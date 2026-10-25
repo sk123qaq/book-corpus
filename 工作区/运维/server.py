@@ -1324,10 +1324,13 @@ class App:
         return {"used": used, "cap": PDF_DAILY_CAP}
 
     def pdf_triage_jobs(self):
-        """同一秒建的任务按 id 排是随机的，rowid 才是真的先后。"""
+        """全部分诊任务，新的在前。不按状态筛：结果落盘就属于那本书，任务后来
+
+        失败、被取消、还在跑，都不该让已经出来的建议和分诊行消失。
+        同一秒建的任务按 id 排是随机的，rowid 才是真的先后。
+        """
         jobs = [row for row in self.store.list(limit=500)
-                if row.get("kind") == "pdf.triage"
-                and row.get("state") in ("awaiting_review", "succeeded")]
+                if row.get("kind") == "pdf.triage"]
         return sorted(jobs, key=lambda row: (row.get("seq") or 0,
                                              row.get("created") or ""),
                       reverse=True)
