@@ -997,6 +997,28 @@ a { color: inherit; text-decoration: none; }
 
 .answer-text p:first-child { margin-top: 8px; }
 
+/* 结构化回答：领句 / 小节 / 分歧 / 缺口 */
+.answer-h {
+  font-size: 15.5px;
+  font-weight: 600;
+  margin: 16px 0 2px;
+  line-height: 1.5;
+}
+
+.answer-lead { margin-top: 8px; }
+
+.answer-dissent {
+  border-left: 2px solid var(--line);
+  padding-left: 10px;
+  margin-top: 14px;
+}
+
+.answer-gap {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+
 .answer-loading {
   display: flex;
   align-items: center;
@@ -1183,6 +1205,7 @@ body.instant .result-foot { padding-top: 7px; }
 body.instant .answer-card { margin-bottom: 10px; padding: 10px 13px; }
 body.instant .answer-label { font-size: 15px; }
 body.instant .answer-text p { margin-top: 6px; font-size: 14px; line-height: 1.72; }
+body.instant .answer-h { font-size: 14px; }
 body.instant .answer-meta { margin-top: 6px; }
 body.instant .cites { margin-bottom: 12px; }
 body.instant .cite { padding: 6px 10px; }
@@ -1263,6 +1286,7 @@ body.instant .hit-para { margin: 8px 0; padding: 6px 10px; }
   .result-foot { flex-direction: column; gap: 4px; }
   .answer-card { padding: 14px 14px; }
   .answer-text p { font-size: 14.5px; }
+  .answer-h { font-size: 15px; }
   .cite-head { flex-wrap: wrap; gap: 2px 8px; }
   .cite-chapter { white-space: normal; }
   .hit-para { padding: 7px 10px; }

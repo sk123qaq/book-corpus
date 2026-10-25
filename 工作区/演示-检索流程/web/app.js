@@ -492,12 +492,29 @@
     const multi = d.mode === 'multi';
     const scope = multi ? (d.sources || []) : [];
     const covered = new Set(((d.citations || []).map((c) => c.book || c.book_title)).filter(Boolean)).size;
-    // 模型常把逐书行写在同一段，句号后接书名时分行，便于扫读。
-    const paras = String(d.answer || '').replace(/([。；！？])\s*(?=《)/g, '$1\n')
-      .split(/\n+/).filter((s) => s.trim());
-    const body = paras.length
-      ? paras.map((p) => `<p>${esc(p)}</p>`).join('')
-      : '<p class="answer-empty">未找到原文依据</p>';
+    // 正文按换行拆段：空行与单换行各成一段。
+    const paragraphs = (text) => String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    let body;
+    if (Array.isArray(d.sections) && d.sections.length) {
+      body = [
+        d.lead ? `<p class="answer-lead">${esc(d.lead)}</p>` : '',
+        d.sections
+          .filter((s) => s && (s.heading || s.body))
+          .map((s) => {
+            const head = s.heading ? `<h3 class="answer-h">${esc(s.heading)}</h3>` : '';
+            const ps = paragraphs(s.body).map((p) => `<p>${esc(p)}</p>`).join('');
+            return `<section class="answer-section">${head}${ps}</section>`;
+          }).join(''),
+        d.dissent ? `<p class="answer-dissent">${esc(d.dissent)}</p>` : '',
+        d.gap ? `<p class="answer-gap">${esc(d.gap)}</p>` : '',
+      ].join('');
+    } else {
+      const paras = paragraphs(d.answer);
+      body = paras.length
+        ? paras.map((p) => `<p>${esc(p)}</p>`).join('')
+        : '';
+    }
+    if (!body) body = '<p class="answer-empty">未找到原文依据</p>';
     const meta = [];
     if (d.confidence) meta.push('置信 ' + confidenceText(d.confidence));
     if (multi) meta.push(scope.length + ' 本书');

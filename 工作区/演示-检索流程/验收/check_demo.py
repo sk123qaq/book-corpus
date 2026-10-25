@@ -94,10 +94,24 @@ else:
           "mode=%s sources=%d %.1f s" % (multi.get("mode"),
                                          len(multi.get("sources") or []),
                                          multi_ms / 1000.0))
-    check("多书回答覆盖 2 本书以上", len(books_m) >= 2, "books=%d" % len(books_m))
+    check("多书引文覆盖 3 本书以上", len(books_m) >= 3 and len(cites_m) >= 4,
+          "books=%d cites=%d" % (len(books_m), len(cites_m)))
     check("多书引文全部回查且在书单内",
           bool(cites_m) and all(c.get("verified") for c in cites_m) and books_m <= scope,
           "cites=%d scope=%d" % (len(cites_m), len(scope)))
+    secs = [s for s in (multi.get("sections") or []) if isinstance(s, dict)]
+    check("多书分节", len(secs) >= 2 and bool((multi.get("lead") or "").strip())
+          and all((s.get("heading") or "").strip() and (s.get("body") or "").strip()
+                  for s in secs),
+          "lead=%d 字 sections=%d" % (len((multi.get("lead") or "").strip()), len(secs)))
+    bookish = [ln for ln in (multi.get("answer") or "").splitlines()
+               if ln.strip().startswith("《")]
+    check("多书不做逐书行", len(bookish) <= 2, "lines=%d" % len(bookish))
+    blob = "\n".join([multi.get("lead") or "", multi.get("dissent") or "",
+                      multi.get("gap") or ""]
+                     + [s.get("heading", "") + "\n" + s.get("body", "") for s in secs])
+    check("回答无标记残留", not any(m in blob for m in ("##", "**")), blob[:40])
+    check("多书冷跑 150 秒内", multi_ms < 150000, "%.1f s" % (multi_ms / 1000.0))
 
     t0 = time.time()
     _, body = post("/api/answer", loc_all, timeout=300)
@@ -160,6 +174,7 @@ check("回答接口可用", status == 200 and first.get("ok") is True,
       "ok=%s cached=%s %.1f s passages=%d" % (first.get("ok"), first.get("cached"),
                                              first_ms / 1000.0, len(first.get("passages") or [])))
 check("回答含威慑度与百分之十", "威慑度" in answer3 and "百分之十" in answer3, answer3[:60])
+check("单书不分节", not (first.get("sections") or []), "sections=%d" % len(first.get("sections") or []))
 check("引文回查行号 1166/1172", any(c.get("line") in (1166, 1172) for c in cites3),
       "lines=%s" % [c.get("line") for c in cites3])
 

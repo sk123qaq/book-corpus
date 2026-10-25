@@ -16,7 +16,7 @@
   6. 解析第一个 JSON 对象，服务端回查每条引文，行号以文件实际行号为准
   7. 缓存到 缓存/answers/<sha1>.json（键含 PROMPT_VERSION），原子写
 
-多书（前端全选）时请求带 sources，每本取两段窗口，一次提示词要逐书回答，引文按书归并。
+多书（前端全选）时请求带 sources，每本取三段窗口，一次提示词要按问题结构逐书对照回答，引文按书归并。
 
 只读 目录/检索/index.db 与 库/**.md；只写 缓存/answers/。
 不跑 B4、不写 expand、不重建索引；pi 只开 book_grep 与 read，证据全部由服务端给。
@@ -45,13 +45,14 @@ import lib_fts_cjk as cjk  # noqa: E402
 import qsearch  # noqa: E402
 
 INDEX_DB = os.path.join(ROOT, "目录", "检索", "index.db")
+LIBRARY_DB = os.path.join(ROOT, "目录", "library.db")
 LIBRARY = os.path.join(ROOT, "库")
 CACHE_DIR = os.path.join(HERE, "缓存", "answers")
 SKILL = "/home/shike/.agents/skills/book-corpus-qa/SKILL.md"
 MODEL = "opencode-go/deepseek-v4.1-flash"
 PI_TIMEOUT = 240
-PROMPT_VERSION = "answer-v6"
-PROMPT_VERSION_MULTI = "answer-v7-multi"
+PROMPT_VERSION = "answer-v8"
+PROMPT_VERSION_MULTI = "answer-v13-multi"
 
 QSEARCH_LIMIT = 100
 DEFPASS_TOP = 4
@@ -67,10 +68,10 @@ QUOTE_PROBE = 20
 
 MAX_SOURCES = 8
 MULTI_QSEARCH_LIMIT = 60
-MULTI_WINDOWS_PER_BOOK = 2
+MULTI_WINDOWS_PER_BOOK = 3
 MULTI_CHAPTERS = 4
-MULTI_QUOTA_MIN = 1400
-MULTI_QUOTA_MAX = 2600
+MULTI_QUOTA_MIN = 2200
+MULTI_QUOTA_MAX = 3400
 PROMPT_MAX_MULTI = 30000
 MAX_CITATIONS_MULTI = 8
 
@@ -81,7 +82,7 @@ PI = ["pi", "-p", "--no-session", "--no-context-files", "--skill", SKILL,
       "-e", EXT, "--tools", "book_grep,read", "--model", MODEL,
       "--thinking", "low"]
 
-PROMPT = """你是书库问答的回答阶段。用自然、通顺的中文直接回答，2 到 4 句。
+PROMPT = """你是书库问答的回答阶段。用自然、通顺的中文直接回答，先给判断，再给两层依据，3 到 6 句。
 
 问题：{question}
 书：{book}
@@ -105,11 +106,11 @@ PROMPT = """你是书库问答的回答阶段。用自然、通顺的中文直�
 {evidence}
 """
 
-MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本书的原文回答同一个问题，用自然、通顺的中文，4 到 10 句。
+MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本书的原文回答同一个问题，用自然、通顺的中文。
 
 问题：{question}
 
-要用的书（{n} 本，每条后面是这本书的 md 目录）：
+{coverage}要用的书（{n} 本，每条后面是这本书的 md 目录）：
 {books}
 
 你可以用两个只读工具：
@@ -117,12 +118,21 @@ MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本�
 - read：读命中的章节文件。
 
 先看各书的候选章与候选窗口。候选章是各书按检索分排的前 4 章，窗口是其中最相关的几段。窗口不够，或要确认「是谁」「结局」「身份」，用 book_grep 搜人物、事件、同义说法，再 read 命中的章。不要写文件。
+每本书至少确认一次它的机制章：窗口里只有一句主张、看不到展开时，用 book_grep 在该书 md 目录里搜这个主张的关键词，读到展开段再写。
 注意：原文里的「应该」「十有八九」「猜测」是推测，不是结论。涉及「是谁」「结局」，必须找到身份或结果被确认的段落，并往后多读一到两章；推测不能写进答案。
 
-答案这样组织：第一段 1 到 2 句给总体回答；然后每本书一行，行首写《书名》：，说这本书怎么回应这个问题。某本书没有相关内容，就在它那一行写明没有直接相关的内容；几本书说法不一致，就直接说哪里不一致。不要写「原文写明」「根据原文」，也不要写路径行号。
+答案按问题本身的结构写，不要按书排。
+
+1. 开头 1 到 3 句给判断。库里的说法和问题里的说法不一样，或者只有一两本书真的讨论这个说法，先说这件事。判断库里的措辞时只用「库内覆盖」里查过的词，没查过的说法不要断言库里没有。
+2. 中间 2 到 4 段。每段第一句是判断句，单独成行当小标题，不要用书名、不要用「首先/其次」、不要编号。标题下面 2 到 4 句，只留最能说明判断的一处证据，例子不超过一个；把几本书的原文放在同一段里对照，写明是哪本书说的。每段至少落到 2 本书；只有一本讲这件事，就在段末说明。citations 只给正文里点到的书，没写进正文的书不要引；某本确实无关，就在缺口里点名它没有相关内容。
+3. 几本书在前提上不一致时单独一段，写清不一致的是哪一步：先做什么、谁是主体、外部条件算不算。不要写「侧重点不同」。
+4. 最后可选一句缺口：哪本书只有一句话、哪一层库里没有展开。没有就不写。
+5. 不要以「《书名》：」开头写任何一行，不要一本书一段，不要用「几本书分别指向 A、B、C」这种列举预告开头。
+6. 600 到 1000 字。不写路径、行号、「原文写明」「根据原文」。
+
 依据放在 citations，quote 必须逐字来自原文，path 用那本书 md 目录里的文件路径。尽量引到至少 2 个不同书的原文；只有所有书都没有相关原文时才写「书里没有直接回答」并置 not_found。
 输出一行 JSON，不要代码块，不要解释：
-{{"answer":"...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
+{{"lead":"...","sections":[{{"heading":"...","body":"..."}}],"dissent":"...","gap":"...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
 
 各书候选章：
 {chapters}
@@ -185,6 +195,7 @@ def _write_json(path, value):
 
 def _ok(**kwargs):
     out = {"ok": True, "cached": False, "ms": 0.0, "model": MODEL, "answer": "",
+           "lead": "", "sections": [], "dissent": "", "gap": "",
            "citations": [], "passages": [], "confidence": "low",
            "not_found": False, "error": "", "mode": "single", "sources": []}
     out.update(kwargs)
@@ -508,16 +519,94 @@ def _book_label(source):
     return source.get("title") or source["book"].rsplit("/", 1)[-1]
 
 
+def _coverage(terms):
+    """库级覆盖：用全库段落倒排数每个词的命中段数与书数。
+
+    扫全部 terms，跳掉 count>200 的常见词，按词长降序保留最多 3 个；全被跳过
+    时保留 count 最小的那个。只表示这个词在库里有没有、有多少，不是答案证据。
+    查询失败返回空串，吞掉异常。
+    """
+    terms = [str(t).strip() for t in terms or [] if str(t).strip()]
+    if not terms:
+        return ""
+    ordered = sorted(terms, key=len, reverse=True)  # 长词在前，同长保持原顺序
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % INDEX_DB, uri=True)
+    except sqlite3.Error:
+        return ""
+    stats = []
+    try:
+        for term in ordered:
+            expr = cjk.query_expr(term)
+            if not expr:
+                continue
+            count = con.execute(
+                "SELECT count(*) FROM para_fts WHERE para_fts MATCH ?",
+                (expr,)).fetchone()[0]
+            nbooks = con.execute(
+                "SELECT count(DISTINCT p.book) FROM para_fts f JOIN para p ON p.id=f.rowid "
+                "WHERE para_fts MATCH ?", (expr,)).fetchone()[0]
+            rows = con.execute(
+                "SELECT p.book, count(*) c FROM para_fts f JOIN para p ON p.id=f.rowid "
+                "WHERE para_fts MATCH ? GROUP BY p.book ORDER BY c DESC LIMIT 2",
+                (expr,)).fetchall()
+            stats.append({"term": term, "count": count, "nbooks": nbooks,
+                          "books": [(b, c) for b, c in rows]})
+    except sqlite3.Error:
+        return ""
+    finally:
+        con.close()
+    if not stats:
+        return ""
+    picked = [s for s in stats if s["count"] <= 200][:3]
+    if not picked:
+        picked = [min(stats, key=lambda s: s["count"])]
+
+    # 书名：目录/library.db 的 book 表按 path 取 title，查不到用路径最后一段
+    titles = {}
+    try:
+        bcon = sqlite3.connect("file:%s?mode=ro" % LIBRARY_DB, uri=True)
+        try:
+            for s in picked:
+                for b, _c in s["books"]:
+                    if b not in titles:
+                        row = bcon.execute(
+                            "SELECT title FROM book WHERE path = ?", (b,)).fetchone()
+                        titles[b] = row[0] if row else b.rsplit("/", 1)[-1]
+        finally:
+            bcon.close()
+    except sqlite3.Error:
+        pass
+
+    def label(book):
+        return titles.get(book) or book.rsplit("/", 1)[-1]
+
+    lines = ["库内覆盖（全库段落命中数，只表示这个词在库里有没有、有多少，不是答案证据）："]
+    for s in picked:
+        books = s["books"]
+        if len(books) == 1:
+            book_part = "《%s》" % label(books[0][0])
+        elif len(books) >= 2:
+            book_part = "《%s》%d，《%s》%d" % (
+                label(books[0][0]), books[0][1], label(books[1][0]), books[1][1])
+        else:
+            book_part = ""
+        lines.append("- 「%s」%d 段 / %d 本%s"
+                     % (s["term"], s["count"], s["nbooks"],
+                        ("：" + book_part) if book_part else ""))
+    return "\n".join(lines)
+
+
 def multi_windows(plans):
-    """每本书一个小预算：两扇窗各 quota//2，先铺各书第一窗，再铺第二窗。"""
+    """每本书一个小预算：每扇窗 quota//MULTI_WINDOWS_PER_BOOK，先铺各书第一窗，再铺后面。"""
     n = len(plans)
-    quota = max(MULTI_QUOTA_MIN, min(MULTI_QUOTA_MAX, TOTAL_CHARS // n))
+    quota = max(MULTI_QUOTA_MIN, min(MULTI_QUOTA_MAX, 18000 // n))
     per_book = []
     for plan in plans:
         book = plan["source"]["book"]
         per_book.append(build_windows(plan["chosen"], {book: plan["titles"]},
                                       {book: plan["status"]}, total_chars=quota,
-                                      window_chars=max(200, quota // 2),
+                                      window_chars=max(200, quota // MULTI_WINDOWS_PER_BOOK),
                                       max_windows=MULTI_WINDOWS_PER_BOOK))
     out = []
     for i in range(max([len(ws) for ws in per_book] or [0])):
@@ -525,20 +614,23 @@ def multi_windows(plans):
     return out
 
 
-def _drop_last_second(windows, rank):
-    """超长时删排名最后那本书的第二扇窗；只有一扇窗的书不碰。"""
+def _drop_last_window(windows, rank):
+    """超长时从排名最后的书开始删它最后一扇窗；一本书至少留一扇。"""
     for book in sorted({w["book"] for w in windows}, key=lambda b: -rank.get(b, 0)):
         idxs = [i for i, w in enumerate(windows) if w["book"] == book]
-        if len(idxs) >= 2:
+        if len(idxs) > 1:
             windows.pop(idxs[-1])
             return True
     return False
 
 
-def build_multi_prompt(question, plans, windows):
-    """一次提示词装下所有书：书名行 + 每书 4 章地图 + 按书分组的窗口。"""
+def build_multi_prompt(question, plans, windows, coverage=""):
+    """一次提示词装下所有书：库级覆盖 + 书名行 + 每书 4 章地图 + 按书分组的窗口。"""
     rank = {p["source"]["book"]: i for i, p in enumerate(plans)}
     labels = {p["source"]["book"]: _book_label(p["source"]) for p in plans}
+    coverage = coverage.strip()
+    if coverage:
+        coverage += "\n\n"
     keep = list(windows)
     while True:
         book_rows, chapter_blocks = [], []
@@ -562,10 +654,11 @@ def build_multi_prompt(question, plans, windows):
             nowindow = ("无相关原文窗口的书：《%s》（这些书在回答里要写明没有相关原文）"
                         % "》《".join(empty))
         prompt = MULTI_PROMPT.format(
-            question=question, n=len(plans), books="\n".join(book_rows),
+            question=question, coverage=coverage, n=len(plans),
+            books="\n".join(book_rows),
             chapters="\n\n".join(chapter_blocks), evidence="\n\n".join(blocks),
             nowindow=nowindow)
-        if len(prompt) <= PROMPT_MAX_MULTI or not _drop_last_second(keep, rank):
+        if len(prompt) <= PROMPT_MAX_MULTI or not _drop_last_window(keep, rank):
             return prompt
 
 
@@ -628,6 +721,52 @@ def parse_reply(raw):
                     break
         start = text.find("{", start + 1)
     return None
+
+
+def _shape_multi(reply):
+    """多书回答的结构化字段：lead/sections/dissent/gap → 拼出 answer。
+
+    类型不对一律忽略，不抛异常。lead/dissent/gap 只收 str，strip 后空就当没有；
+    sections 只收 list，每项 dict 且 heading/body 是非空 str，最多 4 节。
+    answer 由这些字段拼出来（空字段跳过）；全空时退回模型给的 answer 字段。
+    """
+    lead = reply.get("lead")
+    lead = lead.strip() if isinstance(lead, str) else ""
+    dissent = reply.get("dissent")
+    dissent = dissent.strip() if isinstance(dissent, str) else ""
+    gap = reply.get("gap")
+    gap = gap.strip() if isinstance(gap, str) else ""
+
+    sections = []
+    raw_sections = reply.get("sections")
+    if isinstance(raw_sections, list):
+        for item in raw_sections:
+            if not isinstance(item, dict):
+                continue
+            heading = item.get("heading")
+            body = item.get("body")
+            if not isinstance(heading, str) or not isinstance(body, str):
+                continue
+            heading = heading.strip()
+            body = body.strip()
+            if not heading or not body:
+                continue
+            sections.append({"heading": heading, "body": body})
+            if len(sections) >= 4:
+                break
+
+    parts = [lead]
+    for s in sections:
+        parts.append(s["heading"] + "\n" + s["body"])
+    if dissent:
+        parts.append(dissent)
+    if gap:
+        parts.append(gap)
+    answer = "\n\n".join(p for p in parts if p)
+    if not answer:
+        fallback = reply.get("answer")
+        answer = fallback.strip() if isinstance(fallback, str) else ""
+    return lead, sections, dissent, gap, answer
 
 
 # ---- 回查引文 -------------------------------------------------------
@@ -862,7 +1001,7 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0):
 
 
 def _answer_multi(question, sources, terms, groups, use_cache, t0):
-    """多书：每本取两段，一次提示词逐书回答，引文按书归并。"""
+    """多书：每本取三段，一次提示词逐书回答，引文按书归并。"""
     key = multi_cache_key(question, sources, terms, groups)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
@@ -891,7 +1030,8 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0):
     windows = multi_windows(plans)
     if not windows:
         return _err("没有取到原文窗口", passages=[], ms=_ms(t0))
-    prompt = build_multi_prompt(question, plans, windows)
+    coverage = _coverage(terms)
+    prompt = build_multi_prompt(question, plans, windows, coverage)
     raw, error = call_pi(prompt, sources[0]["book"], [s["book"] for s in sources])
     if raw is None:
         return _err(error, passages=_passages(windows), ms=_ms(t0))
@@ -901,8 +1041,7 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0):
         return _err("模型没有返回 JSON：%s" % head, passages=_passages(windows),
                     ms=_ms(t0))
 
-    answer = reply.get("answer")
-    answer = answer.strip() if isinstance(answer, str) else ""
+    lead, sections, dissent, gap, answer = _shape_multi(reply)
     not_found = bool(reply.get("not_found")) or not answer
     citations, _dropped = verify_citations(reply.get("citations"), windows,
                                            sources=sources)
@@ -927,7 +1066,8 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0):
     counts = {}
     for c in citations:
         counts[c["book"]] = counts.get(c["book"], 0) + 1
-    out = _ok(answer=answer, citations=citations, passages=_passages(windows),
+    out = _ok(answer=answer, lead=lead, sections=sections, dissent=dissent, gap=gap,
+              citations=citations, passages=_passages(windows),
               confidence=confidence, not_found=not_found, error=error, ms=_ms(t0))
     out["mode"] = "multi"
     out["sources"] = [{"book": s["book"], "title": _book_label(s), "path": s["path"],
