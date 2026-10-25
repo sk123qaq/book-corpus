@@ -70,7 +70,7 @@
 | `l2_finalize.py` | L2 收尾。同名冲突加限定词、同步作者层，幂等 |
 | `classify_books.py` | 模型分类（`opencode-go/deepseek-v4.1-flash`，默认；`--backend typesafe` 保留旧路），结果落 `分类缓存.jsonl`，`--report` 只看统计。`--merge` 以人账为底合并：已有行一个字段都不动，只追加 `--add-new` 里人账没有的 uid；清单里未入账的 uid 默认跳过 |
 | `scan_library.py` | L1 扫描旧布局。旧目录已不在，只作留档；扫到 0 个源文件时报错退出，不覆盖 `目录/` 任何账 |
-| `split_md_batch.py` | 拆章批次驱动。读 DB 出待拆清单、转 EPUB、拆章、verify、audit、原子进库。verify 或 audit 不过时自动叫 pi agent 修（每本 2 次、默认不设整批上限、900 秒），修完重跑检查再决定是否落地。`--force` 重拆，`--recheck` 只复核暂存区已有产物（不重拆，过了就进库），`--report` 只看状态；`worklist.tsv` 存在时即批次范围 |
+| `split_md_batch.py` | 拆章批次驱动。读 DB 出待拆清单、转 EPUB、拆章、verify、audit、原子进库。verify 或 audit 不过时自动叫 pi agent 修（每本 2 次、默认不设整批上限、每次 600 秒），修完重跑检查再决定是否落地。`--force` 重拆，`--recheck` 只复核暂存区已有产物（不重拆，过了就进库），`--report` 只看状态；`worklist.tsv` 存在时即批次范围 |
 | `redo_md_scope.py` | 从库内旧 md 目录生成重拆范围账本（单 owner 写 worklist，合集写 collections）。只读库，`--apply` 才写批次目录 |
 | `redo_compare.py` | 重拆验收：旧 md 与暂存产物的逐页锚点覆盖率差。下降的书不落地 |
 | `install_collection.py` | 把 split_collection 的逐册产物装进各书 md/，旧版改名留档，写 manifest |
