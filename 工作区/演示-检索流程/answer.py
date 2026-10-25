@@ -52,7 +52,7 @@ SKILL = "/home/shike/.agents/skills/book-corpus-qa/SKILL.md"
 MODEL = "opencode-go/deepseek-v4.1-flash"
 PI_TIMEOUT = 240
 PROMPT_VERSION = "answer-v8"
-PROMPT_VERSION_MULTI = "answer-v14-multi"
+PROMPT_VERSION_MULTI = "answer-v17-multi"
 
 QSEARCH_LIMIT = 100
 DEFPASS_TOP = 4
@@ -121,22 +121,22 @@ MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本�
 每本书至少确认一次它的机制章：窗口里只有一句主张、看不到展开时，用 book_grep 在该书 md 目录里搜这个主张的关键词，读到展开段再写。
 注意：原文里的「应该」「十有八九」「猜测」是推测，不是结论。涉及「是谁」「结局」，必须找到身份或结果被确认的段落，并往后多读一到两章；推测不能写进答案。
 
-答案按问题本身的结构写，不要按书排。
+答案按问题本身的结构写，不要按书排。用 Markdown 小标题分段，标题行以「## 」开头。
 
-1. 开头 1 到 3 句给判断。库里的说法和问题里的说法不一样，或者只有一两本书真的讨论这个说法，先说这件事。判断库里的措辞时只用「库内覆盖」里查过的词，没查过的说法不要断言库里没有。
-2. 中间 2 到 4 段。每段第一句是判断句，单独成行当小标题，不要用书名、不要用「首先/其次」、不要编号。标题下面 3 到 5 句，按「是什么、为什么、后果」展开，不按来源排。
+1. 开头 1 到 3 句给判断，放在第一个小标题之前，不加标题。库里的说法和问题里的说法不一样，或者只有一两本书真的讨论这个说法，先说这件事，并点名是哪几本。判断库里的措辞时只用「库内覆盖」里查过的词，没查过的说法不要断言库里没有。不要写「只有两三本」「一本讲……的著作」这种模糊指代。
+2. 中间 2 到 4 个「## 小标题」。小标题是判断句，不要用书名、不要用「首先/其次」、不要编号。标题下面 3 到 5 句，按「是什么、为什么、后果」展开，不按来源排。
    正文默认不出现作者名和书名，也不要写「甲说」「乙认为」「丙指出」。同一个概念有几本书给了不同定义或口径，先合并成一个定义，再把口径差异并列写清（窄口径算什么，宽口径还算什么，差多少），不写谁提的。
    每段至少合并两处以上原文的事实；同一件事有几本书说，合并成一句，不要逐本复述。只有两本书的说法冲突、必须点名区分时才写书名，冲突本身放进分歧段。
    citations 只给正文里用到的原文，点不点名都行；某本确实无关，就在缺口里点名它没有相关内容。
-3. 几本书在前提上不一致时单独一段，写清不一致的是哪一步：先做什么、谁是主体、外部条件算不算。分歧也按观点写，不按书写，只有必须区分哪本书持哪一方时才点书名。不要写「侧重点不同」。
-4. 最后可选一句缺口：哪本书只有一句话、哪一层库里没有展开。没有就不写。
+3. 几本书在前提上不一致时用「## 分歧」单独一段，写清不一致的是哪一步：先做什么、谁是主体、外部条件算不算。分歧按观点写，不按书写；需要说明哪本书持哪一方时直接写《书名》，不要写「一本讲央地关系的著作」。不要写「侧重点不同」。
+4. 最后可选「## 缺口」一段，点名到书：《书名》只有一句话、《书名》没有展开到融资环节。不要写「一本文学研究」「一本讲央地关系的著作」。没有就不写。
 5. 不要以「《书名》：」开头写任何一行，不要一本书一段，不要用「几本书分别指向 A、B、C」这种列举预告开头。
 6. 600 到 1000 字。不写路径、行号、「原文写明」「根据原文」。
 7. 不要写成文献综述。不要写「甲把它界定为……；乙把口径放得更宽……；丙则从……入手」。要写「它首先是一套……；窄口径只算……，宽口径还包括……；它出现的原因是……」。
 
 依据放在 citations，quote 必须逐字来自原文，path 用那本书 md 目录里的文件路径。尽量引到至少 2 个不同书的原文；只有所有书都没有相关原文时才写「书里没有直接回答」并置 not_found。
-输出一行 JSON，不要代码块，不要解释：
-{{"lead":"...","sections":[{{"heading":"...","body":"..."}}],"dissent":"...","gap":"...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
+输出一行 JSON，不要代码块，不要解释。answer 里用 \\n 换行，节标题行以 ## 开头：
+{{"answer":"开头判断\\n\\n## 小标题\\n正文\\n\\n## 分歧\\n...\\n\\n## 缺口\\n...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
 
 各书候选章：
 {chapters}
@@ -691,7 +691,11 @@ def call_pi(prompt, book, books=None):
 
 
 def parse_reply(raw):
-    """去掉代码块围栏，取第一个括号配平的 JSON 对象。"""
+    """去掉代码块围栏，取第一个括号配平的 JSON 回答对象。
+
+    只认带 answer/lead/sections/citations 这类字段的对象。外层坏了的时候，
+    里面的 citation 对象也能配平，但它不是回答，不能拿来当 reply。
+    """
     text = (raw or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
@@ -720,44 +724,77 @@ def parse_reply(raw):
                         obj = json.loads(text[start:i + 1])
                     except ValueError:
                         obj = None
-                    if isinstance(obj, dict):
+                    if isinstance(obj, dict) and any(
+                            k in obj for k in ("answer", "lead", "sections",
+                                               "citations", "confidence", "not_found")):
                         return obj
                     break
         start = text.find("{", start + 1)
     return None
 
 
-def _shape_multi(reply):
-    """多书回答的结构化字段：lead/sections/dissent/gap → 拼出 answer。
+def _split_answer(text):
+    """把带「## 小标题」的 answer 拆成 lead、sections、dissent、gap。
 
-    类型不对一律忽略，不抛异常。lead/dissent/gap 只收 str，strip 后空就当没有；
-    sections 只收 list，每项 dict 且 heading/body 是非空 str，最多 4 节。
-    answer 由这些字段拼出来（空字段跳过）；全空时退回模型给的 answer 字段。
+    第一个小标题之前是 lead；标题以分歧/不同/差异开头的块是 dissent，以缺口/不足/
+    欠缺开头的块是 gap，其余是 section。空块丢掉，最多 4 节。
     """
-    lead = reply.get("lead")
-    lead = lead.strip() if isinstance(lead, str) else ""
-    dissent = reply.get("dissent")
-    dissent = dissent.strip() if isinstance(dissent, str) else ""
-    gap = reply.get("gap")
-    gap = gap.strip() if isinstance(gap, str) else ""
-
-    sections = []
-    raw_sections = reply.get("sections")
-    if isinstance(raw_sections, list):
-        for item in raw_sections:
-            if not isinstance(item, dict):
-                continue
-            heading = item.get("heading")
-            body = item.get("body")
-            if not isinstance(heading, str) or not isinstance(body, str):
-                continue
-            heading = heading.strip()
-            body = body.strip()
-            if not heading or not body:
-                continue
+    blocks, lead_lines, cur = [], [], None
+    for line in text.splitlines():
+        m = re.match(r"^\s*#{1,4}\s+(.+?)\s*$", line)
+        if m:
+            cur = [m.group(1).strip(), []]
+            blocks.append(cur)
+        elif cur is None:
+            lead_lines.append(line)
+        else:
+            cur[1].append(line)
+    lead = "\n".join(lead_lines).strip()
+    sections, dissent, gap = [], "", ""
+    for heading, lines in blocks:
+        body = "\n".join(lines).strip()
+        if not heading or not body:
+            continue
+        if not dissent and re.match(r"^(分歧|不同|差异)", heading):
+            dissent = body
+        elif not gap and re.match(r"^(缺口|不足|欠缺|未展开)", heading):
+            gap = body
+        elif len(sections) < 4:
             sections.append({"heading": heading, "body": body})
-            if len(sections) >= 4:
-                break
+    return lead, sections, dissent, gap
+
+
+def _shape_multi(reply):
+    """多书回答：优先把 answer 里的「## 小标题」拆成结构，旧字段仍然接受。"""
+    text = reply.get("answer")
+    text = text.strip() if isinstance(text, str) else ""
+    if text and re.search(r"^\s*#{1,4}\s+\S", text, re.M):
+        lead, sections, dissent, gap = _split_answer(text)
+    else:
+        lead = reply.get("lead")
+        lead = lead.strip() if isinstance(lead, str) else ""
+        dissent = reply.get("dissent")
+        dissent = dissent.strip() if isinstance(dissent, str) else ""
+        gap = reply.get("gap")
+        gap = gap.strip() if isinstance(gap, str) else ""
+        sections = []
+        raw_sections = reply.get("sections")
+        if isinstance(raw_sections, list):
+            for item in raw_sections:
+                if isinstance(item, dict):
+                    heading, body = item.get("heading"), item.get("body")
+                elif isinstance(item, (list, tuple)) and len(item) == 2:
+                    heading, body = item
+                else:
+                    continue
+                if not isinstance(heading, str) or not isinstance(body, str):
+                    continue
+                heading, body = heading.strip(), body.strip()
+                if not heading or not body:
+                    continue
+                sections.append({"heading": heading, "body": body})
+                if len(sections) >= 4:
+                    break
 
     parts = [lead]
     for s in sections:
@@ -767,9 +804,8 @@ def _shape_multi(reply):
     if gap:
         parts.append(gap)
     answer = "\n\n".join(p for p in parts if p)
-    if not answer:
-        fallback = reply.get("answer")
-        answer = fallback.strip() if isinstance(fallback, str) else ""
+    if not answer and text:
+        answer = text
     return lead, sections, dissent, gap, answer
 
 
@@ -1036,16 +1072,33 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0):
         return _err("没有取到原文窗口", passages=[], ms=_ms(t0))
     coverage = _coverage(terms)
     prompt = build_multi_prompt(question, plans, windows, coverage)
-    raw, error = call_pi(prompt, sources[0]["book"], [s["book"] for s in sources])
+    raw, reply, error = None, None, ""
+    for _attempt in range(2):
+        raw, error = call_pi(prompt, sources[0]["book"], [s["book"] for s in sources])
+        if raw is None:
+            break
+        reply = parse_reply(raw)
+        if reply is None:
+            error = "模型没有返回 JSON"
+            continue
+        _lead, _sections, _dissent, _gap, _answer = _shape_multi(reply)
+        if _answer or reply.get("not_found"):
+            break
+        # 模型给了 JSON 但没有任何正文，换一次提醒再要一遍，别当成「库里没有」。
+        error = "模型没有给出答案结构"
+        prompt += ("\n\n上一次没有给出正文。这次只输出一个 JSON 对象，"
+                   "answer 里用 ## 小标题分成至少两节，分歧用 ## 分歧，缺口用 ## 缺口。")
     if raw is None:
         return _err(error, passages=_passages(windows), ms=_ms(t0))
-    reply = parse_reply(raw)
     if reply is None:
         head = " ".join((raw or "").split())[:200]
-        return _err("模型没有返回 JSON：%s" % head, passages=_passages(windows),
-                    ms=_ms(t0))
+        return _err("%s：%s" % (error or "模型没有返回 JSON", head),
+                    passages=_passages(windows), ms=_ms(t0))
 
     lead, sections, dissent, gap, answer = _shape_multi(reply)
+    if not answer and not reply.get("not_found"):
+        return _err(error or "模型没有给出答案结构", passages=_passages(windows),
+                    ms=_ms(t0))
     not_found = bool(reply.get("not_found")) or not answer
     citations, _dropped = verify_citations(reply.get("citations"), windows,
                                            sources=sources)
