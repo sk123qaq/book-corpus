@@ -252,6 +252,216 @@ def stage_and_dest(root, uid="B0001"):
     return b, stage, dest
 
 
+def test_status_table_drives_done_status():
+    expect = tuple(name for name, done in S.STATUS.items() if done)
+    assert S.DONE_STATUS == expect, S.DONE_STATUS
+    assert set(S.DONE_STATUS) == {"landed", "replaced", "accepted",
+                                 "skipped-has-md", "staged-green"}, S.DONE_STATUS
+    for name in ("staged", "staged-review", "no-stage", "split-failed",
+                 "convert-failed", "error"):
+        assert name not in S.DONE_STATUS, name
+        assert S.STATUS[name] is False, name
+
+
+def test_write_result_rejects_unregistered_status():
+    root = make_root()
+    try:
+        logs = os.path.join(batch_dir(root, "split-ops-probe"), "logs")
+        os.makedirs(logs)
+        ctx = {"logs": logs, "stamp": "20261024T221000+0800"}
+        S.write_result(ctx, {"uid": "B0001", "status": "landed"})
+        saved = json.load(open(os.path.join(logs, "B0001.json"), encoding="utf-8"))
+        assert saved["status"] == "landed", saved
+        try:
+            S.write_result(ctx, {"uid": "B0002", "status": "半成品"})
+        except AssertionError as exc:
+            assert "半成品" in str(exc), exc
+        else:
+            raise AssertionError("未登记状态没抛 AssertionError")
+        assert not os.path.exists(os.path.join(logs, "B0002.json")), "抛错前已落盘"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_previous_readings_prefers_log_then_manifest():
+    root = make_root()
+    try:
+        b, stage, _ = stage_and_dest(root)
+        os.makedirs(stage)
+        with open(os.path.join(stage, ".manifest.json"), "w", encoding="utf-8") as fh:
+            json.dump({"chapters": 9, "chars": 1200, "images": 4,
+                       "audit_ratio": 0.7, "problems": 2}, fh)
+        logs = os.path.join(b, "logs")
+        os.makedirs(logs)
+        prev = os.path.join(logs, "B0001.json")
+        with open(prev, "w", encoding="utf-8") as fh:
+            json.dump({"uid": "B0001", "status": "staged", "verify_rc": 1,
+                       "audit_rc": 0, "audit_ratio": 0.81, "chapters": 11}, fh)
+        got = S.previous_readings(stage, prev)
+        assert got == {"verify_rc": 1, "audit_rc": 0, "audit_ratio": 0.81,
+                       "chapters": 11, "chars": 1200, "images": 4,
+                       "problems": 2}, got
+        # 日志不在时只剩 manifest，读数为空的字段不出现
+        got = S.previous_readings(stage, os.path.join(logs, "B0099.json"))
+        assert got == {"audit_ratio": 0.7, "chapters": 9, "chars": 1200,
+                       "images": 4, "problems": 2}, got
+        # 两边都没有时不报错
+        assert S.previous_readings(os.path.join(b, "out", "B0099"),
+                                   os.path.join(logs, "B0099.json")) == {}
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_summary_counts_staged_as_pending():
+    ctx = {"batch_name": "split-ops-20261024T2204"}
+    results = [
+        {"uid": "B0001", "title": "书B0001", "status": "landed",
+         "verify_rc": 0, "audit_rc": 0, "audit_ratio": 0.99},
+        {"uid": "B0002", "title": "书B0002", "status": "staged",
+         "note": "暂存区已有产物，本次没重拆；读数是上次留下的"},
+        {"uid": "B0003", "title": "书B0003", "status": "no-stage",
+         "note": "暂存区没有产物，先重拆"},
+    ]
+    data = S.summary(ctx, results)
+    assert data["pending_review"] == ["B0002", "B0003"], data
+    assert data["status_counts"] == {"landed": 1, "no-stage": 1, "staged": 1}, data
+    assert [b["uid"] for b in data["books"]] == ["B0001", "B0002", "B0003"], data
+
+
+def test_recheck_and_force_conflict():
+    p = subprocess.run([sys.executable, SCRIPT, "--batch", "split-ops-probe",
+                        "--only", "B0001", "--recheck", "--force"],
+                       capture_output=True, text=True, cwd=HERE)
+    assert p.returncode != 0, "--recheck 与 --force 同时给时没报错"
+    msg = p.stdout + p.stderr
+    assert "不能同时用" in msg, msg
+
+
+def test_recheck_without_stage_says_no_stage():
+    root = make_root()
+    try:
+        con = make_db(root)
+        log_dir = os.path.join(root, "工作区", "批次", "split-ops-20261024T2205", "logs")
+        os.makedirs(log_dir)
+        codes = (
+            "import sys\n"
+            "sys.path.insert(0, %r)\n"
+            "import split_md_batch as S\n"
+            "S.L.ROOT = %r\nS.L.WORK = %r\nS.L.CAT = %r\n"
+            "row = {'uid': 'B0001', 'title': '书B0001', 'format': 'epub',\n"
+            "       'sha256': 'sha-B0001', 'path': '文学/书B0001',\n"
+            "       'src': '库/文学/书B0001/source/书B0001.epub'}\n"
+            "ctx = {'batch': %r, 'batch_name': 'split-ops-20261024T2205',\n"
+            "       'out': %r, 'tmp': %r, 'logs': %r, 'land': True,\n"
+            "       'force': False, 'replace': False, 'recheck': True,\n"
+            "       'stamp': '20261024T220500+0800', 'tool_version': 'sha256:probe'}\n"
+            "print(S.run_one(row, ctx)['status'])\n"
+        ) % (SCRIPTS, root, os.path.join(root, "工作区"), os.path.join(root, "目录"),
+             os.path.join(root, "工作区", "批次", "split-ops-20261024T2205"),
+             os.path.join(root, "工作区", "批次", "split-ops-20261024T2205", "out"),
+             os.path.join(root, "工作区", "批次", "split-ops-20261024T2205", "tmp"),
+             log_dir)
+        env = dict(os.environ, PI_BIN=STUB, PI_STUB_JSON="[]")
+        p = subprocess.run([sys.executable, "-c", codes], capture_output=True, text=True,
+                           env=env, cwd=root)
+        con.close()
+        assert p.returncode == 0, p.stderr
+        assert p.stdout.strip() == "no-stage", p.stdout
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def recheck_env(root, uid="B0001", fmt="epub"):
+    """一个能真跑 recheck 的最小 ctx：暂存区有产物，manifest 记着上一次的读数。"""
+    b, stage, dest = stage_and_dest(root, uid)
+    os.makedirs(stage, exist_ok=True)
+    with open(os.path.join(stage, "第一章.md"), "w", encoding="utf-8") as fh:
+        fh.write("正文")
+    with open(os.path.join(stage, ".manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump({"uid": uid, "chapters": 1, "chars": 10, "audit_ratio": 0.5,
+                   "audit_chars": 20, "verified": False}, fh)
+    for name in ("out", "tmp", "logs"):
+        os.makedirs(os.path.join(b, name), exist_ok=True)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    row = {"uid": uid, "title": "书" + uid, "format": fmt, "sha256": sha(uid),
+           "path": "文学/书" + uid,
+           "src": "库/文学/书%s/source/书%s.%s" % (uid, uid, fmt)}
+    ctx = {"batch": b, "batch_name": "split-ops-recheck",
+           "out": os.path.join(b, "out"), "tmp": os.path.join(b, "tmp"),
+           "logs": os.path.join(b, "logs"), "land": True, "force": False,
+           "replace": False, "recheck": True,
+           "stamp": "20261024T221500+0800", "tool_version": "sha256:probe"}
+    return b, stage, dest, row, ctx
+
+
+def fake_tool(root, name, body):
+    path = os.path.join(root, name)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("import sys\n%s\n" % body)
+    return path
+
+
+VERIFY_OK = ("print('markdown    : 1 chapters')\n"
+             "print('characters  : 1,000')\n"
+             "print('images used : 0 (on disk: 0)')\n"
+             "print('problems    : 0')")
+AUDIT_OK = "print('  out      950 / 1,000   95.0%    1 md   ')"
+
+
+def test_recheck_only_lands_after_audit_passes():
+    root = make_root()
+    old = (S.VERIFY, S.AUDIT, S.CALIBRE)
+    try:
+        b, stage, dest, row, ctx = recheck_env(root)
+        verify = fake_tool(root, "verify.py", VERIFY_OK)
+        audit_bad = fake_tool(root, "audit-bad.py", AUDIT_OK + "\nsys.exit(1)")
+        audit_ok = fake_tool(root, "audit-ok.py", AUDIT_OK)
+        with patched(ROOT=root):
+            S.VERIFY, S.AUDIT = verify, audit_bad
+            first = S.recheck(row, ctx, {"uid": "B0001", "title": "书B0001",
+                                        "dest": "库/文学/书B0001/md"})
+            assert first["status"] == "staged-review", first
+            assert first["verify_rc"] == 0 and first["audit_rc"] == 1, first
+            assert not os.path.isdir(dest), "内容检查没过就进了库"
+            man = json.load(open(os.path.join(stage, ".manifest.json"), encoding="utf-8"))
+            assert man["verified"] is False, man
+
+            S.AUDIT = audit_ok
+            second = S.recheck(row, ctx, {"uid": "B0001", "title": "书B0001",
+                                         "dest": "库/文学/书B0001/md"})
+            assert second["status"] == "landed", second
+            assert "第一章.md" in os.listdir(dest), os.listdir(dest)
+            man = json.load(open(os.path.join(dest, ".manifest.json"), encoding="utf-8"))
+            assert man["verified"] is True and man["audit_ratio"] == 0.95, man
+            log = open(os.path.join(b, "logs", "B0001.log"), encoding="utf-8").read()
+            assert "---- verify ----" in log and "---- audit ----" in log, log
+    finally:
+        S.VERIFY, S.AUDIT, S.CALIBRE = old
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_recheck_without_epub_never_lands():
+    root = make_root()
+    old = (S.VERIFY, S.AUDIT, S.CALIBRE)
+    try:
+        b, stage, dest, row, ctx = recheck_env(root, uid="B0010", fmt="mobi")
+        verify = fake_tool(root, "verify.py", VERIFY_OK)
+        audit = fake_tool(root, "audit-ok.py", AUDIT_OK)
+        with patched(ROOT=root):
+            S.VERIFY, S.AUDIT = verify, audit
+            S.CALIBRE = os.path.join(root, "no-such-calibre")
+            got = S.recheck(row, ctx, {"uid": "B0010", "title": "书B0010",
+                                       "dest": "库/文学/书B0010/md"})
+            assert got["status"] == "staged-review", got
+            assert got["audit_rc"] is None, got
+            assert not os.path.isdir(dest), "没跑内容检查就进了库"
+            assert "转不出" in got["note"], got
+            assert got["audit_ratio"] == 0.5, got
+    finally:
+        S.VERIFY, S.AUDIT, S.CALIBRE = old
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_land_archives_old_md():
     root = make_root()
     try:

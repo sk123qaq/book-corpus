@@ -6,7 +6,7 @@
 verify 与 audit 都过才进库，没过留在暂存区待人看。
 
 幂等：目标 md 目录已存在就跳过；暂存区已有产物就直接复用，不重跑 verify/audit
-（要重拆用 --force）。
+（要重拆用 --force，要只重跑检查用 --recheck）。
 范围账本 worklist.tsv 只在批次目录里还没有它时生成一次，重复运行不重写；账本一旦
 存在就以它为准，--uids 也只在新批次里起作用。
 
@@ -18,6 +18,7 @@ verify 与 audit 都过才进库，没过留在暂存区待人看。
   python3 split_md_batch.py --batch md拆分-2026-10-18 --only B0121,B0261
   python3 split_md_batch.py --batch md拆分-2026-10-18 --no-land   # 只做暂存，不进库
   python3 split_md_batch.py --batch md拆分-2026-10-18 --no-agent-fix  # 失败时不叫 pi 修
+  python3 split_md_batch.py --batch md拆分-2026-10-18 --only B0121 --recheck
   python3 split_md_batch.py --batch split-ops-20261024T2200 --uids B0001,B0002
   python3 split_md_batch.py --batch md拆分-2026-10-18 --report --report-json
 """
@@ -63,9 +64,16 @@ AUDIT = os.path.join(SKILL, "audit_volume.py")
 CALIBRE = "ebook-convert"
 FORMATS = ("epub", "mobi", "azw3", "azw")
 WORKLIST_COLS = ["uid", "format", "sha256", "path", "title", "src"]
-# 落地完成与留在暂存区、本来就无需处理的状态；其余状态要人看一眼
-DONE_STATUS = ("landed", "replaced", "accepted", "staged-green", "staged",
-               "skipped-has-md")
+# 每本书的终态词表。True 表示这件事不用人再管；页面词表由 check_ops 对齐这张表。
+STATUS = {
+    "landed": True, "replaced": True, "accepted": True,
+    "skipped-has-md": True, "staged-green": True,
+    "staged": False, "staged-review": False, "no-stage": False,
+    "split-failed": False, "convert-failed": False, "error": False,
+}
+DONE_STATUS = tuple(name for name, done in STATUS.items() if done)
+READING_KEYS = ("verify_rc", "audit_rc", "audit_ratio", "chapters", "chars",
+                "images", "problems")
 TIMEOUT = 900
 COUNT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]|[A-Za-z0-9]")
 
@@ -232,6 +240,123 @@ def agent_fix(ctx, row, target, vout, aout):
             "report": os.path.relpath(report, L.ROOT), "tail": out.strip()[-300:]}
 
 
+def previous_readings(stage, log_path):
+    """早退时沿用上一次的读数：日志还在，manifest 补日志里没有的字段。"""
+    prev = {}
+    if os.path.isfile(log_path):
+        try:
+            with open(log_path, encoding="utf-8") as fh:
+                prev = json.load(fh) or {}
+        except (OSError, ValueError):
+            prev = {}
+    man = L.read_md_manifest(stage)
+    out = {}
+    for key in READING_KEYS:
+        for src in (prev, man):
+            if isinstance(src, dict) and src.get(key) is not None:
+                out[key] = src[key]
+                break
+    return out
+
+
+def recheck_audit_source(row, ctx, uid):
+    """复核要拿原文比文本量；非 epub 找转换时留下的中间 EPUB，找不到就再转一次。
+
+    返回 (路径, 命令留痕)。转不出来时路径为 None，复核就没有文本量这一关。
+    """
+    if row["format"] == "epub":
+        return os.path.join(L.ROOT, row["src"]), ""
+    for cand in (os.path.join(ctx["batch"], "prepared", uid + ".epub"),
+                 os.path.join(ctx["tmp"], uid, "book.epub")):
+        if os.path.isfile(cand):
+            return cand, ""
+    out = os.path.join(ctx["tmp"], uid, "book.epub")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    line = "ebook-convert %s book.epub" % row["src"]
+    try:
+        rc, _ = sh([CALIBRE, os.path.join(L.ROOT, row["src"]), out], L.ROOT)
+    except OSError:
+        rc = -1
+    if rc != 0 or not os.path.isfile(out):
+        return None, line
+    return out, line
+
+
+def recheck(row, ctx, result):
+    """只复核暂存区已有的产物：重跑 verify 与 audit，重写 manifest，过了就进库。"""
+    uid = row["uid"]
+    stage = os.path.join(ctx["out"], uid)
+    dest = os.path.join(L.ROOT, "库", row["path"], "md")
+    if not os.path.isdir(stage):
+        result.update(status="no-stage", note="暂存区没有产物，先重拆")
+        return result
+    old = L.read_md_manifest(stage)
+    audited, prep = recheck_audit_source(row, ctx, uid)
+    rc, vout = sh([sys.executable, VERIFY, stage], L.ROOT)
+    v = parse_verify(vout)
+    result.update(verify_rc=rc, **v)
+    commands = ([prep] if prep else []) + ["verify_output.py out"]
+    rc2, aout, a = None, "", None
+    if audited:
+        rc2, aout = sh([sys.executable, AUDIT, audited, "-o", stage], L.ROOT)
+        commands.append("audit_volume.py %s -o out" % os.path.relpath(audited, L.ROOT))
+        a = parse_audit(aout)
+        result["audit_rc"] = rc2
+        if a:
+            result["audit_ratio"] = a["ratio"]
+            result["raw_chars"] = a["raw"]
+    else:
+        # 原文转不出来就没法量文本量：没有内容检查这一关，不许进库
+        result["audit_rc"] = None
+        result["audit_ratio"] = old.get("audit_ratio")
+        if old.get("audit_chars") is not None:
+            result["raw_chars"] = old["audit_chars"]
+        result["note"] = "原文转不出中间 EPUB，文本量没法复核"
+
+    chapters, nbytes = L.count_md_dir(stage)
+    manifest = {
+        "uid": old.get("uid") or uid,
+        "method": old.get("method") or "ebook-to-md",
+        "tool_version": old.get("tool_version") or ctx["tool_version"],
+        "tool": old.get("tool") or os.path.basename(CONVERT),
+        "batch": old.get("batch") or ctx["batch_name"],
+        "source": old.get("source") or row["src"],
+        "source_sha256": old.get("source_sha256") or row["sha256"],
+        "source_format": old.get("source_format") or row["format"],
+        "accepted": old.get("accepted") or "",
+        "chapters": chapters, "bytes": nbytes,
+        "images": v.get("images"), "chars": v.get("chars"),
+        "audit_chars": a["raw"] if a else old.get("audit_chars"),
+        "audit_ratio": a["ratio"] if a else old.get("audit_ratio"),
+        "generated_at": now(), "verified": rc == 0 and rc2 == 0,
+    }
+    with open(os.path.join(stage, ".manifest.json") + ".tmp", "w",
+              encoding="utf-8") as fh:
+        json.dump(manifest, fh, ensure_ascii=False, indent=1)
+        fh.write("\n")
+    os.replace(os.path.join(stage, ".manifest.json") + ".tmp",
+               os.path.join(stage, ".manifest.json"))
+    commands.append("write .manifest.json")
+
+    keep_prev(os.path.join(ctx["logs"], uid + ".log"), ctx["stamp"])
+    with open(os.path.join(ctx["logs"], uid + ".log"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join("$ " + c for c in commands) + "\n\n---- verify ----\n" + vout
+                 + "\n---- audit ----\n" + aout)
+
+    if manifest["verified"]:
+        result["status"] = "staged-green"
+        if ctx["land"]:
+            land(ctx, stage, dest, result)
+    else:
+        result["status"] = "staged-review"
+        note = "复核 verify rc=%s audit rc=%s" % (
+            rc, "未跑" if rc2 is None else rc2)
+        if not audited:
+            note += "；" + result["note"]
+        result["note"] = note
+    return result
+
+
 def run_one(row, ctx):
     uid = row["uid"]
     dest = os.path.join(L.ROOT, "库", row["path"], "md")
@@ -242,13 +367,17 @@ def run_one(row, ctx):
     if os.path.isdir(dest) and not ctx["replace"]:
         result["status"] = "skipped-has-md"
         return result
+    if ctx["recheck"]:
+        return recheck(row, ctx, result)
     if os.path.isdir(stage) and not ctx["force"]:
         man = L.read_md_manifest(stage)
         if ctx["land"] and man.get("verified") and (not os.path.isdir(dest) or ctx["replace"]):
             land(ctx, stage, dest, result)
             result["note"] = "暂存区已有过检产物，直接进库"
         else:
-            result.update(status="staged", note="暂存区已有产物，未重新拆分")
+            result.update(status="staged", note="暂存区已有产物，本次没重拆；读数是上次留下的",
+                          **previous_readings(stage,
+                                              os.path.join(ctx["logs"], uid + ".json")))
         return result
 
     if os.path.isdir(work):
@@ -319,7 +448,7 @@ def run_one(row, ctx):
             if not (rc or rc2):
                 break
             with ctx["fix_lock"]:
-                if ctx["fix_used"][0] >= ctx["fix_total"]:
+                if ctx["fix_total"] and ctx["fix_used"][0] >= ctx["fix_total"]:
                     break
                 ctx["fix_used"][0] += 1
             result.setdefault("fix", []).append(agent_fix(ctx, row, target, vout, aout))
@@ -378,6 +507,7 @@ def run_one(row, ctx):
 
 
 def write_result(ctx, result):
+    assert result["status"] in STATUS, result["status"]
     p = os.path.join(ctx["logs"], result["uid"] + ".json")
     keep_prev(p, ctx["stamp"])
     with open(p + ".tmp", "w", encoding="utf-8") as fh:
@@ -452,22 +582,27 @@ def main():
     ap.add_argument("--no-land", action="store_true", dest="noland",
                     help="只做暂存，不进 库/")
     ap.add_argument("--force", action="store_true", help="忽略暂存区已有产物，重拆")
+    ap.add_argument("--recheck", action="store_true",
+                    help="不重拆，只复核暂存区已有产物")
     ap.add_argument("--replace", action="store_true",
                     help="目标 md 已存在时也重拆并替换，旧版本改名留在批次区")
     ap.add_argument("--report", action="store_true", help="只读 logs/ 出统计，不干活")
     ap.add_argument("--report-json", action="store_true", dest="report_json",
                     help="stdout 最后一行给 JSON，含 batch、status_counts、books、pending_review")
     ap.add_argument("--no-agent-fix", action="store_true", help="检查不过时不叫 pi 修复")
-    ap.add_argument("--agent-fix-cap", type=int, default=1, help="每本最多修几次")
-    ap.add_argument("--agent-fix-total", type=int, default=3, help="整批最多修几次")
+    ap.add_argument("--agent-fix-cap", type=int, default=2, help="每本最多修几次")
+    ap.add_argument("--agent-fix-total", type=int, default=0, help="整批最多修几次，0 表示不限")
     ap.add_argument("--agent-fix-timeout", type=int, default=600)
     ap.add_argument("--agent-model", default=FIX_MODEL)
     a = ap.parse_args()
+    if a.recheck and a.force:
+        ap.error("--recheck 与 --force 不能同时用")
 
     batch_path = os.path.join(L.WORK, "批次", a.batch)
     ctx = {"batch": batch_path, "batch_name": a.batch, "out": os.path.join(batch_path, "out"),
            "tmp": os.path.join(batch_path, "tmp"), "logs": os.path.join(batch_path, "logs"),
            "land": not a.noland, "force": a.force, "replace": a.replace,
+           "recheck": a.recheck,
            "fix": not a.no_agent_fix, "fix_cap": a.agent_fix_cap,
            "fix_total": a.agent_fix_total, "fix_timeout": a.agent_fix_timeout,
            "fix_model": a.agent_model, "fix_used": [0], "fix_lock": threading.Lock(),
