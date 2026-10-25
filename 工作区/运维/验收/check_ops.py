@@ -1013,6 +1013,29 @@ def run_checks(root, ops, port, fixture):
           suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
           "%s 建议=%s 来自=%s 期望=%s" % (target, suggestion.get("route"),
                                      row.get("suggest_job"), batch_id))
+    job_csv = os.path.join(ops, "jobs", batch_id, target, "triage.csv")
+    with open(job_csv, "w", encoding="utf-8") as fh:
+        fh.write("uid,title,subject1,subject2,class,route,pages,mb,ppi,text_page_share,"
+                 "ink,bands,note,verdict,image_share,measure,route_metric\n")
+        fh.write("%s,书 %s,文学,,C 扫描件 批次标记,OCR,320,1.0,,0.0,0.42,2,stub,,"
+                 "1.0,stub,OCR\n" % (target, target))
+    code, body = post(port, "/api/pdf/settle",
+                      {"items": [{"uid": target, "route": "OCR"}]})
+    wait_job(port, body.get("job_id"), ("succeeded", "failed"))
+    review_path = os.path.join(root, "工作区", "批次", body.get("batch") or "",
+                               "review", target + ".json")
+    review = json.load(open(review_path, encoding="utf-8")) \
+        if os.path.isfile(review_path) else {}
+    batch_csv = os.path.join(root, "工作区", "批次", body.get("batch") or "",
+                             "triage.csv")
+    line = next((ln for ln in open(batch_csv, encoding="utf-8")
+                 if ln.split(",", 1)[0] == target), "") \
+        if os.path.isfile(batch_csv) else ""
+    check("失败任务的分诊行还是改处置的底表",
+          (review.get("model") or {}).get("route") == "OCR"
+          and "批次标记" in line,
+          "review=%s 行=%s" % ((review.get("model") or {}).get("route"),
+                               line.strip()[:80]))
     set_job_state(ops_db, batch_id, "awaiting_review")
     code, body = post(port, "/api/pdf/settle",
                       {"items": [{"uid": target, "route": "本地抽文本"}]})
