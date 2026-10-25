@@ -1,0 +1,34 @@
+{
+ "uid": "B1008",
+ "title": "山塔",
+ "title_from_file": "",
+ "author": "斯波四郎",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/山塔",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/山塔 (斯波四郎).pdf",
+   "format": "pdf",
+   "bytes": 8724169,
+   "sha256": "eba8659665e58ba3ddb21ea06577f2153e81f6415a7ec4a0c1a7de54e08c027d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

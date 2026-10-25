@@ -1,0 +1,42 @@
+{
+ "uid": "B1139",
+ "title": "这边风景",
+ "title_from_file": "",
+ "author": "王蒙 王蒙",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/这边风景",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/这边风景 (王蒙 [王蒙]).epub",
+   "format": "epub",
+   "bytes": 936623,
+   "sha256": "2bbc55200f18157605bf83a83f4b0adab30c991f33b65e45511ce6c992f54bd8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 61,
+   "bytes": 1754408
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

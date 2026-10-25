@@ -1,0 +1,20 @@
+{
+ "uid": "B0765",
+ "title": "The Sense Of An Ending",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The Sense Of An Ending/md",
+ "at": "2026-10-18T21:06:55+08:00",
+ "override": {
+  "tool": "carry_doc_prefixes.py"
+ },
+ "verify_rc": 0,
+ "chapters": 5,
+ "chars": 190064,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.986,
+ "raw_chars": 182591,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0765.prev-2026-10-18T210620-0800"
+}

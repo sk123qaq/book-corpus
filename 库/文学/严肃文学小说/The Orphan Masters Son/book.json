@@ -1,0 +1,42 @@
+{
+ "uid": "B0901",
+ "title": "The Orphan Masters Son",
+ "title_from_file": "",
+ "author": "Johnson",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Orphan Masters Son",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Orphan Masters Son (Johnson, Adam).epub",
+   "format": "epub",
+   "bytes": 2571395,
+   "sha256": "e7e8b728905ab7441b9bf088ed230564017bd9835851ff386138d7784480338b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 38,
+   "bytes": 971613
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

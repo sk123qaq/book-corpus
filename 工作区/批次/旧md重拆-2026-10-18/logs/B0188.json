@@ -1,0 +1,16 @@
+{
+ "uid": "B0188",
+ "title": "呼兰河传",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/呼兰河传/md",
+ "at": "2026-10-18T23:30:54+08:00",
+ "verify_rc": 0,
+ "chapters": 10,
+ "chars": 122588,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.995,
+ "raw_chars": 108059,
+ "status": "staged-green"
+}

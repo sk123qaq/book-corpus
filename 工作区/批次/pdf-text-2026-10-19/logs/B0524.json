@@ -1,0 +1,29 @@
+{
+ "uid": "B0524",
+ "title": "The Domineering Sex American SM volume 2",
+ "format": "pdf",
+ "route": "text",
+ "pages": 91,
+ "dest": "库/生活与实用/两性与情色/The Domineering Sex American SM volume 2/md",
+ "at": "2026-10-19T12:40:58+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/生活与实用/两性与情色/The Domineering Sex American SM volume 2/source/The Domineering Sex American SM volume 2 (Marika Moreski, Bill Ward) (z-library.sk, 1lib.sk, z-lib.sk).pdf --out out/B0524 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0019,
+ "audit_anchors": 1.0,
+ "audit_chars": 141656,
+ "chapters": 18,
+ "chars": 153670,
+ "images": 2,
+ "problems": 0,
+ "structure": "chapters",
+ "single_file": false,
+ "pdf_pages": 91,
+ "toc_entries": 18,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

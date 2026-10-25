@@ -1,0 +1,42 @@
+{
+ "uid": "B1541",
+ "title": "第八届鲁迅文学奖中短篇小说",
+ "title_from_file": "",
+ "author": "han",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/第八届鲁迅文学奖中短篇小说",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/第八届鲁迅文学奖中短篇小说 (han).epub",
+   "format": "epub",
+   "bytes": 317664,
+   "sha256": "7132c65ea01833bc461f5a125a87694587a6f6b0a7b90c1fe48b8a217eb5a797",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 663022
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

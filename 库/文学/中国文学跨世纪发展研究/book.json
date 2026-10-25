@@ -1,0 +1,41 @@
+{
+ "uid": "B1313",
+ "title": "中国文学跨世纪发展研究",
+ "title_from_file": "",
+ "author": "高楠",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/中国文学跨世纪发展研究",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国文学跨世纪发展研究 (高楠，王纯菲著).pdf",
+   "format": "pdf",
+   "bytes": 21815986,
+   "sha256": "400d61971cfa216646927a8d80a195f4e06eada6d36fa417c32750127d49b0f7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1033199
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

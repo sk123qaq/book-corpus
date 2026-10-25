@@ -1,0 +1,17 @@
+{
+ "uid": "B1166",
+ "title": "加缪全集",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/加缪全集/md",
+ "at": "2026-10-18T21:07:53+08:00",
+ "verify_rc": 0,
+ "chapters": 57,
+ "chars": 1587766,
+ "images": 7,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 1403307,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1166.prev-2026-10-18T210620-0800"
+}

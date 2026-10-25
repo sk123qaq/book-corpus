@@ -1,0 +1,42 @@
+{
+ "uid": "B0896",
+ "title": "The Mambo Kings Play Songs Of Love",
+ "title_from_file": "",
+ "author": "Oscar Hijuelos",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Mambo Kings Play Songs Of Love",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Mambo Kings Play Songs Of Love (Oscar Hijuelos).epub",
+   "format": "epub",
+   "bytes": 480836,
+   "sha256": "b37dcdaab5ee5c6553ff8d8af81356f4bf57e0ff0bea3e635c59b6e7d1384532",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 857829
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

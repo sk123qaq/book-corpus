@@ -1,0 +1,42 @@
+{
+ "uid": "B1612",
+ "title": "陶渊明的幽灵",
+ "title_from_file": "",
+ "author": "鲁枢元",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/陶渊明的幽灵",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/陶渊明的幽灵 (鲁枢元).epub",
+   "format": "epub",
+   "bytes": 456843,
+   "sha256": "11272028e7c6ae320e341176855fb9230a16148f6ea61a036ecc603757f11c77",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 36,
+   "bytes": 779832
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

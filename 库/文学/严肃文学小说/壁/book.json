@@ -1,0 +1,42 @@
+{
+ "uid": "B0995",
+ "title": "壁",
+ "title_from_file": "",
+ "author": "安部公房",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/壁",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/壁 (安部公房).epub",
+   "format": "epub",
+   "bytes": 3125235,
+   "sha256": "4d7d643d251682f24eaf22825b9e061702bf554f492d2be0854e67b18559e4e3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 440328
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

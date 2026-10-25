@@ -1,0 +1,42 @@
+{
+ "uid": "B1320",
+ "title": "乡村记忆",
+ "title_from_file": "",
+ "author": "刘家科",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/乡村记忆",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/乡村记忆 (刘家科著, 刘家科著, 刘家科, 劉家科).pdf",
+   "format": "pdf",
+   "bytes": 13710557,
+   "sha256": "1e0ef9f6eeb08252fe30ac5ab20972a5e6995dfb0463b575758d1653fe508774",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 384364
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0383",
+ "title": "证券分析",
+ "title_from_file": "",
+ "author": "格雷厄姆",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/证券分析",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/证券分析 (格雷厄姆 [格雷厄姆]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1336573,
+   "sha256": "d36a0f3208a8a26d616ff8c45c51a305b2c992d3332897f67083e18033fda4ac",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 112,
+   "bytes": 1426836
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0779",
+ "title": "失落 (基兰·德赛著, (印)基兰·德赛(Kiran Desai)著 , 韩丽枫译, 德赛 etc.)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/失落 (基兰·德赛著, (印)基兰·德赛(Kiran Desai)著 , 韩丽枫译, 德赛 etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/失落 (基兰·德赛著, (印)基兰·德赛(Kiran Desai)著 , 韩丽枫译, 德赛 etc.).pdf",
+   "format": "pdf",
+   "bytes": 10861671,
+   "sha256": "2425bce49ec6d03743671440bbccb4b37dbdfceb74bd6dea775070933bd96416",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 609882
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

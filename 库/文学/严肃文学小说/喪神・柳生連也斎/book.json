@@ -1,0 +1,42 @@
+{
+ "uid": "B0992",
+ "title": "喪神・柳生連也斎",
+ "title_from_file": "",
+ "author": "P+D BOOKS",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/喪神・柳生連也斎",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/喪神・柳生連也斎 (P+D BOOKS) (五味康祐).epub",
+   "format": "epub",
+   "bytes": 1992578,
+   "sha256": "953130e9992f60d076089e9a2a91dae81e81a2bdb56d51d6a9a8a19a614cac20",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 805213
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

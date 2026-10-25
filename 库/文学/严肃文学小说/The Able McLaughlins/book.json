@@ -1,0 +1,42 @@
+{
+ "uid": "B0882",
+ "title": "The Able McLaughlins",
+ "title_from_file": "",
+ "author": "Margaret Wilson",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Able McLaughlins",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Able McLaughlins (Margaret Wilson).epub",
+   "format": "epub",
+   "bytes": 1440153,
+   "sha256": "55d1cb1f6bc20e4ba57494483f2b4075e48e75314f95d47a6b855114ce6cfdf5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 22,
+   "bytes": 362575
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,18 @@
+{
+ "question": "孤独为什么会在亲密之后出现？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "孤独",
+    "亲密"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [],
+ "broad_weight": 1.0
+}

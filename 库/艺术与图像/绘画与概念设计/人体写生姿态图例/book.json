@@ -1,0 +1,27 @@
+{
+ "uid": "B0629",
+ "title": "人体写生姿态图例",
+ "title_from_file": "",
+ "author": "李欣",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/人体写生姿态图例",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/人体写生姿态图例 (李欣 主编、摄影) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 121753308,
+   "sha256": "1d504f05e186bf17501ff970bb6cf33c77f4cb5dcecde76a205f1af360405153",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比93%"
+}

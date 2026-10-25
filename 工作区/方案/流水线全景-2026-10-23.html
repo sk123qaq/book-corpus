@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>书库流水线全景 · 2026-10-23</title>
+<style>
+  :root {
+    --ink: #16181d;
+    --muted: #5f6672;
+    --line: #dfe2e7;
+    --bg: #fbfbf9;
+    --card: #ffffff;
+    --ok: #14724a;
+    --ok-bg: #e7f3ec;
+    --half: #8a5a00;
+    --half-bg: #fbf0dc;
+    --bad: #a7231b;
+    --bad-bg: #fbe9e7;
+    --human: #1f4f9c;
+    --human-bg: #e8eefb;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 34px 40px 60px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.62 "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1520px; margin: 0 auto; }
+  code, .p { font-family: var(--mono); font-size: 12.5px; }
+  .p { color: #2a3140; background: #f2f3f5; border-radius: 3px; padding: 0 4px; }
+
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; border-bottom: 2px solid var(--ink); padding-bottom: 14px; }
+  h1 { font-size: 25px; margin: 0 0 6px; letter-spacing: .01em; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0; }
+  .stamp { text-align: right; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .stamp b { color: var(--ink); font-size: 13px; }
+
+  h2 { font-size: 15px; margin: 38px 0 12px; letter-spacing: .04em; }
+  h2 .n { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-right: 8px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: -4px 0 12px; }
+
+  /* flow strip */
+  .flow { display: flex; align-items: stretch; gap: 0; }
+  .chip {
+    flex: 0 0 178px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; position: relative;
+  }
+  .chip .k { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .chip .t { font-weight: 700; font-size: 14px; margin: 2px 0 4px; }
+  .chip .s { font-size: 11.5px; color: var(--muted); }
+  .chip.ok { border-color: #b9dbc9; background: linear-gradient(180deg,#fff, #f4faf6); }
+  .chip.half { border-color: #ecd7ac; background: linear-gradient(180deg,#fff, #fdf8ef); }
+  .chip.bad { border-color: #efbdb8; background: linear-gradient(180deg,#fff, #fdf1f0); }
+  .chip.human { border-color: #c3d1ec; background: linear-gradient(180deg,#fff, #f3f6fd); }
+  .hop { flex: 1 1 auto; min-width: 46px; position: relative; display: flex; align-items: center; justify-content: center; }
+  .hop::before {
+    content: ""; position: absolute; left: 6px; right: 6px; top: 50%;
+    border-top: 2px solid #b8bec8;
+  }
+  .hop::after {
+    content: ""; position: absolute; right: 4px; top: 50%; margin-top: -5px;
+    border-left: 8px solid #b8bec8; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  }
+  .hop.broken::before { border-top: 2px dashed var(--bad); }
+  .hop.broken::after { border-left-color: var(--bad); }
+  .hop span {
+    position: absolute; top: 6px; font-size: 10.5px; color: var(--muted);
+    background: var(--bg); padding: 0 3px; white-space: nowrap;
+  }
+  .hop.broken span { color: var(--bad); font-weight: 700; }
+
+  /* detail cards */
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px 12px; }
+  .card .hd { display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 10px; }
+  .card .hd .k { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .card .hd .t { font-weight: 700; font-size: 15px; }
+  .badge { margin-left: auto; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .b-ok { color: var(--ok); background: var(--ok-bg); }
+  .b-half { color: var(--half); background: var(--half-bg); }
+  .b-bad { color: var(--bad); background: var(--bad-bg); }
+  .b-human { color: var(--human); background: var(--human-bg); }
+  .b-miss { color: #5b3fa8; background: #eee9fb; }
+  .b-ext { color: #4a5568; background: #eceef1; }
+  .row { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 8px; margin-bottom: 7px; }
+  .row .lbl { color: var(--muted); font-size: 12px; padding-top: 1px; }
+  .row .val { font-size: 13px; }
+  .val ul { margin: 0; padding-left: 16px; }
+  .val li { margin-bottom: 3px; }
+  .gapnote { margin-top: 9px; border-left: 3px solid var(--bad); background: #fdf5f4; padding: 6px 10px; font-size: 12.5px; color: #6b1d17; }
+  .gapnote b { color: var(--bad); }
+
+  /* query lane */
+  .q { display: flex; align-items: stretch; gap: 0; }
+  .qn { flex: 1 1 0; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; position: relative; }
+  .qn .k { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .qn .t { font-weight: 700; font-size: 13px; margin: 1px 0 3px; }
+  .qn .s { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+  .qn.opt { border-style: dashed; border-color: #b9c0cc; background: #fafbfc; }
+  .qn .flag { position: absolute; top: -8px; right: 8px; font-size: 10px; background: #eef0f3; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+  .q .hop { flex: 0 0 34px; min-width: 34px; }
+  .q-legend { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+  /* ledgers */
+  .leds { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+  .led { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 15px; }
+  .led .t { font-weight: 700; margin-bottom: 4px; }
+  .led .t small { font-weight: 400; color: var(--muted); margin-left: 6px; font-size: 11.5px; }
+  .led p { margin: 4px 0; font-size: 12.5px; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 11px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 12.5px; }
+  th { background: #f4f5f7; font-size: 11.5px; color: var(--muted); font-weight: 600; letter-spacing: .03em; }
+  tr:last-child td { border-bottom: 0; }
+  td.id { font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+  td.ev { font-family: var(--mono); font-size: 11.5px; color: #3b4250; }
+  .sev { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; }
+  .st { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .st .v { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .st .v small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .st .n { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+  footer { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--muted); font-size: 12px; }
+  footer .cmdtab { margin-top: 10px; background: #f4f5f7; border: 1px solid var(--line); }
+  footer .cmdtab td { padding: 4px 10px; border-bottom: 1px solid #e8eaee; font-size: 11.5px; }
+  footer .cmdtab tr:last-child td { border-bottom: 0; }
+  footer .cmdtab td:first-child { font-family: var(--mono); color: #2a3140; }
+  footer .cmdtab td:last-child { width: 230px; color: var(--muted); font-family: var(--mono); }
+  @media print {
+    body { padding: 10mm; background: #fff; }
+    .wrap { max-width: none; }
+    h2 { page-break-after: avoid; }
+    .card, .chip, .qn, .led, .st { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>书库流水线全景</h1>
+    <p class="sub">从收件箱到问答，六个阶段、三本账、十一条断点，其中 G1 与 G2 已通。数字为 2026-10-23 实测，2026-10-24 复核未变；检索层补了向量与重排的实测，见 G7。</p>
+  </div>
+  <div class="stamp">
+    <b>1,693 本</b> · 1,535 有 md · 158 待转换<br>
+    索引 6.1 GB · 2,519,767 段 · 2,043 条视图软链
+  </div>
+</header>
+
+<h2><span class="n">01</span>主流水线</h2>
+<p class="hint">方框是阶段，箭头是交接。红色虚线表示这一步没有自动衔接，靠人或根本不存在。</p>
+
+<div class="flow">
+  <div class="chip ok"><div class="k">S1</div><div class="t">进门</div><div class="s">收件箱（ingest.py）</div></div>
+  <div class="hop broken"><span>G1 无脚本</span></div>
+  <div class="chip ok"><div class="k">S2</div><div class="t">入账</div><div class="s">分类表.csv 脚本追加</div></div>
+  <div class="hop"><span>uid + 分类</span></div>
+  <div class="chip ok"><div class="k">S3</div><div class="t">落位</div><div class="s">DB + book.json + 目录树</div></div>
+  <div class="hop"><span>源文件</span></div>
+  <div class="chip half"><div class="k">S4</div><div class="t">出正文</div><div class="s">md / PDF OCR</div></div>
+  <div class="hop"><span>md/</span></div>
+  <div class="chip half"><div class="k">S5</div><div class="t">建索引</div><div class="s">倒排 + 扩展 + 视图</div></div>
+  <div class="hop"><span>index.db</span></div>
+  <div class="chip ok"><div class="k">S6</div><div class="t">查询展示</div><div class="s">书级 → 章 → 卡</div></div>
+</div>
+
+<div class="cards" style="margin-top:14px">
+
+  <div class="card">
+    <div class="hd"><span class="k">S1</span><span class="t">进门</span><span class="badge b-ok">通</span></div>
+    <div class="row"><div class="lbl">驱动</div><div class="val"><span class="p">ingest.py</span> 管收件箱。<span class="p">scan</span> 列文件、算 sha256、按书名匹配库里已有的书，出 add / replace / conflict / skip 四种动作的计划；<span class="p">--apply</span> 才落盘。</div></div>
+    <div class="row"><div class="lbl">现状</div><div class="val">6 个 epub 在 2026-10-24 处理完：B0554、B1521、B0571 换源并落地 md（42 / 159 / 14 章），B0571 首轮 75.1% 被拦下，由自动叫的 agent 修到 100%；B0929、B1155 已有 md 未动；B1454 冲突跳过。</div></div>
+    <div class="row"><div class="lbl">应有</div><div class="val">分配 uid、sha256 去重（含收件箱内部）、写 book.json 与人账行、记 journal、重建 DB；替换时新源置顶、旧源保留、md 标为待重拆。</div></div>
+    <div class="gapnote"><b>G1</b> 已通：<span class="p">ingest.py scan/apply</span> 加 <span class="p">工作区/批次/ingest-2026-10-24/test_ingest.py</span>（新增、替换、重复、幂等、缺 subjects 拒绝）。</div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><span class="k">S2</span><span class="t">入账</span><span class="badge b-ok">通</span></div>
+    <div class="row"><div class="lbl">方法</div><div class="val">新行由脚本追加：<span class="p">ingest.py add/apply</span> 写 uid、一级、二级、保留、书名；<span class="p">classify_books.py --merge --add-new</span> 把清单里未入账的 uid 追加进人账，不加旗仍跳过。</div></div>
+    <div class="row"><div class="lbl">产物</div><div class="val"><span class="p">目录/分类表.csv</span> 1,693 行，唯一人账。<span class="p">目录/分类缓存.jsonl</span> 是 TypeSafe 的分类建议，可重跑。</div></div>
+    <div class="row"><div class="lbl">读数</div><div class="val">1,693 行全部有合法一级；新行备注写 <span class="p">ingest:日期</span> 或 <span class="p">auto:classify</span>，留给人工复核。</div></div>
+    <div class="gapnote"><b>G2</b> 已通：<span class="p">--add-new</span> 追加新 uid，不再丢进 ignored。<b>G3</b> 目录名只是分类表的投影，改分类不会改目录，要手工 <span class="p">mv</span>。</div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><span class="k">S3</span><span class="t">落位</span><span class="badge b-ok">通</span></div>
+    <div class="row"><div class="lbl">方法</div><div class="val"><span class="p">build_library.py --emit-json</span> 读全部 <span class="p">book.json</span> 重建 DB，全量秒级，不做增量。冲突不为 0 就拒绝写。</div></div>
+    <div class="row"><div class="lbl">产物</div><div class="val"><span class="p">目录/library.db</span> 1.9 MB：book / source / derived / job / award / book_award 六表加 6 个视图。1,693 个 <span class="p">book.json</span>，1,386 个 <span class="p">source/</span> 文件（合集源拆卷，书比文件多）。</div></div>
+    <div class="row"><div class="lbl">读数</div><div class="val">books=1,693，derived md done=1,535，html done=2，待转换视图 158 行。</div></div>
+    <div class="gapnote"><b>G3</b> 只写库和 book.json，不动目录名。</div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><span class="k">S4</span><span class="t">出正文</span><span class="badge b-half">半自动</span></div>
+    <div class="row"><div class="lbl">方法</div><div class="val">
+      <ul>
+        <li>epub / mobi / azw3 → <span class="p">split_md_batch.py</span> 调 <span class="p">ebook-to-md</span>，按 spine 切章，逐页锚点验收后才 rename 进库</li>
+        <li>文本层 PDF → <span class="p">pdf_text_to_md.py</span>，pymupdf 抽文本，自带目录按目录切章</li>
+        <li>扫描 PDF → <span class="p">pdf_md_batch.py --route ocr</span>，PaddleOCR-VL 切片轮询，读出 0 字的页交 MinerU 补投，读不出记 <span class="p">skipped-pages.tsv</span></li>
+      </ul></div></div>
+    <div class="row"><div class="lbl">产物</div><div class="val">1,535 个 <span class="p">md/</span>、88,928 个章文件、68,279 张图、1,532 个 README（3 本缺）、1,055 份 manifest（早期 md 没写）。</div></div>
+    <div class="row"><div class="lbl">待办</div><div class="val">158 本。151 本 pdf 里 73 本图册不转、45 本日文暂缓、33 本可转；另有 5 txt、2 djvu 不在当前范围。</div></div>
+    <div class="gapnote"><b>G4</b> 批次范围来自 <span class="p">triage_final.csv</span> 和只写一次的 <span class="p">worklist.tsv</span>，不是 DB 的待转换视图。OCR 还受外部日额度限制（403 code 12001）。</div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><span class="k">S5</span><span class="t">建索引</span><span class="badge b-half">半自动</span></div>
+    <div class="row"><div class="lbl">方法</div><div class="val">
+      <ul>
+        <li><span class="p">build_para_index.py</span> 段落倒排，FTS5 bigram，CJK 切分与查询共用一份代码</li>
+        <li><span class="p">build_expand.py</span> 每章生成主题前缀与伪查询，写 <span class="p">expand</span> 表与 <span class="p">expand/&lt;uid&gt;.md</span></li>
+        <li><span class="p">build_topic_views.py</span>、<span class="p">build_index.py</span> 出视图软链与阅读版索引</li>
+      </ul></div></div>
+    <div class="row"><div class="lbl">产物</div><div class="val"><span class="p">目录/检索/index.db</span> 6.1 GB，2,519,767 段 / 87,396 章 / 1,531 本；expand 104,293 行；<span class="p">视图/</span> 2,043 条软链。</div></div>
+    <div class="row"><div class="lbl">读数</div><div class="val">索引落后 4 本（1,531 / 1,535）。expand 未覆盖 3,310 章，其中 3,185 是空正文章，125 章待扩。</div></div>
+    <div class="gapnote"><b>G5</b> md 落地不触发重建，全靠人记得跑。<b>G6</b> 空正文章永远扩不出来，账面永远有 3,185。<b>G7</b> 向量层只有实验台，生产的 <span class="p">sem_index.py</span> 与 <span class="p">vec/</span> 仍未建。</div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><span class="k">S6</span><span class="t">查询与展示</span><span class="badge b-ok">通</span></div>
+    <div class="row"><div class="lbl">驱动</div><div class="val"><span class="p">book_query.py</span> 是默认入口，<span class="p">book_cards.py</span> 弹卡，<span class="p">qsearch.py</span> 是旧口径对照，<span class="p">book_expand.py</span> 按需扩展默认关。</div></div>
+    <div class="row"><div class="lbl">产物</div><div class="val">CLI 文本与 <span class="p">--json</span>、5 到 8 张书卡、<span class="p">目录/书目总表.xlsx</span>、<span class="p">视图/奖项</span> 1,009 条、<span class="p">视图/主题</span> 1,034 条、<span class="p">阅读版索引.html</span>。</div></div>
+    <div class="row"><div class="lbl">读数</div><div class="val">B6 探针 <span class="p">ALL PASS</span>：60 题默认命中 53/60 = 0.883；heldout 20 题 hit@10 = 1.000；p95 657 到 674 ms，对旧路径 1.75 到 1.92 倍。</div></div>
+    <div class="gapnote"><b>G8</b> 阅读版 html 只有 2 本。<b>G9</b> 主题视图 124 个目录，概念表 126 键，2 个概念零命中不建目录。<b>G10</b> 冷宫移出仍是 6 步手工。</div>
+  </div>
+
+</div>
+
+<h2><span class="n">02</span>查询链路</h2>
+<p class="hint">从一句问话到书卡与章。虚线节点是默认关闭或尚未接通的分支。</p>
+
+<div class="q">
+  <div class="qn"><div class="k">Q1</div><div class="t">问句</div><div class="s"><span class="p">book_query</span> 收词或整句</div></div>
+  <div class="hop"></div>
+  <div class="qn"><div class="k">Q2</div><div class="t">规划</div><div class="s">名词/动作切分，概念表路由，5 轮词法循环</div></div>
+  <div class="hop"></div>
+  <div class="qn"><div class="k">Q3</div><div class="t">书级打分</div><div class="s"><span class="p">best_support</span>，8 种方案可选</div></div>
+  <div class="hop"></div>
+  <div class="qn"><div class="k">Q4</div><div class="t">段级检索</div><div class="s">FTS5 bigram，2.52M 段</div></div>
+  <div class="hop"></div>
+  <div class="qn"><div class="k">Q5</div><div class="t">选章</div><div class="s">README 目录 + 章内命中行</div></div>
+  <div class="hop"></div>
+  <div class="qn"><div class="k">Q6</div><div class="t">书卡</div><div class="s">5 到 8 张，触发 21/60</div></div>
+  <div class="hop"></div>
+  <div class="qn opt"><span class="flag">默认关</span><div class="k">Q7</div><div class="t">按需扩展</div><div class="s">B4，60/80/120 秒，24 次上限</div></div>
+  <div class="hop"></div>
+  <div class="qn"><div class="k">Q8</div><div class="t">输出</div><div class="s">文本 / json / 反馈 TSV</div></div>
+</div>
+<div class="q-legend">Q2 的第 4 轮默认不加宽词组。Q7 不重排，只补摘要，证据章集合不变。Q6 在命中书少于 6 本时只出几张，不凑数。</div>
+
+<h2><span class="n">03</span>三本账，一个字段一个写者</h2>
+<div class="leds">
+  <div class="led">
+    <div class="t">人账<small>只有它允许人改</small></div>
+    <p><span class="p">目录/分类表.csv</span>，7 列 1,693 行。</p>
+    <p>已有行只由人改；新行走 <span class="p">ingest.py</span> 或 <span class="p">classify --add-new</span>，然后跑 <span class="p">build_library.py --emit-json</span>。</p>
+  </div>
+  <div class="led">
+    <div class="t">产物<small>可重建，删了不丢书</small></div>
+    <p><span class="p">library.db</span>、每本 <span class="p">book.json</span>、<span class="p">index.db</span>、<span class="p">视图/</span>、<span class="p">书目总表.xlsx</span>、<span class="p">阅读版索引.html</span>。</p>
+    <p>全部从 <span class="p">库/</span> 重算，脚本写，人不写。</p>
+  </div>
+  <div class="led">
+    <div class="t">机账<small>只追加</small></div>
+    <p><span class="p">工作区/批次/&lt;批次&gt;/</span> 下的 <span class="p">worklist.tsv</span>、<span class="p">logs/</span>、<span class="p">out/</span>、<span class="p">overrides/</span>、<span class="p">skipped-pages.tsv</span>。</p>
+    <p>每个批次一个写者，重跑不重写范围账。</p>
+  </div>
+</div>
+
+<h2><span class="n">04</span>断点清单</h2>
+<p class="hint">按影响排序。断 = 走不通，半 = 能走但靠人，缺 = 计划里有但没建，外 = 外部依赖。</p>
+
+<table>
+  <thead><tr><th style="width:52px">编号</th><th style="width:150px">位置</th><th style="width:64px">程度</th><th>症状</th><th style="width:330px">证据</th></tr></thead>
+  <tbody>
+    <tr><td class="id">G1</td><td>收件箱 → 人账</td><td><span class="sev b-ok">通</span></td><td><span class="p">ingest.py scan</span> 出计划（add / replace / conflict / skip），<span class="p">apply</span> 落文件、book.json、人账行与 journal，再重建 DB。2026-10-24 已 apply：3 本换源并落地 md，其中 1 本由拆章失败自动叫的 agent 修好；2 本因已有 md 跳过，1 本冲突跳过。</td><td class="ev">工作区/脚本/ingest.py；ingest-2026-10-24/{plan.json,test_ingest.py}</td></tr>
+    <tr><td class="id">G2</td><td>新 uid → 分类表</td><td><span class="sev b-ok">通</span></td><td><span class="p">classify_books.py --merge --add-new</span> 追加清单里未入账的 uid（一级二级取 TypeSafe，备注 auto:classify），默认仍只补已有行。ingest 也追加新行。</td><td class="ev">classify_books.py merge_ledger(add_new)；ingest-2026-10-24/test_ingest.py</td></tr>
+    <tr><td class="id">G3</td><td>分类表 → 目录名</td><td><span class="sev b-half">半</span></td><td>目录名是分类表的投影，改分类不改目录，要手工 <span class="p">mv</span> 再重建。</td><td class="ev">build_library.py 无 rename/replace；AGENTS.md 写入规则第 1 条</td></tr>
+    <tr><td class="id">G4</td><td>DB → 转换批次</td><td><span class="sev b-half">半</span></td><td>PDF 批次范围取自 <span class="p">triage_final.csv</span>，不是 <span class="p">v_pending_md</span>。epub 批次的 <span class="p">worklist.tsv</span> 只写一次，之后新书不会进这个批次。</td><td class="ev">pdf_md_batch.py:172；split_md_batch.py:67</td></tr>
+    <tr><td class="id">G5</td><td>md → 索引</td><td><span class="sev b-half">半</span></td><td>没有落地钩子，索引靠人重跑。当前 1,531 / 1,535，落后 4 本。</td><td class="ev">audit_state --deep：index.db 落后库</td></tr>
+    <tr><td class="id">G6</td><td>expand 覆盖</td><td><span class="sev b-half">半</span></td><td>3,310 章没有扩展文本，其中 3,185 是图片页或标题页，按设计不生成；125 章待扩。</td><td class="ev">audit_state --deep：expand 未覆盖 3310 章</td></tr>
+    <tr><td class="id">G7</td><td>向量层</td><td><span class="sev b-miss">缺</span></td><td>生产 <span class="p">sem_index.py</span> 与 <span class="p">vec/</span> 仍未建。2026-10-24 已有实验台：bge-m3 全库 879,961 块、1.7 GB 分片，加 <span class="p">bge-reranker-v2-m3</span> 重排，工作点 K=200、单题 8 秒。实测近义 3/20 提到 7/20，原词 17/20，无原词暂停、不算产品场景。</td><td class="ev">live/pilot-noword/；P3-重排器-实测-2026-10-24.md；决策记录 2026-10-24</td></tr>
+    <tr><td class="id">G8</td><td>阅读版 html</td><td><span class="sev b-miss">缺</span></td><td>只有 2 本书有 <span class="p">html/</span>，索引页停在 10-22。做阅读版仍是按需手工。</td><td class="ev">find 库 -type d -name html | wc -l → 2</td></tr>
+    <tr><td class="id">G9</td><td>概念表 → 主题视图</td><td><span class="sev b-half">半</span></td><td>概念表 126 键，主题视图 124 个目录。达克效应、人工智能对齐 两个概念零命中，脚本直接跳过不建目录。</td><td class="ev">build_topic_views.py:38 if not books: continue</td></tr>
+    <tr><td class="id">G10</td><td>冷宫移出</td><td><span class="sev b-half">半</span></td><td>移出一本书要 6 步手工：删 md、book.json 改名、移目录、删人账行、重建 DB、重建索引与视图。</td><td class="ev">库/_冷宫/README.md</td></tr>
+    <tr><td class="id">G11</td><td>OCR 额度</td><td><span class="sev b-ext">外</span></td><td>Paddle 每日 20,000 页，用尽回 HTTP 403 code 12001。33 本可转的书要按天排队。</td><td class="ev">pdf-ocr 批次 说明.md；2026-10-20 14:47 撞额度</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="n">05</span>数字快照</h2>
+<div class="stats">
+  <div class="st"><div class="v">1,693</div><div class="n">书（人账 = DB）</div></div>
+  <div class="st"><div class="v">1,386</div><div class="n">source 文件</div></div>
+  <div class="st"><div class="v">1,535</div><div class="n">md 目录</div></div>
+  <div class="st"><div class="v">88,928</div><div class="n">章文件</div></div>
+  <div class="st"><div class="v">158</div><div class="n">待转换</div></div>
+  <div class="st"><div class="v">6.1<small>GB</small></div><div class="n">index.db</div></div>
+  <div class="st"><div class="v">2.52<small>M 段</small></div><div class="n">段落倒排</div></div>
+  <div class="st"><div class="v">104,293</div><div class="n">expand 行</div></div>
+  <div class="st"><div class="v">2,043</div><div class="n">视图软链</div></div>
+  <div class="st"><div class="v">126</div><div class="n">概念键</div></div>
+  <div class="st"><div class="v">0.883</div><div class="n">60 题默认命中</div></div>
+  <div class="st"><div class="v">104</div><div class="n">单测用例</div></div>
+</div>
+
+<footer>
+  数据取自 2026-10-23 22:00 前后的实测，2026-10-24 复核书目与索引数字未变。改完人账跑 <span class="p">build_library.py --emit-json</span>，改完检索层跑 <span class="p">check_p1.py</span> 与 <span class="p">verify_phase.py --box 6</span>。
+  <table class="cmdtab">
+    <tr><td><code>python3 工作区/脚本/lq.py "SELECT count(*) FROM book"</code></td><td>1693</td></tr>
+    <tr><td><code>find 库 -type d -name md | wc -l</code></td><td>1535</td></tr>
+    <tr><td><code>find 库 -path '*/md/*.md' | wc -l</code></td><td>88928</td></tr>
+    <tr><td><code>python3 工作区/脚本/lq.py "SELECT format,count(*) FROM v_pending_md GROUP BY 1"</code></td><td>pdf 151 / txt 5 / djvu 2</td></tr>
+    <tr><td><code>du -h 目录/检索/index.db</code></td><td>6.1G</td></tr>
+    <tr><td><code>python3 工作区/脚本/audit_state.py --deep</code></td><td>FAIL 0 项 / WARN 3 项</td></tr>
+    <tr><td><code>工作区/.venv-pdf/bin/python 工作区/批次/qa-检索-2026-10-22-书级融合/noword_rerank.py --report</code></td><td>无原词 4/20 · 原词 17/20 · 近义 10/20（缓存为 K=2000 口径）</td></tr>
+    <tr><td><code>工作区/.venv-pdf/bin/python 工作区/批次/qa-检索-2026-10-22-书级融合/k_curve.py --plot</code></td><td>live/pilot-noword/k-curve.png</td></tr>
+  </table>
+</footer>
+
+</div>
+</body>
+</html>

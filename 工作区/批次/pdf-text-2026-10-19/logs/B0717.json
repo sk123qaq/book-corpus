@@ -1,0 +1,29 @@
+{
+ "uid": "B0717",
+ "title": "Antonio Buero Vallejos todays a holiday  an introduction to",
+ "format": "pdf",
+ "route": "text",
+ "pages": 96,
+ "dest": "库/文学/戏剧/Antonio Buero Vallejos todays a holiday  an introduction to/md",
+ "at": "2026-10-19T12:40:58+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/戏剧/Antonio Buero Vallejos todays a holiday  an introduction to/source/Antonio Buero Vallejos todays a holiday  an introduction to and translation of Hoy es fiesta (Buero Vallejo, Antonio, 1916-2000, Dunlop etc.).pdf --out out/B0717 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0265,
+ "audit_anchors": 1.0,
+ "audit_chars": 128346,
+ "chapters": 1,
+ "chars": 140697,
+ "images": 192,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 96,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

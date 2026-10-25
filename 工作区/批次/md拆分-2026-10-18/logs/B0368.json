@@ -1,0 +1,17 @@
+{
+ "uid": "B0368",
+ "title": "老人与海",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/老人与海/md",
+ "at": "2026-10-18T21:06:24+08:00",
+ "verify_rc": 0,
+ "chapters": 22,
+ "chars": 165069,
+ "images": 34,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.001,
+ "raw_chars": 152958,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0368.prev-2026-10-18T210620-0800"
+}

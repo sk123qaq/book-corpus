@@ -1,0 +1,41 @@
+{
+ "uid": "B1467",
+ "title": "朱向前文学理论批评选",
+ "title_from_file": "",
+ "author": "朱向前",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/朱向前文学理论批评选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/朱向前文学理论批评选 (朱向前著；Zhu Xiangqian etc.).pdf",
+   "format": "pdf",
+   "bytes": 19850957,
+   "sha256": "9421cb42446eb5d6b0a025b793965fe995fb3f2d253792e55ee840397c52253c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1171227
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,181 @@
+﻿qid	category	variant	rank	pos	hit10	hit20
+q001	原词	literal	7	7	1	1
+q001	原词	bridge	46	46	0	0
+q001	原词	lit_concept	7	7	1	1
+q002	近义表达	literal	99		0	0
+q002	近义表达	bridge	99		0	0
+q002	近义表达	lit_concept	99		0	0
+q003	无原词	literal	99		0	0
+q003	无原词	bridge	99		0	0
+q003	无原词	lit_concept	99		0	0
+q004	原词	literal	2	2	1	1
+q004	原词	bridge	99		0	0
+q004	原词	lit_concept	2	2	1	1
+q005	近义表达	literal	99		0	0
+q005	近义表达	bridge	99		0	0
+q005	近义表达	lit_concept	99		0	0
+q006	无原词	literal	99		0	0
+q006	无原词	bridge	99		0	0
+q006	无原词	lit_concept	99		0	0
+q007	原词	literal	4	4	1	1
+q007	原词	bridge	99		0	0
+q007	原词	lit_concept	4	4	1	1
+q008	近义表达	literal	99		0	0
+q008	近义表达	bridge	4	4	1	1
+q008	近义表达	lit_concept	99		0	0
+q009	无原词	literal	99		0	0
+q009	无原词	bridge	99		0	0
+q009	无原词	lit_concept	99		0	0
+q010	原词	literal	12	12	0	1
+q010	原词	bridge	99		0	0
+q010	原词	lit_concept	12	12	0	1
+q011	近义表达	literal	99		0	0
+q011	近义表达	bridge	99		0	0
+q011	近义表达	lit_concept	99		0	0
+q012	无原词	literal	99		0	0
+q012	无原词	bridge	99		0	0
+q012	无原词	lit_concept	99		0	0
+q013	原词	literal	4	4	1	1
+q013	原词	bridge	99		0	0
+q013	原词	lit_concept	4	4	1	1
+q014	近义表达	literal	99		0	0
+q014	近义表达	bridge	7	7	1	1
+q014	近义表达	lit_concept	99		0	0
+q015	无原词	literal	99		0	0
+q015	无原词	bridge	99		0	0
+q015	无原词	lit_concept	99		0	0
+q016	原词	literal	2	2	1	1
+q016	原词	bridge	99		0	0
+q016	原词	lit_concept	2	2	1	1
+q017	近义表达	literal	99		0	0
+q017	近义表达	bridge	99		0	0
+q017	近义表达	lit_concept	99		0	0
+q018	无原词	literal	99		0	0
+q018	无原词	bridge	99		0	0
+q018	无原词	lit_concept	99		0	0
+q019	原词	literal	2	2	1	1
+q019	原词	bridge	99		0	0
+q019	原词	lit_concept	2	2	1	1
+q020	近义表达	literal	99		0	0
+q020	近义表达	bridge	99		0	0
+q020	近义表达	lit_concept	99		0	0
+q021	无原词	literal	99		0	0
+q021	无原词	bridge	99		0	0
+q021	无原词	lit_concept	99		0	0
+q022	原词	literal	17	17	0	1
+q022	原词	bridge	99		0	0
+q022	原词	lit_concept	17	17	0	1
+q023	近义表达	literal	99		0	0
+q023	近义表达	bridge	99		0	0
+q023	近义表达	lit_concept	99		0	0
+q024	无原词	literal	99		0	0
+q024	无原词	bridge	99		0	0
+q024	无原词	lit_concept	99		0	0
+q025	原词	literal	6	6	1	1
+q025	原词	bridge	32	32	0	0
+q025	原词	lit_concept	6	6	1	1
+q026	近义表达	literal	24	24	0	0
+q026	近义表达	bridge	99		0	0
+q026	近义表达	lit_concept	24	24	0	0
+q027	无原词	literal	99		0	0
+q027	无原词	bridge	99		0	0
+q027	无原词	lit_concept	99		0	0
+q028	原词	literal	2	2	1	1
+q028	原词	bridge	99		0	0
+q028	原词	lit_concept	2	2	1	1
+q029	近义表达	literal	99		0	0
+q029	近义表达	bridge	99		0	0
+q029	近义表达	lit_concept	99		0	0
+q030	无原词	literal	99		0	0
+q030	无原词	bridge	99		0	0
+q030	无原词	lit_concept	99		0	0
+q031	原词	literal	99		0	0
+q031	原词	bridge	99		0	0
+q031	原词	lit_concept	99		0	0
+q032	近义表达	literal	99		0	0
+q032	近义表达	bridge	99		0	0
+q032	近义表达	lit_concept	99		0	0
+q033	无原词	literal	99		0	0
+q033	无原词	bridge	99		0	0
+q033	无原词	lit_concept	99		0	0
+q034	原词	literal	3	3	1	1
+q034	原词	bridge	99		0	0
+q034	原词	lit_concept	3	3	1	1
+q035	近义表达	literal	99		0	0
+q035	近义表达	bridge	99		0	0
+q035	近义表达	lit_concept	99		0	0
+q036	无原词	literal	99		0	0
+q036	无原词	bridge	99		0	0
+q036	无原词	lit_concept	99		0	0
+q037	原词	literal	10	10	1	1
+q037	原词	bridge	99		0	0
+q037	原词	lit_concept	10	10	1	1
+q038	近义表达	literal	2	2	1	1
+q038	近义表达	bridge	7	7	1	1
+q038	近义表达	lit_concept	2	2	1	1
+q039	无原词	literal	99		0	0
+q039	无原词	bridge	99		0	0
+q039	无原词	lit_concept	99		0	0
+q040	原词	literal	2	2	1	1
+q040	原词	bridge	47	47	0	0
+q040	原词	lit_concept	2	2	1	1
+q041	近义表达	literal	99		0	0
+q041	近义表达	bridge	4	4	1	1
+q041	近义表达	lit_concept	99		0	0
+q042	无原词	literal	99		0	0
+q042	无原词	bridge	99		0	0
+q042	无原词	lit_concept	99		0	0
+q043	原词	literal	1	1	1	1
+q043	原词	bridge	99		0	0
+q043	原词	lit_concept	1	1	1	1
+q044	近义表达	literal	19	19	0	1
+q044	近义表达	bridge	99		0	0
+q044	近义表达	lit_concept	19	19	0	1
+q045	无原词	literal	99		0	0
+q045	无原词	bridge	99		0	0
+q045	无原词	lit_concept	99		0	0
+q046	原词	literal	4	4	1	1
+q046	原词	bridge	99		0	0
+q046	原词	lit_concept	4	4	1	1
+q047	近义表达	literal	99		0	0
+q047	近义表达	bridge	99		0	0
+q047	近义表达	lit_concept	99		0	0
+q048	无原词	literal	99		0	0
+q048	无原词	bridge	99		0	0
+q048	无原词	lit_concept	99		0	0
+q049	原词	literal	1	1	1	1
+q049	原词	bridge	99		0	0
+q049	原词	lit_concept	1	1	1	1
+q050	近义表达	literal	99		0	0
+q050	近义表达	bridge	99		0	0
+q050	近义表达	lit_concept	99		0	0
+q051	无原词	literal	99		0	0
+q051	无原词	bridge	99		0	0
+q051	无原词	lit_concept	99		0	0
+q052	原词	literal	99		0	0
+q052	原词	bridge	45	45	0	0
+q052	原词	lit_concept	99		0	0
+q053	近义表达	literal	99		0	0
+q053	近义表达	bridge	99		0	0
+q053	近义表达	lit_concept	99		0	0
+q054	无原词	literal	99		0	0
+q054	无原词	bridge	99		0	0
+q054	无原词	lit_concept	99		0	0
+q055	原词	literal	1	1	1	1
+q055	原词	bridge	99		0	0
+q055	原词	lit_concept	1	1	1	1
+q056	近义表达	literal	99		0	0
+q056	近义表达	bridge	18	18	0	1
+q056	近义表达	lit_concept	99		0	0
+q057	无原词	literal	99		0	0
+q057	无原词	bridge	99		0	0
+q057	无原词	lit_concept	99		0	0
+q058	原词	literal	7	7	1	1
+q058	原词	bridge	99		0	0
+q058	原词	lit_concept	7	7	1	1
+q059	近义表达	literal	99		0	0
+q059	近义表达	bridge	99		0	0
+q059	近义表达	lit_concept	99		0	0
+q060	无原词	literal	99		0	0
+q060	无原词	bridge	11	11	0	1
+q060	无原词	lit_concept	99		0	0

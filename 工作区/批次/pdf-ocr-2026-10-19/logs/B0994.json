@@ -1,0 +1,14 @@
+{
+ "uid": "B0994",
+ "title": "土の器",
+ "format": "pdf",
+ "pages": 246,
+ "dest": "库/文学/严肃文学小说/土の器/md",
+ "at": "2026-10-19T16:26:19+08:00",
+ "commands": [],
+ "chunks_planned": 2,
+ "pages_per_chunk": 138,
+ "slice_mb_estimate": 14.9,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B0994_p0001-0138.pdf，138 页，14.65 MB | 提交 HTTP 403 | {\"traceId\":\"81db084a-4258-4119-999e-f3a88a6d835f\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

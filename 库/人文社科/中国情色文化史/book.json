@@ -1,0 +1,26 @@
+{
+ "uid": "B0535",
+ "title": "中国情色文化史",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科"
+ ],
+ "path": "人文社科/中国情色文化史",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国情色文化史（下） (刘达临) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 33099033,
+   "sha256": "f394af3bab3cfcd6ecbd30bb7b8a2479c4276b60185e4e70e6441da6dce08060",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(0.47)；置信:0.47；图册不转:图占比60%，复核混合"
+}

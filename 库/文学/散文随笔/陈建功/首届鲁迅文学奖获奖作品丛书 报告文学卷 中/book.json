@@ -1,0 +1,35 @@
+{
+ "uid": "B0578",
+ "title": "首届鲁迅文学奖获奖作品丛书 报告文学卷 中",
+ "title_from_file": "",
+ "author": "陈建功",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/陈建功/首届鲁迅文学奖获奖作品丛书 报告文学卷 中",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/首届鲁迅文学奖获奖作品丛书 报告文学卷 中 (陈建功，陈昌本编, Yang Kuanman, Xiao Lijun etc.).pdf",
+   "format": "pdf",
+   "bytes": 14338598,
+   "sha256": "129dfba05e12ad06eade90d3b698105fa75cf58ffa599560d43d8de8bfe70be4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 664231
+  }
+ ],
+ "notes": "依据:TypeSafe(0.97)；置信:0.97"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1456",
+ "title": "时日之子【日记、作品集】",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/时日之子【日记、作品集】",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/时日之子【日记、作品集】 ([乌拉圭]爱德华多·加莱亚诺； 路燕萍译（北京：作家出版社 2015年）).pdf",
+   "format": "pdf",
+   "bytes": 91574718,
+   "sha256": "c68b52964ba792e5d3e6a20a1ccaf8345822b9a782f0000a6a644e6d2a5cc8f6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 255326
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

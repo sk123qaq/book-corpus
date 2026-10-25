@@ -1,0 +1,17 @@
+{
+ "uid": "B0925",
+ "title": "愤怒的葡萄",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/愤怒的葡萄/md",
+ "at": "2026-10-18T20:12:09+08:00",
+ "verify_rc": 0,
+ "chapters": 30,
+ "chars": 347420,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 295876,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0925.prev-2026-10-18T201103-0800"
+}

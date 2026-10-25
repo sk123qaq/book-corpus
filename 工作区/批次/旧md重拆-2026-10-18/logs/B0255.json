@@ -1,0 +1,16 @@
+{
+ "uid": "B0255",
+ "title": "曼昆经济学原理",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/曼昆经济学原理/md",
+ "at": "2026-10-18T23:31:17+08:00",
+ "verify_rc": 0,
+ "chapters": 401,
+ "chars": 286215,
+ "images": 117,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.012,
+ "raw_chars": 256355,
+ "status": "staged-green"
+}

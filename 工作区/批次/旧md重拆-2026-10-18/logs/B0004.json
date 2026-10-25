@@ -1,0 +1,16 @@
+{
+ "uid": "B0004",
+ "title": "2001：太空漫游",
+ "format": "epub",
+ "dest": "库/文学/类型小说/2001：太空漫游/md",
+ "at": "2026-10-18T23:30:39+08:00",
+ "verify_rc": 0,
+ "chapters": 53,
+ "chars": 123494,
+ "images": 3,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.992,
+ "raw_chars": 111480,
+ "status": "staged-green"
+}

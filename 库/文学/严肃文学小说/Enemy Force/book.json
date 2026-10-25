@@ -1,0 +1,42 @@
+{
+ "uid": "B1642",
+ "title": "Enemy Force",
+ "title_from_file": "",
+ "author": "John-Antoine Nau",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Enemy Force",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Enemy Force (John-Antoine Nau).epub",
+   "format": "epub",
+   "bytes": 547145,
+   "sha256": "7d8819911f5ad0b9ee23f98604f6bc1b99d7ee55685e103961481c662e6dfbf4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 24,
+   "bytes": 448005
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

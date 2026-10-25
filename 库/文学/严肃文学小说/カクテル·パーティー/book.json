@@ -1,0 +1,34 @@
+{
+ "uid": "B0953",
+ "title": "カクテル·パーティー",
+ "title_from_file": "",
+ "author": "大城立裕",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/カクテル·パーティー",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/カクテル·パーティー (大城立裕).pdf",
+   "format": "pdf",
+   "bytes": 7214042,
+   "sha256": "384147a9a8b4eaa22ad913958ec69062efb57b2a490056d2a95b77ab58414627",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

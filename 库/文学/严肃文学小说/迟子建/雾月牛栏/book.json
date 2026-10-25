@@ -1,0 +1,42 @@
+{
+ "uid": "B1617",
+ "title": "雾月牛栏",
+ "title_from_file": "",
+ "author": "迟子建",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/迟子建/雾月牛栏",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/雾月牛栏 (迟子建著, Chi Zijian zhu, Zijian Chi, 迟子建 etc.).pdf",
+   "format": "pdf",
+   "bytes": 10608404,
+   "sha256": "0e7d5e41e501f18f702232cff6b6bd8725b98c98dbb0d70087473b0de2a44968",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 559054
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

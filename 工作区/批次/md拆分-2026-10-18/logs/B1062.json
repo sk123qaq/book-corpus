@@ -1,0 +1,22 @@
+{
+ "uid": "B1062",
+ "title": "群青の湖",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/群青の湖/md",
+ "at": "2026-10-18T21:07:43+08:00",
+ "override": {
+  "args": [
+   "--all-pages"
+  ]
+ },
+ "verify_rc": 0,
+ "chapters": 14,
+ "chars": 239836,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.001,
+ "raw_chars": 70673,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1062.prev-2026-10-18T210620-0800"
+}

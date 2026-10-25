@@ -1,0 +1,27 @@
+{
+ "uid": "B0545",
+ "title": "佐藤寛子写真集「1262」",
+ "title_from_file": "",
+ "author": "FLASH",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/佐藤寛子写真集「1262」",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/佐藤寛子写真集「1262」 (FLASH , 佐藤寛子) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 70258023,
+   "sha256": "17b3e17d550a2ab9cb4116c09c0d7affa678a45fdb1dfe95ad3de872c3b196f7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:二级学科是图册与写真"
+}

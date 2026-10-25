@@ -1,0 +1,42 @@
+{
+ "uid": "B1448",
+ "title": "文坛新观察",
+ "title_from_file": "",
+ "author": "白烨",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/文坛新观察",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/文坛新观察 (白烨著, 白烨, 1952- author, Bai Ye zhu etc.).pdf",
+   "format": "pdf",
+   "bytes": 46226167,
+   "sha256": "f0a0246c6fd561bff39f26c06d87602889619cef0eb95281957c03a79f39f821",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 658676
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

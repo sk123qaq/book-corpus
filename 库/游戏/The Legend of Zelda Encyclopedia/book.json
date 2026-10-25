@@ -1,0 +1,34 @@
+{
+ "uid": "B0661",
+ "title": "The Legend of Zelda Encyclopedia",
+ "title_from_file": "",
+ "author": "Nintendo",
+ "subjects": [
+  "游戏"
+ ],
+ "path": "游戏/The Legend of Zelda Encyclopedia",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Legend of Zelda Encyclopedia (Nintendo) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 256339274,
+   "sha256": "098cfcdd2ef1addd30e7b8909ee640c85ee47b29ed20a49185e592d661e5a5b6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 42,
+   "bytes": 1020328
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

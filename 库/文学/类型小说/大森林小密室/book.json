@@ -1,0 +1,35 @@
+{
+ "uid": "B0198",
+ "title": "大森林小密室",
+ "title_from_file": "",
+ "author": "小林泰三 著   高詹燦",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/大森林小密室",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大森林小密室 = 大きな森の小さな密室 (小林泰三 著   高詹燦 譯).epub",
+   "format": "epub",
+   "bytes": 334335,
+   "sha256": "140a4844395fdc6bb319b84a4edbaf51192eb499aa3cc27ef68e4ce023fa164c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 18,
+   "bytes": 376214
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

@@ -1,0 +1,34 @@
+{
+ "uid": "B0613",
+ "title": "走遍中国 山西",
+ "title_from_file": "",
+ "author": "《走遍中国》编辑部",
+ "subjects": [
+  "人文社科"
+ ],
+ "path": "人文社科/走遍中国 山西",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/走遍中国 山西 (《走遍中国》编辑部编) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 38833779,
+   "sha256": "cb7e9bb2644904cb0d3708da8929419fafa0b1b68121ae96aff74b22b089497e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 534281
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

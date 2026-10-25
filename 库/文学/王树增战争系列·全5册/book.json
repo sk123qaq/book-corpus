@@ -1,0 +1,41 @@
+{
+ "uid": "B1511",
+ "title": "王树增战争系列·全5册",
+ "title_from_file": "",
+ "author": "把经典战争作为人类精神事件书写的图书",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/王树增战争系列·全5册",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/王树增战争系列·全5册（把经典战争作为人类精神事件书写的图书；纪念长征胜利80周年、建国70周年、建党100周年） (王树增).epub",
+   "format": "epub",
+   "bytes": 8098705,
+   "sha256": "c1772df0043b75c649fd7284f7d7ca4d7a87e29de073fdb99185a9c3f6e4fdf5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 183,
+   "bytes": 6796716
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

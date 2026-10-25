@@ -1,0 +1,42 @@
+{
+ "uid": "B1406",
+ "title": "巨鲸歌唱",
+ "title_from_file": "",
+ "author": "周晓枫",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/巨鲸歌唱",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/巨鲸歌唱 (周晓枫).epub",
+   "format": "epub",
+   "bytes": 1963870,
+   "sha256": "77b7e6ab3facbe1e2fbbeb91ac8129ad8756d670bfaac9c23bcb628f741d8f12",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 483891
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

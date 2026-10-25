@@ -1,0 +1,42 @@
+{
+ "uid": "B1084",
+ "title": "過越しの祭",
+ "title_from_file": "",
+ "author": "米谷ふみ子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/過越しの祭",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/過越しの祭 (米谷ふみ子).epub",
+   "format": "epub",
+   "bytes": 266112,
+   "sha256": "e678781ec86a1b83f1ac4be26de48e6eacc2b9d898c8079527cc55efd0ff5533",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 8,
+   "bytes": 250615
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

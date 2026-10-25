@@ -1,0 +1,42 @@
+{
+ "uid": "B1088",
+ "title": "限りなく透明に近いブルー",
+ "title_from_file": "",
+ "author": "村上龍",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/限りなく透明に近いブルー",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/限りなく透明に近いブルー (村上龍).epub",
+   "format": "epub",
+   "bytes": 1584908,
+   "sha256": "e788394b9893c048dcb985bdef5e6661cc1e3ea6f9c2bb289817618418668135",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 233204
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

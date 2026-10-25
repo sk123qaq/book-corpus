@@ -1,0 +1,35 @@
+{
+ "uid": "B0013",
+ "title": "JUICY-超害羞絕對領域 吉寶",
+ "title_from_file": "",
+ "author": "Miao喵 Photography",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/JUICY-超害羞絕對領域 吉寶",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/JUICY-超害羞絕對領域 吉寶 (Miao喵 Photography) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 6118696,
+   "sha256": "df30ec85a8409667357a6dde9c8e419b531543cb9de1629ffefeba88bf140628",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 116,
+   "bytes": 32879
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

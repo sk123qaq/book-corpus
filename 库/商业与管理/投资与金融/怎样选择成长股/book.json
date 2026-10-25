@@ -1,0 +1,35 @@
+{
+ "uid": "B0231",
+ "title": "怎样选择成长股",
+ "title_from_file": "",
+ "author": "菲利普.A.费舍",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/怎样选择成长股",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/怎样选择成长股 (菲利普.A.费舍 [未知]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 349304,
+   "sha256": "40e5af60872781057d43a20819ea1765a91d93eba79183334b2d8d06aa8339ec",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 484816
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

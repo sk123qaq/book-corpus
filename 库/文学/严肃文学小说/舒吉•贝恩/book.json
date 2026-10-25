@@ -1,0 +1,42 @@
+{
+ "uid": "B0799",
+ "title": "舒吉•贝恩",
+ "title_from_file": "",
+ "author": "道格拉斯·斯图尔特",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/舒吉•贝恩",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/舒吉•贝恩 = Shuggie Bain (道格拉斯·斯图尔特,席小丹,钟宜吟).epub",
+   "format": "epub",
+   "bytes": 751737,
+   "sha256": "6669dd9af68dc198edf2a18400b2bfca92114bf4a26daa3f7fd168668e272dd0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 32,
+   "bytes": 768741
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

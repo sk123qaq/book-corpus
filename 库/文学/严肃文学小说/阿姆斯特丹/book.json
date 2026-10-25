@@ -1,0 +1,42 @@
+{
+ "uid": "B0803",
+ "title": "阿姆斯特丹",
+ "title_from_file": "",
+ "author": "英伊恩·麦克尤恩冯涛",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/阿姆斯特丹",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/阿姆斯特丹 (【英】伊恩·麦克尤恩冯涛译).epub",
+   "format": "epub",
+   "bytes": 4918687,
+   "sha256": "cce23200d6be656c8d2d34ee39e87a88efd3aab4ede2af6c2b76d8d70aa74488",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 24,
+   "bytes": 281853
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

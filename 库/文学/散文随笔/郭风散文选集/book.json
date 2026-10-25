@@ -1,0 +1,42 @@
+{
+ "uid": "B1599",
+ "title": "郭风散文选集",
+ "title_from_file": "",
+ "author": "姚春树",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/郭风散文选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/郭风散文选集 (姚春树编, 郭风著] , 姚春树编, 郭风, 姚春树 etc.).pdf",
+   "format": "pdf",
+   "bytes": 6072540,
+   "sha256": "f38cde6cdfb98f3c34f7795b0b234af8341bb1485da31d1974fdfcb61f7922c9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 361529
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

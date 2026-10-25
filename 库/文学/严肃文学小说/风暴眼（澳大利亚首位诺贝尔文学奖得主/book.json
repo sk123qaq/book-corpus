@@ -1,0 +1,42 @@
+{
+ "uid": "B1273",
+ "title": "风暴眼（澳大利亚首位诺贝尔文学奖得主",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/风暴眼（澳大利亚首位诺贝尔文学奖得主",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/风暴眼（澳大利亚首位诺贝尔文学奖得主——帕特里克·怀特，一生都在寻求关于生命的终极答案） ([澳]帕特里克·怀特).epub",
+   "format": "epub",
+   "bytes": 741977,
+   "sha256": "8c8d05432b3e1576166a99bb2a4adbaf1952114c6b5e1014f3b9922313dc0f5c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 1232879
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

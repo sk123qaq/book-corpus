@@ -1,0 +1,42 @@
+{
+ "uid": "B1527",
+ "title": "皇天后土 俺是农民",
+ "title_from_file": "",
+ "author": "周同宾",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/皇天后土 俺是农民",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/皇天后土 俺是农民 (周同宾著, Tong bing Zhou, 周同宾, 1941-, 同宾·周, 周同宾 etc.).pdf",
+   "format": "pdf",
+   "bytes": 18566129,
+   "sha256": "af4b59012f0fd794b4543cf057b720c9c4dc141e80ac11f8904413dab50b7838",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 649952
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

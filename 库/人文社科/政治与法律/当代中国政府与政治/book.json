@@ -1,0 +1,35 @@
+{
+ "uid": "B0228",
+ "title": "当代中国政府与政治",
+ "title_from_file": "",
+ "author": "景跃进",
+ "subjects": [
+  "人文社科",
+  "政治与法律"
+ ],
+ "path": "人文社科/政治与法律/当代中国政府与政治",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/当代中国政府与政治 (景跃进) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 13655180,
+   "sha256": "3a3cb1bfc61a846269525f551e3e7221d3122fd8ef4a3646f94b901a75146023",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 170,
+   "bytes": 894756
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

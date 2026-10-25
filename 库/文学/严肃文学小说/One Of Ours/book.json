@@ -1,0 +1,42 @@
+{
+ "uid": "B0875",
+ "title": "One Of Ours",
+ "title_from_file": "",
+ "author": "Willa Cather",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/One Of Ours",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/One Of Ours (Willa Cather).epub",
+   "format": "epub",
+   "bytes": 366364,
+   "sha256": "7714a8d0d6b716fe387f4cb134d4b894215bc5c0397ccef63f724f5e750420ac",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 725103
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

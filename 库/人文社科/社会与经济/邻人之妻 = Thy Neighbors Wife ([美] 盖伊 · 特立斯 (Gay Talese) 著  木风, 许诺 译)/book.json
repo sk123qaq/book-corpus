@@ -1,0 +1,35 @@
+{
+ "uid": "B0391",
+ "title": "邻人之妻 = Thy Neighbors Wife ([美] 盖伊 · 特立斯 (Gay Talese) 著  木风, 许诺 译)",
+ "title_from_file": "",
+ "author": "盖伊·特立斯",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/邻人之妻 = Thy Neighbors Wife ([美] 盖伊 · 特立斯 (Gay Talese) 著  木风, 许诺 译)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/邻人之妻 = Thy Neighbors Wife ([美] 盖伊 · 特立斯 (Gay Talese) 著  木风, 许诺 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 979135,
+   "sha256": "d4e8d461c96b410ae9b1a27d0e501940cafa94ed8d6827a9dc2c3453444c9b80",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 38,
+   "bytes": 967926
+  }
+ ],
+ "notes": "依据:TypeSafe(0.78)；置信:0.78"
+}

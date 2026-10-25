@@ -1,0 +1,35 @@
+{
+ "uid": "B0567",
+ "title": "社会保障学",
+ "title_from_file": "",
+ "author": "郑功成",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/社会保障学",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/社会保障学 (郑功成主编, 郑功成主编, 郑功成, 鄭功成) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 29828642,
+   "sha256": "86e18a74bc05b1fd93a32f946f33280fc7d73ed97110823347b7b285066b9663",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1268565
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

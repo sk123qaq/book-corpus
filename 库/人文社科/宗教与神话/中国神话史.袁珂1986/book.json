@@ -1,0 +1,35 @@
+{
+ "uid": "B0540",
+ "title": "中国神话史.袁珂1986",
+ "title_from_file": "",
+ "author": "中国神话史.袁珂.pdf",
+ "subjects": [
+  "人文社科",
+  "宗教与神话"
+ ],
+ "path": "人文社科/宗教与神话/中国神话史.袁珂1986",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国神话史.袁珂1986 (中国神话史.袁珂1986.pdf) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 10623221,
+   "sha256": "7d619d4c0fade7b9f0e7ba0c789b5d54532b618f025c5f690f0f41bfee78bee7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "mineru-ocr",
+   "chapters": 1,
+   "bytes": 1004479
+  }
+ ],
+ "notes": "依据:系列:神话史；置信:0.98"
+}

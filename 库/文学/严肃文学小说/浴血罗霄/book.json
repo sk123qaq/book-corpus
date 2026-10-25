@@ -1,0 +1,42 @@
+{
+ "uid": "B1124",
+ "title": "浴血罗霄",
+ "title_from_file": "",
+ "author": "萧克",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/浴血罗霄",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/浴血罗霄 (萧克).epub",
+   "format": "epub",
+   "bytes": 319767,
+   "sha256": "7dfd126fb9dab5c64f6578ff0576f5ac93af712eb21da03a27bf24c3668cca46",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 37,
+   "bytes": 564620
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

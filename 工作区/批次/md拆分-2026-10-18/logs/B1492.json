@@ -1,0 +1,18 @@
+{
+ "uid": "B1492",
+ "title": "浮士德",
+ "format": "mobi",
+ "dest": "库/文学/戏剧/浮士德/md",
+ "at": "2026-10-18T21:08:23+08:00",
+ "provenance_fixed": 37,
+ "verify_rc": 0,
+ "chapters": 36,
+ "chars": 278931,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9640000000000001,
+ "raw_chars": 230403,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1492.prev-2026-10-18T210620-0800"
+}

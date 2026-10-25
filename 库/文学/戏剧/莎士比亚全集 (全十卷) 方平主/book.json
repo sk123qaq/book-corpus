@@ -1,0 +1,42 @@
+{
+ "uid": "B1565",
+ "title": "莎士比亚全集 (全十卷) 方平主",
+ "title_from_file": "",
+ "author": "全十卷",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/莎士比亚全集 (全十卷) 方平主",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/莎士比亚全集 (全十卷) 方平主编 (（英）莎士比亚 著，方平 译).epub",
+   "format": "epub",
+   "bytes": 9294099,
+   "sha256": "1e95dc1cd6bd7815e20fd7110d2c2d18e888651c6d8219d595fa3b5a2fc126da",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 416,
+   "bytes": 7105402
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

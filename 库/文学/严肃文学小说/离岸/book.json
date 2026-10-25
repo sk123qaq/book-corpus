@@ -1,0 +1,42 @@
+{
+ "uid": "B0792",
+ "title": "离岸",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/离岸",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/离岸 (（英）佩内洛普·菲兹杰拉德著 etc.).pdf",
+   "format": "pdf",
+   "bytes": 4814366,
+   "sha256": "eb99a7033df810d4c954229fe30bb038305fafbcaf62f1dec7fcd8c94d3b02bc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 273398
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

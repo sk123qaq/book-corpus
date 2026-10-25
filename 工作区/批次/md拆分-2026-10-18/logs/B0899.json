@@ -1,0 +1,17 @@
+{
+ "uid": "B0899",
+ "title": "The Night Watchman",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The Night Watchman/md",
+ "at": "2026-10-18T21:07:29+08:00",
+ "verify_rc": 0,
+ "chapters": 101,
+ "chars": 505818,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.978,
+ "raw_chars": 489680,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0899.prev-2026-10-18T210620-0800"
+}

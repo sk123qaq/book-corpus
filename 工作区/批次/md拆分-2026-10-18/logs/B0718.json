@@ -1,0 +1,17 @@
+{
+ "uid": "B0718",
+ "title": "Byobu",
+ "format": "epub",
+ "dest": "库/文学/Byobu/md",
+ "at": "2026-10-18T21:06:43+08:00",
+ "verify_rc": 0,
+ "chapters": 39,
+ "chars": 62833,
+ "images": 4,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9570000000000001,
+ "raw_chars": 63342,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0718.prev-2026-10-18T210620-0800"
+}

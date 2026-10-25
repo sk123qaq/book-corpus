@@ -1,0 +1,29 @@
+{
+ "uid": "B1658",
+ "title": "the forests of the night",
+ "format": "pdf",
+ "route": "text",
+ "pages": 328,
+ "dest": "库/文学/严肃文学小说/the forests of the night/md",
+ "at": "2026-10-19T12:45:16+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/the forests of the night/source/the forests of the night (jean louis curtis).pdf --out out/B1658 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0195,
+ "audit_anchors": 1.0,
+ "audit_chars": 582797,
+ "chapters": 1,
+ "chars": 622126,
+ "images": 656,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 328,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

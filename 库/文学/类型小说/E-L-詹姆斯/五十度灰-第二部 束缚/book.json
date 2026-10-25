@@ -1,0 +1,35 @@
+{
+ "uid": "B0124",
+ "title": "五十度灰-第二部 束缚",
+ "title_from_file": "",
+ "author": "E-L-詹姆斯",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/E-L-詹姆斯/五十度灰-第二部 束缚",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/五十度灰 第二部 束缚 (E-L-詹姆斯) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 418413,
+   "sha256": "c93d34fed660156014c2243aab0ea00a3bb63a00375f7e7099a7b6167dd56c44",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 904234
+  }
+ ],
+ "notes": "依据:TypeSafe(0.85)；置信:0.85"
+}

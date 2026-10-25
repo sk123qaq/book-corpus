@@ -1,0 +1,42 @@
+{
+ "uid": "B1093",
+ "title": "願能嚐到美味料理【芥川賞受賞作！橫掃日本各大書店TOP1之話題作品】",
+ "title_from_file": "",
+ "author": "高瀨隼子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/願能嚐到美味料理【芥川賞受賞作！橫掃日本各大書店TOP1之話題作品】",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/願能嚐到美味料理【芥川賞受賞作！橫掃日本各大書店TOP1之話題作品】 (高瀨隼子).pdf",
+   "format": "pdf",
+   "bytes": 4459957,
+   "sha256": "22bcb086ed5ee83347538cafa71f693b65b990e5add20e315a0e31adb51155bb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 3,
+   "bytes": 160776
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

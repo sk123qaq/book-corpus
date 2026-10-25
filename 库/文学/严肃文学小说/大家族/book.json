@@ -1,0 +1,42 @@
+{
+ "uid": "B1673",
+ "title": "大家族",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/大家族",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大家族 (（法）德吕翁著；刘志威译).pdf",
+   "format": "pdf",
+   "bytes": 14253095,
+   "sha256": "433cc8fbd2c382cec99ac3616332071752a641054388e4124640fea776c4f3d9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 628573
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

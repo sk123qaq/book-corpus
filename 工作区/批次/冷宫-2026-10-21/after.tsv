@@ -1,0 +1,18 @@
+key	value
+db.books	1693
+db.md_done	1397
+db.pending_md	296
+db.award_books	1009
+ledger.rows	1693
+book_json	1693
+index.para	2359595
+index.chapters	87239
+index.books	1374
+index.book_concept	16027
+index.expand_prefix	83319
+index.expand_fts	83420
+index.B1359_para	0
+index.B1359_concept	0
+index.meta	{'built_at': '2026-10-21T09:51:31+0800', 'chapters': '87239', 'books': '1374', 'paras': '2359595', 'chars': '521118617', 'seconds': '386'}
+md_dirs_now	1399
+chapter_md_now	87260

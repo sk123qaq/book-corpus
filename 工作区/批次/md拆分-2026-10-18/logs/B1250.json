@@ -1,0 +1,17 @@
+{
+ "uid": "B1250",
+ "title": "蒲宁文集",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/蒲宁文集/md",
+ "at": "2026-10-18T20:13:07+08:00",
+ "verify_rc": 0,
+ "chapters": 381,
+ "chars": 1128058,
+ "images": 5,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.001,
+ "raw_chars": 988846,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1250.prev-2026-10-18T201103-0800"
+}

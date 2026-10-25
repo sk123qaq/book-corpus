@@ -1,0 +1,41 @@
+{
+ "uid": "B1561",
+ "title": "草婴译著全集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/草婴译著全集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/草婴译著全集【著名翻译大家草婴呕心沥血、毕生译著全集。21卷，约700万字！豆瓣万人评价9.3分、当当网超9万条评价作品《安娜·卡列尼娜》《战争....epub",
+   "format": "epub",
+   "bytes": 8731362,
+   "sha256": "985ff07c8bd54907bbd3ff6a5aa0e999e0db40778181a2367e6c49932572d9df",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 863,
+   "bytes": 16235211
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

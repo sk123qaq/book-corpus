@@ -1,0 +1,42 @@
+{
+ "uid": "B1566",
+ "title": "莱蒙托夫诗选",
+ "title_from_file": "",
+ "author": "著名翻译家余振和顾蕴璞联袂翻",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/莱蒙托夫诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/莱蒙托夫诗选（著名翻译家余振和顾蕴璞联袂翻译；影响一代中国读者的外国文学丛书之一；人文社倾力打造，经典名著，口碑版本） (外国文学名著....epub",
+   "format": "epub",
+   "bytes": 367604,
+   "sha256": "5d61871b569eb574e0d3a6095367aaf14e240404cccdd87a90c3478248c2c37b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 214,
+   "bytes": 340523
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

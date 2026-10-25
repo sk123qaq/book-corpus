@@ -1,0 +1,27 @@
+{
+ "uid": "B0558",
+ "title": "朱辉水彩写生作品集",
+ "title_from_file": "",
+ "author": "朱辉",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/朱辉水彩写生作品集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/朱辉水彩写生作品集 (朱辉著, 朱辉, 1937- artist, 朱辉绘, 朱辉).pdf",
+   "format": "pdf",
+   "bytes": 89153445,
+   "sha256": "7b0384bd9740c72515862c07af47ca26cc29a43123f3f08c3b3192658566ed34",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(0.77)；置信:0.77；图册不转:图占比93%"
+}

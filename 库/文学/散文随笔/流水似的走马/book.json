@@ -1,0 +1,42 @@
+{
+ "uid": "B1490",
+ "title": "流水似的走马",
+ "title_from_file": "",
+ "author": "鲍尔吉·原野",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/流水似的走马",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/流水似的走马 (鲍尔吉·原野　著).epub",
+   "format": "epub",
+   "bytes": 919164,
+   "sha256": "5c42a6df21522ab50188d7f1531d28ca449ca267a9826f8d0d0840f7feca0203",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 67,
+   "bytes": 251950
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

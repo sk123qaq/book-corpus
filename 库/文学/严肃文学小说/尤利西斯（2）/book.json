@@ -1,0 +1,42 @@
+{
+ "uid": "B1400",
+ "title": "尤利西斯（2）",
+ "title_from_file": "",
+ "author": "詹姆斯·乔伊斯",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/尤利西斯（2）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/尤利西斯 (詹姆斯·乔伊斯,金隄).epub",
+   "format": "epub",
+   "bytes": 1700078,
+   "sha256": "0ca6b38e55ca8b199593dca36a1c1995cedaa993028e3d4cf603761ab53ff7f1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 26,
+   "bytes": 1938456
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项；同名冲突加限定词（2）"
+}

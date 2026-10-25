@@ -1,0 +1,42 @@
+{
+ "uid": "B1130",
+ "title": "秦腔",
+ "title_from_file": "",
+ "author": "贾平凹",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/秦腔",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/秦腔 (贾平凹).epub",
+   "format": "epub",
+   "bytes": 715915,
+   "sha256": "1507dbeb085f8cd2ab88db4adc0e878df608e29f4ba9691321f91dc191cf6343",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 8,
+   "bytes": 1278761
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

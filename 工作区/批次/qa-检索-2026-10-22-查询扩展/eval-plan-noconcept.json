@@ -1,0 +1,1625 @@
+{
+ "mode": "noconcept",
+ "rows": [
+  {
+   "qid": "q001",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 7,
+   "pos": 7,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q001",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 46,
+   "pos": 46,
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q001",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 7,
+   "pos": 7,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q002",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q002",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q002",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q003",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q003",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q003",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q004",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q004",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q004",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q005",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q005",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q005",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q006",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q006",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q006",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q007",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q007",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q007",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q008",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q008",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q008",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q009",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q009",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q009",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q010",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 12,
+   "pos": 12,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q010",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q010",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 12,
+   "pos": 12,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q011",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q011",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q011",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q012",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q012",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q012",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q013",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q013",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q013",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q014",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q014",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 7,
+   "pos": 7,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q014",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q015",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q015",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q015",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q016",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q016",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q016",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q017",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q017",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q017",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q018",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q018",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q018",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q019",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q019",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q019",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q020",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q020",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q020",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q021",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q021",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q021",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q022",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 17,
+   "pos": 17,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q022",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q022",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 17,
+   "pos": 17,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q023",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q023",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q023",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q024",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q024",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q024",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q025",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 6,
+   "pos": 6,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q025",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 32,
+   "pos": 32,
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q025",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 6,
+   "pos": 6,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q026",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 24,
+   "pos": 24,
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q026",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q026",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 24,
+   "pos": 24,
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q027",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q027",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q027",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q028",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q028",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q028",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q029",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q029",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q029",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q030",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q030",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q030",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q031",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q031",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q031",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q032",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q032",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q032",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q033",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q033",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q033",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q034",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 3,
+   "pos": 3,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q034",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q034",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 3,
+   "pos": 3,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q035",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q035",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q035",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q036",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q036",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q036",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q037",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 10,
+   "pos": 10,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q037",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q037",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 10,
+   "pos": 10,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q038",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q038",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 7,
+   "pos": 7,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q038",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q039",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q039",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q039",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q040",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q040",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 47,
+   "pos": 47,
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q040",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 2,
+   "pos": 2,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q041",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q041",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q041",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q042",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q042",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q042",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q043",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 1,
+   "pos": 1,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q043",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q043",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 1,
+   "pos": 1,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q044",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 19,
+   "pos": 19,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q044",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q044",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 19,
+   "pos": 19,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q045",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q045",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q045",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q046",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q046",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q046",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 4,
+   "pos": 4,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q047",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q047",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q047",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q048",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q048",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q048",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q049",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 1,
+   "pos": 1,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q049",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q049",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 1,
+   "pos": 1,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q050",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q050",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q050",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q051",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q051",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q051",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q052",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q052",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 45,
+   "pos": 45,
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q052",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q053",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q053",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q053",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q054",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q054",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q054",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q055",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 1,
+   "pos": 1,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q055",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q055",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 1,
+   "pos": 1,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q056",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q056",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 18,
+   "pos": 18,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q056",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q057",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q057",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q057",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q058",
+   "category": "原词",
+   "variant": "literal",
+   "rank": 7,
+   "pos": 7,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q058",
+   "category": "原词",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q058",
+   "category": "原词",
+   "variant": "lit_concept",
+   "rank": 7,
+   "pos": 7,
+   "hit10": 1,
+   "hit20": 1
+  },
+  {
+   "qid": "q059",
+   "category": "近义表达",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q059",
+   "category": "近义表达",
+   "variant": "bridge",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q059",
+   "category": "近义表达",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q060",
+   "category": "无原词",
+   "variant": "literal",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  },
+  {
+   "qid": "q060",
+   "category": "无原词",
+   "variant": "bridge",
+   "rank": 11,
+   "pos": 11,
+   "hit10": 0,
+   "hit20": 1
+  },
+  {
+   "qid": "q060",
+   "category": "无原词",
+   "variant": "lit_concept",
+   "rank": 99,
+   "pos": "",
+   "hit10": 0,
+   "hit20": 0
+  }
+ ]
+}

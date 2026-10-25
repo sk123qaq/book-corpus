@@ -1,0 +1,42 @@
+{
+ "uid": "B0856",
+ "title": "Early Autumn",
+ "title_from_file": "",
+ "author": "Louis Bromfield",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Early Autumn",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Early Autumn (Louis Bromfield).epub",
+   "format": "epub",
+   "bytes": 749247,
+   "sha256": "bc00b99b53fe7b0a893a08c589063e2f7d35a7a7d3f1d651bf54704802be8cda",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 11,
+   "bytes": 554879
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

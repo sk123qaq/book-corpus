@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>统一操作台 · 书库</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-dot"></span>统一操作台 · 书库</div>
+  <div class="stats" id="stats"></div>
+  <div class="search-box">
+    <button class="btn" id="search-btn" data-act="search-open">搜索 ↗ 8765</button>
+    <span class="dot" id="search-dot"></span>
+    <button class="btn ghost" id="search-start" data-act="search-start">启动搜索</button>
+  </div>
+</header>
+<div class="shell">
+  <nav class="side" id="nav"></nav>
+  <main id="view"><p class="muted">载入中…</p></main>
+</div>
+<div id="modal"></div>
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

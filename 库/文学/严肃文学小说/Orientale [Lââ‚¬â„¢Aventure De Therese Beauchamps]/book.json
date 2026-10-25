@@ -1,0 +1,42 @@
+{
+ "uid": "B1645",
+ "title": "Orientale [Lââ‚¬â„¢Aventure De Therese Beauchamps]",
+ "title_from_file": "",
+ "author": "francis de miomandre",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Orientale [Lââ‚¬â„¢Aventure De Therese Beauchamps]",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Orientale [Lââ‚¬â„¢Aventure De Therese Beauchamps] (francis de miomandre).pdf",
+   "format": "pdf",
+   "bytes": 6002861,
+   "sha256": "d4a015a3bd3fa0783927a76efb9a1cdc95067e814340b1b082669f675771db09",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 178998
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

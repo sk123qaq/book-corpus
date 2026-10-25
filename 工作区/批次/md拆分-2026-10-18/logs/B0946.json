@@ -1,0 +1,18 @@
+{
+ "uid": "B0946",
+ "title": "ひとり日和",
+ "format": "azw3",
+ "dest": "库/文学/严肃文学小说/ひとり日和/md",
+ "at": "2026-10-18T20:12:13+08:00",
+ "provenance_fixed": 11,
+ "verify_rc": 0,
+ "chapters": 10,
+ "chars": 79250,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 17552,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0946.prev-2026-10-18T201103-0800"
+}

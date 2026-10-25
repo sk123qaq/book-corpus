@@ -1,0 +1,42 @@
+{
+ "uid": "B1326",
+ "title": "从这里到永恒",
+ "title_from_file": "",
+ "author": "赵玫",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/从这里到永恒",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/从这里到永恒 (赵玫著, 赵玫, 1954-).pdf",
+   "format": "pdf",
+   "bytes": 6341711,
+   "sha256": "404f75fb7c91d75b566efd6c5a5f956898cee2dea1051ecc66821311a3b93994",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 334675
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

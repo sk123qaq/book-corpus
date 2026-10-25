@@ -1,0 +1,27 @@
+{
+ "uid": "B0603",
+ "title": "赛博朋克2077创伤小队 01",
+ "title_from_file": "",
+ "author": "CULLEN BUNN",
+ "subjects": [
+  "影视动画漫画",
+  "漫画与画集"
+ ],
+ "path": "影视动画漫画/漫画与画集/赛博朋克2077创伤小队 01",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/赛博朋克2077创伤小队 01 (CULLEN BUNN,MIGUEL VALDERRAMA) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 17577955,
+   "sha256": "89064f2995dcc3b5ab0d30fdfa5387aa6374b346bf0f6564de313f373a836b66",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是漫画与画集"
+}

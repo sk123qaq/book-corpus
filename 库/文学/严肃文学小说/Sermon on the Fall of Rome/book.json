@@ -1,0 +1,42 @@
+{
+ "uid": "B1646",
+ "title": "Sermon on the Fall of Rome",
+ "title_from_file": "",
+ "author": "Jerome Ferrari",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Sermon on the Fall of Rome",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Sermon on the Fall of Rome (Jerome Ferrari).epub",
+   "format": "epub",
+   "bytes": 1573832,
+   "sha256": "cf3f0686ce7fdb309cb3fc459250bbbd24d32b4e43b351bab822072273314f9c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 35,
+   "bytes": 304004
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

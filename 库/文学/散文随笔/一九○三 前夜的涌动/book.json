@@ -1,0 +1,42 @@
+{
+ "uid": "B1294",
+ "title": "一九○三 前夜的涌动",
+ "title_from_file": "",
+ "author": "程文超",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/一九○三 前夜的涌动",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/一九○三 前夜的涌动 (程文超著, [Cheng Wenchao deng zhu], 程文超, 1955- etc.).pdf",
+   "format": "pdf",
+   "bytes": 10191733,
+   "sha256": "b5c8a39276a76ce50ce3116551539e16f46d0c8761ef2d2e23718d7400c13716",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 573792
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

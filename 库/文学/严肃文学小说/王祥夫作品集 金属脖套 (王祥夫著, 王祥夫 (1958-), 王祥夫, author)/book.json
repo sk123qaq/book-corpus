@@ -1,0 +1,42 @@
+{
+ "uid": "B1512",
+ "title": "王祥夫作品集 金属脖套 (王祥夫著, 王祥夫 (1958-), 王祥夫, author)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/王祥夫作品集 金属脖套 (王祥夫著, 王祥夫 (1958-), 王祥夫, author)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/王祥夫作品集 金属脖套 (王祥夫著, 王祥夫 (1958-), 王祥夫, author).pdf",
+   "format": "pdf",
+   "bytes": 36450731,
+   "sha256": "9be1ba7be0e811d343c88d7b11a74721e100151235e2cc0b20bf1bd48e8b8e82",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 356738
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

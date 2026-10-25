@@ -1,0 +1,42 @@
+{
+ "uid": "B1213",
+ "title": "林荫幽径",
+ "title_from_file": "",
+ "author": "构思玲珑剔透",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/林荫幽径",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/林荫幽径（构思玲珑剔透，精致，有着磁石般的强烈吸引力；文字精练，抒情性强，擅长表现人物内心的微妙情感。） (伊凡·蒲宁).epub",
+   "format": "epub",
+   "bytes": 360727,
+   "sha256": "1473a613f4fe68b93ae42de359b79ab8abaf2b79e7e52423ca5e4b3f917a3d1f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 29,
+   "bytes": 401706
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

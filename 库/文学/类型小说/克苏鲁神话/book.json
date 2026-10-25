@@ -1,0 +1,35 @@
+{
+ "uid": "B0616",
+ "title": "克苏鲁神话",
+ "title_from_file": "",
+ "author": "I+II+III+IV+V+VI",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/克苏鲁神话",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/克苏鲁神话(I+II+III+IV+V+VI) (H.P.洛夫克拉夫特) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 59174492,
+   "sha256": "79a4eb51735ec4b26f16a1bc6ecb60f9d7da509debc75a624037785034eb20af",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 199,
+   "bytes": 2598389
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

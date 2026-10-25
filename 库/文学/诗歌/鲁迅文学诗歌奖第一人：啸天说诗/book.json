@@ -1,0 +1,42 @@
+{
+ "uid": "B1634",
+ "title": "鲁迅文学诗歌奖第一人：啸天说诗",
+ "title_from_file": "",
+ "author": "诗经楚辞·唐宋诗词鉴赏",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/鲁迅文学诗歌奖第一人：啸天说诗（诗经楚辞·唐宋诗词鉴赏）（全6册） (周啸天（四川人民出版社2017年）).epub",
+   "format": "epub",
+   "bytes": 4502790,
+   "sha256": "36f2d3a70a0af9d8723f50101acc0222c291b3b03852d6e601f9376a3c9296f4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 1793,
+   "bytes": 5143889
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

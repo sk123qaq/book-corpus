@@ -1,0 +1,27 @@
+{
+ "uid": "B0550",
+ "title": "她们 一个摄影师历经十年纪录的风尘故事",
+ "title_from_file": "",
+ "author": "赵铁林",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/她们 一个摄影师历经十年纪录的风尘故事",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/她们 一个摄影师历经十年纪录的风尘故事 (赵铁林) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 66617639,
+   "sha256": "0ab59218de12a52cc7f210854e05c2c2e9ec379f80cc1dde5ebfdfee43ecf4ff",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(0.64)；置信:0.64；图册不转:二级学科是图册与写真"
+}

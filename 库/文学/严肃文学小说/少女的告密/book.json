@@ -1,0 +1,42 @@
+{
+ "uid": "B1005",
+ "title": "少女的告密",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/少女的告密",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/少女的告密 (（日）赤染晶子著；姚东敏译, 赤染晶子, 1974- author).pdf",
+   "format": "pdf",
+   "bytes": 11633616,
+   "sha256": "c738f580b9d080ffe0920830b6d27028419660f0ccb0d2d09d4e8324fca6ad15",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 116482
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

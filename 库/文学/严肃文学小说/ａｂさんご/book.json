@@ -1,0 +1,42 @@
+{
+ "uid": "B1096",
+ "title": "ａｂさんご",
+ "title_from_file": "",
+ "author": "黒田 夏子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/ａｂさんご",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ａｂさんご (黒田 夏子).azw3",
+   "format": "azw3",
+   "bytes": 157081,
+   "sha256": "55a2d4b88f9764181177a03b57e94910ee0085180318336bfb377f42da80d54b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 109525
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

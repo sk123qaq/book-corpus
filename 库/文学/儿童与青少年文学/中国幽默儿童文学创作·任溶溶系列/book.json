@@ -1,0 +1,42 @@
+{
+ "uid": "B1310",
+ "title": "中国幽默儿童文学创作·任溶溶系列",
+ "title_from_file": "",
+ "author": "注音版 共册",
+ "subjects": [
+  "文学",
+  "儿童与青少年文学"
+ ],
+ "path": "文学/儿童与青少年文学/中国幽默儿童文学创作·任溶溶系列",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国幽默儿童文学创作·任溶溶系列(注音版 共5册)（没头脑和不高兴入选新阅读机构推荐中国小学生必读书目，一二年级学生必读的三十本图书之一....epub",
+   "format": "epub",
+   "bytes": 10920541,
+   "sha256": "42aa39491422a7bd5c2ac76e7ba69bbb34461da9dc852a5868ec2c5b7369dbf8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 148,
+   "bytes": 867862
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

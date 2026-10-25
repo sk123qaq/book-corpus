@@ -1,0 +1,42 @@
+{
+ "uid": "B1655",
+ "title": "The wolves",
+ "title_from_file": "",
+ "author": "Guy Mazeline",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The wolves",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The wolves (Guy Mazeline).pdf",
+   "format": "pdf",
+   "bytes": 34838501,
+   "sha256": "1ffba24adc16a6aeab1b012b646ab0f7961aa9b1941f921ab7132cc99d8568a8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 1597380
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

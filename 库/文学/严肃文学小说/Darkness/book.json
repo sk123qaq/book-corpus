@@ -1,0 +1,42 @@
+{
+ "uid": "B0809",
+ "title": "Darkness",
+ "title_from_file": "",
+ "author": "Maraini",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Darkness",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Darkness (Maraini, Dacia, King, Martha, 1928-).pdf",
+   "format": "pdf",
+   "bytes": 10082495,
+   "sha256": "361f9ea2ff674353c03f326da7535f2dedd84bb9f19ddd0472324b47455c9b0f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 305608
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B1579",
+ "title": "贺拉斯诗全集：拉中对照详注本",
+ "format": "epub",
+ "dest": "库/文学/诗歌/贺拉斯诗全集：拉中对照详注本/md",
+ "at": "2026-10-18T21:08:32+08:00",
+ "verify_rc": 0,
+ "chapters": 361,
+ "chars": 1373616,
+ "images": 26,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.98,
+ "raw_chars": 1239581,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1579.prev-2026-10-18T210620-0800"
+}

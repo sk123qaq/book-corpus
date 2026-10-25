@@ -1,0 +1,35 @@
+{
+ "uid": "B0627",
+ "title": "Worlds of Amano",
+ "title_from_file": "",
+ "author": "Yoshitaka Amano",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/Worlds of Amano",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Worlds of Amano (Yoshitaka Amano) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 121611461,
+   "sha256": "df3604b2e0894a1c5f6f12ce466503f87774aa8b9821e6ee65684cf979f21e0b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 161,
+   "bytes": 43462
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

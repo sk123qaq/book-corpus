@@ -1,0 +1,42 @@
+{
+ "uid": "B1544",
+ "title": "第四极",
+ "title_from_file": "",
+ "author": "许晨",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/第四极",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/第四极——中国“蛟龙”号挑战深海 (许晨).epub",
+   "format": "epub",
+   "bytes": 979879,
+   "sha256": "3e348b63291a4f7f906822ce828b35a3a26fc7e39f7a5a55a835e9cec7537d18",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 58,
+   "bytes": 862247
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

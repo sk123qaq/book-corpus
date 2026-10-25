@@ -1,0 +1,42 @@
+{
+ "uid": "B1402",
+ "title": "山南水北",
+ "title_from_file": "",
+ "author": "韩少功",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/山南水北",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/山南水北 (韩少功).epub",
+   "format": "epub",
+   "bytes": 167738,
+   "sha256": "dfe738bfa4c4d7e8138173675c7e41b36cadb69bf1c86b0af7d2edd33a08fdd4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 1,
+   "bytes": 279424
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

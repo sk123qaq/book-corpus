@@ -1,0 +1,18 @@
+{
+ "question": "孤独为什么让人渴望一个人待着？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "孤独",
+    "一个人待着"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [],
+ "broad_weight": 1.0
+}

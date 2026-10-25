@@ -1,0 +1,42 @@
+{
+ "uid": "B1659",
+ "title": "the soul of malaya",
+ "title_from_file": "",
+ "author": "henri fauconnier",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/the soul of malaya",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/the soul of malaya (henri fauconnier).pdf",
+   "format": "pdf",
+   "bytes": 11154949,
+   "sha256": "6639110e5d44b3c46c5cf76572a9144336d4c85b627813c6d525104fde28dae7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 349428
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

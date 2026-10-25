@@ -1,0 +1,42 @@
+{
+ "uid": "B1152",
+ "title": "Poems of Giosuè Carducci, Translated with two introductory e",
+ "title_from_file": "",
+ "author": "Giosuè Carducci",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/Poems of Giosuè Carducci, Translated with two introductory e",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Poems of Giosuè Carducci, Translated with two introductory essays (Giosuè Carducci).epub",
+   "format": "epub",
+   "bytes": 505191,
+   "sha256": "f2d37bafe52365f334509785687df7b5c5e950e42046dd2eac4435709cc7eb70",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 51,
+   "bytes": 170936
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

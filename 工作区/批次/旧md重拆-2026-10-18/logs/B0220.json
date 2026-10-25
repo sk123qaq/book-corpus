@@ -1,0 +1,16 @@
+{
+ "uid": "B0220",
+ "title": "尤利西斯",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/尤利西斯/md",
+ "at": "2026-10-18T23:31:07+08:00",
+ "verify_rc": 0,
+ "chapters": 31,
+ "chars": 996122,
+ "images": 37,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.975,
+ "raw_chars": 825265,
+ "status": "staged-green"
+}

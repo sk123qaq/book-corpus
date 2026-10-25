@@ -1,0 +1,17 @@
+{
+ "uid": "B1191",
+ "title": "小毛驴与我",
+ "format": "epub",
+ "dest": "库/文学/小毛驴与我/md",
+ "at": "2026-10-18T20:12:51+08:00",
+ "verify_rc": 0,
+ "chapters": 108,
+ "chars": 46824,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.986,
+ "raw_chars": 41506,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1191.prev-2026-10-18T201103-0800"
+}

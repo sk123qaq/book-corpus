@@ -1,0 +1,42 @@
+{
+ "uid": "B1501",
+ "title": "湮没的辉煌",
+ "title_from_file": "",
+ "author": "夏坚勇",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/湮没的辉煌",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/湮没的辉煌 (夏坚勇).epub",
+   "format": "epub",
+   "bytes": 481973,
+   "sha256": "5c962222bc93c85e912b64576d60b248cbf209cfc3c82351fbbda7ee5fea555d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 72,
+   "bytes": 592117
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

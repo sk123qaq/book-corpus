@@ -1,0 +1,35 @@
+{
+ "uid": "B0379",
+ "title": "襄水II  林襄MIZUKI數位寫真集",
+ "title_from_file": "",
+ "author": "林襄／莉奈",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/襄水II  林襄MIZUKI數位寫真集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/襄水II  林襄MIZUKI數位寫真集 (林襄, 莉奈) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 78051519,
+   "sha256": "1b96e38a9fce831da332c6e0fa8599aefd77b397ab6e42fe3f5528d20364bf7d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 0,
+   "bytes": 3529
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图片书，不索引"
+}

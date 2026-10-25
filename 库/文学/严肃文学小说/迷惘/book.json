@@ -1,0 +1,42 @@
+{
+ "uid": "B1262",
+ "title": "迷惘",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/迷惘",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/迷惘（1981年诺贝尔文学奖得主埃利亚斯·卡内蒂唯一长篇小说，苏珊·桑塔格、 萨尔曼·鲁西迪、安部公房、新晋诺贝尔文学奖得主奥尔加·托卡尔丘....epub",
+   "format": "epub",
+   "bytes": 768513,
+   "sha256": "3884d0a78ce5c7500424f84bf74d79fdb226c2bb3684d3a7780efb4e9b1ed592",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 1169791
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

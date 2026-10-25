@@ -1,0 +1,35 @@
+{
+ "uid": "B0563",
+ "title": "狮子与宝石",
+ "title_from_file": "",
+ "author": "尼日利",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/狮子与宝石",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/狮子与宝石 (（尼日利）沃莱·沃索因卡著；邵殿生，周永启，蔡宜刚等译 etc.).pdf",
+   "format": "pdf",
+   "bytes": 59981059,
+   "sha256": "acfe9650ebf4e3559f6751c408a44274695de550acad099a4884190d546d8b37",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 853703
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

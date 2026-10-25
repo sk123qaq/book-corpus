@@ -1,0 +1,42 @@
+{
+ "uid": "B1311",
+ "title": "中国当代名人随笔 我的家在哪里",
+ "title_from_file": "",
+ "author": "冰心",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/中国当代名人随笔 我的家在哪里",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国当代名人随笔 我的家在哪里 (冰心著；舒乙编, 冰心著 , 舒乙编, 冰心, 舒乙, 冰心, 1900- etc.).pdf",
+   "format": "pdf",
+   "bytes": 6425683,
+   "sha256": "fbed0fda6886020bd7f8b69667880fc3b37f8aa4957909f2ae55e79ed70f6ec5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 374271
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

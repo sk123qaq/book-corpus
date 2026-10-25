@@ -1,0 +1,241 @@
+qid	stratum	scheme	book_rank	best_chapter	best_ok	in_book_rank	ev_rank
+q010	ordinary	sum	7	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q010	ordinary	mean	13	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q010	ordinary	best	2	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q010	ordinary	mix	2	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q010	ordinary	best_support	2	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q010	ordinary	best_top3_support	2	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q010	ordinary	rrf5	29	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q010	ordinary	best_support_length	2	库/文学/严肃文学小说/1984/md/05_第5节.md	0	2	7
+q014	ordinary	sum	388	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q014	ordinary	mean	282	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q014	ordinary	best	361	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q014	ordinary	mix	351	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q014	ordinary	best_support	356	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q014	ordinary	best_top3_support	352	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q014	ordinary	rrf5	282	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q014	ordinary	best_support_length	357	库/人文社科/人类学与考古/乡土中国/md/13_长老统治.md	0	0	0
+q017	ordinary	sum	0		0	0	0
+q017	ordinary	mean	0		0	0	0
+q017	ordinary	best	0		0	0	0
+q017	ordinary	mix	0		0	0	0
+q017	ordinary	best_support	0		0	0	0
+q017	ordinary	best_top3_support	0		0	0	0
+q017	ordinary	rrf5	0		0	0	0
+q017	ordinary	best_support_length	0		0	0	0
+q024	ordinary	sum	182	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q024	ordinary	mean	12	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q024	ordinary	best	36	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q024	ordinary	mix	23	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q024	ordinary	best_support	42	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q024	ordinary	best_top3_support	39	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q024	ordinary	rrf5	199	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q024	ordinary	best_support_length	43	库/文学/严肃文学小说/杀死一只知更鸟/md/12_第十一章.md	1	1	46
+q028	ordinary	sum	104	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q028	ordinary	mean	192	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q028	ordinary	best	154	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q028	ordinary	mix	168	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q028	ordinary	best_support	155	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q028	ordinary	best_top3_support	155	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q028	ordinary	rrf5	47	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q028	ordinary	best_support_length	152	库/文学/严肃文学小说/动物农场/md/11_◆◆◆ ◆◆◆.md	0	4	765
+q033	ordinary	sum	39	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q033	ordinary	mean	252	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q033	ordinary	best	190	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q033	ordinary	mix	212	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q033	ordinary	best_support	168	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q033	ordinary	best_top3_support	168	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q033	ordinary	rrf5	12	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q033	ordinary	best_support_length	172	库/文学/严肃文学小说/加缪全集/md/22_安南科夫等一等.md	0	0	0
+q044	ordinary	sum	59	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q044	ordinary	mean	38	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q044	ordinary	best	18	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q044	ordinary	mix	19	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q044	ordinary	best_support	18	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q044	ordinary	best_top3_support	17	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q044	ordinary	rrf5	12	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q044	ordinary	best_support_length	18	库/人文社科/思想与哲学/苏菲的世界/md/19_斯宾诺莎.md	1	1	18
+q048	ordinary	sum	61	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q048	ordinary	mean	177	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q048	ordinary	best	115	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q048	ordinary	mix	119	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q048	ordinary	best_support	101	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q048	ordinary	best_top3_support	101	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q048	ordinary	rrf5	1	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q048	ordinary	best_support_length	102	库/人文社科/历史/人类简史/md/049_金钱的价格.md	0	0	0
+q051	ordinary	sum	80	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q051	ordinary	mean	146	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q051	ordinary	best	103	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q051	ordinary	mix	108	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q051	ordinary	best_support	111	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q051	ordinary	best_top3_support	111	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q051	ordinary	rrf5	89	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q051	ordinary	best_support_length	111	库/人文社科/心理与认知/爱的艺术/md/14_爱利希·弗罗姆／百度百科.md	0	0	0
+q058	ordinary	sum	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+q058	ordinary	mean	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+q058	ordinary	best	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+q058	ordinary	mix	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+q058	ordinary	best_support	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+q058	ordinary	best_top3_support	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+q058	ordinary	rrf5	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+q058	ordinary	best_support_length	2	库/人文社科/心理与认知/思考，快与慢/md/049_暗示就是一种锚定效应.md	0	3	6
+L01	long	sum	1	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L01	long	mean	1	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L01	long	best	1	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L01	long	mix	1	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L01	long	best_support	1	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L01	long	best_top3_support	1	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L01	long	rrf5	2	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L01	long	best_support_length	1	库/文学/网络文学/凡人修仙传/md/2067_第十卷魔界之战第两千六十九章拦截.md	1	1	1
+L02	long	sum	1	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L02	long	mean	1	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L02	long	best	1	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L02	long	mix	1	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L02	long	best_support	1	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L02	long	best_top3_support	1	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L02	long	rrf5	12	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L02	long	best_support_length	1	库/文学/网络文学/完美世界/md/0769_第0782章天下动.md	0	32	32
+L03	long	sum	1	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L03	long	mean	3	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L03	long	best	1	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L03	long	mix	1	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L03	long	best_support	1	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L03	long	best_top3_support	1	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L03	long	rrf5	8	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L03	long	best_support_length	1	库/文学/网络文学/遮天/md/0705_第700章老疯子杀太古祖王.md	0	8	8
+L04	long	sum	1	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L04	long	mean	1	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L04	long	best	1	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L04	long	mix	1	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L04	long	best_support	1	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L04	long	best_top3_support	1	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L04	long	rrf5	3	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L04	long	best_support_length	1	库/文学/网络文学/诡秘之主/md/1143_第一百九十一章历史中.md	1	1	1
+L05	long	sum	1	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L05	long	mean	2	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L05	long	best	1	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L05	long	mix	1	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L05	long	best_support	1	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L05	long	best_top3_support	1	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L05	long	rrf5	1	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L05	long	best_support_length	1	库/文学/网络文学/剑来/md/0695_第688章江湖见面道辛苦.md	0	2	2
+L06	long	sum	2	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L06	long	mean	84	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L06	long	best	1	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L06	long	mix	1	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L06	long	best_support	1	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L06	long	best_top3_support	1	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L06	long	rrf5	96	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L06	long	best_support_length	1	库/文学/诗歌/鲁迅文学诗歌奖第一人：啸天说诗/md/0169_石塘濑听猿.md	1	1	1
+L07	long	sum	2	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L07	long	mean	53	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L07	long	best	2	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L07	long	mix	4	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L07	long	best_support	3	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L07	long	best_top3_support	2	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L07	long	rrf5	44	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L07	long	best_support_length	3	库/文学/金克木集/md/525_一梦三千年：周公.md	0	2	7
+L08	long	sum	1	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L08	long	mean	1	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L08	long	best	1	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L08	long	mix	1	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L08	long	best_support	1	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L08	long	best_top3_support	1	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L08	long	rrf5	3	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L08	long	best_support_length	1	库/文学/史铁生作品全/md/1304_通俗、严肃、纯文学和商业文学.md	0	790	790
+L09	long	sum	1	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L09	long	mean	11	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L09	long	best	1	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L09	long	mix	1	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L09	long	best_support	1	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L09	long	best_top3_support	1	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L09	long	rrf5	20	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L09	long	best_support_length	1	库/文学/严肃文学小说/米兰·昆德拉作品系列/md/0877_第二幕.md	1	1	1
+L10	long	sum	1	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+L10	long	mean	11	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+L10	long	best	2	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+L10	long	mix	2	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+L10	long	best_support	2	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+L10	long	best_top3_support	2	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+L10	long	rrf5	4	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+L10	long	best_support_length	2	库/文学/严肃文学小说/海明威诞辰120周年图文珍藏版文集/md/0026_正文.md	1	1	2
+S01	short	sum	16	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S01	short	mean	15	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S01	short	best	1	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S01	short	mix	1	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S01	short	best_support	1	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S01	short	best_top3_support	1	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S01	short	rrf5	1	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S01	short	best_support_length	1	库/人文社科/中县干部/md/中县干部.md	1	1	1
+S02	short	sum	2	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S02	short	mean	1	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S02	short	best	2	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S02	short	mix	2	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S02	short	best_support	2	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S02	short	best_top3_support	2	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S02	short	rrf5	3	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S02	short	best_support_length	2	库/人文社科/宗教与神话/中国神话史.袁珂1986/md/中国神话史.袁珂1986.md	1	1	2
+S03	short	sum	4	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S03	short	mean	2	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S03	short	best	3	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S03	short	mix	3	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S03	short	best_support	3	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S03	short	best_top3_support	3	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S03	short	rrf5	7	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S03	short	best_support_length	3	库/游戏/游戏设计/剑与电-角色扮演游戏设计艺术/md/剑与电-角色扮演游戏设计艺术.md	1	1	3
+S04	short	sum	1	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S04	short	mean	2	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S04	short	best	1	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S04	short	mix	1	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S04	short	best_support	1	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S04	short	best_top3_support	1	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S04	short	rrf5	15	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S04	short	best_support_length	1	库/人文社科/走遍中国 山西/md/走遍中国 山西.md	1	1	1
+S05	short	sum	3	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S05	short	mean	3	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S05	short	best	1	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S05	short	mix	1	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S05	short	best_support	1	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S05	short	best_top3_support	1	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S05	short	rrf5	74	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S05	short	best_support_length	1	库/文学/类型小说/东野圭吾/解忧杂货店/md/05_第五章来自天上的祈祷.md	1	1	1
+S06	short	sum	1	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S06	short	mean	10	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S06	short	best	1	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S06	short	mix	1	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S06	short	best_support	1	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S06	short	best_top3_support	1	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S06	short	rrf5	13	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S06	short	best_support_length	1	库/文学/严肃文学小说/到灯塔去/md/01_窗.md	1	1	1
+S07	short	sum	3	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S07	short	mean	2	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S07	short	best	1	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S07	short	mix	1	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S07	short	best_support	1	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S07	short	best_top3_support	1	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S07	short	rrf5	31	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S07	short	best_support_length	1	库/文学/严肃文学小说/荒原狼/md/03_哈里·哈勒的笔记.md	1	1	1
+S08	short	sum	1	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S08	short	mean	1	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S08	short	best	1	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S08	short	mix	1	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S08	short	best_support	1	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S08	short	best_top3_support	1	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S08	short	rrf5	60	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S08	short	best_support_length	1	库/文学/戏剧/雷雨/md/02_第一幕.md	0	2	2
+S09	short	sum	3	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S09	short	mean	3	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S09	short	best	1	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S09	short	mix	1	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S09	short	best_support	1	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S09	short	best_top3_support	1	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S09	short	rrf5	10	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S09	short	best_support_length	1	库/文学/严肃文学小说/余华/现实一种/md/01_现实一种.md	1	1	1
+S10	short	sum	2	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1
+S10	short	mean	3	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1
+S10	short	best	1	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1
+S10	short	mix	1	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1
+S10	short	best_support	1	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1
+S10	short	best_top3_support	1	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1
+S10	short	rrf5	4	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1
+S10	short	best_support_length	1	库/文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻/md/04_在言谈之中.md	1	1	1

@@ -1,0 +1,42 @@
+{
+ "uid": "B1386",
+ "title": "奥麦罗斯",
+ "title_from_file": "",
+ "author": "圣卢西亚德里克·沃尔科特",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/奥麦罗斯",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/奥麦罗斯 ([圣卢西亚]德里克·沃尔科特 著，杨铁军 译).pdf",
+   "format": "pdf",
+   "bytes": 41357110,
+   "sha256": "1e82402a87dbd48daa0de23eaf9c30c64d84588276e1a79bb45a6847e0b778dc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 453035
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

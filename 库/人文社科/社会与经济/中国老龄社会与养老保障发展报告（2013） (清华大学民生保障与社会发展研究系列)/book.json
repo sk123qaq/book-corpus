@@ -1,0 +1,35 @@
+{
+ "uid": "B0118",
+ "title": "中国老龄社会与养老保障发展报告（2013） (清华大学民生保障与社会发展研究系列)",
+ "title_from_file": "",
+ "author": "杨燕绥",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/中国老龄社会与养老保障发展报告（2013） (清华大学民生保障与社会发展研究系列)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国老龄社会与养老保障发展报告（2013） (清华大学民生保障与社会发展研究系列) (杨燕绥) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 16737682,
+   "sha256": "0e302ae14cbdc5c58695a7a9a4e8aca3cf4519b35017afbd56569ee59bbf0fec",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 72,
+   "bytes": 509297
+  }
+ ],
+ "notes": "依据:TypeSafe(0.88)；置信:0.88"
+}

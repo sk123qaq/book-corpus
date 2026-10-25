@@ -1,0 +1,42 @@
+{
+ "uid": "B1187",
+ "title": "孤独与沉思",
+ "title_from_file": "",
+ "author": "苏利·普吕多姆",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/孤独与沉思",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/孤独与沉思 (苏利·普吕多姆).epub",
+   "format": "epub",
+   "bytes": 224343,
+   "sha256": "6a1dc733f3198dceb8713b74e4a8a4edbe1969b18f718ce444902f9489a70381",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 132,
+   "bytes": 240590
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

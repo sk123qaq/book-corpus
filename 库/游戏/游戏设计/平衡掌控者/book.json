@@ -1,0 +1,35 @@
+{
+ "uid": "B0671",
+ "title": "平衡掌控者",
+ "title_from_file": "",
+ "author": "似水无痕 似水无痕",
+ "subjects": [
+  "游戏",
+  "游戏设计"
+ ],
+ "path": "游戏/游戏设计/平衡掌控者",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/平衡掌控者——游戏数值战斗设计 (似水无痕 [似水无痕]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 32852905,
+   "sha256": "ee43bb05ed45e3aca73a013aa0d43a3e80d14067549c300796e54732e6d669f3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 131,
+   "bytes": 381489
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

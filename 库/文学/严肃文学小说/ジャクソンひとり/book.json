@@ -1,0 +1,42 @@
+{
+ "uid": "B0958",
+ "title": "ジャクソンひとり",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/ジャクソンひとり",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ジャクソンひとり (河出文庫) (安堂ホセ).epub",
+   "format": "epub",
+   "bytes": 209576,
+   "sha256": "811f6accde68d14c1c9444d4cb96eec7a720449189a36a7d8a4a52222d6f61dc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 5,
+   "bytes": 193907
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

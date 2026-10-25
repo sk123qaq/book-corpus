@@ -1,0 +1,42 @@
+{
+ "uid": "B1572",
+ "title": "被雨淋湿的河",
+ "title_from_file": "",
+ "author": "鬼子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/被雨淋湿的河",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/被雨淋湿的河 (鬼子).epub",
+   "format": "epub",
+   "bytes": 242888,
+   "sha256": "a034b900a5b7d1b89ca5f533fc37463f67f92ca935a41e5d76d372ef367ea739",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 441256
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

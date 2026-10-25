@@ -1,0 +1,41 @@
+{
+ "uid": "B1352",
+ "title": "史铁生作品全",
+ "title_from_file": "",
+ "author": "收录史铁生所创作的几乎全部作品",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/史铁生作品全",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/史铁生作品全编（收录史铁生所创作的几乎全部作品；纪念史铁生逝世十周年） (史铁生).epub",
+   "format": "epub",
+   "bytes": 9239568,
+   "sha256": "3b49bdb1bb77f09ac1bdb14294497e23a8c8bb1c85f37a035502c10365c27702",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 1328,
+   "bytes": 7067416
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

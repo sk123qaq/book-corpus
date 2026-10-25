@@ -1,0 +1,35 @@
+{
+ "uid": "B0601",
+ "title": "Spider-Gwen Ghost Spider 1",
+ "title_from_file": "",
+ "author": "Spider",
+ "subjects": [
+  "影视动画漫画",
+  "漫画与画集"
+ ],
+ "path": "影视动画漫画/漫画与画集/Spider-Gwen Ghost Spider 1",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Spider-Gwen Ghost Spider 1 (2024) (Matt Milla, Federica Mancin etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 25853827,
+   "sha256": "8767b11a6ab554def01d4202bdd2309083095ba92a7209187dda2556df090f45",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 33,
+   "bytes": 8924
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

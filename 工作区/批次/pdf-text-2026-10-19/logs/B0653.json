@@ -1,0 +1,29 @@
+{
+ "uid": "B0653",
+ "title": "Bayonetta Official Strategy Guide",
+ "format": "pdf",
+ "route": "text",
+ "pages": 272,
+ "dest": "库/游戏/攻略与资料/Bayonetta Official Strategy Guide/md",
+ "at": "2026-10-19T12:43:44+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/游戏/攻略与资料/Bayonetta Official Strategy Guide/source/Bayonetta Official Strategy Guide (Brady Games) (z-library.sk, 1lib.sk, z-lib.sk).pdf --out out/B0653 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.5411000000000001,
+ "audit_anchors": 0.9505,
+ "audit_chars": 519515,
+ "chapters": 1,
+ "chars": 614105,
+ "images": 10170,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 272,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

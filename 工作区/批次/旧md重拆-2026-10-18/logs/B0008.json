@@ -1,0 +1,16 @@
+{
+ "uid": "B0008",
+ "title": "Die Sklavin des Patriziers",
+ "format": "epub",
+ "dest": "库/文学/Die Sklavin des Patriziers/md",
+ "at": "2026-10-18T23:30:40+08:00",
+ "verify_rc": 0,
+ "chapters": 54,
+ "chars": 389929,
+ "images": 4,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.001,
+ "raw_chars": 368745,
+ "status": "staged-green"
+}

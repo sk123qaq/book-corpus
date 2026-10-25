@@ -1,0 +1,49 @@
+{
+ "uid": "B1155",
+ "title": "一个无政府主义者的意外死亡 达里奥·福戏剧作品集",
+ "title_from_file": "",
+ "author": "意 达里奥·福 著 吕同六",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/一个无政府主义者的意外死亡 达里奥·福戏剧作品集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/一个无政府主义者的意外死亡 (达里奥•福).epub",
+   "format": "epub",
+   "bytes": 71886,
+   "sha256": "bf7fbefeaa8700c2b9b33e47f9bd38aefb9563598ce88859c549ed2c08c626d4",
+   "primary_src": 1
+  },
+  {
+   "file": "source/一个无政府主义者的意外死亡 达里奥·福戏剧作品集 ([意] 达里奥·福 著 吕同六 译).pdf",
+   "format": "pdf",
+   "bytes": 13933826,
+   "sha256": "3d433816bc928a7e94d7c3aeb90719d6a295e522bb2c811e5b8fb12bffb13bbf",
+   "primary_src": 0
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 65686
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

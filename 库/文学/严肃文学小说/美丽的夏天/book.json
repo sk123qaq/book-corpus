@@ -1,0 +1,42 @@
+{
+ "uid": "B0834",
+ "title": "美丽的夏天",
+ "title_from_file": "",
+ "author": "意切萨雷·帕韦塞",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/美丽的夏天",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/美丽的夏天 ([意]切萨雷·帕韦塞,陈英 译).epub",
+   "format": "epub",
+   "bytes": 825192,
+   "sha256": "9d902c049647087b3916581fa762e47ce92d95782976cddb1d53ddf68254c5ad",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 82,
+   "bytes": 656843
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

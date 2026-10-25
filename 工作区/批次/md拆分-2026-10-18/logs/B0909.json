@@ -1,0 +1,17 @@
+{
+ "uid": "B0909",
+ "title": "世界经典文学名著系列老人与海 The Old Man and the Sea",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/世界经典文学名著系列老人与海 The Old Man and the Sea/md",
+ "at": "2026-10-18T21:07:33+08:00",
+ "verify_rc": 0,
+ "chapters": 2,
+ "chars": 106044,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.997,
+ "raw_chars": 102487,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0909.prev-2026-10-18T210620-0800"
+}

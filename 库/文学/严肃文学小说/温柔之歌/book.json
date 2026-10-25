@@ -1,0 +1,42 @@
+{
+ "uid": "B1687",
+ "title": "温柔之歌",
+ "title_from_file": "",
+ "author": "法蕾拉·斯利玛尼",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/温柔之歌",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/温柔之歌 ([法]蕾拉·斯利玛尼).epub",
+   "format": "epub",
+   "bytes": 345248,
+   "sha256": "2c6743d84d200b487b8fa7a0397c111548bd9261e61d8e1c9979e74b9f37bfde",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 49,
+   "bytes": 319628
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1089",
+ "title": "雨にもまけず粗茶一服",
+ "title_from_file": "",
+ "author": "松村栄子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/雨にもまけず粗茶一服",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/雨にもまけず粗茶一服 (松村栄子).epub",
+   "format": "epub",
+   "bytes": 405386,
+   "sha256": "2b80784a80bc814b30f38ae41c727fe793b40f1aa35b60c57a7cd4539131c44f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 719598
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

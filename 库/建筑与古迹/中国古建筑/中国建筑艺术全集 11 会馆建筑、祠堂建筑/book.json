@@ -1,0 +1,27 @@
+{
+ "uid": "B0581",
+ "title": "中国建筑艺术全集 11 会馆建筑、祠堂建筑",
+ "title_from_file": "",
+ "author": "巫纪光",
+ "subjects": [
+  "建筑与古迹",
+  "中国古建筑"
+ ],
+ "path": "建筑与古迹/中国古建筑/中国建筑艺术全集 11 会馆建筑、祠堂建筑",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国建筑艺术全集 11 会馆建筑、祠堂建筑 (巫纪光主编,柳肃摄影中国建筑艺术全集编辑委员会编) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 106946093,
+   "sha256": "ac5af0b8f6325e2ff29b491922b7e6444c24ac0a798662989a548659ec502ee9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比80%，复核混合"
+}

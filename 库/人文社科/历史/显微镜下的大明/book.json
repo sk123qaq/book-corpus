@@ -1,0 +1,35 @@
+{
+ "uid": "B0253",
+ "title": "显微镜下的大明",
+ "title_from_file": "",
+ "author": "马伯庸",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/显微镜下的大明",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/显微镜下的大明 (马伯庸) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 8008643,
+   "sha256": "d2ca98a616f84eabc87201132013ca36f373bf09b29076313ceee6f0bd327e3f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 18,
+   "bytes": 693468
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

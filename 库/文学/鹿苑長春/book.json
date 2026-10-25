@@ -1,0 +1,41 @@
+{
+ "uid": "B0935",
+ "title": "鹿苑長春",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/鹿苑長春",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/鹿苑長春 = The Yearling ( etc.).epub",
+   "format": "epub",
+   "bytes": 1940029,
+   "sha256": "ba641620fe2cac96c2de4476d1b1a4c2354ccb30940ffad0ece913800e32fcd1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 657558
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

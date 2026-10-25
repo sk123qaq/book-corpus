@@ -1,0 +1,42 @@
+{
+ "uid": "B0965",
+ "title": "ブエノスアイレス午前零時",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/ブエノスアイレス午前零時",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ブエノスアイレス午前零時 (河出文庫) (Author Unknown).pdf",
+   "format": "pdf",
+   "bytes": 3654989,
+   "sha256": "a8cbff0c79b1f25a738ec27ec8fc37e107378c13bdb66d3e02b89068dd72264b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 88871
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

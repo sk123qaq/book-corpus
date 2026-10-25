@@ -1,0 +1,17 @@
+{
+ "uid": "B1210",
+ "title": "显克维奇选集",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/显克维奇选集/md",
+ "at": "2026-10-18T20:12:55+08:00",
+ "verify_rc": 0,
+ "chapters": 400,
+ "chars": 3634218,
+ "images": 10,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 3186265,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1210.prev-2026-10-18T201103-0800"
+}

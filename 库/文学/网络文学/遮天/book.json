@@ -1,0 +1,35 @@
+{
+ "uid": "B0389",
+ "title": "遮天",
+ "title_from_file": "",
+ "author": "辰东",
+ "subjects": [
+  "文学",
+  "网络文学"
+ ],
+ "path": "文学/网络文学/遮天",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/遮天 (辰东) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 19021657,
+   "sha256": "70c8333c70fcf9eaab123813bd527f6b82a1b0503a04409609e6394b2a657ca8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 1829,
+   "bytes": 19811082
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

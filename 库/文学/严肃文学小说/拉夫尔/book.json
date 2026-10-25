@@ -1,0 +1,42 @@
+{
+ "uid": "B1436",
+ "title": "拉夫尔",
+ "title_from_file": "",
+ "author": "叶夫盖尼·沃多拉兹金",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/拉夫尔",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/拉夫尔 (叶夫盖尼·沃多拉兹金).epub",
+   "format": "epub",
+   "bytes": 1008534,
+   "sha256": "a8abd956be043238fe144ba7c7f8d1b9947b36cf068fa136c2f9d4028cc6a72b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 99,
+   "bytes": 700161
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

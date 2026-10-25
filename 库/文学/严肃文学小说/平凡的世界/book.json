@@ -1,0 +1,35 @@
+{
+ "uid": "B0225",
+ "title": "平凡的世界",
+ "title_from_file": "",
+ "author": "路遥",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/平凡的世界",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/平凡的世界 (路遥) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2508134,
+   "sha256": "ec8c25b669707b8287f4e509e66477f7c7550e1a7016c0a9dad5d48088991c50",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 185,
+   "bytes": 2543132
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1558",
+ "title": "苏童作品精选集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/苏童作品精选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/苏童作品精选集（套装共13册）【张艺谋电影、奥斯卡金像奖提名影片《大红灯笼高高挂》原著作者，茅盾文学奖得主苏童作品精选集（6部长篇 4部中....epub",
+   "format": "epub",
+   "bytes": 3324924,
+   "sha256": "de71a7c32ff035662157b463551d7264a6b75c3612a6ab6a3c93cf7affd95eef",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "2010",
+   "edition": "第五届",
+   "result": "✅已下载"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 176,
+   "bytes": 4764727
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

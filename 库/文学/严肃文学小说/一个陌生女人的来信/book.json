@@ -1,0 +1,35 @@
+{
+ "uid": "B0016",
+ "title": "一个陌生女人的来信",
+ "title_from_file": "",
+ "author": "斯蒂芬•茨威格",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/一个陌生女人的来信",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/一个陌生女人的来信 (斯蒂芬•茨威格) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2138456,
+   "sha256": "cb51fcad00e33e6c555948b14528d52505b9abad7a9724e936f6e2fee0e77e27",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 472815
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1321",
+ "title": "云南记",
+ "title_from_file": "",
+ "author": "雷平阳",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/云南记",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/云南记 (雷平阳著, Lei Pingyang zhu).pdf",
+   "format": "pdf",
+   "bytes": 4001809,
+   "sha256": "de77fbfedc350840f8b24fc4b0e0461fdcc109ff4518d961e53be192720f131c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 242449
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

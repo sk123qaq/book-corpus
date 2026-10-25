@@ -1,0 +1,35 @@
+{
+ "uid": "B0135",
+ "title": "兄弟",
+ "title_from_file": "",
+ "author": "余华",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/余华/兄弟",
+ "series": "余华",
+ "volume": "3",
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../../../source/余华作品全集(套装共13册) (余华) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2238472,
+   "sha256": "479ae578aa75454630148bd7509db0ffe7bb181ecd049c8b4a7032b067374797",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 77,
+   "bytes": 1273898
+  }
+ ],
+ "notes": "依据:系列:余华；合集拆出 3/13；置信:1.0"
+}

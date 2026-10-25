@@ -1,0 +1,42 @@
+{
+ "uid": "B0727",
+ "title": "人间王国",
+ "title_from_file": "",
+ "author": "古巴 阿莱霍·卡彭铁尔",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/人间王国",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/人间王国 ([古巴] 阿莱霍·卡彭铁尔).epub",
+   "format": "epub",
+   "bytes": 541462,
+   "sha256": "f3da6c80993bd560f49d2cc8732cede36e0b5b9fc984075655b6c7fa23d74223",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 30,
+   "bytes": 181437
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

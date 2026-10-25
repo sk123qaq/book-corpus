@@ -1,0 +1,42 @@
+{
+ "uid": "B0797",
+ "title": "背叛 The Sellout",
+ "title_from_file": "",
+ "author": "Chinese Edition",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/背叛 The Sellout",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/背叛 The Sellout (Chinese Edition) (Paul Beatty).epub",
+   "format": "epub",
+   "bytes": 575016,
+   "sha256": "ebdf51203f1e61700ec6c2b4a0053072163448589c68024a93d1c3f3e2c270bb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 31,
+   "bytes": 518628
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,22 @@
+{
+ "uid": "B0607",
+ "title": "人类的价值",
+ "format": "epub",
+ "dest": "库/人文社科/人类的价值/md",
+ "at": "2026-10-18T21:06:26+08:00",
+ "override": {
+  "tool": "carry_doc_prefixes.py",
+  "accept": "正文只收正文，未收录页以后记/注释/参考文献为主"
+ },
+ "verify_rc": 0,
+ "chapters": 54,
+ "chars": 126195,
+ "images": 35,
+ "problems": 0,
+ "audit_rc": 1,
+ "audit_ratio": 0.757,
+ "raw_chars": 149449,
+ "status": "accepted",
+ "note": "已受理例外：正文只收正文，未收录页以后记/注释/参考文献为主",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0607.prev-2026-10-18T210620-0800"
+}

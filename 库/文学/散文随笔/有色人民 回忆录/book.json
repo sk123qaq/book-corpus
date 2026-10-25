@@ -1,0 +1,42 @@
+{
+ "uid": "B1465",
+ "title": "有色人民 回忆录",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/有色人民 回忆录",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/有色人民 回忆录 (（美）盖茨著, Henry Louis Gates).pdf",
+   "format": "pdf",
+   "bytes": 9228304,
+   "sha256": "844296dda90c9041596a9eee7a5d6b32fb6807b6ffa156835b7cc137d0403bd6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 385620
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B0798",
+ "title": "自由国度",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/自由国度/md",
+ "at": "2026-10-18T21:07:00+08:00",
+ "verify_rc": 0,
+ "chapters": 15,
+ "chars": 155525,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 136118,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0798.prev-2026-10-18T210620-0800"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B0871",
+ "title": "Less A Novel",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/Less A Novel/md",
+ "at": "2026-10-18T21:07:20+08:00",
+ "verify_rc": 0,
+ "chapters": 9,
+ "chars": 326435,
+ "images": 8,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.993,
+ "raw_chars": 310611,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0871.prev-2026-10-18T210620-0800"
+}

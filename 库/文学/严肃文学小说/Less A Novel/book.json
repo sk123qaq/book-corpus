@@ -1,0 +1,42 @@
+{
+ "uid": "B0871",
+ "title": "Less A Novel",
+ "title_from_file": "",
+ "author": "Andrew Sean Greer",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Less A Novel",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Less A Novel (Andrew Sean Greer).epub",
+   "format": "epub",
+   "bytes": 2706263,
+   "sha256": "eaf9ccaa97fadfa88ba155f487c356942a4faf4530ab560f93b480438b45490a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 9,
+   "bytes": 409815
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

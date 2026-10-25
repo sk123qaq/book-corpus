@@ -1,0 +1,42 @@
+{
+ "uid": "B1026",
+ "title": "時の家",
+ "title_from_file": "",
+ "author": "鳥山 まこと",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/時の家",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/時の家 (鳥山 まこと).epub",
+   "format": "epub",
+   "bytes": 1794928,
+   "sha256": "60214fad0ca4817ff7b43d0e2c266d5a33550f105b1c6f3922256306fed79591",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 260767
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

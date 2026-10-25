@@ -1,0 +1,27 @@
+{
+ "uid": "B0600",
+ "title": "Spider-Gwen - Gwenverse 005",
+ "title_from_file": "",
+ "author": "Spider",
+ "subjects": [
+  "影视动画漫画",
+  "漫画与画集"
+ ],
+ "path": "影视动画漫画/漫画与画集/Spider-Gwen - Gwenverse 005",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Spider-Gwen - Gwenverse 005 (2022) (Digital) (Zone-Empire) (未知) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 33016810,
+   "sha256": "eb88e7f2a0c96aab2b1715ef57a30fdeb63eeb92558baa6909b4252d5352824b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是漫画与画集"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0346",
+ "title": "邛笼石影",
+ "title_from_file": "",
+ "author": "南派三叔",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/南派三叔/盗墓笔记/邛笼石影",
+ "series": "盗墓笔记",
+ "volume": "12",
+ "container": "盗墓笔记",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../../../../source/盗墓笔记 1-8 全集 (精美插图 目录) (南派三叔) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 15112157,
+   "sha256": "e9438d3ac78e0c8c982edf70f9737c399186d73d32e57670f7c74d7815961cb7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 60,
+   "bytes": 488408
+  }
+ ],
+ "notes": "依据:系列:盗墓笔记；合集拆出 12/17；置信:1.0"
+}

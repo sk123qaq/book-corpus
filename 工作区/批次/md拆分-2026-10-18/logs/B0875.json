@@ -1,0 +1,22 @@
+{
+ "uid": "B0875",
+ "title": "One Of Ours",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/One Of Ours/md",
+ "at": "2026-10-18T21:07:21+08:00",
+ "override": {
+  "args": [
+   "--all-pages"
+  ]
+ },
+ "verify_rc": 0,
+ "chapters": 7,
+ "chars": 579323,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 553323,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0875.prev-2026-10-18T210620-0800"
+}

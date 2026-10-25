@@ -1,0 +1,42 @@
+{
+ "uid": "B0796",
+ "title": "肉身  Flesh (大卫·塞利(David Szalay),Jass [译])",
+ "title_from_file": "",
+ "author": "David Szalay",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/肉身  Flesh (大卫·塞利(David Szalay),Jass [译])",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/肉身  Flesh (大卫·塞利(David Szalay),Jass [译]).epub",
+   "format": "epub",
+   "bytes": 1884450,
+   "sha256": "b1cdddaaefb7618b7dbcd1db927e0929aa95cbaaad2ab3ef87d94a944fdd58be",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 397967
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

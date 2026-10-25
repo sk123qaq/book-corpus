@@ -1,0 +1,42 @@
+{
+ "uid": "B1492",
+ "title": "浮士德",
+ "title_from_file": "",
+ "author": "世界名",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/浮士德",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/浮士德（世界名著，经典影视剧作，人民文学名著名译最新版） (名著名译丛书) (（德）歌德著 绿原译).mobi",
+   "format": "mobi",
+   "bytes": 2596850,
+   "sha256": "01eba2ecc853cd09d468fa27d4bb9f55e347fb4304fff58bdf89bdc562649cb7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 36,
+   "bytes": 800401
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0978",
+ "title": "伸予",
+ "title_from_file": "",
+ "author": "高橋揆一郎",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/伸予",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/伸予 (高橋揆一郎).pdf",
+   "format": "pdf",
+   "bytes": 34823414,
+   "sha256": "1add9a3e14de1e8ff88aa6afbcbad9885031e3db39281046d39a830b68ff4ac4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 379626
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1380",
+ "title": "大湖消息",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/大湖消息",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大湖消息(精) (沈念).epub",
+   "format": "epub",
+   "bytes": 442021,
+   "sha256": "56f6ad566363656790567e520e49ea28e7512d1ed98708ae9d62f6c116ab6184",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 258,
+   "bytes": 435487
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

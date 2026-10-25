@@ -1,0 +1,26 @@
+{
+ "uid": "B0525",
+ "title": "The Otaku in 10,000 B.C. - Volume 2",
+ "title_from_file": "",
+ "author": "Nagashima Chousuke",
+ "subjects": [
+  "影视动画漫画"
+ ],
+ "path": "影视动画漫画/The Otaku in 10,000 B.C. - Volume 2",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Otaku in 10,000 B.C. - Volume 2 (Nagashima Chousuke) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 434358700,
+   "sha256": "91b96f155de189b8388da16459f9e9dd4f4d86401268598e557ce3c34f9c91cc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(0.85)；置信:0.85；图册不转:图占比80%"
+}

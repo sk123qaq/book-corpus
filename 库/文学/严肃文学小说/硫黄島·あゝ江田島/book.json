@@ -1,0 +1,34 @@
+{
+ "uid": "B1054",
+ "title": "硫黄島·あゝ江田島",
+ "title_from_file": "",
+ "author": "菊村到",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/硫黄島·あゝ江田島",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/硫黄島·あゝ江田島 (菊村到).pdf",
+   "format": "pdf",
+   "bytes": 38848582,
+   "sha256": "ecad6e6aa607fce07429af8ffbd5bd00cea0a9cc3e38a2d60348cc92e58eaf0b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

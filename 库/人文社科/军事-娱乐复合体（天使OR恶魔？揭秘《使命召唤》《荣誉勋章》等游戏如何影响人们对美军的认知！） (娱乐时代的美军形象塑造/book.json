@@ -1,0 +1,34 @@
+{
+ "uid": "B0608",
+ "title": "军事-娱乐复合体（天使OR恶魔？揭秘《使命召唤》《荣誉勋章》等游戏如何影响人们对美军的认知！） (娱乐时代的美军形象塑造",
+ "title_from_file": "",
+ "author": "军事",
+ "subjects": [
+  "人文社科"
+ ],
+ "path": "人文社科/军事-娱乐复合体（天使OR恶魔？揭秘《使命召唤》《荣誉勋章》等游戏如何影响人们对美军的认知！） (娱乐时代的美军形象塑造",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/军事-娱乐复合体（天使OR恶魔？揭秘《使命召唤》《荣誉勋章》等游戏如何影响人们对美军的认知！） (娱乐时代的美军形象塑造系列译丛) (提姆·莱... (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 8044449,
+   "sha256": "18597fc524ce71430179c13bff19ba8912f544b1b34643a8393b827afbf0e779",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 43,
+   "bytes": 432786
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

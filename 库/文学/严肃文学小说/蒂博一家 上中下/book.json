@@ -1,0 +1,42 @@
+{
+ "uid": "B0571",
+ "title": "蒂博一家 上中下",
+ "title_from_file": "",
+ "author": "马丁杜加尔",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/蒂博一家 上中下",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/蒂博一家：全4册 (诺贝尔文学奖大系) ((法)加尔).epub",
+   "format": "epub",
+   "bytes": 1757265,
+   "sha256": "5f5effbe67acb55c0daa2c94dab2464cff2b4df497e8e5593b9e74bbbdacabc7",
+   "primary_src": 1
+  },
+  {
+   "file": "source/蒂博一家 上中下 (马丁杜加尔).pdf",
+   "format": "pdf",
+   "bytes": 50158458,
+   "sha256": "457f67d0d97523245c6084db7db9cc9e26cf6a3fc2c5a5b869d883980ead5ad9",
+   "primary_src": 0
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 3675473
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

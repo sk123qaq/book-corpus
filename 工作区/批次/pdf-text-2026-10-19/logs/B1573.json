@@ -1,0 +1,29 @@
+{
+ "uid": "B1573",
+ "title": "西藏最后的驮队",
+ "format": "pdf",
+ "route": "text",
+ "pages": 296,
+ "dest": "库/文学/西藏最后的驮队/md",
+ "at": "2026-10-19T12:44:15+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/西藏最后的驮队/source/西藏最后的驮队 (加央西热).pdf --out out/B1573 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0796999999999999,
+ "audit_anchors": 1.0,
+ "audit_chars": 136374,
+ "chapters": 1,
+ "chars": 154822,
+ "images": 592,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 296,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

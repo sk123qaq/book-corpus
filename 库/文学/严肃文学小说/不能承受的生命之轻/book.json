@@ -1,0 +1,35 @@
+{
+ "uid": "B0040",
+ "title": "不能承受的生命之轻",
+ "title_from_file": "",
+ "author": "米兰·昆德拉",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/不能承受的生命之轻",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/不能承受的生命之轻 (米兰·昆德拉) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 930384,
+   "sha256": "d586a087e6a2923ed38d256567396a532edfe6e812f4c811e53d63d6eda687dd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 11,
+   "bytes": 491099
+  }
+ ],
+ "notes": "依据:系列:米兰·昆德拉；置信:1.0"
+}

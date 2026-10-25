@@ -1,0 +1,35 @@
+{
+ "uid": "B0400",
+ "title": "基地与帝国",
+ "title_from_file": "",
+ "author": "艾萨克•阿西莫夫",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/艾萨克•阿西莫夫/银河帝国/基地与帝国",
+ "series": "银河帝国",
+ "volume": "2",
+ "container": "银河帝国",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../source/银河帝国(1-7)基地七部曲(套装共7册) (艾萨克•阿西莫夫) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3185875,
+   "sha256": "ba542cb912a457b36dddc592dcc401fc53f4e45e9312f54dbd38bd06e59334e0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 31,
+   "bytes": 461479
+  }
+ ],
+ "notes": "依据:系列:银河帝国；合集拆出 2/7；置信:1.0"
+}

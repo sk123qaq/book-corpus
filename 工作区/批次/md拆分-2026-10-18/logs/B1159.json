@@ -1,0 +1,17 @@
+{
+ "uid": "B1159",
+ "title": "丛林之书",
+ "format": "epub",
+ "dest": "库/文学/儿童与青少年文学/丛林之书/md",
+ "at": "2026-10-18T21:07:51+08:00",
+ "verify_rc": 0,
+ "chapters": 48,
+ "chars": 199094,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 170296,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1159.prev-2026-10-18T210620-0800"
+}

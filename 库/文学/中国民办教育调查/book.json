@@ -1,0 +1,41 @@
+{
+ "uid": "B1317",
+ "title": "中国民办教育调查",
+ "title_from_file": "",
+ "author": "铁流",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/中国民办教育调查",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国民办教育调查 (铁流编, 铁, 流, 徐, 锦庚, liu Tie, jin geng Xu etc.).pdf",
+   "format": "pdf",
+   "bytes": 16420049,
+   "sha256": "1203ad1004d13ddbdc805ee2230669828852d0ad3fbc9c872b46400ca82f0afe",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 731286
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

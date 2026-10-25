@@ -1,0 +1,42 @@
+{
+ "uid": "B0909",
+ "title": "世界经典文学名著系列老人与海 The Old Man and the Sea",
+ "title_from_file": "",
+ "author": "全英文版",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/世界经典文学名著系列老人与海 The Old Man and the Sea",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/世界经典文学名著系列老人与海 The Old Man and the Sea (全英文版) (欧内斯特·海明威).epub",
+   "format": "epub",
+   "bytes": 295956,
+   "sha256": "120fae6c993daf4c17f4db886bb102fa3960381c8c10886745e1425a519d7c68",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 2,
+   "bytes": 136505
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

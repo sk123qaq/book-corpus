@@ -1,0 +1,42 @@
+{
+ "uid": "B0877",
+ "title": "Rabbit Is Rich",
+ "title_from_file": "",
+ "author": "John Updike",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Rabbit Is Rich",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Rabbit Is Rich (John Updike).epub",
+   "format": "epub",
+   "bytes": 431156,
+   "sha256": "e552ccb13c631de55f133ecbeb3eb961f5f007291ad8efd8adc638355fdc1e7f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 932883
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1358",
+ "title": "哺乳期的女人",
+ "title_from_file": "",
+ "author": "毕飞宇",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/哺乳期的女人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/哺乳期的女人 (毕飞宇).epub",
+   "format": "epub",
+   "bytes": 445764,
+   "sha256": "88c063bbb2aa760743468d017599fe90f0a13300f8120b9374d3a19c85564f85",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 23,
+   "bytes": 485437
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

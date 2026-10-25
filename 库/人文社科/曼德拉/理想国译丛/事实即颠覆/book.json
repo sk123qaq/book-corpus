@@ -1,0 +1,34 @@
+{
+ "uid": "B0305",
+ "title": "事实即颠覆",
+ "title_from_file": "",
+ "author": "曼德拉",
+ "subjects": [
+  "人文社科"
+ ],
+ "path": "人文社科/曼德拉/理想国译丛/事实即颠覆",
+ "series": "理想国译丛",
+ "volume": "6",
+ "container": "理想国译丛",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../../../source/理想国译丛系列[套装32册] (巴巴拉·塔奇曼弗朗西斯·福山纳尔逊·曼德拉奥兰多·费吉斯) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 92950726,
+   "sha256": "259bdf29230803178acf6dff51eb14a9c9a182439ee58ea655e421e2c9cced7c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 51,
+   "bytes": 779491
+  }
+ ],
+ "notes": "依据:系列:理想国译丛；合集拆出 6/32；置信:0.92"
+}

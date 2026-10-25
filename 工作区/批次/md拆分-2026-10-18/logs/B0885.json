@@ -1,0 +1,17 @@
+{
+ "uid": "B0885",
+ "title": "The Bridge of San Luis Rey",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The Bridge of San Luis Rey/md",
+ "at": "2026-10-18T21:07:24+08:00",
+ "verify_rc": 0,
+ "chapters": 8,
+ "chars": 148700,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.997,
+ "raw_chars": 143513,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0885.prev-2026-10-18T210620-0800"
+}

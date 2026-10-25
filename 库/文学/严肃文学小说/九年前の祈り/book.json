@@ -1,0 +1,42 @@
+{
+ "uid": "B0975",
+ "title": "九年前の祈り",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/九年前の祈り",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/九年前の祈り ().pdf",
+   "format": "pdf",
+   "bytes": 31944255,
+   "sha256": "5f8d6bc6348738a0e873e4b38bc7aaf15e31089625013afa0fcd257eeeac571e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 346276
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0113",
+ "title": "中国人超会吃",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "生活与实用",
+  "饮食"
+ ],
+ "path": "生活与实用/饮食/中国人超会吃",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国人超会吃【陈晓卿、毛尖、李雪琴诚意推荐；对于吃的执着，中国人罕有对手！资深美食作家三年采风，各地名厨倾囊助力，55道灵魂食谱，14篇....epub",
+   "format": "epub",
+   "bytes": 43508815,
+   "sha256": "caf9b837d35295c4412c041e531ea096f87eecdf0292f31fa0c91920897ddf88",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 97,
+   "bytes": 543479
+  }
+ ],
+ "notes": "依据:TypeSafe(0.88)；置信:0.88"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0756",
+ "title": "The Elected Member",
+ "title_from_file": "",
+ "author": "Bernice Rubens",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Elected Member",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Elected Member (Bernice Rubens).epub",
+   "format": "epub",
+   "bytes": 805151,
+   "sha256": "2113e251031c3909ec4fa216a7dc1418c00b14d194a06e8cfe9edfc23b16877b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 22,
+   "bytes": 433541
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

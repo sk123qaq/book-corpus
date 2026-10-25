@@ -1,0 +1,42 @@
+{
+ "uid": "B1661",
+ "title": "三个折不断的女人",
+ "title_from_file": "",
+ "author": "玛丽•恩迪亚耶",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/三个折不断的女人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/三个折不断的女人 (玛丽•恩迪亚耶).epub",
+   "format": "epub",
+   "bytes": 397609,
+   "sha256": "61a9441de334ed858fd86bbd1a14d39df8cce6b3decbff9af608e4752db4e5a1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 458506
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

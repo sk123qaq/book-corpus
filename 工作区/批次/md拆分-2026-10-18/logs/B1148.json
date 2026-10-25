@@ -1,0 +1,20 @@
+{
+ "uid": "B1148",
+ "title": "麦家作品套装：解密、暗算、风声",
+ "format": "epub",
+ "dest": "库/文学/类型小说/麦家作品套装：解密、暗算、风声/md",
+ "at": "2026-10-18T20:12:41+08:00",
+ "override": {
+  "tool": "carry_doc_prefixes.py"
+ },
+ "verify_rc": 0,
+ "chapters": 19,
+ "chars": 494447,
+ "images": 7,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9940000000000001,
+ "raw_chars": 432740,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1148.prev-2026-10-18T201103-0800"
+}

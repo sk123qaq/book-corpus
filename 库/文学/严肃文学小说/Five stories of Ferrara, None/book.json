@@ -1,0 +1,42 @@
+{
+ "uid": "B0813",
+ "title": "Five stories of Ferrara, None",
+ "title_from_file": "",
+ "author": "Bassani",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Five stories of Ferrara, None",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Five stories of Ferrara, None (Bassani, Giorgio, 1916-2000, None).pdf",
+   "format": "pdf",
+   "bytes": 11339392,
+   "sha256": "c6e7bb7013295c7c9dd1172c4ad2c604749ac620cd28732515eebd83c57d3462",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 425690
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

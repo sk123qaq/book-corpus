@@ -1,0 +1,41 @@
+{
+ "uid": "B1559",
+ "title": "茅盾的文学道路",
+ "title_from_file": "",
+ "author": "邵伯周",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/茅盾的文学道路",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/茅盾的文学道路 (邵伯周著).pdf",
+   "format": "pdf",
+   "bytes": 7952661,
+   "sha256": "ff0224ed772663fac46e63f808a201f465bfd1fe7af5e1fe6f98d6b11525d633",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 399748
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

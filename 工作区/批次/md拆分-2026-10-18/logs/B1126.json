@@ -1,0 +1,17 @@
+{
+ "uid": "B1126",
+ "title": "牵风记",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/牵风记/md",
+ "at": "2026-10-18T21:07:46+08:00",
+ "verify_rc": 0,
+ "chapters": 32,
+ "chars": 124432,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.991,
+ "raw_chars": 110047,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1126.prev-2026-10-18T210620-0800"
+}

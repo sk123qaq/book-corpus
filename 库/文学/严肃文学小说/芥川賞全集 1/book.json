@@ -1,0 +1,34 @@
+{
+ "uid": "B1064",
+ "title": "芥川賞全集 1",
+ "title_from_file": "",
+ "author": "石川 達三",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/芥川賞全集 1",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/芥川賞全集 1 (石川 達三).pdf",
+   "format": "pdf",
+   "bytes": 15992548,
+   "sha256": "df808cfbe17b634b8d5d99f2a2e859de0b2805e16639d7526839402baea74676",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

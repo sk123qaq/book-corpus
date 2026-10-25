@@ -1,0 +1,42 @@
+{
+ "uid": "B0819",
+ "title": "Story of My People",
+ "title_from_file": "",
+ "author": "Nesi",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Story of My People",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Story of My People (Nesi, Edoardo, 1964-, Shugaar, Antony etc.).pdf",
+   "format": "pdf",
+   "bytes": 7246464,
+   "sha256": "656c5130e37056a0e3159e82bbdace172cd2c1116a331b2cb30c19771e0c147e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 247949
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

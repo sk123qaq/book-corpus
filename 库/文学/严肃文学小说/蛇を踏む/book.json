@@ -1,0 +1,42 @@
+{
+ "uid": "B1073",
+ "title": "蛇を踏む",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/蛇を踏む",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/蛇を踏む (文春文庫) (川上 弘美).epub",
+   "format": "epub",
+   "bytes": 192882,
+   "sha256": "ad6ed7fe9f232708180aae7970552b568584e54ae9b839db12183afd6e834c39",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 213228
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

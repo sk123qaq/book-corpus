@@ -1,0 +1,34 @@
+{
+ "uid": "B0386",
+ "title": "费可的晚宴",
+ "title_from_file": "",
+ "author": "懒回顾.",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/费可的晚宴",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/费可的晚宴 (珞珈) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3351227,
+   "sha256": "4a8b541e3d15bdf2211caab8b80b9e9164056a1e97213c1d2d1690ddd6b31f6c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 202964
+  }
+ ],
+ "notes": "依据:TypeSafe(0.96)；置信:0.96"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1172",
+ "title": "喜剧的本质",
+ "title_from_file": "",
+ "author": "法亨利·柏格森",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/喜剧的本质",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/喜剧的本质 (【法】亨利·柏格森).epub",
+   "format": "epub",
+   "bytes": 854371,
+   "sha256": "9967520075c457a53ac7103e0ad97e4108d5a30fe78146d1df70242abcde0eca",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 206067
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

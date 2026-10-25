@@ -1,0 +1,42 @@
+{
+ "uid": "B0950",
+ "title": "アメリカン・スクール",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/アメリカン・スクール",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/アメリカン・スクール (新潮文庫) (小島 信夫).epub",
+   "format": "epub",
+   "bytes": 526319,
+   "sha256": "8b1f34ba7dcf35ea4387de587e9d47c209eff3f588dccd3d5fde2d613d4d2805",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 515108
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

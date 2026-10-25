@@ -1,0 +1,27 @@
+{
+ "uid": "B0529",
+ "title": "ひこうきぐも―堀北真希写真集",
+ "title_from_file": "",
+ "author": "堀北真希",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/ひこうきぐも―堀北真希写真集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ひこうきぐも―堀北真希写真集 (堀北真希, 西田 幸樹) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 16339683,
+   "sha256": "66e837224583f2c3f22b5939488cf6865ff69f0bac66482fd6b35ba45345a9a3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:二级学科是图册与写真"
+}

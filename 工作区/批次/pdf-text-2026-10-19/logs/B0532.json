@@ -1,0 +1,29 @@
+{
+ "uid": "B0532",
+ "title": "中县干部",
+ "format": "pdf",
+ "route": "text",
+ "pages": 215,
+ "dest": "库/人文社科/中县干部/md",
+ "at": "2026-10-19T12:42:10+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/中县干部/source/中县干部 (冯军旗) (z-library.sk, 1lib.sk, z-lib.sk).pdf --out out/B0532 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0002,
+ "audit_anchors": 0.9984000000000001,
+ "audit_chars": 239617,
+ "chapters": 1,
+ "chars": 270866,
+ "images": 2,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 215,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

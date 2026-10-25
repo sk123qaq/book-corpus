@@ -1,0 +1,42 @@
+{
+ "uid": "B1452",
+ "title": "新世纪批评家丛书 谁也管不住说话这张嘴 (程德培著, Cheng Depei zhu, 程德培, (1951- ))",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/新世纪批评家丛书 谁也管不住说话这张嘴 (程德培著, Cheng Depei zhu, 程德培, (1951- ))",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/新世纪批评家丛书 谁也管不住说话这张嘴 (程德培著, Cheng Depei zhu, 程德培, (1951- )).pdf",
+   "format": "pdf",
+   "bytes": 12319898,
+   "sha256": "cba98889ba995d5fd5a3fb18bcc34ff97251a24cd56d915f0727688fa9194517",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 709359
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

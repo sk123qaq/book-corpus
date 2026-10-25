@@ -1,0 +1,42 @@
+{
+ "uid": "B1079",
+ "title": "貝に続く場所にて",
+ "title_from_file": "",
+ "author": "石沢 麻依",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/貝に続く場所にて",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/貝に続く場所にて (石沢 麻依).epub",
+   "format": "epub",
+   "bytes": 1359498,
+   "sha256": "afff2a5236952a99831acdbe75ad3a3c4878c1c10c51a4997bb79e0ae2aa13dc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 297834
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

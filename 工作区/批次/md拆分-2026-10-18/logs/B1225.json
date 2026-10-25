@@ -1,0 +1,17 @@
+{
+ "uid": "B1225",
+ "title": "福克纳文集·全6册",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/福克纳文集·全6册/md",
+ "at": "2026-10-18T20:12:59+08:00",
+ "verify_rc": 0,
+ "chapters": 213,
+ "chars": 1164083,
+ "images": 22,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.977,
+ "raw_chars": 1040317,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1225.prev-2026-10-18T201103-0800"
+}

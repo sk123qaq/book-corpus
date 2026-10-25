@@ -1,0 +1,41 @@
+{
+ "uid": "B1347",
+ "title": "南方想象的诗学 论苏童的当代唯美写作 (张学昕编著, Zhang Xuexin zhu, 张学昕, (1963- ) e",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/南方想象的诗学 论苏童的当代唯美写作 (张学昕编著, Zhang Xuexin zhu, 张学昕, (1963- ) e",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/南方想象的诗学 论苏童的当代唯美写作 (张学昕编著, Zhang Xuexin zhu, 张学昕, (1963- ) etc.).pdf",
+   "format": "pdf",
+   "bytes": 13703699,
+   "sha256": "f76eb0d881b43ce12c0abd790bccc9539a97601d94a986fcc66c8e7e3e058fde",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 639603
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

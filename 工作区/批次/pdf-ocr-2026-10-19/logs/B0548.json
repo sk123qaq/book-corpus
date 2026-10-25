@@ -1,0 +1,30 @@
+{
+ "uid": "B0548",
+ "title": "可持续发展的中国新型农村社会养老保险制度研究",
+ "format": "pdf",
+ "pages": 575,
+ "dest": "库/人文社科/社会与经济/可持续发展的中国新型农村社会养老保险制度研究/md",
+ "at": "2026-10-24T15:28:45+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B0548/merged/pages --out out/B0548 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 18,
+ "pages_per_chunk": 32,
+ "slice_mb_estimate": 14.9,
+ "chunks_done": 18,
+ "merged_pages": 575,
+ "coverage_ok": true,
+ "merged_run_json": "work/B0548/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 1233653,
+ "images": 74,
+ "problems": 0,
+ "blank_pages": 0,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}

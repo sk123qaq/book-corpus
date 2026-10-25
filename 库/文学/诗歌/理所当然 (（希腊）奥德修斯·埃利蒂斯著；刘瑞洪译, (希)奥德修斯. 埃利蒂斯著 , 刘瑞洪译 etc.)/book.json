@@ -1,0 +1,42 @@
+{
+ "uid": "B1222",
+ "title": "理所当然 (（希腊）奥德修斯·埃利蒂斯著；刘瑞洪译, (希)奥德修斯. 埃利蒂斯著 , 刘瑞洪译 etc.)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/理所当然 (（希腊）奥德修斯·埃利蒂斯著；刘瑞洪译, (希)奥德修斯. 埃利蒂斯著 , 刘瑞洪译 etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/理所当然 (（希腊）奥德修斯·埃利蒂斯著；刘瑞洪译, (希)奥德修斯. 埃利蒂斯著 , 刘瑞洪译 etc.).pdf",
+   "format": "pdf",
+   "bytes": 9433033,
+   "sha256": "20ed2d037b5b8162cfae53fd46eb7cb679bf8b2a3020ac14fae8dec58a86ac75",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 129705
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

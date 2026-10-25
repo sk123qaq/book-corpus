@@ -1,0 +1,41 @@
+{
+ "uid": "B1520",
+ "title": "用胸膛行走西藏",
+ "title_from_file": "",
+ "author": "党益民",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/用胸膛行走西藏",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/用胸膛行走西藏 (党益民 著).epub",
+   "format": "epub",
+   "bytes": 14703280,
+   "sha256": "8dd596aa8361b2fafdff18d7ecefeb328edbb36664c66dedb3d1d1b42cbed219",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 89,
+   "bytes": 452407
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

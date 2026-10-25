@@ -1,0 +1,17 @@
+{
+ "uid": "B1592",
+ "title": "追问",
+ "format": "epub",
+ "dest": "库/文学/追问/md",
+ "at": "2026-10-18T20:14:10+08:00",
+ "verify_rc": 0,
+ "chapters": 15,
+ "chars": 160345,
+ "images": 3,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.996,
+ "raw_chars": 142052,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1592.prev-2026-10-18T201103-0800"
+}

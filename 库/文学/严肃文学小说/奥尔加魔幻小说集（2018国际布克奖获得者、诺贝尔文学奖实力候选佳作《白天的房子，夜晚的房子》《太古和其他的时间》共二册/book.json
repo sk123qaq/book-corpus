@@ -1,0 +1,35 @@
+{
+ "uid": "B0202",
+ "title": "奥尔加魔幻小说集（2018国际布克奖获得者、诺贝尔文学奖实力候选佳作《白天的房子，夜晚的房子》《太古和其他的时间》共二册",
+ "title_from_file": "",
+ "author": "国际布克奖获得者",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/奥尔加魔幻小说集（2018国际布克奖获得者、诺贝尔文学奖实力候选佳作《白天的房子，夜晚的房子》《太古和其他的时间》共二册",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/奥尔加魔幻小说集（2018国际布克奖获得者、诺贝尔文学奖实力候选佳作《白天的房子，夜晚的房子》《太古和其他的时间》共二册。） (奥尔加·托卡....epub",
+   "format": "epub",
+   "bytes": 818738,
+   "sha256": "260d456bfbf30cebce1d2dbf17e35c921539a5839a9bfcd6fdc2d57854ee743b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 201,
+   "bytes": 1135186
+  }
+ ],
+ "notes": "依据:系列:奥尔加；置信:0.99"
+}

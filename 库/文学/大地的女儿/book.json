@@ -1,0 +1,41 @@
+{
+ "uid": "B1375",
+ "title": "大地的女儿",
+ "title_from_file": "",
+ "author": "叶玉琳",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/大地的女儿",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大地的女儿 (叶玉琳著).pdf",
+   "format": "pdf",
+   "bytes": 9336898,
+   "sha256": "61f92afa58cf407f696d4d4318b0948e49c3d58ea7bb2800ad88b79990ac34a0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 65447
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

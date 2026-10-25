@@ -1,0 +1,42 @@
+{
+ "uid": "B1471",
+ "title": "松鸦为什么鸣叫 陈应松获奖作品精选",
+ "title_from_file": "",
+ "author": "陈应松",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/松鸦为什么鸣叫 陈应松获奖作品精选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/松鸦为什么鸣叫 陈应松获奖作品精选 (陈应松著, 陈应松, 1956-, 陳應松).pdf",
+   "format": "pdf",
+   "bytes": 18447973,
+   "sha256": "ebc125f7a96314891de21ccbcdc928d94f0b4ec45e6a1d2d955dc9623edffd76",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1037466
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

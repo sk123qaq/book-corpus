@@ -1,0 +1,42 @@
+{
+ "uid": "B1179",
+ "title": "天使沉默",
+ "title_from_file": "",
+ "author": "诺贝尔文学奖得主",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/天使沉默",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/天使沉默（诺贝尔文学奖得主、前国际笔会主席、德国国宝级作家海因里希·伯尔震撼心灵的“废墟文学”代表作） (中经典精选) ([德]海因里希·伯尔).azw3",
+   "format": "azw3",
+   "bytes": 280912,
+   "sha256": "5ab07031bde9a9d9396cadb1d881a81edb4cbfbc6afa6f262e879884b5105585",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 262088
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

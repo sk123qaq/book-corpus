@@ -1,0 +1,42 @@
+{
+ "uid": "B1591",
+ "title": "追问",
+ "title_from_file": "",
+ "author": "丁捷 丁捷",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/追问",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/追问 (丁捷 [丁捷]).epub",
+   "format": "epub",
+   "bytes": 540532,
+   "sha256": "5060098f69e4228786de8203453f2b3b07c88d5ba73d3945a82bd80270268f96",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 477865
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

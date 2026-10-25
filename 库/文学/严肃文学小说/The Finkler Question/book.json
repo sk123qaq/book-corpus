@@ -1,0 +1,42 @@
+{
+ "uid": "B0757",
+ "title": "The Finkler Question",
+ "title_from_file": "",
+ "author": "Howard Jacobson",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Finkler Question",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Finkler Question (Howard Jacobson).epub",
+   "format": "epub",
+   "bytes": 324082,
+   "sha256": "aa0cc105e8760ea80fe08e688f23db825a6fefd395ed39ea14b6bcfd65bbb8b5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 16,
+   "bytes": 626813
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

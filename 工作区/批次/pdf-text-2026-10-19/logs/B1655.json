@@ -1,0 +1,29 @@
+{
+ "uid": "B1655",
+ "title": "The wolves",
+ "format": "pdf",
+ "route": "text",
+ "pages": 792,
+ "dest": "库/文学/严肃文学小说/The wolves/md",
+ "at": "2026-10-19T12:48:16+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/The wolves/source/The wolves (Guy Mazeline).pdf --out out/B1655 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0229000000000001,
+ "audit_anchors": 1.0,
+ "audit_chars": 1201833,
+ "chapters": 1,
+ "chars": 1276799,
+ "images": 1584,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 792,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

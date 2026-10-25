@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>书库检索</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="masthead">
+  <a class="brand" href="/" id="brand">书库检索<span class="brand-dot"></span></a>
+  <div class="stats" id="stats" aria-label="书库规模">
+    <span class="stat"><b class="mono" data-stat="books">—</b> 本</span>
+    <span class="stat"><b class="mono" data-stat="paras">—</b> 段</span>
+    <span class="stat"><b class="mono" data-stat="chapters">—</b> 章</span>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="hero">
+    <div class="hero-intro">
+      <h1>问一句，找到原文</h1>
+      <p>看它先切词，再换词检索，再给书打分，再选章，再弹书卡，最后把命中那一段递到你面前。</p>
+    </div>
+    <div class="hero-card">
+      <form id="ask-form" autocomplete="off">
+        <label class="hero-label" for="question">问书库一个问题</label>
+        <div class="ask-row">
+          <input id="question" name="question" type="text" maxlength="300"
+                 placeholder="例如：礼治社会靠什么维持秩序"
+                 aria-label="问题">
+          <button class="btn-primary" type="submit" id="ask-btn">检索</button>
+        </div>
+      </form>
+      <div class="samples" id="samples">
+        <span class="samples-label">试一句</span>
+        <button type="button" class="sample" data-q="礼治社会靠什么维持秩序">礼治社会靠什么维持秩序</button>
+        <button type="button" class="sample" data-q="内卷和教育之间是什么关系">内卷和教育之间是什么关系</button>
+        <button type="button" class="sample" data-q="乡土中国 差序格局">乡土中国 差序格局</button>
+      </div>
+    </div>
+    <p class="tagline">本地演示 · 真实检索 · 回答由模型归纳，引文回查后给出</p>
+  </section>
+
+  <section class="workspace" id="workspace" hidden>
+    <div class="question-bar">
+      <button type="button" class="link-btn" id="back-btn">← 换个问题</button>
+      <p class="question-text" id="question-text"></p>
+      <div class="controls">
+        <button type="button" class="link-btn" id="replay-btn" hidden>重播</button>
+        <button type="button" class="link-btn" id="skip-btn" hidden>跳过动画</button>
+      </div>
+    </div>
+
+    <div class="mobile-progress" id="mobile-progress" aria-hidden="true">
+      <div class="segments" id="segments"></div>
+      <p class="mobile-label" id="mobile-label"></p>
+    </div>
+
+    <div class="layout">
+      <aside class="rail" id="rail" aria-label="检索流程">
+        <ol>
+          <li data-step="0"><span class="dot"></span><span class="rail-num mono">01</span><span class="rail-name">理解问题</span><span class="rail-ms mono"></span></li>
+          <li data-step="1"><span class="dot"></span><span class="rail-num mono">02</span><span class="rail-name">词法循环</span><span class="rail-ms mono"></span></li>
+          <li data-step="2"><span class="dot"></span><span class="rail-num mono">03</span><span class="rail-name">打分与选章</span><span class="rail-ms mono"></span></li>
+          <li data-step="3"><span class="dot"></span><span class="rail-num mono">04</span><span class="rail-name">书卡</span><span class="rail-ms mono"></span></li>
+          <li data-step="4"><span class="dot"></span><span class="rail-num mono">05</span><span class="rail-name">结果</span><span class="rail-ms mono"></span></li>
+        </ol>
+      </aside>
+
+      <div class="stages" id="stages">
+        <article class="stage" data-stage="0" data-state="pending">
+          <header class="stage-head">
+            <span class="stage-num mono">01</span>
+            <div class="stage-heading"><h2>理解问题</h2><p>一句话 → 检索词</p></div>
+            <span class="stage-ms mono"></span>
+          </header>
+          <div class="stage-body"></div>
+          <div class="stage-summary" hidden></div>
+          <details class="raw"><summary>原始数据</summary><pre></pre></details>
+        </article>
+
+        <article class="stage" data-stage="1" data-state="pending">
+          <header class="stage-head">
+            <span class="stage-num mono">02</span>
+            <div class="stage-heading"><h2>词法循环</h2><p>换一套词，看够不够好</p></div>
+            <span class="stage-ms mono"></span>
+          </header>
+          <div class="stage-body"></div>
+          <div class="stage-summary" hidden></div>
+          <details class="raw"><summary>原始数据</summary><pre></pre></details>
+        </article>
+
+        <article class="stage" data-stage="2" data-state="pending">
+          <header class="stage-head">
+            <span class="stage-num mono">03</span>
+            <div class="stage-heading"><h2>打分与选章</h2><p>书级排序，再落到章</p></div>
+            <span class="stage-ms mono"></span>
+          </header>
+          <div class="stage-body"></div>
+          <div class="stage-summary" hidden></div>
+          <details class="raw"><summary>原始数据</summary><pre></pre></details>
+        </article>
+
+        <article class="stage" data-stage="3" data-state="pending">
+          <header class="stage-head">
+            <span class="stage-num mono">04</span>
+            <div class="stage-heading"><h2>书卡</h2><p>不确定时，把候选递给你</p></div>
+            <span class="stage-ms mono"></span>
+          </header>
+          <div class="stage-body"></div>
+          <div class="stage-summary" hidden></div>
+          <details class="raw"><summary>原始数据</summary><pre></pre></details>
+        </article>
+
+        <article class="stage" data-stage="4" data-state="pending">
+          <header class="stage-head">
+            <span class="stage-num mono">05</span>
+            <div class="stage-heading"><h2>结果</h2><p>先给回答与依据，再给命中段原文与前置上下文</p></div>
+            <span class="stage-ms mono"></span>
+          </header>
+          <div class="stage-body"></div>
+          <div class="stage-summary" hidden></div>
+          <details class="raw"><summary>原始数据</summary><pre></pre></details>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>动画节奏为演示，耗时是实测</span>
+  <span class="foot-sep">·</span>
+  <span>本地只读 · 回答由模型归纳，服务端回查引文</span>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

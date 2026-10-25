@@ -1,0 +1,42 @@
+{
+ "uid": "B0794",
+ "title": "翁达杰作品系列：英国病人",
+ "title_from_file": "",
+ "author": "丁骏 加拿大迈克尔·翁达杰",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/翁达杰作品系列：英国病人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/翁达杰作品系列：英国病人 (丁骏 【加拿大】迈克尔·翁达杰).epub",
+   "format": "epub",
+   "bytes": 856872,
+   "sha256": "f5ef4bf215a10f45ace019d5f68cd7891318b1140d4acec549242bd2046db3ba",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 457878
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1508",
+ "title": "玉米 Three Sisters",
+ "title_from_file": "",
+ "author": "毕飞宇 Bi Feiyu",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/玉米 Three Sisters",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/玉米 Three Sisters (毕飞宇 Bi Feiyu).epub",
+   "format": "epub",
+   "bytes": 227756,
+   "sha256": "23172e1df541f768258e623aee343b00b4704c8150aec6937befd667be28f14c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 3,
+   "bytes": 497638
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,26 @@
+{
+ "uid": "B0587",
+ "title": "双林寺",
+ "title_from_file": "",
+ "author": "平遥县文物管理所",
+ "subjects": [
+  "建筑与古迹"
+ ],
+ "path": "建筑与古迹/双林寺",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/双林寺 (平遥县文物管理所编) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 11403767,
+   "sha256": "02633ebbc695b61780e9c1b58c30e32459bf07a086b9f55bea7be82126d5ace2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比73%，复核混合"
+}

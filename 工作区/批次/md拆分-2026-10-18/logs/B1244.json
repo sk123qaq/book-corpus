@@ -1,0 +1,17 @@
+{
+ "uid": "B1244",
+ "title": "莫言作品",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/莫言作品/md",
+ "at": "2026-10-18T20:13:06+08:00",
+ "verify_rc": 0,
+ "chapters": 673,
+ "chars": 4503351,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.993,
+ "raw_chars": 3974258,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1244.prev-2026-10-18T201103-0800"
+}

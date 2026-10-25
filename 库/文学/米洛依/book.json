@@ -1,0 +1,41 @@
+{
+ "uid": "B1232",
+ "title": "米洛依",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/米洛依",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/米洛依 (（法）弗雷德里克·米斯特拉尔（Frdcric Mistral）著 李斯等译 etc.).pdf",
+   "format": "pdf",
+   "bytes": 4191217,
+   "sha256": "8bbcf2e4db3182a8e68a15b1d198b02d8e4b3ff6236d77fe89d790ccc392a2ef",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 188829
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

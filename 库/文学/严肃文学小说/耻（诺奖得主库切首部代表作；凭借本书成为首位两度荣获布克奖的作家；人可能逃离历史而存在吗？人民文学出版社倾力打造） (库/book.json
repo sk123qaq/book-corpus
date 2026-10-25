@@ -1,0 +1,42 @@
+{
+ "uid": "B0795",
+ "title": "耻（诺奖得主库切首部代表作；凭借本书成为首位两度荣获布克奖的作家；人可能逃离历史而存在吗？人民文学出版社倾力打造） (库",
+ "title_from_file": "",
+ "author": "诺奖得主库切首部代表作",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/耻（诺奖得主库切首部代表作；凭借本书成为首位两度荣获布克奖的作家；人可能逃离历史而存在吗？人民文学出版社倾力打造） (库",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/耻（诺奖得主库切首部代表作；凭借本书成为首位两度荣获布克奖的作家；人可能逃离历史而存在吗？人民文学出版社倾力打造） (库切文集) (库切).epub",
+   "format": "epub",
+   "bytes": 355073,
+   "sha256": "39870360a2e7517050eb02443e5430dad52b41436d4a8932f32b1315ad239a6a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 27,
+   "bytes": 462047
+  }
+ ],
+ "notes": "奖项:布克奖；同一书的第二份源；依据:来源目录或奖项"
+}

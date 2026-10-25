@@ -1,0 +1,29 @@
+{
+ "uid": "B1286",
+ "title": "Liang Xiaobin ru shi shuo  Liang Xiaobin si xiang bi ji 9 ni",
+ "format": "pdf",
+ "route": "text",
+ "pages": 360,
+ "dest": "库/文学/散文随笔/Liang Xiaobin ru shi shuo  Liang Xiaobin si xiang bi ji 9 ni/md",
+ "at": "2026-10-19T12:45:59+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/散文随笔/Liang Xiaobin ru shi shuo  Liang Xiaobin si xiang bi ji 9 ni/source/Liang Xiaobin ru shi shuo  Liang Xiaobin si xiang bi ji 9 nian jing xuan ben, 梁小斌如是说  梁小斌思想笔记 9 年精选本 (Liang, Xiaobin, 1954-, 梁小斌).pdf --out out/B1286 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.056,
+ "audit_anchors": 1.0,
+ "audit_chars": 231528,
+ "chapters": 1,
+ "chars": 262484,
+ "images": 720,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 360,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

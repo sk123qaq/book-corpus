@@ -1,0 +1,21 @@
+{
+ "uid": "B1243",
+ "title": "荒原 (T. S.艾略特(T. S. Eliot) [S.艾略特, T.])",
+ "format": "epub",
+ "dest": "库/文学/诗歌/荒原 (T. S.艾略特(T. S. Eliot) [S.艾略特, T.])/md",
+ "at": "2026-10-18T21:08:04+08:00",
+ "override": {
+  "accept": "源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+ },
+ "verify_rc": 1,
+ "chapters": 117,
+ "chars": 149962,
+ "images": 1,
+ "problems": 1,
+ "audit_rc": 0,
+ "audit_ratio": 0.996,
+ "raw_chars": 126539,
+ "status": "accepted",
+ "note": "已受理例外：源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1243.prev-2026-10-18T210620-0800"
+}

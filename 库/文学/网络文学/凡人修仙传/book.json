@@ -1,0 +1,35 @@
+{
+ "uid": "B0168",
+ "title": "凡人修仙传",
+ "title_from_file": "",
+ "author": "忘语",
+ "subjects": [
+  "文学",
+  "网络文学"
+ ],
+ "path": "文学/网络文学/凡人修仙传",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/凡人修仙传第1卷至第11卷大结局全集（阅文白金作家作品） (忘语 [忘语]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 12407968,
+   "sha256": "b8db94f27237fa0c838e79fa63554bb344841f1034b418864d3bb69de123cc4b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 2456,
+   "bytes": 22112471
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

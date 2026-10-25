@@ -1,0 +1,18 @@
+{
+ "question": "身份为什么不能传给下一代？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "身份",
+    "下一代"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [],
+ "broad_weight": 1.0
+}

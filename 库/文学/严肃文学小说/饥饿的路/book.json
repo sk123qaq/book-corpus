@@ -1,0 +1,42 @@
+{
+ "uid": "B0805",
+ "title": "饥饿的路",
+ "title_from_file": "",
+ "author": "尼日利亚 本·奥克瑞 著 王维东",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/饥饿的路",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/饥饿的路 ([尼日利亚] 本·奥克瑞 著 王维东 译).pdf",
+   "format": "pdf",
+   "bytes": 23803234,
+   "sha256": "157fd7e0b9a0b5c5cc47387818928b258f1e00045b09295eedbfd707c3b27a31",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 982777
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

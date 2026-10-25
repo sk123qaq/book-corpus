@@ -1,0 +1,42 @@
+{
+ "uid": "B1095",
+ "title": "黑盒城市",
+ "title_from_file": "",
+ "author": "砂川文次",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/黑盒城市",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/黑盒城市 (砂川文次).epub",
+   "format": "epub",
+   "bytes": 929604,
+   "sha256": "049381b170d9ca705273d3f54e6c526c3bd3ae911a8d31d9eaa601a8816c30ba",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 198869
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

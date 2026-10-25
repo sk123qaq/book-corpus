@@ -1,0 +1,10 @@
+点击前 rows=0 head='扫描后的计划' disabled=False plan_fetch=0 last_job=20261025-003109-f9b0
+t=169.2s 按钮恢复，计划 rows=0 head='扫描后的计划' toast='扫描没过' class='toast on bad' plan_fetch=0
+t=2.0s rows=0 head='扫描后的计划' disabled=True plan_fetch=0 toast='扫描已排队：20261025-003922-a530'
+t=6.0s rows=0 head='扫描后的计划' disabled=True plan_fetch=0 toast='扫描已排队：20261025-003922-a530'
+t=12.0s rows=0 head='扫描后的计划' disabled=True plan_fetch=0 toast='扫描已排队：20261025-003922-a530'
+t=30.0s rows=0 head='扫描后的计划' disabled=True plan_fetch=0 toast='扫描已排队：20261025-003922-a530'
+点击后 last_job=20261025-003922-a530 state=awaiting_review summary='计划待确认：add 0 / replace 2 / conflict 1 / skip 0；有需要逐条定的行'
+first_plan_fetch=None first_rows=None done_at=169.2
+VERDICT PLAN NEVER SHOWN
+console errors 0

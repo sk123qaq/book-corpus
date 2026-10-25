@@ -1,0 +1,34 @@
+{
+ "uid": "B0008",
+ "title": "Die Sklavin des Patriziers",
+ "title_from_file": "",
+ "author": "Why-Not",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/Die Sklavin des Patriziers",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Die Sklavin des Patriziers (Not Why) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 650340,
+   "sha256": "27d8e66ca8d04b0ca05964ff8c598ad88c3ab1a2cd553db958cbb72c841f34d6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 54,
+   "bytes": 485075
+  }
+ ],
+ "notes": "依据:TypeSafe(0.84)；置信:0.84"
+}

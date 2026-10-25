@@ -1,0 +1,17 @@
+{
+ "uid": "B1396",
+ "title": "封锁",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/封锁/md",
+ "at": "2026-10-18T21:08:18+08:00",
+ "verify_rc": 0,
+ "chapters": 67,
+ "chars": 86026,
+ "images": 8,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.985,
+ "raw_chars": 75711,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1396.prev-2026-10-18T210620-0800"
+}

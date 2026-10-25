@@ -1,0 +1,42 @@
+{
+ "uid": "B1576",
+ "title": "要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻",
+ "title_from_file": "",
+ "author": "梁鸿",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/要有光  一位学者对中国青少年心理的调查, 一位母亲对孩子心灵的探寻 (梁鸿).epub",
+   "format": "epub",
+   "bytes": 415092,
+   "sha256": "c4d13d07f38c127184c38da5c8d59ea3ede5010ebeea93973f5c125cfe4ef1fc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 701020
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

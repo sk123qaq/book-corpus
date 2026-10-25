@@ -1,0 +1,42 @@
+{
+ "uid": "B0961",
+ "title": "ネコババのいる町で",
+ "title_from_file": "",
+ "author": "瀧澤美恵子 瀧澤美恵子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/ネコババのいる町で",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ネコババのいる町で (瀧澤美恵子 [瀧澤美恵子]).epub",
+   "format": "epub",
+   "bytes": 145089,
+   "sha256": "20784ac729d2b390a46dd51258a941548b211ba702237096510f1ac61b0b663e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 377178
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

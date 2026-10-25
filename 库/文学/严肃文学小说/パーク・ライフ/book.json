@@ -1,0 +1,42 @@
+{
+ "uid": "B0964",
+ "title": "パーク・ライフ",
+ "title_from_file": "",
+ "author": "吉田 修一",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/パーク・ライフ",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/パーク・ライフ (吉田 修一).epub",
+   "format": "epub",
+   "bytes": 219409,
+   "sha256": "7a0a3a3ce02d4a63bef0636af58ab990f4e48247ff957851ec2e7999d8367b27",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 238192
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

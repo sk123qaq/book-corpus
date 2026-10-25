@@ -1,0 +1,27 @@
+{
+ "uid": "B0520",
+ "title": "Liyuu写真集「見つめて、恋して。」",
+ "title_from_file": "",
+ "author": "YJ PHOTO BOOK",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/Liyuu写真集「見つめて、恋して。」",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Liyuu写真集「見つめて、恋して。」（YJ PHOTO BOOK） (Liyuu,中山雅文) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 17231421,
+   "sha256": "a733edd594c7e42718f5dab951ff40a23c89b8a798c3923b2b8fe277d8da0f7e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:二级学科是图册与写真"
+}

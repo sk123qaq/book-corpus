@@ -1,0 +1,41 @@
+{
+ "uid": "B1357",
+ "title": "吕叔湘文集 第六卷 译文集",
+ "title_from_file": "",
+ "author": "吕叔湘",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/吕叔湘文集 第六卷 译文集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/吕叔湘文集 第六卷 译文集 (吕叔湘).pdf",
+   "format": "pdf",
+   "bytes": 19370282,
+   "sha256": "36e82fa1484d9575f60a43130f4f1408ea56576a73c9cf187926bd5fdc38c60e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 859803
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

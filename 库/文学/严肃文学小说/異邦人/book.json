@@ -1,0 +1,34 @@
+{
+ "uid": "B1048",
+ "title": "異邦人",
+ "title_from_file": "",
+ "author": "辻亮一",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/異邦人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/異邦人 (辻亮一).pdf",
+   "format": "pdf",
+   "bytes": 5411110,
+   "sha256": "012ab53dea1c4e116f9e886be6f480b8ca5e48a5a34a8effbda172e6c74a6450",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

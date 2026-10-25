@@ -1,0 +1,42 @@
+{
+ "uid": "B1286",
+ "title": "Liang Xiaobin ru shi shuo  Liang Xiaobin si xiang bi ji 9 ni",
+ "title_from_file": "",
+ "author": "Liang",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/Liang Xiaobin ru shi shuo  Liang Xiaobin si xiang bi ji 9 ni",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Liang Xiaobin ru shi shuo  Liang Xiaobin si xiang bi ji 9 nian jing xuan ben, 梁小斌如是说  梁小斌思想笔记 9 年精选本 (Liang, Xiaobin, 1954-, 梁小斌).pdf",
+   "format": "pdf",
+   "bytes": 30423008,
+   "sha256": "04a04d6186066348e68f416560cfe2fe30d8207c15b696687d15741d1fec1eb2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 941048
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

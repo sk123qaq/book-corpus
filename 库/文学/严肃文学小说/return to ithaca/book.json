@@ -1,0 +1,42 @@
+{
+ "uid": "B1154",
+ "title": "return to ithaca",
+ "title_from_file": "",
+ "author": "eyvind johnson",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/return to ithaca",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/return to ithaca (eyvind johnson).pdf",
+   "format": "pdf",
+   "bytes": 24115536,
+   "sha256": "ce232afde1a42aa2c9eb79450ab90f82aa3c1c80feee87f36b818c574d10bb65",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 968868
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0893",
+ "title": "The Killer Angels",
+ "title_from_file": "",
+ "author": "Michael Shaara",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Killer Angels",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Killer Angels (Michael Shaara).epub",
+   "format": "epub",
+   "bytes": 5017261,
+   "sha256": "1652dc9b38e262b85ee02312f4e1823f0ad81b441f57fd6db5f162341ccb57a0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 623496
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

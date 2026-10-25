@@ -1,0 +1,42 @@
+{
+ "uid": "B0689",
+ "title": "Michael Rosens A to Z the best childrens poetry from Agard t",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/Michael Rosens A to Z the best childrens poetry from Agard t",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Michael Rosens A to Z the best childrens poetry from Agard to Zephaniah (Michael RosenJoe Berger).epub",
+   "format": "epub",
+   "bytes": 4091788,
+   "sha256": "9445129e2faa8cb3d3c2b411f24d5ff3ce1e68c4bb1cb08534d5a4c0d942ef0f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "国际安徒生奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 155,
+   "bytes": 178043
+  }
+ ],
+ "notes": "奖项:国际安徒生奖；依据:来源目录或奖项"
+}

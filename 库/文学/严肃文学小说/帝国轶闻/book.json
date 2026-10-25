@@ -1,0 +1,42 @@
+{
+ "uid": "B0730",
+ "title": "帝国轶闻",
+ "title_from_file": "",
+ "author": "马尔克斯推崇的大作家",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/帝国轶闻",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/帝国轶闻（马尔克斯推崇的大作家，2015年塞万提斯奖得主费尔南多·德尔帕索潜心十年创作的全景文学巨著！） (费尔南多·德尔帕索).epub",
+   "format": "epub",
+   "bytes": 1148274,
+   "sha256": "3212e0f5650366b7f22e7c1f23888a238095366e2390ee7de3ccc3a228167318",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 48,
+   "bytes": 1907187
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

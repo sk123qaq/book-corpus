@@ -1,0 +1,17 @@
+{
+ "uid": "B1364",
+ "title": "国学备览9",
+ "format": "epub",
+ "dest": "库/文学/国学备览9/md",
+ "at": "2026-10-18T20:13:24+08:00",
+ "verify_rc": 0,
+ "chapters": 269,
+ "chars": 450924,
+ "images": 66,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 365352,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1364.prev-2026-10-18T201103-0800"
+}

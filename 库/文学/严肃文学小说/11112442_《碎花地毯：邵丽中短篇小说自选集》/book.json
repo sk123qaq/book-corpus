@@ -1,0 +1,42 @@
+{
+ "uid": "B1280",
+ "title": "11112442_《碎花地毯：邵丽中短篇小说自选集》",
+ "title_from_file": "",
+ "author": "邵丽",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/11112442_《碎花地毯：邵丽中短篇小说自选集》",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/11112442_《碎花地毯：邵丽中短篇小说自选集》 (邵丽著, Shao Li zhu, 卲丽, 1964-, 邵丽著, 邵丽).pdf",
+   "format": "pdf",
+   "bytes": 11591011,
+   "sha256": "adba92a8dcf46d93075c42596ef27d0f5b8f1ff6facc4b3c71360f99a20939b7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 624107
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

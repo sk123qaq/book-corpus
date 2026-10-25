@@ -1,0 +1,42 @@
+{
+ "uid": "B1547",
+ "title": "红骆驼",
+ "title_from_file": "",
+ "author": "王松",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/红骆驼",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/红骆驼 (王松).epub",
+   "format": "epub",
+   "bytes": 1099600,
+   "sha256": "d8b1c2ac39215320897e82cdfe99ea44da9dde277648f4b9414bfb30debecce4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 272,
+   "bytes": 532304
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

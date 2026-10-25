@@ -1,0 +1,42 @@
+{
+ "uid": "B1170",
+ "title": "叶芝诗集",
+ "title_from_file": "",
+ "author": "增订本",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/叶芝诗集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/叶芝诗集（增订本） (【爱尔兰】威廉·巴特勒·叶芝, 傅浩).epub",
+   "format": "epub",
+   "bytes": 516700,
+   "sha256": "71c825ef10ca2fb346a012c9a942179a3cfb4356b83e403229b5901c59ed584a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 358,
+   "bytes": 622137
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0970",
+ "title": "モッキングバードのいる町",
+ "title_from_file": "",
+ "author": "森禮子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/モッキングバードのいる町",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/モッキングバードのいる町 (森禮子).epub",
+   "format": "epub",
+   "bytes": 158560,
+   "sha256": "83b4d0d0b819c1e8515d751a0519a7a11b8f37d7cc4847744647fb719f682431",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 28,
+   "bytes": 352048
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

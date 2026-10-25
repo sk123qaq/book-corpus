@@ -1,0 +1,35 @@
+{
+ "uid": "B0204",
+ "title": "她对此感到厌烦",
+ "title_from_file": "",
+ "author": "妚鹤",
+ "subjects": [
+  "文学",
+  "网络文学"
+ ],
+ "path": "文学/网络文学/她对此感到厌烦",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/她对此感到厌烦 (妚鹤) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 893242,
+   "sha256": "8cedfc0ab87cf36804d719d5ae79ddf83ebcf837df7e873bb51b07727048a628",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 968965
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

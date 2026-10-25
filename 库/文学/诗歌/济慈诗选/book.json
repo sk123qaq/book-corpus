@@ -1,0 +1,42 @@
+{
+ "uid": "B1491",
+ "title": "济慈诗选",
+ "title_from_file": "",
+ "author": "约翰·济慈",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/济慈诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/济慈诗选 (约翰·济慈).epub",
+   "format": "epub",
+   "bytes": 549769,
+   "sha256": "21f93028a2f888e1bdbe477cfac2af8ae381449df59e3895e160888daeeb907b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 221,
+   "bytes": 567799
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1379",
+ "title": "大河遗梦",
+ "title_from_file": "",
+ "author": "李存葆",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/大河遗梦",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大河遗梦 (李存葆).pdf",
+   "format": "pdf",
+   "bytes": 11722319,
+   "sha256": "9041129e1cf1f92505c20d0cf62ec2cb516fdecbbd7cd8d47032f6cce2cc4210",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 638673
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

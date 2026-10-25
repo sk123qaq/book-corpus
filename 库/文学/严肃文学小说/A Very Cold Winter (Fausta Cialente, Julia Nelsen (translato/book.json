@@ -1,0 +1,42 @@
+{
+ "uid": "B0806",
+ "title": "A Very Cold Winter (Fausta Cialente, Julia Nelsen (translato",
+ "title_from_file": "",
+ "author": "translator",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/A Very Cold Winter (Fausta Cialente, Julia Nelsen (translato",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/A Very Cold Winter (Fausta Cialente, Julia Nelsen (translator) etc.).epub",
+   "format": "epub",
+   "bytes": 1351088,
+   "sha256": "667d45dd4c75cdee895368106c26438ed8d5e4d2f1c5fde6cc525dc7d6470f96",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 412054
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,34 @@
+{
+ "uid": "B0007",
+ "title": "Crimson Kings Crimson Academy",
+ "title_from_file": "",
+ "author": "Mina Thorne",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/Crimson Kings Crimson Academy",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Crimson Kings Crimson Academy (Mina Thorne [Thorne, Mina]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 356914,
+   "sha256": "2b16cfef34130ffaf68d9fb3d1b2a065711a04a81648caa57409ee0d68080ad4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 36,
+   "bytes": 375085
+  }
+ ],
+ "notes": "依据:TypeSafe(0.91)；置信:0.91"
+}

@@ -1,0 +1,41 @@
+{
+ "uid": "B0718",
+ "title": "Byobu",
+ "title_from_file": "",
+ "author": "Ida Vitale",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/Byobu",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Byobu (Ida Vitale).epub",
+   "format": "epub",
+   "bytes": 516664,
+   "sha256": "6e016c25f405a24d1e60af4d8846d9424655c976aacadc981159048cc7cd0b4f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 39,
+   "bytes": 85827
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

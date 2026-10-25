@@ -1,0 +1,34 @@
+{
+ "uid": "B0607",
+ "title": "人类的价值",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科"
+ ],
+ "path": "人文社科/人类的价值",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/人类的价值（是什么让人类如此独特？是文化让我们与众不同！） (罗伯特·博伊德 [未知]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 5831668,
+   "sha256": "90726974700cb13fe3ffe6c93126e2f40af5c86525a81ad374fa8d809b166f0f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 54,
+   "bytes": 386984
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1560",
+ "title": "草原生灵笔记",
+ "title_from_file": "",
+ "author": "艾平",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/草原生灵笔记",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/草原生灵笔记 (艾平著, 艾平 女, 1956-).pdf",
+   "format": "pdf",
+   "bytes": 80678362,
+   "sha256": "5d2b896cd57ade5d6d952882fa4977e81c35b93cd1ce1168b22585095173134d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 351126
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

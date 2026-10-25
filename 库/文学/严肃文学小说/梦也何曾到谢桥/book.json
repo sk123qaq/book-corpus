@@ -1,0 +1,42 @@
+{
+ "uid": "B1475",
+ "title": "梦也何曾到谢桥",
+ "title_from_file": "",
+ "author": "鲁迅文学奖获奖女作家小说精品",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/梦也何曾到谢桥",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/梦也何曾到谢桥 (鲁迅文学奖获奖女作家小说精品) (叶广芩 [叶广芩]).epub",
+   "format": "epub",
+   "bytes": 569030,
+   "sha256": "09212f6efa13d26904b29206ede495ff1acca3abbe8f04b166759f85052f80b2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 75,
+   "bytes": 599747
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

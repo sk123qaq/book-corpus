@@ -1,0 +1,27 @@
+{
+ "uid": "B0531",
+ "title": "三上悠亜写真集「399DAYS」3部作 VOL.3 涅槃",
+ "title_from_file": "",
+ "author": "三上悠亜",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/三上悠亜写真集「399DAYS」3部作 VOL.3 涅槃",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/三上悠亜写真集「399DAYS」3部作 VOL.3 涅槃 (三上悠亜, 山口勝己) (z-library.sk, 1lib.sk, z-lib.sk) (1).pdf",
+   "format": "pdf",
+   "bytes": 91952955,
+   "sha256": "d32cc668f0ba998964dd934639dfb186adb636643f151da88696588e5e026dea",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:二级学科是图册与写真"
+}

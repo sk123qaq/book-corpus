@@ -1,0 +1,16 @@
+{
+ "uid": "B0200",
+ "title": "失乐园",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/渡边淳一/失乐园/md",
+ "at": "2026-10-18T23:31:01+08:00",
+ "verify_rc": 0,
+ "chapters": 15,
+ "chars": 207124,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9740000000000001,
+ "raw_chars": 185045,
+ "status": "staged-green"
+}

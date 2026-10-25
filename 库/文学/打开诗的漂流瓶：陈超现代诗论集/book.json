@@ -1,0 +1,41 @@
+{
+ "uid": "B1435",
+ "title": "打开诗的漂流瓶：陈超现代诗论集",
+ "title_from_file": "",
+ "author": "珍藏版",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/打开诗的漂流瓶：陈超现代诗论集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/打开诗的漂流瓶：陈超现代诗论集（珍藏版） (陈超).pdf",
+   "format": "pdf",
+   "bytes": 48565314,
+   "sha256": "29de5f602c6075a61c8a33df1299426b91a71492016f0315f29f91b491f1d3f7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 705085
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

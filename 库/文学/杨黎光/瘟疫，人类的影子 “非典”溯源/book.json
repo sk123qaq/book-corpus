@@ -1,0 +1,41 @@
+{
+ "uid": "B1524",
+ "title": "瘟疫，人类的影子 “非典”溯源",
+ "title_from_file": "",
+ "author": "杨黎光",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/杨黎光/瘟疫，人类的影子 “非典”溯源",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/瘟疫，人类的影子 “非典”溯源 (杨黎光著, Yang Liguang zhu, 杨黎光著, 杨黎光, 楊黎光).pdf",
+   "format": "pdf",
+   "bytes": 9380006,
+   "sha256": "3c2f2bedb41bf321bd70fdc8a4450670435848b5cffff0243999b29aa42360e4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 571401
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

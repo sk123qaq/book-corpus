@@ -1,0 +1,34 @@
+{
+ "uid": "B1001",
+ "title": "安岡章太郎集",
+ "title_from_file": "",
+ "author": "安岡章太郎",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/安岡章太郎集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/安岡章太郎集 (安岡章太郎).pdf",
+   "format": "pdf",
+   "bytes": 84743508,
+   "sha256": "a76f26c85a2f5cc0f4f5d3227d7230de0176932231407871a3c21af93b458c47",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

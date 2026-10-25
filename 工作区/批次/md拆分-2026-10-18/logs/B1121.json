@@ -1,0 +1,17 @@
+{
+ "uid": "B1121",
+ "title": "江南三部曲",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/江南三部曲/md",
+ "at": "2026-10-18T21:07:46+08:00",
+ "verify_rc": 0,
+ "chapters": 20,
+ "chars": 637717,
+ "images": 6,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 556042,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1121.prev-2026-10-18T210620-0800"
+}

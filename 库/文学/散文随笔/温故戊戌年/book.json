@@ -1,0 +1,42 @@
+{
+ "uid": "B1499",
+ "title": "温故戊戌年",
+ "title_from_file": "",
+ "author": "张建伟",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/温故戊戌年",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/温故戊戌年 (张建伟著；华沙责任编辑, Jianwei Zhang, 张建伟, 1956-, 張建偉 etc.).pdf",
+   "format": "pdf",
+   "bytes": 14712230,
+   "sha256": "c45848df9bcb037dc426787eabc4bfa4050c3ef3db1c136e9aa0e25760373472",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 735455
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

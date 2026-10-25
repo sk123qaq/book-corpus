@@ -1,0 +1,42 @@
+{
+ "uid": "B1223",
+ "title": "生活的意义与价值",
+ "title_from_file": "",
+ "author": "译文经典",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/生活的意义与价值",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/生活的意义与价值(译文经典) (鲁道夫·奥伊肯).epub",
+   "format": "epub",
+   "bytes": 7430633,
+   "sha256": "98b548120e4ff980dd34db4c0f091e3f50415abc11e53c0410627d887adcee36",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 234427
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

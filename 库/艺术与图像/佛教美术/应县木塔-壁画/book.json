@@ -1,0 +1,27 @@
+{
+ "uid": "B0639",
+ "title": "应县木塔-壁画",
+ "title_from_file": "",
+ "author": "应县木塔",
+ "subjects": [
+  "艺术与图像",
+  "佛教美术"
+ ],
+ "path": "艺术与图像/佛教美术/应县木塔-壁画",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/应县木塔-壁画 (品) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 5566114,
+   "sha256": "7e34ead23abc5ddafb255de1621a38c485224a40deb7a3a407b08a25fdecd73f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比93%"
+}

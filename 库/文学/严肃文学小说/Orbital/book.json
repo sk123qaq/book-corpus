@@ -1,0 +1,42 @@
+{
+ "uid": "B0748",
+ "title": "Orbital",
+ "title_from_file": "",
+ "author": "Samantha Harvey",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Orbital",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Orbital (Samantha Harvey).epub",
+   "format": "epub",
+   "bytes": 1778458,
+   "sha256": "5b8e51afa2db25bf40e4394ba2b9d95063ca53a0ee9e2faa4f1fdbd2b17854db",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 249173
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

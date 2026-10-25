@@ -1,0 +1,34 @@
+{
+ "uid": "B1071",
+ "title": "蒼氓",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/蒼氓",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/蒼氓 (新潮文庫) (石川達三).pdf",
+   "format": "pdf",
+   "bytes": 6458696,
+   "sha256": "3b1a49425f9af9df3edb155e567d9a1f3d3986ecc36cf99d1e28f78a0a33de0f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

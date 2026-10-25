@@ -1,0 +1,42 @@
+{
+ "uid": "B1529",
+ "title": "破壁与神游",
+ "title_from_file": "",
+ "author": "陈先发",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/破壁与神游",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/破壁与神游 (陈先发).epub",
+   "format": "epub",
+   "bytes": 836830,
+   "sha256": "a49eddd3a5e2010167b135afdfe1af93be55d2376393dc0d6876c14520f3ee2d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 138,
+   "bytes": 503852
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

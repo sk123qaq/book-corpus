@@ -1,0 +1,34 @@
+{
+ "uid": "B0238",
+ "title": "摩诃婆罗多",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/摩诃婆罗多",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/摩诃婆罗多（套装共6卷）（印度国宝级文化遗产, 和《罗摩衍那》并称为印度两大史诗，金克木、黄宝生等历时十七年完成翻译，世界仅有的三种译....epub",
+   "format": "epub",
+   "bytes": 12680456,
+   "sha256": "3634f87c6e39af2e94374187fb0538ce0b5af15a3c421cf0ce6ff4e1ae70c581",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 164,
+   "bytes": 10450750
+  }
+ ],
+ "notes": "依据:系列:摩诃婆罗多；置信:0.86"
+}

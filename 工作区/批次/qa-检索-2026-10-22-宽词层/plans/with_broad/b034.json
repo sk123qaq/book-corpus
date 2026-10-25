@@ -1,0 +1,20 @@
+{
+ "question": "家庭为什么会影响人对陌生人的信任？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "家庭",
+    "信任"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [
+  "家庭"
+ ],
+ "broad_weight": 1.0
+}

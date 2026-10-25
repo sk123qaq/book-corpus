@@ -1,0 +1,17 @@
+{
+ "uid": "B0921",
+ "title": "奥斯卡·瓦奥短暂而奇妙的一生",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/奥斯卡·瓦奥短暂而奇妙的一生/md",
+ "at": "2026-10-18T20:12:09+08:00",
+ "verify_rc": 0,
+ "chapters": 77,
+ "chars": 168505,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.983,
+ "raw_chars": 152406,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0921.prev-2026-10-18T201103-0800"
+}

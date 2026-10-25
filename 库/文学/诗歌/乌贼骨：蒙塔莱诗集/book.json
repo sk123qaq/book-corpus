@@ -1,0 +1,42 @@
+{
+ "uid": "B1162",
+ "title": "乌贼骨：蒙塔莱诗集",
+ "title_from_file": "",
+ "author": "雅众诗丛·国外卷",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/乌贼骨：蒙塔莱诗集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/乌贼骨：蒙塔莱诗集（雅众诗丛·国外卷） (欧金尼奥·蒙塔莱).epub",
+   "format": "epub",
+   "bytes": 1109647,
+   "sha256": "44afa5ac3f469718927e5e7fbacb31fed12a4ae8fac0d5945243656169a28189",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 56,
+   "bytes": 208228
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

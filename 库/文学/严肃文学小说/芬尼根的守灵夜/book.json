@@ -1,0 +1,42 @@
+{
+ "uid": "B1556",
+ "title": "芬尼根的守灵夜",
+ "title_from_file": "",
+ "author": "第一卷",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/芬尼根的守灵夜",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/芬尼根的守灵夜(第一卷) ([爱尔兰] 詹姆斯·乔伊斯,戴从容).pdf",
+   "format": "pdf",
+   "bytes": 506647312,
+   "sha256": "243538a836c1d43c829497c475dc20e95d6734fd04aac1adb4e84aee4af092e6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "mineru",
+   "chapters": 1,
+   "bytes": 2318078
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

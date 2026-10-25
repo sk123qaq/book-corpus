@@ -1,0 +1,27 @@
+{
+ "uid": "B0650",
+ "title": "青春韵律 时尚人体艺术 上",
+ "title_from_file": "",
+ "author": "何应法",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/青春韵律 时尚人体艺术 上",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/青春韵律 时尚人体艺术 上 (何应法) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 36108312,
+   "sha256": "ca1c894a0c6650a5421250828cdabb285d2862e1e2e78e49e8825edd410d7c19",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比87%"
+}

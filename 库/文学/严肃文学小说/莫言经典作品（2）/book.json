@@ -1,0 +1,42 @@
+{
+ "uid": "B1245",
+ "title": "莫言经典作品（2）",
+ "title_from_file": "",
+ "author": "套装册",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/莫言经典作品（2）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/莫言经典作品（套装7册）【首位中国籍诺贝尔奖获得者——莫言，经典作品集！收录其最经典作品：《红高粱家族》《丰乳肥臀》《檀香刑》《生死....epub",
+   "format": "epub",
+   "bytes": 3685717,
+   "sha256": "edd6cf860e094144566b8c69c1f19901de29111609e0eba4722b8eae3b923228",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 415,
+   "bytes": 6003996
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项；同名冲突加限定词（2）"
+}

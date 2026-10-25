@@ -1,0 +1,23 @@
+{
+ "uid": "B0984",
+ "title": "共喰い",
+ "format": "azw3",
+ "dest": "库/文学/严肃文学小说/共喰い/md",
+ "at": "2026-10-18T21:07:38+08:00",
+ "override": {
+  "args": [
+   "--all-pages"
+  ]
+ },
+ "provenance_fixed": 13,
+ "verify_rc": 0,
+ "chapters": 12,
+ "chars": 85227,
+ "images": 3,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.008,
+ "raw_chars": 22317,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0984.prev-2026-10-18T210620-0800"
+}

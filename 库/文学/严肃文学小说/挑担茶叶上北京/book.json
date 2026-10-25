@@ -1,0 +1,42 @@
+{
+ "uid": "B1441",
+ "title": "挑担茶叶上北京",
+ "title_from_file": "",
+ "author": "茅盾文学奖获奖作家中短篇精品选",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/挑担茶叶上北京",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/挑担茶叶上北京 (茅盾文学奖获奖作家中短篇精品选) (刘醒龙).epub",
+   "format": "epub",
+   "bytes": 175439,
+   "sha256": "ee07720bd9ac0868f8630622c51f42aaafeb62ccc9f5fe9002541e3b85bfb60c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 26,
+   "bytes": 912213
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,20 @@
+{
+ "question": "死亡为什么让人想到造物主？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "死亡",
+    "造物主"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [
+  "死亡"
+ ],
+ "broad_weight": 1.0
+}

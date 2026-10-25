@@ -1,0 +1,35 @@
+{
+ "uid": "B0365",
+ "title": "罪与罚",
+ "title_from_file": "",
+ "author": "陀思妥耶夫斯基著 朱海观 王汶译",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/罪与罚",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/罪与罚 (陀思妥耶夫斯基) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1877779,
+   "sha256": "1dcfe5ea34ec14931ee600afe46c2e25cb9087c079f1e227eaf86bca1dbcf573",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 42,
+   "bytes": 1262549
+  }
+ ],
+ "notes": "依据:TypeSafe(0.66)；置信:0.66"
+}

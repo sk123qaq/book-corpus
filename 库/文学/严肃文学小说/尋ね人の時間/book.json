@@ -1,0 +1,42 @@
+{
+ "uid": "B1003",
+ "title": "尋ね人の時間",
+ "title_from_file": "",
+ "author": "新井 満",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/尋ね人の時間",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/尋ね人の時間 (新井 満).epub",
+   "format": "epub",
+   "bytes": 281132,
+   "sha256": "16b2e2d3263a7e611a7396995d81ed7bec80c472ad0bff777d72c6ece7d84292",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 218609
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

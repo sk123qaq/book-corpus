@@ -1,0 +1,42 @@
+{
+ "uid": "B1309",
+ "title": "中国好诗 第一季 山中信札",
+ "title_from_file": "",
+ "author": "路也",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/中国好诗 第一季 山中信札",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国好诗 第一季 山中信札 (路也著, 路也, 1969- author, 路也 女, 1969-).pdf",
+   "format": "pdf",
+   "bytes": 28596654,
+   "sha256": "4da0c4f1dadfac18352f88540220595f3a319832ef95a0719864b20af7454a48",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 170259
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

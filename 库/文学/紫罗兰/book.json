@@ -1,0 +1,41 @@
+{
+ "uid": "B1235",
+ "title": "紫罗兰",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/紫罗兰",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/紫罗兰 (（捷）雅罗斯拉夫·塞弗尔特 著).epub",
+   "format": "epub",
+   "bytes": 2619799,
+   "sha256": "53d4a1bf771e3c8c74b11d49309937b1537959630bfb6fc445082f8e522e25a9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 133,
+   "bytes": 200467
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

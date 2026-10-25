@@ -1,0 +1,27 @@
+{
+ "uid": "B0632",
+ "title": "国际游戏场景概念艺术设计 从数码绘画到游戏场景原画制作",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/国际游戏场景概念艺术设计 从数码绘画到游戏场景原画制作",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/国际游戏场景概念艺术设计 从数码绘画到游戏场景原画制作 (（韩）安烘逸著；邸春红译) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 171760077,
+   "sha256": "f4f096e9da126d639358e0cd046f88fefcc75ab16e0d8ce27715923840e3c348",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比80%，复核混合"
+}

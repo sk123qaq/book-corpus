@@ -1,0 +1,29 @@
+{
+ "uid": "B0826",
+ "title": "The chimera",
+ "format": "pdf",
+ "route": "text",
+ "pages": 328,
+ "dest": "库/文学/严肃文学小说/The chimera/md",
+ "at": "2026-10-19T12:45:12+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/The chimera/source/The chimera (Vassalli, Sebastiano, Creagh, Patrick).pdf --out out/B0826 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0206,
+ "audit_anchors": 1.0,
+ "audit_chars": 552010,
+ "chapters": 1,
+ "chars": 579067,
+ "images": 656,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 328,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

@@ -1,0 +1,34 @@
+{
+ "uid": "B0976",
+ "title": "九月の空",
+ "title_from_file": "",
+ "author": "高橋三千綱",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/九月の空",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/九月の空 (高橋三千綱).pdf",
+   "format": "pdf",
+   "bytes": 32240511,
+   "sha256": "8a90bd070124af290778d9246b89de1afc848c27dd5501ea257dd69aa48a3e46",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

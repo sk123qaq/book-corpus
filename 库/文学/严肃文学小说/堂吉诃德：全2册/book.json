@@ -1,0 +1,42 @@
+{
+ "uid": "B1372",
+ "title": "堂吉诃德：全2册",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/堂吉诃德：全2册",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/堂吉诃德：全2册（2020） (塞万提斯（董燕生 译）).epub",
+   "format": "epub",
+   "bytes": 1185818,
+   "sha256": "2adf006e7d793f35b120d153389820ffb38b1f28055bf8577082d8f11fe1cd0f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 130,
+   "bytes": 1995905
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

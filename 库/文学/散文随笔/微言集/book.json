@@ -1,0 +1,42 @@
+{
+ "uid": "B1418",
+ "title": "微言集",
+ "title_from_file": "",
+ "author": "林祖基",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/微言集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/微言集 (林祖基著, 林祖基, author).pdf",
+   "format": "pdf",
+   "bytes": 17367879,
+   "sha256": "e38897a38028a15655e31965e3e56416f0d538ca18a79146dab13229e322cbe0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 392475
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

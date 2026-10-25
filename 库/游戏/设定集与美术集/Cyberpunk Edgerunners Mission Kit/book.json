@@ -1,0 +1,27 @@
+{
+ "uid": "B0656",
+ "title": "Cyberpunk Edgerunners Mission Kit",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/Cyberpunk Edgerunners Mission Kit",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Cyberpunk Edgerunners Mission Kit (R. Talsorian Games Inc.) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 3954843,
+   "sha256": "ec035fbae6ab0a79f31194108375fc3b8e46d4eab7eb35caad4c87b9e12822d2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是设定集与美术集"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1115",
+ "title": "战争和人：全3册（第四届茅盾文学奖获奖作品；展现了抗日战争时期南半个中国的全景画卷；历时近四十年，终成大作） (茅盾文学",
+ "title_from_file": "",
+ "author": "第四届茅盾文学奖获奖作品",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/战争和人：全3册（第四届茅盾文学奖获奖作品；展现了抗日战争时期南半个中国的全景画卷；历时近四十年，终成大作） (茅盾文学",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/战争和人：全3册（第四届茅盾文学奖获奖作品；展现了抗日战争时期南半个中国的全景画卷；历时近四十年，终成大作） (茅盾文学奖获奖作品全集)....epub",
+   "format": "epub",
+   "bytes": 3183654,
+   "sha256": "9399bd2984434d2bb8ea2ebc97123b9bf7d754f7edbedd4637753f2db16aa2e0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 140,
+   "bytes": 4355888
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

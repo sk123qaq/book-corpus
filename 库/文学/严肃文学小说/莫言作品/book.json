@@ -1,0 +1,42 @@
+{
+ "uid": "B1244",
+ "title": "莫言作品",
+ "title_from_file": "",
+ "author": "莫言 莫言",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/莫言作品",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/莫言作品 (莫言 [莫言]).epub",
+   "format": "epub",
+   "bytes": 9472427,
+   "sha256": "4b4c9dbd3cfa6469640983aebdecb73a37ab81e670540b77bf10b1c5ddff2891",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 673,
+   "bytes": 13715677
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

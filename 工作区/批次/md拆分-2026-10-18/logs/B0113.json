@@ -1,0 +1,17 @@
+{
+ "uid": "B0113",
+ "title": "中国人超会吃",
+ "format": "epub",
+ "dest": "库/生活与实用/饮食/中国人超会吃/md",
+ "at": "2026-10-18T21:06:21+08:00",
+ "verify_rc": 0,
+ "chapters": 97,
+ "chars": 178268,
+ "images": 521,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.01,
+ "raw_chars": 148524,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0113.prev-2026-10-18T210620-0800"
+}

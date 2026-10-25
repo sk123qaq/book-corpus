@@ -1,0 +1,42 @@
+{
+ "uid": "B1231",
+ "title": "米斯特拉尔散文选",
+ "title_from_file": "",
+ "author": "智利 加夫列拉·米斯特拉尔 著 孙柏昌",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/米斯特拉尔散文选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/米斯特拉尔散文选 ([智利] 加夫列拉·米斯特拉尔 著 孙柏昌 译).pdf",
+   "format": "pdf",
+   "bytes": 7773677,
+   "sha256": "90dc501e7e06b7b9fcc3a6523a494022a0a9cd08e63d9eb4971aa6bdf9f26c17",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 340635
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

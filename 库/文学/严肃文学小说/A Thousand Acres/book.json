@@ -1,0 +1,42 @@
+{
+ "uid": "B0842",
+ "title": "A Thousand Acres",
+ "title_from_file": "",
+ "author": "Jane Smiley",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/A Thousand Acres",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/A Thousand Acres (Jane Smiley).epub",
+   "format": "epub",
+   "bytes": 944975,
+   "sha256": "1a160bf14b06640729c4a92f89f9d9040d6987d8eb971ae43efe639021fb203b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 56,
+   "bytes": 731059
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

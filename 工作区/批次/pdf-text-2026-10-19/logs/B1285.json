@@ -1,0 +1,29 @@
+{
+ "uid": "B1285",
+ "title": "Di se, 底色",
+ "format": "pdf",
+ "route": "text",
+ "pages": 392,
+ "dest": "库/文学/Di se, 底色/md",
+ "at": "2026-10-19T12:46:18+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/Di se, 底色/source/Di se, 底色 (Xu, Huaizhong, author, 徐怀中).pdf --out out/B1285 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.088,
+ "audit_anchors": 1.0,
+ "audit_chars": 164932,
+ "chapters": 1,
+ "chars": 191254,
+ "images": 784,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 392,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1217",
+ "title": "沉默的经典：直到世界反映了灵魂最深层的需要",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/沉默的经典：直到世界反映了灵魂最深层的需要",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/沉默的经典：直到世界反映了灵魂最深层的需要 （美国桂冠诗人露易丝·格丽克代表诗作首度引进。“不需要诗歌的年代”，更需要伟大的诗歌。“....epub",
+   "format": "epub",
+   "bytes": 421900,
+   "sha256": "18ea7cd6a5c32dcd8072947b4ee316467a2601ed385124c8679d2acf3b294158",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 123,
+   "bytes": 232219
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

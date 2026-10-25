@@ -1,0 +1,42 @@
+{
+ "uid": "B1253",
+ "title": "蝴蝶的重量奈莉·萨克斯诗选",
+ "title_from_file": "",
+ "author": "奈莉·萨克斯",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/蝴蝶的重量奈莉·萨克斯诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/蝴蝶的重量奈莉·萨克斯诗选 (奈莉·萨克斯).epub",
+   "format": "epub",
+   "bytes": 120846,
+   "sha256": "e7c8f8f1f9e2ca0dca0f5d03a97d5536e2521e0936dae92e2abc540ede976be7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 20,
+   "bytes": 174473
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B0147",
+ "title": "傲慢与偏见",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/傲慢与偏见/md",
+ "at": "2026-10-18T23:30:50+08:00",
+ "verify_rc": 0,
+ "chapters": 70,
+ "chars": 211107,
+ "images": 7,
+ "problems": 0,
+ "audit_rc": 1,
+ "audit_ratio": 0.6859999999999999,
+ "raw_chars": 271476,
+ "status": "staged-review",
+ "note": "verify rc=0, audit rc=1"
+}

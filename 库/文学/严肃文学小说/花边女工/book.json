@@ -1,0 +1,42 @@
+{
+ "uid": "B1692",
+ "title": "花边女工",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/花边女工",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/花边女工 (（法）帕斯卡·莱内（Pascal Laine）著；吕华译 etc.).pdf",
+   "format": "pdf",
+   "bytes": 3122617,
+   "sha256": "9540bbb89effe3cc24db2c618ac6c8fadb79f05dc6853efcce5a0363ca201a75",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 168024
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0020",
+ "title": "万物静默如谜：辛波斯卡诗选",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/万物静默如谜：辛波斯卡诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/万物静默如谜：辛波斯卡诗选 = Poems New and Collected ( etc.).epub",
+   "format": "epub",
+   "bytes": 1160232,
+   "sha256": "73fdc24ccadd85398afad5f1c179f91c591f9e4ba62ce9ab502b76e26f59c30e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 90,
+   "bytes": 141950
+  }
+ ],
+ "notes": "依据:系列:辛波斯卡；置信:1.0"
+}

@@ -1,0 +1,25 @@
+key	value
+book.uid	B1359
+book.path	文学/唐诗学书系
+md.chapters	11619
+md.bytes	22946174
+md.files	11622
+md.images	1729
+source.file	唐诗学书系（全十七册）【960余万字，一套书带你摸清唐诗家底。由国内知名唐诗学专家陈伯海先生领衔，朱易安等30多位重量级学者参与其中，经30....epub
+source.bytes	22377022
+source.inode	33194633
+source.sha256	f1153ed903db04b21da582fa7f7bc86de19521953a47feabb6ea9e9b89e6dabe
+ledger.rows	1694
+db.books	1694
+db.md_done	1379
+index.para	2359571
+index.book_para	45690
+index.chapters	98789
+index.book_chapters	11619
+index.book_concept	15094
+index.book_concept_book	37
+index.expand_prefix	83319
+index.expand_queries	101
+index.expand_fts	83420
+index.meta	{'built_at': '2026-10-20T09:25:17+0800', 'chapters': '98789', 'books': '1306', 'paras': '2359571', 'chars': '519641364', 'seconds': '334'}
+views.links_to_book	8

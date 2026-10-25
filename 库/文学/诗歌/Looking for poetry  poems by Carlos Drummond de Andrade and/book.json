@@ -1,0 +1,42 @@
+{
+ "uid": "B0720",
+ "title": "Looking for poetry  poems by Carlos Drummond de Andrade and",
+ "title_from_file": "",
+ "author": "Strand",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/Looking for poetry  poems by Carlos Drummond de Andrade and",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Looking for poetry  poems by Carlos Drummond de Andrade and Rafael Alberti and songs from the Quechua (Strand, Mark, 1934-2014 Andrade etc.).pdf",
+   "format": "pdf",
+   "bytes": 4015294,
+   "sha256": "743567fea8cb022082546f9e88cfea6d6aa56ec40a050c430bb62d8accbf3915",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 126792
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

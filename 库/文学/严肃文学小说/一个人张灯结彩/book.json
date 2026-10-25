@@ -1,0 +1,42 @@
+{
+ "uid": "B1292",
+ "title": "一个人张灯结彩",
+ "title_from_file": "",
+ "author": "田耳",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/一个人张灯结彩",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/一个人张灯结彩 (田耳).epub",
+   "format": "epub",
+   "bytes": 172996,
+   "sha256": "f213601f7e6ef46a39b650c1fed3c528d36d5bf5d75c7b3f58308119597a2d38",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 2,
+   "bytes": 130341
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

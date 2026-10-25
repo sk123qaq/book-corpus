@@ -1,0 +1,42 @@
+{
+ "uid": "B1615",
+ "title": "雷加散文特写选",
+ "title_from_file": "",
+ "author": "雷加",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/雷加散文特写选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/雷加散文特写选 (雷加著).pdf",
+   "format": "pdf",
+   "bytes": 9706252,
+   "sha256": "77048ebb68a151af0398e123672823d2de46c9bcf1c2dd228aff8c59fb1e3bb7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 452612
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

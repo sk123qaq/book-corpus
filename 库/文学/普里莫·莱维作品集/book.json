@@ -1,0 +1,41 @@
+{
+ "uid": "B0830",
+ "title": "普里莫·莱维作品集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/普里莫·莱维作品集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/普里莫·莱维作品集（套装共9册） (普里莫·莱维).epub",
+   "format": "epub",
+   "bytes": 3919900,
+   "sha256": "fb2c42344566e1858753f16f1916b760acaca57fba37eaa8145e15733522467d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 273,
+   "bytes": 3398691
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

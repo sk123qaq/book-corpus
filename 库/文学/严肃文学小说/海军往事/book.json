@@ -1,0 +1,42 @@
+{
+ "uid": "B1493",
+ "title": "海军往事",
+ "title_from_file": "",
+ "author": "陆颖墨",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/海军往事",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/海军往事 (陆颖墨).epub",
+   "format": "epub",
+   "bytes": 181981,
+   "sha256": "1f03a503a1ce6c6d602268fac12e1690e34714769ef903c443a9fdd2d08c396f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 26,
+   "bytes": 241802
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

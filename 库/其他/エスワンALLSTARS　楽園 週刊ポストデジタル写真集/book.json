@@ -1,0 +1,26 @@
+{
+ "uid": "B0530",
+ "title": "エスワンALLSTARS　楽園 週刊ポストデジタル写真集",
+ "title_from_file": "",
+ "author": "三上悠亜",
+ "subjects": [
+  "其他"
+ ],
+ "path": "其他/エスワンALLSTARS　楽園 週刊ポストデジタル写真集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/エスワンALLSTARS　楽園 週刊ポストデジタル写真集 (三上悠亜,葵つかさ,小島みなみ,天使もえ,吉高寧々,奥田咲,架乃ゆら,舞山秀一) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 68742293,
+   "sha256": "96c95ab5ab072315db8e6bc1d501ae6d6e4b111d945eaf4a1816472b43974c98",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:图占比100%"
+}

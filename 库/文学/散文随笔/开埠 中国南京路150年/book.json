@@ -1,0 +1,42 @@
+{
+ "uid": "B1413",
+ "title": "开埠 中国南京路150年",
+ "title_from_file": "",
+ "author": "程童一主",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/开埠 中国南京路150年",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/开埠 中国南京路150年 (程童一主著, Cheng, Tongyi., 程童一., Tongyi Cheng etc.).pdf",
+   "format": "pdf",
+   "bytes": 23297870,
+   "sha256": "ca88dc4a7c403c1051b903cdbb4fccf1a9a7a0b8b24482c52d720e894965454d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1475328
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

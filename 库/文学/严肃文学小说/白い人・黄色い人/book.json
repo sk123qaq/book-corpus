@@ -1,0 +1,42 @@
+{
+ "uid": "B1050",
+ "title": "白い人・黄色い人",
+ "title_from_file": "",
+ "author": "遠藤周作",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/白い人・黄色い人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/白い人・黄色い人 (遠藤周作).epub",
+   "format": "epub",
+   "bytes": 1448454,
+   "sha256": "0da6e7b9eda2885c3d67096342baed530c86852522ee3099c9dc63aa0fcd683e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 263306
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1250",
+ "title": "蒲宁文集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/蒲宁文集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/蒲宁文集(套装共5册) (（俄）蒲宁 著, 戴骢 译).epub",
+   "format": "epub",
+   "bytes": 4578287,
+   "sha256": "226df5e30056f8772ae6990a28e4c3d38ee9ba52fdf52ce2bfadce6f6b373344",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 381,
+   "bytes": 3489590
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

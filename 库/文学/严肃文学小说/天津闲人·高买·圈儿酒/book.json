@@ -1,0 +1,42 @@
+{
+ "uid": "B1383",
+ "title": "天津闲人·高买·圈儿酒",
+ "title_from_file": "",
+ "author": "林希自选集",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/天津闲人·高买·圈儿酒",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/天津闲人·高买·圈儿酒（林希自选集） (林希).epub",
+   "format": "epub",
+   "bytes": 360574,
+   "sha256": "3f03ae3cdb4108f72e3f9c52cec2e0aaf2d11ebda442b4e2c38c325e9ce5e5bd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 361096
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B0889",
+ "title": "The Color Purple A Novel",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The Color Purple A Novel/md",
+ "at": "2026-10-18T21:07:25+08:00",
+ "verify_rc": 0,
+ "chapters": 93,
+ "chars": 272727,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.993,
+ "raw_chars": 259950,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0889.prev-2026-10-18T210620-0800"
+}

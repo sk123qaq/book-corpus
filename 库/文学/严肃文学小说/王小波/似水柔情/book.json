@@ -1,0 +1,35 @@
+{
+ "uid": "B0296",
+ "title": "似水柔情",
+ "title_from_file": "",
+ "author": "王小波",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/王小波/似水柔情",
+ "series": "王小波",
+ "volume": "8",
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../../../source/王小波全集(终结版)(套装全10卷) (王小波) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 8971682,
+   "sha256": "0ee8e1f3130bbc8e02a5547a4ae6026324891894036daa865051d4b3b4d1139f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 20,
+   "bytes": 705119
+  }
+ ],
+ "notes": "依据:系列:王小波；合集拆出 8/10；置信:1.0"
+}

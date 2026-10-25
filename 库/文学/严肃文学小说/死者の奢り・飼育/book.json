@@ -1,0 +1,42 @@
+{
+ "uid": "B1033",
+ "title": "死者の奢り・飼育",
+ "title_from_file": "",
+ "author": "大江 健三郎",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/死者の奢り・飼育",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/死者の奢り・飼育 (大江 健三郎).epub",
+   "format": "epub",
+   "bytes": 507752,
+   "sha256": "0ac933833ecdaace5f612432e206f438d8bfba88f820ff46c12d3c398a06bafc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 9,
+   "bytes": 443275
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

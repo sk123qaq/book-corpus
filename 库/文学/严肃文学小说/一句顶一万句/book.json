@@ -1,0 +1,35 @@
+{
+ "uid": "B0017",
+ "title": "一句顶一万句",
+ "title_from_file": "",
+ "author": "刘震云",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/一句顶一万句",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/一句顶一万句 (刘震云) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 537229,
+   "sha256": "9bf41c95576fdf0ad78bb767f3570954df11c1a71969f3fff91777f2bc7648f7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 817214
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

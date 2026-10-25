@@ -1,0 +1,42 @@
+{
+ "uid": "B0770",
+ "title": "Vernon God Little",
+ "title_from_file": "",
+ "author": "DBC Pierre",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Vernon God Little",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Vernon God Little (DBC Pierre, Peter Warren Finlay).epub",
+   "format": "epub",
+   "bytes": 494813,
+   "sha256": "eebec1c6d028a7aebd1b7cd0c661c4460e3b4ff02b20a280b3bbf8ec31670a9a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 503255
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

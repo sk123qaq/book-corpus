@@ -1,0 +1,41 @@
+{
+ "uid": "B1237",
+ "title": "纪德作品集（套装共10册）【上海译文出品！诺贝尔文学奖得主、法国人的精神导师、法国文坛不可绕过的作家纪德重要作品全收录！",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/纪德作品集（套装共10册）【上海译文出品！诺贝尔文学奖得主、法国人的精神导师、法国文坛不可绕过的作家纪德重要作品全收录！",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/纪德作品集（套装共10册）【上海译文出品！诺贝尔文学奖得主、法国人的精神导师、法国文坛不可绕过的作家纪德重要作品全收录！】 (名家特辑) (....epub",
+   "format": "epub",
+   "bytes": 6073208,
+   "sha256": "9d20baffdb96ecf4d549442891743dc9366d20226ff420dc7788acd5cf153ea0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 177,
+   "bytes": 4888383
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

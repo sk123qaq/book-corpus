@@ -1,0 +1,42 @@
+{
+ "uid": "B1689",
+ "title": "特罗亚短篇小说选",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/特罗亚短篇小说选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/特罗亚短篇小说选 (（法）亨利·特罗亚著；张成柱译).pdf",
+   "format": "pdf",
+   "bytes": 11063289,
+   "sha256": "1e2034569c6647e1a302d3ffc81efad43f4b863f7787951bdcd5c4b56025124e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 511383
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

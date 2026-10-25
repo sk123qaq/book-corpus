@@ -1,0 +1,35 @@
+{
+ "uid": "B0127",
+ "title": "人生的智慧",
+ "title_from_file": "",
+ "author": "叔本华(Arthur Schopenhauer)",
+ "subjects": [
+  "人文社科",
+  "思想与哲学"
+ ],
+ "path": "人文社科/思想与哲学/人生的智慧",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/人生的智慧 ( etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1023306,
+   "sha256": "c7514b2143c20fbfac87004f079330bf4745c07a2056c3aef7985e1d64016bc7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 501023
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1228",
+ "title": "等待戈多 贝克特选集3",
+ "title_from_file": "",
+ "author": "爱尔兰 萨缪尔·贝克特",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/等待戈多 贝克特选集3",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/等待戈多 贝克特选集3 ([爱尔兰] 萨缪尔·贝克特).pdf",
+   "format": "pdf",
+   "bytes": 10017684,
+   "sha256": "fb9635683a850655d419519b55d7e8fd93cc7b5241be96a43eb7349a84ef1821",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 484661
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,41 @@
+{
+ "uid": "B1312",
+ "title": "中国当代文学传媒研究",
+ "title_from_file": "",
+ "author": "黄发有",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/中国当代文学传媒研究",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国当代文学传媒研究 (黄发有著, 黄发有, 1969- author, Huang Fayou zhu).pdf",
+   "format": "pdf",
+   "bytes": 77247681,
+   "sha256": "975f210a237e3cac33e929abb6da2385f52e307a8e47d5e874282387270b1096",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1153554
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

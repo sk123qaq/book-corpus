@@ -1,0 +1,21 @@
+{
+ "uid": "B1133",
+ "title": "芙蓉镇",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/芙蓉镇/md",
+ "at": "2026-10-18T21:07:47+08:00",
+ "override": {
+  "accept": "源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+ },
+ "verify_rc": 1,
+ "chapters": 36,
+ "chars": 144415,
+ "images": 1,
+ "problems": 1,
+ "audit_rc": 0,
+ "audit_ratio": 0.991,
+ "raw_chars": 125592,
+ "status": "accepted",
+ "note": "已受理例外：源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1133.prev-2026-10-18T210620-0800"
+}

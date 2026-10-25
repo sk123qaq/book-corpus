@@ -1,0 +1,42 @@
+{
+ "uid": "B1243",
+ "title": "荒原 (T. S.艾略特(T. S. Eliot) [S.艾略特, T.])",
+ "title_from_file": "",
+ "author": "T. S. Eliot",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/荒原 (T. S.艾略特(T. S. Eliot) [S.艾略特, T.])",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/荒原 (T. S.艾略特(T. S. Eliot) [S.艾略特, T.]).epub",
+   "format": "epub",
+   "bytes": 410450,
+   "sha256": "80a5318984a05aa0a2c2ca9afa9a03868987afd108919f84e9fe5db23efbd5e7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 117,
+   "bytes": 463393
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

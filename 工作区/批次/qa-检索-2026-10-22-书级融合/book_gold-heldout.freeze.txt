@@ -1,0 +1,6 @@
+book_gold-heldout.tsv
+rows 20
+stratum ordinary
+chapters 6-499
+sha256 2112495970c65cb77dae91c92f974b653fc79edf44a8f2b80dbc0c6ba53be40a
+date 2026-10-23

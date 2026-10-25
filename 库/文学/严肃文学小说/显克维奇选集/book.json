@@ -1,0 +1,42 @@
+{
+ "uid": "B1210",
+ "title": "显克维奇选集",
+ "title_from_file": "",
+ "author": "全卷·套装共册",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/显克维奇选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/显克维奇选集(全6卷·套装共8册) (【波】亨利克·显克维奇).epub",
+   "format": "epub",
+   "bytes": 9989459,
+   "sha256": "820e4d56999d71cfa6aec30d1d9ebfe9e91d7d4d26dae2ba0d2fd5174ab83ec9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 400,
+   "bytes": 10912474
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

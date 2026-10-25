@@ -1,0 +1,41 @@
+{
+ "uid": "B1416",
+ "title": "张炯文存 第2卷 文学理论",
+ "title_from_file": "",
+ "author": "张炯",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/张炯文存 第2卷 文学理论",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/张炯文存 第2卷 文学理论 (张炯著, Zhang Jiong zhu, 张炯, 1933-, 张炯著, 张炯).pdf",
+   "format": "pdf",
+   "bytes": 20895930,
+   "sha256": "09e7c2ccb0e91458e9165ef668319ef24ded6c8b0a12a45cff9b35e3fe1017b0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1222230
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

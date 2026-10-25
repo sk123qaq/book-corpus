@@ -1,0 +1,35 @@
+{
+ "uid": "B0200",
+ "title": "失乐园",
+ "title_from_file": "",
+ "author": "渡边淳一",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/渡边淳一/失乐园",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/失乐园 ([日]渡边淳一) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 31596678,
+   "sha256": "0b8cf5719f73a2c401e1a8a7c9ab379365e0337c0b2843c47d7d8a2d41267c6c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 636529
+  }
+ ],
+ "notes": "依据:系列:渡边淳一；置信:1.0"
+}

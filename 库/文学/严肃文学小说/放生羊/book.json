@@ -1,0 +1,42 @@
+{
+ "uid": "B1444",
+ "title": "放生羊",
+ "title_from_file": "",
+ "author": "次仁罗布",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/放生羊",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/放生羊 (次仁罗布).pdf",
+   "format": "pdf",
+   "bytes": 52311079,
+   "sha256": "9de81ab3110cc3a552cc8fdf6c89468c73e8056d4e69ad63b825df9bd4f82013",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 599925
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

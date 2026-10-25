@@ -1,0 +1,42 @@
+{
+ "uid": "B1621",
+ "title": "韩作荣自选集",
+ "title_from_file": "",
+ "author": "韩作荣",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/韩作荣自选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/韩作荣自选集 (韩作荣编).pdf",
+   "format": "pdf",
+   "bytes": 14692320,
+   "sha256": "c48560f01d0ff9f3bd6d181f6b41eff2d83ac41fed60f25eb0be021eee7a2508",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 326628
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

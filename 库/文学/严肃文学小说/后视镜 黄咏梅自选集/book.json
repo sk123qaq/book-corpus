@@ -1,0 +1,42 @@
+{
+ "uid": "B1355",
+ "title": "后视镜 黄咏梅自选集",
+ "title_from_file": "",
+ "author": "黄咏梅",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/后视镜 黄咏梅自选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/后视镜 黄咏梅自选集 (黄咏梅著, Yongmei Huang, 黄咏梅, author, 黄咏梅 女 etc.).pdf",
+   "format": "pdf",
+   "bytes": 45660227,
+   "sha256": "6942e2da9815579cf89abb399926d3ee1d0906e9f2a145a66b631aabf76c8425",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 647203
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

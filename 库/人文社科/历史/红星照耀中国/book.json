@@ -1,0 +1,35 @@
+{
+ "uid": "B0358",
+ "title": "红星照耀中国",
+ "title_from_file": "",
+ "author": "埃德加·斯诺",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/红星照耀中国",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/红星照耀中国 (埃德加·斯诺著,董乐山,墨盟) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 6463993,
+   "sha256": "b3bdef079fc4633c09ad8b6a7fb697fa5ab1a717f18e5a24989d7cacb26e51a6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 65,
+   "bytes": 830771
+  }
+ ],
+ "notes": "依据:TypeSafe(0.79)；置信:0.79"
+}

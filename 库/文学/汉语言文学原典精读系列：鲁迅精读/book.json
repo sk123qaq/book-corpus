@@ -1,0 +1,41 @@
+{
+ "uid": "B1482",
+ "title": "汉语言文学原典精读系列：鲁迅精读",
+ "title_from_file": "",
+ "author": "第二版",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/汉语言文学原典精读系列：鲁迅精读",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/汉语言文学原典精读系列：鲁迅精读（第二版） (郜元宝).epub",
+   "format": "epub",
+   "bytes": 639045,
+   "sha256": "9198f436daa1d8503f3bd5a2fee76354addd1affbd027f196e0634131b36999b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 91,
+   "bytes": 836126
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

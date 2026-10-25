@@ -1,0 +1,35 @@
+{
+ "uid": "B0643",
+ "title": "梦幻森林Procreate童话风插画绘制专业技法",
+ "title_from_file": "",
+ "author": "KUNATATA 编",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/梦幻森林Procreate童话风插画绘制专业技法",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/梦幻森林Procreate童话风插画绘制专业技法 (KUNATATA 编著) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 31504663,
+   "sha256": "8571a7f1cf027dc6a1366a2d72f5150942c84e8e1d491839e4a24c34b4c6fb49",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 36,
+   "bytes": 183641
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

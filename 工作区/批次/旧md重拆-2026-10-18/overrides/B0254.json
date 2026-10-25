@@ -1,0 +1,4 @@
+{
+ "tool": "/home/shike/文档/books/工作区/批次/md拆分-2026-10-18/fixups/doc_units.py",
+ "accept": "源书 NCX 标签全部指向错误文档（第二章被标成致谢而丢），按 spine 文档建单元；正文页全覆盖"
+}

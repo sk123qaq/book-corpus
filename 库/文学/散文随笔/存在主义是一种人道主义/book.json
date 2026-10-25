@@ -1,0 +1,42 @@
+{
+ "uid": "B1186",
+ "title": "存在主义是一种人道主义",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/存在主义是一种人道主义",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/存在主义是一种人道主义【上海译文出品！法国20世纪最重要的哲学家萨特代表作，堪称存在主义划时代的宣言，特别收录其生前最后一次阐述哲思谈....epub",
+   "format": "epub",
+   "bytes": 201485,
+   "sha256": "9b3b0233e59a0618647bfe4b9ae5e57fee60054176c2991eac31a4f6d8bbf6f0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 3,
+   "bytes": 162748
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

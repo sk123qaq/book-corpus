@@ -1,0 +1,35 @@
+{
+ "uid": "B0390",
+ "title": "邓小平时代",
+ "title_from_file": "",
+ "author": "傅高义",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/邓小平时代",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/邓小平时代 (傅高义) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 9097883,
+   "sha256": "c5c619b83a02def7dbfd5f660f090a55e5a03f90de6ce0e613151e663c6614e3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 30,
+   "bytes": 1807957
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

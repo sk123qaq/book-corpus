@@ -1,0 +1,27 @@
+{
+ "uid": "B0665",
+ "title": "尘白禁区-简单画集",
+ "title_from_file": "",
+ "author": "尘白禁区",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/尘白禁区-简单画集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/尘白禁区-简单画集 (Unknown) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 45942545,
+   "sha256": "76735b7e8d107b47d0cf6471b1d6efed14d4df658dce392a65d877731854ffcc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是设定集与美术集"
+}

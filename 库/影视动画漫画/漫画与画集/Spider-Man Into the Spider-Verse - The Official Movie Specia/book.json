@@ -1,0 +1,27 @@
+{
+ "uid": "B0602",
+ "title": "Spider-Man Into the Spider-Verse - The Official Movie Specia",
+ "title_from_file": "",
+ "author": "TITAN",
+ "subjects": [
+  "影视动画漫画",
+  "漫画与画集"
+ ],
+ "path": "影视动画漫画/漫画与画集/Spider-Man Into the Spider-Verse - The Official Movie Specia",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Spider-Man Into the Spider-Verse - The Official Movie Special (TITAN) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 27069452,
+   "sha256": "b4f619e2912f816a5ef1a52bc52052bd2693c63231d5da3159319b08c504d7c3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是漫画与画集"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1126",
+ "title": "牵风记",
+ "title_from_file": "",
+ "author": "徐怀中",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/牵风记",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/牵风记 (徐怀中).epub",
+   "format": "epub",
+   "bytes": 755395,
+   "sha256": "14cc34c1094a677571420f85117202fb9271245b8270f161dacf9de4e2e681ed",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 32,
+   "bytes": 386507
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

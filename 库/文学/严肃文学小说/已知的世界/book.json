@@ -1,0 +1,42 @@
+{
+ "uid": "B0922",
+ "title": "已知的世界",
+ "title_from_file": "",
+ "author": "爱德华",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/已知的世界",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/已知的世界 (爱德华).pdf",
+   "format": "pdf",
+   "bytes": 25362563,
+   "sha256": "f008acf8fb5264b5b61a7cba511024cf884770dbfac27b289fd8838d3935fe59",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 845914
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

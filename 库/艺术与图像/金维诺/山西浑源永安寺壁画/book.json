@@ -1,0 +1,26 @@
+{
+ "uid": "B0635",
+ "title": "山西浑源永安寺壁画",
+ "title_from_file": "",
+ "author": "金维诺",
+ "subjects": [
+  "艺术与图像"
+ ],
+ "path": "艺术与图像/金维诺/山西浑源永安寺壁画",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/山西浑源永安寺壁画 (金维诺) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 16974084,
+   "sha256": "b35f1ebdd1d3fc749e3f3c18f9a77744f415ad2bdf9fd4e1807a151852435a6d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比60%，复核混合"
+}

@@ -1,0 +1,16 @@
+{
+ "uid": "B0005",
+ "title": "ABC谋杀案",
+ "format": "epub",
+ "dest": "库/文学/类型小说/阿加莎·克里斯蒂/ABC谋杀案/md",
+ "at": "2026-10-18T23:30:39+08:00",
+ "verify_rc": 0,
+ "chapters": 35,
+ "chars": 109322,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.997,
+ "raw_chars": 92205,
+ "status": "staged-green"
+}

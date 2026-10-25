@@ -1,0 +1,42 @@
+{
+ "uid": "B1623",
+ "title": "飞发",
+ "title_from_file": "",
+ "author": "葛亮",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/飞发",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/飞发 (葛亮).pdf",
+   "format": "pdf",
+   "bytes": 45519143,
+   "sha256": "8d65dc43020bfe06b9ef242f75edc495f34f48e2f618e84eaecba304f846c515",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 310876
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1608",
+ "title": "陀思妥耶夫斯基中篇心理小说经典·全4册",
+ "title_from_file": "",
+ "author": "著名俄语翻译家磊然",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/陀思妥耶夫斯基中篇心理小说经典·全4册",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/陀思妥耶夫斯基中篇心理小说经典·全4册（著名俄语翻译家磊然、臧仲伦、刘宗次、刘文飞独家权威译本；纪念陀翁诞辰200周年） (陀思妥耶夫斯基).epub",
+   "format": "epub",
+   "bytes": 2939102,
+   "sha256": "859136b88d09c3099447e2f83137314d027a010a5f742d7155edda26fe263add",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 96,
+   "bytes": 1328834
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

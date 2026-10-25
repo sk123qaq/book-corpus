@@ -1,0 +1,35 @@
+{
+ "uid": "B0026",
+ "title": "撒哈拉的故事",
+ "title_from_file": "",
+ "author": "三毛",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/三毛/撒哈拉的故事",
+ "series": "三毛",
+ "volume": "2",
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../../../source/三毛典藏全集（14本套装）（集结十四部传世经典，三十年写作成果全新呈现。） (三毛) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 13641202,
+   "sha256": "3212cae42a8e1b0773efd94ca8f1fc60af61368d31177c3c27b52a9c52159cce",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 28,
+   "bytes": 479572
+  }
+ ],
+ "notes": "依据:系列:三毛；合集拆出 2/14；置信:1.0"
+}

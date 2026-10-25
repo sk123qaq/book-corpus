@@ -1,0 +1,30 @@
+{
+ "uid": "B1184",
+ "title": "婚礼的华盖",
+ "format": "pdf",
+ "pages": 600,
+ "dest": "库/文学/严肃文学小说/婚礼的华盖/md",
+ "at": "2026-10-24T15:49:42+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1184/merged/pages --out out/B1184 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 4,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 5.9,
+ "chunks_done": 4,
+ "merged_pages": 600,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1184/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 336626,
+ "images": 10,
+ "problems": 0,
+ "blank_pages": 1,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}

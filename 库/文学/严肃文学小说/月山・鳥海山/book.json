@@ -1,0 +1,42 @@
+{
+ "uid": "B1027",
+ "title": "月山・鳥海山",
+ "title_from_file": "",
+ "author": "森敦",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/月山・鳥海山",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/月山・鳥海山 (森敦).epub",
+   "format": "epub",
+   "bytes": 604556,
+   "sha256": "e2fb6e7cc70afe27832a024a40cde3fb31ce64a4327dfb8c9dffe9da8c232b84",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 484053
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

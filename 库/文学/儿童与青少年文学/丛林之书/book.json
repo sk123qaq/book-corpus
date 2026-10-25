@@ -1,0 +1,42 @@
+{
+ "uid": "B1159",
+ "title": "丛林之书",
+ "title_from_file": "",
+ "author": "诺贝尔文学奖得主吉卜林代表作",
+ "subjects": [
+  "文学",
+  "儿童与青少年文学"
+ ],
+ "path": "文学/儿童与青少年文学/丛林之书",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/丛林之书(诺贝尔文学奖得主吉卜林代表作；电影《奇幻森林》原著故事；20万字完整译本)(果麦经典) (鲁德亚德·吉卜林).epub",
+   "format": "epub",
+   "bytes": 517624,
+   "sha256": "6f0b5c88214f57396be8c90c10b27075d7d03d6cd93fa240d829d813c8c79381",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 48,
+   "bytes": 618024
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0774",
+ "title": "午夜之子·鲁西迪作品",
+ "title_from_file": "",
+ "author": "天下大师",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/午夜之子·鲁西迪作品",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/午夜之子·鲁西迪作品 (天下大师) (【英】萨曼·鲁西迪).epub",
+   "format": "epub",
+   "bytes": 823239,
+   "sha256": "ba3018cec22c1695f21982d07525b566e55d9aacc5d26fc5a45c0d6cce6c1cd1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 32,
+   "bytes": 1343950
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

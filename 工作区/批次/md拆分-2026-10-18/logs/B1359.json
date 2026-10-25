@@ -1,0 +1,21 @@
+{
+ "uid": "B1359",
+ "title": "唐诗学书系",
+ "format": "epub",
+ "dest": "库/文学/唐诗学书系/md",
+ "at": "2026-10-18T21:08:11+08:00",
+ "override": {
+  "accept": "源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+ },
+ "verify_rc": 1,
+ "chapters": 11619,
+ "chars": 5924162,
+ "images": 1729,
+ "problems": 6,
+ "audit_rc": 0,
+ "audit_ratio": 0.993,
+ "raw_chars": 4807394,
+ "status": "accepted",
+ "note": "已受理例外：源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1359.prev-2026-10-18T210620-0800"
+}

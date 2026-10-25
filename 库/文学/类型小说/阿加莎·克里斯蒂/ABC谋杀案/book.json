@@ -1,0 +1,35 @@
+{
+ "uid": "B0005",
+ "title": "ABC谋杀案",
+ "title_from_file": "",
+ "author": "阿加莎·克里斯蒂",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/阿加莎·克里斯蒂/ABC谋杀案",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ABC谋杀案 (阿加莎·克里斯蒂) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 265960,
+   "sha256": "229f2f9e86d82b3b90275ada7f386215659fbb9abbcdc8789ce7f2ce03643fb8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 35,
+   "bytes": 343688
+  }
+ ],
+ "notes": "依据:系列:阿加莎·克里斯蒂；置信:1.0"
+}

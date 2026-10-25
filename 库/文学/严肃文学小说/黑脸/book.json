@@ -1,0 +1,42 @@
+{
+ "uid": "B1638",
+ "title": "黑脸",
+ "title_from_file": "",
+ "author": "赵一合",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/黑脸",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/黑脸 (赵一合著, 一合, author, 一合著, 一合).pdf",
+   "format": "pdf",
+   "bytes": 16539609,
+   "sha256": "b0a998e2a9d2967b36c717d37d0d5906903a3b11559fcb57c90a1dbb4a4a0f26",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 891286
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B1142",
+ "title": "钟鼓楼",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/钟鼓楼/md",
+ "at": "2026-10-18T21:07:48+08:00",
+ "verify_rc": 0,
+ "chapters": 6,
+ "chars": 263174,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.983,
+ "raw_chars": 233085,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1142.prev-2026-10-18T210620-0800"
+}

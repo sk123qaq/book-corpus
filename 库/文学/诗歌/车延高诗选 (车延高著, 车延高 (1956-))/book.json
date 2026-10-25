@@ -1,0 +1,42 @@
+{
+ "uid": "B1584",
+ "title": "车延高诗选 (车延高著, 车延高 (1956-))",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/车延高诗选 (车延高著, 车延高 (1956-))",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/车延高诗选 (车延高著, 车延高 (1956-)).pdf",
+   "format": "pdf",
+   "bytes": 11933233,
+   "sha256": "23117d4299951775e383e42bd507e3af53df0bc82395821c51574fbfc068aa9f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 92485
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

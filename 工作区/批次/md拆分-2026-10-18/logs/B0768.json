@@ -1,0 +1,17 @@
+{
+ "uid": "B0768",
+ "title": "The White Tiger",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The White Tiger/md",
+ "at": "2026-10-18T21:06:57+08:00",
+ "verify_rc": 0,
+ "chapters": 9,
+ "chars": 338885,
+ "images": 3,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.996,
+ "raw_chars": 320767,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0768.prev-2026-10-18T210620-0800"
+}

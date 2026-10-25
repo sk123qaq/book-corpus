@@ -1,0 +1,21 @@
+{
+ "uid": "B1102",
+ "title": "你在高原",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/你在高原/md",
+ "at": "2026-10-18T21:07:45+08:00",
+ "override": {
+  "accept": "源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+ },
+ "verify_rc": 1,
+ "chapters": 532,
+ "chars": 3424497,
+ "images": 0,
+ "problems": 26,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 3008253,
+ "status": "accepted",
+ "note": "已受理例外：源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1102.prev-2026-10-18T210620-0800"
+}

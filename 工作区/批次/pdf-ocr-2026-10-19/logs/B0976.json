@@ -1,0 +1,14 @@
+{
+ "uid": "B0976",
+ "title": "九月の空",
+ "format": "pdf",
+ "pages": 250,
+ "dest": "库/文学/严肃文学小说/九月の空/md",
+ "at": "2026-10-19T16:26:26+08:00",
+ "commands": [],
+ "chunks_planned": 3,
+ "pages_per_chunk": 116,
+ "slice_mb_estimate": 15.0,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B0976_p0001-0116.pdf，116 页，15.42 MB | 提交 HTTP 403 | {\"traceId\":\"74143a96-02d7-4f37-a22f-4cbde30b962b\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

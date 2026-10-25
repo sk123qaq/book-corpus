@@ -1,0 +1,29 @@
+{
+ "uid": "B1093",
+ "title": "願能嚐到美味料理【芥川賞受賞作！橫掃日本各大書店TOP1之話題作品】",
+ "format": "pdf",
+ "route": "text",
+ "pages": 97,
+ "dest": "库/文学/严肃文学小说/願能嚐到美味料理【芥川賞受賞作！橫掃日本各大書店TOP1之話題作品】/md",
+ "at": "2026-10-19T12:40:58+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/願能嚐到美味料理【芥川賞受賞作！橫掃日本各大書店TOP1之話題作品】/source/願能嚐到美味料理【芥川賞受賞作！橫掃日本各大書店TOP1之話題作品】 (高瀨隼子).pdf --out out/B1093 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0046,
+ "audit_anchors": 1.0,
+ "audit_chars": 42916,
+ "chapters": 3,
+ "chars": 49445,
+ "images": 9,
+ "problems": 0,
+ "structure": "chapters",
+ "single_file": false,
+ "pdf_pages": 97,
+ "toc_entries": 3,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

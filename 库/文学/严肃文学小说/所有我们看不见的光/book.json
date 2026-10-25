@@ -1,0 +1,42 @@
+{
+ "uid": "B0926",
+ "title": "所有我们看不见的光",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/所有我们看不见的光",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/所有我们看不见的光 (（美）多尔 [未知]).epub",
+   "format": "epub",
+   "bytes": 599526,
+   "sha256": "9e8eeebb83906151a92847fec75b0a7a9cfd8b08e6b9192896bb527700c9f2a3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 179,
+   "bytes": 733265
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

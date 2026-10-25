@@ -1,0 +1,34 @@
+{
+ "uid": "B0542",
+ "title": "中金黄金业绩预增公告",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "其他"
+ ],
+ "path": "其他/中金黄金业绩预增公告",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中金黄金业绩预增公告.pdf",
+   "format": "pdf",
+   "bytes": 88190,
+   "sha256": "d8ea8fbec1ad64645f426e71da16ecd7063306d9c50ebc33202ff7a868ef2c1e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 3555
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1267",
+ "title": "阿尼阿拉号",
+ "title_from_file": "",
+ "author": "哈瑞·马丁松",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/阿尼阿拉号",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/阿尼阿拉号 (哈瑞·马丁松).pdf",
+   "format": "pdf",
+   "bytes": 5581933,
+   "sha256": "df2ed9b82511ee5983f76e3d0d7b670c83431c76e10774d2e9e3f426c8aab9f0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 140815
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

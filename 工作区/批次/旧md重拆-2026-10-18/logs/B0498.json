@@ -1,0 +1,17 @@
+{
+ "uid": "B0498",
+ "title": "驭房有术",
+ "format": "epub",
+ "dest": "库/文学/网络文学/驭房有术/md",
+ "at": "2026-10-18T23:31:40+08:00",
+ "verify_rc": 1,
+ "chapters": 5069,
+ "chars": 11590182,
+ "images": 0,
+ "problems": 19,
+ "audit_rc": 0,
+ "audit_ratio": 0.995,
+ "raw_chars": 9813464,
+ "status": "staged-review",
+ "note": "verify rc=1, audit rc=0"
+}

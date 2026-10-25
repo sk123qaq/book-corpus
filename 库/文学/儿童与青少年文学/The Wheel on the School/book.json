@@ -1,0 +1,42 @@
+{
+ "uid": "B0693",
+ "title": "The Wheel on the School",
+ "title_from_file": "",
+ "author": "Meindert Dejong",
+ "subjects": [
+  "文学",
+  "儿童与青少年文学"
+ ],
+ "path": "文学/儿童与青少年文学/The Wheel on the School",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Wheel on the School (Meindert Dejong).pdf",
+   "format": "pdf",
+   "bytes": 12767248,
+   "sha256": "abe4711e55c9a7d9ff385ecd8b498b76e802786b6dcc0e11571f6641b8b21838",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "国际安徒生奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 383564
+  }
+ ],
+ "notes": "奖项:国际安徒生奖；依据:来源目录或奖项"
+}

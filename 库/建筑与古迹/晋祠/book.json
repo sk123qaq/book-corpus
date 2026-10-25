@@ -1,0 +1,34 @@
+{
+ "uid": "B0595",
+ "title": "晋祠",
+ "title_from_file": "",
+ "author": "晋祠文物保管所",
+ "subjects": [
+  "建筑与古迹"
+ ],
+ "path": "建筑与古迹/晋祠",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/晋祠 (晋祠文物保管所编) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 11761974,
+   "sha256": "aaa15a3724b092b107daaed7fcaa003f624e1c7eee27e558ea9c7c113789a6b5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 20502
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

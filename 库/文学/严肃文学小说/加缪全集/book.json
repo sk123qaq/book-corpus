@@ -1,0 +1,42 @@
+{
+ "uid": "B1166",
+ "title": "加缪全集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/加缪全集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/加缪全集 （套装共6卷） (阿尔贝•加缪).epub",
+   "format": "epub",
+   "bytes": 2299247,
+   "sha256": "fe4b6722bbad105f5a08be96be4d1833e49d487fa13624f30b9d92867db89549",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 57,
+   "bytes": 4770784
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

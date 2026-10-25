@@ -1,0 +1,35 @@
+{
+ "uid": "B0683",
+ "title": "游戏设计艺术 第3版",
+ "title_from_file": "",
+ "author": "Jesse Schell",
+ "subjects": [
+  "游戏",
+  "游戏设计"
+ ],
+ "path": "游戏/游戏设计/游戏设计艺术 第3版",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/游戏设计艺术 第3版 (Jesse Schell, 刘嘉俊, 杨逸, 欧阳立博, 陈闻, 陆佳琪) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 70189933,
+   "sha256": "a606e98924d2e2fe96d69f6eca0383d50ab6b0cf8b0418f825ed1856152e15bf",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1191001
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

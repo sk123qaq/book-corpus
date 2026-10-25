@@ -1,0 +1,24 @@
+$ ebook_to_md.py 库/文学/严肃文学小说/蒂博一家 上中下/source/蒂博一家：全4册 (诺贝尔文学奖大系) ((法)加尔).epub -o out --title '蒂博一家 上中下' 
+$ verify_output.py out
+$ audit_volume.py 库/文学/严肃文学小说/蒂博一家 上中下/source/蒂博一家：全4册 (诺贝尔文学奖大系) ((法)加尔).epub -o out
+$ write .manifest.json
+
+---- verify ----
+folder      : /home/shike/文档/books/工作区/批次/md换源-2026-10-24/tmp/B0571/out
+markdown    : 25 chapters
+characters  : 913,510
+images used : 0 (on disk: 0)
+smallest / largest:
+   small      645  24_马丁·杜·加尔作品年表.md
+   small    1,292  25_诺贝尔文学奖大系书目.md
+   large   67,715  17_56.md
+   large   68,612  07_前置页 8.md
+problems    : 0
+
+---- audit ----
+source : /home/shike/文档/books/库/文学/严肃文学小说/蒂博一家 上中下/source/蒂博一家：全4册 (诺贝尔文学奖大系) ((法)加尔).epub
+outdir : /home/shike/文档/books/工作区/批次/md换源-2026-10-24/tmp/B0571/out
+
+  out                                                798,328 / 1,062,779   75.1%    25 md  LOW  <-- check 未收录 / failure modes
+
+1 books: 1 LOW, 0 HIGH, 0 missing

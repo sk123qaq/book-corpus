@@ -1,0 +1,42 @@
+{
+ "uid": "B1537",
+ "title": "笑忘录",
+ "title_from_file": "",
+ "author": "捷克米兰·昆德拉",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/笑忘录",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/笑忘录 ([捷克]米兰·昆德拉 ，王东亮  译).epub",
+   "format": "epub",
+   "bytes": 206879,
+   "sha256": "4b8d99645f0ef9cce906285806b197a5eb1d9666eff94b67d21c095ad0b3addd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 9,
+   "bytes": 385951
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,18 @@
+{
+ "question": "服从为什么是一种宗教式情感？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "服从",
+    "宗教式"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [],
+ "broad_weight": 1.0
+}

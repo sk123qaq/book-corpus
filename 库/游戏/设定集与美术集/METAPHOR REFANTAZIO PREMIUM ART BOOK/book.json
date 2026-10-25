@@ -1,0 +1,27 @@
+{
+ "uid": "B0657",
+ "title": "METAPHOR REFANTAZIO PREMIUM ART BOOK",
+ "title_from_file": "",
+ "author": "Atlus",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/METAPHOR REFANTAZIO PREMIUM ART BOOK",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/METAPHOR REFANTAZIO PREMIUM ART BOOK (Atlus) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 26761396,
+   "sha256": "f43f437804541e25cbfc5259f103e3539e02943b43d74baab1a4965439ba011c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是设定集与美术集"
+}

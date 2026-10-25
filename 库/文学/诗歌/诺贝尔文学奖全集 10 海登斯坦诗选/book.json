@@ -1,0 +1,42 @@
+{
+ "uid": "B1257",
+ "title": "诺贝尔文学奖全集 10 海登斯坦诗选",
+ "title_from_file": "",
+ "author": "海登斯坦",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/诺贝尔文学奖全集 10 海登斯坦诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/诺贝尔文学奖全集 10 海登斯坦诗选 (海登斯坦著；黄琼华·哈国平译).pdf",
+   "format": "pdf",
+   "bytes": 2134447,
+   "sha256": "199ad8bd11eb45575b54d8a26439bca99be427e9c2a137b31740361fbb728b00",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 47515
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0120",
+ "title": "也许你该找个人聊聊",
+ "title_from_file": "",
+ "author": "洛莉·戈特利布",
+ "subjects": [
+  "人文社科",
+  "心理与认知"
+ ],
+ "path": "人文社科/心理与认知/也许你该找个人聊聊",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/也许你该找个人聊聊 = Maybe You Should Talk to Someone A Therapist, HER Therapist, and Our Lives Revealed ([美] 洛莉 · 戈特利布 (Lori Gottlieb) 著  张含笑 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 909849,
+   "sha256": "b86af5c3e25f2a79173daaec92f7f1c78334b79afb88dee11b1fd6f3ca0240c8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 62,
+   "bytes": 900690
+  }
+ ],
+ "notes": "依据:TypeSafe(0.86)；置信:0.86"
+}

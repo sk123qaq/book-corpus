@@ -1,0 +1,16 @@
+{
+ "uid": "B0174",
+ "title": "动物农场",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/动物农场/md",
+ "at": "2026-10-18T23:30:52+08:00",
+ "verify_rc": 0,
+ "chapters": 22,
+ "chars": 59880,
+ "images": 11,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.002,
+ "raw_chars": 53964,
+ "status": "staged-green"
+}

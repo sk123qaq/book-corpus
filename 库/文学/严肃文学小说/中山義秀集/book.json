@@ -1,0 +1,34 @@
+{
+ "uid": "B0973",
+ "title": "中山義秀集",
+ "title_from_file": "",
+ "author": "中山義秀",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/中山義秀集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中山義秀集 (中山義秀).pdf",
+   "format": "pdf",
+   "bytes": 78095224,
+   "sha256": "0467c21c19cbc8c48c9660ef20c32b6c923915f9499738c0ba759df24e7c2997",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

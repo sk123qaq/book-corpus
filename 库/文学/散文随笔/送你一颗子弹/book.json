@@ -1,0 +1,35 @@
+{
+ "uid": "B0388",
+ "title": "送你一颗子弹",
+ "title_from_file": "",
+ "author": "刘瑜",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/送你一颗子弹",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/送你一颗子弹 (刘瑜) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 438628,
+   "sha256": "009282302355583baa20586e1ba7feed004f782e1174bf66f370bf7e01ae6c41",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 102,
+   "bytes": 489732
+  }
+ ],
+ "notes": "依据:TypeSafe(0.73)；置信:0.73"
+}

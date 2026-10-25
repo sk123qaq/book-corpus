@@ -1,0 +1,42 @@
+{
+ "uid": "B1414",
+ "title": "张抗抗散文",
+ "title_from_file": "",
+ "author": "张抗抗",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/张抗抗散文",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/张抗抗散文 (张抗抗著, Zhang Kangkang zhu, Kangkang Zhang etc.).pdf",
+   "format": "pdf",
+   "bytes": 9147438,
+   "sha256": "c3bb94ade2a7688596f0c56cc65f991d295a661062d9c1d4b9d18575f04ace41",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 497520
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

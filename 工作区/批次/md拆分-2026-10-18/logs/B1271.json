@@ -1,0 +1,17 @@
+{
+ "uid": "B1271",
+ "title": "非必要阅读",
+ "format": "epub",
+ "dest": "库/文学/诗歌/非必要阅读/md",
+ "at": "2026-10-18T21:08:06+08:00",
+ "verify_rc": 0,
+ "chapters": 99,
+ "chars": 95994,
+ "images": 10,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0090000000000001,
+ "raw_chars": 83569,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1271.prev-2026-10-18T210620-0800"
+}

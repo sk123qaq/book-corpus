@@ -1,0 +1,42 @@
+{
+ "uid": "B0868",
+ "title": "Journey In The Dark",
+ "title_from_file": "",
+ "author": "Martin Flavin",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Journey In The Dark",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Journey In The Dark (Martin Flavin).epub",
+   "format": "epub",
+   "bytes": 968582,
+   "sha256": "75dc6f355e176599424d2798c7d1e76e249c039c6c5d04202f6c78850e64e626",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 1024827
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

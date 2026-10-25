@@ -1,0 +1,17 @@
+{
+ "uid": "B0721",
+ "title": "Manual de Infractores",
+ "format": "epub",
+ "dest": "库/文学/Manual de Infractores/md",
+ "at": "2026-10-18T21:06:43+08:00",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 46170,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 43953,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0721.prev-2026-10-18T210620-0800"
+}

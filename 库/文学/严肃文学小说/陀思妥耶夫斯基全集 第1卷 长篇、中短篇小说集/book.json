@@ -1,0 +1,35 @@
+{
+ "uid": "B0576",
+ "title": "陀思妥耶夫斯基全集 第1卷 长篇、中短篇小说集",
+ "title_from_file": "",
+ "author": "陀思妥耶夫斯基",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/陀思妥耶夫斯基全集 第1卷 长篇、中短篇小说集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/陀思妥耶夫斯基全集 第1卷 长篇、中短篇小说集 (陀思妥耶夫斯基,磊然).pdf",
+   "format": "pdf",
+   "bytes": 24484718,
+   "sha256": "d1ecca2ad689cd026c04549bc4bdd64db7b7896c8c8de6822a4a64bf2a4b644f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 9,
+   "bytes": 1143442
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

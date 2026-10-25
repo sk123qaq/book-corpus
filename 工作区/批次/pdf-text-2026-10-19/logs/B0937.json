@@ -1,0 +1,29 @@
+{
+ "uid": "B0937",
+ "title": "Asatte no hito, アサッテの人",
+ "format": "pdf",
+ "route": "text",
+ "pages": 206,
+ "dest": "库/文学/严肃文学小说/Asatte no hito, アサッテの人/md",
+ "at": "2026-10-19T12:42:07+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/Asatte no hito, アサッテの人/source/Asatte no hito, アサッテの人 (Suwa, Tetsushi, 1969-, 諏訪哲史).pdf --out out/B0937 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.1937,
+ "audit_anchors": 1.0,
+ "audit_chars": 43241,
+ "chapters": 1,
+ "chars": 72456,
+ "images": 412,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 206,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

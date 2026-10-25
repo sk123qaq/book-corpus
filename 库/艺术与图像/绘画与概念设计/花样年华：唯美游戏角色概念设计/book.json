@@ -1,0 +1,35 @@
+{
+ "uid": "B0647",
+ "title": "花样年华：唯美游戏角色概念设计",
+ "title_from_file": "",
+ "author": "王敏",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/花样年华：唯美游戏角色概念设计",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/花样年华：唯美游戏角色概念设计 (王敏) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 75772970,
+   "sha256": "fd23922dacd0d12aa7724c4752cdb88ea62d588bc7edbb608c4b81c74bb850e6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 117734
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

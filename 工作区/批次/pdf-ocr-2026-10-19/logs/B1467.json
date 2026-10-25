@@ -1,0 +1,35 @@
+{
+ "uid": "B1467",
+ "title": "朱向前文学理论批评选",
+ "format": "pdf",
+ "pages": 602,
+ "dest": "库/文学/朱向前文学理论批评选/md",
+ "at": "2026-10-24T15:56:42+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1467/merged/pages --out out/B1467 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 5,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 4.9,
+ "chunks_done": 5,
+ "merged_pages": 602,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1467/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 396491,
+ "images": 3,
+ "problems": 0,
+ "blank_pages": 5,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 4,
+ "short_page_list": [
+  20,
+  198,
+  316,
+  406
+ ],
+ "accepted": "",
+ "status": "landed"
+}

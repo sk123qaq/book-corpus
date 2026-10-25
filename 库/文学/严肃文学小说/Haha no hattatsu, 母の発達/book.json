@@ -1,0 +1,42 @@
+{
+ "uid": "B0938",
+ "title": "Haha no hattatsu, 母の発達",
+ "title_from_file": "",
+ "author": "Shōno",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Haha no hattatsu, 母の発達",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Haha no hattatsu, 母の発達 (Shōno, Yoriko, 1956- author, 笙野頼子).pdf",
+   "format": "pdf",
+   "bytes": 5266656,
+   "sha256": "6d01afe8d58f05092f2d072e33f1e6db73dbfc8661f10ef06499485c4cf960dc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 219860
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

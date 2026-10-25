@@ -1,0 +1,42 @@
+{
+ "uid": "B1684",
+ "title": "沙岸风云",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/沙岸风云",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/沙岸风云 (（法）朱利安·格拉克 著).pdf",
+   "format": "pdf",
+   "bytes": 40163726,
+   "sha256": "fcdb92ad8f146de171dc9dd4cb2cbb1b3df50e711191b58ddf276592145be325",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 592949
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

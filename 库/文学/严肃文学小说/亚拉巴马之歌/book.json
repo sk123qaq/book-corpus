@@ -1,0 +1,42 @@
+{
+ "uid": "B1662",
+ "title": "亚拉巴马之歌",
+ "title_from_file": "",
+ "author": "吉勒·勒鲁瓦",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/亚拉巴马之歌",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/亚拉巴马之歌 (吉勒·勒鲁瓦).epub",
+   "format": "epub",
+   "bytes": 239941,
+   "sha256": "18ee8a0b7517f28afcbebc9e13e2d3436784619e0fc3b69e95ce0c3bd44cc62d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 38,
+   "bytes": 264601
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

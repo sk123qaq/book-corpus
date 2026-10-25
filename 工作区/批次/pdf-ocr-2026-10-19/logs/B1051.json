@@ -1,0 +1,37 @@
+{
+ "uid": "B1051",
+ "title": "石の来歴 石の来歴,三つ目の鯰,奥泉光",
+ "format": "pdf",
+ "pages": 208,
+ "dest": "库/文学/严肃文学小说/石の来歴 石の来歴,三つ目の鯰,奥泉光/md",
+ "at": "2026-10-19T15:24:10+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1051/merged/pages --out out/B1051 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 2,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 3.8,
+ "chunks_done": 2,
+ "merged_pages": 208,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1051/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 125203,
+ "images": 2,
+ "problems": 0,
+ "blank_pages": 7,
+ "suspect_miss_pages": 1,
+ "suspect_pages": [
+  10
+ ],
+ "short_pages": 2,
+ "short_page_list": [
+  2,
+  107
+ ],
+ "review": "review/B1051",
+ "accepted": "",
+ "status": "staged-review",
+ "note": "可疑页 1 个"
+}

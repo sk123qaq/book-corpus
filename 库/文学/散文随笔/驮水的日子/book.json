@@ -1,0 +1,42 @@
+{
+ "uid": "B1626",
+ "title": "驮水的日子",
+ "title_from_file": "",
+ "author": "温亚军",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/驮水的日子",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/驮水的日子 (温亚军著, 温亚军, 1967-, Yajun Wen, 温亚军著, 温亚军 etc.).pdf",
+   "format": "pdf",
+   "bytes": 20644280,
+   "sha256": "f6cef279ae5b322d3c6693a986a4d0a2adcf76ac5b08e065604112b3fa4e7261",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1046428
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

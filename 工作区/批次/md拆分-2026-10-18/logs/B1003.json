@@ -1,0 +1,17 @@
+{
+ "uid": "B1003",
+ "title": "尋ね人の時間",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/尋ね人の時間/md",
+ "at": "2026-10-18T21:07:40+08:00",
+ "verify_rc": 0,
+ "chapters": 13,
+ "chars": 70816,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.997,
+ "raw_chars": 18835,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1003.prev-2026-10-18T210620-0800"
+}

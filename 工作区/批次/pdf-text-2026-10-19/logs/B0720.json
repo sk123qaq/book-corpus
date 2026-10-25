@@ -1,0 +1,29 @@
+{
+ "uid": "B0720",
+ "title": "Looking for poetry  poems by Carlos Drummond de Andrade and",
+ "format": "pdf",
+ "route": "text",
+ "pages": 194,
+ "dest": "库/文学/诗歌/Looking for poetry  poems by Carlos Drummond de Andrade and/md",
+ "at": "2026-10-19T12:41:47+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/诗歌/Looking for poetry  poems by Carlos Drummond de Andrade and/source/Looking for poetry  poems by Carlos Drummond de Andrade and Rafael Alberti and songs from the Quechua (Strand, Mark, 1934-2014 Andrade etc.).pdf --out out/B0720 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0766,
+ "audit_anchors": 1.0,
+ "audit_chars": 93434,
+ "chapters": 1,
+ "chars": 100523,
+ "images": 388,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 194,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

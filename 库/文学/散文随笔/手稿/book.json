@@ -1,0 +1,42 @@
+{
+ "uid": "B1290",
+ "title": "手稿",
+ "title_from_file": "",
+ "author": "王向峰",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/手稿",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/《手稿》的美学解读 (王向峰).pdf",
+   "format": "pdf",
+   "bytes": 24803118,
+   "sha256": "4a7ee35e75d43fe42ae7145a98990789872ff9711c46466104185ab1ebef23ba",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 816115
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

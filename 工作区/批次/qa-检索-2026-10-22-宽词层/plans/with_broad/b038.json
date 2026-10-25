@@ -1,0 +1,20 @@
+{
+ "question": "幸福为什么和接近目标有关？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "幸福",
+    "接近目标"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [
+  "幸福"
+ ],
+ "broad_weight": 1.0
+}

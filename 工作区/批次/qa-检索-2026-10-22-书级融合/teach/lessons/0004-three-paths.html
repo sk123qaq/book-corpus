@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>三条线：auto、loop、card 到底谁先谁后</title>
+<link rel="stylesheet" href="../assets/style.css">
+<body>
+
+<h1>三条线：谁先谁后</h1>
+<p class="meta">课 4 · 2026-10-23 · 把 auto / loop / card 放回同一条流程</p>
+
+<p class="lead">先直接回答：它们<strong>不是三个独立的方法，也不是三步</strong>。
+<code>auto</code> 和 <code>card</code> 都从「第一轮检索」分叉；<code>loop</code> 是第一轮之后
+继续换词。当前默认入口不是只看 top1，而是最多看 5 本书（触发时展开六张卡）。</p>
+
+<h2>一、三条线从哪里分叉</h2>
+
+<figure>
+<svg viewBox="0 0 940 330" role="img" aria-label="auto、loop、card 的分叉流程">
+  <defs>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a3b12"/>
+    </marker>
+  </defs>
+  <style>
+    .b { fill:#fff; stroke:#b9b1a4; stroke-width:1.2 }
+    .b2 { fill:#fbf3ea; stroke:#8a3b12; stroke-width:1.4 }
+    .t { font:600 13px "Noto Sans CJK SC",sans-serif; fill:#1b1b1b }
+    .s { font:11.5px "Noto Sans CJK SC",sans-serif; fill:#555 }
+    .l { stroke:#8a3b12; stroke-width:1.4; fill:none; marker-end:url(#a4) }
+    .d { stroke:#8a3b12; stroke-width:1.2; stroke-dasharray:5 4; fill:none }
+  </style>
+
+  <rect class="b" x="18" y="34" width="140" height="52" rx="4"/>
+  <text class="t" x="88" y="58" text-anchor="middle">查询</text>
+  <text class="s" x="88" y="75" text-anchor="middle">同一道题</text>
+  <line class="l" x1="158" y1="60" x2="210" y2="60"/>
+
+  <rect class="b2" x="210" y="34" width="330" height="52" rx="4"/>
+  <text class="t" x="375" y="57" text-anchor="middle">第一轮：名词集检索 → 书级排序</text>
+  <text class="s" x="375" y="74" text-anchor="middle">auto 和 card 都从这一轮分叉</text>
+
+  <line class="l" x1="540" y1="48" x2="600" y2="30"/>
+  <rect class="b" x="600" y="6" width="320" height="46" rx="4"/>
+  <text class="t" x="760" y="27" text-anchor="middle">auto：取第 1 本</text>
+  <text class="s" x="760" y="44" text-anchor="middle">21 道触发题里 13 中</text>
+
+  <line class="l" x1="540" y1="68" x2="600" y2="88"/>
+  <rect class="b" x="600" y="66" width="320" height="46" rx="4"/>
+  <text class="t" x="760" y="87" text-anchor="middle">card：取前 6 本，做成卡</text>
+  <text class="s" x="760" y="104" text-anchor="middle">21 道触发题：top3 15、top6 17</text>
+
+  <line class="l" x1="375" y1="86" x2="375" y2="136"/>
+  <rect class="b" x="210" y="136" width="330" height="50" rx="4"/>
+  <text class="t" x="375" y="158" text-anchor="middle">B2.5 继续换词（最多 5 轮）</text>
+  <text class="s" x="375" y="175" text-anchor="middle">全词 / 同义 / 宽词 / 降词</text>
+
+  <line class="l" x1="540" y1="161" x2="600" y2="161"/>
+  <rect class="b" x="600" y="138" width="320" height="46" rx="4"/>
+  <text class="t" x="760" y="159" text-anchor="middle">loop：最终一轮的第 1 本</text>
+  <text class="s" x="760" y="176" text-anchor="middle">21 道触发题里 13 中</text>
+
+  <rect class="b2" x="600" y="196" width="320" height="44" rx="4"/>
+  <text class="t" x="760" y="216" text-anchor="middle">自动也看前 3 本：15 中</text>
+  <text class="s" x="760" y="233" text-anchor="middle">这才是和卡片同宽的基线</text>
+  <line class="d" x1="760" y1="184" x2="760" y2="196"/>
+
+  <text class="s" x="20" y="288">auto 与 card 是同一轮的两个出口；loop 是继续换词后的另一个出口。</text>
+  <text class="s" x="20" y="308">所以「auto 13、card top3 15、loop 13」不是三次检索，是同一道题的三次取数。</text>
+</svg>
+<figcaption>三条线的分叉。注意 <code>card</code> 取的是第一轮前 6 本，不是 loop 的最终结果；
+<code>loop</code> 继续换词，但最终也只取第 1 本。把 loop 放宽到前 3 本是 15，前 5 本是 17。</figcaption>
+</figure>
+
+<h2>二、把表里的数字放回去</h2>
+
+<p>旧表的三列，其实是三种「取数方式」，不是三个系统：</p>
+
+<table>
+  <thead><tr><th>名字</th><th>是什么</th><th>看几本</th><th>21 道触发题</th></tr></thead>
+  <tbody>
+    <tr><td><code>auto</code></td><td>第一轮排序的第 1 本</td><td>1</td><td>13/21 = 0.619</td></tr>
+    <tr><td><code>loop</code></td><td>B2.5 继续换词，最终一轮的第 1 本</td><td>1</td><td>13/21 = 0.619</td></tr>
+    <tr><td><code>card top6</code></td><td>第一轮前 6 本，做成卡</td><td>6</td><td>17/21 = 0.810</td></tr>
+    <tr><td><code>card top3</code></td><td>卡片前三（诊断；实际默认六张）</td><td>3</td><td>15/21 = 0.714</td></tr>
+    <tr><td><code>loop top3</code></td><td>同一个循环，但看前 3 本</td><td>3</td><td>15/21 = 0.714</td></tr>
+    <tr><td><code>loop top5</code></td><td>同一个循环，看前 5 本</td><td>5</td><td>17/21 = 0.810</td></tr>
+  </tbody>
+</table>
+
+<p>看同宽两行：<code>card top3</code> 和 <code>loop top3</code> 都是 15；<code>card top6</code> 和 <code>loop top5</code> 都是 17。旧 <code>+19</code> 是 6 卡（17）对 loop top1（13），多出来的 4 题是第 2 到第 5 本；同宽比较收益为 0。</p>
+
+<p>未触发的 39 题没有卡，所以旧表让它们走 <code>auto</code>：</p>
+
+<table>
+  <thead><tr><th>子集</th><th>题数</th><th>auto top1</th><th>loop top1</th><th>loop top3/top5</th><th>card</th></tr></thead>
+  <tbody>
+    <tr><td>触发</td><td>21</td><td>13</td><td>13</td><td>15 / 17</td><td>15 / 17</td></tr>
+    <tr><td>未触发</td><td>39</td><td>29</td><td>32</td><td>35 / 36</td><td>没有卡</td></tr>
+    <tr><td>全部</td><td>60</td><td>42</td><td>45</td><td>50 / 53</td><td>默认 53</td></tr>
+  </tbody>
+</table>
+
+<p>旧 <code>effective = 45/60 = 0.750</code> 是「触发 17 + 未触发 auto 28」；默认路径是「触发卡六张 17 + 未触发 loop top5 36」= <code>53/60 = 0.883</code>。自动 loop top5 也是 53/60；六卡默认不再比自动 top5 少 2 题。</p>
+
+<h2>三、现在到底给用户看什么</h2>
+
+<figure>
+<svg viewBox="0 0 940 270" role="img" aria-label="当前默认入口的展示流程">
+  <defs>
+    <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a3b12"/>
+    </marker>
+  </defs>
+  <style>
+    .b { fill:#fff; stroke:#b9b1a4; stroke-width:1.2 }
+    .b2 { fill:#fbf3ea; stroke:#8a3b12; stroke-width:1.4 }
+    .t { font:600 12.5px "Noto Sans CJK SC",sans-serif; fill:#1b1b1b }
+    .s { font:11px "Noto Sans CJK SC",sans-serif; fill:#555 }
+    .l { stroke:#8a3b12; stroke-width:1.4; fill:none; marker-end:url(#a5) }
+    .d { stroke:#8a3b12; stroke-width:1.2; stroke-dasharray:5 4; fill:none }
+  </style>
+
+  <rect class="b" x="16" y="26" width="120" height="48" rx="4"/>
+  <text class="t" x="76" y="47" text-anchor="middle">查询</text>
+  <text class="s" x="76" y="63" text-anchor="middle">同一道题</text>
+  <line class="l" x1="136" y1="50" x2="180" y2="50"/>
+
+  <rect class="b2" x="180" y="26" width="190" height="48" rx="4"/>
+  <text class="t" x="275" y="47" text-anchor="middle">B2.5 循环</text>
+  <text class="s" x="275" y="63" text-anchor="middle">最多 5 轮</text>
+  <line class="l" x1="370" y1="50" x2="414" y2="50"/>
+
+  <rect class="b" x="414" y="26" width="240" height="48" rx="4"/>
+  <text class="t" x="534" y="47" text-anchor="middle">前 5 本书 × 每本 ≤3 章</text>
+  <text class="s" x="534" y="63" text-anchor="middle">不触发时直接展示</text>
+  <line class="l" x1="654" y1="50" x2="698" y2="50"/>
+
+  <rect class="b" x="698" y="26" width="220" height="48" rx="4"/>
+  <text class="t" x="808" y="47" text-anchor="middle">默认展示</text>
+  <text class="s" x="808" y="63" text-anchor="middle">top5 书 + 章</text>
+
+  <rect class="b" x="180" y="128" width="190" height="48" rx="4"/>
+  <text class="t" x="275" y="149" text-anchor="middle">第一轮的 6 张卡</text>
+  <text class="s" x="275" y="165" text-anchor="middle">触发时才展示</text>
+  <line class="d" x1="275" y1="74" x2="275" y2="128"/>
+
+  <rect class="b2" x="414" y="128" width="240" height="48" rx="4"/>
+  <text class="t" x="534" y="149" text-anchor="middle">触发时：六张卡</text>
+  <text class="s" x="534" y="165" text-anchor="middle">六本都展开章节</text>
+  <line class="l" x1="370" y1="152" x2="414" y2="152"/>
+  <line class="d" x1="654" y1="152" x2="698" y2="152"/>
+
+  <rect class="b" x="698" y="128" width="220" height="48" rx="4"/>
+  <text class="t" x="808" y="149" text-anchor="middle">默认展示</text>
+  <text class="s" x="808" y="165" text-anchor="middle">6 张卡；六本章节</text>
+
+  <text class="s" x="16" y="232">触发：卡片来自第一轮（缓存），章节来自循环；两者取交集/补齐。</text>
+  <text class="s" x="16" y="252">不触发：没有卡，直接展示循环的 top5 书与章。</text>
+</svg>
+<figcaption>当前默认入口。不是「只按 top1 回答」：不触发时最多 5 本；触发时 6 张卡，
+但默认六张卡都展开章节。</figcaption>
+</figure>
+
+<h2>四、所以「只按 top1 回答」吗？</h2>
+
+<p>不是。默认 <code>book_query.py</code> 的 <code>-n</code> 是 5：</p>
+
+<ul>
+  <li><strong>不触发书卡</strong>：返回循环排出的前 5 本书，每本最多 3 章。</li>
+  <li><strong>触发书卡</strong>：显示 6 张卡；六本的章节都展开，每本最多 3 章；
+  交互版 <code>book_cards.py</code> 还可以让用户选 1 到 3 本。</li>
+  <li><strong>只有 <code>auto</code> 和 <code>loop</code> 这两个诊断列</strong>只看第 1 本；
+  它们不是产品实际只给第 1 本。</li>
+</ul>
+
+<p>换句话说：<code>auto</code> 是「如果第一轮就停，只看第 1 本」；<code>loop</code> 是
+「如果循环完就停，只看第 1 本」；<code>card</code> 是「第一轮前 6 本摆出来」。当前默认是
+「循环的前 5 本，或触发时的六张卡」。三者不是互斥的三个系统，而是同一道题的三种取数方式。</p>
+
+<h2>五、自测</h2>
+
+<div class="quiz" data-answer="a" data-hint="看第一张流程图：auto 和 card 都从第一轮分叉。">
+  <h3>自测 1：auto 和 card 是什么关系？</h3>
+  <label><input type="radio" name="q1" value="a"> 同轮分叉</label>
+  <label><input type="radio" name="q1" value="b"> 先后两轮</label>
+  <label><input type="radio" name="q1" value="c"> 互相独立</label>
+  <label><input type="radio" name="q1" value="d"> 卡片先跑</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="a" data-hint="默认 -n 是 5；触发时是六张卡。">
+  <h3>自测 2：当前默认不触发时看几本？</h3>
+  <label><input type="radio" name="q2" value="a"> 最多五本</label>
+  <label><input type="radio" name="q2" value="b"> 只看一本</label>
+  <label><input type="radio" name="q2" value="c"> 固定十本</label>
+  <label><input type="radio" name="q2" value="d"> 只看三本</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="b" data-hint="触发时 6 张卡都显示，六本都展开章节。">
+  <h3>自测 3：触发时默认展开哪几本？</h3>
+  <label><input type="radio" name="q3" value="a"> 卡前三本</label>
+  <label><input type="radio" name="q3" value="b"> 卡前六本</label>
+  <label><input type="radio" name="q3" value="c"> 循环五本</label>
+  <label><input type="radio" name="q3" value="d"> 只第一本</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="a" data-hint="13/15/17：卡片 top3 和 loop top3 都是 15；top6/top5 都是 17。">
+  <h3>自测 4：旧 +19 主要来自什么？</h3>
+  <label><input type="radio" name="q4" value="a"> 展示宽度</label>
+  <label><input type="radio" name="q4" value="b"> 检索能力</label>
+  <label><input type="radio" name="q4" value="c"> 排序错误</label>
+  <label><input type="radio" name="q4" value="d"> 长书下降</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<h2>六、先读这一份</h2>
+
+<p>第一张图的逐题数据在
+<a href="../../live/B6/gate.tsv">gate.tsv</a>；旧表的原始行在
+<a href="../../live/B5/gate.tsv">gate.tsv</a>。审计的总报告是
+<a href="../../审计报告-2026-10-23.md">审计报告</a>，一页速查是
+<a href="../reference/audit-checklist.html">审计速查</a>。</p>
+
+<div class="note">如果还是绕，先只记一句：<strong>auto 和 card 是同一轮的两个出口；loop 是继续换词后的出口；
+当前默认看循环的 5 本，不是只看 1 本。</strong> 然后回到第一张图，把 13 / 15 / 17 填进去。</div>
+
+<p class="foot">课 4 · 上一课：<a href="0003-same-ruler.html">同一把尺子</a> ·
+参考：<a href="../reference/audit-checklist.html">审计速查</a> ·
+<a href="../reference/b5-gate.html">B5 读数速查</a> · <a href="../reference/terms.html">术语表</a></p>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+ "uid": "B0959",
+ "title": "スクラップ・アンド・ビルド",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/スクラップ・アンド・ビルド/md",
+ "at": "2026-10-18T20:12:15+08:00",
+ "override": {
+  "args": [
+   "--all-pages"
+  ]
+ },
+ "verify_rc": 0,
+ "chapters": 8,
+ "chars": 55683,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.002,
+ "raw_chars": 17465,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0959.prev-2026-10-18T201103-0800"
+}

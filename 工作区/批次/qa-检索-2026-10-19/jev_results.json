@@ -1,0 +1,98 @@
+[
+ {
+  "tag": "A-1200字/9章",
+  "limit": 1200,
+  "n": 9,
+  "in": 12099,
+  "out": 196,
+  "sec": 1.25,
+  "per_ch": 1366,
+  "model": "jev-1.13.0",
+  "ans": {
+   "free_liuqing029": 0.87,
+   "free_liuqing072": 0.77,
+   "free_wuhe05": 0.64,
+   "free_farm21": 0.24,
+   "free_n1984_08": 0.7,
+   "free_xiangtu10": 0.28,
+   "free_churchill107": 0.12,
+   "free_camus03": 0.16,
+   "free_ming03": 0.23
+  },
+  "unc": {
+   "free_liuqing029": 0,
+   "free_liuqing072": 0,
+   "free_wuhe05": 0,
+   "free_farm21": 0,
+   "free_n1984_08": 0,
+   "free_xiangtu10": 0,
+   "free_churchill107": 0,
+   "free_camus03": 0,
+   "free_ming03": 0
+  }
+ },
+ {
+  "tag": "B-2400字/9章",
+  "limit": 2400,
+  "n": 9,
+  "in": 20613,
+  "out": 196,
+  "sec": 0.87,
+  "per_ch": 2312,
+  "model": "jev-1.13.0",
+  "ans": {
+   "free_liuqing029": 0.89,
+   "free_liuqing072": 0.78,
+   "free_wuhe05": 0.7,
+   "free_farm21": 0.21,
+   "free_n1984_08": 0.7,
+   "free_xiangtu10": 0.38,
+   "free_churchill107": 0.21,
+   "free_camus03": 0.25,
+   "free_ming03": 0.34
+  },
+  "unc": {
+   "free_liuqing029": 0,
+   "free_liuqing072": 0,
+   "free_wuhe05": 0,
+   "free_farm21": 0,
+   "free_n1984_08": 0,
+   "free_xiangtu10": 0,
+   "free_churchill107": 0,
+   "free_camus03": 0,
+   "free_ming03": 0
+  }
+ },
+ {
+  "tag": "C-1200字/20章",
+  "limit": 1200,
+  "n": 20,
+  "in": 12099,
+  "out": 196,
+  "sec": 0.69,
+  "per_ch": 615,
+  "model": "jev-1.13.0",
+  "ans": {
+   "free_liuqing029": 0.88,
+   "free_liuqing072": 0.77,
+   "free_wuhe05": 0.65,
+   "free_farm21": 0.22,
+   "free_n1984_08": 0.71,
+   "free_xiangtu10": 0.36,
+   "free_churchill107": 0.23,
+   "free_camus03": 0.18,
+   "free_ming03": 0.22
+  },
+  "unc": {
+   "free_liuqing029": 0,
+   "free_liuqing072": 0,
+   "free_wuhe05": 0,
+   "free_farm21": 0,
+   "free_n1984_08": 0,
+   "free_xiangtu10": 0,
+   "free_churchill107": 0,
+   "free_camus03": 0,
+   "free_ming03": 0
+  }
+ }
+]

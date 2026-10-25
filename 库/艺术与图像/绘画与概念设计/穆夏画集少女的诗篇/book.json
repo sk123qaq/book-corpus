@@ -1,0 +1,35 @@
+{
+ "uid": "B0646",
+ "title": "穆夏画集少女的诗篇",
+ "title_from_file": "",
+ "author": "捷克 阿尔丰斯·穆夏",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/穆夏画集少女的诗篇",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/穆夏画集少女的诗篇 ([捷克] 阿尔丰斯·穆夏) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 49454492,
+   "sha256": "3c1e1873f2c1fcbfff0917617991e6b2095efda9dced41cc0b023b764a7ccb9b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 32000
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

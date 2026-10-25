@@ -1,0 +1,42 @@
+{
+ "uid": "B1637",
+ "title": "黄金洞",
+ "title_from_file": "",
+ "author": "阎连科",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/黄金洞",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/黄金洞 (阎连科著, 阎连科, 1958-).pdf",
+   "format": "pdf",
+   "bytes": 3542256,
+   "sha256": "9fe832e641f1b38f6ca5adec4993260e2325240d24acc323f5253fe1ff31f962",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 155483
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0846",
+ "title": "American Pastoral",
+ "title_from_file": "",
+ "author": "Philip Roth",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/American Pastoral",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/American Pastoral (Philip Roth).epub",
+   "format": "epub",
+   "bytes": 569118,
+   "sha256": "b1e01460590e9a7b32e132c53c93ae2b30871b1b9621642057aaf91428585d17",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 879427
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

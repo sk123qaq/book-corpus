@@ -1,0 +1,27 @@
+{
+ "uid": "B0655",
+ "title": "Bloodborne Official Artworks (Sony (Author), FromSoftware (A",
+ "title_from_file": "",
+ "author": "Author",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/Bloodborne Official Artworks (Sony (Author), FromSoftware (A",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Bloodborne Official Artworks (Sony (Author), FromSoftware (Author)) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 28887793,
+   "sha256": "acec987b8c58808bc23430a91421b3b6d96f32d2f0243112a1b4030d454b3159",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是设定集与美术集"
+}

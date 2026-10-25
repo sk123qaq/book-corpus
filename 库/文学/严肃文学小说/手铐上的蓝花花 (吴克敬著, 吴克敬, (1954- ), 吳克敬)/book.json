@@ -1,0 +1,42 @@
+{
+ "uid": "B1434",
+ "title": "手铐上的蓝花花 (吴克敬著, 吴克敬, (1954- ), 吳克敬)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/手铐上的蓝花花 (吴克敬著, 吴克敬, (1954- ), 吳克敬)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/手铐上的蓝花花 (吴克敬著, 吴克敬, (1954- ), 吳克敬).pdf",
+   "format": "pdf",
+   "bytes": 7826544,
+   "sha256": "cc5e61e4674780c44fa5e0cd5665ff39521f9c729d3fec2d735179df70106300",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 443820
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

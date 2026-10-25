@@ -1,0 +1,42 @@
+{
+ "uid": "B1365",
+ "title": "国家订单",
+ "title_from_file": "",
+ "author": "王十月",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/国家订单",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/国家订单 (王十月著, Shiyue Wang, 王十月, 1972-, 王十月著, 王十月).pdf",
+   "format": "pdf",
+   "bytes": 89351252,
+   "sha256": "5839ff97b49ee64562d04a2d875d95882f67e632b63bb0d343a769d2514e385f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 685019
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

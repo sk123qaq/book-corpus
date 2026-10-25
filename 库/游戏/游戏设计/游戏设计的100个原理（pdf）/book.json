@@ -1,0 +1,35 @@
+{
+ "uid": "B0681",
+ "title": "游戏设计的100个原理（pdf）",
+ "title_from_file": "",
+ "author": "美  Wendy Despain",
+ "subjects": [
+  "游戏",
+  "游戏设计"
+ ],
+ "path": "游戏/游戏设计/游戏设计的100个原理（pdf）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/游戏设计的100个原理 ([美]  Wendy Despain) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 22119165,
+   "sha256": "66a02ff126d857608ec9988413f6938997fc6644f1e3c917db5de35f75c987c8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 11,
+   "bytes": 431960
+  }
+ ],
+ "notes": "依据:来源目录或奖项；同名冲突加限定词（pdf）"
+}

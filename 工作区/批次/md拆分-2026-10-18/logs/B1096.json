@@ -1,0 +1,22 @@
+{
+ "uid": "B1096",
+ "title": "ａｂさんご",
+ "format": "azw3",
+ "dest": "库/文学/严肃文学小说/ａｂさんご/md",
+ "at": "2026-10-18T21:07:45+08:00",
+ "override": {
+  "tool": "/home/shike/文档/books/工作区/批次/md拆分-2026-10-18/fixups/doc_units.py",
+  "accept": "目录锚点全挤在一个 div 顶部，按 spine 文档建单元，整篇故事一个文件"
+ },
+ "provenance_fixed": 8,
+ "verify_rc": 0,
+ "chapters": 7,
+ "chars": 35821,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.001,
+ "raw_chars": 5097,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1096.prev-2026-10-18T210620-0800"
+}

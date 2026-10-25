@@ -1,0 +1,14 @@
+{
+ "uid": "B0997",
+ "title": "夜と霧の隅で",
+ "format": "pdf",
+ "pages": 261,
+ "dest": "库/文学/严肃文学小说/夜と霧の隅で/md",
+ "at": "2026-10-19T16:27:13+08:00",
+ "commands": [],
+ "chunks_planned": 2,
+ "pages_per_chunk": 135,
+ "slice_mb_estimate": 14.9,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B0997_p0001-0135.pdf，135 页，13.91 MB | 提交 HTTP 403 | {\"traceId\":\"2af1b9d3-5ad9-4f76-a01a-13db61dfc073\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

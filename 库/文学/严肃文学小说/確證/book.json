@@ -1,0 +1,34 @@
+{
+ "uid": "B1055",
+ "title": "確證",
+ "title_from_file": "",
+ "author": "小谷剛",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/確證",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/確證 (小谷剛).pdf",
+   "format": "pdf",
+   "bytes": 23626150,
+   "sha256": "a1d37e81f5c78afea4939a3d8ceab3e723857a072a074a4f9a89deb2c636a9f1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

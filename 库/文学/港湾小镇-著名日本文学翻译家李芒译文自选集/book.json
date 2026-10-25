@@ -1,0 +1,41 @@
+{
+ "uid": "B1500",
+ "title": "港湾小镇-著名日本文学翻译家李芒译文自选集",
+ "title_from_file": "",
+ "author": "港湾小镇",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/港湾小镇-著名日本文学翻译家李芒译文自选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/港湾小镇-著名日本文学翻译家李芒译文自选集 (（日）广津和郎等著；李芒译).pdf",
+   "format": "pdf",
+   "bytes": 8150524,
+   "sha256": "8c3a77e5719e0d06d5aeed9d581101037f66b16e0d48692e31dfaad0602c865d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 351917
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

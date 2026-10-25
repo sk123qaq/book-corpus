@@ -1,0 +1,35 @@
+{
+ "uid": "B0014",
+ "title": "Miss cat─Lisa 莎莎【超完美女神】",
+ "title_from_file": "",
+ "author": "Miao喵 Photography",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/Miss cat─Lisa 莎莎【超完美女神】",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Miss cat─Lisa 莎莎【超完美女神】 (Miao喵 Photography  EPUB檔製作：BOOK☆WALKER代製) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 62678207,
+   "sha256": "efdcdd9be2be7c2725087fa1c76791bf2e386632a93a78d9f719271c503e7d48",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 0,
+   "bytes": 5319
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99；图片书，不索引"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1665",
+ "title": "单程票 ((法)迪迪尔·范·考韦拉尔特著李珂译 etc.)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/单程票 ((法)迪迪尔·范·考韦拉尔特著李珂译 etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/单程票 ((法)迪迪尔·范·考韦拉尔特著李珂译 etc.).pdf",
+   "format": "pdf",
+   "bytes": 19008711,
+   "sha256": "c6294faab4485ea07a2ec4ce6c331e74cb2418f003361ab88d9201216747c100",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 173899
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

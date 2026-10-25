@@ -1,0 +1,42 @@
+{
+ "uid": "B1100",
+ "title": "主角",
+ "title_from_file": "",
+ "author": "陈彦",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/主角",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/主角 (陈彦).epub",
+   "format": "epub",
+   "bytes": 1209314,
+   "sha256": "d340e00d94d5c111cffd5834b3d89f1484115f65a52b5374b8c18ba549106421",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 150,
+   "bytes": 1973015
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

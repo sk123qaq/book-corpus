@@ -1,0 +1,35 @@
+{
+ "uid": "B0241",
+ "title": "时间的秩序",
+ "title_from_file": "",
+ "author": "卡洛·罗韦利, 杨光, ePUBw.COM",
+ "subjects": [
+  "科学技术",
+  "物理与天文"
+ ],
+ "path": "科学技术/物理与天文/时间的秩序",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/时间的秩序 [= The Order of Time (2019)] (卡洛．罗韦利 (Carlo Rovelli)) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1970172,
+   "sha256": "7f0c0564fc4d169c2c91866f280fb79861cb167d33615b8b6455cb21b4c3560a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 225566
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

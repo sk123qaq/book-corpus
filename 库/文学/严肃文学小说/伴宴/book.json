@@ -1,0 +1,35 @@
+{
+ "uid": "B0544",
+ "title": "伴宴",
+ "title_from_file": "",
+ "author": "鲁敏",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/伴宴",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/伴宴 (鲁敏著).pdf",
+   "format": "pdf",
+   "bytes": 12064029,
+   "sha256": "e3fcdb388738321a3fd101e224c55ec9e8a2c007b0ca9afc071b85c8de1c46a2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 545029
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

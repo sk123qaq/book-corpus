@@ -1,0 +1,41 @@
+{
+ "uid": "B1618",
+ "title": "震中在人心",
+ "title_from_file": "",
+ "author": "李鸣生",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/李鸣生/震中在人心",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/震中在人心 (李鸣生).epub",
+   "format": "epub",
+   "bytes": 263137,
+   "sha256": "e4b93dc957446121abf6bd7447becd102c556b18c39f9d9e190d32c4dbd89946",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 81,
+   "bytes": 375382
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

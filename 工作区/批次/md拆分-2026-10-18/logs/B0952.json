@@ -1,0 +1,21 @@
+{
+ "uid": "B0952",
+ "title": "オキナワの少年",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/オキナワの少年/md",
+ "at": "2026-10-18T21:07:36+08:00",
+ "override": {
+  "accept": "源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+ },
+ "verify_rc": 1,
+ "chapters": 22,
+ "chars": 166299,
+ "images": 0,
+ "problems": 1,
+ "audit_rc": 0,
+ "audit_ratio": 1.003,
+ "raw_chars": 31348,
+ "status": "accepted",
+ "note": "已受理例外：源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0952.prev-2026-10-18T210620-0800"
+}

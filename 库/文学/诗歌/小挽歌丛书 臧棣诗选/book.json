@@ -1,0 +1,42 @@
+{
+ "uid": "B1398",
+ "title": "小挽歌丛书 臧棣诗选",
+ "title_from_file": "",
+ "author": "臧棣",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/小挽歌丛书 臧棣诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/小挽歌丛书 臧棣诗选 (臧棣著).pdf",
+   "format": "pdf",
+   "bytes": 28957120,
+   "sha256": "e72e8fbd92c6490d70d3a21fb14a3dc472116ce4fba7b15bd2682332f8d98dfd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 204131
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0566",
+ "title": "社会保险",
+ "title_from_file": "",
+ "author": "邓大松",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/社会保险",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/社会保险 (邓大松主编, 邓大松主编, 邓大松) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 30482715,
+   "sha256": "7a5ec2974dea6c74829eb3a9493836e73f432c06b3788c5366f268b83b73fe4e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 828037
+  }
+ ],
+ "notes": "依据:TypeSafe(0.98)；置信:0.98"
+}

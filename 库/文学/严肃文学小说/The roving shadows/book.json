@@ -1,0 +1,42 @@
+{
+ "uid": "B1654",
+ "title": "The roving shadows",
+ "title_from_file": "",
+ "author": "Quignard",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The roving shadows",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The roving shadows (Quignard, Pascal).pdf",
+   "format": "pdf",
+   "bytes": 10010784,
+   "sha256": "d89a86e0b25ff45b228a85196faed524b0e193be062138cadce3a7fe890a011e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 210724
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0356",
+ "title": "米兰·昆德拉作品系列",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/米兰·昆德拉作品系列",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/米兰·昆德拉作品系列（套装共15册）【上海译文出品！在世即封神，收录昆德拉入选伽利玛“七星文库”全十五部作品！欧洲文学的集大成者，突破....epub",
+   "format": "epub",
+   "bytes": 6478147,
+   "sha256": "99cc16821db2acee9f35ec696e46ae13fc5837143e064e8c5147c7f3fa673685",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 1207,
+   "bytes": 5788578
+  }
+ ],
+ "notes": "依据:系列:米兰·昆德拉；置信:0.98"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0801",
+ "title": "迈克尔·K的生活和时代",
+ "title_from_file": "",
+ "author": "南非J·M·库切 著 邹海仑",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/迈克尔·K的生活和时代",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/迈克尔·K的生活和时代 ([南非]J·M·库切 著 邹海仑 译).epub",
+   "format": "epub",
+   "bytes": 325219,
+   "sha256": "1f100e1ccd6592a980ed9cbcf26c9228d2ebb8424bfb217b8be5fc5495f143e8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 434486
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

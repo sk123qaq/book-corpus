@@ -1,0 +1,29 @@
+{
+ "uid": "B1284",
+ "title": "Chui man feng de shan gu , 吹满风的山谷",
+ "format": "pdf",
+ "route": "text",
+ "pages": 318,
+ "dest": "库/文学/严肃文学小说/Chui man feng de shan gu , 吹满风的山谷/md",
+ "at": "2026-10-19T12:44:22+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/Chui man feng de shan gu , 吹满风的山谷/source/Chui man feng de shan gu , 吹满风的山谷 (Yi, Xiangdong, 衣向东).pdf --out out/B1284 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.068,
+ "audit_anchors": 1.0,
+ "audit_chars": 170297,
+ "chapters": 1,
+ "chars": 193914,
+ "images": 636,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 318,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

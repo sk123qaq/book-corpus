@@ -1,0 +1,35 @@
+{
+ "uid": "B0226",
+ "title": "康熙的红票：全球化中的清朝",
+ "title_from_file": "",
+ "author": "孙立天",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/康熙的红票：全球化中的清朝",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/康熙的红票：全球化中的清朝 = Emperor Kangxis Red Manifesto (孙立天) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1576300,
+   "sha256": "eefcd082612dc28a374731ed459bf84638b89599012d64cc8323cc103a124de4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 68,
+   "bytes": 544071
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

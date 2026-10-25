@@ -1,0 +1,42 @@
+{
+ "uid": "B1656",
+ "title": "[法国当代小说精品]梦魔的后代 (夏穆瓦佐(法) 著 陈耐秋等 译)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/[法国当代小说精品]梦魔的后代 (夏穆瓦佐(法) 著 陈耐秋等 译)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/[法国当代小说精品]梦魔的后代 (夏穆瓦佐(法) 著 陈耐秋等 译).pdf",
+   "format": "pdf",
+   "bytes": 8006442,
+   "sha256": "7634b52e7d061a25e913b9f9df0cd268145008164b0af5414322d443deceff00",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 375980
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

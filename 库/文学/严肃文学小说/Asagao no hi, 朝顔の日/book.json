@@ -1,0 +1,42 @@
+{
+ "uid": "B0936",
+ "title": "Asagao no hi, 朝顔の日",
+ "title_from_file": "",
+ "author": "Takahashi",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Asagao no hi, 朝顔の日",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Asagao no hi, 朝顔の日 (Takahashi, Hiroki, 1979- author, 高橋弘希).pdf",
+   "format": "pdf",
+   "bytes": 4723472,
+   "sha256": "b4253201ac4aae1c2a2323a594536a90d56ed8e5bc17e8162c1b49db9d1bd9ed",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 193968
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

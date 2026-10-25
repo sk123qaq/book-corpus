@@ -1,0 +1,42 @@
+{
+ "uid": "B0773",
+ "title": "凯利帮真史",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/凯利帮真史",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/凯利帮真史 (（澳）彼得·凯里 著李尧 译).epub",
+   "format": "epub",
+   "bytes": 519197,
+   "sha256": "42cf15a41a2857528548d3e35786fe00360503773899bb501d3370be717c2edf",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 790530
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

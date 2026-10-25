@@ -1,0 +1,42 @@
+{
+ "uid": "B0900",
+ "title": "The Optimists Daughter",
+ "title_from_file": "",
+ "author": "Eudora Welty",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Optimists Daughter",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Optimists Daughter (Eudora Welty).epub",
+   "format": "epub",
+   "bytes": 535724,
+   "sha256": "abd45215e206b9e3fb4e3028afc2209ee62ec7793a1ee86fa6dcd10188c59d1b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 231857
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

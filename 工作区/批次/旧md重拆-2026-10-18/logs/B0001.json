@@ -1,0 +1,16 @@
+{
+ "uid": "B0001",
+ "title": "13.67",
+ "format": "epub",
+ "dest": "库/文学/类型小说/13.67/md",
+ "at": "2026-10-18T23:30:39+08:00",
+ "verify_rc": 0,
+ "chapters": 8,
+ "chars": 284038,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 246159,
+ "status": "staged-green"
+}

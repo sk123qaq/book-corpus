@@ -1,0 +1,42 @@
+{
+ "uid": "B1478",
+ "title": "楼下楼上 何玉茹中短篇小说精选",
+ "title_from_file": "",
+ "author": "何玉茹",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/楼下楼上 何玉茹中短篇小说精选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/楼下楼上 何玉茹中短篇小说精选 (何玉茹著, He Yuru zhu, 何玉茹著, 何玉茹).pdf",
+   "format": "pdf",
+   "bytes": 11394252,
+   "sha256": "d1949a9a37458501fd84c26c7f8f7faa23541b179d191c3bc8af2196e0e0e111",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 639155
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

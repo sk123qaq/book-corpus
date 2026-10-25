@@ -1,0 +1,35 @@
+{
+ "uid": "B0255",
+ "title": "曼昆经济学原理",
+ "title_from_file": "",
+ "author": "N.格里高利·曼昆",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/曼昆经济学原理",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/曼昆经济学原理 (N.格里高利·曼昆 [N.格里高利·曼昆]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1492626,
+   "sha256": "690316e4c2c1ef4d70c453cf204fdfa322082fefacaf862dee94bb9add55ba6a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 401,
+   "bytes": 983452
+  }
+ ],
+ "notes": "依据:TypeSafe(0.98)；置信:0.98"
+}

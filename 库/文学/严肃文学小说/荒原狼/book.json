@@ -1,0 +1,35 @@
+{
+ "uid": "B0377",
+ "title": "荒原狼",
+ "title_from_file": "",
+ "author": "赫尔曼·黑塞",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/荒原狼",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/荒原狼 (赫尔曼·黑塞，姜乙（译）) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 464658,
+   "sha256": "fb6ee1ff814243b59120a958bbee2a6c1dc85375ae3a9f56dcbabe617c1cd03c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 5,
+   "bytes": 353542
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

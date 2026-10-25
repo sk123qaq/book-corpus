@@ -1,0 +1,17 @@
+{
+ "uid": "B0661",
+ "title": "The Legend of Zelda Encyclopedia",
+ "format": "epub",
+ "dest": "库/游戏/The Legend of Zelda Encyclopedia/md",
+ "at": "2026-10-18T21:06:32+08:00",
+ "verify_rc": 0,
+ "chapters": 42,
+ "chars": 862996,
+ "images": 2325,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9390000000000001,
+ "raw_chars": 825554,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0661.prev-2026-10-18T210620-0800"
+}

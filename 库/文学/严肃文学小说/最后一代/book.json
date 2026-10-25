@@ -1,0 +1,42 @@
+{
+ "uid": "B1462",
+ "title": "最后一代",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/最后一代",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/最后一代 (（苏）高尔基，М.著；陈冰夷译).pdf",
+   "format": "pdf",
+   "bytes": 3469431,
+   "sha256": "68060e280e20eaf040d0a97f7296dca5af685f49d09687729d41dfeebfda8273",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 137424
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

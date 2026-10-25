@@ -1,0 +1,17 @@
+{
+ "uid": "B0810",
+ "title": "Dont Move",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/Dont Move/md",
+ "at": "2026-10-18T21:07:02+08:00",
+ "verify_rc": 0,
+ "chapters": 40,
+ "chars": 402629,
+ "images": 40,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.002,
+ "raw_chars": 380242,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0810.prev-2026-10-18T210620-0800"
+}

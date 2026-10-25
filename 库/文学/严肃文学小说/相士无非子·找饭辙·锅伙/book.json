@@ -1,0 +1,42 @@
+{
+ "uid": "B1528",
+ "title": "相士无非子·找饭辙·锅伙",
+ "title_from_file": "",
+ "author": "林希自选集",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/相士无非子·找饭辙·锅伙",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/相士无非子·找饭辙·锅伙（林希自选集） (林希).epub",
+   "format": "epub",
+   "bytes": 376710,
+   "sha256": "f3cbe63a15282dbe583a54d6757524c606a0b68156b164f6f081e93c915aadd9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 26,
+   "bytes": 395805
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

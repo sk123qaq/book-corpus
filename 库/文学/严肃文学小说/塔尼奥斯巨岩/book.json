@@ -1,0 +1,42 @@
+{
+ "uid": "B1671",
+ "title": "塔尼奥斯巨岩",
+ "title_from_file": "",
+ "author": "黎巴嫩法国",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/塔尼奥斯巨岩",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/塔尼奥斯巨岩 (（黎巴嫩法国）阿明·马洛夫著；吴锡德译, (法) 马洛夫, (Maalouf etc.).pdf",
+   "format": "pdf",
+   "bytes": 83174463,
+   "sha256": "e56796b734e9a13cda002b140ec6c17f90456c505169d8d483abdee41ed11350",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 458960
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

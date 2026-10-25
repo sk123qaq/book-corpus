@@ -1,0 +1,42 @@
+{
+ "uid": "B1205",
+ "title": "托马斯·曼作品布登勃洛克一家 (译林经典) (托马斯·曼 (Thomas Mann) [托马斯·曼 (Thomas Ma",
+ "title_from_file": "",
+ "author": "译林经典",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/托马斯·曼作品布登勃洛克一家 (译林经典) (托马斯·曼 (Thomas Mann) [托马斯·曼 (Thomas Ma",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/托马斯·曼作品布登勃洛克一家 (译林经典) (托马斯·曼 (Thomas Mann) [托马斯·曼 (Thomas Mann)]).epub",
+   "format": "epub",
+   "bytes": 906829,
+   "sha256": "3671370853e67e3059e9351e832f074f27de033d82761e8f77fccb349fa1cd62",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 101,
+   "bytes": 1497984
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

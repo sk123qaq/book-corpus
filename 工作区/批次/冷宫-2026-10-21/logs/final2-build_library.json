@@ -1,0 +1,13 @@
+{
+ "books": 1693,
+ "sources": 1693,
+ "active": 1693,
+ "conflicts": 0,
+ "md_done": 1415,
+ "pending_md": 278,
+ "award_books": 1009,
+ "dup_sha": 21,
+ "build_sec": 1.325,
+ "db_bytes": 4096,
+ "book_json": 1693
+}

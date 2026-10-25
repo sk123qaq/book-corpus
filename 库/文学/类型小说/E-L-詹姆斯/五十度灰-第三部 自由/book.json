@@ -1,0 +1,35 @@
+{
+ "uid": "B0123",
+ "title": "五十度灰-第三部 自由",
+ "title_from_file": "",
+ "author": "E-L-詹姆斯",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/E-L-詹姆斯/五十度灰-第三部 自由",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/五十度灰 第三部 自由 (E-L-詹姆斯) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 451120,
+   "sha256": "a25abe1213260ef07a3d877af8bb8aea7931325523c2b70e35622b5a9e96c522",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 5,
+   "bytes": 986784
+  }
+ ],
+ "notes": "依据:TypeSafe(0.84)；置信:0.84"
+}

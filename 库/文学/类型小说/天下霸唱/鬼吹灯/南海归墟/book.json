@@ -1,0 +1,35 @@
+{
+ "uid": "B0505",
+ "title": "南海归墟",
+ "title_from_file": "",
+ "author": "天下霸唱",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/天下霸唱/鬼吹灯/南海归墟",
+ "series": "鬼吹灯",
+ "volume": "6",
+ "container": "鬼吹灯",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../source/鬼吹灯 8部全集图文版 (天下霸唱) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 6000722,
+   "sha256": "39feedfca4cea8f2bfbdf16352bd38c138341506ddd778075521050eb8e03def",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 57,
+   "bytes": 712476
+  }
+ ],
+ "notes": "依据:系列:鬼吹灯；合集拆出 6/8；置信:1.0"
+}

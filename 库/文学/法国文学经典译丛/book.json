@@ -1,0 +1,41 @@
+{
+ "uid": "B1686",
+ "title": "法国文学经典译丛",
+ "title_from_file": "",
+ "author": "共本",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/法国文学经典译丛",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/法国文学经典译丛（共6本）（由资深法语翻译家许钧主编。诺贝尔文学奖得主、法国作家勒克莱齐奥推荐、深入法国文学的必读书目) ( etc.).epub",
+   "format": "epub",
+   "bytes": 3894105,
+   "sha256": "fdc7d9eab0b23b61af7f1f6a5adbc5e42c7a63016805bba0b8a7e373b2885705",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 144,
+   "bytes": 1667283
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

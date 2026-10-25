@@ -1,0 +1,42 @@
+{
+ "uid": "B1335",
+ "title": "先前的风气",
+ "title_from_file": "",
+ "author": "穆涛",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/先前的风气",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/先前的风气 (穆涛著, 穆涛, 1963- author, 穆涛著, 穆涛).pdf",
+   "format": "pdf",
+   "bytes": 43033595,
+   "sha256": "bb6dbec5ddd8fe62fee1ce201663db1b47340f45c4bf512d4f66862f0e5f5fc8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 517271
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

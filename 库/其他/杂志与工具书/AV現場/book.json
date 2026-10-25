@@ -1,0 +1,27 @@
+{
+ "uid": "B0511",
+ "title": "AV現場",
+ "title_from_file": "",
+ "author": "湯禎兆",
+ "subjects": [
+  "其他",
+  "杂志与工具书"
+ ],
+ "path": "其他/杂志与工具书/AV現場",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/AV現場 (湯禎兆) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 60368556,
+   "sha256": "805645c7b7185c88579c2964faacb4c5f52acfabbe67a305b2bb7d44dc73a772",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(0.64)；置信:0.64；图册不转:图占比100%"
+}

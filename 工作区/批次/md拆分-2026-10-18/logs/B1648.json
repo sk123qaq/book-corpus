@@ -1,0 +1,17 @@
+{
+ "uid": "B1648",
+ "title": "The Battle",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The Battle/md",
+ "at": "2026-10-18T21:08:47+08:00",
+ "verify_rc": 0,
+ "chapters": 10,
+ "chars": 368465,
+ "images": 12,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.001,
+ "raw_chars": 349554,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1648.prev-2026-10-18T210620-0800"
+}

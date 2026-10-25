@@ -1,0 +1,42 @@
+{
+ "uid": "B1453",
+ "title": "新势力丛书：将军的部队",
+ "title_from_file": "",
+ "author": "李浩",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/新势力丛书：将军的部队",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/新势力丛书：将军的部队 (李浩).epub",
+   "format": "epub",
+   "bytes": 465775,
+   "sha256": "8d1bcb5d5aa315744d2a7ff57855316eaf55abadfd25aed08118eff50ca6a759",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 577721
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

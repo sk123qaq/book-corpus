@@ -1,0 +1,35 @@
+{
+ "uid": "B0261",
+ "title": "枪炮、病菌与钢铁",
+ "title_from_file": "",
+ "author": "贾雷德·戴蒙德",
+ "subjects": [
+  "人文社科",
+  "人类学与考古"
+ ],
+ "path": "人文社科/人类学与考古/枪炮、病菌与钢铁",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/枪炮、病菌与钢铁人类社会的命运 = Guns, Germs, and Steel The Fates of Human Societies ([美] 贾雷德 · 戴蒙德 (Jared Diamond) 著  王道还 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 6311447,
+   "sha256": "7fe48112e66775234aadf9b910d58624c7397e9a15e188f2370bb98fe5644ef7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 36,
+   "bytes": 1020868
+  }
+ ],
+ "notes": "依据:TypeSafe(0.98)；置信:0.98"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1190",
+ "title": "安妮·埃尔诺作品集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/安妮·埃尔诺作品集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/安妮·埃尔诺作品集 ( etc.).epub",
+   "format": "epub",
+   "bytes": 5449266,
+   "sha256": "db1017d0a2e9e770ee131db71bf218c48b3e6bf8fd6559aeaa334bea754e9a4d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 179,
+   "bytes": 1930735
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

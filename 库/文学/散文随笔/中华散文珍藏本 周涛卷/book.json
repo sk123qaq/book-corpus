@@ -1,0 +1,42 @@
+{
+ "uid": "B1306",
+ "title": "中华散文珍藏本 周涛卷",
+ "title_from_file": "",
+ "author": "周涛",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/中华散文珍藏本 周涛卷",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中华散文珍藏本 周涛卷 (周涛著, Zhou Tao Zhu, 周涛, 1946-, Tao Zhou, 賈平凹).pdf",
+   "format": "pdf",
+   "bytes": 6758796,
+   "sha256": "dbc65cee3711cc2f76e208dd8e7356e6443ea83bdf804c37434298b56585523a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 383694
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

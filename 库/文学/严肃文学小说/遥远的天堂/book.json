@@ -1,0 +1,42 @@
+{
+ "uid": "B1595",
+ "title": "遥远的天堂",
+ "title_from_file": "",
+ "author": "ePUBw.COM 裘山山",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/遥远的天堂",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/遥远的天堂 (ePUBw.COM 裘山山).azw3",
+   "format": "azw3",
+   "bytes": 757020,
+   "sha256": "3e8f4bac16a7d4f8040e187772a48dc552258c73a49e7ddc25196b2e07ca3911",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 63,
+   "bytes": 509122
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

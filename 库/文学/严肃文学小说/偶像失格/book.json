@@ -1,0 +1,42 @@
+{
+ "uid": "B0980",
+ "title": "偶像失格",
+ "title_from_file": "",
+ "author": "日 宇佐见铃 著  千早",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/偶像失格",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/偶像失格 = 推し、燃ゆ ([日] 宇佐见铃 著  千早 译).azw3",
+   "format": "azw3",
+   "bytes": 2146809,
+   "sha256": "2fb7e402b16171243160539ecde1ccb401abb6e978be9e7ba42b792c75e672f4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 124444
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

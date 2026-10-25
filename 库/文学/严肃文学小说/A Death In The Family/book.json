@@ -1,0 +1,42 @@
+{
+ "uid": "B0838",
+ "title": "A Death In The Family",
+ "title_from_file": "",
+ "author": "James Agee",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/A Death In The Family",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/A Death In The Family (James Agee).epub",
+   "format": "epub",
+   "bytes": 280527,
+   "sha256": "c1fc45e04d7401de57f7f6def76dd4450ecda17e098c4743ae11827db144244f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 26,
+   "bytes": 553396
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

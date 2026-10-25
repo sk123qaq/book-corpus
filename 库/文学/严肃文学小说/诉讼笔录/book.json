@@ -1,0 +1,42 @@
+{
+ "uid": "B1255",
+ "title": "诉讼笔录",
+ "title_from_file": "",
+ "author": "法马-让·居·勒克莱齐奥",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/诉讼笔录",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/诉讼笔录 (【法】马-让·居·勒克莱齐奥, 许钧).epub",
+   "format": "epub",
+   "bytes": 901512,
+   "sha256": "c6c1256ec25055ea59b66f6cd43bf850ef2279f0673787a6c5a3e562d296abfc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 20,
+   "bytes": 403311
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

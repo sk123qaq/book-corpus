@@ -1,0 +1,14 @@
+{
+ "uid": "B0989",
+ "title": "口唇論",
+ "format": "pdf",
+ "pages": 324,
+ "dest": "库/文学/严肃文学小说/口唇論/md",
+ "at": "2026-10-19T16:30:18+08:00",
+ "commands": [],
+ "chunks_planned": 3,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 6.5,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B0989_p0001-0150.pdf，150 页，4.44 MB | 提交 HTTP 403 | {\"traceId\":\"1ce51146-9a6a-4960-a37a-8cd5d24217de\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

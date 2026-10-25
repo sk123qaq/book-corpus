@@ -1,0 +1,35 @@
+{
+ "uid": "B0623",
+ "title": "對白的解剖 (二版)  跟好萊塢編劇教父學習角色說話的藝術, 在已說、未說、不可說之間, 強化故事的深度、角色的厚度、風",
+ "title_from_file": "",
+ "author": "二版",
+ "subjects": [
+  "写作与编剧",
+  "编剧理论与对白"
+ ],
+ "path": "写作与编剧/编剧理论与对白/對白的解剖 (二版)  跟好萊塢編劇教父學習角色說話的藝術, 在已說、未說、不可說之間, 強化故事的深度、角色的厚度、風",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/對白的解剖 (二版)  跟好萊塢編劇教父學習角色說話的藝術, 在已說、未說、不可說之間, 強化故事的深度、角色的厚度、風格的魅力 = Dialogue The Art of... (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3716235,
+   "sha256": "cb6c29635fbd506cfb9c8fc1979e2bba051bde4f9e9c4bc1f2b4bbf6f7f8d9f4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 29,
+   "bytes": 571677
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1620",
+ "title": "韩东的诗",
+ "title_from_file": "",
+ "author": "做天下最好的诗集",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/韩东的诗",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/韩东的诗 (做天下最好的诗集) (韩东).epub",
+   "format": "epub",
+   "bytes": 459110,
+   "sha256": "4a8506b560558e4dbea314fea635803bc5167a1d0dfa58daf05048cd76b43082",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 351,
+   "bytes": 262135
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

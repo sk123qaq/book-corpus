@@ -1,0 +1,35 @@
+{
+ "uid": "B0299",
+ "title": "球状闪电",
+ "title_from_file": "",
+ "author": "刘慈欣",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/刘慈欣/球状闪电",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/球状闪电（没有《球状闪电》，就没有后来的《三体》《三体》前传，刘慈欣三大长篇作品之一！《三体》《球状闪电》《超新星纪元》） (刘慈欣) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 566940,
+   "sha256": "5dd426673203488023d23b73449df2b8e6d3be76f1ba086aa3a7844a30016a10",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 38,
+   "bytes": 560100
+  }
+ ],
+ "notes": "依据:系列:三体；置信:0.99"
+}

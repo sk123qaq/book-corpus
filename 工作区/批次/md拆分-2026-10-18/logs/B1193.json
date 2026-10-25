@@ -1,0 +1,17 @@
+{
+ "uid": "B1193",
+ "title": "尼尔斯骑鹅旅行记",
+ "format": "epub",
+ "dest": "库/文学/儿童与青少年文学/尼尔斯骑鹅旅行记/md",
+ "at": "2026-10-18T20:12:51+08:00",
+ "verify_rc": 0,
+ "chapters": 102,
+ "chars": 377515,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 339104,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1193.prev-2026-10-18T201103-0800"
+}

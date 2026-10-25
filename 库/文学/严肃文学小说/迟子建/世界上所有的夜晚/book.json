@@ -1,0 +1,42 @@
+{
+ "uid": "B1300",
+ "title": "世界上所有的夜晚",
+ "title_from_file": "",
+ "author": "迟子建",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/迟子建/世界上所有的夜晚",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/世界上所有的夜晚 (迟子建).epub",
+   "format": "epub",
+   "bytes": 1186388,
+   "sha256": "e48667d38abdca5cf91712e150183203433a0cc3ad3a902d0b2bd601efb1b3f8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 121529
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

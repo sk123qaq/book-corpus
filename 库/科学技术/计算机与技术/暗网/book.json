@@ -1,0 +1,35 @@
+{
+ "uid": "B0254",
+ "title": "暗网",
+ "title_from_file": "",
+ "author": "杰米•巴特利特",
+ "subjects": [
+  "科学技术",
+  "计算机与技术"
+ ],
+ "path": "科学技术/计算机与技术/暗网",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/暗网 (杰米·巴特利特（Jamie Bartlett）) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 435804,
+   "sha256": "9e48de35cd5c5360c30834d8e8fac7ac5c136b47397d6b6d60f05c0e5f9dbdb4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 512914
+  }
+ ],
+ "notes": "依据:TypeSafe(0.65)；置信:0.65"
+}

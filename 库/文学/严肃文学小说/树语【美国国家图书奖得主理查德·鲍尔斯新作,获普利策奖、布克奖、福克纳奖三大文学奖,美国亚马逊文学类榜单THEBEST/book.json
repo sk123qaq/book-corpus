@@ -1,0 +1,42 @@
+{
+ "uid": "B0928",
+ "title": "树语【美国国家图书奖得主理查德·鲍尔斯新作,获普利策奖、布克奖、福克纳奖三大文学奖,美国亚马逊文学类榜单THEBEST",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/树语【美国国家图书奖得主理查德·鲍尔斯新作,获普利策奖、布克奖、福克纳奖三大文学奖,美国亚马逊文学类榜单THEBEST",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/树语【美国国家图书奖得主理查德·鲍尔斯新作,获普利策奖、布克奖、福克纳奖三大文学奖,美国亚马逊文学类榜单THEBEST,Goodreads文学类年度TOP 10】 (理....epub",
+   "format": "epub",
+   "bytes": 817356,
+   "sha256": "13825863a3a3f69b70ee07ffce53dbaf59db87ba411c5b4cc4dbbc7201893cc0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 1086537
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

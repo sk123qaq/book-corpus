@@ -1,0 +1,30 @@
+{
+ "uid": "B0537",
+ "title": "中国社会保障制度变迁与评估",
+ "format": "pdf",
+ "pages": 578,
+ "dest": "库/人文社科/社会与经济/中国社会保障制度变迁与评估/md",
+ "at": "2026-10-24T15:30:22+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B0537/merged/pages --out out/B0537 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 4,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 7.4,
+ "chunks_done": 4,
+ "merged_pages": 578,
+ "coverage_ok": true,
+ "merged_run_json": "work/B0537/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 2150130,
+ "images": 60,
+ "problems": 0,
+ "blank_pages": 0,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}

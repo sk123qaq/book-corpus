@@ -1,0 +1,42 @@
+{
+ "uid": "B1381",
+ "title": "大荒羁旅 留在北大荒的知青",
+ "title_from_file": "",
+ "author": "朱晓军",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/大荒羁旅 留在北大荒的知青",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大荒羁旅 留在北大荒的知青 (朱晓军著, Zhu Xiaojun zhu, Zhu Xiao Jun, 朱晓军著 etc.).pdf",
+   "format": "pdf",
+   "bytes": 32430429,
+   "sha256": "fbb34cde05f18eeba991d3932ac51c50beb63e6ebe6356ad2dfd7483674432d7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 599374
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

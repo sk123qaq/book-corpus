@@ -1,0 +1,29 @@
+{
+ "uid": "B1657",
+ "title": "marivaux",
+ "format": "pdf",
+ "route": "text",
+ "pages": 282,
+ "dest": "库/文学/marivaux/md",
+ "at": "2026-10-19T12:43:51+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/marivaux/source/marivaux (marcel arland).pdf --out out/B1657 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0387,
+ "audit_anchors": 1.0,
+ "audit_chars": 257777,
+ "chapters": 1,
+ "chars": 285550,
+ "images": 564,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 282,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

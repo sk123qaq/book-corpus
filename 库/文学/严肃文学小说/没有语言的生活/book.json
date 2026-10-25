@@ -1,0 +1,42 @@
+{
+ "uid": "B1489",
+ "title": "没有语言的生活",
+ "title_from_file": "",
+ "author": "东西",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/没有语言的生活",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/没有语言的生活 (东西著).epub",
+   "format": "epub",
+   "bytes": 897521,
+   "sha256": "c4e4063f2a359364aa6cd5914ce928c2493310bcafbe692f6012106919670a93",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 52,
+   "bytes": 375219
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

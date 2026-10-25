@@ -1,0 +1,14 @@
+{
+ "uid": "B1016",
+ "title": "志賀島",
+ "format": "pdf",
+ "pages": 256,
+ "dest": "库/文学/严肃文学小说/志賀島/md",
+ "at": "2026-10-19T16:26:58+08:00",
+ "commands": [],
+ "chunks_planned": 2,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 3.9,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B1016_p0001-0150.pdf，150 页，3.94 MB | 提交 HTTP 403 | {\"traceId\":\"0967214d-5233-4d15-905d-842ca0796bd4\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

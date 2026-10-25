@@ -1,0 +1,42 @@
+{
+ "uid": "B1410",
+ "title": "并非永生的渴望 梅洁散文集",
+ "title_from_file": "",
+ "author": "梅洁",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/并非永生的渴望 梅洁散文集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/并非永生的渴望 梅洁散文集 (梅洁著, [Mei Jie zhu], 梅洁, 1946-).pdf",
+   "format": "pdf",
+   "bytes": 63024313,
+   "sha256": "e799efd9cc64d65ab5299ea5c036d2fb23737c13f140f921385dcf54ec8a5b27",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 668241
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

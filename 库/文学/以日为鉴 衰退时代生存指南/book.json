@@ -1,0 +1,34 @@
+{
+ "uid": "B0131",
+ "title": "以日为鉴 衰退时代生存指南",
+ "title_from_file": "",
+ "author": "分析师Boden",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/以日为鉴 衰退时代生存指南",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/以日为鉴 衰退时代生存指南 (分析师Boden) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2955622,
+   "sha256": "bd03d1c8ff3345bee37da96ad50c04095b7e47502789d07cc45cb3d4803ad60a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 349842
+  }
+ ],
+ "notes": "依据:TypeSafe(0.45)；置信:0.45"
+}

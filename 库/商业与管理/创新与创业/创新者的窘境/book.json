@@ -1,0 +1,35 @@
+{
+ "uid": "B0170",
+ "title": "创新者的窘境",
+ "title_from_file": "",
+ "author": "克莱顿·克里斯坦森",
+ "subjects": [
+  "商业与管理",
+  "创新与创业"
+ ],
+ "path": "商业与管理/创新与创业/创新者的窘境",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/创新者的窘境（全新修订版） ([美]克莱顿·克里斯坦森等 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 4552833,
+   "sha256": "81c9d6c35799234d6b46ec8a6b155389772e79ce48257816ffe99fe15679bede",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 490661
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

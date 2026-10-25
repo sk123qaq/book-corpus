@@ -1,0 +1,42 @@
+{
+ "uid": "B1329",
+ "title": "何满子杂文自选集",
+ "title_from_file": "",
+ "author": "何满子",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/何满子杂文自选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/何满子杂文自选集 (何满子著, He, Manzi, 何滿子).pdf",
+   "format": "pdf",
+   "bytes": 7118613,
+   "sha256": "d890e88e0472e7e987b9316b05e26ba06215e909c2aa869e364d3ba5e070cd51",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 419343
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

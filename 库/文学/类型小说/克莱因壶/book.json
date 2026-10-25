@@ -1,0 +1,35 @@
+{
+ "uid": "B0151",
+ "title": "克莱因壶",
+ "title_from_file": "",
+ "author": "冈岛二人",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/克莱因壶",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/克莱因壶 (冈岛二人) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 450378,
+   "sha256": "21d836a6683600426b320db0bbf39af04f85922385326e379cb0b8aa2af68da6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 52,
+   "bytes": 439587
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

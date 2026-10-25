@@ -1,0 +1,42 @@
+{
+ "uid": "B1428",
+ "title": "我的叔叔李海",
+ "title_from_file": "",
+ "author": "尹学芸",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/我的叔叔李海",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/我的叔叔李海 (尹学芸).epub",
+   "format": "epub",
+   "bytes": 369739,
+   "sha256": "e0daaac83bcef58f0ff35e9c8dbc995bba7db5989830ab78619fd32217aa1edb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 452958
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

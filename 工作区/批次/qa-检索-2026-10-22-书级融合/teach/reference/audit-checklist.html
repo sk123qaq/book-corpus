@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>审计速查 · 哪些读数还能用</title>
+<link rel="stylesheet" href="../assets/style.css">
+<body>
+
+<h1>审计速查</h1>
+<p class="meta">同一把尺子 · 2026-10-23 · 一页速查</p>
+
+<p class="lead">审计不是把代码全部推翻。它先问三件事：两边看的东西一样多吗？基线是同一条路径吗？
+前后测是同一组样本吗？这一页把「旧读数 / 审计后 / 还能不能用」压成一张表。</p>
+
+<h2>三条原则</h2>
+
+<table>
+  <thead><tr><th>原则</th><th>问法</th><th>这次的例子</th></tr></thead>
+  <tbody>
+    <tr><td>同宽</td><td>两边各看几本？</td><td>卡片 6 本，自动只算 top1；放到 top3/top5 后卡片收益 0</td></tr>
+    <tr><td>同基线</td><td>「旧路径」到底是哪条命令？</td><td>旧路径是 <code>qsearch --book --book-score mix</code>，不是 <code>book_query mix</code></td></tr>
+    <tr><td>同组</td><td>开/关是不是同一批书、同一批章？</td><td>B4 关闭取 10 本第 1 章，开启取 3 本最佳章，不是同一组</td></tr>
+  </tbody>
+</table>
+
+<h2>读数表</h2>
+
+<table>
+  <thead><tr><th>读数</th><th>旧值</th><th>审计后</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr><td>B5 触发题卡片 vs 循环</td><td>0.810 vs 0.619（+19）</td><td>卡片 top3 0.714、top6 0.810；循环 top3 0.714、top5 0.810（top3 +0；top6 对 top5 17 对 17）</td><td>旧值不可用；宽度差</td></tr>
+    <tr><td>B5 全部题卡片 vs 循环</td><td>0.750 vs 0.733（+1.7）</td><td>实际默认 53/60=0.883，循环 top5 53/60=0.883</td><td>旧值不可用；默认六卡与自动 top5 相同</td></tr>
+    <tr><td>B5 长书占比</td><td>0.175 vs 0.153</td><td>卡片分母 6、循环分母 10，不同单位</td><td>要换同宽或计数</td></tr>
+    <tr><td>B6 默认 / 旧路径 p95</td><td>1.17 倍</td><td>1.88 到 1.96 倍（qsearch 旧路径，两遍交错）</td><td>仍过 2 倍，但只剩约 2% 余量</td></tr>
+    <tr><td>B4 缓存命中</td><td>0.038 ms</td><td>端到端冷 31,083 ms / 热 153 ms，热跑 0 调用</td><td>旧值是读文件；153 ms 仍不过 100 ms</td></tr>
+    <tr><td>B4 停止线</td><td>4/10 对 4/10</td><td>同组已选章 7/10，delta 0</td><td>旧两组不同；扩展不改章集合，10 点线不适用</td></tr>
+    <tr><td>B2 普通层</td><td>1.000</td><td>看过名次后重写 terms 的开发集</td><td>要标 dev-tuned 或补新题</td></tr>
+    <tr><td>B2 single_hit</td><td>0.950</td><td>已改为 chapters==1；4 道单章题 1.000</td><td>已修；样本 4 题</td></tr>
+    <tr><td>B6 默认 top1 与 B2 一致</td><td>lane-1 一题通过</td><td>60 题里 3 题不同（O13/S14/S17）</td><td>O13 回退，S14 改善，S17 两边都漏</td></tr>
+    <tr><td>P0 默认 CLI</td><td>JSON 通过</td><td>文本在 <code>-n 3</code> 缺卡时 KeyError</td><td>已修；39 例 B5，总 101 例</td></tr>
+  </tbody>
+</table>
+
+<h2>还能用的部分</h2>
+
+<ul>
+  <li><strong>B1</strong>：书级公式、support 封顶、并列键、章节数回退；6 个单测。</li>
+  <li><strong>B2.5</strong>：两段词、A/B/C、5 轮、换词顺序、零模型调用；31 个单测，gold 1.000 / 55/60 / 1.40 轮 / p95 650 ms。</li>
+  <li><strong>B3</strong>：README 解析、缺 README 回退、单章书、20 本章节数 20/20；标题加权默认关。</li>
+  <li><strong>B4 功能</strong>：L1 到 L4 窗口、协议校验、缓存键、16 个功能单测；证据口径要重做。</li>
+  <li><strong>B5 触发</strong>：四条规则、三类抑制、20 题人工清单 20/20；卡片字段与 JSON 形状可用。</li>
+  <li><strong>B6 默认值</strong>：<code>DEFAULTS</code>、<code>--no-cards</code>、<code>--help</code>、README 六条命令 rc 0。</li>
+</ul>
+
+<h2>三条速记</h2>
+
+<div class="note"><strong>同宽：</strong>卡片 6 本，自动也要允许多本；top1 对 6 卡不是门槛。</div>
+<div class="note"><strong>同基线：</strong>旧路径是 qsearch，不是新管线里的 mix；缓存命中是查询，不是读文件。</div>
+<div class="note"><strong>同组：</strong>开/关要同一批书、同一批章；两本不同的书不算前后测。</div>
+
+<h2>原始读数</h2>
+
+<p><a href="../../审计报告-2026-10-23.md">审计报告</a> ·
+<a href="../../live/B6/gate.tsv">gate.tsv</a> ·
+<a href="../../live/B6/perf.tsv">perf.tsv</a> ·
+<a href="../../live/B5/gate.tsv">gate.tsv</a> ·
+<a href="../../live/B4/perf.txt">B4 perf.txt</a></p>
+
+<p class="foot"><a href="../lessons/0003-same-ruler.html">← 课 3：同一把尺子</a> ·
+<a href="../lessons/0004-three-paths.html">课 4：三条线</a> ·
+<a href="b5-gate.html">B5 读数速查</a> ·
+<a href="terms.html">术语表</a></p>
+</body>
+</html>

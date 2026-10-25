@@ -1,0 +1,35 @@
+{
+ "uid": "B0235",
+ "title": "我的天才女友",
+ "title_from_file": "",
+ "author": "埃莱娜·费兰特",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/我的天才女友",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/我的天才女友 (埃莱娜·费兰特,陈英) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 390101,
+   "sha256": "cdeae0b3f30ca795e6aeff0b63c88faa06c5647bbc29d2a9317ce873103ddb1d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 86,
+   "bytes": 591575
+  }
+ ],
+ "notes": "依据:TypeSafe(0.98)；置信:0.98"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1009",
+ "title": "岬",
+ "title_from_file": "",
+ "author": "日中上健次",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/岬",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/岬 ([日]中上健次).pdf",
+   "format": "pdf",
+   "bytes": 29088878,
+   "sha256": "7b17ed0ece7453b6fc9cfeed025cfa22729199617d27c6c644d2c77afce55cbf",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 339370
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

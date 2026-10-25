@@ -1,0 +1,17 @@
+{
+ "uid": "B1010",
+ "title": "年の残り",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/年の残り/md",
+ "at": "2026-10-18T21:07:40+08:00",
+ "verify_rc": 0,
+ "chapters": 12,
+ "chars": 144433,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 36066,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1010.prev-2026-10-18T210620-0800"
+}

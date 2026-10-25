@@ -1,0 +1,35 @@
+{
+ "uid": "B0004",
+ "title": "2001：太空漫游",
+ "title_from_file": "",
+ "author": "阿瑟·克拉克",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/2001：太空漫游",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/2001：太空漫游 (阿瑟·克拉克) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1176967,
+   "sha256": "a794fe05141efbd91e80397a2378b982d93196c14e20dd42c5703fb9b2ca5f19",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 53,
+   "bytes": 383238
+  }
+ ],
+ "notes": "依据:TypeSafe(0.97)；置信:0.97"
+}

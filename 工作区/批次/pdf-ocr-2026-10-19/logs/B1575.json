@@ -1,0 +1,30 @@
+{
+ "uid": "B1575",
+ "title": "西长城 新疆兵团一甲子",
+ "format": "pdf",
+ "pages": 590,
+ "dest": "库/文学/散文随笔/西长城 新疆兵团一甲子/md",
+ "at": "2026-10-24T15:45:22+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1575/merged/pages --out out/B1575 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 20,
+ "pages_per_chunk": 31,
+ "slice_mb_estimate": 14.7,
+ "chunks_done": 20,
+ "merged_pages": 590,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1575/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 401826,
+ "images": 196,
+ "problems": 0,
+ "blank_pages": 3,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}

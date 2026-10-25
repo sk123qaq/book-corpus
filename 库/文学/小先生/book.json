@@ -1,0 +1,41 @@
+{
+ "uid": "B1397",
+ "title": "小先生",
+ "title_from_file": "",
+ "author": "庞余亮",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/小先生",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/小先生 (庞余亮).epub",
+   "format": "epub",
+   "bytes": 2220080,
+   "sha256": "1a0c5b9def112139408b98a63f47e91592f503bf436beb8e44f104fc94d4fb21",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 89,
+   "bytes": 333133
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

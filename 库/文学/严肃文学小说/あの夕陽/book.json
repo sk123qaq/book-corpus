@@ -1,0 +1,42 @@
+{
+ "uid": "B0940",
+ "title": "あの夕陽",
+ "title_from_file": "",
+ "author": "日野 啓三",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/あの夕陽",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/あの夕陽 (日野 啓三).epub",
+   "format": "epub",
+   "bytes": 278394,
+   "sha256": "ba8f2e912eea2bcb9d5f3a1e15471c4ae1bb9228a745cefc1fa2029acae0b82a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 319101
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

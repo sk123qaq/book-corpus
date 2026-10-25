@@ -1,0 +1,42 @@
+{
+ "uid": "B1555",
+ "title": "艾青诗选集",
+ "title_from_file": "",
+ "author": "全本",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/艾青诗选集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/艾青诗选集(全本) (世界文学文库) (艾青).epub",
+   "format": "epub",
+   "bytes": 1101753,
+   "sha256": "df39d8a48b7d37d31f814284165eeab5d7581bd3f50901e7252cdca1b58401d5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 170521
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

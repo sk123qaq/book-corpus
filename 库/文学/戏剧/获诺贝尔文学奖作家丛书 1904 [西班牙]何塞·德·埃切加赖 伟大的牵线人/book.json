@@ -1,0 +1,42 @@
+{
+ "uid": "B1247",
+ "title": "获诺贝尔文学奖作家丛书 1904 [西班牙]何塞·德·埃切加赖 伟大的牵线人",
+ "title_from_file": "",
+ "author": "西班牙何塞·德·埃切加赖",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/获诺贝尔文学奖作家丛书 1904 [西班牙]何塞·德·埃切加赖 伟大的牵线人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/获诺贝尔文学奖作家丛书 1904 [西班牙]何塞·德·埃切加赖 伟大的牵线人 ([西班牙]何塞·德·埃切加赖； 沈石岩等译).pdf",
+   "format": "pdf",
+   "bytes": 12664848,
+   "sha256": "405a2b19c2b0090a99d613371c0049a05b824c0a30cf322d9334624c0da52ec4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 595011
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

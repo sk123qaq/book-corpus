@@ -1,0 +1,42 @@
+{
+ "uid": "B1605",
+ "title": "锦州之恋 记锦州市委书记张鸣岐",
+ "title_from_file": "",
+ "author": "邢军纪",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/锦州之恋 记锦州市委书记张鸣岐",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/锦州之恋 记锦州市委书记张鸣岐 (邢军纪，曹岩著, 邢军纪, 曹岩著, 邢军纪, 曹岩, 刑军纪, 1952-).pdf",
+   "format": "pdf",
+   "bytes": 7476156,
+   "sha256": "4bda6ec61783ae89f56ea107e1914e873816f1549a92ce016c6d6ff082775668",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 416722
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

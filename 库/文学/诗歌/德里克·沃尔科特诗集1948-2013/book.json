@@ -1,0 +1,42 @@
+{
+ "uid": "B1202",
+ "title": "德里克·沃尔科特诗集1948-2013",
+ "title_from_file": "",
+ "author": "圣卢西亚德里克·沃尔科特",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/德里克·沃尔科特诗集1948-2013",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/德里克·沃尔科特诗集1948-2013 (【圣卢西亚】德里克·沃尔科特).pdf",
+   "format": "pdf",
+   "bytes": 59196988,
+   "sha256": "e3464a6c404963252e08a86b7731609f3367bbb206faa72dd7d0b7535a7d61e6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 884583
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

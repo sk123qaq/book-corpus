@@ -1,0 +1,27 @@
+{
+ "uid": "B0551",
+ "title": "寫真集合集",
+ "title_from_file": "",
+ "author": "Vivian Hsu",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/寫真集合集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/寫真集合集 (Vivian Hsu) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 177565864,
+   "sha256": "fb472aeb91d25baf08c3c68901176f818f68aa70989359e7b654b977945d24d0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:二级学科是图册与写真"
+}

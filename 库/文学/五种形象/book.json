@@ -1,0 +1,41 @@
+{
+ "uid": "B1322",
+ "title": "五种形象",
+ "title_from_file": "",
+ "author": "南帆",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/五种形象",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/五种形象 (南帆著, 南帆, 1957-, 南帆著, 张帆).pdf",
+   "format": "pdf",
+   "bytes": 5163850,
+   "sha256": "b2fe7d8fce350e96a41c3b3d74720eeb395e3272da5eef09563a86cd46809e69",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 288875
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1597",
+ "title": "郁葱抒情诗",
+ "title_from_file": "",
+ "author": "郁葱",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/郁葱抒情诗",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/郁葱抒情诗 (郁葱著, 郁葱著, 郁葱, 鬱蔥).pdf",
+   "format": "pdf",
+   "bytes": 4050217,
+   "sha256": "076388b84ef155337cfdc99a858c3db9cdc9cf9747fe06f0810bb8a6bd7ee0ec",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 153985
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

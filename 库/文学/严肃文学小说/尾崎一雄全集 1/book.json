@@ -1,0 +1,34 @@
+{
+ "uid": "B1007",
+ "title": "尾崎一雄全集 1",
+ "title_from_file": "",
+ "author": "尾崎一雄",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/尾崎一雄全集 1",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/尾崎一雄全集 1 (尾崎一雄).pdf",
+   "format": "pdf",
+   "bytes": 14863667,
+   "sha256": "2601411a00c6e40b6192c0c4d92d32d411ca0c03a8fda88d5c727a411f743c56",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

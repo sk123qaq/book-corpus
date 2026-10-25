@@ -1,0 +1,42 @@
+{
+ "uid": "B1198",
+ "title": "帕慕克别样的色彩系列：我的名字叫红",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/帕慕克别样的色彩系列：我的名字叫红",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/帕慕克别样的色彩系列：我的名字叫红（“不仅是好看”！土耳其诺贝尔文学奖得主帕慕克之代表作！） ([土耳其] 奥尔罕·帕慕克 [[土耳其] 奥尔罕·....epub",
+   "format": "epub",
+   "bytes": 769150,
+   "sha256": "80f44469019a058456b8d6463a549a78f0d8d7730e681ffd126e132860e3a986",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 60,
+   "bytes": 1014045
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,27 @@
+{
+ "uid": "B0568",
+ "title": "細川ふみえ迫撮写真集 LET IN THE SUN",
+ "title_from_file": "",
+ "author": "野村誠一",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/細川ふみえ迫撮写真集 LET IN THE SUN",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/細川ふみえ迫撮写真集 LET IN THE SUN (野村誠一) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 41913990,
+   "sha256": "76c92083c1bf5355d43f056f6e9f086b8712937ffae8e11b5129ac122c19ec74",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:二级学科是图册与写真"
+}

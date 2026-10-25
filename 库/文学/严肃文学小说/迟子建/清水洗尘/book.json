@@ -1,0 +1,42 @@
+{
+ "uid": "B1497",
+ "title": "清水洗尘",
+ "title_from_file": "",
+ "author": "迟子建",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/迟子建/清水洗尘",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/清水洗尘 (迟子建著, 迟子建, 1964-, Zijian Chi, Chi Zijian etc.).pdf",
+   "format": "pdf",
+   "bytes": 11568983,
+   "sha256": "773139c77683e2f047d08ad305895744d832e7e54f0f95a29456c28b5645ada2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 688905
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

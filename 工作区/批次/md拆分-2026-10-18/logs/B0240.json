@@ -1,0 +1,17 @@
+{
+ "uid": "B0240",
+ "title": "施蛰存全集北山散文集",
+ "format": "epub",
+ "dest": "库/文学/散文随笔/施蛰存全集北山散文集/md",
+ "at": "2026-10-18T21:06:22+08:00",
+ "verify_rc": 0,
+ "chapters": 865,
+ "chars": 1463813,
+ "images": 107,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 1265965,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0240.prev-2026-10-18T210620-0800"
+}

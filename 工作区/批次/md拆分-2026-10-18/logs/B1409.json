@@ -1,0 +1,17 @@
+{
+ "uid": "B1409",
+ "title": "年月日",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/年月日/md",
+ "at": "2026-10-18T20:13:35+08:00",
+ "verify_rc": 0,
+ "chapters": 34,
+ "chars": 185800,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9740000000000001,
+ "raw_chars": 170300,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1409.prev-2026-10-18T201103-0800"
+}

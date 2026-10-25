@@ -1,0 +1,17 @@
+{
+ "uid": "B1107",
+ "title": "回响",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/回响/md",
+ "at": "2026-10-18T20:12:30+08:00",
+ "verify_rc": 0,
+ "chapters": 11,
+ "chars": 185768,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.988,
+ "raw_chars": 167085,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1107.prev-2026-10-18T201103-0800"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B1530",
+ "title": "神曲：地狱篇、炼狱篇、天国篇",
+ "format": "epub",
+ "dest": "库/文学/神曲：地狱篇、炼狱篇、天国篇/md",
+ "at": "2026-10-18T20:13:51+08:00",
+ "verify_rc": 0,
+ "chapters": 104,
+ "chars": 774658,
+ "images": 47,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 647799,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1530.prev-2026-10-18T201103-0800"
+}

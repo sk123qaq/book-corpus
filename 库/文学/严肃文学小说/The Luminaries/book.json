@@ -1,0 +1,42 @@
+{
+ "uid": "B0761",
+ "title": "The Luminaries",
+ "title_from_file": "",
+ "author": "Eleanor Catton",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Luminaries",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Luminaries (Eleanor Catton).epub",
+   "format": "epub",
+   "bytes": 1290852,
+   "sha256": "a904d13ef32ffa286a03741105d90df1627de4365f9b1c50e63470985aa66f11",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 104,
+   "bytes": 1590040
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

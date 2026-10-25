@@ -1,0 +1,42 @@
+{
+ "uid": "B0788",
+ "title": "牛奶工",
+ "title_from_file": "",
+ "author": "Anna Burns",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/牛奶工",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/牛奶工 = Milkman (安娜 · 伯恩斯 (Anna Burns) 著  謝瑤玲 譯).epub",
+   "format": "epub",
+   "bytes": 1806541,
+   "sha256": "f4e946b4c9eadb79749ceec395f7942dede386d03502381b7450e0028af0f329",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 667430
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

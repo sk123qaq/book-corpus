@@ -1,0 +1,33 @@
+{
+ "uid": "B1067",
+ "title": "芥川賞全集 3",
+ "title_from_file": "",
+ "author": "various",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/芥川賞全集 3",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/芥川賞全集 3 (various).pdf",
+   "format": "pdf",
+   "bytes": 16712890,
+   "sha256": "cf38a9f65c4c7281c68b5ec5932510d39c7866ec9d27f4f7d34c110b9ab75b63",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

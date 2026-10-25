@@ -1,0 +1,17 @@
+{
+ "uid": "B0730",
+ "title": "帝国轶闻",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/帝国轶闻/md",
+ "at": "2026-10-18T21:06:45+08:00",
+ "verify_rc": 0,
+ "chapters": 48,
+ "chars": 650558,
+ "images": 3,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0290000000000001,
+ "raw_chars": 562495,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0730.prev-2026-10-18T210620-0800"
+}

@@ -1,0 +1,43 @@
+{
+ "uid": "B0561",
+ "title": "法朗士精选集 (（法）阿纳托尔·法朗士著；吴岳添编选, (法)阿纳托尔·法朗士著 , 吴岳添编选 etc.)",
+ "format": "pdf",
+ "pages": 801,
+ "dest": "库/文学/严肃文学小说/法朗士精选集 (（法）阿纳托尔·法朗士著；吴岳添编选, (法)阿纳托尔·法朗士著 , 吴岳添编选 etc.)/md",
+ "at": "2026-10-24T16:31:40+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B0561/merged/pages --out out/B0561 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 6,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 4.1,
+ "chunks_done": 6,
+ "merged_pages": 801,
+ "coverage_ok": true,
+ "merged_run_json": "work/B0561/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 413083,
+ "images": 1,
+ "problems": 0,
+ "blank_pages": 15,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 12,
+ "short_page_list": [
+  24,
+  42,
+  44,
+  47,
+  82,
+  124,
+  142,
+  224,
+  294,
+  296,
+  516,
+  686
+ ],
+ "accepted": "",
+ "status": "landed"
+}

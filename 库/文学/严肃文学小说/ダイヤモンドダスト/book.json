@@ -1,0 +1,42 @@
+{
+ "uid": "B0960",
+ "title": "ダイヤモンドダスト",
+ "title_from_file": "",
+ "author": "南木 佳士",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/ダイヤモンドダスト",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ダイヤモンドダスト (南木 佳士).epub",
+   "format": "epub",
+   "bytes": 277604,
+   "sha256": "e9c09c102582abcfaa065011c2181ca3a5bd193a2bb88845d64785012ec31966",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 298187
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

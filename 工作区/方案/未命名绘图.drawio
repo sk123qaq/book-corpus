@@ -1,0 +1,43 @@
+<mxfile host="Electron">
+  <diagram name="第 1 页" id="J2R2HD5rpCIHsuB_wScc">
+    <mxGraphModel dx="693" dy="631" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="books(epub，mobi,pdf&lt;div&gt;)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="120" x="270" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-2" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.annotation_2;align=left;labelPosition=right;pointerEvents=1;direction=south;" value="" vertex="1">
+          <mxGeometry height="100" width="170" x="244" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-11" edge="1" parent="1" source="ajDqJ2_G0jX44aLWVThK-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="ajDqJ2_G0jX44aLWVThK-10" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="mobi,epub" vertex="1">
+          <mxGeometry height="60" width="120" x="180" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-16" edge="1" parent="1" source="ajDqJ2_G0jX44aLWVThK-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="ajDqJ2_G0jX44aLWVThK-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-17" edge="1" parent="1" source="ajDqJ2_G0jX44aLWVThK-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="ajDqJ2_G0jX44aLWVThK-10" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="pdf" vertex="1">
+          <mxGeometry height="60" width="120" x="340" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-10" parent="1" style="whiteSpace=wrap;html=1;rounded=0;" value="得到文档库" vertex="1">
+          <mxGeometry height="60" width="120" x="269" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-18" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="paddle-ocr" vertex="1">
+          <mxGeometry height="30" width="60" x="400" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-19" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="ebook-to-md(pdf有目录的得到分章节md，没有的只出一个md)" vertex="1">
+          <mxGeometry height="40" width="250" x="330" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="ajDqJ2_G0jX44aLWVThK-20" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="按书籍类型分类（jev,只列出每本书对应的类型）" vertex="1">
+          <mxGeometry height="30" width="210" x="340" y="170" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

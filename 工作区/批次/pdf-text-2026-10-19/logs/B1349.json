@@ -1,0 +1,29 @@
+{
+ "uid": "B1349",
+ "title": "双鱼星座",
+ "format": "pdf",
+ "route": "text",
+ "pages": 44,
+ "dest": "库/文学/严肃文学小说/双鱼星座/md",
+ "at": "2026-10-19T12:40:58+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/双鱼星座/source/双鱼星座 (徐小斌).pdf --out out/B1349 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0028,
+ "audit_anchors": 1.0,
+ "audit_chars": 34926,
+ "chapters": 37,
+ "chars": 38028,
+ "images": 1,
+ "problems": 0,
+ "structure": "chapters",
+ "single_file": false,
+ "pdf_pages": 44,
+ "toc_entries": 37,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0822",
+ "title": "The Catholic School",
+ "title_from_file": "",
+ "author": "Albinati",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Catholic School",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Catholic School (Albinati, Edoardo).epub",
+   "format": "epub",
+   "bytes": 1528623,
+   "sha256": "5c0a24841103fbff3fc0a77e6cb19f1ef2df8445104bd1c56ab5a466b5875882",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 177,
+   "bytes": 3110827
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

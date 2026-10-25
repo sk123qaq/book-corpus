@@ -1,0 +1,42 @@
+{
+ "uid": "B1268",
+ "title": "阿尼阿拉号 对人类在时空中的一次检视",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/阿尼阿拉号 对人类在时空中的一次检视",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/阿尼阿拉号 对人类在时空中的一次检视 (（瑞典）哈瑞·马丁松著；万之译).pdf",
+   "format": "pdf",
+   "bytes": 5086173,
+   "sha256": "9292169ed4bdd4105ddb3ba17e1de6a69b40af508c61ba179495ba8330ef029c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 142095
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

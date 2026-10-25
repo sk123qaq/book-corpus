@@ -1,0 +1,42 @@
+{
+ "uid": "B1553",
+ "title": "肖克凡作品集 1 都市上空的爱情",
+ "title_from_file": "",
+ "author": "肖克凡",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/肖克凡作品集 1 都市上空的爱情",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/肖克凡作品集 1 都市上空的爱情 (肖克凡著).pdf",
+   "format": "pdf",
+   "bytes": 99591804,
+   "sha256": "63ba7938ef39e98186cc6a317ec0c039c977c587437ede61328e52cff2557a1b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 996982
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1146",
+ "title": "额尔古纳河右岸",
+ "title_from_file": "",
+ "author": "迟子建",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/迟子建/额尔古纳河右岸",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/额尔古纳河右岸 (迟子建).epub",
+   "format": "epub",
+   "bytes": 306933,
+   "sha256": "de118802eba35ae8f79b2f8e130358e66dd77ff049a74ff2c8040e57de9b3138",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 507455
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

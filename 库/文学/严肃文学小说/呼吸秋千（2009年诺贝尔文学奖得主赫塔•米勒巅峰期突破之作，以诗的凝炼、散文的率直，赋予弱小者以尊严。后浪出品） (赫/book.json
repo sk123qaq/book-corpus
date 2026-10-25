@@ -1,0 +1,42 @@
+{
+ "uid": "B1171",
+ "title": "呼吸秋千（2009年诺贝尔文学奖得主赫塔•米勒巅峰期突破之作，以诗的凝炼、散文的率直，赋予弱小者以尊严。后浪出品） (赫",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/呼吸秋千（2009年诺贝尔文学奖得主赫塔•米勒巅峰期突破之作，以诗的凝炼、散文的率直，赋予弱小者以尊严。后浪出品） (赫",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/呼吸秋千（2009年诺贝尔文学奖得主赫塔•米勒巅峰期突破之作，以诗的凝炼、散文的率直，赋予弱小者以尊严。后浪出品） (赫塔·米勒作品) (赫塔·....epub",
+   "format": "epub",
+   "bytes": 6076310,
+   "sha256": "31390a0e6f0e32db837098c44409ba21e86aaa2a21cff552f091d8030df3e2e8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 64,
+   "bytes": 422782
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

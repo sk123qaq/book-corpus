@@ -1,0 +1,17 @@
+{
+ "uid": "B1022",
+ "title": "掏摸",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/掏摸/md",
+ "at": "2026-10-18T20:12:21+08:00",
+ "verify_rc": 0,
+ "chapters": 24,
+ "chars": 79670,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 22921,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1022.prev-2026-10-18T201103-0800"
+}

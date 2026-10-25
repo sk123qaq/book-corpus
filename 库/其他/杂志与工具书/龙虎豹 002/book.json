@@ -1,0 +1,35 @@
+{
+ "uid": "B0579",
+ "title": "龙虎豹 002",
+ "title_from_file": "",
+ "author": "龙虎豹",
+ "subjects": [
+  "其他",
+  "杂志与工具书"
+ ],
+ "path": "其他/杂志与工具书/龙虎豹 002",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/龙虎豹 002 (龙虎豹) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 101780274,
+   "sha256": "ee94efcb4a5345d751cc9a3df4de30581273665fba3c12ba7d59622070718254",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 166564
+  }
+ ],
+ "notes": "依据:TypeSafe(0.76)；置信:0.76"
+}

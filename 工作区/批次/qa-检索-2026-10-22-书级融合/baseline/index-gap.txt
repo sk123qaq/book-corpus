@@ -1,0 +1,12 @@
+md books (book x derived) 1489
+derived md rows chapters>0 1489
+indexed books 1374
+md books not indexed 115
+indexed not in md ledger 0
+md ledger chapters (sum) 87354
+index chapters (distinct path) 87239
+para rows 2359595
+md ledger bands {'1': 345, '2-5': 60, '500+': 20, '6-499': 1064} total 1489
+indexed bands {'1': 230, '2-5': 60, '500+': 20, '6-499': 1064} total 1374
+unindexed books with 500+ chapters 0 []
+derived md status=done 1493

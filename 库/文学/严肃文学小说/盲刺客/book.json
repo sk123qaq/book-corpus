@@ -1,0 +1,42 @@
+{
+ "uid": "B0790",
+ "title": "盲刺客",
+ "title_from_file": "",
+ "author": "玛格丽特·阿特伍德 玛格丽特·阿特伍德",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/盲刺客",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/盲刺客 (玛格丽特·阿特伍德 [玛格丽特·阿特伍德]).epub",
+   "format": "epub",
+   "bytes": 1737557,
+   "sha256": "66d649ba8fa2598ee2dc37fb96e3089e69cb868a2268b7bb5cc1a999907ea5ed",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 94,
+   "bytes": 1027529
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

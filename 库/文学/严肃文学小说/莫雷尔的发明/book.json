@@ -1,0 +1,42 @@
+{
+ "uid": "B0735",
+ "title": "莫雷尔的发明",
+ "title_from_file": "",
+ "author": "阿道夫•比奥伊•卡萨雷斯",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/莫雷尔的发明",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/莫雷尔的发明 (阿道夫•比奥伊•卡萨雷斯).epub",
+   "format": "epub",
+   "bytes": 1328235,
+   "sha256": "fea1a51af7c94e5fb0bb182556f847f51d3057342a46724942ed8620d72396ac",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 44,
+   "bytes": 170405
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

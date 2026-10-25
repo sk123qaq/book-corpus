@@ -1,0 +1,42 @@
+{
+ "uid": "B0895",
+ "title": "The Magnificent Ambersons",
+ "title_from_file": "",
+ "author": "Booth Tarkington",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Magnificent Ambersons",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Magnificent Ambersons (Booth Tarkington).epub",
+   "format": "epub",
+   "bytes": 560364,
+   "sha256": "811f056e62ce9bd60c4ae6d7fb1c72221f5171bddfa21f439f57b0399a087a56",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 36,
+   "bytes": 606494
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

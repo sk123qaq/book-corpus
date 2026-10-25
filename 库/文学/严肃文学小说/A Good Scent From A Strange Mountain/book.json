@@ -1,0 +1,42 @@
+{
+ "uid": "B0840",
+ "title": "A Good Scent From A Strange Mountain",
+ "title_from_file": "",
+ "author": "Robert Olen Butler",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/A Good Scent From A Strange Mountain",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/A Good Scent From A Strange Mountain (Robert Olen Butler).epub",
+   "format": "epub",
+   "bytes": 685259,
+   "sha256": "c7105cd70a4620781b0e28ce8e6d134d01c123a66f0dfcd38d4a6ee4a071e79a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 23,
+   "bytes": 511572
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

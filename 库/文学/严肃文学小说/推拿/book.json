@@ -1,0 +1,42 @@
+{
+ "uid": "B1117",
+ "title": "推拿",
+ "title_from_file": "",
+ "author": "插图本",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/推拿",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/推拿（插图本）（柏林国际电影节银熊奖；台湾电影金马奖六项大奖得主之原著小说；茅盾文学奖获奖作品） (毕飞宇).epub",
+   "format": "epub",
+   "bytes": 490992,
+   "sha256": "2e8cff88912f6dda7e5bf410c192c7354a0423af2030c866ebb8ccd5817afc9f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 28,
+   "bytes": 619193
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

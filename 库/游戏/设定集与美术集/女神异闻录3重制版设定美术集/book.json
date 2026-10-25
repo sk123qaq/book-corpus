@@ -1,0 +1,27 @@
+{
+ "uid": "B0664",
+ "title": "女神异闻录3重制版设定美术集",
+ "title_from_file": "",
+ "author": "Atlus",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/女神异闻录3重制版设定美术集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/女神异闻录3重制版设定美术集 (Atlus) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 14693740,
+   "sha256": "2ca2b2a4cfbe770a77596830f682176ae6b9ce8f4d1dbafe548b020fb78abb0c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是设定集与美术集"
+}

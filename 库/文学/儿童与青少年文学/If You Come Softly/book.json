@@ -1,0 +1,42 @@
+{
+ "uid": "B0686",
+ "title": "If You Come Softly",
+ "title_from_file": "",
+ "author": "Jacqueline Woodson",
+ "subjects": [
+  "文学",
+  "儿童与青少年文学"
+ ],
+ "path": "文学/儿童与青少年文学/If You Come Softly",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/If You Come Softly (Jacqueline Woodson).epub",
+   "format": "epub",
+   "bytes": 1777703,
+   "sha256": "321ad487bf8dfc1513e077cf3a6ed5355ec7e2410e9c68af6105db227c1560b4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "国际安徒生奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 43,
+   "bytes": 193831
+  }
+ ],
+ "notes": "奖项:国际安徒生奖；依据:来源目录或奖项"
+}

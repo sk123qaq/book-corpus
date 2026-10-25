@@ -1,0 +1,24 @@
+{
+ "uid": "B0571",
+ "title": "蒂博一家 上中下",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/蒂博一家 上中下/md",
+ "at": "2026-10-24T15:26:36+08:00",
+ "verify_rc": 0,
+ "chapters": 14,
+ "chars": 1216593,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 1062779,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 697508,
+   "report": "工作区/批次/md换源-2026-10-24/logs/B0571.fix.md",
+   "tail": "​B0571 已修订完成：我重写了 `fixups/span_units.py`，由 `overrides/B0571.json` 引用，并按目录映射重新生成 14 篇、每卷一档，verify 报 problems 0，audit 为 1,062,881/1,062,779 = 100.0% ok，记录写在 `logs/B0571.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}

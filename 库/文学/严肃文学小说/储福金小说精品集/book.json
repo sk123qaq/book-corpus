@@ -1,0 +1,42 @@
+{
+ "uid": "B1333",
+ "title": "储福金小说精品集",
+ "title_from_file": "",
+ "author": "中国当代文学百家丛书",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/储福金小说精品集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/储福金小说精品集 (中国当代文学百家丛书) (储福金).epub",
+   "format": "epub",
+   "bytes": 288884,
+   "sha256": "979cfe64916356b0ad59af8e9e21b5e9d17d6f77e8e6fb82721c496af1d82d8b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 11,
+   "bytes": 526061
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,13 @@
+{
+  "n": 100,
+  "tokens": 357800,
+  "tokens_per_chapter": 3578.0,
+  "cost_usd": 0.015,
+  "cost_full_84k": 12.64,
+  "jev_choice_gap": 65,
+  "jev_choice_gap_pct": 65.0,
+  "token126_gap": 71.0,
+  "tokenbook_gap": 81.0,
+  "broad_gap": 47.0,
+  "union_gap": 35.0
+}

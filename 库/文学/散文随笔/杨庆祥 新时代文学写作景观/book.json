@@ -1,0 +1,42 @@
+{
+ "uid": "B1470",
+ "title": "杨庆祥 新时代文学写作景观",
+ "title_from_file": "",
+ "author": "杨庆祥",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/杨庆祥 新时代文学写作景观",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/杨庆祥 新时代文学写作景观 (杨庆祥).pdf",
+   "format": "pdf",
+   "bytes": 49189728,
+   "sha256": "8cc93d86c5485abc6e0204c95de8d82203f838a58393046e128ada226401d290",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 263484
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B1201",
+ "title": "彼得·汉德克：经典作品合集",
+ "format": "epub",
+ "dest": "库/文学/彼得·汉德克：经典作品合集/md",
+ "at": "2026-10-18T21:07:58+08:00",
+ "verify_rc": 0,
+ "chapters": 183,
+ "chars": 1234518,
+ "images": 23,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 1100701,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1201.prev-2026-10-18T210620-0800"
+}

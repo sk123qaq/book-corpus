@@ -1,0 +1,29 @@
+{
+ "uid": "B1660",
+ "title": "twelve portraits of the french revolution",
+ "format": "pdf",
+ "route": "text",
+ "pages": 364,
+ "dest": "库/文学/严肃文学小说/twelve portraits of the french revolution/md",
+ "at": "2026-10-19T12:46:11+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/twelve portraits of the french revolution/source/twelve portraits of the french revolution (Henri Beraud).pdf --out out/B1660 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0342,
+ "audit_anchors": 1.0,
+ "audit_chars": 375213,
+ "chapters": 1,
+ "chars": 397936,
+ "images": 728,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 364,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

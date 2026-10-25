@@ -1,0 +1,42 @@
+{
+ "uid": "B1277",
+ "title": "高行健全集",
+ "title_from_file": "",
+ "author": "高行健",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/高行健全集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/高行健全集 (高行健).epub",
+   "format": "epub",
+   "bytes": 4301798,
+   "sha256": "84ac09797494d8b313baf259f6337d9ccd00189017d776bf1326c9d0662a5f1b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 411,
+   "bytes": 3068654
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

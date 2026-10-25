@@ -1,0 +1,41 @@
+{
+ "uid": "B1392",
+ "title": "守望先锋 兼论中国当代先锋文学的发展",
+ "title_from_file": "",
+ "author": "杭州师范大学",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/守望先锋 兼论中国当代先锋文学的发展",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/守望先锋 兼论中国当代先锋文学的发展 (洪治纲著（杭州师范大学）, Hong Zhigang zhu, 洪治纲 etc.).pdf",
+   "format": "pdf",
+   "bytes": 11418114,
+   "sha256": "f0b4ba521891212fab7cf532d3fd26a578bfe712d3f1522b2de58bb1ba4973f0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 636362
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

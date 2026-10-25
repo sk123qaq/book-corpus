@@ -1,0 +1,10 @@
+{
+ "uid": "B0373",
+ "title": "色·戒",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/张爱玲/色·戒/md",
+ "at": "2026-10-18T23:31:28+08:00",
+ "status": "split-failed",
+ "note": "ebook_to_md rc=1",
+ "tail": "Traceback (most recent call last):\n  File \"/home/shike/.agents/skills/ebook-to-md/scripts/ebook_to_md.py\", line 1827, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"/home/shike/.agents/skills/ebook-to-md/scripts/ebook_to_md.py\", line 1823, in main\n    return run(args)\n  File \"/home/shike/.agents/skills/ebook-to-md/scripts/ebook_to_md.py\", line 1760, in run\n    epub = Epub(src)\n  File \"/home/shike/.agents/skills/ebook-to-md/scripts/ebook_to_md.py\", line 323, in __init__\n    self._parse_opf()\n    ~~~~~~~~~~~~~~~^^\n  File \"/home/shike/.agents/skills/ebook-to-md/scripts/ebook_to_md.py\", line 338, in _parse_opf\n    root = _xml_root(self.zip.read(self.opf_path))\n  File \"/home/shike/.agents/skills/ebook-to-md/scripts/ebook_to_md.py\", line 290, in _xml_root\n    return ET.fromstring(text.encode(\"utf-8\"))\n           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib64/python3.14/xml/etree/ElementTree.py\", line 1362, in XML\n    parser.feed(text)\n    ~~~~~~~~~~~^^^^^^\nxml.etree.ElementTree.ParseError: unbound prefix: line 18, column 0"
+}

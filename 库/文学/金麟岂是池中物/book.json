@@ -1,0 +1,26 @@
+{
+ "uid": "B0621",
+ "title": "金麟岂是池中物",
+ "title_from_file": "",
+ "author": "ohx",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/金麟岂是池中物",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/金麟岂是池中物 (ohx) (z-library.sk, 1lib.sk, z-lib.sk).txt",
+   "format": "txt",
+   "bytes": 3699451,
+   "sha256": "b975501e3d24c81732601bf842daf79fe8d6cbaed571a7b764da45926e9d98d9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项"
+}

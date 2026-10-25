@@ -1,0 +1,42 @@
+{
+ "uid": "B0827",
+ "title": "Vita A Novel",
+ "title_from_file": "",
+ "author": "Mazzucco",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Vita A Novel",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Vita A Novel (Mazzucco, Melania G.).epub",
+   "format": "epub",
+   "bytes": 1038626,
+   "sha256": "aaf3b76e7b90b5a14af20640772c6a3c0b9a70ee4fe6f881a7be671a7e03c15d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "斯特雷加奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 40,
+   "bytes": 929734
+  }
+ ],
+ "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
+}

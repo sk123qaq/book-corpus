@@ -1,0 +1,41 @@
+{
+ "uid": "B0776",
+ "title": "回响",
+ "title_from_file": "",
+ "author": "东西全新长篇情感推理小说",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/回响",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/回响（东西全新长篇情感推理小说；著名导演、演员陈建斌倾情推荐；拆解“心理现实”和生活真相；人民文学出版社倾力打造） (东西 [东西]).epub",
+   "format": "epub",
+   "bytes": 918261,
+   "sha256": "9bdb57bfdb35529ffc409ceefb79443f70fa97f54c30e522fa38c6ced6abad0a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 11,
+   "bytes": 564269
+  }
+ ],
+ "notes": "奖项:布克奖；同一书的第二份源；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1229",
+ "title": "答案在风中飘：现代歌曲的哲学（诺贝尔文学奖获得者鲍勃·迪伦重磅新作，用音乐反思社会与人生）",
+ "title_from_file": "",
+ "author": "诺贝尔文学奖获得者鲍勃·迪伦重磅新作",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/答案在风中飘：现代歌曲的哲学（诺贝尔文学奖获得者鲍勃·迪伦重磅新作，用音乐反思社会与人生）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/答案在风中飘：现代歌曲的哲学（诺贝尔文学奖获得者鲍勃·迪伦重磅新作，用音乐反思社会与人生） (鲍勃·迪伦).epub",
+   "format": "epub",
+   "bytes": 6466298,
+   "sha256": "6ef9dee83ec9a56e38735fd830f29f06542ab1b54412d4f8e1b852f4ec73d50a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 70,
+   "bytes": 469456
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

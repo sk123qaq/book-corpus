@@ -1,0 +1,14 @@
+{
+ "uid": "B1042",
+ "title": "父が消えた",
+ "format": "pdf",
+ "pages": 275,
+ "dest": "库/文学/严肃文学小说/父が消えた/md",
+ "at": "2026-10-19T16:27:38+08:00",
+ "commands": [],
+ "chunks_planned": 2,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 2.8,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B1042_p0001-0150.pdf，150 页，2.98 MB | 提交 HTTP 403 | {\"traceId\":\"dee7ec46-5f33-499d-8a49-994745637a3e\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

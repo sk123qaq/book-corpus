@@ -1,0 +1,42 @@
+{
+ "uid": "B1164",
+ "title": "傻瓜吉姆佩尔 ((美) 艾萨克·巴什维斯·辛格)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/傻瓜吉姆佩尔 ((美) 艾萨克·巴什维斯·辛格)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/傻瓜吉姆佩尔 ((美) 艾萨克·巴什维斯·辛格).epub",
+   "format": "epub",
+   "bytes": 4661808,
+   "sha256": "348c1a6b22993bf90c1a3bfa93b5baa2e93aa78db971ec4d773564d4c6407bfc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 334140
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

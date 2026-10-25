@@ -1,0 +1,42 @@
+{
+ "uid": "B1627",
+ "title": "骑手和豆浆 臧棣集 1991-2014 (臧棣著, 臧棣, 1964- author, 臧棣, (1964- ) etc",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/骑手和豆浆 臧棣集 1991-2014 (臧棣著, 臧棣, 1964- author, 臧棣, (1964- ) etc",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/骑手和豆浆 臧棣集 1991-2014 (臧棣著, 臧棣, 1964- author, 臧棣, (1964- ) etc.).pdf",
+   "format": "pdf",
+   "bytes": 39221097,
+   "sha256": "631b79fde309eeab5b551c0fbd95b0f4530a5db296c6b906ada05314dedca22e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 309932
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

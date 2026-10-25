@@ -1,0 +1,42 @@
+{
+ "uid": "B1103",
+ "title": "冬天里的春天",
+ "title_from_file": "",
+ "author": "茅盾文学奖获奖作品",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/冬天里的春天",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/冬天里的春天（茅盾文学奖获奖作品） (共和国作家文库) (李国文).epub",
+   "format": "epub",
+   "bytes": 798989,
+   "sha256": "ee86ad232fa1aee17bcbff36c7cb4063fc1dcbeb6f638dec8cd3da70b9c8f0c1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 5,
+   "bytes": 1507928
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

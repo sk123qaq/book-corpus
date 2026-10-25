@@ -1,0 +1,34 @@
+{
+ "uid": "B1625",
+ "title": "香炉山",
+ "title_from_file": "",
+ "author": "叶弥",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/香炉山",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/香炉山 (叶弥).txt",
+   "format": "txt",
+   "bytes": 20731,
+   "sha256": "16523c123191f663de7bf18574f216307d0b5594612ae8fb59751c29cbe811a4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

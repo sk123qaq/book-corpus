@@ -1,0 +1,42 @@
+{
+ "uid": "B1242",
+ "title": "花环 ((挪)西格丽德·温塞特)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/花环 ((挪)西格丽德·温塞特)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/花环 ((挪)西格丽德·温塞特).epub",
+   "format": "epub",
+   "bytes": 303664,
+   "sha256": "03773bde5ede3de1562a1760a4c63783465a2dc6602979ad3259737edc933c8b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 23,
+   "bytes": 571654
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

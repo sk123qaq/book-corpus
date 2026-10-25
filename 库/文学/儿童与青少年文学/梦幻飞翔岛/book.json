@@ -1,0 +1,42 @@
+{
+ "uid": "B0704",
+ "title": "梦幻飞翔岛",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "儿童与青少年文学"
+ ],
+ "path": "文学/儿童与青少年文学/梦幻飞翔岛",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/梦幻飞翔岛 (（奥）海因茨·雅尼施著；王泰智，沈惠珠译, hai yin ci ·ya ni shi etc.).pdf",
+   "format": "pdf",
+   "bytes": 25965698,
+   "sha256": "be2f35426a534a7b5c74410dcfc7296788681d207e5baea274e89d13d32d26d4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "国际安徒生奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 218160
+  }
+ ],
+ "notes": "奖项:国际安徒生奖；依据:来源目录或奖项"
+}

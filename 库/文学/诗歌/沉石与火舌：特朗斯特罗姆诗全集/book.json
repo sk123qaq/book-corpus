@@ -1,0 +1,42 @@
+{
+ "uid": "B1215",
+ "title": "沉石与火舌：特朗斯特罗姆诗全集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/沉石与火舌：特朗斯特罗姆诗全集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/沉石与火舌：特朗斯特罗姆诗全集 (托马斯·特朗斯特罗姆 [托马斯·特朗斯特罗姆]).epub",
+   "format": "epub",
+   "bytes": 378848,
+   "sha256": "60db4cb533c00256b0e19ca8ba30357ce0a94ea1c9084567dc17a160cc3c463b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 186,
+   "bytes": 265890
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1568",
+ "title": "落泪是金",
+ "title_from_file": "",
+ "author": "何建明",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/何建明/落泪是金",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/落泪是金 (何建明著).pdf",
+   "format": "pdf",
+   "bytes": 16916470,
+   "sha256": "c085299c61e563c41e84a8e28a7c09e9d3a511805e5f1611e862443789be7584",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 781663
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

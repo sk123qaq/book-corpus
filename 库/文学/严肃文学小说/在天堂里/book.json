@@ -1,0 +1,42 @@
+{
+ "uid": "B1174",
+ "title": "在天堂里",
+ "title_from_file": "",
+ "author": "德 保罗·海泽",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/在天堂里",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/在天堂里 ([德] 保罗·海泽).mobi",
+   "format": "mobi",
+   "bytes": 1295931,
+   "sha256": "bd9efa45b6f50b0c1e87df93da2bffa789613943053dc4ba6577df71e1a88b0d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 78,
+   "bytes": 1159591
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

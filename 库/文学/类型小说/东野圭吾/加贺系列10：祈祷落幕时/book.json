@@ -1,0 +1,35 @@
+{
+ "uid": "B0064",
+ "title": "加贺系列10：祈祷落幕时",
+ "title_from_file": "",
+ "author": "东野圭吾",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/东野圭吾/加贺系列10：祈祷落幕时",
+ "series": "东野圭吾",
+ "volume": "22",
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../source/东野圭吾作品集（共69册） (东野圭吾) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 40934331,
+   "sha256": "2e6e85b193538fc37fcbd639cc7a1e75437e2211607cd44755b05df7d45e0630",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 29,
+   "bytes": 491834
+  }
+ ],
+ "notes": "依据:系列:东野圭吾；合集拆出 22/69；置信:1.0"
+}

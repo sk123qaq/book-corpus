@@ -1,0 +1,42 @@
+{
+ "uid": "B0733",
+ "title": "罗萨莱斯诗选 (（西）罗萨莱斯著；段继承译, (西)路易斯. 罗萨莱斯(Luis Rosales)著 etc.)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/罗萨莱斯诗选 (（西）罗萨莱斯著；段继承译, (西)路易斯. 罗萨莱斯(Luis Rosales)著 etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/罗萨莱斯诗选 (（西）罗萨莱斯著；段继承译, (西)路易斯. 罗萨莱斯(Luis Rosales)著 etc.).pdf",
+   "format": "pdf",
+   "bytes": 6272376,
+   "sha256": "7d663a3fec4ba2d3fc0d2cfb8b92608bab78c96ca7f7fd53640d586fee3008a1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 370177
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

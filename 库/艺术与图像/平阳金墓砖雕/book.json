@@ -1,0 +1,26 @@
+{
+ "uid": "B0638",
+ "title": "平阳金墓砖雕",
+ "title_from_file": "",
+ "author": "山西省考古研究所",
+ "subjects": [
+  "艺术与图像"
+ ],
+ "path": "艺术与图像/平阳金墓砖雕",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/平阳金墓砖雕 (山西省考古研究所) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 34716713,
+   "sha256": "8268a2970d19382b20d44084091776d66b9236231f5c1de088de6338f6fb77a4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比80%"
+}

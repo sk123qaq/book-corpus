@@ -1,0 +1,42 @@
+{
+ "uid": "B1653",
+ "title": "The lost shore",
+ "title_from_file": "",
+ "author": "Langfus",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The lost shore",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The lost shore (Langfus, Anna, 1920-1966).pdf",
+   "format": "pdf",
+   "bytes": 10541843,
+   "sha256": "510848be50da88964192f1017684f5639d56258f142a06de76509fb8eeaad304",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 417564
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

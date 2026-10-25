@@ -1,0 +1,42 @@
+{
+ "uid": "B0747",
+ "title": "Offshore",
+ "title_from_file": "",
+ "author": "Penelope Fitzgerald",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Offshore",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Offshore (Penelope Fitzgerald, Alan Hollinghurst).epub",
+   "format": "epub",
+   "bytes": 626606,
+   "sha256": "e9f5d09bdba0ae393b0aa976226196b3354523bcc34be85ae9396d0fc15846cb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 260244
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

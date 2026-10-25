@@ -1,0 +1,17 @@
+{
+ "uid": "B0359",
+ "title": "红楼折钗记",
+ "format": "mobi",
+ "dest": "库/文学/网络文学/红楼折钗记/md",
+ "at": "2026-10-18T23:31:23+08:00",
+ "provenance_fixed": 20,
+ "verify_rc": 0,
+ "chapters": 19,
+ "chars": 462462,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 407136,
+ "status": "staged-green"
+}

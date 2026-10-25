@@ -1,0 +1,42 @@
+{
+ "uid": "B0879",
+ "title": "So Big",
+ "title_from_file": "",
+ "author": "Edna Ferber",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/So Big",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/So Big (Edna Ferber).epub",
+   "format": "epub",
+   "bytes": 1050151,
+   "sha256": "c573cf7acd1c4712dae54d5ed2094642eccbd50f465e83d8bcd1bbd8341db012",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 28,
+   "bytes": 537009
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

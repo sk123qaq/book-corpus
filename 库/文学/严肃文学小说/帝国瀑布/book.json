@@ -1,0 +1,42 @@
+{
+ "uid": "B0923",
+ "title": "帝国瀑布",
+ "title_from_file": "",
+ "author": "美理查德·索拉",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/帝国瀑布",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/帝国瀑布 ([美]理查德·索拉 著，马爱新 译).pdf",
+   "format": "pdf",
+   "bytes": 18627650,
+   "sha256": "86abfe5ea8fe4fd6af4383e91fe8e5e7e963dd75d4dbb6fa87956d909384f389",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 909215
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,36 @@
+{
+ "uid": "B1183",
+ "title": "奥林匹斯的春天",
+ "format": "pdf",
+ "pages": 808,
+ "dest": "库/文学/严肃文学小说/奥林匹斯的春天/md",
+ "at": "2026-10-24T16:44:25+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1183/merged/pages --out out/B1183 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 6,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 3.9,
+ "chunks_done": 6,
+ "merged_pages": 808,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1183/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 304573,
+ "images": 2,
+ "problems": 0,
+ "blank_pages": 7,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 5,
+ "short_page_list": [
+  37,
+  197,
+  357,
+  623,
+  687
+ ],
+ "accepted": "",
+ "status": "landed"
+}

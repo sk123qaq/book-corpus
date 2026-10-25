@@ -1,0 +1,35 @@
+{
+ "uid": "B0398",
+ "title": "钢琴教师",
+ "title_from_file": "",
+ "author": "奥埃尔夫丽德·耶利内克",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/钢琴教师",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/钢琴教师 (【奥】埃尔夫丽德·耶利内克).epub",
+   "format": "epub",
+   "bytes": 980877,
+   "sha256": "f83432d62f66c86d174af3876820a8e7430a4c6968775d3c2bbd6fd32d8de4ab",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 518871
+  }
+ ],
+ "notes": "依据:系列:钢琴教师；置信:1.0"
+}

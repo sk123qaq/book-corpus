@@ -1,0 +1,41 @@
+{
+ "uid": "B1316",
+ "title": "中国有座鲁西监狱 长篇报告文学",
+ "title_from_file": "",
+ "author": "王光明",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/中国有座鲁西监狱 长篇报告文学",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国有座鲁西监狱 长篇报告文学 (王光明，姜良纲著, Wang Guangming etc.).pdf",
+   "format": "pdf",
+   "bytes": 14761158,
+   "sha256": "48451b96cb80dc6febc84994912543f75c56d213b2d9e500ce7325dc87a8f11c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 439868
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

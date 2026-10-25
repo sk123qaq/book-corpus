@@ -1,0 +1,35 @@
+{
+ "uid": "B0642",
+ "title": "机械未来蒸汽朋克动漫角色设计实例教程",
+ "title_from_file": "",
+ "author": "绘月工坊 主编五子棋 编",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/机械未来蒸汽朋克动漫角色设计实例教程",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/机械未来蒸汽朋克动漫角色设计实例教程 (绘月工坊 主编五子棋 编著) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 55826413,
+   "sha256": "9a6c4afba7de9d5ef1a7c1915658cbb3bd244d0f6208831d11f90f40bf3539fb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 5,
+   "bytes": 56676
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

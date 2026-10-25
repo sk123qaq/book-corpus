@@ -1,0 +1,42 @@
+{
+ "uid": "B1002",
+ "title": "家族の標本",
+ "title_from_file": "",
+ "author": "柳美里",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/家族の標本",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/家族の標本 (柳美里).pdf",
+   "format": "pdf",
+   "bytes": 4059285,
+   "sha256": "1c16c696ac657aa8dff7a59ecd6eb009936b03263c8d7d655fe5e535d1fb626e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 242448
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

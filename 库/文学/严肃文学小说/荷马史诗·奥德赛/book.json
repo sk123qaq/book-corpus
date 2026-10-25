@@ -1,0 +1,42 @@
+{
+ "uid": "B1564",
+ "title": "荷马史诗·奥德赛",
+ "title_from_file": "",
+ "author": "经典文学名",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/荷马史诗·奥德赛",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/荷马史诗·奥德赛（经典文学名著；人民文学出版社名著名译最新版） (名著名译丛书) (（古希腊）荷马著 王焕生译).epub",
+   "format": "epub",
+   "bytes": 2511467,
+   "sha256": "d4ddb1330553e20d6a1c54a40a64047c986c99574793291cd1d08e78e22ae168",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 28,
+   "bytes": 708231
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0373",
+ "title": "色·戒",
+ "title_from_file": "",
+ "author": "张爱玲",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/张爱玲/色·戒",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/色·戒 (张爱玲) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 96992,
+   "sha256": "f81bd04d1d616b13fc4a6a802de9cbdf95c90671b4f31e91176bf07df7a00f26",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 8,
+   "bytes": 86838
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

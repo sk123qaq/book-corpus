@@ -1,0 +1,35 @@
+{
+ "uid": "B0171",
+ "title": "创造的进化论",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "生命与医学"
+ ],
+ "path": "人文社科/生命与医学/创造的进化论",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/创造的进化论 ( etc.).epub",
+   "format": "epub",
+   "bytes": 755260,
+   "sha256": "60670aa571cfd0742bf3c485943e2ff79594c9c54859076f7d31521370ec5278",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 768009
+  }
+ ],
+ "notes": "依据:系列:创造的进化论；置信:0.76"
+}

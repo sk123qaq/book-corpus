@@ -1,0 +1,16 @@
+{
+ "uid": "B0116",
+ "title": "中国神话大词典",
+ "format": "epub",
+ "dest": "库/人文社科/宗教与神话/中国神话大词典/md",
+ "at": "2026-10-18T23:30:44+08:00",
+ "verify_rc": 0,
+ "chapters": 217,
+ "chars": 1109442,
+ "images": 1614,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.031,
+ "raw_chars": 865143,
+ "status": "staged-green"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0880",
+ "title": "THE STORE",
+ "title_from_file": "",
+ "author": "T. S. Stribling",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/THE STORE",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/THE STORE (T. S. Stribling).epub",
+   "format": "epub",
+   "bytes": 811259,
+   "sha256": "9ec52645b99a1988cbcddefe11987249c63e6a7c281b12061588b571aec3cccf",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 957153
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

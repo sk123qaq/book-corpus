@@ -1,0 +1,35 @@
+{
+ "uid": "B0147",
+ "title": "傲慢与偏见",
+ "title_from_file": "",
+ "author": "简·奥斯汀",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/傲慢与偏见",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/傲慢与偏见 (简·奥斯汀,李继宏 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 757455,
+   "sha256": "53328695d5b42eb01940d163c4195f6f7193fa97913de415e6a1b9bc154ffd39",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 70,
+   "bytes": 646823
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

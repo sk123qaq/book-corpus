@@ -1,0 +1,42 @@
+{
+ "uid": "B1323",
+ "title": "人民的风 米格尔·埃尔南德斯诗选",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/人民的风 米格尔·埃尔南德斯诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/人民的风 米格尔·埃尔南德斯诗选 (（西班牙）埃尔南德斯著, 埃尔南德斯 Hernandez etc.).pdf",
+   "format": "pdf",
+   "bytes": 4369187,
+   "sha256": "6005a0146c739bd34c6c061d7463c1d781f72803762aebf4cfefd66be885c103",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 233081
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

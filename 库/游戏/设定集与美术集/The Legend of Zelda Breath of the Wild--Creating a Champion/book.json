@@ -1,0 +1,27 @@
+{
+ "uid": "B0660",
+ "title": "The Legend of Zelda Breath of the Wild--Creating a Champion",
+ "title_from_file": "",
+ "author": "Nintendo",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/The Legend of Zelda Breath of the Wild--Creating a Champion",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Legend of Zelda Breath of the Wild--Creating a Champion (Nintendo) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 245480578,
+   "sha256": "d44f62c999e3767b1d1a391a2728e36d20d19e7cafea4a8e1a122885b910fada",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:二级学科是设定集与美术集"
+}

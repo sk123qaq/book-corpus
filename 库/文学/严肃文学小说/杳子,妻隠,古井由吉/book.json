@@ -1,0 +1,34 @@
+{
+ "uid": "B1030",
+ "title": "杳子,妻隠,古井由吉",
+ "title_from_file": "",
+ "author": "河出書房新社",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/杳子,妻隠,古井由吉",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/杳子,妻隠,古井由吉 (河出書房新社).pdf",
+   "format": "pdf",
+   "bytes": 5119617,
+   "sha256": "e1b2649a4dfaad7dd10b9aee4ad6332b2045ebcdba5105a440a948e5d1d2ee43",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

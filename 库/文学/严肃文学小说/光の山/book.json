@@ -1,0 +1,42 @@
+{
+ "uid": "B0982",
+ "title": "光の山",
+ "title_from_file": "",
+ "author": "玄侑宗久",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/光の山",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/光の山 (玄侑宗久).epub",
+   "format": "epub",
+   "bytes": 167061,
+   "sha256": "50ebca979fabd843b52f29171c07ded7a45f27ddefb5d88085e07ae866af5526",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 265428
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,34 @@
+{
+ "uid": "B0597",
+ "title": "晋祠故事",
+ "title_from_file": "",
+ "author": "贾莉莉编",
+ "subjects": [
+  "建筑与古迹"
+ ],
+ "path": "建筑与古迹/晋祠故事",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/晋祠故事 (贾莉莉编著, 贾莉莉, editor, author etc.) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 95404173,
+   "sha256": "4539bad55425999bcf79ad62145760ab1fbcfeceb9e7280eee0d206f6dfcd0de",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 419850
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

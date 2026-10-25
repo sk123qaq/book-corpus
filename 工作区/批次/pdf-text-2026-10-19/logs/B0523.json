@@ -1,0 +1,29 @@
+{
+ "uid": "B0523",
+ "title": "Pillow Talk Step-by-Step Instructions and Notes A Comprehens",
+ "format": "pdf",
+ "route": "text",
+ "pages": 285,
+ "dest": "库/生活与实用/两性与情色/Pillow Talk Step-by-Step Instructions and Notes A Comprehens/md",
+ "at": "2026-10-19T12:43:57+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/生活与实用/两性与情色/Pillow Talk Step-by-Step Instructions and Notes A Comprehens/source/Pillow Talk Step-by-Step Instructions and Notes A Comprehensive Guide to Erotic Hypnosis and Relyfe Programming (Michael Scott) (z-library.sk, 1lib.sk, z-lib.sk) (1).pdf --out out/B0523 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0004,
+ "audit_anchors": 1.0,
+ "audit_chars": 280268,
+ "chapters": 1,
+ "chars": 289165,
+ "images": 3,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 285,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

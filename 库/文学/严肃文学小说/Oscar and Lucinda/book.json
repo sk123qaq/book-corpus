@@ -1,0 +1,42 @@
+{
+ "uid": "B0749",
+ "title": "Oscar and Lucinda",
+ "title_from_file": "",
+ "author": "Vintage",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Oscar and Lucinda",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Oscar and Lucinda (Vintage 1997) (Peter Carey [Peter Philip Carey]).epub",
+   "format": "epub",
+   "bytes": 449040,
+   "sha256": "2414e9486a499eab337f4bfa785a3544490b31037ab15216b96d2877332e6671",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 8,
+   "bytes": 994160
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

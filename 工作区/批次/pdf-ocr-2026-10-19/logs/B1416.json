@@ -1,0 +1,36 @@
+{
+ "uid": "B1416",
+ "title": "张炯文存 第2卷 文学理论",
+ "format": "pdf",
+ "pages": 690,
+ "dest": "库/文学/张炯文存 第2卷 文学理论/md",
+ "at": "2026-10-24T16:22:48+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1416/merged/pages --out out/B1416 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 5,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 4.5,
+ "chunks_done": 5,
+ "merged_pages": 690,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1416/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 408573,
+ "images": 2,
+ "problems": 0,
+ "blank_pages": 6,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 5,
+ "short_page_list": [
+  13,
+  287,
+  451,
+  539,
+  597
+ ],
+ "accepted": "",
+ "status": "landed"
+}

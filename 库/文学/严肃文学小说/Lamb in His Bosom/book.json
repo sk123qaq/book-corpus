@@ -1,0 +1,42 @@
+{
+ "uid": "B0869",
+ "title": "Lamb in His Bosom",
+ "title_from_file": "",
+ "author": "Caroline Miller",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Lamb in His Bosom",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Lamb in His Bosom (Caroline Miller).epub",
+   "format": "epub",
+   "bytes": 701862,
+   "sha256": "9a1e82f20a1e683acee16fd2b024d685e08d7684e7309a239105c120e426ff32",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 24,
+   "bytes": 633224
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

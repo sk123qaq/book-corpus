@@ -1,0 +1,42 @@
+{
+ "uid": "B0939",
+ "title": "Sekiryō kōya, 寂寥郊野",
+ "title_from_file": "",
+ "author": "吉目木",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Sekiryō kōya, 寂寥郊野",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Sekiryō kōya, 寂寥郊野 (吉目木, 晴彦, Yoshimeki, Haruhiko, 1957-).pdf",
+   "format": "pdf",
+   "bytes": 7181953,
+   "sha256": "3c67c21dff57ba42d02ffc8b63f4506fefd4de163e67883eafb259ccf01c57ce",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 350009
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

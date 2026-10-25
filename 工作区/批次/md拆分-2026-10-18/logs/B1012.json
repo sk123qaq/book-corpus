@@ -1,0 +1,22 @@
+{
+ "uid": "B1012",
+ "title": "彼岸花が咲く島",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/彼岸花が咲く島/md",
+ "at": "2026-10-18T21:07:40+08:00",
+ "override": {
+  "args": [
+   "--all-pages"
+  ]
+ },
+ "verify_rc": 0,
+ "chapters": 16,
+ "chars": 95509,
+ "images": 4,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0070000000000001,
+ "raw_chars": 28200,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1012.prev-2026-10-18T210620-0800"
+}

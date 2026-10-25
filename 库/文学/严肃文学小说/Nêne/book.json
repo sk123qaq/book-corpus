@@ -1,0 +1,42 @@
+{
+ "uid": "B1644",
+ "title": "Nêne",
+ "title_from_file": "",
+ "author": "Pérochon Ernest",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Nêne",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Nêne (Pérochon Ernest).epub",
+   "format": "epub",
+   "bytes": 354146,
+   "sha256": "9f9f824b44715772b6c4b0c5c3151b6a031d98ca6a945e7e78d42a811b674038",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 9,
+   "bytes": 313633
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

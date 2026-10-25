@@ -1,0 +1,42 @@
+{
+ "uid": "B0771",
+ "title": "保守的人",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/保守的人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/保守的人=The conservationist (（南非）纳丁·戈迪默著；何静芝译, 戈迪默 女, Gordimer, Nadine etc.).pdf",
+   "format": "pdf",
+   "bytes": 36480282,
+   "sha256": "61e4a854ce5fd1d06c44a570d68a3b51a8ed0f190134f1b9b1fc9208ce950bd5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 518780
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

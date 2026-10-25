@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>审计课：同一把尺子</title>
+<link rel="stylesheet" href="../assets/style.css">
+<body>
+
+<h1>同一把尺子</h1>
+<p class="meta">审计课 · 2026-10-23 · 从 B5 书卡到 B6 默认值</p>
+
+<p class="lead">你之前学的「触发题 +19 点」不是算错，是拿两把不同的尺子量出来的：
+卡片让你看 6 本，自动路径只让你看 1 本。这课从头讲清楚：检索在做什么、门槛想证明什么、
+审计为什么说 +19 不算、哪些读数还能用。</p>
+
+<div class="note"><strong>2026-10-23 晚复跑：</strong>全词选章后，触发题卡片 top3 15/21、top6 17/21；循环 top3 15/21、top5 17/21；全部题实际默认 53/60=0.883，循环 top5 53/60=0.883。下面把旧读法的 17/21 拆成 top3 的 15 和 top6 的 17；同宽收益仍是 0。</div>
+
+<div class="note"><strong>先给一句话结论：</strong>书卡让用户多几个选择，但检索本身没有多找到
+答案；把两边都放到 top3 或 top5 来量，卡片和自动路径的命中一样。默认展示书卡仍然可以是
+产品决定，但它不是「检索命中 +19」的证据。</div>
+
+<h2>一、先看整条链</h2>
+
+<p>这套东西解决一个问题：你问一句话，系统从 1,693 本书里找出最可能回答的那一本，
+再指出书里的哪一章、哪一段。B1 到 B6 是这条链上的六段：</p>
+
+<table>
+  <thead><tr><th>单元</th><th>做什么</th><th>你看到的东西</th></tr></thead>
+  <tbody>
+    <tr><td>B1</td><td>把段落命中聚成书级分</td><td>一本书一个分数，按分数排序</td></tr>
+    <tr><td>B2</td><td>用 60 道题比较八种书级打分</td><td>哪种打分把目标书排得更前</td></tr>
+    <tr><td>B2.5</td><td>选词、换词、最多 5 轮</td><td>书序和章序，零模型调用</td></tr>
+    <tr><td>B3</td><td>读 <code>md/README.md</code> 选章</td><td>每本书最多三章，按检索分排</td></tr>
+    <tr><td>B4</td><td>按需把选中的章交给模型做摘要</td><td>L0 到 L4 的窗口与摘要</td></tr>
+    <tr><td>B5</td><td>首轮之后弹 5 到 8 张书卡</td><td>书名、类型、最佳章、片段</td></tr>
+    <tr><td>B6</td><td>把验收后的默认值写进入口与文档</td><td><code>book_query.py</code> 默认行为</td></tr>
+  </tbody>
+</table>
+
+<p>「命中」这个词在 B5 里只有一个意思：<strong>目标章出现在你看到的那本书的前三章里</strong>。
+书对了、章不对，不算命中；书不在你看到的列表里，也不算。</p>
+
+<h2>二、旧门槛想证明什么</h2>
+
+<p>B5 的书卡是一个「选择层」：系统先排书，触发时给你 6 张卡，你选 1 到 3 本。
+它要回答的问题是：<strong>加了书卡，用户更容易找到答案吗？</strong></p>
+
+<p>方案写的门槛有两条路，满足一条就算过：</p>
+
+<ol>
+  <li>书卡让答案命中比「最好的自动方案」高至少 10 个百分点；</li>
+  <li>或者命中不降，同时展示列表里的长书占比下降。</li>
+</ol>
+
+<p>旧的算法把 60 道题拆成两组：21 道触发、39 道不触发。触发题用卡，未触发题走首轮
+<code>auto</code>。算出来是这样：</p>
+
+<table>
+  <thead><tr><th>子集</th><th>题数</th><th>auto（首轮 top1）</th><th>loop（B2.5 top1）</th><th>card（6 张卡里选）</th></tr></thead>
+  <tbody>
+    <tr><td>未触发</td><td>39</td><td>28</td><td>31</td><td>28（走 auto）</td></tr>
+    <tr><td>触发</td><td>21</td><td>13</td><td>13</td><td>17（top6；top3 15）</td></tr>
+    <tr><td>合计</td><td>60</td><td>41</td><td>44</td><td>45</td></tr>
+  </tbody>
+</table>
+
+<p>所以旧读数是：全部题 <code>45/60 = 0.750</code>，循环 <code>44/60 = 0.733</code>，
+差 <code>1/60 = 1.7</code> 点；触发题 <code>17/21 = 0.810</code> 对
+<code>13/21 = 0.619</code>，差 <code>4/21 = 19.0</code> 点。1.7 没过 10 点线，19 过了，
+于是当时的结论是「只做 opt-in」。</p>
+
+<h2>三、审计：同一把尺子</h2>
+
+<p>问题出在「看几本」。旧算法里：</p>
+
+<table>
+  <thead><tr><th>路径</th><th>实际看几本</th></tr></thead>
+  <tbody>
+    <tr><td>auto</td><td>只看 top1 一本</td></tr>
+    <tr><td>loop</td><td>只看 top1 一本</td></tr>
+    <tr><td>card</td><td>看 6 张卡，目标书在任意一张就算</td></tr>
+  </tbody>
+</table>
+
+<p>这就不是同一把尺子。把自动路径也放到 top3 或 top5 来看，21 道触发题的数字变成：</p>
+
+<table>
+  <thead><tr><th>口径</th><th>命中</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>循环 top1</td><td>13/21 = 0.619</td><td>旧 baseline</td></tr>
+    <tr><td>循环 top3</td><td>15/21 = 0.714</td><td>目标书在第 2 或第 3 本</td></tr>
+    <tr><td>循环 top5</td><td>17/21 = 0.810</td><td>再放宽到第 5 本</td></tr>
+    <tr><td>卡片 top1</td><td>13/21 = 0.619</td><td>卡片第 1 张</td></tr>
+    <tr><td>卡片 top3 / top6</td><td>15/21 = 0.714 / 17/21 = 0.810</td><td>实际默认六张都展开；top3 只是诊断</td></tr>
+  </tbody>
+</table>
+
+<p>看最后两行：卡片 top3 和循环 top3 都是 15/21；卡片 top6 和循环 top5 都是 17/21。**+4 不是卡片新找到的答案**：旧 +19 是 6 卡 17 对循环 top1 13；同宽 top3 是 15 对 15，top6 对 top5 是 17 对 17。
+三条线各自从哪里分叉、当前默认到底看几本，见 <a href="0004-three-paths.html">课 4 的流程图</a>。</p>
+
+<figure>
+<svg viewBox="0 0 760 190" role="img" aria-label="top1、top3、top6 的命中对比">
+  <style>
+    .ax { stroke:#b9b1a4; stroke-width:1 }
+    .bar { fill:#8a3b12 }
+    .bar2 { fill:#c9a27e }
+    .lb { font:12px "Noto Sans CJK SC",sans-serif; fill:#444 }
+    .vl { font:600 12px "Noto Sans CJK SC",sans-serif; fill:#1b1b1b }
+  </style>
+  <line class="ax" x1="90" y1="150" x2="700" y2="150"/>
+  <text class="lb" x="90" y="172">0</text>
+  <text class="lb" x="285" y="172">5</text>
+  <text class="lb" x="480" y="172">10</text>
+  <text class="lb" x="675" y="172">17 命中</text>
+  <rect class="bar2" x="90" y="48" width="275" height="34"/>
+  <text class="lb" x="80" y="70" text-anchor="end">循环 top1</text>
+  <text class="vl" x="375" y="70">13</text>
+  <rect class="bar" x="90" y="92" width="396" height="34"/>
+  <text class="lb" x="80" y="114" text-anchor="end">循环 top3</text>
+  <text class="vl" x="549" y="114">15</text>
+  <rect class="bar" x="90" y="136" width="449" height="14" opacity=".55"/>
+  <text class="lb" x="80" y="147" text-anchor="end">卡片 top6</text>
+  <text class="vl" x="549" y="147">17</text>
+</svg>
+<figcaption>21 道触发题。top1 13；循环 top3 15；卡片 top6 17。旧 +19 是 6 卡对 top1；
+同宽 top3 是 15 对 15，top6 对 top5 是 17 对 17。</figcaption>
+</figure>
+
+<h3>用一道题看</h3>
+
+<p>O06 问「随机数字为什么会影响人的估价？」，目标书是《思考，快与慢》，目标章是
+「第 11 章锚定效应在生活中随处可见」。</p>
+
+<ul>
+  <li>首轮 top1 是另一本 comma 版本的《思考, 快与慢》，目标章不在它名下，记 0；</li>
+  <li>B2.5 循环的 top3 里有目标书《思考，快与慢》，记 1；</li>
+  <li>书卡的前三张/六张里也有目标书，记 1。</li>
+</ul>
+
+<p>旧 gate 会把这一题算成「卡片赢了」，因为卡片看了 6 张、循环只看了 top1。
+但循环的 top3 本来就有它。卡片没有多找到答案，它只是把第 2、3 本也摆出来了。</p>
+
+<h2>四、全部 60 题：默认路径到底是多少</h2>
+
+<p>B6 之后，默认路径不是「未触发走 auto」，而是先跑 B2.5 循环，再在触发时开卡。
+所以未触发的 39 题应该用 <code>loop</code>，不是 <code>auto</code>。按 top5 算：</p>
+
+<table>
+  <thead><tr><th>口径</th><th>触发 21 题</th><th>未触发 39 题</th><th>全部 60 题</th></tr></thead>
+  <tbody>
+    <tr><td>循环 top1</td><td>13</td><td>32</td><td>45/60 = 0.750</td></tr>
+    <tr><td>循环 top5</td><td>17</td><td>36</td><td>53/60 = 0.883</td></tr>
+    <tr><td>默认路径（触发卡六张 + 未触发循环 top5）</td><td>17</td><td>36</td><td>53/60 = 0.883</td></tr>
+  </tbody>
+</table>
+
+<p>旧报告的 <code>effective = 0.750</code> 是未触发按 auto 28；默认路径按触发卡六张 17 + 未触发循环 top5 36 = 53/60。自动循环 top5 也是 53/60；六卡默认不再比自动 top5 少 2 题。<strong>同宽比较下卡片检索收益仍是 0。</strong></p>
+
+<div class="note">旧报告里还有一个「如果接在循环后，全部题 0.800」的估算：它用的是循环
+top1 的 31，不是 top5 的 36。按默认入口实际会返回的 top5 来算，是 0.883。差别不在卡片，
+在「自动路径给用户看几本」。</div>
+
+<h2>五、同样的错误还有三处</h2>
+
+<h3>1. B6 性能：旧路径不是同一个旧路径</h3>
+
+<p>方案说「旧 mix 路径」是 <code>qsearch.py --book --book-score mix</code>。
+B6 报告却拿 <code>book_query --book-score mix</code> 当基线；后者已经包含 B2.5 循环，
+不是用户原来的旧路径。两遍交错复测：</p>
+
+<table>
+  <thead><tr><th>遍</th><th>qsearch mix p95</th><th>默认 p95</th><th>比值</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>376 ms</td><td>737 ms</td><td>1.96</td></tr>
+    <tr><td>2</td><td>395 ms</td><td>742 ms</td><td>1.88</td></tr>
+  </tbody>
+</table>
+
+<p>仍然过 2 倍线，但只剩约 2% 余量，不是报告里的 1.17。1.17 是「新管线 vs 新管线的
+mix 打分」，两辆车都是汽车；方案要的是「新管线 vs 原来的 qsearch」，那是一辆汽车对
+一辆自行车。</p>
+
+<h3>2. B4 缓存命中：看菜谱不是做菜</h3>
+
+<p>B4 报告写「缓存命中 0.038 ms」，这个数是<strong>读一个缓存 JSON 文件</strong>的时间。
+方案要的「缓存命中延迟」是用户再问一次、拿到结果的端到端时间；复跑冷 31,083 ms、热 153 ms（0 次调用）。
+0.038 ms 证明文件读得快，不证明查询快。</p>
+
+<h3>3. B4 停止线：两组人不是同一组</h3>
+
+<p>停止线要比较「开扩展」和「关扩展」的证据章命中。代码里关闭取 10 本书各自第 1 章，
+开启取 3 本书各自最佳章——书和章都不是同一组。同组复跑是 7/10、delta 0；旧 4/10 对 4/10 不能当成同一组的前后测。
+「扩展只给已选章加摘要、不改章集合」这个结构性论证仍然成立，但那个读数不是它的证据。</p>
+
+<h3>4. P0：后门能进，不代表前门能进</h3>
+
+<p>B6 的 <code>book_query</code> 默认开卡。某道题触发后，卡片六本里有一本不在循环的
+章节目录里，补进来的条目少了一个 <code>book_score</code> 字段。JSON 路径不打印这个字段，
+所以测试和 lane 都过了；文本路径在 <code>print</code> 处直接 <code>KeyError</code>。
+审计时用一道 gold 题复现并修了：补字段、加防御、加回归用例。</p>
+
+<h2>六、哪些读数还能用</h2>
+
+<table>
+  <thead><tr><th>读数</th><th>状态</th><th>怎么用</th></tr></thead>
+  <tbody>
+    <tr><td>B1 公式与 6 个单测</td><td>可用</td><td>书级分、support 封顶、并列键都对得上方案</td></tr>
+    <tr><td>B2.5 两段词、5 轮、31 个单测、gold 1.000 / 55/60 / 1.40 轮 / p95 650 ms</td><td>可用</td><td>查询规划的核心读数；动作词表只覆盖 gold，迁移性未证</td></tr>
+    <tr><td>B3 README 解析、20 本章节数 20/20、5 个单测</td><td>可用</td><td>选章默认仍按段落分；标题加权默认关</td></tr>
+    <tr><td>B4 五层窗口、缓存键、协议校验、16 个功能单测</td><td>功能可用</td><td>证据口径要重做，不等于代码不能用</td></tr>
+    <tr><td>B5 触发规则、20 题人工清单 20/20、37 个单测</td><td>可用</td><td>卡片什么时候弹是对的；门槛对比宽度要改</td></tr>
+    <tr><td>B6 <code>DEFAULTS</code>、<code>--no-cards</code>、<code>--help</code>、README 命令 rc 0</td><td>可用</td><td>默认值已经落地；性能读数要换成 qsearch 基线</td></tr>
+    <tr><td>旧 B5 <code>+19</code> / <code>+1.7</code></td><td>不可用</td><td>6 卡对 top1 的宽度差；等宽收益 0</td></tr>
+    <tr><td>B6 <code>1.17</code></td><td>不可用</td><td>基线是 book_query mix，不是 qsearch；旧路径是 1.88 到 1.96</td></tr>
+    <tr><td>B4 <code>0.038 ms</code> 缓存命中</td><td>不可用</td><td>读文件时间，不是查询；端到端冷 31,083 ms / 热 153 ms</td></tr>
+    <tr><td>B2 普通层 <code>1.000</code></td><td>要打折</td><td>看过名次后重写 terms 的开发集；不是独立 heldout</td></tr>
+    <tr><td>B6 默认 top1 与 B2 一致</td><td>要重述</td><td>60 题里 3 题不同（O13/S14/S17）；lane-1 只测了一题</td></tr>
+  </tbody>
+</table>
+
+<h2>七、你现在要决定什么</h2>
+
+<ul>
+  <li><strong>书卡要不要默认展示？</strong>这是产品决定，不是准确率决定。保留可以，但文档只能写
+  「多给选择、方便排除」，不能写「命中 +19」。</li>
+  <li><strong>要不要重跑三条读数？</strong>B5 gate 用等宽口径；B6 性能用 qsearch 旧路径；B4 的缓存命中与
+  停止线用同一组章。重跑之后，之前的结论可能仍成立，但数字会换。</li>
+  <li><strong>B2 的普通层怎么办？</strong>要么标成 dev-tuned，要么补一层没筛过的新题；否则 0.983 的
+  总表会一直偏乐观。</li>
+</ul>
+
+<h2>八、自测</h2>
+
+<div class="quiz" data-answer="a" data-hint="看「同一把尺子」那一节的 13 / 15 / 17。">
+  <h3>自测 1：旧门槛的 +19 主要来自什么？</h3>
+  <label><input type="radio" name="q1" value="a"> 展示宽度</label>
+  <label><input type="radio" name="q1" value="b"> 检索能力</label>
+  <label><input type="radio" name="q1" value="c"> 排序错误</label>
+  <label><input type="radio" name="q1" value="d"> 长书下降</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="a" data-hint="循环 top3 和卡片 top3 都是 15/21。">
+  <h3>自测 2：等宽比较，触发题卡片与循环 top3 各是多少？</h3>
+  <label><input type="radio" name="q2" value="a"> 0.714</label>
+  <label><input type="radio" name="q2" value="b"> 0.810</label>
+  <label><input type="radio" name="q2" value="c"> 0.619</label>
+  <label><input type="radio" name="q2" value="d"> 0.883</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="b" data-hint="两遍是 1.96 和 1.88。">
+  <h3>自测 3：B6 性能按旧 qsearch 路径，比值最接近？</h3>
+  <label><input type="radio" name="q3" value="a"> 1.17</label>
+  <label><input type="radio" name="q3" value="b"> 1.96</label>
+  <label><input type="radio" name="q3" value="c"> 2.50</label>
+  <label><input type="radio" name="q3" value="d"> 3.00</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="d" data-hint="JSON 不打印那个字段，文本打印。">
+  <h3>自测 4：P0 崩溃的直接原因？</h3>
+  <label><input type="radio" name="q4" value="a"> 缺索引</label>
+  <label><input type="radio" name="q4" value="b"> 缺模型</label>
+  <label><input type="radio" name="q4" value="c"> 缺缓存</label>
+  <label><input type="radio" name="q4" value="d"> 缺字段</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<h2>九、先读这一份</h2>
+
+<p>主材料是 <a href="../../审计报告-2026-10-23.md">审计报告</a> 的「结论」「P1」
+「已经对得上的部分」三节。要复算等宽读数，看
+<a href="../../live/B6/gate.tsv">gate.tsv</a>；要看性能的两条基线，
+看 <a href="../../live/B6/perf.tsv">perf.tsv</a>。
+一页速查在 <a href="../reference/audit-checklist.html">审计速查</a>；
+旧课 2 的读数在 <a href="0002-book-cards-and-gate.html">书卡与门槛</a>，它的顶部已经加了修订注。</p>
+
+<div class="note">有不清楚的地方直接问。我是你的老师：可以摊开 O06 的 gate 行、把 13/15/17
+再算一遍，或者用一道你熟悉的题演示「top1 / top3 / top5 各看到什么」。</div>
+
+<p class="foot">课 3 · 上一课：<a href="0002-book-cards-and-gate.html">书卡与门槛</a> ·
+下一课：<a href="0004-three-paths.html">三条线：谁先谁后</a> ·
+参考：<a href="../reference/audit-checklist.html">审计速查</a> ·
+<a href="../reference/b5-gate.html">B5 读数速查</a> · <a href="../reference/terms.html">术语表</a></p>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

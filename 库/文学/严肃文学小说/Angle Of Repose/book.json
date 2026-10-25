@@ -1,0 +1,42 @@
+{
+ "uid": "B0849",
+ "title": "Angle Of Repose",
+ "title_from_file": "",
+ "author": "Wallace Stegner",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Angle Of Repose",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Angle Of Repose (Wallace Stegner).epub",
+   "format": "epub",
+   "bytes": 710032,
+   "sha256": "e11e4a44ed94977cea909c18ea81b6dc6674aecd11a910d4406c5e35b946ff6b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 70,
+   "bytes": 1225385
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

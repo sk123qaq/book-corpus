@@ -1,0 +1,34 @@
+{
+ "uid": "B1042",
+ "title": "父が消えた",
+ "title_from_file": "",
+ "author": "尾辻克彦",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/父が消えた",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/父が消えた (尾辻克彦).pdf",
+   "format": "pdf",
+   "bytes": 5130006,
+   "sha256": "ff7a34e4f6d9665f5d97657e6a80fdc0f4a5f80f7d2d52d1ac648ed897d9c262",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

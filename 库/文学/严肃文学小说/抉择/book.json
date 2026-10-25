@@ -1,0 +1,42 @@
+{
+ "uid": "B0781",
+ "title": "抉择",
+ "title_from_file": "",
+ "author": "张平",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/抉择",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/抉择 (张平).epub",
+   "format": "epub",
+   "bytes": 620679,
+   "sha256": "fdccd6af42619eab5e835a3a722ee40a3e216a4dbe738f411ac19110f049ae67",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 54,
+   "bytes": 1098881
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

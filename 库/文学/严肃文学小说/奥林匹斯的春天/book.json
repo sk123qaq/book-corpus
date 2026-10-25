@@ -1,0 +1,42 @@
+{
+ "uid": "B1183",
+ "title": "奥林匹斯的春天",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/奥林匹斯的春天",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/奥林匹斯的春天 (Pdg2Pic, （瑞士）卡尔·施皮特勒（Carl Spitteler）著；施 岷译).pdf",
+   "format": "pdf",
+   "bytes": 20992473,
+   "sha256": "2c1e519151e7d1850cb2966dcf272e895a4e65f51206a1e3e58b2c6a40c634e2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 942914
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B1027",
+ "title": "月山・鳥海山",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/月山・鳥海山/md",
+ "at": "2026-10-18T21:07:42+08:00",
+ "verify_rc": 0,
+ "chapters": 12,
+ "chars": 158146,
+ "images": 4,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.004,
+ "raw_chars": 30157,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1027.prev-2026-10-18T210620-0800"
+}

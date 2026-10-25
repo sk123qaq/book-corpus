@@ -1,0 +1,29 @@
+{
+ "uid": "B0813",
+ "title": "Five stories of Ferrara, None",
+ "format": "pdf",
+ "route": "text",
+ "pages": 228,
+ "dest": "库/文学/严肃文学小说/Five stories of Ferrara, None/md",
+ "at": "2026-10-19T12:42:24+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/Five stories of Ferrara, None/source/Five stories of Ferrara, None (Bassani, Giorgio, 1916-2000, None).pdf --out out/B0813 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0245,
+ "audit_anchors": 1.0,
+ "audit_chars": 325471,
+ "chapters": 1,
+ "chars": 345495,
+ "images": 456,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 228,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

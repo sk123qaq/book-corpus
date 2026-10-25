@@ -1,0 +1,42 @@
+{
+ "uid": "B1681",
+ "title": "斯科塔的太阳",
+ "title_from_file": "",
+ "author": "洛朗·戈代",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/斯科塔的太阳",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/斯科塔的太阳 (洛朗·戈代).epub",
+   "format": "epub",
+   "bytes": 191949,
+   "sha256": "fbfbddb3a225ce2e56e4587e4b58707ce15ac226526547f569584c21d493a6bb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 11,
+   "bytes": 273318
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

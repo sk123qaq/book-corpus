@@ -1,0 +1,35 @@
+{
+ "uid": "B0125",
+ "title": "亲密关系（第6版）",
+ "title_from_file": "",
+ "author": "罗兰·米勒 (Rowland S. Miller)",
+ "subjects": [
+  "人文社科",
+  "心理与认知"
+ ],
+ "path": "人文社科/心理与认知/亲密关系（第6版）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/亲密关系 (第6版) = Intimate Relationship ([美] 罗兰・米勒 (Rowland S. Miller) 著  王伟平 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 12544717,
+   "sha256": "bc45843c166af457b68525c9cb2eb73ca5b4dbf89531aa5ed29fafbae6ae3223",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 243,
+   "bytes": 1053184
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

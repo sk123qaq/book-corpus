@@ -1,0 +1,35 @@
+{
+ "uid": "B0667",
+ "title": "三维游戏引擎设计与实现",
+ "title_from_file": "",
+ "author": "数字媒体艺术与技术系列丛书",
+ "subjects": [
+  "游戏",
+  "游戏设计"
+ ],
+ "path": "游戏/游戏设计/三维游戏引擎设计与实现",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/三维游戏引擎设计与实现 (数字媒体艺术与技术系列丛书) (耿卫东) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 11910632,
+   "sha256": "64bba764a0c577747f7af5813572c501f6c26961621e16bf07a131f75bde9fd4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 114,
+   "bytes": 352620
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

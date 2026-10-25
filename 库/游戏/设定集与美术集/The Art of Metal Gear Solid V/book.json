@@ -1,0 +1,35 @@
+{
+ "uid": "B0659",
+ "title": "The Art of Metal Gear Solid V",
+ "title_from_file": "",
+ "author": "Metal Gear",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/The Art of Metal Gear Solid V",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Art of Metal Gear Solid V (Metal Gear) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 95395416,
+   "sha256": "33c03a115d2d325b2141e6250c7e3c4c3b2c145c0d1e0abee6a363adda73e3ac",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 224,
+   "bytes": 77012
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

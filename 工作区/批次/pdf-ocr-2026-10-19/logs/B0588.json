@@ -1,0 +1,30 @@
+{
+ "uid": "B0588",
+ "title": "古代卷山西建筑史",
+ "format": "pdf",
+ "pages": 769,
+ "dest": "库/建筑与古迹/建筑史与理论/古代卷山西建筑史/md",
+ "at": "2026-10-24T16:30:41+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B0588/merged/pages --out out/B0588 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 14,
+ "pages_per_chunk": 55,
+ "slice_mb_estimate": 15.0,
+ "chunks_done": 14,
+ "merged_pages": 769,
+ "coverage_ok": true,
+ "merged_run_json": "work/B0588/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 723987,
+ "images": 919,
+ "problems": 0,
+ "blank_pages": 2,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}

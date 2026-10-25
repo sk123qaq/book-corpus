@@ -1,0 +1,42 @@
+{
+ "uid": "B0955",
+ "title": "ゲルマニウムの夜",
+ "title_from_file": "",
+ "author": "花村 萬月",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/ゲルマニウムの夜",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ゲルマニウムの夜 (花村 萬月).epub",
+   "format": "epub",
+   "bytes": 302996,
+   "sha256": "11a622db50121797c6a05c7aad6b6112334f4c004bce3da6cafe63cd4f5d9dc6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 336733
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

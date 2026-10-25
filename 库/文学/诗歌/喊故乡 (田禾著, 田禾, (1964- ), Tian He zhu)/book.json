@@ -1,0 +1,42 @@
+{
+ "uid": "B1361",
+ "title": "喊故乡 (田禾著, 田禾, (1964- ), Tian He zhu)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/喊故乡 (田禾著, 田禾, (1964- ), Tian He zhu)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/喊故乡 (田禾著, 田禾, (1964- ), Tian He zhu).pdf",
+   "format": "pdf",
+   "bytes": 1456182,
+   "sha256": "b03f51c2a3c1ff5dea0f8a45a6a5e29cbcc757ab22060ae8f7b0cc37069edcce",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 57889
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

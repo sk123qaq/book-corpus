@@ -1,0 +1,42 @@
+{
+ "uid": "B1135",
+ "title": "茶人三部曲",
+ "title_from_file": "",
+ "author": "王旭烽",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/茶人三部曲",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/茶人三部曲 (王旭烽).epub",
+   "format": "epub",
+   "bytes": 1938029,
+   "sha256": "a8f3ab64f8cf9967752caa36cf50d5137857f67c5290244d7b931fda3d98b82b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 96,
+   "bytes": 3140501
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

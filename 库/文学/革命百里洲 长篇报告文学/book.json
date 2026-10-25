@@ -1,0 +1,41 @@
+{
+ "uid": "B1619",
+ "title": "革命百里洲 长篇报告文学",
+ "title_from_file": "",
+ "author": "中国作家协会",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/革命百里洲 长篇报告文学",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/革命百里洲 长篇报告文学 (赵瑜，胡世全著（中国作家协会）, Zhao Yu, Hu Shiquan zhu etc.).pdf",
+   "format": "pdf",
+   "bytes": 23098407,
+   "sha256": "23ca6f6af1ee522363899e120d7eca6e8acf01d9c32a45af40a082898ebcd314",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 737867
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

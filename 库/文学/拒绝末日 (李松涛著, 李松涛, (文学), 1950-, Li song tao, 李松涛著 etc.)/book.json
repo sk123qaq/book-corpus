@@ -1,0 +1,41 @@
+{
+ "uid": "B1437",
+ "title": "拒绝末日 (李松涛著, 李松涛, (文学), 1950-, Li song tao, 李松涛著 etc.)",
+ "title_from_file": "",
+ "author": "文学",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/拒绝末日 (李松涛著, 李松涛, (文学), 1950-, Li song tao, 李松涛著 etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/拒绝末日 (李松涛著, 李松涛, (文学), 1950-, Li song tao, 李松涛著 etc.).pdf",
+   "format": "pdf",
+   "bytes": 1978999,
+   "sha256": "573be0ca3c61f460675e2b9a97c4314de1727746e02e4aa8c128a0db29ff0191",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 100778
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

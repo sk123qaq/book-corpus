@@ -1,0 +1,34 @@
+{
+ "uid": "B1066",
+ "title": "芥川賞全集 2",
+ "title_from_file": "",
+ "author": "火野 葦平",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/芥川賞全集 2",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/芥川賞全集 2 (火野 葦平).pdf",
+   "format": "pdf",
+   "bytes": 17952717,
+   "sha256": "ee8b2fd200bf05370c31dc95624bd7beffd37e815c3a19444b76603bca89bca9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1070",
+ "title": "荒地の家族",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/荒地の家族",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/荒地の家族 (新潮文庫) (佐藤厚志).epub",
+   "format": "epub",
+   "bytes": 909427,
+   "sha256": "b21403425c08bb3d090e2ead99d6094f5e2d18ec7430bfda7bb162d6504857d7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 218283
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

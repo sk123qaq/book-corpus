@@ -1,0 +1,17 @@
+{
+ "uid": "B0825",
+ "title": "The Hummingbird",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The Hummingbird/md",
+ "at": "2026-10-18T21:07:05+08:00",
+ "verify_rc": 0,
+ "chapters": 52,
+ "chars": 370580,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.988,
+ "raw_chars": 354949,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0825.prev-2026-10-18T210620-0800"
+}

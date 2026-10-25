@@ -1,0 +1,34 @@
+{
+ "uid": "B0974",
+ "title": "中里恒子全集 1",
+ "title_from_file": "",
+ "author": "中里恒子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/中里恒子全集 1",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中里恒子全集 1 (中里恒子).pdf",
+   "format": "pdf",
+   "bytes": 10675167,
+   "sha256": "1e8f27d24b622b14cbc913446dced4a96562c88c078f44ef229c7cc6d3eea1dd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

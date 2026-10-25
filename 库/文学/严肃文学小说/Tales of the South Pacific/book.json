@@ -1,0 +1,42 @@
+{
+ "uid": "B0881",
+ "title": "Tales of the South Pacific",
+ "title_from_file": "",
+ "author": "James A. Michener",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Tales of the South Pacific",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Tales of the South Pacific (James A. Michener).mobi",
+   "format": "mobi",
+   "bytes": 570014,
+   "sha256": "f2e818d72a6a5c8edc1fcddf747e0aa0307c8a911f9f5c8a98405e242e5522d8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 1,
+   "bytes": 812889
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

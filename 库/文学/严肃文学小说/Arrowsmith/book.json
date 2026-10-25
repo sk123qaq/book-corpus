@@ -1,0 +1,42 @@
+{
+ "uid": "B0850",
+ "title": "Arrowsmith",
+ "title_from_file": "",
+ "author": "Sinclair Lewis",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Arrowsmith",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Arrowsmith (Sinclair Lewis).epub",
+   "format": "epub",
+   "bytes": 995401,
+   "sha256": "65b496d1c381e1bb33a0c90737fb39c6bce8c40e28cd5e64212c00a91e64b842",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 42,
+   "bytes": 967543
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

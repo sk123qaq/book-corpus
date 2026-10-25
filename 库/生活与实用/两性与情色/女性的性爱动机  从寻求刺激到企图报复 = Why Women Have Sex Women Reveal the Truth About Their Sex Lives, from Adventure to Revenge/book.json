@@ -1,0 +1,35 @@
+{
+ "uid": "B0203",
+ "title": "女性的性爱动机  从寻求刺激到企图报复 = Why Women Have Sex Women Reveal the Truth About Their Sex Lives, from Adventure to Revenge",
+ "title_from_file": "",
+ "author": "辛迪•M．梅斯顿",
+ "subjects": [
+  "生活与实用",
+  "两性与情色"
+ ],
+ "path": "生活与实用/两性与情色/女性的性爱动机  从寻求刺激到企图报复 = Why Women Have Sex Women Reveal the Truth About Their Sex Lives, from Adventure to Revenge",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/女性的性爱动机  从寻求刺激到企图报复 = Why Women Have Sex Women Reveal the Truth About Their Sex Lives, from Adventure to Revenge ([美] 辛迪・M ・梅斯顿 (Cindy M. Meston) e... (z-library.sk, 1lib.sk, z-lib.sk).azw3",
+   "format": "azw3",
+   "bytes": 420744,
+   "sha256": "abe9f67f1303002810875cc434ee37c9eaf788693ac595a328a763a1def038b7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 113,
+   "bytes": 488065
+  }
+ ],
+ "notes": "依据:TypeSafe(0.96)；置信:0.96"
+}

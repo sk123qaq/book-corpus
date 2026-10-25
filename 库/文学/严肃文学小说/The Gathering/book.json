@@ -1,0 +1,42 @@
+{
+ "uid": "B0758",
+ "title": "The Gathering",
+ "title_from_file": "",
+ "author": "Anne Enright",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Gathering",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Gathering (Anne Enright).epub",
+   "format": "epub",
+   "bytes": 520775,
+   "sha256": "a26bb646f1f02d872acc51f08c373b7bdd1c7112d51938079098ad4336d9ab16",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 41,
+   "bytes": 409179
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

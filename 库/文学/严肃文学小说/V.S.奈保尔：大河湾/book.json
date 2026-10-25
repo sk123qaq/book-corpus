@@ -1,0 +1,42 @@
+{
+ "uid": "B1153",
+ "title": "V.S.奈保尔：大河湾",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/V.S.奈保尔：大河湾",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/V.S.奈保尔：大河湾（如果想读一本书了解V.S.奈保尔文学的精华，那就是《大河湾》！） (V.S.奈保尔).epub",
+   "format": "epub",
+   "bytes": 450630,
+   "sha256": "52bf75f7108eb6d36ada30f7851df3234d64dcc27e1773fad480b96e40bf5d50",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 579683
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1667",
+ "title": "名士风流（全卷本）【上海译文出品！法国龚古尔文学奖作品，战后欧洲社会文化纪实，聚焦知识分子命运，呈现女性生存状态】",
+ "title_from_file": "",
+ "author": "全卷本",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/名士风流（全卷本）【上海译文出品！法国龚古尔文学奖作品，战后欧洲社会文化纪实，聚焦知识分子命运，呈现女性生存状态】",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/名士风流（全卷本）【上海译文出品！法国龚古尔文学奖作品，战后欧洲社会文化纪实，聚焦知识分子命运，呈现女性生存状态】 (西蒙娜·德·波伏....epub",
+   "format": "epub",
+   "bytes": 842479,
+   "sha256": "bfd878053056f209e2fe8922b94f5d3ec3e9d6b00ff27d7e9977a6840e2b9775",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 1593872
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

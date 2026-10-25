@@ -1,0 +1,42 @@
+{
+ "uid": "B1389",
+ "title": "如果大雪封门 (徐则臣著, 徐则臣, 1978- author, 徐则臣, (1978- ))",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/如果大雪封门 (徐则臣著, 徐则臣, 1978- author, 徐则臣, (1978- ))",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/如果大雪封门 (徐则臣著, 徐则臣, 1978- author, 徐则臣, (1978- )).pdf",
+   "format": "pdf",
+   "bytes": 42381245,
+   "sha256": "123109c0ba4cde93751fdb090fb1daa3ab9b9216b9172b751e69bdfa43e1b1a7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 523290
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1632",
+ "title": "鲁迅文学奖获奖者丛书 伴宴",
+ "title_from_file": "",
+ "author": "鲁敏",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/鲁迅文学奖获奖者丛书 伴宴",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/鲁迅文学奖获奖者丛书 伴宴 (鲁敏著, 鲁敏, 1973-, 魯敏).pdf",
+   "format": "pdf",
+   "bytes": 9547167,
+   "sha256": "bb1275f8c758f4d8e6a4f19819e24f73d043dc2a598f6ee389de2daa7a648e3e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 546270
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

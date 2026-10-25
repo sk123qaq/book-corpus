@@ -1,0 +1,35 @@
+{
+ "uid": "B0266",
+ "title": "第二卷",
+ "title_from_file": "",
+ "author": "毛泽东",
+ "subjects": [
+  "人文社科",
+  "政治与法律"
+ ],
+ "path": "人文社科/政治与法律/毛泽东/毛泽东选集/第二卷",
+ "series": "毛泽东选集",
+ "volume": "2",
+ "container": "毛泽东选集",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../../../../source/毛泽东选集（1-5卷） (毛泽东 [毛泽东]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1450614,
+   "sha256": "9177b1096073ead0a8f19f0406e93afa375b7bafab01fe00f87ff899f893fddc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 40,
+   "bytes": 824565
+  }
+ ],
+ "notes": "依据:系列:毛泽东选集；合集拆出 2/5；置信:0.92"
+}

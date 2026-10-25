@@ -1,0 +1,42 @@
+{
+ "uid": "B1676",
+ "title": "守护她",
+ "title_from_file": "",
+ "author": "法让-巴蒂斯特·安德烈亚",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/守护她",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/守护她 (【法】让-巴蒂斯特·安德烈亚).pdf",
+   "format": "pdf",
+   "bytes": 44788314,
+   "sha256": "f719681bc0b8e5b971f4b77cd71728d55737ad383b8696cfc8efd391455e5cb0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 643712
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

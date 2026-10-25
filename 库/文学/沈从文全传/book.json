@@ -1,0 +1,41 @@
+{
+ "uid": "B1485",
+ "title": "沈从文全传",
+ "title_from_file": "",
+ "author": "增订版全二册",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/沈从文全传",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/沈从文全传（增订版全二册，豆瓣口碑榜9.0高分，“感动沈从文家人”的沈从文传记，国家图书馆“文津奖”得主合璧之作） (张新颖).epub",
+   "format": "epub",
+   "bytes": 2998572,
+   "sha256": "a1bb442009e4df0cceff21ba64eda2e5bcced7f3149bdac85461ff777df25134",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 195,
+   "bytes": 1360836
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0239",
+ "title": "新中国性话语研究",
+ "title_from_file": "",
+ "author": "李银河/著 著 无 译",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/新中国性话语研究",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/新中国性话语研究 (李银河) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2095965,
+   "sha256": "19b6a6a594be99c6d30fb7241ca0356b384733e5c8f8830f1bbeb1b3aa54eb90",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 43,
+   "bytes": 737156
+  }
+ ],
+ "notes": "依据:TypeSafe(0.86)；置信:0.86"
+}

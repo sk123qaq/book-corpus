@@ -1,0 +1,42 @@
+{
+ "uid": "B1432",
+ "title": "战争与和平",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/战争与和平",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/战争与和平 (（俄）列夫·托尔斯泰著；刘辽逸译).mobi",
+   "format": "mobi",
+   "bytes": 6055680,
+   "sha256": "183713ec8fd5de8888819ea9a5689c17f2f2ba8c75246c3a5137363560b1104b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 2971584
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

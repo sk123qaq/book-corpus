@@ -1,0 +1,29 @@
+{
+ "uid": "B0814",
+ "title": "Lies of the night",
+ "format": "pdf",
+ "route": "text",
+ "pages": 184,
+ "dest": "库/文学/严肃文学小说/Lies of the night/md",
+ "at": "2026-10-19T12:41:29+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/严肃文学小说/Lies of the night/source/Lies of the night (Bufalino, Gesualdo).pdf --out out/B0814 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0297,
+ "audit_anchors": 1.0,
+ "audit_chars": 217480,
+ "chapters": 1,
+ "chars": 229909,
+ "images": 368,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 184,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1494",
+ "title": "涅槃",
+ "title_from_file": "",
+ "author": "李国文",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/涅槃",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/涅槃 (李国文著, 李国文, 1930-, 李国文著, 李国文).pdf",
+   "format": "pdf",
+   "bytes": 107583882,
+   "sha256": "0f070ecf82d3322e1d4e263ec82a871cb038335d3883bf61c9b56ccecd5be4c2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 956117
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

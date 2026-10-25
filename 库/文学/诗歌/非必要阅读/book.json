@@ -1,0 +1,42 @@
+{
+ "uid": "B1271",
+ "title": "非必要阅读",
+ "title_from_file": "",
+ "author": "维斯瓦娃·辛波斯卡",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/非必要阅读",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/非必要阅读 (维斯瓦娃·辛波斯卡).epub",
+   "format": "epub",
+   "bytes": 417362,
+   "sha256": "c2d7ee6039cba7c595dac0837a823cc5f198292bed06ccabf263d21d92852a10",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 99,
+   "bytes": 303934
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

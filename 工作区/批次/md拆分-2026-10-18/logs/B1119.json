@@ -1,0 +1,17 @@
+{
+ "uid": "B1119",
+ "title": "本巴",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/本巴/md",
+ "at": "2026-10-18T20:12:33+08:00",
+ "verify_rc": 0,
+ "chapters": 38,
+ "chars": 135481,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9329999999999999,
+ "raw_chars": 128682,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1119.prev-2026-10-18T201103-0800"
+}

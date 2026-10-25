@@ -1,0 +1,42 @@
+{
+ "uid": "B1348",
+ "title": "去人间",
+ "title_from_file": "",
+ "author": "汤养宗",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/去人间",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/去人间 (汤养宗).epub",
+   "format": "epub",
+   "bytes": 231482,
+   "sha256": "771dd5ffafe088551ee8961f56b2399c44c616db2860430196e23d67a03d4db0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 230,
+   "bytes": 265423
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

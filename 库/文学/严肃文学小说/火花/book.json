@@ -1,0 +1,42 @@
+{
+ "uid": "B1039",
+ "title": "火花",
+ "title_from_file": "",
+ "author": "日又吉直樹 日又吉直樹",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/火花",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/火花 ([日]又吉直樹 [[日]又吉直樹]).epub",
+   "format": "epub",
+   "bytes": 1462888,
+   "sha256": "8d57b7560fa29b23ab66173f50713e839af90c151234668edef90056b8e92bac",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 185168
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

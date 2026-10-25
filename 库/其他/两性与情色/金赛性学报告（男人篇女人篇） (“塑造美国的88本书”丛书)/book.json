@@ -1,0 +1,35 @@
+{
+ "uid": "B0397",
+ "title": "金赛性学报告（男人篇女人篇） (“塑造美国的88本书”丛书)",
+ "title_from_file": "",
+ "author": "阿尔弗雷德•C•金赛",
+ "subjects": [
+  "其他",
+  "两性与情色"
+ ],
+ "path": "其他/两性与情色/金赛性学报告（男人篇女人篇） (“塑造美国的88本书”丛书)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/金赛性学报告（男人篇女人篇） (“塑造美国的88本书”丛书) (（美）阿尔弗雷德•C•金赛) (z-library.sk, 1lib.sk, z-lib.sk).azw3",
+   "format": "azw3",
+   "bytes": 3682375,
+   "sha256": "68bb0838227f3a22a8ebca03fefc5f254552cdd6251d66cf65d195a4289a3d41",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 155,
+   "bytes": 916848
+  }
+ ],
+ "notes": "依据:未匹配；置信:0.43"
+}

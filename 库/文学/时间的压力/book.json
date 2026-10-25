@@ -1,0 +1,41 @@
+{
+ "uid": "B1458",
+ "title": "时间的压力",
+ "title_from_file": "",
+ "author": "夏立君",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/时间的压力",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/时间的压力 (夏立君).epub",
+   "format": "epub",
+   "bytes": 4651814,
+   "sha256": "cfa817993ea2057cbbd59150b7ad9274d5651304523718bc296482aa4050f506",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 473146
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

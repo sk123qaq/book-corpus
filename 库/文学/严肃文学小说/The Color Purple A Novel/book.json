@@ -1,0 +1,42 @@
+{
+ "uid": "B0889",
+ "title": "The Color Purple A Novel",
+ "title_from_file": "",
+ "author": "Alice Walker",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Color Purple A Novel",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Color Purple A Novel (Alice Walker).epub",
+   "format": "epub",
+   "bytes": 267122,
+   "sha256": "58f0b2a40001db37ab64a2daff2a776fe1f8fadc00bff815948b9541addf4a1f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 93,
+   "bytes": 360899
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

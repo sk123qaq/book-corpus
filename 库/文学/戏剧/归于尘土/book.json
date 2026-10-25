@@ -1,0 +1,42 @@
+{
+ "uid": "B1200",
+ "title": "归于尘土",
+ "title_from_file": "",
+ "author": "品特戏剧",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/归于尘土",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/归于尘土 (品特戏剧) (［英国］哈罗德·品特 [［英国］哈罗德·品特]).epub",
+   "format": "epub",
+   "bytes": 279026,
+   "sha256": "4d50d26e8fb43392079573aea6d83eab27f8e647a2495a54ca2123de171ad3e1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 23,
+   "bytes": 363754
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

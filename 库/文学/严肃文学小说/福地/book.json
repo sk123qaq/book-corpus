@@ -1,0 +1,42 @@
+{
+ "uid": "B1226",
+ "title": "福地",
+ "title_from_file": "",
+ "author": "诺贝尔文学经典超值系列",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/福地",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/福地 (诺贝尔文学经典超值系列) (弗瓦迪斯瓦夫·莱蒙特 [弗瓦迪斯瓦夫·莱蒙特]).epub",
+   "format": "epub",
+   "bytes": 763595,
+   "sha256": "7039033d6810ebe5e4a81aad2a925049e03bed8653f0075ee6338126bf525514",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 44,
+   "bytes": 1294888
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

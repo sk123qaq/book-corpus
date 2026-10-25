@@ -1,0 +1,14 @@
+{
+ "uid": "B1061",
+ "title": "美談の出発",
+ "format": "pdf",
+ "pages": 248,
+ "dest": "库/文学/严肃文学小说/美談の出発/md",
+ "at": "2026-10-19T16:26:24+08:00",
+ "commands": [],
+ "chunks_planned": 2,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 4.1,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B1061_p0001-0150.pdf，150 页，4.09 MB | 提交 HTTP 403 | {\"traceId\":\"46c2c846-b8f2-4b0d-a818-b18469821d49\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

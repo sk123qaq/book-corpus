@@ -1,0 +1,34 @@
+{
+ "uid": "B1060",
+ "title": "美少女,蟹,河野多恵子",
+ "title_from_file": "",
+ "author": "新潮社",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/美少女,蟹,河野多恵子",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/美少女,蟹,河野多恵子 (新潮社).pdf",
+   "format": "pdf",
+   "bytes": 31051933,
+   "sha256": "4622703463b5f9c4b168b433a168b3c58ce1885f7d1b32cc81aedae289000128",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1685",
+ "title": "法兰西遗嘱",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/法兰西遗嘱",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/法兰西遗嘱 (（法）安德烈·马奇诺著；王殿忠译, 马奇诺 Andrei Makine etc.).pdf",
+   "format": "pdf",
+   "bytes": 9165237,
+   "sha256": "1f69ff771c59729a3ac5bf9ccde86a88a7b8c1bb99bc7c7aa42884797018324b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 522429
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

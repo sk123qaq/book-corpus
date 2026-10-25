@@ -1,0 +1,30 @@
+{
+ "uid": "B1423",
+ "title": "恸问苍冥：日军侵华暴行备忘录",
+ "format": "pdf",
+ "pages": 538,
+ "dest": "库/文学/散文随笔/恸问苍冥：日军侵华暴行备忘录/md",
+ "at": "2026-10-24T15:09:48+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1423/merged/pages --out out/B1423 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 8,
+ "pages_per_chunk": 72,
+ "slice_mb_estimate": 14.9,
+ "chunks_done": 8,
+ "merged_pages": 538,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1423/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 310393,
+ "images": 22,
+ "problems": 0,
+ "blank_pages": 0,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}

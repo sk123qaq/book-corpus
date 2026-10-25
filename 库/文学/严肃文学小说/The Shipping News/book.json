@@ -1,0 +1,42 @@
+{
+ "uid": "B0903",
+ "title": "The Shipping News",
+ "title_from_file": "",
+ "author": "E. Annie Proulx",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Shipping News",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Shipping News (E. Annie Proulx).epub",
+   "format": "epub",
+   "bytes": 833290,
+   "sha256": "cd34d23935a1051036c7d1c651078bd293fe94ad59d39d076ef097225dc734c0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 47,
+   "bytes": 636428
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

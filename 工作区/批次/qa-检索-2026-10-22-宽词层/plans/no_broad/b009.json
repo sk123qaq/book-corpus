@@ -1,0 +1,19 @@
+{
+ "question": "秩序为什么在熟人社会靠习惯维持？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "秩序",
+    "熟人社会",
+    "习惯"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [],
+ "broad_weight": 1.0
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B0823",
+ "title": "The Girl with the Leica",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/The Girl with the Leica/md",
+ "at": "2026-10-18T21:07:05+08:00",
+ "verify_rc": 0,
+ "chapters": 11,
+ "chars": 378938,
+ "images": 4,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.883,
+ "raw_chars": 409222,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0823.prev-2026-10-18T210620-0800"
+}

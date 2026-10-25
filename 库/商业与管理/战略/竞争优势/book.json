@@ -1,0 +1,42 @@
+{
+ "uid": "B0353",
+ "title": "竞争优势",
+ "title_from_file": "",
+ "author": "迈克尔•波特 (michael E.porter)",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/竞争优势",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/竞争优势 ( etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1437417,
+   "sha256": "9e36f1b03c29511779112a529fc1ffc8ff7f1185a322175e27100e5f60104dc7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "html",
+   "status": "done",
+   "method": "chapter-html-versions",
+   "chapters": 15,
+   "bytes": 0
+  },
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 955416
+  }
+ ],
+ "notes": "依据:系列:竞争优势；置信:0.97"
+}

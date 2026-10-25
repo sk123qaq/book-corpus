@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>B5 课 1：书卡与门槛读数</title>
+<link rel="stylesheet" href="../assets/style.css">
+<body>
+
+<div class="note"><strong>审计修订（2026-10-23）：</strong>本课的 <code>+19</code> / <code>+1.7</code>
+是「6 张卡 vs 自动只算 top1」的旧口径。全词选章后复跑：触发题卡片 top3 15/21=0.714、
+top6 17/21=0.810；B2.5 循环 top3 15/21、top5 17/21；全部题实际默认六卡 53/60=0.883，
+循环 top5 53/60=0.883。同宽 top3 收益 0。下面保留原课作为「旧读法」，为什么旧读法不成立见
+<a href="0003-same-ruler.html">课 3：同一把尺子</a>。</div>
+
+<h1>书卡与门槛读数</h1>
+<p class="meta">B5 课 1 · 2026-10-23 · 书库检索的书卡与用户反馈</p>
+
+<p class="lead">这一课只解决三件事：什么时候弹书卡；卡上每一行是什么；门槛表怎么读，
+以及为什么结论是「只做 opt-in」。读完你能自己复算那张 60 题的表。</p>
+
+<h2>一、书卡解决什么问题</h2>
+
+<p>检索先给一个书级排序。排序第一的书不一定对：分差可能只有 1%，或者前十本跨了三个类型。
+书卡把「系统替你选 top1」改成「给你 5 到 8 本，你选 1 到 3 本」。它不是搜索框，也不改
+检索本身；它只在首轮之后出现一次。</p>
+
+<figure>
+<svg viewBox="0 0 900 150" role="img" aria-label="书卡流程">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a3b12"/>
+    </marker>
+  </defs>
+  <style>
+    .bx { fill:#fff; stroke:#b9b1a4; stroke-width:1.2 }
+    .tt { font:600 12.5px "Noto Sans CJK SC",sans-serif; fill:#1b1b1b }
+    .sm { font:11px "Noto Sans CJK SC",sans-serif; fill:#666 }
+    .ln { stroke:#8a3b12; stroke-width:1.3; fill:none; marker-end:url(#ar) }
+  </style>
+  <rect class="bx" x="12" y="24" width="150" height="62" rx="4"/>
+  <text class="tt" x="87" y="48" text-anchor="middle">首轮检索</text>
+  <text class="sm" x="87" y="66" text-anchor="middle">名词集 → 书级排序</text>
+  <rect class="bx" x="192" y="24" width="150" height="62" rx="4"/>
+  <text class="tt" x="267" y="48" text-anchor="middle">触发判断</text>
+  <text class="sm" x="267" y="66" text-anchor="middle">4 条规则 + 3 类抑制</text>
+  <rect class="bx" x="372" y="24" width="150" height="62" rx="4"/>
+  <text class="tt" x="447" y="48" text-anchor="middle">6 张卡</text>
+  <text class="sm" x="447" y="66" text-anchor="middle">书名 / 类型 / 最佳章</text>
+  <rect class="bx" x="552" y="24" width="150" height="62" rx="4"/>
+  <text class="tt" x="627" y="48" text-anchor="middle">用户动作</text>
+  <text class="sm" x="627" y="66" text-anchor="middle">选书 / 排除 / 换一批</text>
+  <rect class="bx" x="732" y="24" width="156" height="62" rx="4"/>
+  <text class="tt" x="810" y="48" text-anchor="middle">下一步</text>
+  <text class="sm" x="810" y="66" text-anchor="middle">只读选中的书</text>
+  <line class="ln" x1="162" y1="55" x2="190" y2="55"/>
+  <line class="ln" x1="342" y1="55" x2="370" y2="55"/>
+  <line class="ln" x1="522" y1="55" x2="550" y2="55"/>
+  <line class="ln" x1="702" y1="55" x2="730" y2="55"/>
+  <text class="sm" x="450" y="118" text-anchor="middle">不触发时跳过卡片，直接返回 top1 书；选中之后才跑 B4 扩展（默认每本最佳章）</text>
+</svg>
+</figure>
+
+<h2>二、什么时候弹</h2>
+
+<p>四条规则任一成立，且不是书名、作者、原句查询：</p>
+
+<table>
+  <thead><tr><th>规则</th><th>条件</th><th>例子</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>top1 与 top2 分差 &lt; 10%</td><td>礼治：1.03%</td></tr>
+    <tr><td>2</td><td>top10 跨至少三个类型</td><td>礼治：社科 + 文学 + …</td></tr>
+    <tr><td>3</td><td>top10 里有 ≥50 章的书</td><td>礼治：三本长书</td></tr>
+    <tr><td>4</td><td>概念型开放问题，无书名/作者提示</td><td>「礼治社会靠什么维持秩序？」</td></tr>
+  </tbody>
+</table>
+
+<p>抑制优先于规则：问句里点了书名（包括 2 字书名 + 「里」、<code>《…》</code> 里的书名）、
+作者名，或者是 ≥12 字的原句，就不弹。60 题里 21 题触发、39 题不触发；不触发的多数是
+「《万历十五年》里…」「凡人修仙传里…」这种已经把书点名的题。</p>
+
+<p>触发逻辑有一份 20 题人工清单：<a href="../../live/B5/trigger-20.txt">trigger-20.txt</a>（人读）
+与 <a href="../../live/B5/trigger-20.tsv">trigger-20.tsv</a>（机读）。每题都带问句、检索词、
+可接受书、首轮 top1、分差、类型数、长书数、命中提示、期望理由与代码原因；先看
+<code>expected / actual / match</code>，不一致时再逐项看提示与理由。人工 expected 与逻辑
+actual 对上 20/20。</p>
+
+<pre>[O01] expected=1 actual=1 match=1
+问句：礼治社会靠什么维持秩序，为什么不需要法律？
+检索词：礼治,秩序,法律
+分差 1.03% ｜ top10 类型 3 ｜ top10 ≥50 章 3 ｜ 卡数 6 ｜ 目标书在卡里 1
+提示：书名=- ｜ 作者=- ｜ 原句=否 ｜ 概念=是 ｜ 问句词=为什么|什么|靠什么
+期望理由：开放概念问句；没有书名/作者/原句提示；R1/R2/R3/R4 都成立
+代码原因：margin,types,long,concept
+
+[O04] expected=0 actual=0 match=1
+问句：动物农场里所有动物平等，为什么有些动物更平等？
+提示：书名=动物农场 ｜ 作者=- ｜ 原句=否 ｜ 概念=否 ｜ 问句词=为什么|什么
+期望理由：问句点了书名《动物农场》；按抑制规则不弹卡
+代码原因：-</pre>
+
+<p>清单抓出过三处误触发：L03「遮天里…」、L05「剑来里…」是 2 字书名；
+S02「《搜神记》…」是书名号里的书名但不在库里。补了两条判断才消掉。</p>
+
+<h2>三、五张卡长什么样</h2>
+
+<p>lane 1 是「礼治 秩序 法律」，问句「礼治社会靠什么维持秩序，为什么不需要法律？」。
+分差 1.03%、三个类型、三本长书、概念命中，四个原因全中。它给 6 张卡，默认前三本：</p>
+
+<table>
+  <thead><tr><th>#</th><th>书名</th><th>类型</th><th>章</th><th>最佳章</th><th>为什么在这</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>乡土中国（2）</td><td>社科</td><td>18</td><td>无讼</td><td>第 1 名，best 32.89，support 5，cov 1.00</td></tr>
+    <tr><td>2</td><td>乡土中国</td><td>社科</td><td>17</td><td>礼治秩序</td><td>第 2 名，best 32.47，support 5，cov 1.00</td></tr>
+    <tr><td>3</td><td>刘擎西方现代思想讲义</td><td>社科</td><td>171</td><td>自发秩序</td><td>第 3 名，best 20.11，cov 0.67</td></tr>
+    <tr><td>4</td><td>盐铁论</td><td>社科</td><td>60</td><td>周秦第五十七</td><td>第 4 名，best 18.96，support 1</td></tr>
+    <tr><td>5</td><td>政治秩序的起源</td><td>社科</td><td>33</td><td>第18章教会变为国家</td><td>第 5 名，best 18.78，support 5</td></tr>
+  </tbody>
+</table>
+
+<p>每张卡有九个字段：书名、类型、章数、最佳章、片段、命中组、书级分、原因、目录状态。
+「最佳章」是系统会先读的那一章，不是书的第一章；「片段」是这一章里最好的一段正文。
+第 1、2 张是《乡土中国》的两个版本，卡里都列出来，用户自己选；这不是重复，是让用户
+决定用哪个版本。</p>
+
+<div class="note">片段要检查是不是正文。初版第 5 张卡给的是脚注（<code>[[20]]()</code> 引用），
+第 4 张是章标题；加了去标题、去脚注标记、跳过表格/引用块的过滤后，五张都是正文段。
+指标看不出这件事，所以验收要读卡。</div>
+
+<h2>四、门槛表怎么读</h2>
+
+<p>先记住三个「命中」：</p>
+
+<ul>
+  <li><strong>auto</strong>：首轮 top1 书的前三章里有没有可接受章。</li>
+  <li><strong>loop</strong>：B2.5 循环最终 top1 的前三章。它是「最好的自动方案」，门槛要和它比。</li>
+  <li><strong>card</strong>：目标书在卡里，用户选中它之后，它的前三章里有没有可接受章。这是上限，
+  因为假设用户一定选对。</li>
+</ul>
+
+<p>60 题里 21 题触发、39 题不触发。触发题用卡，未触发题走 auto，合起来就是
+<code>effective</code>。把题拆开算，一切就清楚了：</p>
+
+<table>
+  <thead><tr><th>子集</th><th>题数</th><th>auto</th><th>loop</th><th>card</th></tr></thead>
+  <tbody>
+    <tr><td>未触发</td><td>39</td><td>28</td><td>31</td><td>28（走 auto）</td></tr>
+    <tr><td>触发</td><td>21</td><td>13</td><td>13</td><td>17</td></tr>
+    <tr><td>合计</td><td>60</td><td>41</td><td>44</td><td>45</td></tr>
+  </tbody>
+</table>
+
+<p>于是：<code>auto_hit</code> 41/60 = 0.683；<code>loop_hit</code> 44/60 = 0.733；
+<code>effective_hit</code> 45/60 = 0.750。全部题只比循环多 1 题，1/60 = <strong>1.7 点</strong>，
+不到 10 点线。触发题上 17 对 13，4/21 = <strong>19.0 点</strong>，过线。</p>
+
+<div class="note">为什么只有 1.7 点：触发题 +4（17 对 13），但未触发题走首轮 auto，比循环少 3
+（28 对 31），净 +1，1/60 = 1.7 点。卡片只在 21 题上生效，未触发题没有吃到循环的收益。
+门槛的「全部题」口径看产品整体，「触发题」口径看功能本身；两个都要报，不能只挑过的那个。</div>
+
+<p>长书路径也没过。卡片展示的长书占比是 0.175（触发题），循环 top10 是 0.153；6 张卡里
+平均约 1 本 ≥500 章的书，比循环略高。排除类型能把长书压到 0.033，但触发题命中掉到 0.429，
+因为目标书常在被排除的类型里。所以长书路径不是通过路径。</p>
+
+<p>结论：全部题 +1.7 点不过，触发题 +19 点过，长书路径不过；<code>recommend = opt-in</code>。
+书卡保留为 <code>--cards</code>，不进默认，等真实用户选择记录。</p>
+
+<h2>五、自测</h2>
+
+<div class="quiz" data-answer="a" data-hint="回到「门槛表怎么读」的拆分表。">
+  <h3>自测 1：全部 60 题，书卡比循环高多少？</h3>
+  <label><input type="radio" name="q1" value="a"> 1.7 个百分点</label>
+  <label><input type="radio" name="q1" value="b"> 5.0 个百分点</label>
+  <label><input type="radio" name="q1" value="c"> 10 个百分点</label>
+  <label><input type="radio" name="q1" value="d"> 19 个百分点</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="d" data-hint="触发题是 17/21 对 13/21。">
+  <h3>自测 2：触发题上，书卡比循环高多少？</h3>
+  <label><input type="radio" name="q2" value="a"> 1.7 个百分点</label>
+  <label><input type="radio" name="q2" value="b"> 5.0 个百分点</label>
+  <label><input type="radio" name="q2" value="c"> 10 个百分点</label>
+  <label><input type="radio" name="q2" value="d"> 19 个百分点</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="a" data-hint="看「全部题」和「触发题」两个口径的差别。">
+  <h3>自测 3：为什么结论是 opt-in，不是默认？</h3>
+  <label><input type="radio" name="q3" value="a"> 全部题只高 1.7 点</label>
+  <label><input type="radio" name="q3" value="b"> 触发题只高 1.7 点</label>
+  <label><input type="radio" name="q3" value="c"> 卡片延迟超过一秒</label>
+  <label><input type="radio" name="q3" value="d"> 长书占比已经下降</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<div class="quiz" data-answer="d" data-hint="抑制是「不弹」的条件，不是「弹」的条件。">
+  <h3>自测 4：下面哪一项是抑制而不是触发？</h3>
+  <label><input type="radio" name="q4" value="a"> 分差小于百分之十</label>
+  <label><input type="radio" name="q4" value="b"> 前十里跨三个类型</label>
+  <label><input type="radio" name="q4" value="c"> 前十里有一本长书</label>
+  <label><input type="radio" name="q4" value="d"> 问句里有书名号</label>
+  <button>看结果</button><div class="fb"></div>
+</div>
+
+<h2>六、先读这一份</h2>
+
+<p>主材料是 <a href="../../单元报告-B5.md">单元报告-B5.md</a> 的「结论」「门槛」「五张卡」
+「发现」四节。要复算就看 <a href="../../live/B5/gate.tsv">gate.tsv</a> 的 60 行；
+要看卡片的原始 JSON 就看 <a href="../../live/B5/lane-1.json">lane-1.json</a>；
+触发边界看 <a href="../../live/B5/trigger-20.tsv">trigger-20.tsv</a>。
+速查表在 <a href="../reference/b5-gate.html">B5 读数速查</a>。</p>
+
+<div class="note">有不清楚的地方直接问。我是你的老师：可以摊开任意一道题的 gate 行、任意一张卡的
+JSON，或者把 1.7 与 19 的算法再算一遍。</div>
+
+<p class="foot">课 2 · 上一课：<a href="0001-five-levels-and-rounds.html">五层披露与轮次</a> ·
+下一课：<a href="0003-same-ruler.html">同一把尺子</a> ·
+参考：<a href="../reference/b5-gate.html">B5 读数速查</a> · <a href="../reference/terms.html">术语表</a></p>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

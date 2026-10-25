@@ -1,0 +1,17 @@
+{
+ "uid": "B1555",
+ "title": "艾青诗选集",
+ "format": "epub",
+ "dest": "库/文学/诗歌/艾青诗选集/md",
+ "at": "2026-10-18T21:08:27+08:00",
+ "verify_rc": 0,
+ "chapters": 6,
+ "chars": 53404,
+ "images": 9,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.996,
+ "raw_chars": 49053,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1555.prev-2026-10-18T210620-0800"
+}

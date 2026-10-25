@@ -1,0 +1,42 @@
+{
+ "uid": "B0791",
+ "title": "眷恋 STAYING ON",
+ "title_from_file": "",
+ "author": "保罗.斯格特 paul scott",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/眷恋 STAYING ON",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/眷恋 STAYING ON (保罗.斯格特 paul scott).pdf",
+   "format": "pdf",
+   "bytes": 9733067,
+   "sha256": "d628db28c957e5e076d6aff5f35639b7dcd67e6b6e08457155dc2247a61fe36c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 505367
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

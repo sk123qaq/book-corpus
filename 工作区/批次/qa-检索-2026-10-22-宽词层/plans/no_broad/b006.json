@@ -1,0 +1,18 @@
+{
+ "question": "正义为什么需要道德约束？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "正义",
+    "道德约束"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [],
+ "broad_weight": 1.0
+}

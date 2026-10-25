@@ -1,0 +1,34 @@
+{
+ "uid": "B0499",
+ "title": "高效能人士的七个习惯",
+ "title_from_file": "",
+ "author": "史蒂芬·柯维, SoBooKs.cc",
+ "subjects": [
+  "商业与管理"
+ ],
+ "path": "商业与管理/高效能人士的七个习惯",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/高效能人士的七个习惯 (30周年纪念版)：打造一套全新的思维方式和原则体系 = The 7 Habits of Highly Effective People 30th Anniversary Edition ([美] 史蒂芬 · 柯维 (... (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 6052041,
+   "sha256": "8a1b7405569daf2bc5b8fe104d397e7c330ef86fc3cd4712f901877b0d7a3b12",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 42,
+   "bytes": 543163
+  }
+ ],
+ "notes": "依据:TypeSafe(0.92)；置信:0.92"
+}

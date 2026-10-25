@@ -1,0 +1,42 @@
+{
+ "uid": "B0845",
+ "title": "All The Kings Men A Novel",
+ "title_from_file": "",
+ "author": "Robert Penn Warren",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/All The Kings Men A Novel",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/All The Kings Men A Novel (Robert Penn Warren).epub",
+   "format": "epub",
+   "bytes": 985364,
+   "sha256": "974d87be0bc68bc25211727956fad9b90015b801283acf32865ae8bd52247547",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 11,
+   "bytes": 1170265
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

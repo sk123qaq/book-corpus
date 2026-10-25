@@ -1,0 +1,42 @@
+{
+ "uid": "B1415",
+ "title": "张新泉的诗",
+ "title_from_file": "",
+ "author": "ePUBw.COM 张新泉",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/张新泉的诗",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/张新泉的诗 (ePUBw.COM 张新泉).azw3",
+   "format": "azw3",
+   "bytes": 369715,
+   "sha256": "065c7cb896653f4f902cbaf9e720f5bfc435bbebe01eceff2ca05cc0a3586a8f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 177,
+   "bytes": 127396
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

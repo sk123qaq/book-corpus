@@ -1,0 +1,42 @@
+{
+ "uid": "B0760",
+ "title": "The God of Small Things",
+ "title_from_file": "",
+ "author": "Arundhati Roy",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The God of Small Things",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The God of Small Things (Arundhati Roy).epub",
+   "format": "epub",
+   "bytes": 259183,
+   "sha256": "96f3d257cdcb9a5f057a12b70f0f3c1e2bec9113092c5b40dee82dd2feff378b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 562708
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

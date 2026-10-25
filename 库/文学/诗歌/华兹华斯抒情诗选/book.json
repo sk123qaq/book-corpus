@@ -1,0 +1,42 @@
+{
+ "uid": "B1346",
+ "title": "华兹华斯抒情诗选",
+ "title_from_file": "",
+ "author": "华兹华斯",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/华兹华斯抒情诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/华兹华斯抒情诗选 (华兹华斯).pdf",
+   "format": "pdf",
+   "bytes": 7045506,
+   "sha256": "e24329698bd51e9842a21b20afd9ab54ac518783ebe457e556e5e844ef4656a9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 272637
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

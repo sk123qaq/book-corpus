@@ -1,0 +1,41 @@
+{
+ "uid": "B0554",
+ "title": "性学观止",
+ "title_from_file": "",
+ "author": "贺兰特·凯查杜里安",
+ "subjects": [
+  "生活与实用"
+ ],
+ "path": "生活与实用/性学观止",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/性学观止（插图第6版） (（美）贺兰特·凯查杜里安).epub",
+   "format": "epub",
+   "bytes": 2194586,
+   "sha256": "bda8b7f9e8f23dc2b99a444e8656ba1e3a8849bb45208b12c4cf6670de86bf58",
+   "primary_src": 1
+  },
+  {
+   "file": "source/性学观止 (贺兰特·凯查杜里安, 胡颖翀) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 46500657,
+   "sha256": "0a7c4e1b118de0e42c0968380184a4fed35147b7f7a30fc63fafe729ff657ddd",
+   "primary_src": 0
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 42,
+   "bytes": 560501
+  }
+ ],
+ "notes": "依据:TypeSafe(0.65)；置信:0.65"
+}

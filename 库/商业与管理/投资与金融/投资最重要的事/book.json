@@ -1,0 +1,35 @@
+{
+ "uid": "B0236",
+ "title": "投资最重要的事",
+ "title_from_file": "",
+ "author": "霍华德·马克斯",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/投资最重要的事",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/投资最重要的事（全新升级版）：顶尖价值投资者的忠告 ([美]霍华德·马克斯) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1401467,
+   "sha256": "54f68a8091fa9f9c171b9a4c378e0bde29c4d1be1823ae3da725cf945b63b55d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 44,
+   "bytes": 423396
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

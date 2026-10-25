@@ -1,0 +1,35 @@
+{
+ "uid": "B0332",
+ "title": "生死疲劳",
+ "title_from_file": "",
+ "author": "莫言",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/生死疲劳",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/生死疲劳 (莫言) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 649037,
+   "sha256": "07738665e2ae9a1f76c76cac7a5c6869e667d55deb5288be67366986fdaa56be",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 53,
+   "bytes": 1176792
+  }
+ ],
+ "notes": "依据:系列:莫言；置信:1.0"
+}

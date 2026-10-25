@@ -1,0 +1,17 @@
+{
+ "uid": "B1235",
+ "title": "紫罗兰",
+ "format": "epub",
+ "dest": "库/文学/紫罗兰/md",
+ "at": "2026-10-18T21:08:02+08:00",
+ "verify_rc": 0,
+ "chapters": 133,
+ "chars": 53417,
+ "images": 65,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 46463,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1235.prev-2026-10-18T210620-0800"
+}

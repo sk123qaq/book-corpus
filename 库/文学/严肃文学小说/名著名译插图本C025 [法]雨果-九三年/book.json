@@ -1,0 +1,42 @@
+{
+ "uid": "B1354",
+ "title": "名著名译插图本C025 [法]雨果-九三年",
+ "title_from_file": "",
+ "author": "郑永慧",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/名著名译插图本C025 [法]雨果-九三年",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/名著名译插图本C025 [法]雨果-九三年（郑永慧译，人民文学出版社2004） ([法]雨果著，郑永慧译).pdf",
+   "format": "pdf",
+   "bytes": 28399748,
+   "sha256": "cb0fb36e43f5093f7b57888b9e6cad954db1761e30425c550ea4ca28dc860cb7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 699844
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

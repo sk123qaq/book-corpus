@@ -1,0 +1,42 @@
+{
+ "uid": "B1261",
+ "title": "这不可能发生",
+ "title_from_file": "",
+ "author": "Sinclair Lewis",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/这不可能发生",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/这不可能发生 = It Cant Happen Here ([美] 辛克莱・刘易斯 (Sinclair Lewis) 著  仲树 译).epub",
+   "format": "epub",
+   "bytes": 1015602,
+   "sha256": "58ee7396bcf0732532a2236d7c02c4205960e1fba92de6e556d3b51810c9a01d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 39,
+   "bytes": 824946
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

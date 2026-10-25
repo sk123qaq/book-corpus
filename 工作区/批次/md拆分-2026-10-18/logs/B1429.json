@@ -1,0 +1,17 @@
+{
+ "uid": "B1429",
+ "title": "我的孤独是一座花园：阿多尼斯诗选",
+ "format": "epub",
+ "dest": "库/文学/诗歌/我的孤独是一座花园：阿多尼斯诗选/md",
+ "at": "2026-10-18T20:13:37+08:00",
+ "verify_rc": 0,
+ "chapters": 88,
+ "chars": 46891,
+ "images": 8,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 40307,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1429.prev-2026-10-18T201103-0800"
+}

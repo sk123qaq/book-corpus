@@ -1,0 +1,42 @@
+{
+ "uid": "B1343",
+ "title": "北京：城与年",
+ "title_from_file": "",
+ "author": "ePUBw.COM 宁肯",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/北京：城与年",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/北京：城与年 (ePUBw.COM 宁肯).azw3",
+   "format": "azw3",
+   "bytes": 515288,
+   "sha256": "e15fdee2e0920a47f78008770fdd356cd2724f2af0e711578ddeedcc79809c29",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 42,
+   "bytes": 386397
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

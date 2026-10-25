@@ -1,0 +1,17 @@
+{
+ "uid": "B0378",
+ "title": "莫言经典作品",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/莫言经典作品/md",
+ "at": "2026-10-18T21:06:25+08:00",
+ "verify_rc": 0,
+ "chapters": 200,
+ "chars": 1928967,
+ "images": 7,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 1690257,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0378.prev-2026-10-18T210620-0800"
+}

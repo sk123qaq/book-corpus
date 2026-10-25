@@ -1,0 +1,42 @@
+{
+ "uid": "B1579",
+ "title": "贺拉斯诗全集：拉中对照详注本",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/贺拉斯诗全集：拉中对照详注本",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/贺拉斯诗全集：拉中对照详注本(套装共2册) (贺拉斯).epub",
+   "format": "epub",
+   "bytes": 4253856,
+   "sha256": "0e7352a8a160d14a6df0102a3e533100d322f153c29d9652828cc5cc7337fce6",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 361,
+   "bytes": 3046463
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

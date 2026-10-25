@@ -1,0 +1,35 @@
+{
+ "uid": "B0588",
+ "title": "古代卷山西建筑史",
+ "title_from_file": "",
+ "author": "本书编委会",
+ "subjects": [
+  "建筑与古迹",
+  "建筑史与理论"
+ ],
+ "path": "建筑与古迹/建筑史与理论/古代卷山西建筑史",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/古代卷山西建筑史 (本书编委会, 山西省建筑业协会主编, 张学锋, 王国正, 山西省建筑业协会) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 209627092,
+   "sha256": "57f29202e4f7755f6e38838229cd494722c50af19809a4df1477892a13a33e5d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1900619
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

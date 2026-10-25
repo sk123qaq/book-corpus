@@ -1,0 +1,42 @@
+{
+ "uid": "B0947",
+ "title": "むらさきのスカートの女",
+ "title_from_file": "",
+ "author": "今村 夏子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/むらさきのスカートの女",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/むらさきのスカートの女 (今村 夏子).epub",
+   "format": "epub",
+   "bytes": 3338144,
+   "sha256": "ecd6bb62dd2386f32f4786cbfffac38c752756043b9c3a8890b42ce1b616a1aa",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 263289
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1477",
+ "title": "棉花垛永远有多远",
+ "title_from_file": "",
+ "author": "铁凝",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/棉花垛永远有多远",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/棉花垛永远有多远 (铁凝).epub",
+   "format": "epub",
+   "bytes": 216797,
+   "sha256": "cd3ef59d7cb1abfd91bfcc9b41c8d205ea4edc31192d11b213d2f0b6d8583211",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 22,
+   "bytes": 212780
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

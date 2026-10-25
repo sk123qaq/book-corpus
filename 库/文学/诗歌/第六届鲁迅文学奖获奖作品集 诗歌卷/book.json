@@ -1,0 +1,42 @@
+{
+ "uid": "B1542",
+ "title": "第六届鲁迅文学奖获奖作品集 诗歌卷",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/第六届鲁迅文学奖获奖作品集 诗歌卷",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/第六届鲁迅文学奖获奖作品集 诗歌卷 (中国作家协会鲁迅文学奖评奖办公室编 etc.).pdf",
+   "format": "pdf",
+   "bytes": 26310891,
+   "sha256": "26ae6aba22aba58379f2d60b47ea04972fa7b338cd5297e8be2b2da8b8a0944b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 215916
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

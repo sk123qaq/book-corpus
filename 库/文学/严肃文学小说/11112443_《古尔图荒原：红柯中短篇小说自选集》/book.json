@@ -1,0 +1,42 @@
+{
+ "uid": "B1281",
+ "title": "11112443_《古尔图荒原：红柯中短篇小说自选集》",
+ "title_from_file": "",
+ "author": "红柯",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/11112443_《古尔图荒原：红柯中短篇小说自选集》",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/11112443_《古尔图荒原：红柯中短篇小说自选集》 (红柯著, Hongke zhu, 红柯, 1962-, 红柯著, 红柯).pdf",
+   "format": "pdf",
+   "bytes": 11215175,
+   "sha256": "2854fa69be73b41fd773734729f83629fc6f4adb3af01c79e0d23fdf5c62fc59",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 621403
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

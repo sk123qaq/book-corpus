@@ -1,0 +1,42 @@
+{
+ "uid": "B0800",
+ "title": "证言",
+ "title_from_file": "",
+ "author": "《使女的故事》续作",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/证言",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/证言 (《使女的故事》续作) = The Testaments ([加拿大] 玛格丽特·阿特伍德 (Margaret Atwood), 于是 译).epub",
+   "format": "epub",
+   "bytes": 451101,
+   "sha256": "c6dc7a3e3c7d0bfe587fe85113b46425558511cdb790e6f5b09862c27eff2840",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 74,
+   "bytes": 636923
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

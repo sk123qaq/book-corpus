@@ -1,0 +1,14 @@
+{
+ "uid": "B0966",
+ "title": "プールサイド小景·静物",
+ "format": "pdf",
+ "pages": 276,
+ "dest": "库/文学/严肃文学小说/プールサイド小景·静物/md",
+ "at": "2026-10-19T16:27:45+08:00",
+ "commands": [],
+ "chunks_planned": 2,
+ "pages_per_chunk": 148,
+ "slice_mb_estimate": 14.9,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B0966_p0001-0148.pdf，148 页，15.50 MB | 提交 HTTP 403 | {\"traceId\":\"c30a529c-a4a6-47da-b4c5-fccacc40d86f\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

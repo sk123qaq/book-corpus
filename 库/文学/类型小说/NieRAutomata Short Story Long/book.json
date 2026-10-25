@@ -1,0 +1,35 @@
+{
+ "uid": "B0615",
+ "title": "NieRAutomata Short Story Long",
+ "title_from_file": "",
+ "author": "Jun Eishima",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/NieRAutomata Short Story Long",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/NieRAutomata Short Story Long (Jun Eishima, Yoko Taro) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 2315708,
+   "sha256": "dd7dd65d6731e065e7bdee4a095752d035e9f7939f333b9919a674fb4fc5316c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 11,
+   "bytes": 322379
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

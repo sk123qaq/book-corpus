@@ -1,0 +1,42 @@
+{
+ "uid": "B1440",
+ "title": "持微火者（mobi）",
+ "title_from_file": "",
+ "author": "修订本",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/持微火者（mobi）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/持微火者（修订本）（茅盾文学奖评委、第八届鲁迅文学奖文学理论评论奖得主张莉的文艺随笔集；为当代作家绘制群像） (张莉).mobi",
+   "format": "mobi",
+   "bytes": 1389296,
+   "sha256": "75e0e1ffd500ab2e67bd6255ec83ad313bfa13f69cabd1623300a0f6e2835a4e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 110,
+   "bytes": 425218
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项；同名冲突加限定词（mobi）"
+}

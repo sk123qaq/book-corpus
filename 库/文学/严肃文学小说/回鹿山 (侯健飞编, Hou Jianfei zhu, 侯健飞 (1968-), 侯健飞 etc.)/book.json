@@ -1,0 +1,42 @@
+{
+ "uid": "B1363",
+ "title": "回鹿山 (侯健飞编, Hou Jianfei zhu, 侯健飞 (1968-), 侯健飞 etc.)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/回鹿山 (侯健飞编, Hou Jianfei zhu, 侯健飞 (1968-), 侯健飞 etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/回鹿山 (侯健飞编, Hou Jianfei zhu, 侯健飞 (1968-), 侯健飞 etc.).pdf",
+   "format": "pdf",
+   "bytes": 6132241,
+   "sha256": "bd83bb96fe6de182d1aa9a7daea195d9bf76e6abb1a7b04e54323fea348cb617",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 354809
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

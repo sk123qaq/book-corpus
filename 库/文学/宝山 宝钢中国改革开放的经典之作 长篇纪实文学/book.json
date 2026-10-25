@@ -1,0 +1,41 @@
+{
+ "uid": "B1393",
+ "title": "宝山 宝钢中国改革开放的经典之作 长篇纪实文学",
+ "title_from_file": "",
+ "author": "李春雷",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/宝山 宝钢中国改革开放的经典之作 长篇纪实文学",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/宝山 宝钢中国改革开放的经典之作 长篇纪实文学 (李春雷著, 李春雷著, 李春雷).pdf",
+   "format": "pdf",
+   "bytes": 4626571,
+   "sha256": "cbebe0f66cc82e8077e7a40bc3163321f27f0c4999ebc438f3cc4657955406a8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 496602
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

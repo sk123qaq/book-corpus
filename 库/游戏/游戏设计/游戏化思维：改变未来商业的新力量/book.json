@@ -1,0 +1,35 @@
+{
+ "uid": "B0673",
+ "title": "游戏化思维：改变未来商业的新力量",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "游戏",
+  "游戏设计"
+ ],
+ "path": "游戏/游戏设计/游戏化思维：改变未来商业的新力量",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/游戏化思维：改变未来商业的新力量 (（美）韦巴赫，（美）亨特 [未知]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 9150600,
+   "sha256": "3d2cdc537bb1309adfb591cbfc7741b193ada25c55a05f1f0bf7086f209e44ca",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 237896
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

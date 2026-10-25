@@ -1,0 +1,35 @@
+{
+ "uid": "B0233",
+ "title": "思考，快与慢",
+ "title_from_file": "",
+ "author": "丹尼尔•卡尼曼",
+ "subjects": [
+  "人文社科",
+  "心理与认知"
+ ],
+ "path": "人文社科/心理与认知/思考，快与慢",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/思考, 快与慢 = Thinking, Fast and Slow ([美] 丹尼尔 · 卡尼曼 (Daniel Kahneman) 著 胡晓姣 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 980286,
+   "sha256": "6d781edcb77269e18da6fe154aa2fdc99871182e3ccf143c5854116faf0b5fc4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 172,
+   "bytes": 1027105
+  }
+ ],
+ "notes": "依据:TypeSafe(0.95)；置信:0.95"
+}

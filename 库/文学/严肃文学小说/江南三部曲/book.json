@@ -1,0 +1,42 @@
+{
+ "uid": "B1121",
+ "title": "江南三部曲",
+ "title_from_file": "",
+ "author": "格非",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/江南三部曲",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/江南三部曲 (格非).epub",
+   "format": "epub",
+   "bytes": 1407881,
+   "sha256": "9b5a40f0986f4c48dd7c5565ca2cf2cd3bfc88b0e89a879f619a8a07cbd0373c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 20,
+   "bytes": 1932363
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

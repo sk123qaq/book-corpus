@@ -1,0 +1,27 @@
+{
+ "uid": "B0560",
+ "title": "沢口愛華1st写真集 でらあいか",
+ "title_from_file": "",
+ "author": "沢口愛華",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/沢口愛華1st写真集 でらあいか",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/沢口愛華1st写真集 でらあいか (沢口愛華) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 81489673,
+   "sha256": "e5d3ee3c1f676ad893640da66e9f66e15d278e3c7143b159839761a412e3b7b0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0；图册不转:二级学科是图册与写真"
+}

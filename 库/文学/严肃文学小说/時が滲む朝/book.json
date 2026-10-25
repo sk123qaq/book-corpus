@@ -1,0 +1,42 @@
+{
+ "uid": "B1025",
+ "title": "時が滲む朝",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/時が滲む朝",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/時が滲む朝 (文春文庫) (楊 逸).epub",
+   "format": "epub",
+   "bytes": 237382,
+   "sha256": "023a8c125c6408f83b4c5990dc7ba4a0b1d65f8ba48ece8d143a8c04ae54eb14",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 209373
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

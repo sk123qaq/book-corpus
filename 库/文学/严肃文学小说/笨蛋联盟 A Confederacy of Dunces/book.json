@@ -1,0 +1,49 @@
+{
+ "uid": "B0929",
+ "title": "笨蛋联盟 A Confederacy of Dunces",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/笨蛋联盟 A Confederacy of Dunces",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/笨蛋联盟 ([美]约翰·肯尼迪·图尔； 韩雨苇译).epub",
+   "format": "epub",
+   "bytes": 933307,
+   "sha256": "42515254f78b0e7ec13d60befd4d03bce11689f1b0d51ef1bd43306ecccab073",
+   "primary_src": 1
+  },
+  {
+   "file": "source/笨蛋联盟 A Confederacy of Dunces (约翰·肯尼迪·图尔 John Kennedy Toole).pdf",
+   "format": "pdf",
+   "bytes": 15862692,
+   "sha256": "dd09f5838b22a93bfcb72fc62eea2b48754ad205a6212dd72ed25e9df49cd2f8",
+   "primary_src": 0
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 16,
+   "bytes": 761130
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

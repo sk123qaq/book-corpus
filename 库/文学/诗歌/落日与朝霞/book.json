@@ -1,0 +1,42 @@
+{
+ "uid": "B1567",
+ "title": "落日与朝霞",
+ "title_from_file": "",
+ "author": "杜涯",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/落日与朝霞",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/落日与朝霞 (杜涯著, 杜涯, 1968- author, 杜涯 女, 1968- etc.).pdf",
+   "format": "pdf",
+   "bytes": 20942061,
+   "sha256": "dc8b5b51ae85ffc315dcb27322538fa1d9103005f76e779b6cc29e7da0fe4a1b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 190913
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

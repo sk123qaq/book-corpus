@@ -1,0 +1,41 @@
+{
+ "uid": "B1395",
+ "title": "寻觅光荣",
+ "title_from_file": "",
+ "author": "辛茹",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/寻觅光荣",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/寻觅光荣 (辛茹著, Xin Ru zhu, 辛茹, 1965-).pdf",
+   "format": "pdf",
+   "bytes": 1872981,
+   "sha256": "40cae8b0239ceb00c953ae93b66c6e0882db453045451678e95a472d5cfc405d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 76047
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

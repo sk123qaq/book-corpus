@@ -1,0 +1,42 @@
+{
+ "uid": "B0890",
+ "title": "The Edge Of Sadness",
+ "title_from_file": "",
+ "author": "Edwin OConnor",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Edge Of Sadness",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Edge Of Sadness (Edwin OConnor, Ron Hansen, Amy Welborn).epub",
+   "format": "epub",
+   "bytes": 892344,
+   "sha256": "3028298f691bef351bc44eaa6126db59daa222f17b082ff16a7437bfa3229267",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 20,
+   "bytes": 917062
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

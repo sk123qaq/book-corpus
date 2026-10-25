@@ -1,0 +1,42 @@
+{
+ "uid": "B0723",
+ "title": "The Holy Innocents",
+ "title_from_file": "",
+ "author": "Miguel Delibes",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Holy Innocents",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Holy Innocents (Miguel Delibes).epub",
+   "format": "epub",
+   "bytes": 1944177,
+   "sha256": "9b397840262993ce39641eb969e928eeb2160d012ff04ae1aabd8301c999d32a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 152997
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

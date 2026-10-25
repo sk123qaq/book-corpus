@@ -1,0 +1,35 @@
+{
+ "uid": "B0229",
+ "title": "当呼吸化为空气",
+ "title_from_file": "",
+ "author": "保罗·卡拉尼什",
+ "subjects": [
+  "其他",
+  "散文随笔"
+ ],
+ "path": "其他/散文随笔/当呼吸化为空气",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/当呼吸化为空气 = When Breath Becomes Air ([美] 保罗・卡拉尼什 (Paul Kalanithi) 著  何雨珈 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 342332,
+   "sha256": "c36b04f017142ec1811ede4f1e136b1a73ef082584119e8b7d7bd374e6218024",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 9,
+   "bytes": 280296
+  }
+ ],
+ "notes": "依据:未匹配；置信:0.36"
+}

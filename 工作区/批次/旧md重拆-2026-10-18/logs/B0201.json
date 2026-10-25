@@ -1,0 +1,16 @@
+{
+ "uid": "B0201",
+ "title": "失明症漫记",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/失明症漫记/md",
+ "at": "2026-10-18T23:31:02+08:00",
+ "verify_rc": 0,
+ "chapters": 21,
+ "chars": 185839,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 167425,
+ "status": "staged-green"
+}

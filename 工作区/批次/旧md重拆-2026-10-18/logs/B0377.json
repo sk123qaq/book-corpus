@@ -1,0 +1,16 @@
+{
+ "uid": "B0377",
+ "title": "荒原狼",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/荒原狼/md",
+ "at": "2026-10-18T23:31:28+08:00",
+ "verify_rc": 0,
+ "chapters": 5,
+ "chars": 117455,
+ "images": 3,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.986,
+ "raw_chars": 104318,
+ "status": "staged-green"
+}

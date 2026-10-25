@@ -1,0 +1,42 @@
+{
+ "uid": "B1015",
+ "title": "忍ぶ川",
+ "title_from_file": "",
+ "author": "三浦 哲郎",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/忍ぶ川",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/忍ぶ川 (三浦 哲郎).epub",
+   "format": "epub",
+   "bytes": 509868,
+   "sha256": "ab43ebe1b3e55d1e2e30e9e8fce5c127091a1719de20af7ae4a3b8e904f06e25",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 562844
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0555",
+ "title": "戴维·洛奇作品 赖床的男人戴维·洛奇短篇小说集",
+ "title_from_file": "",
+ "author": "英戴维·洛奇王家湘",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/戴维·洛奇作品 赖床的男人戴维·洛奇短篇小说集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/戴维·洛奇作品 赖床的男人戴维·洛奇短篇小说集 ([英]戴维·洛奇王家湘,周曦译).pdf",
+   "format": "pdf",
+   "bytes": 33524373,
+   "sha256": "2972f8a98e98426d45f3d9857bddf702e1c984d259e6971a9946897accb84dec",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 190230
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

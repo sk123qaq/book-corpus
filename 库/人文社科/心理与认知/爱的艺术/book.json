@@ -1,0 +1,35 @@
+{
+ "uid": "B0280",
+ "title": "爱的艺术",
+ "title_from_file": "",
+ "author": "〔美〕弗洛姆",
+ "subjects": [
+  "人文社科",
+  "心理与认知"
+ ],
+ "path": "人文社科/心理与认知/爱的艺术",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/爱的艺术 (〔美〕弗洛姆) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 191008,
+   "sha256": "3458d3a6d8dcb8a643d279414dabad7b2328e6b6049528c0b70e0209593d410c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 262374
+  }
+ ],
+ "notes": "依据:TypeSafe(0.86)；置信:0.86"
+}

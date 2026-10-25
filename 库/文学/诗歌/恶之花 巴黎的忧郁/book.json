@@ -1,0 +1,42 @@
+{
+ "uid": "B1422",
+ "title": "恶之花 巴黎的忧郁",
+ "title_from_file": "",
+ "author": "法国象征派诗歌先驱波德莱尔扛鼎之作",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/恶之花 巴黎的忧郁",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/恶之花 巴黎的忧郁（法国象征派诗歌先驱波德莱尔扛鼎之作；中国翻译工作者协会理事、“资深翻译家”荣誉称号得主钱春绮译本） (波德莱尔  钱春....epub",
+   "format": "epub",
+   "bytes": 735671,
+   "sha256": "331fb1b342b637f179f41d192d54025c744148b96f2450683bb76264a02ad44d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 219,
+   "bytes": 622248
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

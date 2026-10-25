@@ -1,0 +1,14 @@
+{
+ "uid": "B0998",
+ "title": "夢の壁",
+ "format": "pdf",
+ "pages": 238,
+ "dest": "库/文学/严肃文学小说/夢の壁/md",
+ "at": "2026-10-19T16:25:33+08:00",
+ "commands": [],
+ "chunks_planned": 3,
+ "pages_per_chunk": 93,
+ "slice_mb_estimate": 15.0,
+ "status": "api-fatal",
+ "note": "接口鉴权/参数类错误，重试与切分都没用：切片 B0998_p0001-0093.pdf，93 页，14.90 MB | 提交 HTTP 403 | {\"traceId\":\"83335fe0-2768-44ae-825b-5c9cf37ca0fe\",\"code\":12001,\"msg\":\"已达每日页数上限\"}"
+}

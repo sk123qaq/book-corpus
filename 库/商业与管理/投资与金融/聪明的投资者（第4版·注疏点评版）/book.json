@@ -1,0 +1,35 @@
+{
+ "uid": "B0369",
+ "title": "聪明的投资者（第4版·注疏点评版）",
+ "title_from_file": "",
+ "author": "本杰明·格雷厄姆",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/聪明的投资者（第4版·注疏点评版）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/聪明的投资者 (第4版注疏点评版) = The Intelligent Investor A Book of Practical Counsel ([美] 本杰明・格雷厄姆 (Benjamin Graham) 著  王中华 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 419538,
+   "sha256": "232c00a25ca74da797e61100960eb2929aaeef5730a1e98063cf1603ea6b5b46",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 22,
+   "bytes": 480851
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

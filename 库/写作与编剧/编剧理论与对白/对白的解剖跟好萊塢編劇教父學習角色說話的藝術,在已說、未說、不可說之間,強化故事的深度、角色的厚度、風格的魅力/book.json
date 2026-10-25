@@ -1,0 +1,35 @@
+{
+ "uid": "B0622",
+ "title": "对白的解剖跟好萊塢編劇教父學習角色說話的藝術,在已說、未說、不可說之間,強化故事的深度、角色的厚度、風格的魅力",
+ "title_from_file": "",
+ "author": "罗伯特·麦基",
+ "subjects": [
+  "写作与编剧",
+  "编剧理论与对白"
+ ],
+ "path": "写作与编剧/编剧理论与对白/对白的解剖跟好萊塢編劇教父學習角色說話的藝術,在已說、未說、不可說之間,強化故事的深度、角色的厚度、風格的魅力",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/对白的解剖跟好萊塢編劇教父學習角色說話的藝術,在已說、未說、不可說之間,強化故事的深度、角色的厚度、風格的魅力 (罗伯特·麦基) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 796914,
+   "sha256": "e755ce3fb3f0d8fd908c4558786a5cf6e099d5f9c5eb539c6d38d7c2c3d02437",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 93,
+   "bytes": 606577
+  }
+ ],
+ "notes": "依据:来源目录或奖项"
+}

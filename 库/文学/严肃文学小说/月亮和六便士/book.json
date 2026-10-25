@@ -1,0 +1,35 @@
+{
+ "uid": "B0256",
+ "title": "月亮和六便士",
+ "title_from_file": "",
+ "author": "威廉·毛姆(William Maugham)",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/月亮和六便士",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/月亮和六便士 ( etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1300321,
+   "sha256": "27935360a6fe63652073edc69605161ea1196aff82576cd36aa3a27a9b511c48",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 59,
+   "bytes": 471176
+  }
+ ],
+ "notes": "依据:TypeSafe(0.95)；置信:0.95"
+}

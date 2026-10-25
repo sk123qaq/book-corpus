@@ -1,0 +1,42 @@
+{
+ "uid": "B1136",
+ "title": "莫言长篇小说全集",
+ "title_from_file": "",
+ "author": "共册",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/莫言长篇小说全集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/莫言长篇小说全集（共11册）（首位中国籍诺贝尔奖获得者——莫言，长篇小说全集《红高粱家族》《丰乳肥臀》《檀香刑》《生死疲劳》《蛙》《酒....epub",
+   "format": "epub",
+   "bytes": 6974281,
+   "sha256": "db2abbae38090b6c6f476338d22ac0bb312d279d7eb13c96a5f5317aa7cb9a2f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 410,
+   "bytes": 8760502
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

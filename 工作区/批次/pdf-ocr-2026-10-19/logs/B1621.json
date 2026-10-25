@@ -1,0 +1,45 @@
+{
+ "uid": "B1621",
+ "title": "韩作荣自选集",
+ "format": "pdf",
+ "pages": 589,
+ "dest": "库/文学/诗歌/韩作荣自选集/md",
+ "at": "2026-10-24T15:41:57+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1621/merged/pages --out out/B1621 --structure single --method paddle-ocr",
+  "mineru.py 工作区/批次/pdf-ocr-2026-10-19/tmp/mineru/B1621/B1621_suspect.pdf --mode precision --model vlm --ocr --lang ch",
+  "pdf_ocr_to_md.py --pages-dir work/B1621/merged/pages --out out/B1621 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 4,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 3.7,
+ "chunks_done": 4,
+ "merged_pages": 589,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1621/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 107113,
+ "images": 18,
+ "problems": 0,
+ "blank_pages": 13,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 3,
+ "short_page_list": [
+  238,
+  378,
+  448
+ ],
+ "review": "review/B1621",
+ "mineru_pages": [
+  238
+ ],
+ "mineru_rescued": [
+  238
+ ],
+ "stage_previous": "tmp/B1621.prev-2026-10-24T150238-0800",
+ "skipped_unreadable_pages": [],
+ "accepted": "",
+ "status": "landed"
+}

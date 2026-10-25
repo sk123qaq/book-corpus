@@ -1,0 +1,34 @@
+{
+ "uid": "B0986",
+ "title": "冷べたい水の村",
+ "title_from_file": "",
+ "author": "倉光俊夫",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/冷べたい水の村",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/冷べたい水の村 (倉光俊夫).pdf",
+   "format": "pdf",
+   "bytes": 6837402,
+   "sha256": "2d2c5c59a7361537eacc66f1b8debe601d5a994d8392ba9ad3c4fce8e7b86b8a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

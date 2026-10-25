@@ -1,0 +1,27 @@
+{
+ "uid": "B0569",
+ "title": "舒淇 Hsu Chi《戏弄春潮》",
+ "title_from_file": "",
+ "author": "舒淇",
+ "subjects": [
+  "其他",
+  "图册与写真"
+ ],
+ "path": "其他/图册与写真/舒淇/舒淇 Hsu Chi《戏弄春潮》",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/舒淇 Hsu Chi《戏弄春潮》 (舒淇 , Hsu Chi) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 45920420,
+   "sha256": "3634f4781dd4880c9fc6a9c6111534b6ac66a76023543f0bd1b449010cbf5210",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:TypeSafe(0.90)；置信:0.9；图册不转:二级学科是图册与写真"
+}

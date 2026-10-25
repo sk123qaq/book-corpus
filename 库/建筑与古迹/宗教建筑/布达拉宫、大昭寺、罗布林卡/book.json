@@ -1,0 +1,27 @@
+{
+ "uid": "B0591",
+ "title": "布达拉宫、大昭寺、罗布林卡",
+ "title_from_file": "",
+ "author": "北京原色印象文化艺术中心",
+ "subjects": [
+  "建筑与古迹",
+  "宗教建筑"
+ ],
+ "path": "建筑与古迹/宗教建筑/布达拉宫、大昭寺、罗布林卡",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/布达拉宫、大昭寺、罗布林卡 (北京原色印象文化艺术中心) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 3617576,
+   "sha256": "bc856b31f09e44a2d978044445b8a6566585a8354e246cde0641c975301936ff",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比80%"
+}

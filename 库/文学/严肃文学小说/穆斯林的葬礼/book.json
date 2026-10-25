@@ -1,0 +1,42 @@
+{
+ "uid": "B1131",
+ "title": "穆斯林的葬礼",
+ "title_from_file": "",
+ "author": "霍达",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/穆斯林的葬礼",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/穆斯林的葬礼 (霍达).epub",
+   "format": "epub",
+   "bytes": 762603,
+   "sha256": "1529b9bf65be5ede6f8b6dda77b2c5f956ae9a69f8d79e98e653cefd18c81c89",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 20,
+   "bytes": 1369787
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

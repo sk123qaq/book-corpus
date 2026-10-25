@@ -1,0 +1,35 @@
+{
+ "uid": "B0018",
+ "title": "一桩事先张扬的凶杀案",
+ "title_from_file": "",
+ "author": "加西亚·马尔克斯",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/一桩事先张扬的凶杀案",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/一桩事先张扬的凶杀案 (加西亚·马尔克斯,魏然) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 136781,
+   "sha256": "004a3f68f1c5af828a5244cf1118af1096fa7a6113234a478af45e96c9eff785",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 152439
+  }
+ ],
+ "notes": "依据:TypeSafe(0.98)；置信:0.98"
+}

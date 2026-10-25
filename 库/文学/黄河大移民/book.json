@@ -1,0 +1,41 @@
+{
+ "uid": "B1635",
+ "title": "黄河大移民",
+ "title_from_file": "",
+ "author": "冷梦",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/黄河大移民",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/黄河大移民 (冷梦).pdf",
+   "format": "pdf",
+   "bytes": 6330554,
+   "sha256": "c2526ab3609afe459d0b8ee701b970c1d8c07a8f08dee2e6b52c6b83c199c1e0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 579587
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

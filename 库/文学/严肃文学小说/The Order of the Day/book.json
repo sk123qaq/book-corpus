@@ -1,0 +1,42 @@
+{
+ "uid": "B1652",
+ "title": "The Order of the Day",
+ "title_from_file": "",
+ "author": "Éric Vuillard",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Order of the Day",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Order of the Day (Éric Vuillard).epub",
+   "format": "epub",
+   "bytes": 2783835,
+   "sha256": "761108990f4bfb01f3f1022f854a664fbdbbe9ba8a711e1376b075828dfb5e04",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "龚古尔奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 18,
+   "bytes": 144758
+  }
+ ],
+ "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
+}

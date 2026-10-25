@@ -1,0 +1,42 @@
+{
+ "uid": "B0780",
+ "title": "少年pi的奇幻漂流",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/少年pi的奇幻漂流",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/少年pi的奇幻漂流 (（加拿大）扬·马特尔著；姚媛译, Yang Mateer zhu etc.).pdf",
+   "format": "pdf",
+   "bytes": 15960059,
+   "sha256": "615a0802cc58fa3ee8a84b72d8b5cfa0adb710b4edf0a0588a4ed21dd8d44908",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 577258
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

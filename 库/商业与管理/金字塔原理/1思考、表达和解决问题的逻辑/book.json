@@ -1,0 +1,34 @@
+{
+ "uid": "B0392",
+ "title": "1思考、表达和解决问题的逻辑",
+ "title_from_file": "",
+ "author": "芭芭拉·明托",
+ "subjects": [
+  "商业与管理"
+ ],
+ "path": "商业与管理/金字塔原理/1思考、表达和解决问题的逻辑",
+ "series": "金字塔原理",
+ "volume": "1",
+ "container": "金字塔原理",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../source/金字塔原理大全集 (芭芭拉·明托) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 20548306,
+   "sha256": "fc94319089967490000941ffd39b8ec8b2230ce46be7561eca11032db3c101b3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 59,
+   "bytes": 382960
+  }
+ ],
+ "notes": "依据:系列:金字塔原理；合集拆出 1/2；置信:0.52"
+}

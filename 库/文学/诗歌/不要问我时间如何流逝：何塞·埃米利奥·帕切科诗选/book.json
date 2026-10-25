@@ -1,0 +1,42 @@
+{
+ "uid": "B0725",
+ "title": "不要问我时间如何流逝：何塞·埃米利奥·帕切科诗选",
+ "title_from_file": "",
+ "author": "何塞·埃米利奥·帕切科",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/不要问我时间如何流逝：何塞·埃米利奥·帕切科诗选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/不要问我时间如何流逝：何塞·埃米利奥·帕切科诗选 (何塞·埃米利奥·帕切科).pdf",
+   "format": "pdf",
+   "bytes": 28136934,
+   "sha256": "7104bb16c932c87b0d6fc06a86038624341e5531670a38f60a78201aeda2bb39",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "塞万提斯奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 93420
+  }
+ ],
+ "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
+}

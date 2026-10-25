@@ -1,0 +1,26 @@
+{
+ "uid": "B0605",
+ "title": "世界情色电影精品鉴赏",
+ "title_from_file": "",
+ "author": "世界情色电影精品鉴赏",
+ "subjects": [
+  "人文社科"
+ ],
+ "path": "人文社科/世界情色电影精品鉴赏",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/世界情色电影精品鉴赏 (世界情色电影精品鉴赏) (z-library.sk, 1lib.sk, z-lib.sk).txt",
+   "format": "txt",
+   "bytes": 309790,
+   "sha256": "2ff27f4efffef8f81c63dc9d2e0d6411b5a05eaf532d3ec1d36556aca91b091b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1220",
+ "title": "爱的荒漠",
+ "title_from_file": "",
+ "author": "弗朗索瓦·莫里亚克",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/爱的荒漠",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/爱的荒漠 (弗朗索瓦·莫里亚克).epub",
+   "format": "epub",
+   "bytes": 1556138,
+   "sha256": "9feec0f6c1131721176dbf857c6353b5ce25e106bd0b964f697c2f6ffc5ed964",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 273418
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

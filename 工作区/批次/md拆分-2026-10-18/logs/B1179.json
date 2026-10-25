@@ -1,0 +1,18 @@
+{
+ "uid": "B1179",
+ "title": "天使沉默",
+ "format": "azw3",
+ "dest": "库/文学/严肃文学小说/天使沉默/md",
+ "at": "2026-10-18T20:12:48+08:00",
+ "provenance_fixed": 20,
+ "verify_rc": 0,
+ "chapters": 19,
+ "chars": 84291,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9129999999999999,
+ "raw_chars": 79464,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1179.prev-2026-10-18T201103-0800"
+}

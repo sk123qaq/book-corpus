@@ -1,0 +1,42 @@
+{
+ "uid": "B1457",
+ "title": "时空旅行者的沙漏",
+ "title_from_file": "",
+ "author": "方丈贵惠",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/时空旅行者的沙漏",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/时空旅行者的沙漏 (方丈贵惠).epub",
+   "format": "epub",
+   "bytes": 614760,
+   "sha256": "43c8d70ef9bbfc15afd0a39cb4fd487e479c4f8e970eb0ccf2a3a1cc9ade4017",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 406638
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

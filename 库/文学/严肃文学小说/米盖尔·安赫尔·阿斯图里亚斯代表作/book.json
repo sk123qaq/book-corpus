@@ -1,0 +1,42 @@
+{
+ "uid": "B1233",
+ "title": "米盖尔·安赫尔·阿斯图里亚斯代表作",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/米盖尔·安赫尔·阿斯图里亚斯代表作",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/米盖尔·安赫尔·阿斯图里亚斯代表作(套装共3册) (【危】米盖尔·安赫尔·阿斯图里亚斯).epub",
+   "format": "epub",
+   "bytes": 2051590,
+   "sha256": "810d1a6a457e8360583775c835a09ef5386fd626ddc5372f18a61ccb3c1966ca",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 74,
+   "bytes": 1505080
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

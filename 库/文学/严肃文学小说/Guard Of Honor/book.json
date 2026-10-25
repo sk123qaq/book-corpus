@@ -1,0 +1,42 @@
+{
+ "uid": "B0859",
+ "title": "Guard Of Honor",
+ "title_from_file": "",
+ "author": "James Gould Cozzens",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Guard Of Honor",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Guard Of Honor (James Gould Cozzens).epub",
+   "format": "epub",
+   "bytes": 1020689,
+   "sha256": "2173f7dfc720485d7d322785217adcb936c2cc0ffa2978fd6865a3ee9a5ddcb8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 36,
+   "bytes": 1342137
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

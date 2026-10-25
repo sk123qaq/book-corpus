@@ -1,0 +1,42 @@
+{
+ "uid": "B1059",
+ "title": "糞尿譚",
+ "title_from_file": "",
+ "author": "火野 葦平 火野 葦平",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/糞尿譚",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/糞尿譚 (火野 葦平 [火野 葦平]).epub",
+   "format": "epub",
+   "bytes": 80376,
+   "sha256": "5adc09ee94f4e2a00f8974aeba7bc68a47fbac0c49b023fc79b2f5da469a1018",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 2,
+   "bytes": 162784
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

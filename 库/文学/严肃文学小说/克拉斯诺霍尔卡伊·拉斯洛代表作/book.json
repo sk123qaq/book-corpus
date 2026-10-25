@@ -1,0 +1,42 @@
+{
+ "uid": "B1165",
+ "title": "克拉斯诺霍尔卡伊·拉斯洛代表作",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/克拉斯诺霍尔卡伊·拉斯洛代表作",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/克拉斯诺霍尔卡伊·拉斯洛代表作(套装共5册) (【匈】克拉斯诺霍尔卡伊·拉斯洛).epub",
+   "format": "epub",
+   "bytes": 4712534,
+   "sha256": "a3331cb40a20b35ba0ed29eb7ee3b2db6c6fffae02f81f933353ccf5c4fe458f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 76,
+   "bytes": 3136132
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1401",
+ "title": "屋顶上的河流 散文集",
+ "title_from_file": "",
+ "author": "傅菲",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/屋顶上的河流 散文集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/屋顶上的河流 散文集 (傅菲著, 傅菲, 1971-, 傅菲著, 傅菲).pdf",
+   "format": "pdf",
+   "bytes": 8362167,
+   "sha256": "2bc04a63bcc4ed561c29ff257b8e4b1fd0492dcd2ca6a5e3b1d367b3c45e8649",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 501305
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0866",
+ "title": "Ironweed",
+ "title_from_file": "",
+ "author": "William Kennedy",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Ironweed",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Ironweed (William Kennedy).epub",
+   "format": "epub",
+   "bytes": 589387,
+   "sha256": "a4c68379b3702cb7305e0184d8c08edf16b4063c551be405ccf3ed4f0f8fab0b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 8,
+   "bytes": 386634
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

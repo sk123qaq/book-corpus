@@ -1,0 +1,17 @@
+{
+ "uid": "B1541",
+ "title": "第八届鲁迅文学奖中短篇小说",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/第八届鲁迅文学奖中短篇小说/md",
+ "at": "2026-10-18T21:08:25+08:00",
+ "verify_rc": 0,
+ "chapters": 10,
+ "chars": 219417,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.001,
+ "raw_chars": 192349,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1541.prev-2026-10-18T210620-0800"
+}

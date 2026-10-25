@@ -1,0 +1,42 @@
+{
+ "uid": "B1554",
+ "title": "艾煊散文选",
+ "title_from_file": "",
+ "author": "艾煊",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/艾煊散文选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/艾煊散文选 (艾煊).pdf",
+   "format": "pdf",
+   "bytes": 17469079,
+   "sha256": "f7bdabe41b8da7e7a23970a4d1b4be47a6e78ce1ca1412a603e91ea8ec3ad642",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 810951
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

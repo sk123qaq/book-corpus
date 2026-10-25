@@ -1,0 +1,34 @@
+{
+ "uid": "B1061",
+ "title": "美談の出発",
+ "title_from_file": "",
+ "author": "川村晃",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/美談の出発",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/美談の出発 (川村晃).pdf",
+   "format": "pdf",
+   "bytes": 6702284,
+   "sha256": "0c2cd4a5218f48a1ec78faacfa4d87a053026fa5188ed76d07d58bfffae5c7c9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

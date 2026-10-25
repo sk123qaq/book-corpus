@@ -1,0 +1,42 @@
+{
+ "uid": "B0864",
+ "title": "In This Our Life",
+ "title_from_file": "",
+ "author": "Ellen Glasgow",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/In This Our Life",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/In This Our Life (Ellen Glasgow).epub",
+   "format": "epub",
+   "bytes": 656995,
+   "sha256": "4ad24d89c1511ac4df3fb1745108421ace2f8bfe7218509e8f3e31bc8290690d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 38,
+   "bytes": 761338
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0242",
+ "title": "明亮的夜晚",
+ "title_from_file": "",
+ "author": "崔恩荣",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/明亮的夜晚",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/明亮的夜晚 (崔恩荣) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1099914,
+   "sha256": "840669515505a1bfa08f2f622a0a0aa0e9c4b01ff1988d0d56d9ae2ac0f397cb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 413243
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B1308",
+ "title": "中国北斗",
+ "format": "epub",
+ "dest": "库/文学/中国北斗/md",
+ "at": "2026-10-18T21:08:08+08:00",
+ "verify_rc": 0,
+ "chapters": 87,
+ "chars": 181412,
+ "images": 3,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.976,
+ "raw_chars": 164951,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1308.prev-2026-10-18T210620-0800"
+}

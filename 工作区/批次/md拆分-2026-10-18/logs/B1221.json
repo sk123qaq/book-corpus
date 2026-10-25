@@ -1,0 +1,18 @@
+{
+ "uid": "B1221",
+ "title": "玉米人",
+ "format": "azw3",
+ "dest": "库/文学/严肃文学小说/玉米人/md",
+ "at": "2026-10-18T21:08:00+08:00",
+ "provenance_fixed": 16,
+ "verify_rc": 0,
+ "chapters": 15,
+ "chars": 231717,
+ "images": 8,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.987,
+ "raw_chars": 202183,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1221.prev-2026-10-18T210620-0800"
+}

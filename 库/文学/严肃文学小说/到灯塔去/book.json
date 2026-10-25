@@ -1,0 +1,35 @@
+{
+ "uid": "B0172",
+ "title": "到灯塔去",
+ "title_from_file": "",
+ "author": "弗吉尼亚·伍尔芙",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/到灯塔去",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/到灯塔去 ([英]弗吉尼亚·伍尔芙) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 298297,
+   "sha256": "0f9eb75096d3c80d3c3774946eb321d2f18ccabddafb3541eb53db33bee24ee1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 3,
+   "bytes": 380766
+  }
+ ],
+ "notes": "依据:系列:到灯塔去；置信:1.0"
+}

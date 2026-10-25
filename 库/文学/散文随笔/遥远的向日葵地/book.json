@@ -1,0 +1,42 @@
+{
+ "uid": "B1594",
+ "title": "遥远的向日葵地",
+ "title_from_file": "",
+ "author": "李娟",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/遥远的向日葵地",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/遥远的向日葵地 (李娟).epub",
+   "format": "epub",
+   "bytes": 7877136,
+   "sha256": "5dc1b05adb238bff73af744175aff656ad1aee74c590e64b3416128d60b664fa",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 49,
+   "bytes": 277381
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

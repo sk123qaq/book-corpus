@@ -1,0 +1,17 @@
+{
+ "uid": "B1269",
+ "title": "青鸟",
+ "format": "epub",
+ "dest": "库/文学/戏剧/青鸟/md",
+ "at": "2026-10-18T20:13:12+08:00",
+ "verify_rc": 0,
+ "chapters": 15,
+ "chars": 59714,
+ "images": 24,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0070000000000001,
+ "raw_chars": 47382,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1269.prev-2026-10-18T201103-0800"
+}

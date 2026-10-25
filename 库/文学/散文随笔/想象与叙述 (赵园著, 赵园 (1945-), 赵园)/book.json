@@ -1,0 +1,42 @@
+{
+ "uid": "B1425",
+ "title": "想象与叙述 (赵园著, 赵园 (1945-), 赵园)",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/想象与叙述 (赵园著, 赵园 (1945-), 赵园)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/想象与叙述 (赵园著, 赵园 (1945-), 赵园).pdf",
+   "format": "pdf",
+   "bytes": 74023471,
+   "sha256": "bd4ce768a2f2012bd51e97264d8d00e34f21133d9a0d2baa69dbf01211d5996f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 695436
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

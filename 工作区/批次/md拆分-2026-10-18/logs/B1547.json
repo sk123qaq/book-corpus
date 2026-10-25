@@ -1,0 +1,21 @@
+{
+ "uid": "B1547",
+ "title": "红骆驼",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/红骆驼/md",
+ "at": "2026-10-18T21:08:26+08:00",
+ "override": {
+  "accept": "源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+ },
+ "verify_rc": 1,
+ "chapters": 272,
+ "chars": 158728,
+ "images": 73,
+ "problems": 4,
+ "audit_rc": 0,
+ "audit_ratio": 1.0090000000000001,
+ "raw_chars": 140387,
+ "status": "accepted",
+ "note": "已受理例外：源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1547.prev-2026-10-18T210620-0800"
+}

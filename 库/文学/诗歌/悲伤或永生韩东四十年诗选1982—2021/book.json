@@ -1,0 +1,42 @@
+{
+ "uid": "B1424",
+ "title": "悲伤或永生韩东四十年诗选1982—2021",
+ "title_from_file": "",
+ "author": "韩东",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/悲伤或永生韩东四十年诗选1982—2021",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/悲伤或永生韩东四十年诗选1982—2021 (韩东).epub",
+   "format": "epub",
+   "bytes": 628938,
+   "sha256": "40f85c6a3ae26b3fd63e3534b9492fca17c0f69bc1b2bbdb72b4762865fe40ca",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 357,
+   "bytes": 335882
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

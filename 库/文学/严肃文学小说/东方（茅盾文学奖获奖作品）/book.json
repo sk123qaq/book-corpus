@@ -1,0 +1,42 @@
+{
+ "uid": "B1098",
+ "title": "东方（茅盾文学奖获奖作品）",
+ "title_from_file": "",
+ "author": "茅盾文学奖获奖作品",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/东方（茅盾文学奖获奖作品）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/东方（茅盾文学奖获奖作品） (魏巍).epub",
+   "format": "epub",
+   "bytes": 1019136,
+   "sha256": "13b9c876837bcb7f2febbabe9526458f2888a2b0c385c48030978de42b594f2b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 103,
+   "bytes": 1930774
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项；同名冲突加限定词（茅盾文学奖获奖作品）"
+}

@@ -1,0 +1,17 @@
+{
+ "uid": "B1162",
+ "title": "乌贼骨：蒙塔莱诗集",
+ "format": "epub",
+ "dest": "库/文学/诗歌/乌贼骨：蒙塔莱诗集/md",
+ "at": "2026-10-18T20:12:44+08:00",
+ "verify_rc": 0,
+ "chapters": 56,
+ "chars": 70832,
+ "images": 56,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.1159999999999999,
+ "raw_chars": 52276,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1162.prev-2026-10-18T201103-0800"
+}

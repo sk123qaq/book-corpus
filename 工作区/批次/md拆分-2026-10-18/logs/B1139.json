@@ -1,0 +1,20 @@
+{
+ "uid": "B1139",
+ "title": "这边风景",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/这边风景/md",
+ "at": "2026-10-18T20:17:45+08:00",
+ "override": {
+  "accept": "源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+ },
+ "verify_rc": 1,
+ "chapters": 61,
+ "chars": 576462,
+ "images": 0,
+ "problems": 1,
+ "audit_rc": 0,
+ "audit_ratio": 0.995,
+ "raw_chars": 507088,
+ "status": "accepted",
+ "note": "已受理例外：源书自身重复的卷首/版权/书目页，原文如此，md 忠实保留未删"
+}

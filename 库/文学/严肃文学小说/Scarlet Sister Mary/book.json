@@ -1,0 +1,42 @@
+{
+ "uid": "B0878",
+ "title": "Scarlet Sister Mary",
+ "title_from_file": "",
+ "author": "Julia Peterkin",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Scarlet Sister Mary",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Scarlet Sister Mary (Julia Peterkin).epub",
+   "format": "epub",
+   "bytes": 849299,
+   "sha256": "525b7261512cc6205a3c98fbe82268ebc5d3d714ee42b1044e3e3bc389a90b00",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 392012
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

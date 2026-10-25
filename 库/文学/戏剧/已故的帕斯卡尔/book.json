@@ -1,0 +1,42 @@
+{
+ "uid": "B1194",
+ "title": "已故的帕斯卡尔",
+ "title_from_file": "",
+ "author": "意路易吉·皮兰德娄",
+ "subjects": [
+  "文学",
+  "戏剧"
+ ],
+ "path": "文学/戏剧/已故的帕斯卡尔",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/已故的帕斯卡尔 ([意]路易吉·皮兰德娄；刘儒庭译).pdf",
+   "format": "pdf",
+   "bytes": 87085945,
+   "sha256": "5ec67d036cf48df2de5d64e57fe6b842abf4cffb757e4c9764fe747162f84952",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 525100
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B1353",
+ "title": "吉祥如意",
+ "title_from_file": "",
+ "author": "鲁迅文学奖·宁夏作家自选集·郭文斌卷",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/吉祥如意",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/吉祥如意 (鲁迅文学奖·宁夏作家自选集·郭文斌卷) (郭文斌).epub",
+   "format": "epub",
+   "bytes": 291823,
+   "sha256": "686313b7435c6f38fc2e66afda67e1c5b481ba63bed94867ff75f6e820620d33",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 22,
+   "bytes": 551337
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

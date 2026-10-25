@@ -1,0 +1,41 @@
+{
+ "uid": "B1610",
+ "title": "陈占元晚年文集",
+ "title_from_file": "",
+ "author": "陈占元",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/陈占元晚年文集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/陈占元晚年文集 (陈占元著, Zhanyuan Chen, 陈占元, 1908-, 陈占元著, 陈占元).pdf",
+   "format": "pdf",
+   "bytes": 13945593,
+   "sha256": "6a35b38c094b00a66231a920ceaec55f393e11e9486fc640543f0a51c3ca0417",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 790737
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

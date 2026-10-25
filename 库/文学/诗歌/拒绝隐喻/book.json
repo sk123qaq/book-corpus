@@ -1,0 +1,42 @@
+{
+ "uid": "B1438",
+ "title": "拒绝隐喻",
+ "title_from_file": "",
+ "author": "于坚集卷",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/拒绝隐喻",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/拒绝隐喻 (于坚集卷) (于坚).epub",
+   "format": "epub",
+   "bytes": 359524,
+   "sha256": "0de7ebfdce5e1ec903c6b507e06b032dbb3744a9c43b67a32623b1e7e027b5c7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 4,
+   "bytes": 577947
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0023",
+ "title": "黑暗森林",
+ "title_from_file": "",
+ "author": "刘慈欣",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/刘慈欣/三体/黑暗森林",
+ "series": "三体",
+ "volume": "3",
+ "container": "三体",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../source/三体全集（共3册） (刘慈欣) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1411978,
+   "sha256": "0fb3cde2dc4f8c9f4e5a2ba612f3d3d3eb049d67928cce4fcc8b2c94ea20c6a8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 959817
+  }
+ ],
+ "notes": "依据:系列:三体；合集拆出 3/4；置信:1.0"
+}

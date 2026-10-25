@@ -1,0 +1,35 @@
+{
+ "uid": "B0362",
+ "title": "经济学原理（微观经济学分册·第7版）",
+ "title_from_file": "",
+ "author": "曼昆 (n.gregory Mankiw)",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/经济学原理（微观经济学分册·第7版）",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/经济学原理  微观经济学分册 (第7版) = Principles of Economics ([美] 曼昆 (N. Gregory Mankiw) 著  梁小民, 梁砾 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 447165,
+   "sha256": "6391bd648cf4d6476c83088e1e7d9aadab7d9c445f01eb7677c7520b3b5c2ddc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 829172
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

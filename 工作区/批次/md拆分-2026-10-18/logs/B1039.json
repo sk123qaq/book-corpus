@@ -1,0 +1,17 @@
+{
+ "uid": "B1039",
+ "title": "火花",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/火花/md",
+ "at": "2026-10-18T20:12:23+08:00",
+ "verify_rc": 0,
+ "chapters": 21,
+ "chars": 62259,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.985,
+ "raw_chars": 55353,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1039.prev-2026-10-18T201103-0800"
+}

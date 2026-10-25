@@ -1,0 +1,17 @@
+{
+ "uid": "B1117",
+ "title": "推拿",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/推拿/md",
+ "at": "2026-10-18T20:12:33+08:00",
+ "verify_rc": 0,
+ "chapters": 28,
+ "chars": 201764,
+ "images": 10,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 175156,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1117.prev-2026-10-18T201103-0800"
+}

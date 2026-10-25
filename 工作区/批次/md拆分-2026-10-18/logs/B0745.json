@@ -1,0 +1,17 @@
+{
+ "uid": "B0745",
+ "title": "Last Orders",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/Last Orders/md",
+ "at": "2026-10-18T21:06:49+08:00",
+ "verify_rc": 0,
+ "chapters": 80,
+ "chars": 348511,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 325994,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0745.prev-2026-10-18T210620-0800"
+}

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>书库项目结构图</title>
+<style>
+  body { margin: 0; padding: 28px 24px 48px; background: #fff; color: #0f172a;
+         font-family: "Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft YaHei",sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  h2 { font-size: 14px; margin: 28px 0 8px; color: #334155; }
+  p.sub { margin: 0 0 16px; font-size: 13px; color: #475569; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: #334155; margin: 0 0 14px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; border: 1.8px solid; }
+  .wrap { overflow-x: auto; }
+  svg { max-width: none; }
+  ul { font-size: 12.5px; color: #334155; margin: 0; padding-left: 20px; line-height: 1.9; }
+  code { font-size: 12px; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>书库项目结构图</h1>
+<p class="sub">数字取自 目录/library.db、目录/分类表.csv、目录/概念表.tsv 与盘上实测（2026-10-20，分类表那一行是 10-19）。按写入者分栏读，不按文件夹列。</p>
+<div class="legend">
+  <span class="chip"><span class="sw" style="background:#fffbeb;border-color:#b45309"></span>人账</span>
+  <span class="chip"><span class="sw" style="background:#eff6ff;border-color:#1d4ed8"></span>内容区与索引（产物）</span>
+  <span class="chip"><span class="sw" style="background:#ecfeff;border-color:#0e7490"></span>转换器</span>
+  <span class="chip"><span class="sw" style="background:#f5f3ff;border-color:#6d28d9"></span>派生视图与导出</span>
+  <span class="chip"><span class="sw" style="background:#f8fafc;border-color:#475569"></span>源文件、机账、快照</span>
+  <span class="chip">实线是写入流向，虚线是留账、回滚或事后检查</span>
+</div>
+<div class="wrap">
+<svg viewBox="0 0 1660 1360" width="1660" height="1360" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK SC, Source Han Sans SC, PingFang SC, Microsoft YaHei, sans-serif">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker><marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs>
+<rect width="1660" height="1360" fill="#ffffff"/>
+<text x="40" y="34" font-size="14" font-weight="700" fill="#94a3b8">源文件、机账、回滚副本</text>
+<text x="600" y="34" font-size="14" font-weight="700" fill="#94a3b8">人账、索引与内容</text>
+<text x="1160" y="34" font-size="14" font-weight="700" fill="#94a3b8">派生产物</text>
+<path d="M255,154 L255,200" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="265" y="190" font-size="11.5" fill="#475569">收到</text>
+<path d="M470,250 L520,250 L520,180 L600,180" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="528" y="172" font-size="11.5" fill="#475569">人工分类</text>
+<path d="M815,214 L815,262" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="825" y="252" font-size="11.5" fill="#475569">人账</text>
+<path d="M815,356 L815,402" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="825" y="396" font-size="11.5" fill="#475569">重建</text>
+<path d="M815,556 L815,600" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="825" y="584" font-size="11.5" fill="#475569">路径是分类表的投影</text>
+<path d="M815,774 L815,810" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="825" y="798" font-size="11.5" fill="#475569">source/ 里的文件</text>
+<path d="M470,362 L600,362" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ahd)"/>
+<text x="486" y="354" font-size="11.5" fill="#475569">重跑</text>
+<path d="M600,650 L470,650" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ahd)"/>
+<text x="482" y="642" font-size="11.5" fill="#475569">搬错删错回滚</text>
+<path d="M600,840 L470,840" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ahd)"/>
+<text x="482" y="832" font-size="11.5" fill="#475569">每批留账</text>
+<path d="M1030,462 L1160,462" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1040" y="454" font-size="11.5" fill="#475569">导出</text>
+<path d="M1030,500 L1080,500 L1080,583 L1160,583" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1088" y="575" font-size="11.5" fill="#475569">奖项记录</text>
+<path d="M1030,620 L1110,620 L1110,727 L1160,727" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M1030,690 L1080,690 L1080,891 L1160,891" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M1375,978 L1375,1030" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1385" y="992" font-size="11.5" fill="#475569">qsearch 与 build_topic_views.py</text>
+<path d="M815,964 L815,1200" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ahd)"/>
+<text x="827" y="1188" font-size="11.5" fill="#475569">每次改完之后，按改了什么挑一条跑</text>
+<rect x="40" y="60" width="430" height="94" rx="8" fill="#f8fafc" stroke="#475569" stroke-width="1.8"/>
+<text x="58" y="90" font-size="15" font-weight="700" fill="#1e293b">新书源文件</text>
+<text x="58" y="112" font-size="11.5" fill="#334155">epub、mobi、azw3、pdf、txt、djvu</text>
+<text x="58" y="132" font-size="11.5" fill="#334155">落盘之后由人账决定它去哪</text>
+<rect x="40" y="200" width="430" height="94" rx="8" fill="#f8fafc" stroke="#475569" stroke-width="1.8"/>
+<text x="58" y="230" font-size="15" font-weight="700" fill="#1e293b">库/_收件箱/</text>
+<text x="58" y="252" font-size="11.5" fill="#334155">新书先落这里，再从人账开一条</text>
+<text x="58" y="272" font-size="11.5" fill="#334155">ingest.py 还没实现，入库靠手工加行</text>
+<rect x="40" y="344" width="430" height="94" rx="8" fill="#f8fafc" stroke="#475569" stroke-width="1.8"/>
+<text x="58" y="374" font-size="15" font-weight="700" fill="#1e293b">工作区/脚本/</text>
+<text x="452" y="374" font-size="12" fill="#475569" text-anchor="end">46 个 py</text>
+<text x="58" y="396" font-size="11.5" fill="#334155">每个动作都是可重跑脚本，不手改产物</text>
+<text x="58" y="416" font-size="11.5" fill="#334155">一个账本一个写者：人写人账，脚本写产物</text>
+<rect x="40" y="556" width="430" height="114" rx="8" fill="#f8fafc" stroke="#475569" stroke-width="1.8"/>
+<text x="58" y="586" font-size="15" font-weight="700" fill="#1e293b">../books.snapshot-2026-10-18</text>
+<text x="452" y="586" font-size="12" fill="#475569" text-anchor="end">47916 文件</text>
+<text x="58" y="608" font-size="11.5" fill="#334155">L0 硬链接快照，与库里的文件共享 inode</text>
+<text x="58" y="628" font-size="11.5" fill="#334155">所以库内文件走 tmp 加 os.replace</text>
+<text x="58" y="648" font-size="11.5" fill="#334155">截断式原地写会同时改掉快照</text>
+<rect x="40" y="760" width="430" height="134" rx="8" fill="#f8fafc" stroke="#475569" stroke-width="1.8"/>
+<text x="58" y="790" font-size="15" font-weight="700" fill="#1e293b">工作区/批次/</text>
+<text x="452" y="790" font-size="12" fill="#475569" text-anchor="end">8 个批次</text>
+<text x="58" y="812" font-size="11.5" fill="#334155">8 个批次的目录约定不统一</text>
+<text x="58" y="832" font-size="11.5" fill="#334155">齐全的只有 旧md重拆 与 pdf-ocr：worklist、logs、out、</text>
+<text x="58" y="852" font-size="11.5" fill="#334155">overrides 四样都在</text>
+<text x="58" y="872" font-size="11.5" fill="#334155">普查只留 census.jsonl，检索批次只留 logs/</text>
+<rect x="600" y="100" width="430" height="114" rx="8" fill="#fffbeb" stroke="#b45309" stroke-width="1.8"/>
+<text x="618" y="130" font-size="15" font-weight="700" fill="#92400e">目录/分类表.csv</text>
+<text x="1012" y="130" font-size="12" fill="#b45309" text-anchor="end">1694 行</text>
+<text x="618" y="152" font-size="11.5" fill="#334155">人账。一行一本书：uid、一级、二级、作者层、</text>
+<text x="618" y="172" font-size="11.5" fill="#334155">保留、正式书名、备注</text>
+<text x="618" y="192" font-size="11.5" fill="#334155">分类、书名、保留策略只在这里改</text>
+<rect x="600" y="262" width="430" height="94" rx="8" fill="#fffbeb" stroke="#b45309" stroke-width="1.8"/>
+<text x="618" y="292" font-size="15" font-weight="700" fill="#92400e">build_library.py --emit-json</text>
+<text x="618" y="314" font-size="11.5" fill="#334155">读人账，重建 library.db，同步每本 book.json</text>
+<text x="618" y="334" font-size="11.5" fill="#334155">conflicts=0 且 books 等于人账行数才算过</text>
+<rect x="600" y="402" width="430" height="154" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.8"/>
+<text x="618" y="432" font-size="15" font-weight="700" fill="#1e3a8a">目录/library.db</text>
+<text x="1012" y="432" font-size="12" fill="#1d4ed8" text-anchor="end">6 表 6 视图</text>
+<text x="618" y="454" font-size="11.5" fill="#334155">book、source、derived、job、award、book_award</text>
+<text x="618" y="474" font-size="11.5" fill="#334155">派生表记 chapters、bytes、method</text>
+<text x="618" y="494" font-size="11.5" fill="#334155">v_pending_md 视图：315 本还缺 md</text>
+<text x="618" y="514" font-size="11.5" fill="#334155">产物，可重建；查询用 lq.py 只读打开</text>
+<text x="618" y="534" font-size="11.5" fill="#334155">同目录：对照表.csv 路径映射、系列/ 卷序 21 份</text>
+<rect x="600" y="600" width="430" height="174" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.8"/>
+<text x="618" y="630" font-size="15" font-weight="700" fill="#1e3a8a">库/ 内容区</text>
+<text x="1012" y="630" font-size="12" fill="#1d4ed8" text-anchor="end">1694 本</text>
+<text x="618" y="652" font-size="11.5" fill="#334155">唯一权威内容。路径按 一级/二级/作者层/系列 排</text>
+<text x="618" y="672" font-size="11.5" fill="#334155">多数是一级/二级/书名 1170 本，带作者层 230 本</text>
+<text x="618" y="692" font-size="11.5" fill="#334155">盘上层深：两层 149、三层 1193、四层 234、五层 118</text>
+<text x="618" y="712" font-size="11.5" fill="#334155">每本 book.json，329 本的源文件在合集目录里</text>
+<text x="618" y="732" font-size="11.5" fill="#334155">可选 md/ 与 html/，md/ 只认这个位置</text>
+<text x="618" y="752" font-size="11.5" fill="#334155">11 个一级分类，另加一个 _收件箱</text>
+<rect x="600" y="810" width="430" height="154" rx="8" fill="#ecfeff" stroke="#0e7490" stroke-width="1.8"/>
+<text x="618" y="840" font-size="15" font-weight="700" fill="#155e75">转换器（source/ 到 md/）</text>
+<text x="1012" y="840" font-size="12" fill="#0e7490" text-anchor="end">1379 已拆 315 待拆</text>
+<text x="618" y="862" font-size="11.5" fill="#334155">产出章节 md、README 目录、images/</text>
+<text x="618" y="882" font-size="11.5" fill="#334155">1376 本有 README，938 本有 images/</text>
+<text x="618" y="902" font-size="11.5" fill="#334155">ebook-to-md 1140、paddle-ocr 174、pdf-text 55</text>
+<text x="618" y="922" font-size="11.5" fill="#334155">split_collection 7、mineru-ocr 3</text>
+<text x="618" y="942" font-size="11.5" fill="#334155">待拆的 pdf 里 193 本在排期，其余暂缓或不转</text>
+<rect x="1160" y="402" width="430" height="114" rx="8" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.8"/>
+<text x="1178" y="432" font-size="15" font-weight="700" fill="#4c1d95">目录/书目总表.csv 与 .xlsx</text>
+<text x="1178" y="454" font-size="11.5" fill="#334155">gen_book_catalog.py 从 DB 导出</text>
+<text x="1178" y="474" font-size="11.5" fill="#334155">含 md 状态、主源文件、路径</text>
+<text x="1178" y="494" font-size="11.5" fill="#334155">末行报未匹配条数，要求 0</text>
+<rect x="1160" y="536" width="430" height="94" rx="8" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.8"/>
+<text x="1178" y="566" font-size="15" font-weight="700" fill="#4c1d95">视图/奖项/</text>
+<text x="1572" y="566" font-size="12" fill="#6d28d9" text-anchor="end">10 奖项 1010 链</text>
+<text x="1178" y="588" font-size="11.5" fill="#334155">奖项降为字段，目录树由软链现搭</text>
+<text x="1178" y="608" font-size="11.5" fill="#334155">随时可删可重建</text>
+<rect x="1160" y="680" width="430" height="94" rx="8" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.8"/>
+<text x="1178" y="710" font-size="15" font-weight="700" fill="#4c1d95">阅读版 html</text>
+<text x="1572" y="710" font-size="12" fill="#6d28d9" text-anchor="end">2 本</text>
+<text x="1178" y="732" font-size="11.5" fill="#334155">build_index.py 出每本 html/index.html</text>
+<text x="1178" y="752" font-size="11.5" fill="#334155">加目录/阅读版索引.html</text>
+<rect x="1160" y="824" width="430" height="154" rx="8" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.8"/>
+<text x="1178" y="854" font-size="15" font-weight="700" fill="#4c1d95">目录/检索/index.db</text>
+<text x="1572" y="854" font-size="12" fill="#6d28d9" text-anchor="end">约 5.5 GiB，在涨</text>
+<text x="1178" y="876" font-size="11.5" fill="#334155">段落倒排 FTS5 bigram、概念剖面、章级扩展</text>
+<text x="1178" y="896" font-size="11.5" fill="#334155">切分与查询共用 lib_fts_cjk.py</text>
+<text x="1178" y="916" font-size="11.5" fill="#334155">概念表 126 条在这里参与检索</text>
+<text x="1178" y="936" font-size="11.5" fill="#334155">改检索脚本前先看目录/检索/踩坑记录.md</text>
+<text x="1178" y="956" font-size="11.5" fill="#334155">build_expand.py 从 13:19 跑到现在，体积在涨</text>
+<rect x="1160" y="1030" width="430" height="114" rx="8" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.8"/>
+<text x="1178" y="1060" font-size="15" font-weight="700" fill="#4c1d95">视图/主题/</text>
+<text x="1572" y="1060" font-size="12" fill="#6d28d9" text-anchor="end">124 概念 1025 链</text>
+<text x="1178" y="1082" font-size="11.5" fill="#334155">qsearch --book 的排序，build_topic_views.py 建链</text>
+<text x="1178" y="1102" font-size="11.5" fill="#334155">124 个概念目录，1025 条软链，外加一份 README</text>
+<text x="1178" y="1122" font-size="11.5" fill="#334155">概念表 126 条：达克效应、人工智能对齐 还没有书</text>
+<rect x="40" y="1200" width="1580" height="130" rx="8" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.8"/>
+<text x="58" y="1230" font-size="15" font-weight="700" fill="#7f1d1d">改完跑什么（门槛）</text>
+<text x="58" y="1260" font-size="11.5" fill="#334155">人账动过：build_library.py --emit-json，conflicts=0 且 books 等于人账行数</text>
+<text x="838" y="1260" font-size="11.5" fill="#334155">结构与 html 动过：verify_phase.py，末行全过</text>
+<text x="58" y="1286" font-size="11.5" fill="#334155">书目动过：gen_book_catalog.py，末行未匹配 0 条</text>
+<text x="838" y="1286" font-size="11.5" fill="#334155">检索层动过：check_p1.py 失败 0 项，verify_phase.py --box 6 全过</text>
+</svg>
+</div>
+
+<h2>规则与方案住哪</h2>
+<ul>
+  <li><code>AGENTS.md</code> 现状数字、文件地图、脚本表、改完跑什么</li>
+  <li><code>工作区/方案/设计方案-书目结构.md</code> L0 到 L5 的门槛与目标结构</li>
+  <li><code>工作区/方案/决策记录.tsv</code> 每个决定的理由与证据</li>
+  <li><code>目录/检索/README.md</code> 与 <code>踩坑记录.md</code>，改检索脚本前先查</li>
+</ul>
+<p class="sub" style="margin-top:22px">这张图由 <code>工作区/方案/项目结构图.py</code> 生成，改节点或坐标后重跑它即可。</p>
+</body>
+</html>

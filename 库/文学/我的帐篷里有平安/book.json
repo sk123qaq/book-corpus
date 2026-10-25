@@ -1,0 +1,41 @@
+{
+ "uid": "B1430",
+ "title": "我的帐篷里有平安",
+ "title_from_file": "",
+ "author": "叶舟",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/我的帐篷里有平安",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/我的帐篷里有平安 (叶舟著, 叶舟, 1966- author, Ye Zhou zhu).pdf",
+   "format": "pdf",
+   "bytes": 87916168,
+   "sha256": "1c2a67c7126f1e6fc96d4194d4e9a0cd46ca7a481b3b1aca92842d471584227e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 584385
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

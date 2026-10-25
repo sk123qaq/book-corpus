@@ -1,0 +1,17 @@
+{
+ "uid": "B0667",
+ "title": "三维游戏引擎设计与实现",
+ "format": "epub",
+ "dest": "库/游戏/游戏设计/三维游戏引擎设计与实现/md",
+ "at": "2026-10-18T21:06:32+08:00",
+ "verify_rc": 0,
+ "chapters": 114,
+ "chars": 136685,
+ "images": 102,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.966,
+ "raw_chars": 124550,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B0667.prev-2026-10-18T210620-0800"
+}

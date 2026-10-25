@@ -1,0 +1,35 @@
+{
+ "uid": "B0570",
+ "title": "茨菰",
+ "title_from_file": "",
+ "author": "苏童",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/苏童/茨菰",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/茨菰 (苏童).pdf",
+   "format": "pdf",
+   "bytes": 10825323,
+   "sha256": "c4b0ad1490dbf6c010df1bda63185a8e3ee800f46851eb49ea4fe0fe0a94c723",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 476573
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B0012",
+ "title": "I love BDSM",
+ "title_from_file": "",
+ "author": "Ayzad",
+ "subjects": [
+  "生活与实用",
+  "两性与情色"
+ ],
+ "path": "生活与实用/两性与情色/I love BDSM",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/I love BDSM (Ayzad Ayzad) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 261993,
+   "sha256": "633c5f83fee2e2cf5fd0efc786e0cbb646c8f72b2bd57bafc8e04b9ee4063df7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 32857
+  }
+ ],
+ "notes": "依据:TypeSafe(0.76)；置信:0.76"
+}

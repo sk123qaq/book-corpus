@@ -1,0 +1,42 @@
+{
+ "uid": "B0905",
+ "title": "The Stories of John Cheever",
+ "title_from_file": "",
+ "author": "John Cheever",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Stories of John Cheever",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Stories of John Cheever (John Cheever).epub",
+   "format": "epub",
+   "bytes": 848415,
+   "sha256": "a370deafd1f84e978f87c76ebb5bff3cfa3030e82890b4166cff404d77a4e158",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 64,
+   "bytes": 1872052
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

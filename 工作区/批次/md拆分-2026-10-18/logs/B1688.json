@@ -1,0 +1,17 @@
+{
+ "uid": "B1688",
+ "title": "火线",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/火线/md",
+ "at": "2026-10-18T20:14:25+08:00",
+ "verify_rc": 0,
+ "chapters": 26,
+ "chars": 222956,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9990000000000001,
+ "raw_chars": 195074,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1688.prev-2026-10-18T201103-0800"
+}

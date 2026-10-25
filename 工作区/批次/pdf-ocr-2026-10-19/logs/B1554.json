@@ -1,0 +1,30 @@
+{
+ "uid": "B1554",
+ "title": "艾煊散文选",
+ "format": "pdf",
+ "pages": 578,
+ "dest": "库/文学/散文随笔/艾煊散文选/md",
+ "at": "2026-10-24T15:34:57+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1554/merged/pages --out out/B1554 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 4,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 4.5,
+ "chunks_done": 4,
+ "merged_pages": 578,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1554/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 269041,
+ "images": 2,
+ "problems": 0,
+ "blank_pages": 5,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}

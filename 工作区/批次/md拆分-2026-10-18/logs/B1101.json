@@ -1,0 +1,17 @@
+{
+ "uid": "B1101",
+ "title": "人世间",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/人世间/md",
+ "at": "2026-10-18T20:12:28+08:00",
+ "verify_rc": 0,
+ "chapters": 55,
+ "chars": 862170,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "raw_chars": 753882,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1101.prev-2026-10-18T201103-0800"
+}

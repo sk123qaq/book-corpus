@@ -1,0 +1,35 @@
+{
+ "uid": "B0517",
+ "title": "Hokusai",
+ "title_from_file": "",
+ "author": "Edmond de Goncourt",
+ "subjects": [
+  "艺术与图像",
+  "美术史"
+ ],
+ "path": "艺术与图像/美术史/Hokusai",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Hokusai (Edmond de Goncourt) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 85851146,
+   "sha256": "b14aeda746bcf9dc787ff237abbaaab21e5c7a7df6683d35e9fcad0437db2409",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 9,
+   "bytes": 332746
+  }
+ ],
+ "notes": "依据:TypeSafe(0.95)；置信:0.95"
+}

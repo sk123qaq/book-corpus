@@ -1,0 +1,42 @@
+{
+ "uid": "B0907",
+ "title": "The Travels of Jaimie McPheeters (Arbor House Library of Con",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The Travels of Jaimie McPheeters (Arbor House Library of Con",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Travels of Jaimie McPheeters (Arbor House Library of Contemporary Americana) (Robert Lewis Taylor).epub",
+   "format": "epub",
+   "bytes": 7355812,
+   "sha256": "eb47abc8ef1bb29d2b8927e28ef081905a0ffe56edbc26daa98b992330b6bf29",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 50,
+   "bytes": 1079601
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

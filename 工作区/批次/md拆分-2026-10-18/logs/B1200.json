@@ -1,0 +1,17 @@
+{
+ "uid": "B1200",
+ "title": "归于尘土",
+ "format": "epub",
+ "dest": "库/文学/戏剧/归于尘土/md",
+ "at": "2026-10-18T20:12:53+08:00",
+ "verify_rc": 0,
+ "chapters": 23,
+ "chars": 116184,
+ "images": 2,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.9840000000000001,
+ "raw_chars": 101553,
+ "status": "replaced",
+ "previous": "工作区/批次/md拆分-2026-10-18/out/B1200.prev-2026-10-18T201103-0800"
+}

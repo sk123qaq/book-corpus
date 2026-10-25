@@ -1,0 +1,35 @@
+{
+ "uid": "B0396",
+ "title": "金色梦乡",
+ "title_from_file": "",
+ "author": "伊坂幸太郎",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/金色梦乡",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/金色梦乡 (伊坂幸太郎) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 564162,
+   "sha256": "d686d86ba9408a867be7962e649664e951ac817fc235635248edf184a242ef48",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 67,
+   "bytes": 835120
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

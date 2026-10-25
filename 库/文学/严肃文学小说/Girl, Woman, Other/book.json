@@ -1,0 +1,42 @@
+{
+ "uid": "B0741",
+ "title": "Girl, Woman, Other",
+ "title_from_file": "",
+ "author": "Bernardine Evaristo",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Girl, Woman, Other",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Girl, Woman, Other (Bernardine Evaristo).epub",
+   "format": "epub",
+   "bytes": 2950761,
+   "sha256": "cf61d799dc44373086a7db4ec49a5159de0ce2c6c6f248fcaa34c334293f100c",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 635616
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,32 @@
+{
+ "uid": "B1517",
+ "title": "生命的呐喊",
+ "format": "pdf",
+ "pages": 570,
+ "dest": "库/文学/生命的呐喊/md",
+ "at": "2026-10-24T15:23:28+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1517/merged/pages --out out/B1517 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 10,
+ "pages_per_chunk": 58,
+ "slice_mb_estimate": 14.8,
+ "chunks_done": 10,
+ "merged_pages": 570,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1517/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 751766,
+ "images": 2,
+ "problems": 0,
+ "blank_pages": 1,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 1,
+ "short_page_list": [
+  5
+ ],
+ "accepted": "",
+ "status": "landed"
+}

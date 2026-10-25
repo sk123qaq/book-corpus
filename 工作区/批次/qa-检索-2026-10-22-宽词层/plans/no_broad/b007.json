@@ -1,0 +1,18 @@
+{
+ "question": "正义为什么不能靠一时冲动？",
+ "groups": [
+  {
+   "name": "literal",
+   "terms": [
+    "正义",
+    "一时冲动"
+   ],
+   "weight": 1.0
+  }
+ ],
+ "concepts": [],
+ "book_hint": "",
+ "exclude": [],
+ "broad": [],
+ "broad_weight": 1.0
+}

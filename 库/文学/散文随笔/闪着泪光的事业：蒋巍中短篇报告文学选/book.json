@@ -1,0 +1,42 @@
+{
+ "uid": "B1606",
+ "title": "闪着泪光的事业：蒋巍中短篇报告文学选",
+ "title_from_file": "",
+ "author": "蒋巍",
+ "subjects": [
+  "文学",
+  "散文随笔"
+ ],
+ "path": "文学/散文随笔/闪着泪光的事业：蒋巍中短篇报告文学选",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/闪着泪光的事业：蒋巍中短篇报告文学选 (蒋巍 著).epub",
+   "format": "epub",
+   "bytes": 3235168,
+   "sha256": "f6f37be2f5dd6158049f75518c40a8b77135105aef3beb901bf9d02bbb9fc3b3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 82,
+   "bytes": 854800
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

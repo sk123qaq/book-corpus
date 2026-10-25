@@ -1,0 +1,35 @@
+{
+ "uid": "B0178",
+ "title": "包法利夫人",
+ "title_from_file": "",
+ "author": "福楼拜",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/包法利夫人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/包法利夫人（名著名译丛书） (福楼拜) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2741832,
+   "sha256": "aa88c0b9170b52415cf3d177287ec3e1ade16c91979118d6580e9723ba0fbde7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 37,
+   "bytes": 614711
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

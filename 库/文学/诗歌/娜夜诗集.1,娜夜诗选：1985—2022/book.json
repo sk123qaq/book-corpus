@@ -1,0 +1,42 @@
+{
+ "uid": "B1390",
+ "title": "娜夜诗集.1,娜夜诗选：1985—2022",
+ "title_from_file": "",
+ "author": "娜夜",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/娜夜诗集.1,娜夜诗选：1985—2022",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/娜夜诗集.1,娜夜诗选：1985—2022 (娜夜 著).epub",
+   "format": "epub",
+   "bytes": 857742,
+   "sha256": "bdf7e7652f08ed5e6216439ab13ef094a78a2cc175a6130f85ad7a5f45001c09",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 341,
+   "bytes": 223330
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

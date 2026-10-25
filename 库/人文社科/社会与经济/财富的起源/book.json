@@ -1,0 +1,35 @@
+{
+ "uid": "B0385",
+ "title": "财富的起源",
+ "title_from_file": "",
+ "author": "埃里克·拜因霍克",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/财富的起源",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/财富的起源 = The Origin of Wealth Evolution, Complexity, and the Radical Remaking of Economics ([英] 埃里克・拜因霍克 (Eric Beinhocker) 著  俸绪娴, 刘玮琦 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2502964,
+   "sha256": "1e2e637501762adec00b0a43fe6b8b51ef39309fb8ff6b29f8c36081ca2892d2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 30,
+   "bytes": 1007698
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

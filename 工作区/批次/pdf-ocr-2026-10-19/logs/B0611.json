@@ -1,0 +1,34 @@
+{
+ "uid": "B0611",
+ "title": "山西通史 第2卷 秦汉魏晋南北朝卷",
+ "format": "pdf",
+ "pages": 664,
+ "dest": "库/人文社科/历史/山西通史 第2卷 秦汉魏晋南北朝卷/md",
+ "at": "2026-10-24T16:14:04+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B0611/merged/pages --out out/B0611 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 5,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 5.3,
+ "chunks_done": 5,
+ "merged_pages": 664,
+ "coverage_ok": true,
+ "merged_run_json": "work/B0611/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 332084,
+ "images": 3,
+ "problems": 0,
+ "blank_pages": 3,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 3,
+ "short_page_list": [
+  18,
+  508,
+  612
+ ],
+ "accepted": "",
+ "status": "landed"
+}

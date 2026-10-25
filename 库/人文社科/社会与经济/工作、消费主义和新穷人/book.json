@@ -1,0 +1,35 @@
+{
+ "uid": "B0222",
+ "title": "工作、消费主义和新穷人",
+ "title_from_file": "",
+ "author": "齐格蒙特·鲍曼",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/工作、消费主义和新穷人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/工作、消费主义和新穷人 = Work, Consumerism and the New Poor ([英] 齐格蒙特・鲍曼 (Zygmunt Bauman) 著  郭楠 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 351680,
+   "sha256": "a23bd71a16b2f6b3c994dbcd5883236d5ad81002cf789f7cde73bc8c902af73a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 33,
+   "bytes": 301478
+  }
+ ],
+ "notes": "依据:TypeSafe(0.99)；置信:0.99"
+}

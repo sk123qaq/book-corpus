@@ -1,0 +1,35 @@
+{
+ "uid": "B0177",
+ "title": "虹",
+ "title_from_file": "",
+ "author": "D.H.劳伦斯",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/D.H.劳伦斯/劳伦斯/虹",
+ "series": "劳伦斯",
+ "volume": "3",
+ "container": "劳伦斯",
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "../source/劳伦斯禁书三部曲（泰莱夫人的情人、虹、恋爱中的女人）（全新修订版） (D.H.劳伦斯) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1932596,
+   "sha256": "399876f2107768276c5d2de0406c946891265c37ff57ca059bc529900ba1a9c1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 16,
+   "bytes": 1031539
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

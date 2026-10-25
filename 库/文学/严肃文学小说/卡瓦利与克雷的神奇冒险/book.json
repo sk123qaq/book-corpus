@@ -1,0 +1,42 @@
+{
+ "uid": "B0915",
+ "title": "卡瓦利与克雷的神奇冒险",
+ "title_from_file": "",
+ "author": "迈克尔·夏邦",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/卡瓦利与克雷的神奇冒险",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/卡瓦利与克雷的神奇冒险 (迈克尔·夏邦).epub",
+   "format": "epub",
+   "bytes": 798527,
+   "sha256": "768b0e693ff06739aeac8bcbfafe988b97ccdac57ddd39eea107469d4822cc6a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 77,
+   "bytes": 1280795
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

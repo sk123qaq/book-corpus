@@ -1,0 +1,42 @@
+{
+ "uid": "B1043",
+ "title": "犬婿入り",
+ "title_from_file": "",
+ "author": "多和田葉子",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/犬婿入り",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/犬婿入り (多和田葉子).pdf",
+   "format": "pdf",
+   "bytes": 2633663,
+   "sha256": "b0978c5131eefbb907f4eaa81eab549f3ccdc4e13180dd4f411b7ee974f90096",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 195729
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

@@ -1,0 +1,29 @@
+{
+ "uid": "B1447",
+ "title": "整理石头",
+ "format": "pdf",
+ "route": "text",
+ "pages": 243,
+ "dest": "库/文学/整理石头/md",
+ "at": "2026-10-19T12:42:52+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/文学/整理石头/source/整理石头 (Adobe Acrobat Pro 9.1.2, 阎安著).pdf --out out/B1447 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0041,
+ "audit_anchors": 1.0,
+ "audit_chars": 45154,
+ "chapters": 12,
+ "chars": 56949,
+ "images": 5,
+ "problems": 0,
+ "structure": "chapters",
+ "single_file": false,
+ "pdf_pages": 243,
+ "toc_entries": 12,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

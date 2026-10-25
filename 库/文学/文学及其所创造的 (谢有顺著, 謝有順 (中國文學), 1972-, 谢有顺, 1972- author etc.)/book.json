@@ -1,0 +1,41 @@
+{
+ "uid": "B1449",
+ "title": "文学及其所创造的 (谢有顺著, 謝有順 (中國文學), 1972-, 谢有顺, 1972- author etc.)",
+ "title_from_file": "",
+ "author": "中國文學",
+ "subjects": [
+  "文学"
+ ],
+ "path": "文学/文学及其所创造的 (谢有顺著, 謝有順 (中國文學), 1972-, 谢有顺, 1972- author etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/文学及其所创造的 (谢有顺著, 謝有順 (中國文學), 1972-, 谢有顺, 1972- author etc.).pdf",
+   "format": "pdf",
+   "bytes": 101149862,
+   "sha256": "224d6de22e730b96b97502a97a6553617ddfae94e7cb14264ba4591167aa491b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 1276543
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

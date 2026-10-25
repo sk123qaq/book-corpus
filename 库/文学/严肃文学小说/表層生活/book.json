@@ -1,0 +1,42 @@
+{
+ "uid": "B1075",
+ "title": "表層生活",
+ "title_from_file": "",
+ "author": "大岡玲",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/表層生活",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/表層生活 (大岡玲).pdf",
+   "format": "pdf",
+   "bytes": 6663164,
+   "sha256": "4cf8e51a1d55c7d34c01a1c6ff58471573d6d37d98faf214c82859fa7852dfcb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "芥川奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 379778
+  }
+ ],
+ "notes": "奖项:芥川奖；依据:来源目录或奖项"
+}

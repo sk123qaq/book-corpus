@@ -1,0 +1,42 @@
+{
+ "uid": "B1538",
+ "title": "第三届鲁迅文学奖获奖作品丛书 诗歌",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "文学",
+  "诗歌"
+ ],
+ "path": "文学/诗歌/第三届鲁迅文学奖获奖作品丛书 诗歌",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/第三届鲁迅文学奖获奖作品丛书 诗歌 (第三届鲁迅文学奖全国优秀诗歌奖评奖办公室编 etc.).pdf",
+   "format": "pdf",
+   "bytes": 5565328,
+   "sha256": "26935ec5e7e3895095dc7d02a1229ac8f00a41f6221e4b234ef05352bed9554e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 222672
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

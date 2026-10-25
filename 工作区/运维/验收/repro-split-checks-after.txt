@@ -1,0 +1,12 @@
+初始             rows=2 B0929=False B1155=False all=False rep=False workers=4 selected=[]
+点行勾选           rows=2 B0929=True B1155=False all=False rep=False workers=4 selected=['B0929']
+点全选            rows=2 B0929=True B1155=True all=True rep=False workers=4 selected=['B0929', 'B1155']
+点重拆            rows=2 B0929=True B1155=True all=True rep=True workers=4 selected=['B0929', 'B1155']
+改并发            rows=2 B0929=True B1155=True all=True rep=True workers=8 selected=['B0929', 'B1155']
+再点全选           rows=2 B0929=False B1155=False all=False rep=True workers=8 selected=[]
+ROW TOGGLE PASS
+ALL REFLECT PASS
+REPLACE KEPT PASS
+WORKERS KEPT PASS
+VERDICT ALL PASS
+console errors 0

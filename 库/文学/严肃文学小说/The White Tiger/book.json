@@ -1,0 +1,42 @@
+{
+ "uid": "B0768",
+ "title": "The White Tiger",
+ "title_from_file": "",
+ "author": "Aravind Adiga",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/The White Tiger",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The White Tiger (Aravind Adiga).epub",
+   "format": "epub",
+   "bytes": 714753,
+   "sha256": "5b3d701ebc67b0813ab28c6df954426296ad1589cfbeb3c858be0e80b8bad075",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 9,
+   "bytes": 434664
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

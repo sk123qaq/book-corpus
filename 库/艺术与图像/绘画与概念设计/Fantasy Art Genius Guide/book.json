@@ -1,0 +1,35 @@
+{
+ "uid": "B0514",
+ "title": "Fantasy Art Genius Guide",
+ "title_from_file": "",
+ "author": "Charlie Crooks",
+ "subjects": [
+  "艺术与图像",
+  "绘画与概念设计"
+ ],
+ "path": "艺术与图像/绘画与概念设计/Fantasy Art Genius Guide",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Fantasy Art Genius Guide (Charlie Crooks) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 26978769,
+   "sha256": "45d79865cefec26ef0d7492f6da08f1f2f2a6a1695d7797fb580629ee6cc7638",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 396932
+  }
+ ],
+ "notes": "依据:TypeSafe(0.96)；置信:0.96"
+}

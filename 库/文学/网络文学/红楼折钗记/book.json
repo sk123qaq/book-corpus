@@ -1,0 +1,35 @@
+{
+ "uid": "B0359",
+ "title": "红楼折钗记",
+ "title_from_file": "",
+ "author": "红楼小后宫",
+ "subjects": [
+  "文学",
+  "网络文学"
+ ],
+ "path": "文学/网络文学/红楼折钗记",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/红楼折钗记 (红楼小后宫) (z-library.sk, 1lib.sk, z-lib.sk).mobi",
+   "format": "mobi",
+   "bytes": 3032219,
+   "sha256": "313dd38fc39cf4426e37f1191411282a5736fb47530ebab9296e7c12ea4ebf6a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 1408675
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

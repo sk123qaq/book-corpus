@@ -1,0 +1,16 @@
+{
+ "uid": "B0128",
+ "title": "人类简史",
+ "format": "epub",
+ "dest": "库/人文社科/历史/人类简史/md",
+ "at": "2026-10-18T23:30:49+08:00",
+ "verify_rc": 0,
+ "chapters": 113,
+ "chars": 294649,
+ "images": 40,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.986,
+ "raw_chars": 269970,
+ "status": "staged-green"
+}

@@ -1,0 +1,42 @@
+{
+ "uid": "B0919",
+ "title": "大地 (The Good Earth) ((美)赛珍珠(Pearl S.Buck)著王逢振,马传禧译 etc.)",
+ "title_from_file": "",
+ "author": "The Good Earth",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/大地 (The Good Earth) ((美)赛珍珠(Pearl S.Buck)著王逢振,马传禧译 etc.)",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大地 (The Good Earth) ((美)赛珍珠(Pearl S.Buck)著王逢振,马传禧译 etc.).pdf",
+   "format": "pdf",
+   "bytes": 9958304,
+   "sha256": "c7935e26536ca3c5e3335a83894d8fe39bd9f1774450b302396a838334dfdc81",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 559388
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

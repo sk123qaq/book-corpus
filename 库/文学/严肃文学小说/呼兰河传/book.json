@@ -1,0 +1,35 @@
+{
+ "uid": "B0188",
+ "title": "呼兰河传",
+ "title_from_file": "",
+ "author": "萧红",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/呼兰河传",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/呼兰河传 (萧红) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 228620,
+   "sha256": "1c60237378b11db9361ca79baa2f22deccc48c682d3254a07826afeb3272bd1d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 375354
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

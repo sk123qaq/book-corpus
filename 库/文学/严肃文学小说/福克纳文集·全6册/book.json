@@ -1,0 +1,42 @@
+{
+ "uid": "B1225",
+ "title": "福克纳文集·全6册",
+ "title_from_file": "",
+ "author": "收录诺奖作家福克纳代表性作品",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/福克纳文集·全6册",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/福克纳文集·全6册（收录诺奖作家福克纳代表性作品；翻译家李文俊传神译本；影响了中国当代文坛一大批优秀作家） (威廉·福克纳).epub",
+   "format": "epub",
+   "bytes": 2416865,
+   "sha256": "7d6b3cd2c5cb35d5158313eec6e6934ad6be19b4a84cc2348fac34ac94a58bb7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "诺贝尔文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 213,
+   "bytes": 3542837
+  }
+ ],
+ "notes": "奖项:诺贝尔文学奖；依据:来源目录或奖项"
+}

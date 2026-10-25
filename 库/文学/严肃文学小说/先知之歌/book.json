@@ -1,0 +1,42 @@
+{
+ "uid": "B0772",
+ "title": "先知之歌",
+ "title_from_file": "",
+ "author": "Paul Lynch",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/先知之歌",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/先知之歌 = Prophet Song (保羅 · 林奇 (Paul Lynch) 著  呂玉嬋 譯).epub",
+   "format": "epub",
+   "bytes": 1903685,
+   "sha256": "27259c5f1a8e19b6e25c8b17f60e08ce5b2a4ccfa4183d951b81ed9175c29de4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "布克奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 436045
+  }
+ ],
+ "notes": "奖项:布克奖；依据:来源目录或奖项"
+}

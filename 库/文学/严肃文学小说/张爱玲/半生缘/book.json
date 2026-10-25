@@ -1,0 +1,35 @@
+{
+ "uid": "B0180",
+ "title": "半生缘",
+ "title_from_file": "",
+ "author": "张爱玲",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/张爱玲/半生缘",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/半生缘 (张爱玲) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 420191,
+   "sha256": "129f52074471d841007add2f2e6a2fede8da892097ffccaf5a69c4fae2e44cba",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 18,
+   "bytes": 674034
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

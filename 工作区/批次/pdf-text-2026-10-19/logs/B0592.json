@@ -1,0 +1,29 @@
+{
+ "uid": "B0592",
+ "title": "幻方 中国古代的城市",
+ "format": "pdf",
+ "route": "text",
+ "pages": 478,
+ "dest": "库/建筑与古迹/城市与聚落/幻方 中国古代的城市/md",
+ "at": "2026-10-19T12:47:33+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/建筑与古迹/城市与聚落/幻方 中国古代的城市/source/幻方 中国古代的城市 (阿尔弗雷德·申茨) (z-library.sk, 1lib.sk, z-lib.sk).pdf --out out/B0592 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.023,
+ "audit_anchors": 1.0,
+ "audit_chars": 373116,
+ "chapters": 1,
+ "chars": 423201,
+ "images": 478,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 478,
+ "toc_entries": 10,
+ "toc_rejected": "第 9 条页号从 360 回退到 1，按目录切会乱序",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

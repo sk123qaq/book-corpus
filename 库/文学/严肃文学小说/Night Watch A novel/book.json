@@ -1,0 +1,42 @@
+{
+ "uid": "B0874",
+ "title": "Night Watch A novel",
+ "title_from_file": "",
+ "author": "Jayne Anne Phillips",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/Night Watch A novel",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Night Watch A novel (Jayne Anne Phillips).epub",
+   "format": "epub",
+   "bytes": 1760530,
+   "sha256": "bddf0de86a4b165de509d12f8bcda23b2ace092f729382529fc8f301cfab79ed",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "普利策小说奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 22,
+   "bytes": 501765
+  }
+ ],
+ "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
+}

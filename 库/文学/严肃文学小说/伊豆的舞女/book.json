@@ -1,0 +1,35 @@
+{
+ "uid": "B0132",
+ "title": "伊豆的舞女",
+ "title_from_file": "",
+ "author": "川端康成",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/伊豆的舞女",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/伊豆的舞女 (川端康成) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 557739,
+   "sha256": "a1daa97847414235d576aee2bc7b3c336dbafa261b586ce0c764b4a2ead78511",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 8,
+   "bytes": 45460
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

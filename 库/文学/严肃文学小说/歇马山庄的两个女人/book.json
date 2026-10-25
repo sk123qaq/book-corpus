@@ -1,0 +1,42 @@
+{
+ "uid": "B1479",
+ "title": "歇马山庄的两个女人",
+ "title_from_file": "",
+ "author": "孙惠芬",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/歇马山庄的两个女人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/歇马山庄的两个女人 (孙惠芬著, 孙惠芬, 1961- author, Sun Huifen zhu etc.).pdf",
+   "format": "pdf",
+   "bytes": 8757132,
+   "sha256": "9f05bada4dabe7f2178a3de5e6c7594d9132a87ff2e0d3ff079720fe563bd711",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "鲁迅文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 465295
+  }
+ ],
+ "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
+}

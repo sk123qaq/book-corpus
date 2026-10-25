@@ -1,0 +1,29 @@
+{
+ "uid": "B0583",
+ "title": "中国晋祠 Jin Ci in China",
+ "format": "pdf",
+ "route": "text",
+ "pages": 292,
+ "dest": "库/建筑与古迹/中国晋祠 Jin Ci in China/md",
+ "at": "2026-10-19T12:43:59+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/建筑与古迹/中国晋祠 Jin Ci in China/source/中国晋祠 Jin Ci in China (晋祠博物馆 Jin Ci Museum) (z-library.sk, 1lib.sk, z-lib.sk).pdf --out out/B0583 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0676,
+ "audit_anchors": 1.0,
+ "audit_chars": 80288,
+ "chapters": 10,
+ "chars": 89437,
+ "images": 297,
+ "problems": 0,
+ "structure": "chapters",
+ "single_file": false,
+ "pdf_pages": 292,
+ "toc_entries": 10,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

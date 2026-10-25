@@ -1,0 +1,35 @@
+{
+ "uid": "B0387",
+ "title": "追风筝的人",
+ "title_from_file": "",
+ "author": "胡赛尼",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/追风筝的人",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/追风筝的人 (胡赛尼 [胡赛尼]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 545876,
+   "sha256": "bc6d6463eee04fdc4f87dede5646801c853fc1d3d984d01aec0348c61d432794",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 25,
+   "bytes": 583553
+  }
+ ],
+ "notes": "依据:TypeSafe(1.00)；置信:1.0"
+}

@@ -1,0 +1,16 @@
+{
+ "uid": "B0242",
+ "title": "明亮的夜晚",
+ "format": "epub",
+ "dest": "库/文学/严肃文学小说/明亮的夜晚/md",
+ "at": "2026-10-18T23:31:16+08:00",
+ "verify_rc": 0,
+ "chapters": 19,
+ "chars": 134268,
+ "images": 1,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.998,
+ "raw_chars": 118042,
+ "status": "staged-green"
+}

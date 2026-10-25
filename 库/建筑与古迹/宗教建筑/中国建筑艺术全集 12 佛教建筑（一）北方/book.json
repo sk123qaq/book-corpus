@@ -1,0 +1,27 @@
+{
+ "uid": "B0582",
+ "title": "中国建筑艺术全集 12 佛教建筑（一）北方",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "建筑与古迹",
+  "宗教建筑"
+ ],
+ "path": "建筑与古迹/宗教建筑/中国建筑艺术全集 12 佛教建筑（一）北方",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国建筑艺术全集 12 佛教建筑（一）北方 (曹昌智主编；中国建筑艺术全集编辑委员会编) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 128909158,
+   "sha256": "8de8ca68bba6a0872dac0e1741a9b36df80c51a817ef35ad11ba5073ecdfcf00",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "依据:来源目录或奖项；图册不转:图占比60%"
+}

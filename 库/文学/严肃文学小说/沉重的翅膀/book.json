@@ -1,0 +1,42 @@
+{
+ "uid": "B1122",
+ "title": "沉重的翅膀",
+ "title_from_file": "",
+ "author": "张洁 张洁",
+ "subjects": [
+  "文学",
+  "严肃文学小说"
+ ],
+ "path": "文学/严肃文学小说/沉重的翅膀",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/沉重的翅膀 (张洁 [张洁]).epub",
+   "format": "epub",
+   "bytes": 410562,
+   "sha256": "4ad7522862fdecb3e4d7d897c0c9268d56ab9717f8c0eebf6686fda1c22fd5b9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [
+  {
+   "award": "茅盾文学奖",
+   "year": "",
+   "edition": "",
+   "result": "已在盘"
+  }
+ ],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 646463
+  }
+ ],
+ "notes": "奖项:茅盾文学奖；依据:来源目录或奖项"
+}

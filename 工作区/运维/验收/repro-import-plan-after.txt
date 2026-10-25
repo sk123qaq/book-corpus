@@ -1,0 +1,6 @@
+点击前 rows=3 head='扫描后的计划 · 20261025-003922-a530' disabled=False plan_fetch=0 last_job=20261025-003922-a530
+t=1.0s 计划已出，rows=3 head='扫描后的计划 · 20261025-004453-3cbe'
+点击后 last_job=20261025-004453-3cbe state=awaiting_review summary='计划待确认：add 0 / replace 2 / conflict 1 / skip 0；有需要逐条定的行'
+first_plan_fetch=1.0 first_rows=1.0 done_at=None
+VERDICT PLAN SHOWN
+console errors 0
