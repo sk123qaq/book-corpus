@@ -1004,6 +1004,16 @@ def run_checks(root, ops, port, fixture):
     check("未分诊的行带建议，并指向出建议的那个任务",
           suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
           "%s 建议=%s 任务=%s" % (target, suggestion, row.get("suggest_job")))
+    ops_db = os.path.join(root, "工作区", "运维", "ops.db")
+    set_job_state(ops_db, batch_id, "failed")
+    code, body = get(port, "/api/pdf/books")
+    row = next((r for r in (body.get("books") or []) if r.get("uid") == target), {})
+    suggestion = row.get("suggestion") or {}
+    check("任务后来判失败，已落盘的建议仍然算",
+          suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
+          "%s 建议=%s 来自=%s 期望=%s" % (target, suggestion.get("route"),
+                                     row.get("suggest_job"), batch_id))
+    set_job_state(ops_db, batch_id, "awaiting_review")
     code, body = post(port, "/api/pdf/settle",
                       {"items": [{"uid": target, "route": "本地抽文本"}]})
     settle_id = body.get("job_id")
@@ -1181,6 +1191,13 @@ def adoption_checks(root, fixture):
                     proc_.kill()
         if os.path.exists(slow):
             os.remove(slow)
+
+
+def set_job_state(ops_db, job_id, state):
+    conn = sqlite3.connect(ops_db)
+    conn.execute("UPDATE job SET state=? WHERE id=?", (state, job_id))
+    conn.commit()
+    conn.close()
 
 
 def wait_exit(proc, seconds):
