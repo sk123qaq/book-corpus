@@ -237,7 +237,7 @@ new Promise((resolve) => {
 IMPORT_PLAN = """
 (() => {
   const head = Array.from(document.querySelectorAll('#view h2'))
-    .map((h) => h.textContent).find((t) => t.indexOf('扫描后的计划') >= 0) || '';
+    .map((h) => h.textContent).find((t) => t.indexOf('入库清单') >= 0) || '';
   const btn = document.querySelector('[data-act="import-scan"]');
   return {rows: document.querySelectorAll('[data-field="action"]').length,
           head: head, disabled: btn ? !!btn.disabled : null};
@@ -250,7 +250,7 @@ new Promise((resolve) => {
   const t0 = Date.now();
   const tick = () => {
     const head = Array.from(document.querySelectorAll('#view h2'))
-      .map((h) => h.textContent).find((t) => t.indexOf('扫描后的计划') >= 0) || '';
+      .map((h) => h.textContent).find((t) => t.indexOf('入库清单') >= 0) || '';
     const btn = document.querySelector('[data-act="import-scan"]');
     const rows = document.querySelectorAll('[data-field="action"]').length;
     if ((rows > 0 && head !== before) || Date.now() - t0 > 10000) {
@@ -269,7 +269,7 @@ new Promise((resolve) => {
   const t0 = Date.now();
   const tick = () => {
     const head = Array.from(document.querySelectorAll('#view h2'))
-      .map((h) => h.textContent).find((t) => t.indexOf('扫描后的计划') >= 0) || '';
+      .map((h) => h.textContent).find((t) => t.indexOf('入库清单') >= 0) || '';
     const rows = document.querySelectorAll('[data-field="action"]').length;
     if (rows > 0 || Date.now() - t0 > 10000) {
       resolve({rows: rows, head: head, ms: Date.now() - t0});
@@ -453,6 +453,20 @@ LOG_CANCEL = """
 })()
 """
 
+# 日志页是诊断面，命令行与门槛原文留在那里；其余页不得出现实现细节。
+COPY_LEAKS = """
+(() => {
+  const bad = ['.py', '--', 'ops.db', 'library.db', 'book.json', 'index.db', 'ingest',
+               'build_library', 'gen_book_catalog', 'ops_status', 'worklist', 'triage_final',
+               'review.json', 'quota', 'conflicts', '未匹配', 'sha256', 'route', 'fixture',
+               'plan_hash', '快照', 'replaced', 'pending_review',
+               'stub', 'S1 ', 'S2 ', 'S3 ', 'S4 ', 'S5 ', 'S6 ', 'G3 ', 'G4 ', 'G5 ',
+               'G10', 'G11'];
+  const text = (document.querySelector('#view') || {}).textContent || '';
+  return bad.filter((w) => text.indexOf(w) >= 0);
+})()
+"""
+
 
 def dump_png(cdp, path):
     shot = cdp.call("Page.captureScreenshot",
@@ -501,6 +515,11 @@ def run_viewport(base, width, height, out_dir, port, live=False):
                             info.get("ms"), " 溢出！" if tab_overflow else ""))
             if tab_overflow:
                 widest[0] = tab
+            if tab != 'logs':
+                leaks = eval_js(cdp, COPY_LEAKS)
+                if leaks:
+                    notes.append("页签 %-9s 文案残留 %s" % (tab, "、".join(leaks)))
+                    failed_tabs.append(tab + "-copy")
             cdp.drain(0.4)
             if not info.get("ok"):
                 failed_tabs.append(tab)

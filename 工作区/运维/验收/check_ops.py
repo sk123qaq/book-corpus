@@ -471,7 +471,7 @@ def run_checks(root, ops, port, fixture):
           and status.get("jobs", {}).get("running") == 0)
 
     code, html = get(port, "/")
-    check("首页渲染", code == 200 and "统一操作台" in html, "len=%d" % len(html or ""))
+    check("首页渲染", code == 200 and "书库操作台" in html, "len=%d" % len(html or ""))
     for name in ("app.js", "style.css"):
         code, _ = get(port, "/" + name)
         check("静态文件 " + name, code == 200)
