@@ -1,0 +1,7 @@
+{
+  "tool": "/home/shike/文档/books/工作区/批次/split-ops-20261025-191539/fixups/page_units.py",
+  "args": [
+    "--map", "/home/shike/文档/books/工作区/批次/split-ops-20261025-191539/fixups/B1705.chapters.json",
+    "--all-pages"
+  ]
+}

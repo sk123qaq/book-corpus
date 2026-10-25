@@ -1,0 +1,17 @@
+{
+ "uid": "B1738",
+ "title": "The Climate Casino",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/The Climate Casino/md",
+ "at": "2026-10-25T19:16:49+08:00",
+ "verify_rc": 0,
+ "chapters": 33,
+ "chars": 507953,
+ "images": 60,
+ "problems": 0,
+ "audit_rc": 1,
+ "audit_ratio": 0.818,
+ "raw_chars": 602637,
+ "status": "staged-review",
+ "note": "verify rc=0, audit rc=1"
+}

@@ -1,0 +1,10 @@
+{
+ "tool": "/home/shike/文档/books/工作区/批次/split-ops-20261025-204703/tools/rebuilt_doc_units.py",
+ "args": [
+  "--units",
+  "/home/shike/文档/books/工作区/批次/split-ops-20261025-204703/overrides/B1750.units.json",
+  "--keep",
+  "^Epilogue$"
+ ],
+ "note": "本书的 NCX 锚点与 index_split 文档不同步，按 TOC 切片把 12 章正文切成碎片（旧产物 54 个文件 / 179,287 字 / 29.6%）。rebuilt_doc_units.py 按 overrides/B1750.units.json 的文档→章映射重建，一个文档一章，章名取自书自己的 Contents 页。--keep ^Epilogue$ 因为 Epilogue 是卷尾页词表里的词，但它在这里是第 12 章正文。"
+}

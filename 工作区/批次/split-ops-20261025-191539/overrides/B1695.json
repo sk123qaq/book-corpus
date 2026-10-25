@@ -1,0 +1,9 @@
+[
+ "--keep",
+ "^Preface$",
+ "--keep",
+ "^Epilogue",
+ "--keep",
+ "^References$",
+ "--no-untoced"
+]

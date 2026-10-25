@@ -1,0 +1,25 @@
+{
+ "uid": "B1714",
+ "title": "Governing the Commons The Evolution of Institutions for Collective Action",
+ "format": "azw",
+ "dest": "库/人文社科/社会与经济/Governing the Commons The Evolution of Institutions for Collective Action/md",
+ "at": "2026-10-25T20:47:03+08:00",
+ "provenance_fixed": 84,
+ "verify_rc": 0,
+ "chapters": 84,
+ "chars": 633302,
+ "images": 28,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.966,
+ "raw_chars": 629939,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 192384,
+   "report": "工作区/批次/split-ops-20261025-204703/logs/B1714.fix.md",
+   "tail": "B1714 已修好：在 `overrides/B1714.json` 加 `--keep \"^Notes$\" --keep \"^References\"`、`--drop \"^levels of analysis,–$\"`（尾注/参考文献是正文的学术附注，补进来 133k 字；Index 续页那页纯页码反链不再误收，正文 01–82 章一字未动），重拆后 verify `problems 0`、audit `608,795/629,939 = 96.6% ok`，两份读数与诊断记在 `工作区/批次/split-ops-20261025-204703/logs/B1714.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}

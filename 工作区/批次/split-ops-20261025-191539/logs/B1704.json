@@ -1,0 +1,24 @@
+{
+ "uid": "B1704",
+ "title": "Development As Freedom",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/Development As Freedom/md",
+ "at": "2026-10-25T19:15:44+08:00",
+ "verify_rc": 0,
+ "chapters": 17,
+ "chars": 756389,
+ "images": 14,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.991,
+ "raw_chars": 722983,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 271354,
+   "report": "工作区/批次/split-ops-20261025-191539/logs/B1704.fix.md",
+   "tail": "被当成卷尾页丢掉的页面（Notes 142k 字尾注、Preface 6k、Index 28.5k），正文一字没丢；`overrides/B1704.json` 加 `--keep '^Preface$' --keep '^Notes$'`（并用 `--drop` 清掉吹捧语页、献词页、半书名页三个无目录项的前置页），重出后 verify（17 md、756,389 字、images 14/14、problems 0、rc=0）与 audit（716,401/722,983 = 99.1% ok、rc=0）都过，正文与旧产物归一化后逐字节相同，改动记在 `logs/B1704.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}

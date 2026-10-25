@@ -1,0 +1,24 @@
+{
+ "uid": "B1750",
+ "title": "The lever of riches - technological creativity and economic progress",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/The lever of riches - technological creativity and economic progress/md",
+ "at": "2026-10-25T20:55:01+08:00",
+ "verify_rc": 0,
+ "chapters": 12,
+ "chars": 563909,
+ "images": 49,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.902,
+ "raw_chars": 605303,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 403909,
+   "report": "工作区/批次/split-ops-20261025-204703/logs/B1750.fix.md",
+   "tail": "ides/B1750.json` 用 `{\"tool\":…,\"args\":[\"--units\",…,\"--keep\",\"^Epilogue$\"]}` 记录，未动 `库/`、未动 `工作区/脚本/`、无手改 md/无编造文本，重跑后 verify 12 章/problems 0（rc=0）、audit `545,776/605,303 = 90.2% ok`（rc=0），需排在未收录里的 9.8% 全是 Bibliography/Preface/卷尾目录/扉页/图片版 Index，逐条记在 `工作区/批次/split-ops-20261025-204703/logs/B1750.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}

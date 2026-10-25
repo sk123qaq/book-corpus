@@ -1,0 +1,17 @@
+{
+ "uid": "B1742",
+ "title": "The Race between Education and Technology",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/The Race between Education and Technology/md",
+ "at": "2026-10-25T19:29:40+08:00",
+ "verify_rc": 1,
+ "chapters": 20,
+ "chars": 662837,
+ "images": 114,
+ "problems": 1,
+ "audit_rc": 1,
+ "audit_ratio": 0.7190000000000001,
+ "raw_chars": 889866,
+ "status": "staged-review",
+ "note": "verify rc=1, audit rc=1"
+}

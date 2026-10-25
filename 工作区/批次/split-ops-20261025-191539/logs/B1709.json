@@ -1,0 +1,17 @@
+{
+ "uid": "B1709",
+ "title": "Essays on the Great Depression",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/Essays on the Great Depression/md",
+ "at": "2026-10-25T19:15:57+08:00",
+ "verify_rc": 1,
+ "chapters": 15,
+ "chars": 548501,
+ "images": 203,
+ "problems": 1,
+ "audit_rc": 0,
+ "audit_ratio": 0.9640000000000001,
+ "raw_chars": 542522,
+ "status": "staged-review",
+ "note": "verify rc=1, audit rc=0"
+}

@@ -1,0 +1,24 @@
+{
+ "uid": "B1757",
+ "title": "Who Gets What — and Why The New Economics of Matchmaking and Market Design",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/Who Gets What — and Why The New Economics of Matchmaking and Market Design/md",
+ "at": "2026-10-25T20:55:32+08:00",
+ "verify_rc": 0,
+ "chapters": 14,
+ "chars": 384798,
+ "images": 0,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 0.955,
+ "raw_chars": 388180,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 423070,
+   "report": "工作区/批次/split-ops-20261025-204703/logs/B1757.fix.md",
+   "tail": "10 个十几字残页；我改成按 spine 文档显式建单元（`fixups/doc_units.py` + `B1757.chapters.json`，override 里 `--all-pages`），正文取同一切片的 `_split_001`、末注 Notes 当正文收进，部页/章号页/Index 收进未收录 —— 现为 14 章、verify `0 problems`、audit `370,891/388,180 = 95.5% ok`（原 87.7% LOW），诊断与逐文件读数记在 `工作区/批次/split-ops-20261025-204703/logs/B1757.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}

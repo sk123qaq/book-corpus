@@ -1,0 +1,24 @@
+{
+ "uid": "B1742",
+ "title": "The Race between Education and Technology",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/The Race between Education and Technology/md",
+ "at": "2026-10-25T20:50:23+08:00",
+ "verify_rc": 0,
+ "chapters": 20,
+ "chars": 941449,
+ "images": 114,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.004,
+ "raw_chars": 889866,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 407783,
+   "report": "工作区/批次/split-ops-20261025-204703/logs/B1742.fix.md",
+   "tail": "B1742 已修好：`overrides/B1742.json` 加 `[\"--keep\",\"^Notes$\",\"--keep\",\"^References$\",\"--drop\",\"^The$\"]` 重拆后，补进 642 条尾注（`18_Notes.md`）与文献表，去掉两张重复的半书名页；verify 20 章、problems 0，audit 892,986/889,866 = 100.4% ok，改动与读数记在 `工作区/批次/split-ops-20261025-204703/logs/B1742.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}

@@ -1,0 +1,3 @@
+{
+ "args": ["--keep", "^Notes$", "--keep", "^Epilogue", "--no-untoced"]
+}

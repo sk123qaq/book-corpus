@@ -1,0 +1,9 @@
+{
+ "args": [
+  "--keep", "^Preface$",
+  "--keep", "^Notes$",
+  "--drop", "^Explore$",
+  "--drop", "^Discover More$",
+  "--drop", "^PublicAffairs$"
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "uid": "B1713",
+ "title": "Good Economics for Hard Times",
+ "format": "epub",
+ "dest": "库/人文社科/社会与经济/Good Economics for Hard Times/md",
+ "at": "2026-10-25T19:29:27+08:00",
+ "verify_rc": 0,
+ "chapters": 14,
+ "chars": 774810,
+ "images": 5,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0190000000000001,
+ "raw_chars": 719360,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 341395,
+   "report": "工作区/批次/split-ops-20261025-192927/logs/B1713.fix.md",
+   "tail": "Notes$'`（并用 `--drop` 清掉 Explore、Discover More、PublicAffairs 三张出版社推广页，它们原本还占了章号），重出后 verify（14 md、774,810 字、problems 0、rc=0）与 audit（733,046/719,360 = 101.9% ok、rc=0；超 100% 的部分是 661+661 个脚注链接目标里的文件名被计入，非重复正文）都过，12 个共有章文件与旧产物归一化后逐字节相同、跨文件重复 0 处，改动记在 `工作区/批次/split-ops-20261025-192927/logs/B1713.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}

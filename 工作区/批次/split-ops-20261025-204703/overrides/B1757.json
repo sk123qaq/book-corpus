@@ -1,0 +1,8 @@
+{
+  "tool": "/home/shike/文档/books/工作区/批次/split-ops-20261025-204703/fixups/doc_units.py",
+  "args": [
+    "--map", "/home/shike/文档/books/工作区/批次/split-ops-20261025-204703/fixups/B1757.chapters.json",
+    "--all-pages"
+  ],
+  "accept": "NCX 把章/部条目锚在 partNNNN_split_000.html 上，那页只有章号（10/11/12）或 PART N 标记，正文在同一切片的 _split_001.html；按锚点切出 23 个文件含 10 个十几字残页。改按 spine 文档显式建单元（一章一条），末注 Notes 当正文收进，部页/章号页/Index 收进未收录，无正文丢失"
+}

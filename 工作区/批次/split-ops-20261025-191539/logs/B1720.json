@@ -1,0 +1,17 @@
+{
+ "uid": "B1720",
+ "title": "Irrational Exuberance",
+ "format": "epub",
+ "dest": "库/商业与管理/投资与金融/Irrational Exuberance/md",
+ "at": "2026-10-25T19:16:19+08:00",
+ "verify_rc": 0,
+ "chapters": 22,
+ "chars": 727468,
+ "images": 31,
+ "problems": 0,
+ "audit_rc": 1,
+ "audit_ratio": 0.848,
+ "raw_chars": 806063,
+ "status": "staged-review",
+ "note": "verify rc=0, audit rc=1"
+}
