@@ -1,0 +1,35 @@
+{
+ "uid": "B1700",
+ "title": "An American Dilemma The Negro Problem and Modern Democracy, Volume 2",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/An American Dilemma The Negro Problem and Modern Democracy, Volume 2",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/An American Dilemma The Negro Problem and Modern Democracy, Volume 2 (Gunnar Myrdal).epub",
+   "format": "epub",
+   "bytes": 4418708,
+   "sha256": "8859e3a5aecf2be8da3d034f09ae410cd3da96a7162b59b2e1e82f0507f34aec",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 43,
+   "bytes": 2350681
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

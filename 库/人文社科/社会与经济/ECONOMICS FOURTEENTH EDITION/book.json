@@ -1,0 +1,27 @@
+{
+ "uid": "B1706",
+ "title": "ECONOMICS FOURTEENTH EDITION",
+ "title_from_file": "",
+ "author": "PAUL A.SAMUELSON,WILLIAM D.NORDHAUS etc.",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/ECONOMICS FOURTEENTH EDITION",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/ECONOMICS FOURTEENTH EDITION (PAUL A.SAMUELSON,WILLIAM D.NORDHAUS etc.).pdf",
+   "format": "pdf",
+   "bytes": 347469276,
+   "sha256": "43ed8833f637225286d601edd5ab5c9ade20038f7310a6d525c4f96751a0021b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

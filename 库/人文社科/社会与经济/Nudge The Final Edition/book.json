@@ -1,0 +1,35 @@
+{
+ "uid": "B1727",
+ "title": "Nudge The Final Edition",
+ "title_from_file": "",
+ "author": "Richard H. Thaler, Cass R. Sunstein",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Nudge The Final Edition",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Nudge The Final Edition (Richard H. Thaler, Cass R. Sunstein).epub",
+   "format": "epub",
+   "bytes": 4977393,
+   "sha256": "fb3bb5a9227b8e8a8923ee22ecbeaf50498d9054cd68358dd43f796bb9787b79",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 26,
+   "bytes": 657216
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

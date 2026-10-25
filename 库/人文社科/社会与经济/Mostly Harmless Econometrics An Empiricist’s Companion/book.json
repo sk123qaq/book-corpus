@@ -1,0 +1,35 @@
+{
+ "uid": "B1724",
+ "title": "Mostly Harmless Econometrics An Empiricist’s Companion",
+ "title_from_file": "",
+ "author": "Joshua D. Angrist Jörn-Steffen Pischke",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Mostly Harmless Econometrics An Empiricist’s Companion",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Mostly Harmless Econometrics An Empiricist’s Companion (Joshua D. Angrist Jörn-Steffen Pischke).epub",
+   "format": "epub",
+   "bytes": 5740891,
+   "sha256": "b51e057a5d7ee9310b3c45197a85ac10a53afddeaa9ba644b1258d4c5f0d6374",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 51,
+   "bytes": 651961
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

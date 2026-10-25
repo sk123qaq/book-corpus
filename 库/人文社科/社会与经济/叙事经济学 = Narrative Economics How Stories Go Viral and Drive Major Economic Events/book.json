@@ -1,0 +1,35 @@
+{
+ "uid": "B1761",
+ "title": "叙事经济学 = Narrative Economics How Stories Go Viral and Drive Major Economic Events",
+ "title_from_file": "",
+ "author": "[美] 罗伯特 · 希勒 (Robert J. Shiller) 著  陆殷莉 译",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/叙事经济学 = Narrative Economics How Stories Go Viral and Drive Major Economic Events",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/叙事经济学 = Narrative Economics How Stories Go Viral and Drive Major Economic Events ([美] 罗伯特 · 希勒 (Robert J. Shiller) 著  陆殷莉 译).epub",
+   "format": "epub",
+   "bytes": 4284641,
+   "sha256": "022ebcaef86344431ace7615e201727c29b6b497f07f38ce9eec19d92add802b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 618668
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

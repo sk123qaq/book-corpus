@@ -1,0 +1,35 @@
+{
+ "uid": "B1709",
+ "title": "Essays on the Great Depression",
+ "title_from_file": "",
+ "author": "Ben S. Bernanke",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Essays on the Great Depression",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Essays on the Great Depression (Ben S. Bernanke).epub",
+   "format": "epub",
+   "bytes": 6227879,
+   "sha256": "a50829e992c6529959251ac6fe9be1dd12293b4df6176a673b5b28042ff75622",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 656626
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

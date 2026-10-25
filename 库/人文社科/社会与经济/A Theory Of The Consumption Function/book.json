@@ -1,0 +1,35 @@
+{
+ "uid": "B1697",
+ "title": "A Theory Of The Consumption Function",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/A Theory Of The Consumption Function",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/A Theory Of The Consumption Function (Milton Friedman).epub",
+   "format": "epub",
+   "bytes": 12194966,
+   "sha256": "ff434e052fa0e3ee3485f44549df4f3355175d79179e78f350a8c1fbf010a072",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 71,
+   "bytes": 588006
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

@@ -1,0 +1,27 @@
+{
+ "uid": "B1749",
+ "title": "The firm, the market, and the law",
+ "title_from_file": "",
+ "author": "Coase, R. H. (Ronald Harry)",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/The firm, the market, and the law",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The firm, the market, and the law (Coase, R. H. (Ronald Harry)).pdf",
+   "format": "pdf",
+   "bytes": 17149941,
+   "sha256": "023f31c899d22fa93de3d0f8ebb5b7e110c227b0a947aa22809646d80d1b257b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

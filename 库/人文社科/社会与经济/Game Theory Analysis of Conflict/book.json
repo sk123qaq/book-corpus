@@ -1,0 +1,27 @@
+{
+ "uid": "B1712",
+ "title": "Game Theory Analysis of Conflict",
+ "title_from_file": "",
+ "author": "Roger B. Myerson",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Game Theory Analysis of Conflict",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Game Theory Analysis of Conflict (Roger B. Myerson).pdf",
+   "format": "pdf",
+   "bytes": 5827999,
+   "sha256": "a19d631356179f40f8084018ba7cff0da2c6d061d45231df449b849a267f3d29",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

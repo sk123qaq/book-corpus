@@ -1,0 +1,27 @@
+{
+ "uid": "B1726",
+ "title": "National Income and Its Composition 1919-1938",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/National Income and Its Composition 1919-1938",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/National Income and Its Composition 1919-1938 (Vol 1) (Simon Kuznets).pdf",
+   "format": "pdf",
+   "bytes": 27396426,
+   "sha256": "390f72ef58b8c44b1e8a5f7e601687c5ccb81af3cd4c4dfee15e61980c4b9618",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

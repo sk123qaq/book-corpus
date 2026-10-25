@@ -1,0 +1,35 @@
+{
+ "uid": "B1713",
+ "title": "Good Economics for Hard Times",
+ "title_from_file": "",
+ "author": "Abhijit V. Banerjee  Esther Duflo",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Good Economics for Hard Times",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Good Economics for Hard Times (Abhijit V. Banerjee  Esther Duflo).epub",
+   "format": "epub",
+   "bytes": 2294560,
+   "sha256": "9572589a7dedfa05cb73d02ec94e208725c27a5e1f658058259d7770849de92f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 932172
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

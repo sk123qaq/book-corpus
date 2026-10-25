@@ -1,0 +1,27 @@
+{
+ "uid": "B1719",
+ "title": "Interregional and International Trade",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Interregional and International Trade",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Interregional and International Trade (Bertil Ohlin).pdf",
+   "format": "pdf",
+   "bytes": 24155940,
+   "sha256": "c3849d322adebd3f6e91898614e2bf4ae6cc898df5a6d05b8853d11d24f48eca",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1696",
+ "title": "A Monetary History of the United States 1867-1960",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/A Monetary History of the United States 1867-1960",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/A Monetary History of the United States 1867-1960 (Milton Friedman  Anna Jacobson Schwartz).epub",
+   "format": "epub",
+   "bytes": 12817723,
+   "sha256": "a765664552aa3fd8d93d12e2e1eca8f07d935f5b0ba557442f140d1d0285d850",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 178,
+   "bytes": 2323526
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

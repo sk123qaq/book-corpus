@@ -1,0 +1,27 @@
+{
+ "uid": "B1756",
+ "title": "Value and Capital An Inquiry into some Fundamental Principles of Economic Theory, Second Edition",
+ "title_from_file": "",
+ "author": "John R. Hicks",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Value and Capital An Inquiry into some Fundamental Principles of Economic Theory, Second Edition",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Value and Capital An Inquiry into some Fundamental Principles of Economic Theory, Second Edition (John R. Hicks).pdf",
+   "format": "pdf",
+   "bytes": 12356000,
+   "sha256": "2418652bea142991967b367f12fe29ff4dc7c197f1e5f2bead5c8252b9c08d57",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

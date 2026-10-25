@@ -1,0 +1,35 @@
+{
+ "uid": "B1746",
+ "title": "The Theory of Economic Growth",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/The Theory of Economic Growth",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Theory of Economic Growth (W Arthur Lewis).epub",
+   "format": "epub",
+   "bytes": 1201435,
+   "sha256": "15d5724fa7883999b7a4c8a93ba85df14616d08358606e2caa96a726c779b1bb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 91,
+   "bytes": 1246255
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

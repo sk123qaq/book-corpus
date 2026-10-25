@@ -1,0 +1,27 @@
+{
+ "uid": "B1730",
+ "title": "Poverty and Famines An Essay on Entitlement and Deprivation",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Poverty and Famines An Essay on Entitlement and Deprivation",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Poverty and Famines An Essay on Entitlement and Deprivation (Amartya Sen).pdf",
+   "format": "pdf",
+   "bytes": 2084896,
+   "sha256": "a0a985156424f29cf634f385d013e0a23def50ab4a0a37b01300b24473d43539",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1714",
+ "title": "Governing the Commons The Evolution of Institutions for Collective Action",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Governing the Commons The Evolution of Institutions for Collective Action",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Governing the Commons The Evolution of Institutions for Collective Action (Canto Classics) (Elinor Ostrom).azw",
+   "format": "azw",
+   "bytes": 1526696,
+   "sha256": "1aa38377aed573db7cd1d3f1925cbaaa3d1ea28dcb506ef4006651c354d0b070",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 84,
+   "bytes": 785685
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

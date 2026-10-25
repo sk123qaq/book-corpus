@@ -1,0 +1,27 @@
+{
+ "uid": "B1732",
+ "title": "Putting auction theory to work",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Putting auction theory to work",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Putting auction theory to work (Paul Milgrom).pdf",
+   "format": "pdf",
+   "bytes": 1649395,
+   "sha256": "0ecece399d0cc715f7e17d307c372c75314dff8cc21b58df6c9adf759cddf06d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

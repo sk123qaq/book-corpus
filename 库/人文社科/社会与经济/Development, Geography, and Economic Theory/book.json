@@ -1,0 +1,35 @@
+{
+ "uid": "B1705",
+ "title": "Development, Geography, and Economic Theory",
+ "title_from_file": "",
+ "author": "Paul R. Krugman",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Development, Geography, and Economic Theory",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Development, Geography, and Economic Theory (Paul R. Krugman).mobi",
+   "format": "mobi",
+   "bytes": 375260,
+   "sha256": "a772baaaf68ac9d35688250b65c1346036c9272ea565ab1ec006a08732bdb2dd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 217202
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

@@ -1,0 +1,27 @@
+{
+ "uid": "B1752",
+ "title": "Theory of Price",
+ "title_from_file": "",
+ "author": "George J. Stigler",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Theory of Price",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Theory of Price (George J. Stigler).pdf",
+   "format": "pdf",
+   "bytes": 10662054,
+   "sha256": "12e0b0844ef4719caf798bcf574682a204f631446c55925fee3dc8b7b94bb21e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

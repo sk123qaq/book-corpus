@@ -1,0 +1,35 @@
+{
+ "uid": "B1704",
+ "title": "Development As Freedom",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Development As Freedom",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Development As Freedom (Amartya Sen).epub",
+   "format": "epub",
+   "bytes": 2913692,
+   "sha256": "bcf943abcfaf6d78b10cf3935bd9b776b41e8043d8174731bbb7a91171bd9704",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 902783
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

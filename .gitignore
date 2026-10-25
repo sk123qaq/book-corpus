@@ -31,6 +31,7 @@
 /工作区/批次/**/paddle_*/
 /工作区/批次/**/gap-*.tsv
 /工作区/批次/**/*.jsonl
+/工作区/批次/ingest/classify.json
 /工作区/中间态/
 /工作区/废弃/
 /工作区/models/

@@ -1,0 +1,35 @@
+{
+ "uid": "B1722",
+ "title": "Micromotives and Macrobehavior",
+ "title_from_file": "",
+ "author": "Thomas C. Schelling",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Micromotives and Macrobehavior",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Micromotives and Macrobehavior (Thomas C. Schelling).epub",
+   "format": "epub",
+   "bytes": 3149855,
+   "sha256": "7feec561635bb15e24ed97aae2d764444bf8f958f6a1791d7a222b0aff12abe9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 29,
+   "bytes": 463425
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

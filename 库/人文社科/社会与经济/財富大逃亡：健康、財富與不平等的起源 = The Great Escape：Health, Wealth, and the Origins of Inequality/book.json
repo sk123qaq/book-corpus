@@ -1,0 +1,35 @@
+{
+ "uid": "B1763",
+ "title": "財富大逃亡：健康、財富與不平等的起源 = The Great Escape：Health, Wealth, and the Origins of Inequality",
+ "title_from_file": "",
+ "author": "安格斯 · 迪頓 (Angus Deaton) 著  李隆生，張逸安 譯",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/財富大逃亡：健康、財富與不平等的起源 = The Great Escape：Health, Wealth, and the Origins of Inequality",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/財富大逃亡：健康、財富與不平等的起源 = The Great Escape：Health, Wealth, and the Origins of Inequality (安格斯 · 迪頓 (Angus Deaton) 著  李隆生，張逸安 譯).epub",
+   "format": "epub",
+   "bytes": 4033711,
+   "sha256": "972d52f41a4d0b07e9dd84bc6175b9ef40d73b550064ed43e659279ac97f7bdd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 56,
+   "bytes": 600627
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

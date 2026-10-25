@@ -1,0 +1,35 @@
+{
+ "uid": "B1699",
+ "title": "Administrative Behavior",
+ "title_from_file": "",
+ "author": "Herbert A. Simon",
+ "subjects": [
+  "商业与管理",
+  "管理与组织"
+ ],
+ "path": "商业与管理/管理与组织/Administrative Behavior",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Administrative Behavior (Herbert A. Simon).epub",
+   "format": "epub",
+   "bytes": 617447,
+   "sha256": "ed96b451d590bf6dbf7161792b21305f2e16345a0247725e5ed57f3f62e92db0",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 28,
+   "bytes": 929228
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

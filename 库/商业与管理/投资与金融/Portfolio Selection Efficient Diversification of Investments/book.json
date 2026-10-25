@@ -1,0 +1,35 @@
+{
+ "uid": "B1729",
+ "title": "Portfolio Selection Efficient Diversification of Investments",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/Portfolio Selection Efficient Diversification of Investments",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Portfolio Selection Efficient Diversification of Investments (Markowitz, Harry M).epub",
+   "format": "epub",
+   "bytes": 29403139,
+   "sha256": "ef16273f55350f31b5dbac85b6fe5498bfc0d59b11cb799b2ddceed5c582cd01",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 585679
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

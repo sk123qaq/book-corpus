@@ -1,0 +1,35 @@
+{
+ "uid": "B1728",
+ "title": "Poor Economics. A Radical Rethinking of the Way to Fight Global Poverty",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Poor Economics. A Radical Rethinking of the Way to Fight Global Poverty",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Poor Economics. A Radical Rethinking of the Way to Fight Global Poverty (Abhijit Banerjee, Esther Duflo).epub",
+   "format": "epub",
+   "bytes": 536768,
+   "sha256": "a3dae5489d5083fd6aa128aeced8be362ef1fca071054086b52db68da5765c4f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 52,
+   "bytes": 624147
+  }
+ ],
+ "notes": "ingest:2026-10-25；待复核"
+}

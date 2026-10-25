@@ -1,0 +1,27 @@
+{
+ "uid": "B1723",
+ "title": "Models of Business Cycles",
+ "title_from_file": "",
+ "author": "Robert E. Lucas",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Models of Business Cycles",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Models of Business Cycles (Robert E. Lucas).pdf",
+   "format": "pdf",
+   "bytes": 22184299,
+   "sha256": "47da9bf53ebcdc5fa3b48d3761e2e45e1608e84380174aa270358a01b4d6e702",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}

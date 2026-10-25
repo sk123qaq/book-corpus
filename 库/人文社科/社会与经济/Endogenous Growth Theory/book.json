@@ -1,0 +1,27 @@
+{
+ "uid": "B1707",
+ "title": "Endogenous Growth Theory",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/Endogenous Growth Theory",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Endogenous Growth Theory (Philippe Aghion, Peter Howitt).pdf",
+   "format": "pdf",
+   "bytes": 32764576,
+   "sha256": "cbb9c4c50edf7a79354b667cf8c22f1c5e096885b09fc699dcd9ad3f0fd7557f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-25；待复核"
+}
