@@ -180,9 +180,28 @@ print(json.dumps(result, ensure_ascii=False))
 '''
 
 STUB_APPLY_REVIEW = '''#!/usr/bin/env python3
-import sys
+import csv, os, sys
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
+triage, out_dir = opt("--triage"), opt("--out-dir")
+rows = list(csv.DictReader(open(triage, encoding="utf-8"))) if triage else []
+path = os.path.join(out_dir, "triage_final.csv") if out_dir else ""
+old = list(csv.DictReader(open(path, encoding="utf-8"))) \
+    if path and os.path.isfile(path) else []
+if rows and path:
+    fresh = {r["uid"]: r for r in rows}
+    cols = list(old[0].keys()) if old else list(rows[0].keys())
+    keep = [r for r in old if r.get("uid") not in fresh] + list(fresh.values())
+    for r in keep:
+        for c in cols:
+            r.setdefault(c, "")
+    os.makedirs(out_dir, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(keep)
+    os.replace(tmp, path)
 print("写回 %s 的 review，四列已并。" % opt("--batch"))
 '''
 
@@ -298,6 +317,29 @@ def build_root():
     with open(os.path.join(root, "目录", "书目总表.xlsx"), "wb") as fh:
         fh.write(b"PK\x03\x04fake")
     make_library_db(os.path.join(root, "目录", "library.db"))
+    led = os.path.join(root, "工作区", "批次", "pdf-普查-2026-10-19")
+    os.makedirs(led, exist_ok=True)
+    with open(os.path.join(led, "triage_final.csv"), "w", encoding="utf-8") as fh:
+        fh.write("uid,title,subject1,subject2,class,route,pages\n")
+        fh.write("B0002,书 二,人文社科,,C 扫描件,不转-记图册,22\n")
+        fh.write("B0003,书 三,艺术与图像,,A 图册,不转-记图册,33\n")
+    with open(os.path.join(led, "skip_list.tsv"), "w", encoding="utf-8") as fh:
+        fh.write("uid\ttitle\tsubject1\tsubject2\tpages\tmb\timage_share\twhy"
+                 "\tverdict\troute_metric\n")
+        fh.write("B0002\t书 二\t人文社科\t\t22\t1.0\t0.9\t图片占比 90% 超过一半"
+                 "\t图片书\t图册不转\n")
+        fh.write("B0003\t书 三\t艺术与图像\t\t33\t2.0\t0.9\t设定集与美术集"
+                 "\t图片书\t图册不转\n")
+    ocr = os.path.join(root, "工作区", "批次", "pdf-ocr-2026-10-19")
+    os.makedirs(os.path.join(ocr, "logs"), exist_ok=True)
+    with open(os.path.join(ocr, "worklist.tsv"), "w", encoding="utf-8") as fh:
+        fh.write("uid\ttitle\tsrc\tformat\tpages\tclass\n")
+        fh.write("B9001\t已落地的一本\t库/x/source/a.pdf\tpdf\t40\tC 扫描件\n")
+        fh.write("B9002\t失败的一本\t库/x/source/b.pdf\tpdf\t60\tC 扫描件\n")
+        fh.write("B9003\t没开跑的一本\t库/x/source/c.pdf\tpdf\t80\tC 扫描件\n")
+    for uid, status in (("B9001", "landed"), ("B9002", "api-fatal")):
+        with open(os.path.join(ocr, "logs", uid + ".json"), "w", encoding="utf-8") as fh:
+            json.dump({"uid": uid, "status": status, "pages": 10}, fh)
     with open(os.path.join(root, "库", "_收件箱", "A.epub"), "wb") as fh:
         fh.write(b"epub-a")
     with open(os.path.join(root, "库", "_收件箱", "B.epub"), "wb") as fh:
@@ -350,6 +392,18 @@ CREATE VIEW v_pending_md AS
                  "'epub',11,'aa',1)")
     conn.execute("INSERT INTO source VALUES ('B0002','库/人文社科/书 二/source/b.pdf',"
                  "'pdf',22,'bb',1)")
+    conn.execute("INSERT INTO book VALUES ('B0003','书 三','某人','艺术与图像','',"
+                 "'艺术与图像/书 三','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0003','库/艺术与图像/书 三/source/c.pdf',"
+                 "'pdf',33,'cc',1)")
+    conn.execute("INSERT INTO book VALUES ('B0004','书 四','某人','文学','小说',"
+                 "'文学/小说/书 四','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0004','库/文学/小说/书 四/source/d.pdf',"
+                 "'pdf',44,'dd',1)")
+    conn.execute("INSERT INTO book VALUES ('B0005','书 五','某人','文学','小说',"
+                 "'文学/小说/书 五','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0005','库/文学/小说/书 五/source/e.pdf',"
+                 "'pdf',55,'ee',1)")
     conn.execute("INSERT INTO derived VALUES ('B0002','md','done',12,4096,'bb')")
     conn.execute("INSERT INTO book_award VALUES ('B0002','某奖','2020','longlist')")
     conn.commit()
@@ -858,12 +912,12 @@ def run_checks(root, ops, port, fixture):
     with open(os.path.join(batch_dir, triage_batch, "triage_final.csv"), "w",
               encoding="utf-8") as fh:
         fh.write("uid,title,subject1,subject2,class,route,pages\n")
-        fh.write("B0001,书 一,文学,,C 扫描件,OCR,30\n")
+        fh.write("B0005,书 五,文学,,C 扫描件,OCR,40\n")
         fh.write("B0002,书 二,文学,,C 扫描件,不转-记图册,20\n")
-    code, body = post(port, "/api/pdf/run", {"uids": ["B0001"], "workers": 1})
+    code, body = post(port, "/api/pdf/run", {"uids": ["B0005"], "workers": 1})
     pdf_id = body.get("job_id")
     check("PDF 运行按 route 分组",
-          code == 200 and (body.get("routes") or {}).get("ocr") == 1)
+          code == 200 and (body.get("routes") or {}).get("ocr") == 1, str(body))
     detail = wait_job(port, pdf_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check("PDF 成功读统计", job.get("state") == "succeeded"
@@ -876,6 +930,111 @@ def run_checks(root, ops, port, fixture):
           and argv[argv.index("--batch") + 1] == triage_batch, " ".join(argv[2:]))
     code, body = post(port, "/api/pdf/run", {"uids": ["B0002"]})
     check("没有可转 route 时拒绝", code == 400, str(body.get("error")))
+
+    # ---- 待转 PDF 清单 ---------------------------------------------
+    code, body = get(port, "/api/pdf/books")
+    books = (body or {}).get("books") or []
+    counts = (body or {}).get("counts") or {}
+    check("待转清单给 books 与四类计数",
+          code == 200 and isinstance(books, list)
+          and set(counts) == {"convert", "gallery", "ja", "untriaged"},
+          "code=%s 本数=%d 计数=%s" % (code, len(books), counts))
+    row = next((r for r in books if r.get("uid") == "B0003"), {})
+    check("不转清单里的书处置判为只记图册", row.get("disposition") == "gallery",
+          "%s → %s" % (row.get("uid"), row.get("disposition")))
+    code, body = post(port, "/api/pdf/run", {"uids": ["B0003"]})
+    check("只记图册未二次确认就不转",
+          code == 400 and "只记图册" in str(body.get("error")), str(body.get("error")))
+    code, body = post(port, "/api/pdf/run", {"uids": ["B0003"], "force": True})
+    detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
+    commands = (detail or {}).get("commands") or []
+    names = [c.get("name") for c in commands]
+    batch_argv = next((c.get("argv") or [] for c in commands
+                       if len(c.get("argv") or []) > 1
+                       and str(c["argv"][1]).endswith("pdf_md_batch.py")), [])
+    review = os.path.join(root, "工作区", "批次", body.get("batch") or "", "review",
+                          "B0003.json")
+    check("二次确认后先改判再按扫描识别转",
+          code == 200 and body.get("forced") == 1 and names[:1] == ["apply_review"]
+          and (detail or {}).get("job", {}).get("state") == "succeeded"
+          and batch_argv
+          and batch_argv[batch_argv.index("--route") + 1] == "ocr"
+          and "B0003" in batch_argv[batch_argv.index("--uids") + 1].split(",")
+          and str(body.get("batch") or "").startswith("pdf-ocr-ops-")
+          and os.path.isfile(review),
+          "步骤=%s 判定=%s 批次=%s" % (names, (detail or {}).get("job", {}).get("summary"),
+                                  body.get("batch")))
+    code, body = post(port, "/api/pdf/run", {"uids": ["B0004"]})
+    triage_id = (body.get("triage_jobs") or [None])[0]
+    detail = wait_job(port, triage_id, ("awaiting_review", "failed")) if triage_id else None
+    argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
+    check("未分诊的书只送分诊不建转写任务",
+          code == 200 and body.get("job_id") is None and body.get("triaged") == 1
+          and len(body.get("triage_jobs") or []) == 1
+          and argv[argv.index("--uid") + 1] == "B0004", str(body))
+
+    # ---- 批量分诊与改处置 -------------------------------------------
+    code, body = get(port, "/api/pdf/books")
+    untriaged = [r["uid"] for r in (body.get("books") or [])
+                 if r.get("disposition") == "untriaged"]
+    target = untriaged[0] if untriaged else ""
+    check("清单里还有未分诊的书", bool(untriaged), str(untriaged))
+    code, body = post(port, "/api/pdf/triage-batch", {})
+    check("已经有了建议的书，默认不再重跑分诊", code == 400
+          and "建议" in str(body.get("error")), str(body.get("error")))
+    code, body = post(port, "/api/pdf/triage-batch", {"uids": untriaged})
+    batch_id = body.get("job_id")
+    detail = wait_job(port, batch_id, ("awaiting_review", "failed"))
+    steps = (detail or {}).get("steps") or []
+    argvs = [c.get("argv") or [] for c in ((detail or {}).get("commands") or [])]
+    check("批量分诊按未分诊本数出步，每步 --out 落在自己的目录",
+          code == 200 and len(steps) == len(untriaged) and bool(argvs)
+          and all("--out" in argv_one
+                  and argv_one[argv_one.index("--out") + 1].endswith("/" + uid)
+                  for argv_one, uid in zip(argvs, untriaged)),
+          "步数=%d 未分诊=%s" % (len(steps), untriaged))
+    job = (detail or {}).get("job") or {}
+    summary = job.get("summary") or ""
+    check("批量分诊停在待确认，摘要写本数与建议",
+          job.get("state") == "awaiting_review" and "本" in summary
+          and "建议" in summary, str(summary))
+    code, body = get(port, "/api/pdf/books")
+    row = next((r for r in (body.get("books") or []) if r.get("uid") == target), {})
+    suggestion = row.get("suggestion") or {}
+    check("未分诊的行带建议，并指向出建议的那个任务",
+          suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
+          "%s 建议=%s 任务=%s" % (target, suggestion, row.get("suggest_job")))
+    code, body = post(port, "/api/pdf/settle",
+                      {"items": [{"uid": target, "route": "本地抽文本"}]})
+    settle_id = body.get("job_id")
+    detail = wait_job(port, settle_id, ("succeeded", "failed"))
+    review_path = os.path.join(root, "工作区", "批次", body.get("batch") or "",
+                              "review", target + ".json")
+    review = json.load(open(review_path, encoding="utf-8")) \
+        if os.path.isfile(review_path) else {}
+    settle_steps = [s["name"] for s in ((detail or {}).get("steps") or [])]
+    check("改处置先写 review，再跑 apply_review",
+          code == 200 and settle_steps[:1] == ["apply_review"]
+          and review.get("route") == "本地抽文本"
+          and (detail or {}).get("job", {}).get("state") == "succeeded",
+          "步骤=%s route=%s" % (settle_steps, review.get("route")))
+    code, body = get(port, "/api/pdf/books")
+    row = next((r for r in (body.get("books") or []) if r.get("uid") == target), {})
+    check("改处置之后那本书算可转", row.get("disposition") == "convert",
+          "%s → %s" % (target, row.get("disposition")))
+    code, body = post(port, "/api/pdf/settle",
+                      {"items": [{"uid": target, "route": "人工确认"}]})
+    check("人工确认不算一个处置，改处置拒绝它", code == 400, str(body.get("error")))
+    code, body = get(port, "/api/pdf/books")
+    today = (body or {}).get("today") or {}
+    check("清单给今天的额度", today.get("cap") == 20000
+          and isinstance(today.get("used"), int), str(today))
+    code, body = get(port, "/api/pdf/queue")
+    part = ((body or {}).get("batch") or {}).get("partition") or {}
+    check("旧批次给落地与未落地的分解",
+          part.get("landed") == 1 and part.get("failed") == 1
+          and part.get("staged") == 0 and part.get("untouched") == 1
+          and part.get("left") == 2, str(part))
 
     # ---- 收尾 ------------------------------------------------------
     code, body = post(port, "/api/maintain", {"steps": ["verify", "p1", "catalog"]})

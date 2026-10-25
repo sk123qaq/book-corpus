@@ -23,7 +23,7 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
 | 路径 | 内容 |
 |---|---|
 | `server.py` | 全部服务端逻辑：`ops.db`、任务队列与锁、门槛判定、HTTP 接口 |
-| `web/index.html` `web/app.js` `web/style.css` | 七个页签的原生 JS 页面，无框架无 CDN |
+| `web/index.html` `web/app.js` `web/style.css` | 七个页签加一个 PDF 清单子页（`#pdf-list`）的原生 JS 页面，无框架无 CDN |
 | `ops.db` | 任务与步骤（首次启动自建，可重建，丢了只是任务历史没了） |
 | `jobs/<id>/` | `log.txt`、`commands.json`、`pid`、`plan.json`、`result.json`、`dry-run.json`、`thumbs/*.png` |
 | `.writer.lock` | 写任务互斥用的 `fcntl.flock` 文件，内容为空 |
@@ -62,10 +62,26 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
   已有的正文，重跑 verify 与 audit，过关就直接进库；「查看问题」是只读任务，跑 `md_review_report.py`
   列出审计比、正文字数、图片路径字数、跨文件重复片段、自链、未收录的页与原因、结构报警。
   「重拆已有 Markdown」走 `--replace`，旧 md 路径由脚本写进 `previous`，这些选项收在「更多选项」里。
-- **PDF**：队列按 route 分组与本数页数、现有批次进度与额度、新 PDF 分诊（4 个关键指标 + 3 张缩略图 +
-  模型建议 route/置信/理由，原始指标收在「技术指标」里）、人工选处理方式后确认、按 route 分组转 md。
-  页面上的处理方式是中文显示（扫描识别、直接抽取、只记图册、待人工判断、日文暂缓），
-  写回接口的 value 仍是 `OCR`、`本地抽文本`、`不转-记图册`、`人工确认`、`日文暂缓`。
+- **PDF**：三块。一是状态带，四格（可转 / 未分诊 / 只记图册 / 日文暂缓）带本数与页数，图册格附
+  「其中 N 本标了复看」、日文格附「N 本上次失败」，每格点进去是清单里对应的那一类；带下一行写今天已用
+  额度（X / 20,000 页）与旧批次的一行摘要（411 本里 369 落地、42 未落地，拆成失败 / 待复核 / 未开跑），
+  「看明细」直接跳到清单里日文暂缓且失败的那批。二是两张动作卡：左「批量分诊」写未分诊多少本、多少本文本层
+  会建议直接抽取、多少本扫描件会建议识别，跑起来按钮换成进度条（分诊中 x / N 本）；右「确认后转 md」是已选
+  摘要、去清单选书、最多转几本、同时处理与开始转写。三是最近的分诊与转 md。单本分诊面板已删，分诊改成批量：
+  出的建议在清单里逐行确认。
+  页面上的处理方式是中文显示（扫描识别、直接抽取、只记图册、日文暂缓），
+  写回接口的 value 仍是 `OCR`、`本地抽文本`、`不转-记图册`、`日文暂缓`。
+- **待转 PDF 清单**（PDF 页的子页 `#pdf-list`，不在左侧导航）：待转的 PDF 一本书一行，处置分四类
+  （可转 / 只记图册 / 日文暂缓 / 未分诊），进度分四档（未开始 / 在跑 / 已落地 / 失败），页数缺的由
+  `工作区/.venv-pdf/bin/python` 子进程读。两行筛选：第一行是编号或书名、处置复选、一级分类、排序；
+  第二行是进度三选（未开始 / 在跑 / 失败）与「只看复看」。筛选顺序是处置 → 进度 → 只看复看 →
+  一级分类 → 关键字 → 排序。有未确认建议的行在处置后写「建议 扫描识别 0.95」；备注列图册写
+  不转的理由、失败行写上次停在哪种状态、有建议的写建议的理由；行末只有一格动作，有建议是「按建议确认」，
+  否则是「改处置」，弹窗里四个处置选一个提交，写完只记台账不出正文。底部条另有一个「按建议确认 N 本」，
+  只算选中且带建议的行，N 为 0 时置灰。
+  勾选跨页保留，提交后清空，刷新页面清空。转写卡不再有编号输入框，只显示已选摘要与「去清单选书」；
+  只记图册与日文暂缓默认不转，勾上之后要再确认一次（服务端把它们改判成扫描识别再跑），
+  未分诊的只投分诊任务，不出正文。
 - **维护**：状态条（检索索引、浏览入口、体检、书目表、上次收尾）、一键收尾（书目数据库与总表、
   检索索引、入口、体检与验收共 8 步，跑完刷新体检缓存）、「只想跑其中几步」里按步勾选、
   三份下载、清理旧记录、最近收尾记录。页面只写任务名与做什么，脚本名与参数不进页面，
@@ -95,9 +111,11 @@ POST /api/import/apply                 # {plan_path}
 POST /api/split/run                    # {uids, workers, replace} 或 {only, batch}（单本带 --force）
 POST /api/split/recheck                # {uid, batch}：只复核暂存区产物，进库算写任务
 POST /api/split/inspect                # {uid, batch}：只读，出这本书的问题清单
-POST /api/pdf/triage                   # {uid}
+POST /api/pdf/triage                   # {uid}（页面上已不用，接口留着给验收与命令行）
+POST /api/pdf/triage-batch             # {uids?}：不给就分诊所有未分诊的书，一个任务 N 步；已有建议的书默认跳过，不重复烧模型
+POST /api/pdf/settle                   # {items:[{uid, route}]}：改处置，只写台账不出正文；route 不收人工确认
 POST /api/pdf/confirm                  # {uid, route, reason, model, job_id}
-POST /api/pdf/run                      # {uids, limit, workers, route?}
+POST /api/pdf/run                      # {uids, limit, workers, force}：可转的按 route 跑；图册与日文要 force 才改判成 OCR；只选未分诊时只投分诊、job_id 为 null
 POST /api/maintain                     # {steps:[db,index,topics,awards,audit,verify,p1,catalog,doc]}
 POST /api/delete/dry-run               # {uid, reason}
 POST /api/delete/apply                 # {uid, reason, plan_hash, confirm_uid}
@@ -108,7 +126,8 @@ GET  /api/inbox                        # 收件箱清单
 GET  /api/import/latest                # 最近一份可用计划（源文件还在收件箱）
 GET  /api/pending                      # v_pending_md 列表（只读 library.db）
 GET  /api/split/books?batch=           # 批次的 logs/<uid>.json 汇总
-GET  /api/pdf/queue                    # 三本 PDF 账 + 批次进度
+GET  /api/pdf/queue                    # 三本 PDF 账 + 批次进度（batch.partition 是落地与未落地的分解）
+GET  /api/pdf/books                    # 待转 PDF 清单：一本书一行的处置、进度、页数、备注、复看与建议 + 四类计数 + today + 未分诊的文本层分解
 GET  /api/retire/search?q=             # uid 或书名，带源、md、奖项
 ```
 
@@ -160,7 +179,7 @@ python3 工作区/脚本/ops_pdf_triage.py --uid B1234 --out 工作区/运维/jo
 python3 工作区/脚本/pdf_apply_review.py --batch pdf-ocr-ops-<日期> \
         --triage 工作区/批次/pdf-ocr-ops-<日期>/triage.csv \
         --out-dir 工作区/批次/pdf-ocr-ops-<日期> \
-        --review 工作区/批次/pdf-ocr-ops-<日期>/review
+        --review 工作区/批次/pdf-ocr-ops-<日期>/review    # 清单里二次确认的图册/日文也走这条，排在转 md 前一步
 python3 工作区/脚本/pdf_md_batch.py --batch pdf-ocr-ops-<日期> --route ocr|text --uids ... --workers N \
         --triage 工作区/批次/pdf-ocr-ops-<日期>/triage_final.csv --report-json [--limit N]
 python3 工作区/脚本/build_library.py --emit-json     # PDF 任务跑完后接
@@ -192,17 +211,23 @@ python3 工作区/运维/验收/shot_ops.py         # 1440x900 与 390x844，报
 ```
 
 `check_ops.py` 自己造临时根：`工作区/脚本/` 下写一套 stub（`ingest.py`、`split_md_batch.py`、
-`pdf_md_batch.py`、`ops_pdf_triage.py`、`retire_book.py` 等），`目录/library.db` 造两张书的最小表，
+`pdf_md_batch.py`、`ops_pdf_triage.py`、`retire_book.py` 等），`目录/library.db` 造五本书的最小表（含三本待转 PDF），
 `OPS_STATUS_FIXTURE` 给状态。它验这些东西：状态字段、静态页、任务生命周期与门槛、写互斥（真去
 `flock` 探一次）、取消、上传与文件名、文件白名单与路径穿越、跨站与 Host 拒绝、计划写回、stub 导入、
-stub 分诊、最近计划的复用与失效（源文件不在就不给计划）、PDF 分组、拆章的单本重拆与
-重新检查与查看问题（驱动收到的 `--force`/`--recheck` 都核过）、页面状态词与驱动状态表对齐、收尾门槛、删书预览与哈希、重跑、
+stub 分诊、最近计划的复用与失效（源文件不在就不给计划）、PDF 分组、PDF 清单的处置与二次确认（先改判再转、
+未分诊只投分诊）、批量分诊（步数等于未分诊本数、每步输出目录、停在待确认、摘要写本数与建议）、
+按建议确认与改处置（先写 review 再跑 `pdf_apply_review.py`、改完那本书算可转、人工确认被拒、今天额度），
+拆章的单本重拆与重新检查与查看问题（驱动收到的 `--force`/`--recheck` 都核过）、
+页面状态词与驱动状态表对齐、收尾门槛、删书预览与哈希、重跑、
 清理、搜索健康、重启接管与孤儿。中途不碰真库，也不调模型（`PI_BIN` 指向 `验收/fixtures/pi_stub.py`）。
 
 `shot_ops.py` 复用同一套临时根，起 headless Chrome 走 CDP：把七个页签点一遍收
 `Runtime.exceptionThrown` / `console.error` / `Log.error`，再量 `scrollWidth > innerWidth`，
 出两张截图。导入页另查三件事：加载后有计划、点「生成入库清单」后换成新计划、刷新后计划还在。
-维护页另查：一键收尾能跑完、高级勾选跨渲染保留、页面上不出现脚本名与参数。除日志页外，
+维护页另查：一键收尾能跑完、高级勾选跨渲染保留、页面上不出现脚本名与参数。PDF 页另查：
+没有编号输入框、有批量分诊按钮与旧批次摘要、有「去清单选书」，点它之后停到 `#pdf-list`，清单页有两行
+筛选（进度三个勾与只看复看）、行末有「改处置」或「按建议确认」、改处置弹窗里四个处置，切页再回来
+勾选与关键字都在，390 宽不横向溢出。除日志页外，
 每页再扫一遍可见文案，出现 `.py`、`--`、`ops.db`、`route`、`worklist`、`S1`、`G3` 这类
 实现细节就判失败；日志页保留命令行与门槛原文，属于诊断面。
 这台机器上 8765 常常已经在跑，健康检查会照实报 `running=True`。
@@ -230,6 +255,28 @@ stub 分诊、最近计划的复用与失效（源文件不在就不给计划）
 - `GET /api/import/latest` 只在计划里的 add/replace 源文件还在收件箱时返回。应用之后源文件已经搬进
   书目录，计划自动失效，刷新不会把旧计划拿回来重放。等待任务的页面把 `awaiting_review` 当终态，
   因为进程已经退出，只是产物等人确认。
+- 待转 PDF 清单是 PDF 页的子页（`#pdf-list`），故意不进左侧导航：它能靠 `#pdf-list` 直接打开，
+  但左侧仍是七个页签，避免把「清单」当成第八个大页面。
+- 清单里的页数不在服务端 import pymupdf，走 `工作区/.venv-pdf/bin/python` 的子进程一次批量读，
+  进程内按 uid 加文件 mtime 与大小缓存；venv 或文件缺了就显示「—」，不影响其它列。
+- `POST /api/pdf/run` 的 `force` 只把只记图册与日文暂缓改判成扫描识别：先写当天批次的 `triage.csv`
+  与 `review/<uid>.json`，再跑 `pdf_apply_review.py`，最后才排转 md，人工 route 会短路图片占比规则。
+  `--uids` 只在批次还没有 `worklist.tsv` 时收窄范围，同一天二次改判要另开一天批次。
+- 「改处置」与「按建议确认」走同一个 `POST /api/pdf/settle`，也是这条路径：先写当天批次的
+  `triage.csv` 与 `review/<uid>.json`（不吃 `人工确认`），再跑 `pdf_apply_review.py`。`/api/pdf/run`
+  的二次确认改判调的就是这一个函数，行为没变。
+- 单本分诊面板从前端删了（`POST /api/pdf/triage` 与 `POST /api/pdf/confirm` 保留，验收与命令行在用）：
+  建议不再直接改处置，只在清单里逐行确认。建议的来源只看 `awaiting_review` 与 `succeeded` 两个状态的
+  分诊任务，新到旧取第一条命中；单本任务读 `jobs/<id>/result.json`，批量任务读
+  `jobs/<id>/<uid>/result.json`。
+- 旧批次的一行摘要读 `pdf/queue` 的 `batch.partition`：`landed` 把 landed / skipped-has-md / accepted /
+  replaced 算落地，`failed` 是 api-fatal 与 failed，`staged` 是 staged-review，`untouched` 是名单减掉
+  三者，`left` 是后三者之和。批次 `landed` 字段照旧不动，两个数字在 replaced 上可能差一本。
+- 今天额度只算当天 `<批次>/logs/*.json` 里 `status != skipped-has-md` 的 `pages` 之和，不跨批次累加；
+  没开过当天批次就是 0。`cap` 写死 20000。
+- 批量分诊卡里的「多少本文本层、多少本扫描件」不是普查账的读数：页数子进程顺手抽首页、中页、末页的文本，
+  有字算文本层。没有 `.venv-pdf` 或书读不到时只写本数与总页数，不编分解。
+- 队列计数条来自普查账，清单页的四类计数来自待转集与各批次的 ops 分诊表，两个口径不同，数字可以不相等。
 - `awaiting_review` 的含义定为「产物等人确认」：扫描与分诊跑完停在这里，确认动作由新的任务接手，
   父任务状态不再回写。
 - 状态脚本没就绪时页面显示 0 与「状态：缺」，不假装有数。真库实测字段与 `ops_status.py` 现状一致。

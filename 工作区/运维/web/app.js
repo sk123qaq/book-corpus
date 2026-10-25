@@ -4,6 +4,9 @@ const TABS = [
   ['overview', '总览'], ['import', '新书导入'], ['split', '电子书'],
   ['pdf', 'PDF'], ['maintain', '维护'], ['retire', '删书'], ['logs', '日志'],
 ];
+// pdf-list 是 PDF 页的子页，不进左侧导航，但能用 #pdf-list 直接打开
+const EXTRA_TABS = ['pdf-list'];
+const ALL_TABS = TABS.map(([key]) => key).concat(EXTRA_TABS);
 
 const MAINTAIN_STEPS = [
   ['index', '更新检索索引', '让新章节能被搜到。最花时间。'],
@@ -17,7 +20,7 @@ const MAINTAIN_STEPS = [
   ['doc', '重出阅读版页面', '只有阅读版有改动时才需要。'],
 ];
 const FINISH_DEFAULT = ['db', 'index', 'topics', 'awards', 'audit', 'verify', 'p1', 'catalog'];
-const PDF_ROUTES = ['OCR', '本地抽文本', '不转-记图册', '人工确认', '日文暂缓'];
+const SETTLE_ROUTES = ['OCR', '本地抽文本', '不转-记图册', '日文暂缓'];
 const JOB_WORD = {
   queued: '排队', running: '在跑', awaiting_review: '待确认', succeeded: '完成',
   failed: '失败', cancelled: '取消', orphaned: '失联',
@@ -42,6 +45,20 @@ const PDF_ROUTE_WORD = {
   'OCR': '扫描识别', '本地抽文本': '直接抽取', '不转-记图册': '只记图册',
   '人工确认': '待人工判断', '日文暂缓': '日文暂缓',
 };
+const PICK_TAG = [['convert', '可转'], ['gallery', '只记图册'], ['ja', '日文暂缓'],
+  ['untriaged', '未分诊']];
+// 状态带按「先能转的，再要人动手的」排；清单筛选条沿用上面的处置顺序
+const STRIP_TAG = ['convert', 'untriaged', 'gallery', 'ja'];
+const PICK_SORT = [['pages', '页数多到少'], ['pages-asc', '页数少到多'], ['uid', '编号']];
+const PICK_WORD = {
+  convert: '可转', gallery: '只记图册', ja: '日文暂缓', untriaged: '未分诊',
+};
+const PICK_PROGRESS = {
+  todo: ['未开始', 'out'], running: ['在跑', 'half'], landed: ['已落地', 'ok'],
+  failed: ['失败', 'miss'],
+};
+// 清单页的进度筛选只管这三档：已有正文的书不会出现在待转清单里
+const PICK_PROGRESS_FILTER = [['todo', '未开始'], ['running', '在跑'], ['failed', '失败']];
 const SOURCE_WORD = { move: '移动', hardlink: '硬链接' };
 // 结构检查的报警键换成普通说法
 const VERIFY_WORD = {
@@ -49,34 +66,23 @@ const VERIFY_WORD = {
   'orphan image': '多余图片', 'no H1': '章名缺失',
 };
 const EBOOK = /^(epub|mobi|azw3|azw)$/;
-// 分诊面板的指标：键、中文名、格式化
-const TRIAGE_METRICS = [
-  ['text_page_share', '文字页占比', 'pct'],
-  ['image_share', '图片占比', 'pct'],
-  ['chars_per_page', '每页字数', 'int'],
-  ['bad_char_ratio', '乱码率', 'pct2'],
-  ['text_page_ratio', '文字页比例', 'pct'],
-  ['pages_with_text', '有字页数', 'int'],
-  ['full_page_images', '整页图', 'int'],
-  ['toc_entries', '目录条目', 'int'],
-  ['img_ppi_median', '图片分辨率', 'ppi'],
-  ['ink', '墨迹', 'pct'],
-  ['bands', '文字行带', 'int'],
-];
-const TRIAGE_KEY = ['text_page_share', 'image_share', 'chars_per_page', 'bad_char_ratio'];
 
 const S = {
   tab: 'overview',
   payload: null, status: {}, health: null,
   jobs: [], pending: [], inbox: [], pdf: null,
   plan: null, planJob: null, planDirty: false,
-  batch: null, splitBooks: [], triage: null, triageJob: null,
+  batch: null, splitBooks: [],
   review: null, reviewJob: null,
   retireHits: [], retireQuery: '', preview: null,
   logJob: null, logDetail: null, follow: true, importDone: null,
   filter: '', selected: new Set(), busy: false,
   replaceMd: false, splitWorkers: 4,
-  triageUid: '', pdfUids: '', pdfLimit: 0, pdfWorkers: 3,
+  pdfLimit: 0, pdfWorkers: 3, pdfTriage: null, pdfToday: null, pdfUntriaged: null,
+  books: [], bookCounts: null, pick: new Set(), pickQ: '',
+  pickTags: new Set(['convert', 'untriaged', 'gallery', 'ja']),
+  pickProgress: new Set(['todo', 'running', 'failed']), pickRecheck: false,
+  pickSubject: '', pickSort: 'pages', settle: null,
   maintainSteps: new Set(FINISH_DEFAULT),
 };
 
@@ -125,16 +131,6 @@ function pct(value, digits) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
   return (n * 100).toFixed(digits === undefined ? 1 : digits) + '%';
-}
-
-function metricValue(kind, value) {
-  if (value === null || value === undefined || value === '') return '—';
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value);
-  if (kind === 'pct') return pct(n, 1);
-  if (kind === 'pct2') return pct(n, 2);
-  if (kind === 'ppi') return num(Math.round(n)) + ' ppi';
-  return num(Math.round(n));
 }
 
 function routeWord(route) {
@@ -239,6 +235,7 @@ function setBusy(flag) {
 // ---- 顶栏与导航 ---------------------------------------------------
 function renderNav() {
   const counts = (S.payload && S.payload.state_counts) || {};
+  const on = S.tab === 'pdf-list' ? 'pdf' : S.tab;
   $('#nav').innerHTML = TABS.map(([key, label]) => {
     let badge = '';
     if (key === 'logs') {
@@ -250,7 +247,7 @@ function renderNav() {
       const ebooks = S.pending.filter((r) => /^(epub|mobi|azw3|azw)$/.test(r.format)).length;
       if (ebooks) badge = `<span class="badge">${ebooks}</span>`;
     }
-    return `<a href="#${key}" class="${S.tab === key ? 'on' : ''}">${esc(label)}${badge}</a>`;
+    return `<a href="#${key}" class="${on === key ? 'on' : ''}">${esc(label)}${badge}</a>`;
   }).join('');
 }
 
@@ -326,6 +323,7 @@ function render() {
   const view = $('#view');
   const map = {
     overview: viewOverview, import: viewImport, split: viewSplit, pdf: viewPdf,
+    'pdf-list': viewPdfList,
     maintain: viewMaintain, retire: viewRetire, logs: viewLogs,
   };
   view.innerHTML = (map[S.tab] || viewOverview)();
@@ -726,107 +724,379 @@ function recentJobs(kind, limit = 6) {
   return rows.map(jobLine).join('');
 }
 
-// ---- PDF ----------------------------------------------------------
-function queueStrip(data, groups) {
-  if (!groups.length) return '<p class="empty">还没有分诊记录，先在上面看一本的建议。</p>';
-  return `<div class="strip">${groups.map((g) => `<div class="strip-cell">
-    <div class="strip-name">${esc(routeWord(g.route))}</div>
-    <div class="strip-read">${num(g.books)} 本 · ${num(g.pages)} 页</div>
-  </div>`).join('')}</div>
-  <p class="hint">图册不转文字，日文原版暂缓处理。</p>`;
+// 两类合成一份，空态只出一句
+function recentPdfJobs(limit = 3) {
+  const rows = S.jobs.filter((j) => j.kind === 'pdf.triage' || j.kind === 'pdf.run')
+    .slice(0, limit * 2);
+  if (!rows.length) return '<p class="empty">还没有这类任务。</p>';
+  return rows.map(jobLine).join('');
 }
 
-function batchPanel(batch, data) {
-  if (!batch.name) return '<p class="empty">还没开过批次。确认处理方式后再开始转写。</p>';
-  const total = Number(batch.worklist) || 0;
-  const done = Number(batch.landed) || 0;
-  const share = total ? Math.min(100, Math.round(done / total * 100)) : 0;
-  const quota = (/^(\d+)/.exec(String(batch.quota || '')) || [null, '20000'])[1];
-  return `<div class="progress-label"><span>${num(done)} / ${num(total)} 本</span><span>${share}%</span></div>
-    <div class="progress"><i style="width:${share}%"></i></div>
-    <p class="small">剩 ${num(batch.remaining_books)} 本 · ${num(batch.remaining_pages)} 页 · 每天最多 ${num(quota)} 页</p>
-    <p class="hint">当天额度用完会自动停下，第二天继续。</p>`;
+// ---- PDF ----------------------------------------------------------
+// 队列条读的是待转清单本身，不读分诊账：分诊账里扫描识别 411 本中有 399 本已经落地
+function queueStrip() {
+  if (!S.bookCounts) return '<p class="empty">清单还没读出来，点「刷新」再试。</p>';
+  const pages = {};
+  S.books.forEach((row) => {
+    pages[row.disposition] = (pages[row.disposition] || 0) + (Number(row.pages) || 0);
+  });
+  const recheck = S.books.filter((row) => row.recheck).length;
+  const stuck = S.books.filter((row) => row.disposition === 'ja'
+    && row.progress === 'failed').length;
+  const note = {
+    convert: '已确认处置，可以直接转',
+    untriaged: '还没看过，先分诊',
+    gallery: recheck ? '其中 ' + num(recheck) + ' 本标了复看' : '图册不转文字',
+    ja: stuck ? num(stuck) + ' 本上次失败' : '日文原版暂缓处理',
+  };
+  return `<div class="strip">${STRIP_TAG.map((key) => `<a class="strip-cell" href="#pdf-list" data-act="pdf-jump" data-tag="${esc(key)}">
+    <div class="strip-name">${esc(PICK_WORD[key])}</div>
+    <div class="strip-read">${num(S.bookCounts[key] || 0)} 本 · ${num(pages[key] || 0)} 页</div>
+    <div class="note">${esc(note[key])}</div>
+  </a>`).join('')}</div>`;
+}
+
+function quotaLine(batch) {
+  const today = S.pdfToday || { used: 0, cap: 20000 };
+  const part = batch.partition || {};
+  const day = /(\d{4}-\d{2}-\d{2})$/.exec(String(batch.name || ''));
+  const archived = !!batch.name && Number(batch.worklist) > 0;
+  const old = archived
+    ? `${esc(day ? day[1] : batch.name)} 已封存 · ${num(batch.worklist)} 本里 ${num(part.landed)} 落地、${num(part.left)} 未落地（${num(part.failed)} 失败 / ${num(part.staged)} 待复核 / ${num(part.untouched)} 未开跑）`
+    : '还没封存过批次。';
+  return `<div class="toolbar" style="margin-top:10px">
+    <span class="small">今天额度 <b>${num(today.used)}</b> / ${num(today.cap)} 页</span>
+    <span class="spacer"></span>
+    <span class="hint">${old}</span>
+    <button class="btn sm" data-act="pdf-detail"${archived ? '' : ' disabled'}>看明细</button>
+  </div>`;
+}
+
+function pickCounts() {
+  const counts = { total: 0, convert: 0, gallery: 0, ja: 0, untriaged: 0 };
+  S.books.forEach((row) => {
+    if (!S.pick.has(row.uid)) return;
+    counts.total += 1;
+    if (counts[row.disposition] !== undefined) counts[row.disposition] += 1;
+  });
+  return counts;
+}
+
+function pickBreakdown() {
+  const c = pickCounts();
+  if (!c.total) return '还没有选书';
+  const bits = ['已选 ' + num(c.total) + ' 本'];
+  if (c.convert) bits.push('可转 ' + num(c.convert) + ' 本');
+  if (c.gallery) bits.push('只记图册 ' + num(c.gallery) + ' 本');
+  if (c.ja) bits.push('日文暂缓 ' + num(c.ja) + ' 本');
+  if (c.untriaged) bits.push('未分诊 ' + num(c.untriaged) + ' 本');
+  return bits.join(' · ');
+}
+
+function pdfPickSummary() {
+  const note = S.bookCounts
+    ? '清单里共 ' + num(S.books.length) + ' 本待转的 PDF。'
+    : '清单还没读，点下面进去看。';
+  return `<p class="small"><b>${esc(pickBreakdown())}</b></p>
+    <p class="hint">${esc(note)}</p>
+    <button class="btn" data-act="pdf-pick-open">去清单选书</button>`;
+}
+
+function pickRowHtml(rows) {
+  if (!rows.length) {
+    return `<tr><td class="empty" colspan="8">${S.books.length
+      ? '没有符合条件的书。' : '清单是空的：现在没有待转的 PDF。'}</td></tr>`;
+  }
+  return rows.map((row) => {
+    const tag = `<span class="tag tag-${esc(row.disposition)}">${esc(PICK_WORD[row.disposition] || row.disposition)}</span>`;
+    const marks = [];
+    if (row.disposition === 'untriaged' && row.suggestion) {
+      const conf = row.suggestion.confidence === null
+        || row.suggestion.confidence === undefined ? ''
+        : ' ' + Number(row.suggestion.confidence).toFixed(2);
+      marks.push(`<span class="hint">建议 ${esc(routeWord(row.suggestion.route))}${esc(conf)}</span>`);
+    }
+    if (row.route) marks.push(`<span class="hint">${esc(routeWord(row.route))}</span>`);
+    if (row.recheck) marks.push('<span class="hint">复看</span>');
+    const pages = row.pages === null || row.pages === undefined ? '—' : num(row.pages);
+    const note = pickNote(row);
+    const act = row.disposition === 'untriaged' && row.suggestion
+      ? `<button class="btn sm" data-act="pick-suggest" data-uid="${esc(row.uid)}">按建议确认</button>`
+      : `<button class="btn sm" data-act="pick-settle" data-uid="${esc(row.uid)}">改处置</button>`;
+    return `<tr>
+      <td><input type="checkbox" data-act="pick-one" value="${esc(row.uid)}"${S.pick.has(row.uid) ? ' checked' : ''}></td>
+      <td class="mono">${esc(row.uid)}</td>
+      <td class="wrap">${esc(row.title || '')}</td>
+      <td>${tag}${marks.join(' ')}</td>
+      <td>${pickProgress(row)}</td>
+      <td class="num">${pages}</td>
+      <td class="small clip" title="${esc(note)}">${esc(note)}</td>
+      <td>${act}</td>
+    </tr>`;
+  }).join('');
+}
+
+function pickNote(row) {
+  if (row.disposition === 'gallery' && row.why) return row.why;
+  if (row.progress === 'failed' && row.last) return '上次 ' + row.last;
+  if (row.suggestion && row.suggestion.reason) return '分诊建议：' + row.suggestion.reason;
+  return '';
+}
+
+function pickProgress(row) {
+  const word = PICK_PROGRESS[row.progress] || [row.progress, 'out'];
+  return `<span class="status ${word[1]}">${esc(word[0])}</span>`;
+}
+
+function pickRows() {
+  const q = String(S.pickQ || '').trim().toLowerCase();
+  const rows = S.books.filter((row) => {
+    if (S.pickTags.size && !S.pickTags.has(row.disposition)) return false;
+    if (PICK_PROGRESS_FILTER.some(([key]) => key === row.progress)
+      && !S.pickProgress.has(row.progress)) return false;
+    if (S.pickRecheck && !row.recheck) return false;
+    if (S.pickSubject && row.subject1 !== S.pickSubject) return false;
+    if (!q) return true;
+    return String(row.uid || '').toLowerCase().indexOf(q) >= 0
+      || String(row.title || '').toLowerCase().indexOf(q) >= 0;
+  });
+  const byUid = (a, b) => String(a.uid).localeCompare(String(b.uid));
+  if (S.pickSort === 'uid') return rows.slice().sort(byUid);
+  const sign = S.pickSort === 'pages-asc' ? 1 : -1;
+  return rows.slice().sort((a, b) => (sign * ((Number(a.pages) || 0) - (Number(b.pages) || 0)))
+    || byUid(a, b));
+}
+
+function pickSubjects() {
+  const out = [];
+  S.books.forEach((row) => {
+    if (row.subject1 && out.indexOf(row.subject1) < 0) out.push(row.subject1);
+  });
+  return out.sort();
+}
+
+function pickToolbar() {
+  return `<div class="toolbar">
+    <input type="text" id="pick-q" placeholder="编号或书名" size="14" value="${esc(S.pickQ)}">
+    ${PICK_TAG.map(([key, label]) => `<label class="check"><input type="checkbox" data-act="pick-tag" value="${key}"${S.pickTags.has(key) ? ' checked' : ''}>${esc(label)}</label>`).join('')}
+    <select id="pick-subject">
+      <option value="">全部一级分类</option>
+      ${pickSubjects().map((name) => `<option value="${esc(name)}"${name === S.pickSubject ? ' selected' : ''}>${esc(name)}</option>`).join('')}
+    </select>
+    <select id="pick-sort">
+      ${PICK_SORT.map(([key, label]) => `<option value="${key}"${key === S.pickSort ? ' selected' : ''}>${esc(label)}</option>`).join('')}
+    </select>
+    <span class="spacer"></span>
+    <button class="btn sm" data-act="pick-refresh">刷新</button>
+    <a class="btn sm" href="#pdf" data-act="goto" data-tab="pdf">回 PDF 页</a>
+  </div>`;
+}
+
+function pickFilterBar() {
+  return `<div class="toolbar">
+    <span class="small muted">进度</span>
+    ${PICK_PROGRESS_FILTER.map(([key, label]) => `<label class="check"><input type="checkbox" data-act="pick-progress" value="${key}"${S.pickProgress.has(key) ? ' checked' : ''}>${esc(label)}</label>`).join('')}
+    <span class="small muted">标记</span>
+    <label class="check"><input type="checkbox" data-act="pick-recheck"${S.pickRecheck ? ' checked' : ''}>只看复看</label>
+    <span class="hint">复看是当初标了复看的图册，还没复核完</span>
+  </div>`;
+}
+
+function pickBar() {
+  const c = pickCounts();
+  const converts = S.books.filter((row) => row.disposition === 'convert').length;
+  const suggests = S.books.filter((row) => S.pick.has(row.uid) && row.suggestion).length;
+  return `<b>已选 ${num(c.total)} 本</b>
+    <span class="hint">可转 ${num(c.convert)} · 只记图册 ${num(c.gallery)} · 日文暂缓 ${num(c.ja)} · 未分诊 ${num(c.untriaged)}</span>
+    <button class="btn sm" data-act="pick-suggest-all"${suggests ? '' : ' disabled'}>按建议确认 ${num(suggests)} 本</button>
+    <button class="btn sm" data-act="pick-all-convert"${converts ? '' : ' disabled'}>全选可转的</button>
+    <button class="btn sm" data-act="pick-clear"${c.total ? '' : ' disabled'}>清空</button>
+    <span class="spacer"></span>
+    <label class="check">最多转 <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0" style="width:64px"> 本</label>
+    <label class="check">同时处理 <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8" style="width:64px"> 本</label>
+    <button class="btn primary" data-write data-act="pdf-run"${c.total ? '' : ' disabled'}>开始转写</button>`;
+}
+
+function viewPdfList() {
+  const counts = S.bookCounts || { convert: 0, gallery: 0, ja: 0, untriaged: 0 };
+  const total = (counts.convert || 0) + (counts.gallery || 0) + (counts.ja || 0)
+    + (counts.untriaged || 0);
+  const rows = pickRows();
+  const lead = '还没有正文的 PDF 都在这里，共 ' + num(total) + ' 本：可转 '
+    + num(counts.convert || 0) + ' 本、只记图册 ' + num(counts.gallery || 0) + ' 本、日文暂缓 '
+    + num(counts.ja || 0) + ' 本、未分诊 ' + num(counts.untriaged || 0) + ' 本。';
+  return `<h1>待转 PDF 清单</h1>
+    <p class="lead">${esc(lead)}</p>
+    <div class="section card">
+      ${pickToolbar()}
+      ${pickFilterBar()}
+      <div class="tw"><table class="pick-table">
+        <colgroup><col style="width:34px"><col style="width:76px"><col><col style="width:232px">
+          <col style="width:86px"><col style="width:76px"><col style="width:210px"><col style="width:104px"></colgroup>
+        <thead><tr><th></th><th>编号</th><th>书名</th><th>处置</th><th>进度</th>
+          <th class="num">页数</th><th>备注</th><th></th></tr></thead>
+        <tbody id="pick-body">${pickRowHtml(rows)}</tbody>
+      </table></div>
+      <p class="hint" id="pick-note">当前显示 ${num(rows.length)} 本。</p>
+      <div class="pick-gap"></div>
+      <div class="pick-bar" id="pick-bar">${pickBar()}</div>
+    </div>`;
+}
+
+// 关键字边打边筛：只重画表格与计数，整页 render 会丢焦点
+function paintPick() {
+  const rows = pickRows();
+  const body = $('#pick-body');
+  if (body) body.innerHTML = pickRowHtml(rows);
+  const bar = $('#pick-bar');
+  if (bar) bar.innerHTML = pickBar();
+  const note = $('#pick-note');
+  if (note) note.textContent = '当前显示 ' + num(rows.length) + ' 本。';
+}
+
+function paintTriageProgress() {
+  const box = $('#triage-progress');
+  if (box) box.innerHTML = triageProgress();
+}
+
+// 批量任务要按步数出进度，watchJob 只回任务行，这里连 steps 一起拿
+async function watchSteps(jobId, onTick) {
+  for (let i = 0; i < 240; i += 1) {
+    let body;
+    try {
+      body = await api('/api/jobs/' + encodeURIComponent(jobId));
+    } catch (err) {
+      return null;
+    }
+    if (onTick) onTick(body.steps || []);
+    if (SETTLED.indexOf(body.job.state) >= 0) return body;
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+  return null;
+}
+
+function settlePages(items) {
+  const pages = {};
+  items.forEach((item) => {
+    const row = S.books.find((one) => one.uid === item.uid) || {};
+    pages[item.route] = (pages[item.route] || 0) + (Number(row.pages) || 0);
+  });
+  return Object.keys(pages)
+    .map((route) => routeWord(route) + ' ' + num(pages[route]) + ' 页').join('、');
+}
+
+function settleAsk(items) {
+  return '按分诊建议确认 ' + num(items.length) + ' 本：' + settlePages(items)
+    + '。只写台账，不出正文。';
+}
+
+// 改处置只写台账，不出正文
+async function applySettle(items, ask) {
+  if (ask && !window.confirm(ask)) return;
+  setBusy(true);
+  try {
+    const body = await post('/api/pdf/settle', { items });
+    S.settle = null;
+    $('#modal').innerHTML = '';
+    const detail = await watchJob(body.job_id, afterJob);
+    if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+    await Promise.all([loadJobs(), loadPdfBooks(), loadPdf()]);
+    render();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function triageProgress() {
+  const t = S.pdfTriage;
+  if (!t) return '';
+  const pct = t.total ? Math.min(100, Math.round(t.done / t.total * 100)) : 0;
+  return `<div class="progress-label"><span>分诊中 ${num(t.done)} / ${num(t.total)} 本</span><span>${pct}%</span></div>
+    <div class="progress"><i style="width:${pct}%"></i></div>`;
+}
+
+function triageCard() {
+  const split = S.pdfUntriaged;
+  const untriaged = S.books.filter((row) => row.disposition === 'untriaged');
+  const total = split ? split.books : untriaged.length;
+  const have = untriaged.filter((row) => row.suggestion).length;
+  const todo = Math.max(0, total - have);
+  const bits = [];
+  if (split && split.text.books + split.scan.books === split.books) {
+    if (split.text.books) {
+      bits.push(num(split.text.books) + ' 本文本层 ' + num(split.text.pages) + ' 页会建议直接抽取');
+    }
+    if (split.scan.books) {
+      bits.push(num(split.scan.books) + ' 本扫描件 ' + num(split.scan.pages) + ' 页会建议识别');
+    }
+  }
+  const lead = total
+    ? '未分诊 ' + num(total) + ' 本'
+      + (bits.length ? '：' + bits.join('，') + '。'
+        : '，共 ' + num(split ? split.pages : 0) + ' 页。')
+    : '现在没有未分诊的 PDF。';
+  const second = have
+    ? '其中 ' + num(have) + ' 本已经出了建议，等你在清单里确认。'
+    : '分诊只看指标与三张缩略图，不出正文。出的建议在清单页逐行确认，也可以一次按建议确认。';
+  return `<div class="card">
+    <h2>批量分诊</h2>
+    <p class="small">${esc(lead)}</p>
+    <p class="hint">${esc(second)}</p>
+    <button class="btn primary" data-act="pdf-triage-batch"${todo && !S.pdfTriage ? '' : ' disabled'}>开始分诊 ${num(todo)} 本</button>
+    <div id="triage-progress" style="margin-top:12px">${triageProgress()}</div>
+  </div>`;
+}
+
+function runCard() {
+  return `<div class="card">
+    <h2>确认后转 md</h2>
+    ${pdfPickSummary()}
+    <label class="field"><span>最多转几本</span>
+      <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0"></label>
+    <label class="field"><span>同时处理</span>
+      <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8"></label>
+    <button class="btn primary" data-write data-act="pdf-run">开始转写</button>
+    <p class="hint">最多转几本填 0 表示不限。勾了图册或日文会再问一次；未分诊的书只送去分诊，不出正文。</p>
+  </div>`;
 }
 
 function viewPdf() {
-  const data = S.pdf;
-  const groups = (data && data.groups) || [];
-  const batch = (data && data.batch) || {};
-  const left = Number(batch.remaining_pages) || 0;
+  const batch = (S.pdf && S.pdf.batch) || {};
   return `<h1>PDF 出正文</h1>
-    <p class="lead">扫描版 PDF 先看建议，确认处理方式后再批量转成 Markdown。</p>
+    <p class="lead">待转的 PDF 先分诊定处置，再从清单里勾书转成 Markdown。</p>
     <div class="section card">
-      <div class="card-head"><h2>队列</h2><button class="btn sm" data-act="pdf-refresh">刷新</button></div>
-      ${queueStrip(data, groups)}
-    </div>
-    <div class="section card">
-      <h2>现有批次${batch.name ? ' ' + esc(batch.name) : ''}</h2>
-      ${batchPanel(batch, data)}
+      <div class="card-head"><h2>现在的状态</h2><span class="row tight"><button class="btn sm" data-act="pdf-refresh">刷新</button></span></div>
+      ${queueStrip()}
+      ${quotaLine(batch)}
     </div>
     <div class="grid c2 section">
-      <div class="card">
-        <h2>新 PDF 分诊</h2>
-        <div class="toolbar">
-          <input type="text" id="triage-uid" placeholder="B1234" size="10" value="${esc(S.triageUid)}">
-          <button class="btn" data-act="pdf-triage">看建议</button>
-        </div>
-        <p class="hint">输入编号，例如 B1234。</p>
-        ${triagePanel()}
-      </div>
-      <div class="card">
-        <h2>确认后转 md</h2>
-        <label class="field"><span>要转的书</span>
-          <input type="text" id="pdf-uids" placeholder="B1234, B1235" value="${esc(S.pdfUids)}"></label>
-        <label class="field"><span>最多转几本</span>
-          <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0"></label>
-        <label class="field"><span>同时处理</span>
-          <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8"></label>
-        <p class="hint">最多转几本填 0 表示不限。</p>
-        <button class="btn primary" data-write data-act="pdf-run">开始转写</button>
-        <p class="hint">只转已确认处理方式的书，图册和日文原版不会开始。</p>
-        ${left ? `<p class="callout">本批还有 ${num(left)} 页，受每天额度限制，跑不完会停下。</p>` : ''}
-      </div>
+      ${triageCard()}
+      ${runCard()}
     </div>
-    <div class="section card"><h2>最近的分诊与转 md</h2>${recentJobs('pdf.triage', 3)}${recentJobs('pdf.run', 3)}</div>`;
+    <div class="section card"><h2>最近的分诊与转 md</h2>${recentPdfJobs()}</div>`;
 }
 
-function triagePanel() {
-  const t = S.triage;
-  if (!t) return '<p class="empty">还没有分诊结果。输入编号后点「看建议」。</p>';
-  const model = t.model || {};
-  const thumbs = (t.thumbs || []).map((rel) => {
-    const job = S.triageJob;
-    if (!job) return '';
-    const path = '工作区/运维/jobs/' + job + '/' + rel;
-    return `<img src="/api/file?path=${encodeURIComponent(path)}" alt="缩略图">`;
-  }).join('');
-  const metrics = t.metrics || {};
-  const known = new Set(TRIAGE_METRICS.map(([key]) => key));
-  const row = ([key, label, kind]) => `<span class="k">${esc(label)}</span>
-    <span class="v">${esc(metricValue(kind, metrics[key]))}</span>`;
-  const keyMetrics = TRIAGE_METRICS.filter(([key]) => TRIAGE_KEY.indexOf(key) >= 0 && key in metrics);
-  const rest = TRIAGE_METRICS.filter(([key]) => TRIAGE_KEY.indexOf(key) < 0 && key in metrics)
-    .concat(Object.keys(metrics).filter((key) => !known.has(key)).map((key) => [key, key, 'raw']));
-  const confidence = model.confidence === null || model.confidence === undefined
-    ? '' : '（把握 ' + Number(model.confidence).toFixed(2) + '）';
-  return `<div class="triage-head">
-      <b>${esc(t.title || t.uid)}</b>
-      <span class="hint">${num(t.pages || 0)} 页 · ${esc(t.class || '未分类')}</span>
+function settleModal(row) {
+  if (!row) return '';
+  const current = row.route || (row.disposition === 'gallery' ? '不转-记图册'
+    : (row.disposition === 'ja' ? '日文暂缓' : (row.suggestion || {}).route));
+  const pages = row.pages === null || row.pages === undefined ? '' : ' · ' + num(row.pages) + ' 页';
+  return `<div class="overlay" data-act="close-modal">
+    <div class="modal" data-stop="1">
+      <h2>改处置：${esc(row.title || row.uid)}</h2>
+      <p class="hint">${esc(row.uid)}${esc(pages)}</p>
+      <label class="field"><span>处置</span><select id="settle-route">
+        ${SETTLE_ROUTES.map((r) => `<option value="${esc(r)}"${r === current ? ' selected' : ''}>${esc(routeWord(r))}</option>`).join('')}
+      </select></label>
+      <div class="row">
+        <button class="btn primary" data-write data-act="settle-submit" data-uid="${esc(row.uid)}">提交</button>
+        <button class="btn" data-act="close-modal">取消</button>
+        <span class="hint">改处置只写台账，不出正文。</span>
+      </div>
     </div>
-    <p class="small">建议 <b>${esc(routeWord(model.route) || '无建议')}</b>${esc(confidence)}
-      <span class="hint">${esc(model.reason || '')}</span></p>
-    <div class="thumbs">${thumbs || '<div class="thumb-empty">没有缩略图</div>'}</div>
-    <div class="metrics">${keyMetrics.map(row).join('')}</div>
-    <details class="adv">
-      <summary>技术指标</summary>
-      <div class="metrics">${rest.map(row).join('') || '<span class="k">没有更多指标</span>'}</div>
-    </details>
-    <label class="field"><span>处理方式</span><select id="confirm-route">
-      ${PDF_ROUTES.map((r) => `<option value="${esc(r)}"${r === model.route ? ' selected' : ''}>${esc(routeWord(r))}</option>`).join('')}
-    </select></label>
-    <label class="field"><span>备注（可选）</span>
-      <input type="text" id="confirm-reason" placeholder="写一句判断依据"></label>
-    <button class="btn primary" data-write data-act="pdf-confirm">确认处理方式</button>`;
+  </div>`;
 }
 
 // ---- 维护 ---------------------------------------------------------
@@ -1101,16 +1371,6 @@ async function loadLatestPlan() {
   }
 }
 
-async function loadTriage(jobId) {
-  try {
-    S.triage = await api('/api/file?path=' + encodeURIComponent(
-      '工作区/运维/jobs/' + jobId + '/result.json'));
-    S.triageJob = jobId;
-  } catch (err) {
-    S.triage = null;
-  }
-}
-
 async function loadReview(jobId) {
   try {
     S.review = await api('/api/file?path=' + encodeURIComponent(
@@ -1147,6 +1407,26 @@ async function loadPdf() {
   }
 }
 
+async function loadPdfBooks() {
+  try {
+    const body = await api('/api/pdf/books');
+    S.books = body.books || [];
+    S.bookCounts = body.counts || null;
+    S.pdfToday = body.today || null;
+    S.pdfUntriaged = body.untriaged || null;
+  } catch (err) {
+    S.books = [];
+    S.bookCounts = null;
+    S.pdfToday = null;
+    S.pdfUntriaged = null;
+    toast(err.message, true);
+  }
+  const known = new Set(S.books.map((row) => row.uid));
+  Array.from(S.pick).forEach((uid) => {
+    if (!known.has(uid)) S.pick.delete(uid);
+  });
+}
+
 async function refreshTab() {
   if (S.tab === 'overview') {
     await Promise.all([loadStatus(), loadJobs(), loadPending()]);
@@ -1157,10 +1437,9 @@ async function refreshTab() {
     await Promise.all([loadStatus(), loadJobs(), loadPending()]);
     await loadSplitBooks();
   } else if (S.tab === 'pdf') {
-    await Promise.all([loadJobs(), loadPdf()]);
-    const last = S.jobs.find((j) => j.kind === 'pdf.triage'
-      && (j.state === 'awaiting_review' || j.state === 'succeeded'));
-    if (!S.triage && last) await loadTriage(last.id);
+    await Promise.all([loadJobs(), loadPdf(), loadPdfBooks()]);
+  } else if (S.tab === 'pdf-list') {
+    await Promise.all([loadJobs(), loadPdfBooks()]);
   } else if (S.tab === 'maintain' || S.tab === 'retire') {
     await Promise.all([loadStatus(), loadJobs()]);
   } else if (S.tab === 'logs') {
@@ -1169,7 +1448,7 @@ async function refreshTab() {
 }
 
 async function go(tab) {
-  S.tab = TABS.some(([key]) => key === tab) ? tab : 'overview';
+  S.tab = ALL_TABS.indexOf(tab) >= 0 ? tab : 'overview';
   try {
     await refreshTab();
   } catch (err) {
@@ -1471,67 +1750,135 @@ const actions = {
   },
 
   async 'pdf-refresh'() {
-    await loadPdf();
+    await Promise.all([loadPdf(), loadPdfBooks()]);
     render();
   },
 
-  async 'pdf-triage'() {
-    const uid = (($('#triage-uid') || {}).value || '').trim();
-    if (!/^B\d{4}$/.test(uid)) {
-      toast('编号写成 B1234 这样', true);
-      return;
-    }
-    setBusy(true);
-    try {
-      const body = await post('/api/pdf/triage', { uid });
-      S.triageUid = uid;
-      toast('开始看建议，稍等');
-      const detail = await watchJob(body.job_id, afterJob);
-      if (detail && detail.job.state === 'awaiting_review') {
-        await loadTriage(body.job_id);
-        if (S.triage && S.triage.uid) S.triageUid = S.triage.uid;
-        toast('分诊完成，看建议再确认');
-      } else {
-        toast(summaryText(detail.job.summary) || '分诊没过，看日志', true);
-      }
-      await loadJobs();
-      render();
-    } catch (err) {
-      toast(err.message, true);
-    } finally {
-      setBusy(false);
-    }
+  async 'pdf-pick-open'() {
+    if (location.hash !== '#pdf-list') location.hash = '#pdf-list';
+    else await go('pdf-list');
   },
 
-  async 'pdf-confirm'() {
-    const uid = ((S.triage && S.triage.uid) || S.triageUid || '').trim();
-    const route = ($('#confirm-route') || {}).value;
-    const reason = (($('#confirm-reason') || {}).value || '').trim();
-    if (!/^B\d{4}$/.test(uid)) {
-      toast('先把编号填上（B1234）', true);
+  // 明细就是清单筛成「日文暂缓 + 失败」
+  async 'pdf-detail'() {
+    S.pickTags = new Set(['ja']);
+    S.pickProgress = new Set(['failed']);
+    S.pickRecheck = false;
+    if (location.hash !== '#pdf-list') location.hash = '#pdf-list';
+    else await go('pdf-list');
+  },
+
+  async 'pdf-jump'(el) {
+    const tag = el.dataset.tag;
+    S.pickTags = new Set(tag ? [tag] : ['convert', 'untriaged', 'gallery', 'ja']);
+    S.pickProgress = new Set(['todo', 'running', 'failed']);
+    S.pickRecheck = false;
+    if (location.hash !== '#pdf-list') location.hash = '#pdf-list';
+    else await go('pdf-list');
+  },
+
+  async 'pick-one'(el) {
+    if (el.checked) S.pick.add(el.value);
+    else S.pick.delete(el.value);
+    paintPick();
+  },
+
+  async 'pick-tag'(el) {
+    if (el.checked) S.pickTags.add(el.value);
+    else S.pickTags.delete(el.value);
+    render();
+  },
+
+  async 'pick-progress'(el) {
+    if (el.checked) S.pickProgress.add(el.value);
+    else S.pickProgress.delete(el.value);
+    paintPick();
+  },
+
+  async 'pick-recheck'(el) {
+    S.pickRecheck = el.checked;
+    paintPick();
+  },
+
+  async 'pick-all-convert'() {
+    pickRows().forEach((row) => {
+      if (row.disposition === 'convert') S.pick.add(row.uid);
+    });
+    paintPick();
+  },
+
+  async 'pick-clear'() {
+    S.pick.clear();
+    paintPick();
+  },
+
+  async 'pick-settle'(el) {
+    const row = S.books.find((item) => item.uid === el.dataset.uid);
+    if (!row) return;
+    S.settle = row;
+    $('#modal').innerHTML = settleModal(row);
+  },
+
+  async 'settle-submit'(el) {
+    const route = ($('#settle-route') || {}).value;
+    if (!route) return;
+    await applySettle([{ uid: el.dataset.uid, route }]);
+  },
+
+  async 'pick-suggest'(el) {
+    const row = S.books.find((item) => item.uid === el.dataset.uid);
+    if (!row || !row.suggestion) return;
+    const items = [{ uid: row.uid, route: row.suggestion.route }];
+    await applySettle(items, settleAsk(items));
+  },
+
+  async 'pick-suggest-all'() {
+    const items = S.books.filter((row) => S.pick.has(row.uid) && row.suggestion)
+      .map((row) => ({ uid: row.uid, route: row.suggestion.route }));
+    if (!items.length) {
+      toast('选中的书里没有带建议的', true);
       return;
     }
-    if (!S.triageJob) {
-      toast('先看建议，再确认处理方式', true);
+    await applySettle(items, settleAsk(items));
+  },
+
+  async 'pick-refresh'() {
+    await loadPdfBooks();
+    render();
+  },
+
+  async 'pdf-triage-batch'() {
+    const uids = S.books.filter((row) => row.disposition === 'untriaged' && !row.suggestion)
+      .map((row) => row.uid);
+    if (!uids.length) {
+      toast('没有还要分诊的书', true);
       return;
     }
     setBusy(true);
+    S.pdfTriage = { total: uids.length, done: 0 };
+    render();
     try {
-      const body = await post('/api/pdf/confirm', {
-        uid, route, reason, verdict: route, job_id: S.triageJob,
-        model: (S.triage && S.triage.model) || {},
+      const body = await post('/api/pdf/triage-batch', { uids });
+      const detail = await watchSteps(body.job_id, (steps) => {
+        S.pdfTriage.done = steps.filter((s) => s.state && s.state !== 'pending').length;
+        paintTriageProgress();
       });
-      toast('处理方式已记下，批次 ' + body.batch);
-      const detail = await watchJob(body.job_id, afterJob);
-      if (detail && detail.job.state === 'succeeded') {
-        S.triage = null;
-        S.triageJob = null;
-      } else if (detail) {
-        toast(summaryText(detail.job.summary) || detail.job.state, true);
+      const state = detail ? detail.job.state : 'failed';
+      await Promise.all([loadJobs(), loadPdfBooks(), loadPdf()]);
+      S.pdfTriage = null;
+      const made = uids.filter((uid) => {
+        const row = S.books.find((item) => item.uid === uid);
+        return !!row && !!row.suggestion;
+      }).length;
+      if (state === 'awaiting_review' || state === 'succeeded') {
+        toast(made ? num(made) + ' 本出了建议，去清单确认' : '分诊跑完了，但没有模型建议', !made);
+      } else {
+        toast('分诊没过，去日志看', true);
       }
-      await loadJobs();
       render();
     } catch (err) {
+      S.pdfTriage = null;
+      render();
       toast(err.message, true);
     } finally {
       setBusy(false);
@@ -1539,24 +1886,38 @@ const actions = {
   },
 
   async 'pdf-run'() {
-    const uids = (($('#pdf-uids') || {}).value || '').split(',').map((s) => s.trim())
-      .filter(Boolean);
-    if (!uids.length) {
-      toast('填要转的编号', true);
+    const picked = Array.from(S.pick);
+    if (!picked.length) {
+      toast('先去清单勾要转的书', true);
       return;
     }
-    const limit = Number(($('#pdf-limit') || {}).value) || 0;
-    const workers = Number(($('#pdf-workers') || {}).value) || 3;
-    S.pdfUids = uids.join(',');
-    S.pdfLimit = limit;
-    S.pdfWorkers = workers;
+    const limit = Number(S.pdfLimit) || 0;
+    const workers = Number(S.pdfWorkers) || 3;
+    const rows = S.books.filter((row) => S.pick.has(row.uid));
+    const gallery = rows.filter((row) => row.disposition === 'gallery');
+    const japanese = rows.filter((row) => row.disposition === 'ja');
+    let force = false;
+    if (gallery.length || japanese.length) {
+      const pages = gallery.concat(japanese)
+        .reduce((sum, row) => sum + (Number(row.pages) || 0), 0);
+      const ask = '这 ' + num(gallery.length + japanese.length) + ' 本原定不转：只记图册 '
+        + num(gallery.length) + ' 本、日文暂缓 ' + num(japanese.length) + ' 本，合计 '
+        + num(pages) + ' 页。改成按扫描识别转？';
+      if (!window.confirm(ask)) return;
+      force = true;
+    }
     setBusy(true);
     try {
-      const body = await post('/api/pdf/run', { uids, limit, workers });
-      toast('转写已开始，进度看日志');
-      const detail = await watchJob(body.job_id, afterJob);
-      if (detail) toast(jobNote(detail.job), jobBad(detail.job));
-      await Promise.all([loadJobs(), loadPdf(), loadPending()]);
+      const body = await post('/api/pdf/run', { uids: picked, limit, workers, force });
+      S.pick.clear();
+      if (body.job_id) {
+        toast('转写已开始，进度看日志');
+        const detail = await watchJob(body.job_id, afterJob);
+        if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+      } else {
+        toast('已送去分诊 ' + num(body.triaged) + ' 本');
+      }
+      await Promise.all([loadJobs(), loadPdf(), loadPdfBooks(), loadPending()]);
       render();
     } catch (err) {
       toast(err.message, true);
@@ -1670,6 +2031,7 @@ const actions = {
 
   async 'close-modal'() {
     S.preview = null;
+    S.settle = null;
     $('#modal').innerHTML = '';
   },
 
@@ -1729,6 +2091,13 @@ document.addEventListener('keydown', (ev) => {
 document.addEventListener('dragover', (ev) => ev.preventDefault());
 document.addEventListener('drop', (ev) => ev.preventDefault());
 
+document.addEventListener('input', (ev) => {
+  const el = ev.target;
+  if (!el || el.id !== 'pick-q') return;
+  S.pickQ = el.value;
+  paintPick();
+});
+
 document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.dataset && el.dataset.act) {
@@ -1744,20 +2113,22 @@ document.addEventListener('change', (ev) => {
     S.splitWorkers = Number(el.value) || 0;
     return;
   }
-  if (el.id === 'triage-uid') {
-    S.triageUid = el.value.trim();
-    return;
-  }
-  if (el.id === 'pdf-uids') {
-    S.pdfUids = el.value;
-    return;
-  }
   if (el.id === 'pdf-limit') {
     S.pdfLimit = Number(el.value) || 0;
     return;
   }
   if (el.id === 'pdf-workers') {
     S.pdfWorkers = Number(el.value) || 0;
+    return;
+  }
+  if (el.id === 'pick-subject') {
+    S.pickSubject = el.value;
+    render();
+    return;
+  }
+  if (el.id === 'pick-sort') {
+    S.pickSort = el.value || 'pages';
+    render();
     return;
   }
   if (el.dataset && el.dataset.step) {

@@ -378,21 +378,98 @@ PDF_INPUTS = """
 (async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const q = (s) => document.querySelector(s);
-  if (!q('#triage-uid')) return {before: null, after: null};
+  const text = () => ((q('#view') || {}).textContent || '');
+  if (!q('#pdf-limit') || !q('#pdf-workers')) return {before: null, after: null};
   const put = (sel, val) => {
     q(sel).value = val;
     q(sel).dispatchEvent(new Event('change', {bubbles: true}));
   };
-  put('#triage-uid', 'B0002');
-  put('#pdf-uids', 'B0001,B0002');
   put('#pdf-limit', '7');
   put('#pdf-workers', '5');
-  const snap = () => ({uid: q('#triage-uid').value, uids: q('#pdf-uids').value,
-                       limit: q('#pdf-limit').value, workers: q('#pdf-workers').value});
+  const snap = () => ({limit: q('#pdf-limit').value, workers: q('#pdf-workers').value,
+                       legacy: !!q('#triage-uid'),
+                       triage: !!q('[data-act="pdf-triage-batch"]'),
+                       quota: text().indexOf('今天额度') >= 0,
+                       archive: text().indexOf('已封存') >= 0,
+                       open: !!q('[data-act="pdf-pick-open"]')});
   const before = snap();
   q('[data-act="pdf-refresh"]').click();
-  await sleep(900);
+  await sleep(1500);
   return {before: before, after: snap()};
+})()
+"""
+
+PDF_LIST = """
+(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const q = (s) => document.querySelector(s);
+  const title = () => (q('#view h1') ? q('#view h1').textContent.trim() : '');
+  const until = async (fn, ms) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(120); }
+    return false;
+  };
+  const out = {open: !!q('[data-act="pdf-pick-open"]'), legacy: !!q('#pdf-uids')};
+  if (!out.open) return out;
+  q('[data-act="pdf-pick-open"]').click();
+  out.jumped = await until(() => location.hash === '#pdf-list' && title() === '待转 PDF 清单', 12000);
+  out.title = title();
+  out.filters = {q: !!q('#pick-q'), tags: document.querySelectorAll('[data-act="pick-tag"]').length,
+                 subject: !!q('#pick-subject'), sort: !!q('#pick-sort'),
+                 progress: document.querySelectorAll('[data-act="pick-progress"]').length,
+                 recheck: !!q('[data-act="pick-recheck"]'),
+                 actions: document.querySelectorAll('[data-act="pick-settle"], [data-act="pick-suggest"]').length,
+                 bar: !!q('#pick-bar')};
+  const box = q('#pick-q');
+  if (!box) return out;
+  box.focus();
+  box.value = 'zzz-没有这本';
+  box.dispatchEvent(new Event('input', {bubbles: true}));
+  await sleep(150);
+  out.empty = ((q('#pick-body') || {}).textContent || '').indexOf('没有符合条件') >= 0;
+  out.focus = document.activeElement === box;
+  box.value = 'B';
+  box.dispatchEvent(new Event('input', {bubbles: true}));
+  await sleep(150);
+  const rows = Array.from(document.querySelectorAll('[data-act="pick-one"]'));
+  out.rows = rows.length;
+  if (rows.length) rows[0].click();
+  await sleep(150);
+  out.picked = rows.filter((r) => r.checked).length;
+  out.summary = (q('#pick-bar') || {}).textContent || '';
+  document.querySelector('#nav a[href="#pdf"]').click();
+  await until(() => title() === 'PDF 出正文', 8000);
+  out.back = title();
+  location.hash = '#pdf-list';
+  await until(() => title() === '待转 PDF 清单', 12000);
+  await sleep(200);
+  out.keptTitle = title();
+  out.keptQ = q('#pick-q') ? q('#pick-q').value : null;
+  out.keptPick = Array.from(document.querySelectorAll('[data-act="pick-one"]'))
+    .filter((r) => r.checked).length;
+  out.wide = document.documentElement.scrollWidth > window.innerWidth;
+  if (q('[data-act="pick-clear"]')) q('[data-act="pick-clear"]').click();
+  if (q('#pick-q')) {
+    q('#pick-q').value = '';
+    q('#pick-q').dispatchEvent(new Event('input', {bubbles: true}));
+  }
+  await sleep(150);
+  out.cleared = Array.from(document.querySelectorAll('[data-act="pick-one"]'))
+    .filter((r) => r.checked).length;
+  const settle = q('[data-act="pick-settle"]');
+  if (settle) {
+    settle.click();
+    await sleep(300);
+    out.settle = {open: !!q('#modal .modal'),
+                  routes: document.querySelectorAll('#settle-route option').length,
+                  note: ((q('#modal .modal') || {}).textContent || '').indexOf('只写台账') >= 0};
+    if (q('#modal [data-act="close-modal"]')) q('#modal [data-act="close-modal"]').click();
+    await sleep(250);
+    out.settle.closed = !q('#modal .modal');
+  } else {
+    out.settle = null;
+  }
+  return out;
 })()
 """
 
@@ -618,10 +695,43 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             failed_tabs.append("retire-modal")
         eval_js(cdp, VISIT_TAB % ("pdf", "pdf", "PDF 出正文", "pdf", "PDF 出正文"),
                 await_promise=True, timeout=30)
-        pdfin = eval_js(cdp, PDF_INPUTS, await_promise=True, timeout=30)
+        pdfin = eval_js(cdp, PDF_INPUTS, await_promise=True, timeout=40)
         notes.append("PDF 刷新前后 %s → %s" % (pdfin["before"], pdfin["after"]))
         if pdfin["before"] != pdfin["after"]:
             failed_tabs.append("pdf-inputs-kept")
+        before_pdf = pdfin["before"] or {}
+        if not before_pdf.get("open"):
+            notes.append("PDF 页没有去清单的入口")
+            failed_tabs.append("pdf-pick-entry")
+        if before_pdf.get("legacy"):
+            notes.append("PDF 页还留着一本书的编号输入框")
+            failed_tabs.append("pdf-triage-input")
+        if not (before_pdf.get("triage") and before_pdf.get("archive")
+                and before_pdf.get("quota")):
+            notes.append("PDF 页缺批量分诊按钮、旧批次摘要或今天额度")
+            failed_tabs.append("pdf-cards")
+        pdflist = eval_js(cdp, PDF_LIST, await_promise=True, timeout=60)
+        notes.append("清单页 %s" % (pdflist,))
+        filters = pdflist.get("filters") or {}
+        settle = pdflist.get("settle") or {}
+        for name, ok in (("pdf-list-jump", pdflist.get("jumped")
+                          and pdflist.get("title") == "待转 PDF 清单"),
+                          ("pdf-list-filters", filters.get("q") and filters.get("subject")
+                          and filters.get("sort") and filters.get("tags") == 4),
+                          ("pdf-list-progress", filters.get("progress") == 3
+                          and filters.get("recheck")),
+                          ("pdf-list-action", (filters.get("actions") or 0) >= 1),
+                          ("pdf-list-settle", not settle or (settle.get("open")
+                          and settle.get("routes") == 4 and settle.get("note")
+                          and settle.get("closed"))),
+                          ("pdf-list-empty", pdflist.get("empty") and pdflist.get("focus")),
+                          ("pdf-list-kept", pdflist.get("keptQ") == "B"
+                          and pdflist.get("keptPick") == pdflist.get("picked")
+                          and pdflist.get("picked") == 1),
+                          ("pdf-list-width", not pdflist.get("wide")),
+                          ("pdf-list-clear", pdflist.get("cleared") == 0)):
+            if not ok:
+                failed_tabs.append(name)
         eval_js(cdp, VISIT_TAB % ("maintain", "maintain", "维护", "maintain", "维护"),
                 await_promise=True, timeout=30)
         maint = eval_js(cdp, MAINTAIN_CHECKS)

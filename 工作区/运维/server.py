@@ -44,6 +44,38 @@ SEARCH_URL = "http://127.0.0.1:8765"
 TRIAGE_BATCH_PREFIX = "pdf-ocr-ops-"
 TRIAGE_PDF_DIR = os.path.join("工作区", "批次", "pdf-普查-2026-10-19")
 OCR_BATCH = os.path.join("工作区", "批次", "pdf-ocr-2026-10-19")
+PDF_SKIP_LIST = os.path.join(TRIAGE_PDF_DIR, "skip_list.tsv")
+PDF_DEFER = os.path.join(OCR_BATCH, "defer", "lang.tsv")
+PDF_WORKLIST = os.path.join(OCR_BATCH, "worklist.tsv")
+VENV_PDF = os.path.join("工作区", ".venv-pdf", "bin", "python")
+PDF_DISPOSITIONS = ("convert", "gallery", "ja", "untriaged")
+PDF_CONVERT_ROUTES = ("OCR", "本地抽文本")
+PENDING_PDF_SQL = (
+    "SELECT b.uid, b.title, b.subject1, b.subject2, s.file FROM book b"
+    " JOIN source s ON s.uid = b.uid AND s.primary_src = 1"
+    " WHERE s.format = 'pdf' AND NOT EXISTS (SELECT 1 FROM derived d"
+    " WHERE d.uid = b.uid AND d.kind = 'md' AND d.status = 'done')")
+PROBE_TEXT_MIN_CHARS = 100
+PDF_PAGE_SCRIPT = '''import json, sys
+import pymupdf
+TEXT_MIN = %d
+out = {}
+for item in json.load(sys.stdin):
+    try:
+        doc = pymupdf.open(item["path"])
+    except Exception:
+        continue
+    pages = doc.page_count
+    picks = sorted({1, (pages + 1) // 4, (pages + 1) // 2, (3 * (pages + 1)) // 4, pages})
+    picks = [p for p in picks if 1 <= p <= pages]
+    hits = sum(1 for p in picks if len(doc[p - 1].get_text().strip()) >= TEXT_MIN)
+    out[item["uid"]] = {"pages": pages,
+                        "text": int(bool(picks) and hits * 2 >= len(picks))}
+print(json.dumps(out))
+''' % PROBE_TEXT_MIN_CHARS
+PDF_DAILY_CAP = 20000
+PDF_SETTLE_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "日文暂缓")
+PDF_RECHECK_METRICS = ("OCR-复看", "复看-可能OCR")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS job (
@@ -279,9 +311,10 @@ class Store:
 
     def list(self, state=None, limit=200):
         if state:
-            return self._rows("SELECT * FROM job WHERE state=? ORDER BY created DESC"
-                              " LIMIT ?", (state, limit))
-        return self._rows("SELECT * FROM job ORDER BY created DESC LIMIT ?", (limit,))
+            return self._rows("SELECT rowid AS seq, * FROM job WHERE state=?"
+                              " ORDER BY created DESC LIMIT ?", (state, limit))
+        return self._rows("SELECT rowid AS seq, * FROM job ORDER BY created DESC LIMIT ?",
+                          (limit,))
 
     def counts(self):
         rows = self._rows("SELECT state, count(*) n FROM job GROUP BY state")
@@ -458,7 +491,7 @@ def gate_triage(ctx):
         return "failed", "失败步：%s" % "、".join("%s(rc=%s)" % (n, rc) for n, rc in bad)
     result = ctx.artifact("result.json")
     if result is None:
-        return "failed", "分诊没有结果文件 result.json"
+        return gate_triage_batch(ctx)
     model = result.get("model") or {}
     thumbs = result.get("thumbs") or []
     if model.get("route"):
@@ -468,6 +501,24 @@ def gate_triage(ctx):
         summary = "无模型建议，待人工判断"
     summary += "；缩略图 %d 张" % len(thumbs)
     return "awaiting_review", summary
+
+
+def gate_triage_batch(ctx):
+    try:
+        names = sorted(os.listdir(ctx.job_dir))
+    except OSError:
+        names = []
+    results = []
+    for name in names:
+        one = read_json(os.path.join(ctx.job_dir, name, "result.json"))
+        if isinstance(one, dict) and one.get("uid") == name:
+            results.append(one)
+    if not results:
+        return "failed", "分诊没有结果文件 result.json"
+    routed = sum(1 for one in results if (one.get("model") or {}).get("route"))
+    thumbs = sum(len(one.get("thumbs") or []) for one in results)
+    return "awaiting_review", "%d 本出建议，%d 本有模型路线；缩略图共 %d 张" % (
+        len(results), routed, thumbs)
 
 
 def gate_dryrun(ctx):
@@ -516,6 +567,31 @@ def format_conf(value):
         return "%.2f" % float(value)
     except (TypeError, ValueError):
         return "-"
+
+
+def recheck_row(row):
+    if not row:
+        return False
+    if (row.get("route_metric") or "").strip() in PDF_RECHECK_METRICS:
+        return True
+    return "复看" in (row.get("verdict") or "")
+
+
+def untriaged_split(books):
+    out = {"books": 0, "pages": 0,
+           "text": {"books": 0, "pages": 0}, "scan": {"books": 0, "pages": 0}}
+    for row in books.values():
+        if row["disposition"] != "untriaged":
+            continue
+        pages = int(row["pages"] or 0)
+        out["books"] += 1
+        out["pages"] += pages
+        if row.get("text_layer") is None:
+            continue
+        key = "text" if row["text_layer"] else "scan"
+        out[key]["books"] += 1
+        out[key]["pages"] += pages
+    return out
 
 
 KINDS = {
@@ -827,6 +903,8 @@ class App:
         self.runner = Runner(env, self.store)
         self.status_cache = (0.0, None)
         self.status_lock = threading.Lock()
+        self.pdf_page_cache = {}
+        self.pdf_page_lock = threading.Lock()
         self.runner.adopt()
 
     # ---- status ----------------------------------------------------
@@ -1028,17 +1106,314 @@ class App:
         batch_landed = sum(1 for uid, status in done.items()
                            if status in ("landed", "skipped-has-md", "accepted"))
         remaining = [r for r in work if r.get("uid") not in done]
+        counts = collections.Counter(s for s in done.values() if s)
+        landed = sum(n for status, n in counts.items()
+                     if status in ("landed", "skipped-has-md", "accepted", "replaced"))
+        failed = sum(n for status, n in counts.items()
+                     if status in ("api-fatal", "failed"))
+        staged = counts.get("staged-review", 0)
+        untouched = max(0, len(work) - landed - failed - staged)
         batch = {"name": os.path.basename(OCR_BATCH), "readonly": True,
                  "worklist": len(work), "landed": batch_landed,
                  "remaining_books": len(remaining),
                  "remaining_pages": sum(int(float(r.get("pages") or 0))
                                         for r in remaining),
                  "quota": "20000/天",
-                 "status_counts": collections.Counter(
-                     s for s in done.values() if s)}
+                 "partition": {"landed": landed, "failed": failed, "staged": staged,
+                               "untouched": untouched,
+                               "left": failed + staged + untouched},
+                 "status_counts": counts}
         return {"groups": list(groups.values()), "skip": len(skip),
                 "deferred": len(deferred), "batch": batch,
                 "triage_path": os.path.join(TRIAGE_PDF_DIR, "triage_final.csv")}
+
+    def pdf_batches(self):
+        """后建的批次盖前面的那一份。"""
+        root = self.env.batches
+        if not os.path.isdir(root):
+            return []
+        return [os.path.join("工作区", "批次", name) for name in sorted(os.listdir(root))
+                if name.startswith(TRIAGE_BATCH_PREFIX)
+                and os.path.isdir(os.path.join(root, name))]
+
+    def pdf_last_status(self):
+        out = {}
+        for rel in [OCR_BATCH] + self.pdf_batches():
+            logs = os.path.join(self.env.root, rel, "logs")
+            if not os.path.isdir(logs):
+                continue
+            for name in sorted(os.listdir(logs)):
+                if not name.endswith(".json"):
+                    continue
+                row = read_json(os.path.join(logs, name)) or {}
+                out[row.get("uid") or name[:-5]] = row.get("status")
+        return out
+
+    def job_argvs(self, job_id):
+        commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
+        argvs = [c.get("argv") or [] for c in commands if isinstance(c, dict)]
+        row = self.store.get(job_id) or {}
+        if row.get("argv"):
+            try:
+                argvs.append(json.loads(row["argv"]))
+            except ValueError:
+                pass
+        return argvs
+
+    def pdf_running(self):
+        out = set()
+        for row in self.store.list(limit=500):
+            if row.get("kind") != "pdf.run" or row.get("state") not in ("queued", "running"):
+                continue
+            for argv in self.job_argvs(row["id"]):
+                for seq, part in enumerate(argv):
+                    if part in ("--uids", "--only") and seq + 1 < len(argv):
+                        out.update(u.strip() for u in str(argv[seq + 1]).split(",") if u.strip())
+        return out
+
+    def pdf_probe(self, items):
+        out, todo = {}, []
+        with self.pdf_page_lock:
+            for uid, rel in items:
+                try:
+                    st = os.stat(os.path.join(self.env.root, rel) if rel else "")
+                except OSError:
+                    continue
+                stamp = (st.st_mtime_ns, st.st_size)
+                hit = self.pdf_page_cache.get(uid)
+                if hit and hit[0] == stamp:
+                    out[uid] = {"pages": hit[1], "text": hit[2]}
+                else:
+                    todo.append((uid, rel, stamp))
+        interpreter = os.path.join(self.env.root, VENV_PDF)
+        if not todo or not os.path.isfile(interpreter):
+            return out
+        payload = json.dumps([{"uid": uid, "path": rel} for uid, rel, _stamp in todo],
+                             ensure_ascii=False)
+        try:
+            proc = subprocess.run([interpreter, "-c", PDF_PAGE_SCRIPT], input=payload,
+                                  cwd=self.env.root, capture_output=True, text=True,
+                                  timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return out
+        blob = {}
+        tail = (proc.stdout or "").strip().splitlines()
+        if proc.returncode == 0 and tail:
+            try:
+                blob = json.loads(tail[-1])
+            except ValueError:
+                blob = {}
+        if not isinstance(blob, dict):
+            blob = {}
+        with self.pdf_page_lock:
+            for uid, _rel, stamp in todo:
+                item = blob.get(uid)
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    pages = int(item["pages"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                text = 1 if item.get("text") else 0
+                self.pdf_page_cache[uid] = (stamp, pages, text)
+                out[uid] = {"pages": pages, "text": text}
+        return out
+
+    def pdf_books_index(self):
+        try:
+            pending = self.db_rows(PENDING_PDF_SQL)
+            landed = {r["uid"] for r in self.db_rows(
+                "SELECT uid FROM derived WHERE kind='md' AND status='done'")}
+        except FileNotFoundError:
+            return {}
+        pages, route = {}, {}
+        for row in read_table(self.env.root, os.path.join(TRIAGE_PDF_DIR,
+                                                         "triage_final.csv"), ","):
+            uid = row.get("uid")
+            if uid:
+                pages[uid] = row.get("pages")
+        for row in (read_table(self.env.root, PDF_WORKLIST)
+                    + read_table(self.env.root, PDF_SKIP_LIST)
+                    + read_table(self.env.root, PDF_DEFER)):
+            uid = row.get("uid")
+            if uid and not pages.get(uid):
+                pages[uid] = row.get("pages")
+        for rel in self.pdf_batches():
+            for row in read_table(self.env.root, os.path.join(rel, "triage_final.csv"), ","):
+                uid = row.get("uid")
+                if not uid:
+                    continue
+                route[uid] = row.get("route") or ""
+                if row.get("pages"):
+                    pages[uid] = row.get("pages")
+        skipped = {r["uid"]: r for r in read_table(self.env.root, PDF_SKIP_LIST)
+                   if r.get("uid")}
+        japanese = {r.get("uid") for r in read_table(self.env.root, PDF_DEFER)
+                    if (r.get("lang") or "").strip() == "ja"}
+        last = self.pdf_last_status()
+        running = self.pdf_running()
+        books = {}
+        for row in pending:
+            uid = row["uid"]
+            if route.get(uid) in PDF_CONVERT_ROUTES:
+                disposition = "convert"
+            elif route.get(uid) == "不转-记图册" or uid in skipped:
+                disposition = "gallery"
+            elif route.get(uid) == "日文暂缓" or uid in japanese:
+                disposition = "ja"
+            else:
+                disposition = "untriaged"
+            if uid in landed:
+                progress = "landed"
+            elif uid in running:
+                progress = "running"
+            elif last.get(uid) in ("failed", "api-fatal", "staged-review"):
+                progress = "failed"
+            else:
+                progress = "todo"
+            try:
+                count = int(float(pages.get(uid) or 0)) or None
+            except (TypeError, ValueError):
+                count = None
+            books[uid] = {
+                "uid": uid, "title": row.get("title"),
+                "subject1": row.get("subject1") or "",
+                "subject2": row.get("subject2") or "",
+                "pages": count, "disposition": disposition,
+                "route": route.get(uid) if disposition == "convert" else None,
+                "progress": progress,
+                "recheck": disposition == "gallery" and recheck_row(skipped.get(uid)),
+                "why": (skipped.get(uid) or {}).get("why") if disposition == "gallery" else None,
+                "last": last.get(uid)}
+        todo = [(row["uid"], row.get("file") or "") for row in pending
+                if books[row["uid"]]["pages"] is None
+                or books[row["uid"]]["disposition"] == "untriaged"]
+        probe = self.pdf_probe(todo)
+        for uid, info in probe.items():
+            if uid not in books:
+                continue
+            if books[uid]["pages"] is None:
+                books[uid]["pages"] = info["pages"]
+            books[uid]["text_layer"] = (info["text"] == 1) if info["text"] is not None else None
+        suggestions = self.pdf_suggestions(
+            [uid for uid, row in books.items() if row["disposition"] == "untriaged"])
+        for uid, row in books.items():
+            row.setdefault("text_layer", None)
+            hit = suggestions.get(uid)
+            row["suggestion"] = ({"route": hit["route"], "confidence": hit["confidence"],
+                                  "reason": hit["reason"]} if hit else None)
+            row["suggest_job"] = hit["job"] if hit else None
+        return dict(sorted(books.items()))
+
+    def pdf_today(self):
+        """skipped-has-md 的书没走 OCR，不计入当天额度。"""
+        logs = os.path.join(self.env.batches,
+                            TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d"), "logs")
+        used = 0
+        if os.path.isdir(logs):
+            for name in os.listdir(logs):
+                if not name.endswith(".json"):
+                    continue
+                row = read_json(os.path.join(logs, name)) or {}
+                if row.get("status") == "skipped-has-md":
+                    continue
+                try:
+                    used += int(float(row.get("pages") or 0))
+                except (TypeError, ValueError):
+                    pass
+        return {"used": used, "cap": PDF_DAILY_CAP}
+
+    def pdf_triage_jobs(self):
+        """同一秒建的任务按 id 排是随机的，rowid 才是真的先后。"""
+        jobs = [row for row in self.store.list(limit=500)
+                if row.get("kind") == "pdf.triage"
+                and row.get("state") in ("awaiting_review", "succeeded")]
+        return sorted(jobs, key=lambda row: (row.get("seq") or 0,
+                                             row.get("created") or ""),
+                      reverse=True)
+
+    def pdf_suggestions(self, uids):
+        out, want = {}, set(uids)
+        for job in self.pdf_triage_jobs():
+            left = want - set(out)
+            if not left:
+                break
+            job_dir = self.env.job_dir(job["id"])
+            results = {}
+            single = read_json(os.path.join(job_dir, "result.json"))
+            if isinstance(single, dict) and single.get("uid"):
+                results[single["uid"]] = single
+            try:
+                names = os.listdir(job_dir)
+            except OSError:
+                names = []
+            for name in names:
+                if name not in left:
+                    continue
+                batch_one = read_json(os.path.join(job_dir, name, "result.json"))
+                if isinstance(batch_one, dict) and batch_one.get("uid") == name:
+                    results[name] = batch_one
+            for uid, result in results.items():
+                if uid not in left:
+                    continue
+                model = result.get("model") or {}
+                route = model.get("route")
+                if route not in PDF_SETTLE_ROUTES:
+                    continue
+                out[uid] = {"route": route, "confidence": model.get("confidence"),
+                            "reason": model.get("reason") or "", "job": job["id"]}
+        return out
+
+    def pdf_triage_row(self, uid, index):
+        for job in self.pdf_triage_jobs():
+            for rel in (os.path.join("jobs", job["id"], uid, "triage.csv"),
+                        os.path.join("jobs", job["id"], "triage.csv")):
+                for row in read_table(self.env.ops, rel, ","):
+                    if row.get("uid") == uid:
+                        return row, (row.get("verdict") or "").strip()
+        sources = [os.path.join(rel, "triage_final.csv")
+                   for rel in reversed(self.pdf_batches())]
+        sources.append(os.path.join(TRIAGE_PDF_DIR, "triage_final.csv"))
+        for rel in sources:
+            for row in read_table(self.env.root, rel, ","):
+                if row.get("uid") == uid:
+                    return row, (row.get("verdict") or "").strip()
+        work = {r.get("uid"): r for r in read_table(self.env.root, PDF_WORKLIST)}
+        book = index.get(uid) or {}
+        return {"uid": uid, "title": book.get("title") or "",
+                "subject1": book.get("subject1") or "",
+                "subject2": book.get("subject2") or "",
+                "class": (work.get(uid) or {}).get("class") or "", "route": "",
+                "pages": "" if book.get("pages") is None else book["pages"],
+                "mb": "", "note": "", "verdict": ""}, ""
+
+    def pdf_settle(self, items, index):
+        batch = TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")
+        batch_dir = os.path.join(self.env.batches, batch)
+        os.makedirs(batch_dir, exist_ok=True)
+        review_dir = os.path.join(batch_dir, "review")
+        batch_triage = os.path.join(batch_dir, "triage.csv")
+        for item in items:
+            uid, route = item["uid"], item["route"]
+            row, verdict = self.pdf_triage_row(uid, index)
+            row["route"] = route
+            upsert_csv(batch_triage, row, list(row.keys()))
+            suggestion = item.get("suggestion") or {}
+            review = {"uid": uid, "verdict": item.get("verdict") or verdict or route,
+                      "evidence": "", "route": route,
+                      "reason": item.get("reason") or "在 PDF 清单里改处置",
+                      "model": ({"route": suggestion.get("route"),
+                                 "confidence": suggestion.get("confidence"),
+                                 "reason": suggestion.get("reason") or "",
+                                 "at": now_iso()} if suggestion.get("route") else None),
+                      "at": now_iso()}
+            write_json_atomic(os.path.join(review_dir, uid + ".json"), review)
+        command = make_cmd(self.env, "apply_review", "pdf_apply_review.py",
+                           ["--batch", batch,
+                            "--triage", self.env.rel(batch_triage),
+                            "--out-dir", self.env.rel(batch_dir),
+                            "--review", self.env.rel(review_dir)])
+        return batch, command
 
     def retire_search(self, query):
         like = "%%%s%%" % query
@@ -1242,6 +1617,15 @@ class Handler(BaseHTTPRequestHandler):
                                      "books": self.app.split_books(batch)})
             elif route == "/api/pdf/queue":
                 self.send_json(200, dict(self.app.pdf_queue(), ok=True))
+            elif route == "/api/pdf/books":
+                books = self.app.pdf_books_index()
+                counts = dict.fromkeys(PDF_DISPOSITIONS, 0)
+                for row in books.values():
+                    counts[row["disposition"]] += 1
+                self.send_json(200, {"ok": True, "books": list(books.values()),
+                                     "counts": counts,
+                                     "today": self.app.pdf_today(),
+                                     "untriaged": untriaged_split(books)})
             elif route == "/api/retire/search":
                 q = (query.get("q") or [""])[0].strip()
                 if not q:
@@ -1375,6 +1759,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/split/recheck": lambda: self.api_split_recheck(payload),
                 "/api/split/inspect": lambda: self.api_split_inspect(payload),
                 "/api/pdf/triage": lambda: self.api_pdf_triage(payload),
+                "/api/pdf/triage-batch": lambda: self.api_pdf_triage_batch(payload),
+                "/api/pdf/settle": lambda: self.api_pdf_settle(payload),
                 "/api/pdf/confirm": lambda: self.api_pdf_confirm(payload),
                 "/api/pdf/run": lambda: self.api_pdf_run(payload),
                 "/api/maintain": lambda: self.api_maintain(payload),
@@ -1729,6 +2115,75 @@ class Handler(BaseHTTPRequestHandler):
                                  os.path.join(review_dir, uid + ".json")),
                              "batch": batch})
 
+    def api_pdf_triage_batch(self, payload):
+        uids = uid_list(payload.get("uids"))
+        index = self.app.pdf_books_index()
+        explicit = bool(uids)
+        if not uids:
+            uids = [uid for uid, row in index.items() if row["disposition"] == "untriaged"]
+        if not uids:
+            self.fail(400, "没有未分诊的 PDF")
+            return
+        unknown = [uid for uid in uids if uid not in index]
+        if unknown:
+            self.fail(400, "这些不在待转 PDF 里：%s" % "、".join(unknown))
+            return
+        if not explicit:
+            # 已经有建议的书不再跑一次，模型要钱，建议又不会变
+            have = self.app.pdf_suggestions(uids)
+            uids = [uid for uid in uids if uid not in have]
+            if not uids:
+                self.fail(400, "未分诊的书都已经有建议，去清单里确认")
+                return
+        def build(job_id):
+            job_dir = self.app.env.job_dir(job_id)
+            return [make_cmd(self.app.env, "triage " + uid, "ops_pdf_triage.py",
+                             ["--uid", uid,
+                              "--out", self.app.env.rel(os.path.join(job_dir, uid))],
+                             accepts_root=True) for uid in uids]
+        job_id = self.app.runner.submit("pdf.triage", "批量分诊 %d 本" % len(uids), build)
+        self.send_json(200, {"ok": True, "job_id": job_id, "uids": uids})
+
+    def api_pdf_settle(self, payload):
+        items = payload.get("items")
+        if not isinstance(items, list) or not items:
+            self.fail(400, "items 为空")
+            return
+        clean, routes, seen = [], collections.Counter(), set()
+        for item in items:
+            if not isinstance(item, dict):
+                self.fail(400, "items 里每一项要是 {uid, route}")
+                return
+            uid = str(item.get("uid") or "").strip()
+            route = str(item.get("route") or "").strip()
+            if not re.match(r"^B\d{4}$", uid):
+                self.fail(400, "uid 形如 B1234")
+                return
+            if route not in PDF_SETTLE_ROUTES:
+                self.fail(400, "route 只收：%s" % "、".join(PDF_SETTLE_ROUTES))
+                return
+            if uid in seen:
+                continue
+            seen.add(uid)
+            clean.append({"uid": uid, "route": route})
+            routes[route] += 1
+        index = self.app.pdf_books_index()
+        unknown = [item["uid"] for item in clean if item["uid"] not in index]
+        if unknown:
+            self.fail(400, "这些不在待转 PDF 里：%s" % "、".join(unknown))
+            return
+        for item in clean:
+            suggestion = index[item["uid"]].get("suggestion") or {}
+            follow = suggestion.get("route") == item["route"]
+            item["reason"] = "按分诊建议确认" if follow else "在 PDF 清单里改处置"
+            item["suggestion"] = suggestion if follow else None
+        batch, command = self.app.pdf_settle(clean, index)
+        job_id = self.app.runner.submit(
+            "pdf.confirm", "改处置 %d 本" % len(clean), [command],
+            batch_dir=os.path.join("工作区", "批次", batch))
+        self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch,
+                             "routes": dict(routes)})
+
     def api_pdf_run(self, payload):
         uids = uid_list(payload.get("uids"))
         if not uids:
@@ -1742,30 +2197,75 @@ class Handler(BaseHTTPRequestHandler):
             workers = max(1, min(int(payload.get("workers") or 3), 8))
         except (TypeError, ValueError):
             workers = 3
-        batch = TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")
-        triage = os.path.join(self.app.env.batches, batch, "triage_final.csv")
-        route = (payload.get("route") or "").strip()
-        routes = {"ocr": uids} if route == "ocr" else (
-            {"text": uids} if route == "text" else split_by_route(triage, uids))
-        if not routes:
-            self.fail(400, "这些 uid 在 %s 里没有可转的 route，先做分诊确认"
-                      % self.app.env.rel(triage))
+        force = payload.get("force") is True
+        index = self.app.pdf_books_index()
+        unknown = [uid for uid in uids if uid not in index]
+        if unknown:
+            self.fail(400, "这些不在待转 PDF 里：%s" % "、".join(unknown))
             return
+        groups = collections.defaultdict(list)
+        for uid in uids:
+            groups[index[uid]["disposition"]].append(uid)
+        gallery, japanese = groups["gallery"], groups["ja"]
+        convert, untriaged = groups["convert"], groups["untriaged"]
+        if (gallery or japanese) and not force:
+            self.fail(400, "选中的 %d 本里有 %d 本只记图册、%d 本日文暂缓，默认不转；"
+                           "要转就再确认一次"
+                      % (len(gallery) + len(japanese), len(gallery), len(japanese)))
+            return
+        batch = TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")
+        batch_dir = os.path.join(self.app.env.batches, batch)
+        batch_triage = os.path.join(batch_dir, "triage_final.csv")
+        triage = self.app.env.rel(batch_triage)
+        routes = {"ocr": [], "text": []}
+        if convert:
+            routes.update(split_by_route(batch_triage, convert))
+            placed = set(routes.get("ocr") or []) | set(routes.get("text") or [])
+            missing = [uid for uid in convert if uid not in placed]
+            if missing:
+                self.fail(400, "这些 uid 在 %s 里没有可转的 route，先做分诊确认：%s"
+                          % (triage, "、".join(missing)))
+                return
+        forced = gallery + japanese
         commands = []
-        for name, group in sorted(routes.items()):
+        if forced:
+            commands.append(self.forced_pdf(forced, index))
+            routes["ocr"] = (routes.get("ocr") or []) + forced
+        for name in sorted(routes):
+            group = routes[name]
+            if not group:
+                continue
             args = ["--batch", batch, "--route", name, "--uids", ",".join(group),
-                    "--workers", str(workers), "--triage", self.app.env.rel(triage),
+                    "--workers", str(workers), "--triage", triage,
                     "--report-json"]
             if limit:
                 args += ["--limit", str(limit)]
             commands.append(make_cmd(self.app.env, "pdf %s" % name, "pdf_md_batch.py",
                                      args))
-        commands += rebuild_commands(self.app.env)
-        job_id = self.app.runner.submit(
-            "pdf.run", "PDF 转 md %d 本" % len(uids), commands,
-            batch_dir=os.path.join("工作区", "批次", batch))
-        self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch,
-                             "routes": {k: len(v) for k, v in routes.items()}})
+        triage_jobs = []
+        for uid in untriaged:
+            def build(job_id, uid=uid):
+                out = self.app.env.rel(self.app.env.job_dir(job_id))
+                return [make_cmd(self.app.env, "triage", "ops_pdf_triage.py",
+                                 ["--uid", uid, "--out", out], accepts_root=True)]
+            triage_jobs.append(self.app.runner.submit("pdf.triage", "分诊 %s" % uid, build))
+        job_id = None
+        if commands:
+            commands += rebuild_commands(self.app.env)
+            job_id = self.app.runner.submit(
+                "pdf.run", "PDF 转 md %d 本" % (len(convert) + len(forced)), commands,
+                batch_dir=os.path.join("工作区", "批次", batch))
+        self.send_json(200, {"ok": True, "job_id": job_id,
+                             "batch": batch if job_id else "",
+                             "routes": {k: len(v) for k, v in routes.items() if v},
+                             "forced": len(forced), "triaged": len(untriaged),
+                             "triage_jobs": triage_jobs})
+
+    def forced_pdf(self, uids, index):
+        """改处置成 OCR，返回先跑的 apply_review。"""
+        items = [{"uid": uid, "route": "OCR", "verdict": "文字书",
+                  "reason": "在 PDF 清单里二次确认按扫描识别转"} for uid in uids]
+        return self.app.pdf_settle(items, index)[1]
 
     def api_maintain(self, payload):
         steps = payload.get("steps") or list(FINISH_DEFAULT)
@@ -1869,7 +2369,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 WRITE_ROUTES = ("/api/import/apply", "/api/split/run", "/api/split/recheck",
-                "/api/pdf/confirm", "/api/pdf/run", "/api/maintain",
+                "/api/pdf/settle", "/api/pdf/confirm", "/api/pdf/run", "/api/maintain",
                 "/api/delete/apply")
 PDF_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 

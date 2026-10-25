@@ -583,6 +583,56 @@ td.empty { text-align: center; padding: 16px 9px; }
   margin-bottom: 6px;
 }
 
+/* ---- 待转 PDF 清单 ------------------------------------------------ */
+a.strip-cell { text-decoration: none; color: inherit; }
+a.strip-cell:hover { background: var(--card); }
+
+.pick-table { table-layout: fixed; }
+.pick-table td.clip {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  background: var(--soft);
+  white-space: nowrap;
+}
+
+.tag-convert { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+.tag-gallery { background: var(--grey-soft); color: var(--grey); }
+.tag-ja { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
+.tag-untriaged { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+
+.pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  position: fixed;
+  left: 176px;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  padding: 10px 22px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 -8px 18px -14px rgba(0, 0, 0, .7);
+  font-size: 13px;
+}
+
+.pick-gap { height: 60px; }
+
+@media (max-width: 820px) {
+  .pick-bar { left: 0; padding: 9px 14px; }
+  .pick-gap { height: 168px; }
+}
+
 /* ---- 焦点与动效 --------------------------------------------------- */
 :focus-visible {
   outline: 2px solid var(--red);

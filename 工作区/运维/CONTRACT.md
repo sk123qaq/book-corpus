@@ -83,15 +83,34 @@ POST /api/split/run                {uids, workers, replace} 或 {only, batch}（
 POST /api/split/recheck            {uid, batch}：不重拆，只复核暂存区已有产物
 POST /api/split/inspect            {uid, batch}：只读，出这本书的问题清单
 POST /api/pdf/triage               {uid}
+POST /api/pdf/triage-batch         {uids?}：不给就分诊所有未分诊的书，一个任务 N 步
+POST /api/pdf/settle               {items:[{uid, route}]}：改处置，只写台账不出正文
 POST /api/pdf/confirm              {uid, route, reason, model}
-POST /api/pdf/run                  {uids, limit, workers}
+POST /api/pdf/run                  {uids, limit, workers, force}
 POST /api/maintain                 {steps:[...]}
 POST /api/delete/dry-run           {uid, reason}
 POST /api/delete/apply             {uid, reason, plan_hash, confirm_uid}
 GET  /api/search/health
 POST /api/search/start
 GET  /api/file?path=...
+GET  /api/pdf/books
 ```
+
+`POST /api/pdf/run` 的 `force`：选中的书里含只记图册或日文暂缓时必须为 true，服务端先把它们改判成
+`OCR`（写批次 `triage.csv` 与 `review/<uid>.json`，跑 `pdf_apply_review.py`）再转；未分诊的书只投
+`pdf.triage`，不出正文，只选了未分诊时返回 `job_id: null`。`GET /api/pdf/books` 是清单页的数据源，
+返回 `{books, counts:{convert, gallery, ja, untriaged}, today:{used, cap}, untriaged}`，只读，
+不写任何账；`books` 的行带 `disposition`/`progress`/`pages`/`why`/`last`/`recheck`，未分诊的行另带
+`suggestion:{route, confidence, reason}` 与 `suggest_job`。`GET /api/pdf/queue` 的 `batch` 另带
+`partition:{landed, failed, staged, untouched, left}`，给旧批次的一行摘要用。
+
+`POST /api/pdf/settle` 只收 `OCR`、`本地抽文本`、`不转-记图册`、`日文暂缓`（`人工确认` 不是一个处置，回
+400）。它复用二次确认改判那一段：备一行分诊行（分诊产物 → 批次账 → DB 现造）写进当天批次的
+`triage.csv`，写 `review/<uid>.json`，再排一步 `pdf_apply_review.py`；返回
+`{ok, job_id, batch, routes:{route: n}}`。`POST /api/pdf/triage-batch` 起一个 `pdf.triage` 任务，
+标题 `批量分诊 N 本`，每本一步，输出落 `jobs/<id>/<uid>/`，终态 `awaiting_review`，摘要写本数与建议数。
+不给 `uids` 时只分诊还没出建议的书（已有建议的跳过，模型不重复烧）。
+页面不再用单本分诊面板，`/api/pdf/triage` 与 `/api/pdf/confirm` 留着给验收与命令行。
 
 文件白名单：`工作区/运维/jobs/<id>/` 下的日志与缩略图，`目录/书目总表.xlsx`、`目录/书目总表.csv`、`目录/分类预填.csv`。其它 404。
 
@@ -153,10 +172,13 @@ GET  /api/file?path=...
 
 ### pdf_md_batch.py
 
-- `--uids B001,B002`：新批次且 worklist 不存在时只写这些 uid。
+- `--uids B001,B002`：新批次且 worklist 不存在时只写这些 uid。批次已有 `worklist.tsv` 时 `--uids` 不生效。
 - `--triage <path>`：可选，指向新批次的 `triage_final.csv`。不传时仍用全局 `triage_final.csv`。
 - `--report-json`：stdout 最后一行是 JSON，含 `route`、`queued`、`landed`、`remaining_books`、`remaining_pages`、`status_counts`。
 - 不改旧批次任何文件。
+- 同目录有 `skip_list.tsv` 时优先用它，否则用全局那份；`--uids` 里的 uid 在 skip 表里则直接退出。
+  所以 `api_pdf_run` 二次确认改判的书要先过 `pdf_apply_review.py` 改写出新 `triage_final.csv`
+  与 `skip_list.tsv`，再跑转 md。
 
 ### pdf_apply_review.py
 
@@ -228,6 +250,10 @@ dry-run JSON 至少含：
 `server.py` 用标准库 `ThreadingHTTPServer`，零依赖。`web/` 用原生 JS。样式参考 `工作区/演示-检索流程/web/style.css` 的纸色与朱红，流程轨参考 `工作区/方案/流水线全景-2026-10-23.html` 的阶段与状态词。
 
 页面七块：总览、新书导入、电子书出正文、PDF 出正文、维护、删书、日志。顶栏有搜索入口与 8765 健康点。
+PDF 页是三块：四格状态带（可转 / 未分诊 / 只记图册 / 日文暂缓，各带本数、页数与一句说明）加一行
+「今天额度」与旧批次摘要，再加两张动作卡（批量分诊、确认后转 md），最后是最近的分诊与转 md。
+另有 PDF 的子页待转 PDF 清单（`#pdf-list`），不进左侧导航，由 PDF 页的入口与状态带进入，
+列出四类处置，带两行筛选（处置 / 进度 / 只看复看 / 一级分类 / 关键字 / 排序）、建议与行内改处置、勾选与转写入口。
 
 服务启动时接管能核对 PID 的 `running` 任务，核对不上标 `orphaned`，不杀进程。
 
@@ -235,6 +261,8 @@ dry-run JSON 至少含：
 
 上传裸 body，上限 2 GB，写 `库/_收件箱/<name>.part` 后 `os.replace`。文件名去路径。
 
-`check_ops.py` 用随机端口与临时根，测 `/api/status`、任务生命周期、文件白名单、路径穿越拒绝、stub 导入与分诊解析。末行 `ALL PASS`。
+`check_ops.py` 用随机端口与临时根，测 `/api/status`、任务生命周期、文件白名单、路径穿越拒绝、stub 导入与分诊解析；PDF 段另测批量分诊的步数与输出目录、建议与出建议的任务、改处置与按建议确认的 400 与写盘结果、今天额度。末行 `ALL PASS`。
 
-`shot_ops.py` 用 CDP，1440×900 与 390×844，报 `CONSOLE ERROR n` 与 `overflow=`。
+`shot_ops.py` 用 CDP，1440×900 与 390×844，报 `CONSOLE ERROR n` 与 `overflow=`。PDF 页另查：没有编号
+输入框、有批量分诊按钮与旧批次摘要、有去清单的入口，清单页能打开、有两行筛选（进度三个勾与只看复看）、
+行末有「改处置」或「按建议确认」、改处置弹窗里四个处置，切页后勾选与关键字不丢，390 宽不横向溢出。
