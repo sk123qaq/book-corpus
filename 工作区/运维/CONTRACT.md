@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS step (
 
 任务状态：`queued`、`running`、`awaiting_review`、`succeeded`、`failed`、`cancelled`、`orphaned`。
 
-成功判据：脚本输出门槛，不是退出码 0。导入看 `conflicts=0` 与 `未匹配 0 条`，拆章看 verify 与 audit，收尾看 FAIL 0 与全过。
+成功判据：脚本输出门槛，不是退出码 0。导入看 `conflicts=0` 与 `未匹配 0 条`，拆章看 `--report-json` 的
+`pending_review`（非空就停在 `awaiting_review`），查看问题看 `result.json` 里有这本书的记录，收尾看
+FAIL 0 与全过。`split.inspect` 是只读任务，不进写任务互斥。
 
 ## 4. HTTP
 
@@ -77,7 +79,9 @@ GET  /api/jobs/<id>/log?offset=...
 POST /api/import/upload            裸 body，X-Filename
 POST /api/import/scan
 POST /api/import/apply             {plan_path}
-POST /api/split/run                {uids, workers, replace}
+POST /api/split/run                {uids, workers, replace} 或 {only, batch}（单本路径带 --force）
+POST /api/split/recheck            {uid, batch}：不重拆，只复核暂存区已有产物
+POST /api/split/inspect            {uid, batch}：只读，出这本书的问题清单
 POST /api/pdf/triage               {uid}
 POST /api/pdf/confirm              {uid, route, reason, model}
 POST /api/pdf/run                  {uids, limit, workers}
@@ -141,7 +145,9 @@ GET  /api/file?path=...
 ### split_md_batch.py
 
 - `--uids B001,B002`：新批次且 worklist 不存在时只写这些 uid。
-- `--report-json`：stdout 最后一行是 JSON，含 `status_counts`、`books`、`batch`。
+- `--report-json`：stdout 最后一行是 JSON，含 `status_counts`、`books`、`batch`、`pending_review`。
+  `pending_review` 是页面门槛的唯一依据；驱动里的状态表 `STATUS` 决定哪些算完成。
+- `--recheck`：不重拆，只跑 verify 与 audit、重写 `.manifest.json`，过了就进库。与 `--force` 互斥。
 - 不新增 `--archive-old`。现有 `land()` 已把旧 md 改名到 `<stage>.prev-<stamp>` 并把路径写进 `result["previous"]`。`--replace` 与 `--force` 沿用现有行为，页面读 `previous`。
 - `logs/<uid>.json` 不改字段；页面读现有 `status`、`verify_rc`、`audit_rc`、`audit_ratio`、`fix`、`previous`、`dest`。
 

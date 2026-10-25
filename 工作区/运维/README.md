@@ -57,9 +57,11 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
   不进页面文案。低置信行标黄，表下写「黄色行建议再核对一遍」。页面加载时自动带出最近一份可用计划
   （add/replace 的源文件还在收件箱），刷新不用重扫。
 - **电子书**：待拆 epub/mobi/azw3/azw 勾选开批次；单本状态读 `logs/<uid>.json` 的
-  `status`/`verify_rc`/`audit_rc`/`audit_ratio`/`chapters`/`fix`/`previous`；失败书可「只重跑这本」
-  （同一批次 `--only`）；「重拆已有 Markdown」走 `--replace`，旧 md 路径由脚本写进 `previous`，
-  这两项收在「更多选项」里。
+  `status`/`verify_rc`/`audit_rc`/`audit_ratio`/`chapters`/`fix`/`previous`。批次卡片每行三个动作：
+  「重拆这本」用同一批次 `--only` 并带 `--force`，从头再拆；「重新检查」带 `--recheck`，只复核暂存区里
+  已有的正文，重跑 verify 与 audit，过关就直接进库；「查看问题」是只读任务，跑 `md_review_report.py`
+  列出审计比、正文字数、图片路径字数、跨文件重复片段、自链、未收录的页与原因、结构报警。
+  「重拆已有 Markdown」走 `--replace`，旧 md 路径由脚本写进 `previous`，这些选项收在「更多选项」里。
 - **PDF**：队列按 route 分组与本数页数、现有批次进度与额度、新 PDF 分诊（4 个关键指标 + 3 张缩略图 +
   模型建议 route/置信/理由，原始指标收在「技术指标」里）、人工选处理方式后确认、按 route 分组转 md。
   页面上的处理方式是中文显示（扫描识别、直接抽取、只记图册、待人工判断、日文暂缓），
@@ -90,7 +92,9 @@ POST /api/import/upload                # 裸 body，X-Filename（URL 编码）�
 POST /api/import/scan                  # ingest.py scan
 POST /api/import/plan                  # {job_id, items}：把编辑后的计划写回 jobs/<id>/plan.json
 POST /api/import/apply                 # {plan_path}
-POST /api/split/run                    # {uids, workers, replace} 或 {only, batch}
+POST /api/split/run                    # {uids, workers, replace} 或 {only, batch}（单本带 --force）
+POST /api/split/recheck                # {uid, batch}：只复核暂存区产物，进库算写任务
+POST /api/split/inspect                # {uid, batch}：只读，出这本书的问题清单
 POST /api/pdf/triage                   # {uid}
 POST /api/pdf/confirm                  # {uid, route, reason, model, job_id}
 POST /api/pdf/run                      # {uids, limit, workers, route?}
@@ -129,7 +133,8 @@ GET  /api/retire/search?q=             # uid 或书名，带源、md、奖项
 |---|---|
 | `import.scan` | 退出码 0 且写出 `plan.json`，停在 `awaiting_review` |
 | `import.apply` | 三步全 0，日志里有 `"conflicts": 0` 与 `未匹配 0 条` |
-| `split.run` | 全 0 且有 `--report-json` 的 `status_counts`；有 `pending_review` 时停在 `awaiting_review` |
+| `split.run` | 全 0 且读到 `--report-json` 的 `pending_review` 清单；清单非空时停在 `awaiting_review`（`staged`、`no-stage`、`staged-review` 都在里面） |
+| `split.inspect` | 退出码 0 且 `result.json` 有这本书的记录；只读任务，判 `succeeded` |
 | `pdf.triage` | `result.json` 有指标与缩略图，停在 `awaiting_review` |
 | `pdf.confirm` | 退出码 0（review 由页面先写盘） |
 | `pdf.run` | 有 `remaining_books`/`landed` 统计；`quota` 停在 `awaiting_review`，有 `failed` 判失败 |
@@ -146,6 +151,9 @@ python3 工作区/脚本/build_library.py --emit-json
 python3 工作区/脚本/gen_book_catalog.py
 python3 工作区/脚本/split_md_batch.py --batch split-ops-<ts> --uids B1,B2 --workers N --report-json [--replace]
 python3 工作区/脚本/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json
+python3 工作区/脚本/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json --force
+python3 工作区/脚本/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json --recheck
+python3 工作区/脚本/md_review_report.py <batch> B0001 --json 工作区/运维/jobs/<id>/result.json
 python3 工作区/脚本/build_library.py --emit-json     # 拆章与 PDF 任务跑完后接
 python3 工作区/脚本/gen_book_catalog.py              # 拆章与 PDF 任务跑完后接
 python3 工作区/脚本/ops_pdf_triage.py --uid B1234 --out 工作区/运维/jobs/<id> --root <root>
@@ -187,7 +195,8 @@ python3 工作区/运维/验收/shot_ops.py         # 1440x900 与 390x844，报
 `pdf_md_batch.py`、`ops_pdf_triage.py`、`retire_book.py` 等），`目录/library.db` 造两张书的最小表，
 `OPS_STATUS_FIXTURE` 给状态。它验这些东西：状态字段、静态页、任务生命周期与门槛、写互斥（真去
 `flock` 探一次）、取消、上传与文件名、文件白名单与路径穿越、跨站与 Host 拒绝、计划写回、stub 导入、
-stub 分诊、最近计划的复用与失效（源文件不在就不给计划）、PDF 分组、收尾门槛、删书预览与哈希、重跑、
+stub 分诊、最近计划的复用与失效（源文件不在就不给计划）、PDF 分组、拆章的单本重拆与
+重新检查与查看问题（驱动收到的 `--force`/`--recheck` 都核过）、页面状态词与驱动状态表对齐、收尾门槛、删书预览与哈希、重跑、
 清理、搜索健康、重启接管与孤儿。中途不碰真库，也不调模型（`PI_BIN` 指向 `验收/fixtures/pi_stub.py`）。
 
 `shot_ops.py` 复用同一套临时根，起 headless Chrome 走 CDP：把七个页签点一遍收
@@ -205,6 +214,13 @@ stub 分诊、最近计划的复用与失效（源文件不在就不给计划）
 
 - `split_md_batch.py` 不新增 `--archive-old`（契约为准）。页面读 `logs/<uid>.json` 的 `previous`
   拿旧 md 路径，不再自己猜目录。
+- 「查看问题」只能查还留在暂存区的书：`md_review_report.py` 只看 `staged-review`、`error`、
+  `convert-failed`、`split-failed`、`staged` 这几种状态。已进库的书没有暂存正文可查，批次里没有
+  这本书的记录时任务判失败并提示先重拆。
+- 「重新检查」的文本量：mobi/azw3 先找转换时留下的中间 EPUB，找不到就用源书再转一次；还转不出来就不入库，
+  留待复核（`audit_rc` 留空，页面显示「—」，不算内容检查过关）。
+- 拆章的 agent 修复预算改成每本 2 次、默认不设整批上限（`--agent-fix-total 0`）；以前是每本 1 次、
+  整批 3 次。
 - 需要 `--root` 才换根的脚本（`ingest.py`、`ops_pdf_triage.py`、`retire_book.py`、`ops_status.py`）
   一律显式带 `--root <root>`；在真库上等于默认值，在临时根上才指得对。`build_library.py`、
   `gen_book_catalog.py`、`split_md_batch.py`、`pdf_md_batch.py`、收尾那批脚本不认 `--root`，
