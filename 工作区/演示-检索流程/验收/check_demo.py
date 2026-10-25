@@ -111,6 +111,8 @@ else:
                       multi.get("gap") or ""]
                      + [s.get("heading", "") + "\n" + s.get("body", "") for s in secs])
     check("回答无标记残留", not any(m in blob for m in ("##", "**")), blob[:40])
+    body_books = "".join(s.get("body", "") for s in secs).count("《")
+    check("正文不逐书点名", body_books <= 2, "《=%d" % body_books)
     check("多书冷跑 150 秒内", multi_ms < 150000, "%.1f s" % (multi_ms / 1000.0))
 
     t0 = time.time()
