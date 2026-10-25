@@ -24,13 +24,17 @@ const JOB_WORD = {
 };
 const KIND_WORD = {
   'import.scan': '识别新书', 'import.apply': '入库', 'split.run': '拆章',
+  'split.inspect': '查看问题',
   'pdf.triage': 'PDF 分诊', 'pdf.confirm': '确认处理方式', 'pdf.run': 'PDF 转写',
   maintain: '收尾', 'delete.dry-run': '删书预览', 'delete.apply': '删书',
 };
 const STEP_WORD = { pending: '等待', ok: '通过', fail: '失败', running: '在跑' };
 const SPLIT_WORD = {
-  replaced: '已替换', landed: '已落地', pending_review: '待复核', failed: '失败',
-  running: '拆解中', skipped: '跳过',
+  landed: '已入库', replaced: '已替换', accepted: '已受理',
+  'skipped-has-md': '已有正文', 'staged-green': '已过检未入库',
+  staged: '未复核', 'staged-review': '待复核', 'no-stage': '暂存区空',
+  'split-failed': '拆章失败', 'convert-failed': '转格式失败', error: '异常',
+  pending_review: '待复核',
 };
 const ACTION_WORD = { add: '新增', replace: '换源', conflict: '冲突', skip: '跳过' };
 const RETENTION_WORD = { keep: '保留', review: '待定', drop: '不留' };
@@ -39,6 +43,11 @@ const PDF_ROUTE_WORD = {
   '人工确认': '待人工判断', '日文暂缓': '日文暂缓',
 };
 const SOURCE_WORD = { move: '移动', hardlink: '硬链接' };
+// 结构检查的报警键换成普通说法
+const VERIFY_WORD = {
+  identical: '重复段落', 'broken link': '断链', 'missing image': '缺图',
+  'orphan image': '多余图片', 'no H1': '章名缺失',
+};
 const EBOOK = /^(epub|mobi|azw3|azw)$/;
 // 分诊面板的指标：键、中文名、格式化
 const TRIAGE_METRICS = [
@@ -62,6 +71,7 @@ const S = {
   jobs: [], pending: [], inbox: [], pdf: null,
   plan: null, planJob: null, planDirty: false,
   batch: null, splitBooks: [], triage: null, triageJob: null,
+  review: null, reviewJob: null,
   retireHits: [], retireQuery: '', preview: null,
   logJob: null, logDetail: null, follow: true, importDone: null,
   filter: '', selected: new Set(), busy: false,
@@ -150,7 +160,10 @@ function stepNote(text) {
   return m[1] === '0' ? '' : '退出码 ' + m[1];
 }
 
-// 任务摘要里夹着机械写法，页面上换成普通说法
+// 任务摘要里夹着机械写法，页面上换成普通说法。状态词的词表就是 SPLIT_WORD，加状态不用改这里。
+const SPLIT_COUNT = new RegExp(
+  '\\b(' + Object.keys(SPLIT_WORD).sort((a, b) => b.length - a.length).join('|')
+    + ') (\\d+)', 'g');
 const SUMMARY_FIX = [
   [/\s*\d{8}-\d{6}-[0-9a-f]{4}\s*/g, ' '],
   [/conflicts=(\d+)[，,]?\s*未匹配 (\d+) 条/g, (match, conflict, miss) => {
@@ -163,7 +176,7 @@ const SUMMARY_FIX = [
   [/快照不可用，不能应用/g, '回滚副本不可用，不能移出'],
   [/快照就绪/g, '回滚副本就绪'],
   [/，?\s*md (\d+) 章/g, '，Markdown $1 章'],
-  [/\b(replaced|landed|pending_review|failed|running|skipped) (\d+)/g,
+  [SPLIT_COUNT,
     (match, word, count) => SPLIT_WORD[word] + ' ' + count + ' 本'],
   [/\b(add|replace|conflict|skip) (\d+)/g, (match, word, count) => ACTION_WORD[word] + ' ' + count],
   [/\s+\/\s+(?=(?:新增|换源|冲突|跳过)\s*\d)/g, '，'],
@@ -642,6 +655,7 @@ function viewSplit() {
       </tr>`).join('')}</tbody></table></div>` : '<p class="empty">没有待拆的电子书。</p>'}
     </div>
     <div class="section card" data-live="split-batch">${batchCard()}</div>
+    ${S.review ? `<div class="section card">${reviewPanel()}</div>` : ''}
     <div class="section card"><h2>最近的拆章任务</h2>${recentJobs('split.run')}</div>`;
 }
 
@@ -650,6 +664,8 @@ function batchCard() {
       <button class="btn sm" data-act="split-refresh"${S.batch ? '' : ' disabled'}>刷新状态</button></div>
     ${splitBooks()}`;
 }
+
+const INSPECT_STATUS = ['staged', 'staged-review', 'split-failed', 'convert-failed', 'error'];
 
 function splitBooks() {
   if (!S.batch) return '<p class="empty">还没开批次。选书后点「开始拆章」。</p>';
@@ -666,8 +682,42 @@ function splitBooks() {
       <td class="num">${esc(b.fix || 0)}</td>
       <td class="wrap small">${esc(b.dest || '')}</td>
       <td class="wrap small" title="${esc(b.previous || '')}">${esc(baseName(b.previous))}</td>
-      <td><button class="btn sm" data-act="split-one" data-uid="${esc(b.uid)}">只重跑这本</button></td>
-    </tr>`).join('')}</tbody></table></div>`;
+      <td class="row tight">
+        <button class="btn sm" data-act="split-one" data-uid="${esc(b.uid)}">重拆这本</button>
+        <button class="btn sm" data-act="split-recheck" data-uid="${esc(b.uid)}">重新检查</button>
+        ${INSPECT_STATUS.indexOf(b.status) >= 0 ? `<button class="btn sm" data-act="split-inspect" data-uid="${esc(b.uid)}">查看问题</button>` : ''}
+      </td>
+    </tr>`).join('')}</tbody></table></div>
+    <p class="hint">重拆这本会从头再拆一遍；重新检查只复核暂存区里已有的正文，过关就直接进库；查看问题列出这本书差在哪。</p>`;
+}
+
+function reviewPanel() {
+  const row = (Array.isArray(S.review) ? S.review[0] : null) || {};
+  const uncovered = Array.isArray(row.uncovered) ? row.uncovered : [];
+  const covered = uncovered.reduce((sum, item) => sum + (Number(item[0]) || 0), 0);
+  const excluded = row.excluded || {};
+  const alarms = row.verify || {};
+  const stat = (label, value) => `<span class="k">${esc(label)}</span><span class="v">${esc(value)}</span>`;
+  const alarmRows = Object.keys(alarms)
+    .map((key) => stat(VERIFY_WORD[key] || key, num((alarms[key] || []).length) + ' 处'));
+  const reasonRows = Object.keys(excluded)
+    .map((key) => stat(key, num(excluded[key]) + ' 页'));
+  return `<div class="card-head"><h2>${esc(row.title || row.uid || '这本书')}</h2>
+      <button class="btn sm" data-act="review-close">关闭</button></div>
+    <p class="small">状态 <span class="pill">${esc(SPLIT_WORD[row.status] || row.status || '—')}</span>
+      · 审计比 ${esc(row.ratio === null || row.ratio === undefined ? '—' : pct(row.ratio, 1))}</p>
+    <div class="metrics">
+      ${stat('正文字数', num(row.text_chars || 0))}
+      ${stat('图片路径字数', num(row.image_path_chars || 0))}
+      ${stat('跨文件重复片段', num(row.dup_shingles || 0))}
+      ${stat('自链', num(row.self_links || 0))}
+    </div>
+    <p class="small">原文没收录的页 ${num(uncovered.length)} 个，合计 ${num(covered)} 字${uncovered.length
+      ? '；前几个：' + uncovered.slice(0, 5).map((item) => esc(baseName(item[1]))).join('、') : ''}</p>
+    <div class="metrics">${reasonRows.join('') || stat('未收录原因', '没有')}</div>
+    <div class="metrics">${alarmRows.join('') || stat('结构报警', '没有')}</div>
+    <p class="hint">差在卷首卷尾或图版的，多半用章节映射调整后再重拆；确认本来就该少，就写受理原因后放进库。</p>
+    <p class="hint">文本量低于原文 88% 或高于 115% 才会被标出。</p>`;
 }
 
 function recentJobs(kind, limit = 6) {
@@ -1061,6 +1111,16 @@ async function loadTriage(jobId) {
   }
 }
 
+async function loadReview(jobId) {
+  try {
+    S.review = await api('/api/file?path=' + encodeURIComponent(
+      '工作区/运维/jobs/' + jobId + '/result.json'));
+    S.reviewJob = jobId;
+  } catch (err) {
+    S.review = null;
+  }
+}
+
 function latestBatch() {
   const row = S.jobs.find((j) => j.kind === 'split.run' && j.batch_dir);
   if (!row) return '';
@@ -1341,7 +1401,7 @@ const actions = {
     try {
       const body = await post('/api/split/run',
         { uids: [el.dataset.uid], only: el.dataset.uid, batch: S.batch, workers: 1 });
-      toast('只重跑 ' + el.dataset.uid + '：' + body.job_id);
+      toast('重拆 ' + el.dataset.uid + '：' + body.job_id);
       watchJob(body.job_id, afterJob).then(async (detail) => {
         if (detail) toast(jobNote(detail.job), jobBad(detail.job));
         await loadSplitBooks();
@@ -1354,6 +1414,49 @@ const actions = {
     } finally {
       setBusy(false);
     }
+  },
+
+  async 'split-recheck'(el) {
+    if (!S.batch) return;
+    setBusy(true);
+    try {
+      const body = await post('/api/split/recheck', { uid: el.dataset.uid, batch: S.batch });
+      toast('重新检查 ' + el.dataset.uid + '：' + body.job_id);
+      watchJob(body.job_id, afterJob).then(async (detail) => {
+        if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+        await loadSplitBooks();
+        await loadPending();
+        await loadJobs();
+        render();
+      });
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'split-inspect'(el) {
+    if (!S.batch) return;
+    try {
+      const body = await post('/api/split/inspect', { uid: el.dataset.uid, batch: S.batch });
+      const detail = await watchJob(body.job_id, afterJob);
+      if (detail && detail.job.state === 'succeeded') {
+        await loadReview(body.job_id);
+      } else {
+        toast(summaryText(detail && detail.job.summary) || '没取到这本书的核对证据', true);
+      }
+      await loadJobs();
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  },
+
+  async 'review-close'() {
+    S.review = null;
+    S.reviewJob = null;
+    render();
   },
 
   async 'goto'(el) {

@@ -314,6 +314,18 @@ SPLIT_CHECKS = """
 })()
 """
 
+SPLIT_OPS_CHECKS = """
+(() => {
+  const text = (document.querySelector('#view') || {}).textContent || '';
+  return {
+    one: !!document.querySelector('[data-act="split-one"]'),
+    recheck: !!document.querySelector('[data-act="split-recheck"]'),
+    inspect: !!document.querySelector('[data-act="split-inspect"]'),
+    hint: text.indexOf('重新检查只复核暂存区里已有的正文') >= 0,
+  };
+})()
+"""
+
 IMPORT_EDIT = """
 (() => {
   const q = (s) => document.querySelector(s);
@@ -475,15 +487,27 @@ def dump_png(cdp, path):
         fh.write(base64.b64decode(shot["data"]))
 
 
-def seed(port):
+def seed(port, root=""):
     """给页面喂点数据：一条扫描计划、一个拆章批次、一次分诊。都用 stub，不碰真库。"""
+    batch = ""
     for path, payload in (("/api/import/scan", {}),
                           ("/api/split/run", {"uids": ["B0001", "B0002"], "workers": 2}),
                           ("/api/pdf/triage", {"uid": "B0001"})):
         try:
-            check_ops.post(port, path, payload)
+            code, body = check_ops.post(port, path, payload)
+            if path == "/api/split/run" and isinstance(body, dict):
+                batch = body.get("batch") or ""
         except (OSError, ValueError):
             pass
+    if root and batch:
+        # 批次卡片每行才有「重新检查」「查看问题」，stub 驱动不写 logs，这里补一条
+        logs = os.path.join(root, "工作区", "批次", batch, "logs")
+        os.makedirs(logs, exist_ok=True)
+        with open(os.path.join(logs, "B0001.json"), "w", encoding="utf-8") as fh:
+            json.dump({"uid": "B0001", "title": "书 B0001", "status": "staged-review",
+                       "verify_rc": 0, "audit_rc": 1, "audit_ratio": 0.81,
+                       "chapters": 12, "dest": "库/文学/书 B0001/md",
+                       "note": "verify rc=0, audit rc=1"}, fh, ensure_ascii=False)
     time.sleep(2.0)
 
 
@@ -558,6 +582,17 @@ def run_viewport(base, width, height, out_dir, port, live=False):
                              ("split-all-partial", split["partial"]["all"] is False),
                              ("split-replace-kept", split["final"]["rep"] is True),
                              ("split-workers-kept", split["final"]["workers"] == "8")):
+                if not ok:
+                    failed_tabs.append(name)
+        ops = eval_js(cdp, SPLIT_OPS_CHECKS)
+        notes.append("电子书整行动作 重拆=%s 重新检查=%s 查看问题=%s 说明=%s"
+                     % (ops.get("one"), ops.get("recheck"), ops.get("inspect"),
+                        ops.get("hint")))
+        if not ops.get("one"):
+            notes.append("批次卡片没有单本记录，跳过整行动作检查")
+        else:
+            for name, ok in (("split-recheck-button", ops.get("recheck")),
+                             ("split-ops-hint", ops.get("hint"))):
                 if not ok:
                     failed_tabs.append(name)
         eval_js(cdp, VISIT_TAB % ("import", "import", "新书导入", "import", "新书导入"),
@@ -668,7 +703,7 @@ def main(argv=None):
         server, port = check_ops.start(root, fixture)
         base = "http://127.0.0.1:%d" % port
         print("临时根：%s  服务：%s" % (root, base))
-        seed(port)
+        seed(port, root)
 
     fails = 0
     try:

@@ -5,6 +5,7 @@
 
 做这些事：起服务，看 /api/status 与静态页；跑任务生命周期（queued → running →
 判门槛）、写任务互斥与取消、上传、文件白名单与路径穿越、stub 导入与 PDF 分诊、
+拆章的单本重拆/重新检查/查看问题、页面状态词与驱动状态表对齐、
 收尾门槛、删书预览与应用、重启接管与孤儿。末行 ALL PASS。
 """
 import argparse
@@ -94,12 +95,49 @@ if os.path.exists(".slow-split"):
     print("慢批次：开始")
     time.sleep(60)
 batch = opt("--batch")
+only = opt("--only")
 uids = [u for u in (opt("--uids") or "").split(",") if u]
+if only and only not in uids:
+    uids.append(only)
+with open(".split-args.json", "w", encoding="utf-8") as fh:
+    json.dump({"force": "--force" in args, "recheck": "--recheck" in args,
+               "only": only, "argv": args}, fh, ensure_ascii=False)
 print("批次 %s，%d 本" % (batch, len(uids)))
-books = [{"uid": u, "title": "书 " + u, "status": "landed", "verify_rc": 0,
-          "audit_rc": 0, "audit_ratio": 0.99, "chapters": 12} for u in uids]
-print(json.dumps({"batch": batch, "status_counts": {"landed": len(books)},
-                  "books": books, "pending_review": []}, ensure_ascii=False))
+books, pending = [], []
+for u in uids:
+    if u == "B0005":
+        books.append({"uid": u, "title": "书 " + u, "status": "staged",
+                      "note": "暂存区已有产物，本次没重拆；读数是上次留下的"})
+        pending.append(u)
+        continue
+    books.append({"uid": u, "title": "书 " + u, "status": "landed", "verify_rc": 0,
+                  "audit_rc": 0, "audit_ratio": 0.99, "chapters": 12})
+counts = {}
+for b in books:
+    counts[b["status"]] = counts.get(b["status"], 0) + 1
+print(json.dumps({"batch": batch, "status_counts": counts, "books": books,
+                  "pending_review": pending}, ensure_ascii=False))
+'''
+
+STUB_REVIEW = '''#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
+batch, uid, out = args[0], args[1], opt("--json")
+rows = [] if uid == "B0009" else [{
+    "uid": uid, "title": "书 " + uid, "status": "staged-review", "format": "epub",
+    "chapters": 12, "ratio": 0.808, "files": 13, "text_chars": 250000,
+    "image_path_chars": 1200, "dup_shingles": 2, "self_links": 1,
+    "excluded": {"卷首": 1, "卷尾": 2},
+    "verify": {"identical": ["identical content a.md b.md"]},
+    "uncovered": [[120, "text/p003.xhtml"], [80, "text/p009.xhtml"],
+                  [40, "text/p012.xhtml"]],
+}]
+if out:
+    with open(out + ".tmp", "w", encoding="utf-8") as fh:
+        json.dump(rows, fh, ensure_ascii=False)
+    os.replace(out + ".tmp", out)
+print("核对 %s %s：%s 本" % (batch, uid, len(rows)))
 '''
 
 STUB_PDF = '''#!/usr/bin/env python3
@@ -213,6 +251,7 @@ STUBS = {
     "build_library.py": STUB_BUILD_LIBRARY,
     "gen_book_catalog.py": STUB_CATALOG,
     "split_md_batch.py": STUB_SPLIT,
+    "md_review_report.py": STUB_REVIEW,
     "pdf_md_batch.py": STUB_PDF,
     "ops_pdf_triage.py": STUB_TRIAGE,
     "pdf_apply_review.py": STUB_APPLY_REVIEW,
@@ -411,6 +450,23 @@ def job_log(port, job_id):
     return body.get("text", "") if code == 200 else ""
 
 
+def split_flags(root):
+    """stub 驱动把自己收到的参数写在这里，证明服务端真是这么发的。"""
+    path = os.path.join(root, ".split-args.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def clear_split_flags(root):
+    try:
+        os.remove(os.path.join(root, ".split-args.json"))
+    except OSError:
+        pass
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -441,6 +497,7 @@ def main(argv=None):
             print("保留临时根：%s" % adopt_root)
         else:
             shutil.rmtree(adopt_root, ignore_errors=True)
+    word_coverage_checks()
     return finish()
 
 
@@ -452,6 +509,23 @@ def finish():
         return 1
     print("ALL PASS")
     return 0
+
+
+def word_coverage_checks():
+    """驱动加了新状态，页面必须也认识：两张表对不上时页面会直接打出英文。"""
+    driver = os.path.join(os.path.dirname(os.path.dirname(OPS_DIR)), "工作区", "脚本",
+                          "split_md_batch.py")
+    page = os.path.join(OPS_DIR, "web", "app.js")
+    dblock = re.search(r"^STATUS = \{(.*?)^\}",
+                       open(driver, encoding="utf-8").read(), re.S | re.M)
+    status = set(re.findall(r'"([A-Za-z][\w-]*)"\s*:', dblock.group(1))) if dblock else set()
+    wblock = re.search(r"const SPLIT_WORD = \{(.*?)\n\};",
+                       open(page, encoding="utf-8").read(), re.S)
+    words = set(re.findall(r"['\"]?([A-Za-z][\w-]*)['\"]?\s*:\s*'",
+                           wblock.group(1))) if wblock else set()
+    missing = sorted(status - words)
+    check("页面认得每个拆章状态", bool(status) and not missing,
+          "驱动 %d 个状态，页面缺 %s" % (len(status), "、".join(missing) or "无"))
 
 
 def run_checks(root, ops, port, fixture):
@@ -643,6 +717,10 @@ def run_checks(root, ops, port, fixture):
     check("写任务期间 flock 被占", held)
     code, body = post(port, "/api/split/run", {"uids": ["B0001"]})
     check("写任务在跑时第二个写任务被拒", code == 409, str(body.get("error")))
+    os.makedirs(os.path.join(root, "工作区", "批次", slow_batch, "logs"), exist_ok=True)
+    code, body = post(port, "/api/split/inspect", {"uid": "B0001", "batch": slow_batch})
+    check("查看问题不进写任务入口", code == 200 and body.get("job_id"),
+          str(body.get("error")))
     code, body = post(port, "/api/jobs/%s/cancel" % slow_id)
     check("停止接口接受", code == 200)
     detail = wait_job(port, slow_id, ("cancelled", "failed"), timeout=40)
@@ -663,7 +741,8 @@ def run_checks(root, ops, port, fixture):
     check("拆章步骤名", [s["name"] for s in (detail or {}).get("steps", [])[:3]]
           == ["split", "build_library", "gen_book_catalog"])
 
-    os.makedirs(os.path.join(root, "工作区", "批次", slow_batch), exist_ok=True)
+    os.makedirs(os.path.join(root, "工作区", "批次", slow_batch, "logs"), exist_ok=True)
+    clear_split_flags(root)
     code, body = post(port, "/api/split/run",
                       {"uids": ["B0004"], "only": "B0004", "batch": slow_batch,
                        "workers": 1})
@@ -672,6 +751,61 @@ def run_checks(root, ops, port, fixture):
     check("单本重跑带 --only 且复用批次",
           code == 200 and "--only" in argv and argv[argv.index("--only") + 1] == "B0004"
           and argv[argv.index("--batch") + 1] == slow_batch, " ".join(argv[2:]))
+    flags = split_flags(root)
+    check("单本重跑真的重拆",
+          flags.get("force") is True and flags.get("only") == "B0004"
+          and "--force" in (flags.get("argv") or []), str(flags))
+
+    clear_split_flags(root)
+    code, body = post(port, "/api/split/recheck", {"uid": "B0004", "batch": slow_batch})
+    detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
+    job = (detail or {}).get("job") or {}
+    flags = split_flags(root)
+    argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
+    check("重新检查只复核不重拆",
+          code == 200 and flags.get("recheck") is True and flags.get("only") == "B0004"
+          and flags.get("force") is False and "--recheck" in argv
+          and "--force" not in argv, str(flags))
+    check("重新检查读完统计判完成",
+          job.get("state") == "succeeded" and "待复核" not in (job.get("summary") or ""),
+          "%s · %s" % (job.get("state"), job.get("summary")))
+
+    code, body = post(port, "/api/split/run",
+                      {"uids": ["B0005"], "only": "B0005", "batch": slow_batch,
+                       "workers": 1})
+    detail = wait_job(port, body.get("job_id"), ("awaiting_review", "succeeded", "failed"))
+    job = (detail or {}).get("job") or {}
+    check("暂存区有产物时停在待复核",
+          job.get("state") == "awaiting_review" and "待复核" in (job.get("summary") or ""),
+          "%s · %s" % (job.get("state"), job.get("summary")))
+
+    code, body = post(port, "/api/split/inspect", {"uid": "B0004", "batch": slow_batch})
+    inspect_id = body.get("job_id")
+    detail = wait_job(port, inspect_id, ("succeeded", "failed"))
+    job = (detail or {}).get("job") or {}
+    check("查看问题给出审计比与未收录页",
+          job.get("state") == "succeeded" and "审计比" in (job.get("summary") or "")
+          and "未收录" in (job.get("summary") or ""),
+          "%s · %s" % (job.get("state"), job.get("summary")))
+    argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
+    check("查看问题 argv 用契约命令",
+          len(argv) == 6 and argv[1].endswith("md_review_report.py")
+          and argv[2] == slow_batch and argv[3] == "B0004" and argv[4] == "--json"
+          and argv[5] == "工作区/运维/jobs/%s/result.json" % inspect_id,
+          " ".join(argv[2:]))
+    code, rows = get(port, "/api/file?path=" + urllib.request.quote(
+        "工作区/运维/jobs/%s/result.json" % inspect_id))
+    check("核对证据能从文件接口读回",
+          code == 200 and isinstance(rows, list) and rows[0].get("uid") == "B0004"
+          and rows[0].get("dup_shingles") == 2, "code=%s" % code)
+    code, body = post(port, "/api/split/inspect", {"uid": "B0009", "batch": slow_batch})
+    detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
+    job = (detail or {}).get("job") or {}
+    check("没有证据时查看问题判失败", job.get("state") == "failed"
+          and "暂存区" in (job.get("summary") or ""), str(job.get("summary")))
+    for route in ("/api/split/inspect", "/api/split/recheck"):
+        code, body = post(port, route, {"uid": "B0004", "batch": "nope-20260101"})
+        check("批次不存在时 %s 回 404" % route, code == 404, str(body.get("error")))
 
     # ---- PDF 分诊 --------------------------------------------------
     code, body = post(port, "/api/pdf/triage", {"uid": "B0001"})

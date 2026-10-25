@@ -394,17 +394,39 @@ def gate_split(ctx):
         report = json_blob_with(ctx.text(), "status_counts")
     if report is None:
         return "failed", "没取到 --report-json 统计，判不了 verify 与 audit"
+    pending = report.get("pending_review")
+    if not isinstance(pending, list):
+        return "failed", "统计里没有待复核清单，重跑一次"
     counts = report.get("status_counts") or {}
-    books = report.get("books") or []
-    pending = [b.get("uid") for b in books
-               if b.get("status") not in ("landed", "replaced", "accepted",
-                                          "staged-green", "staged", "skipped-has-md")]
     summary = "批次 %s：%s" % (report.get("batch") or "?",
                              "，".join("%s %d" % (k, v) for k, v in sorted(counts.items())))
     if pending:
         return "awaiting_review", summary + "；待复核 %d 本（%s）" % (
             len(pending), "、".join(pending[:6]))
     return "succeeded", summary
+
+
+def gate_inspect(ctx):
+    bad = ctx.failed()
+    if bad:
+        return "failed", "失败步：%s" % "、".join("%s(rc=%s)" % (n, rc) for n, rc in bad)
+    rows = ctx.artifact("result.json")
+    if not isinstance(rows, list) or not rows:
+        return "failed", "没取到这本书的核对证据（只查还留在暂存区的书）"
+    row = rows[0]
+    bits = []
+    ratio = row.get("ratio")
+    if isinstance(ratio, (int, float)):
+        bits.append("审计比 %.1f%%" % (ratio * 100))
+    uncovered = row.get("uncovered")
+    if isinstance(uncovered, list):
+        bits.append("未收录 %d 页" % len(uncovered))
+    if row.get("dup_shingles"):
+        bits.append("跨文件重复 %d 处" % row["dup_shingles"])
+    if not bits:
+        bits.append("没有发现疑点")
+    return "succeeded", "《%s》%s" % (row.get("title") or row.get("uid") or "这本书",
+                                    "，".join(bits))
 
 
 def gate_pdf(ctx):
@@ -500,6 +522,7 @@ KINDS = {
     "import.scan": {"label": "扫收件箱", "readonly": True, "gate": gate_import_scan},
     "import.apply": {"label": "导入入库", "readonly": False, "gate": gate_import_apply},
     "split.run": {"label": "电子书拆章", "readonly": False, "gate": gate_split},
+    "split.inspect": {"label": "查看问题", "readonly": True, "gate": gate_inspect},
     "pdf.triage": {"label": "PDF 分诊", "readonly": True, "gate": gate_triage},
     "pdf.confirm": {"label": "分诊确认", "readonly": False, "gate": gate_rc},
     "pdf.run": {"label": "PDF 转 md", "readonly": False, "gate": gate_pdf},
@@ -1349,6 +1372,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/import/plan": lambda: self.api_import_plan(payload),
                 "/api/import/apply": lambda: self.api_import_apply(payload),
                 "/api/split/run": lambda: self.api_split_run(payload),
+                "/api/split/recheck": lambda: self.api_split_recheck(payload),
+                "/api/split/inspect": lambda: self.api_split_inspect(payload),
                 "/api/pdf/triage": lambda: self.api_pdf_triage(payload),
                 "/api/pdf/confirm": lambda: self.api_pdf_confirm(payload),
                 "/api/pdf/run": lambda: self.api_pdf_run(payload),
@@ -1556,6 +1581,9 @@ class Handler(BaseHTTPRequestHandler):
         args += ["--workers", str(workers), "--report-json"]
         if replace:
             args.append("--replace")
+        if only:
+            # 单本入口就是“真的重拆”，不然暂存区有产物时空转
+            args.append("--force")
         argv_args = args
         commands = [make_cmd(self.app.env, "split", "split_md_batch.py", argv_args)]
         commands += rebuild_commands(self.app.env)
@@ -1564,6 +1592,48 @@ class Handler(BaseHTTPRequestHandler):
             commands,
             batch_dir=os.path.join("工作区", "批次", batch))
         self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch})
+
+    def split_target(self, payload):
+        uid = (payload.get("uid") or "").strip()
+        batch = (payload.get("batch") or "").strip()
+        if not re.match(r"^B\d{4}$", uid):
+            self.fail(400, "uid 形如 B1234")
+            return None
+        if not re.match(r"^[A-Za-z0-9._-]+$", batch):
+            self.fail(400, "批次名不合法")
+            return None
+        if not os.path.isdir(os.path.join(self.app.env.batches, batch, "logs")):
+            self.fail(404, "这个批次没有记录")
+            return None
+        return batch, uid
+
+    def api_split_recheck(self, payload):
+        target = self.split_target(payload)
+        if target is None:
+            return
+        batch, uid = target
+        commands = [make_cmd(self.app.env, "split", "split_md_batch.py",
+                             ["--batch", batch, "--only", uid, "--workers", "1",
+                              "--report-json", "--recheck"])]
+        commands += rebuild_commands(self.app.env)
+        job_id = self.app.runner.submit(
+            "split.run", "重新检查 %s" % uid, commands,
+            batch_dir=os.path.join("工作区", "批次", batch))
+        self.send_json(200, {"ok": True, "job_id": job_id})
+
+    def api_split_inspect(self, payload):
+        target = self.split_target(payload)
+        if target is None:
+            return
+        batch, uid = target
+
+        def build(job_id):
+            out = os.path.join(self.app.env.rel(self.app.env.job_dir(job_id)),
+                               "result.json")
+            return [make_cmd(self.app.env, "review", "md_review_report.py",
+                             [batch, uid, "--json", out])]
+        job_id = self.app.runner.submit("split.inspect", "查看问题 %s" % uid, build)
+        self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_pdf_triage(self, payload):
         uid = (payload.get("uid") or "").strip()
@@ -1798,8 +1868,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "job_id": new_id})
 
 
-WRITE_ROUTES = ("/api/import/apply", "/api/split/run", "/api/pdf/confirm",
-                "/api/pdf/run", "/api/maintain", "/api/delete/apply")
+WRITE_ROUTES = ("/api/import/apply", "/api/split/run", "/api/split/recheck",
+                "/api/pdf/confirm", "/api/pdf/run", "/api/maintain",
+                "/api/delete/apply")
 PDF_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 
 
