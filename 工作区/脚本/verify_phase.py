@@ -176,13 +176,13 @@ def box4():
     print("箱子 4 · 顶层结构与 book.json")
     tops = sorted(n for n in os.listdir(L.ROOT) if os.path.isdir(os.path.join(L.ROOT, n)))
     want = sorted(["库", "目录", "视图", "工作区"])
-    # .pi 是 pi 的项目配置目录（harness 工具账，不是库内容），只放它一个
-    harness = [n for n in tops if n == ".pi"]
+    # .pi 是 pi 的项目配置目录、.git 是版本库，都算工具账，不是库内容
+    harness = [n for n in tops if n in (".pi", ".git")]
     tops = [n for n in tops if n not in harness]
     if tops != want:
         fail("顶层目录 %s != %s" % (tops, want))
     elif harness:
-        ok("顶层内容目录只剩 库/ 目录/ 视图/ 工作区/，另有 harness 目录 %s" % ", ".join(harness))
+        ok("顶层内容目录只剩 库/ 目录/ 视图/ 工作区/，另有工具目录 %s" % ", ".join(harness))
     else:
         ok("顶层只剩 库/ 目录/ 视图/ 工作区/")
     books = L.iter_book_json()
