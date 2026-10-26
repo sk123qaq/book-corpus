@@ -1,0 +1,25 @@
+{
+ "uid": "B1778",
+ "title": "穷查理宝典  查理・芒格的智慧箴言录 = Poor Charlies Almanack The Wit and Wisdom of Charles T. Munger",
+ "format": "mobi",
+ "dest": "库/商业与管理/投资与金融/穷查理宝典  查理・芒格的智慧箴言录 = Poor Charlies Almanack The Wit and Wisdom of Charles T. Munger/md",
+ "at": "2026-10-26T11:50:45+08:00",
+ "provenance_fixed": 26,
+ "verify_rc": 0,
+ "chapters": 25,
+ "chars": 350384,
+ "images": 523,
+ "problems": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.01,
+ "raw_chars": 311890,
+ "fix": [
+  {
+   "rc": 0,
+   "ms": 243805,
+   "report": "工作区/批次/split-ops-20261026-115045/logs/B1778.fix.md",
+   "tail": "B1778 已修好：缺口是 calibre 分页文档与 NCX 锚点错位（index_split_015/016/017 的前缀 43,465 字无人认领，实为第三/五/九讲被截断的正文），override 指定 `carry_doc_prefixes.py` 重出，现 verify problems 0、audit 101.0% ok，记录写在 `工作区/批次/split-ops-20261026-115045/logs/B1778.fix.md`。"
+  }
+ ],
+ "status": "landed"
+}
