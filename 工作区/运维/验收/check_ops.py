@@ -305,6 +305,9 @@ def build_root():
     for rel in ("工作区/运维/jobs", "工作区/脚本", "工作区/批次", "目录",
                 "库/_收件箱", "视图/奖项", "视图/主题"):
         os.makedirs(os.path.join(root, rel), exist_ok=True)
+    os.makedirs(os.path.join(root, "工作区", ".venv-pdf", "bin"), exist_ok=True)
+    os.symlink(sys.executable,
+               os.path.join(root, "工作区", ".venv-pdf", "bin", "python"))
     for name, body in STUBS.items():
         path = os.path.join(root, "工作区", "脚本", name)
         with open(path, "w", encoding="utf-8") as fh:
@@ -928,6 +931,21 @@ def run_checks(root, ops, port, fixture):
     check("PDF argv 带 --triage 与新批次",
           "--route" in argv and argv[argv.index("--route") + 1] == "ocr"
           and argv[argv.index("--batch") + 1] == triage_batch, " ".join(argv[2:]))
+    venv_py = os.path.join(root, "工作区", ".venv-pdf", "bin", "python")
+    check("PDF 转写用 .venv-pdf 的解释器",
+          os.path.abspath(argv[0]) == venv_py, argv[0])
+    deadline = time.time() + 20
+    while True:
+        code, body = post(port, "/api/jobs/%s/rerun" % pdf_id)
+        if code == 200 or time.time() > deadline:
+            break
+        time.sleep(0.2)
+    rerun_id = body.get("job_id")
+    check("PDF 重跑开新任务", code == 200 and rerun_id not in (None, pdf_id), str(body))
+    detail = wait_job(port, rerun_id, ("succeeded", "failed"))
+    rerun_argv = ((detail or {}).get("commands") or [{}])[0]["argv"]
+    check("PDF 重跑也用 .venv-pdf 的解释器",
+          os.path.abspath(rerun_argv[0]) == venv_py, rerun_argv[0])
     code, body = post(port, "/api/pdf/run", {"uids": ["B0002"]})
     check("没有可转 route 时拒绝", code == 400, str(body.get("error")))
 
