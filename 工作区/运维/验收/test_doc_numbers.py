@@ -305,6 +305,12 @@ def fixture_checks(root):
     check("一致时说明是哪天", "as_of %s" % counts["as_of"] in proc.stdout, proc.stdout)
     check("--check 不改文件", read(doc) == before)
 
+    write_doc(root, "# 书库项目\n\n" + doc_numbers.render(
+        dict(counts, as_of="2000-01-01")) + "\n")
+    proc = run([DOC_NUMBERS, "--root", root, "--check"])
+    check("只有日期旧时退出 0", proc.returncode == 0, proc.stdout)
+    check("只有日期旧时说明可刷新", "日期旧" in proc.stdout, proc.stdout)
+
     write_doc(root, "# 书库项目\n\n" + STALE_BLOCK + "\n")
     proc = run([DOC_NUMBERS, "--root", root, "--check"])
     check("块过期时退出 1", proc.returncode == 1, proc.returncode)

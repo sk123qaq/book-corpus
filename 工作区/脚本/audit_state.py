@@ -122,7 +122,7 @@ def docs():
     if got is None:
         warn("%s 没有数字块；doc_numbers.py --write 可补（现库 as_of %s）" % (
             doc_numbers.DOC, counts["as_of"]))
-    elif got != block:
+    elif not doc_numbers.same_numbers(got, block):
         warn("%s 的数字块过期（现库 as_of %s）；doc_numbers.py --write 重写" % (
             doc_numbers.DOC, counts["as_of"]))
     else:

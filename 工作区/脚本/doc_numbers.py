@@ -25,6 +25,7 @@ DOC = "AGENTS.md"
 START = "<!-- numbers:start -->"
 END = "<!-- numbers:end -->"
 BLOCK_RE = re.compile(re.escape(START) + r".*?" + re.escape(END), re.S)
+DATE_RE = re.compile(r"As of \S+?：")
 HEADING = "## 现状"
 ACTION_TEXT = {"replaced": "换", "inserted": "补上"}
 PENDING_KEYS = ("pdf", "txt", "djvu")
@@ -112,6 +113,11 @@ def read_block(text):
     return m.group(0) if m else None
 
 
+def same_numbers(got, block):
+    """只比数字，忽略 as_of 日期。日期是同步戳，不是契约。"""
+    return DATE_RE.sub("As of ：", got) == DATE_RE.sub("As of ：", block)
+
+
 def sync(text, block):
     """把 block 放进 text，返回 (新全文, 动作)。有块就换，没有块就插在「## 现状」之后。"""
     m = BLOCK_RE.search(text)
@@ -190,6 +196,9 @@ def main(argv=None):
         return 1
     if got == block:
         print("%s 的数字块与现库一致（as_of %s）" % (doc, counts["as_of"]))
+        return 0
+    if got is not None and same_numbers(got, block):
+        print("%s 的数字与现库一致，块日期旧；--write 只刷新日期" % doc)
         return 0
     print("%s 的数字块%s" % (doc, "缺失" if got is None else "过期"))
     if got is not None:
