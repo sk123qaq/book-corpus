@@ -199,8 +199,9 @@ python3 工作区/脚本/ops_status.py --json --root <root>
 - 写任务的入口在收到请求时就检查是否有写任务在跑，有就回 409，避免排队两个改库的任务。
 - 取消：给子进程组发 SIGTERM，10 秒没退再 SIGKILL。拆章与 PDF 驱动幂等，重跑会跳过已落地产物。
   已结束与 `awaiting_review` 的任务不能取消，接口回 409。
-- 接管：启动时对每个 `running` 任务读 `pid`，比 `/proc/<pid>/cmdline` 里的脚本名；对得上继续跑并
-  盯进程退出，对不上标 `orphaned`。僵尸进程按已退出处理。不自动杀任何进程。
+- 接管：启动时对每个 `running` 任务读 `pid`，比 `/proc/<pid>/cmdline` 里的脚本名；对得上就接着盯，
+  进程退出后把剩下的步骤补跑完再收尾，对不上标 `orphaned`。僵尸进程按已退出处理。不自动杀任何进程。
+  接管来的那一步拿不到退出码，步骤表记 `unknown`，任务停在 `awaiting_review` 并写明是哪一步。
 
 ## 验收
 

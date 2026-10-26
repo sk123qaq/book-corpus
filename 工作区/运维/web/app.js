@@ -31,7 +31,7 @@ const KIND_WORD = {
   'pdf.triage': 'PDF 分诊', 'pdf.confirm': '确认处理方式', 'pdf.run': 'PDF 转写',
   maintain: '收尾', 'delete.dry-run': '删书预览', 'delete.apply': '删书',
 };
-const STEP_WORD = { pending: '等待', ok: '通过', fail: '失败', running: '在跑' };
+const STEP_WORD = { pending: '等待', ok: '通过', fail: '失败', running: '在跑', unknown: '退出码未知' };
 const SPLIT_WORD = {
   landed: '已入库', replaced: '已替换', accepted: '已受理',
   'skipped-has-md': '已有正文', 'staged-green': '已过检未入库',

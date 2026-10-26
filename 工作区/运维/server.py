@@ -232,6 +232,12 @@ def cmdline_of(pid):
     return [part.decode("utf-8", "replace") for part in raw.split(b"\0") if part]
 
 
+def rc_of_detail(detail):
+    """步骤表里写的 rc=2 这种；读不出来就是 None，不拿 -1 冒充。"""
+    match = re.match(r"^rc=(-?\d+)$", (detail or "").strip())
+    return int(match.group(1)) if match else None
+
+
 class Env:
     """一个数据根下的全部路径。--root 换根，代码目录仍指本文件所在处。"""
 
@@ -342,12 +348,11 @@ class Store:
 class Ctx:
     """一个正在收尾的任务：跑过的命令、日志、产物。"""
 
-    def __init__(self, env, job, commands, rcs, adopted=False):
+    def __init__(self, env, job, commands, rcs):
         self.env = env
         self.job = job
         self.commands = commands
         self.rcs = rcs
-        self.adopted = adopted
 
     @property
     def job_dir(self):
@@ -369,7 +374,7 @@ class Ctx:
         return text[start:] if nxt < 0 else text[start:nxt]
 
     def failed(self):
-        return [(n, rc) for n, rc in self.rcs if rc != 0]
+        return [(n, rc) for n, rc in self.rcs if rc not in (0, None)]
 
 
 def gate_rc(ctx):
@@ -736,6 +741,14 @@ class Runner:
                 argv = []
             pid = row.get("pid")
             if pid and pid_alive(pid) and self._matches(int(pid), argv):
+                spec = KINDS.get(row["kind"]) or {}
+                with self.cv:
+                    self.active[row["id"]] = row["kind"]
+                    if spec.get("readonly"):
+                        self.active_read += 1
+                    else:
+                        self.active_write += 1
+                    self.cv.notify_all()
                 self.store.update(row["id"], summary="接管：进程仍在跑")
                 threading.Thread(target=self._watch_adopted, args=(row["id"], int(pid)),
                                  daemon=True).start()
@@ -801,21 +814,7 @@ class Runner:
             self.store.update(job_id, state="running", started=now_iso(), summary="")
             self._log(job_id, "=== %s %s %s\n" % (job_id, job["kind"], job["title"]),
                       truncate=True)
-            rcs = []
-            for seq, cmd in enumerate(commands):
-                self.store.add_step(job_id, seq, cmd["name"], "running")
-                self.store.update(job_id, argv=json.dumps(cmd["argv"],
-                                                          ensure_ascii=False))
-                rc = self._spawn(job_id, cmd)
-                rcs.append((cmd["name"], rc))
-                self.store.step_state(job_id, seq, "ok" if rc == 0 else "fail",
-                                      "rc=%d" % rc)
-                if cmd.get("capture"):
-                    self._capture(job_id, cmd["capture"])
-                if job_id in self.cancels:
-                    break
-                if rc != 0:
-                    break
+            rcs = self._play(job_id, commands)
             self._finalize(job_id, job, commands, rcs, spec=spec)
         except Exception:  # noqa: BLE001
             detail = traceback.format_exc(limit=4)
@@ -835,6 +834,24 @@ class Runner:
                 os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
             except OSError:
                 pass
+
+    def _play(self, job_id, commands, start=0, rcs=None):
+        """从 start 开始按顺序跑命令，逐步记状态；rcs 里是前面几步已经知道的退出码。"""
+        rcs = list(rcs or [])
+        for seq in range(start, len(commands)):
+            cmd = commands[seq]
+            self.store.add_step(job_id, seq, cmd["name"], "running")
+            self.store.update(job_id, argv=json.dumps(cmd["argv"], ensure_ascii=False))
+            rc = self._spawn(job_id, cmd)
+            rcs.append((cmd["name"], rc))
+            self.store.step_state(job_id, seq, "ok" if rc == 0 else "fail", "rc=%d" % rc)
+            if cmd.get("capture"):
+                self._capture(job_id, cmd["capture"])
+            if job_id in self.cancels:
+                break
+            if rc != 0:
+                break
+        return rcs
 
     def _log(self, job_id, text, truncate=False):
         path = os.path.join(self.env.job_dir(job_id), "log.txt")
@@ -868,40 +885,96 @@ class Runner:
         if blob is not None:
             write_json_atomic(os.path.join(self.env.job_dir(job_id), name), blob)
 
-    def _finalize(self, job_id, job, commands, rcs, adopted=False, spec=None):
+    def _finalize(self, job_id, job, commands, rcs, spec=None):
         spec = spec or KINDS.get(job["kind"]) or {"gate": gate_rc}
         if job_id in self.cancels:
             self.store.update(job_id, state="cancelled", ended=now_iso(),
                               summary="已取消")
             self.cancels.discard(job_id)
             return
-        ctx = Ctx(self.env, job, commands, rcs, adopted=adopted)
+        ctx = Ctx(self.env, job, commands, rcs)
         try:
             state, summary = spec["gate"](ctx)
         except Exception:  # noqa: BLE001
             state, summary = "failed", "门槛判定出错：" + traceback.format_exc(
                 limit=2).strip().splitlines()[-1][:160]
-        if adopted and state == "awaiting_review":
-            summary += "；进程非本次服务起的，退出码未知"
+        unknown = [name for name, rc in rcs if rc is None]
+        if unknown:
+            summary += "；接管：%s 的退出码拿不到" % "、".join(unknown)
+            if state == "succeeded":
+                state = "awaiting_review"
         self.store.update(job_id, state=state, ended=now_iso(), summary=summary,
                           exit_code=(rcs[-1][1] if rcs else None))
         self._log(job_id, "\n---- 判定 %s：%s ----\n" % (state, summary))
 
     def _watch_adopted(self, job_id, pid):
-        while pid_alive(pid):
-            if job_id in self.cancels:
-                self._terminate(job_id, pid)
-            time.sleep(1.0)
+        """等接管来的进程退出，再把剩下的步骤跑完，最后按产物收尾。"""
+        row = self.store.get(job_id) or {}
+        spec = KINDS.get(row.get("kind")) or {}
+        try:
+            while pid_alive(pid):
+                if job_id in self.cancels:
+                    self._terminate(job_id, pid)
+                time.sleep(1.0)
+            self.resume(job_id, spec)
+        except Exception:  # noqa: BLE001
+            detail = traceback.format_exc(limit=4)
+            self._log(job_id, "[接管异常]\n" + detail + "\n")
+            self.store.update(job_id, state="failed", ended=now_iso(),
+                              summary="接管后收尾失败："
+                                      + detail.strip().splitlines()[-1][:160])
+        finally:
+            self._release(job_id, spec)
+            try:
+                os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
+            except OSError:
+                pass
+
+    def resume(self, job_id, spec):
+        """接管后的续跑：跑到一半的那一步没人知道退出码，记 unknown；剩下的命令接着跑。"""
         job = self.store.get(job_id)
         if not job:
             return
-        commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
-        steps = self.store.steps(job_id)
-        rcs = [(s["name"], 0 if s["state"] == "ok" else -1) for s in steps]
-        if steps:
-            self.store.step_state(job_id, steps[-1]["seq"], "ok", "接管后进程退出")
-        self._finalize(job_id, job, commands, rcs, adopted=True,
-                       spec=KINDS.get(job["kind"]))
+        lock_fd = None
+        try:
+            commands = read_json(os.path.join(self.env.job_dir(job_id),
+                                              "commands.json")) or []
+            lock_fd = os.open(self.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+            fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly")
+                        else fcntl.LOCK_EX)
+            rcs, start = self._adopted_rcs(job_id)
+            if job_id in self.cancels:
+                self._finalize(job_id, job, commands, rcs, spec=spec or None)
+                return
+            if start < len(commands):
+                self._log(job_id, "\n[接管] 服务重启过，剩下的 %d 步接着跑\n"
+                          % (len(commands) - start))
+            rcs = self._play(job_id, commands, start, rcs)
+            self._finalize(job_id, job, commands, rcs, spec=spec or None)
+        finally:
+            if lock_fd is not None:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                    os.close(lock_fd)
+                except OSError:
+                    pass
+
+    def _adopted_rcs(self, job_id):
+        """接管前那几步的结果从步骤表还原；跑到一半的那步记 None，没人知道它的退出码。"""
+        rcs, start = [], 0
+        for step in self.store.steps(job_id):
+            if step["state"] in ("ok", "fail"):
+                rc = 0 if step["state"] == "ok" else rc_of_detail(step.get("detail"))
+                rcs.append((step["name"], rc))
+                start = step["seq"] + 1
+                continue
+            if step["state"] == "running":
+                self.store.step_state(job_id, step["seq"], "unknown",
+                                      "接管：进程退出，退出码未知")
+                rcs.append((step["name"], None))
+                start = step["seq"] + 1
+            break
+        return rcs, start
 
     def _terminate(self, job_id, pid):
         try:
