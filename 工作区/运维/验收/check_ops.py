@@ -1120,6 +1120,31 @@ def run_checks(root, ops, port, fixture):
           and part.get("staged") == 0 and part.get("untouched") == 1
           and part.get("left") == 2, str(part))
 
+    # ---- 跨日的分诊表 -----------------------------------------------
+    today_name = mod.TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")
+    today_final = os.path.join(root, "工作区", "批次", today_name, "triage_final.csv")
+    with open(today_final, encoding="utf-8") as fh:
+        kept = [ln for ln in fh if not ln.startswith(target + ",")]
+    with open(today_final, "w", encoding="utf-8") as fh:
+        fh.writelines(kept)
+    old_name = mod.TRIAGE_BATCH_PREFIX + time.strftime(
+        "%Y-%m-%d", time.localtime(time.time() - 86400))
+    old_dir = os.path.join(root, "工作区", "批次", old_name)
+    os.makedirs(old_dir, exist_ok=True)
+    with open(os.path.join(old_dir, "triage_final.csv"), "w", encoding="utf-8") as fh:
+        fh.write("uid,title,subject1,subject2,class,route,pages\n")
+        fh.write("%s,书 %s,文学,,C 扫描件,OCR,320\n" % (target, target))
+    code, body = post(port, "/api/pdf/run", {"uids": [target], "workers": 1})
+    detail = (wait_job(port, body.get("job_id"), ("succeeded", "failed"))
+              if body.get("job_id") else None)
+    names = [c.get("name") for c in ((detail or {}).get("commands") or [])]
+    argv = next((c.get("argv") or [] for c in ((detail or {}).get("commands") or [])
+                 if str((c.get("argv") or ["", ""])[1]).endswith("pdf_md_batch.py")), [])
+    check("昨天的分诊行今天照样能转",
+          code == 200 and body.get("carried") == 1 and names[:1] == ["apply_review"]
+          and "--uids" in argv and target in argv[argv.index("--uids") + 1].split(","),
+          "%s 步骤=%s" % (body, names))
+
     # ---- 收尾 ------------------------------------------------------
     code, body = post(port, "/api/maintain", {"steps": ["verify", "p1", "catalog"]})
     maintain_id = body.get("job_id")
