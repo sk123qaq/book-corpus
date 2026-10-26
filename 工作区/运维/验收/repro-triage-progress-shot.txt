@@ -1,0 +1,59 @@
+临时根：/tmp/ops-check-_pk7kaki  服务：http://127.0.0.1:44805
+[1440x900]
+  首屏 h1='总览' stats=5 等 0 ms
+  页签 overview  通 '总览' 0 ms
+  页签 import    通 '新书导入' 100 ms
+  页签 split     通 '电子书出正文' 100 ms
+  页签 pdf       通 'PDF 出正文' 101 ms
+  页签 maintain  通 '维护' 100 ms
+  页签 retire    通 '删书' 100 ms
+  页签 logs      通 '日志' 100 ms
+  导入页计划 rows=3 head='入库清单 · 11:01:21' 按钮禁用=False
+  点扫描后计划 rows=3 换计划 901 ms 按钮禁用=False
+  刷新后计划 rows=3 head='入库清单 · 11:01:28' 0 ms
+  电子书勾选 全关={'count': 1, 'uid': 'B0001', 'checked': 0, 'first': False, 'all': False, 'rep': False, 'workers': '4'} 全开={'count': 1, 'uid': 'B0001', 'checked': 1, 'first': True, 'all': True, 'rep': False, 'workers': '4'} 单行关={'count': 1, 'uid': 'B0001', 'checked': 0, 'first': False, 'all': False, 'rep': False, 'workers': '4'} 全选后={'count': 1, 'uid': 'B0001', 'checked': 1, 'first': True, 'all': True, 'rep': True, 'workers': '8'}
+  电子书整行动作 重拆=True 重新检查=True 查看问题=True 说明=True
+  导入页改行后 title='改过的名' subjects='文学/类型小说'
+  删书弹窗 {'opened': True, 'afterInput': True, 'afterOk': True, 'checked': True, 'closed': True}
+  PDF 刷新前后 {'limit': '7', 'workers': '5', 'legacy': False, 'triage': True, 'quota': True, 'archive': True, 'open': True} → {'limit': '7', 'workers': '5', 'legacy': False, 'triage': True, 'quota': True, 'archive': True, 'open': True}
+  清单页 {'open': True, 'legacy': False, 'jumped': True, 'title': '待转 PDF 清单', 'filters': {'q': True, 'tags': 4, 'subject': True, 'sort': True, 'progress': 3, 'recheck': True, 'actions': 3, 'bar': True}, 'empty': True, 'focus': True, 'rows': 3, 'picked': 1, 'summary': '已选 1 本\n    可转 0 · 只记图册 1 · 日文暂缓 0 · 未分诊 0\n    按建议确认 0 本\n    全选可转的\n    清空\n    \n    最多转  本\n    同时处理  本\n    开始转写', 'back': 'PDF 出正文', 'keptTitle': '待转 PDF 清单', 'keptQ': 'B', 'keptPick': 1, 'wide': False, 'cleared': 0, 'settle': {'open': True, 'routes': 4, 'note': True, 'closed': True}}
+  批量分诊 点按钮 {'label': '开始分诊 2 本', 'empty': False, 'bar': '分诊中 0 / 2 本0%', 'disabled': True, 'ms': 100}
+  刷新后进度条 {'bar': '分诊中 0 / 2 本0%', 'disabled': True, 'label': '开始分诊 2 本', 'ms': 0}
+  分诊任务 awaiting_review，收尾后页面 {'bar': '', 'disabled': True, 'made': 2, 'toast': '2 本出了建议，去清单确认', 'ms': 2252}
+  维护勾选 render 前后 ['topics', 'awards', 'audit', 'verify', 'p1', 'catalog', 'db'] → ['topics', 'awards', 'audit', 'verify', 'p1', 'catalog', 'db']
+  维护一键收尾 {'button': True, 'open': False, 'steps': 9, 'leaks': False, 'last': '2026-10-26 11:01 完成 收尾 8 步 8 步全过 详情'}
+  日志待确认 {'found': True, 'state': '待确认', 'cancel': False, 'rerun': True}
+  图 → 验收/总览-1440x900.png
+1440x900 图 总览-1440x900.png
+1440x900 CONSOLE ERROR 0
+1440x900 overflow=false (scrollWidth 1440 vs 1440)
+[390x844]
+  首屏 h1='总览' stats=5 等 0 ms
+  页签 overview  通 '总览' 1 ms
+  页签 import    通 '新书导入' 100 ms
+  页签 split     通 '电子书出正文' 100 ms
+  页签 pdf       通 'PDF 出正文' 100 ms
+  页签 maintain  通 '维护' 100 ms
+  页签 retire    通 '删书' 100 ms
+  页签 logs      通 '日志' 101 ms
+  导入页计划 rows=3 head='入库清单 · 11:01:28' 按钮禁用=False
+  点扫描后计划 rows=3 换计划 901 ms 按钮禁用=False
+  刷新后计划 rows=3 head='入库清单 · 11:01:53' 0 ms
+  电子书勾选 全关={'count': 1, 'uid': 'B0001', 'checked': 0, 'first': False, 'all': False, 'rep': False, 'workers': '4'} 全开={'count': 1, 'uid': 'B0001', 'checked': 1, 'first': True, 'all': True, 'rep': False, 'workers': '4'} 单行关={'count': 1, 'uid': 'B0001', 'checked': 0, 'first': False, 'all': False, 'rep': False, 'workers': '4'} 全选后={'count': 1, 'uid': 'B0001', 'checked': 1, 'first': True, 'all': True, 'rep': True, 'workers': '8'}
+  电子书整行动作 重拆=True 重新检查=True 查看问题=True 说明=True
+  导入页改行后 title='改过的名' subjects='文学/类型小说'
+  删书弹窗 {'opened': True, 'afterInput': True, 'afterOk': True, 'checked': True, 'closed': True}
+  PDF 刷新前后 {'limit': '7', 'workers': '5', 'legacy': False, 'triage': True, 'quota': True, 'archive': True, 'open': True} → {'limit': '7', 'workers': '5', 'legacy': False, 'triage': True, 'quota': True, 'archive': True, 'open': True}
+  清单页 {'open': True, 'legacy': False, 'jumped': True, 'title': '待转 PDF 清单', 'filters': {'q': True, 'tags': 4, 'subject': True, 'sort': True, 'progress': 3, 'recheck': True, 'actions': 3, 'bar': True}, 'empty': True, 'focus': True, 'rows': 3, 'picked': 1, 'summary': '已选 1 本\n    可转 0 · 只记图册 1 · 日文暂缓 0 · 未分诊 0\n    按建议确认 0 本\n    全选可转的\n    清空\n    \n    最多转  本\n    同时处理  本\n    开始转写', 'back': 'PDF 出正文', 'keptTitle': '待转 PDF 清单', 'keptQ': 'B', 'keptPick': 1, 'wide': False, 'cleared': 0, 'settle': {'open': True, 'routes': 4, 'note': True, 'closed': True}}
+  批量分诊 点按钮 {'label': '开始分诊 0 本', 'empty': True, 'bar': '', 'disabled': None, 'ms': 0}
+  没有未分诊的书，跳过分诊进度条检查
+  维护勾选 render 前后 ['topics', 'awards', 'audit', 'verify', 'p1', 'catalog', 'db'] → ['topics', 'awards', 'audit', 'verify', 'p1', 'catalog', 'db']
+  维护一键收尾 {'button': True, 'open': False, 'steps': 9, 'leaks': False, 'last': '2026-10-26 11:02 完成 收尾 8 步 8 步全过 详情'}
+  日志待确认 {'found': True, 'state': '待确认', 'cancel': False, 'rerun': True}
+  图 → 验收/总览-390x844.png
+390x844 图 总览-390x844.png
+390x844 CONSOLE ERROR 0
+390x844 overflow=false (scrollWidth 390 vs 390)
+CONSOLE ERROR 0
+overflow=false
+SHOT PASS

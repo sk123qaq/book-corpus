@@ -1,0 +1,28 @@
+临时根 /tmp/ops-check-6xf_85yw，新增未分诊 7 本，stub 每本 30 秒
+服务 127.0.0.1:38473，未分诊 9 本：B0004,B0005,B0100,B0101,B0102,B0103,B0104,B0105,B0106
+页面 'PDF 出正文' 按钮 '开始分诊 9 本'
+点之前 {"bar": "", "button": "开始分诊 9 本", "disabled": false, "toast": ""}
+t=0s 进度条没了，任务 None，步 0/0，按钮禁用=True
+t=2s 任务 20261026-111212-e091 起跑，步数 9
+t=2s 进度条出现（分诊中 0 / 9 本0%），任务 running，步 0/9
+t=16s 进度条在，任务 running，步 0/9，按钮禁用=True
+t=32s 进度条在，任务 running，步 1/9，按钮禁用=True
+t=48s 进度条在，任务 running，步 1/9，按钮禁用=True
+t=64s 进度条在，任务 running，步 2/9，按钮禁用=True
+t=80s 进度条在，任务 running，步 2/9，按钮禁用=True
+t=96s 进度条在，任务 running，步 3/9，按钮禁用=True
+t=112s 进度条在，任务 running，步 3/9，按钮禁用=True
+t=128s 进度条在，任务 running，步 4/9，按钮禁用=True
+t=144s 进度条在，任务 running，步 4/9，按钮禁用=True
+t=160s 进度条在，任务 running，步 5/9，按钮禁用=True
+t=176s 进度条在，任务 running，步 5/9，按钮禁用=True
+t=192s 进度条在，任务 running，步 6/9，按钮禁用=True
+t=208s 进度条在，任务 running，步 6/9，按钮禁用=True
+t=224s 进度条在，任务 running，步 7/9，按钮禁用=True
+t=240s 进度条在，任务 running，步 8/9，按钮禁用=True
+t=256s 进度条在，任务 running，步 8/9，按钮禁用=True
+t=272s 进度条在，任务 awaiting_review，步 9/9，按钮禁用=True
+t=274s 进度条消失，任务 awaiting_review，步 9/9
+t=274s 提示 '9 本出了建议，去清单确认'
+收尾 t=278s 任务 awaiting_review，步 9/9，进度条 ''，提示 ''
+REPRO CLEAN：进度条一直留到任务收尾

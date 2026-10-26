@@ -78,7 +78,7 @@ const S = {
   logJob: null, logDetail: null, follow: true, importDone: null,
   filter: '', selected: new Set(), busy: false,
   replaceMd: false, splitWorkers: 4,
-  pdfLimit: 0, pdfWorkers: 3, pdfTriage: null, pdfToday: null, pdfUntriaged: null,
+  pdfLimit: 0, pdfWorkers: 3, triageSeen: null, pdfToday: null, pdfUntriaged: null,
   books: [], bookCounts: null, pick: new Set(), pickQ: '',
   pickTags: new Set(['convert', 'untriaged', 'gallery', 'ja']),
   pickProgress: new Set(['todo', 'running', 'failed']), pickRecheck: false,
@@ -954,25 +954,18 @@ function paintPick() {
   if (note) note.textContent = '当前显示 ' + num(rows.length) + ' 本。';
 }
 
+// 进度条只在任务真在跑时出现：任务记录是唯一来源，刷新页面也还在
+function liveTriage() {
+  const rows = S.jobs.filter((row) => row.kind === 'pdf.triage'
+    && /^批量分诊/.test(row.title || '')
+    && (row.state === 'queued' || row.state === 'running'));
+  return rows.reduce((best, row) => (!best || (row.seq || 0) > (best.seq || 0)
+    ? row : best), null);
+}
+
 function paintTriageProgress() {
   const box = $('#triage-progress');
   if (box) box.innerHTML = triageProgress();
-}
-
-// 批量任务要按步数出进度，watchJob 只回任务行，这里连 steps 一起拿
-async function watchSteps(jobId, onTick) {
-  for (let i = 0; i < 240; i += 1) {
-    let body;
-    try {
-      body = await api('/api/jobs/' + encodeURIComponent(jobId));
-    } catch (err) {
-      return null;
-    }
-    if (onTick) onTick(body.steps || []);
-    if (SETTLED.indexOf(body.job.state) >= 0) return body;
-    await new Promise((resolve) => setTimeout(resolve, 700));
-  }
-  return null;
 }
 
 function settlePages(items) {
@@ -1010,10 +1003,13 @@ async function applySettle(items, ask) {
 }
 
 function triageProgress() {
-  const t = S.pdfTriage;
-  if (!t) return '';
-  const pct = t.total ? Math.min(100, Math.round(t.done / t.total * 100)) : 0;
-  return `<div class="progress-label"><span>分诊中 ${num(t.done)} / ${num(t.total)} 本</span><span>${pct}%</span></div>
+  const job = liveTriage();
+  if (!job) return '';
+  const steps = job.steps || [];
+  const done = steps.filter((s) => s.state === 'ok' || s.state === 'fail').length;
+  const pct = steps.length ? Math.min(100, Math.round(done / steps.length * 100)) : 0;
+  const word = job.state === 'queued' ? '排队' : '分诊中';
+  return `<div class="progress-label"><span>${word} ${num(done)} / ${num(steps.length)} 本</span><span>${pct}%</span></div>
     <div class="progress"><i style="width:${pct}%"></i></div>`;
 }
 
@@ -1044,7 +1040,7 @@ function triageCard() {
     <h2>批量分诊</h2>
     <p class="small">${esc(lead)}</p>
     <p class="hint">${esc(second)}</p>
-    <button class="btn primary" data-act="pdf-triage-batch"${todo && !S.pdfTriage ? '' : ' disabled'}>开始分诊 ${num(todo)} 本</button>
+    <button class="btn primary" data-act="pdf-triage-batch"${todo && !liveTriage() ? '' : ' disabled'}>开始分诊 ${num(todo)} 本</button>
     <div id="triage-progress" style="margin-top:12px">${triageProgress()}</div>
   </div>`;
 }
@@ -1847,42 +1843,22 @@ const actions = {
     render();
   },
 
-  async 'pdf-triage-batch'() {
+  async 'pdf-triage-batch'(el) {
     const uids = S.books.filter((row) => row.disposition === 'untriaged' && !row.suggestion)
       .map((row) => row.uid);
     if (!uids.length) {
       toast('没有还要分诊的书', true);
       return;
     }
-    setBusy(true);
-    S.pdfTriage = { total: uids.length, done: 0 };
-    render();
+    if (el) el.disabled = true;
     try {
       const body = await post('/api/pdf/triage-batch', { uids });
-      const detail = await watchSteps(body.job_id, (steps) => {
-        S.pdfTriage.done = steps.filter((s) => s.state && s.state !== 'pending').length;
-        paintTriageProgress();
-      });
-      const state = detail ? detail.job.state : 'failed';
-      await Promise.all([loadJobs(), loadPdfBooks(), loadPdf()]);
-      S.pdfTriage = null;
-      const made = uids.filter((uid) => {
-        const row = S.books.find((item) => item.uid === uid);
-        return !!row && !!row.suggestion;
-      }).length;
-      if (state === 'awaiting_review' || state === 'succeeded') {
-        toast(made ? num(made) + ' 本出了建议，去清单确认' : '分诊跑完了，但没有模型建议', !made);
-      } else {
-        toast('分诊没过，去日志看', true);
-      }
-      render();
+      S.triageSeen = body.job_id || null;
+      await loadJobs();
     } catch (err) {
-      S.pdfTriage = null;
-      render();
       toast(err.message, true);
-    } finally {
-      setBusy(false);
     }
+    render();
   },
 
   async 'pdf-run'() {
@@ -2235,6 +2211,23 @@ async function boot() {
         await loadSplitBooks();
         const box = document.querySelector('[data-live="split-batch"]');
         if (box) box.innerHTML = batchCard();
+      }
+      if (S.tab === 'pdf') {
+        const live = liveTriage();
+        if (live) {
+          S.triageSeen = live.id;
+          paintTriageProgress();
+        } else if (S.triageSeen) {
+          const job = S.jobs.find((row) => row.id === S.triageSeen);
+          if (!job) return;
+          const made = (job.steps || []).filter((s) => s.state === 'ok').length;
+          const ok = job.state === 'awaiting_review' || job.state === 'succeeded';
+          S.triageSeen = null;
+          await Promise.all([loadPdfBooks(), loadPdf()]);
+          render();
+          toast(ok ? (made ? num(made) + ' 本出了建议，去清单确认'
+            : '分诊跑完了，但没有模型建议') : '分诊没过，去日志看', !ok || !made);
+        }
       }
       if (S.tab === 'overview') {
         const view = document.querySelector('#view');
