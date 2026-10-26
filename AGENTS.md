@@ -80,6 +80,7 @@
 | `audit_old_md.py` | 旧 md 文本量审计。逐页锚点比对源书，报「缺页」并按 README 未收录与卷首卷尾分类。只读 |
 | `drill_md_gap.py` | 单本下钻：源书每页在 md 里能找到多少，定位丢的是哪些页。只读 |
 | `md_link_health.py` | 全库链接健康：章节文件自链数、README 目录段是否全部成链接、目录首行缩进。只读。装了 commonmark 按渲染结果判，没装按 CommonMark 链接目标规则判 |
+| `backfill_readme.py` | 给缺 README 的 md 目录补目录页，格式同拼装器。默认只打印，`--apply` 写盘。只写 README.md，已有 README 的目录不碰 |
 | `pdf_lang_probe.py` | 探页判语种，账落 `工作区/批次/pdf-ocr-2026-10-19/defer/lang.tsv`。`--force` 重探不覆盖已判定语种；额度用尽即停止派发 |
 | `pdf_census.py` | PDF 普查：页数、字体、逐页文本量、图片清单与分辨率。出 `census.jsonl`。`--uid`/`--limit` 子集跑必须给 `--out` |
 | `pdf_scan_probe.py` | 扫描件探针：抽页渲染 70dpi 算 ink 与文字行带数，给分诊用 |

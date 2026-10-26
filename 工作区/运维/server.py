@@ -906,6 +906,23 @@ class Runner:
         self.store.update(job_id, state=state, ended=now_iso(), summary=summary,
                           exit_code=(rcs[-1][1] if rcs else None))
         self._log(job_id, "\n---- 判定 %s：%s ----\n" % (state, summary))
+        if job["kind"] == "maintain" and state in ("succeeded", "awaiting_review"):
+            threading.Thread(target=self._refresh_audit, args=(job_id,),
+                             daemon=True).start()
+
+    def _refresh_audit(self, job_id):
+        """收尾跑完就重写体检缓存。页面关着也照样刷新，下次打开不再显示跑之前的读数。"""
+        argv = [sys.executable, self.env.status_script, "--json", "--deep",
+                "--root", self.env.root]
+        try:
+            proc = subprocess.run(argv, cwd=self.env.root, capture_output=True,
+                                  text=True, timeout=180)
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._log(job_id, "[体检缓存] 刷新失败：%s\n" % exc)
+            return
+        if proc.returncode != 0:
+            self._log(job_id, "[体检缓存] ops_status rc=%d：%s\n"
+                      % (proc.returncode, (proc.stderr or proc.stdout).strip()[-200:]))
 
     def _watch_adopted(self, job_id, pid):
         """等接管来的进程退出，再把剩下的步骤跑完，最后按产物收尾。"""

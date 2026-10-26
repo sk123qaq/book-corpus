@@ -220,8 +220,9 @@ def main():
                 idx.execute("SELECT count(*) FROM para").fetchone()[0],
                 len(para_paths), len(para_books)))
         behind = []
-        if len(para_books) != len(md):
-            behind.append("书 %d/%d" % (len(para_books), len(md)))
+        indexable = sum(1 for _, ch in md.values() if ch)
+        if len(para_books) != indexable:
+            behind.append("书 %d/%d" % (len(para_books), indexable))
         if len(para_paths) != chapters:
             behind.append("章 %d/%d" % (len(para_paths), chapters))
         if behind:
