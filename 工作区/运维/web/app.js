@@ -78,7 +78,8 @@ const S = {
   logJob: null, logDetail: null, follow: true, importDone: null,
   filter: '', selected: new Set(), busy: false,
   replaceMd: false, splitWorkers: 4,
-  pdfLimit: 0, pdfWorkers: 3, triageSeen: null, pdfToday: null, pdfUntriaged: null,
+  pdfLimit: 0, pdfLimitFrom: -1, pdfWorkers: 3, triageSeen: null, pdfToday: null,
+  pdfUntriaged: null,
   books: [], bookCounts: null, pick: new Set(), pickQ: '',
   pickTags: new Set(['convert', 'untriaged', 'gallery', 'ja']),
   pickProgress: new Set(['todo', 'running', 'failed']), pickRecheck: false,
@@ -944,7 +945,15 @@ function viewPdfList() {
 }
 
 // 关键字边打边筛：只重画表格与计数，整页 render 会丢焦点
+function syncPdfLimit() {
+  const total = pickCounts().total;
+  if (total === S.pdfLimitFrom) return;
+  S.pdfLimitFrom = total;
+  S.pdfLimit = total;
+}
+
 function paintPick() {
+  syncPdfLimit();
   const rows = pickRows();
   const body = $('#pick-body');
   if (body) body.innerHTML = pickRowHtml(rows);
@@ -1054,7 +1063,7 @@ function runCard() {
     <label class="field"><span>同时处理</span>
       <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8"></label>
     <button class="btn primary" data-write data-act="pdf-run">开始转写</button>
-    <p class="hint">最多转几本填 0 表示不限。勾了图册或日文会再问一次；未分诊的书只送去分诊，不出正文。</p>
+    <p class="hint">最多转几本跟着勾选的本数走，填 0 表示不限。勾了图册或日文会再问一次；未分诊的书只送去分诊，不出正文。</p>
   </div>`;
 }
 
@@ -1886,6 +1895,7 @@ const actions = {
     try {
       const body = await post('/api/pdf/run', { uids: picked, limit, workers, force });
       S.pick.clear();
+      syncPdfLimit();
       if (body.job_id) {
         toast('转写已开始，进度看日志');
         const detail = await watchJob(body.job_id, afterJob);
