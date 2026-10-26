@@ -554,6 +554,7 @@ def main(argv=None):
     adopt_root, adopt_fixture = build_root()
     try:
         adoption_checks(adopt_root, adopt_fixture)
+        adoption_resume_check(adopt_root, adopt_fixture)
     finally:
         if args.keep:
             print("保留临时根：%s" % adopt_root)
@@ -1290,6 +1291,81 @@ def adoption_checks(root, fixture):
                     proc_.kill()
         if os.path.exists(slow):
             os.remove(slow)
+
+
+def adoption_resume_check(root, fixture):
+    """接管后续跑：跑到一半那一步记 unknown，剩下的步骤接着跑，拿不到退出码就不冒充成功。"""
+    ops_db = os.path.join(root, "工作区", "运维", "ops.db")
+    scripts = os.path.join(root, "工作区", "脚本")
+    probe = os.path.join(scripts, "adopt-probe.py")
+    with open(probe, "w", encoding="utf-8") as fh:
+        fh.write("import time\ntime.sleep(2)\n")
+    finish = os.path.join(scripts, "adopt-finish.py")
+    with open(finish, "w", encoding="utf-8") as fh:
+        fh.write("import os\n"
+                 "open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"
+                 " '.adopt-ran'), 'w').close()\n")
+    job_id = "adopt-resume"
+    job_dir = os.path.join(root, "工作区", "运维", "jobs", job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+    commands = [
+        {"name": "pdf ocr", "script": "adopt-probe.py",
+         "argv": [sys.executable, probe], "marker": None, "capture": None},
+        {"name": "pdf text", "script": "adopt-finish.py",
+         "argv": [sys.executable, finish], "marker": None, "capture": None}]
+    with open(os.path.join(job_dir, "commands.json"), "w", encoding="utf-8") as fh:
+        json.dump(commands, fh, ensure_ascii=False)
+    child = subprocess.Popen(commands[0]["argv"], cwd=root, start_new_session=True,
+                             stdout=subprocess.DEVNULL)
+    try:
+        time.sleep(0.3)
+        conn = ensure_ops_db(ops_db)
+        conn.execute(
+            "INSERT OR REPLACE INTO job (id, kind, title, argv, state, pid,"
+            " created, started, ended, exit_code, summary, log_path, batch_dir,"
+            " plan_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (job_id, "pdf.confirm", "接管续跑探针",
+             json.dumps(commands[0]["argv"]), "running", child.pid, stamp, stamp,
+             None, None, "", "工作区/运维/jobs/%s/log.txt" % job_id, None, None))
+        for seq, name, state in ((0, "pdf ocr", "running"), (1, "pdf text", "pending")):
+            conn.execute("INSERT OR REPLACE INTO step (job_id, seq, name, state,"
+                         " detail, started) VALUES (?,?,?,?,?,?)",
+                         (job_id, seq, name, state, None, stamp))
+        conn.commit()
+        conn.close()
+        proc, port = start(root, fixture)
+        try:
+            detail = wait_job(port, job_id,
+                              ("succeeded", "failed", "awaiting_review"), timeout=40)
+            job = (detail or {}).get("job") or {}
+            steps = {s["seq"]: s for s in (detail or {}).get("steps") or []}
+            check("接管来的那一步记 unknown",
+                  (steps.get(0) or {}).get("state") == "unknown"
+                  and "退出码" in ((steps.get(0) or {}).get("detail") or ""),
+                  str((steps.get(0) or {}).get("state")))
+            check("接管后剩下的步骤接着跑",
+                  (steps.get(1) or {}).get("state") == "ok"
+                  and os.path.isfile(os.path.join(scripts, ".adopt-ran")),
+                  str((steps.get(1) or {}).get("state")))
+            check("退出码拿不到时不冒充成功",
+                  job.get("state") == "awaiting_review"
+                  and "接管" in (job.get("summary") or "")
+                  and "退出码" in (job.get("summary") or ""), str(job.get("summary")))
+            check("接管续跑写进日志",
+                  "[接管]" in ((detail or {}).get("log_tail") or ""))
+        finally:
+            stop(proc)
+    finally:
+        if child.poll() is None:
+            try:
+                os.killpg(os.getpgid(child.pid), 9)
+            except OSError:
+                child.kill()
+        for name in ("adopt-probe.py", "adopt-finish.py", ".adopt-ran"):
+            path = os.path.join(scripts, name)
+            if os.path.exists(path):
+                os.remove(path)
 
 
 def set_job_state(ops_db, job_id, state):
