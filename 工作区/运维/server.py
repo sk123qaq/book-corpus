@@ -2247,18 +2247,28 @@ class Handler(BaseHTTPRequestHandler):
         batch_triage = os.path.join(batch_dir, "triage_final.csv")
         triage = self.app.env.rel(batch_triage)
         routes = {"ocr": [], "text": []}
+        commands = []
+        carried = []
         if convert:
             routes.update(split_by_route(batch_triage, convert))
             placed = set(routes.get("ocr") or []) | set(routes.get("text") or [])
+            carried = [uid for uid in convert if uid not in placed]
+            if carried:
+                commands.append(self.carry_pdf(carried, index))
+                for uid in carried:
+                    key = "ocr" if index[uid]["route"] == "OCR" else "text"
+                    routes[key].append(uid)
+                    placed.add(uid)
             missing = [uid for uid in convert if uid not in placed]
             if missing:
                 self.fail(400, "这些 uid 在 %s 里没有可转的 route，先做分诊确认：%s"
                           % (triage, "、".join(missing)))
                 return
         forced = gallery + japanese
-        commands = []
         if forced:
-            commands.append(self.forced_pdf(forced, index))
+            command = self.forced_pdf(forced, index)
+            if not any(c["name"] == command["name"] for c in commands):
+                commands.append(command)
             routes["ocr"] = (routes.get("ocr") or []) + forced
         for name in sorted(routes):
             group = routes[name]
@@ -2288,7 +2298,18 @@ class Handler(BaseHTTPRequestHandler):
                              "batch": batch if job_id else "",
                              "routes": {k: len(v) for k, v in routes.items() if v},
                              "forced": len(forced), "triaged": len(untriaged),
+                             "carried": len(carried),
                              "triage_jobs": triage_jobs})
+
+    def carry_pdf(self, uids, index):
+        """今天的分诊表里没有这些书：沿用之前批次那条 route，先落一次 apply_review。
+
+        triage_final.csv 与 skip_list.tsv 都由 apply_review 写，驱动读的是它写完的那份。
+        """
+        items = [{"uid": uid, "route": index[uid]["route"],
+                  "reason": "今天这张表里没有这本书，沿用之前批次的 route"}
+                 for uid in uids]
+        return self.app.pdf_settle(items, index)[1]
 
     def forced_pdf(self, uids, index):
         """改处置成 OCR，返回 apply_review 那条命令。它排在驱动前面：triage_final.csv 与
