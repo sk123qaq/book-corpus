@@ -637,10 +637,14 @@ def rebuild_commands(env):
             make_cmd(env, "gen_book_catalog", "gen_book_catalog.py", [])]
 
 
+def pdf_interpreter(env):
+    return os.path.join(env.root, VENV_PDF)
+
+
 def script_interpreter(env, script):
-    """PDF 侧脚本要 pymupdf：按脚本契约换成 工作区/.venv-pdf 的解释器，其余用服务自己的。"""
+    """这几个脚本要 pymupdf，服务自己的解释器里没有：不换就死在脚本自己的守卫上。"""
     if script in VENV_PDF_SCRIPTS:
-        return os.path.join(env.root, VENV_PDF)
+        return pdf_interpreter(env)
     return sys.executable
 
 
@@ -838,6 +842,9 @@ class Runner:
         argv = cmd["argv"]
         self._log(job_id, "\n---- step %s ----\n$ %s\n" % (cmd["name"],
                                                           " ".join(argv)))
+        if not os.path.exists(argv[0]):
+            self._log(job_id, "[缺] 解释器不存在：%s\n" % argv[0])
+            return 127
         if not os.path.exists(argv[1]):
             self._log(job_id, "[缺] 脚本不存在：%s\n" % argv[1])
             return 127
@@ -1201,7 +1208,7 @@ class App:
                     out[uid] = {"pages": hit[1], "text": hit[2]}
                 else:
                     todo.append((uid, rel, stamp))
-        interpreter = os.path.join(self.env.root, VENV_PDF)
+        interpreter = pdf_interpreter(self.env)
         if not todo or not os.path.isfile(interpreter):
             return out
         payload = json.dumps([{"uid": uid, "path": rel} for uid, rel, _stamp in todo],
