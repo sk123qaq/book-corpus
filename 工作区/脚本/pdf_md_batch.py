@@ -27,7 +27,8 @@ pdf_audit_volume.py 做 PDF 侧字数比与逐页锚点覆盖率，门槛全过�
 范围账本 worklist.tsv 记着一批要跑的书：triage_final.csv 里 route=OCR（或 route=本地抽文本）
 的书（skip_list.tsv 里的不排），按页数升序排，页数相同按 uid。账建好之后 --uids 只往里补书，
 不改已有的行。一次运行只跑点名的那几本，没点名就跑账上属于这条 route 的书。--report-json
-在 stdout 最后一行给页面一份统计，只算本次范围。
+在 stdout 最后一行给页面一份统计，范围是这次要跑的书（route 收窄、点名再收窄），不受
+--limit 与 --only 影响。
 
 用法:
   python3 pdf_md_batch.py --batch pdf-ocr-2026-10-19 --workers 3
@@ -186,13 +187,13 @@ def read_worklist(batch_path):
 
 
 def triage_routes(triage):
-    """分诊表里每本书现在走哪条线。表里没有的书算不知道。"""
+    """uid -> 分诊表里的 route。表里没有的书不出现。"""
     with open(triage or TRIAGE, encoding="utf-8") as fh:
         return {t["uid"]: t.get("route") for t in csv.DictReader(fh)}
 
 
 def worklist_scope(rows, route_of, want, wanted):
-    """按 route 收窄，点名了就只留点名的。分诊表里没有的书 route 未知，照跑。"""
+    """分诊表里没有的书 route 未知，照跑；有的只留这条线。"""
     out = [r for r in rows if route_of.get(r["uid"], want) == want]
     if wanted:
         out = [r for r in out if r["uid"] in wanted]
@@ -200,9 +201,9 @@ def worklist_scope(rows, route_of, want, wanted):
 
 
 def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, skip=None):
-    """账在磁盘上，崩了能接着跑。点名（--uids）往账里补书，已有的行不改，没点名的书不动。
+    """点名（--uids）往账里补书，已有的行不改，没点名的书不动。
 
-    本次跑的范围只算 --route 这条线：账是同一份，OCR 与文本层各跑各的书。
+    点名里有 skip_list 的书、或分的不是这条 route 的书，直接退出，不写账。
     dry=True 时只算不写。
     """
     want = ROUTE_TRIAGE[route]
@@ -234,6 +235,7 @@ def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, sk
                       "class": t["class"], "verdict": t.get("verdict", ""),
                       "subject1": t["subject1"], "subject2": t["subject2"],
                       "author": d["author"] or "", "series": d["series"] or ""})
+        known.add(uid)
     rows += added
     rows.sort(key=lambda r: (int(r["pages"] or 0), r["uid"]))
     out = worklist_scope(rows, route_of, want, wanted)
@@ -1319,7 +1321,7 @@ def report(ctx):
 
 
 def report_json(ctx):
-    """队列与落地统计，给页面读。landed 只算真落地的状态，skipped-has-md 算已完成但不算落地。"""
+    """landed 只算真落地的状态，skipped-has-md 算已完成但不算落地。范围是这次要跑的书。"""
     results, broken = load_results(ctx)
     rows = ctx.get("rows")
     if rows is None:
@@ -1392,8 +1394,12 @@ def main():
 
     picked_uids = [u.strip() for u in (a.uids or "").split(",") if u.strip()]
     if a.report:
-        ctx["rows"] = worklist_scope(read_worklist(batch_path) or [], triage_routes(a.triage),
-                                     ROUTE_TRIAGE[a.route], picked_uids)
+        ledger = read_worklist(batch_path) or []
+        ctx["rows"] = worklist_scope(ledger, triage_routes(a.triage), ROUTE_TRIAGE[a.route],
+                                     picked_uids)
+        if ledger and not ctx["rows"]:
+            print("账上 %d 本都不在 route=%s 这条线上，换 --route 再看"
+                  % (len(ledger), a.route))
         report(ctx)
         if a.report_json:
             print(json.dumps(report_json(ctx), ensure_ascii=False))
@@ -1426,7 +1432,8 @@ def main():
         rows = [known[u] for u in wanted if u in known]
         missing = [u for u in wanted if u not in known]
         if missing:
-            sys.exit("worklist 里找不到: " + ", ".join(missing))
+            sys.exit("worklist 里没有 route=%s 的 %s（账上是另一条 route 的书？）"
+                     % (a.route, ", ".join(missing)))
         picked = [r["uid"] for r in rows if r["uid"] in deferred]
         if picked:
             print("注意：%s 在语种账里是日文原版，--only 点名了就跑" % ", ".join(picked))

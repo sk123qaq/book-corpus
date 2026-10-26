@@ -2291,7 +2291,8 @@ class Handler(BaseHTTPRequestHandler):
                              "triage_jobs": triage_jobs})
 
     def forced_pdf(self, uids, index):
-        """改处置成 OCR，返回先跑的 apply_review。"""
+        """改处置成 OCR，返回 apply_review 那条命令。它排在驱动前面：triage_final.csv 与
+        skip_list.tsv 都由它写。"""
         items = [{"uid": uid, "route": "OCR", "verdict": "文字书",
                   "reason": "在 PDF 清单里二次确认按扫描识别转"} for uid in uids]
         return self.app.pdf_settle(items, index)[1]

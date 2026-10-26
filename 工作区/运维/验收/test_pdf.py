@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
 """PDF 这一组的离线验收：分诊、模型四列、批次队列与统计。不碰真库、不调真模型。
 
-覆盖三件事：
-  1. ops_pdf_triage.py 在有文本层与纯图版两种 fixture PDF 上的指标、3 张缩略图、
-     --no-model、模型 JSON 解析（含代码块包裹与非 JSON 回话）；
-  2. pdf_apply_review.py 从 review/<uid>.json 的 model 对象写四列，route 仍由人工 verdict 定，
-     skip_list.tsv 列不变；
-  3. pdf_md_batch.py 的 --uids、--triage、--report-json。
-
 跑法：python3 工作区/运维/验收/test_pdf.py
 """
 import csv
