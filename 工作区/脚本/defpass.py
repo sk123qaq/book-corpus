@@ -20,14 +20,62 @@ def rg_candidates(root, terms):
         sys.exit("rg 退出码 %d：%s" % (r.returncode, (r.stderr or "").strip()))
     return [l for l in r.stdout.splitlines() if l]
 
-def paragraphs(path):
-    """返回 (起始行号, 文本)。空行分段，过短的段向下合并。"""
+FRONT_MATTER_KEY = re.compile(r"^[A-Za-z_][\w-]*:\s*\S")
+
+
+def front_matter_end(lines):
+    """front matter 闭合行的下标（0-based）。不是 front matter 返回 None。
+
+    只认文件开头、40 行内闭合、块里至少有一个 key: value 的块。脚注分隔线
+    没有 key: value，不会被当成 front matter。
+    """
+    if not lines or lines[0].strip() != "---":
+        return None
+    for i in range(1, min(40, len(lines))):
+        if lines[i].strip() == "---":
+            return i if any(FRONT_MATTER_KEY.match(x) for x in lines[1:i]) else None
+    return None
+
+
+def content_line(lines, line):
+    """把落在 front matter 里的行号挪到块后第一个非空行。"""
+    end = front_matter_end(lines)
+    if end is None or line >= end + 2:
+        return line
+    for i in range(end + 1, len(lines)):
+        if lines[i].strip():
+            return i + 1
+    return line
+
+
+def first_content_line(path):
+    """正文第一行的 1-based 行号。没有 front matter 或整篇只有 front matter 时返回 1。"""
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as fh:
+            lines = fh.read().split("\n")
+    except OSError:
+        return 1
+    return content_line(lines, 1)
+
+
+def paragraphs(path, keep_front_matter=False):
+    """返回 (起始行号, 文本)。空行分段，过短的段向下合并。
+
+    文件开头的 front matter 块不索引。块后同一段里的正文另起一段，从闭合行的
+    下一行算起，不按前缀删，免得把正文一起删掉。整篇只有 front matter 时保留
+    原段，章节不从索引里消失。keep_front_matter=True 时连块一起返回，给正文没有
+    可索引 token 的章兜底。
+    """
     try:
         lines = open(path, encoding="utf-8", errors="ignore").read().split("\n")
     except OSError:
         return []
-    out, buf, start = [], [], 1
-    for i, ln in enumerate(lines, 1):
+    base = 1
+    end = front_matter_end(lines)
+    if end is not None and not keep_front_matter and any(x.strip() for x in lines[end + 1:]):
+        base = end + 2
+    out, buf, start = [], [], base
+    for i, ln in enumerate(lines[base - 1:], base):
         if ln.strip():
             if not buf:
                 start = i

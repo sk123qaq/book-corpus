@@ -40,6 +40,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import book_readme
 import book_score
+import defpass
 import lib_fts_cjk as cjk
 import qsearch
 
@@ -128,11 +129,16 @@ def window_for(lines, best_line, level, window_chars):
     if level == 4:
         text = "\n".join(lines)
         return 1, total, text, False, False
+    best_line = defpass.content_line(lines, best_line)
+    floor = 1
+    fm = defpass.front_matter_end(lines)
+    if fm is not None:
+        floor = next((i + 1 for i in range(fm + 1, total) if lines[i].strip()), 1)
     span = {0: 3, 1: 20, 2: 60}.get(level, 20)
-    start, end = max(1, best_line - span), min(total, best_line + span)
+    start, end = max(floor, best_line - span), min(total, best_line + span)
     while True:
         chunk = "\n".join(lines[start - 1:end])
-        if len(chunk) <= window_chars or (start == 1 and end == total):
+        if len(chunk) <= window_chars or (start == floor and end == total):
             break
         if end - best_line >= best_line - start and end > best_line:
             end -= 1
@@ -145,7 +151,7 @@ def window_for(lines, best_line, level, window_chars):
     text = "\n".join(lines[start - 1:end])
     if len(text) > window_chars:
         text = text[:window_chars]
-    has_before, has_after = start > 1, end < total
+    has_before, has_after = start > floor, end < total
     if has_before and level >= 2:
         heading = None
         for i in range(start - 1, max(0, start - 41), -1):
@@ -167,6 +173,9 @@ def boundary_window(lines, side, max_chars):
             start -= 1
     else:
         start = 1
+        fm = defpass.front_matter_end(lines)
+        if fm is not None:
+            start = next((i + 1 for i in range(fm + 1, total) if lines[i].strip()), 1)
         end = start
         while end < total and len("\n".join(lines[start - 1:end + 1])) <= max_chars:
             end += 1
@@ -192,6 +201,7 @@ def make_packet(book, path, title, lines, best_line, level, max_chars, readme_st
                 start=None, end=None):
     """窗口按行。给了 start/end 时保证覆盖这一段（不超过 max_chars）。"""
     total = len(lines)
+    best_line = defpass.content_line(lines, best_line)
     if start is None or end is None:
         a, b, text, has_before, has_after = window_for(lines, best_line, level, max_chars)
     else:

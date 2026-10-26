@@ -53,8 +53,8 @@ CACHE_DIR = os.path.join(HERE, "缓存", "answers")
 SKILL = "/home/shike/.agents/skills/book-corpus-qa/SKILL.md"
 MODEL = "opencode-go/deepseek-v4.1-flash"
 PI_TIMEOUT = 240
-PROMPT_VERSION = "answer-v11"
-PROMPT_VERSION_MULTI = "answer-v18-multi"
+PROMPT_VERSION = "answer-v12"
+PROMPT_VERSION_MULTI = "answer-v19-multi"
 
 QSEARCH_LIMIT = 100
 DEFPASS_TOP = 4
@@ -278,6 +278,9 @@ def _normalize_sources(sources):
             line = max(1, int(item.get("line") or 1))
         except (TypeError, ValueError):
             line = 1
+        first = defpass.first_content_line(os.path.join(ROOT, rel))
+        if line < first:
+            line = first
         title = item.get("title")
         seen.add(rel)
         out.append({"book": book,
@@ -358,6 +361,9 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
 
     返回 (picked, chapters)。picked 是窗口候选，chapters 是给 agent 的候选章地图。
     """
+    first = defpass.first_content_line(os.path.join(ROOT, path))
+    if int(line) < first:
+        line = first
     current = {"path": path, "line": int(line), "score": None, "coverage": None}
     group_lists = _group_lists(groups, terms)
     expr = " OR ".join("(%s)" % e for e in (cjk.query_expr(t) for t in terms) if e)
@@ -1009,6 +1015,9 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     except (TypeError, ValueError):
         line = 1
     book = (book or "").strip() or book_from_path(rel)
+    first = defpass.first_content_line(os.path.join(ROOT, rel))
+    if line < first:
+        line = first
 
     key = cache_key(question, book, rel, line, terms, groups, thinking)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
@@ -1086,7 +1095,7 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
             titles, status = _chapter_titles(src["book"])
             picked, chapters = pick_passages(con, src["book"], src["path"], src["line"],
                                              terms, groups, MULTI_QSEARCH_LIMIT)
-            chosen = [picked[0]] if picked and int(src["line"]) > 1 else []
+            chosen = [picked[0]] if picked and int(picked[0].get("line") or 0) > 1 else []
             for item in picked[1:]:
                 if len(chosen) >= MULTI_WINDOWS_PER_BOOK:
                     break

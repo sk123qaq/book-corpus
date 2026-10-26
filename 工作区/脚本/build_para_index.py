@@ -142,8 +142,13 @@ def build(db, limit_books=0, keep=False):
     for book, paths in books:
         for path in paths:
             rel = os.path.relpath(path, ROOT)
-            for start, text in paragraphs(path):
-                tok = cjk.index_text(text)
+            rows = [(start, text, cjk.index_text(text))
+                    for start, text in paragraphs(path)]
+            if not any(tok for _, _, tok in rows):
+                # 正文全是假名或符号时没有可索引 token，保留 front matter，章节不从索引里消失
+                rows = [(start, text, cjk.index_text(text))
+                        for start, text in paragraphs(path, keep_front_matter=True)]
+            for start, text, tok in rows:
                 if not tok:
                     continue
                 batch.append((rel, book, start, len(text), tok, text))
