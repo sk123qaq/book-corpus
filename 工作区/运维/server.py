@@ -48,6 +48,7 @@ PDF_SKIP_LIST = os.path.join(TRIAGE_PDF_DIR, "skip_list.tsv")
 PDF_DEFER = os.path.join(OCR_BATCH, "defer", "lang.tsv")
 PDF_WORKLIST = os.path.join(OCR_BATCH, "worklist.tsv")
 VENV_PDF = os.path.join("工作区", ".venv-pdf", "bin", "python")
+VENV_PDF_SCRIPTS = ("pdf_md_batch.py",)
 PDF_DISPOSITIONS = ("convert", "gallery", "ja", "untriaged")
 PDF_CONVERT_ROUTES = ("OCR", "本地抽文本")
 PENDING_PDF_SQL = (
@@ -636,13 +637,28 @@ def rebuild_commands(env):
             make_cmd(env, "gen_book_catalog", "gen_book_catalog.py", [])]
 
 
+def script_interpreter(env, script):
+    """PDF 侧脚本要 pymupdf：按脚本契约换成 工作区/.venv-pdf 的解释器，其余用服务自己的。"""
+    if script in VENV_PDF_SCRIPTS:
+        return os.path.join(env.root, VENV_PDF)
+    return sys.executable
+
+
 def make_cmd(env, name, script, args, accepts_root=False, marker=None, capture=None):
     path = os.path.join(env.scripts, script)
-    argv = [sys.executable, path] + list(args)
+    argv = [script_interpreter(env, script), path] + list(args)
     if accepts_root:
         argv += ["--root", env.root]
     return {"name": name, "script": script, "argv": argv, "marker": marker,
             "capture": capture}
+
+
+def retarget(env, cmd):
+    """重跑时按当前根重算解释器：旧 commands.json 可能留着跑不了 PDF 的那个。"""
+    argv = list(cmd.get("argv") or [])
+    if argv:
+        argv[0] = script_interpreter(env, cmd.get("script") or "")
+    return dict(cmd, argv=argv)
 
 
 class Runner:
@@ -2361,6 +2377,10 @@ class Handler(BaseHTTPRequestHandler):
                                           "commands.json"))
         if not commands:
             self.fail(409, "找不到原来的命令行")
+            return
+        commands = [retarget(self.app.env, c) for c in commands if isinstance(c, dict)]
+        if not commands:
+            self.fail(409, "原来的命令行里没有可重跑的步骤")
             return
         if not KINDS.get(job["kind"], {}).get("readonly") and self.writer_busy():
             self.fail(409, "有写任务在跑，等它结束再发")
