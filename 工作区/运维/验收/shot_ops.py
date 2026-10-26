@@ -606,6 +606,21 @@ MAINTAIN_PRODUCT = """
 })()
 """
 
+STATUS_ISSUES = """
+(() => {
+  const box = document.querySelector('#status-issues');
+  if (!box) return {box: false};
+  const head = (el) => {
+    const h = el && el.querySelector('h2');
+    return h ? h.textContent.replace(/\\s+/g, ' ').trim() : '';
+  };
+  return {box: true, prev: head(box.previousElementSibling),
+          next: head(box.nextElementSibling),
+          count: box.querySelectorAll('.issue').length,
+          text: box.textContent.replace(/\\s+/g, ' ').trim()};
+})()
+"""
+
 LOG_CANCEL = """
 (async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -864,6 +879,18 @@ def run_viewport(base, width, height, out_dir, port, live=False):
                      % (maint["afterClick"], maint["afterRender"]))
         if maint["afterClick"] != maint["afterRender"]:
             failed_tabs.append("maintain-steps-kept")
+        issues = eval_js(cdp, STATUS_ISSUES)
+        notes.append("维护体检提醒 %s" % (issues,))
+        issues_ok = (issues.get("box") and issues.get("prev") == "库的状态"
+                     and issues.get("next") == "一键收尾")
+        if not live:
+            issue_text = issues.get("text") or ""
+            issues_ok = (issues_ok and issues.get("count") == 2
+                         and "缺 README" in issue_text
+                         and "批次在跑" in issue_text
+                         and "体检于" in issue_text)
+        if not issues_ok:
+            failed_tabs.append("maintain-issues")
         maint2 = eval_js(cdp, MAINTAIN_PRODUCT if not live else MAINTAIN_LAYOUT,
                          await_promise=True, timeout=120)
         notes.append("维护一键收尾 %s" % (maint2,))

@@ -419,6 +419,20 @@ pre.log {
 .status.out::before { background: var(--line); }
 .status.miss { color: var(--ink); }
 
+/* ---- 体检提醒 ------------------------------------------------------ */
+.issues { list-style: none; margin: 0; padding: 0; }
+.issue {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.issue:last-child { border-bottom: 0; }
+.issue-text { min-width: 0; overflow-wrap: anywhere; }
+.pill.half { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
+.pill.miss { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+
 /* ---- 流水线 ------------------------------------------------------- */
 .pipeline {
   display: grid;

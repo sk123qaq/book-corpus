@@ -276,6 +276,41 @@ function bookCounts() {
   };
 }
 
+// 体检条只给条数，具体哪几条由状态原文拆出来，和条上的数同源
+function statusIssues() {
+  const st = S.status || {};
+  const rows = [];
+  dig(st, 'problems', []).forEach((raw) => {
+    rows.push({ level: 'fail', text: String(raw) });
+  });
+  dig(st, 'audit.items', []).forEach((raw) => {
+    const text = String(raw);
+    if (/^…/.test(text)) {
+      rows.push({ level: 'note', text: text });
+      return;
+    }
+    const hit = /^\s*(fail|warn)\s*[:：]?\s*(.*)$/i.exec(text);
+    if (hit) rows.push({ level: hit[1].toLowerCase(), text: hit[2] });
+    else rows.push({ level: 'warn', text: text });
+  });
+  return { at: dig(st, 'audit.at', ''), rows: rows };
+}
+
+function issueList(info) {
+  if (!statsReadable()) return '<p class="hint">状态读不到，刷新一下试试。</p>';
+  if (!info.rows.length) {
+    return info.at
+      ? '<p class="pass">体检全部通过。</p>'
+      : '<p class="hint">还没有体检记录，跑一次收尾就会有。</p>';
+  }
+  return `<ul class="issues">${info.rows.map((row) => `<li class="issue">
+    ${row.level === 'note' ? ''
+    : `<span class="pill ${row.level === 'fail' ? 'miss' : 'half'}">${
+      row.level === 'fail' ? '需处理' : '提醒'}</span>`}
+    <span class="issue-text${row.level === 'note' ? ' hint' : ''}">${esc(row.text)}</span>
+  </li>`).join('')}</ul>`;
+}
+
 function statsReadable() {
   return !(S.payload && S.payload.error);
 }
@@ -1115,6 +1150,7 @@ function stateCell(name, cls, word, note) {
 
 function viewMaintain() {
   const c = bookCounts();
+  const info = statusIssues();
   const last = S.jobs.find((j) => j.kind === 'maintain') || null;
   const lastCls = !last ? 'out' : (last.state === 'succeeded' ? 'ok'
     : (last.state === 'failed' || last.state === 'orphaned' ? 'miss' : 'half'));
@@ -1141,6 +1177,11 @@ function viewMaintain() {
     c.unmatched ? num(c.unmatched) + ' 条对不上文件' : '改于 ' + fmtTime(c.catalogAt).slice(5))}
         ${stateCell('上次收尾', lastCls, lastWord, lastNote)}
       </div>
+    </div>
+    <div class="section card" id="status-issues">
+      <h2>体检提醒</h2>
+      ${issueList(info)}
+      ${info.at ? `<p class="hint">体检于 ${esc(fmtTime(info.at).slice(5))}</p>` : ''}
     </div>
     <div class="section card">
       <div class="card-head"><h2>一键收尾</h2>
