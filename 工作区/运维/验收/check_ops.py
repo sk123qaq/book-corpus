@@ -934,6 +934,11 @@ def run_checks(root, ops, port, fixture):
     venv_py = os.path.join(root, "工作区", ".venv-pdf", "bin", "python")
     check("PDF 转写用 .venv-pdf 的解释器",
           os.path.abspath(argv[0]) == venv_py, argv[0])
+    cpath = os.path.join(root, "工作区", "运维", "jobs", pdf_id, "commands.json")
+    stale = json.load(open(cpath, encoding="utf-8"))
+    stale[0]["argv"][0] = sys.executable
+    with open(cpath, "w", encoding="utf-8") as fh:
+        json.dump(stale, fh, ensure_ascii=False)
     deadline = time.time() + 20
     while True:
         code, body = post(port, "/api/jobs/%s/rerun" % pdf_id)
@@ -946,6 +951,16 @@ def run_checks(root, ops, port, fixture):
     rerun_argv = ((detail or {}).get("commands") or [{}])[0]["argv"]
     check("PDF 重跑也用 .venv-pdf 的解释器",
           os.path.abspath(rerun_argv[0]) == venv_py, rerun_argv[0])
+    try:
+        os.remove(venv_py)
+        code, body = post(port, "/api/pdf/run", {"uids": ["B0005"], "workers": 1})
+        detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
+    finally:
+        os.symlink(sys.executable, venv_py)
+    job = (detail or {}).get("job") or {}
+    check("缺 PDF 解释器时日志写明，不抛服务端异常",
+          job.get("state") == "failed" and "解释器不存在" in str((detail or {}).get("log_tail")),
+          str(job.get("summary")))
     code, body = post(port, "/api/pdf/run", {"uids": ["B0002"]})
     check("没有可转 route 时拒绝", code == 400, str(body.get("error")))
 
