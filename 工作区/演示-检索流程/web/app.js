@@ -18,10 +18,16 @@
   };
   const SOURCE = { model: '模型切词', cache: '缓存', degraded: '降级' };
   const SOURCE_CLASS = { model: 'model', cache: 'cache', degraded: 'degraded' };
+  const THINKING = { off: '关', low: '低', medium: '中', high: '高' };
+  const THINKING_LEVELS = ['off', 'low', 'medium', 'high'];
+  const THINKING_DEFAULT = 'high';
+  const THINKING_KEY = 'booksearch.thinking';
 
   const state = {
     trace: null,
     health: null,
+    thinking: THINKING_DEFAULT,
+    answerFresh: false,
     instant: false,
     expandAll: false,
     selectAll: false,
@@ -74,6 +80,40 @@
   function fixed(x, digits = 2) {
     const n = Number(x);
     return isFinite(n) ? n.toFixed(digits) : '—';
+  }
+
+  function normalizeThinking(value) {
+    const v = String(value || '').trim().toLowerCase();
+    return THINKING_LEVELS.indexOf(v) >= 0 ? v : THINKING_DEFAULT;
+  }
+
+  function thinkingLabel(value) {
+    const level = normalizeThinking(value);
+    return THINKING[level] || level;
+  }
+
+  function savedThinking() {
+    try {
+      const v = localStorage.getItem(THINKING_KEY);
+      if (v) return normalizeThinking(v);
+    } catch (err) { /* 隐私模式下 localStorage 可能不可用 */ }
+    return THINKING_DEFAULT;
+  }
+
+  function renderThinking() {
+    $$('.think-opt').forEach((el) => {
+      const on = el.dataset.level === state.thinking;
+      el.classList.toggle('on', on);
+      el.setAttribute('aria-pressed', String(on));
+    });
+    const sel = $('#think-select');
+    if (sel && sel.value !== state.thinking) sel.value = state.thinking;
+  }
+
+  function setThinking(value) {
+    state.thinking = normalizeThinking(value);
+    try { localStorage.setItem(THINKING_KEY, state.thinking); } catch (err) { /* ignore */ }
+    renderThinking();
   }
 
   function stageMs(trace) {
@@ -219,7 +259,7 @@
     $('.stage-body', stages[0]).innerHTML =
       `<p class="stage-note">${esc(notes.join(' · '))}</p><div class="term-row">${chips}</div>`;
     $('.stage-summary', stages[0]).innerHTML =
-      `<p class="summary-line">${terms.length} 个检索词 · ${SOURCE[ex.source] || '降级'} · ${fmtMs(ex.ms)}</p>` +
+      `<p class="summary-line">${terms.length} 个检索词 · 思考 ${thinkingLabel(trace.thinking)} · ${SOURCE[ex.source] || '降级'} · ${fmtMs(ex.ms)}</p>` +
       `<div class="summary-evidence">${terms.map((t) => `<span class="mini-term">${esc(t)}</span>`).join('')}</div>`;
   }
 
@@ -529,10 +569,13 @@
     if (d.cached) meta.push('缓存命中');
     if (d.ms != null) meta.push(fmtMs(d.ms));
     if (d.model) meta.push(d.model);
+    if (d.thinking) meta.push('思考 ' + thinkingLabel(d.thinking));
     return `<section class="answer-card ${d.not_found ? 'is-empty' : ''}">
       <div class="answer-head">
         <span class="answer-label">回答</span>
         <span class="answer-note">${note}</span>
+        <button type="button" class="fresh-btn answer-fresh"
+                title="跳过缓存，重新检索并生成新回答">重新检索</button>
       </div>
       <div class="answer-text">${body}</div>
       <p class="answer-meta mono">${esc(meta.join(' · '))}</p>
@@ -613,7 +656,7 @@
   function locatorKey(loc) {
     if (!loc) return '';
     const sig = (loc.sources || []).map((s) => [s.book, s.path, s.line].join(',')).join(';');
-    return [loc.question, loc.book, loc.path, loc.line, sig].join('|');
+    return [loc.question, loc.book, loc.path, loc.line, sig, state.thinking].join('|');
   }
 
   function cancelAnswer() {
@@ -624,8 +667,11 @@
     state.answer = null;
   }
 
-  async function startAnswer(loc) {
+  async function startAnswer(loc, opts = {}) {
     if (!loc || !loc.path || !loc.question) return;
+    let fresh = opts.fresh;
+    if (fresh == null) fresh = !!state.answerFresh;
+    state.answerFresh = false;
     const key = locatorKey(loc);
     const seq = ++state.answerSeq;
     if (state.answer && state.answer.controller) {
@@ -642,6 +688,8 @@
           question: loc.question, book: loc.book, path: loc.path,
           line: loc.line, terms: loc.terms, groups: loc.groups || [],
           sources: loc.sources || [],
+          thinking: state.thinking,
+          fresh: !!fresh,
         }),
         signal: controller.signal,
       });
@@ -859,6 +907,8 @@
   }
 
   function enterLoading(q) {
+    clearTimers();
+    state.playing = false;
     $('#hero').hidden = true;
     $('#workspace').hidden = false;
     $('.question-text').textContent = q;
@@ -1028,7 +1078,12 @@
       }
       if (ev.target.closest('.answer-retry')) {
         const loc = (state.answer && state.answer.locator) || answerLocator();
-        if (loc) startAnswer(loc);
+        if (loc) startAnswer(loc, { fresh: true });
+        return;
+      }
+      if (ev.target.closest('.answer-fresh')) {
+        const q = (state.trace && state.trace.question) || $('#question').value;
+        run(q, { fresh: true });
         return;
       }
       const name = ev.target.closest('.rank-name');
@@ -1061,17 +1116,24 @@
     if (!q || state.busy) return;
     state.busy = true;
     hideError();
+    cancelAnswer();
+    const fresh = !!opts.fresh;
+    state.answerFresh = fresh;
     const btn = $('#ask-btn');
     const old = btn.textContent;
     btn.disabled = true;
     btn.textContent = '检索中';
+    const freshBtn = $('#fresh-btn');
+    if (freshBtn) freshBtn.disabled = true;
+    const thinkSel = $('#think-select');
+    if (thinkSel) thinkSel.disabled = true;
     const seq = ++state.runSeq;
     enterLoading(q);
     try {
       const trace = await fetchJSON('/api/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, thinking: state.thinking, fresh }),
       });
       if (seq !== state.runSeq) return;
       state.trace = trace;
@@ -1079,6 +1141,7 @@
       state.expandAll = !!opts.expandAll;
       state.noScroll = !!opts.noScroll;
       state.scrollHit = !!opts.scrollHit;
+      state.answerFresh = fresh;
       const cards = (trace.cards && trace.cards.cards) || [];
       const want = Number(opts.select) || 0;
       state.selected = (cards.length && want >= 1 && want <= cards.length) ? want - 1 : 0;
@@ -1097,17 +1160,21 @@
       const params = new URLSearchParams();
       params.set('q', q);
       if (state.instant) params.set('instant', '1');
+      if (state.thinking !== THINKING_DEFAULT) params.set('thinking', state.thinking);
       if (state.selected && cards.length) params.set('select', String(state.selected + 1));
       if (state.selectAll) params.set('all', '1');
       history.replaceState(null, '', '?' + params.toString());
     } catch (err) {
       if (seq !== state.runSeq) return;
+      state.answerFresh = false;
       backToHero();
       showError(err.message || String(err));
     } finally {
       state.busy = false;
       btn.disabled = false;
       btn.textContent = old;
+      if (freshBtn) freshBtn.disabled = false;
+      if (thinkSel) thinkSel.disabled = false;
     }
   }
 
@@ -1116,6 +1183,7 @@
     cancelAnswer();
     state.runSeq++;
     state.trace = null;
+    state.answerFresh = false;
     state.selectAll = false;
     state.result = null;
     state.locator = null;
@@ -1130,6 +1198,8 @@
   }
 
   function init() {
+    const params = new URLSearchParams(location.search);
+    setThinking(params.get('thinking') || savedThinking());
     bindStageToggle();
     bindCardClick();
     railItems.forEach((li) => {
@@ -1138,6 +1208,10 @@
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
+    $$('.think-opt').forEach((btn) => {
+      btn.addEventListener('click', () => setThinking(btn.dataset.level));
+    });
+    $('#think-select').addEventListener('change', (ev) => setThinking(ev.target.value));
     loadHealth();
 
     $('#ask-form').addEventListener('submit', (ev) => {
@@ -1158,6 +1232,7 @@
     });
     $('#replay-btn').addEventListener('click', () => {
       if (!state.trace) return;
+      state.answerFresh = false;
       state.selectAll = false;
       state.selected = 0;
       markSelected(0);
@@ -1173,8 +1248,11 @@
       state.instant = false;
       finishAll();
     });
+    $('#fresh-btn').addEventListener('click', () => {
+      const q = (state.trace && state.trace.question) || $('#question').value;
+      run(q, { fresh: true });
+    });
 
-    const params = new URLSearchParams(location.search);
     const q = (params.get('q') || '').trim();
     if (q) {
       $('#question').value = q;

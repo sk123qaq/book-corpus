@@ -2,7 +2,8 @@
 """组装一条检索 trace：切词 → 词法循环 → 打分选章 → 书卡 → 原文。
 
 只读 目录/检索/index.db、目录/library.db 与 库/**.md。
-切词用一次 pi 调用并缓存到 缓存/terms/<问题sha1>.json；失败退回概念表包含匹配。
+切词用一次 pi 调用并缓存到 缓存/terms/<问题+思考等级 sha1>.json；失败退回概念表包含匹配。
+fresh=True 跳过切词缓存，前端「重新检索」走这条路。
 不跑 B4：book_cards.run 的 expand 固定为 {}。
 """
 import csv
@@ -19,11 +20,13 @@ import unicodedata
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 SCRIPTS = os.path.join(ROOT, "工作区", "脚本")
-if SCRIPTS not in sys.path:
-    sys.path.insert(0, SCRIPTS)
+for _p in (SCRIPTS, HERE):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import book_cards  # noqa: E402
 import book_query  # noqa: E402
+from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinking  # noqa: E402
 
 INDEX_DB = os.path.join(ROOT, "目录", "检索", "index.db")
 LIB_DB = os.path.join(ROOT, "目录", "library.db")
@@ -37,7 +40,7 @@ PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files",
       "--no-skills", "--no-extensions", "--model", MODEL]
 PI_TIMEOUT = 90
 MAX_TERMS = 6
-TERM_VERSION = "terms-v2"
+TERM_VERSION = "terms-v3"
 STAGE_CHARS = 900
 STAGE_BEFORE = 700
 
@@ -160,8 +163,9 @@ def _fallback_terms(question):
     return [question.strip()]
 
 
-def _cache_path(question):
-    key = hashlib.sha1((TERM_VERSION + "\n" + question.strip()).encode("utf-8")).hexdigest()
+def _cache_path(question, thinking):
+    raw = "\n".join((TERM_VERSION, thinking, question.strip()))
+    key = hashlib.sha1(raw.encode("utf-8")).hexdigest()
     return os.path.join(CACHE_DIR, key + ".json")
 
 
@@ -174,10 +178,15 @@ def _write_json(path, value):
     os.replace(tmp, path)
 
 
-def extract_terms(question):
-    """返回 {terms, groups, source, ms, note}。source: model|cache|degraded。"""
-    path = _cache_path(question)
-    if os.path.exists(path):
+def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
+    """返回 {terms, groups, source, ms, note}。source: model|cache|degraded。
+
+    thinking 进缓存键：换档就是另一份切词。use_cache=False 时跳过读缓存，
+    但本次模型结果仍写回，下一次同档提问直接命中。
+    """
+    thinking = normalize_thinking(thinking)
+    path = _cache_path(question, thinking)
+    if use_cache and os.path.exists(path):
         t0 = time.time()
         try:
             with open(path, encoding="utf-8") as fh:
@@ -186,7 +195,7 @@ def extract_terms(question):
             groups = data.get("groups") or []
             if terms and groups:
                 return {"terms": terms[:MAX_TERMS], "groups": groups,
-                        "source": "cache",
+                        "source": "cache", "thinking": thinking,
                         "ms": round((time.time() - t0) * 1000, 1), "model": MODEL}
         except (OSError, ValueError):
             pass
@@ -194,16 +203,17 @@ def extract_terms(question):
     t0 = time.time()
     note = ""
     try:
-        res = subprocess.run(PI + [_prompt(question)], capture_output=True, text=True,
-                             timeout=PI_TIMEOUT, cwd=ROOT)
+        res = subprocess.run(PI + ["--thinking", thinking, _prompt(question)],
+                             capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT)
         terms, groups = _parse_extract(res.stdout) if res.returncode == 0 else ([], [])
         if len(terms) >= 2:
             ms = round((time.time() - t0) * 1000, 1)
             _write_json(path, {"question": question, "terms": terms, "groups": groups,
-                               "source": "model", "model": MODEL, "ms": ms,
+                               "source": "model", "model": MODEL, "thinking": thinking,
+                               "ms": ms,
                                "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
             return {"terms": terms, "groups": groups, "source": "model",
-                    "ms": ms, "model": MODEL}
+                    "thinking": thinking, "ms": ms, "model": MODEL}
         note = "模型返回不可用（rc=%d）" % res.returncode
     except (OSError, subprocess.SubprocessError) as exc:
         note = "切词调用失败：%s" % exc.__class__.__name__
@@ -211,7 +221,7 @@ def extract_terms(question):
     terms = _fallback_terms(question)
     groups = [{"name": t, "variants": [t]} for t in terms]
     return {"terms": terms, "groups": groups, "source": "degraded",
-            "ms": ms, "model": MODEL, "note": note}
+            "thinking": thinking, "ms": ms, "model": MODEL, "note": note}
 
 
 # ---- 原文 -----------------------------------------------------------
@@ -448,11 +458,12 @@ def _pick_default(plan, cardset, select):
     return None
 
 
-def build(question, select=0):
+def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
     question = (question or "").strip()
     if not question:
         raise ValueError("question 为空")
-    understand = extract_terms(question)
+    thinking = normalize_thinking(thinking)
+    understand = extract_terms(question, thinking=thinking, use_cache=not fresh)
     terms = understand["terms"]
 
     con = _ro(INDEX_DB)
@@ -548,6 +559,7 @@ def build(question, select=0):
         }
         trace = {
             "question": question,
+            "thinking": thinking,
             "extract": understand,
             "plan": plan_dict,
             "cards": cards_dict,
@@ -566,9 +578,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
     ap.add_argument("--select", type=int, default=0)
+    ap.add_argument("--thinking", default=DEFAULT_THINKING)
+    ap.add_argument("--fresh", action="store_true")
     ap.add_argument("--out")
     args = ap.parse_args(argv)
-    trace = build(args.question, args.select)
+    trace = build(args.question, args.select, thinking=args.thinking, fresh=args.fresh)
     text = json.dumps(trace, ensure_ascii=False)
     if args.out:
         _write_json(args.out, trace)

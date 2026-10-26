@@ -8,6 +8,7 @@
   3. 库里没有的问题 not_found=true 或 answer 含「未找到原文依据」，不崩
   4. 全选：用「内卷和教育」那题的书卡拼 sources 再问一次，mode=multi、引文盖住 2 本书以上且都在书单内、
      第二跑命中缓存
+  5. thinking 透传到切词与回答；/api/run 与 /api/answer 的 fresh=true 跳过缓存重新生成
 """
 import json
 import sys
@@ -128,6 +129,23 @@ check("不弹卡路径", (t2.get("cards") or {}).get("trigger") is False
       and not (t2.get("cards") or {}).get("cards"), "trigger=false, cards=0")
 check("不弹卡仍有结果", len((t2.get("result") or {}).get("text") or "") > 200)
 
+# ---- 思考等级与「重新检索」跳过缓存 -----------------------------------
+_, body = post("/api/run", {"question": "乡土中国 差序格局", "thinking": "low"})
+t_low = json.loads(body)
+check("思考等级透传", (t_low.get("extract") or {}).get("thinking") == "low"
+      and t_low.get("thinking") == "low",
+      "%s/%s" % (t_low.get("thinking"), (t_low.get("extract") or {}).get("thinking")))
+_, body = post("/api/run", {"question": "乡土中国 差序格局", "thinking": "low"})
+t_low_cached = json.loads(body)
+check("同档切词缓存命中", (t_low_cached.get("extract") or {}).get("source") == "cache",
+      "source=%s" % (t_low_cached.get("extract") or {}).get("source"))
+_, body = post("/api/run", {"question": "乡土中国 差序格局", "thinking": "low",
+                            "fresh": True})
+t_low_fresh = json.loads(body)
+check("重新检索跳过切词缓存",
+      (t_low_fresh.get("extract") or {}).get("source") == "model",
+      "source=%s" % (t_low_fresh.get("extract") or {}).get("source"))
+
 ch = ((t1.get("plan") or {}).get("chapters") or [{}])[0].get("selected", [{}])[0]
 q = urllib.parse.quote(ch.get("chapter_path", ""))
 status, body = get("/api/chapter?path=%s&line=%s&chars=600" % (q, ch.get("line", 1)))
@@ -176,7 +194,14 @@ check("回答接口可用", status == 200 and first.get("ok") is True,
       "ok=%s cached=%s %.1f s passages=%d" % (first.get("ok"), first.get("cached"),
                                              first_ms / 1000.0, len(first.get("passages") or [])))
 check("回答含威慑度与百分之十", "威慑度" in answer3 and "百分之十" in answer3, answer3[:60])
-check("单书不分节", not (first.get("sections") or []), "sections=%d" % len(first.get("sections") or []))
+check("回答思考等级默认 high", first.get("thinking") == "high",
+      "thinking=%s" % first.get("thinking"))
+secs1 = [s for s in (first.get("sections") or []) if isinstance(s, dict)]
+check("单书分节", bool(secs1) and bool((first.get("lead") or "").strip())
+      and all((s.get("heading") or "").strip() and (s.get("body") or "").strip()
+              for s in secs1)
+      and not any(m in answer3 for m in ("##", "**")),
+      "lead=%d 字 sections=%d" % (len((first.get("lead") or "").strip()), len(secs1)))
 check("引文回查行号 1166/1172", any(c.get("line") in (1166, 1172) for c in cites3),
       "lines=%s" % [c.get("line") for c in cites3])
 
@@ -186,6 +211,13 @@ again = json.loads(body)
 again_ms = (time.time() - t0) * 1000
 check("回答缓存命中", again.get("cached") is True and again_ms < 1500,
       "cached=%s %.0f ms" % (again.get("cached"), again_ms))
+
+t0 = time.time()
+status, body = post("/api/answer", dict(loc, fresh=True), timeout=300)
+fresh3 = json.loads(body)
+fresh3_ms = (time.time() - t0) * 1000
+check("回答 fresh 跳过缓存", fresh3.get("ok") is True and fresh3.get("cached") is False,
+      "cached=%s %.1f s" % (fresh3.get("cached"), fresh3_ms / 1000.0))
 
 # ---- 凡人修仙传：qsearch 前 100 + 组覆盖 + 只读 grep -----------------
 FANREN = "凡人修仙传里有次南宫婉受伤，好像还被冰封，是什么人下的手"

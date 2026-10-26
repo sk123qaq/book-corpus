@@ -30,6 +30,17 @@ def json_bytes(value):
     return json.dumps(value, ensure_ascii=False).encode("utf-8")
 
 
+def _flag(value):
+    """请求里的布尔开关：接受 true/false、"1"/"0" 与数字，别的算 false。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return False
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "BookTrace/1.0"
     protocol_version = "HTTP/1.1"
@@ -143,7 +154,8 @@ class Handler(BaseHTTPRequestHandler):
             select = int(select)
         except (TypeError, ValueError):
             select = 0
-        self.api_run(question, select)
+        self.api_run(question, select, payload.get("thinking"),
+                     _flag(payload.get("fresh")))
 
     def handle_answer(self, payload):
         question = payload.get("question")
@@ -202,7 +214,9 @@ class Handler(BaseHTTPRequestHandler):
         elif not path:
             self.fail(400, "path 为空")
             return
-        self.api_answer(question, book, path, line, terms, groups, clean)
+        self.api_answer(question, book, path, line, terms, groups, clean,
+                        thinking=payload.get("thinking"),
+                        use_cache=not _flag(payload.get("fresh")))
 
     # ---- API -------------------------------------------------------
     def api_health(self):
@@ -213,12 +227,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(200, {"ok": True, "db": "ok", "meta": info})
 
-    def api_run(self, question, select):
+    def api_run(self, question, select, thinking=None, fresh=False):
         if not LOCK.acquire(timeout=120):
             self.fail(503, "服务忙，稍后重试")
             return
         try:
-            data = tracer.build(question, select)
+            data = tracer.build(question, select, thinking=thinking, fresh=fresh)
             self.send_json(200, data)
         except ValueError as exc:
             self.fail(400, str(exc))
@@ -255,10 +269,12 @@ class Handler(BaseHTTPRequestHandler):
         info["ok"] = True
         self.send_json(200, info)
 
-    def api_answer(self, question, book, path, line, terms, groups, sources=None):
+    def api_answer(self, question, book, path, line, terms, groups, sources=None,
+                   thinking=None, use_cache=True):
         try:
             info = answerer.answer_question(question, book, path, line, terms,
-                                            groups=groups, sources=sources)
+                                            groups=groups, sources=sources,
+                                            thinking=thinking, use_cache=use_cache)
             self.send_json(200, info)
         except ValueError as exc:
             self.fail(400, str(exc))

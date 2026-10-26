@@ -31,6 +31,16 @@
                  aria-label="问题">
           <button class="btn-primary" type="submit" id="ask-btn">检索</button>
         </div>
+        <div class="ask-options">
+          <span class="option-label">模型思考</span>
+          <span class="seg" id="think-seg" role="group" aria-label="模型思考等级">
+            <button type="button" class="think-opt" data-level="off">关</button>
+            <button type="button" class="think-opt" data-level="low">低</button>
+            <button type="button" class="think-opt" data-level="medium">中</button>
+            <button type="button" class="think-opt" data-level="high">高</button>
+          </span>
+          <span class="option-hint">越高越慢；换档后同一问题按新档重新生成</span>
+        </div>
       </form>
       <div class="samples" id="samples">
         <span class="samples-label">试一句</span>
@@ -47,6 +57,16 @@
       <button type="button" class="link-btn" id="back-btn">← 换个问题</button>
       <p class="question-text" id="question-text"></p>
       <div class="controls">
+        <label class="think-mini">思考
+          <select id="think-select" aria-label="模型思考等级">
+            <option value="off">关</option>
+            <option value="low">低</option>
+            <option value="medium">中</option>
+            <option value="high">高</option>
+          </select>
+        </label>
+        <button type="button" class="fresh-btn" id="fresh-btn"
+                title="跳过缓存，重新切词、检索并生成回答">重新检索</button>
         <button type="button" class="link-btn" id="replay-btn" hidden>重播</button>
         <button type="button" class="link-btn" id="skip-btn" hidden>跳过动画</button>
       </div>

@@ -14,9 +14,9 @@ python3 工作区/演示-检索流程/server.py
 打开 http://127.0.0.1:8765 。默认只监听 127.0.0.1:8765，`--port` 可换。
 
 - 示例问题点一下就跑：礼治社会靠什么维持秩序 / 内卷和教育之间是什么关系 / 乡土中国 差序格局。
-- 自由提问会先用 `pi` 调一次 `opencode-go/deepseek-v4.1-flash` 切词，约 3 到 5 秒，之后同一个问题命中缓存。
-- 回答是第二次调用（`--thinking low`）：单书约 15 到 40 秒，多书 65 到 87 秒（六本实测），同一个问题第二次命中
-  `缓存/answers/`，毫秒级。
+- 自由提问会先用 `pi` 调一次 `opencode-go/deepseek-v4.1-flash` 切词，约 3 到 5 秒；同问题同思考等级命中缓存。
+- 回答是第二次调用（思考等级默认 `high`，页面可调 关/低/中/高）：单书约 15 到 40 秒，多书 65 到 87 秒（六本实测），
+  同问题同档第二次命中 `缓存/answers/`，毫秒级。顶部「重新检索」跳过两处缓存，重新切词、检索并生成新回答。
 - 页脚写明「动画节奏为演示，耗时是实测」：每个阶段的毫秒数来自真实调用。
 
 ## 五个阶段与数据来源
@@ -41,15 +41,17 @@ python3 工作区/演示-检索流程/server.py
    取有界窗口；最多 6 窗、合计 14000 字。候选章地图单独给 agent。
 5. 提示词带候选章地图、窗口和两个只读工具：
    `pi -p -e readonly_tools.ts --tools book_grep,read --skill ~/.agents/skills/book-corpus-qa/SKILL.md
-   --model opencode-go/deepseek-v4.1-flash --thinking low "<prompt>"`，超时 240 秒。
+   --model opencode-go/deepseek-v4.1-flash --thinking <档位> "<prompt>"`，超时 240 秒。
+   `<档位>` 由页面选，默认 `high`，进答案缓存键。
    `book_grep` 只搜本书 md 目录；没有 bash、edit、write。
-6. 解析第一个括号配平的 JSON 对象（去代码块围栏）。多书读 `lead`、`sections`、`dissent`、`gap`
+   单书提示词要求领句给判断、中间 2 到 4 个 `## 小标题`、可选 `## 分歧` 与 `## 缺口`，全篇 300 到 600 字，和多书同一套结构规则。
+6. 解析第一个括号配平的 JSON 对象（去代码块围栏）。单书与多书都读 `lead`、`sections`、`dissent`、`gap`
    并拼出 `answer`；全空时退回模型给的 `answer`，再空就是 `not_found=true`。
 7. 回查引文：`quote` 去空白后的前 20 字，在对应章文件逐行找；找不到再整章找；
    行号一律改成文件实际行号，仍找不到就丢掉这条。`path` 必须 realpath 在 `库/` 下且 `.md`。
 8. 通过 ≥ 2 条保留模型给的 `confidence`，0 到 1 条降到 `low` 并在 `error` 写「引文回查不足」。
-   依据按「离命中行的距离」排序，只留 4 条；整份 Answer 缓存到 `缓存/answers/<sha1>.json`
-   （键含 question、book、path、line、terms、groups、`PROMPT_VERSION`），原子写。
+   依据按「离命中行的距离」排序，只留 6 条；整份 Answer 缓存到 `缓存/answers/<sha1>.json`
+   （键含 question、book、path、line、terms、groups、`PROMPT_VERSION`、思考等级），原子写。
 9. 回答完成后，前端自动把原文窗口切到第一条 verified 依据，并高亮该依据；点其它依据仍可切换。
 
 ### 多书（全选）
@@ -72,7 +74,7 @@ python3 工作区/演示-检索流程/server.py
 6. 回查时 citation 的 path 必须 realpath 在 `库/` 下且推出的书在本次书单内，不做跨书同名文件兜底。
    排序是书单顺序（当前选中的那本在前），每本内按离该书命中行的距离，先每本一条再第二轮，最多 8 条。
    通过 ≥ 2 条但只盖住 1 本书时 `error` 写「引文只覆盖 1 本书」，`confidence` 不降。
-7. 缓存键换成 `answer-v17-multi`，含书单顺序；单书用 `answer-v8`。形状变了，旧缓存不再命中。
+7. 缓存键换成 `answer-v18-multi`，含书单顺序；单书用 `answer-v11`。形状变了，旧缓存不再命中。
    `book_grep` 的搜索范围改由 `BOOK_MDS`（JSON 数组，一本一个 md 目录）给出，没给 `path` 时每本书分一份
    `max(5, limit // 本数)` 的配额，所以一本厚书吃不掉全部限额。
 
@@ -82,7 +84,9 @@ python3 工作区/演示-检索流程/server.py
 ## 接口
 
 - `GET /api/health` → 书库规模与索引构建时间。
-- `POST /api/run` `{"question":"..."}` → 五阶段 trace（结构见 `BRIEF.md` 的「数据契约」）。
+- `POST /api/run` `{"question":"...","thinking":"high","fresh":false}` → 五阶段 trace（结构见 `BRIEF.md` 的「数据契约」）。
+  `thinking` 取 `off/minimal/low/medium/high/xhigh/max`（默认 `high`），进切词缓存键；
+  `fresh=true` 跳过切词缓存重新调模型，本次结果仍写回。trace 顶层与 `extract` 都带 `thinking`。
 - `GET /api/chapter?path=库/...md&line=16&chars=900&before=700` → 从 1-based 行起截原文，命中整行保留，前置 700 字，YAML 前置块跳过。
   路径必须 realpath 在 `库/` 下且以 `.md` 结尾，否则 400。返回除 `text`/`title`/`html`/`ms` 外还有：
   `hit_line`、`hit_start`、`hit_end`、`hit_text`、`before`（请求的前置预算）、`before_chars`（实际前置字数）、
@@ -98,12 +102,14 @@ python3 工作区/演示-检索流程/server.py
   否则 400）：
   ```json
   {"question": "...", "path": "库/...md", "line": 1180, "terms": [], "groups": [],
+   "thinking": "high", "fresh": false,
    "sources": [{"book": "人文社科/教育/...", "title": "...", "path": "库/...md", "line": 31}]}
   ```
-  返回 Answer：`ok`、`cached`、`ms`、`model`、`answer`、`citations[{path,line,quote,chapter,verified}]`、
+  可选 `thinking` 与 `fresh`：思考和切词共用同一套档位并进答案缓存键；`fresh=true` 跳过答案缓存重新调模型。
+  返回 Answer：`ok`、`cached`、`ms`、`model`、`thinking`、`answer`、`citations[{path,line,quote,chapter,verified}]`、
   `passages[{path,start,end,chars,title}]`、`confidence`、`not_found`、`error`，另有
   `mode`（`single` 或 `multi`）与 `sources[{book,title,path,line,citations}]`。
-  多书还有 `lead`、`sections[{heading,body}]`、`dissent`、`gap`；`answer` 是它们拼出来的纯文本。单书这四个字段为空。
+   `lead`、`sections[{heading,body}]`、`dissent`、`gap` 单书与多书都会填；`answer` 是它们拼出来的纯文本。模型只给平铺 `answer` 时这四个字段为空。
   多书时每条 citation 多带 `book` 与 `book_title`。
   `citations` 只放回查通过的引文，`line` 是文件实际行号。
   只给 `book`/`path`/`line` 的老请求行为与返回形状不变，`mode` 为 `single`、`sources` 为空。
@@ -119,7 +125,7 @@ python3 工作区/演示-检索流程/server.py
    失败显示错误与「重试」；成功时按 `sections` 渲染小节标题与正文，领句、分歧、缺口各一段；
    没有 `sections` 时按 `answer` 换行分段。另给一行小字（置信度、回查条数、缓存、耗时、模型）。
    `not_found` 时另标「未找到原文依据」。
-2. 依据列表：最多 4 条（多书时 8 条），每条一行章名与行号 + 引文（两行截断），多书时上方还有一行书名；
+2. 依据列表：最多 6 条（多书时 8 条），每条一行章名与行号 + 引文（两行截断），多书时上方还有一行书名；
    整条可点，点了用 `/api/chapter` 载入那段并刷新原文窗口；回答卡保留。小字报「依据 N 条，覆盖 M 本书」。
 3. 原文区：命中段用 `<span class="hit-para">`（`display:block`）浅朱红底 + 左侧竖线包成块，
    块内检索词仍是 `<mark>`，不嵌套；上方是 700 字前置，下方是后置。脚注写
@@ -129,6 +135,11 @@ python3 工作区/演示-检索流程/server.py
 下方补一行小字说明第 5 阶段会用这 N 本书一起回答；第 5 阶段的加载文案变成「正在检索 N 本书的原文并
 组织回答，最长约 2 分钟」，回答卡小字报「N 本书」与「覆盖 M 本」。再点一下取消全选，或者直接点某张卡，
 就回到单书行为。`&all=1` 可复现，换问题、重播、返回首屏都会清掉全选。
+
+首屏「模型思考」四档（关/低/中/高）与第 5 阶段顶部「思考」下拉是同一份设置：存 `localStorage`，
+`?thinking=low` 可复现；第 01 阶段摘要与回答卡小字都报当前档位。顶部「重新检索」与回答卡右上角
+「重新检索」是同一个动作：用当前档位重跑 `/api/run`（`fresh=true`），第 5 阶段再用 `fresh=true`
+生成回答，切词与答案两处缓存都跳过；换档本身也换缓存键，所以同一问题在新档第一次跑是冷跑。
 
 回答请求在结果阶段变为 active 时发起（`instant=1` 立即发起），带 `AbortController` 与序号；
 换卡、换书、取消全选、返回都取消旧请求，缓存命中直接渲染。
@@ -181,6 +192,8 @@ python3 工作区/演示-检索流程/验收/shot.py --width 390 --height 844 --
 - `回答-1440x900.png`、`命中块-1440x900.png`
 - `手机-回答-390x844.png`、`手机-命中块-390x844.png`
 - `回答-加载中-1440x900.png`、`回答-乡土-1440x900.png`、`回答-凡人-1440x900.png`
+- `首屏-思考-1440x900.png`、`问题栏-思考-1440x900.png`、`回答-思考-1440x900.png`
+- `手机-首屏-思考-390x844.png`、`手机-问题栏-思考-390x844.png`、`手机-回答-思考-390x844.png`
 - `全选-书卡-1440x900.png`、`全选-回答-1440x900.png`、`全选-手机-390x844.png`
 - 五阶段的旧图（首屏、桌面结果、播放中、加载中、手机全页）保留作对照；旧结果图不含回答卡。
 

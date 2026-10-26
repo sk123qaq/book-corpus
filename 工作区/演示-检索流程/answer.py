@@ -14,7 +14,8 @@
   4. book_expand.make_packet 取有界窗口，合并重叠，最多 4 个窗口、合计 12000 字
   5. 拼提示词调 `pi -p --no-tools --no-session --no-context-files --skill ...`
   6. 解析第一个 JSON 对象，服务端回查每条引文，行号以文件实际行号为准
-  7. 缓存到 缓存/answers/<sha1>.json（键含 PROMPT_VERSION），原子写
+  7. 缓存到 缓存/answers/<sha1>.json（键含 PROMPT_VERSION 与思考等级），原子写；
+     use_cache=False（页面「重新检索」）跳过读缓存，重新调模型
 
 多书（前端全选）时请求带 sources，每本取三段窗口，一次提示词要按问题结构逐书对照回答，引文按书归并。
 
@@ -43,6 +44,7 @@ import book_readme  # noqa: E402
 import defpass  # noqa: E402
 import lib_fts_cjk as cjk  # noqa: E402
 import qsearch  # noqa: E402
+from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinking  # noqa: E402
 
 INDEX_DB = os.path.join(ROOT, "目录", "检索", "index.db")
 LIBRARY_DB = os.path.join(ROOT, "目录", "library.db")
@@ -51,8 +53,8 @@ CACHE_DIR = os.path.join(HERE, "缓存", "answers")
 SKILL = "/home/shike/.agents/skills/book-corpus-qa/SKILL.md"
 MODEL = "opencode-go/deepseek-v4.1-flash"
 PI_TIMEOUT = 240
-PROMPT_VERSION = "answer-v8"
-PROMPT_VERSION_MULTI = "answer-v17-multi"
+PROMPT_VERSION = "answer-v11"
+PROMPT_VERSION_MULTI = "answer-v18-multi"
 
 QSEARCH_LIMIT = 100
 DEFPASS_TOP = 4
@@ -63,7 +65,7 @@ MAX_WINDOWS = 6
 WINDOW_CHARS = 3500
 TOTAL_CHARS = 14000
 PROMPT_MAX = 26000
-MAX_CITATIONS = 4
+MAX_CITATIONS = 6
 QUOTE_PROBE = 20
 
 MAX_SOURCES = 8
@@ -75,14 +77,17 @@ MULTI_QUOTA_MAX = 3400
 PROMPT_MAX_MULTI = 30000
 MAX_CITATIONS_MULTI = 8
 
-# 默认 thinking 是 high（~/.pi/agent/settings.json），回答阶段用不上那么长的思考，
-# 关掉后 4 窗提示词从 40 秒档降到 20 秒档，引文回查照样过。
+# 思考等级由页面选择（默认 high）。低档 4 窗提示词大约从 40 秒档降到 20 秒档，
+# 引文回查照样过；档位进缓存键，换档不会命中上一档的答案。
 EXT = os.path.join(HERE, "readonly_tools.ts")
-PI = ["pi", "-p", "--no-session", "--no-context-files", "--skill", SKILL,
-      "-e", EXT, "--tools", "book_grep,read", "--model", MODEL,
-      "--thinking", "low"]
 
-PROMPT = """你是书库问答的回答阶段。用自然、通顺的中文直接回答，先给判断，再给两层依据，3 到 6 句。
+
+def pi_cmd(thinking):
+    return ["pi", "-p", "--no-session", "--no-context-files", "--skill", SKILL,
+            "-e", EXT, "--tools", "book_grep,read", "--model", MODEL,
+            "--thinking", thinking]
+
+PROMPT = """你是书库问答的回答阶段。依据这一本书的原文回答，用自然、通顺的中文。
 
 问题：{question}
 书：{book}
@@ -92,12 +97,24 @@ PROMPT = """你是书库问答的回答阶段。用自然、通顺的中文直�
 - book_grep(pattern, path?, max?)：在本书 md 目录里搜正则，返回 file:line。
 - read：读命中的章节文件。
 
-先看候选章与候选窗口。候选章是按检索分排的前 30 章，窗口是其中最相关的几段。若窗口不够，或要确认「是谁」「结局」「身份」，用 book_grep 搜人物、事件、同义说法，再 read 命中的章。不要写文件。
+先看候选章与候选窗口。候选章是按检索分排的前 {n} 章，窗口是其中最相关的几段。窗口不够，或要确认「是谁」「结局」「身份」，用 book_grep 搜人物、事件、同义说法，再 read 命中的章。窗口里只有一句主张、看不到展开时，用 book_grep 搜这个主张的关键词，读到展开段再写。不要写文件。
 注意：原文里的「应该」「十有八九」「猜测」是推测，不是结论。涉及「是谁」「结局」，必须找到身份或结果被确认的段落（令牌、名号、旁白、后文），并往后多读一到两章；推测不能写进答案。
-回答里不要写「原文写明」「根据原文」，也不要写路径行号；依据放在 citations，quote 必须逐字来自原文。
-证据不足才写「书里没有直接回答」。
-输出一行 JSON，不要代码块，不要解释：
-{{"answer":"...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
+
+答案按问题本身的结构写，不按章节顺序写。用 Markdown 小标题分段，标题行以「## 」开头。
+
+1. 开头 1 到 3 句给判断，放在第一个小标题之前，不加标题。问「是谁」「结局」的，开头就点名，不要留到最后一段。书里的说法和问题里的说法不一样，或者这本书只答了问题的一半，也先在开头说清。
+2. 中间 2 到 4 个「## 小标题」。小标题是判断句，不要用章名、不要用「首先/其次」、不要编号。标题下面 3 到 5 句，按「是什么、为什么、后果」展开，不按章节顺序复述。
+   正文默认不写书名和作者名，读者已经知道问的是哪本书。同一个概念有两种说法、两个数字时，合并成一处再并列写清差别（一处说什么，另一处说什么，差在哪），不要一一交代出处，不要写「作者先……后……」。
+   每节至少用两处原文的事实支撑。同一件事书里讲了两遍，合并成一句，不要按章复述。
+3. 书里前后不一致时（旁白给的结论和某个角色的说法相反，两章给出不同数字或不同人），用「## 分歧」单独一段，写清不一致的是哪一步：谁说的、说什么、哪一处证据更硬。没有就不写。不要写「侧重点不同」。
+4. 书没有讲到问题的一部分时，最后可选「## 缺口」一段，写清书停在哪一步。没有就不写。
+5. 不要以「《书名》：」开头写任何一行，不要一章一段，不要用「书中分别提到 A、B、C」这种列举预告开头。
+6. 300 到 600 字。问题只要一句结论能答完（某句话在哪、书里有没有提过），写领句加一节就够。
+7. 不写路径、行号、「原文写明」「根据原文」。依据放在 citations，最多 6 条，按这几处补齐：领句的判断一条；每个小标题的判断一条；问题里点到的每个人、每件事、每个数字各一条，落在它被确认的那一段；回答纠正问题里的说法（例如「不是他做的」「不是这个原因」）时，纠正所依据的那段必须引。一句话里合并了两处原文，两处各给一条。quote 逐字来自原文，path 用本书 md 目录里的文件路径。
+
+书里确实没有回答时，先用 book_grep 搜同义词与别名，确认搜不到再写「书里没有直接回答」并置 not_found，不要拿相邻话题凑一段。
+输出一行 JSON，不要代码块，不要解释。answer 里用 \\n 换行，节标题行以 ## 开头：
+{{"answer":"开头判断\\n\\n## 小标题\\n正文\\n\\n## 分歧\\n...\\n\\n## 缺口\\n...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
 
 候选章（前 {n} 章）：
 {chapters}
@@ -198,7 +215,8 @@ def _write_json(path, value):
 
 
 def _ok(**kwargs):
-    out = {"ok": True, "cached": False, "ms": 0.0, "model": MODEL, "answer": "",
+    out = {"ok": True, "cached": False, "ms": 0.0, "model": MODEL,
+           "thinking": DEFAULT_THINKING, "answer": "",
            "lead": "", "sections": [], "dissent": "", "gap": "",
            "citations": [], "passages": [], "confidence": "low",
            "not_found": False, "error": "", "mode": "single", "sources": []}
@@ -222,22 +240,24 @@ def _err(message, **kwargs):
     return out
 
 
-def cache_key(question, book, path, line, terms, groups=None):
+def cache_key(question, book, path, line, terms, groups=None,
+              thinking=DEFAULT_THINKING):
     payload = {"q": question, "book": book, "path": path, "line": int(line),
                "terms": sorted({str(t) for t in terms if str(t).strip()}),
                "groups": groups or [],
-               "v": PROMPT_VERSION, "model": MODEL}
+               "v": PROMPT_VERSION, "model": MODEL, "thinking": thinking}
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
-def multi_cache_key(question, sources, terms, groups=None):
+def multi_cache_key(question, sources, terms, groups=None,
+                    thinking=DEFAULT_THINKING):
     """多书回答的键：书单顺序也算输入，换掉一本书就不再命中。"""
     payload = {"q": question,
                "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
                "terms": sorted({str(t) for t in terms if str(t).strip()}),
                "groups": groups or [],
-               "v": PROMPT_VERSION_MULTI, "model": MODEL}
+               "v": PROMPT_VERSION_MULTI, "model": MODEL, "thinking": thinking}
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
@@ -268,7 +288,7 @@ def _normalize_sources(sources):
     return out
 
 
-def _read_cached(cache_path, t0):
+def _read_cached(cache_path, t0, thinking=DEFAULT_THINKING):
     if not os.path.exists(cache_path):
         return None
     try:
@@ -281,6 +301,7 @@ def _read_cached(cache_path, t0):
     cached = dict(cached)
     cached.setdefault("mode", "single")
     cached.setdefault("sources", [])
+    cached["thinking"] = thinking
     cached["cached"] = True
     cached["ms"] = _ms(t0)
     return cached
@@ -668,14 +689,15 @@ def build_multi_prompt(question, plans, windows, coverage=""):
 
 # ---- 调模型 ---------------------------------------------------------
 
-def call_pi(prompt, book, books=None):
+def call_pi(prompt, book, books=None, thinking=DEFAULT_THINKING):
     """返回 (raw_text, error)。失败时 raw_text 为 None。"""
     roots = ["库/%s/md" % b for b in (books or [book])]
     env = dict(os.environ)
     env["BOOK_MD"] = roots[0]
     env["BOOK_MDS"] = json.dumps(roots, ensure_ascii=False)
     try:
-        res = subprocess.run(PI + [prompt], capture_output=True, text=True,
+        res = subprocess.run(pi_cmd(normalize_thinking(thinking)) + [prompt],
+                             capture_output=True, text=True,
                              timeout=PI_TIMEOUT, cwd=ROOT, env=env)
     except subprocess.TimeoutExpired:
         return None, "回答超时（%d 秒）" % PI_TIMEOUT
@@ -764,8 +786,8 @@ def _split_answer(text):
     return lead, sections, dissent, gap
 
 
-def _shape_multi(reply):
-    """多书回答：优先把 answer 里的「## 小标题」拆成结构，旧字段仍然接受。"""
+def _shape_answer(reply):
+    """单书与多书共用：优先把 answer 里的「## 小标题」拆成结构，旧字段仍然接受。"""
     text = reply.get("answer")
     text = text.strip() if isinstance(text, str) else ""
     if text and re.search(r"^\s*#{1,4}\s+\S", text, re.M):
@@ -853,7 +875,7 @@ def _locate_in(rel, needle, indexes):
 def verify_citations(cites, windows, hit_path="", hit_line=0, sources=None):
     """只留回查通过的引文；行号用文件实际行号，不信模型报的。
 
-    单书：回查后再按「离命中行近的排前面」排序并截到 4 条，固定的第一段就是命中段，
+    单书：回查后再按「离命中行近的排前面」排序并截到 6 条，固定的第一段就是命中段，
     邻近的引文最能支撑它。多书：path 必须落在本次书单内，按书轮取，最多 8 条。
     """
     if sources:
@@ -958,34 +980,40 @@ def _verify_multi(cites, windows, sources):
 # ---- 主流程 ---------------------------------------------------------
 
 def answer_question(question, book, path, line=1, terms=None, groups=None,
-                    use_cache=True, sources=None):
-    """返回 Answer dict（结构见 ANSWER-BRIEF.md 的「数据形状」）。"""
+                    use_cache=True, sources=None, thinking=DEFAULT_THINKING):
+    """返回 Answer dict（结构见 ANSWER-BRIEF.md 的「数据形状」）。
+
+    use_cache=False 即前端「重新检索」：跳过答案缓存并重新调模型，本次结果照样回写。
+    """
     t0 = time.time()
     question = (question or "").strip()
     if not question:
         return _err("question 为空", ms=_ms(t0))
+    thinking = normalize_thinking(thinking)
     terms = [str(t).strip() for t in (terms or []) if str(t).strip()][:12]
     groups = [g for g in (groups or []) if isinstance(g, dict) and g.get("variants")]
     scope = _normalize_sources(sources)
     if len(scope) >= 2:
-        return _answer_multi(question, scope, terms, groups, use_cache, t0)
-    return _answer_single(question, book, path, line, terms, groups, use_cache, t0)
+        return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking)
+    return _answer_single(question, book, path, line, terms, groups, use_cache, t0,
+                          thinking)
 
 
-def _answer_single(question, book, path, line, terms, groups, use_cache, t0):
+def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
+                   thinking=DEFAULT_THINKING):
     rel = _rel(path)
     if not _inside_library(rel):
-        return _err("path 不在 库/ 下或不是 .md", ms=_ms(t0))
+        return _err("path 不在 库/ 下或不是 .md", ms=_ms(t0), thinking=thinking)
     try:
         line = max(1, int(line or 1))
     except (TypeError, ValueError):
         line = 1
     book = (book or "").strip() or book_from_path(rel)
 
-    key = cache_key(question, book, rel, line, terms, groups)
+    key = cache_key(question, book, rel, line, terms, groups, thinking)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
-        cached = _read_cached(cache_path, t0)
+        cached = _read_cached(cache_path, t0, thinking)
         if cached:
             return cached
 
@@ -999,20 +1027,20 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0):
         item["book"] = book
     windows = build_windows(chosen, {book: titles}, {book: status})
     if not windows:
-        return _err("没有取到原文窗口", ms=_ms(t0))
+        return _err("没有取到原文窗口", ms=_ms(t0), thinking=thinking)
 
     prompt = build_prompt(question, book, windows, chapters)
-    raw, error = call_pi(prompt, book)
+    raw, error = call_pi(prompt, book, thinking=thinking)
     if raw is None:
-        return _err(error, passages=_passages(windows), ms=_ms(t0))
+        return _err(error, passages=_passages(windows), ms=_ms(t0),
+                    thinking=thinking)
     reply = parse_reply(raw)
     if reply is None:
         head = " ".join((raw or "").split())[:200]
         return _err("模型没有返回 JSON：%s" % head, passages=_passages(windows),
-                    ms=_ms(t0))
+                    ms=_ms(t0), thinking=thinking)
 
-    answer = reply.get("answer")
-    answer = answer.strip() if isinstance(answer, str) else ""
+    lead, sections, dissent, gap, answer = _shape_answer(reply)
     not_found = bool(reply.get("not_found")) or not answer
     citations, _dropped = verify_citations(reply.get("citations"), windows, rel, line)
     confidence = reply.get("confidence")
@@ -1031,21 +1059,23 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0):
         answer = "未找到原文依据"
 
     out = _ok(answer=answer, citations=citations, passages=_passages(windows),
-              confidence=confidence, not_found=not_found, error=error, ms=_ms(t0))
-    if use_cache:
-        try:
-            _write_json(cache_path, out)
-        except OSError:
-            pass
+              confidence=confidence, not_found=not_found, error=error, ms=_ms(t0),
+              lead=lead, sections=sections, dissent=dissent, gap=gap,
+              thinking=thinking)
+    try:
+        _write_json(cache_path, out)
+    except OSError:
+        pass
     return out
 
 
-def _answer_multi(question, sources, terms, groups, use_cache, t0):
+def _answer_multi(question, sources, terms, groups, use_cache, t0,
+                  thinking=DEFAULT_THINKING):
     """多书：每本取三段，一次提示词逐书回答，引文按书归并。"""
-    key = multi_cache_key(question, sources, terms, groups)
+    key = multi_cache_key(question, sources, terms, groups, thinking)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
-        cached = _read_cached(cache_path, t0)
+        cached = _read_cached(cache_path, t0, thinking)
         if cached:
             return cached
 
@@ -1069,19 +1099,20 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0):
 
     windows = multi_windows(plans)
     if not windows:
-        return _err("没有取到原文窗口", passages=[], ms=_ms(t0))
+        return _err("没有取到原文窗口", passages=[], ms=_ms(t0), thinking=thinking)
     coverage = _coverage(terms)
     prompt = build_multi_prompt(question, plans, windows, coverage)
     raw, reply, error = None, None, ""
     for _attempt in range(2):
-        raw, error = call_pi(prompt, sources[0]["book"], [s["book"] for s in sources])
+        raw, error = call_pi(prompt, sources[0]["book"],
+                             [s["book"] for s in sources], thinking=thinking)
         if raw is None:
             break
         reply = parse_reply(raw)
         if reply is None:
             error = "模型没有返回 JSON"
             continue
-        _lead, _sections, _dissent, _gap, _answer = _shape_multi(reply)
+        _lead, _sections, _dissent, _gap, _answer = _shape_answer(reply)
         if _answer or reply.get("not_found"):
             break
         # 模型给了 JSON 但没有任何正文，换一次提醒再要一遍，别当成「库里没有」。
@@ -1089,16 +1120,17 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0):
         prompt += ("\n\n上一次没有给出正文。这次只输出一个 JSON 对象，"
                    "answer 里用 ## 小标题分成至少两节，分歧用 ## 分歧，缺口用 ## 缺口。")
     if raw is None:
-        return _err(error, passages=_passages(windows), ms=_ms(t0))
+        return _err(error, passages=_passages(windows), ms=_ms(t0),
+                    thinking=thinking)
     if reply is None:
         head = " ".join((raw or "").split())[:200]
         return _err("%s：%s" % (error or "模型没有返回 JSON", head),
-                    passages=_passages(windows), ms=_ms(t0))
+                    passages=_passages(windows), ms=_ms(t0), thinking=thinking)
 
-    lead, sections, dissent, gap, answer = _shape_multi(reply)
+    lead, sections, dissent, gap, answer = _shape_answer(reply)
     if not answer and not reply.get("not_found"):
         return _err(error or "模型没有给出答案结构", passages=_passages(windows),
-                    ms=_ms(t0))
+                    ms=_ms(t0), thinking=thinking)
     not_found = bool(reply.get("not_found")) or not answer
     citations, _dropped = verify_citations(reply.get("citations"), windows,
                                            sources=sources)
@@ -1125,16 +1157,16 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0):
         counts[c["book"]] = counts.get(c["book"], 0) + 1
     out = _ok(answer=answer, lead=lead, sections=sections, dissent=dissent, gap=gap,
               citations=citations, passages=_passages(windows),
-              confidence=confidence, not_found=not_found, error=error, ms=_ms(t0))
+              confidence=confidence, not_found=not_found, error=error, ms=_ms(t0),
+              thinking=thinking)
     out["mode"] = "multi"
     out["sources"] = [{"book": s["book"], "title": _book_label(s), "path": s["path"],
                        "line": s["line"], "citations": counts.get(s["book"], 0)}
                       for s in sources]
-    if use_cache:
-        try:
-            _write_json(cache_path, out)
-        except OSError:
-            pass
+    try:
+        _write_json(cache_path, out)
+    except OSError:
+        pass
     return out
 
 
@@ -1146,11 +1178,12 @@ def main(argv=None):
     ap.add_argument("--path", required=True)
     ap.add_argument("--line", type=int, default=1)
     ap.add_argument("--terms", default="")
+    ap.add_argument("--thinking", default=DEFAULT_THINKING)
     ap.add_argument("--no-cache", action="store_true")
     args = ap.parse_args(argv)
     terms = [t for t in re.split(r"[\s,，]+", args.terms) if t]
     out = answer_question(args.question, args.book, args.path, args.line, terms,
-                          use_cache=not args.no_cache)
+                          use_cache=not args.no_cache, thinking=args.thinking)
     print(json.dumps(out, ensure_ascii=False, indent=1))
 
 
