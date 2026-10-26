@@ -1,0 +1,35 @@
+{
+ "uid": "B1775",
+ "title": "富兰克林传",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/富兰克林传",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/富兰克林传 (沃尔特·艾萨克森) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 4353114,
+   "sha256": "410b018e53e2f206ebb5e4c0067650c3e355230d80fb2c8c34b3d76669833f05",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 1091625
+  }
+ ],
+ "notes": "ingest:2026-10-26；待复核"
+}

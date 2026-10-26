@@ -1,0 +1,27 @@
+{
+ "uid": "B1772",
+ "title": "中国建筑艺术全集 24 建筑装修与装饰",
+ "title_from_file": "",
+ "author": "楼庆西主编；中国建筑艺术全集编辑委员会编",
+ "subjects": [
+  "建筑与古迹",
+  "中国古建筑"
+ ],
+ "path": "建筑与古迹/中国古建筑/中国建筑艺术全集 24 建筑装修与装饰",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/中国建筑艺术全集 24 建筑装修与装饰 (楼庆西主编；中国建筑艺术全集编辑委员会编).pdf",
+   "format": "pdf",
+   "bytes": 146649768,
+   "sha256": "a72ebf5b66e497bc197b524d2456f08f18429d3045cbb324895255ab942d9be5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-26；待复核；图册不转:复核判为不转-记图册，账在 工作区/批次/pdf-ocr-ops-2026-10-26/skip_list.tsv"
+}

@@ -1,0 +1,27 @@
+{
+ "uid": "B1774",
+ "title": "女神异闻录3reload persona 3 reload 艺术设定集",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/女神异闻录3reload persona 3 reload 艺术设定集",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/女神异闻录3reload persona 3 reload 艺术设定集 (ATLUS).pdf",
+   "format": "pdf",
+   "bytes": 55924262,
+   "sha256": "235ae475d9e89e184a19f234120ca7f9f3ae68b3cf57d482063c176a2943d647",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-26；待复核；图册不转:复核判为不转-记图册，账在 工作区/批次/pdf-ocr-ops-2026-10-26/skip_list.tsv"
+}

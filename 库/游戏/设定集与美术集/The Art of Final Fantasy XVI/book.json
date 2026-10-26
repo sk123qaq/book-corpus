@@ -1,0 +1,27 @@
+{
+ "uid": "B1764",
+ "title": "The Art of Final Fantasy XVI",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/The Art of Final Fantasy XVI",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/The Art of Final Fantasy XVI (Square Enix Ltd).pdf",
+   "format": "pdf",
+   "bytes": 146537189,
+   "sha256": "5b016b04ea4f01172f3ff95f14305e89a8ad8ee7d0defa76ccdfa9ae431e086e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [],
+ "notes": "ingest:2026-10-26；待复核；图册不转:复核判为不转-记图册，账在 工作区/批次/pdf-ocr-ops-2026-10-26/skip_list.tsv"
+}
