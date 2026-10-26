@@ -1,0 +1,29 @@
+{
+ "uid": "B1740",
+ "title": "The Keynesian revolution",
+ "format": "pdf",
+ "route": "text",
+ "pages": 308,
+ "dest": "库/人文社科/社会与经济/The Keynesian revolution/md",
+ "at": "2026-10-26T12:35:21+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/The Keynesian revolution/source/The Keynesian revolution (Klein, Lawrence Robert).pdf --out out/B1740 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0207,
+ "audit_anchors": 1.0,
+ "audit_chars": 517357,
+ "chapters": 1,
+ "chars": 542041,
+ "images": 616,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 308,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

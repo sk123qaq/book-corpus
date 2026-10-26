@@ -1,0 +1,29 @@
+{
+ "uid": "B1751",
+ "title": "The organization of industry",
+ "format": "pdf",
+ "route": "text",
+ "pages": 348,
+ "dest": "库/人文社科/社会与经济/The organization of industry/md",
+ "at": "2026-10-26T12:37:31+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/The organization of industry/source/The organization of industry (Stigler, George Joseph, 1911-).pdf --out out/B1751 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0218,
+ "audit_anchors": 1.0,
+ "audit_chars": 555528,
+ "chapters": 1,
+ "chars": 589257,
+ "images": 696,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 348,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

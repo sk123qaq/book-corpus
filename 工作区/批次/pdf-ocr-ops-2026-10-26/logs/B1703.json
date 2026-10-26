@@ -1,0 +1,29 @@
+{
+ "uid": "B1703",
+ "title": "Collective Choice and Social Welfare",
+ "format": "pdf",
+ "route": "text",
+ "pages": 636,
+ "dest": "库/人文社科/社会与经济/Collective Choice and Social Welfare/md",
+ "at": "2026-10-26T15:20:27+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/Collective Choice and Social Welfare/source/Collective Choice and Social Welfare (Amartya Sen).pdf --out out/B1703 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0,
+ "audit_anchors": 1.0,
+ "audit_chars": 1005858,
+ "chapters": 1,
+ "chars": 1090182,
+ "images": 1,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 636,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

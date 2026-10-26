@@ -22,6 +22,14 @@
   }
  ],
  "awards": [],
- "derived": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 212778
+  }
+ ],
  "notes": "ingest:2026-10-25；待复核"
 }

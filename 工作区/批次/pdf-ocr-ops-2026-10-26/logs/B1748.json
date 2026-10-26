@@ -1,0 +1,29 @@
+{
+ "uid": "B1748",
+ "title": "The economics of discrimination",
+ "format": "pdf",
+ "route": "text",
+ "pages": 184,
+ "dest": "库/人文社科/社会与经济/The economics of discrimination/md",
+ "at": "2026-10-26T12:33:54+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/The economics of discrimination/source/The economics of discrimination (Becker, Gary S. (Gary Stanley), 1930-2014).pdf --out out/B1748 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0227,
+ "audit_anchors": 1.0,
+ "audit_chars": 283035,
+ "chapters": 1,
+ "chars": 301028,
+ "images": 368,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 184,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

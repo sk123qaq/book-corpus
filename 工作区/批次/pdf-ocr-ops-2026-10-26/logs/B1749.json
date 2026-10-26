@@ -1,0 +1,29 @@
+{
+ "uid": "B1749",
+ "title": "The firm, the market, and the law",
+ "format": "pdf",
+ "route": "text",
+ "pages": 236,
+ "dest": "库/人文社科/社会与经济/The firm, the market, and the law/md",
+ "at": "2026-10-26T12:34:25+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/The firm, the market, and the law/source/The firm, the market, and the law (Coase, R. H. (Ronald Harry)).pdf --out out/B1749 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.021,
+ "audit_anchors": 1.0,
+ "audit_chars": 391669,
+ "chapters": 1,
+ "chars": 410571,
+ "images": 472,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 236,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

@@ -1,0 +1,29 @@
+{
+ "uid": "B1698",
+ "title": "A treatise on the family",
+ "format": "pdf",
+ "route": "text",
+ "pages": 441,
+ "dest": "库/人文社科/社会与经济/A treatise on the family/md",
+ "at": "2026-10-26T15:19:26+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/A treatise on the family/source/A treatise on the family (Becker, Gary Stanley).pdf --out out/B1698 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0104,
+ "audit_anchors": 1.0,
+ "audit_chars": 765972,
+ "chapters": 16,
+ "chars": 814921,
+ "images": 441,
+ "problems": 0,
+ "structure": "chapters",
+ "single_file": false,
+ "pdf_pages": 441,
+ "toc_entries": 20,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

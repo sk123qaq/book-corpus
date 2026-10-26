@@ -1,0 +1,41 @@
+{
+ "uid": "B1726",
+ "title": "National Income and Its Composition 1919-1938",
+ "format": "pdf",
+ "pages": 429,
+ "dest": "库/人文社科/社会与经济/National Income and Its Composition 1919-1938/md",
+ "at": "2026-10-26T12:46:58+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1726/merged/pages --out out/B1726 --structure single --method paddle-ocr",
+  "mineru.py 工作区/批次/pdf-ocr-ops-2026-10-26/tmp/mineru/B1726/B1726_suspect.pdf --mode precision --model vlm --ocr --lang ch",
+  "pdf_ocr_to_md.py --pages-dir work/B1726/merged/pages --out out/B1726 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 3,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 9.6,
+ "chunks_done": 3,
+ "merged_pages": 429,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1726/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 2707624,
+ "images": 1,
+ "problems": 0,
+ "blank_pages": 18,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "review": "review/B1726",
+ "mineru_pages": [
+  1
+ ],
+ "mineru_rescued": [
+  1
+ ],
+ "stage_previous": "tmp/B1726.prev-2026-10-26T124658-0800",
+ "skipped_unreadable_pages": [],
+ "accepted": "",
+ "status": "landed"
+}

@@ -1,0 +1,29 @@
+{
+ "uid": "B1718",
+ "title": "Institutions, institutional change, and economic performance",
+ "format": "pdf",
+ "route": "text",
+ "pages": 164,
+ "dest": "库/人文社科/社会与经济/Institutions, institutional change, and economic performance/md",
+ "at": "2026-10-26T12:33:52+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/Institutions, institutional change, and economic performance/source/Institutions, institutional change, and economic performance (North, Douglass C. (Douglass Cecil)).pdf --out out/B1718 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0171,
+ "audit_anchors": 1.0,
+ "audit_chars": 335175,
+ "chapters": 1,
+ "chars": 349011,
+ "images": 328,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 164,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

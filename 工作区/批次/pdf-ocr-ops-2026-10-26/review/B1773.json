@@ -1,0 +1,14 @@
+{
+ "uid": "B1773",
+ "verdict": "OCR",
+ "evidence": "",
+ "route": "OCR",
+ "reason": "按分诊建议确认",
+ "model": {
+  "route": "OCR",
+  "confidence": 0.93,
+  "reason": "正文中页为清晰的成段中文排版文字，但文本层几乎为空（chars_per_page=5.5），符合扫描件走 OCR 的条件",
+  "at": "2026-10-26T12:08:52+08:00"
+ },
+ "at": "2026-10-26T12:08:52+08:00"
+}

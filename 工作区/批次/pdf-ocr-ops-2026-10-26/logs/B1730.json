@@ -1,0 +1,29 @@
+{
+ "uid": "B1730",
+ "title": "Poverty and Famines An Essay on Entitlement and Deprivation",
+ "format": "pdf",
+ "route": "text",
+ "pages": 160,
+ "dest": "库/人文社科/社会与经济/Poverty and Famines An Essay on Entitlement and Deprivation/md",
+ "at": "2026-10-26T12:33:52+08:00",
+ "commands": [
+  "pdf_text_to_md.py --pdf 库/人文社科/社会与经济/Poverty and Famines An Essay on Entitlement and Deprivation/source/Poverty and Famines An Essay on Entitlement and Deprivation (Amartya Sen).pdf --out out/B1730 --structure auto --method pdf-text"
+ ],
+ "verify_rc": 0,
+ "audit_rc": 0,
+ "audit_ratio": 1.0002,
+ "audit_anchors": 1.0,
+ "audit_chars": 277862,
+ "chapters": 1,
+ "chars": 299326,
+ "images": 0,
+ "problems": 0,
+ "structure": "single",
+ "single_file": true,
+ "pdf_pages": 160,
+ "toc_entries": 0,
+ "toc_rejected": "",
+ "empty_chapters": 0,
+ "accepted": "",
+ "status": "landed"
+}

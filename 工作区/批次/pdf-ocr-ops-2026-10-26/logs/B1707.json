@@ -1,0 +1,30 @@
+{
+ "uid": "B1707",
+ "title": "Endogenous Growth Theory",
+ "format": "pdf",
+ "pages": 356,
+ "dest": "库/人文社科/社会与经济/Endogenous Growth Theory/md",
+ "at": "2026-10-26T12:22:56+08:00",
+ "commands": [
+  "pdf_ocr_to_md.py --pages-dir work/B1707/merged/pages --out out/B1707 --structure single --method paddle-ocr"
+ ],
+ "chunks_planned": 3,
+ "pages_per_chunk": 150,
+ "slice_mb_estimate": 13.8,
+ "chunks_done": 3,
+ "merged_pages": 356,
+ "coverage_ok": true,
+ "merged_run_json": "work/B1707/merged/run.json",
+ "verify_rc": 0,
+ "chapters": 1,
+ "chars": 1402496,
+ "images": 67,
+ "problems": 0,
+ "blank_pages": 0,
+ "suspect_miss_pages": 0,
+ "suspect_pages": [],
+ "short_pages": 0,
+ "short_page_list": [],
+ "accepted": "",
+ "status": "landed"
+}
