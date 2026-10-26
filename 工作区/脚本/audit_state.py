@@ -8,6 +8,7 @@
 
 FAIL 表示有孤儿行、断链或对不上的账；WARN 表示批次在跑时允许落后的读数。
 退出码：有 FAIL 为 1，否则 0。--json 不改判定，只换输出。
+「== 文档 ==」一节只 WARN：AGENTS.md 的数字块与现库不一致就提示 doc_numbers.py --write。
 """
 import argparse
 import csv
@@ -102,6 +103,30 @@ def use_root(root):
     INDEX = os.path.join(CAT, "检索", "index.db")
     VIEWS = os.path.join(ROOT, "视图")
     MAP_CSV = os.path.join(CAT, "对照表.csv")
+
+
+def docs():
+    try:
+        sys.path.insert(0, HERE)
+        import doc_numbers
+        path = os.path.join(ROOT, doc_numbers.DOC)
+        if not os.path.isfile(path):
+            return
+        counts = doc_numbers.collect(ROOT)
+        block = doc_numbers.render(counts)
+        with open(path, encoding="utf-8") as fh:
+            got = doc_numbers.read_block(fh.read())
+    except Exception as exc:
+        warn("数字块取数失败: %s" % exc)
+        return
+    if got is None:
+        warn("%s 没有数字块；doc_numbers.py --write 可补（现库 as_of %s）" % (
+            doc_numbers.DOC, counts["as_of"]))
+    elif got != block:
+        warn("%s 的数字块过期（现库 as_of %s）；doc_numbers.py --write 重写" % (
+            doc_numbers.DOC, counts["as_of"]))
+    else:
+        ok("%s 的数字块与现库一致（as_of %s）" % (doc_numbers.DOC, counts["as_of"]))
 
 
 def report(args):
@@ -280,6 +305,9 @@ def main():
         bad("对照表指向不存在的库路径 %d: %s" % (len(map_missing), sample(map_missing)))
     else:
         ok("对照表的 库/ 目标全部存在")
+
+    say("\n== 文档 ==")
+    docs()
 
     say("")
     return report(args)

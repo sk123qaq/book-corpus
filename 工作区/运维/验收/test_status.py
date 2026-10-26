@@ -20,7 +20,6 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 SCRIPTS = os.path.join(REPO, "工作区", "脚本")
 OPS_STATUS = os.path.join(SCRIPTS, "ops_status.py")
 AUDIT = os.path.join(SCRIPTS, "audit_state.py")
-BACKUP_AUDIT = os.path.join(REPO, "工作区", "运维", "backup-2026-10-24", "audit_state.py")
 
 LIB_SCHEMA = """
 CREATE TABLE book(
@@ -308,17 +307,11 @@ def fixture_checks(root):
         check("fixture 审计 FAIL 空", data["fail"] == [], data["fail"])
         check("PASS 行进了 ok 列表", len(data["ok"]) >= 5, len(data["ok"]))
 
-    if os.path.isfile(BACKUP_AUDIT):
-        old = os.path.join(root, "工作区", "脚本", "audit_state_before.py")
-        os.makedirs(os.path.dirname(old), exist_ok=True)
-        shutil.copyfile(BACKUP_AUDIT, old)
-        human_old = run([old], root)
-        human_new = run([AUDIT, "--root", root], root)
-        os.remove(old)
-        check("人读输出与改前逐字节相同", human_old.stdout == human_new.stdout,
-              len(human_old.stdout) - len(human_new.stdout))
-    else:
-        print("SKIP  人读输出对照：没有 backup-2026-10-24/audit_state.py")
+    human_new = run([AUDIT, "--root", root], root)
+    sections = ("== 人账 / 库 ==", "== md ==", "== 检索层 ==",
+                "== 视图 / 对照表 ==", "== 文档 ==")
+    missing = [s for s in sections if s not in human_new.stdout]
+    check("人读输出五节齐全", not missing, missing)
 
     print("\n== fixture: 断链与退出码 ==")
     os.symlink(os.path.join("..", "..", "..", "库", "文学", "没有这本"),
