@@ -476,7 +476,10 @@ def gate_pdf(ctx):
     remaining = report.get("remaining_books")
     pages = report.get("remaining_pages")
     counts = report.get("status_counts") or {}
-    summary = "落地 %s 本，剩 %s 本 / %s 页" % (landed, remaining, pages)
+    summary = "本次落地 %s 本" % landed
+    if counts.get("skipped-has-md"):
+        summary += "，%s 本已有 md 跳过" % counts["skipped-has-md"]
+    summary += "，本次范围剩 %s 本 / %s 页" % (remaining, pages)
     if counts.get("quota"):
         return "awaiting_review", summary + "；额度用尽，明日续跑"
     if counts.get("failed"):

@@ -24,9 +24,10 @@ merged/pages 再重拼装，门槛自然过；MinerU 也读不出的页记进 �
 pdf_audit_volume.py 做 PDF 侧字数比与逐页锚点覆盖率，门槛全过才入库。两条路线的暂存、落地、
 日志、report 是同一套。
 
-范围账本 worklist.tsv 只写一次：triage_final.csv 里 route=OCR（或 route=本地抽文本）的书
-（skip_list.tsv 里的不排），按页数升序排，页数相同按 uid。--uids 只在新批次还没 worklist 时
-收窄范围，已有 worklist 时以它为准。--report-json 在 stdout 最后一行给页面一份结构化统计。
+范围账本 worklist.tsv 记着一批要跑的书：triage_final.csv 里 route=OCR（或 route=本地抽文本）
+的书（skip_list.tsv 里的不排），按页数升序排，页数相同按 uid。账建好之后 --uids 只往里补书，
+不改已有的行。一次运行只跑点名的那几本，没点名就跑账上属于这条 route 的书。--report-json
+在 stdout 最后一行给页面一份统计，只算本次范围。
 
 用法:
   python3 pdf_md_batch.py --batch pdf-ocr-2026-10-19 --workers 3
@@ -184,37 +185,58 @@ def read_worklist(batch_path):
                 for line in fh if line.strip()]
 
 
-def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, skip=None):
-    """只写一次。文件在了就以它为准，驱动只读不重写；dry=True 时只算不写。
+def triage_routes(triage):
+    """分诊表里每本书现在走哪条线。表里没有的书算不知道。"""
+    with open(triage or TRIAGE, encoding="utf-8") as fh:
+        return {t["uid"]: t.get("route") for t in csv.DictReader(fh)}
 
-    uids 只在新建 worklist 时收窄范围（ops 新建批次那一路）；triage/skip 默认全局账。
+
+def worklist_scope(rows, route_of, want, wanted):
+    """按 route 收窄，点名了就只留点名的。分诊表里没有的书 route 未知，照跑。"""
+    out = [r for r in rows if route_of.get(r["uid"], want) == want]
+    if wanted:
+        out = [r for r in out if r["uid"] in wanted]
+    return out
+
+
+def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, skip=None):
+    """账在磁盘上，崩了能接着跑。点名（--uids）往账里补书，已有的行不改，没点名的书不动。
+
+    本次跑的范围只算 --route 这条线：账是同一份，OCR 与文本层各跑各的书。
+    dry=True 时只算不写。
     """
     want = ROUTE_TRIAGE[route]
     path = os.path.join(batch_path, "worklist.tsv")
-    have = read_worklist(batch_path)
-    if have is not None:
-        return have
-    rows = list(csv.DictReader(open(triage or TRIAGE, encoding="utf-8")))
+    triage_rows = list(csv.DictReader(open(triage or TRIAGE, encoding="utf-8")))
+    route_of = triage_routes(triage)
     skipped = skip_uids() if skip is None else skip_uids(skip)
     wanted = {u.strip() for u in (uids or []) if u.strip()}
-    out, dropped = [], 0
-    for t in rows:
+    rows = read_worklist(batch_path) or []
+    known = {r["uid"] for r in rows}
+    added, dropped = [], 0
+    for t in triage_rows:
         uid = t["uid"]
-        if t.get("route") != want:
+        if uid in known or t.get("route") != want:
             continue
-        if wanted and uid not in wanted:
-            continue
+        if wanted:
+            if uid not in wanted:
+                continue
+        elif rows:
+            continue        # 账已在且没点名：重跑账上的书，不往里添
         if uid in skipped:
             dropped += 1
             continue
         d = db_row(con, uid)
         if not d or d["format"] != "pdf":
             sys.exit("triage 里 route=%s 的 %s 在库里拿不到 pdf 主源: %r" % (want, uid, d))
-        out.append({"uid": uid, "title": d["title"], "path": d["path"], "src": d["src"],
-                    "sha256": d["sha256"], "format": d["format"], "pages": t["pages"],
-                    "class": t["class"], "verdict": t.get("verdict", ""),
-                    "subject1": t["subject1"], "subject2": t["subject2"],
-                    "author": d["author"] or "", "series": d["series"] or ""})
+        added.append({"uid": uid, "title": d["title"], "path": d["path"], "src": d["src"],
+                      "sha256": d["sha256"], "format": d["format"], "pages": t["pages"],
+                      "class": t["class"], "verdict": t.get("verdict", ""),
+                      "subject1": t["subject1"], "subject2": t["subject2"],
+                      "author": d["author"] or "", "series": d["series"] or ""})
+    rows += added
+    rows.sort(key=lambda r: (int(r["pages"] or 0), r["uid"]))
+    out = worklist_scope(rows, route_of, want, wanted)
     if wanted:
         in_skip = sorted(wanted & skipped)
         if in_skip:
@@ -222,13 +244,12 @@ def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, sk
                      % ", ".join(in_skip))
         missing = sorted(wanted - {r["uid"] for r in out})
         if missing:
-            sys.exit("--uids 里这些 uid 不在 route=%s 的分诊表里：%s"
-                     % (want, ", ".join(missing)))
-    out.sort(key=lambda r: (int(r["pages"] or 0), r["uid"]))
-    if not dry:
+            sys.exit("--uids 里这些 uid 不在 route=%s 的范围里（分诊表里没有，或分的不是这条线）：%s"
+                     % (route, ", ".join(missing)))
+    if not dry and (added or not known):
         with open(path + ".tmp", "w", encoding="utf-8") as fh:
             fh.write("\t".join(WORKLIST_COLS) + "\n")
-            for r in out:
+            for r in rows:
                 fh.write("\t".join(str(r[c]) for c in WORKLIST_COLS) + "\n")
         os.replace(path + ".tmp", path)
     if dropped:
@@ -1300,7 +1321,10 @@ def report(ctx):
 def report_json(ctx):
     """队列与落地统计，给页面读。landed 只算真落地的状态，skipped-has-md 算已完成但不算落地。"""
     results, broken = load_results(ctx)
-    rows = read_worklist(ctx["batch"]) or []
+    rows = ctx.get("rows")
+    if rows is None:
+        rows = read_worklist(ctx["batch"]) or []
+    results = [r for r in results if r.get("uid") in {x["uid"] for x in rows}]
     finished = {r.get("uid") for r in results
                 if r.get("status") in GREEN + ("skipped-has-md",)}
     left = [r for r in rows if r["uid"] not in finished]
@@ -1338,7 +1362,7 @@ def main():
     ap.add_argument("--report", action="store_true", help="只读 logs/ 出统计，不干活")
     ap.add_argument("--report-json", dest="report_json", action="store_true",
                     help="跑完（或 --report）在 stdout 最后一行再给一份 JSON，给页面读")
-    ap.add_argument("--uids", help="新批次且 worklist 还不存在时，只写这些 uid，逗号分隔")
+    ap.add_argument("--uids", help="本次要跑哪些 uid（账上没有的补进账），逗号分隔")
     ap.add_argument("--triage", metavar="CSV",
                     help="分诊表路径，默认全局 triage_final.csv；新批次可指自己的"
                          "（同目录的 skip_list.tsv 优先，没有就用全局的）")
@@ -1366,7 +1390,10 @@ def main():
            "stamp": now().replace(":", "").replace("+", "-"),
            "tool_version": text_tool_version() if a.route == "text" else tool_version()}
 
+    picked_uids = [u.strip() for u in (a.uids or "").split(",") if u.strip()]
     if a.report:
+        ctx["rows"] = worklist_scope(read_worklist(batch_path) or [], triage_routes(a.triage),
+                                     ROUTE_TRIAGE[a.route], picked_uids)
         report(ctx)
         if a.report_json:
             print(json.dumps(report_json(ctx), ensure_ascii=False))
@@ -1385,11 +1412,11 @@ def main():
     skip_path = os.path.join(os.path.dirname(os.path.abspath(triage_path)), "skip_list.tsv")
     if not os.path.isfile(skip_path):
         skip_path = SKIP_LIST
-    picked_uids = [u.strip() for u in (a.uids or "").split(",") if u.strip()]
     if picked_uids and os.path.exists(os.path.join(batch_path, "worklist.tsv")):
-        print("批次已有 worklist.tsv，范围以它为准，--uids 不生效")
+        print("批次已有 worklist.tsv，点名的书补进账，本次只跑点名的")
     rows = build_worklist(con, batch_path, a.route, dry=a.dry_run, uids=picked_uids,
                           triage=triage_path, skip=skip_path)
+    ctx["rows"] = rows
     known = {r["uid"]: r for r in rows}
     deferred = {} if a.ignore_defer else defer_uids(
         a.defer or os.path.join(batch_path, DEFER_LEDGER))
