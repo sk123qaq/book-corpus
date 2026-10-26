@@ -30,6 +30,7 @@ OUT = os.path.join(HERE, "live", "B6")
 PY = sys.executable
 Q = ["礼治", "秩序", "法律"]
 QUESTION = "礼治社会靠什么维持秩序，为什么不需要法律？"
+MODES = ("qsearch_mix", "book_query_mix", "default")
 
 
 def cli(args, timeout=300):
@@ -131,7 +132,12 @@ def gate():
     return len(res["rows"]) == 60
 
 
-def perf(passes=2):
+def p95(xs):
+    s = sorted(xs)
+    return s[max(0, min(len(s) - 1, int(round(0.95 * (len(s) - 1)))))]
+
+
+def perf(passes=5):
     con = BC.sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
     meta = book_score.load_meta()
     expand = book_score.load_expand(con)
@@ -173,18 +179,17 @@ def perf(passes=2):
         return (time.time() - t0) * 1000
 
     for pnum in range(1, passes + 1):
+        fns = {"qsearch_mix": run_qsearch, "book_query_mix": run_mix,
+               "default": run_default}
         for i, row in enumerate(rows):
-            modes = [("qsearch_mix", run_qsearch, row),
-                     ("book_query_mix", run_mix, row),
-                     ("default", run_default, row)]
+            modes = [(mode, fns[mode], row) for mode in MODES]
             shift = (pnum + i) % 3
             modes = modes[shift:] + modes[:shift]
             vals = {}
             for name, fn, arg in modes:
                 vals[name] = fn(arg)
             out.append({"pass": pnum, "qid": row["qid"],
-                        **{k: round(vals[k], 1) for k in
-                           ("qsearch_mix", "book_query_mix", "default")}})
+                        **{k: round(vals[k], 1) for k in MODES}})
     con.close()
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, "perf.tsv")
@@ -194,23 +199,36 @@ def perf(passes=2):
         w.writeheader()
         w.writerows(out)
     os.replace(path + ".tmp", path)
-    lines = ["B6 性能：60 题，qsearch 旧路径 / book_query mix / 默认，三路交错", ""]
+    lines = ["B6 性能：60 题，qsearch 旧路径 / book_query mix / 默认，三路交错，%d 遍"
+             % passes, ""]
     p95s = {}
     for p in range(1, passes + 1):
-        for mode in ("qsearch_mix", "book_query_mix", "default"):
+        for mode in MODES:
+            p95s[(p, mode)] = p95([r[mode] for r in out if r["pass"] == p])
+    spread = {mode: [p95s[(p, mode)] for p in range(1, passes + 1)] for mode in MODES}
+    ratios = {mode: [spread["default"][i] / max(1.0, spread[mode][i])
+                     for i in range(passes)]
+              for mode in ("qsearch_mix", "book_query_mix")}
+    for p in range(1, passes + 1):
+        for mode in MODES:
             xs = sorted(r[mode] for r in out if r["pass"] == p)
-            p95 = xs[max(0, min(len(xs) - 1, int(round(0.95 * (len(xs) - 1)))))]
-            p95s[(p, mode)] = p95
             lines.append("pass=%d %-14s n=%d p50 %.0f ms p95 %.0f ms max %.0f ms"
-                         % (p, mode, len(xs), statistics.median(xs), p95, xs[-1]))
-        d = p95s[(p, "default")]
-        q = p95s[(p, "qsearch_mix")]
-        m = p95s[(p, "book_query_mix")]
+                         % (p, mode, len(xs), statistics.median(xs), p95s[(p, mode)],
+                            xs[-1]))
         lines.append("  default/qsearch p95 %.2f ｜ default/book_query_mix p95 %.2f"
-                     % (d / max(1.0, q), d / max(1.0, m)))
-    worst = max(p95s[(p, "default")] for p in range(1, passes + 1))
-    ratio = max(p95s[(p, "default")] / max(1.0, p95s[(p, "qsearch_mix")])
-                for p in range(1, passes + 1))
+                     % (ratios["qsearch_mix"][p - 1], ratios["book_query_mix"][p - 1]))
+    lines += ["", "每路 p95（%d 遍）" % passes]
+    for mode in MODES:
+        xs = spread[mode]
+        lines.append("  %-14s 中位 %.0f ms ｜ 最小 %.0f ms ｜ 最大 %.0f ms"
+                     % (mode, statistics.median(xs), min(xs), max(xs)))
+    lines.append("")
+    for mode in ("qsearch_mix", "book_query_mix"):
+        xs = ratios[mode]
+        lines.append("default/%s p95 比值：中位 %.2f ｜ 最大 %.2f"
+                     % (mode, statistics.median(xs), max(xs)))
+    worst = max(spread["default"])
+    ratio = max(ratios["qsearch_mix"])
     lines += ["", "默认 p95 最大值 %.0f ms（线 2000）: %s" % (
         worst, "过" if worst <= 2000 else "不过"),
         "默认/旧 qsearch p95 比值最大 %.2f（线 2.0）: %s" % (
@@ -226,7 +244,7 @@ def main(argv=None):
     ap.add_argument("--lanes", action="store_true")
     ap.add_argument("--perf", action="store_true")
     ap.add_argument("--gate", action="store_true")
-    ap.add_argument("--passes", type=int, default=2)
+    ap.add_argument("--passes", type=int, default=5)
     a = ap.parse_args(argv)
     if not (a.lanes or a.perf or a.gate):
         ap.error("要 --lanes / --perf / --gate")

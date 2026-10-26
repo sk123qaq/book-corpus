@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""书级 gold 的分层评测：八种书级方案在 30 道 pilot 上的名次、长书占比与证据章。
+"""书级 gold 的分层评测：八种书级方案在 60 道 gold 上的名次、长书占比与证据章。
 
   book_eval.py --validate   只校验 book_gold.tsv
   book_eval.py              跑评测，写 eval-book.tsv / summary.tsv / strata.tsv / lane-*.tsv
-  book_eval.py --perf       30 题上交错跑旧 qsearch --book 路径与新书级路径，比 p95
+  book_eval.py --perf       60 题上交错跑旧 qsearch --book 路径与新书级路径，比 p95
 
 口径（写死在这里，报告与表格共用）：
 
@@ -14,7 +14,7 @@
   ev_hit@10      ev_rank 落在 10 内
   in_book_rank   可接受章在目标书内部的名次（按章最好段排）
   in_book_top3   in_book_rank 落在 3 内，B3 的「每本返回最多三章」就是拿它比
-  long_share@10  top10 里 500 章以上书的占比，除以 10 后按题平均
+  long_share@10  top10 里 500 章以上书的占比，除以 10 后按题平均；all 全题合并，nonlong 去掉 long 层，门槛按 nonlong 读
   best_ok        目标书自己最好的章是不是可接受章
 
 long_share@10 报两个口径。`all` 是全部题合并算，`nonlong` 只算 short 与 ordinary 两层。
@@ -43,6 +43,7 @@ import lib_fts_cjk as cjk
 import qsearch
 
 GOLD = os.path.join(HERE, "book_gold.tsv")
+BASELINE = os.path.join(HERE, "基线-B2-60题-2026-10-26.tsv")
 DB = book_score.DB
 LIBDB = book_score.LIBDB
 STRATA = ("long", "short", "ordinary")
@@ -85,6 +86,51 @@ def search_hits(con, terms, pool=2000):
 def type_counts(rows):
     c = collections.Counter(b.type for b in rows)
     return " ".join("%s%d" % (k, v) for k, v in sorted(c.items()))
+
+
+def docstring_caliber():
+    """文件头「口径」段，原样取，打印的定义与 docstring 只有一份。"""
+    body = __doc__.splitlines()
+    start = next((i for i, l in enumerate(body) if "口径（" in l), None)
+    end = next((i for i, l in enumerate(body) if l.startswith("门槛基准")), None)
+    if start is None or end is None:
+        return []
+    out = []
+    for line in body[start + 1:end]:
+        s = line.rstrip()
+        if not s.startswith("  "):
+            continue
+        name, _, text = s.strip().partition("  ")
+        out.append([name.strip(), text.strip()])
+    return out
+
+
+def print_caliber(rows, path=BASELINE):
+    counts = collections.Counter(r["stratum"] for r in rows)
+    print("样本 %d 题  %s" % (len(rows), "  ".join("%s %d" % (st, counts[st])
+                                                   for st in STRATA)))
+    entries = docstring_caliber()
+    if entries:
+        print("口径（照 book_eval.py 文件头 docstring）")
+        for name, text in entries:
+            print("  %-16s %s" % (name, text))
+    if not os.path.exists(path):
+        print("基线未找到：%s" % os.path.relpath(path, HERE))
+        return
+    with open(path, encoding="utf-8") as fh:
+        base = next((r for r in csv.DictReader(fh, delimiter="\t")
+                     if r.get("scheme") == "best_support"), None)
+    if not base:
+        print("基线未找到：%s 无 best_support 行" % os.path.relpath(path, HERE))
+        return
+    def fmt(v):
+        try:
+            return "%.3f" % float(v)
+        except (TypeError, ValueError):
+            return "?"
+    print("基线 %s best_support  hit10 %s  mrr %s  ev10 %s" % (
+        os.path.relpath(path, HERE), fmt(base.get("hit10")), fmt(base.get("mrr")),
+        fmt(base.get("ev10"))))
 
 
 def run(rows, con, meta, expand):
@@ -340,6 +386,7 @@ def main():
     write_tsv(os.path.join(a.outdir, "strata.tsv"),
               ["scheme", "stratum", "n", "hit10", "hit20", "mrr", "ev10",
                "in_book_top3", "long_share10"], srows)
+    print_caliber(rows)
     print("全库基准 long_share  书数 %d/%d = %.4f  章数 %.4f  段数 %.4f（门槛用段数）"
           % (long_books, all_books, base_share, chapter_share(con), para_share(con)))
     print("%-20s %6s %6s %6s %6s %6s %6s %6s %6s  %s" % (
