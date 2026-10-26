@@ -11,6 +11,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import select
 import socket
 import struct
@@ -473,6 +474,87 @@ PDF_LIST = """
 })()
 """
 
+# 分诊进度条看的是任务记录，不是这次点击。点完先看它出来，刷新页面再看它回来。
+TRIAGE_START = """
+new Promise((resolve) => {
+  const box = () => document.querySelector('#triage-progress');
+  const bar = () => (box() ? box().textContent.replace(/\\s+/g, ' ').trim() : '');
+  const btn = () => document.querySelector('[data-act="pdf-triage-batch"]');
+  const out = {label: '', empty: true, bar: '', disabled: null, ms: 0};
+  const link = document.querySelector('#nav a[href="#pdf"]');
+  if (link) link.click();
+  const t0 = Date.now();
+  const start = () => {
+    if (!btn() && Date.now() - t0 < 10000) { setTimeout(start, 100); return; }
+    out.label = btn() ? btn().textContent.replace(/\\s+/g, ' ').trim() : '';
+    out.empty = !btn() || btn().disabled;
+    if (out.empty) { resolve(out); return; }
+    btn().click();
+    const t1 = Date.now();
+    const tick = () => {
+      if (bar() || Date.now() - t1 > 10000) {
+        out.bar = bar();
+        out.disabled = btn() ? !!btn().disabled : null;
+        out.ms = Date.now() - t1;
+        resolve(out);
+      } else {
+        setTimeout(tick, 100);
+      }
+    };
+    tick();
+  };
+  start();
+})
+"""
+
+TRIAGE_BACK = """
+new Promise((resolve) => {
+  const link = document.querySelector('#nav a[href="#pdf"]');
+  if (link) link.click();
+  const box = () => document.querySelector('#triage-progress');
+  const bar = () => (box() ? box().textContent.replace(/\\s+/g, ' ').trim() : '');
+  const btn = () => document.querySelector('[data-act="pdf-triage-batch"]');
+  const t0 = Date.now();
+  const tick = () => {
+    if (bar() || Date.now() - t0 > 12000) {
+      resolve({bar: bar(), disabled: btn() ? !!btn().disabled : null,
+               label: btn() ? btn().textContent.replace(/\\s+/g, ' ').trim() : '',
+               ms: Date.now() - t0});
+    } else {
+      setTimeout(tick, 100);
+    }
+  };
+  tick();
+})
+"""
+
+TRIAGE_SETTLED = """
+new Promise((resolve) => {
+  const box = () => document.querySelector('#triage-progress');
+  const bar = () => (box() ? box().textContent.replace(/\\s+/g, ' ').trim() : '');
+  const btn = () => document.querySelector('[data-act="pdf-triage-batch"]');
+  const made = () => {
+    const text = Array.from(document.querySelectorAll('#view p'))
+      .map((el) => el.textContent).join(' ');
+    const hit = text.match(/其中 (\\d+) 本已经出了建议/);
+    return hit ? Number(hit[1]) : 0;
+  };
+  const toast = () => (document.querySelector('#toast')
+    ? document.querySelector('#toast').textContent.replace(/\\s+/g, ' ').trim() : '');
+  const t0 = Date.now();
+  const tick = () => {
+    const off = !bar() && made() > 0;
+    if (off || Date.now() - t0 > 15000) {
+      resolve({bar: bar(), disabled: btn() ? !!btn().disabled : null,
+               made: made(), toast: toast(), ms: Date.now() - t0});
+    } else {
+      setTimeout(tick, 150);
+    }
+  };
+  tick();
+})
+"""
+
 MAINTAIN_CHECKS = """
 (() => {
   const q = (s) => document.querySelector(s);
@@ -732,6 +814,49 @@ def run_viewport(base, width, height, out_dir, port, live=False):
                           ("pdf-list-clear", pdflist.get("cleared") == 0)):
             if not ok:
                 failed_tabs.append(name)
+        if live:
+            notes.append("live 模式不起分诊，跳过分诊进度条检查")
+        else:
+            triage = eval_js(cdp, TRIAGE_START, await_promise=True, timeout=30)
+            notes.append("批量分诊 点按钮 %s" % (triage,))
+            if triage.get("empty"):
+                notes.append("没有未分诊的书，跳过分诊进度条检查")
+            else:
+                found = re.search(r"(\d+) 本", triage.get("label") or "")
+                want = int(found.group(1)) if found else 0
+                cdp.call("Page.reload", {"ignoreCache": True})
+                time.sleep(1.2)
+                back = None
+                for _ in range(3):
+                    try:
+                        back = eval_js(cdp, TRIAGE_BACK, await_promise=True, timeout=40)
+                        break
+                    except RuntimeError:
+                        time.sleep(1.0)
+                back = back or {"bar": "", "disabled": None}
+                notes.append("刷新后进度条 %s" % (back,))
+                api_port = int(base.rsplit(":", 1)[1])
+                job = None
+                for row in ((check_ops.get(api_port, "/api/jobs?limit=20")[1] or {})
+                            .get("jobs") or []):
+                    if (row.get("kind") == "pdf.triage"
+                            and (row.get("title") or "").startswith("批量分诊")):
+                        job = row
+                        break
+                settled = check_ops.wait_job(api_port, job["id"], (
+                    "awaiting_review", "succeeded", "failed", "cancelled", "orphaned"),
+                    timeout=120) if job else None
+                after = eval_js(cdp, TRIAGE_SETTLED, await_promise=True, timeout=40)
+                notes.append("分诊任务 %s，收尾后页面 %s"
+                             % (((settled or {}).get("job") or {}).get("state"), after))
+                for name, ok in (("pdf-triage-bar", triage["disabled"]
+                                  and ("/ %d 本" % want) in triage["bar"]),
+                                 ("pdf-triage-reload",
+                                  ("/ %d 本" % want) in (back.get("bar") or "")),
+                                 ("pdf-triage-settle", not after["bar"]
+                                  and after["made"] == want)):
+                    if not ok:
+                        failed_tabs.append(name)
         eval_js(cdp, VISIT_TAB % ("maintain", "maintain", "维护", "maintain", "维护"),
                 await_promise=True, timeout=30)
         maint = eval_js(cdp, MAINTAIN_CHECKS)
@@ -810,6 +935,7 @@ def main(argv=None):
                     json.dump(check_ops.FIXTURE_STATUS, fh, ensure_ascii=False)
         else:
             root, fixture = check_ops.build_root()
+        os.environ["STUB_TRIAGE_SLEEP"] = "4"
         server, port = check_ops.start(root, fixture)
         base = "http://127.0.0.1:%d" % port
         print("临时根：%s  服务：%s" % (root, base))

@@ -153,10 +153,11 @@ print(json.dumps({"route": route, "batch": opt("--batch"), "queued": len(uids),
 '''
 
 STUB_TRIAGE = '''#!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
 uid, out = opt("--uid"), opt("--out")
+time.sleep(float(os.environ.get("STUB_TRIAGE_SLEEP") or "0"))
 os.makedirs(os.path.join(out, "thumbs"), exist_ok=True)
 thumbs = []
 for page in (1, 160, 320):
