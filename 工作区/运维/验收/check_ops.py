@@ -356,12 +356,16 @@ def build_root():
     return root, fixture
 
 
-def server_schema():
+def server_module():
     import importlib.util
     spec = importlib.util.spec_from_file_location("ops_server", SERVER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.SCHEMA
+    return module
+
+
+def server_schema():
+    return server_module().SCHEMA
 
 
 def ensure_ops_db(path):
@@ -964,6 +968,19 @@ def run_checks(root, ops, port, fixture):
           str(job.get("summary")))
     code, body = post(port, "/api/pdf/run", {"uids": ["B0002"]})
     check("没有可转 route 时拒绝", code == 400, str(body.get("error")))
+
+    # ---- 收尾摘要 ---------------------------------------------------
+    mod = server_module()
+    env = mod.Env(root)
+    gid = "gate-pdf-skip"
+    os.makedirs(env.job_dir(gid), exist_ok=True)
+    with open(os.path.join(env.job_dir(gid), "report.json"), "w", encoding="utf-8") as fh:
+        json.dump({"landed": 0, "remaining_books": 0, "remaining_pages": 0,
+                   "status_counts": {"skipped-has-md": 3}}, fh)
+    state, summary = mod.gate_pdf(mod.Ctx(env, {"id": gid}, [], [("pdf ocr", 0)]))
+    check("空转那次的摘要写明是已有 md 跳过",
+          state == "succeeded" and "落地 0 本" in summary and "3 本已有 md 跳过" in summary,
+          "%s · %s" % (state, summary))
 
     # ---- 待转 PDF 清单 ---------------------------------------------
     code, body = get(port, "/api/pdf/books")

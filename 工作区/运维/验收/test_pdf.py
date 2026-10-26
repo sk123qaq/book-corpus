@@ -335,7 +335,8 @@ def test_worklist(tmp):
     db = os.path.join(tmp, "lib.db")
     books = [("B9101", "图册丙", "文学/丙", None, "sha-1"),
              ("B9102", "图册丁", "文学/丁", None, "sha-2"),
-             ("B9103", "图册戊", "文学/戊", None, "sha-3")]
+             ("B9103", "图册戊", "文学/戊", None, "sha-3"),
+             ("B9104", "纯文本丁", "文学/丁", None, "sha-4")]
     make_db(db, books)
     con = sqlite3.connect("file:%s?mode=ro" % db, uri=True)
     con.row_factory = sqlite3.Row
@@ -380,9 +381,27 @@ def test_worklist(tmp):
     again = mod.build_worklist(con, batch_a, "ocr", uids=["B9102"], triage=tri, skip=skip)
     with open(wl, "rb") as fh:
         after = fh.read()
-    check(before == after, "worklist 已存在时不重写（范围账只写一次）")
-    check([r["uid"] for r in again] == ["B9102", "B9101"],
-          "已有 worklist 时 --uids 不生效，实际 %r" % [r["uid"] for r in again])
+    check(before == after, "点名的书都在账上时不重写 worklist")
+    check([r["uid"] for r in again] == ["B9102"],
+          "已有 worklist 时 --uids 收窄到点名的书，实际 %r" % [r["uid"] for r in again])
+
+    print("\n== pdf_md_batch：账已有时补书、按 route 各跑各的")
+    more = mod.build_worklist(con, batch_a, "text", uids=["B9104"], triage=tri, skip=skip)
+    check([r["uid"] for r in more] == ["B9104"],
+          "点名文本层的书补进同一份账，本次只跑它，实际 %r" % [r["uid"] for r in more])
+    on_disk = mod.read_worklist(batch_a)
+    check([r["uid"] for r in on_disk] == ["B9104", "B9102", "B9101"],
+          "账按页数升序含三本，实际 %r" % [r["uid"] for r in on_disk])
+    ocr_only = mod.build_worklist(con, batch_a, "ocr", triage=tri, skip=skip)
+    check([r["uid"] for r in ocr_only] == ["B9102", "B9101"],
+          "没点名时只跑账上这条 route 的书，实际 %r" % [r["uid"] for r in ocr_only])
+    check([r["uid"] for r in mod.read_worklist(batch_a)] == ["B9104", "B9102", "B9101"],
+          "没点名那次不往账里添书")
+    try:
+        mod.build_worklist(con, batch_a, "ocr", uids=["B9104"], triage=tri, skip=skip)
+        check(False, "B9104 分的是文本层，跑 ocr 应当退出并报错")
+    except SystemExit as exc:
+        check("route=ocr" in str(exc), "报错说清是哪条线：%s" % exc)
 
     print("\n== pdf_md_batch：--uids 点名了库里没有的书 / 不转的书")
     try:
@@ -435,6 +454,41 @@ def test_report_json(tmp):
           % doc.get("remaining_pages"))
     check(doc.get("status_counts") == {"landed": 1, "failed": 1},
           "status_counts 对得上，实际 %r" % doc.get("status_counts"))
+
+    batch4 = os.path.join(tmp, "b4")
+    os.makedirs(os.path.join(batch4, "logs"), exist_ok=True)
+    write_csv(os.path.join(batch4, "worklist.tsv"), cols, [
+        {"uid": "B9201", "title": "落地本", "path": "文学/一", "src": "库/x.pdf",
+         "format": "pdf", "pages": "10"},
+        {"uid": "B9204", "title": "文本层本", "path": "文学/四", "src": "库/z.pdf",
+         "format": "pdf", "pages": "12"}], delim="\t")
+    tri4 = os.path.join(tmp, "triage4.csv")
+    write_csv(tri4, ["uid", "title", "subject1", "subject2", "class", "route", "pages"], [
+        {"uid": "B9201", "title": "落地本", "subject1": "文学", "route": "OCR",
+         "pages": "10", "class": "C 扫描件"},
+        {"uid": "B9204", "title": "文本层本", "subject1": "文学", "route": "本地抽文本",
+         "pages": "12", "class": "A 纯文本层"}])
+    for uid, status in (("B9201", "landed"), ("B9204", "failed")):
+        with open(os.path.join(batch4, "logs", uid + ".json"), "w", encoding="utf-8") as fh:
+            json.dump({"uid": uid, "status": status, "pages": 1}, fh)
+    p = run([sys.executable, BATCH_PY, "--batch", "unit4", "--batch-dir", batch4,
+             "--report", "--report-json", "--route", "ocr", "--triage", tri4])
+    check(p.returncode == 0, "按 route 出统计那次退出码 0（%s）" % out_text(p).strip()[-200:])
+    lines = [ln for ln in p.stdout.decode("utf-8", "replace").splitlines() if ln.strip()]
+    doc = None
+    try:
+        doc = json.loads(lines[-1])
+    except (IndexError, json.JSONDecodeError):
+        pass
+    if not doc:
+        check(False, "只跑 ocr 那次 stdout 最后一行不是 JSON：%r" % lines[-1:])
+        return
+    check(doc.get("queued") == 1, "queued 只算本次 route，实际 %r" % doc.get("queued"))
+    check(doc.get("landed") == 1, "landed 只算本次 route，实际 %r" % doc.get("landed"))
+    check(doc.get("remaining_books") == 0, "remaining_books 只算本次 route，实际 %r"
+          % doc.get("remaining_books"))
+    check(doc.get("status_counts") == {"landed": 1},
+          "另一条 route 的 failed 日志不进本次统计，实际 %r" % doc.get("status_counts"))
 
 
 def main():
