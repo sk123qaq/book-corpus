@@ -34,14 +34,22 @@ PROMPT = """读者在中文书库里找答案，但他打的词原文里一个�
 
 读者问：{q}"""
 
+# 提示词内容指纹进缓存键：改 PROMPT 后旧缓存自然失效
+PROMPT_VERSION = hashlib.sha1(PROMPT.encode()).hexdigest()[:8]
+
 
 def phrases(q, effort="low", max_out=12000, timeout=300, provider="commandcode"):
     os.makedirs(CACHE, exist_ok=True)
-    h = hashlib.sha1((provider + "|" + effort + "|" + q).encode()).hexdigest()[:16]
+    h = hashlib.sha1((PROMPT_VERSION + "|" + provider + "|" + effort + "|" + q)
+                     .encode()).hexdigest()[:16]
     p = os.path.join(CACHE, h + ".json")
     if os.path.isfile(p):
-        cached = json.load(open(p, encoding="utf-8"))["phrases"]
-        if len(cached) >= 3:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                cached = json.load(fh)["phrases"]
+        except (OSError, ValueError, KeyError):
+            cached = None  # 缓存坏了当未命中，重算后覆盖
+        if cached and len(cached) >= 3:
             return cached
     last = ""
     for attempt in (1, 2):
@@ -66,7 +74,7 @@ def phrases(q, effort="low", max_out=12000, timeout=300, provider="commandcode")
 
 
 def run(con, text, n, min_chars=40, rerank=False):
-    groups = [g for g in re.split(r"[\s,]+", text) if g]
+    groups = cjk.split_groups(text)
     expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
     hits, ms = qsearch.search(con, expr, groups, [], n, min_chars, rerank, pool=2000)
     return hits, ms

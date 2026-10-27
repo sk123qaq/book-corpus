@@ -91,6 +91,9 @@ def compact_table(rows):
 
 NONE = "无"
 
+# 提示词内容指纹进缓存键：改 PROMPT 后旧缓存自然失效
+PROMPT_VERSION = hashlib.sha1(PROMPT.encode()).hexdigest()[:8]
+
 
 def route(q, rows=None, effort="low", max_out=12000, timeout=180, tag="", db=DB):
     """返回最多 3 个概念键；一个都不合适时返回空列表，让调用方退回段落档。
@@ -101,12 +104,16 @@ def route(q, rows=None, effort="low", max_out=12000, timeout=180, tag="", db=DB)
     rows, skipped = drop_dead(rows, db)
     keys = [r["key"] for r in rows]
     os.makedirs(CACHE, exist_ok=True)
-    h = hashlib.sha1((tag + "|v3|none|" + table_fingerprint() + "|" + q).encode()
-                     ).hexdigest()[:16]
+    h = hashlib.sha1((tag + "|v3|" + PROMPT_VERSION + "|" + effort + "|"
+                      + table_fingerprint() + "|" + q).encode()).hexdigest()[:16]
     p = os.path.join(CACHE, h + ".json")
     if os.path.isfile(p):
-        cached = json.load(open(p, encoding="utf-8"))
-        return cached.get("picked") or []
+        try:
+            with open(p, encoding="utf-8") as fh:
+                cached = json.load(fh)
+            return cached.get("picked") or []
+        except (OSError, ValueError):
+            pass  # 缓存坏了当未命中，重算后覆盖
     picked, txt = [], ""
     for cap in (max_out, max_out * 2):
         ns = argparse.Namespace(effort=effort, max_out=cap, provider="commandcode")
