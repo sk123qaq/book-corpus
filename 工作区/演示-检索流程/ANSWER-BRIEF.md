@@ -130,6 +130,11 @@ pi -p --no-session --no-context-files \
 11. 返回。
 
 失败路径：`pi` 非 0、超时、JSON 解析失败都返回 `ok:false` 和可读的 `error`。前端照常显示原文。
+`pi` 调用本身失败（非 0、超时、没有输出）不重问；JSON 不合法、或多书回了 JSON 却没有正文时，
+同一提示词加一句提醒再问一次，单书与多书都是两次封顶，两次都不成才返回 `ok:false`。
+重问时 server.log 留一行「回答重问（解析失败｜没有正文）：坏输出去空白后的前 120 字」。
+单书实测到的坏形态是 citations 数组的 `]` 后面多了一个 `"`（合法写法是 `]` 后直接跟 `,"confidence"`），同一提示词 4 次冷跑里 1 次，
+第二次问就能过；此前单书一次不重问，会把这种可恢复的采样噪声报成失败卡。
 
 ### 提示词
 
@@ -283,6 +288,9 @@ curl -s -X POST localhost:8765/api/run -H 'content-type: application/json' \
   冷跑 ≤ 90 秒，第二跑缓存小于 1.5 秒。
 - 库里没有的问题要 `not_found=true` 或 answer 含「未找到原文依据」，不能崩。
 - `验收/check_demo.py` 增加上面几条，末行 `ALL PASS`。
+- `验收/test_answer_retry.py`：离线用桩替换 `call_pi`，不调模型。首答坏 JSON、次答好 JSON 时单书与多书都要
+  `ok:true` 且模型被调两次；两次都坏要 `ok:false`；`pi` 调用本身失败只调一次。
+  `python3 工作区/演示-检索流程/验收/test_answer_retry.py` 末行 `ALL PASS`。
 - 截图：三体题的回答卡与依据、原文命中块，桌面 1440×900；手机 390×844。控制台 0 报错。
 
 ## 禁止

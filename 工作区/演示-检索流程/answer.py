@@ -57,6 +57,11 @@ PI_TIMEOUT = 240
 PROMPT_VERSION = "answer-v12"
 PROMPT_VERSION_MULTI = "answer-v19-multi"
 
+JSON_REMIND = ("\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，"
+               "不要解释，字符串里的双引号写成 \\\"。")
+ANSWER_REMIND = ("\n\n上一次没有给出正文。这次只输出一个 JSON 对象，"
+                 "answer 里用 ## 小标题分成至少两节，分歧用 ## 分歧，缺口用 ## 缺口。")
+
 QSEARCH_LIMIT = 100
 DEFPASS_TOP = 4
 MAX_CHAPTERS = 30
@@ -774,6 +779,30 @@ def parse_reply(raw):
     return None
 
 
+def _request_reply(prompt, book, books=None, thinking=DEFAULT_THINKING, accept=None):
+    """调模型并解析，最多两次。返回 (reply, raw, error)，reply 只在成功时非 None。
+
+    解析不出 JSON 换 JSON_REMIND 再问，解析出来但结构不合格换 ANSWER_REMIND。
+    raw 为 None 是调不起 pi（超时、传输失败），重问只会再等一遍，直接返回。
+    """
+    raw, error, reply = None, "", None
+    ask = prompt
+    for _attempt in range(2):
+        raw, error = call_pi(ask, book, books, thinking=thinking)
+        if raw is None:
+            return None, None, error
+        reply = parse_reply(raw)
+        if reply is not None and (accept is None or accept(reply)):
+            return reply, raw, ""
+        error = "模型没有返回 JSON" if reply is None else "模型没有给出答案结构"
+        # server.log 里要能看出这次答案多等了一轮，以及坏在哪
+        print("回答重问（%s）：%s" % ("解析失败" if reply is None else "没有正文",
+                                " ".join(raw.split())[:120]),
+              file=sys.stderr, flush=True)
+        ask = prompt + (JSON_REMIND if reply is None else ANSWER_REMIND)
+    return None, raw, error
+
+
 def _split_answer(text):
     """把带「## 小标题」的 answer 拆成 lead、sections、dissent、gap。
 
@@ -1056,14 +1085,13 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
         return _err("没有取到原文窗口", ms=_ms(t0), thinking=thinking)
 
     prompt = build_prompt(question, book, windows, chapters, history)
-    raw, error = call_pi(prompt, book, thinking=thinking)
+    reply, raw, error = _request_reply(prompt, book, thinking=thinking)
     if raw is None:
         return _err(error, passages=_passages(windows), ms=_ms(t0),
                     thinking=thinking)
-    reply = parse_reply(raw)
     if reply is None:
         head = " ".join((raw or "").split())[:200]
-        return _err("模型没有返回 JSON：%s" % head, passages=_passages(windows),
+        return _err("%s：%s" % (error, head), passages=_passages(windows),
                     ms=_ms(t0), thinking=thinking)
 
     lead, sections, dissent, gap, answer = _shape_answer(reply)
@@ -1130,23 +1158,10 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
         return _err("没有取到原文窗口", passages=[], ms=_ms(t0), thinking=thinking)
     coverage = _coverage(terms)
     prompt = build_multi_prompt(question, plans, windows, coverage, history)
-    raw, reply, error = None, None, ""
-    for _attempt in range(2):
-        raw, error = call_pi(prompt, sources[0]["book"],
-                             [s["book"] for s in sources], thinking=thinking)
-        if raw is None:
-            break
-        reply = parse_reply(raw)
-        if reply is None:
-            error = "模型没有返回 JSON"
-            continue
-        _lead, _sections, _dissent, _gap, _answer = _shape_answer(reply)
-        if _answer or reply.get("not_found"):
-            break
-        # 模型给了 JSON 但没有任何正文，换一次提醒再要一遍，别当成「库里没有」。
-        error = "模型没有给出答案结构"
-        prompt += ("\n\n上一次没有给出正文。这次只输出一个 JSON 对象，"
-                   "answer 里用 ## 小标题分成至少两节，分歧用 ## 分歧，缺口用 ## 缺口。")
+    # 模型给了 JSON 但没有任何正文时重问，别当成「库里没有」。
+    reply, raw, error = _request_reply(
+        prompt, sources[0]["book"], [s["book"] for s in sources], thinking,
+        accept=lambda reply: bool(reply.get("not_found")) or bool(_shape_answer(reply)[4]))
     if raw is None:
         return _err(error, passages=_passages(windows), ms=_ms(t0),
                     thinking=thinking)
@@ -1156,9 +1171,6 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
                     passages=_passages(windows), ms=_ms(t0), thinking=thinking)
 
     lead, sections, dissent, gap, answer = _shape_answer(reply)
-    if not answer and not reply.get("not_found"):
-        return _err(error or "模型没有给出答案结构", passages=_passages(windows),
-                    ms=_ms(t0), thinking=thinking)
     not_found = bool(reply.get("not_found")) or not answer
     citations, _dropped = verify_citations(reply.get("citations"), windows,
                                            sources=sources)
