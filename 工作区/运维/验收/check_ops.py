@@ -21,6 +21,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import quote as urlquote
 
 sys.dont_write_bytecode = True
 
@@ -441,6 +442,9 @@ def http(port, method, path, payload=None, headers=None, raw=None, timeout=30):
             return exc.code, json.loads(body)
         except ValueError:
             return exc.code, body
+    except (urllib.error.URLError, ConnectionError, OSError) as exc:
+        # 服务半路死掉不该让整个验收裸 traceback 中断，返回一个可判假的码
+        return 0, {"ok": False, "error": str(exc)}
 
 
 def get(port, path, **kw):
@@ -561,6 +565,14 @@ def main(argv=None):
             print("保留临时根：%s" % adopt_root)
         else:
             shutil.rmtree(adopt_root, ignore_errors=True)
+    hard_root, hard_fixture = build_root()
+    try:
+        hardening_checks(hard_root, hard_fixture)
+    finally:
+        if args.keep:
+            print("保留临时根：%s" % hard_root)
+        else:
+            shutil.rmtree(hard_root, ignore_errors=True)
     word_coverage_checks()
     return finish()
 
@@ -1300,7 +1312,7 @@ def adoption_resume_check(root, fixture):
     scripts = os.path.join(root, "工作区", "脚本")
     probe = os.path.join(scripts, "adopt-probe.py")
     with open(probe, "w", encoding="utf-8") as fh:
-        fh.write("import time\ntime.sleep(2)\n")
+        fh.write("import time\ntime.sleep(10)\n")
     finish = os.path.join(scripts, "adopt-finish.py")
     with open(finish, "w", encoding="utf-8") as fh:
         fh.write("import os\n"
@@ -1367,6 +1379,142 @@ def adoption_resume_check(root, fixture):
             path = os.path.join(scripts, name)
             if os.path.exists(path):
                 os.remove(path)
+
+
+def insert_job(ops_db, job_id, kind="split.run", state="succeeded", pid=None):
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+    conn = sqlite3.connect(ops_db)
+    conn.execute(
+        "INSERT OR REPLACE INTO job (id, kind, title, argv, state, pid,"
+        " created, started, ended, exit_code, summary, log_path, batch_dir,"
+        " plan_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (job_id, kind, "加固探针", json.dumps(["/bin/echo", "x"]), state, pid,
+         stamp, stamp, stamp if state != "running" else None,
+         0 if state == "succeeded" else None, "",
+         "工作区/运维/jobs/%s/log.txt" % job_id, None, None))
+    conn.commit()
+    conn.close()
+
+
+def hardening_checks(root, fixture):
+    """加固回归：GET 也拒站外、日志下载脱敏、出错连接断开、清理删得掉子目录、
+    日志分页在多字节字符边界不漂移。"""
+    ops_db = os.path.join(root, "工作区", "运维", "ops.db")
+    ensure_ops_db(ops_db).close()
+    jobs = os.path.join(root, "工作区", "运维", "jobs")
+
+    # 日志里带密钥形态的串，/api/file 下载口必须与 /api/jobs/<id>/log 同样脱敏
+    os.makedirs(os.path.join(jobs, "seed-file"), exist_ok=True)
+    secret = "token=sk-abc123def456ghi789 api_key=zzz bearer Qqq123\n普通一行\n"
+    with open(os.path.join(jobs, "seed-file", "log.txt"), "w", encoding="utf-8") as fh:
+        fh.write(secret)
+
+    # 清理探针：一棵带子目录的老树 + 一棵带新鲜缩略图的
+    old_dir = os.path.join(jobs, "clean-old", "thumbs")
+    os.makedirs(os.path.join(jobs, "clean-old", "steps", "inner"), exist_ok=True)
+    os.makedirs(old_dir, exist_ok=True)
+    old = time.time() - 100 * 86400
+    for rel in ("log.txt", "steps/a.txt", "steps/inner/b.txt", "thumbs/t1.png"):
+        path = os.path.join(jobs, "clean-old", rel)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("x")
+        os.utime(path, (old, old))
+    thumb_dir = os.path.join(jobs, "clean-thumb", "thumbs")
+    os.makedirs(thumb_dir, exist_ok=True)
+    with open(os.path.join(thumb_dir, "t2.png"), "w", encoding="utf-8") as fh:
+        fh.write("x")
+    with open(os.path.join(jobs, "clean-thumb", "log.txt"), "w",
+              encoding="utf-8") as fh:
+        fh.write("x")
+    os.utime(os.path.join(jobs, "clean-thumb", "log.txt"), (old, old))
+
+    # 分页探针：30 万个汉字（90 万字节），400,000 字节的页边界必切在字符中间
+    page_text = "汉字边界测试" * 50000
+    os.makedirs(os.path.join(jobs, "page-x"), exist_ok=True)
+    with open(os.path.join(jobs, "page-x", "log.txt"), "w", encoding="utf-8") as fh:
+        fh.write(page_text)
+
+    insert_job(ops_db, "seed-file")
+    insert_job(ops_db, "clean-old")
+    insert_job(ops_db, "clean-thumb")
+    insert_job(ops_db, "page-x")
+
+    proc, port = start(root, fixture)
+    try:
+        # GET 也得拒站外：DNS rebinding 的页面靠伪造 Host 读任务与日志
+        for path in ("/api/status", "/api/jobs",
+                     "/api/file?path=" + urlquote("工作区/运维/jobs/seed-file/log.txt")):
+            code, _ = http(port, "GET", path, headers={"Host": "evil.example"})
+            check("GET 拒伪造 Host " + path.split("?")[0], code == 403, str(code))
+
+        code, blob = get(port, "/api/file?path="
+                         + urlquote("工作区/运维/jobs/seed-file/log.txt"))
+        text = blob if isinstance(blob, str) else ""
+        check("日志下载脱敏", code == 200 and "[redacted]" in text
+              and "sk-abc123" not in text, str(code))
+
+        # 分页读到 eof 拼回去要和原文一致：漂移会产生 U+FFFD 与丢字
+        got, offset, guard = [], 0, 0
+        while guard < 10:
+            guard += 1
+            code, body = get(port, "/api/jobs/page-x/log?offset=%d" % offset)
+            if code != 200:
+                break
+            got.append(body["text"])
+            if body.get("eof"):
+                break
+            offset = body["next"]
+        joined = "".join(got)
+        check("日志分页不漂移", joined == page_text and "\ufffd" not in joined,
+              "页数 %d，重建 %d 字 vs 原文 %d 字" % (guard, len(joined), len(page_text)))
+
+        code, body = post(port, "/api/jobs/clean")
+        check("清理接口可用", code == 200 and "removed" in body)
+        code, body = get(port, "/api/jobs/clean-old")
+        check("清理删行", code == 404, str(code))
+        check("清理删树（含子目录）", not os.path.exists(os.path.join(jobs, "clean-old")))
+        code, body = get(port, "/api/jobs/clean-thumb")
+        check("缩略图保留期内整本跳过", code == 200
+              and os.path.isfile(os.path.join(thumb_dir, "t2.png")))
+
+        # 出错响应要断开连接：keep-alive 下没读尽的请求体会污染下一条请求
+        import socket
+        conn = socket.create_connection(("127.0.0.1", port), timeout=5)
+        try:
+            conn.sendall(b"POST /api/import/upload HTTP/1.1\r\n"
+                         b"Host: 127.0.0.1\r\nX-Filename: x.epub\r\n"
+                         b"Content-Length: 3000000000\r\n\r\n")
+            head = b""
+            while b"\r\n\r\n" not in head:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                head += chunk
+            # 把响应 body 消费完，再收一次：服务端关了连接应得到 b""，
+            # 若 keep-alive 没断，这里会超时或收到对下一个请求的响应
+            m = re.search(rb"Content-Length: (\d+)", head)
+            want = int(m.group(1)) if m else 0
+            rest = head[head.index(b"\r\n\r\n") + 4:]
+            conn.settimeout(2)
+            while len(rest) < want:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                rest += chunk
+            try:
+                conn.sendall(b"GET /api/status HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            except OSError:
+                pass
+            try:
+                after = conn.recv(4096)
+            except (TimeoutError, OSError):
+                after = b"\x00TIMEOUT"  # 没断开才算失败
+            check("413 断开连接", b"413" in head and b"Connection: close" in head
+                  and after == b"", "%d 字节头，续收 %s" % (len(head), after[:40]))
+        finally:
+            conn.close()
+    finally:
+        stop(proc)
 
 
 def set_job_state(ops_db, job_id, state):

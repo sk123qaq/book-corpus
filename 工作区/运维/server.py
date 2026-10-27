@@ -10,9 +10,11 @@ import argparse
 import collections
 import csv
 import fcntl
+import hashlib
 import json
 import os
 import re
+import shutil
 import signal
 import sqlite3
 import subprocess
@@ -726,6 +728,7 @@ class Runner:
         if not pid:
             self.store.update(job_id, state="cancelled", summary="已取消（还没起进程）",
                               ended=now_iso())
+            self.cancels.discard(job_id)
             return True
         threading.Thread(target=self._terminate, args=(job_id, int(pid)),
                          daemon=True).start()
@@ -768,25 +771,34 @@ class Runner:
     def _loop(self):
         while not self.stopping:
             picked = None
-            with self.cv:
-                for row in self.store.queued():
-                    if row["id"] in self.active:
+            try:
+                with self.cv:
+                    for row in self.store.queued():
+                        if row["id"] in self.active:
+                            continue
+                        spec = KINDS.get(row["kind"]) or {}
+                        if spec.get("readonly"):
+                            if self.active_read >= READ_SLOTS:
+                                continue
+                            self.active_read += 1
+                        else:
+                            if self.active_write:
+                                continue
+                            self.active_write += 1
+                        self.active[row["id"]] = row["kind"]
+                        picked = row
+                        break
+                    if picked is None:
+                        self.cv.wait(0.4)
                         continue
-                    spec = KINDS.get(row["kind"]) or {}
-                    if spec.get("readonly"):
-                        if self.active_read >= READ_SLOTS:
-                            continue
-                        self.active_read += 1
-                    else:
-                        if self.active_write:
-                            continue
-                        self.active_write += 1
-                    self.active[row["id"]] = row["kind"]
-                    picked = row
+            except Exception:  # noqa: BLE001
+                # 调度线程死了 = 队列永久停摆（ops.db 被外部锁住等）。吞掉记日志，
+                # 缓一缓再回来；HTTP 侧还能照常受理与查询。
+                traceback.print_exc()
+                if self.stopping:
                     break
-                if picked is None:
-                    self.cv.wait(0.4)
-                    continue
+                time.sleep(1.0)
+                continue
             threading.Thread(target=self._run, args=(picked,), daemon=True).start()
 
     def _release(self, job_id, spec):
@@ -810,6 +822,7 @@ class Runner:
             if job_id in self.cancels:
                 self.store.update(job_id, state="cancelled", ended=now_iso(),
                                   summary="已取消（拿锁前）")
+                self.cancels.discard(job_id)
                 return
             self.store.update(job_id, state="running", started=now_iso(), summary="")
             self._log(job_id, "=== %s %s %s\n" % (job_id, job["kind"], job["title"]),
@@ -995,18 +1008,31 @@ class Runner:
 
     def _terminate(self, job_id, pid):
         try:
-            os.killpg(os.getpgid(pid), signal.SIGTERM)
+            pgid = os.getpgid(pid)
+            os.killpg(pgid, signal.SIGTERM)
         except OSError:
             try:
                 os.kill(pid, signal.SIGTERM)
             except OSError:
                 return
+            try:
+                pgid = os.getpgid(pid)
+            except OSError:
+                pgid = None
         for _ in range(KILL_WAIT * 4):
             if not pid_alive(pid):
-                return
+                break
             time.sleep(0.25)
+        if pgid is None:
+            return
+        # 组长退了不等于组空了：孙进程可能吞了 SIGTERM 还在写日志/烧额度。
+        # 组里还有活口就补 SIGKILL；全退干净（ESRCH）就到此为止。
         try:
-            os.killpg(os.getpgid(pid), signal.SIGKILL)
+            os.killpg(pgid, 0)
+        except OSError:
+            return
+        try:
+            os.killpg(pgid, signal.SIGKILL)
         except OSError:
             pass
 
@@ -1155,7 +1181,7 @@ class App:
         if os.path.isdir(self.env.inbox):
             for name in sorted(os.listdir(self.env.inbox)):
                 path = os.path.join(self.env.inbox, name)
-                if not os.path.isfile(path) or name.startswith("."):
+                if not os.path.isfile(path) or name.startswith(".") or name.endswith(".part"):
                     continue
                 st = os.stat(path)
                 out.append({"name": name, "bytes": st.st_size,
@@ -1574,37 +1600,38 @@ class App:
         cutoff = time.time() - keep_days * 86400
         removed = []
         for job in jobs:
-            if job["id"] in keep or job["state"] not in DONE_STATES:
+            if job["state"] not in DONE_STATES:
                 continue
             try:
                 ended = os.path.getmtime(os.path.join(self.env.job_dir(job["id"]),
                                                       "log.txt"))
             except OSError:
                 ended = 0
-            if ended and ended > cutoff:
+            stale = bool(ended) and ended <= cutoff
+            # 90 天或 200 个任务，先到为准：最新 200 个之外的一律清，
+            # 之内的也要够老才清（不是无条件保 200 个）
+            if job["id"] in keep and not stale:
                 continue
             job_dir = self.env.job_dir(job["id"])
             thresh = time.time() - thumb_days * 86400
-            for base, _dirs, files in os.walk(job_dir):
-                for name in files:
-                    path = os.path.join(base, name)
-                    if "/thumbs/" in path and os.path.getmtime(path) > thresh:
-                        continue
-                    try:
-                        os.remove(path)
-                    except OSError:
-                        pass
-            shutil_rmdir(job_dir)
+            if self._has_fresh_thumbs(job_dir, thresh):
+                # 缩略图还在保留期：整本任务跳过，行与建议都留着，过期后再清
+                continue
+            shutil.rmtree(job_dir, ignore_errors=True)
             self.store.delete(job["id"])
             removed.append(job["id"])
         return {"removed": len(removed), "ids": removed[:20]}
 
-
-def shutil_rmdir(path):
-    try:
-        os.rmdir(path)
-    except OSError:
-        pass
+    @staticmethod
+    def _has_fresh_thumbs(job_dir, thresh):
+        thumbs = os.path.join(job_dir, "thumbs")
+        try:
+            for name in os.listdir(thumbs):
+                if os.path.getmtime(os.path.join(thumbs, name)) > thresh:
+                    return True
+        except OSError:
+            pass
+        return False
 
 
 def json_bytes(value):
@@ -1624,6 +1651,8 @@ CONTENT_TYPES = {".json": "application/json; charset=utf-8",
                  ".png": "image/png",
                  ".xlsx": "application/vnd.openxmlformats-officedocument."
                           "spreadsheetml.sheet"}
+# 这些走 /api/file 时按文本解码头再脱敏；png/xlsx 是二进制，原样下发
+TEXT_DOWNLOAD_EXTS = {".txt", ".json", ".csv", ".tsv", ".log", ".md"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1637,12 +1666,19 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- plumbing --------------------------------------------------
     def send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
+        if code >= 400:
+            # 出错路径常常没读尽请求体（403 拒站外、413 超限、400 超大 JSON）。
+            # HTTP/1.1 keep-alive 下残余 body 字节会被下一条请求当请求行解析，
+            # 连接直接失步；出错一律断开，代价只是重连。
+            self.close_connection = True
         if isinstance(body, (dict, list)):
             body = json_bytes(body)
         elif isinstance(body, str):
             body = body.encode("utf-8")
         try:
             self.send_response(code)
+            if code >= 400:
+                self.send_header("Connection", "close")
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
@@ -1702,6 +1738,10 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- GET -------------------------------------------------------
     def do_GET(self):
+        if not self.local_ok():
+            # GET 也得校验：DNS rebinding 的页面一样能读 /api/jobs 与日志下载
+            self.fail(403, "只接受本机页面的请求")
+            return
         parsed = urlparse(self.path)
         route = unquote(parsed.path)
         query = parse_qs(parsed.query)
@@ -1821,11 +1861,26 @@ class Handler(BaseHTTPRequestHandler):
             offset = 0
         offset = max(0, min(offset, size))
         text = ""
+        consumed = 0
         if offset < size:
             with open(path, "rb") as fh:
                 fh.seek(offset)
-                text = fh.read(400_000).decode("utf-8", "replace")
-        next_offset = offset + len(text.encode("utf-8"))
+                raw = fh.read(400_000)
+            # 结尾的不完整多字节序列退回给下一页，不变成 U+FFFD；
+            # next_offset 按实际消费的字节算，页与页之间不丢不重
+            cut = len(raw)
+            while cut > 0:
+                try:
+                    text = raw[:cut].decode("utf-8")
+                    break
+                except UnicodeDecodeError:
+                    cut -= 1
+            if cut == 0 and raw:
+                # 段首就是坏字节：按 replace 吞掉一个字节，offset 不能原地踏步
+                text = raw[:1].decode("utf-8", "replace")
+                cut = 1
+            consumed = cut
+        next_offset = offset + consumed
         self.send_json(200, {"ok": True, "offset": offset, "next": next_offset,
                              "size": size, "eof": next_offset >= size,
                              "text": redact(text)})
@@ -1853,6 +1908,9 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(404, "读不出：%s" % exc)
             return
         ext = os.path.splitext(path)[1].lower()
+        if ext in TEXT_DOWNLOAD_EXTS:
+            # 文本产物（日志/计划/结果）走下载口也要脱敏，与 /api/jobs/<id>/log 同口径
+            body = redact(body.decode("utf-8", "replace")).encode("utf-8")
         extra = {"X-File-Name": quote(os.path.basename(path))}
         self.send(200, body, CONTENT_TYPES.get(ext, "application/octet-stream"), extra)
 
@@ -1906,7 +1964,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def writer_busy(self):
         snap = self.app.runner.snapshot()
-        return snap["writer"] > 0 or self.app.store.counts().get("queued", 0) > 0
+        if snap["writer"]:
+            return True
+        # 只看排队中的「写」任务：只读任务排队不该让写按钮报「有写任务在跑」
+        for row in self.app.store.queued(limit=200):
+            if not (KINDS.get(row["kind"]) or {}).get("readonly"):
+                return True
+        return False
 
     def api_upload(self):
         try:
@@ -1935,7 +1999,9 @@ class Handler(BaseHTTPRequestHandler):
         while os.path.exists(target):
             target = os.path.join(self.app.env.inbox, "%s-%d%s" % (stem, n, ext))
             n += 1
-        part = target + ".part"
+        part = "%s.%d.part" % (target, threading.get_ident())
+        # 并发同名上传各有各的 .part，不会交错写同一个临时文件；最后 os.replace
+        # 谁后到谁生效。中断残留的 .part 不进收件箱清单（见 inbox）。
         got = 0
         with open(part, "wb") as fh:
             while got < length:
@@ -2052,7 +2118,7 @@ class Handler(BaseHTTPRequestHandler):
         commands += rebuild_commands(self.app.env)
         job_id = self.app.runner.submit(
             "import.apply", "导入入库 %s" % os.path.basename(os.path.dirname(plan)),
-            commands, plan_hash=plan)
+            commands, plan_hash=plan_file_hash(plan))
         self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_split_run(self, payload):
@@ -2196,39 +2262,49 @@ class Handler(BaseHTTPRequestHandler):
         review_dir = os.path.join(batch_dir, "review")
         os.makedirs(batch_dir, exist_ok=True)
         batch_triage = os.path.join(batch_dir, "triage.csv")
-        upsert_csv(batch_triage, triage_row, triage_fields)
-        for name in ("census.jsonl", "text.jsonl", "scan.jsonl"):
-            src = os.path.join(job_dir, name)
-            if not os.path.isfile(src):
-                continue
-            rows = []
-            with open(src, encoding="utf-8") as fh:
-                for line in fh:
-                    if not line.strip():
-                        continue
-                    try:
-                        rows.append(json.loads(line))
-                    except ValueError:
-                        pass
-            merge_jsonl(os.path.join(batch_dir, name), rows, uid)
-        review = {"uid": uid, "verdict": payload.get("verdict") or route,
-                  "evidence": payload.get("evidence") or "",
-                  "route": route, "reason": reason,
-                  "model": ({"route": model.get("route"),
-                             "confidence": model.get("confidence"),
-                             "reason": model.get("reason"),
-                             "at": model.get("at") or now_iso()}
-                            if isinstance(model, dict) and model.get("route") else None),
-                  "at": now_iso()}
-        write_json_atomic(os.path.join(review_dir, uid + ".json"), review)
-        job_id = self.app.runner.submit(
-            "pdf.confirm", "分诊确认 %s → %s" % (uid, route),
-            [make_cmd(self.app.env, "apply_review", "pdf_apply_review.py",
-                      ["--batch", batch,
-                       "--triage", self.app.env.rel(batch_triage),
-                       "--out-dir", self.app.env.rel(batch_dir),
-                       "--review", self.app.env.rel(review_dir)])],
-            batch_dir=os.path.join("工作区", "批次", batch))
+        # 批次账的读改写要互斥：两个标签页并发确认不同 uid，后写的会把先写的
+        # uid 从 triage.csv / *.jsonl 里抹掉。写任务互斥用的是同一把 flock。
+        lock_fd = os.open(self.app.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            upsert_csv(batch_triage, triage_row, triage_fields)
+            for name in ("census.jsonl", "text.jsonl", "scan.jsonl"):
+                src = os.path.join(job_dir, name)
+                if not os.path.isfile(src):
+                    continue
+                rows = []
+                with open(src, encoding="utf-8") as fh:
+                    for line in fh:
+                        if not line.strip():
+                            continue
+                        try:
+                            rows.append(json.loads(line))
+                        except ValueError:
+                            pass
+                merge_jsonl(os.path.join(batch_dir, name), rows, uid)
+            review = {"uid": uid, "verdict": payload.get("verdict") or route,
+                      "evidence": payload.get("evidence") or "",
+                      "route": route, "reason": reason,
+                      "model": ({"route": model.get("route"),
+                                 "confidence": model.get("confidence"),
+                                 "reason": model.get("reason"),
+                                 "at": model.get("at") or now_iso()}
+                                if isinstance(model, dict) and model.get("route") else None),
+                      "at": now_iso()}
+            write_json_atomic(os.path.join(review_dir, uid + ".json"), review)
+            job_id = self.app.runner.submit(
+                "pdf.confirm", "分诊确认 %s → %s" % (uid, route),
+                [make_cmd(self.app.env, "apply_review", "pdf_apply_review.py",
+                          ["--batch", batch,
+                           "--triage", self.app.env.rel(batch_triage),
+                           "--out-dir", self.app.env.rel(batch_dir),
+                           "--review", self.app.env.rel(review_dir)])],
+                batch_dir=os.path.join("工作区", "批次", batch))
+        finally:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(lock_fd)
         self.send_json(200, {"ok": True, "job_id": job_id,
                              "review": self.app.env.rel(
                                  os.path.join(review_dir, uid + ".json")),
@@ -2296,10 +2372,20 @@ class Handler(BaseHTTPRequestHandler):
             follow = suggestion.get("route") == item["route"]
             item["reason"] = "按分诊建议确认" if follow else "在 PDF 清单里改处置"
             item["suggestion"] = suggestion if follow else None
-        batch, command = self.app.pdf_settle(clean, index)
-        job_id = self.app.runner.submit(
-            "pdf.confirm", "改处置 %d 本" % len(clean), [command],
-            batch_dir=os.path.join("工作区", "批次", batch))
+        # 批次账读改写与 confirm 同一把锁：并发 settle 之间、settle 与 confirm
+        # 之间都不能互相抹行（见 api_pdf_confirm 里的说明）。
+        lock_fd = os.open(self.app.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            batch, command = self.app.pdf_settle(clean, index)
+            job_id = self.app.runner.submit(
+                "pdf.confirm", "改处置 %d 本" % len(clean), [command],
+                batch_dir=os.path.join("工作区", "批次", batch))
+        finally:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(lock_fd)
         self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch,
                              "routes": dict(routes)})
 
@@ -2532,6 +2618,16 @@ def plan_path(env, raw):
     if not os.path.exists(path):
         raise ValueError("plan 文件不存在：%s" % rel)
     return path
+
+
+def plan_file_hash(path):
+    """plan 内容哈希，给 job.plan_hash。这个字段在删书那边是预览哈希，
+    导入这边以前错存了文件路径，排查时误导。"""
+    try:
+        with open(path, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()[:16]
+    except OSError:
+        return ""
 
 
 def uid_list(raw):

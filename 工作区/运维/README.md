@@ -102,9 +102,9 @@ GET  /api/status                       # 状态脚本 + ops.db 计数 + 锁状�
 GET  /api/jobs?state=&limit=           # 任务表（带 steps）
 GET  /api/jobs/<id>                    # 任务详情：steps、commands、log_tail、产物路径
 GET  /api/jobs/<id>/log?offset=        # {offset,next,size,eof,text}，text 已脱敏
-POST /api/jobs/<id>/cancel             # SIGTERM 进程组，10 秒后 SIGKILL
+POST /api/jobs/<id>/cancel             # SIGTERM 进程组，10 秒后组里还有活口就 SIGKILL
 POST /api/jobs/<id>/rerun              # 用 jobs/<id>/commands.json 再排一个
-POST /api/jobs/clean                   # 日志 90 天 / 200 个任务，缩略图 30 天
+POST /api/jobs/clean                   # 日志 90 天 / 200 个任务；分诊任务在缩略图 30 天保留期内整本跳过
 POST /api/import/upload                # 裸 body，X-Filename（URL 编码），上限 2 GB
 POST /api/import/scan                  # ingest.py scan
 POST /api/import/plan                  # {job_id, items}：把编辑后的计划写回 jobs/<id>/plan.json
@@ -197,7 +197,7 @@ python3 工作区/脚本/ops_status.py --json --root <root>
 - 一个写任务同时只跑一个：`工作区/运维/.writer.lock` 上 `flock(LOCK_EX)`，子进程与页面同时受约束。
 - 只读任务（扫描、分诊、删书预览）用 `LOCK_SH`，最多两个并行。
 - 写任务的入口在收到请求时就检查是否有写任务在跑，有就回 409，避免排队两个改库的任务。
-- 取消：给子进程组发 SIGTERM，10 秒没退再 SIGKILL。拆章与 PDF 驱动幂等，重跑会跳过已落地产物。
+- 取消：给子进程组发 SIGTERM，10 秒后组里还有活口（比如吞了 SIGTERM 的孙进程）就整组 SIGKILL。拆章与 PDF 驱动幂等，重跑会跳过已落地产物。
   已结束与 `awaiting_review` 的任务不能取消，接口回 409。
 - 接管：启动时对每个 `running` 任务读 `pid`，比 `/proc/<pid>/cmdline` 里的脚本名；对得上就接着盯，
   进程退出后把剩下的步骤补跑完再收尾，对不上标 `orphaned`。僵尸进程按已退出处理。不自动杀任何进程。
