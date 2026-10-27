@@ -136,7 +136,7 @@ def is_table_page(page):
     return len(xs) >= 3 and len(ys) >= 6
 
 
-def page_items(page, min_px=MIN_IMAGE_PX, keep_images=True, merge_blocks=False):
+def page_items(page, min_px=MIN_IMAGE_PX, keep_images=True, merge_blocks=True):
     """一页按读序的块：文字块成段落字符串，图块成 ("image", 扩展名, 字节, 宽, 高)。
     过小的图按丢弃计数。返回 (块, 丢弃数)。keep_images=False 时不取图片字节（审计只数文字，
     省下每页几 MB），丢弃口径不变。
@@ -211,7 +211,7 @@ def chapter_starts(toc):
     return out
 
 
-def extract(doc, out_dir, merge_blocks=False):
+def extract(doc, out_dir, merge_blocks=True):
     """摊开全书：被引用的图落 images/，正文里的图换成一个占位。返回 (逐页块, 丢弃图数, 留图数)。"""
     pages, dropped, used = [], 0, 0
     for i, page in enumerate(doc, 1):
@@ -291,7 +291,7 @@ def main():
     ap.add_argument("--method", default="pdf-text")
     ap.add_argument("--tool-version", default="")
     ap.add_argument("--structure", choices=("auto", "single", "chapters"), default="auto")
-    ap.add_argument("--merge-blocks", action=argparse.BooleanOptionalAction, default=False,
+    ap.add_argument("--merge-blocks", action=argparse.BooleanOptionalAction, default=True,
                     help="跨块并段（默认开）。--no-merge-blocks 回到逐块成段，供对照与回滚")
     a = ap.parse_args()
 
