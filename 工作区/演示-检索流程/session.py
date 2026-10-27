@@ -49,10 +49,12 @@ def create():
     return {"id": new_id(), "created_at": stamp, "updated_at": stamp, "turns": []}
 
 
+def valid_id(sid):
+    return isinstance(sid, str) and bool(ID_RE.match(sid))
+
+
 def _path(sid):
-    if not isinstance(sid, str) or not ID_RE.match(sid):
-        return ""
-    return os.path.join(SESS_DIR, sid + ".json")
+    return os.path.join(SESS_DIR, sid + ".json") if valid_id(sid) else ""
 
 
 def load(sid):

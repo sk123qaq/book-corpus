@@ -167,12 +167,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route in ("/", "/index.html"):
                 self.serve_file("index.html", "text/html; charset=utf-8")
+            elif route in ("/session", "/session.html"):
+                self.serve_file("session.html", "text/html; charset=utf-8")
             elif route == "/style.css":
                 self.serve_file("style.css", "text/css; charset=utf-8")
+            elif route == "/session.css":
+                self.serve_file("session.css", "text/css; charset=utf-8")
             elif route == "/app.js":
                 self.serve_file("app.js", "application/javascript; charset=utf-8")
+            elif route == "/session.js":
+                self.serve_file("session.js", "application/javascript; charset=utf-8")
             elif route == "/api/health":
                 self.api_health()
+            elif route == "/api/session":
+                self.api_session(parse_qs(parsed.query))
             elif route == "/api/chapter":
                 self.api_chapter(parse_qs(parsed.query))
             elif route == "/favicon.ico":
@@ -308,6 +316,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(500, {"ok": False, "db": "error", "error": str(exc)})
             return
         self.send_json(200, {"ok": True, "db": "ok", "meta": info})
+
+    def api_session(self, query):
+        sid = (query.get("id") or [""])[0]
+        if not session.valid_id(sid):
+            self.fail(400, "会话 id 不合法")
+            return
+        sess = session.load(sid)
+        if sess is None:
+            self.fail(404, "会话不存在")
+            return
+        self.send_json(200, {"ok": True, "session": sess})
 
     def api_run(self, question, select, thinking=None, fresh=False,
                 session_id="", turn=None, anchor=None):

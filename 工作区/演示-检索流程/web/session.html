@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>会话追问 · 书库检索</title>
+<link rel="stylesheet" href="/session.css">
+</head>
+<body>
+<header class="masthead">
+  <a class="brand" href="/session">书库检索<span class="brand-dot"></span></a>
+  <div class="stats" id="stats" aria-label="书库规模">
+    <span><b class="mono" data-stat="books">—</b> 本</span>
+    <span><b class="mono" data-stat="paras">—</b> 段</span>
+    <span><b class="mono" data-stat="chapters">—</b> 章</span>
+  </div>
+  <nav class="nav"><a href="/">完整流程 ↗</a></nav>
+</header>
+
+<main class="app">
+  <aside class="rail">
+    <div class="rail-head">
+      <span class="mono">本次会话</span>
+      <b class="mono" id="turn-count">0 问</b>
+    </div>
+    <ol class="rounds" id="rounds"></ol>
+    <button class="rail-foot" type="button" id="new-session"><span class="plus">+</span>新会话</button>
+  </aside>
+
+  <section class="main" id="main"></section>
+
+  <div class="ask">
+    <div class="ask-sugs">
+      <span class="lbl">接着问</span>
+      <button class="chip" type="button" data-ask="还有别的例子吗？">还有别的例子吗？</button>
+      <button class="chip" type="button" data-ask="这个说法有反例吗？">这个说法有反例吗？</button>
+      <button class="chip" type="button" data-ask="作者在别的章节怎么讲？">作者在别的章节怎么讲？</button>
+    </div>
+    <div class="ask-hint" id="hint"></div>
+    <div class="ask-row">
+      <div class="ask-field" id="ask-field">
+        <input class="field" id="q" type="text" maxlength="300" autocomplete="off"
+               aria-label="接着问" placeholder="问一句，从书里找原文">
+        <span class="caret" aria-hidden="true"></span>
+      </div>
+      <button class="btn btn-primary ask-send" type="button" id="send">追问</button>
+    </div>
+  </div>
+
+  <aside class="drawer" id="drawer">
+    <button class="drawer-toggle" type="button" id="drawer-toggle">
+      <span class="when-closed">原文</span><span class="when-open">收起</span>
+    </button>
+    <section class="panel is-shown" id="panel"></section>
+  </aside>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+<script src="/session.js"></script>
+</body>
+</html>
