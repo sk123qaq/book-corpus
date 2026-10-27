@@ -51,8 +51,10 @@ def code_of(path):
 status, body = get("/api/health")
 health = json.loads(body)
 check("健康检查", status == 200 and health.get("ok"), "books=%s" % health.get("meta", {}).get("books"))
-_, html = get("/")
-check("首页渲染入口", "书库检索" in html and "ask-form" in html)
+_, html = get("/classic")
+check("旧页在 /classic", "书库检索" in html and "ask-form" in html)
+_, home = get("/")
+check("/ 是 02 页", "session.js" in home and 'id="main"' in home)
 
 status, body = post("/api/run", {"question": "内卷和教育之间是什么关系"})
 t1 = json.loads(body)

@@ -224,8 +224,10 @@ check("旧请求五阶段齐全",
       stages >= {"understand", "rounds", "rank", "cards", "result"}
       and bool((old.get("result") or {}).get("text")),
       "stages=%d" % len(stages))
-_, html = get("/")
-check("首页仍能打开", "书库检索" in html and "ask-form" in html)
+_, html = get("/classic")
+check("旧页仍能打开", "书库检索" in html and "ask-form" in html)
+_, home = get("/")
+check("/ 是 02 页", "session.js" in home and 'id="main"' in home)
 
 # ---- 会话的拒绝路径 -------------------------------------------------
 missing = "ffffffffffff"

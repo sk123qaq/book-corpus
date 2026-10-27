@@ -12,10 +12,11 @@
 
 ## 路由
 
-- `/` 仍然是旧版五阶段页，不动。
-- 新增 `/session` 与 `/session.html` → `web/session.html`。
-- 新增 `/session.css`、`/session.js`。
-- 旧页页头加一个链接 `会话追问 →` 到 `/session`；新页页头加 `完整流程 ↗` 到 `/`。
+- `/` 与 `/index.html` → `web/session.html`（02 研究台，默认页）。
+- `/classic` 与 `/classic.html` → 旧版五阶段页 `web/index.html`。
+- `/session` 与 `/session.html` 仍是 02 的别名，页面自己把 URL 归一到 `/`。
+- `web/session.css`、`web/session.js` 由 02 页加载。
+- 新页页头 `完整流程 ↗` 指 `/classic`，品牌指 `/`；旧页页头 `研究台 →` 指 `/`，品牌指 `/classic`。
 
 ## 新增只读接口
 

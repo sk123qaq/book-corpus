@@ -166,6 +166,8 @@ class Handler(BaseHTTPRequestHandler):
         route = unquote(parsed.path)
         try:
             if route in ("/", "/index.html"):
+                self.serve_file("session.html", "text/html; charset=utf-8")
+            elif route in ("/classic", "/classic.html"):
                 self.serve_file("index.html", "text/html; charset=utf-8")
             elif route in ("/session", "/session.html"):
                 self.serve_file("session.html", "text/html; charset=utf-8")

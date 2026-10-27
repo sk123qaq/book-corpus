@@ -34,7 +34,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHROME = "google-chrome-stable"
-DEFAULT_URL = "http://127.0.0.1:8765/"
+DEFAULT_URL = "http://127.0.0.1:8765/classic"
 QUESTION = "《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球"
 
 
