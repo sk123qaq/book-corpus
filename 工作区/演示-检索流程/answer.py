@@ -30,6 +30,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -207,7 +208,8 @@ def _norm(text):
 
 def _write_json(path, value):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp.%d" % os.getpid()
+    # 线程号进临时名：两个标签页同时算同一问时，不至于互写同一个 tmp
+    tmp = "%s.tmp.%d.%d" % (path, os.getpid(), threading.get_ident())
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(value, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
@@ -1095,7 +1097,9 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
             titles, status = _chapter_titles(src["book"])
             picked, chapters = pick_passages(con, src["book"], src["path"], src["line"],
                                              terms, groups, MULTI_QSEARCH_LIMIT)
-            chosen = [picked[0]] if picked and int(picked[0].get("line") or 0) > 1 else []
+            # 命中行本身就是首个正文行（line==1）也是合法命中，照样进证据窗；
+            # 以前 > 1 会把用户点中的那段丢掉
+            chosen = [picked[0]] if picked else []
             for item in picked[1:]:
                 if len(chosen) >= MULTI_WINDOWS_PER_BOOK:
                     break

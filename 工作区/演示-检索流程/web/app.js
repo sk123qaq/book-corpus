@@ -192,31 +192,44 @@
   }
 
   function highlight(text, terms) {
-    let html = esc(text || '');
+    // 在原文上收集命中区间，最后统一转义拼接：不对已插 <mark>/实体 的
+    // HTML 再做 split，后续词就撞不上自己刚生成的标记
+    const raw = String(text || '');
     const seen = new Set();
-    let count = 0;
-    for (const raw of terms) {
-      const term = String(raw || '');
+    const ranges = [];
+    let budget = 20;
+    for (const t of terms) {
+      const term = String(t || '');
       if (term.length < 2 || seen.has(term)) continue;
       seen.add(term);
-      if (count >= 20) break;
-      const needle = esc(term);
-      if (!needle) continue;
-      const parts = html.split(needle);
-      if (parts.length === 1) continue;
-      const take = Math.min(parts.length - 1, 20 - count);
-      let out = parts[0];
-      for (let i = 1; i < parts.length; i++) {
-        if (i <= take) {
-          out += '<mark>' + needle + '</mark>' + parts[i];
-          count++;
-        } else {
-          out += needle + parts[i];
-        }
+      let from = 0;
+      let idx;
+      let taken = 0;
+      while (taken < budget - ranges.length && (idx = raw.indexOf(term, from)) >= 0) {
+        ranges.push([idx, idx + term.length]);
+        from = idx + term.length;
+        taken += 1;
       }
-      html = out;
+      if (ranges.length >= budget) break;
     }
-    return { html, count };
+    ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const merged = [];
+    for (const r of ranges) {
+      const last = merged[merged.length - 1];
+      if (last && r[0] < last[1]) {
+        last[1] = Math.max(last[1], r[1]);
+        continue;
+      }
+      merged.push(r);
+    }
+    let out = '';
+    let pos = 0;
+    for (const r of merged) {
+      out += esc(raw.slice(pos, r[0])) + '<mark>' + esc(raw.slice(r[0], r[1])) + '</mark>';
+      pos = r[1];
+    }
+    out += esc(raw.slice(pos));
+    return { html: out, count: merged.length };
   }
 
   function highlightTerms(trace) {
@@ -345,7 +358,9 @@
     }
     const top = Number(ranking[0].score) || 0;
     const rows = ranking.map((b, i) => {
-      const cov = Math.round((Number(b.coverage) || 0) * nGroups);
+      // 分母用这一轮实际采用的词组数（total_groups）， nouns 只是首轮的
+      const denom = Number(b.total_groups) || nGroups;
+      const cov = Math.round((Number(b.coverage) || 0) * denom);
       const width = top > 0 ? Math.max(2, Math.round((Number(b.score) / top) * 100)) : 0;
       return `<div class="rank-row">
         <div class="rank-top">
@@ -353,7 +368,7 @@
           <button type="button" class="rank-name" title="${esc(b.title)}">${esc(b.title)}</button>
           <span class="rank-score mono">${fixed(b.score)}</span>
         </div>
-        <div class="rank-meta"><span>${esc(b.type)}</span><span class="mono">${fmtInt(b.chapters)} 章</span><span class="cov">${cov}/${nGroups} 组</span></div>
+        <div class="rank-meta"><span>${esc(b.type)}</span><span class="mono">${fmtInt(b.chapters)} 章</span><span class="cov">${cov}/${denom} 组</span></div>
         <div class="bar"><i data-w="${width}%"></i></div>
         <p class="rank-text">${esc(b.best_text || '')}</p>
       </div>`;
@@ -603,7 +618,8 @@
   function stage4HTML() {
     const result = state.result;
     if (result && result.error) {
-      return '<p class="empty">读取原文失败：' + esc(result.error) + '</p>';
+      // 原文载入失败也保留回答与引文，只把原文区换成错误提示，不能把答案整个吞掉
+      return answerHTML() + '<p class="empty">读取原文失败：' + esc(result.error) + '</p>';
     }
     if (!result || !result.path) {
       return '<p class="empty">没找到：这句话没有命中任何书。可以换个更具体的词再试。</p>';
@@ -1150,7 +1166,9 @@
       const trace = await fetchJSON('/api/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: q, thinking: state.thinking, fresh }),
+        // select 一起送：URL 带着 ?select=N 刷新时，服务端按同一张卡取原文与回答
+        body: JSON.stringify({ question: q, thinking: state.thinking, fresh,
+                               select: (opts && opts.select) || 0 }),
       });
       if (seq !== state.runSeq) return;
       state.trace = trace;

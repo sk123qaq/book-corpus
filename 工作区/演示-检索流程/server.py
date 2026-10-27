@@ -50,11 +50,17 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- helpers ---------------------------------------------------
     def send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
+        if code >= 400:
+            # 出错路径可能没读尽请求体（404 未知接口、400 超大 JSON）。HTTP/1.1
+            # keep-alive 下残余 body 会被下一条请求当请求行解析，断开才不失步。
+            self.close_connection = True
         if isinstance(body, (dict, list)):
             body = json_bytes(body)
         elif isinstance(body, str):
             body = body.encode("utf-8")
         self.send_response(code)
+        if code >= 400:
+            self.send_header("Connection", "close")
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")

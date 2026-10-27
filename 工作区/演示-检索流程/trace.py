@@ -206,7 +206,8 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
         res = subprocess.run(PI + ["--thinking", thinking, _prompt(question)],
                              capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT)
         terms, groups = _parse_extract(res.stdout) if res.returncode == 0 else ([], [])
-        if len(terms) >= 2:
+        # 只缓存读侧认的形态（terms 且 groups），否则这份缓存永远命中不了
+        if len(terms) >= 2 and groups:
             ms = round((time.time() - t0) * 1000, 1)
             _write_json(path, {"question": question, "terms": terms, "groups": groups,
                                "source": "model", "model": MODEL, "thinking": thinking,
@@ -214,7 +215,8 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
                                "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
             return {"terms": terms, "groups": groups, "source": "model",
                     "thinking": thinking, "ms": ms, "model": MODEL}
-        note = "模型返回不可用（rc=%d）" % res.returncode
+        note = ("模型没给出可用的词组" if res.returncode == 0
+                else "模型返回不可用（rc=%d）" % res.returncode)
     except (OSError, subprocess.SubprocessError) as exc:
         note = "切词调用失败：%s" % exc.__class__.__name__
     ms = round((time.time() - t0) * 1000, 1)
@@ -332,17 +334,24 @@ def read_chapter(path, line=1, chars=STAGE_CHARS, before=STAGE_BEFORE):
         idx -= 1
     pre.reverse()
     pre_text = "\n".join(pre)
-    hit_start = len(pre_text) + (1 if pre_text else 0)
-    hit_end = hit_start + len(hit_text)
+
+    def u16(s):
+        """JS 的 length/slice 按 UTF-16 码元数，增补平面字符算 2。"""
+        return sum(2 if ord(ch) > 0xFFFF else 1 for ch in s)
+
+    hit_start = u16(pre_text) + (1 if pre_text else 0)
+    hit_end = hit_start + u16(hit_text)
 
     blocks, used_after = [], 0
     for raw in lines[start:]:
         s = _clean_line(raw)
         if not s.strip():
             continue
-        if used_after and used_after + len(s) > chars:
+        if used_after + len(s) > chars:
             if not blocks:
+                # 首个非空行就超预算：与前置方向同口径，只留头部，不整行吞下
                 blocks.append(s[:chars])
+                used_after += chars
             break
         blocks.append(s)
         used_after += len(s)
@@ -510,6 +519,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
                 {"book": b.book, "title": b.title, "type": b.type,
                  "chapters": b.chapters, "score": round(b.score, 4),
                  "coverage": round(b.coverage, 4), "groups": list(b.groups),
+                 "total_groups": b.total_groups,
                  "best_path": b.best_path, "best_line": b.best_line,
                  "best_text": " ".join((b.best_text or "").split())[:300],
                  "support": b.support}
