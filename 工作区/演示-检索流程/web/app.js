@@ -121,6 +121,24 @@
     return [s.understand, s.rounds, s.rank, s.cards, s.result];
   }
 
+  /* 第 5 阶段 = 读原文窗口 + 回答。读窗口那半跟着屏幕上这段原文走，回答那半等它落地才加上。 */
+  function resultStageMs() {
+    if (!state.result) return null;
+    const read = Number(state.result.ms) || 0;
+    const a = state.answer;
+    const ans = (a && !a.loading && a.data) ? (Number(a.data.ms) || 0) : 0;
+    return read + ans;
+  }
+
+  function renderResultMs() {
+    const value = resultStageMs();
+    const text = value == null ? '—' : fmtMs(value);
+    const msEl = $('.stage-ms', stages[4]);
+    if (msEl) msEl.textContent = text;
+    const li = railItems[4];
+    if (li) $('.rail-ms', li).textContent = text;
+  }
+
   async function fetchJSON(url, opts) {
     const res = await fetch(url, opts);
     let data = null;
@@ -597,6 +615,7 @@
     const result = state.result || trace.result;
     state.result = result;
     $('.stage-body', stages[4]).innerHTML = stage4HTML();
+    renderResultMs();
   }
 
   /* ---- answer ---------------------------------------------------- */
@@ -790,7 +809,7 @@
     stages.forEach((article, i) => {
       renderHeadBadge(article, trace);
       const msEl = $('.stage-ms', article);
-      if (msEl) msEl.textContent = i === 4 && !state.result ? '—' : fmtMs(ms[i]);
+      if (msEl && i < 4) msEl.textContent = fmtMs(ms[i]);
       article.classList.remove('is-open');
       article.dataset.state = 'pending';
     });
@@ -805,7 +824,8 @@
     $$('.raw').forEach((el) => { el.style.display = ''; });
     railItems.forEach((li) => {
       li.classList.remove('done', 'active');
-      $('.rail-ms', li).textContent = fmtMs(ms[Number(li.dataset.step)]);
+      const step = Number(li.dataset.step);
+      if (step < 4) $('.rail-ms', li).textContent = fmtMs(ms[step]);
     });
     const segs = $('#segments');
     segs.innerHTML = STAGE_NAMES.map(() => '<span class="segment"></span>').join('');
@@ -842,7 +862,8 @@
       seg.className = 'segment' + (value === 'active' ? ' active' : value === 'done' ? ' done' : '');
     }
     if (value === 'active') {
-      $('#mobile-label').textContent = String(i + 1).padStart(2, '0') + ' ' + STAGE_NAMES[i] + ' · ' + fmtMs(stageMs(state.trace)[i]);
+      const ms = i === 4 ? resultStageMs() : stageMs(state.trace)[i];
+      $('#mobile-label').textContent = String(i + 1).padStart(2, '0') + ' ' + STAGE_NAMES[i] + ' · ' + (ms == null ? '—' : fmtMs(ms));
       if (i === stages.length - 1) maybeAnswer();
     }
   }
@@ -990,10 +1011,6 @@
     }
     renderStage4(state.trace);
     renderRaw(4, state.trace);
-    const msEl = $('.stage-ms', stages[4]);
-    if (msEl) msEl.textContent = fmtMs(state.result.ms);
-    const li = railItems[4];
-    if (li) $('.rail-ms', li).textContent = fmtMs(state.result.ms);
     bindSwitch();
   }
 
