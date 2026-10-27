@@ -42,6 +42,7 @@
 /工作区/运维/ops.db*
 /工作区/运维/jobs/
 /工作区/运维/.writer.lock
+/工作区/运维/.reader.lock
 /工作区/运维/search.log
 /工作区/运维/search.pid
 /工作区/运维/last-audit.json

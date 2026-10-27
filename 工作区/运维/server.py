@@ -256,6 +256,7 @@ class Env:
         self.views = os.path.join(self.root, "视图")
         self.ops_db = os.path.join(self.ops, "ops.db")
         self.lock = os.path.join(self.ops, ".writer.lock")
+        self.reader_lock = os.path.join(self.ops, ".reader.lock")
         self.search_log = os.path.join(self.ops, "search.log")
         self.search_pid = os.path.join(self.ops, "search.pid")
         self.audit_cache = os.path.join(self.ops, "last-audit.json")
@@ -606,6 +607,9 @@ def untriaged_split(books):
     return out
 
 
+# readonly=True 的承诺：任务只写自己的 jobs/<id>/，读的共享文件都是 tmp+replace
+# 原子写。锁按它分文件（.reader.lock / .writer.lock）；凡要动 库/、批次账、目录 的
+# 步骤必须开成写任务，标错了锁就白分了。
 KINDS = {
     "import.scan": {"label": "扫收件箱", "readonly": True, "gate": gate_import_scan},
     "import.apply": {"label": "导入入库", "readonly": False, "gate": gate_import_apply},
@@ -677,7 +681,8 @@ def retarget(env, cmd):
 
 
 class Runner:
-    """写任务互斥（flock 独占），只读任务最多 READ_SLOTS 个并行。"""
+    """写任务互斥于批次账读改写（.writer.lock 独占）；只读任务共用 .reader.lock，
+    与写任务互不阻塞，最多 READ_SLOTS 个并行。"""
 
     def __init__(self, env, store):
         self.env = env
@@ -762,6 +767,11 @@ class Runner:
 
     # ---- internals -------------------------------------------------
     @staticmethod
+    def _lock_file(env, spec):
+        """读任务锁 .reader.lock（与写互不阻塞），写任务与批次账读改写锁 .writer.lock。"""
+        return env.reader_lock if spec.get("readonly") else env.lock
+
+    @staticmethod
     def _matches(pid, argv):
         parts = [os.path.basename(p) for p in cmdline_of(pid)]
         if not argv:
@@ -817,7 +827,8 @@ class Runner:
         lock_fd = None
         try:
             commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
-            lock_fd = os.open(self.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+            lock_fd = os.open(self._lock_file(self.env, spec),
+                              os.O_CREAT | os.O_RDWR, 0o644)
             fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly")
                         else fcntl.LOCK_EX)
             if job_id in self.cancels:
@@ -970,7 +981,8 @@ class Runner:
         try:
             commands = read_json(os.path.join(self.env.job_dir(job_id),
                                               "commands.json")) or []
-            lock_fd = os.open(self.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+            lock_fd = os.open(self._lock_file(self.env, spec),
+                              os.O_CREAT | os.O_RDWR, 0o644)
             fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly")
                         else fcntl.LOCK_EX)
             rcs, start = self._adopted_rcs(job_id)

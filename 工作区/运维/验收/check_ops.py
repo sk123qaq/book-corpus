@@ -121,9 +121,12 @@ print(json.dumps({"batch": batch, "status_counts": counts, "books": books,
 '''
 
 STUB_REVIEW = '''#!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
+if os.path.exists(".slow-review"):
+    print("慢核对：开始")
+    time.sleep(30)
 batch, uid, out = args[0], args[1], opt("--json")
 rows = [] if uid == "B0009" else [{
     "uid": uid, "title": "书 " + uid, "status": "staged-review", "format": "epub",
@@ -797,6 +800,26 @@ def run_checks(root, ops, port, fixture):
     code, body = post(port, "/api/split/inspect", {"uid": "B0001", "batch": slow_batch})
     check("查看问题不进写任务入口", code == 200 and body.get("job_id"),
           str(body.get("error")))
+    # ---- 读任务不该被写任务卡住 ------------------------------------
+    open(os.path.join(root, ".slow-review"), "w").close()
+    code, body = post(port, "/api/split/inspect", {"uid": "B0001", "batch": slow_batch})
+    inspect_id = body.get("job_id")
+    check("慢查看问题受理，拆章还在跑", code == 200 and inspect_id,
+          str(body.get("error")))
+    detail = wait_job(port, inspect_id, ("running",), timeout=15)
+    check("拆章在跑时查看问题照样 running",
+          (detail or {}).get("job", {}).get("state") == "running",
+          str((detail or {}).get("job", {}).get("state")))
+    lock_path = os.path.join(ops, ".reader.lock")
+    holder = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        held = False
+    except OSError:
+        held = True
+    finally:
+        os.close(holder)
+    check("跑着的查看问题持有 .reader.lock", held)
     code, body = post(port, "/api/jobs/%s/cancel" % slow_id)
     check("停止接口接受", code == 200)
     detail = wait_job(port, slow_id, ("cancelled", "failed"), timeout=40)
@@ -806,6 +829,13 @@ def run_checks(root, ops, port, fixture):
     os.remove(os.path.join(root, ".slow-split"))
     code, body = post(port, "/api/jobs/%s/cancel" % slow_id)
     check("已结束的任务不能再取消", code == 409)
+    code, body = post(port, "/api/jobs/%s/cancel" % inspect_id)
+    check("跑着的查看问题可取消", code == 200, str(body.get("error")))
+    detail = wait_job(port, inspect_id, ("cancelled", "failed"), timeout=20)
+    check("查看问题取消后是 cancelled",
+          (detail or {}).get("job", {}).get("state") == "cancelled",
+          str((detail or {}).get("job", {}).get("state")))
+    os.remove(os.path.join(root, ".slow-review"))
 
     # ---- 拆章门槛读 report-json ------------------------------------
     code, body = post(port, "/api/split/run", {"uids": ["B0003"], "workers": 1})

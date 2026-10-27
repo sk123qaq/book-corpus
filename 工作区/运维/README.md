@@ -26,7 +26,8 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
 | `web/index.html` `web/app.js` `web/style.css` | 七个页签加一个 PDF 清单子页（`#pdf-list`）的原生 JS 页面，无框架无 CDN |
 | `ops.db` | 任务与步骤（首次启动自建，可重建，丢了只是任务历史没了） |
 | `jobs/<id>/` | `log.txt`、`commands.json`、`pid`、`plan.json`、`result.json`、`dry-run.json`、`thumbs/*.png` |
-| `.writer.lock` | 写任务互斥用的 `fcntl.flock` 文件，内容为空 |
+| `.writer.lock` | 写任务互斥与批次账读改写用的 `fcntl.flock` 文件，内容为空 |
+| `.reader.lock` | 只读任务共用锁的 `fcntl.flock` 文件，内容为空；与写任务互不阻塞 |
 | `search.log` `search.pid` | 检索演示页的子进程输出与 PID |
 | `last-audit.json` | 审计缓存，由 `ops_status.py --deep` 写，页面只读 |
 | `验收/check_ops.py` | 服务与任务自检，末行 `ALL PASS` |
@@ -194,9 +195,12 @@ python3 工作区/脚本/ops_status.py --json --root <root>
 
 ## 锁、并发与取消
 
-- 一个写任务同时只跑一个：`工作区/运维/.writer.lock` 上 `flock(LOCK_EX)`，子进程与页面同时受约束。
-- 只读任务（扫描、分诊、删书预览）用 `LOCK_SH`，最多两个并行。
-- 写任务的入口在收到请求时就检查是否有写任务在跑，有就回 409，避免排队两个改库的任务。
+- 写任务同时只跑一个：写任务与 HTTP 批次账读改写都在 `工作区/运维/.writer.lock` 上 `flock(LOCK_EX)`；
+  写任务的入口在收到请求时就检查是否有写任务在跑，有就回 409，避免排队两个改库的任务。
+- 只读任务（扫描、分诊、查看问题、删书预览）共用 `工作区/运维/.reader.lock` 的 `LOCK_SH`，最多两个并行，
+  **与写任务互不阻塞**——拆章在跑时点分诊照跑，分诊在跑时点写任务也不再等锁。
+- 读写不打架靠两条约定：只读任务只写自己的 `jobs/<id>/`，写任务对共享文件一律 tmp 加 `os.replace`
+  （见库根 AGENTS.md 写入规则）。新增任务 kind 时按这两条定 `readonly`，标错了锁就白分了。
 - 取消：给子进程组发 SIGTERM，10 秒后组里还有活口（比如吞了 SIGTERM 的孙进程）就整组 SIGKILL。拆章与 PDF 驱动幂等，重跑会跳过已落地产物。
   已结束与 `awaiting_review` 的任务不能取消，接口回 409。
 - 接管：启动时对每个 `running` 任务读 `pid`，比 `/proc/<pid>/cmdline` 里的脚本名；对得上就接着盯，

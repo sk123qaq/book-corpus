@@ -257,7 +257,8 @@ PDF 页是三块：四格状态带（可转 / 未分诊 / 只记图册 / 日文�
 
 服务启动时接管能核对 PID 的 `running` 任务，核对不上标 `orphaned`，不杀进程。
 
-写任务互斥。读任务可并行。用 `工作区/运维/.writer.lock` 的 `fcntl.flock`。
+写任务互斥，读任务可并行且与写任务互不阻塞。写任务与批次账读改写用 `工作区/运维/.writer.lock` 的
+`fcntl.flock(LOCK_EX)`；只读任务用 `工作区/运维/.reader.lock` 的 `fcntl.flock(LOCK_SH)`，只写自己的 `jobs/<id>/`。
 
 上传裸 body，上限 2 GB，写 `库/_收件箱/<name>.part` 后 `os.replace`。文件名去路径。
 
