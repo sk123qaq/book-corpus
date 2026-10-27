@@ -66,6 +66,7 @@ MAX_WINDOWS = 6
 WINDOW_CHARS = 3500
 TOTAL_CHARS = 14000
 PROMPT_MAX = 26000
+HISTORY_CHARS_SINGLE = 5000
 MAX_CITATIONS = 6
 QUOTE_PROBE = 20
 
@@ -76,6 +77,7 @@ MULTI_CHAPTERS = 4
 MULTI_QUOTA_MIN = 2200
 MULTI_QUOTA_MAX = 3400
 PROMPT_MAX_MULTI = 30000
+HISTORY_CHARS_MULTI = 10000
 MAX_CITATIONS_MULTI = 8
 
 # 思考等级由页面选择（默认 high）。低档 4 窗提示词大约从 40 秒档降到 20 秒档，
@@ -93,7 +95,7 @@ PROMPT = """你是书库问答的回答阶段。依据这一本书的原文回�
 问题：{question}
 书：{book}
 本书 md 目录：{md}
-
+{history}
 你可以用两个只读工具：
 - book_grep(pattern, path?, max?)：在本书 md 目录里搜正则，返回 file:line。
 - read：读命中的章节文件。
@@ -130,7 +132,7 @@ MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本�
 
 {coverage}要用的书（{n} 本，每条后面是这本书的 md 目录）：
 {books}
-
+{history}
 你可以用两个只读工具：
 - book_grep(pattern, path?, max?)：在这些书的 md 目录里搜正则，返回 file:line。
 - read：读命中的章节文件。
@@ -243,23 +245,27 @@ def _err(message, **kwargs):
 
 
 def cache_key(question, book, path, line, terms, groups=None,
-              thinking=DEFAULT_THINKING):
+              thinking=DEFAULT_THINKING, history=""):
     payload = {"q": question, "book": book, "path": path, "line": int(line),
                "terms": sorted({str(t) for t in terms if str(t).strip()}),
                "groups": groups or [],
                "v": PROMPT_VERSION, "model": MODEL, "thinking": thinking}
+    if history:
+        payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
 def multi_cache_key(question, sources, terms, groups=None,
-                    thinking=DEFAULT_THINKING):
+                    thinking=DEFAULT_THINKING, history=""):
     """多书回答的键：书单顺序也算输入，换掉一本书就不再命中。"""
     payload = {"q": question,
                "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
                "terms": sorted({str(t) for t in terms if str(t).strip()}),
                "groups": groups or [],
                "v": PROMPT_VERSION_MULTI, "model": MODEL, "thinking": thinking}
+    if history:
+        payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
@@ -529,7 +535,7 @@ def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS,
     return windows
 
 
-def build_prompt(question, book, windows, chapters):
+def build_prompt(question, book, windows, chapters, history=""):
     blocks = ["%s:%d-%d\n%s" % (w["path"], w["start"], w["end"], w["text"])
               for w in windows]
     rows = []
@@ -537,13 +543,16 @@ def build_prompt(question, book, windows, chapters):
         cov = "-" if c.get("coverage") is None else "%.2f" % float(c["coverage"])
         rows.append("%d. %s:%d 《%s》 score=%.2f cov=%s"
                     % (i, c["path"], c["line"], c["title"], c["score"], cov))
+    history = (history.strip() + "\n") if history.strip() else ""
+    limit = PROMPT_MAX + (HISTORY_CHARS_SINGLE if history else 0)
     prompt = PROMPT.format(question=question, book=book, md="库/%s/md" % book,
-                           n=len(rows), chapters="\n".join(rows),
+                           history=history, n=len(rows), chapters="\n".join(rows),
                            evidence="\n\n".join(blocks))
-    while len(prompt) > PROMPT_MAX and len(blocks) > 1:
+    while len(prompt) > limit and len(blocks) > 1:
         blocks.pop()
         prompt = PROMPT.format(question=question, book=book, md="库/%s/md" % book,
-                               n=len(rows), chapters="\n".join(rows),
+                               history=history, n=len(rows),
+                               chapters="\n".join(rows),
                                evidence="\n\n".join(blocks))
     return prompt
 
@@ -657,13 +666,15 @@ def _drop_last_window(windows, rank):
     return False
 
 
-def build_multi_prompt(question, plans, windows, coverage=""):
+def build_multi_prompt(question, plans, windows, coverage="", history=""):
     """一次提示词装下所有书：库级覆盖 + 书名行 + 每书 4 章地图 + 按书分组的窗口。"""
     rank = {p["source"]["book"]: i for i, p in enumerate(plans)}
     labels = {p["source"]["book"]: _book_label(p["source"]) for p in plans}
     coverage = coverage.strip()
     if coverage:
         coverage += "\n\n"
+    history = (history.strip() + "\n") if history.strip() else ""
+    limit = PROMPT_MAX_MULTI + (HISTORY_CHARS_MULTI if history else 0)
     keep = list(windows)
     while True:
         book_rows, chapter_blocks = [], []
@@ -687,11 +698,11 @@ def build_multi_prompt(question, plans, windows, coverage=""):
             nowindow = ("无相关原文窗口的书：《%s》（这些书在回答里要写明没有相关原文）"
                         % "》《".join(empty))
         prompt = MULTI_PROMPT.format(
-            question=question, coverage=coverage, n=len(plans),
+            question=question, coverage=coverage, n=len(plans), history=history,
             books="\n".join(book_rows),
             chapters="\n\n".join(chapter_blocks), evidence="\n\n".join(blocks),
             nowindow=nowindow)
-        if len(prompt) <= PROMPT_MAX_MULTI or not _drop_last_window(keep, rank):
+        if len(prompt) <= limit or not _drop_last_window(keep, rank):
             return prompt
 
 
@@ -988,27 +999,31 @@ def _verify_multi(cites, windows, sources):
 # ---- 主流程 ---------------------------------------------------------
 
 def answer_question(question, book, path, line=1, terms=None, groups=None,
-                    use_cache=True, sources=None, thinking=DEFAULT_THINKING):
+                    use_cache=True, sources=None, thinking=DEFAULT_THINKING,
+                    history=""):
     """返回 Answer dict（结构见 ANSWER-BRIEF.md 的「数据形状」）。
 
     use_cache=False 即前端「重新检索」：跳过答案缓存并重新调模型，本次结果照样回写。
+    history 是上一轮的上下文片段，非空时进提示词也进缓存键。
     """
     t0 = time.time()
     question = (question or "").strip()
     if not question:
         return _err("question 为空", ms=_ms(t0))
     thinking = normalize_thinking(thinking)
+    history = (history or "").strip()
     terms = [str(t).strip() for t in (terms or []) if str(t).strip()][:12]
     groups = [g for g in (groups or []) if isinstance(g, dict) and g.get("variants")]
     scope = _normalize_sources(sources)
     if len(scope) >= 2:
-        return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking)
+        return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking,
+                             history)
     return _answer_single(question, book, path, line, terms, groups, use_cache, t0,
-                          thinking)
+                          thinking, history)
 
 
 def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
-                   thinking=DEFAULT_THINKING):
+                   thinking=DEFAULT_THINKING, history=""):
     rel = _rel(path)
     if not _inside_library(rel):
         return _err("path 不在 库/ 下或不是 .md", ms=_ms(t0), thinking=thinking)
@@ -1021,7 +1036,7 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     if line < first:
         line = first
 
-    key = cache_key(question, book, rel, line, terms, groups, thinking)
+    key = cache_key(question, book, rel, line, terms, groups, thinking, history)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
         cached = _read_cached(cache_path, t0, thinking)
@@ -1040,7 +1055,7 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     if not windows:
         return _err("没有取到原文窗口", ms=_ms(t0), thinking=thinking)
 
-    prompt = build_prompt(question, book, windows, chapters)
+    prompt = build_prompt(question, book, windows, chapters, history)
     raw, error = call_pi(prompt, book, thinking=thinking)
     if raw is None:
         return _err(error, passages=_passages(windows), ms=_ms(t0),
@@ -1081,9 +1096,9 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
 
 
 def _answer_multi(question, sources, terms, groups, use_cache, t0,
-                  thinking=DEFAULT_THINKING):
+                  thinking=DEFAULT_THINKING, history=""):
     """多书：每本取三段，一次提示词逐书回答，引文按书归并。"""
-    key = multi_cache_key(question, sources, terms, groups, thinking)
+    key = multi_cache_key(question, sources, terms, groups, thinking, history)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
         cached = _read_cached(cache_path, t0, thinking)
@@ -1114,7 +1129,7 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
     if not windows:
         return _err("没有取到原文窗口", passages=[], ms=_ms(t0), thinking=thinking)
     coverage = _coverage(terms)
-    prompt = build_multi_prompt(question, plans, windows, coverage)
+    prompt = build_multi_prompt(question, plans, windows, coverage, history)
     raw, reply, error = None, None, ""
     for _attempt in range(2):
         raw, error = call_pi(prompt, sources[0]["book"],

@@ -19,15 +19,86 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import answer as answerer  # noqa: E402
+import related  # noqa: E402
+import session  # noqa: E402
 import trace as tracer  # noqa: E402
 
 WEB = os.path.join(HERE, "web")
 MAX_BODY = 16 * 1024
 LOCK = threading.Lock()
+SESSION_LOCK = threading.Lock()
 
 
 def json_bytes(value):
     return json.dumps(value, ensure_ascii=False).encode("utf-8")
+
+
+def _session_id(value):
+    return value.strip() if isinstance(value, str) and value.strip() else ""
+
+
+def _turn_no(value):
+    """请求里的 turn：缺省、布尔或非法值一律当没给。"""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 1 else None
+
+
+def _clean_anchor(value):
+    """anchor 只在 库/ 下的 .md + 正整数行号时采用，其余忽略。"""
+    if not isinstance(value, dict):
+        return None
+    try:
+        real = tracer.safe_md_path(value.get("path"))
+    except (ValueError, OSError):
+        return None
+    try:
+        line = int(value.get("line"))
+    except (TypeError, ValueError):
+        return None
+    if line <= 0:
+        return None
+    title = value.get("title")
+    quote = value.get("quote")
+    return {"path": os.path.relpath(real, tracer.ROOT).replace(os.sep, "/"),
+            "line": line,
+            "title": title.strip() if isinstance(title, str) else "",
+            "quote": quote.strip() if isinstance(quote, str) else ""}
+
+
+def _previous(sess, n):
+    """第 n 问之前最近 3 轮，answer 只留前 300 字。"""
+    rows = []
+    for turn in sess.get("turns") or []:
+        if turn.get("n", 0) >= n:
+            continue
+        ans = turn.get("answer")
+        body = ans.get("answer") if isinstance(ans, dict) else ""
+        if not body:
+            trace = turn.get("trace") if isinstance(turn.get("trace"), dict) else {}
+            result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
+            body = result.get("text") or ""
+        rows.append({"n": turn["n"], "question": turn.get("question") or "",
+                     "answer": str(body or "")[:300]})
+    return rows[-3:]
+
+
+def _write_turn(sess, n, question, data, rel, anchor):
+    """n 已经存在就替掉它并截断后面的轮次（重跑同一问），否则追加。"""
+    turns = sess.setdefault("turns", [])
+    turn = {"n": n, "question": question, "thinking": data.get("thinking") or "",
+            "at": session.now(), "related": rel, "anchor": anchor,
+            "trace": data, "answer": None, "context": None}
+    index = next((i for i, t in enumerate(turns) if t.get("n") == n), -1)
+    if index >= 0:
+        turns[index:] = [turn]
+    else:
+        turns.append(turn)
+    return turn
 
 
 def _flag(value):
@@ -161,7 +232,10 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             select = 0
         self.api_run(question, select, payload.get("thinking"),
-                     _flag(payload.get("fresh")))
+                     _flag(payload.get("fresh")),
+                     session_id=_session_id(payload.get("session_id")),
+                     turn=_turn_no(payload.get("turn")),
+                     anchor=_clean_anchor(payload.get("anchor")))
 
     def handle_answer(self, payload):
         question = payload.get("question")
@@ -222,7 +296,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.api_answer(question, book, path, line, terms, groups, clean,
                         thinking=payload.get("thinking"),
-                        use_cache=not _flag(payload.get("fresh")))
+                        use_cache=not _flag(payload.get("fresh")),
+                        session_id=_session_id(payload.get("session_id")),
+                        turn=_turn_no(payload.get("turn")))
 
     # ---- API -------------------------------------------------------
     def api_health(self):
@@ -233,13 +309,33 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(200, {"ok": True, "db": "ok", "meta": info})
 
-    def api_run(self, question, select, thinking=None, fresh=False):
+    def api_run(self, question, select, thinking=None, fresh=False,
+                session_id="", turn=None, anchor=None):
         if not LOCK.acquire(timeout=120):
             self.fail(503, "服务忙，稍后重试")
             return
         try:
+            sess, n = None, 1
+            if session_id:
+                sess = session.load(session_id)
+                if sess is None:
+                    self.fail(404, "会话不存在")
+                    return
+                total = len(sess.get("turns") or [])
+                n = turn or total + 1
+                if not 1 <= n <= total + 1:
+                    self.fail(400, "turn 超出会话范围")
+                    return
             data = tracer.build(question, select, thinking=thinking, fresh=fresh)
-            self.send_json(200, data)
+            rel = None
+            if sess and n > 1:
+                rel = related.check(question, _previous(sess, n))
+            if sess is None:
+                sess = session.create()
+            _write_turn(sess, n, question, data, rel, anchor)
+            session.save(sess)
+            self.send_json(200, dict(data, session_id=sess["id"], turn=n,
+                                     related=rel, session=session.public(sess)))
         except ValueError as exc:
             self.fail(400, str(exc))
         except Exception as exc:  # noqa: BLE001
@@ -276,17 +372,66 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, info)
 
     def api_answer(self, question, book, path, line, terms, groups, sources=None,
-                   thinking=None, use_cache=True):
+                   thinking=None, use_cache=True, session_id="", turn=None):
+        sid, n, rel, ctx = "", 0, None, None
         try:
+            if session_id:
+                sid, n, rel, ctx = self.session_context(session_id, turn, sources)
             info = answerer.answer_question(question, book, path, line, terms,
                                             groups=groups, sources=sources,
-                                            thinking=thinking, use_cache=use_cache)
-            self.send_json(200, info)
+                                            thinking=thinking, use_cache=use_cache,
+                                            history=ctx["text"] if ctx else "")
+            if sid and n:
+                self.store_answer(sid, n, info, ctx)
+            self.send_json(200, dict(info, session_id=sid, turn=n, related=rel,
+                                     history=self.history_brief(ctx)))
         except ValueError as exc:
             self.fail(400, str(exc))
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
+
+    @staticmethod
+    def history_brief(ctx):
+        return {"used": bool(ctx),
+                "prev": ctx["prev"] if ctx else 0,
+                "chars": ctx["chars"] if ctx else 0,
+                "budget": ctx["budget"] if ctx else 0,
+                "chapters": len(ctx["chapters"]) if ctx else 0,
+                "paragraphs": len(ctx["paragraphs"]) if ctx else 0}
+
+    def session_context(self, session_id, turn, sources):
+        """定位这一问，related 为真时拼上一轮上下文。会话找不到就当没带。"""
+        with SESSION_LOCK:
+            sess = session.load(session_id)
+            if sess is None:
+                return "", 0, None, None
+            turns = sess.get("turns") or []
+            n = turn or len(turns)
+            current = session.find(sess, n)
+            if current is None:
+                return "", 0, None, None
+            rel = current.get("related")
+            if not (isinstance(rel, dict) and rel.get("related")):
+                return sess["id"], n, rel, None
+            budget = (session.HISTORY_CHARS_MULTI if len(sources or []) >= 2
+                      else session.HISTORY_CHARS_SINGLE)
+            ctx = session.build_context([t for t in turns if t.get("n", 0) < n],
+                                        budget, anchor=current.get("anchor"))
+            return sess["id"], n, rel, ctx
+
+    def store_answer(self, sid, n, info, ctx):
+        with SESSION_LOCK:
+            sess = session.load(sid)
+            turn = session.find(sess, n) if sess else None
+            if turn is None:
+                return
+            turn["answer"] = dict(info)
+            turn["context"] = ctx
+            try:
+                session.save(sess)
+            except OSError:
+                pass
 
 
 def main(argv=None):
