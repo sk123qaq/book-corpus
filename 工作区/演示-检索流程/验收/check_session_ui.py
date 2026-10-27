@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""02 会话页验收：真实会话恢复、落点开关、追问请求体、390 布局。
+"""02 会话页验收：真实会话恢复、落点开关、候选书多选、追问请求体、390 布局。
 
 默认打 8765；自测时可 `--base http://127.0.0.1:8799`。
-只读页面与会话接口，不调真实 /api/run 或 /api/answer；追问那一步用假 fetch 截请求体。
+只读页面与会话接口，不调真实 /api/run 或 /api/answer；追问与重新回答那两步用假 fetch 截请求体。
 """
 import argparse
 import base64
@@ -12,12 +12,14 @@ import shutil
 import sys
 import tempfile
 import time
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from shot import CDP, WS, eval_js, launch  # noqa: E402
 
 SESSION = "7f0f8d8ba4c4"
+SESSION_MULTI = "e4120ff4977d"
 fails = []
 notes = []
 
@@ -77,6 +79,25 @@ SNAP = r"""
     innerWidth: window.innerWidth,
     ask: rect(q('.ask')),
     roundsText: qa('.round').map((e) => e.textContent.replace(/\s+/g, ' ').trim().slice(0, 90)),
+    railChips: qa('.round').map((e) => {
+      const chip = e.querySelector('.meta .chip');
+      return chip ? chip.textContent.trim() : '';
+    }),
+    books: qa('.books').length,
+    picks: qa('.book-pick').length,
+    picksOn: qa('.book-pick.is-on').length,
+    picksLocked: qa('.book-pick.is-locked').length,
+    picksOff: qa('.book-pick:disabled').length,
+    booksHead: q('.books-head') ? q('.books-head').textContent.replace(/\s+/g, ' ').trim() : '',
+    booksAll: q('.books-head [data-books-all]')
+      ? q('.books-head [data-books-all]').textContent.trim() : '',
+    booksNote: qa('.books > .books-note').map((e) => e.textContent.trim()),
+    booksAct: q('.books-act') ? q('.books-act').textContent.replace(/\s+/g, ' ').trim() : '',
+    booksActBtn: q('[data-reanswer]') ? q('[data-reanswer]').textContent.trim() : '',
+    booksActOff: q('[data-reanswer]') ? q('[data-reanswer]').disabled : null,
+    picksWrap: q('.books-picks') ? getComputedStyle(q('.books-picks')).flexWrap : '',
+    picksScroll: q('.books-picks') ? getComputedStyle(q('.books-picks')).overflowX : '',
+    cells: qa('.cells .cell').map((e) => e.textContent.replace(/\s+/g, ' ').trim()),
   };
 })()
 """
@@ -126,6 +147,57 @@ FAKE = r"""
 """
 
 
+MULTI = r"""
+(() => {
+  window.__calls = [];
+  window.__picked = '';
+  window.__realFetch = window.fetch;
+  window.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('/api/answer')) {
+      const body = JSON.parse(opts.body);
+      window.__calls.push({kind: 'answer', body});
+      const sources = body.sources || [];
+      const answer = {
+        ok: true, mode: 'multi', answer: '模拟多书回答', lead: '模拟多书回答',
+        sections: [], dissent: '', gap: '',
+        citations: sources.map((s, i) => ({
+          path: s.path, line: s.line,
+          quote: i ? '其最著名的，即是提出了差序格局' : '差序格局是一圈圈推出去的波纹',
+          chapter: i ? '杨庆祥 新时代文学写作景观' : '差序格局', verified: true,
+          book: s.book, book_title: s.title,
+        })),
+        sources: sources, confidence: 'high', not_found: false, error: '', ms: 10,
+        thinking: 'high', cached: false, session_id: body.session_id, turn: body.turn,
+        related: {related: true, reason: '模拟', against: [1], ms: 1},
+        history: {used: true, prev: 1, chars: 3625, budget: 10000, chapters: 2, paragraphs: 2},
+      };
+      return new Response(JSON.stringify(answer), {status: 200,
+        headers: {'content-type': 'application/json'}});
+    }
+    return window.__realFetch(url, opts);
+  };
+  return true;
+})()
+"""
+
+PICK_FREE = r"""
+(() => {
+  const pick = Array.from(document.querySelectorAll('.book-pick')).find(
+    (el) => !el.classList.contains('is-on') && !el.classList.contains('is-locked'));
+  if (!pick) return '';
+  window.__picked = pick.dataset.bookPick;
+  pick.click();
+  return pick.dataset.bookPick;
+})()
+"""
+
+
+def get_html(base, path):
+    with urllib.request.urlopen(base + path, timeout=20) as r:
+        return r.status, r.read().decode("utf-8", "replace")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8765")
@@ -133,7 +205,13 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=HERE)
     a = ap.parse_args(argv)
     base = a.base.rstrip("/")
-    url = base + "/session?session=" + SESSION
+    url = base + "/?session=" + SESSION
+    status, classic = get_html(base, "/classic")
+    check("旧页在 /classic", status == 200 and "ask-form" in classic,
+          "status=%s" % status)
+    status, home = get_html(base, "/")
+    check("/ 是 02 页", status == 200 and "session.js" in home and "id=\"main\"" in home,
+          "status=%s" % status)
     proc, profile, ws_url = launch(1440, 900, "about:blank", a.port)
     try:
         cdp = CDP(WS(ws_url))
@@ -141,10 +219,14 @@ def main(argv=None):
             cdp.call(method)
         cdp.call("Emulation.setDeviceMetricsOverride",
                  {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False})
-        cdp.call("Page.navigate", {"url": url})
+        cdp.call("Page.navigate", {"url": base + "/session?session=" + SESSION})
         loaded = wait_js(cdp, "document.querySelectorAll('.round').length === 3"
                               " && !!document.querySelector('.answer p')", 25)
         check("恢复 3 轮会话", loaded)
+        check("/session 别名可用且 URL 归一",
+              eval_js(cdp, "location.pathname === '/' && location.search.includes("
+                          + json.dumps("session=" + SESSION) + ")"),
+              eval_js(cdp, "location.pathname + location.search"))
         s0 = eval_js(cdp, SNAP)
         check("页头统计不是占位", all(v not in ("—", "") for v in s0["stats"]),
               ",".join(s0["stats"]))
@@ -172,6 +254,24 @@ def main(argv=None):
         check("五阶段可展开", eval_js(cdp, "(() => { const b=document.querySelector('.strip-bar');"
                                       " if(!b) return false; b.click();"
                                       " return document.querySelectorAll('.cells .cell').length===5; })()"))
+        s_cells = eval_js(cdp, SNAP)
+        check("第 2 轮候选书 2 选 1 锁定",
+              s_cells["books"] == 1 and s_cells["picksOn"] == 2 and s_cells["picksLocked"] == 1,
+              "books=%d on=%d locked=%d head=%s" % (s_cells["books"], s_cells["picksOn"],
+                                                    s_cells["picksLocked"], s_cells["booksHead"]))
+        check("左栏范围与回答元信息按多书",
+              s_cells["railChips"][1] == "2 本" and "2 本书" in s_cells["meta"]
+              and "9,311/10,000" in s_cells["meta"],
+              "chips=%s meta=%s" % (s_cells["railChips"], s_cells["meta"]))
+        check("五阶段第 5 格是跨书",
+              len(s_cells["cells"]) == 5 and "2 本 · 跨书" in s_cells["cells"][4],
+              s_cells["cells"][4] if len(s_cells["cells"]) > 4 else "cells=%d" % len(s_cells["cells"]))
+        check("历史轮次书单只读",
+              s_cells["booksAll"] == "" and s_cells["picksOff"] == s_cells["picks"]
+              and "历史轮次 · 书单只读" in s_cells["booksHead"] and s_cells["booksAct"] == "",
+              "all=%s off=%d/%d head=%s act=%s" % (s_cells["booksAll"], s_cells["picksOff"],
+                                                    s_cells["picks"], s_cells["booksHead"],
+                                                    s_cells["booksAct"]))
 
         eval_js(cdp, "document.querySelector('.ev').click(); true")
         on = wait_js(cdp, "document.querySelectorAll('.ev.is-on').length === 1", 10)
@@ -215,11 +315,13 @@ def main(argv=None):
               and (run.get("anchor") or {}).get("line") == 972
               and "杨庆祥" in (run.get("anchor") or {}).get("path", "")
               and bool((run.get("anchor") or {}).get("quote")), json.dumps(run, ensure_ascii=False)[:180])
-        check("回答请求带会话、轮次，且不加多书",
+        ans_srcs = ans.get("sources") or []
+        check("回答请求带会话、轮次，且只带一本来源",
               ans.get("session_id") == SESSION and ans.get("turn") == 4
-              and ans.get("sources") == [] and "杨庆祥" in ans.get("path", "")
-              and ans.get("line") == 972,
-              json.dumps(ans, ensure_ascii=False)[:160])
+              and len(ans_srcs) == 1 and ans_srcs[0].get("path") == ans.get("path")
+              and "杨庆祥" in ans.get("path", "") and ans.get("line") == 972
+              and ans.get("book") == ans_srcs[0].get("book"),
+              json.dumps(ans, ensure_ascii=False)[:200])
         check("上下文提示出现在回答里", "接上一问 · 上下文 10/5,000 字" in s4["meta"], s4["meta"])
 
         cdp.call("Emulation.setDeviceMetricsOverride",
@@ -248,6 +350,75 @@ def main(argv=None):
             fh.write(base64.b64decode(shot["data"]))
         check("390 截图", os.path.getsize(path390) > 10000,
               "%s %d B" % (path390, os.path.getsize(path390)))
+
+        cdp.call("Emulation.setDeviceMetricsOverride",
+                 {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False})
+        cdp.call("Page.navigate", {"url": base + "/?session=" + SESSION_MULTI})
+        loaded2 = wait_js(cdp, "document.querySelectorAll('.round').length === 2"
+                               " && !!document.querySelector('.answer p')", 25)
+        m0 = eval_js(cdp, SNAP)
+        check("最后一轮出多书选择器",
+              loaded2 and m0["books"] == 1 and m0["picksOn"] == 1 and m0["picksLocked"] == 1
+              and m0["booksAll"] == "全选",
+              "books=%d on=%d locked=%d all=%s head=%s" % (m0["books"], m0["picksOn"],
+                                                           m0["picksLocked"], m0["booksAll"],
+                                                           m0["booksHead"]))
+        check("换书前没有过期条", m0["booksAct"] == "", m0["booksAct"])
+
+        eval_js(cdp, MULTI)
+        picked = eval_js(cdp, PICK_FREE)
+        bar = wait_js(cdp, "!!document.querySelector('[data-reanswer]')", 10)
+        m1 = eval_js(cdp, SNAP)
+        pre = json.loads(eval_js(cdp, "JSON.stringify(window.__calls || [])"))
+        check("点书卡出现过期条且不发请求",
+              bar and bool(picked) and m1["booksActBtn"] == "用这 2 本重新回答" and not pre,
+              "picked=%s btn=%s calls=%d act=%s" % (picked, m1["booksActBtn"], len(pre),
+                                                   m1["booksAct"]))
+
+        eval_js(cdp, "document.querySelector('[data-reanswer]').click(); true")
+        redone = wait_js(cdp, "!document.querySelector('.books-act')"
+                              " && !!document.querySelector('.answer-meta')"
+                              " && document.querySelector('.answer-meta').textContent"
+                                 ".includes('3,625/10,000')", 20)
+        m2 = eval_js(cdp, SNAP)
+        calls = json.loads(eval_js(cdp, "JSON.stringify(window.__calls || [])"))
+        ans2 = next((c["body"] for c in calls if c["kind"] == "answer"), {})
+        srcs = ans2.get("sources") or []
+        check("重新回答的请求带两本来源",
+              ans2.get("session_id") == SESSION_MULTI and ans2.get("turn") == 2
+              and len(srcs) == 2 and srcs[0].get("path", "").endswith("07_差序格局.md")
+              and srcs[0].get("line") == 14 and srcs[1].get("book") == picked,
+              json.dumps(ans2, ensure_ascii=False)[:220])
+        check("多书回答回到页面",
+              redone and m2["railChips"][1] == "2 本" and "2 本书" in m2["meta"]
+              and "3,625/10,000 字" in m2["meta"] and m2["picksOn"] == 2,
+              "chips=%s meta=%s on=%d" % (m2["railChips"], m2["meta"], m2["picksOn"]))
+
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        multi1440 = os.path.join(a.out_dir, "会话-multi-1440x900.png")
+        with open(multi1440, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("multi 1440 截图", os.path.getsize(multi1440) > 20000,
+              "%s %d B" % (multi1440, os.path.getsize(multi1440)))
+
+        cdp.call("Emulation.setDeviceMetricsOverride",
+                 {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
+        time.sleep(0.4)
+        m3 = eval_js(cdp, SNAP)
+        check("390 multi 无横向溢出", not m3["overflow"] and m3["scrollWidth"] == 390,
+              "scrollWidth=%s innerWidth=%s" % (m3["scrollWidth"], m3["innerWidth"]))
+        check("390 multi composer 在视口内",
+              m3["ask"] and m3["ask"]["top"] > 0 and m3["ask"]["bottom"] <= 844,
+              "ask=%s" % (m3["ask"],))
+        check("390 书卡横向滚动",
+              m3["picksWrap"] == "nowrap" and m3["picksScroll"] in ("auto", "scroll"),
+              "wrap=%s scroll=%s" % (m3["picksWrap"], m3["picksScroll"]))
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        multi390 = os.path.join(a.out_dir, "会话-multi-390x844.png")
+        with open(multi390, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("multi 390 截图", os.path.getsize(multi390) > 10000,
+              "%s %d B" % (multi390, os.path.getsize(multi390)))
 
         cdp.wait_events(0.5)
         errs = cdp.errors()

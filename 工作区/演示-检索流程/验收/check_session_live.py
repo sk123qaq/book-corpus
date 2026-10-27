@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""02 会话页真实端到端：新会话首问 → 选依据 → 追问，读服务端落盘的上下文。
+"""02 会话页真实端到端：新会话首问 → 选依据 → 追问 → 选第二本书重新回答。
 
-会调真实 /api/run 与 /api/answer，通常 1 到 3 分钟。默认 8765。
+会调真实 /api/run 与 /api/answer，通常 2 到 5 分钟。默认 8765。
 """
 import argparse
 import base64
@@ -41,7 +41,7 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=HERE)
     a = ap.parse_args(argv)
     base = a.base.rstrip("/")
-    url = base + "/session?q=" + urllib.parse.quote(Q1)
+    url = base + "/?q=" + urllib.parse.quote(Q1)
     proc, profile, ws_url = launch(1440, 900, "about:blank", a.port)
     try:
         cdp = CDP(WS(ws_url))
@@ -96,6 +96,8 @@ def main(argv=None):
               "chars=%s budget=%s" % (ctx.get("chars"), ctx.get("budget")))
         check("第 2 轮落点已落盘", bool(t2.get("anchor") and t2["anchor"].get("path")),
               json.dumps(t2.get("anchor"), ensure_ascii=False)[:120])
+        cards = ((t2.get("trace") or {}).get("cards") or {}).get("cards") or []
+        check("第 2 轮 trace 有书卡", 5 <= len(cards) <= 8, "cards=%d" % len(cards))
         check("1440 无横向溢出", not s3["overflow"],
               "scrollWidth=%s innerWidth=%s" % (s3["scrollWidth"], s3["innerWidth"]))
 
@@ -106,9 +108,71 @@ def main(argv=None):
         check("1440 真实截图", os.path.getsize(path) > 20000,
               "%s %d B" % (path, os.path.getsize(path)))
 
+        picked = eval_js(cdp, """(() => {
+          const pick = Array.from(document.querySelectorAll('.book-pick')).find(
+            (el) => !el.classList.contains('is-on') && !el.classList.contains('is-locked'));
+          if (!pick) return '';
+          window.__picked = pick.dataset.bookPick;
+          pick.click();
+          return pick.dataset.bookPick;
+        })()""")
+        bar = wait_js(cdp, "!!document.querySelector('[data-reanswer]')", 10)
+        s5 = eval_js(cdp, SNAP)
+        check("选第二本书出现过期条",
+              bar and bool(picked) and "用这 2 本重新回答" in s5["booksActBtn"],
+              "picked=%s act=%s" % (picked, s5["booksAct"]))
+
+        eval_js(cdp, "document.querySelector('[data-reanswer]').click(); true")
+        multi = wait_js(cdp, "!document.querySelector('.books-act')"
+                             " && !!document.querySelector('.answer-meta')"
+                             " && document.querySelector('.answer-meta').textContent.includes('本书')", 300)
+        s6 = eval_js(cdp, SNAP)
+        data = get_json(base + "/api/session?id=" + sid)
+        t2b = ((data.get("session") or {}).get("turns") or [None, None])[1] or {}
+        ans = t2b.get("answer") or {}
+        ctx2 = t2b.get("context") or {}
+        srcs = ans.get("sources") or []
+        check("服务端第 2 轮是 multi",
+              ans.get("mode") == "multi" and len(srcs) >= 2,
+              "mode=%s sources=%d" % (ans.get("mode"), len(srcs)))
+        check("多书上下文守 10000",
+              int(ctx2.get("budget") or 0) == 10000 and 0 < int(ctx2.get("chars") or 0) <= 10000,
+              "chars=%s budget=%s" % (ctx2.get("chars"), ctx2.get("budget")))
+        check("多书轮 related=true", (t2b.get("related") or {}).get("related") is True,
+              json.dumps(t2b.get("related"), ensure_ascii=False)[:120])
+        wide = len(srcs)
+        check("页面按 N 本显示",
+              multi and s6["railChips"][1] == "%d 本" % wide
+              and ("%d 本书" % wide) in s6["meta"] and "/10,000 字" in s6["meta"]
+              and s6["picksOn"] == wide,
+              "chips=%s meta=%s on=%d" % (s6["railChips"], s6["meta"], s6["picksOn"]))
+
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        path = os.path.join(a.out_dir, "会话-live-multi-1440x900.png")
+        with open(path, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("multi 1440 真实截图", os.path.getsize(path) > 20000,
+              "%s %d B" % (path, os.path.getsize(path)))
+
         cdp.call("Emulation.setDeviceMetricsOverride",
                  {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
-        cdp.call("Page.navigate", {"url": base + "/session?session=" + sid})
+        time.sleep(0.4)
+        s7 = eval_js(cdp, SNAP)
+        check("390 multi 无横向溢出", not s7["overflow"] and s7["scrollWidth"] == 390,
+              "scrollWidth=%s innerWidth=%s" % (s7["scrollWidth"], s7["innerWidth"]))
+        check("390 multi composer 在视口内",
+              s7["ask"] and s7["ask"]["top"] > 0 and s7["ask"]["bottom"] <= 844,
+              "ask=%s" % (s7["ask"],))
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        path = os.path.join(a.out_dir, "会话-live-multi-390x844.png")
+        with open(path, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("multi 390 真实截图", os.path.getsize(path) > 10000,
+              "%s %d B" % (path, os.path.getsize(path)))
+
+        cdp.call("Emulation.setDeviceMetricsOverride",
+                 {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
+        cdp.call("Page.navigate", {"url": base + "/?session=" + sid})
         wait_js(cdp, "document.querySelectorAll('.round').length === 2"
                      " && !!document.querySelector('.answer')", 25)
         s4 = eval_js(cdp, SNAP)
@@ -127,7 +191,7 @@ def main(argv=None):
         cdp.wait_events(0.5)
         errs = cdp.errors()
         check("控制台 0 错误", not errs, "; ".join(errs)[:300])
-        print("会话：%s/session?session=%s" % (base, sid))
+        print("会话：%s/?session=%s" % (base, sid))
     finally:
         proc.terminate()
         try:

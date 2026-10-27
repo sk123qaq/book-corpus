@@ -143,6 +143,136 @@
     return name.replace(/^\d+[_、.\- ]*/, '').replace(/\.md$/, '');
   }
 
+  /* ---- 回答范围：一本书或几本书 ---------------------------------- */
+
+  const MAX_SOURCES = 8;
+
+  function sourceFromAnchor(anchor) {
+    if (!anchor || typeof anchor.path !== 'string' || !anchor.path) return null;
+    return {
+      book: bookKey(anchor.path),
+      title: bookOf(anchor),
+      chapter: anchor.title || chapterOf(anchor),
+      path: anchor.path,
+      line: Number(anchor.line) || 1,
+    };
+  }
+
+  function sourceFromResult(result) {
+    if (!result || typeof result.path !== 'string' || !result.path) return null;
+    return {
+      book: result.book || bookKey(result.path),
+      title: result.book_title || result.title || bookOf(result),
+      chapter: result.chapter || result.title || chapterOf(result),
+      path: result.path,
+      line: Number(result.line) || 1,
+    };
+  }
+
+  function sourceFromCard(card, result) {
+    if (!card || typeof card.best_chapter !== 'string' || !card.best_chapter) return null;
+    if (result && result.book && card.book === result.book) return sourceFromResult(result);
+    const spot = { path: card.best_chapter, chapter: card.best_chapter_title };
+    return {
+      book: card.book || bookKey(card.best_chapter),
+      title: card.title || bookOf(spot),
+      chapter: card.best_chapter_title || chapterOf(spot),
+      path: card.best_chapter,
+      line: Number(card.line) || 1,
+    };
+  }
+
+  function sourceFromAnswer(item) {
+    if (!item || typeof item.path !== 'string' || !item.path) return null;
+    return {
+      book: item.book || bookKey(item.path),
+      title: item.title || bookOf(item),
+      chapter: item.chapter || chapterOf(item),
+      path: item.path,
+      line: Number(item.line) || 1,
+    };
+  }
+
+  function sourceKey(source) {
+    if (!source) return '';
+    return source.book || bookKey(source.path) || source.path || '';
+  }
+
+  function cloneSource(source) {
+    return {
+      book: source.book || '',
+      title: source.title || '',
+      chapter: source.chapter || '',
+      path: source.path || '',
+      line: Number(source.line) || 1,
+    };
+  }
+
+  function sameSources(left, right) {
+    const a = left || [];
+    const b = right || [];
+    if (a.length !== b.length) return false;
+    return a.every((s, i) => s.path === b[i].path
+      && (Number(s.line) || 1) === (Number(b[i].line) || 1));
+  }
+
+  function cardSources(turn) {
+    const trace = turn.trace || {};
+    const cards = trace.cards || {};
+    if (!cards.trigger) return [];
+    const result = trace.result || {};
+    return (Array.isArray(cards.cards) ? cards.cards : [])
+      .map((card) => sourceFromCard(card, result)).filter(Boolean);
+  }
+
+  function defaultSources(turn) {
+    const anchor = sourceFromAnchor(turn.anchor);
+    if (anchor) return [anchor];
+    const top = sourceFromResult((turn.trace || {}).result);
+    if (top) return [top];
+    const cards = cardSources(turn);
+    return cards.length ? [cards[0]] : [];
+  }
+
+  function roleOf(source, anchor, top) {
+    const key = sourceKey(source);
+    if (anchor && sourceKey(anchor) === key) return 'anchor';
+    if (top && sourceKey(top) === key) return 'top';
+    return 'card';
+  }
+
+  function bookChoices(turn) {
+    const anchor = sourceFromAnchor(turn.anchor);
+    const top = sourceFromResult((turn.trace || {}).result);
+    const seen = new Set();
+    const rows = [];
+    const push = (source, role) => {
+      const key = sourceKey(source);
+      if (!source || !key || seen.has(key)) return;
+      seen.add(key);
+      rows.push({ source, role, locked: role === 'anchor' });
+    };
+    (turn.sources || []).forEach((source) => push(source, roleOf(source, anchor, top)));
+    push(anchor, 'anchor');
+    push(top, 'top');
+    cardSources(turn).forEach((source) => push(source, 'card'));
+    return rows;
+  }
+
+  function scopeSources(turn) {
+    const answer = turn.answer || {};
+    if (answer.mode === 'multi' && Array.isArray(answer.sources) && answer.sources.length) {
+      return answer.sources.map(sourceFromAnswer).filter(Boolean);
+    }
+    if (Array.isArray(turn.answerSources) && turn.answerSources.length) return turn.answerSources;
+    return turn.sources || [];
+  }
+
+  function staleSources(turn) {
+    const used = Array.isArray(turn.answerSources) ? turn.answerSources : [];
+    return used.length > 0 && !sameSources(turn.sources, used);
+  }
+
   function sameSpot(a, b) {
     if (!a || !b) return false;
     return a.path === b.path && (Number(a.line) || 0) === (Number(b.line) || 0);
@@ -255,8 +385,10 @@
     const status = STATUS_TEXT[turn.status] || '';
     const caret = turn.status === 'retrieving' || turn.status === 'answering'
       ? '<i class="p-caret"></i>' : '';
-    const result = (turn.trace && turn.trace.result) || {};
-    const book = turn.anchor ? bookOf(turn.anchor) : (result.book_title || result.book || '');
+    const scope = scopeSources(turn);
+    const book = scope.length > 1
+      ? scope.length + ' 本'
+      : (scope[0] ? '《' + (scope[0].title || scope[0].book) + '》' : '');
     const ids = citesOf(turn).map((c, i) =>
       '<i class="' + (usedLater(turn, i + 1) ? 'on' : '') + '">[' + (i + 1) + ']</i>').join('');
     return '<li class="round' + (current ? ' is-current' : '') + '" data-turn="' + turn.n + '">'
@@ -264,7 +396,7 @@
       + railRel(turn)
       + '<p class="q">' + esc(turn.question) + '</p>'
       + '<div class="meta">'
-      + (book ? '<span class="chip">《' + esc(book) + '》</span>' : '')
+      + (book ? '<span class="chip">' + esc(book) + '</span>' : '')
       + (ids ? '<span class="ids">' + ids + '</span>' : '')
       + (status ? '<span class="round-status">' + status + caret + '</span>' : '')
       + '</div></li>';
@@ -323,19 +455,21 @@
     const extract = trace.extract || {};
     const plan = trace.plan || {};
     const cards = trace.cards || {};
-    const result = trace.result || {};
     const terms = extract.terms || [];
     const rounds = plan.rounds || [];
     const chapters = plan.chapters || [];
     const books = new Set((plan.ranking || []).map((b) => b && b.book).filter(Boolean));
     const cardList = cards.cards || [];
+    const scope = scopeSources(turn);
+    const one = scope[0] || {};
     return [
       { value: terms.length + ' 组词', note: terms.slice(0, 3).map(esc).join(' · ') },
       { value: rounds.length + ' 轮', note: esc(STOP[plan.stop] || '—') },
       { value: '评 ' + books.size + ' 本 · 选 ' + chapters.length + ' 章' },
       { value: cards.trigger ? cardList.length + ' 张' : '未触发' },
-      { value: '《' + esc(turn.anchor ? bookOf(turn.anchor) : (result.book_title || result.book || '—'))
-        + '》· ' + esc(turn.anchor ? (turn.anchor.title || '') : (result.chapter || '')) },
+      scope.length > 1
+        ? { value: scope.length + ' 本 · 跨书' }
+        : { value: '《' + esc(one.title || one.book || '—') + '》· ' + esc(one.chapter || '') },
     ];
   }
 
@@ -380,12 +514,64 @@
       + '<span class="quote">' + text + '</span></div>';
   }
 
+  function booksHTML(turn) {
+    const choices = bookChoices(turn);
+    const chosen = turn.sources || [];
+    if (choices.length < 2 || !chosen.length) return '';
+    const last = lastTurn();
+    const readonly = !last || last.n !== turn.n;
+    const picked = new Set(chosen.map(sourceKey));
+    const selectable = choices.slice(0, MAX_SOURCES);
+    const allOn = selectable.every((row) => picked.has(sourceKey(row.source)));
+    const head = '<div class="books-head">'
+      + '<span class="t">候选书 · ' + choices.length + ' 本</span>'
+      + '<span class="h">' + (readonly
+        ? '历史轮次 · 书单只读'
+        : '已选 ' + chosen.length + '/' + choices.length + ' 本') + '</span>'
+      + (readonly ? ''
+        : '<button class="books-all" type="button" data-books-all="' + turn.n + '">'
+          + (allOn ? '清空' : '全选') + '</button>')
+      + '</div>';
+    const picks = choices.map((row, i) => {
+      const key = sourceKey(row.source);
+      const on = picked.has(key);
+      const full = i >= MAX_SOURCES;
+      const tag = row.role === 'anchor' ? '落点' : (row.role === 'top' ? '首选' : '');
+      const tagText = full ? '最多 ' + MAX_SOURCES + ' 本' : tag;
+      const cls = 'book-pick' + (on ? ' is-on' : '') + (row.locked ? ' is-locked' : '')
+        + (full ? ' is-full' : '');
+      const fullTitle = '《' + (row.source.title || row.source.book) + '》· '
+        + (row.source.chapter || '');
+      return '<button class="' + cls + '" type="button" data-book-pick="' + esc(key) + '"'
+        + ' data-from="' + turn.n + '" title="' + esc(fullTitle) + '"'
+        + (readonly || full ? ' disabled' : '') + '>'
+        + '<span class="bp-title">《' + esc(cut(row.source.title || row.source.book, 18)) + '》</span>'
+        + (tagText ? '<span class="bp-tag">' + esc(tagText) + '</span>' : '')
+        + '</button>';
+    }).join('');
+    const notes = [];
+    if (choices.length > MAX_SOURCES) {
+      notes.push('候选超过 ' + MAX_SOURCES + ' 本，最多选 ' + MAX_SOURCES + ' 本。');
+    }
+    if (chosen.length > 1) notes.push('选中 2 本以上时，回答跨书，上下文预算 10,000 字。');
+    const act = !readonly && turn.answer && staleSources(turn)
+      ? '<div class="books-act"><span class="books-note">当前回答按 '
+        + scopeSources(turn).length + ' 本生成</span>'
+        + '<button class="btn btn-primary" type="button" data-reanswer="' + turn.n + '"'
+        + (state.busy ? ' disabled' : '') + '>用这 ' + chosen.length + ' 本重新回答</button></div>'
+      : '';
+    return '<section class="books">' + head
+      + '<div class="books-picks">' + picks + '</div>'
+      + (notes.length ? '<div class="books-note">' + esc(notes.join(' ')) + '</div>' : '')
+      + act + '</section>';
+  }
+
   function answerBody(answer) {
     const parts = [];
-    const lead = plain(answer.lead);
-    if (lead) parts.push('<p class="answer-lead">' + esc(lead) + '</p>');
     const sections = Array.isArray(answer.sections) ? answer.sections : [];
     if (sections.length) {
+      const lead = plain(answer.lead);
+      if (lead) parts.push('<p class="answer-lead">' + esc(lead) + '</p>');
       sections.forEach((section) => {
         if (!section) return;
         const head = plain(section.heading);
@@ -394,7 +580,7 @@
           + body.map((p) => '<p>' + esc(p) + '</p>').join('') + '</section>');
       });
     } else {
-      String(answer.answer || '').split(/\n\s*\n/).map(plain).filter(Boolean)
+      String(answer.answer || answer.lead || '').split(/\n\s*\n/).map(plain).filter(Boolean)
         .forEach((p) => parts.push('<p>' + esc(p) + '</p>'));
     }
     if (!parts.length) parts.push('<p class="answer-loading">没有拿到回答正文</p>');
@@ -405,6 +591,8 @@
     const data = turn.answer || {};
     const meta = [];
     if (data.confidence) meta.push('置信 ' + (CONFIDENCE[data.confidence] || data.confidence));
+    const scope = scopeSources(turn);
+    if (data.mode === 'multi' && scope.length > 1) meta.push(scope.length + ' 本书');
     const verified = citesOf(turn).filter((c) => c.verified).length;
     if (verified) meta.push(verified + ' 条引文已回查');
     const history = data.history || (turn.context
@@ -434,9 +622,15 @@
         + '<button class="btn" type="button" data-retry-run="' + turn.n + '">重试</button>';
     }
     if (turn.status === 'answer-error') {
+      const last = lastTurn();
+      const canRetry = last && last.n === turn.n;
       return '<p class="answer-error">回答失败：' + esc(turn.answerError || '未知错误') + '</p>'
-        + '<p class="answer-meta">检索结果已保留，重试只重发回答。</p>'
-        + '<button class="btn" type="button" data-retry-answer="' + turn.n + '">重试回答</button>';
+        + '<p class="answer-meta">' + (canRetry
+          ? '检索结果已保留，重试只重发回答。'
+          : '历史轮次，回答不再重试。') + '</p>'
+        + (canRetry
+          ? '<button class="btn" type="button" data-retry-answer="' + turn.n + '">重试回答</button>'
+          : '');
     }
     const answer = turn.answer || {};
     if (answer.ok === false) {
@@ -479,7 +673,7 @@
     }
     const parts = [kickerHTML(turn), '<h1 class="question">' + esc(turn.question) + '</h1>'];
     if (turn.trace) parts.push(stripHTML(turn));
-    parts.push(scopeHTML(turn), bodyHTML(turn));
+    parts.push(booksHTML(turn), scopeHTML(turn), bodyHTML(turn));
     if (turn.answer) parts.push(evidenceHTML(turn));
     mainEl.innerHTML = parts.join('');
   }
@@ -614,12 +808,18 @@
   /* ---- 会话动作 -------------------------------------------------- */
 
   function setUrl(sessionId) {
-    const url = sessionId ? '/session?session=' + encodeURIComponent(sessionId) : '/session';
+    const url = sessionId ? pagePath() + '?session=' + encodeURIComponent(sessionId) : pagePath();
     try {
       history.replaceState(null, '', url);
     } catch (err) {
       // file:// 下 replaceState 会抛，页面照样能用
     }
+  }
+
+  function pagePath() {
+    const path = location.pathname;
+    if (!path || path === '/session' || path === '/session.html') return '/';
+    return path;
   }
 
   function anchorPayload() {
@@ -652,6 +852,8 @@
       if (epoch !== state.epoch) return;
       turn.trace = data;
       turn.related = data.related || null;
+      turn.sources = defaultSources(turn);
+      turn.answerSources = [];
       if (data.session_id && data.session_id !== state.sessionId) {
         state.sessionId = data.session_id;
         setUrl(state.sessionId);
@@ -667,33 +869,47 @@
     }
   }
 
-  async function answerTurn(turn, fresh) {
+  async function answerTurn(turn, opts) {
+    const options = opts || {};
     const epoch = state.epoch;
     const trace = turn.trace || {};
-    const result = trace.result || {};
     const extract = trace.extract || {};
     const plan = trace.plan || {};
+    const sources = (options.sources || turn.sources || defaultSources(turn))
+      .filter((s) => s && typeof s.path === 'string' && s.path)
+      .slice(0, MAX_SOURCES)
+      .map(cloneSource);
+    if (!sources.length) {
+      turn.status = 'answer-error';
+      turn.answerError = '这一轮没有可用的来源';
+      render();
+      return;
+    }
+    turn.sources = sources;
+    turn.answerSources = sources.map(cloneSource);
+    turn.answer = null;
+    turn.context = null;
     turn.status = 'answering';
     turn.answerError = '';
     syncBusy();
     startClock();
     render();
-    const anchored = turn.anchor && turn.anchor.path;
-    const answerPath = anchored ? turn.anchor.path : (result.path || '');
-    const answerLine = Number(anchored ? turn.anchor.line : result.line) || 1;
+    const primary = sources[0];
     const body = {
       question: turn.question,
-      book: anchored ? bookKey(answerPath) : (result.book || bookKey(answerPath)),
-      path: answerPath,
-      line: answerLine,
+      book: primary.book || bookKey(primary.path),
+      path: primary.path,
+      line: Number(primary.line) || 1,
       terms: uniq([].concat(extract.terms || [], plan.nouns || [])).slice(0, 12),
       groups: Array.isArray(extract.groups) ? extract.groups : [],
-      sources: [],
+      sources: sources.map((s) => ({
+        book: s.book || '', title: s.title || '', path: s.path, line: Number(s.line) || 1,
+      })),
       session_id: state.sessionId,
       turn: turn.n,
       thinking: THINKING_LEVEL,
     };
-    if (fresh) body.fresh = true;
+    if (options.fresh) body.fresh = true;
     try {
       const data = await postJSON('/api/answer', body);
       if (epoch !== state.epoch) return;
@@ -731,6 +947,8 @@
       anchor: anchorPayload(),
       answer: null,
       context: null,
+      sources: [],
+      answerSources: [],
       status: 'retrieving',
       runError: '',
       answerError: '',
@@ -747,7 +965,8 @@
 
   function retryRun(n) {
     const turn = state.turns.find((t) => t.n === n);
-    if (!turn || state.busy) return;
+    const last = lastTurn();
+    if (!turn || !last || last.n !== n || state.busy) return;
     turn.answer = null;
     turn.context = null;
     state.viewN = n;
@@ -756,9 +975,58 @@
 
   function retryAnswer(n) {
     const turn = state.turns.find((t) => t.n === n);
-    if (!turn || state.busy) return;
+    const last = lastTurn();
+    if (!turn || !last || last.n !== n || state.busy) return;
     state.viewN = n;
-    answerTurn(turn, true);
+    answerTurn(turn, { fresh: true });
+  }
+
+  function toggleBook(n, key) {
+    const turn = state.turns.find((t) => t.n === n);
+    const last = lastTurn();
+    if (!turn || !last || last.n !== n) return;
+    const choice = bookChoices(turn).find((row) => sourceKey(row.source) === key);
+    if (!choice) return;
+    if (choice.locked) {
+      toast('落点那本固定入选，先取消落点再换');
+      return;
+    }
+    const chosen = turn.sources || [];
+    const on = chosen.some((s) => sourceKey(s) === key);
+    if (on) {
+      if (chosen.length <= 1) {
+        toast('至少留一本');
+        return;
+      }
+      turn.sources = chosen.filter((s) => sourceKey(s) !== key);
+    } else {
+      if (chosen.length >= MAX_SOURCES) {
+        toast('最多 ' + MAX_SOURCES + ' 本');
+        return;
+      }
+      turn.sources = chosen.concat([cloneSource(choice.source)]);
+    }
+    render();
+  }
+
+  function toggleAllBooks(n) {
+    const turn = state.turns.find((t) => t.n === n);
+    const last = lastTurn();
+    if (!turn || !last || last.n !== n) return;
+    const selectable = bookChoices(turn).slice(0, MAX_SOURCES);
+    const picked = new Set((turn.sources || []).map(sourceKey));
+    const allOn = selectable.every((row) => picked.has(sourceKey(row.source)));
+    turn.sources = allOn
+      ? defaultSources(turn)
+      : selectable.map((row) => cloneSource(row.source));
+    render();
+  }
+
+  function reanswer(n) {
+    const turn = state.turns.find((t) => t.n === n);
+    const last = lastTurn();
+    if (!turn || !last || last.n !== n || state.busy) return;
+    answerTurn(turn, { sources: turn.sources, fresh: false });
   }
 
   function newSession() {
@@ -860,6 +1128,21 @@
       render();
       return;
     }
+    const picker = e.target.closest('[data-book-pick]');
+    if (picker) {
+      toggleBook(Number(picker.dataset.from), picker.dataset.bookPick);
+      return;
+    }
+    const allBooks = e.target.closest('[data-books-all]');
+    if (allBooks) {
+      toggleAllBooks(Number(allBooks.dataset.booksAll));
+      return;
+    }
+    const reanswerBtn = e.target.closest('[data-reanswer]');
+    if (reanswerBtn) {
+      reanswer(Number(reanswerBtn.dataset.reanswer));
+      return;
+    }
     const citer = e.target.closest('[data-cite]');
     if (citer && citer.dataset.cite) {
       pick(Number(citer.dataset.from), Number(citer.dataset.cite));
@@ -920,10 +1203,32 @@
 
   /* ---- 启动 ------------------------------------------------------ */
 
+  function savedSources(turn) {
+    const answer = turn.answer || {};
+    if (answer.mode === 'multi' && Array.isArray(answer.sources) && answer.sources.length) {
+      return answer.sources.map(sourceFromAnswer).filter(Boolean);
+    }
+    const anchor = sourceFromAnchor(turn.anchor);
+    if (anchor) return [anchor];
+    const top = sourceFromResult((turn.trace || {}).result);
+    if (top) return [top];
+    const cite = citesOf(turn).find((c) => c.verified) || citesOf(turn)[0];
+    if (cite && cite.path) {
+      return [{
+        book: bookKey(cite.path),
+        title: bookOf(cite),
+        chapter: chapterOf(cite),
+        path: cite.path,
+        line: Number(cite.line) || 1,
+      }];
+    }
+    return [];
+  }
+
   function turnFromSaved(turn) {
     const answer = turn.answer && typeof turn.answer === 'object' ? turn.answer : null;
     const trace = turn.trace && typeof turn.trace === 'object' ? turn.trace : null;
-    return {
+    const row = {
       n: turn.n,
       question: turn.question || '',
       thinking: turn.thinking || '',
@@ -932,10 +1237,20 @@
       anchor: turn.anchor || null,
       answer,
       context: turn.context || null,
+      sources: [],
+      answerSources: [],
       status: answer ? 'ready' : (trace ? 'answer-error' : 'run-error'),
       runError: '',
       answerError: '',
     };
+    const restored = savedSources(row);
+    row.answerSources = restored.map(cloneSource);
+    row.sources = restored.map(cloneSource);
+    const anchor = sourceFromAnchor(row.anchor);
+    if (anchor && !row.sources.some((s) => sourceKey(s) === sourceKey(anchor))) {
+      row.sources = [anchor].concat(row.sources);
+    }
+    return row;
   }
 
   async function openSession(sessionId) {
@@ -966,6 +1281,13 @@
     const params = new URLSearchParams(location.search);
     const sessionId = params.get('session') || '';
     const question = params.get('q') || '';
+    if (location.pathname !== pagePath()) {
+      try {
+        history.replaceState(null, '', pagePath() + (location.search || ''));
+      } catch (err) {
+        // 同 setUrl：拿不到 history 时只影响地址栏
+      }
+    }
     if (sessionId) {
       await openSession(sessionId);
       return;

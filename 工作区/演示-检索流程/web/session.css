@@ -391,6 +391,98 @@ a { color: inherit; text-decoration: none; }
   color: #a9a294;
 }
 
+/* 候选书 */
+.books {
+  margin-top: 10px;
+  padding: 9px 12px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--soft);
+}
+.books-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.books-head .t {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+.books-head .h { font-size: 11px; color: var(--muted); }
+.books-all {
+  margin-left: auto;
+  padding: 1px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.books-all:hover { color: var(--red-ink); border-color: var(--red-soft); }
+.books-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.book-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  max-width: 13em;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.book-pick:hover { border-color: var(--red-soft); color: var(--red-ink); }
+.book-pick .bp-title { overflow: hidden; text-overflow: ellipsis; }
+.book-pick .bp-tag {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  color: #a9a294;
+}
+.book-pick.is-on { border-color: var(--red); background: var(--red-soft); color: var(--red-ink); }
+.book-pick.is-on .bp-tag { color: var(--red-ink); }
+.book-pick.is-locked { cursor: default; }
+.book-pick:disabled { opacity: .55; cursor: default; }
+.books-note {
+  margin: 7px 0 0;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.books-act {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.books-act .books-note { margin: 0; }
+.books-act .btn { padding: 4px 11px; font-size: 11.5px; }
+
+@media (max-width: 700px) {
+  .books-picks {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .books-picks::-webkit-scrollbar { display: none; }
+  .book-pick { flex: 0 0 auto; }
+  .books-act { justify-content: flex-start; }
+  .books-act .books-note { flex: 1 0 100%; }
+}
+
 /* 追问落点 */
 .anchor { position: relative; margin-top: 16px; }
 .anchor::after {
