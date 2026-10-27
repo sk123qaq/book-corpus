@@ -10,8 +10,9 @@
 并进第一章，所以一页都不会丢。章内正文空的不写，数目记 empty_chapters。
 
 抽字按页读序取 get_text("dict") 的块：文字块成段（块内换行只在两侧非中日韩字时才留空格），
-图块按块序换成 ![](images/p%04d_i%02d.<ext>)，只留被引用的图；宽或高小于 64 px 的图丢掉，
-数目记 images_dropped。图文件名带页号，两页不会撞。
+相邻块同栏、行距小、上一段没结句、下一块不是标题列表时接成一段（--merge-blocks，默认开；
+有框线的表页不并），图块按块序换成 ![](images/p%04d_i%02d.<ext>)，只留被引用的图；宽或高小于
+64 px 的图丢掉，数目记 images_dropped。图文件名带页号，两页不会撞。
 
 README、.manifest.json、front matter、文件名清洗、目录链接都复用 pdf_ocr_to_md.py 那套，
 拼装器只有一份。
@@ -21,6 +22,7 @@ README、.manifest.json、front matter、文件名清洗、目录链接都复用
       --author "Edmond de Goncourt" --source-sha256 xxx --method pdf-text --structure auto
 """
 import argparse
+import collections
 import os
 import re
 import sys
@@ -34,6 +36,16 @@ MIN_IMAGE_PX = 64
 CJK_RE = re.compile(r"[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]")
 UNLISTED_CHAPTERS = "- 无（按页全收，目录首条之前的页并进第一章）"
 UNLISTED_SINGLE = "- 无（文本层按页全收）"
+
+SENT_END = "。！？…；：!?.;:"
+SENT_CLOSERS = "\u201d\u2019\"'\u300d\u300f\uff09\u3011\u300b\u3009"
+LIST_START = re.compile(r"^(?:[\u2022\u00b7*#>\-\u2013\u2014]|\d+[.\u3001)]"
+                        r"|[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]+[\u3001.]"
+                        r"|[\uff08(][\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\d]+[)\uff09])")
+HEAD_START = re.compile(r"^(?:\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e0-9]+[\u7ae0\u8282\u7bc7\u90e8]"
+                        r"|[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]+[\u3001.]"
+                        r"|[\uff08(][\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\d]+[)\uff09]"
+                        r"|\d+(?:\.\d+)*[\u3001.\s])")
 
 
 def block_text(b):
@@ -51,24 +63,121 @@ def block_text(b):
     return out
 
 
-def page_items(page, min_px=MIN_IMAGE_PX, keep_images=True):
+def body_size(blocks):
+    """页内覆盖字符最多的字号（一位小数，按字数加权）。页上没有字时给 10 pt。"""
+    sizes = collections.Counter()
+    for b in blocks:
+        for ln in b.get("lines") or []:
+            for sp in ln.get("spans") or []:
+                t = (sp.get("text") or "").strip()
+                if t:
+                    sizes[round(sp["size"], 1)] += len(t)
+    return sizes.most_common(1)[0][0] if sizes else 10.0
+
+
+def block_metrics(b, text, body):
+    """并段要用的块几何：bbox、块内最大字号（正文缺省）、每行高度。"""
+    lines = [ln for ln in (b.get("lines") or [])
+             if "".join(sp.get("text") or "" for sp in ln.get("spans") or []).strip()]
+    size = 0.0
+    for ln in lines:
+        for sp in ln.get("spans") or []:
+            if (sp.get("text") or "").strip():
+                size = max(size, round(sp["size"], 1))
+    x0, y0, x1, y1 = b["bbox"]
+    return {"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+            "size": size or body, "lh": (y1 - y0) / max(1, len(lines))}
+
+
+def _can_merge(a, b, body, page_w):
+    """后一块 b 能不能接上前一段 a。同栏 + 行距小 + a 没结句 + 两块都不是标题列表。
+    逗号顿号不算结句，否则 ePub 转出的 PDF 会在每个逗号处断段，规则等于没做。
+    """
+    if not a or not b or not a["text"] or not b["text"] or len(a["text"]) < 4:
+        return False
+    for blk in (a, b):
+        if blk["size"] > body * 1.15 and len(blk["text"]) <= 20:
+            return False
+    if len(a["text"]) <= 40 and HEAD_START.match(a["text"]):
+        return False
+    tail = a["text"].rstrip(SENT_CLOSERS)
+    if tail and tail[-1] in SENT_END:
+        return False
+    if LIST_START.match(b["text"]):
+        return False
+    if b["y0"] < a["y0"] - 1:
+        return False
+    wa, wb = a["x1"] - a["x0"], b["x1"] - b["x0"]
+    overlap = min(a["x1"], b["x1"]) - max(a["x0"], b["x0"])
+    if not (overlap >= 0.5 * min(wa, wb) or abs(a["x0"] - b["x0"]) <= 0.15 * page_w):
+        return False
+    return -3.0 <= b["y0"] - a["y1"] <= max(2.0, 0.9 * a["lh"])
+
+
+def _join_text(a, b):
+    """两段接一行：两侧都是中日韩字（含全角标点）时不加空格，否则加一个。"""
+    return a + ("" if CJK_RE.match(a[-1]) and CJK_RE.match(b[0]) else " ") + b
+
+
+def is_table_page(page):
+    """有框线的表格页：细矩形横线去重后的 y 数 ≥6、竖线去重后的 x 数 ≥3。
+    这类页不并段，保持逐块成段，跟并段之前逐字节一致。无边框表判不出来，已知。
+    """
+    ys, xs = set(), set()
+    for d in page.get_drawings():
+        for it in d["items"]:
+            if it[0] != "re":
+                continue
+            r = it[1]
+            if r.height < 2 and r.width > 5:
+                ys.add(round(r.y0))
+            elif r.width < 2 and r.height > 5:
+                xs.add(round(r.x0))
+    return len(xs) >= 3 and len(ys) >= 6
+
+
+def page_items(page, min_px=MIN_IMAGE_PX, keep_images=True, merge_blocks=False):
     """一页按读序的块：文字块成段落字符串，图块成 ("image", 扩展名, 字节, 宽, 高)。
     过小的图按丢弃计数。返回 (块, 丢弃数)。keep_images=False 时不取图片字节（审计只数文字，
     省下每页几 MB），丢弃口径不变。
+
+    merge_blocks=True 时跨块并段：相邻文字块同栏且行距小、上一段没结句、下一块不是标题列表，
+    就接成一段（头图或表页不并）。一行一块的 ePub 转出 PDF 靠这个才成整段。
     """
-    items, dropped = [], 0
-    for b in page.get_text("dict")["blocks"]:
+    blocks = page.get_text("dict")["blocks"]
+    merge = merge_blocks and not is_table_page(page)
+    body = body_size(blocks) if merge else 0.0
+    page_w = page.rect.width
+    items, dropped, cur = [], 0, None
+    for b in blocks:
         if b.get("type") != 1:
             t = block_text(b)
-            if t:
+            if not t:
+                continue
+            if not merge:
                 items.append(t)
+                continue
+            nxt = block_metrics(b, t, body)
+            if _can_merge(cur, nxt, body, page_w):
+                cur["text"] = _join_text(cur["text"], nxt["text"])
+                cur["y1"] = nxt["y1"]
+                cur["x1"] = max(cur["x1"], nxt["x1"])
+                continue
+            if cur:
+                items.append(cur["text"])
+            cur = nxt
             continue
+        if cur:
+            items.append(cur["text"])
+            cur = None
         w, h = int(b.get("width") or 0), int(b.get("height") or 0)
         data = (b.get("image") or b"") if keep_images else b""
         if w >= min_px and h >= min_px and (bool(data) or not keep_images):
             items.append(("image", (b.get("ext") or "png").lstrip("."), data, w, h))
         else:
             dropped += 1
+    if cur:
+        items.append(cur["text"])
     return items, dropped
 
 
@@ -102,11 +211,11 @@ def chapter_starts(toc):
     return out
 
 
-def extract(doc, out_dir):
+def extract(doc, out_dir, merge_blocks=False):
     """摊开全书：被引用的图落 images/，正文里的图换成一个占位。返回 (逐页块, 丢弃图数, 留图数)。"""
     pages, dropped, used = [], 0, 0
     for i, page in enumerate(doc, 1):
-        items, ndrop = page_items(page)
+        items, ndrop = page_items(page, merge_blocks=merge_blocks)
         dropped += ndrop
         parts, n = [], 0
         for it in items:
@@ -182,6 +291,8 @@ def main():
     ap.add_argument("--method", default="pdf-text")
     ap.add_argument("--tool-version", default="")
     ap.add_argument("--structure", choices=("auto", "single", "chapters"), default="auto")
+    ap.add_argument("--merge-blocks", action=argparse.BooleanOptionalAction, default=False,
+                    help="跨块并段（默认开）。--no-merge-blocks 回到逐块成段，供对照与回滚")
     a = ap.parse_args()
 
     doc = fitz.open(a.pdf)
@@ -194,7 +305,7 @@ def main():
         sys.exit("目录是空的，切不了章: " + a.pdf)
 
     os.makedirs(a.out, exist_ok=True)
-    pages, dropped, used = extract(doc, a.out)
+    pages, dropped, used = extract(doc, a.out, merge_blocks=a.merge_blocks)
     if structure == "chapters":
         chapters, chars, bytes_, empty = write_chapters(doc, pages, a, a.out)
         unlisted = UNLISTED_CHAPTERS
