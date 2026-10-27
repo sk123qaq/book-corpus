@@ -47,11 +47,16 @@ def post(path, obj, timeout=300):
         return r.status, r.read().decode("utf-8")
 
 
-def code_of(path):
+def get_json(path, timeout=60):
+    """带状态码的 GET：4xx/5xx 也把 JSON 读回来。"""
     try:
-        return get(path)[0]
+        status, body = get(path, timeout=timeout)
     except urllib.error.HTTPError as exc:
-        return exc.code
+        status, body = exc.code, exc.read().decode("utf-8")
+    try:
+        return status, json.loads(body)
+    except ValueError:
+        return status, {}
 
 
 def loc_of(trace, question):
@@ -171,6 +176,25 @@ check("第 1 轮与第 2 轮 answer 落盘", len(turns) > 1
                   len((turns[1].get("answer") or {}).get("answer") or "")
                   if len(turns) > 1 else 0))
 
+# ---- GET /api/session：刷新页面靠它恢复 -------------------------------
+status, data = get_json("/api/session?id=" + sid)
+saved = (data.get("session") or {}).get("turns") or []
+check("会话接口回完整会话", status == 200 and data.get("ok") is True
+      and [t.get("n") for t in saved] == [1, 2, 3],
+      "status=%s turns=%s" % (status, [t.get("n") for t in saved]))
+check("会话接口带每轮 trace/answer/anchor/context",
+      all(isinstance(t.get("trace"), dict) and isinstance(t.get("answer"), dict)
+          for t in saved)
+      and isinstance((saved[1].get("context") if len(saved) > 1 else None), dict)
+      and bool((saved[1].get("anchor") if len(saved) > 1 else None)),
+      "keys=%s" % sorted(saved[0].keys()) if saved else "没有轮次")
+status, data = get_json("/api/session?id=../x")
+check("非法会话 id 回 400", status == 400 and data.get("error") == "会话 id 不合法",
+      "status=%s error=%s" % (status, data.get("error")))
+status, data = get_json("/api/session?id=aaaaaaaaaaaa")
+check("未知会话 id 回 404", status == 404 and data.get("error") == "会话不存在",
+      "status=%s error=%s" % (status, data.get("error")))
+
 # ---- build_context：上一轮跨两本书，budget 10000 ---------------------
 if len(turns) >= 3:
     prev = {"n": 2, "question": Q3, "thinking": "low", "related": None,
@@ -217,10 +241,9 @@ except urllib.error.HTTPError as exc:
     check("越界 turn 回 400", exc.code == 400, "code=%d" % exc.code)
 try:
     post("/api/run", {"question": Q1, "session_id": "../../etc/passwd"})
-    check("非法会话 id 回 404", False)
+    check("运行接口非法会话 id 回 404", False)
 except urllib.error.HTTPError as exc:
-    check("非法会话 id 回 404", exc.code == 404, "code=%d" % exc.code)
-check("会话列表接口不存在", code_of("/api/session") == 404)
+    check("运行接口非法会话 id 回 404", exc.code == 404, "code=%d" % exc.code)
 
 print("\nALL PASS" if not fails else "\n失败 %d 项：%s" % (len(fails), ", ".join(fails)))
 sys.exit(0 if not fails else 1)
