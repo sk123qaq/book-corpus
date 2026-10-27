@@ -53,7 +53,29 @@ def load_concept(key):
     sys.exit("概念表里没有 " + key)
 
 
+_ASCII_ALPHA = re.compile(r"[A-Za-z]")
+
+
+def group_in(g, low):
+    """组词是否算命中（low 是已 lower 的正文）。
+
+    ASCII 与 FTS5 的 unicode61 折叠对齐，折小写再比；多词别名（如
+    learned helplessness）在 expr 里是各词 AND，可不相邻，这里同口径：
+    各词都在即算命中，不要求字面连续。
+    """
+    if " " in g:
+        return all(w in low for w in g.split())
+    return g in low
+
+
 def group_hits(text, groups, exclude):
+    """单段组命中数。search 的热循环自己内联了这段（带预计算），这里留给外部调用。"""
+    if _ASCII_ALPHA.search("".join(groups)):
+        body = text
+        if exclude:
+            body = re.sub("|".join(map(re.escape, exclude)), "", body)
+        low = body.lower()
+        return sum(1 for g in groups if group_in(g.lower(), low))
     body = text
     if exclude:
         body = re.sub("|".join(map(re.escape, exclude)), "", body)
@@ -75,7 +97,7 @@ def rerank_bonus(text, line, groups):
         bonus -= 0.5
     if line <= 3:
         bonus -= 0.5
-    if any(g in text[:40] for g in groups):
+    if any(group_in(g.lower(), text[:40].lower()) for g in groups):
         bonus += 0.3
     return bonus
 
@@ -86,6 +108,10 @@ def search(con, expr, groups, exclude, limit, min_chars, rerank=False, pool=400)
     pool <= 0 表示不设上限（全取）。
     """
     t0 = time.time()
+    if not expr:
+        # 查询词全是不可索引字符（全角符号/假名等）时 expr 为空，
+        # MATCH '' 是 FTS5 语法错；这里返回空结果，不炸。
+        return [], 0.0
     sql = ("SELECT p.id, p.path, p.book, p.line, p.text, bm25(para_fts) AS score "
            "FROM para_fts f JOIN para p ON p.id=f.rowid "
            "WHERE para_fts MATCH ? AND p.chars >= ? ORDER BY score")
@@ -94,8 +120,19 @@ def search(con, expr, groups, exclude, limit, min_chars, rerank=False, pool=400)
     else:
         rows = con.execute(sql, (expr, min_chars)).fetchall()
     cand = []
+    # 大小写判定与组词 lower 都只做一次；纯 CJK 查询的逐段路径与
+    # 不折大小写的旧版完全同价
+    ascii_groups = bool(_ASCII_ALPHA.search("".join(groups)))
+    low_groups = [g.lower() for g in groups] if ascii_groups else None
     for pid, path, book, line, text, score in rows:
-        cov = group_hits(text, groups, exclude)
+        body = text
+        if exclude:
+            body = re.sub("|".join(map(re.escape, exclude)), "", body)
+        if ascii_groups:
+            low = body.lower()
+            cov = sum(1 for g in low_groups if group_in(g, low))
+        else:
+            cov = sum(1 for g in groups if g in body)
         if cov == 0 and exclude:
             continue
         kana = sum(1 for ch in text if "\u3040" <= ch <= "\u30ff")
@@ -112,6 +149,8 @@ def search(con, expr, groups, exclude, limit, min_chars, rerank=False, pool=400)
 
 
 def search_expand(con, expr, kind="both", limit=200):
+    if not expr:
+        return []
     cond = "" if kind == "both" else " AND e.kind = ?"
     args = (expr, limit) if kind == "both" else (expr, kind, limit)
     try:
@@ -202,7 +241,7 @@ def main():
         expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
         label = a.concept
     else:
-        groups = [g for g in re.split(r"[\s,]+", a.query) if g]
+        groups = cjk.split_groups(a.query)
         exclude = []
         expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
         label = a.query
@@ -223,14 +262,13 @@ def main():
             import concept_route
             keys = concept_route.route(a.query or label)
             second, ms2 = concept_route.search_keys(con, keys, 200, a.min_chars,
-                                                    pool=pool or 2000)
+                                                    pool=pool)
         except Exception as exc:
             print("路由失败，退回段落档: %s" % exc, file=sys.stderr)
             keys, second = [], []
         if second and a.route_mode == "append":
             head = max(1, min(10, a.limit // 2))
-            base, _ = search(con, expr, groups, exclude, max(400, pool or 2000),
-                             a.min_chars, a.rerank)
+            base = hits
             seen, out = set(), []
             for r in base[:head]:
                 seen.add(r["path"])
@@ -249,8 +287,7 @@ def main():
                     out.append(r)
             hits = out
         elif second:
-            base, _ = search(con, expr, groups, exclude, max(400, pool or 2000),
-                             a.min_chars, a.rerank)
+            base = hits
             order, scores = fuse(base, second)
             best = {r["path"]: r for r in reversed(base)}
             best.update({r["path"]: r for r in reversed(second)})
@@ -262,7 +299,8 @@ def main():
                 hits.append(r)
             ms += ms2
     if a.expand:
-        exp = search_expand(con, expr, a.expand_kind, max(400, pool or 2000))
+        exp = search_expand(con, expr, a.expand_kind,
+                            max(400, pool) if pool > 0 else -1)
         order, scores = fuse(hits, exp)
         best = {r["path"]: r for r in reversed(hits)}
         expmap = {r["path"]: r for r in exp}

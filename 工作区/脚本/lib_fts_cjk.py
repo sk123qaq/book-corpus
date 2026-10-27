@@ -5,9 +5,22 @@
 查询侧：1 字走前缀，2 字走单 token，3 字以上走相邻二元组 phrase。
 """
 import re
+import unicodedata
 
 RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+|[A-Za-z0-9]+")
 CJK = re.compile(r"^[\u3400-\u4dbf\u4e00-\u9fff]+$")
+
+# 查询词组分隔符：空白与半角/全角逗号、顿号、分号
+SPLIT = re.compile(r"[\s,，、;；]+")
+
+
+def split_groups(text):
+    """查询侧的组切分：NFKC 把全角字母数字折成半角，再按分隔符切组。
+
+    只动查询侧，索引侧 index_text 不归一——语料里的全角字符本来就不进
+    RUN 正则（索引和查询两侧都不认），归一只是把查询词修成索引里有的形态。
+    """
+    return [g for g in SPLIT.split(unicodedata.normalize("NFKC", text or "")) if g]
 
 
 def tokens(text):
@@ -67,6 +80,9 @@ def selftest():
     assert query_expr("现代的铁笼") == '"现代 代的 的铁 铁笼"'
     assert query_expr("COVID 19") == '"covid" AND "19"'
     assert query_expr("㐀㐁㐂") == '"㐀㐁 㐁㐂"'
+    assert split_groups("自由，平等、博爱") == ["自由", "平等", "博爱"]
+    assert split_groups("１９８４ ａｂｃ") == ["1984", "abc"]
+    assert split_groups("") == []
     print("lib_fts_cjk 自检通过")
 
 

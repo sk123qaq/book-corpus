@@ -58,12 +58,16 @@ def load_broad(key):
 
 
 def normalize(plan):
+    def weight(v):
+        # 显式给 0 是想把这一组关掉，不能被 or 吞成 1.0
+        return 1.0 if v is None or v == "" else float(v)
+
     groups = []
     for g in plan.get("groups") or []:
         terms = [str(t).strip() for t in (g.get("terms") or []) if str(t).strip()]
         if terms:
             groups.append({"name": g.get("name") or "组", "terms": terms,
-                           "weight": float(g.get("weight") or 1.0)})
+                           "weight": weight(g.get("weight"))})
     if not groups and plan.get("must"):
         groups.append({"name": "原词", "terms": [str(t) for t in plan["must"]],
                        "weight": 1.0})
@@ -75,7 +79,7 @@ def normalize(plan):
             continue
         if terms:
             groups.append({"name": "概念:" + key, "terms": terms,
-                           "weight": float(plan.get("concept_weight") or 1.0)})
+                           "weight": weight(plan.get("concept_weight"))})
             exclude += ex
     for key in plan.get("broad") or []:
         try:
@@ -84,7 +88,7 @@ def normalize(plan):
             continue
         if terms:
             groups.append({"name": "宽:" + key, "terms": terms,
-                           "weight": float(plan.get("broad_weight") or 1.0),
+                           "weight": weight(plan.get("broad_weight")),
                            "exclude": ex})
     return groups, exclude
 

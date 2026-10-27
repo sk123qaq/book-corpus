@@ -431,7 +431,7 @@ def main(argv=None):
         groups, exclude = qsearch.load_concept(a.concept)
         terms = groups
     elif a.query:
-        terms = [t for t in " ".join(a.query).replace(",", " ").split() if t]
+        terms = cjk.split_groups(" ".join(a.query))
     else:
         ap.error("要给查询词或 --concept")
     con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)

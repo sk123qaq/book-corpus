@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""P1 验收：2 字词可查且有序、译名墙案例、原词类不低于裸 grep。
+"""P1 验收：2 字词可查且有序、译名墙案例、原词类不低于裸 grep、查询边界回归。
 
+边界回归段（edge_cases）覆盖：不可索引字符不崩、全角数字归一可查、
+全角逗号当分隔符、ASCII 大小写覆盖口径、--pool all 不被吞。
 只读。任一不过就退出码 1。
 """
-import csv, json, os, subprocess, sys, time
+import csv, json, os, sqlite3, subprocess, sys, time
 
 ROOT = "/home/shike/文档/books"
 QSEARCH = os.path.join(ROOT, "工作区", "脚本", "qsearch.py")
@@ -52,8 +54,61 @@ def wall(word, want_book, want_any=True):
           "语料命中 %d 文件；%s 在 top20: %s" % (len(corpus_files(word)), want_book, bool(hit)))
 
 
+def safe_run(args):
+    """边界用例专用：坏输入不应让验收本身崩掉，崩了记 FAIL 并带回错误。"""
+    r = subprocess.run([sys.executable, QSEARCH] + args + ["--json"], cwd=ROOT,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None, (r.stderr or "").strip().splitlines()[-1:]
+    try:
+        return json.loads(r.stdout), None
+    except ValueError:
+        return None, ["stdout 不是 JSON"]
+
+
+def edge_cases():
+    # 不可索引字符（标点/假名单独成查询）不该崩，返回空结果即可
+    res, err = safe_run(["！！！", "-n", "3"])
+    check(res is not None and res["hits"] == [], "纯标点查询不崩",
+          "崩：%s" % err[0] if err else "返回 %d 条" % len(res["hits"]))
+    # 全角数字折半角后应能查到（语料有 1984）
+    res, err = safe_run(["１９８４", "-n", "5"])
+    check(bool(res and res["hits"]), "全角数字归一可查",
+          "崩：%s" % err[0] if err else "返回 %d 条" % len(res["hits"]))
+    # 全角逗号当分隔符：与空格分隔同口径
+    comma, err1 = safe_run(["自由，平等", "-n", "5"])
+    space, err2 = safe_run(["自由 平等", "-n", "5"])
+    same = (comma and space and comma["hits"] and space["hits"]
+            and [h["path"] for h in comma["hits"]] == [h["path"] for h in space["hits"]])
+    check(bool(same), "全角逗号当分隔符",
+          "逗号版 %s / 空格版 %s" % (
+              "崩" if err1 else "%d 条" % len(comma["hits"]),
+              "崩" if err2 else "%d 条" % len(space["hits"])))
+    # ASCII 大小写：FTS 折叠了大小写，覆盖判定也得跟上
+    res, err = safe_run(["PANOPTICON", "-n", "5"])
+    cov = max((h.get("coverage", 0) for h in res["hits"]), default=0) if res else 0
+    check(bool(res and res["hits"]) and cov > 0, "大写词覆盖判定",
+          "崩：%s" % err[0] if err else "%d 条，最大 coverage %d" % (len(res["hits"]), cov))
+    # --pool all（0）是不设上限，不能被 or 吞成默认值
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import qsearch
+        con = sqlite3.connect("file:%s?mode=ro" % os.path.join(
+            ROOT, "目录", "检索", "index.db"), uri=True)
+        expr = '"自由"'
+        # limit 放大过池深，返回条数才反映 pool 的取数深度
+        all_hits, _ = qsearch.search(con, expr, ["自由"], [], 10 ** 9, 40, False, 0)
+        low_hits, _ = qsearch.search(con, expr, ["自由"], [], 10 ** 9, 40, False, 100)
+        con.close()
+        check(len(all_hits) > len(low_hits), "--pool all 不被吞",
+              "all=%d 段 vs 100=%d 段" % (len(all_hits), len(low_hits)))
+    except Exception as exc:  # noqa: BLE001
+        check(False, "--pool all 不被吞", "异常 %s: %s" % (type(exc).__name__, exc))
+
+
 def main():
     two_char_words()
+    edge_cases()
     wall("过密化", "八次危机")
     wall("群己权界论", "金克木集")
     wall("消极自由", "刘擎西方现代思想讲义")

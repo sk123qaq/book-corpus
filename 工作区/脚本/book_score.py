@@ -124,7 +124,10 @@ def matched_groups(text, groups, exclude):
     body = text
     if exclude:
         body = re.sub("|".join(map(re.escape, exclude)), "", body)
-    return [g for g in groups if g in body]
+    if not qsearch._ASCII_ALPHA.search("".join(groups)):
+        return [g for g in groups if g in body]
+    low = body.lower()
+    return [g for g in groups if qsearch.group_in(g.lower(), low)]
 
 
 def top3_mean(scores):
@@ -232,7 +235,7 @@ def main(argv=None):
         groups, exclude = qsearch.load_concept(a.concept)
         label = a.concept
     else:
-        groups = [g for g in re.split(r"[\s,]+", a.query) if g]
+        groups = cjk.split_groups(a.query)
         exclude = []
         label = a.query
     expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))

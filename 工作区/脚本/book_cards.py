@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.join(HERE))
 import book_query  # noqa: E402
 import book_readme  # noqa: E402
 import book_score  # noqa: E402
+import lib_fts_cjk as cjk  # noqa: E402
 
 DB = book_score.DB
 LIBDB = book_score.LIBDB
@@ -139,7 +140,7 @@ def query_hints(query, books, concepts, terms=None):
                     author = a
     quoted = re.search(r"[“\"「『](.{8,})[”\"」』]", query or "")
     verbatim = bool(quoted) or (len(q) >= 12 and not qw)
-    terms = terms or [t for t in re.split(r"[\s,]+", query or "") if t]
+    terms = terms or cjk.split_groups(query or "")
     concept = any(book_query.resolve(t, concepts) for t in terms)
     if not concept:
         for key, rec in concepts.items():
@@ -297,7 +298,11 @@ def exclude_type(cards, type_name):
 
 
 def apply_action(cards, select="", exclude="", refresh_cards=None):
-    """返回 (展示的卡, 下一步的默认三本, 用户显式选中的书, rejected)。"""
+    """返回 (展示的卡, 展开的下一步（全部卡，至多六本）, 用户显式选中的书, rejected)。
+
+    「下一步」与 default_selection（默认前三本）口径不同：不带动作时把
+    展示的卡整批展开进 next（至多六本，test: 空选择展开全部卡）。
+    """
     if exclude:
         shown = exclude_type(cards, exclude)
         return shown, shown[:6], [], "type:" + exclude
@@ -352,7 +357,7 @@ def cards_for(planner, terms, question, n=DEFAULT_CARDS, books=None, concepts=No
     """
     terms = [t for t in (terms or []) if t]
     if not terms:
-        terms = [t for t in re.split(r"[\s,]+", question or "") if t]
+        terms = cjk.split_groups(question or "")
     nouns = book_query.split_terms(terms, planner.actions)
     noun_hits, _ = planner.search(nouns)
     ranking = book_score.rank(noun_hits, nouns, "best_support",
@@ -405,7 +410,7 @@ def run(query, terms=None, question=None, n=DEFAULT_CARDS, select="", exclude=""
         expand_fn=None):
     """首轮 → 触发 → 卡片 → 动作 → 下一步。不调模型（--expand 除外）。"""
     t0 = time.time()
-    terms = terms or [t for t in re.split(r"[\s,]+", query or "") if t]
+    terms = terms or cjk.split_groups(query or "")
     question = question or query or ""
     own = con is None
     if con is None:
@@ -427,10 +432,12 @@ def run(query, terms=None, question=None, n=DEFAULT_CARDS, select="", exclude=""
             refresh_cards = None
             if refresh:
                 start = n
-                refresh_cards = build_cards(ranking[start:start + n], hits, nouns, n,
-                                            toc_fn, select_fn)
-                for i, c in enumerate(refresh_cards, 1):
-                    c.rank = start + i
+                # 没有下一批候选时保持现有卡，不把展示清空
+                if len(ranking) > start:
+                    refresh_cards = build_cards(ranking[start:start + n], hits, terms,
+                                                n, toc_fn, select_fn)
+                    for i, c in enumerate(refresh_cards, 1):
+                        c.rank = start + i
             shown, chosen, picked, rejected = apply_action(res.cards, select, exclude,
                                                            refresh_cards)
             res.cards = shown
@@ -700,6 +707,11 @@ def perf(con=None, meta=None, expand=None, n=20, cards=DEFAULT_CARDS, passes=2):
                         if fire:
                             build_cards(ranking, hits, nouns, cards)
                     else:
+                        if not ranking:
+                            # 空题没有可看章，跳过；不补这刀整个 --perf 会中断
+                            out.append({"pass": p + 1, "qid": row["qid"], "mode": mode,
+                                        "ms": round((time.time() - t0) * 1000, 1)})
+                            continue
                         toc, _ = book_readme.readme_toc(ranking[0].book)
                         _chapter_rows(hits, ranking[0].book, nouns, toc)
                     out.append({"pass": p + 1, "qid": row["qid"], "mode": mode,

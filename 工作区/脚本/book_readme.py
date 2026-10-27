@@ -186,7 +186,7 @@ def run(query, con, meta, expand, scheme="best_support", concept=None, limit=10,
         groups, exclude = qsearch.load_concept(concept)
         label = concept
     else:
-        groups = [g for g in re.split(r"[\s,]+", query) if g]
+        groups = cjk.split_groups(query)
         exclude = []
         label = query
     hits, ms = search(con, groups, exclude, pool)
