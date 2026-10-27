@@ -530,8 +530,10 @@ def run_chapter(question, book, path, title, best_line, mode, call, deadline,
         if use_neighbors and nbrs and round_no == 1:
             text = neighbor_block(nbrs, LEVEL_CHARS[1])
             if text:
-                packet = ChapterPacket(path, title, total_chars, len(lines), best_line,
-                                       0, 0, "", 1, False, False, readme_status, text)
+                # 邻章片段是背景，本章窗口还在：数据结构里有独立的 neighbor_text
+                # 字段，提示词也要求「引用只能来自本章窗口的行号」——把窗口换成
+                # 邻章会让模型看不到本章任何一行，证据行号必然对不上
+                packet.neighbor_text = text
                 res.neighbor_used = True
                 continue
         if kind == "lines":
