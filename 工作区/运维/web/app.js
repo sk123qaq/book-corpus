@@ -1384,6 +1384,12 @@ async function loadPending() {
   } catch (err) {
     S.pending = [];
   }
+  // 与 PDF 勾选（S.pick）同口径：书不在待拆清单里了，勾选也跟着去掉，
+  // 不然拆章会把过期 uid 发进新批次
+  const known = new Set(S.pending.map((row) => row.uid));
+  Array.from(S.selected).forEach((uid) => {
+    if (!known.has(uid)) S.selected.delete(uid);
+  });
 }
 
 async function loadHealth() {
@@ -1501,7 +1507,7 @@ async function go(tab) {
     toast(err.message, true);
   }
   render();
-  if (S.tab === 'logs' && S.logJob) openLog(S.logJob);
+  if (S.tab === 'logs' && S.logJob) openLog(S.logJob.id);
 }
 
 // ---- 任务轮询 -----------------------------------------------------
@@ -1522,14 +1528,21 @@ async function openLog(jobId) {
   }
 }
 
-async function watchJob(jobId, done) {
-  for (let i = 0; i < 240; i += 1) {
+async function watchJob(jobId, done, maxLoops) {
+  const cap = maxLoops || 240;
+  let misses = 0;
+  for (let i = 0; i < cap; i += 1) {
     let body;
     try {
       body = await api('/api/jobs/' + encodeURIComponent(jobId));
     } catch (err) {
-      return null;
+      // 单次失败（服务重启/网络抖动）不算完：连续 10 次（约 7 秒）都不通才放弃
+      misses += 1;
+      if (misses >= 10) return null;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      continue;
     }
+    misses = 0;
     if (done && done(body.job)) return body;
     await new Promise((resolve) => setTimeout(resolve, 700));
   }
@@ -1616,7 +1629,7 @@ const actions = {
     try {
       const body = await post('/api/import/scan');
       toast('开始识别，好了会出现在下面');
-      const detail = await watchJob(body.job_id, afterJob);
+      const detail = await watchJob(body.job_id, afterJob, 600);
       if (detail && detail.job.state === 'awaiting_review') {
         S.planJob = body.job_id;
         await loadPlan(body.job_id);
@@ -1655,7 +1668,8 @@ const actions = {
       const body = await post('/api/import/apply',
         { plan_path: '工作区/运维/jobs/' + S.planJob + '/plan.json' });
       toast('开始入库，完成后会提示');
-      const detail = await watchJob(body.job_id, afterJob);
+      // 入库要 ingest + 重建 DB + 书目表，全库重建不止两分钟，上限放宽到 15 分钟
+      const detail = await watchJob(body.job_id, afterJob, 1300);
       if (detail && detail.job.state === 'succeeded') {
         toast('入库完成');
         S.importDone = true;
@@ -2188,6 +2202,8 @@ document.addEventListener('change', (ev) => {
 
 function uploadFiles(files) {
   const list = Array.from(files || []);
+  const input = $('#up-file');
+  if (input) input.value = '';
   if (!list.length) return;
   const box = $('#up-box');
   const note = $('#up-note');
