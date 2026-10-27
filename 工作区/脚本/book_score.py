@@ -124,7 +124,7 @@ def matched_groups(text, groups, exclude):
     body = text
     if exclude:
         body = re.sub("|".join(map(re.escape, exclude)), "", body)
-    if not qsearch._ASCII_ALPHA.search("".join(groups)):
+    if not qsearch.ASCII_ALPHA.search("".join(groups)):
         return [g for g in groups if g in body]
     low = body.lower()
     return [g for g in groups if qsearch.group_in(g.lower(), low)]

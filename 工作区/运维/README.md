@@ -95,7 +95,7 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
 
 ## HTTP
 
-POST 收 JSON，返回 `{ok, job_id}` 或 `{ok:false, error}`。POST 校验 `Host` 与 `Origin` 都是本机。
+POST 收 JSON，返回 `{ok, job_id}` 或 `{ok:false, error}`。GET 与 POST 都校验 `Host` 与 `Origin` 都是本机，不对就 403。4xx 一律断开连接（出错路径可能没读尽请求体，keep-alive 会失步）。
 
 ```text
 GET  /api/status                       # 状态脚本 + ops.db 计数 + 锁状态；?refresh=1 绕过缓存，?deep=1 另跑深度审计并刷新 last-audit.json
@@ -122,7 +122,7 @@ POST /api/delete/dry-run               # {uid, reason}
 POST /api/delete/apply                 # {uid, reason, plan_hash, confirm_uid}
 GET  /api/search/health                # 代理查 8765 /api/health，避开浏览器跨域
 POST /api/search/start                 # sys.executable 工作区/演示-检索流程/server.py
-GET  /api/file?path=...                # 白名单文件
+GET  /api/file?path=...                # 白名单文件；文本产物走脱敏，png/xlsx 原样
 GET  /api/inbox                        # 收件箱清单
 GET  /api/import/latest                # 最近一份可用计划（源文件还在收件箱）
 GET  /api/pending                      # v_pending_md 列表（只读 library.db）

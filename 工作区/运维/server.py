@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import contextmanager
 import traceback
 import urllib.error
 import urllib.request
@@ -2262,11 +2263,7 @@ class Handler(BaseHTTPRequestHandler):
         review_dir = os.path.join(batch_dir, "review")
         os.makedirs(batch_dir, exist_ok=True)
         batch_triage = os.path.join(batch_dir, "triage.csv")
-        # 批次账的读改写要互斥：两个标签页并发确认不同 uid，后写的会把先写的
-        # uid 从 triage.csv / *.jsonl 里抹掉。写任务互斥用的是同一把 flock。
-        lock_fd = os.open(self.app.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
-        try:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        with ledger_lock(self.app.env):
             upsert_csv(batch_triage, triage_row, triage_fields)
             for name in ("census.jsonl", "text.jsonl", "scan.jsonl"):
                 src = os.path.join(job_dir, name)
@@ -2300,11 +2297,6 @@ class Handler(BaseHTTPRequestHandler):
                            "--out-dir", self.app.env.rel(batch_dir),
                            "--review", self.app.env.rel(review_dir)])],
                 batch_dir=os.path.join("工作区", "批次", batch))
-        finally:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            finally:
-                os.close(lock_fd)
         self.send_json(200, {"ok": True, "job_id": job_id,
                              "review": self.app.env.rel(
                                  os.path.join(review_dir, uid + ".json")),
@@ -2373,19 +2365,12 @@ class Handler(BaseHTTPRequestHandler):
             item["reason"] = "按分诊建议确认" if follow else "在 PDF 清单里改处置"
             item["suggestion"] = suggestion if follow else None
         # 批次账读改写与 confirm 同一把锁：并发 settle 之间、settle 与 confirm
-        # 之间都不能互相抹行（见 api_pdf_confirm 里的说明）。
-        lock_fd = os.open(self.app.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
-        try:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        # 之间都不能互相抹行。
+        with ledger_lock(self.app.env):
             batch, command = self.app.pdf_settle(clean, index)
             job_id = self.app.runner.submit(
                 "pdf.confirm", "改处置 %d 本" % len(clean), [command],
                 batch_dir=os.path.join("工作区", "批次", batch))
-        finally:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            finally:
-                os.close(lock_fd)
         self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch,
                              "routes": dict(routes)})
 
@@ -2662,6 +2647,21 @@ def split_by_route(triage_path, uids):
         elif route == "本地抽文本":
             routes["text"].append(uid)
     return {k: v for k, v in routes.items() if v}
+
+
+@contextmanager
+def ledger_lock(env):
+    """批次账读改写的互斥锁：与写任务共用 .writer.lock。确认与改处置在
+    HTTP 线程里直接改批次账，两个标签页并发时会互相抹行，必须串行。"""
+    fd = os.open(env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
 
 def upsert_csv(path, row, cols):
