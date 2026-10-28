@@ -181,6 +181,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.serve_file("session.js", "application/javascript; charset=utf-8")
             elif route == "/api/health":
                 self.api_health()
+            elif route == "/api/sessions":
+                self.api_sessions(parse_qs(parsed.query))
             elif route == "/api/session":
                 self.api_session(parse_qs(parsed.query))
             elif route == "/api/chapter":
@@ -318,6 +320,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(500, {"ok": False, "db": "error", "error": str(exc)})
             return
         self.send_json(200, {"ok": True, "db": "ok", "meta": info})
+
+    def api_sessions(self, query):
+        try:
+            limit = int((query.get("limit") or ["0"])[0])
+        except ValueError:
+            limit = 0
+        rows = session.summaries(limit if 1 <= limit <= 500 else None)
+        self.send_json(200, {"ok": True, "count": len(rows), "sessions": rows})
 
     def api_session(self, query):
         sid = (query.get("id") or [""])[0]

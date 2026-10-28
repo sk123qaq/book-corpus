@@ -115,6 +115,70 @@ def public(sess):
     return {"id": (sess or {}).get("id") or "", "turns": out}
 
 
+def _book_names(turn):
+    """一轮涉及的书名，最多 3 个，去重。"""
+    names, seen = [], set()
+
+    def add(value):
+        name = _book_name(value)
+        if not name or name in seen:
+            return
+        seen.add(name)
+        names.append(name)
+
+    trace = turn.get("trace") if isinstance(turn.get("trace"), dict) else {}
+    plan = trace.get("plan") if isinstance(trace.get("plan"), dict) else {}
+    for row in plan.get("ranking") or []:
+        if isinstance(row, dict):
+            add(row.get("book"))
+    if not names:
+        ans = turn.get("answer")
+        if isinstance(ans, dict):
+            for cite in ans.get("citations") or []:
+                if isinstance(cite, dict):
+                    add(_book_of(cite.get("book"), cite.get("path")))
+        if not names:
+            result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
+            add(result.get("book_title") or result.get("book"))
+    return names[:3]
+
+
+def summaries(limit=None):
+    """历史会话摘要，按 updated_at 倒序。只读。
+
+    跳过没有 turn 的文件、坏文件、非法 id。limit 为正整数时截断。
+    """
+    try:
+        cap = int(limit) if limit is not None else 0
+    except (TypeError, ValueError):
+        cap = 0
+    try:
+        names = os.listdir(SESS_DIR)
+    except OSError:
+        names = []
+    rows = []
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        sid = name[:-5]
+        if not valid_id(sid):
+            continue
+        sess = load(sid)
+        if sess is None:
+            continue
+        turns = sess.get("turns") or []
+        if not turns:
+            continue
+        stamp = sess.get("updated_at") or turns[-1].get("at") or ""
+        rows.append({"id": sid, "updated_at": str(stamp or ""),
+                     "turns": len(turns),
+                     "question": str(turns[0].get("question") or ""),
+                     "last_question": str(turns[-1].get("question") or ""),
+                     "books": _book_names(turns[-1])})
+    rows.sort(key=lambda r: (r["updated_at"], r["id"]), reverse=True)
+    return rows[:cap] if cap > 0 else rows
+
+
 # ---- 上下文 ---------------------------------------------------------
 
 def _rel(path):

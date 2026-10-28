@@ -4,6 +4,7 @@
   const STAGE_NAMES = ['理解问题', '词法循环', '打分与选章', '书卡', '结果'];
   const STAGE_KEYS = ['understand', 'rounds', 'rank', 'cards', 'result'];
   const STOP = { C: 'C 到线', 'A+B': 'A+B 到线', cap: '跑满 5 轮', exhausted: '词集用尽' };
+  const KIND = { noun: '名词', 'noun+concept': '名词+概念', 'drop-generic': '去泛词' };
   const THINKING = { off: '关', low: '低', medium: '中', high: '高' };
   const CONFIDENCE = { high: '高', medium: '中', low: '低' };
   const STATUS_TEXT = {
@@ -11,6 +12,10 @@
     'run-error': '检索失败', 'answer-error': '回答失败',
   };
   const THINKING_LEVEL = 'high';
+  const ALL_DONE = ['done', 'done', 'done', 'done', 'done'];
+  const ALL_PENDING = ['pending', 'pending', 'pending', 'pending', 'pending'];
+  const REPLAY_MS = 900;
+  const HISTORY_PAGE = 10;
 
   const state = {
     sessionId: '',
@@ -25,7 +30,11 @@
     timer: null,
     error: '',
     epoch: 0,
-    stripOpen: false,
+    rail: 'history',
+    history: [],
+    historyQuery: '',
+    historyAll: false,
+    historyError: '',
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -34,6 +43,15 @@
   const panelEl = $('#panel');
   const hintEl = $('#hint');
   const turnCountEl = $('#turn-count');
+  const historyCountEl = $('#history-count');
+  const tabCurrentEl = $('#tab-current');
+  const tabHistoryEl = $('#tab-history');
+  const panelCurrentEl = $('#panel-current');
+  const panelHistoryEl = $('#panel-history');
+  const histListEl = $('#hist-list');
+  const histFilterEl = $('#hist-filter');
+  const railSubEl = $('#rail-sub');
+  const railEmptyEl = $('#rail-empty');
   const field = $('#q');
   const sendBtn = $('#send');
   const drawerEl = $('#drawer');
@@ -65,6 +83,27 @@
     const n = Number(ms);
     if (!isFinite(n) || n <= 0) return '—';
     return (n / 1000).toFixed(1) + 's';
+  }
+
+  function fmtMs(ms) {
+    const n = Number(ms);
+    if (!isFinite(n) || n < 0) return '—';
+    if (n < 10) return n.toFixed(1) + ' ms';
+    if (n < 1000) return Math.round(n) + ' ms';
+    return (n / 1000).toFixed(1) + ' s';
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function bookName(value) {
+    const raw = String(value == null ? '' : value).trim();
+    return raw ? raw.split('/').pop() : '';
+  }
+
+  function kindLabel(kind) {
+    return KIND[kind] || String(kind || '—');
   }
 
   function pad(n) {
@@ -407,14 +446,27 @@
   function emptyHTML() {
     const error = state.error
       ? '<p class="answer-error">' + esc(state.error) + '</p>' : '';
-    return '<section class="empty">'
-      + '<h1>问一句，找到原文</h1>'
-      + '<p>先问第一问，它会把命中的原文与依据递到你面前。之后点一条依据当落点，接着问。</p>'
-      + '<div class="empty-samples">'
+    const last = state.history[0];
+    const card = last ? ('<div class="start-last">'
+      + '<span class="lbl mono">接着上次</span>'
+      + '<button class="last-card" type="button" data-open-session="' + esc(last.id) + '">'
+      + '<span class="last-when mono">' + esc(whenText(last.updated_at)) + '</span>'
+      + '<span class="last-q">' + esc(last.question || last.last_question || '') + '</span>'
+      + '<span class="last-meta">' + (Number(last.turns) || 0) + ' 问'
+      + ((last.books || []).length ? ' · 《' + esc(last.books.join('》《')) + '》' : '')
+      + '</span>'
+      + '<span class="last-go" aria-hidden="true">→</span>'
+      + '</button></div>') : '';
+    return '<section class="start">'
+      + '<p class="start-kicker mono">会话追问 · 书库检索</p>'
+      + '<h1>问一句，<br>找到原文</h1>'
+      + '<p class="start-lead">先问第一问，它会把命中的原文与依据递到你面前。'
+      + '之后点一条依据当落点，接着问。</p>'
+      + '<div class="start-samples">'
       + '<button class="chip" type="button" data-ask="乡土中国 差序格局">乡土中国 差序格局</button>'
       + '<button class="chip" type="button" data-ask="礼治社会靠什么维持秩序">礼治社会靠什么维持秩序</button>'
       + '<button class="chip" type="button" data-ask="三体 程心 执剑人">三体 程心 执剑人</button>'
-      + '</div></section>' + error;
+      + '</div>' + card + '</section>' + error;
   }
 
   function relChip(turn) {
@@ -445,51 +497,174 @@
       + '</div>';
   }
 
-  function stageMs(trace, index) {
+  function stageMsOf(trace, index) {
     const stage = (trace && trace.stage_ms) || {};
-    return fmtSec(stage[STAGE_KEYS[index]]);
+    return fmtMs(stage[STAGE_KEYS[index]]);
   }
 
-  function stageCells(turn) {
-    const trace = turn.trace || {};
+  function stageDetails(turn) {
+    const blank = { value: '—', lead: '', meta: '', field: null, raw: null };
+    const trace = turn.trace || null;
+    if (!trace) return [blank, blank, blank, blank, blank];
     const extract = trace.extract || {};
     const plan = trace.plan || {};
     const cards = trace.cards || {};
-    const terms = extract.terms || [];
-    const rounds = plan.rounds || [];
-    const chapters = plan.chapters || [];
-    const books = new Set((plan.ranking || []).map((b) => b && b.book).filter(Boolean));
-    const cardList = cards.cards || [];
+    const terms = Array.isArray(extract.terms) ? extract.terms : [];
+    const rounds = Array.isArray(plan.rounds) ? plan.rounds : [];
+    const ranking = Array.isArray(plan.ranking) ? plan.ranking : [];
+    const chapters = Array.isArray(plan.chapters) ? plan.chapters : [];
+    const cardList = Array.isArray(cards.cards) ? cards.cards : [];
     const scope = scopeSources(turn);
     const one = scope[0] || {};
+    const top = ranking[0] || {};
+    const topScore = Number(top.score);
+    const topName = top.title || bookName(top.book) || '—';
+    const bookCount = new Set(ranking.map((row) => row && row.book).filter(Boolean)).size;
+    const cites = citesOf(turn);
+    const result = trace.result || {};
+    const answer = turn.answer || null;
+    const resultBook = one.title || bookName(one.book) || result.book_title
+      || bookName(result.book) || '—';
+    const resultChapter = one.chapter || result.chapter || result.title || '—';
+    const scoreText = isFinite(topScore) ? topScore.toFixed(2) : '—';
+
     return [
-      { value: terms.length + ' 组词', note: terms.slice(0, 3).map(esc).join(' · ') },
-      { value: rounds.length + ' 轮', note: esc(STOP[plan.stop] || '—') },
-      { value: '评 ' + books.size + ' 本 · 选 ' + chapters.length + ' 章' },
-      { value: cards.trigger ? cardList.length + ' 张' : '未触发' },
-      scope.length > 1
-        ? { value: scope.length + ' 本 · 跨书' }
-        : { value: '《' + esc(one.title || one.book || '—') + '》· ' + esc(one.chapter || '') },
+      {
+        value: terms.length + ' 组词',
+        lead: terms.length + ' 组词'
+          + (terms.length ? ' · ' + terms.slice(0, 3).join(' · ') : ''),
+        meta: terms.length + ' 个检索词 · '
+          + (extract.source === 'model' ? '模型切词'
+             : extract.source === 'cache' ? '命中切词缓存' : '切词'),
+        field: null,
+        raw: trace.extract,
+      },
+      {
+        value: rounds.length + ' 轮',
+        lead: rounds.length + ' 轮 · ' + (STOP[plan.stop] || '—'),
+        meta: plan.best_round ? '取第 ' + plan.best_round + ' 轮' : '',
+        field: {
+          label: '轮次',
+          chips: rounds.map((row) => kindLabel(row.kind) + ' · ' + fmtInt(row.hits) + ' 段'
+            + (row.n === plan.best_round ? ' · 采用' : '')),
+        },
+        raw: {
+          terms: plan.terms, nouns: plan.nouns, rounds: plan.rounds,
+          stop: plan.stop, best_round: plan.best_round, ms: plan.ms,
+        },
+      },
+      {
+        value: '评 ' + bookCount + ' 本 · 选 ' + chapters.length + ' 章',
+        lead: ranking.length
+          ? 'top1 ' + topName + ' · ' + scoreText + ' 分 · 取 ' + chapters.length + ' 本书的章'
+          : '没有命中',
+        meta: '书级打分 ' + (plan.scheme || 'best_support') + ' · 分数相对第一名',
+        field: {
+          label: '排序',
+          chips: ranking.slice(0, 3).map((row, i) => (i + 1) + '. '
+            + (row.title || bookName(row.book)) + ' '
+            + (isFinite(Number(row.score)) ? Number(row.score).toFixed(2) : '—')),
+        },
+        raw: { scheme: plan.scheme, ranking: plan.ranking, chapters: plan.chapters },
+      },
+      {
+        value: cards.trigger ? cardList.length + ' 张' : '未触发',
+        lead: cards.trigger ? cardList.length + ' 张书卡 · 触发' : '未触发 · 直接取 top1',
+        meta: cards.trigger ? '不确定时，把候选递给你' : '书级第一名够稳，不弹卡',
+        field: {
+          label: '候选',
+          chips: cardList.map((card) => '《' + (card.title || bookName(card.book)) + '》'),
+        },
+        raw: trace.cards,
+      },
+      {
+        value: scope.length > 1
+          ? scope.length + ' 本 · 跨书'
+          : '《' + resultBook + '》· ' + resultChapter,
+        lead: '《' + resultBook + '》· ' + resultChapter + ' · ' + cites.length + ' 条引文',
+        meta: '读窗口 ' + fmtMs((trace.stage_ms || {}).result)
+          + (answer && answer.ms != null ? ' · 回答 ' + fmtMs(answer.ms) : ' · 回答中'),
+        field: {
+          label: '命中',
+          quote: cut(result.text || (cites[0] && cites[0].quote) || '', 80),
+        },
+        raw: { result: trace.result || null, answer },
+      },
     ];
   }
 
-  function stripHTML(turn) {
-    const open = state.stripOpen;
+  function rawHTML(raw) {
+    if (raw == null) return '';
+    let text = '';
+    try {
+      text = JSON.stringify(raw, null, 1) || '';
+    } catch (err) {
+      text = '';
+    }
+    if (text.length > 4096) text = text.slice(0, 4096) + '…';
+    if (!text) return '';
+    return '<details class="raw"><summary>原始数据</summary><pre>' + esc(text) + '</pre></details>';
+  }
+
+  function fieldHTML(field) {
+    if (!field) return '';
+    const body = field.quote != null
+      ? '<p class="stage-quote">「' + esc(field.quote) + '」</p>'
+      : '<div class="stage-chips">' + (field.chips || []).map((chip) =>
+        '<span class="stage-chip">' + esc(chip) + '</span>').join('') + '</div>';
+    return '<div class="v3-field"><span class="v3-k">' + esc(field.label) + '</span>'
+      + '<span class="v3-v">' + body + '</span></div>';
+  }
+
+  function stageRowHTML(turn, detail, i, stateName) {
+    const open = (turn.stageOpen || new Set()).has(i);
+    const loading = !turn.trace && stateName === 'active' && i === 0;
+    const waiting = turn.status === 'answering' && stateName === 'active' && i === 4;
+    const cls = ['stage-row', 'v3-row', 'is-' + stateName];
+    if (open) cls.push('is-open');
+    if (loading) cls.push('is-loading');
+    const done = (detail.lead ? '<p class="v3-lead">' + esc(detail.lead) + '</p>' : '')
+      + (detail.meta ? '<p class="v3-meta">' + esc(detail.meta) + '</p>' : '')
+      + fieldHTML(detail.field)
+      + (waiting
+        ? '<p class="v3-waiting"><i class="blink-dot"></i>正在读原文、组织回答…</p>' : '');
+    return '<article class="' + cls.join(' ') + '" data-i="' + i + '">'
+      + '<button class="stage-row-head v3-head" type="button" aria-expanded="' + open + '"'
+      + (stateName === 'pending' ? ' disabled' : '') + '>'
+      + '<span class="v3-num mono">' + pad(i + 1) + '</span>'
+      + '<span class="v3-name stage-name">' + STAGE_NAMES[i] + '</span>'
+      + '<span class="v3-val">' + esc(detail.value) + '</span>'
+      + '<span class="v3-ms mono">' + stageMsOf(turn.trace, i) + '</span>'
+      + '<span class="scaret" aria-hidden="true">' + (open ? '⌃' : '⌄') + '</span>'
+      + '</button>'
+      + '<div class="stage-row-body v3-body">'
+      + '<div class="stage-body-done">' + done + '</div>'
+      + '<p class="stage-loading"><i class="blink-dot"></i>正在理解这句话…</p>'
+      + rawHTML(detail.raw)
+      + '</div></article>';
+  }
+
+  function stagesHTML(turn) {
+    const states = Array.isArray(turn.stageStates) ? turn.stageStates : ALL_DONE;
+    const details = stageDetails(turn);
+    const open = !!turn.stripOpen;
     const steps = STAGE_NAMES.map((name, i) =>
-      '<span class="step"><i class="dot"></i><span class="sn">' + pad(i + 1)
-      + '</span><span class="sname">' + name + '</span></span>').join('');
-    const cells = stageCells(turn).map((cell, i) =>
-      '<div class="cell"><span class="cn">' + pad(i + 1) + '</span>'
-      + '<span class="cname">' + STAGE_NAMES[i] + '</span>'
-      + '<span class="cval">' + cell.value + '</span>'
-      + (cell.note ? '<span class="cnote">' + cell.note + '</span>' : '')
-      + '<span class="cms mono">' + stageMs(turn.trace, i) + '</span></div>').join('');
-    return '<section class="strip' + (open ? ' is-open' : '') + '">'
-      + '<button class="strip-bar" type="button" aria-expanded="' + open + '">'
+      '<span class="step is-' + (states[i] || 'pending') + '">'
+      + '<i class="dot" aria-hidden="true"></i>'
+      + '<span class="sn">' + pad(i + 1) + '</span>'
+      + '<span class="sname">' + name + '</span></span>').join('');
+    const rows = STAGE_NAMES.map((name, i) =>
+      stageRowHTML(turn, details[i], i, states[i] || 'pending')).join('');
+    return '<section class="stages' + (open ? ' is-open' : '')
+      + '" id="stages" aria-label="检索进度">'
+      + '<div class="strip"><button class="strip-bar" type="button" aria-expanded="'
+      + open + '">'
       + '<span class="steps">' + steps + '</span>'
-      + '<span class="strip-toggle mono"><span class="when-closed">展开</span>'
-      + '<span class="when-open">收起</span><span aria-hidden="true">⌄</span></span>'
-      + '</button><div class="cells">' + cells + '</div></section>';
+      + '<span class="strip-toggle"><span class="t-open">展开</span>'
+      + '<span class="t-close">收起</span>'
+      + '<span class="strip-caret" aria-hidden="true">⌄</span></span>'
+      + '</button></div>'
+      + '<div class="stage-stack v3">' + rows + '</div></section>';
   }
 
   function scopeHTML(turn) {
@@ -666,16 +841,18 @@
   }
 
   function renderMain() {
+    const top = mainEl.scrollTop;
     const turn = viewTurn();
     if (!turn) {
       mainEl.innerHTML = emptyHTML();
+      mainEl.scrollTop = top;
       return;
     }
-    const parts = [kickerHTML(turn), '<h1 class="question">' + esc(turn.question) + '</h1>'];
-    if (turn.trace) parts.push(stripHTML(turn));
-    parts.push(booksHTML(turn), scopeHTML(turn), bodyHTML(turn));
+    const parts = [kickerHTML(turn), '<h1 class="question">' + esc(turn.question) + '</h1>',
+      stagesHTML(turn), booksHTML(turn), scopeHTML(turn), bodyHTML(turn)];
     if (turn.answer) parts.push(evidenceHTML(turn));
     mainEl.innerHTML = parts.join('');
+    mainEl.scrollTop = top;
   }
 
   /* ---- 右栏 ------------------------------------------------------ */
@@ -704,9 +881,12 @@
   function renderPanel() {
     const ref = state.shown;
     if (!ref) {
-      panelEl.innerHTML = '';
+      drawerEl.classList.add('is-empty');
+      panelEl.innerHTML = '<div class="drawer-empty"><span class="lbl mono">原文</span>'
+        + '<p>点一条依据，这里给出命中段与上下文。</p></div>';
       return;
     }
+    drawerEl.classList.remove('is-empty');
     const cite = ref.citation;
     const owner = state.turns.find((t) => t.n === ref.fromN) || null;
     const view = viewTurn();
@@ -780,6 +960,8 @@
       : (state.turns.length ? '追问' : '提问');
     sendBtn.disabled = state.busy;
     document.querySelectorAll('[data-ask]').forEach((el) => { el.disabled = state.busy; });
+    const sugs = document.querySelector('.ask-sugs');
+    if (sugs) sugs.hidden = state.turns.length === 0;
   }
 
   function scrollRail() {
@@ -795,11 +977,158 @@
     scrollRail();
   });
 
+  /* ---- 历史会话 -------------------------------------------------- */
+
+  function parseStamp(stamp) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(String(stamp || ''));
+    if (!m) return null;
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+      Number(m[4]), Number(m[5]), Number(m[6]));
+  }
+
+  function dayGroup(stamp) {
+    const at = parseStamp(stamp);
+    if (!at) return '更早';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const t = at.getTime();
+    if (t >= today) return '今天';
+    if (t >= today - 86400000) return '昨天';
+    return '更早';
+  }
+
+  function whenText(stamp) {
+    const at = parseStamp(stamp);
+    if (!at) return '';
+    const hm = pad(at.getHours()) + ':' + pad(at.getMinutes());
+    const group = dayGroup(stamp);
+    if (group === '今天') return hm;
+    if (group === '昨天') return '昨天 ' + hm;
+    return pad(at.getMonth() + 1) + '-' + pad(at.getDate()) + ' ' + hm;
+  }
+
+  function historyCount() {
+    if (!state.sessionId) return state.history.length;
+    const listed = state.history.some((row) => row.id === state.sessionId);
+    return state.history.length + (listed ? 0 : 1);
+  }
+
+  function currentSummary() {
+    if (state.turns.length) {
+      const first = state.turns[0];
+      const last = lastTurn() || first;
+      const found = state.history.find((row) => row.id === state.sessionId);
+      const books = [];
+      state.turns.forEach((turn) => {
+        scopeSources(turn).forEach((source) => {
+          const name = source.title || bookName(source.book);
+          if (name) books.push(name);
+        });
+      });
+      return {
+        id: state.sessionId,
+        updated_at: last.at || (found && found.updated_at) || '',
+        turns: state.turns.length,
+        question: first.question || '',
+        last_question: last.question || '',
+        books: uniq(books).slice(0, 3),
+      };
+    }
+    return state.history.find((row) => row.id === state.sessionId) || null;
+  }
+
+  function histRowHTML(row, current) {
+    const books = (row.books || []).length ? '《' + row.books.join('》《') + '》' : '';
+    return '<button class="hist-row' + (current ? ' is-current' : '') + '" type="button"'
+      + ' data-open-session="' + esc(row.id) + '">'
+      + '<span class="top"><span>' + esc(whenText(row.updated_at)) + '</span>'
+      + '<span>' + (Number(row.turns) || 0) + ' 问'
+      + (current ? ' <span class="pin">当前</span>' : '') + '</span></span>'
+      + '<span class="q">' + esc(row.question || row.last_question || '') + '</span>'
+      + '<span class="meta">' + esc(books) + '</span></button>';
+  }
+
+  function histMatch(row, q) {
+    if (!q) return true;
+    const text = [row.question, row.last_question].concat(row.books || []).join(' ');
+    return text.toLowerCase().includes(q);
+  }
+
+  function renderHistory() {
+    if (!histListEl) return;
+    const q = state.historyQuery.trim().toLowerCase();
+    const cur = currentSummary();
+    const curId = cur ? cur.id : '';
+    const rows = state.history.filter((row) => row.id !== curId);
+    let html = '';
+    let shown = 0;
+    if (state.historyError) {
+      html += '<p class="hist-empty">' + esc(state.historyError) + '</p>';
+    }
+    if (cur && histMatch(cur, q)) {
+      html += '<p class="hist-group">当前打开</p>' + histRowHTML(cur, true);
+      shown += 1;
+    }
+    const matched = rows.filter((row) => histMatch(row, q));
+    const list = (q || state.historyAll)
+      ? matched
+      : matched.slice(0, Math.max(0, HISTORY_PAGE - shown));
+    ['今天', '昨天', '更早'].forEach((group) => {
+      const part = list.filter((row) => dayGroup(row.updated_at) === group);
+      if (!part.length) return;
+      html += '<p class="hist-group">' + group + '</p>'
+        + part.map((row) => histRowHTML(row, false)).join('');
+    });
+    if (!q) {
+      const rest = matched.length - list.length;
+      if (rest > 0) {
+        html += '<button class="hist-more" type="button" data-hist-more="1">更早的 '
+          + rest + ' 个 ↓</button>';
+      } else if (state.historyAll && matched.length > HISTORY_PAGE) {
+        html += '<button class="hist-more" type="button" data-hist-collapse="1">收起</button>';
+      }
+    }
+    if (!html) html = '<p class="hist-empty">没有匹配的会话。</p>';
+    histListEl.innerHTML = html;
+  }
+
+  async function loadSessions() {
+    try {
+      const data = await fetchJSON('/api/sessions');
+      state.history = Array.isArray(data.sessions) ? data.sessions : [];
+      state.historyError = '';
+    } catch (err) {
+      state.history = [];
+      state.historyError = '历史会话加载失败：' + err.message;
+    }
+    renderRail();
+    if (!state.turns.length) renderMain();
+  }
+
+  /* ---- 左栏渲染 -------------------------------------------------- */
+
+  function renderRail() {
+    const histOn = state.rail === 'history';
+    tabCurrentEl.classList.toggle('is-on', !histOn);
+    tabHistoryEl.classList.toggle('is-on', histOn);
+    tabCurrentEl.setAttribute('aria-selected', String(!histOn));
+    tabHistoryEl.setAttribute('aria-selected', String(histOn));
+    panelCurrentEl.hidden = histOn;
+    panelHistoryEl.hidden = !histOn;
+    turnCountEl.textContent = String(state.turns.length);
+    if (historyCountEl) historyCountEl.textContent = String(historyCount());
+    railSubEl.textContent = state.turns.length
+      ? state.turns.length + ' 问 · 正在看第 ' + state.viewN + ' 问'
+      : '还没有开始';
+    railEmptyEl.hidden = state.turns.length > 0;
+    roundsEl.innerHTML = state.turns.map(roundHTML).join('');
+    scrollRail();
+    renderHistory();
+  }
+
   function render() {
     syncBusy();
-    roundsEl.innerHTML = state.turns.map(roundHTML).join('');
-    turnCountEl.textContent = state.turns.length + ' 问';
-    scrollRail();
+    renderRail();
     renderMain();
     renderPanel();
     renderHint();
@@ -834,10 +1163,34 @@
     };
   }
 
+  async function replayStages(turn) {
+    const epoch = state.epoch;
+    for (let i = 0; i < 4; i += 1) {
+      if (epoch !== state.epoch) return false;
+      turn.stageStates = [0, 1, 2, 3, 4].map((k) => {
+        if (k < i) return 'done';
+        return k === i ? 'active' : 'pending';
+      });
+      turn.stageOpen = new Set([i]);
+      turn.stripOpen = true;
+      render();
+      await sleep(REPLAY_MS);
+    }
+    if (epoch !== state.epoch) return false;
+    turn.stageStates = ['done', 'done', 'done', 'done', 'active'];
+    turn.stageOpen = new Set([4]);
+    turn.stripOpen = true;
+    render();
+    return true;
+  }
+
   async function runTurn(turn) {
     const epoch = state.epoch;
     turn.status = 'retrieving';
     turn.runError = '';
+    turn.stageStates = ['active', 'pending', 'pending', 'pending', 'pending'];
+    turn.stageOpen = new Set([0]);
+    turn.stripOpen = true;
     syncBusy();
     startClock();
     render();
@@ -858,11 +1211,17 @@
         state.sessionId = data.session_id;
         setUrl(state.sessionId);
       }
+      render();
+      loadSessions();
+      if (!(await replayStages(turn))) return;
       await answerTurn(turn);
     } catch (err) {
       if (epoch !== state.epoch) return;
       turn.status = 'run-error';
       turn.runError = err.message;
+      turn.stageStates = ALL_PENDING.slice();
+      turn.stageOpen = new Set();
+      turn.stripOpen = false;
       stopClock();
       syncBusy();
       render();
@@ -882,6 +1241,10 @@
     if (!sources.length) {
       turn.status = 'answer-error';
       turn.answerError = '这一轮没有可用的来源';
+      turn.stageStates = ALL_DONE.slice();
+      turn.stageOpen = new Set();
+      turn.stripOpen = false;
+      stopClock();
       render();
       return;
     }
@@ -891,6 +1254,9 @@
     turn.context = null;
     turn.status = 'answering';
     turn.answerError = '';
+    turn.stageStates = ['done', 'done', 'done', 'done', 'active'];
+    turn.stageOpen = new Set([4]);
+    turn.stripOpen = true;
     syncBusy();
     startClock();
     render();
@@ -924,9 +1290,14 @@
       turn.status = 'answer-error';
       turn.answerError = err.message;
     }
+    if (epoch !== state.epoch) return;
+    turn.stageStates = ALL_DONE.slice();
+    turn.stageOpen = new Set();
+    turn.stripOpen = false;
     stopClock();
     syncBusy();
     render();
+    loadSessions();
     const first = defaultRef(turn);
     if (turn.status === 'ready' && first && state.viewN === turn.n) {
       showCitation(first);
@@ -952,9 +1323,13 @@
       status: 'retrieving',
       runError: '',
       answerError: '',
+      stageStates: ['active', 'pending', 'pending', 'pending', 'pending'],
+      stageOpen: new Set([0]),
+      stripOpen: true,
     };
     state.turns.push(turn);
     state.viewN = turn.n;
+    state.rail = 'current';
     state.error = '';
     field.value = '';
     field.closest('.ask-field').classList.remove('has-text');
@@ -970,6 +1345,7 @@
     turn.answer = null;
     turn.context = null;
     state.viewN = n;
+    state.epoch += 1;
     runTurn(turn);
   }
 
@@ -1041,7 +1417,10 @@
     state.error = '';
     state.busy = false;
     state.elapsed = 0;
-    state.stripOpen = false;
+    state.rail = 'history';
+    state.historyAll = false;
+    state.historyQuery = '';
+    if (histFilterEl) histFilterEl.value = '';
     field.value = '';
     field.closest('.ask-field').classList.remove('has-text');
     setUrl('');
@@ -1170,9 +1549,63 @@
     }
     const stripBar = e.target.closest('.strip-bar');
     if (stripBar) {
-      state.stripOpen = !state.stripOpen;
-      stripBar.closest('.strip').classList.toggle('is-open', state.stripOpen);
-      stripBar.setAttribute('aria-expanded', String(state.stripOpen));
+      const turn = viewTurn();
+      if (turn) {
+        turn.stripOpen = !turn.stripOpen;
+        render();
+      }
+      return;
+    }
+    const stageHead = e.target.closest('.stage-row-head');
+    if (stageHead) {
+      const turn = viewTurn();
+      const row = stageHead.closest('.stage-row');
+      if (turn && row) {
+        const i = Number(row.dataset.i);
+        if (Number.isInteger(i)) {
+          if (turn.stageOpen.has(i)) turn.stageOpen.delete(i);
+          else turn.stageOpen.add(i);
+          render();
+        }
+      }
+      return;
+    }
+    const opener = e.target.closest('[data-open-session]');
+    if (opener) {
+      const id = opener.dataset.openSession;
+      const cur = currentSummary();
+      if (cur && cur.id === id && state.turns.length) {
+        const last = lastTurn();
+        state.rail = 'current';
+        state.viewN = last ? last.n : state.viewN;
+        render();
+        return;
+      }
+      if (state.busy) {
+        toast('这一问还在跑，落地后再切');
+        return;
+      }
+      openSession(id);
+      return;
+    }
+    if (e.target.closest('[data-hist-more]')) {
+      state.historyAll = true;
+      renderHistory();
+      return;
+    }
+    if (e.target.closest('[data-hist-collapse]')) {
+      state.historyAll = false;
+      renderHistory();
+      return;
+    }
+    if (e.target.closest('#tab-current')) {
+      state.rail = 'current';
+      render();
+      return;
+    }
+    if (e.target.closest('#tab-history')) {
+      state.rail = 'history';
+      render();
       return;
     }
     const round = e.target.closest('[data-turn]');
@@ -1192,6 +1625,13 @@
   field.addEventListener('input', () => {
     field.closest('.ask-field').classList.toggle('has-text', field.value !== '');
   });
+
+  if (histFilterEl) {
+    histFilterEl.addEventListener('input', () => {
+      state.historyQuery = histFilterEl.value;
+      renderHistory();
+    });
+  }
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.isComposing) return;
@@ -1242,6 +1682,9 @@
       status: answer ? 'ready' : (trace ? 'answer-error' : 'run-error'),
       runError: '',
       answerError: '',
+      stageStates: ALL_DONE.slice(),
+      stageOpen: new Set(),
+      stripOpen: false,
     };
     const restored = savedSources(row);
     row.answerSources = restored.map(cloneSource);
@@ -1254,6 +1697,7 @@
   }
 
   async function openSession(sessionId) {
+    state.epoch += 1;
     try {
       const data = await fetchJSON('/api/session?id=' + encodeURIComponent(sessionId));
       const sess = data.session || {};
@@ -1265,6 +1709,9 @@
       state.selected = saved && saved.cite ? saved : null;
       state.viewN = last ? last.n : 0;
       state.error = '';
+      state.rail = 'current';
+      state.historyAll = false;
+      setUrl(state.sessionId);
       render();
       if (last) showCitation(defaultRef(last));
     } catch (err) {
@@ -1272,12 +1719,15 @@
       state.sessionId = '';
       state.turns = [];
       state.viewN = 0;
+      state.rail = 'current';
+      setUrl('');
       render();
     }
   }
 
   async function boot() {
     loadStats();
+    loadSessions();
     const params = new URLSearchParams(location.search);
     const sessionId = params.get('session') || '';
     const question = params.get('q') || '';

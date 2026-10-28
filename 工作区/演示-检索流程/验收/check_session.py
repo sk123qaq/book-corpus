@@ -176,6 +176,16 @@ check("第 1 轮与第 2 轮 answer 落盘", len(turns) > 1
                   len((turns[1].get("answer") or {}).get("answer") or "")
                   if len(turns) > 1 else 0))
 
+# ---- GET /api/sessions：历史会话列表 -------------------------------
+status, data = get_json("/api/sessions")
+rows = data.get("sessions") or []
+check("会话列表接口", status == 200 and data.get("ok") is True
+      and any(r.get("id") == sid for r in rows), "rows=%d" % len(rows))
+row = next((r for r in rows if r.get("id") == sid), {})
+check("会话摘要字段", row.get("turns") == 3 and bool(row.get("question"))
+      and bool(row.get("updated_at")) and isinstance(row.get("books"), list),
+      str(row)[:180])
+
 # ---- GET /api/session：刷新页面靠它恢复 -------------------------------
 status, data = get_json("/api/session?id=" + sid)
 saved = (data.get("session") or {}).get("turns") or []

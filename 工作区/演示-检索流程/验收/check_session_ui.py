@@ -97,7 +97,28 @@ SNAP = r"""
     booksActOff: q('[data-reanswer]') ? q('[data-reanswer]').disabled : null,
     picksWrap: q('.books-picks') ? getComputedStyle(q('.books-picks')).flexWrap : '',
     picksScroll: q('.books-picks') ? getComputedStyle(q('.books-picks')).overflowX : '',
-    cells: qa('.cells .cell').map((e) => e.textContent.replace(/\s+/g, ' ').trim()),
+    stageRows: qa('.stage-row').length,
+    stageValues: qa('.stage-row .v3-val').map((e) => e.textContent.trim()),
+    stageTexts: qa('.stage-row').map((e) => e.textContent.replace(/\s+/g, ' ').trim()),
+    stageOpen: qa('.stage-row.is-open').length,
+    stageActive: qa('.strip .step.is-active').length,
+    stageDone: qa('.strip .step.is-done').length,
+    stripOpen: q('.stages') ? q('.stages').classList.contains('is-open') : false,
+    historyRows: qa('.hist-row').length,
+    historyCount: q('#history-count') ? q('#history-count').textContent.trim() : '',
+    tabHistoryOn: q('#tab-history') ? q('#tab-history').classList.contains('is-on') : false,
+    tabCurrentOn: q('#tab-current') ? q('#tab-current').classList.contains('is-on') : false,
+    h2Size: q('.answer h2, .answer h3')
+      ? getComputedStyle(q('.answer h2, .answer h3')).fontSize : '',
+    pSize: q('.answer p') ? getComputedStyle(q('.answer p')).fontSize : '',
+    starts: qa('.start').length,
+    lastCards: qa('.last-card').length,
+    histScroll: q('#hist-list') ? getComputedStyle(q('#hist-list')).overflowX : '',
+    histWrap: q('#hist-list') ? getComputedStyle(q('#hist-list')).flexWrap : '',
+    histFirstGroup: q('.hist-group') ? q('.hist-group').textContent.trim() : '',
+    histFirstCurrent: qa('.hist-row').length
+      ? qa('.hist-row')[0].classList.contains('is-current') : false,
+    panelHistoryHidden: q('#panel-history') ? q('#panel-history').hidden : null,
   };
 })()
 """
@@ -239,6 +260,10 @@ def main(argv=None):
               "paras=%d cites=%d" % (s0["answerParas"], s0["cites"]))
         check("1440 无横向溢出", not s0["overflow"],
               "scrollWidth=%s innerWidth=%s" % (s0["scrollWidth"], s0["innerWidth"]))
+        check("历史页签有列表", s0["historyRows"] > 0 and s0["historyCount"] != "",
+              "rows=%d count=%s" % (s0["historyRows"], s0["historyCount"]))
+        check("回答标题与正文同字号", s0["h2Size"] != "" and s0["h2Size"] == s0["pSize"],
+              "h2=%s p=%s" % (s0["h2Size"], s0["pSize"]))
 
         eval_js(cdp, "document.querySelector('.round[data-turn=\"2\"]').click(); true")
         ok2 = wait_js(cdp, "document.querySelector('.round.is-current')"
@@ -253,8 +278,13 @@ def main(argv=None):
               "cite=%s book=%s pins=%s" % (s1["drawerCite"], s1["drawerBook"], s1["pins"]))
         check("五阶段可展开", eval_js(cdp, "(() => { const b=document.querySelector('.strip-bar');"
                                       " if(!b) return false; b.click();"
-                                      " return document.querySelectorAll('.cells .cell').length===5; })()"))
+                                      " return document.querySelectorAll('.stage-row').length===5; })()"))
         s_cells = eval_js(cdp, SNAP)
+        check("V3 阶段面板五行展开", s_cells["stageRows"] == 5 and s_cells["stripOpen"]
+              and len(s_cells["stageValues"]) == 5
+              and all(v and v != "—" for v in s_cells["stageValues"]),
+              "rows=%d open=%s vals=%s" % (s_cells["stageRows"], s_cells["stripOpen"],
+                                           s_cells["stageValues"]))
         check("第 2 轮候选书 2 选 1 锁定",
               s_cells["books"] == 1 and s_cells["picksOn"] == 2 and s_cells["picksLocked"] == 1,
               "books=%d on=%d locked=%d head=%s" % (s_cells["books"], s_cells["picksOn"],
@@ -264,14 +294,26 @@ def main(argv=None):
               and "9,311/10,000" in s_cells["meta"],
               "chips=%s meta=%s" % (s_cells["railChips"], s_cells["meta"]))
         check("五阶段第 5 格是跨书",
-              len(s_cells["cells"]) == 5 and "2 本 · 跨书" in s_cells["cells"][4],
-              s_cells["cells"][4] if len(s_cells["cells"]) > 4 else "cells=%d" % len(s_cells["cells"]))
+              len(s_cells["stageTexts"]) == 5 and "2 本 · 跨书" in s_cells["stageTexts"][4],
+              s_cells["stageTexts"][4][:120] if len(s_cells["stageTexts"]) > 4
+              else "rows=%d" % len(s_cells["stageTexts"]))
         check("历史轮次书单只读",
               s_cells["booksAll"] == "" and s_cells["picksOff"] == s_cells["picks"]
               and "历史轮次 · 书单只读" in s_cells["booksHead"] and s_cells["booksAct"] == "",
               "all=%s off=%d/%d head=%s act=%s" % (s_cells["booksAll"], s_cells["picksOff"],
                                                     s_cells["picks"], s_cells["booksHead"],
                                                     s_cells["booksAct"]))
+
+        eval_js(cdp, "document.querySelectorAll('.stage-row .stage-row-head')[2].click(); true")
+        s_open = eval_js(cdp, SNAP)
+        check("阶段行可点开", s_open["stageOpen"] == 1 and s_open["stripOpen"],
+              "open=%d strip=%s" % (s_open["stageOpen"], s_open["stripOpen"]))
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        v3shot = os.path.join(a.out_dir, "会话-V3-阶段-1440x900.png")
+        with open(v3shot, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("V3 阶段 1440 截图", os.path.getsize(v3shot) > 20000,
+              "%s %d B" % (v3shot, os.path.getsize(v3shot)))
 
         eval_js(cdp, "document.querySelector('.ev').click(); true")
         on = wait_js(cdp, "document.querySelectorAll('.ev.is-on').length === 1", 10)
@@ -324,6 +366,50 @@ def main(argv=None):
               json.dumps(ans, ensure_ascii=False)[:200])
         check("上下文提示出现在回答里", "接上一问 · 上下文 10/5,000 字" in s4["meta"], s4["meta"])
 
+        still = wait_js(cdp, "document.querySelectorAll('.strip .step.is-active').length === 0"
+                            " && document.querySelectorAll('.strip .step.is-done').length === 5"
+                            " && !!document.querySelector('.stages')"
+                            " && !document.querySelector('.stages').classList.contains('is-open')"
+                            " && document.querySelectorAll('.stage-row.is-open').length === 0", 20)
+        s5a = eval_js(cdp, SNAP)
+        check("阶段结束后静止", still and s5a["stageActive"] == 0 and s5a["stageDone"] == 5
+              and not s5a["stripOpen"] and s5a["stageOpen"] == 0,
+              "active=%d done=%d strip=%s open=%d" % (s5a["stageActive"], s5a["stageDone"],
+                                                     s5a["stripOpen"], s5a["stageOpen"]))
+
+        cdp.call("Page.navigate", {"url": base + "/"})
+        home = wait_js(cdp, "document.querySelectorAll('.hist-row').length > 0"
+                            " && !!document.querySelector('.last-card')", 25)
+        s7 = eval_js(cdp, SNAP)
+        check("初始页默认历史", home and s7["tabHistoryOn"] and not s7["tabCurrentOn"]
+              and s7["starts"] == 1 and s7["lastCards"] == 1 and s7["historyRows"] > 0,
+              "hist=%d start=%d last=%d tabH=%s tabC=%s" % (s7["historyRows"], s7["starts"],
+                                                            s7["lastCards"], s7["tabHistoryOn"],
+                                                            s7["tabCurrentOn"]))
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        hist1440 = os.path.join(a.out_dir, "会话-历史-1440x900.png")
+        with open(hist1440, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("历史 1440 截图", os.path.getsize(hist1440) > 20000,
+              "%s %d B" % (hist1440, os.path.getsize(hist1440)))
+        eval_js(cdp, "document.querySelector('.last-card').click(); true")
+        back = wait_js(cdp, "document.querySelectorAll('.round').length > 0"
+                            " && document.querySelector('#tab-current')"
+                            " .classList.contains('is-on')", 25)
+        s8 = eval_js(cdp, SNAP)
+        check("接着上次能打开会话", back and s8["rounds"] > 0 and s8["tabCurrentOn"],
+              "rounds=%d tabC=%s" % (s8["rounds"], s8["tabCurrentOn"]))
+        eval_js(cdp, "document.querySelector('#tab-history').click(); true")
+        pinned = wait_js(cdp, "document.querySelector('#panel-history')"
+                             " && !document.querySelector('#panel-history').hidden"
+                             " && document.querySelectorAll('.hist-row.is-current').length === 1", 10)
+        s8b = eval_js(cdp, SNAP)
+        check("历史里当前会话置顶",
+              pinned and s8b["histFirstGroup"] == "当前打开" and s8b["histFirstCurrent"]
+              and s8b["panelHistoryHidden"] is False,
+              "group=%s first=%s hidden=%s" % (s8b["histFirstGroup"], s8b["histFirstCurrent"],
+                                              s8b["panelHistoryHidden"]))
+
         cdp.call("Emulation.setDeviceMetricsOverride",
                  {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
         cdp.call("Page.navigate", {"url": url})
@@ -335,6 +421,8 @@ def main(argv=None):
         check("390 composer 在视口内", s5["ask"] and s5["ask"]["top"] > 0
               and s5["ask"]["bottom"] <= 844,
               "ask=%s" % (s5["ask"],))
+        check("390 回答标题与正文同字号", s5["h2Size"] != "" and s5["h2Size"] == s5["pSize"],
+              "h2=%s p=%s" % (s5["h2Size"], s5["pSize"]))
         check("390 有新会话入口", s5["newSession"] != "none", s5["newSession"])
         check("390 有原文开关", s5["drawerToggle"] != "none", s5["drawerToggle"])
         eval_js(cdp, "document.querySelector('.ev').click(); true")
@@ -350,6 +438,21 @@ def main(argv=None):
             fh.write(base64.b64decode(shot["data"]))
         check("390 截图", os.path.getsize(path390) > 10000,
               "%s %d B" % (path390, os.path.getsize(path390)))
+
+        cdp.call("Page.navigate", {"url": base + "/"})
+        h390 = wait_js(cdp, "document.querySelectorAll('.hist-row').length > 0"
+                            " && !!document.querySelector('.last-card')", 25)
+        s9 = eval_js(cdp, SNAP)
+        check("390 初始页历史可滚", h390 and not s9["overflow"] and s9["scrollWidth"] == 390
+              and s9["histScroll"] in ("auto", "scroll") and s9["histWrap"] == "nowrap",
+              "overflow=%s sw=%s scroll=%s wrap=%s" % (s9["overflow"], s9["scrollWidth"],
+                                                      s9["histScroll"], s9["histWrap"]))
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        hist390 = os.path.join(a.out_dir, "会话-历史-390x844.png")
+        with open(hist390, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("历史 390 截图", os.path.getsize(hist390) > 10000,
+              "%s %d B" % (hist390, os.path.getsize(hist390)))
 
         cdp.call("Emulation.setDeviceMetricsOverride",
                  {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False})
