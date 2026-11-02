@@ -14,7 +14,8 @@ import subprocess
 import sys
 import tempfile
 
-REPO = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 SCRIPTS = os.path.join(REPO, "工作区/脚本")
 TRIAGE_PY = os.path.join(SCRIPTS, "ops_pdf_triage.py")
 APPLY_PY = os.path.join(SCRIPTS, "pdf_apply_review.py")

@@ -151,7 +151,10 @@ def log_tail(out, n=25):
 
 
 def sh(cmd, cwd):
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT)
+    try:
+        p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT)
+    except FileNotFoundError as exc:
+        return 127, str(exc)
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -597,6 +600,9 @@ def main():
     ap.add_argument("--agent-fix-timeout", type=int, default=600)
     ap.add_argument("--agent-model", default=FIX_MODEL)
     a = ap.parse_args()
+    if not shutil.which(CALIBRE):
+        print("提示：缺 %s，mobi/azw3/azw 会转换失败；epub 不受影响。装 Calibre 后重跑。"
+              % CALIBRE, file=sys.stderr)
     if a.recheck and a.force:
         ap.error("--recheck 与 --force 不能同时用")
 

@@ -13,7 +13,8 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 SCRIPTS = os.path.join(ROOT, "工作区", "脚本")
 STUB = os.path.join(ROOT, "工作区", "运维", "验收", "fixtures", "pi_stub.py")
 sys.path.insert(0, SCRIPTS)
