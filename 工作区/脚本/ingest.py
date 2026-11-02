@@ -424,6 +424,17 @@ def main():
         return 2
 
     books, shas = library_index(a.root)
+
+    # add 没写 uid 时按人账往下排：scan 已经排好，但手写 plan 与单本 add 容易漏，
+    # 漏了会写出一行 uid 为空的 book.json 与分类表。
+    if any(i["action"] == "add" and not (i.get("uid") or "").strip() for i in items):
+        led = os.path.join(a.root, "目录", "分类表.csv")
+        rows = L.read_csv(led) if os.path.exists(led) else []
+        base, n = int(next_uid(rows)[1:]), 0
+        for i in items:
+            if i["action"] == "add" and not (i.get("uid") or "").strip():
+                i["uid"] = "B%04d" % (base + n)
+                n += 1
     todo = [i for i in items if i["action"] in ("add", "replace")]
     if not a.apply:
         print_plan(items)
