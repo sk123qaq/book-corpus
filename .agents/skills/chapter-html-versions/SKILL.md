@@ -5,12 +5,12 @@ description: Use when 书籍章节 md 要转 HTML：做成一页图表为主、1
 
 # 章节 Markdown → 可视化阅读版 HTML
 
-把 `$BOOKS_ROOT/库/<学科>/…/<书>/md/<NN>_<章名>.md` 做成一页 HTML：读者 10 分钟抓住这一章在讲什么、有哪几张关键图、能带走什么判断。
-凡能用图、表、卡片说清的，就不写成段落。下文用 `$BOOKS_ROOT` 指书库仓库根目录。没设就先执行 `export BOOKS_ROOT=$(git rev-parse --show-toplevel)`。
+把 `$BOOKS_ROOT/books/<uid>/md/<NN>_<章名>.md` 做成一页 HTML：读者 10 分钟抓住这一章在讲什么、有哪几张关键图、能带走什么判断。
+凡能用图、表、卡片说清的，就不写成段落。下文用 `$BOOKS_ROOT` 指书库仓库根目录。没设就先把 `BOOKS_ROOT` 指向有 `books.toml` 的工作区根，例如 `export BOOKS_ROOT=${BOOKS_ROOT:-$PWD}`。
 
 ## 产物
 
-- `$BOOKS_ROOT/库/<学科>/<作者层?>/<书>/html/<NN>_<章名>.html`
+- `$BOOKS_ROOT/books/<uid>/html/<NN>_<章名>.html`
 - 单文件，CSS 内联在 `<style>`；图片用相对路径 `images/<文件名>`（图片收在同级 `html/images/`）
 - 体量 25–60 KB
 

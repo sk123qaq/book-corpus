@@ -18,7 +18,7 @@ per_page，页序即文件序）。输出与 ebook-to-md 同形，好让 verify_
 
 用法：
   python3 pdf_ocr_to_md.py --pages-dir <dir> --run-json <paddle_run.json> \
-      --uid B0540 --title 中国神话史 --source 库/…/x.pdf --source-sha256 xxx --out <outdir>
+      --uid B0540 --title 中国神话史 --source books/<uid>/source/x.pdf --source-sha256 xxx --out <outdir>
   python3 pdf_ocr_to_md.py … --structure chapters   # 按标题切章
 """
 import argparse

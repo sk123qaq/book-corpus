@@ -36,7 +36,7 @@ def pdf_python():
         candidates.append(os.environ["BOOKS_PDF_PY"])
     candidates += [str(INSTANCE / "工作区" / ".venv-pdf" / "bin" / "python"),
                    str(REPO / "工作区" / ".venv-pdf" / "bin" / "python"),
-                   "/home/shike/teleocr/.venv/bin/python",
+                   str(Path.home() / "teleocr" / ".venv" / "bin" / "python"),
                    sys.executable]
     for path in candidates:
         if not os.path.isfile(path):

@@ -13,8 +13,8 @@
 
 ## 产物
 
-- `$BOOKS_ROOT/库/<学科>/<作者层?>/{{BOOK}}/html/{{STEM}}.html`
-  （书目录不确定时查 `$BOOKS_ROOT/目录/书目总表.csv` 的「路径」列）
+- `$BOOKS_ROOT/books/<uid>/html/{{STEM}}.html`
+  （书目录不确定时查 `$BOOKS_ROOT/build/书目总表.csv` 的「路径」列）
 - 单文件，CSS 内联在 `<style>`；图片用相对路径 `images/<文件名>`（图片收在同级的 `html/images/`）
 - 体量 25–60 KB
 
@@ -72,7 +72,7 @@
 
 ```bash
 python3 "<SKILL_DIR>/scripts/verify_lite.py" \
-  "$BOOKS_ROOT/库/<学科>/<作者层?>/{{BOOK}}/html/{{STEM}}.html" --src "{{MD}}"
+  "$BOOKS_ROOT/books/<uid>/html/{{STEM}}.html" --src "{{MD}}"
 ```
 
 ## 本章可用图片

@@ -1,6 +1,10 @@
-"""树形只能由 layout.py 命名。脚本里再拼 库/、目录/、视图/ 就是第二条隐式约定。"""
+"""树形只能由 layout.py 命名。脚本里再拼 库/、目录/、视图/ 就是第二条隐式约定。
+
+也不许写死别人的家目录：跑测试的机器不叫 shike，别人的机器也不叫。
+"""
 
 import ast
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,6 +13,7 @@ TARGETS.append(ROOT / "工作区" / "运维" / "server.py")
 # migrate.py 的职责就是读 v1 树，必须认识旧名字。
 SKIP = {ROOT / "src" / "bookcorpus" / "migrate.py"}
 OLD = {"目录", "库", "视图"}
+HOME_PTR = re.compile(r"(?<![\w.])/(?:home|Users)/[A-Za-z0-9._-]+/")
 
 
 def docstrings(tree):
@@ -50,4 +55,14 @@ def test_no_script_names_the_old_tree():
         hits = offenders(path)
         if hits:
             bad[str(path.relative_to(ROOT))] = hits
+    assert not bad, bad
+
+
+def test_no_script_hardcodes_a_home_directory():
+    bad = {}
+    for path in sorted(set(TARGETS) | set((ROOT / "tests").rglob("*.py"))
+                       | set((ROOT / "工作区").rglob("*.py"))):
+        found = HOME_PTR.findall(path.read_text(encoding="utf-8"))
+        if found:
+            bad[str(path.relative_to(ROOT))] = sorted(set(found))
     assert not bad, bad

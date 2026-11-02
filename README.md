@@ -133,7 +133,7 @@ PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当�
 | `mineru` | `.agents/skills/mineru/` | OCR 兜底 |
 | `typesafe-ai` | `.agents/skills/typesafe-ai/` | 旧分类后端，默认已改用模型 |
 
-脚本解析技能目录的顺序是：仓库内 `.agents/skills/`，其次 `~/.agents/skills/`。可以用 `BOOKS_SKILLS_DIR` 指定别的根。
+脚本解析技能目录的顺序是：工作区 `.agents/skills/`、源码仓 `.agents/skills/`、`~/.agents/skills/`。可以用 `BOOKS_SKILLS_DIR` 指定别的根。
 
 ### 6. 本地模型（可选）
 

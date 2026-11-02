@@ -11,7 +11,7 @@
 PDF 侧字数按整页算，不扣卷首/卷尾页，md 侧又去掉了 front matter，所以字数比可能偏低。
 
 用法:
-  python3 pdf_audit_volume.py 库/…/x.pdf -o out/B0517 [--min-ratio 0.95] [--min-anchors 0.90]
+  python3 pdf_audit_volume.py books/<uid>/source/x.pdf -o out/B0517 [--min-ratio 0.95] [--min-anchors 0.90]
 """
 import argparse
 import glob

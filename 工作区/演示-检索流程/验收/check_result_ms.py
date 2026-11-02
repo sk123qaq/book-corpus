@@ -39,7 +39,7 @@ new Promise((resolve) => {
     const el = document.querySelectorAll('.stage-ms')[4];
     const txt = el ? el.textContent.trim() : '';
     if (txt && txt !== '—') { resolve({ok: true, text: txt, wait: Date.now() - t0}); return; }
-    if (Date.now() - t0 > 30000) { resolve({ok: false, text: txt, wait: Date.now() - t0}); return; }
+    if (Date.now() - t0 > 240000) { resolve({ok: false, text: txt, wait: Date.now() - t0}); return; }
     setTimeout(tick, 100);
   };
   tick();
@@ -89,7 +89,7 @@ def main(argv=None):
     ap.add_argument("--shot", default="")
     args = ap.parse_args(argv)
 
-    url = args.base + "/?q=" + urllib.parse.quote(args.question) + "&instant=1"
+    url = args.base + "/classic?q=" + urllib.parse.quote(args.question) + "&instant=1"
     fails = []
     proc, profile, ws_url = shot.launch(1440, 900, url, args.port)
     ws = None
@@ -103,7 +103,7 @@ def main(argv=None):
         cdp.call("Page.navigate", {"url": url})
         time.sleep(0.8)
 
-        first = shot.eval_js(cdp, READ_HEAD, await_promise=True, timeout=60)
+        first = shot.eval_js(cdp, READ_HEAD, await_promise=True, timeout=300)
         print("[首屏] 第 5 阶段耗时 %s（等了 %.0f ms）" % (first.get("text"), first.get("wait") or 0))
 
         shot.eval_js(cdp, "document.querySelector('#fresh-btn').click(); true", timeout=20)

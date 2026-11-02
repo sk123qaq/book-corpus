@@ -18,7 +18,7 @@ README、.manifest.json、front matter、文件名清洗、目录链接都复用
 拼装器只有一份。
 
 用法:
-  python3 pdf_text_to_md.py --pdf 库/…/x.pdf --out out/B0517 --uid B0517 --title Hokusai \
+  python3 pdf_text_to_md.py --pdf books/<uid>/source/x.pdf --out out/B0517 --uid B0517 --title Hokusai \
       --author "Edmond de Goncourt" --source-sha256 xxx --method pdf-text --structure auto
 """
 import argparse

@@ -7,7 +7,7 @@
   3. 抽出来的字可不可信（无 ToUnicode 的 CID 字体会出乱码或私用区字符）。
 
 需要 pymupdf，用带它的解释器跑，例如：
-  工作区/.venv-pdf/bin/python 工作区/脚本/pdf_text_probe.py --census <census.jsonl> --out probe.jsonl
+  工作区/.venv-pdf/bin/python src/bookcorpus/scripts/pdf_text_probe.py --census <census.jsonl> --out probe.jsonl
 """
 import argparse
 import json

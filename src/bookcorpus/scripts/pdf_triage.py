@@ -43,8 +43,6 @@ def main():
         if os.path.exists(p):
             for r in load(p):
                 probes[r["uid"]] = r
-    import sys
-    sys.path.insert(0, os.path.join(ROOT, "工作区/脚本"))
     from pdf_census import classify
 
     rows = []

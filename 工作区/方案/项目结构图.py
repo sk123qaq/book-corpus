@@ -6,7 +6,12 @@
 Regenerate after the layout changes: python3 工作区/方案/项目结构图.py
 Every number in the diagram was read from build/library.db (lq.py), tables/分类表.csv,
 tables/概念表.tsv and the filesystem on 2026-10-19.
+
+输出默认落在本文件同目录的 项目结构图.html（即仓内那份），要落到别处用 --out。
 """
+
+import argparse
+import os
 
 W, H = 1660, 1360
 CW = 430
@@ -208,6 +213,8 @@ html = f"""<!doctype html>
 </style>
 </head>
 <body>
+<div style="margin:12px 16px;padding:10px 14px;border-left:4px solid #b58900;background:#fff8e1;font:14px/1.6 system-ui,sans-serif;color:#333"><b>布局说明（2026-11-02）</b>：这是 v1 时代生成的图。图中的 <code>库/</code> 现在对应 <code>books/&lt;uid&gt;/</code>，<code>目录/library.db</code> 对应 <code>build/library.db</code>，<code>目录/检索/</code> 对应 <code>build/检索/</code>，<code>视图/</code> 对应 <code>build/views/</code>，<code>工作区/脚本/</code> 对应 <code>src/bookcorpus/scripts/</code>。</div>
+
 <h1>书库项目结构图</h1>
 <p class="sub">数字取自 目录/library.db、目录/分类表.csv、目录/概念表.tsv 与盘上实测（2026-10-20，分类表那一行是 10-19）。按写入者分栏读，不按文件夹列。</p>
 <div class="legend">
@@ -234,6 +241,12 @@ html = f"""<!doctype html>
 </html>
 """
 
-with open("/home/shike/文档/books/工作区/方案/项目结构图.html", "w", encoding="utf-8") as f:
-    f.write(html)
-print(f"wrote html, {len(NODES)} nodes, {len(EDGES)} edges, canvas {W}x{H}")
+DEFAULT_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "项目结构图.html")
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=DEFAULT_OUT, help="默认本文件同目录的 项目结构图.html")
+    a = ap.parse_args()
+    with open(a.out, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"wrote {a.out}, {len(NODES)} nodes, {len(EDGES)} edges, canvas {W}x{H}")

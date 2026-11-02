@@ -11,8 +11,8 @@ pymupdf/numpy/PIL 只装在 工作区/.venv-pdf/，所以本脚本用那个解�
 模型只给建议，不改路线：route 永远由人工复核决定。
 
 用法：
-  python3 工作区/脚本/ops_pdf_triage.py --uid B1234 --out 工作区/运维/jobs/<id>
-  python3 工作区/脚本/ops_pdf_triage.py --uid B1234 --out /tmp/j --root <临时库> --no-model
+  book-corpus run ops_pdf_triage --uid B1234 --out 工作区/运维/jobs/<id>
+  book-corpus run ops_pdf_triage --uid B1234 --out /tmp/j --root <临时库> --no-model
 """
 import argparse
 import csv

@@ -34,7 +34,7 @@ every skipped page and why (未收录 section), and part names still reach the c
 python3 "<SKILL_DIR>/scripts/ebook_to_md.py" "book.epub"
 
 # explicit destination（书库里定稿到那本书的 md/）
-python3 "<SKILL_DIR>/scripts/ebook_to_md.py" "book.epub" -o "$BOOKS_ROOT/库/<学科>/<书名>/md"
+python3 "<SKILL_DIR>/scripts/ebook_to_md.py" "book.epub" -o "$BOOKS_ROOT/books/<uid>/md"
 
 # always run this before reporting the result
 python3 "<SKILL_DIR>/scripts/verify_output.py" "<outdir>"

@@ -116,10 +116,12 @@
 
 ```bash
 pi -p --no-session --no-context-files \
-  --skill /home/shike/.agents/skills/book-corpus-qa/SKILL.md \
+  --skill .agents/skills/book-corpus-qa/SKILL.md \
   -e 工作区/演示-检索流程/readonly_tools.ts --tools book_grep,read \
   --model opencode-go/deepseek-v4.1-flash --thinking <档位> "<prompt>"
 ```
+
+`--skill` 指到 `book-corpus-qa` 的 SKILL.md。仓内自带 `.agents/skills/book-corpus-qa/`，所以在工具仓根目录下跑就用上面这个相对路径；装在用户目录时换成 `~/.agents/skills/book-corpus-qa/SKILL.md`。`answer.py` 走 `lib_common.skill_dir("book-corpus-qa")`，解析次序相同。
 
 `<档位>` 由页面选（`off/minimal/low/medium/high/xhigh/max`，默认 `high`），进答案缓存键。
 超时 240 秒。`BOOK_MD` 指到本书 md 目录（兼容旧只给一个变量的调用），`BOOK_MDS` 是 md 目录的 JSON 数组；

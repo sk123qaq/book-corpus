@@ -14,7 +14,7 @@
 | `~/文档/book-corpus-data` | 私有数据仓：`books/<uid>/book.json`、`tables/`、批次机账 | 有，私有仓 |
 | `~/文档/book-corpus-local` | v2 实例：正文、源文件、`collections/`、`build/` | **没有** |
 
-`~/文档/books` 是便捷软链，指向 `book-corpus-local`。旧批次里 `/home/shike/文档/books/库/...`
+`~/文档/books` 是便捷软链，指向 `book-corpus-local`。旧批次里 `~/文档/books/库/...`
 是 v1 时代写死的记录，v2 没有 `库/`，软链救不了；要解析用 `tables/对照表.csv`
 与批次里的 `对照表-0002.csv`，不要把它们当活路径。
 

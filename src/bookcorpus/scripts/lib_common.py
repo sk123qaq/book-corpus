@@ -29,6 +29,9 @@ TABLES = PATHS.tables
 BUILD = PATHS.build
 WORK = PATHS.work
 SKILLS = os.environ.get("BOOKS_SKILLS_DIR") or os.path.join(ROOT, ".agents", "skills")
+# 工作区通常不带 .agents/skills（init 不铺），源码仓根下才有。装成包后这条
+# 路径不存在，skill_dir 仍会回落到用户目录。
+REPO_SKILLS = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".agents", "skills"))
 RG = os.environ.get("BOOKS_RG") or shutil.which("rg") or "rg"
 
 
@@ -47,12 +50,14 @@ def source_rel(owner, name):
 
 
 def skill_dir(name):
-    """技能目录：仓库内 .agents/skills 优先，其次用户目录。"""
+    """技能目录：工作区 .agents/skills、源码仓 .agents/skills、用户目录，按序找。"""
     local = os.path.join(SKILLS, name)
-    if os.path.isdir(local):
-        return local
-    user = os.path.expanduser(os.path.join("~", ".agents", "skills", name))
-    return user if os.path.isdir(user) else local
+    roots = [SKILLS, REPO_SKILLS, os.path.expanduser(os.path.join("~", ".agents", "skills"))]
+    for root in dict.fromkeys(roots):
+        path = os.path.join(root, name)
+        if os.path.isdir(path):
+            return path
+    return local
 
 
 EXT = {".epub", ".pdf", ".mobi", ".azw3", ".azw", ".txt", ".djvu"}
