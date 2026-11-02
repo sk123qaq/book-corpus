@@ -3,6 +3,7 @@
 
 默认打 8765；自测时可 `--base http://127.0.0.1:8799`。
 只读页面与会话接口，不调真实 /api/run 或 /api/answer；追问与重新回答那两步用假 fetch 截请求体。
+会话 id 默认从 /api/sessions 动态选：一个 3 轮会话、一个最后一轮带多书 sources 的会话。
 """
 import argparse
 import base64
@@ -219,13 +220,89 @@ def get_html(base, path):
         return r.status, r.read().decode("utf-8", "replace")
 
 
+def get_json(base, path):
+    with urllib.request.urlopen(base + path, timeout=20) as r:
+        return r.status, json.loads(r.read().decode("utf-8"))
+
+
+def pick_sessions(base):
+    """从 /api/sessions 选一个 3 轮会话和一个多书会话，不再依赖固定 id。
+
+    3 轮会话优先选「第 2 轮有落点、第 3 轮无落点」的，UI 的落点开关才可验证；
+    多书会话优先选最后一轮确实带 2 个以上 sources 的。
+    """
+    status, data = get_json(base, "/api/sessions")
+    if status != 200 or data.get("ok") is not True:
+        raise SystemExit("会话列表不可用：HTTP %s" % status)
+    rows = data.get("sessions") or []
+    three = ""
+    for row in rows:
+        if row.get("turns") != 3:
+            continue
+        sid = row.get("id") or ""
+        if not sid:
+            continue
+        st, sess = get_json(base, "/api/session?id=" + sid)
+        turns = (sess.get("session") or {}).get("turns") or []
+        if st != 200 or len(turns) != 3:
+            continue
+        anchors = [t.get("anchor") or {} for t in turns]
+        if anchors[1].get("path") and not anchors[2].get("path"):
+            three = sid
+            break
+        if not three:
+            three = sid
+    multi = ""
+    for row in rows:
+        if (row.get("turns") or 0) < 2:
+            continue
+        sid = row.get("id") or ""
+        if not sid:
+            continue
+        st, sess = get_json(base, "/api/session?id=" + sid)
+        turns = (sess.get("session") or {}).get("turns") or []
+        if st != 200 or len(turns) < 2:
+            continue
+        ans = turns[-1].get("answer") or {}
+        if ans.get("mode") == "multi" and len(ans.get("sources") or []) >= 2:
+            multi = sid
+            break
+    if not three:
+        raise SystemExit("没有找到可用的 3 轮会话；先用 check_session.py 生成一轮")
+    if not multi:
+        raise SystemExit("没有找到带 2 本以上 sources 的多书会话；先用 check_session_live.py 生成")
+    return three, multi
+
+
 def main(argv=None):
+    global SESSION, SESSION_MULTI
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8765")
     ap.add_argument("--port", type=int, default=9345)
     ap.add_argument("--out-dir", default=HERE)
+    ap.add_argument("--session", default="", help="3 轮会话 id；默认从 /api/sessions 选")
+    ap.add_argument("--multi-session", default="", help="多书会话 id；默认从 /api/sessions 选")
     a = ap.parse_args(argv)
     base = a.base.rstrip("/")
+    auto_three, auto_multi = pick_sessions(base)
+    SESSION = a.session or auto_three
+    SESSION_MULTI = a.multi_session or auto_multi
+    _, three_payload = get_json(base, "/api/session?id=" + SESSION)
+    three_turns = (three_payload.get("session") or {}).get("turns") or []
+    anchor2 = (three_turns[1].get("anchor") or {}) if len(three_turns) > 1 else {}
+    turn2_mode = ((three_turns[1].get("answer") or {}).get("mode")
+                  if len(three_turns) > 1 else "") or "single"
+    _, multi_payload = get_json(base, "/api/session?id=" + SESSION_MULTI)
+    multi_turns = (multi_payload.get("session") or {}).get("turns") or []
+    init_sources = (((multi_turns[-1].get("answer") or {}).get("sources") or [])
+                    if multi_turns else [])
+    n0 = len(init_sources)
+    if len(three_turns) != 3:
+        raise SystemExit("3 轮会话形状不对：%s 轮" % len(three_turns))
+    if n0 < 1:
+        raise SystemExit("多书会话最后一轮没有 sources")
+    print("[会话] 3 轮 %s，第 2 轮 %s；多书 %s，初始 %d 本" %
+          (SESSION, turn2_mode, SESSION_MULTI, n0))
     url = base + "/?session=" + SESSION
     status, classic = get_html(base, "/classic")
     check("旧页在 /classic", status == 200 and "ask-form" in classic,
@@ -273,9 +350,14 @@ def main(argv=None):
         check("第 2 轮有落点框", ok2 and s1["anchors"] == 1 and s1["scopes"] == 0
               and "承接 01" in s1["kicker"],
               "anchors=%d scopes=%d kicker=%s" % (s1["anchors"], s1["scopes"], s1["kicker"]))
+        anchor_title = anchor2.get("title") or ""
+        anchor_book = (anchor2.get("path") or "").split("/")[1] if anchor2.get("path") else ""
         check("右栏默认落在本轮落点", s1["drawerCite"] == "[1]"
-              and "杨庆祥" in s1["drawerBook"] and "这一问的落点" in " ".join(s1["pins"]),
-              "cite=%s book=%s pins=%s" % (s1["drawerCite"], s1["drawerBook"], s1["pins"]))
+              and (not anchor_title or anchor_title in s1["drawerBook"]
+                   or (anchor_book and anchor_book in s1["drawerBook"]))
+              and "这一问的落点" in " ".join(s1["pins"]),
+              "cite=%s book=%s expected=%s/%s pins=%s" % (
+                  s1["drawerCite"], s1["drawerBook"], anchor_title, anchor_book, s1["pins"]))
         check("五阶段可展开", eval_js(cdp, "(() => { const b=document.querySelector('.strip-bar');"
                                       " if(!b) return false; b.click();"
                                       " return document.querySelectorAll('.stage-row').length===5; })()"))
@@ -285,18 +367,22 @@ def main(argv=None):
               and all(v and v != "—" for v in s_cells["stageValues"]),
               "rows=%d open=%s vals=%s" % (s_cells["stageRows"], s_cells["stripOpen"],
                                            s_cells["stageValues"]))
-        check("第 2 轮候选书 2 选 1 锁定",
-              s_cells["books"] == 1 and s_cells["picksOn"] == 2 and s_cells["picksLocked"] == 1,
+        check("第 2 轮候选书有选中与锁定",
+              s_cells["books"] >= 1 and s_cells["picksOn"] >= 1
+              and s_cells["picksLocked"] >= 1 and "候选书" in s_cells["booksHead"],
               "books=%d on=%d locked=%d head=%s" % (s_cells["books"], s_cells["picksOn"],
                                                     s_cells["picksLocked"], s_cells["booksHead"]))
-        check("左栏范围与回答元信息按多书",
-              s_cells["railChips"][1] == "2 本" and "2 本书" in s_cells["meta"]
-              and "9,311/10,000" in s_cells["meta"],
-              "chips=%s meta=%s" % (s_cells["railChips"], s_cells["meta"]))
-        check("五阶段第 5 格是跨书",
-              len(s_cells["stageTexts"]) == 5 and "2 本 · 跨书" in s_cells["stageTexts"][4],
-              s_cells["stageTexts"][4][:120] if len(s_cells["stageTexts"]) > 4
-              else "rows=%d" % len(s_cells["stageTexts"]))
+        if turn2_mode == "multi":
+            check("左栏范围与回答元信息按多书",
+                  s_cells["railChips"] and s_cells["railChips"][-1].endswith("本")
+                  and "本书" in s_cells["meta"] and "10,000" in s_cells["meta"],
+                  "chips=%s meta=%s" % (s_cells["railChips"], s_cells["meta"]))
+            check("五阶段第 5 格是跨书",
+                  len(s_cells["stageTexts"]) == 5 and "跨书" in s_cells["stageTexts"][4],
+                  s_cells["stageTexts"][4][:120] if len(s_cells["stageTexts"]) > 4
+                  else "rows=%d" % len(s_cells["stageTexts"]))
+        else:
+            print("[跳过] 第 2 轮是单书，跳过跨书左栏断言")
         check("历史轮次书单只读",
               s_cells["booksAll"] == "" and s_cells["picksOff"] == s_cells["picks"]
               and "历史轮次 · 书单只读" in s_cells["booksHead"] and s_cells["booksAct"] == "",
@@ -339,7 +425,7 @@ def main(argv=None):
         check("1440 截图", os.path.getsize(path1440) > 20000,
               "%s %d B" % (path1440, os.path.getsize(path1440)))
 
-        eval_js(cdp, FAKE)
+        eval_js(cdp, FAKE.replace("7f0f8d8ba4c4", SESSION))
         eval_js(cdp, "document.querySelector('#q').value='带落点的问题';"
                      "document.querySelector('#q').dispatchEvent(new Event('input', {bubbles:true}));"
                      "document.querySelector('#send').click(); true")
@@ -352,16 +438,17 @@ def main(argv=None):
         ans = next((c["body"] for c in calls if c["kind"] == "answer"), {})
         check("追问追加第 4 轮", done and s4["rounds"] == 4 and s4["current"] == "4",
               "rounds=%d current=%s" % (s4["rounds"], s4["current"]))
+        ranchor = run.get("anchor") or {}
         check("追问请求带会话、轮次和落点",
               run.get("session_id") == SESSION and run.get("turn") == 4
-              and (run.get("anchor") or {}).get("line") == 972
-              and "杨庆祥" in (run.get("anchor") or {}).get("path", "")
-              and bool((run.get("anchor") or {}).get("quote")), json.dumps(run, ensure_ascii=False)[:180])
+              and (ranchor.get("path") or "").startswith("books/")
+              and int(ranchor.get("line") or 0) > 0
+              and bool(ranchor.get("quote")), json.dumps(run, ensure_ascii=False)[:180])
         ans_srcs = ans.get("sources") or []
         check("回答请求带会话、轮次，且只带一本来源",
               ans.get("session_id") == SESSION and ans.get("turn") == 4
               and len(ans_srcs) == 1 and ans_srcs[0].get("path") == ans.get("path")
-              and "杨庆祥" in ans.get("path", "") and ans.get("line") == 972
+              and ans.get("path") == ranchor.get("path") and ans.get("line") == ranchor.get("line")
               and ans.get("book") == ans_srcs[0].get("book"),
               json.dumps(ans, ensure_ascii=False)[:200])
         check("上下文提示出现在回答里", "接上一问 · 上下文 10/5,000 字" in s4["meta"], s4["meta"])
@@ -461,11 +548,11 @@ def main(argv=None):
                                " && !!document.querySelector('.answer p')", 25)
         m0 = eval_js(cdp, SNAP)
         check("最后一轮出多书选择器",
-              loaded2 and m0["books"] == 1 and m0["picksOn"] == 1 and m0["picksLocked"] == 1
-              and m0["booksAll"] == "全选",
-              "books=%d on=%d locked=%d all=%s head=%s" % (m0["books"], m0["picksOn"],
-                                                           m0["picksLocked"], m0["booksAll"],
-                                                           m0["booksHead"]))
+              loaded2 and m0["books"] >= 1 and m0["picksOn"] == n0
+              and m0["picksLocked"] >= 1 and m0["booksAll"] == "全选",
+              "books=%d on=%d locked=%d n0=%d all=%s head=%s" % (
+                  m0["books"], m0["picksOn"], m0["picksLocked"], n0,
+                  m0["booksAll"], m0["booksHead"]))
         check("换书前没有过期条", m0["booksAct"] == "", m0["booksAct"])
 
         eval_js(cdp, MULTI)
@@ -474,7 +561,8 @@ def main(argv=None):
         m1 = eval_js(cdp, SNAP)
         pre = json.loads(eval_js(cdp, "JSON.stringify(window.__calls || [])"))
         check("点书卡出现过期条且不发请求",
-              bar and bool(picked) and m1["booksActBtn"] == "用这 2 本重新回答" and not pre,
+              bar and bool(picked)
+              and m1["booksActBtn"] == "用这 %d 本重新回答" % (n0 + 1) and not pre,
               "picked=%s btn=%s calls=%d act=%s" % (picked, m1["booksActBtn"], len(pre),
                                                    m1["booksAct"]))
 
@@ -487,14 +575,15 @@ def main(argv=None):
         calls = json.loads(eval_js(cdp, "JSON.stringify(window.__calls || [])"))
         ans2 = next((c["body"] for c in calls if c["kind"] == "answer"), {})
         srcs = ans2.get("sources") or []
-        check("重新回答的请求带两本来源",
+        check("重新回答的请求带 n0+1 本来源",
               ans2.get("session_id") == SESSION_MULTI and ans2.get("turn") == 2
-              and len(srcs) == 2 and srcs[0].get("path", "").endswith("07_差序格局.md")
-              and srcs[0].get("line") == 14 and srcs[1].get("book") == picked,
+              and len(srcs) == n0 + 1 and srcs[-1].get("book") == picked
+              and srcs[0].get("path") == (init_sources[0].get("path") if init_sources else ""),
               json.dumps(ans2, ensure_ascii=False)[:220])
         check("多书回答回到页面",
-              redone and m2["railChips"][1] == "2 本" and "2 本书" in m2["meta"]
-              and "3,625/10,000 字" in m2["meta"] and m2["picksOn"] == 2,
+              redone and m2["railChips"][-1] == "%d 本" % (n0 + 1)
+              and ("%d 本书" % (n0 + 1)) in m2["meta"]
+              and "3,625/10,000 字" in m2["meta"] and m2["picksOn"] == n0 + 1,
               "chips=%s meta=%s on=%d" % (m2["railChips"], m2["meta"], m2["picksOn"]))
 
         shot = cdp.call("Page.captureScreenshot", {"format": "png"})
