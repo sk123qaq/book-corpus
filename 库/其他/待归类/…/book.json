@@ -1,0 +1,35 @@
+{
+ "uid": "B1785",
+ "title": "…",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "其他",
+  "待归类"
+ ],
+ "path": "其他/待归类/…",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/… (布莱恩·赫伯特，凯文·J.安德森) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3507623,
+   "sha256": "12c71a1f84f9b7df3fd3d882a23c4d3aaaf49b5262fa96f4e0fd953218ae4e83",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 7,
+   "bytes": 3731159
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

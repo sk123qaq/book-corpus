@@ -1,0 +1,35 @@
+{
+ "uid": "B1881",
+ "title": "无印良品笔记术  四个步骤实现持续提升",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "管理与组织"
+ ],
+ "path": "商业与管理/管理与组织/无印良品笔记术  四个步骤实现持续提升",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/无印良品笔记术  四个步骤实现持续提升（无印良品前会长 松井忠三“密不外传”的笔记使用方法 创造商业奇迹的管理秘诀） (松井忠三) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2205014,
+   "sha256": "7934b80cfcd904a5b18e8c2569fe2c2e1ec0f8c1c8604e3f5b36289b2148f42d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 48,
+   "bytes": 193062
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

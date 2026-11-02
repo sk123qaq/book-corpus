@@ -1,0 +1,35 @@
+{
+ "uid": "B1912",
+ "title": "绝对权力",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/绝对权力",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/绝对权力 (周梅森) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 422210,
+   "sha256": "7b56372e2a40baf8d0460645fcc9210b2b6388c50020e300a54c08521dc4dc21",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 9,
+   "bytes": 812939
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

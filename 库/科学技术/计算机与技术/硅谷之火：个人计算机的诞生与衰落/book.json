@@ -1,0 +1,35 @@
+{
+ "uid": "B1907",
+ "title": "硅谷之火：个人计算机的诞生与衰落",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "计算机与技术"
+ ],
+ "path": "科学技术/计算机与技术/硅谷之火：个人计算机的诞生与衰落",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/硅谷之火：个人计算机的诞生与衰落（第3版）（图灵图书） (迈克尔·斯韦因  保罗·弗赖伯格 [迈克尔·斯韦因  保罗·弗赖伯格]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 10817692,
+   "sha256": "0a265502c5ad22fc8019de4f81947afb1f271d00c4f1260b2e9c0d8962734a4f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 81,
+   "bytes": 913237
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

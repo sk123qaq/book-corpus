@@ -1,0 +1,35 @@
+{
+ "uid": "B1954",
+ "title": "黄仁勋：英伟达之芯 = The Thinking Machine Jensen Huang, Nvidia, and the Worlds Most Coveted Microchip",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "创新与创业"
+ ],
+ "path": "商业与管理/创新与创业/黄仁勋：英伟达之芯 = The Thinking Machine Jensen Huang, Nvidia, and the Worlds Most Coveted Microchip",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/黄仁勋：英伟达之芯 = The Thinking Machine Jensen Huang, Nvidia, and the Worlds Most Coveted Microchip ([美] 斯蒂芬 · 威特 (StephenWitt) 著  周健工 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2029027,
+   "sha256": "ef98e272d6e834141086249decf76e81af3ccdef4d09b9b509582a54ed568c59",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 57,
+   "bytes": 713028
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

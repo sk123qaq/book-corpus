@@ -1,0 +1,35 @@
+{
+ "uid": "B1800",
+ "title": "为什么：企业人思考笔记",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "管理与组织"
+ ],
+ "path": "商业与管理/管理与组织/为什么：企业人思考笔记",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/为什么：企业人思考笔记 (ePUBw.COM 宁高宁) (z-library.sk, 1lib.sk, z-lib.sk).azw3",
+   "format": "azw3",
+   "bytes": 600143,
+   "sha256": "ca613946d9eac37ab7c358711f8c967f14bca53088ec5fd318182a171871db2e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 100,
+   "bytes": 406478
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

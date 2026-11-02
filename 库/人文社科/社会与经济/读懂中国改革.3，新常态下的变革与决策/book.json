@@ -1,0 +1,35 @@
+{
+ "uid": "B1932",
+ "title": "读懂中国改革.3，新常态下的变革与决策",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/读懂中国改革.3，新常态下的变革与决策",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/读懂中国改革.3，新常态下的变革与决策 (厉以宁, 吴敬琏, 周其仁 等) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 412360,
+   "sha256": "83656ec3dbabf32aa32b9c9b8ec9fe40ad493040e2675191db062426c2a3f133",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 46,
+   "bytes": 588694
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

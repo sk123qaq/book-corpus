@@ -1,0 +1,35 @@
+{
+ "uid": "B1879",
+ "title": "新下层日本的社会阶层与贫困遗传",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/新下层日本的社会阶层与贫困遗传",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/新下层日本的社会阶层与贫困遗传 (【日】桥本健二) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 14933907,
+   "sha256": "39f91f140ba02d3efff6c29d3698447a96e693fca3556a1642af95a7741a72bc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 17,
+   "bytes": 251886
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

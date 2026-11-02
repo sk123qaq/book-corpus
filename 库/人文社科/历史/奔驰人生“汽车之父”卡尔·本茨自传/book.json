@@ -1,0 +1,35 @@
+{
+ "uid": "B1847",
+ "title": "奔驰人生“汽车之父”卡尔·本茨自传",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/奔驰人生“汽车之父”卡尔·本茨自传",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/奔驰人生“汽车之父”卡尔·本茨自传 ([德]卡尔 · 本茨) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 11086876,
+   "sha256": "e324f8499e5afaaf47673b05370ba125a7a39d3796e7499a28641008401afab8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 33,
+   "bytes": 219539
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

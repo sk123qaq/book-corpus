@@ -1,0 +1,35 @@
+{
+ "uid": "B1925",
+ "title": "萧条中的生存智慧",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/萧条中的生存智慧",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/萧条中的生存智慧 (【日】长谷川和广班健译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 4982385,
+   "sha256": "c0fd52860a4cdab82cc3a5b50eaa65ad77688a7a80fd51b5e4d2cefe5d57436b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 145,
+   "bytes": 212616
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

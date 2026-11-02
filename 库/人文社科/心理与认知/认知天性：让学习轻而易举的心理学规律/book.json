@@ -1,0 +1,35 @@
+{
+ "uid": "B1928",
+ "title": "认知天性：让学习轻而易举的心理学规律",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "心理与认知"
+ ],
+ "path": "人文社科/心理与认知/认知天性：让学习轻而易举的心理学规律",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/认知天性：让学习轻而易举的心理学规律 (彼得．布朗 (Peter C. Brown) etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 450518,
+   "sha256": "487bffe3fe8d938e5d10b259f4923fafe9f36e089767a8e830c4d06ab9ec7795",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 52,
+   "bytes": 474755
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

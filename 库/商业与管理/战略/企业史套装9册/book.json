@@ -1,0 +1,35 @@
+{
+ "uid": "B1806",
+ "title": "企业史套装9册",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/企业史套装9册",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/企业史套装9册 (吴晓波) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 68153216,
+   "sha256": "f33011f1feeee553d827557407e8f206eec4d5ac73f4abfec0a7a7925877fcf4",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 565,
+   "bytes": 6384357
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

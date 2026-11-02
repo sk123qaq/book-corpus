@@ -1,0 +1,35 @@
+{
+ "uid": "B1900",
+ "title": "火星救援",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/火星救援",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/火星救援（同名电影登顶10月北美票房 11月25日大陆震撼上映） (译林幻系列) (［美国］安迪·威尔 [［美国］安迪·威尔]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 530505,
+   "sha256": "6ae6eb61364b801f8bd5b30f8b281f9662738a44fd219f57b3b24231c46d6d35",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 142,
+   "bytes": 665620
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

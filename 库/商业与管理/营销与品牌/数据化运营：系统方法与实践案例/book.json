@@ -1,0 +1,35 @@
+{
+ "uid": "B1878",
+ "title": "数据化运营：系统方法与实践案例",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "营销与品牌"
+ ],
+ "path": "商业与管理/营销与品牌/数据化运营：系统方法与实践案例",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/数据化运营：系统方法与实践案例 (产品管理与运营系列丛书) (赵宏田  江丽萍  李宁) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 19850684,
+   "sha256": "06e06b91e55bf26b85a497e8fe9db09c42f9f8c90172b60ba6d5a102395d1c49",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 60,
+   "bytes": 476338
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

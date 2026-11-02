@@ -1,0 +1,35 @@
+{
+ "uid": "B1782",
+ "title": "Python数据分析与数据化运营",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "计算机与技术"
+ ],
+ "path": "科学技术/计算机与技术/Python数据分析与数据化运营",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/Python数据分析与数据化运营 (数据分析与决策技术丛书) (宋天龙) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 16406234,
+   "sha256": "3097c6f12fdc2ee9e3e7a1ed3662db22776df0be0ee13e5e0cf69cc2977d75ba",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 360,
+   "bytes": 1356651
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

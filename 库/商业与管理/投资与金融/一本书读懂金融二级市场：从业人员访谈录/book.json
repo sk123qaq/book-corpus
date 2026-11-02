@@ -1,0 +1,35 @@
+{
+ "uid": "B1789",
+ "title": "一本书读懂金融二级市场：从业人员访谈录",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/一本书读懂金融二级市场：从业人员访谈录",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/一本书读懂金融二级市场：从业人员访谈录 (邢恩泉) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1191496,
+   "sha256": "259a585889bc584c44afbecee5129dde40fe4b64c392ac3f49768daed56b5ec7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 22,
+   "bytes": 422579
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1877",
+ "title": "数据分析实战",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "计算机与技术"
+ ],
+ "path": "科学技术/计算机与技术/数据分析实战",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/数据分析实战 (【美】托马兹·卓巴斯（Tomasz Drabas）) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 57877448,
+   "sha256": "bb1e32f3392c0271684ec26cc7f284763e7f9d94a42883a2f56a4ec51539c249",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 98,
+   "bytes": 348997
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

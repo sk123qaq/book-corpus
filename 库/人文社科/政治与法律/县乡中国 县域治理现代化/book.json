@@ -1,0 +1,35 @@
+{
+ "uid": "B1822",
+ "title": "县乡中国 县域治理现代化",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "政治与法律"
+ ],
+ "path": "人文社科/政治与法律/县乡中国 县域治理现代化",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/县乡中国 县域治理现代化 (杨华) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 866203,
+   "sha256": "61c1ec39a9f361a1645c9310a605825bd6c31a4daefa172d0d65e4ed3347a4cb",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 35,
+   "bytes": 610629
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

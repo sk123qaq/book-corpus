@@ -1,0 +1,35 @@
+{
+ "uid": "B1805",
+ "title": "仿生人会梦见电子羊吗？",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/仿生人会梦见电子羊吗？",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/仿生人会梦见电子羊吗？ (菲利普·迪克 著 姚向辉 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 26880274,
+   "sha256": "9755d8f68577b91fe443234a939ada2a68146d819d0853c24f850bb300c3521f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 32,
+   "bytes": 434877
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

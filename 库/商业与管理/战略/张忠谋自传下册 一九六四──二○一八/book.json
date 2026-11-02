@@ -1,0 +1,35 @@
+{
+ "uid": "B1861",
+ "title": "张忠谋自传下册 一九六四──二○一八",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/张忠谋自传下册 一九六四──二○一八",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/张忠谋自传下册 一九六四──二○一八 (张忠谋) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 24090656,
+   "sha256": "8cb0dff2d9d8abd7d2d644b96abda9b097ee0d55ff96d2b8c08ac742da14aee8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 191,
+   "bytes": 648509
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

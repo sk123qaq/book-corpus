@@ -1,0 +1,35 @@
+{
+ "uid": "B1955",
+ "title": "黑冰",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/黑冰",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/黑冰 (张成功) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 270865,
+   "sha256": "600a28ce7351ac823a411a2340fbb5266d2e977c6339f7abbe1bd57f5ecc798d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 484790
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1846",
+ "title": "失去的制造业：日本制造业的败北",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/失去的制造业：日本制造业的败北",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/失去的制造业：日本制造业的败北 (汤之上隆) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 8598884,
+   "sha256": "6dc11cd9968f425eba2b6e76e3bf42ad06f050fef699a2139330b0a263015c98",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 343319
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

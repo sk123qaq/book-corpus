@@ -1,0 +1,35 @@
+{
+ "uid": "B1819",
+ "title": "北平无战事",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/北平无战事",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/北平无战事（全二册） (刘和平  头撞南墙) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 4835077,
+   "sha256": "7e5b24ce90d347ef4103e5e7138bf577f6371f2720486d05df34ebbbd6e68d0e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 54,
+   "bytes": 2290525
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

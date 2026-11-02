@@ -1,0 +1,35 @@
+{
+ "uid": "B1854",
+ "title": "就业、利息和货币通论",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/就业、利息和货币通论",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/就业、利息和货币通论 ( etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2108490,
+   "sha256": "f35438855e402b67e70d81c047e3df393bae1b91b6834d520d24ba4998820db8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 39,
+   "bytes": 735524
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

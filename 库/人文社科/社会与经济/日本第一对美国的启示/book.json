@@ -1,0 +1,35 @@
+{
+ "uid": "B1883",
+ "title": "日本第一对美国的启示",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/日本第一对美国的启示",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/日本第一对美国的启示 (傅高义作品系列) (傅高义) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 957759,
+   "sha256": "aebd7daf0e48ffc77442240293b30e2f65e5ef5a3dabbc45681c78dc084c0ee2",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 13,
+   "bytes": 432114
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1802",
+ "title": "二号首长",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/二号首长",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/二号首长 (黄晓阳) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3665629,
+   "sha256": "c59e402fdc2380218471fabb717d46cf9ddaa3b33f7cbc572aba10e9f52fba6e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 554,
+   "bytes": 4631974
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

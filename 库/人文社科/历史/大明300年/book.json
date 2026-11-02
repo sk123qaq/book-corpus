@@ -1,0 +1,35 @@
+{
+ "uid": "B1842",
+ "title": "大明300年",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/大明300年",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大明300年 (艾公子) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1410537,
+   "sha256": "94fc120b4ca350c29bb90f9a801c73065e2f5366f9be2f6a4f5b102440606a0a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 15,
+   "bytes": 812686
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

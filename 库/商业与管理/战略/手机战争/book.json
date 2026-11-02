@@ -1,0 +1,35 @@
+{
+ "uid": "B1866",
+ "title": "手机战争",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/手机战争",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/手机战争 (余盛) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1118979,
+   "sha256": "4a21703b7a19897b526062afc69339d28cd65931476c84d8ffa0515e684171e3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 912445
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

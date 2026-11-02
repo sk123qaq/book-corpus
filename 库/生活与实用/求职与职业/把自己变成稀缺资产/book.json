@@ -1,0 +1,35 @@
+{
+ "uid": "B1867",
+ "title": "把自己变成稀缺资产",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "生活与实用",
+  "求职与职业"
+ ],
+ "path": "生活与实用/求职与职业/把自己变成稀缺资产",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/把自己变成稀缺资产 (何思平) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1133996,
+   "sha256": "a8a15e7c3824d33111d1130d1da3ef4a0cf8230fd3fe8756c29fb2fcc3a49cdd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 117,
+   "bytes": 363876
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

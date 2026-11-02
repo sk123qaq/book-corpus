@@ -1,0 +1,35 @@
+{
+ "uid": "B1884",
+ "title": "星际穿越",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "科普"
+ ],
+ "path": "科学技术/科普/星际穿越",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/星际穿越 (基普·索恩 (Kip Thorne)) (z-library.sk, 1lib.sk, z-lib.sk).azw3",
+   "format": "azw3",
+   "bytes": 17944639,
+   "sha256": "7f837196a97aa0639871e096dc9e9aad0ae964a006375dca4c505a04474dd600",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 38,
+   "bytes": 509115
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

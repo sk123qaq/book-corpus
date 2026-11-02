@@ -1,0 +1,35 @@
+{
+ "uid": "B1792",
+ "title": "世界金融史：泡沫、战争与股票市场",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/世界金融史：泡沫、战争与股票市场",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/世界金融史：泡沫、战争与股票市场（珍藏版） (【日】板谷敏彦) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 7234537,
+   "sha256": "009a3645c810b32802ec55ebf1e3d1ee1952e8c6dcceb6e9f22841337a0a8014",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 87,
+   "bytes": 423180
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1807",
+ "title": "低欲望社会：“丧失大志时代” 的新 · 国富论 = 低欲望社会：「大志なき時代」の新 · 国富論",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/低欲望社会：“丧失大志时代” 的新 · 国富论 = 低欲望社会：「大志なき時代」の新 · 国富論",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/低欲望社会：“丧失大志时代” 的新 · 国富论 = 低欲望社会：「大志なき時代」の新 · 国富論 ([日] 大前研一 著  姜建强 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 12562995,
+   "sha256": "b662366b751bff18ecfded8c18f12160d013c205ab6639546b239a0808fa8e02",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 138,
+   "bytes": 435106
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

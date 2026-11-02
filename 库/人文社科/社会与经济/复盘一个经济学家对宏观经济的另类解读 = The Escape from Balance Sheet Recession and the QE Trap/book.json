@@ -1,0 +1,35 @@
+{
+ "uid": "B1839",
+ "title": "复盘一个经济学家对宏观经济的另类解读 = The Escape from Balance Sheet Recession and the QE Trap",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/复盘一个经济学家对宏观经济的另类解读 = The Escape from Balance Sheet Recession and the QE Trap",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/复盘一个经济学家对宏观经济的另类解读 = The Escape from Balance Sheet Recession and the QE Trap ([美] 辜朝明(Richard C.Koo)) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 5941879,
+   "sha256": "7956171fc13da6392f2f02e12d1b84977ae71ae0cf9a6d23eeb9d8fd982d1019",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 8,
+   "bytes": 575883
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

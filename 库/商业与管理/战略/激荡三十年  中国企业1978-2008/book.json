@@ -1,0 +1,35 @@
+{
+ "uid": "B1899",
+ "title": "激荡三十年  中国企业1978-2008",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/激荡三十年  中国企业1978-2008",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/激荡三十年  中国企业1978-2008 (纪念版) (套装上下册) (吴晓波) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 13153362,
+   "sha256": "aca94c7b4f3783b85f56c6d1e2945874459bddf3602c2cee0c144779ee12fbb3",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 39,
+   "bytes": 1716627
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

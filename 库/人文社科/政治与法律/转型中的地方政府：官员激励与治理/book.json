@@ -1,0 +1,35 @@
+{
+ "uid": "B1937",
+ "title": "转型中的地方政府：官员激励与治理",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "政治与法律"
+ ],
+ "path": "人文社科/政治与法律/转型中的地方政府：官员激励与治理",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/转型中的地方政府：官员激励与治理 (周黎安) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1506739,
+   "sha256": "2029df3664318864b4c04fed1d8c22d1d10fbe7962cabe96a60c92153c69166d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 65,
+   "bytes": 1257554
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

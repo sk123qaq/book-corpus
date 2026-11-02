@@ -1,0 +1,35 @@
+{
+ "uid": "B1941",
+ "title": "重新定义公司  谷歌是如何运营的 = How Google Works",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "管理与组织"
+ ],
+ "path": "商业与管理/管理与组织/重新定义公司  谷歌是如何运营的 = How Google Works",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/重新定义公司  谷歌是如何运营的 = How Google Works ([美] 埃里克・施密特 (Eric Schmidt) 著  靳婷婷, 陈序 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2552224,
+   "sha256": "7432627f933d3be96f8a9198882085392a762c401bb0e68e093ad23f03cfc32b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 14,
+   "bytes": 556671
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1812",
+ "title": "光刻巨人  ASML崛起之路 = ASMLs Architects The Story of the Engineers Who Shaped the Worlds Most Powerful Chip Machines",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/光刻巨人  ASML崛起之路 = ASMLs Architects The Story of the Engineers Who Shaped the Worlds Most Powerful Chip Machines",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/光刻巨人  ASML崛起之路 = ASMLs Architects The Story of the Engineers Who Shaped the Worlds Most Powerful Chip Machines ([荷] 瑞尼・雷吉梅克 (Rene Raaijmakers) 著  金捷幡 译) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 8516825,
+   "sha256": "f47e931d03d7b2f1e59c45e19d3e66b55104bb8e7e4472d9944fb035ad3791b5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 26,
+   "bytes": 987005
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

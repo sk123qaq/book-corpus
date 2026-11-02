@@ -1,0 +1,35 @@
+{
+ "uid": "B1896",
+ "title": "深入浅出数据分析",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "计算机与技术"
+ ],
+ "path": "科学技术/计算机与技术/深入浅出数据分析",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/深入浅出数据分析 (迈克尔·米尔顿(Michael Milton)) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 15209478,
+   "sha256": "2beefd2c72d81b243a2d87b02942318b5285eaf7ca25e70320ece4e68b042350",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 241,
+   "bytes": 376903
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

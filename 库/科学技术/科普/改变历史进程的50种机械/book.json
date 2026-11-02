@@ -1,0 +1,35 @@
+{
+ "uid": "B1868",
+ "title": "改变历史进程的50种机械",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "科普"
+ ],
+ "path": "科学技术/科普/改变历史进程的50种机械",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/改变历史进程的50种机械 (（英）埃里克·查林) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 16009725,
+   "sha256": "bb8d7f12c9f4636816462a91f7f0e23022a4cd7c62600b7108d861f9f56800b7",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 52,
+   "bytes": 305382
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1922",
+ "title": "芯片简史",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "科普"
+ ],
+ "path": "科学技术/科普/芯片简史",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/芯片简史 (汪波) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3452217,
+   "sha256": "af785cf1007429a8592ccadecfda1fda47bf592d8bf97ff22f38629d9a36432e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 79,
+   "bytes": 890258
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

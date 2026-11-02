@@ -1,0 +1,35 @@
+{
+ "uid": "B1840",
+ "title": "大义觉迷录（简体中文版） 中华传世珍藏古典文库",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/大义觉迷录（简体中文版） 中华传世珍藏古典文库",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/大义觉迷录（简体中文版） 中华传世珍藏古典文库 (雍正皇帝) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 635290,
+   "sha256": "2771b685bf061d851c67c46c3fe46bd01b48d62091fe647eb7c2cf313b00fd1b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 93,
+   "bytes": 1165322
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

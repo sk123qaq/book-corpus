@@ -1,0 +1,35 @@
+{
+ "uid": "B1873",
+ "title": "数商：工业数字化转型之道",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/数商：工业数字化转型之道",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/数商：工业数字化转型之道 (顾建党  俞文勤  李祖滨) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 4005258,
+   "sha256": "182bd4cf88af6c33a0401c24eb67410a1e61d36849edb068fedd7ba693b9a554",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 53,
+   "bytes": 448058
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

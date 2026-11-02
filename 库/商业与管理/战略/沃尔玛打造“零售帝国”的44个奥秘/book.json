@@ -1,0 +1,35 @@
+{
+ "uid": "B1895",
+ "title": "沃尔玛打造“零售帝国”的44个奥秘",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/沃尔玛打造“零售帝国”的44个奥秘",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/沃尔玛打造“零售帝国”的44个奥秘 (王孝明) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 245324,
+   "sha256": "22ebab0cee7b164df4a62e67b316713502e85531e7862ad30798788ed73d32f8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 6,
+   "bytes": 306882
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

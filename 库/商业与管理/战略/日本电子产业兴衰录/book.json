@@ -1,0 +1,35 @@
+{
+ "uid": "B1882",
+ "title": "日本电子产业兴衰录",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/日本电子产业兴衰录",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/日本电子产业兴衰录 ([日] 西村吉雄；侯秀娟) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 3421308,
+   "sha256": "245554fd74171ae5763eb74ae2c3e91407654c61391678a6cdfe308b7c77e707",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 9,
+   "bytes": 337857
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

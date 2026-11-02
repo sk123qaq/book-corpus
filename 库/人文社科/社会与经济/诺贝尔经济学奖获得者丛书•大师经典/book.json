@@ -1,0 +1,35 @@
+{
+ "uid": "B1931",
+ "title": "诺贝尔经济学奖获得者丛书•大师经典",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/诺贝尔经济学奖获得者丛书•大师经典",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/诺贝尔经济学奖获得者丛书•大师经典（套装共10册） (藤田昌久, 保罗·R·克鲁格曼, 默顿·米勒, 托马斯·C·谢林, 阿马蒂亚·森 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 35431174,
+   "sha256": "28358b7edc0fd8f9213e13c80d71193e3703fa54a1ad50002714b0ce0d942cc5",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 791,
+   "bytes": 6749728
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

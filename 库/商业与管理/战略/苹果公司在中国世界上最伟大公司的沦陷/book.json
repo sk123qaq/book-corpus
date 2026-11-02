@@ -1,0 +1,35 @@
+{
+ "uid": "B1924",
+ "title": "苹果公司在中国世界上最伟大公司的沦陷",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/苹果公司在中国世界上最伟大公司的沦陷",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/苹果公司在中国世界上最伟大公司的沦陷(Apple in China The Capture of the Worlds Greatest Company) (Patrick McGee) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 7274330,
+   "sha256": "63d9f6f2817a73a246562296ea08805425c45231a459c05e6ab3dfde8ab0294a",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "pdf-text",
+   "chapters": 1,
+   "bytes": 803657
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

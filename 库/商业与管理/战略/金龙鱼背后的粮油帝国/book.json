@@ -1,0 +1,35 @@
+{
+ "uid": "B1943",
+ "title": "金龙鱼背后的粮油帝国",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/金龙鱼背后的粮油帝国",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/金龙鱼背后的粮油帝国 (余盛) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3966202,
+   "sha256": "76b80053ade87abe2054dee1b97ad53b936f8483d13564797c911c4baaf9053e",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 69,
+   "bytes": 525061
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

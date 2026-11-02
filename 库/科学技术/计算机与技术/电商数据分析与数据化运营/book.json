@@ -1,0 +1,35 @@
+{
+ "uid": "B1904",
+ "title": "电商数据分析与数据化运营",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "计算机与技术"
+ ],
+ "path": "科学技术/计算机与技术/电商数据分析与数据化运营",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/电商数据分析与数据化运营 (刘振华) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3182389,
+   "sha256": "d0663d980e9ceac385b8349953e1ed1e23cdcd1f1029d34db603dd1e3ea3f731",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 10,
+   "bytes": 323786
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

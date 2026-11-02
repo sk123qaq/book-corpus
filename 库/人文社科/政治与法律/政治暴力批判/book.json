@@ -1,0 +1,35 @@
+{
+ "uid": "B1871",
+ "title": "政治暴力批判",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "政治与法律"
+ ],
+ "path": "人文社科/政治与法律/政治暴力批判",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/政治暴力批判 (左高山) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 19161139,
+   "sha256": "40ca8ce1d26ddee898d50988254175dfcf0cf6c5109a7063edbff66bcd4480fe",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 710018
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

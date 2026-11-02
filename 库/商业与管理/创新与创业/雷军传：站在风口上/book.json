@@ -1,0 +1,35 @@
+{
+ "uid": "B1949",
+ "title": "雷军传：站在风口上",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "创新与创业"
+ ],
+ "path": "商业与管理/创新与创业/雷军传：站在风口上",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/雷军传：站在风口上 (陈润) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 221619,
+   "sha256": "affda341368b2c5cab2648227061c4febb02484ae2f37ea3390cf1b4b9f57d97",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 422560
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

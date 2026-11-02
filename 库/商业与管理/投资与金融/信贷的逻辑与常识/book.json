@@ -1,0 +1,35 @@
+{
+ "uid": "B1810",
+ "title": "信贷的逻辑与常识",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/信贷的逻辑与常识",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/信贷的逻辑与常识 (刘元庆) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 1959004,
+   "sha256": "505c48d9445e7e9f790dd69208376954d24a9e8a5c0f30cc196ee6a6aa134c12",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 43,
+   "bytes": 742471
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

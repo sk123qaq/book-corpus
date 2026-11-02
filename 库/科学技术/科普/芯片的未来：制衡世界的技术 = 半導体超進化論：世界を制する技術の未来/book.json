@@ -1,0 +1,35 @@
+{
+ "uid": "B1921",
+ "title": "芯片的未来：制衡世界的技术 = 半導体超進化論：世界を制する技術の未来",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "科普"
+ ],
+ "path": "科学技术/科普/芯片的未来：制衡世界的技术 = 半導体超進化論：世界を制する技術の未来",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/芯片的未来：制衡世界的技术 = 半導体超進化論：世界を制する技術の未来 ([日] 黑田忠广, [译] 陆应亮) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 2156141,
+   "sha256": "03d73a337bf83e293e87acb7b0d9b67bb003ede93dac7a23ab85264132846f9d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 37,
+   "bytes": 273876
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1860",
+ "title": "弗兰肯斯坦",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/弗兰肯斯坦",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/弗兰肯斯坦 (【英】玛丽·雪莱) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 5074966,
+   "sha256": "02b42ad592c094c8c337accb0393dca34c27e7bcf7a9d5cd232381e6c1d8e08b",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 32,
+   "bytes": 486541
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

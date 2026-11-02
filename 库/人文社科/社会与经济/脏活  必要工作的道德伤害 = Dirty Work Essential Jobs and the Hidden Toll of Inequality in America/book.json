@@ -1,0 +1,35 @@
+{
+ "uid": "B1917",
+ "title": "脏活  必要工作的道德伤害 = Dirty Work Essential Jobs and the Hidden Toll of Inequality in America",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/脏活  必要工作的道德伤害 = Dirty Work Essential Jobs and the Hidden Toll of Inequality in America",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/脏活  必要工作的道德伤害 = Dirty Work Essential Jobs and the Hidden Toll of Inequality in America ([美] 埃亚勒・普雷斯 (Eyal Press) 著  李立丰 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 925133,
+   "sha256": "dc353db791ee773738585cecfe30248bb583b5b677b9cef9133d1b7619dafad9",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 40,
+   "bytes": 545604
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

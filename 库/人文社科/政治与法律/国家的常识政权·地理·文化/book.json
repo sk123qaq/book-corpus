@@ -1,0 +1,35 @@
+{
+ "uid": "B1832",
+ "title": "国家的常识政权·地理·文化",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "政治与法律"
+ ],
+ "path": "人文社科/政治与法律/国家的常识政权·地理·文化",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/国家的常识政权·地理·文化 ([美]迈克尔·罗斯金,Michael G. Roskin,杨勇,夏维勇) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 31000135,
+   "sha256": "ad12b06d866111344ba6a11b7160603031aab6f5bfb2b4bb0f09f4f8497c3955",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 39,
+   "bytes": 1767274
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

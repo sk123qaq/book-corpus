@@ -1,0 +1,35 @@
+{
+ "uid": "B1889",
+ "title": "朱鎔基講話實錄",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "政治与法律"
+ ],
+ "path": "人文社科/政治与法律/朱鎔基講話實錄",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/朱鎔基講話實錄(全四卷) (《朱鎔基講話實錄》編寫組) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 28288240,
+   "sha256": "3b05dbd45b6dc0d8849b86b758fde7647858baed3774b56d7f857830e3bfc1b8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 353,
+   "bytes": 3716874
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

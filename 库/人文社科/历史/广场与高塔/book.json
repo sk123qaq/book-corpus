@@ -1,0 +1,35 @@
+{
+ "uid": "B1859",
+ "title": "广场与高塔",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/广场与高塔",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/广场与高塔（有关世界历史转折的全新视角与精彩重铸。细密思辨“人民广场”和“权力高塔”的博弈过程） (尼尔·弗格森 [尼尔·弗格森]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 4342951,
+   "sha256": "fcb9bf965b7a473a3b90977af72f85e26c1a57e1078d6ddcf91b7551cecba082",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 62,
+   "bytes": 878777
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

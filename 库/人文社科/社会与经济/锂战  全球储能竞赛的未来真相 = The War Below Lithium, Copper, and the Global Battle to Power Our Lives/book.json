@@ -1,0 +1,35 @@
+{
+ "uid": "B1945",
+ "title": "锂战  全球储能竞赛的未来真相 = The War Below Lithium, Copper, and the Global Battle to Power Our Lives",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/锂战  全球储能竞赛的未来真相 = The War Below Lithium, Copper, and the Global Battle to Power Our Lives",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/锂战  全球储能竞赛的未来真相 = The War Below Lithium, Copper, and the Global Battle to Power Our Lives (厄尼斯特 · 谢德 (Ernest Scheyder) 著  陈仪 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3251513,
+   "sha256": "5c12163c581c94838e0049e99bdd3318d51f90ee9e430e90e1ff24223700800f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 19,
+   "bytes": 837023
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

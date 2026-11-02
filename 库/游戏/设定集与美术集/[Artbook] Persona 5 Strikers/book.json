@@ -1,0 +1,35 @@
+{
+ "uid": "B1783",
+ "title": "[Artbook] Persona 5 Strikers",
+ "title_from_file": "",
+ "author": "",
+ "subjects": [
+  "游戏",
+  "设定集与美术集"
+ ],
+ "path": "游戏/设定集与美术集/[Artbook] Persona 5 Strikers",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/[Artbook] Persona 5 Strikers (Atlus).pdf",
+   "format": "pdf",
+   "bytes": 129599221,
+   "sha256": "3b136d0d48187714ad9aa3683b4633ae01b18f4e8a537cfee827585f54f333cc",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 16423
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

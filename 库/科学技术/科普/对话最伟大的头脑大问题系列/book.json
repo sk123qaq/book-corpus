@@ -1,0 +1,35 @@
+{
+ "uid": "B1852",
+ "title": "对话最伟大的头脑大问题系列",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "科学技术",
+  "科普"
+ ],
+ "path": "科学技术/科普/对话最伟大的头脑大问题系列",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/对话最伟大的头脑大问题系列（套装共6册） (John Brockman) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 19797351,
+   "sha256": "e947595687a202f8158f0b9a5bfa758dd1fd04a3a54151ffb7efc79c24c55b99",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 1094,
+   "bytes": 4487768
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1791",
+ "title": "世界是平的 (3.0版)  21世纪简史 = The World Is Flat 3.0 A Brief History of the Twenty-first Century",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/世界是平的 (3.0版)  21世纪简史 = The World Is Flat 3.0 A Brief History of the Twenty-first Century",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/世界是平的 (3.0版)  21世纪简史 = The World Is Flat 3.0 A Brief History of the Twenty-first Century ([美] 托马斯・费里德曼 (Thomas L. Friedman) 著  何帆 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 691883,
+   "sha256": "e1e488c8f9b17787dd6602fdfbffbbc33f483e16cc3eae1e59e1ebb462ff2d4f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 21,
+   "bytes": 1231409
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

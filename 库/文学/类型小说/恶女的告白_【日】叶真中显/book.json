@@ -1,0 +1,35 @@
+{
+ "uid": "B1862",
+ "title": "恶女的告白_【日】叶真中显",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/恶女的告白_【日】叶真中显",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/恶女的告白_【日】叶真中显 (【日】叶真中显) (z-library.sk, 1lib.sk, z-lib.sk).azw3",
+   "format": "azw3",
+   "bytes": 927876,
+   "sha256": "1a3dc15330ca10c251e3fae2aec2ba9a438173b832ffbae4eedc91e7a9a1960d",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 385812
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

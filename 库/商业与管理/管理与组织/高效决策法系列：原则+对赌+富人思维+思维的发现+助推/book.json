@@ -1,0 +1,35 @@
+{
+ "uid": "B1952",
+ "title": "高效决策法系列：原则+对赌+富人思维+思维的发现+助推",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "管理与组织"
+ ],
+ "path": "商业与管理/管理与组织/高效决策法系列：原则+对赌+富人思维+思维的发现+助推",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/高效决策法系列：原则+对赌+富人思维+思维的发现+助推（套装共5册） (瑞·达利欧  安妮·杜克  贾森·卡拉卡尼斯  迈克尔·刘易斯  戴维·哈尔彭) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 7981352,
+   "sha256": "35a8b7c3569bc9cec8db9d6245554626027ff5f45ff90f78e1ab59804d15f333",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 134,
+   "bytes": 2759193
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1942",
+ "title": "金融的本质：伯南克四讲美联储 = The Federal Reserve and the Financial Crisis",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/金融的本质：伯南克四讲美联储 = The Federal Reserve and the Financial Crisis",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/金融的本质：伯南克四讲美联储 = The Federal Reserve and the Financial Crisis ([美] 本 · 伯南克 (Ben S. Bernanke) 著  巴曙松, 陈剑 译) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3151586,
+   "sha256": "210f10ada64468ae4aa994b061c7f47e3ccbdf6a273a4451bf91e0ae218d42bf",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 27,
+   "bytes": 442587
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

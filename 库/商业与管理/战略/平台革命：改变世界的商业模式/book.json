@@ -1,0 +1,35 @@
+{
+ "uid": "B1858",
+ "title": "平台革命：改变世界的商业模式",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/平台革命：改变世界的商业模式",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/平台革命：改变世界的商业模式 (杰奥夫雷G. 帕克  马歇尔W. 范·埃尔斯泰恩  桑基特·保罗·邱达利 [帕克 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3469290,
+   "sha256": "f2ff738241325896d46023102b15f838d681a0c64e789690f4d7df1f2191d8a8",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 103,
+   "bytes": 595928
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

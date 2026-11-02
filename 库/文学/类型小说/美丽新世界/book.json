@@ -1,0 +1,35 @@
+{
+ "uid": "B1914",
+ "title": "美丽新世界",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "文学",
+  "类型小说"
+ ],
+ "path": "文学/类型小说/美丽新世界",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/美丽新世界 (奥尔德斯·赫胥黎 (Aldous Huxley)) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 708117,
+   "sha256": "e8e86668e3460c012fe6b0c3e64dc8042cf65d844cbfb07b6ef2f54adde6b1ce",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 34,
+   "bytes": 586206
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1950",
+ "title": "電玩即政治  駕馭改變世界的電玩之力 = Everything to Play For How Videogames Are Changing the World",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "游戏",
+  "游戏研究"
+ ],
+ "path": "游戏/游戏研究/電玩即政治  駕馭改變世界的電玩之力 = Everything to Play For How Videogames Are Changing the World",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/電玩即政治  駕馭改變世界的電玩之力 = Everything to Play For How Videogames Are Changing the World (瑪麗亞姆 · 迪特 (Marijam Did) 著  詹婕翎 譯) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 3576524,
+   "sha256": "0dba16ea756fd027c3084be46d72d23b4c6fc4631bfaf67c878788f6f8058bb1",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 12,
+   "bytes": 537726
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

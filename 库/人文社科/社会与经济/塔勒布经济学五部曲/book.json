@@ -1,0 +1,35 @@
+{
+ "uid": "B1837",
+ "title": "塔勒布经济学五部曲",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "社会与经济"
+ ],
+ "path": "人文社科/社会与经济/塔勒布经济学五部曲",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/塔勒布经济学五部曲（套装共5册） (纳西姆•尼古拉斯•塔勒布) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 4132750,
+   "sha256": "36e2e117289a5abed60fdf6f38f44af967a9fa385b19c1aaad18773fb499f596",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 114,
+   "bytes": 2694939
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

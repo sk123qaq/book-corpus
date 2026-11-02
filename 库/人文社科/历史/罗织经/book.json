@@ -1,0 +1,35 @@
+{
+ "uid": "B1913",
+ "title": "罗织经",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "人文社科",
+  "历史"
+ ],
+ "path": "人文社科/历史/罗织经",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/罗织经 (来俊臣) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+   "format": "pdf",
+   "bytes": 33394698,
+   "sha256": "d691b69570ba98f6d2f05bc47a97918899f568323a69d4374826a8fc10e255dd",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "paddle-ocr",
+   "chapters": 1,
+   "bytes": 548153
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

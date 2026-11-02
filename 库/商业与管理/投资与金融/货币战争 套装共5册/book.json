@@ -1,0 +1,35 @@
+{
+ "uid": "B1935",
+ "title": "货币战争 套装共5册",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "投资与金融"
+ ],
+ "path": "商业与管理/投资与金融/货币战争 套装共5册",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/货币战争 套装共5册（宋鸿兵著，中美贸易战必读！教你应对经济生活中无处不在的危机） (宋鸿兵 [宋鸿兵]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 19550357,
+   "sha256": "806d09d1e7f847238b090aece1076cc3e0e381b337edb48c8babe9a3ab8c5a6f",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 601,
+   "bytes": 3919255
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

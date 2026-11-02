@@ -1,0 +1,35 @@
+{
+ "uid": "B1820",
+ "title": "华为数据之道",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "战略"
+ ],
+ "path": "商业与管理/战略/华为数据之道",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/华为数据之道 (华为公司数据管理部) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 49008989,
+   "sha256": "60135c6ba8395fcd858735682c421a741b57cbe61a6f907c269fc1b939988848",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 149,
+   "bytes": 374223
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

@@ -1,0 +1,35 @@
+{
+ "uid": "B1927",
+ "title": "褚时健管理法：匠人精神+精英思想+卓越战略，一本系统性论述这一传奇企业家管理艺术的著作",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "管理与组织"
+ ],
+ "path": "商业与管理/管理与组织/褚时健管理法：匠人精神+精英思想+卓越战略，一本系统性论述这一传奇企业家管理艺术的著作",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/褚时健管理法：匠人精神+精英思想+卓越战略，一本系统性论述这一传奇企业家管理艺术的著作 (张小军 马玥 [张小军 马玥]) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 307867,
+   "sha256": "35b15cffdb74ca9e690c04a8eeea96a817dcd0dd5db359f9a3ee2a78f4042a21",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 55,
+   "bytes": 424444
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}

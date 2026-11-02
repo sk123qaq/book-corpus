@@ -1,0 +1,35 @@
+{
+ "uid": "B1835",
+ "title": "埃隆・马斯克传 = Elon Musk",
+ "title_from_file": "",
+ "author": "z-library.sk, 1lib.sk, z-lib.sk",
+ "subjects": [
+  "商业与管理",
+  "创新与创业"
+ ],
+ "path": "商业与管理/创新与创业/埃隆・马斯克传 = Elon Musk",
+ "series": null,
+ "volume": null,
+ "container": null,
+ "retention": "keep",
+ "sources": [
+  {
+   "file": "source/埃隆・马斯克传 = Elon Musk ([美] 沃尔特・艾萨克森 (Walter Isaacson) 著  孙思远 etc.) (z-library.sk, 1lib.sk, z-lib.sk).epub",
+   "format": "epub",
+   "bytes": 755178,
+   "sha256": "dbbc764d15d3f0d47b8c1e4b72db40d912b231ce9f9c9d0b8570c1b6b6935588",
+   "primary_src": 1
+  }
+ ],
+ "awards": [],
+ "derived": [
+  {
+   "kind": "md",
+   "status": "done",
+   "method": "ebook-to-md",
+   "chapters": 98,
+   "bytes": 1141920
+  }
+ ],
+ "notes": "ingest:2026-10-27；待复核"
+}
