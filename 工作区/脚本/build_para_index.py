@@ -134,6 +134,9 @@ def build(db, limit_books=0, keep=False):
     con = sqlite3.connect(building)
     con.executescript("PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; "
                       "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-2000000;" + SCHEMA)
+    # expand 表即使没有扩展行也要建，否则新库上 book_score/book_query 会查不到表
+    import build_expand
+    con.executescript(build_expand.SCHEMA)
     t0 = time.time()
     books = chapters(limit_books)
     nfiles = sum(len(v) for _, v in books)

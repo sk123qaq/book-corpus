@@ -103,7 +103,11 @@ def load_meta(libdb=LIBDB):
 
 def load_expand(con):
     out = {}
-    for path, kind in con.execute("SELECT DISTINCT path, kind FROM expand"):
+    try:
+        rows = con.execute("SELECT DISTINCT path, kind FROM expand").fetchall()
+    except sqlite3.OperationalError:
+        return out
+    for path, kind in rows:
         book = path.split("/md/")[0]
         if book.startswith("库/"):
             book = book[2:]
