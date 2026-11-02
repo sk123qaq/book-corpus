@@ -1,5 +1,10 @@
 # 检索层（可重建产物，非人账）
 
+> 2026-11-02 布局迁移：本文写于 v1，路径示例保留当时写法。v2 的对应关系是
+> `库/…` → `books/<uid>/`，`目录/library.db` → `build/library.db`，
+> `目录/检索/` → `build/检索/`，`视图/` → `build/views/`，
+> `工作区/脚本/x.py` → `book-corpus x` 或 `src/bookcorpus/scripts/x.py`。
+
 本目录存放 `book-corpus-qa` 的检索索引与评测产物。**它不参与书目结构，不写 `库/`，删掉不影响任何书的可用性。**
 
 - 建造者：`工作区/脚本/` 下的 `build_para_index.py`、`build_expand.py`、`concept_expand.py`、`sem_index.py`、`qsearch.py`
