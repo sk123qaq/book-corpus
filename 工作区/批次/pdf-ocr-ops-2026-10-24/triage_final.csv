@@ -1,2 +1,0 @@
-uid,title,subject1,subject2,class,route,pages,mb,ppi,text_page_share,ink,bands,note,verdict,image_share,measure,route_metric,model_route,model_confidence,model_reason,model_at
-"B0542","中金黄金业绩预增公告","其他","","A 纯文本层","本地抽文本","2","0.1","","1.0","","","文本层覆盖率为100%，乱码率仅0.155%，页面文字清晰，可直接本地抽取文本。；人工确认 route=本地抽文本；两页文本层公告（复核）","本地抽文本","0.0","文本层逐页统计","本地抽文本","本地抽文本","0.99","文本层覆盖率为100%，乱码率仅0.155%，页面文字清晰，可直接本地抽取文本。","2026-10-24T23:30:00+08:00"

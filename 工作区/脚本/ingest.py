@@ -164,6 +164,8 @@ def scan(root):
         p = os.path.join(inbox, name)
         if not os.path.isfile(p) or name.startswith("."):
             continue
+        if name.lower() in ("readme.md", "readme.txt"):
+            continue
         item = plan_for(p, books, shas)
         if item["sha256"] in seen and item["action"] != "skip":
             item["action"] = "skip"

@@ -1,8 +1,0 @@
-{
- "args": [
-  "--keep", "^Epilogue$",
-  "--keep", "^Notes$",
-  "--drop", "^Thank$",
-  "--drop", "^We$"
- ]
-}

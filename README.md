@@ -2,7 +2,7 @@
 
 本地电子书库的工具箱。每本书一个目录，正文拆成章节 Markdown，另有可视化阅读版 HTML。SQLite 保存书目与检索索引，全库正文可以按词、按概念、按书检索，也可以交给 pi agent 按原文回答问题，答案带逐字引文。
 
-仓库只跟结构、脚本与账，不跟书的正文。`库/**/source/`、`md/`、`html/` 都在 `.gitignore` 里。克隆后 `库/` 里只有书目元数据（`book.json`），没有正文。
+仓库只跟结构、脚本与表格式，不跟任何人的书。`库/**/source/`、`md/`、`html/`、`book.json` 都在 `.gitignore` 里，`目录/` 下的 CSV 只带表头。克隆下来是**空骨架：0 本书、0 条账**，放自己的书用 `ingest.py` 入库。
 
 ## 能做什么
 
@@ -16,10 +16,10 @@
 
 | 路径 | 内容 |
 |---|---|
-| `库/` | 唯一权威内容区。一本书一个目录，含 `book.json`、`source/`、可选 `md/` 与 `html/` |
-| `库/_收件箱/` | 新书落地处，入库走 `ingest.py` |
+| `库/` | 唯一权威内容区。一本书一个目录，含 `book.json`、`source/`、可选 `md/` 与 `html/`。**克隆后是空的** |
+| `库/_收件箱/` | 新书落地处，入库走 `ingest.py`，见该目录的 README |
 | `库/_冷宫/` | 移出处理流程的书，只留原书文件，不在人账，不进检索 |
-| `目录/分类表.csv` | 唯一人账，一行一本书。只有它允许人改 |
+| `目录/分类表.csv` | 唯一人账，一行一本书。只有它允许人改。克隆后只有表头 |
 | `目录/library.db` | 全库索引，SQLite，产物，可重建 |
 | `目录/书目总表.csv` | 从 DB 导出的书目，含 md 状态、主源文件、路径，产物 |
 | `目录/概念表.tsv` | 检索层的概念键与同义词组，人写人改 |
@@ -34,6 +34,8 @@
 | `工作区/演示-检索流程/` | 检索流程演示页服务与验收 |
 
 `book.json` 只记源元数据（uid、书名、学科、sources、awards）。md 与 html 状态在 `library.db` 的 `derived` 表里，由 `build_library.py` 按磁盘生成，不写回 `book.json`。
+
+本仓只放工具，不放书账。作者自己的书目在私有数据仓 `book-corpus-data` 里，换机器时 clone 它并 `rsync` 覆盖回本仓即可（`目录/*.csv` 与 `库/**/book.json`）。你在本仓加的 `book.json` 不会被 Git 跟踪，这是故意的。
 
 ## 从零搭起来
 
@@ -50,10 +52,16 @@
 | `pi` CLI | 模型功能必需 | 分类、拆章修复、问答通过它调模型 |
 | headless Chrome | 可选 | 操作台截图验收，`CHROME_BIN` 可换路径 |
 
-Fedora 装系统工具：
+Fedora：
 
 ```bash
 sudo dnf install calibre poppler-utils ripgrep
+```
+
+Arch / Omarchy：
+
+```bash
+sudo pacman -S --needed calibre poppler ripgrep
 ```
 
 Debian 与 Ubuntu：
@@ -136,16 +144,16 @@ huggingface-cli download BAAI/bge-reranker-v2-m3 \
 
 ### 6. 准备语料
 
-仓库带着作者的书目账（`目录/分类表.csv` 与各书的 `book.json`），正文不在 Git 里。要用自己的书，有两条路：
+克隆下来是空骨架：`库/` 里只有 `_收件箱/` 与 `_冷宫/` 的 README，`目录/` 下的 CSV 只有表头。自己的书这样进来：
 
-- 在本仓库的 `库/` 里继续加书，走 `ingest.py`。
-- 另起一个数据根，设 `BOOKS_ROOT` 指过去。新根至少要有 `库/`、`目录/分类表.csv`（表头 `uid,一级,二级,作者层,保留,正式书名,备注`）、`目录/概念表.tsv` 与 `目录/系列/`。
-
-入库流程：
+1. 把书拷进 `库/_收件箱/`。
+2. `ingest.py scan` 出计划，`ingest.py apply --apply` 落到 `库/<一级>/<二级>/<书名>/source/`，同时写 `book.json` 与 `目录/分类表.csv` 一行。
+3. `build_library.py --emit-json` 建库，`split_md_batch.py` 拆章，`build_para_index.py --rebuild` 建检索索引。
 
 ```bash
 python3 工作区/脚本/ingest.py scan --out plan.json
 python3 工作区/脚本/ingest.py apply plan.json --apply
+python3 工作区/脚本/build_library.py --emit-json
 ```
 
 `scan` 只读，出计划。`apply` 默认也只打印，加 `--apply` 才写盘。

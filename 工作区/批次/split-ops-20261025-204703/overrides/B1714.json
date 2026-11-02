@@ -1,8 +1,0 @@
-{
- "args": [
-  "--keep", "^Notes$",
-  "--keep", "^References",
-  "--drop", "^levels of analysis,–$"
- ],
- "accept": "全书 24.5% 是 Notes(73.8k)/References(59.4k)/Index 等卷尾页；默认去卷尾页只剩 80.8%。把作者尾注与参考文献当正文收进（末注是正文的学术附注，非导航），索引页（含只有页码反链的续页 levels of analysis,–）仍不收"
-}

@@ -1,7 +1,0 @@
-{
-  "args": [
-    "--keep", "^Notes$",
-    "--keep", "^References",
-    "--drop", "^Khurana, Rakesh"
-  ]
-}

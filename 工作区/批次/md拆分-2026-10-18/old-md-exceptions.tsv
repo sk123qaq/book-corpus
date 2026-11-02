@@ -1,3 +1,0 @@
-uid	dir	check	flagged	verdict	evidence
-B0223	库/文学/类型小说/巨人的陨落/md	verify_output.py	problems: 44	源书自身重复，接受	用当前转换器重跑同一源到 /tmp/probe-B0223，verify 同样报 44；重跑产物与库内 md 逐字节相同（diff -r 无输出）。44 项主体是人物表各节按三卷各排一次，原文如此
-B0316	库/人文社科/历史/曼德拉/理想国译丛/奥斯曼帝国的衰亡：一战中东，1914—1920/md	verify_output.py	problems: 7（broken link）	源书正文如此，照录	7 条的目标串逐条在源 epub 的 XHTML 里原文存在，例如 part0555.xhtml 里写着 "[东线下士的日记，1914–1915](Istanbul: Türkiye Iş Bankası Kültür Yayınları, 2009)"；改写会违反「引文照原文逐字抄」

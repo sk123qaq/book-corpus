@@ -1,1 +1,0 @@
-["--keep", "^Notes$", "--keep", "^References$", "--drop", "^The$"]

@@ -1,8 +1,0 @@
-{
-  "args": [
-    "--keep", "^Preface$",
-    "--keep", "^Notes$",
-    "--drop", "^DEVELOPMENT AS FREEDOM$",
-    "--drop", "^To Emma$"
-  ]
-}
