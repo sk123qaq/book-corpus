@@ -882,7 +882,7 @@
       <span>→</span>
       <span><b>≤24</b><i>段</i></span>
       <span>→</span>
-      <span><b>≤6</b><i>窗</i></span>
+      <span><b>≤5</b><i>窗</i></span>
     </div>
   </header>
 
@@ -907,7 +907,7 @@
         <div class="num">03 / 正文</div>
         <h3>窗口</h3>
         <p>从选中的段向上下各约 60 行取原文，按字数截断；同一文件里重叠或相邻的窗口合并。这才是提示词里的“原文”。</p>
-        <span class="tag">正文 ≤6 扇</span>
+        <span class="tag">正文 ≤5 扇</span>
       </article>
     </div>
   </section>
@@ -975,13 +975,13 @@
         </div>
       </article>
 
-      <div class="connector"><span class="arrow">↓</span><span><b>扩窗、合并、封顶</b>：每段上下各约 60 行取正文，同文件重叠就合并，最多 6 扇</span></div>
+      <div class="connector"><span class="arrow">↓</span><span><b>扩窗、合并、封顶</b>：每段上下各约 60 行取正文，同文件重叠就合并，最多 5 扇</span></div>
 
       <article class="step" style="--accent:#1d1c1a; --accent-soft:#eee9dd;">
         <div class="step-head">
           <span class="step-no">STEP 04</span>
           <h3>窗口</h3>
-          <div class="count">≤6<small>扇</small></div>
+          <div class="count">≤5<small>扇</small></div>
           <span class="access">正文进提示词</span>
         </div>
         <div class="step-body">
@@ -992,18 +992,17 @@
               <div class="window"><div class="tag"><b>W3</b><span>命中行 ±60</span></div><div class="bar"></div><div class="bar short"></div><div class="bar mid"></div></div>
               <div class="window"><div class="tag"><b>W4</b><span>命中行 ±60</span></div><div class="bar short"></div><div class="bar"></div><div class="bar mid"></div></div>
               <div class="window"><div class="tag"><b>W5</b><span>命中行 ±60</span></div><div class="bar mid"></div><div class="bar short"></div><div class="bar"></div></div>
-              <div class="window"><div class="tag"><b>W6</b><span>命中行 ±60</span></div><div class="bar"></div><div class="bar mid"></div><div class="bar short"></div></div>
             </div>
           </div>
           <div class="budget">
             <span>每窗 <b>≤3500 字</b></span>
-            <span>合计 <b>≤14000 字</b></span>
+            <span>合计 <b>≤18000 字</b></span>
             <span>提示词 <b>≤26000 字</b></span>
           </div>
           <p class="note">
-            6 扇是<strong>合并后</strong>的窗口数。同章两处命中相隔很远，会留成两扇窗，所以
-            <strong>6 窗不保证覆盖 6 章</strong>；模型还能用 <code>book_grep</code> + <code>read</code>
-            越过这 6 扇去补读。
+            5 扇是<strong>合并后</strong>的窗口数。同章两处命中相隔很远，会留成两扇窗，所以
+            <strong>5 窗不保证覆盖 5 章</strong>；模型还能用 <code>book_grep</code> + <code>read</code>
+            越过这 5 扇去补读。
           </p>
         </div>
       </article>
@@ -1028,7 +1027,7 @@
         </div>
         <div class="branch">
           <span class="branch-op">回选 24 段 + 扩窗</span>
-          <div class="branch-node"><b>窗口</b><span>正文 ≤6</span></div>
+          <div class="branch-node"><b>窗口</b><span>正文 ≤5</span></div>
           <span class="branch-out">给模型读正文</span>
         </div>
       </div>
@@ -1117,14 +1116,14 @@
           </tr>
           <tr>
             <td>窗口</td>
-            <td class="num">≤6</td>
+            <td class="num">≤5</td>
             <td class="num">≤3</td>
             <td class="num">≤24</td>
             <td><span class="tag-inline">正文</span></td>
           </tr>
           <tr>
             <td>正文字数预算</td>
-            <td class="num">≤14000</td>
+            <td class="num">≤18000</td>
             <td class="num">2200–3400</td>
             <td class="num">约 18000</td>
             <td><span class="tag-inline">正文</span></td>
@@ -1178,14 +1177,14 @@
     <div class="myths">
       <article class="myth">
         <p class="wrong">30 章 = 读了 30 章</p>
-        <p class="right">30 章是目录地图，只有 path、line、score；正文只有 6 扇窗。</p>
+        <p class="right">30 章是目录地图，只有 path、line、score；正文只有 5 扇窗。</p>
       </article>
       <article class="myth">
         <p class="wrong">24 段 = 24 章</p>
-        <p class="right">段按章分布，多段可同章；24 段只是扩窗前的种子，最后只留 6 扇。</p>
+        <p class="right">段按章分布，多段可同章；24 段只是扩窗前的种子，最后只留 5 扇。</p>
       </article>
       <article class="myth">
-        <p class="wrong">6 窗 = 6 章</p>
+        <p class="wrong">5 窗 = 5 章</p>
         <p class="right">窗口按文件内位置合并，不按章去重；同章两处远隔的命中会占两扇窗。</p>
       </article>
       <article class="myth">

@@ -43,7 +43,8 @@ python3 工作区/演示-检索流程/server.py
 3. 组覆盖二遍：在这 100 个同书候选段上，用 `defpass.score` 按 groups 打分，取前 4 段。
    只在前 100 候选上跑，不扫全库，避免 README 和无关章把候选冲上来。
 4. 当前命中 + 组覆盖 + 章聚类 → `book_expand.make_packet(..., level=2, max_chars=3500)`
-   取有界窗口；最多 6 窗、合计 14000 字。候选章地图单独给 agent。
+   取有界窗口；最多 5 窗、合计 18000 字。候选章地图单独给 agent。窗口参数的理由见
+   `工作区/演示-检索流程/窗口参数-决策记录.md`。
 5. 提示词带候选章地图、窗口和两个只读工具：
    `pi -p -e readonly_tools.ts --tools book_grep,read --skill ~/.agents/skills/book-corpus-qa/SKILL.md
    --model opencode-go/deepseek-v4.1-flash --thinking <档位> "<prompt>"`，超时 240 秒。
@@ -206,9 +207,9 @@ python3 工作区/演示-检索流程/验收/shot.py --width 390 --height 844 --
 
 - 回答依赖本机 `pi` 与 `opencode-go` 凭据；不可用时回答卡报错、可重试，检索与原文不受影响。
 - 延迟随提供方波动（实测 11 到 49 秒）：`--thinking low` 保留低档思考，
-  6 窗提示词、30 章地图和 agent 的工具轮数都会拉长时间。
+  5 窗提示词、30 章地图和 agent 的工具轮数都会拉长时间。
 - 模型偶尔改写引文，回查不过会被丢掉，可能只剩 1 条并标「引文回查不足」；`confidence` 也随之降到 `low`。
-- 回答默认给 6 个窗口（≤ 14000 字）和 30 章候选地图；全选时每本书分到 `clamp(14000 // 本数, 1400, 2600)` 字的预算、
-  最多两扇窗与 4 章地图，一次提示词答完，不是每本各答一遍再拼。agent 可用只读 `book_grep`/`read` 继续搜，
+- 回答默认给 5 个窗口（≤ 18000 字）和 30 章候选地图；全选时每本书分到 `clamp(18000 // 本数, 2200, 3400)` 字的预算、
+  最多三扇窗与 4 章地图，一次提示词答完，不是每本各答一遍再拼。agent 可用只读 `book_grep`/`read` 继续搜，
   全选时 `book_grep` 同时搜所有在范围内的书。不做追问。
 - 左栏流程轨在长页里没有真正吸顶（`html, body { overflow-x: hidden }` 让 sticky 失效），滚动截图里看不到它。

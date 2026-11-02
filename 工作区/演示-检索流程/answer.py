@@ -10,8 +10,8 @@
 步骤（见 ANSWER-BRIEF.md）：
   1. book_readme.readme_toc 拿 path → 章名
   2. lib_fts_cjk.query_expr 拼表达式，qsearch.search 取同书候选段
-  3. 固定当前命中在第一段，最多 6 段，同一章最多 2 段
-  4. book_expand.make_packet 取有界窗口，合并重叠，最多 4 个窗口、合计 12000 字
+  3. 固定当前命中在第一段，最多 24 段，同一章最多 2 段
+  4. book_expand.make_packet 取有界窗口，合并重叠，最多 5 个窗口、合计 18000 字
   5. 拼提示词调 `pi -p --no-tools --no-session --no-context-files --skill ...`
   6. 解析第一个 JSON 对象，服务端回查每条引文，行号以文件实际行号为准
   7. 缓存到 缓存/answers/<sha1>.json（键含 PROMPT_VERSION 与思考等级），原子写；
@@ -64,7 +64,7 @@ CACHE_DIR = os.path.join(HERE, "缓存", "answers")
 SKILL = os.path.join(L.skill_dir("book-corpus-qa"), "SKILL.md")
 MODEL = os.environ.get("ANSWER_MODEL", "opencode-go/deepseek-v4.1-flash")
 PI_TIMEOUT = 240
-PROMPT_VERSION = "answer-v12"
+PROMPT_VERSION = "answer-v13"
 PROMPT_VERSION_MULTI = "answer-v19-multi"
 
 JSON_REMIND = ("\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，"
@@ -77,11 +77,12 @@ DEFPASS_TOP = 4
 MAX_CHAPTERS = 30
 MAX_PASSAGES = 24
 MAX_PER_CHAPTER = 2
-MAX_WINDOWS = 7
+MAX_WINDOWS = 5
 WINDOW_CHARS = 3500
 TOTAL_CHARS = 18000
-# 6 窗/14k 字会在「凡人」这类多点命中题里把第 7 个高相关窗（0791）截掉，
-# 模型只剩 1002/0783，引不到长老身份那一章；7 窗/18k 仍低于 PROMPT_MAX。
+# 5 个满窗是 17500 字，落在 18000 内。实验见「窗口参数-决策记录.md」：
+# 单事实题 N=3 到 N=5 已饱和；长论证和凡人题靠 W=3500；N=7 只在多证据边界
+# 多一条证据，默认不付这个成本。改窗数要同时升 PROMPT_VERSION 和更新文档。
 PROMPT_MAX = 26000
 HISTORY_CHARS_SINGLE = 5000
 MAX_CITATIONS = 6

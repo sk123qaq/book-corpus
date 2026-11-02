@@ -24,6 +24,14 @@
 
 检索层给候选地图与窗口，agent 做归纳、补搜与引文组织。首跑 11 到 50 秒，引文可回查，长章只加载窗口。
 
+## 窗口参数（2026-11-02）
+
+单书默认是 `MAX_WINDOWS=5`、`WINDOW_CHARS=3500`、`TOTAL_CHARS=18000`。
+
+5 个满窗是 17500 字，落在 18000 内，`floor=1750` 不会提前停。60 题 gold 在 N=3 到 N=5 已经饱和，N=7 不再增加单事实题覆盖；长论证要到 W=3500，W=2500 的必答覆盖只有 0.681。凡人题在 N=5/W3500 的那轮回答里靠 `book_grep`/`read` 补读到 0791，窗口本身仍是 5 扇，不含 0791。N=7 只在多证据题完整必答覆盖是硬要求，或要求窗口本身带齐长老身份证据时保留。
+
+完整读数、为什么不用 W=2500 或 W=5000、以及失败调用的处理，见 `窗口参数-决策记录.md`。改这三个值时要同步升 `PROMPT_VERSION`，并更新本段。
+
 ## 数据形状
 
 `trace.py` 的 `read_chapter` 增加前置上下文。返回：
@@ -111,7 +119,7 @@
 2. 用 `lib_fts_cjk.query_expr` 拼表达式，`qsearch.search(con, expr, terms, [], 100, 40, False, 2000)` 取候选段。只留 `hit["book"] == book` 的段。
 3. 按章聚类，取每章最好的一段，排出前 30 章候选地图。
 4. 组覆盖二遍：在这 100 个同书候选段上，用 `defpass.score` 按 `groups` 打分，取前 4 段（覆盖 ≥ 2 组）。
-5. 当前命中 + 组覆盖 + 章聚类 → `book_expand.make_packet(..., level=2, max_chars=3500)`；重叠合并，最多 6 个窗口、合计 14000 字。
+5. 当前命中 + 组覆盖 + 章聚类 → `book_expand.make_packet(..., level=2, max_chars=3500)`；重叠合并，最多 5 个窗口、合计 18000 字。
 6. 组装提示词，带候选章地图、窗口和只读工具，调 `pi`：
 
 ```bash
@@ -247,8 +255,8 @@ Source 就是 `{book, title, path, line}`，`book` 由 `path` 推（`books/<uid>
 
 ### 缓存与工具
 
-- 单书用 `PROMPT_VERSION = "answer-v11"`，多书用 `PROMPT_VERSION_MULTI = "answer-v18-multi"`。
-  这一轮加入思考等级与单书结构，v8 与 v17 的旧缓存不再命中，不做数据迁移。
+- 单书用 `PROMPT_VERSION = "answer-v13"`，多书用 `PROMPT_VERSION_MULTI = "answer-v19-multi"`。
+  单书窗数改为 5 后旧缓存不再命中，不做数据迁移。
 - 单书与多书键都含 thinking；多书还含 question、有序书单的 `(book, path, line)`、terms、groups、model。
   换掉一本书或换一档思考都不再命中。
 - `call_pi` 把 `BOOK_MDS`（md 目录 JSON 数组）给出去，`BOOK_MD` 仍是第一个目录。
