@@ -1,0 +1,6 @@
+# 重排实验（rerank.py）用。GPU 版按平台装：AMD 用 ROCm 轮子，NVIDIA 用 CUDA 轮子。
+# 只跑检索与问答不需要这些包。
+# 用法：工作区/.venv-pdf/bin/pip install -r requirements-rerank.txt
+
+torch>=2.2
+transformers>=4.40

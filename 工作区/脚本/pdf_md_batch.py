@@ -66,7 +66,7 @@ PILOT = os.path.join(HERE, "paddleocr_pilot.py")
 ASSEMBLER = os.path.join(HERE, "pdf_ocr_to_md.py")
 TEXT_ASSEMBLER = os.path.join(HERE, "pdf_text_to_md.py")
 AUDIT = os.path.join(HERE, "pdf_audit_volume.py")
-VERIFY = os.path.expanduser("~/.agents/skills/ebook-to-md/scripts/verify_output.py")
+VERIFY = os.path.join(L.skill_dir("ebook-to-md"), "scripts", "verify_output.py")
 CENSUS_DIR = os.path.join(L.WORK, "批次", "pdf-普查-2026-10-19")
 TRIAGE = os.path.join(CENSUS_DIR, "triage_final.csv")
 SKIP_LIST = os.path.join(CENSUS_DIR, "skip_list.tsv")
@@ -97,7 +97,7 @@ ROUTE_TRIAGE = {"ocr": "OCR", "text": "本地抽文本"}
 MIN_AUDIT_RATIO, MIN_AUDIT_ANCHORS = 0.95, 0.90   # 与 pdf_audit_volume.py 的默认门槛一致
 # MinerU 兜底：Paddle 读出 0 字但有字迹的页交它补投。官方上限单文件 200 页 / 200 MB，
 # 每账号每天 1000 页最高优先级、超出降速、5000 页封顶。
-MINERU_CLI = os.path.expanduser("~/.agents/skills/mineru/scripts/mineru.py")
+MINERU_CLI = os.path.join(L.skill_dir("mineru"), "scripts", "mineru.py")
 MINERU_MAX_PAGES, MINERU_MAX_MB = 200, 200
 MINERU_FREE_PAGES, MINERU_DAY_PAGES = 1000, 5000
 MINERU_SKIP_TYPES = ("page_number", "page_footnote", "footer", "footer_image")

@@ -24,10 +24,11 @@ import shutil
 import subprocess
 import sys
 
-ROOT = "/home/shike/文档/books"
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
 from pdf_census import classify  # noqa: E402  纯函数，只吃 census 行，不需要 pymupdf
+ROOT = L.ROOT
 
 MODEL = "opencode-go/deepseek-v4.1-flash"
 ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")

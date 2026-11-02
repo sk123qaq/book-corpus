@@ -20,7 +20,10 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 MIN_INK, MAX_INK, MIN_BANDS = 0.004, 0.35, 8
 
 

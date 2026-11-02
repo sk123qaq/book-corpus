@@ -44,6 +44,7 @@ import book_expand  # noqa: E402
 import book_readme  # noqa: E402
 import defpass  # noqa: E402
 import lib_fts_cjk as cjk  # noqa: E402
+import lib_common as L  # noqa: E402
 import qsearch  # noqa: E402
 from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinking  # noqa: E402
 
@@ -51,8 +52,8 @@ INDEX_DB = os.path.join(ROOT, "目录", "检索", "index.db")
 LIBRARY_DB = os.path.join(ROOT, "目录", "library.db")
 LIBRARY = os.path.join(ROOT, "库")
 CACHE_DIR = os.path.join(HERE, "缓存", "answers")
-SKILL = "/home/shike/.agents/skills/book-corpus-qa/SKILL.md"
-MODEL = "opencode-go/deepseek-v4.1-flash"
+SKILL = os.path.join(L.skill_dir("book-corpus-qa"), "SKILL.md")
+MODEL = os.environ.get("ANSWER_MODEL", "opencode-go/deepseek-v4.1-flash")
 PI_TIMEOUT = 240
 PROMPT_VERSION = "answer-v12"
 PROMPT_VERSION_MULTI = "answer-v19-multi"

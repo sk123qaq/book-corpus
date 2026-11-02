@@ -16,7 +16,10 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 DB = os.path.join(ROOT, "目录/library.db")
 TIMEOUT = 300
 

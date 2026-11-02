@@ -3,9 +3,12 @@
 
   eval_report.py [--batch 工作区/批次/qa-检索-2026-10-19]
 """
-import argparse, csv, glob, os
+import argparse, csv, glob, os, sys
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 
 
 def load(path):

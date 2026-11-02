@@ -7,7 +7,7 @@
   3. 抽出来的字可不可信（无 ToUnicode 的 CID 字体会出乱码或私用区字符）。
 
 需要 pymupdf，用带它的解释器跑，例如：
-  ~/teleocr/.venv/bin/python 工作区/脚本/pdf_text_probe.py --census <census.jsonl> --out probe.jsonl
+  工作区/.venv-pdf/bin/python 工作区/脚本/pdf_text_probe.py --census <census.jsonl> --out probe.jsonl
 """
 import argparse
 import json
@@ -16,7 +16,10 @@ import re
 import statistics
 import sys
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 BAD_RE = re.compile(r"[\ufffd\ue000-\uf8ff\x00-\x08\x0b\x0e-\x1f]")
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 

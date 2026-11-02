@@ -1,8 +1,10 @@
 # 书库项目
 
-`~/文档/books` 是 22 GB 的个人电子书库。2026-10 按 `工作区/方案/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
+`~/文档/books` 是个人电子书库。2026-10 按 `工作区/方案/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
 
 新会话先读本文件，再按「文件地图」与「脚本」按需深入。方案 §8 开头有两段执行修订，正文里写死的原型数字按修订块读。
+
+本文件记录作者本机的书库实例。批次账与现状数字只对那份语料成立；新克隆的仓库按 `README.md` 从零搭建。
 
 ## 现状
 
@@ -18,7 +20,7 @@ As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf�
 
 2026-10-20 按操作人要求把日文原版暂缓（中文译本照做），语种由 `工作区/脚本/pdf_lang_probe.py` 探页按内容判，账落批次目录 `defer/lang.tsv`；当天再入库 69 本（`paddle-ocr`，1 本 B1321 走 `overrides/` 受理），14:47 又撞日额度。范围内（非日文）还剩 193 本 85,196 页，其中 6 本有半成品（补完约 380 页额度）；续跑照 `工作区/批次/pdf-ocr-2026-10-19/续跑计划.md`，额度用尽时接口回 HTTP 403 code 12001，不是 429。
 
-2026-10-18 深夜把 11 本旧 md 重拆替换（4 本单 owner + 渡边淳一合集 7 本），其余旧 md 经逐本覆盖率比对与当前转换器产物逐字节相同，未动。账与结论见 `工作区/批次/旧md重拆-2026-10-18/重拆报告.md`。DB 的 `derived` 表（chapters/bytes/method）与 `目录/书目总表.csv` 已随之重建，`book-corpus-qa` 的 `corpus-map.md` 数字也用 `corpus_stats.py` 重测。
+2026-10-18 深夜把 11 本旧 md 重拆替换（4 本单 owner + 渡边淳一合集 7 本），其余旧 md 经逐本覆盖率比对与当前转换器产物逐字节相同，未动。账与结论见 `工作区/批次/旧md重拆-2026-10-18/重拆报告.md`。DB 的 `derived` 表（chapters/bytes/method）与 `目录/书目总表.csv` 已随之重建，`book-corpus-qa` 的结构读数也用 `corpus_stats.py` 重测。
 
 ## 文件地图
 
@@ -33,6 +35,7 @@ As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf�
 | `目录/对照表.csv` | L3 搬迁的旧路径到新路径映射，任何路径改写的依据 |
 | `目录/` 其余 csv 与 jsonl | 分类预填、分类缓存、标注样本、搬迁计划、书目录清单、源文件清单、重复、损坏、路径冲突。L0 到 L2 的过程账，留档 |
 | `目录/系列/` | 21 份合集的卷序说明 |
+| `.agents/skills/` | 随仓库提交的 pi 技能：`book-corpus-qa`、`ebook-to-md`、`chapter-html-versions`、`mineru`、`typesafe-ai`。脚本优先从这里解析 |
 | `目录/概念表.tsv` | 检索层的概念键与同义词组，126 条。人写人改 |
 | `目录/概念表-broad.tsv` | 宽词层实验表，10 个宽词。独立于 126 主表，未并入生产 |
 | `目录/检索/README.md` | 检索层方案。P0 到 P5 的门槛、目标结构、实测基线 |
@@ -62,7 +65,7 @@ As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf�
 
 | 脚本 | 用途 |
 |---|---|
-| `lib_common.py` | 共享工具。路径常量、书名与作者清洗、`book_relpath`、md 目录计数 |
+| `lib_common.py` | 共享工具。路径常量、书名与作者清洗、`book_relpath`、md 目录计数。`ROOT` 由脚本位置推导，`BOOKS_ROOT` 可覆盖；`skill_dir()` 先找仓库 `.agents/skills/`，再找 `~/.agents/skills/` |
 | `build_library.py` | 重建 `目录/library.db`（读 `库/**/book.json`）。`--emit-json` 同时同步每本书的 `book.json` |
 | `ingest.py` | 收件箱入库：`scan` 出计划（sha256 去重、书名匹配、add/replace/conflict，add 调 pi 的 deepseek-v4.1-flash 预填 subjects 与置信度），`apply` 落文件、写 `book.json` 与人账行、记 journal，再重建 DB。`--root` 可指到临时目录做测试，`--no-classify` 跳过分类 |
 | `lq.py` | 只读查询 DB。`lq.py [-H] "SELECT ..."`，字段用制表符分隔 |
@@ -80,7 +83,7 @@ As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf�
 | `install_collection.py` | 把 split_collection 的逐册产物装进各书 md/，旧版改名留档，写 manifest |
 | `collection_coverage.py` | 合集重拆的覆盖率验收（源书逐页锚点在给定旧/新 md 目录里的命中数） |
 | `md_review_report.py` | 只读取证：正文字数、图片路径字数、跨文件重复片段、自链、spine 未收录页 |
-| `corpus_stats.py` | 重测 `book-corpus-qa` 的 corpus-map.md 里那批数字 |
+| `corpus_stats.py` | 现测书库规模与结构：md 数、章节数、体积、未收录项、长书与系列分布。只读 |
 | `audit_old_md.py` | 旧 md 文本量审计。逐页锚点比对源书，报「缺页」并按 README 未收录与卷首卷尾分类。只读 |
 | `drill_md_gap.py` | 单本下钻：源书每页在 md 里能找到多少，定位丢的是哪些页。只读 |
 | `md_link_health.py` | 全库链接健康：章节文件自链数、README 目录段是否全部成链接、目录首行缩进。只读。装了 commonmark 按渲染结果判，没装按 CommonMark 链接目标规则判 |
@@ -118,6 +121,8 @@ As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf�
 | `eval_report.py` | 把 `eval-*.tsv` 汇总成 README §2.2 的两张表 |
 | `check_p1.py` | P1 验收：2 字词、译名墙案例、原词类不低于裸 grep |
 
+路径与技能解析：`BOOKS_ROOT` 换数据根，`BOOKS_SKILLS_DIR` 换技能根，`BOOKS_RG` 指定 `rg`，`PI_BIN` 指定 `pi`。默认值都由脚本位置推导，不写死绝对路径。
+
 ## 流程
 
 - 开工第一天就 `git init`，先提交账本、脚本与方案，不跟正文。
@@ -145,7 +150,7 @@ As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf�
 书级默认入口（2026-10-23）：`book_query.py`。默认 `best_support` + B2.5 5 轮词法循环；触发时默认弹 5-8 张书卡，`--no-cards` 关闭；按需扩展默认关，`--expand-on-demand` 才跑 B4。`qsearch.py --book` 仍是旧 `mix` 口径，只作对照；`book_score.py` 是打分实验台。
 
 ```bash
-cd ~/文档/books
+cd "$(git rev-parse --show-toplevel)"
 # 找书（书名或作者），把 波特 换成要查的词
 python3 工作区/脚本/lq.py -H "SELECT uid,title,author,path FROM book WHERE title LIKE '%波特%' OR author LIKE '%波特%'"
 # 拿某本书的 md 目录，把 乡土中国 换成书名

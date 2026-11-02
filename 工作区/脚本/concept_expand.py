@@ -11,7 +11,7 @@ sys.path.insert(0, HERE)
 import lib_common as L  # noqa: E402
 
 TABLE = os.path.join(L.CAT, "概念表.tsv")
-RG = "/home/shike/.pi/agent/bin/rg"
+RG = L.RG
 
 
 def load():
@@ -38,7 +38,9 @@ def count_files(terms):
         cmd += ["-e", t]
     cmd.append(L.LIB)
     env = dict(os.environ)
-    env["PATH"] = os.path.dirname(RG) + ":" + env.get("PATH", "")
+    rg_dir = os.path.dirname(RG)
+    if rg_dir:
+        env["PATH"] = rg_dir + ":" + env.get("PATH", "")
     r = subprocess.run(cmd, capture_output=True, text=True, env=env)
     return len([l for l in r.stdout.splitlines() if l])
 

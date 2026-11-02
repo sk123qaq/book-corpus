@@ -6,7 +6,7 @@ HTTP 403 code 12001（2026-10-19 16:23 实测，不是 429）。
 轮询遇网络抖动自动重试；中断后用 --job <jobId> 续跑同一任务，不重复消耗额度。
 token 读 ~/.config/PaddleOCR/api_key，脚本不打印密钥。
 
-用法（要 pypdf 与 requests，用 ~/teleocr/.venv/bin/python）：
+用法（要 pypdf 与 requests，用 工作区/.venv-pdf/bin/python）：
   paddleocr_pilot.py --uid B0540 --pages 3-8 --out <dir>
   paddleocr_pilot.py --job 105481013747945472 --pages 3-8 --out <dir>
 """
@@ -18,7 +18,10 @@ import time
 
 JOB_URL = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
 KEY_PATH = os.path.expanduser("~/.config/PaddleOCR/api_key")
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 
 
 def token():

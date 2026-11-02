@@ -40,7 +40,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
-SKILL = os.path.expanduser("~/.agents/skills/ebook-to-md/scripts")
+SKILL = os.path.join(L.skill_dir("ebook-to-md"), "scripts")
+SKILL_DOC = os.path.join(os.path.dirname(SKILL), "SKILL.md")
 CONVERT = os.path.join(SKILL, "ebook_to_md.py")
 FIX_MODEL = os.environ.get("MD_FIX_MODEL", "opencode-go/deepseek-v4.1-flash")
 PI = os.environ.get("PI_BIN") or shutil.which("pi") or "pi"
@@ -57,7 +58,7 @@ FIX_PROMPT = """修一本书的拆章产物，目标：verify_output.py 与 audi
 
 允许：调整章节映射与章名，把原书漏收的正文补进来，改 {batch}/overrides/{uid}.json。
 禁止：改 库/ 下任何文件；改 工作区/脚本/；用重复段落或编造文本凑字数；删正文来抬比例。
-工具说明在 ~/.agents/skills/ebook-to-md/SKILL.md 与 scripts/。
+工具说明在 {skill_doc} 与 scripts/。
 把改动写进 {report}，只回一句结论。"""
 VERIFY = os.path.join(SKILL, "verify_output.py")
 AUDIT = os.path.join(SKILL, "audit_volume.py")
@@ -224,7 +225,8 @@ def agent_fix(ctx, row, target, vout, aout):
     prompt = FIX_PROMPT.format(uid=row["uid"], title=row["title"], src=row.get("src", ""),
                                target=os.path.relpath(target, L.ROOT),
                                batch=ctx["batch_name"], v=vout[-1500:], a=aout[-800:],
-                               report=os.path.relpath(report, L.ROOT))
+                               report=os.path.relpath(report, L.ROOT),
+                               skill_doc=SKILL_DOC)
     t0 = time.time()
     try:
         r = subprocess.run([PI, "-p", "--approve", "--model", ctx["fix_model"],

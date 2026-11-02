@@ -9,8 +9,8 @@
   readme_link_fix_check.py --json X          # 默认按 --verify 跑
 
 裸目标指 `- [label](target)` 里 target 不以 `<` 开头；target 里出现空格或括号时
-CommonMark 就不再把它当链接目标。渲染成字面的行数用 commonmark 解析器实测，
-解析器取自隔离安装 /tmp/pycommonmark（先试直接 import）。
+CommonMark 就不再把它当链接目标。渲染成字面的行数用 commonmark 解析器实测。
+缺这个包时脚本会提示 `pip install commonmark`。
 """
 import argparse
 import datetime
@@ -28,7 +28,6 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 BATCH = os.path.join(ROOT, "工作区/批次/md拆分-2026-10-18")
 LOGS = os.path.join(BATCH, "logs")
 OUT = os.path.join(BATCH, "out")
-ISOLATED_COMMONMARK = "/tmp/pycommonmark"
 
 TOC_RE = re.compile(r"^\s*-\s+\[(?P<label>.*)\]\((?P<target>.*)\)\s*$")
 HREF_RE = re.compile(r'<a href="([^"]*)"')
@@ -39,8 +38,7 @@ def render_html(text):
     try:
         import commonmark
     except ImportError:
-        sys.path.insert(0, ISOLATED_COMMONMARK)
-        import commonmark
+        raise SystemExit("需要 commonmark：pip install commonmark")
     return commonmark.commonmark(text)
 
 

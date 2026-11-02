@@ -28,7 +28,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lib_common as L  # noqa: E402
 
-SKILL = os.path.expanduser("~/.agents/skills/ebook-to-md/scripts")
+SKILL = os.path.join(L.skill_dir("ebook-to-md"), "scripts")
 sys.path.insert(0, SKILL)
 from audit_volume import Epub, COUNT_RE  # noqa: E402
 

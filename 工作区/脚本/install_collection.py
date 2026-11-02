@@ -38,7 +38,7 @@ def sha256_file(path):
 
 
 def tool_version():
-    convert = os.path.expanduser("~/.agents/skills/ebook-to-md/scripts/ebook_to_md.py")
+    convert = os.path.join(L.skill_dir("ebook-to-md"), "scripts", "ebook_to_md.py")
     return "sha256:" + sha256_file(convert)[:12]
 
 

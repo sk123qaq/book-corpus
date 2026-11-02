@@ -27,7 +27,10 @@ import os
 import sys
 from collections import Counter
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 SKIP_SUBJECT2 = {"设定集与美术集", "图册与写真", "漫画与画集"}
 VERDICT_ROUTE = {"文字书": "OCR", "混合": "OCR", "图片书": "不转-记图册", "读不出": "人工确认"}
 HUMAN_ROUTES = {"OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓"}

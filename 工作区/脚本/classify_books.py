@@ -35,7 +35,7 @@ import classify_model as CM  # noqa: E402
 API = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-latest"
 TS_PROMPT_VERSION = "typesafe-2026-10-18.1"
-ENV = os.path.expanduser("~/.agents/skills/typesafe-ai/.env")
+ENV = os.environ.get("TYPESAFE_ENV") or os.path.join(L.skill_dir("typesafe-ai"), ".env")
 UNCERTAIN = CM.UNCERTAIN
 NO_SUB = CM.NO_SUB
 TAXONOMY = CM.TAXONOMY
@@ -45,11 +45,14 @@ PREFILL_EXTRA = ["预填依据", "依据最终", "一级TypeSafe", "二级TypeSa
 
 
 def api_key():
-    with open(ENV, encoding="utf-8") as fh:
-        for line in fh:
-            m = re.match(r"\s*(?:export\s+)?TYPESAFE_API_KEY\s*=\s*['\"]?([^'\"\s]+)", line)
-            if m:
-                return m.group(1)
+    try:
+        with open(ENV, encoding="utf-8") as fh:
+            for line in fh:
+                m = re.match(r"\s*(?:export\s+)?TYPESAFE_API_KEY\s*=\s*['\"]?([^'\"\s]+)", line)
+                if m:
+                    return m.group(1)
+    except FileNotFoundError:
+        raise SystemExit("找不到 %s；旧 TypeSafe 后端需要 TYPESAFE_API_KEY 或 TYPESAFE_ENV" % ENV)
     raise SystemExit("找不到 TYPESAFE_API_KEY")
 
 

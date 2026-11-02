@@ -1,0 +1,9 @@
+# 核心脚本只用标准库。这里列的是 PDF 与 EPUB 需要的包。
+# 用法：工作区/.venv-pdf/bin/pip install -r requirements.txt
+
+pymupdf>=1.24
+pypdf>=4
+requests>=2.31
+numpy>=1.26
+pillow>=10
+beautifulsoup4>=4.12

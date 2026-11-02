@@ -89,6 +89,9 @@
 *.docx
 *.pptx
 
+# ---- 技能 ----
+/.agents/skills/typesafe-ai/.env
+
 # ---- 通用 ----
 __pycache__/
 *.py[cod]

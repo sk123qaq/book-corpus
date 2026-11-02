@@ -5,14 +5,29 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import unicodedata
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+CODE_ROOT = os.path.dirname(os.path.dirname(HERE))
+ROOT = os.environ.get("BOOKS_ROOT") or CODE_ROOT
 LIB = os.path.join(ROOT, "库")
 CAT = os.path.join(ROOT, "目录")
 WORK = os.path.join(ROOT, "工作区")
 SCRIPTS = os.path.join(WORK, "脚本")
 BASELINE = os.path.join(WORK, "中间态", "基线")
+SKILLS = os.environ.get("BOOKS_SKILLS_DIR") or os.path.join(CODE_ROOT, ".agents", "skills")
+RG = os.environ.get("BOOKS_RG") or shutil.which("rg") or "rg"
+
+
+def skill_dir(name):
+    """技能目录：仓库内 .agents/skills 优先，其次用户目录。"""
+    local = os.path.join(SKILLS, name)
+    if os.path.isdir(local):
+        return local
+    user = os.path.expanduser(os.path.join("~", ".agents", "skills", name))
+    return user if os.path.isdir(user) else local
+
 
 EXT = {".epub", ".pdf", ".mobi", ".azw3", ".azw", ".txt", ".djvu"}
 CONTENT_POOLS = ["原书", "原书pdf", "建筑", "漫画与动画", "人文社科", "文学",

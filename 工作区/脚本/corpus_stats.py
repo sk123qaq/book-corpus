@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
-"""重测 book-corpus-qa/references/corpus-map.md 里写死的那批数字。
+"""现测书库规模与结构：书目数、md 数、章节数、体积、未收录项、长书与系列分布。只读。
 
-每拆一批 md 之后跑一次，把输出抄回该文件的表格。只读，不改任何文件。
+每拆一批 md 之后跑一次，用输出核对 `book-corpus-qa` 的结构判断。
 
 用法: python3 corpus_stats.py
 """
 import collections
 import os
 import re
-import shutil
 import sqlite3
-import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
 WATCH = ("序言", "自序", "前言", "后记", "导读", "结语")
-SERIES = ("阿加莎", "东野圭吾", "理想国译丛", "毛泽东选集", "余华", "王小波",
-          "盗墓笔记", "鬼吹灯", "吉姆·柯林斯", "杰克·韦尔奇", "金字塔原理", "三体")
 
 
 def md_dirs():
@@ -86,30 +82,21 @@ def main():
         print("   %-40.40s %5d 章  %6.1f MB" % (rel, n, b / MB))
 
     con = sqlite3.connect("file:" + os.path.join(L.CAT, "library.db") + "?mode=ro", uri=True)
-    print()
-    # 口径是 path 含关键词，不是 book.series 字段：path 含作者层目录，所以把 series 为空的书
-    # 也算进来了（阿加莎 path 87 / series 85，王小波 path 11 / series 10）。corpus-map.md
-    # 记的就是这套 path 数，改按 series 会跟它对不上。
-    print("人账口径（有 md 的书里按 path 含关键词数）：")
-    for name in SERIES:
-        n = con.execute("SELECT count(*) FROM book WHERE path LIKE ? AND uid IN "
-                        "(SELECT uid FROM derived WHERE kind='md')", ("%" + name + "%",)).fetchone()[0]
-        print("   %-12s %d" % (name, n))
+    books = con.execute("SELECT count(*) FROM book").fetchone()[0]
+    rows = con.execute(
+        "SELECT series, count(*) FROM book "
+        "WHERE series IS NOT NULL AND series != '' "
+        "AND uid IN (SELECT uid FROM derived WHERE kind='md') "
+        "GROUP BY series ORDER BY count(*) DESC LIMIT 12").fetchall()
     con.close()
-
-    rg = shutil.which("rg")
-    if rg:
-        try:
-            out = subprocess.run([rg, "-l", "波特", L.LIB], capture_output=True, text=True,
-                                 timeout=300)
-        except subprocess.TimeoutExpired:
-            sys.exit("rg 超过 300 秒没返回")
-        print()
-        if out.returncode not in (0, 1):
-            sys.stderr.write(out.stderr)
-            sys.exit("rg 出错，退出码 %d" % out.returncode)
-        print("rg -l 波特 命中 %d 个文件（%s）"
-              % (len(out.stdout.splitlines()), "计时没复现，只报命中数"))
+    print()
+    print("人账               %d 本" % books)
+    if rows:
+        print("系列分布（有 md 的书，前 12）")
+        for name, n in rows:
+            print("   %-20.20s %d" % (name, n))
+    else:
+        print("系列分布           无 series 字段")
 
 
 if __name__ == "__main__":

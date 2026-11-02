@@ -14,9 +14,13 @@
 import argparse
 import json
 import os
+import sys
 from collections import Counter
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 TEXT_SUBJECTS = {"文学", "人文社科", "科学技术", "商业与管理", "写作与编剧", "影视动画漫画"}
 PICTURE_SUBJECT2 = {"图册与写真", "设定集与美术集", "漫画与画集", "绘画与概念设计"}
 

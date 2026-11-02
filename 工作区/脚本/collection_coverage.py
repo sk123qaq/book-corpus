@@ -15,7 +15,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.expanduser("~/.agents/skills/ebook-to-md/scripts"))
+import lib_common as L  # noqa: E402
+sys.path.insert(0, os.path.join(L.skill_dir("ebook-to-md"), "scripts"))
 from audit_volume import Epub  # noqa: E402
 from audit_old_md import page_anchors  # noqa: E402
 

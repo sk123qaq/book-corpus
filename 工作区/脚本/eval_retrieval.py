@@ -10,10 +10,13 @@ L 与 M 写 目录/检索/route_cache/。
 import argparse, csv, json, os, re, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
-ROOT = os.path.expanduser("~/文档/books")
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 CONCEPTS = os.path.join(ROOT, "目录", "概念表.tsv")
 DEFPASS = os.path.join(ROOT, "工作区", "脚本", "defpass.py")
-RG = "/home/shike/.pi/agent/bin/rg"
+RG = L.RG
 QEXPAND = os.path.join(ROOT, "工作区", "脚本", "query_expand.py")
 QROUTE = os.path.join(ROOT, "工作区", "脚本", "concept_route.py")
 QSEARCH = os.path.join(ROOT, "工作区", "脚本", "qsearch.py")
@@ -33,7 +36,9 @@ def concept_table():
 
 def env():
     e = dict(os.environ)
-    e["PATH"] = os.path.dirname(RG) + ":" + e.get("PATH", "")
+    rg_dir = os.path.dirname(RG)
+    if rg_dir:
+        e["PATH"] = rg_dir + ":" + e.get("PATH", "")
     return e
 
 

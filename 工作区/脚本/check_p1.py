@@ -7,9 +7,12 @@
 """
 import csv, json, os, sqlite3, subprocess, sys, time
 
-ROOT = "/home/shike/文档/books"
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import lib_common as L  # noqa: E402
+ROOT = L.ROOT
 QSEARCH = os.path.join(ROOT, "工作区", "脚本", "qsearch.py")
-RG = "/home/shike/.pi/agent/bin/rg"
+RG = L.RG
 BATCH = os.path.join(ROOT, "工作区", "批次", "qa-检索-2026-10-19")
 fails = []
 
@@ -22,7 +25,9 @@ def run(args):
 
 def corpus_files(term):
     env = dict(os.environ)
-    env["PATH"] = os.path.dirname(RG) + ":" + env.get("PATH", "")
+    rg_dir = os.path.dirname(RG)
+    if rg_dir:
+        env["PATH"] = rg_dir + ":" + env.get("PATH", "")
     r = subprocess.run([RG, "-l", "-F", "-g", "*.md", "-e", term, "库"],
                        cwd=ROOT, capture_output=True, text=True, env=env)
     return [l for l in r.stdout.splitlines() if l]
