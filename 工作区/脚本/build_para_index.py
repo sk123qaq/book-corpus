@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """建 目录/检索/index.db：段落倒排（CJK bigram FTS5）+ 概念剖面。零第三方依赖。
 
-  build_para_index.py --rebuild                 # 全库重建，40-70 min
+  build_para_index.py --rebuild                 # 全库重建，40-70 min；顺带重算概念剖面
   build_para_index.py --rebuild --limit-books 20
   build_para_index.py --concepts                # 只补 book_concept 剖面
 
@@ -229,11 +229,12 @@ def main():
     a = ap.parse_args()
     if not (a.rebuild or a.concepts or not os.path.exists(a.db)):
         ap.error("要 --rebuild 或 --concepts")
-    if a.rebuild or not os.path.exists(a.db):
+    fresh = a.rebuild or not os.path.exists(a.db)
+    if fresh:
         con = build(a.db, a.limit_books)
     else:
         con = sqlite3.connect(a.db)
-    if a.concepts:
+    if fresh or a.concepts:
         build_concepts(con)
 
 

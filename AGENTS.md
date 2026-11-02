@@ -6,6 +6,18 @@
 
 本文件记录作者本机的书库实例。批次账与现状数字只对那份语料成立；新克隆的仓库按 `README.md` 从零搭建。
 
+## 这台机器上的三处目录（2026-11-02 起）
+
+| 目录 | 角色 | 有无 `.git` |
+|---|---|---|
+| `~/文档/book-corpus` | 发布骨架，只在这儿改代码、推代码 | 有，跟 origin/main |
+| `~/文档/book-corpus-data` | 书账（`book.json`、`目录/` 的账、批次机账） | 有，私有仓 |
+| `~/文档/book-corpus-local` | 日常干活的副本，正文、源文件、两个 db、视图都在这儿 | **没有** |
+
+`~/文档/books` 指向 `book-corpus-local`，只为让 `工作区/批次/` 里 217 个写死绝对路径的旧机账继续 resolve。
+改脚本要两处一起改：骨架里改并提交，再同步到工作副本（工作副本没有 `.git`，不会自己跟过来）。
+迁移账与验收读数见 `工作区/批次/迁移-三处目录-2026-11-02/迁移说明.md`。
+
 ## 现状
 
 <!-- numbers:start -->
@@ -102,7 +114,7 @@ As of 2026-11-02：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `pdf_md_batch.py` | PDF 批次驱动（`--route ocr\|text`）：切片、提交/续跑、合并、拼装、体检、原子落地、logs、report。失败分 `quota/queue-full/transport/fatal/other` 五类。Paddle 读出 0 字而纸面有字迹的页自动交 MinerU 补投一次，读不出就按跳过受理（账 `skipped-pages.tsv`）。MinerU 没跑（CLI 缺/额度封顶/切片超限）不算跳过受理，可疑页留人工复核 |
 | `eval_retrieval.py` | 四档检索基线：A `grep -rlF`、B `rg -l -F`、C `defpass --concept`、D 近义词组 grep。出 `eval-baseline.tsv` 与 `eval-summary.tsv`（recall@10/@20、MRR、无原词进前 20） |
 | `lib_fts_cjk.py` | CJK bigram 索引与查询的同一份切分，`build_para_index.py` 与 `qsearch.py` 共用 |
-| `build_para_index.py` | 建 `目录/检索/index.db`：段落倒排（FTS5 bigram）+ `book_concept` 概念剖面。只读 `库/`，`--rebuild` 全量 |
+| `build_para_index.py` | 建 `目录/检索/index.db`：段落倒排（FTS5 bigram）+ `book_concept` 概念剖面。只读 `库/`，`--rebuild` 全量且顺带重算概念剖面；`--concepts` 只补剖面 |
 | `concept_expand.py` | 概念表展开成同义词组与排除正则，`--audit` 报零命中的别名 |
 | `concept_route.py` | 问句路由到概念表 3 个键，缓存 `目录/检索/route_cache/`（键含概念表内容指纹）。`qsearch --route` 与评测 L/M 档依赖它 |
 | `query_expand.py` | 查询侧扩展：一次模型调用扩 4 条短语再融合，缓存 `目录/检索/expand_queries/`，`--phrases-only` 只打短语 |

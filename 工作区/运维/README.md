@@ -10,7 +10,7 @@
 ## 起与停
 
 ```bash
-cd ~/文档/books
+cd <工作副本根目录>
 python3 工作区/运维/server.py                 # 127.0.0.1:8770
 python3 工作区/运维/server.py --port 0        # 随机端口（测试用，stdout 打印实际端口）
 python3 工作区/运维/server.py --root /tmp/x   # 换数据根，代码仍指本文件所在处
@@ -210,7 +210,7 @@ python3 工作区/脚本/ops_status.py --json --root <root>
 ## 验收
 
 ```bash
-cd ~/文档/books
+cd <工作副本根目录>
 python3 -m py_compile 工作区/运维/server.py 工作区/运维/验收/check_ops.py 工作区/运维/验收/shot_ops.py
 python3 工作区/运维/验收/check_ops.py        # 随机端口 + 临时根 + stub 脚本，末行 ALL PASS
 python3 工作区/运维/验收/shot_ops.py         # 1440x900 与 390x844，报 CONSOLE ERROR n 与 overflow=

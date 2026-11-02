@@ -298,6 +298,15 @@ def box6():
         ok("概念表 %d 条，键不重复" % len(rows))
     else:
         fail("概念表条数 %d，或键有重复" % len(rows))
+    nbc, bbc = con.execute(
+        "SELECT count(*), count(DISTINCT book) FROM book_concept").fetchone()
+    if nbooks < 10:
+        skip("概念剖面 %d 条（语料只有 %d 本）" % (nbc, nbooks))
+    elif nbc and bbc >= 0.8 * nbooks:
+        ok("概念剖面 %d 条，覆盖 %d/%d 本" % (nbc, bbc, nbooks))
+    else:
+        fail("概念剖面 %d 条，覆盖 %d/%d 本；重建后补 build_para_index --concepts"
+             % (nbc, bbc, nbooks))
     views = os.path.join(L.ROOT, "视图", "主题")
     if not os.path.isdir(views):
         skip("没有 视图/主题/（还没重建视图）")
