@@ -312,7 +312,7 @@ def box6():
              % (nbc, bbc, nbooks))
     views = os.path.join(L.PATHS.views, "主题")
     if not os.path.isdir(views):
-        skip("没有 视图/主题/（还没重建视图）")
+        skip("没有 build/views/主题/（还没重建视图）")
     else:
         links = broken = 0
         for dirpath, dirnames, files in os.walk(views):
@@ -324,11 +324,26 @@ def box6():
                 if not os.path.exists(p):
                     broken += 1
         if links and not broken:
-            ok("视图/主题 %d 条软链全部 resolve" % links)
+            ok("build/views/主题 %d 条软链全部 resolve" % links)
         elif not links and not broken:
-            skip("视图/主题 为空（语料太小或未建主题视图）")
+            skip("build/views/主题 为空（语料太小或未建主题视图）")
         else:
-            fail("视图/主题 软链 %d 条，断链 %d 条" % (links, broken))
+            fail("build/views/主题 软链 %d 条，断链 %d 条" % (links, broken))
+    awards = os.path.join(L.PATHS.views, "奖项")
+    if os.path.isdir(awards):
+        links = broken = 0
+        for dirpath, dirnames, files in os.walk(awards):
+            for fn in dirnames + [f for f in files if f != "README.md"]:
+                p = os.path.join(dirpath, fn)
+                if os.path.islink(p):
+                    links += 1
+                    broken += 0 if os.path.exists(p) else 1
+        if links and not broken:
+            ok("build/views/奖项 %d 条软链全部 resolve" % links)
+        elif not links and not broken:
+            skip("build/views/奖项 为空")
+        else:
+            fail("build/views/奖项 软链 %d 条，断链 %d 条" % (links, broken))
     for word in ("自由", "内卷"):
         out = subprocess.run([sys.executable, os.path.join(L.SCRIPTS, "qsearch.py"), word,
                               "-n", "3", "--json"], capture_output=True, text=True)

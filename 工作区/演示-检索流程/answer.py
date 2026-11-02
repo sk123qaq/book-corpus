@@ -19,7 +19,7 @@
 
 多书（前端全选）时请求带 sources，每本取三段窗口，一次提示词要按问题结构逐书对照回答，引文按书归并。
 
-只读 目录/检索/index.db 与 库/**.md；只写 缓存/answers/。
+只读 build/检索/index.db 与 books/**.md；只写 缓存/answers/。
 不跑 B4、不写 expand、不重建索引；pi 只开 book_grep 与 read，证据全部由服务端给。
 """
 import bisect
@@ -57,9 +57,9 @@ from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinkin
 
 ROOT = L.ROOT
 
-INDEX_DB = os.path.join(ROOT, "目录", "检索", "index.db")
-LIBRARY_DB = os.path.join(ROOT, "目录", "library.db")
-LIBRARY = os.path.join(ROOT, "库")
+INDEX_DB = os.path.join(ROOT, "build", "检索", "index.db")
+LIBRARY_DB = os.path.join(ROOT, "build", "library.db")
+LIBRARY = os.path.join(ROOT, "books")
 CACHE_DIR = os.path.join(HERE, "缓存", "answers")
 SKILL = os.path.join(L.skill_dir("book-corpus-qa"), "SKILL.md")
 MODEL = os.environ.get("ANSWER_MODEL", "opencode-go/deepseek-v4.1-flash")

@@ -73,7 +73,7 @@ def write_json(path, doc):
 
 def find_book(root, uid):
     """库/**/book.json 里按 uid 取书。_ 开头的目录不是账上的书，跳过。"""
-    lib = os.path.join(root, "库")
+    lib = os.path.join(root, "books")
     for dirpath, dirnames, filenames in os.walk(lib):
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if "book.json" not in filenames:
@@ -89,15 +89,17 @@ def find_book(root, uid):
 
 
 def source_path(root, doc):
-    """book.json 的源路径相对书目录，DB 里的是相对库根；两种都认。"""
+    """源文件在 v2 里是 books/ 或 collections/ 下的根相对路径。"""
     srcs = [s for s in doc.get("sources") or [] if (s.get("format") or "").lower() == "pdf"]
     primary = [s for s in srcs if s.get("primary_src")] or srcs
     if not primary:
         return ""
     f = primary[0].get("file") or ""
-    if f.startswith("库/"):
+    if f.startswith(("books/", "collections/")):
         return os.path.join(root, f)
-    return os.path.join(root, "库", doc.get("path") or "", f)
+    owner = primary[0].get("collection") or doc.get("uid") or ""
+    top = "collections" if owner.startswith("C") else "books"
+    return os.path.join(root, top, owner, "source", os.path.basename(f))
 
 
 def venv_python(root):
@@ -348,7 +350,7 @@ def main():
     shutil.rmtree(os.path.join(out, "thumbs"), ignore_errors=True)
     doc = find_book(root, a.uid)
     if not doc:
-        sys.exit("找不到 uid=%s 的书（%s/库/**/book.json）" % (a.uid, root))
+        sys.exit("找不到 uid=%s 的书（%s/books/**/book.json）" % (a.uid, root))
     pdf = source_path(root, doc)
     if not pdf or not os.path.isfile(pdf):
         sys.exit("要分诊的 pdf 源不在：%s" % (pdf or "book.json 里没有 pdf 源"))

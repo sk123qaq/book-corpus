@@ -9,7 +9,7 @@
   doc_numbers.py --doc PATH  # 换文档，默认 <root>/AGENTS.md
 
 块由 <!-- numbers:start --> 与 <!-- numbers:end --> 夹住，只换夹住的那几行，块外一字不动。
-取数只读：library.db 以 mode=ro 打开，md 本数看 库/<path>/md 是不是目录，视图数软链。
+取数只读：library.db 以 mode=ro 打开，md 本数看 books/<uid>/md 是不是目录，视图数 build/views 下的软链。
 """
 import argparse
 import datetime
@@ -43,7 +43,7 @@ def num(value):
 
 def collect(root=ROOT, as_of=None):
     """现库的十项读数。"""
-    libdb = os.path.join(root, "目录", "library.db")
+    libdb = os.path.join(root, "build", "library.db")
     con = sqlite3.connect("file:%s?mode=ro" % libdb, uri=True)
     try:
         books = con.execute("SELECT count(*) FROM book").fetchone()[0]
@@ -60,7 +60,7 @@ def collect(root=ROOT, as_of=None):
     view = views(root)
     return {
         "books": books,
-        "md": sum(1 for p in paths if os.path.isdir(os.path.join(root, "库", p, "md"))),
+        "md": sum(1 for p in paths if os.path.isdir(os.path.join(root, "books", p, "md"))),
         "pending_total": sum(pending.values()),
         "pending": pending,
         "awards": awards,
@@ -74,7 +74,7 @@ def collect(root=ROOT, as_of=None):
 
 def views(root):
     out = {"奖项": 0, "主题": 0}
-    base = os.path.join(root, "视图")
+    base = os.path.join(root, "build", "views")
     for dirpath, dirnames, filenames in os.walk(base):
         for name in dirnames + filenames:
             entry = os.path.join(dirpath, name)
@@ -87,7 +87,9 @@ def views(root):
 
 
 def pitfall(root):
-    path = os.path.join(root, "目录", "检索", "踩坑记录.md")
+    path = os.path.join(root, "build", "检索", "踩坑记录.md")
+    if not os.path.isfile(path):
+        path = os.path.join(HERE, "..", "..", "..", "docs", "检索", "踩坑记录.md")
     if not os.path.isfile(path):
         return 0
     with open(path, encoding="utf-8") as fh:
@@ -207,7 +209,7 @@ def main(argv=None):
         print(got)
     print("--- 现库的块 ---")
     print(block)
-    print("--- 修：python3 工作区/脚本/doc_numbers.py --write ---")
+    print("--- 修：book-corpus run doc_numbers --write ---")
     return 1
 
 

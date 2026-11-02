@@ -1,18 +1,17 @@
-# 库/_冷宫
+# books/_冷宫
 
 移出处理流程的书放这里。只留原书文件，不参与任何脚本。
 
 ## 规则
 
 - 没有 `book.json` 或任何 json。元数据写在 `工作区/批次/移出-<日期>/retired.tsv` 与本文的账表。
-- 不在 `目录/分类表.csv` 里，所以不建 `library.db` 行，不进 `目录/书目总表.csv`。
-- 没有 `md/` 与 `html/`，所以 `build_para_index.py`、`build_expand.py`、`corpus_stats.py` 都发现不了它。
-- 要复用：按 `retired.tsv` 重建 `book.json`，把书移回 `库/<一级>/<书名>/`，`分类表.csv` 补一行，再跑 `build_library.py --emit-json` 与 `build_para_index.py --rebuild --concepts`。
+- 不在 `tables/分类表.csv` 里，所以不建 `library.db` 行，不进 `build/书目总表.csv`。
+- 没有 `md/` 与 `html/`，所以 `book-corpus index`、`book-corpus run build_expand`、`book-corpus stats` 都发现不了它。
+- 要复用：按 `retired.tsv` 重建 `book.json`，把书移回 `books/<uid>/`，`tables/分类表.csv` 补一行，再跑 `book-corpus library` 与 `book-corpus index --rebuild`。
 
-`_` 开头是为了和一级分类目录区分。`库/_收件箱` 是新书入口，这里是出口。
+`_` 开头是为了和书的 uid 目录区分。`books/_收件箱` 是新书入口，这里是出口。
 
 ## 账
 
 | 移入日期 | uid | 书名 | 原路径 | 源文件 | 原 md | 理由 |
 |---|---|---|---|---|---|---|
-| 2026-10-21 | B1359 | 唐诗学书系（全十七册） | 库/文学/唐诗学书系 | `source/` 下 epub，22,377,022 字节，sha256 `f1153ed9…`（inode 33194633，与移入前一致） | 11,619 章 / 22,946,174 字节 / 1,729 图；2026-10-21 删除，`md-归档.json` 留了重拆参数（`ebook-to-md` sha256:1932df458a07，批次 md拆分-2026-10-18） | 11,619 章占全库 11.8%，诗集汇编，检索与扩展收益低；操作人指示移出处理流程 |

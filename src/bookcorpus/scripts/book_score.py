@@ -34,13 +34,13 @@ from dataclasses import asdict, dataclass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 import qsearch
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-LIBDB = os.path.join(ROOT, "目录", "library.db")
+DB = PATHS.index_db
+LIBDB = PATHS.library_db
 
 CHAPTER_SQL = ("SELECT b.path, b.title, b.subject1, b.subject2, d.chapters "
                "FROM book b LEFT JOIN derived d ON d.uid = b.uid AND d.kind = 'md'")
@@ -117,7 +117,7 @@ def load_expand(con):
 
 
 def count_md(book, root=None):
-    base = os.path.join(ROOT if root is None else root, "库", book, "md")
+    base = os.path.join(ROOT if root is None else root, "books", book, "md")
     try:
         with os.scandir(base) as it:
             return sum(1 for e in it if e.is_file() and e.name.endswith(".md"))

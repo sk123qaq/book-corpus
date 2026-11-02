@@ -63,7 +63,7 @@ def main():
 
     out_rows, details = [], []
     for row in rows:
-        old_dir = os.path.join(L.ROOT, "库", row["path"], "md")
+        old_dir = L.PATHS.md(row["uid"])
         new_dir = os.path.join(batch, "out", row["uid"])
         rec = {"uid": row["uid"], "title": row["title"], "format": row["format"],
                "stage": "yes" if os.path.isdir(new_dir) else "missing"}

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""扫描 库/**/html/，给每本有阅读版的书重建 html/index.html，并重建 目录/阅读版索引.html。
+"""扫描 books/**/html/，给每本有阅读版的书重建 html/index.html，并重建 build/阅读版索引.html。
 
 可重复运行：每次按当前 html/ 目录内容重建。书名与分类从同目录的 book.json 读，
 书籍清单不再写在代码里；只有两本老书保留手写的副标题与介绍。
 
-用法: python3 工作区/脚本/build_index.py
+用法: book-corpus render
 """
 import datetime
 import html
@@ -247,7 +247,7 @@ def top_page(books, date):
         '<h2 class="sec">有阅读版的书<span class="cnt">共 {} 本 · {} 章</span></h2>'.format(
             len(books), total)
         + "".join(cards) + "".join(notes)
-        + '<footer>生成日期：{d}｜本页与各书索引由 工作区/脚本/build_index.py 重建</footer>'.format(d=date)
+        + '<footer>生成日期：{d}｜本页与各书索引由 book-corpus render 重建</footer>'.format(d=date)
     )
     return page("书库 · 章节可视化阅读版", "LIBRARY · 章节可视化阅读版",
                 "书库 · 章节可视化阅读版",
@@ -269,7 +269,7 @@ def main():
         with open(tmp, "w", encoding="utf-8") as fh:
             fh.write(book_page(title, subtitle, blurb, rows, DATE))
         os.replace(tmp, out)
-        href = "../库/" + rel.replace(os.sep, "/") + "/html/index.html"
+        href = "../books/" + rel.replace(os.sep, "/") + "/html/index.html"
         made.append((title, blurb, href, len(rows)))
         chapters += len(rows)
         print("%s  (%d 章)" % (out, len(rows)))

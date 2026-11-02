@@ -151,7 +151,7 @@ def main():
 
     if a.uid:
         import sqlite3
-        con = sqlite3.connect("file:%s?mode=ro" % os.path.join(ROOT, "目录/library.db"), uri=True)
+        con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.library_db, uri=True)
         row = con.execute("SELECT file FROM source WHERE uid=? AND format='pdf'", (a.uid,)).fetchone()
         if not row:
             sys.exit("库里找不到 %s 的 PDF" % a.uid)

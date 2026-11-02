@@ -156,7 +156,7 @@ def main():
             continue
         missing += 1
         text, notes = readme_text(uid, book, md_dir, meta)
-        print("== %s  库/%s/md" % (uid, book))
+        print("== %s  books/%s/md" % (uid, book))
         for note in notes:
             print("   注意  " + note)
         print(text if a.apply else text + "\n")

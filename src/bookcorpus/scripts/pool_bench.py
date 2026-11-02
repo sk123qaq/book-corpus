@@ -11,13 +11,13 @@ import collections, os, sqlite3, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 import qsearch
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-LIBDB = os.path.join(ROOT, "目录", "library.db")
+DB = PATHS.index_db
+LIBDB = PATHS.library_db
 POOLS = [400, 2000, 10000, 0]
 DEFAULT_KEYS = ["自由", "群体", "异化", "规训", "荒诞", "铁笼", "内卷", "独立判断",
                 "工具理性", "平庸之恶"]

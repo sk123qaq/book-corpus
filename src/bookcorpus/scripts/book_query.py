@@ -41,16 +41,16 @@ from dataclasses import asdict, dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import book_readme  # noqa: E402
 import book_score  # noqa: E402
 import lib_fts_cjk as cjk  # noqa: E402
 import qsearch  # noqa: E402
 
-ACTIONS = os.path.join(ROOT, "目录", "概念表-动作词.tsv")
-CONCEPTS = os.path.join(ROOT, "目录", "概念表.tsv")
-BROAD = os.path.join(ROOT, "目录", "概念表-broad.tsv")
+ACTIONS = PATHS.concepts_action
+CONCEPTS = PATHS.concepts
+BROAD = PATHS.concepts_broad
 MAX_ROUNDS = 5
 MARGIN = 0.10          # 判据 B 的 10%
 # B6 验收后的默认值。qsearch --book 仍是 mix 旧口径，不在这里。

@@ -75,7 +75,7 @@ def has_md(uid):
         row = con.execute("SELECT path FROM book WHERE uid=?", (uid,)).fetchone()
     finally:
         con.close()
-    return bool(row) and os.path.isdir(os.path.join(L.ROOT, "库", row[0], "md"))
+    return bool(row) and os.path.isdir(L.PATHS.md(row[0]))
 
 
 def sample_pages(npages):

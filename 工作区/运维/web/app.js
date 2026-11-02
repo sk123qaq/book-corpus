@@ -1210,9 +1210,9 @@ function viewMaintain() {
     </div>
     <div class="grid c2 section">
       <div class="card"><h2>下载</h2>
-        <p><a class="btn sm" href="/api/file?path=${encodeURIComponent('目录/书目总表.xlsx')}">书目总表（Excel）</a>
-           <a class="btn sm" href="/api/file?path=${encodeURIComponent('目录/书目总表.csv')}">书目总表（CSV）</a>
-           <a class="btn sm" href="/api/file?path=${encodeURIComponent('目录/分类预填.csv')}">分类预填表</a></p>
+        <p><a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.xlsx')}">书目总表（Excel）</a>
+           <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.csv')}">书目总表（CSV）</a>
+           <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/分类预填.csv')}">分类预填表</a></p>
         <p class="hint">书目总表改于 ${esc(fmtTime(c.catalogAt).slice(5))}，分类预填表只包含新书。</p>
       </div>
       <div class="card"><h2>清理旧记录</h2>

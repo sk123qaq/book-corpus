@@ -13,15 +13,15 @@ import argparse, hashlib, json, os, re, sqlite3, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import build_expand
 import lib_fts_cjk as cjk
 import qsearch
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-CTAB = os.path.join(ROOT, "目录", "概念表.tsv")
-CACHE = os.path.join(ROOT, "目录", "检索", "route_cache")
+DB = PATHS.index_db
+CTAB = PATHS.concepts
+CACHE = os.path.join(PATHS.index_dir, "route_cache")
 
 PROMPT = """下面是书库的概念表，一行一个键，冒号后是它的同义说法。
 

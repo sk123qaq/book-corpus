@@ -14,13 +14,13 @@ import os, sqlite3, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 import qsearch
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-LIBDB = os.path.join(ROOT, "目录", "library.db")
+DB = PATHS.index_db
+LIBDB = PATHS.library_db
 
 # 概念 → 该概念在书库里公认讲得对的书（人工指定，不看排序结果）
 EXPECT = {

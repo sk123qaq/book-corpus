@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""移出一本书：原书进 库/_冷宫/<书名>/source/，md、html、json 删除，账本同步。
+"""移出一本书：原书进 books/_冷宫/<书名>/source/，md、html、json 删除，账本同步。
 
-  python3 工作区/脚本/retire_book.py --uid B1234 --reason "..." --dry-run --json
-  python3 工作区/脚本/retire_book.py --uid B1234 --reason "..." --plan-hash <sha> --apply
+  book-corpus run retire_book --uid B1234 --reason "..." --dry-run --json
+  book-corpus run retire_book --uid B1234 --reason "..." --plan-hash <sha> --apply
 
 --dry-run 只读，算一份预览与 plan_hash。--apply 重算预览，哈希不一致、快照没就绪、
 预览有挡住项都拒绝，避免预览后库变了。冷宫只留 source/，元数据进
-工作区/批次/移出-<日期>/retired.tsv 与 库/_冷宫/README.md。
+工作区/批次/移出-<日期>/retired.tsv 与 books/_冷宫/README.md。
 """
 import argparse
 import collections
@@ -25,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lib_common as L  # noqa: E402
 
-DEFAULT_sys.path.insert(0, HERE)
+sys.path.insert(0, HERE)
 from lib_common import ROOT  # noqa: E402
 
 RETIRED_HEADER = ["retired_at", "uid", "title", "old_path", "cold_path", "sources",
@@ -40,16 +40,16 @@ class Ctx:
 
     def __init__(self, root):
         self.root = os.path.abspath(root)
-        self.lib = os.path.join(self.root, "库")
-        self.cat = os.path.join(self.root, "目录")
+        self.lib = os.path.join(self.root, "books")
+        self.cat = os.path.join(self.root, "tables")
         self.work = os.path.join(self.root, "工作区")
-        self.views = os.path.join(self.root, "视图")
+        self.views = os.path.join(self.root, "build", "views")
         self.cold = os.path.join(self.lib, "_冷宫")
         self.cold_readme = os.path.join(self.cold, "README.md")
         self.ledger = os.path.join(self.cat, "分类表.csv")
-        self.db = os.path.join(self.cat, "library.db")
-        self.index = os.path.join(self.cat, "检索", "index.db")
-        self.expand_dir = os.path.join(self.cat, "检索", "expand")
+        self.db = os.path.join(self.root, "build", "library.db")
+        self.index = os.path.join(self.root, "build", "检索", "index.db")
+        self.expand_dir = os.path.join(self.root, "build", "检索", "expand")
         self.series_dir = os.path.join(self.cat, "系列")
         self.snapshot_name = "books.snapshot-" + datetime.date.today().isoformat()
         self.snapshot = os.path.join(os.path.dirname(self.root), self.snapshot_name)
@@ -77,7 +77,7 @@ def read_ledger(path):
 
 
 def iter_book_docs(ctx):
-    """库/**/book.json -> (书目录, doc)。_ 开头的顶层目录不算书。"""
+    """books/**/book.json -> (书目录, doc)。_ 开头的顶层目录不算书。"""
     if not os.path.isdir(ctx.lib):
         return
     for dirpath, dirnames, filenames in os.walk(ctx.lib):
@@ -179,7 +179,7 @@ def db_facts(ctx, uid):
 
 
 def find_view_links(ctx, book_dir):
-    """视图/ 下指向这本书的软链，(奖项视图, 主题视图)，root 相对路径。"""
+    """build/views/ 下指向这本书的软链，(奖项视图, 主题视图)，root 相对路径。"""
     target = os.path.realpath(book_dir)
     found = {"奖项": [], "主题": []}
     for top in ("奖项", "主题"):
@@ -197,7 +197,7 @@ def find_view_links(ctx, book_dir):
 
 
 def find_series_docs(ctx, doc):
-    """提到了这本或它所属系列的 目录/系列/*.md，只标出，不自动改。"""
+    """提到了这本或它所属系列的 tables/系列/*.md，只标出，不自动改。"""
     if not os.path.isdir(ctx.series_dir):
         return []
     needles = [x for x in {(doc.get("title") or "").strip(),
@@ -222,9 +222,9 @@ def find_series_docs(ctx, doc):
 def cold_layout(ctx, doc):
     """(冷宫书目录, 冷宫 source 目录)，root 相对。同名目录已存在就带 uid。"""
     title = L.path_safe(doc.get("title") or "") or (doc.get("uid") or "未命名")
-    rel_dir = "库/_冷宫/" + title
+    rel_dir = "books/_冷宫/" + title
     if os.path.exists(os.path.join(ctx.root, rel_dir)):
-        rel_dir = "库/_冷宫/%s（%s）" % (title, doc.get("uid") or "")
+        rel_dir = "books/_冷宫/%s（%s）" % (title, doc.get("uid") or "")
     return rel_dir, rel_dir + "/source"
 
 
@@ -341,14 +341,14 @@ def readme_state(ctx):
     if not header:
         return True, ""
     if len(header) != README_COLS:
-        return False, "库/_冷宫/README.md 表头是 %d 列，不是 %d 列" % (len(header), README_COLS)
+        return False, "books/_冷宫/README.md 表头是 %d 列，不是 %d 列" % (len(header), README_COLS)
     return True, ""
 
 
 def build_preview(ctx, uid):
     book_dir, doc = find_book(ctx, uid)
     if doc is None:
-        raise LookupError("uid 不在 库/ 里: %s" % uid)
+        raise LookupError("uid 不在 books/ 里: %s" % uid)
     rel_dir = ctx.rel(book_dir)
     _header, ledger_rows = read_ledger(ctx.ledger)
     led_row = next((r for r in ledger_rows if (r.get("uid") or "").strip() == uid), None)
@@ -367,7 +367,7 @@ def build_preview(ctx, uid):
 
     blockers = []
     warnings = []
-    if rel_dir.split("/")[0] != "库" or rel_dir.startswith("库/_"):
+    if rel_dir.split("/")[0] != "books" or rel_dir.startswith("books/_"):
         blockers.append("书目录不在正常书区: " + rel_dir)
     if any(not s["exists"] for s in sources):
         warnings.append("有源文件不在磁盘上: " + ", ".join(
@@ -522,7 +522,7 @@ def append_cold_readme(ctx, preview, reason):
              md_text, reason]
     row = "| " + " | ".join(_cell(c).replace("|", "／") for c in cells) + " |"
     lines = old.splitlines() if old else [
-        "# 库/_冷宫", "",
+        "# books/_冷宫", "",
         "| 移入日期 | uid | 书名 | 原路径 | 源文件 | 原 md | 理由 |",
         "|---|---|---|---|---|---|---|"]
     last_table = max((i for i, line in enumerate(lines) if line.startswith("|")), default=-1)
@@ -581,8 +581,7 @@ def rebuild_derived(ctx, preview, run):
     cmds = [
         [sys.executable, os.path.join(HERE, "build_library.py"), "--emit-json"],
         [sys.executable, os.path.join(HERE, "gen_book_catalog.py")],
-        [sys.executable, os.path.join(HERE, "migrate_layout.py"), "--views"],
-        [sys.executable, os.path.join(HERE, "build_topic_views.py")],
+        [sys.executable, os.path.join(HERE, "build_views.py")],
     ]
     if "html/" in preview["delete"]:
         cmds.append([sys.executable, os.path.join(HERE, "build_index.py")])
@@ -681,7 +680,7 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
 
 
 def _run(cmd):
-    return subprocess.run(cmd, cwd=DEFAULT_ROOT, shell=False).returncode
+    return subprocess.run(cmd, cwd=ROOT, shell=False).returncode
 
 
 def retired_record(ctx, uid):
@@ -704,7 +703,7 @@ def main(argv=None):
     mode.add_argument("--apply", action="store_true", help="按 plan_hash 落地")
     ap.add_argument("--json", action="store_true", help="stdout 只打 JSON")
     ap.add_argument("--plan-hash", default="")
-    ap.add_argument("--root", default=DEFAULT_ROOT)
+    ap.add_argument("--root", default=ROOT)
     ap.add_argument("--no-snapshot", action="store_true", help="跳过快照门槛，只给测试用")
     ap.add_argument("--no-rebuild", action="store_true",
                     help="不重建 DB、书目表、视图与 expand，留给收尾")
@@ -743,7 +742,7 @@ def main(argv=None):
                   % (args.plan_hash, preview["plan_hash"]))
     elif not args.no_snapshot and not preview["snapshot_ok"]:
         refuse = "当天快照不在: %s（只给测试用 --no-snapshot）" % preview["snapshot"]
-    elif not args.no_rebuild and ctx.root != DEFAULT_ROOT:
+    elif not args.no_rebuild and ctx.root != ROOT:
         refuse = "--root 不是真库却要重建派生数据，测试请加 --no-rebuild"
     if refuse:
         print(json.dumps({"ok": False, "uid": uid, "refused": refuse,

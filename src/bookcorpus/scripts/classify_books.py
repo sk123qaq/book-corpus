@@ -323,7 +323,7 @@ def main():
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--threshold", type=float, default=0.45)
     ap.add_argument("--refresh", action="store_true", help="忽略缓存重问")
-    ap.add_argument("--cache", help="缓存文件，默认 目录/分类缓存.jsonl")
+    ap.add_argument("--cache", help="缓存文件，默认 tables/分类缓存.jsonl")
     ap.add_argument("--include-other", action="store_true", help="一级为其他也问二级")
     args = ap.parse_args()
     args.model = os.environ.get("CLASSIFY_BOOKS_MODEL", CM.DEFAULT_MODEL)
@@ -331,7 +331,7 @@ def main():
         print("--stage 只对 --backend typesafe 有效；model 后端一次就回两级", file=sys.stderr)
         return 2
 
-    cat = os.path.join(os.path.abspath(args.root), "目录")
+    cat = os.path.join(os.path.abspath(args.root), "tables")
     cache_path = args.cache or os.path.join(cat, "分类缓存.jsonl")
     rows = L.read_csv(os.path.join(cat, "书目录清单.csv"))
     cache = load_cache(cache_path)

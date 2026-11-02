@@ -28,7 +28,7 @@ def corpus_files(term):
     rg_dir = os.path.dirname(RG)
     if rg_dir:
         env["PATH"] = rg_dir + ":" + env.get("PATH", "")
-    r = subprocess.run([RG, "-l", "-F", "-g", "*.md", "-e", term, "库"],
+    r = subprocess.run([RG, "-l", "-F", "-g", "*.md", "-e", term, "books"],
                        cwd=ROOT, capture_output=True, text=True, env=env)
     return [l for l in r.stdout.splitlines() if l]
 
@@ -98,8 +98,7 @@ def edge_cases():
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import qsearch
-        con = sqlite3.connect("file:%s?mode=ro" % os.path.join(
-            ROOT, "目录", "检索", "index.db"), uri=True)
+        con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.index_db, uri=True)
         expr = '"自由"'
         # limit 放大过池深，返回条数才反映 pool 的取数深度
         all_hits, _ = qsearch.search(con, expr, ["自由"], [], 10 ** 9, 40, False, 0)
@@ -133,7 +132,7 @@ def main():
     for word in ("达克效应", "灰犀牛"):
         n = len(corpus_files(word))
         print("注  %s 语料命中 %d 个文件，不足以做译名墙验收（只记数，不计入通过/失败）" % (word, n))
-    idx_db = os.path.join(ROOT, "目录", "检索", "index.db")
+    idx_db = L.PATHS.index_db
     for fn in ("eval-baseline.tsv", "eval-index.tsv"):
         p = os.path.join(BATCH, fn)
         if not os.path.isfile(p):

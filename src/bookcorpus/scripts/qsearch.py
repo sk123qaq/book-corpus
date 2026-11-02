@@ -214,7 +214,7 @@ def main():
     ap.add_argument("--book-score", default="mix", choices=["mix", "sum"],
                     help="qsearch 旧书级口径：mix=0.7*最好段+0.3*段落均值（默认）；"
                          "sum=段落求和（旧口径）。新书级默认 best_support 见 book_query.py")
-    ap.add_argument("--expand", action="store_true", help="并上 目录/检索/expand 的扩展文本档")
+    ap.add_argument("--expand", action="store_true", help="并上 build/检索/expand 的扩展文本档")
     ap.add_argument("--expand-kind", default="both", choices=["both", "prefix", "queries"])
     ap.add_argument("--rerank", action="store_true", help="加模型无关的定义式/引号/卷首页特征")
     ap.add_argument("--route-mode", default="append", choices=["append", "rrf"],

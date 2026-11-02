@@ -2,7 +2,7 @@
 """统一操作台的本地服务，127.0.0.1:8770，只用标准库。
 
 页面读 ops_status.py 的 JSON 与 ops.db；按钮排队调 工作区/脚本/ 里的脚本。
-不写 目录/、视图/，不重建真索引；除上传落 库/_收件箱/ 外不碰 库/。
+不写 tables/、build/，不重建真索引；除上传落 books/_收件箱/ 外不碰 books/。
 
   python3 工作区/运维/server.py [--port 8770] [--root .]
 """
@@ -259,10 +259,13 @@ class Env:
         self.jobs = os.path.join(self.ops, "jobs")
         self.scripts = _package_scripts()
         self.batches = os.path.join(self.root, "工作区", "批次")
-        self.lib = os.path.join(self.root, "库")
+        self.lib = os.path.join(self.root, "books")
         self.inbox = os.path.join(self.lib, "_收件箱")
-        self.cat = os.path.join(self.root, "目录")
-        self.views = os.path.join(self.root, "视图")
+        self.cat = os.path.join(self.root, "tables")
+        self.views = os.path.join(self.root, "build", "views")
+        self.libdb = os.path.join(self.root, "build", "library.db")
+        self.indexdb = os.path.join(self.root, "build", "检索", "index.db")
+        self.catalog_csv = os.path.join(self.root, "build", "书目总表.csv")
         self.ops_db = os.path.join(self.ops, "ops.db")
         self.lock = os.path.join(self.ops, ".writer.lock")
         self.reader_lock = os.path.join(self.ops, ".reader.lock")
@@ -638,8 +641,8 @@ MAINTAIN_STEPS = {
            "args": ["--emit-json"], "marker": r'"conflicts":\s*0'},
     "index": {"label": "检索索引", "script": "build_para_index.py",
               "args": ["--rebuild", "--concepts"]},
-    "topics": {"label": "主题软链", "script": "build_topic_views.py", "args": []},
-    "awards": {"label": "奖项软链", "script": "migrate_layout.py", "args": ["--views"]},
+    "topics": {"label": "主题软链", "script": "build_views.py", "args": ["--only", "topics"]},
+    "awards": {"label": "奖项软链", "script": "build_views.py", "args": ["--only", "awards"]},
     "audit": {"label": "深审计", "script": "audit_state.py", "args": ["--deep"],
               "marker": r"FAIL 0 项"},
     "verify": {"label": "六箱验收", "script": "verify_phase.py", "args": [],
@@ -1179,7 +1182,7 @@ class App:
 
     # ---- read-only data --------------------------------------------
     def db_rows(self, sql, args=()):
-        path = os.path.join(self.env.cat, "library.db")
+        path = self.env.libdb
         if not os.path.exists(path):
             raise FileNotFoundError("library.db 不存在")
         conn = sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=5)

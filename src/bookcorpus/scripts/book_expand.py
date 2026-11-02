@@ -37,7 +37,7 @@ from dataclasses import asdict, dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import book_readme
 import book_score
@@ -47,7 +47,7 @@ import qsearch
 
 DB = book_score.DB
 LIBDB = book_score.LIBDB
-CACHE = os.path.join(ROOT, "目录", "检索", "expand_cache")
+CACHE = os.path.join(PATHS.index_dir, "expand_cache")
 PROMPT_VERSION = "b4-v1"
 
 MODES = {

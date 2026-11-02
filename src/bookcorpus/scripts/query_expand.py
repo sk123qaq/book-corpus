@@ -13,14 +13,14 @@ import argparse, hashlib, json, os, re, sqlite3, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import build_expand
 import lib_fts_cjk as cjk
 import qsearch
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-CACHE = os.path.join(ROOT, "目录", "检索", "expand_queries")
+DB = PATHS.index_db
+CACHE = os.path.join(PATHS.index_dir, "expand_queries")
 
 PROMPT = """读者在中文书库里找答案，但他打的词原文里一个都没有。请给出 4 条检索式，每条不超过 14 字，用于在书里找到讲这件事的段落。
 

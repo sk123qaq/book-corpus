@@ -32,7 +32,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import book_score
 import lib_fts_cjk as cjk
@@ -80,8 +80,8 @@ def usable(target):
 
 
 def entry(book, target, title, order, volume):
-    path = os.path.normpath("库/%s/md/%s" % (book, target)).replace(os.sep, "/")
-    if not path.startswith("库/%s/md/" % book) or ".." in path.split("/"):
+    path = os.path.normpath("books/%s/md/%s" % (book, target)).replace(os.sep, "/")
+    if not path.startswith("books/%s/md/" % book) or ".." in path.split("/"):
         return None
     return {"book": book, "path": path, "title": title or title_from_name(target),
             "order": order, "volume": volume}
@@ -89,13 +89,13 @@ def entry(book, target, title, order, volume):
 
 def readme_toc(book, root=None):
     """返回 (章节列表, readme_status)。列表顺序是 README 的目录顺序。"""
-    base = os.path.join(ROOT if root is None else root, "库", book, "md")
+    base = os.path.join(ROOT if root is None else root, "books", book, "md")
     try:
         files = sorted(f for f in os.listdir(base) if f.endswith(".md") and f != "README.md")
     except OSError:
         return [], "missing"
     rp = os.path.join(base, "README.md")
-    fallback = [{"book": book, "path": "库/%s/md/%s" % (book, f),
+    fallback = [{"book": book, "path": "books/%s/md/%s" % (book, f),
                  "title": title_from_name(f), "order": i, "volume": ""}
                 for i, f in enumerate(files)]
     if not os.path.exists(rp):
@@ -130,7 +130,7 @@ def readme_toc(book, root=None):
         order += 1
     for f in files:
         if f not in seen:
-            entries.append({"book": book, "path": "库/%s/md/%s" % (book, f),
+            entries.append({"book": book, "path": "books/%s/md/%s" % (book, f),
                             "title": title_from_name(f), "order": order,
                             "volume": ""})
             order += 1

@@ -167,7 +167,7 @@ CALIBRE = "ebook-convert"
 
 def md_dirs():
     out = []
-    for root, subdirs, _files in os.walk(os.path.join(L.ROOT, "库")):
+    for root, subdirs, _files in os.walk(L.PATHS.books):
         if "md" in subdirs:
             out.append(os.path.join(root, "md"))
     return sorted(out)
@@ -191,7 +191,7 @@ def scope():
     old = [d for d in md_dirs() if d not in batch]
     books, unresolved = [], []
     for d in old:
-        rel = os.path.relpath(d, os.path.join(L.ROOT, "库"))[: -len("/md")]
+        rel = os.path.relpath(d, L.PATHS.books)[: -len("/md")]
         r = con.execute(
             """SELECT b.uid AS uid, b.path AS path, b.title AS title, b.author AS author,
                       s.format AS format, s.file AS src

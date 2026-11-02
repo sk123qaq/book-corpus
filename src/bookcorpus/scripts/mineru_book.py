@@ -397,7 +397,7 @@ def main():
     os.makedirs(ctx["out"], exist_ok=True)
     logpath = os.path.join(ctx["logs"], uid + ".log")
     result = {"uid": uid, "title": row["title"], "format": row["format"], "route": "mineru",
-              "pages": int(row["pages"]), "dest": B.rel(os.path.join(L.ROOT, "库", row["path"], "md")),
+              "pages": int(row["pages"]), "dest": B.rel(L.PATHS.md(uid)),
               "at": B.now(), "commands": [], "engine": "mineru"}
     with open(logpath, "w", encoding="utf-8") as log:
         log.write("MinerU 整本路线：%d 页，每片 %d 页，语种 %s\n"
@@ -507,7 +507,7 @@ def main():
         enrich(stage, ctx, row, v, doc, blank, suspect, short,
                result.get("mineru_rescued") or [], skipped)
         if ctx["land"]:
-            B.land(ctx, stage, os.path.join(L.ROOT, "库", row["path"], "md"), result)
+            B.land(ctx, stage, L.PATHS.md(uid), result)
         else:
             result["status"] = "staged-green"
         if skipped and result["status"] == "landed":

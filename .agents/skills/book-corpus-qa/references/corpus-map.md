@@ -1,8 +1,8 @@
 # 书库结构地图
 
-`$BOOKS_ROOT/库/**/md/` 是正文区。每本书一个目录，路径形如 `库/<学科>/<作者层?>/<书>/md/`，由 epub 或 PDF 按目录拆章生成。扫描版 PDF 常常只有单文件。
+`$BOOKS_ROOT/books/**/md/` 是正文区。每本书一个目录，路径形如 `books/<uid>/md/`，由 epub 或 PDF 按目录拆章生成。扫描版 PDF 常常只有单文件。
 
-`$BOOKS_ROOT` 指书库仓库根目录。没设这个变量时，先执行 `export BOOKS_ROOT=$(git rev-parse --show-toplevel)`。
+`$BOOKS_ROOT` 指工作区根目录（有 `books.toml` 的那层）。没设这个变量时，先 `cd` 到工作区，或 `export BOOKS_ROOT=$PWD`。
 
 本页只写结构约定与检查方法。具体数字随语料变化，用脚本现测，不要照抄别人的快照。
 
@@ -10,10 +10,10 @@
 
 ```bash
 cd "$BOOKS_ROOT"
-python3 工作区/脚本/corpus_stats.py
+book-corpus stats
 ```
 
-`corpus_stats.py` 只读 `library.db` 与 `库/`，报书目数、md 数、章节数、体积、未收录项、系列分布与重复片段。拆完一批 md 之后重跑一次，把输出当成本次的事实。
+`corpus_stats.py` 只读 `library.db` 与 `books/`，报书目数、md 数、章节数、体积、未收录项、系列分布与重复片段。拆完一批 md 之后重跑一次，把输出当成本次的事实。
 
 单次检索的耗时也现测：
 
@@ -29,7 +29,7 @@ time grep -rl --include='*.md' '测试词' 库 | wc -l
 同一目录下的 `.manifest.json` 记转换工具版本、源文件 sha256、章数、审计比值与受理例外。章数或来源可疑时先读它。
 
 - `合集` 字段有值时就是系列名。判断一本书属于哪个系列、有没有兄弟卷，看这里，别猜。
-- 系列另有独立说明文件，放在 `$BOOKS_ROOT/目录/系列/<系列>-合集说明.md`。**卷序看这里，不要按目录名排序**，`ls` 出来的顺序通常不对。
+- 系列另有独立说明文件，放在 `$BOOKS_ROOT/tables/系列/<系列>-合集说明.md`。**卷序看这里，不要按目录名排序**，`ls` 出来的顺序通常不对。
 - **`未收录` 是关键字段**。转换时可能丢弃扉页、版权页、目录页、序言、后记。名著的招牌论断常在自序里。遇到「库里翻遍了却没有」的现象，先回 README 确认该部分是否被收录。
 - PDF 路线常常「按页全收」，这一栏会写 `无（文本层按页全收）` 或 `无（扫描书按页全收）`。看到这种写法就知道扉页、版权页、目录页都在正文里。
 
@@ -45,11 +45,11 @@ time grep -rl --include='*.md' '测试词' 库 | wc -l
 
 ## 系列与超长书
 
-- 系列卷序看 `目录/系列/`，不要按目录名排序。
+- 系列卷序看 `tables/系列/`，不要按目录名排序。
 - 超长书（千章级）先测章数与正文体积：
 
   ```bash
-  BOOKDIR=$(python3 工作区/脚本/lq.py "SELECT '库/'||path||'/md' FROM book WHERE title='书名'")
+  BOOKDIR=$(book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='书名'")
   find "$BOOKDIR" -name '*.md' ! -name README.md | wc -l
   du -sh "$BOOKDIR"
   ```
@@ -87,7 +87,7 @@ done
 检测：
 
 ```bash
-python3 工作区/脚本/md_review_report.py --uid <uid>
+book-corpus run md_review_report --uid <uid>
 ```
 
 报告里的「跨文件重复片段」就是这一类。

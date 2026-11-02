@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """组装一条检索 trace：切词 → 词法循环 → 打分选章 → 书卡 → 原文。
 
-只读 目录/检索/index.db、目录/library.db 与 库/**.md。
+只读 build/检索/index.db、build/library.db 与 books/**.md。
 切词用一次 pi 调用并缓存到 缓存/terms/<问题+思考等级 sha1>.json；失败退回概念表包含匹配。
 fresh=True 跳过切词缓存，前端「重新检索」走这条路。
 不跑 B4：book_cards.run 的 expand 固定为 {}。
@@ -38,12 +38,12 @@ from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinkin
 
 ROOT = L.ROOT
 
-INDEX_DB = os.path.join(ROOT, "目录", "检索", "index.db")
-LIB_DB = os.path.join(ROOT, "目录", "library.db")
-LIBRARY = os.path.join(ROOT, "库")
+INDEX_DB = os.path.join(ROOT, "build", "检索", "index.db")
+LIB_DB = os.path.join(ROOT, "build", "library.db")
+LIBRARY = os.path.join(ROOT, "books")
 CACHE_DIR = os.path.join(HERE, "缓存", "terms")
-CONCEPTS = os.path.join(ROOT, "目录", "概念表.tsv")
-ACTIONS = os.path.join(ROOT, "目录", "概念表-动作词.tsv")
+CONCEPTS = os.path.join(ROOT, "tables", "概念表.tsv")
+ACTIONS = os.path.join(ROOT, "tables", "概念表-动作词.tsv")
 
 MODEL = "opencode-go/deepseek-v4.1-flash"
 PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files",

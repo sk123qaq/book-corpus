@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEF_sys.path.insert(0, HERE)
+sys.path.insert(0, HERE)
 from lib_common import ROOT  # noqa: E402
 AUDIT = os.path.join(HERE, "audit_state.py")
 AUDIT_TIMEOUT = 1800
@@ -37,17 +37,17 @@ class Paths(object):
 
     def __init__(self, root):
         self.root = os.path.abspath(root)
-        self.lib = os.path.join(self.root, "库")
-        self.cat = os.path.join(self.root, "目录")
-        self.views = os.path.join(self.root, "视图")
+        self.lib = os.path.join(self.root, "books")
+        self.cat = os.path.join(self.root, "tables")
+        self.views = os.path.join(self.root, "build", "views")
         self.work = os.path.join(self.root, "工作区")
         self.batches = os.path.join(self.work, "批次")
         self.ops = os.path.join(self.work, "运维")
         self.inbox = os.path.join(self.lib, "_收件箱")
         self.class_csv = os.path.join(self.cat, "分类表.csv")
-        self.libdb = os.path.join(self.cat, "library.db")
-        self.indexdb = os.path.join(self.cat, "检索", "index.db")
-        self.catalog_csv = os.path.join(self.cat, "书目总表.csv")
+        self.libdb = os.path.join(self.root, "build", "library.db")
+        self.indexdb = os.path.join(self.root, "build", "检索", "index.db")
+        self.catalog_csv = os.path.join(self.root, "build", "书目总表.csv")
         self.opsdb = os.path.join(self.ops, "ops.db")
         self.last_audit = os.path.join(self.ops, "last-audit.json")
 
@@ -74,7 +74,7 @@ def ro(path):
 
 def library(p, state):
     if not os.path.isfile(p.libdb):
-        state["problems"].append("没有 目录/library.db")
+        state["problems"].append("没有 build/library.db")
         return
     con = ro(p.libdb)
     try:
@@ -118,7 +118,7 @@ def ledger(p, state):
         except (OSError, csv.Error) as exc:
             state["problems"].append("分类表.csv 读不了: %s" % exc)
     else:
-        state["problems"].append("没有 目录/分类表.csv")
+        state["problems"].append("没有 tables/分类表.csv")
     state["ledger"] = {"rows": rows, "mtime": mtime_of(p.class_csv)}
 
 
@@ -192,7 +192,7 @@ def chapter_paths(p, books):
         for name in os.listdir(d):
             if name.endswith(".md") and name != "README.md" and os.path.isfile(
                     os.path.join(d, name)):
-                out.add(os.path.join("库", rel, "md", name))
+                out.add(os.path.join("books", rel, "md", name))
     return out
 
 
@@ -201,7 +201,7 @@ def index(p, state, deep):
     index_books = lag_books = lag_chapters = 0
     chapters = paras = 0
     if not os.path.isfile(p.indexdb):
-        state["problems"].append("没有 目录/检索/index.db")
+        state["problems"].append("没有 build/检索/index.db")
     else:
         con = ro(p.indexdb)
         try:
@@ -462,7 +462,7 @@ def render(state):
 def main():
     ap = argparse.ArgumentParser(description="只读输出书库状态（JSON 或人读）")
     ap.add_argument("--json", action="store_true", help="只输出 JSON")
-    ap.add_argument("--root", default=DEF_ROOT, help="库根，默认按脚本位置推")
+    ap.add_argument("--root", default=ROOT, help="库根，默认按脚本位置推")
     ap.add_argument("--deep", action="store_true",
                     help="跑 audit_state --deep，精确算索引落后，写 工作区/运维/last-audit.json")
     args = ap.parse_args()

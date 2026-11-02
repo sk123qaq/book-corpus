@@ -35,7 +35,7 @@ def journal_path(root):
 
 
 def lock_path(root):
-    return os.path.join(root, "目录", ".ingest.lock")
+    return os.path.join(root, "tables", ".ingest.lock")
 FORMATS = {"epub": 3, "mobi": 2, "azw3": 2, "pdf": 1, "txt": 0, "djvu": 0}
 
 
@@ -179,7 +179,7 @@ def scan(root):
 
 
 def next_uid_cmd(root):
-    rows = L.read_csv(os.path.join(root, "目录", "分类表.csv"))
+    rows = L.read_csv(os.path.join(root, "tables", "分类表.csv"))
     print(next_uid(rows))
 
 
@@ -290,7 +290,7 @@ def drop_lock(root):
 
 
 def find_by_uid(root, uid):
-    lib = os.path.join(root, "库")
+    lib = os.path.join(root, "books")
     for dirpath, dirnames, filenames in os.walk(lib):
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if "book.json" in filenames:
@@ -306,7 +306,7 @@ def book_json(uid, title, author, subjects, sources, notes):
 
 
 def apply_one(root, it, shas):
-    lib, cat = os.path.join(root, "库"), os.path.join(root, "目录")
+    lib, cat = os.path.join(root, "books"), os.path.join(root, "tables")
     if it["sha256"] in shas:
         return dict(it, action="skip", note="同 sha256 已在库（幂等跳过）")
     src = it.get("path") or os.path.join(lib, "_收件箱", it["file"])
@@ -318,7 +318,7 @@ def apply_one(root, it, shas):
         subj = [s for s in (it.get("subjects") or []) if s]
         if len(subj) < 1:
             raise SystemExit("add 缺 subjects: %s（写在 plan 里或命令行给 --subjects）" % it["file"])
-        rel = it.get("target") or "/".join(subj + [it["title"]])
+        rel = it["uid"]
         dest = os.path.join(lib, rel)
         if os.path.exists(dest):
             raise SystemExit("目标目录已存在: " + dest)
@@ -329,7 +329,7 @@ def apply_one(root, it, shas):
                     "bytes": it["bytes"], "sha256": it["sha256"], "primary_src": 1}]
         L.write_json_atomic(os.path.join(dest, "book.json"),
                             book_json(it["uid"], it["title"], it.get("author", ""), subj,
-                                      rel, sources, "ingest:%s" % time.strftime("%Y-%m-%d")))
+                                      sources, "ingest:%s" % time.strftime("%Y-%m-%d")))
         rows = L.read_csv(os.path.join(cat, "分类表.csv"))
         rows.append({"uid": it["uid"], "一级": subj[0], "二级": subj[1] if len(subj) > 1 else "",
                      "作者层": "0", "保留": "keep", "正式书名": it["title"],
@@ -428,7 +428,7 @@ def main():
     # add 没写 uid 时按人账往下排：scan 已经排好，但手写 plan 与单本 add 容易漏，
     # 漏了会写出一行 uid 为空的 book.json 与分类表。
     if any(i["action"] == "add" and not (i.get("uid") or "").strip() for i in items):
-        led = os.path.join(a.root, "目录", "分类表.csv")
+        led = os.path.join(a.root, "tables", "分类表.csv")
         rows = L.read_csv(led) if os.path.exists(led) else []
         base, n = int(next_uid(rows)[1:]), 0
         for i in items:

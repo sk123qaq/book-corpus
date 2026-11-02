@@ -75,7 +75,7 @@ def main():
                WHERE b.uid=?""", (uid,)).fetchone()
         if r is None:
             sys.exit("uid not found in DB: %s" % uid)
-        dest = os.path.join(root, "库", r["path"], "md")
+        dest = os.path.join(root, "books", r["uid"], "md")
         man_old = L.read_md_manifest(dest)
         if (not a.force and man_old.get("batch") == a.batch
                 and man_old.get("map") == map_rel):

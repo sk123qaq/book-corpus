@@ -14,14 +14,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-OUTDIR = os.path.join(ROOT, "目录", "检索", "expand")
-LIBDB = os.path.join(ROOT, "目录", "library.db")
-LOG = os.path.join(ROOT, "目录", "检索", "build.log")
+DB = PATHS.index_db
+OUTDIR = os.path.join(PATHS.index_dir, "expand")
+LIBDB = PATHS.library_db
+LOG = os.path.join(PATHS.index_dir, "build.log")
 AUTH = os.path.expanduser("~/.pi/agent/auth.json")
 MIMO_KEY = os.path.expanduser("~/.config/mimo/api_key")
 MIMO_URL = "https://token-plan-cn.xiaomimimo.com/v1/chat/completions"
@@ -90,7 +90,7 @@ def prompt_hash(args):
 
 
 def md_files(uid, book_rel):
-    base = os.path.join(ROOT, "库", book_rel, "md")
+    base = os.path.join(ROOT, "books", book_rel, "md")
     return [os.path.join(base, f) for f in sorted(os.listdir(base))
             if f.endswith(".md") and f != "README.md"]
 
@@ -382,11 +382,11 @@ def write_md(uid, book_rel, got):
                 old[cur] = []
             elif cur and line.strip():
                 old[cur].append(line.rstrip())
-    base = os.path.join(ROOT, "库", book_rel, "md")
+    base = os.path.join(ROOT, "books", book_rel, "md")
     for p, txt in got.items():
         old[os.path.relpath(p, base)] = [txt]
     lines = ["# 文档扩展账 %s" % uid, "",
-             "书：`库/%s`" % book_rel,
+             "书：`books/%s`" % book_rel,
              "这些是索引文本，不是原文。引用一律回章节 md 取行号。", ""]
     for name in sorted(old):
         lines += ["## %s" % name, ""] + old[name] + [""]
@@ -418,12 +418,12 @@ def main():
     ap.add_argument("--regen-stale", action="store_true",
                     help="把 prompt_hash 不同的旧行也重排；默认只补完全没行的章")
     ap.add_argument("--only-file", default="",
-                    help="只扩展这个清单里的章节。每行一个，路径（库/…）放最后一列，可带 tab 前缀列；# 开头与空行忽略")
+                    help="只扩展这个清单里的章节。每行一个，路径（books/…）放最后一列，可带 tab 前缀列；# 开头与空行忽略")
     ap.add_argument("--exclude-file", default="",
                     help="排除清单：一行一个 uid（# 开头与空行忽略）。被排的书整本跳过，已生成的行不动")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--rebuild-md", action="store_true",
-                    help="不调模型，只按库里的 expand 表重写 目录/检索/expand/*.md 账文件")
+                    help="不调模型，只按库里的 expand 表重写 build/检索/expand/*.md 账文件")
     ap.add_argument("--reindex-fts", action="store_true",
                     help="不调模型，从 expand 表整体重建 expand_fts 索引（修索引漂移，幂等）")
     ap.add_argument("--prune-stub", action="store_true",

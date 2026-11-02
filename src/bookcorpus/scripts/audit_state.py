@@ -19,13 +19,13 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
-CORPUS = os.path.join(ROOT, "库")
-CAT = os.path.join(ROOT, "tables")
-CLASS_CSV = os.path.join(CAT, "分类表.csv")
-LIBDB = os.path.join(CAT, "library.db")
-INDEX = os.path.join(CAT, "检索", "index.db")
-VIEWS = os.path.join(ROOT, "视图")
+from lib_common import ROOT, PATHS  # noqa: E402
+CORPUS = PATHS.books
+CAT = PATHS.tables
+CLASS_CSV = PATHS.ledger
+LIBDB = PATHS.library_db
+INDEX = PATHS.index_db
+VIEWS = PATHS.views
 MAP_CSV = os.path.join(CAT, "对照表.csv")
 
 FAIL = []
@@ -97,12 +97,14 @@ def walk_md(books):
 def use_root(root):
     global ROOT, CORPUS, CAT, CLASS_CSV, LIBDB, INDEX, VIEWS, MAP_CSV
     ROOT = os.path.abspath(root)
-    CORPUS = os.path.join(ROOT, "库")
-    CAT = os.path.join(ROOT, "目录")
-    CLASS_CSV = os.path.join(CAT, "分类表.csv")
-    LIBDB = os.path.join(CAT, "library.db")
-    INDEX = os.path.join(CAT, "检索", "index.db")
-    VIEWS = os.path.join(ROOT, "视图")
+    from lib_common import Layout
+    paths = Layout(ROOT)
+    CORPUS = paths.books
+    CAT = paths.tables
+    CLASS_CSV = paths.ledger
+    LIBDB = paths.library_db
+    INDEX = paths.index_db
+    VIEWS = paths.views
     MAP_CSV = os.path.join(CAT, "对照表.csv")
 
 
@@ -155,7 +157,7 @@ def main():
     QUIET = args.json
     use_root(args.root)
     if not os.path.isdir(CORPUS):
-        bad("没有 库/")
+        bad("没有 books/")
         if args.json:
             return report(args)
         print("\nFAIL %d 项" % len(FAIL))
@@ -226,7 +228,7 @@ def main():
 
     say("\n== 检索层 ==")
     if not os.path.isfile(INDEX):
-        bad("没有 目录/检索/index.db")
+        bad("没有 build/检索/index.db")
         idx = None
     else:
         idx = sqlite3.connect("file:%s?mode=ro" % INDEX, uri=True)
@@ -300,12 +302,12 @@ def main():
     with open(MAP_CSV, encoding="utf-8-sig") as fh:
         map_rows = list(csv.DictReader(fh))
     map_missing = [r["uid"] or r["旧路径"] for r in map_rows
-                   if r["新路径"].startswith("库/")
+                   if r["新路径"].startswith(("books/", "collections/"))
                    and not os.path.exists(os.path.join(ROOT, r["新路径"]))]
     if map_missing:
         bad("对照表指向不存在的库路径 %d: %s" % (len(map_missing), sample(map_missing)))
     else:
-        ok("对照表的 库/ 目标全部存在")
+        ok("对照表的 v2 目标全部存在")
 
     say("\n== 文档 ==")
     docs()

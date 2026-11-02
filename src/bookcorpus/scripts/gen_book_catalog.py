@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""从 目录/library.db 出书目总表，并核对每条记录能落到磁盘。
+"""从 build/library.db 出书目总表，并核对每条记录能落到磁盘。
 
 L4 之前这个脚本扫 原书/ 与 原书pdf/ 做 200 行模糊匹配；L3 之后书目录、源文件、
-md、html 都收在 库/**，书与产物的对应关系由 book.json 与 DB 记死，匹配不再需要。
+md、html 都收在 books/**，书与产物的对应关系由 book.json 与 DB 记死，匹配不再需要。
 
-用法: python3 工作区/脚本/gen_book_catalog.py
-输出: 目录/书目总表.xlsx、目录/书目总表.csv
+用法: book-corpus catalog
+输出: build/书目总表.xlsx、build/书目总表.csv（xlsx 需要 openpyxl，没装只出 CSV）
 门槛: 末行必须是「未匹配 0 条」，否则以非零码退出。
 """
 import os
@@ -200,9 +200,13 @@ def main():
         print("未匹配 %d 条（未覆盖书目总表）" % len(problems))
         sys.exit(1)
     L.write_csv(CSV, rows, COLS)
-    write_xlsx(rows, counts)
-    for p in (XLSX, CSV):
-        print("已生成: %s" % p)
+    try:
+        write_xlsx(rows, counts)
+    except ImportError:
+        print("没装 openpyxl，跳过 xlsx（CSV 已生成）")
+    else:
+        print("已生成: %s" % XLSX)
+    print("已生成: %s" % CSV)
     print("书名 %d | 源文件 %d 行 / %d 个文件（盘上 %d）| md %d 目录 | html %d 目录 | "
           "奖项记录 %d（%d 个奖项）"
           % (counts["books"], counts["src_rows"], counts["src_files"], counts["disk_src_files"],

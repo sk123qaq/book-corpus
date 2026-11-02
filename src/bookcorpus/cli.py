@@ -28,13 +28,6 @@ ALIASES = {
     "stats": "corpus_stats",
 }
 
-# 这些脚本还按旧布局拼路径（库/ 目录/ 视图/）。在 v2 树上跑会静默指错地方，
-# 所以先拒跑，转完一个从这套里删一个。
-LEGACY = {
-    "audit_state", "migrate_layout", "ops_pdf_triage", "paddleocr_pilot",
-    "pdf_census", "retire_book",
-}
-
 HELP = """book-corpus <命令> [参数...]
 
 工作区
@@ -45,6 +38,8 @@ HELP = """book-corpus <命令> [参数...]
 迁移
   migrate [--apply]       把 v1 布局（库/ 目录/ 视图/）搬成 v2（books/ collections/ tables/ build/）
                           --dest <目录> 落到新树，--mode move|link|copy，--out <目录> 写对照表
+  remap --map <csv> [--apply]
+                          按对照表改写索引里的路径；--old-db <旧 index.db> 把旧 expand 灌进新索引
 
 跑脚本
   run <脚本> [参数...]    scripts/ 下任一脚本，例如 run scan_library --help
@@ -64,9 +59,6 @@ def script_path(name):
 
 def run_script(name, argv, root):
     path = script_path(name)
-    base = name[:-3] if name.endswith(".py") else name
-    if base in LEGACY:
-        raise SystemExit("%s 还没转到 v2 布局，先别在 v2 树上跑。见阶段 3 的剩余清单。" % base)
     os.environ["BOOKS_ROOT"] = root
     if SCRIPTS_DIR not in sys.path:
         sys.path.insert(0, SCRIPTS_DIR)
@@ -111,6 +103,36 @@ def cmd_doctor(root, as_json):
         for level, label, detail in rows:
             print("%-5s %-*s %s" % (level, width, label, detail))
     return 1 if any(lv == "fail" for lv, _lb, _d in rows) else 0
+
+
+def cmd_remap(root, rest):
+    from . import remap
+    from .scripts import layout as LY
+    db = os.path.join(LY.Layout(workspace.resolve(root)).index_dir, "index.db")
+    old_db = None
+    mapping = None
+    i = 0
+    while i < len(rest):
+        arg = rest[i]
+        if arg == "--db" and i + 1 < len(rest):
+            db = rest[i + 1]
+            i += 2
+            continue
+        if arg == "--old-db" and i + 1 < len(rest):
+            old_db = rest[i + 1]
+            i += 2
+            continue
+        if arg == "--map" and i + 1 < len(rest):
+            mapping = rest[i + 1]
+            i += 2
+            continue
+        i += 1
+    if not mapping:
+        raise SystemExit("remap 要 --map <对照表.csv>")
+    code, lines = remap.run(db, mapping, old_db, "--apply" in rest)
+    for line in lines:
+        print(line)
+    return code
 
 
 def cmd_migrate(root, rest):
@@ -158,8 +180,7 @@ def cmd_list():
         except SyntaxError:
             doc = ""
         first = doc.strip().splitlines()[0] if doc.strip() else ""
-        mark = " 未转 v2" if name in LEGACY else ""
-        print("%-24s %-10s %s%s" % (name, alias_of.get(name, ""), first[:70], mark))
+        print("%-24s %-10s %s" % (name, alias_of.get(name, ""), first[:70]))
     return 0
 
 
@@ -185,6 +206,8 @@ def main(argv=None):
         return cmd_list()
     if cmd == "migrate":
         return cmd_migrate(explicit_root, rest)
+    if cmd == "remap":
+        return cmd_remap(explicit_root, rest)
     if cmd == "run":
         if not rest:
             raise SystemExit("run 要脚本名：book-corpus run <脚本> [参数...]")

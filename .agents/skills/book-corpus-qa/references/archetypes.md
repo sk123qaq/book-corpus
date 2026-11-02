@@ -15,16 +15,16 @@
 
 ## 语料在哪、书怎么定（所有配方共用）
 
-正文在 `$BOOKS_ROOT/库/<一级>/<二级>/<作者层?>/<书名>/md/`，一本书的章节文件全在它自己的 `md/` 里。`$BOOKS_ROOT` 指书库仓库根目录，没设就先执行 `export BOOKS_ROOT=$(git rev-parse --show-toplevel)`。
+正文在 `$BOOKS_ROOT/books/<uid>/md/`，一本书的章节文件全在它自己的 `md/` 里。`$BOOKS_ROOT` 指工作区根目录（有 `books.toml` 的那层），没设就先 `cd` 到那里或 `export BOOKS_ROOT=$PWD`。
 
 先把两个变量立起来：
 
 ```bash
 cd "$BOOKS_ROOT"
-DB=目录/library.db
-LQ=工作区/脚本/lq.py
+DB=build/library.db
+LQ="book-corpus run lq"
 BOOKDIR=$(python3 "$LQ" \
-  "SELECT '库/'||path||'/md' FROM book WHERE title LIKE '%核心词%' LIMIT 1")
+  "SELECT 'books/'||path||'/md' FROM book WHERE title LIKE '%核心词%' LIMIT 1")
 ls "$BOOKDIR"
 ```
 
@@ -33,7 +33,7 @@ ls "$BOOKDIR"
 - 列候选书：`python3 "$LQ" -H "SELECT uid,title,author,path FROM book WHERE title LIKE '%词%' OR author LIKE '%词%'"`
   `lq.py` 只读打开 library.db。也可以直接用 `python3 -m sqlite3 "$DB" "..."`，但它输出 Python 元组，不适合赋值。
 - 系列卷序：`python3 "$LQ" "SELECT volume,title,path FROM book WHERE series='系列名' ORDER BY CAST(volume AS INT)"`。
-  卷序说明在 `目录/系列/<系列>-合集说明.md`。系列各卷的公共父目录记作 `$SERIES`。
+  卷序说明在 `tables/系列/<系列>-合集说明.md`。系列各卷的公共父目录记作 `$SERIES`。
 
 ---
 
@@ -94,7 +94,7 @@ grep -n "<被害人名>\|<嫌疑人名>" "<书>"/*.md | head -30        # 4 回�
 
 ```bash
 python3 "$LQ" "SELECT volume,title,path FROM book WHERE series='系列名' ORDER BY CAST(volume AS INT)"  # 1 列全系列卷册
-cat 目录/系列/系列名-合集说明.md   # 2 定卷序（不要按 ls 排序）
+cat tables/系列/系列名-合集说明.md   # 2 定卷序（不要按 ls 排序）
 for w in 本名 别称1 别称2; do printf "%s=%s\n" "$w" \
   "$(grep -ro "$w" "$SERIES"/*/md | wc -l)"; done  # 3 别名量级比对，必做
 grep -rc "人物名\|线索词" "$SERIES"/*/md | grep -v ':0'  # 4 看每卷命中密度

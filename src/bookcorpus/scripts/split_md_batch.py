@@ -291,7 +291,7 @@ def recheck(row, ctx, result):
     """只复核暂存区已有的产物：重跑 verify 与 audit，重写 manifest，过了就进库。"""
     uid = row["uid"]
     stage = os.path.join(ctx["out"], uid)
-    dest = os.path.join(L.ROOT, "库", row["path"], "md")
+    dest = L.PATHS.md(row["uid"])
     if not os.path.isdir(stage):
         result.update(status="no-stage", note="暂存区没有产物，先重拆")
         return result
@@ -364,7 +364,7 @@ def recheck(row, ctx, result):
 
 def run_one(row, ctx):
     uid = row["uid"]
-    dest = os.path.join(L.ROOT, "库", row["path"], "md")
+    dest = L.PATHS.md(row["uid"])
     stage = os.path.join(ctx["out"], uid)
     work = os.path.join(ctx["tmp"], uid)
     result = {"uid": uid, "title": row["title"], "format": row["format"],
@@ -585,7 +585,7 @@ def main():
     ap.add_argument("--uids", help="新批次的 uid 清单，逗号分隔；只在 worklist.tsv 不存在时写入")
     ap.add_argument("--limit", type=int, help="最多跑几本（调试用）")
     ap.add_argument("--no-land", action="store_true", dest="noland",
-                    help="只做暂存，不进 库/")
+                    help="只做暂存，不进 books/")
     ap.add_argument("--force", action="store_true", help="忽略暂存区已有产物，重拆")
     ap.add_argument("--recheck", action="store_true",
                     help="不重拆，只复核暂存区已有产物")
@@ -668,7 +668,7 @@ def main():
                 res = job.result()
             except Exception as exc:  # 单本炸了不拖住整批
                 res = {"uid": r["uid"], "title": r["title"], "format": r["format"],
-                       "dest": os.path.join("库", r["path"], "md"), "at": now(),
+                       "dest": "books/%s/md" % r["uid"], "at": now(),
                        "status": "error", "note": "%s: %s" % (type(exc).__name__, exc)}
             write_result(ctx, res)
             results.append(res)

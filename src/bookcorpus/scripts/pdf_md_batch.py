@@ -1008,7 +1008,7 @@ def land(ctx, stage, dest, result):
 def run_one_text(row, ctx):
     """文本层路线：不切片、不调接口。抽文本 → verify → PDF 侧审计 → 门槛 → 落地。"""
     uid = row["uid"]
-    dest = os.path.join(L.ROOT, "库", row["path"], "md")
+    dest = L.PATHS.md(row["uid"])
     stage = os.path.join(ctx["out"], uid)
     result = {"uid": uid, "title": row["title"], "format": row["format"], "route": "text",
               "pages": int(row["pages"]), "dest": rel(dest), "at": now(), "commands": []}
@@ -1092,7 +1092,7 @@ def run_one(row, ctx):
     if ctx["route"] == "text":
         return run_one_text(row, ctx)
     uid = row["uid"]
-    dest = os.path.join(L.ROOT, "库", row["path"], "md")
+    dest = L.PATHS.md(row["uid"])
     stage = os.path.join(ctx["out"], uid)
     result = {"uid": uid, "title": row["title"], "format": row["format"],
               "pages": int(row["pages"]), "dest": rel(dest), "at": now(), "commands": []}
@@ -1351,7 +1351,7 @@ def main():
     ap.add_argument("--workers", type=int, default=3, help="同时跑几本；一本书的分片是串行的")
     ap.add_argument("--only", help="只跑这些 uid，逗号分隔")
     ap.add_argument("--limit", type=int, help="最多跑几本（调试用）")
-    ap.add_argument("--no-land", action="store_true", dest="noland", help="只做暂存，不进 库/")
+    ap.add_argument("--no-land", action="store_true", dest="noland", help="只做暂存，不进 books/")
     ap.add_argument("--force", action="store_true",
                     help="重拼装：忽略暂存区已有产物。缺的分片会重新提交，那是要花 OCR 额度的")
     ap.add_argument("--replace", action="store_true",
@@ -1451,7 +1451,7 @@ def main():
         run, skip_n, skip_pages = [], 0, 0
         for r in rows:
             pages = int(r["pages"] or 0)
-            if not keep_existing and os.path.isdir(os.path.join(L.ROOT, "库", r["path"], "md")):
+            if not keep_existing and os.path.isdir(L.PATHS.md(r["uid"])):
                 skip_n += 1
                 skip_pages += pages
                 continue
@@ -1487,8 +1487,7 @@ def main():
                 res = run_one(r, ctx)
             except Exception as exc:  # 单本炸了不拖住整批
                 res = {"uid": r["uid"], "title": r["title"], "format": r["format"],
-                       "pages": int(r["pages"]), "dest": rel(os.path.join(
-                           L.ROOT, "库", r["path"], "md")), "at": now(),
+                       "pages": int(r["pages"]), "dest": rel(L.PATHS.md(r["uid"])), "at": now(),
                        "status": "error", "note": "%s: %s" % (type(exc).__name__, exc)}
             with lock:
                 write_result(ctx, res)
