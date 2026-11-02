@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "paddle-ocr",
-   "chapters": 1,
-   "bytes": 197318
-  }
- ],
  "notes": "依据:系列:阿来；置信:0.99"
 }

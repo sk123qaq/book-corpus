@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 118,
-   "bytes": 728956
-  }
- ],
  "notes": "依据:系列:银河帝国；合集拆出 5/7；置信:1.0"
 }

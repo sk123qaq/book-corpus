@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "paddle-ocr",
-   "chapters": 1,
-   "bytes": 546076
-  }
- ],
  "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
 }

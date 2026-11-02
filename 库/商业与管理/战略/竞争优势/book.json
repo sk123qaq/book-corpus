@@ -22,21 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "html",
-   "status": "done",
-   "method": "chapter-html-versions",
-   "chapters": 15,
-   "bytes": 0
-  },
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 15,
-   "bytes": 955416
-  }
- ],
  "notes": "依据:系列:竞争优势；置信:0.97"
 }

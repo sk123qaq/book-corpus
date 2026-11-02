@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 10,
-   "bytes": 278854
-  }
- ],
  "notes": "依据:系列:阿加莎·克里斯蒂；合集拆出 84/85；置信:1.0"
 }

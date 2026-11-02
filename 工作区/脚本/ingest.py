@@ -300,7 +300,7 @@ def find_by_uid(root, uid):
 
 def book_json(uid, title, author, subjects, rel, sources, notes):
     return L.book_doc(uid, title, "", author, subjects, rel, None, None, None,
-                      "keep", notes, sources, [], [])
+                      "keep", notes, sources, [])
 
 
 def apply_one(root, it, shas):

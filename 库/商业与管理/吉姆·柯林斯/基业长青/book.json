@@ -21,14 +21,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 26,
-   "bytes": 558979
-  }
- ],
  "notes": "依据:系列:吉姆·柯林斯；合集拆出 1/4；置信:1.0"
 }

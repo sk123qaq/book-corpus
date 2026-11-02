@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 30,
-   "bytes": 538277
-  }
- ],
  "notes": "依据:系列:冰与火之歌；合集拆出 1/15；置信:0.99"
 }

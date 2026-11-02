@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 38,
-   "bytes": 563220
-  }
- ],
  "notes": "依据:系列:克苏鲁神话；合集拆出 2/3；置信:0.99"
 }

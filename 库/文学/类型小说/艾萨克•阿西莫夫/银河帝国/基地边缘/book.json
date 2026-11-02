@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 24,
-   "bytes": 805538
-  }
- ],
  "notes": "依据:系列:银河帝国；合集拆出 6/7；置信:0.99"
 }

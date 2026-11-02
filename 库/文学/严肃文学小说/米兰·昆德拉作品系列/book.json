@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 1207,
-   "bytes": 5788578
-  }
- ],
  "notes": "依据:系列:米兰·昆德拉；置信:0.98"
 }

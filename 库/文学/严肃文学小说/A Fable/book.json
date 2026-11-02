@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 11,
-   "bytes": 895426
-  }
- ],
  "notes": "奖项:普利策小说奖；依据:来源目录或奖项"
 }

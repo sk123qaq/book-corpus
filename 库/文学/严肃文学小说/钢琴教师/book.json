@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 6,
-   "bytes": 518871
-  }
- ],
  "notes": "依据:系列:钢琴教师；置信:1.0"
 }

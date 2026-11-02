@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "mineru-ocr",
-   "chapters": 1,
-   "bytes": 1004790
-  }
- ],
  "notes": "依据:系列:神话史；置信:0.98"
 }

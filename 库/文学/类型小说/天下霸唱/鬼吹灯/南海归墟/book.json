@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 57,
-   "bytes": 712476
-  }
- ],
  "notes": "依据:系列:鬼吹灯；合集拆出 6/8；置信:1.0"
 }

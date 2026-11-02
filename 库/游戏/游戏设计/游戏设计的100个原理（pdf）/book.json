@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "pdf-text",
-   "chapters": 11,
-   "bytes": 431960
-  }
- ],
  "notes": "依据:来源目录或奖项；同名冲突加限定词（pdf）"
 }

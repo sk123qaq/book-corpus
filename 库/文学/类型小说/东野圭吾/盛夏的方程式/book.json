@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 64,
-   "bytes": 648906
-  }
- ],
  "notes": "依据:系列:东野圭吾；合集拆出 10/69；置信:1.0"
 }

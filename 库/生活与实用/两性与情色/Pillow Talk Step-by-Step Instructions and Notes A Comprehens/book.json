@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "pdf-text",
-   "chapters": 1,
-   "bytes": 359869
-  }
- ],
  "notes": "同一书的第二份源；依据:TypeSafe(0.91)；置信:0.91"
 }

@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 52,
-   "bytes": 262068
-  }
- ],
  "notes": "奖项:龚古尔奖；依据:来源目录或奖项"
 }

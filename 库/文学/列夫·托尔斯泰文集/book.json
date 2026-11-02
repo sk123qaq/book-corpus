@@ -21,14 +21,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "pdf-text",
-   "chapters": 4,
-   "bytes": 763494
-  }
- ],
  "notes": "依据:TypeSafe(0.99)；置信:0.99"
 }

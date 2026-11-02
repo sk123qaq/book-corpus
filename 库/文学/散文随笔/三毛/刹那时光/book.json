@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 46,
-   "bytes": 325014
-  }
- ],
  "notes": "依据:系列:三毛；合集拆出 13/14；置信:1.0"
 }

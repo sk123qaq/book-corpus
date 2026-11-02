@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "split_collection",
-   "chapters": 80,
-   "bytes": 297185
-  }
- ],
  "notes": "依据:系列:渡边淳一；合集拆出 5/7；置信:0.59"
 }

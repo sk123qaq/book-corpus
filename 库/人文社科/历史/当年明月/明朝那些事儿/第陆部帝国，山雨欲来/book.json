@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 18,
-   "bytes": 607382
-  }
- ],
  "notes": "依据:系列:明朝那些事儿；合集拆出 7/10；置信:0.97"
 }

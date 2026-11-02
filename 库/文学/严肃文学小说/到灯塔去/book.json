@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 3,
-   "bytes": 380766
-  }
- ],
  "notes": "依据:系列:到灯塔去；置信:1.0"
 }

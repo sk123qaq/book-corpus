@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "split_collection",
-   "chapters": 18,
-   "bytes": 424863
-  }
- ],
  "notes": "依据:系列:渡边淳一；合集拆出 4/7；置信:0.73"
 }

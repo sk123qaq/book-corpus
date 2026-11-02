@@ -21,14 +21,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "paddle-ocr",
-   "chapters": 1,
-   "bytes": 419850
-  }
- ],
  "notes": "依据:来源目录或奖项"
 }

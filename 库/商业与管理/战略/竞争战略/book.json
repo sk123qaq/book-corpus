@@ -22,21 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "html",
-   "status": "done",
-   "method": "chapter-html-versions",
-   "chapters": 18,
-   "bytes": 0
-  },
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 21,
-   "bytes": 689748
-  }
- ],
  "notes": "依据:系列:竞争战略；置信:0.99"
 }

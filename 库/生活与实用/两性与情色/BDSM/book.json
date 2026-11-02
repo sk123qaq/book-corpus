@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 2,
-   "bytes": 28330
-  }
- ],
  "notes": "依据:TypeSafe(0.90)；置信:0.9"
 }

@@ -28,14 +28,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 1,
-   "bytes": 58589
-  }
- ],
  "notes": "奖项:塞万提斯奖；依据:来源目录或奖项"
 }

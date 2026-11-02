@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 82,
-   "bytes": 471790
-  }
- ],
  "notes": "依据:系列:王小波；合集拆出 2/10；置信:0.9"
 }

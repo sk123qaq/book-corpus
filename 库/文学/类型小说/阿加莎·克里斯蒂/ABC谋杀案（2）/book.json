@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 35,
-   "bytes": 349084
-  }
- ],
  "notes": "依据:系列:阿加莎·克里斯蒂；合集拆出 14/85；置信:1.0；同名冲突加限定词（2）"
 }

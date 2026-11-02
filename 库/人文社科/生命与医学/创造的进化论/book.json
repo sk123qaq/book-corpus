@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 13,
-   "bytes": 768009
-  }
- ],
  "notes": "依据:系列:创造的进化论；置信:0.76"
 }

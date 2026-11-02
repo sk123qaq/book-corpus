@@ -21,14 +21,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 191,
-   "bytes": 3975522
-  }
- ],
  "notes": "依据:系列:汉德克；置信:0.64"
 }

@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 53,
-   "bytes": 1176792
-  }
- ],
  "notes": "依据:系列:莫言；置信:1.0"
 }

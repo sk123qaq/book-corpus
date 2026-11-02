@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 34,
-   "bytes": 636686
-  }
- ],
  "notes": "依据:系列:鬼吹灯；合集拆出 1/8；置信:1.0"
 }

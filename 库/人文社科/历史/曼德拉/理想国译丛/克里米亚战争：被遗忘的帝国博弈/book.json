@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 19,
-   "bytes": 1213676
-  }
- ],
  "notes": "依据:系列:理想国译丛；合集拆出 29/32；置信:0.99"
 }

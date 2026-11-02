@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 22,
-   "bytes": 504353
-  }
- ],
  "notes": "奖项:芥川奖；依据:来源目录或奖项"
 }

@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 6,
-   "bytes": 612451
-  }
- ],
  "notes": "依据:系列:猎魔人；合集拆出 2/8；置信:1.0"
 }

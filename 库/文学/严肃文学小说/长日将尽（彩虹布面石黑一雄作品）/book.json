@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 10,
-   "bytes": 523249
-  }
- ],
  "notes": "奖项:布克奖；依据:来源目录或奖项；同名冲突加限定词（彩虹布面石黑一雄作品）"
 }

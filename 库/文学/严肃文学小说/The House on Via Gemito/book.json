@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 6,
-   "bytes": 900481
-  }
- ],
  "notes": "奖项:斯特雷加奖；依据:来源目录或奖项"
 }

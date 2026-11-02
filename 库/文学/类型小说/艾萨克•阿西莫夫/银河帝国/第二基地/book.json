@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 27,
-   "bytes": 432764
-  }
- ],
  "notes": "依据:系列:银河帝国；合集拆出 3/7；置信:1.0"
 }

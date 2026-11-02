@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 19,
-   "bytes": 690774
-  }
- ],
  "notes": "奖项:茅盾文学奖；依据:来源目录或奖项；同名冲突加限定词（茅盾文学奖获奖作品全集·典藏版·第二届）"
 }

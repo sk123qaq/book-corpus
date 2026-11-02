@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 12,
-   "bytes": 197718
-  }
- ],
  "notes": "依据:系列:余华；合集拆出 9/13；置信:0.96"
 }

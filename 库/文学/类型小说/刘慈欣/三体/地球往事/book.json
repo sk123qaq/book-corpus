@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 38,
-   "bytes": 573417
-  }
- ],
  "notes": "依据:系列:三体；合集拆出 2/4；置信:1.0"
 }

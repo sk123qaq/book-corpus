@@ -294,11 +294,9 @@ def emit_book_json(con):
                          "sha256": s["sha256"], "primary_src": s["primary_src"]})
         awards = [dict(a) for a in con.execute(
             "SELECT award,year,edition,result FROM book_award WHERE uid=?", (b["uid"],))]
-        derived = [dict(d) for d in con.execute(
-            "SELECT kind,status,method,chapters,bytes FROM derived WHERE uid=?", (b["uid"],))]
         doc = L.book_doc(b["uid"], b["title"], b["title_from_file"], b["author"],
                          [b["subject1"], b["subject2"]], b["path"], b["series"], b["volume"],
-                         b["container"], b["retention"], b["notes"], srcs, awards, derived)
+                         b["container"], b["retention"], b["notes"], srcs, awards)
         L.write_json_atomic(os.path.join(dest, "book.json"), doc)
         written += 1
     return written

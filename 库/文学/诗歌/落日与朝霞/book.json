@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "paddle-ocr",
-   "chapters": 1,
-   "bytes": 190913
-  }
- ],
  "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
 }

@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 17,
-   "bytes": 159784
-  }
- ],
  "notes": "依据:系列:乡土中国；置信:1.0"
 }

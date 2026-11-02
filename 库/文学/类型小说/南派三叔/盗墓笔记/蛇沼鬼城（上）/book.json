@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 29,
-   "bytes": 255372
-  }
- ],
  "notes": "依据:系列:盗墓笔记；合集拆出 6/17；置信:1.0"
 }

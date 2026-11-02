@@ -339,15 +339,18 @@ def iter_book_json():
 
 
 def book_doc(uid, title, title_from_file, author, subjects, path, series, volume, container,
-             retention, notes, sources, awards, derived):
-    """book.json 的唯一形状。build_library 与 migrate_layout 都从这里取。"""
-    return {
+             retention, notes, sources, awards, derived=None):
+    """book.json 的唯一形状。derived 是磁盘状态，只在迁移脚本里显式写入。"""
+    doc = {
         "uid": uid, "title": title, "title_from_file": title_from_file,
         "author": author or "", "subjects": [x for x in (subjects or []) if x], "path": path,
         "series": series or None, "volume": volume or None, "container": container or None,
         "retention": retention or "keep",
-        "sources": sources, "awards": awards, "derived": derived, "notes": notes or "",
+        "sources": sources, "awards": awards, "notes": notes or "",
     }
+    if derived is not None:
+        doc["derived"] = derived
+    return doc
 
 
 def write_json_atomic(path, doc):

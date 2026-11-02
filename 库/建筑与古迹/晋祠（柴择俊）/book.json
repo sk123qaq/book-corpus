@@ -21,14 +21,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "paddle-ocr",
-   "chapters": 1,
-   "bytes": 37762
-  }
- ],
  "notes": "依据:来源目录或奖项；同名冲突加限定词（柴择俊）"
 }

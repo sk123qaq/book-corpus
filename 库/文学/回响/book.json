@@ -28,14 +28,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 11,
-   "bytes": 564269
-  }
- ],
  "notes": "奖项:布克奖；同一书的第二份源；依据:来源目录或奖项"
 }

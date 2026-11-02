@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 15,
-   "bytes": 636529
-  }
- ],
  "notes": "依据:系列:渡边淳一；置信:1.0"
 }

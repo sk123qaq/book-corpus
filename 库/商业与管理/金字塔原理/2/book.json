@@ -21,14 +21,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 26,
-   "bytes": 246178
-  }
- ],
  "notes": "依据:系列:金字塔原理；合集拆出 2/2；置信:0.36"
 }

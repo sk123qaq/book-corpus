@@ -21,14 +21,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 58,
-   "bytes": 486343
-  }
- ],
  "notes": "依据:系列:毛泽东选集；合集拆出 5/5；置信:0.73"
 }

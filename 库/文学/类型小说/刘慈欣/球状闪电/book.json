@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 38,
-   "bytes": 560100
-  }
- ],
  "notes": "依据:系列:三体；置信:0.99"
 }

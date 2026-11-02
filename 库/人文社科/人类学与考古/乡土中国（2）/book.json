@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 18,
-   "bytes": 228858
-  }
- ],
  "notes": "依据:来源目录或奖项；同名冲突加限定词（2）"
 }

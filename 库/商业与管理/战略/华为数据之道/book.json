@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 149,
-   "bytes": 374223
-  }
- ],
  "notes": "ingest:2026-10-27；待复核"
 }

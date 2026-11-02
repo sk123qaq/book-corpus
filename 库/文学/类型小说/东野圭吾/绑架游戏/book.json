@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 21,
-   "bytes": 326301
-  }
- ],
  "notes": "依据:系列:东野圭吾；合集拆出 46/69；置信:1.0"
 }

@@ -29,14 +29,5 @@
    "result": "已在盘"
   }
  ],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 2,
-   "bytes": 130341
-  }
- ],
  "notes": "奖项:鲁迅文学奖；依据:来源目录或奖项"
 }

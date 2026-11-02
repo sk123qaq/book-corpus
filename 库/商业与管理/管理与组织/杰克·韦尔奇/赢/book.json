@@ -22,14 +22,5 @@
   }
  ],
  "awards": [],
- "derived": [
-  {
-   "kind": "md",
-   "status": "done",
-   "method": "ebook-to-md",
-   "chapters": 32,
-   "bytes": 726611
-  }
- ],
  "notes": "依据:系列:韦尔奇；合集拆出 1/3；置信:1.0"
 }
