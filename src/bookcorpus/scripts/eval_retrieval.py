@@ -2,7 +2,7 @@
 """四档基线评测：A grep 字面 / B rg 字面 / C defpass 概念组 / D grep 近义词组。
 
 gold.tsv 一行一题，每个系统给目标章在候选列表里的名次（超过 99 记 99，没进候选也记 99）。
-候选只认库下的 .md。索引本身只读，但 K/L/M 档会写缓存：K 写 目录/检索/expand_queries/，
+候选只认 books/ 下的 .md。索引本身只读，但 K/L/M 档会写缓存：K 写 目录/检索/expand_queries/，
 L 与 M 写 目录/检索/route_cache/。
 
   eval_retrieval.py --gold gold.tsv --system A,B,C,D --k 10,20 --out eval-baseline.tsv
@@ -47,7 +47,7 @@ def grep_files(patterns, literal=True):
     cmd += ["-F" if literal else "-E"]
     for p in patterns:
         cmd += ["-e", p]
-    cmd.append("库")
+    cmd.append("books")
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     return [l for l in out.stdout.splitlines() if l]
 
@@ -56,7 +56,7 @@ def rg_files(patterns):
     cmd = [RG, "-l", "-F", "--sort", "path", "-g", "*.md"]
     for p in patterns:
         cmd += ["-e", p]
-    cmd.append("库")
+    cmd.append("books")
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env())
     return [l for l in out.stdout.splitlines() if l]
 
@@ -65,7 +65,7 @@ def grep_expanded(patterns, excludes):
     cmd = ["grep", "-rn", "--include=*.md", "-E"]
     for p in patterns:
         cmd += ["-e", p]
-    cmd.append("库")
+    cmd.append("books")
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     ex = re.compile("|".join(excludes)) if excludes else None
     seen, order = set(), []
