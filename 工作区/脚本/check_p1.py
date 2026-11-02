@@ -111,7 +111,20 @@ def edge_cases():
         check(False, "--pool all 不被吞", "异常 %s: %s" % (type(exc).__name__, exc))
 
 
+def fixtures_available():
+    gold = os.path.join(BATCH, "gold.tsv")
+    if not os.path.isfile(gold):
+        return False
+    with open(gold, encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+    paths = [r.get("path") for r in rows if r.get("path")][:10]
+    return bool(paths) and all(os.path.exists(os.path.join(ROOT, p)) for p in paths)
+
+
 def main():
+    if not fixtures_available():
+        print("SKIP 当前库不含 P1 评测语料（gold.tsv 的书），跳过。")
+        return 0
     two_char_words()
     edge_cases()
     wall("过密化", "八次危机")

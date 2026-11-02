@@ -33,6 +33,8 @@
 | `工作区/运维/` | 统一操作台服务与验收 |
 | `工作区/演示-检索流程/` | 检索流程演示页服务与验收 |
 
+`book.json` 只记源元数据（uid、书名、学科、sources、awards）。md 与 html 状态在 `library.db` 的 `derived` 表里，由 `build_library.py` 按磁盘生成，不写回 `book.json`。
+
 ## 从零搭起来
 
 ### 1. 系统依赖
@@ -148,6 +150,21 @@ python3 工作区/脚本/ingest.py apply plan.json --apply
 
 `scan` 只读，出计划。`apply` 默认也只打印，加 `--apply` 才写盘。
 
+入库只把源和 `book.json` 放进库，还没有 md。要能检索，先拆章：
+
+```bash
+python3 工作区/脚本/split_md_batch.py --batch <批次名> --uids <uid>
+```
+
+`split_md_batch.py` 会转 EPUB、拆章、verify、audit，过了才把 md 原子落进 `库/.../md/`。epub 不需要 Calibre；mobi、azw3、azw 需要先装 Calibre 的 `ebook-convert`。只想快速拆一本、不走批次账时，也可以用 `ebook-to-md` 技能：
+
+```bash
+python3 .agents/skills/ebook-to-md/scripts/ebook_to_md.py <书>.epub -o 库/<path>/md
+python3 .agents/skills/ebook-to-md/scripts/verify_output.py 库/<path>/md
+```
+
+`split_md_batch.py` 从 `library.db` 找待拆书，所以刚 `ingest` 完要先跑一次 `build_library.py`。它只在 `工作区/批次/<批次名>/` 里生成一次 `worklist.tsv`，重复运行以账为准。
+
 建库：
 
 ```bash
@@ -217,13 +234,13 @@ python3 工作区/脚本/build_topic_views.py
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
 | 人账 `目录/分类表.csv` | `python3 工作区/脚本/build_library.py --emit-json` | `conflicts=0`，`books` 等于人账行数 |
-| 结构、脚本、html | `python3 工作区/脚本/verify_phase.py` | 末行「全过」 |
+| 结构、脚本、html | `python3 工作区/脚本/verify_phase.py` | 末行「全过」，缺基线时部分箱子打印「跳过」 |
 | 书目或人账 | `python3 工作区/脚本/gen_book_catalog.py` | 末行「未匹配 0 条」 |
-| 检索层 | `python3 工作区/脚本/check_p1.py` 与 `python3 工作区/脚本/verify_phase.py --box 6` | 前者「失败 0 项」，后者「全过」 |
+| 检索层 | `python3 工作区/脚本/check_p1.py` 与 `python3 工作区/脚本/verify_phase.py --box 6` | 前者「失败 0 项」或 `SKIP`，后者「全过」 |
 | 操作台 | `python3 工作区/运维/验收/check_ops.py` | 末行 `ALL PASS` |
-| 演示页 | 先起演示页，再跑 `python3 工作区/演示-检索流程/验收/check_demo.py` | 全部「过」 |
+| 演示页 | 先起演示页，再跑 `python3 工作区/演示-检索流程/验收/check_demo.py` | 全部「过」，缺三体时打印「[跳过]」 |
 
-`verify_phase.py` 与 `check_p1.py` 依赖作者本机的基线（`工作区/中间态/基线/`）与评测账（`工作区/批次/qa-检索-2026-10-19/`）。新克隆的仓库没有这些基线，先建库与索引，再按自己的语料重做检查。
+`verify_phase.py`、`check_p1.py`、`check_demo.py` 与 `gen_book_catalog.py` 是作者实例检查。缺基线、评测书、三体或凡人语料时，前三个会打印 `[跳过]` 或 `SKIP`；`gen_book_catalog.py` 需要源文件在盘，克隆状态不会通过。只验证部署本身时跑 `check_ops.py`。
 
 ## 路径与配置
 

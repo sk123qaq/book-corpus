@@ -10,7 +10,9 @@
      第二跑命中缓存
   5. thinking 透传到切词与回答；/api/run 与 /api/answer 的 fresh=true 跳过缓存重新生成
 """
+import glob
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -20,6 +22,10 @@ import urllib.request
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765"
 THREE = "《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球"
 THREE_PATH = "库/文学/类型小说/刘慈欣/三体/死神永生/md/03_第二部威慑纪元12年，“青铜世纪”号.md"
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+HAS_FIXTURES = os.path.exists(os.path.join(ROOT, THREE_PATH)) and bool(
+    glob.glob(os.path.join(ROOT, "库", "**", "凡人修仙传"), recursive=True))
 fails = []
 
 
@@ -55,6 +61,18 @@ _, html = get("/classic")
 check("旧页在 /classic", "书库检索" in html and "ask-form" in html)
 _, home = get("/")
 check("/ 是 02 页", "session.js" in home and 'id="main"' in home)
+
+if not HAS_FIXTURES:
+    check("路径穿越拒绝", code_of("/api/chapter?path=../../etc/passwd&line=1") == 400)
+    check("非 md 拒绝", code_of("/api/chapter?path=/etc/passwd&line=1") == 400)
+    try:
+        post("/api/run", {"question": ""})
+        check("空问题拒绝", False)
+    except urllib.error.HTTPError as exc:
+        check("空问题拒绝", exc.code == 400)
+    print("\n[跳过] 语料不含三体/凡人修仙传，跳过回答、书卡与章节验收")
+    print("\nALL PASS" if not fails else "\n失败 %d 项：%s" % (len(fails), ", ".join(fails)))
+    sys.exit(0 if not fails else 1)
 
 status, body = post("/api/run", {"question": "内卷和教育之间是什么关系"})
 t1 = json.loads(body)
