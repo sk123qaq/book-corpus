@@ -34,6 +34,15 @@ CODE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(CODE_DIR, "web")
 REAL_ROOT = os.path.dirname(os.path.dirname(CODE_DIR))
 
+def _package_scripts():
+    try:
+        from bookcorpus.paths import scripts_dir
+        return scripts_dir()
+    except ImportError:
+        return os.path.join(os.path.dirname(os.path.dirname(CODE_DIR)), "src", "bookcorpus", "scripts")
+
+
+
 STATES = ("queued", "running", "awaiting_review", "succeeded", "failed",
           "cancelled", "orphaned")
 DONE_STATES = ("succeeded", "failed", "cancelled", "orphaned")
@@ -248,7 +257,7 @@ class Env:
         self.root = os.path.abspath(root)
         self.ops = os.path.join(self.root, "工作区", "运维")
         self.jobs = os.path.join(self.ops, "jobs")
-        self.scripts = os.path.join(self.root, "工作区", "脚本")
+        self.scripts = _package_scripts()
         self.batches = os.path.join(self.root, "工作区", "批次")
         self.lib = os.path.join(self.root, "库")
         self.inbox = os.path.join(self.lib, "_收件箱")

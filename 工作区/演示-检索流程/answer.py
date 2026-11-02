@@ -33,9 +33,16 @@ import sys
 import threading
 import time
 
+def _package_scripts():
+    try:
+        from bookcorpus.paths import scripts_dir
+        return scripts_dir()
+    except ImportError:
+        return os.path.join(os.path.dirname(os.path.dirname(HERE)), "src", "bookcorpus", "scripts")
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
-SCRIPTS = os.path.join(ROOT, "工作区", "脚本")
+SCRIPTS = _package_scripts()
 for _p in (SCRIPTS, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -47,6 +54,8 @@ import lib_fts_cjk as cjk  # noqa: E402
 import lib_common as L  # noqa: E402
 import qsearch  # noqa: E402
 from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinking  # noqa: E402
+
+ROOT = L.ROOT
 
 INDEX_DB = os.path.join(ROOT, "目录", "检索", "index.db")
 LIBRARY_DB = os.path.join(ROOT, "目录", "library.db")

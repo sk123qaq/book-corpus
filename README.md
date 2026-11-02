@@ -27,7 +27,7 @@
 | `目录/阅读版索引.html` | 有阅读版 HTML 的书的总索引，产物 |
 | `视图/奖项/`、`视图/主题/` | 指向 `库/` 的软链树，随时可删可重建 |
 | `.agents/skills/` | 随仓库提交的 pi 技能，见下文 |
-| `工作区/脚本/` | 全部脚本 |
+| `src/bookcorpus/` | 包与脚本。装好后用 `book-corpus` 一条命令进全部子命令 |
 | `工作区/方案/` | 方案与决策记录 |
 | `工作区/批次/` | 每批转换、评测、下载的机账 |
 | `工作区/运维/` | 统一操作台服务与验收 |
@@ -43,7 +43,7 @@
 
 | 依赖 | 必需性 | 用途 |
 |---|---|---|
-| Python 3.10+ | 必需 | 全部脚本。开发与验收用 3.14 |
+| Python 3.11+ | 必需 | 全部脚本。开发与验收用 3.14 |
 | SQLite（带 FTS5） | 必需 | `library.db` 与 `index.db`。Python 自带 `sqlite3` 模块即可，需确认 FTS5 可用 |
 | Git | 必需 | 版本管理 |
 | ripgrep | 检索与验收需要 | 全文定位。`rg` 放到 PATH，或用 `BOOKS_RG` 指定 |
@@ -72,7 +72,26 @@ sudo apt install calibre poppler-utils ripgrep
 
 `pi` 由 npm 包 `@earendil-works/pi-coding-agent` 提供。装好后在 `~/.pi/agent/auth.json` 里配置至少一个模型 provider。
 
-### 2. Python 环境
+### 2. 装工具
+
+用 uv，`uv.lock` 在仓里。
+
+```bash
+uv tool install .                  # 装成全局命令
+book-corpus --version
+book-corpus init ~/书库            # 建一个空工作区
+```
+
+改代码时走项目环境：
+
+```bash
+uv sync --frozen
+uv run book-corpus --version
+```
+
+`book-corpus` 是唯一入口。`book-corpus list` 列出全部脚本，`book-corpus run <脚本>` 跑没有短名的那些。工作区根用 `--root`、`BOOKS_ROOT` 或工作区里的 `books.toml` 指定。
+
+### 3. Python 环境
 
 核心流程只用标准库。`qsearch.py`、`book_query.py`、`build_library.py`、`build_para_index.py`、`lq.py` 不需要装第三方包。
 
@@ -89,7 +108,7 @@ PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当�
 
 `requirements.txt` 还包含 `beautifulsoup4`，`ebook-to-md` 技能解析 EPUB 要用。两个可选包按需装：`pip install commonmark lxml`。`commonmark` 让 `md_link_health.py` 按渲染结果判断链接，`lxml` 让 EPUB 解析更快。
 
-### 3. 模型与账号
+### 4. 模型与账号
 
 多数脚本通过 pi 调模型。文档扩展直连 provider 接口，自己从 `~/.pi/agent/auth.json` 读 key。
 
@@ -109,7 +128,7 @@ PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当�
 | PaddleOCR | `~/.config/PaddleOCR/api_key` | 扫描件逐页 OCR。平台有每日页数额度，用尽返回 HTTP 403 code 12001 |
 | MinerU | `~/.config/mineru/api_key` 或 `$MINERU_API_KEY` | OCR 兜底，读不出的可疑页补投。CLI 在 `.agents/skills/mineru/scripts/mineru.py` |
 
-### 4. 技能
+### 5. 技能
 
 问答与转换依赖的 pi 技能已经放在仓库里，不需要另外安装。Pi 会自动发现项目下的 `.agents/skills/`。
 
@@ -123,7 +142,7 @@ PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当�
 
 脚本解析技能目录的顺序是：仓库内 `.agents/skills/`，其次 `~/.agents/skills/`。可以用 `BOOKS_SKILLS_DIR` 指定别的根。如果本机 `~/.agents/skills/` 里有同名技能，Pi 交互会话可能加载其中一份；脚本固定优先用仓库内的。`typesafe-ai` 不附带密钥。旧后端读 `.agents/skills/typesafe-ai/.env` 里的 `TYPESAFE_API_KEY`，或用 `TYPESAFE_ENV` 指向别的文件。
 
-### 5. 本地模型（可选）
+### 6. 本地模型（可选）
 
 `工作区/models/` 下的模型都不在 Git 里。只跑检索与问答不需要它们。
 
@@ -142,7 +161,7 @@ huggingface-cli download BAAI/bge-reranker-v2-m3 \
 
 重排实验需要能用的 GPU。`rerank.py` 的设备名写死 `cuda`，AMD 显卡用 ROCm 版 torch 也映射成这个名字。
 
-### 6. 准备语料
+### 7. 准备语料
 
 克隆下来是空骨架：`库/` 里只有 `_收件箱/` 与 `_冷宫/` 的 README，`目录/` 下的 CSV 只有表头。自己的书这样进来：
 
@@ -151,9 +170,9 @@ huggingface-cli download BAAI/bge-reranker-v2-m3 \
 3. `build_library.py --emit-json` 建库，`split_md_batch.py` 拆章，`build_para_index.py --rebuild` 建检索索引。
 
 ```bash
-python3 工作区/脚本/ingest.py scan --out plan.json
-python3 工作区/脚本/ingest.py apply plan.json --apply
-python3 工作区/脚本/build_library.py --emit-json
+book-corpus ingest scan --out plan.json
+book-corpus ingest apply plan.json --apply
+book-corpus library --emit-json
 ```
 
 `scan` 只读，出计划。`apply` 默认也只打印，加 `--apply` 才写盘。
@@ -161,7 +180,7 @@ python3 工作区/脚本/build_library.py --emit-json
 入库只把源和 `book.json` 放进库，还没有 md。要能检索，先拆章：
 
 ```bash
-python3 工作区/脚本/split_md_batch.py --batch <批次名> --uids <uid>
+book-corpus run split_md_batch --batch <批次名> --uids <uid>
 ```
 
 `split_md_batch.py` 会转 EPUB、拆章、verify、audit，过了才把 md 原子落进 `库/.../md/`。epub 不需要 Calibre；mobi、azw3、azw 需要先装 Calibre 的 `ebook-convert`。只想快速拆一本、不走批次账时，也可以用 `ebook-to-md` 技能：
@@ -176,8 +195,8 @@ python3 .agents/skills/ebook-to-md/scripts/verify_output.py 库/<path>/md
 建库：
 
 ```bash
-python3 工作区/脚本/build_library.py --emit-json
-python3 工作区/脚本/build_para_index.py --rebuild
+book-corpus library --emit-json
+book-corpus index --rebuild
 ```
 
 `build_library.py` 读 `分类表.csv` 与 `book.json`，重建 `目录/library.db`。`build_para_index.py --rebuild` 全量重建检索索引，耗时随语料增长，几十分钟到几小时。
@@ -188,7 +207,7 @@ python3 工作区/脚本/build_para_index.py --rebuild
 
 ```bash
 cd <仓库根>
-python3 工作区/脚本/lq.py -H "SELECT uid,title,author,path FROM book WHERE title LIKE '%核心词%' OR author LIKE '%核心词%'"
+book-corpus run lq -H "SELECT uid,title,author,path FROM book WHERE title LIKE '%核心词%' OR author LIKE '%核心词%'"
 ```
 
 `lq.py` 只读打开 `目录/library.db`，输出制表符分隔。
@@ -196,8 +215,8 @@ python3 工作区/脚本/lq.py -H "SELECT uid,title,author,path FROM book WHERE 
 ### 查原文
 
 ```bash
-python3 工作区/脚本/qsearch.py '关键词 关键词' -n 5
-python3 工作区/脚本/qsearch.py --concept 概念键 -n 5
+book-corpus search '关键词 关键词' -n 5
+book-corpus search --concept 概念键 -n 5
 ```
 
 返回 `库/…/md/xx.md:行号`、分数与命中段。`--book` 出书级聚合，`--concept` 走概念表。
@@ -205,7 +224,7 @@ python3 工作区/脚本/qsearch.py --concept 概念键 -n 5
 ### 问一本书
 
 ```bash
-python3 工作区/脚本/book_query.py 关键词 关键词 --no-cards
+book-corpus query 关键词 关键词 --no-cards
 ```
 
 默认先做书级定位，再选章。书卡默认开，触发时弹 5 到 8 张，`--no-cards` 关闭。按需扩展默认关，加 `--expand-on-demand` 才跑。
@@ -225,26 +244,26 @@ python3 工作区/运维/server.py             # http://127.0.0.1:8770
 
 ```bash
 # 改完人账后重建 library.db 与每本书的 book.json
-python3 工作区/脚本/build_library.py --emit-json
+book-corpus library --emit-json
 
 # 重建检索索引
-python3 工作区/脚本/build_para_index.py --rebuild
+book-corpus index --rebuild
 
 # 重建每本书的 html 索引与阅读版总索引
-python3 工作区/脚本/build_index.py
+book-corpus render
 
 # 重建视图/主题软链
-python3 工作区/脚本/build_topic_views.py
+book-corpus run build_topic_views
 ```
 
 ## 改完跑什么
 
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
-| 人账 `目录/分类表.csv` | `python3 工作区/脚本/build_library.py --emit-json` | `conflicts=0`，`books` 等于人账行数 |
-| 结构、脚本、html | `python3 工作区/脚本/verify_phase.py` | 末行「全过」，缺基线时部分箱子打印「跳过」 |
-| 书目或人账 | `python3 工作区/脚本/gen_book_catalog.py` | 末行「未匹配 0 条」 |
-| 检索层 | `python3 工作区/脚本/check_p1.py` 与 `python3 工作区/脚本/verify_phase.py --box 6` | 前者「失败 0 项」或 `SKIP`，后者「全过」 |
+| 人账 `目录/分类表.csv` | `book-corpus library --emit-json` | `conflicts=0`，`books` 等于人账行数 |
+| 结构、脚本、html | `book-corpus verify` | 末行「全过」，缺基线时部分箱子打印「跳过」 |
+| 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
+| 检索层 | `book-corpus run check_p1` 与 `book-corpus verify --box 6` | 前者「失败 0 项」或 `SKIP`，后者「全过」 |
 | 操作台 | `python3 工作区/运维/验收/check_ops.py` | 末行 `ALL PASS` |
 | 演示页 | 先起演示页，再跑 `python3 工作区/演示-检索流程/验收/check_demo.py` | 全部「过」，缺三体时打印「[跳过]」 |
 

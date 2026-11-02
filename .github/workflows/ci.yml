@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: 安装
+        run: uv sync --frozen
+      - name: 单元与端到端
+        run: uv run --frozen pytest
+      - name: 命令行冒烟
+        run: |
+          uv run --frozen book-corpus --version
+          uv run --frozen book-corpus list > /dev/null
+          uv run --frozen book-corpus init /tmp/ws
+          uv run --frozen book-corpus doctor --root /tmp/ws

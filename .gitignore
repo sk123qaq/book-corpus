@@ -95,3 +95,5 @@ __pycache__/
 *.tmp
 *.swp
 .DS_Store
+/.venv/
+/dist/
