@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """统一操作台的本地服务，127.0.0.1:8770，只用标准库。
 
-页面读 ops_status.py 的 JSON 与 ops.db；按钮排队调 工作区/脚本/ 里的脚本。
+页面读 ops_status.py 的 JSON 与 ops.db；按钮排队调 src/bookcorpus/scripts/ 里的脚本。
 不写 tables/、build/，不重建真索引；除上传落 books/_收件箱/ 外不碰 books/。
 
   python3 工作区/运维/server.py [--port 8770] [--root .]

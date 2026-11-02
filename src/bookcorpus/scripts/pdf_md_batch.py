@@ -3,7 +3,7 @@
 
 每本书一条流水线：切片 → paddleocr_pilot.py 提交/续跑/下载 → 合并成连续页序 →
 pdf_ocr_to_md.py 拼装（--structure single）→ verify_output.py 加 PDF 侧体检 →
-原子 rename 进 库/<path>/md/。产物先落 工作区/批次/<批次>/out/<uid>/，门槛全过才进库，
+原子 rename 进 books/<uid>/md/。产物先落 工作区/批次/<批次>/out/<uid>/，门槛全过才进书，
 没过留在暂存区等人看。
 
 每本书的状态都从磁盘推出来，崩了能接着跑：

@@ -2,7 +2,7 @@
 """批量把 source 是 ebook 的书拆成 md（方案 §7 的转换接口）。
 
 每本书一条流水线：转 EPUB（mobi/azw3/azw 先过 Calibre）→ 拆章 → verify → audit
-→ 原子 rename 进 库/<path>/md/。产物先落 工作区/批次/<批次>/out/<uid>/，只有
+→ 原子 rename 进 books/<uid>/md/。产物先落 工作区/批次/<批次>/out/<uid>/，只有
 verify 与 audit 都过才进库，没过留在暂存区待人看。
 
 幂等：目标 md 目录已存在就跳过；暂存区已有产物就直接复用，不重跑 verify/audit
@@ -57,7 +57,7 @@ FIX_PROMPT = """修一本书的拆章产物，目标：verify_output.py 与 audi
 {a}
 
 允许：调整章节映射与章名，把原书漏收的正文补进来，改 {batch}/overrides/{uid}.json。
-禁止：改 库/ 下任何文件；改 工作区/脚本/；用重复段落或编造文本凑字数；删正文来抬比例。
+禁止：改 books/ 下任何文件；改 src/bookcorpus/scripts/；用重复段落或编造文本凑字数；删正文来抬比例。
 工具说明在 {skill_doc} 与 scripts/。
 把改动写进 {report}，只回一句结论。"""
 VERIFY = os.path.join(SKILL, "verify_output.py")

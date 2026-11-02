@@ -12,9 +12,9 @@ lang ∈ ja / zh / en / empty（该页无字）/ unknown（探页失败，留在
 
 用法：
   PY=工作区/.venv-pdf/bin/python
-  $PY 工作区/脚本/pdf_lang_probe.py --batch pdf-ocr-2026-10-19                # 探完整个待办集
-  $PY 工作区/脚本/pdf_lang_probe.py --batch pdf-ocr-2026-10-19 --uids B1051,B1064
-  $PY 工作区/脚本/pdf_lang_probe.py --batch pdf-ocr-2026-10-19 --list         # 只列会探谁，不花额度
+  $PY book-corpus run pdf_lang_probe --batch pdf-ocr-2026-10-19                # 探完整个待办集
+  $PY book-corpus run pdf_lang_probe --batch pdf-ocr-2026-10-19 --uids B1051,B1064
+  $PY book-corpus run pdf_lang_probe --batch pdf-ocr-2026-10-19 --list         # 只列会探谁，不花额度
 """
 import argparse
 import csv
