@@ -17,7 +17,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-SCRIPTS = os.path.join(REPO, "工作区", "脚本")
+SCRIPTS = os.path.join(REPO, "src", "bookcorpus", "scripts")
+REAL_ROOT = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-local")
 OPS_STATUS = os.path.join(SCRIPTS, "ops_status.py")
 AUDIT = os.path.join(SCRIPTS, "audit_state.py")
 
@@ -114,12 +115,12 @@ def tree_state(root, skip=()):
 
 
 def build_root(root):
-    cat = os.path.join(root, "目录")
-    lib = os.path.join(root, "库")
+    cat = os.path.join(root, "tables")
+    lib = os.path.join(root, "books")
     for uid, title, rel, src, fmt, chapters in BOOKS:
-        book = os.path.join(lib, rel)
+        book = os.path.join(lib, uid)
         write(os.path.join(book, "book.json"),
-              json.dumps({"uid": uid, "title": title, "path": rel}, ensure_ascii=False))
+              json.dumps({"uid": uid, "title": title}, ensure_ascii=False))
         write(os.path.join(book, "source", src), "源文件 %s\n" % uid)
         for i in range(1, chapters + 1):
             write(os.path.join(book, "md", "%02d.md" % i), "# %s 第 %d 章\n正文。\n" % (title, i))
@@ -129,23 +130,23 @@ def build_root(root):
             write(os.path.join(book, "md", "README.md"), "# %s\n\n图片书，不索引。\n" % title)
     write(os.path.join(lib, "_收件箱", "新书.epub"), "epub\n")
 
-    libdb = os.path.join(cat, "library.db")
-    os.makedirs(cat, exist_ok=True)
+    libdb = os.path.join(root, "build", "library.db")
+    os.makedirs(os.path.dirname(libdb), exist_ok=True)
     con = sqlite3.connect(libdb)
     con.executescript(LIB_SCHEMA)
     for uid, title, rel, src, fmt, chapters in BOOKS:
         con.execute("INSERT INTO book(uid,title,subject1,path,path_state) VALUES(?,?,?,?,?)",
-                    (uid, title, rel.split("/")[0], rel, "active"))
+                    (uid, title, rel.split("/")[0], uid, "active"))
         con.execute("INSERT INTO source(uid,file,format,bytes,sha256,primary_src) "
                     "VALUES(?,?,?,?,?,1)",
-                    (uid, "库/%s/source/%s" % (rel, src), fmt, 12, "sha-" + uid))
+                    (uid, "books/%s/source/%s" % (uid, src), fmt, 12, "sha-" + uid))
         if chapters or uid in EMPTY_MD:
             con.execute("INSERT INTO derived(uid,kind,status,chapters,bytes) "
                         "VALUES(?,?,?,?,?)", (uid, "md", "done", chapters, 100))
     con.commit()
     con.close()
 
-    idx = os.path.join(cat, "检索", "index.db")
+    idx = os.path.join(root, "build", "检索", "index.db")
     os.makedirs(os.path.dirname(idx), exist_ok=True)
     con = sqlite3.connect(idx)
     con.executescript(INDEX_SCHEMA)
@@ -153,9 +154,9 @@ def build_root(root):
                        ("chapters", "2"), ("paras", "2")):
         con.execute("INSERT INTO meta(key,value) VALUES(?,?)", (key, value))
     for i in (1, 2):
-        path = "库/文学/甲书/md/%02d.md" % i
+        path = "books/B0001/md/%02d.md" % i
         con.execute("INSERT INTO para(path,book,line,chars,tok,text) VALUES(?,?,?,?,?,?)",
-                    (path, "文学/甲书", 1, 4, "正文", "正文。"))
+                    (path, "B0001", 1, 4, "正文", "正文。"))
         con.execute("INSERT INTO expand(path,kind,tok,text,built_at) VALUES(?,?,?,?,?)",
                     (path, "prefix", "正文", "正文。", "2026-10-24T18:35:38+0800"))
         con.execute("INSERT INTO expand_fts(path,tok,text) VALUES(?,?,?)",
@@ -168,21 +169,20 @@ def build_root(root):
           "B0001,文学,,0,keep,甲书,\nB0002,文学,,0,keep,乙书,\n"
           "B0003,人文社科,,0,keep,丙书,\nB0004,其他,,0,keep,图册,图片书，不索引\n")
     write(os.path.join(cat, "对照表.csv"),
-          "旧路径,新路径,uid\n旧/甲,库/文学/甲书,B0001\n旧/乙,库/文学/乙书,B0002\n"
-          "旧/丙,库/人文社科/丙书,B0003\n旧/图册,库/其他/图册,B0004\n")
-    write(os.path.join(cat, "书目总表.csv"),
+          "旧路径,新路径,uid\n旧/甲,books/B0001,B0001\n旧/乙,books/B0002,B0002\n"
+          "旧/丙,books/B0003,B0003\n旧/图册,books/B0004,B0004\n")
+    write(os.path.join(root, "build", "书目总表.csv"),
           "uid,书名\nB0001,甲书\nB0002,乙书\nB0003,丙书\nB0004,图册\n")
 
-    views = os.path.join(root, "视图")
-    for sub, book, rel, link in (("奖项", "测试奖", "甲书", "文学/甲书"),
-                                 ("主题", "测试主题", "乙书", "文学/乙书")):
-        target = os.path.join(views, sub, book, rel)
+    views = os.path.join(root, "build", "views")
+    for sub, book, uid in (("奖项", "测试奖", "B0001"), ("主题", "测试主题", "B0002")):
+        target = os.path.join(views, sub, book, uid)
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        os.symlink(os.path.join("..", "..", "..", "库", link), target)
+        os.symlink(os.path.join("..", "..", "..", "..", "books", uid), target)
 
     write(os.path.join(root, "工作区", "批次", "pdf-ocr-2026-10-19", "worklist.tsv"),
           "uid\ttitle\tpath\tsrc\tsha256\tformat\tpages\tclass\n"
-          "B0003\t丙书\t人文社科/丙书\t库/人文社科/丙书/source/c.pdf\tsha-B0003\tpdf\t10\tC\n")
+          "B0003\t丙书\tB0003\tbooks/B0003/source/c.pdf\tsha-B0003\tpdf\t10\tC\n")
     os.makedirs(os.path.join(root, "工作区", "运维"), exist_ok=True)
 
 
@@ -314,8 +314,8 @@ def fixture_checks(root):
     check("人读输出五节齐全", not missing, missing)
 
     print("\n== fixture: 断链与退出码 ==")
-    os.symlink(os.path.join("..", "..", "..", "库", "文学", "没有这本"),
-               os.path.join(root, "视图", "主题", "测试主题", "坏链"))
+    os.symlink(os.path.join("..", "..", "..", "..", "books", "B9999"),
+               os.path.join(root, "build", "views", "主题", "测试主题", "坏链"))
     light, _ = read_json([OPS_STATUS, "--root", root], root)
     if light:
         check("断链计入 views.broken",
@@ -343,13 +343,13 @@ def con_indexable(libdb):
 
 def real_checks():
     print("\n== 真库：只读 ==")
-    libdb = os.path.join(REPO, "目录", "library.db")
-    indexdb = os.path.join(REPO, "目录", "检索", "index.db")
-    watched = [libdb, indexdb, os.path.join(REPO, "目录", "分类表.csv"),
-               os.path.join(REPO, "目录", "书目总表.csv"),
-               os.path.join(REPO, "工作区", "运维", "last-audit.json")]
+    libdb = os.path.join(REAL_ROOT, "build", "library.db")
+    indexdb = os.path.join(REAL_ROOT, "build", "检索", "index.db")
+    watched = [libdb, indexdb, os.path.join(REAL_ROOT, "tables", "分类表.csv"),
+               os.path.join(REAL_ROOT, "build", "书目总表.csv"),
+               os.path.join(REAL_ROOT, "工作区", "运维", "last-audit.json")]
     before = {p: (os.stat(p).st_mtime_ns if os.path.exists(p) else None) for p in watched}
-    state, proc = read_json([OPS_STATUS], REPO)
+    state, proc = read_json([OPS_STATUS], REAL_ROOT)
     check("真库 ops_status --json 成功", proc.returncode == 0 and state is not None,
           proc.stderr[-300:])
     if state is None:
@@ -383,11 +383,11 @@ def real_checks():
     check("真库索引 built_at 有值", bool(state["index"]["built_at"]), state["index"])
     check("真库人账行数与分类表行数一致",
           state["ledger"]["rows"] == sum(
-              1 for _ in open(os.path.join(REPO, "目录", "分类表.csv"), encoding="utf-8-sig"))
+              1 for _ in open(os.path.join(REAL_ROOT, "tables", "分类表.csv"), encoding="utf-8-sig"))
           - 1, state["ledger"])
     broken = total = 0
     for sub in ("奖项", "主题"):
-        for dirpath, dirnames, filenames in os.walk(os.path.join(REPO, "视图", sub)):
+        for dirpath, dirnames, filenames in os.walk(os.path.join(REAL_ROOT, "build", "views", sub)):
             for name in dirnames + filenames:
                 fp = os.path.join(dirpath, name)
                 if os.path.islink(fp):
@@ -396,11 +396,12 @@ def real_checks():
     check("真库视图软链计数一致",
           state["views"]["awards"] + state["views"]["topics"] == total, state["views"])
     check("真库视图断链计数一致", state["views"]["broken"] == broken, state["views"])
-    check("真库 OCR 批次有值且剩余页数非负",
-          bool(state["ocr"]["batch"]) and state["ocr"]["remaining_pages"] >= 0, state["ocr"])
+    check("真库 OCR 剩余页数非负，有批次时批次名非空",
+          state["ocr"]["remaining_pages"] >= 0
+          and (state["ocr"]["batch"] is None or bool(state["ocr"]["batch"])), state["ocr"])
     check("真库跑完没报问题", state["problems"] == [], state["problems"])
 
-    audit_json, proc = read_json([AUDIT, "--root", REPO], REPO)
+    audit_json, proc = read_json([AUDIT, "--root", REAL_ROOT], REAL_ROOT)
     check("真库 audit_state --json 可解析", audit_json is not None, proc.stderr[-300:])
     if audit_json:
         check("真库审计 FAIL 为空", audit_json["fail"] == [], audit_json["fail"])

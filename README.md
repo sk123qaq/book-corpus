@@ -252,7 +252,7 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 
 `verify_phase.py`、`check_p1.py` 与 `gen_book_catalog.py` 是作者实例检查。缺基线、评测书时，前两个会打印 `[跳过]` 或 `SKIP`；`gen_book_catalog.py` 需要源文件在盘，克隆状态不会通过。
 
-`工作区/运维/验收/` 与 `工作区/演示-检索流程/验收/` 是操作台与演示页的旧验收脚本，按 v1 夹具写的，没有接进 pytest；重跑前要先按脚本里的假设准备临时根。
+`工作区/运维/验收/` 与 `工作区/演示-检索流程/验收/` 的脚本已改成 v2 临时根。8 个离线入口（`check_ops`、`test_status`、`test_classify`、`test_doc_numbers`、`test_split`、`test_retire`、`test_pdf`、`test_answer_retry`）由 `tests/test_acceptance.py` 接进 pytest；需要 Chrome、真实模型或真实会话的 `check_demo`、`check_session*`、`check_result_ms`、`shot_ops`、`repro-*` 仍是手工验收。
 
 ## 路径与配置
 

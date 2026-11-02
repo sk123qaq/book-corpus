@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """PDF 这一组的离线验收：分诊、模型四列、批次队列与统计。不碰真库、不调真模型。
 
-跑法：python3 工作区/运维/验收/test_pdf.py
+跑法：BOOKS_PDF_PY=/path/to/venv/bin/python python3 工作区/运维/验收/test_pdf.py
+（该解释器要能 import pymupdf；没有就跳过，不伪装成通过。）
 """
 import csv
 import importlib.util
@@ -16,11 +17,11 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-SCRIPTS = os.path.join(REPO, "工作区/脚本")
+SCRIPTS = os.path.join(REPO, "src", "bookcorpus", "scripts")
 TRIAGE_PY = os.path.join(SCRIPTS, "ops_pdf_triage.py")
 APPLY_PY = os.path.join(SCRIPTS, "pdf_apply_review.py")
 BATCH_PY = os.path.join(SCRIPTS, "pdf_md_batch.py")
-VENV_PY = os.path.join(REPO, "工作区/.venv-pdf/bin/python")
+VENV_PY = os.environ.get("BOOKS_PDF_PY") or os.path.join(REPO, "工作区/.venv-pdf/bin/python")
 STUB = os.path.join(REPO, "工作区/运维/验收/fixtures/pi_stub.py")
 SKIP_HEADER = "uid\ttitle\tsubject1\tsubject2\tpages\tmb\timage_share\twhy\tverdict\troute_metric"
 MODEL_COLS = ["model_route", "model_confidence", "model_reason", "model_at"]
@@ -86,15 +87,14 @@ def make_pdf(path, kind, pages):
 
 def make_library(root):
     """两本书的临时库：一本文本层（4 页），一本纯图版（4 页）。"""
-    books = [("B9001", "测试文本书", "文学/测试文本书", "text", "text.pdf", ["文学"]),
-             ("B9002", "测试图册", "艺术与图像/测试图册", "img", "img.pdf",
-              ["艺术与图像", "图册与写真"])]
-    for uid, title, relpath, kind, fname, subjects in books:
-        bdir = os.path.join(root, "库", relpath)
+    books = [("B9001", "测试文本书", "text", "text.pdf", ["文学"]),
+             ("B9002", "测试图册", "img", "img.pdf", ["艺术与图像", "图册与写真"])]
+    for uid, title, kind, fname, subjects in books:
+        bdir = os.path.join(root, "books", uid)
         os.makedirs(os.path.join(bdir, "source"), exist_ok=True)
         pdf = os.path.join(bdir, "source", fname)
         make_pdf(pdf, kind, 4)
-        doc = {"uid": uid, "title": title, "path": relpath, "subjects": subjects,
+        doc = {"uid": uid, "title": title, "subjects": subjects,
                "sources": [{"file": "source/" + fname, "format": "pdf",
                             "bytes": os.path.getsize(pdf), "sha256": "", "primary_src": 1}]}
         with open(os.path.join(bdir, "book.json"), "w", encoding="utf-8") as fh:
@@ -131,7 +131,7 @@ def test_triage_text(root):
         return None
     check(res["pages"] == 4, "pages=4，实际 %s" % res["pages"])
     check(res["class"].startswith("A"), "census 判 A 类，实际 %r" % res["class"])
-    check(res["path"] == "库/文学/测试文本书/source/text.pdf",
+    check(res["path"] == "books/B9001/source/text.pdf",
           "path 是库内相对路径，实际 %r" % res["path"])
     m = res["metrics"]
     check(m["text_page_share"] == 1.0, "text_page_share=1.0，实际 %r" % m["text_page_share"])
@@ -308,9 +308,9 @@ def make_db(path, books):
     con.execute("CREATE TABLE source (uid TEXT, file TEXT, format TEXT, sha256 TEXT,"
                 " primary_src INTEGER)")
     for uid, title, path, pages_src, sha in books:
-        con.execute("INSERT INTO book VALUES (?,?,?,?,?)", (uid, title, path, "作者甲", None))
+        con.execute("INSERT INTO book VALUES (?,?,?,?,?)", (uid, title, uid, "作者甲", None))
         con.execute("INSERT INTO source VALUES (?,?,?,?,1)",
-                    (uid, "库/%s/source/%s.pdf" % (path, uid), "pdf", sha))
+                    (uid, "books/%s/source/%s.pdf" % (uid, uid), "pdf", sha))
     con.commit()
     con.close()
 
@@ -420,15 +420,21 @@ def test_report_json(tmp):
     cols = ["uid", "title", "path", "src", "sha256", "format", "pages", "class", "verdict",
             "subject1", "subject2", "author", "series"]
     write_csv(os.path.join(batch, "worklist.tsv"), cols, [
-        {"uid": "B9201", "title": "落地本", "path": "文学/一", "src": "库/x.pdf", "format": "pdf",
+        {"uid": "B9201", "title": "落地本", "path": "B9201", "src": "books/B9201/source/x.pdf", "format": "pdf",
          "pages": "10"},
-        {"uid": "B9202", "title": "待跑本", "path": "文学/二", "src": "库/y.pdf", "format": "pdf",
+        {"uid": "B9202", "title": "待跑本", "path": "B9202", "src": "books/B9202/source/y.pdf", "format": "pdf",
          "pages": "25"}], delim="\t")
+    tri = os.path.join(tmp, "triage-report.csv")
+    write_csv(tri, ["uid", "title", "subject1", "subject2", "class", "route", "pages"], [
+        {"uid": "B9201", "title": "落地本", "subject1": "文学", "route": "OCR",
+         "pages": "10", "class": "C 扫描件"},
+        {"uid": "B9202", "title": "待跑本", "subject1": "文学", "route": "OCR",
+         "pages": "25", "class": "C 扫描件"}])
     for uid, status in (("B9201", "landed"), ("B9202", "failed")):
         with open(os.path.join(batch, "logs", uid + ".json"), "w", encoding="utf-8") as fh:
             json.dump({"uid": uid, "status": status, "pages": 1}, fh)
     p = run([sys.executable, BATCH_PY, "--batch", "unit", "--batch-dir", batch,
-             "--report", "--report-json"])
+             "--report", "--report-json", "--triage", tri])
     check(p.returncode == 0, "退出码 0")
     lines = [ln for ln in p.stdout.decode("utf-8", "replace").splitlines() if ln.strip()]
     doc = None
@@ -452,9 +458,9 @@ def test_report_json(tmp):
     batch4 = os.path.join(tmp, "b4")
     os.makedirs(os.path.join(batch4, "logs"), exist_ok=True)
     write_csv(os.path.join(batch4, "worklist.tsv"), cols, [
-        {"uid": "B9201", "title": "落地本", "path": "文学/一", "src": "库/x.pdf",
+        {"uid": "B9201", "title": "落地本", "path": "B9201", "src": "books/B9201/source/x.pdf",
          "format": "pdf", "pages": "10"},
-        {"uid": "B9204", "title": "文本层本", "path": "文学/四", "src": "库/z.pdf",
+        {"uid": "B9204", "title": "文本层本", "path": "B9204", "src": "books/B9204/source/z.pdf",
          "format": "pdf", "pages": "12"}], delim="\t")
     tri4 = os.path.join(tmp, "triage4.csv")
     write_csv(tri4, ["uid", "title", "subject1", "subject2", "class", "route", "pages"], [

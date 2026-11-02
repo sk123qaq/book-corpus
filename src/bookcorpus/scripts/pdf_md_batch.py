@@ -70,7 +70,7 @@ VERIFY = os.path.join(L.skill_dir("ebook-to-md"), "scripts", "verify_output.py")
 CENSUS_DIR = os.path.join(L.WORK, "批次", "pdf-普查-2026-10-19")
 TRIAGE = os.path.join(CENSUS_DIR, "triage_final.csv")
 SKIP_LIST = os.path.join(CENSUS_DIR, "skip_list.tsv")
-DB = os.path.join(L.TABLES, "library.db")
+DB = L.PATHS.library_db
 
 MAX_SLICE_MB = 15          # 官方上限是本地文件 50 MB；实测 29.9 MB 切片第一次上传就 180 秒超时，
                            # 11.8 MB 与 14.2 MB 能拿到干净回话，而 56.6 MB/118 MB 直接断，所以压到 15 MB
@@ -187,8 +187,11 @@ def read_worklist(batch_path):
 
 
 def triage_routes(triage):
-    """uid -> 分诊表里的 route。表里没有的书不出现。"""
-    with open(triage or TRIAGE, encoding="utf-8") as fh:
+    """uid -> 分诊表里的 route。表里没有的书不出现；表不在就返回空。"""
+    path = triage or TRIAGE
+    if not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8") as fh:
         return {t["uid"]: t.get("route") for t in csv.DictReader(fh)}
 
 

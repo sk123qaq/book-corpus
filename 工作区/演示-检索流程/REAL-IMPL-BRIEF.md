@@ -1,5 +1,8 @@
 # 会话历史 + V3 阶段区 · 真实实现单
 
+> **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
+
+
 把 `原型-会话历史` 里已批准的 V3 方案接进生产会话页。前后端都做。
 原型目录只读参考，不改。生产文件在 `工作区/演示-检索流程/` 下。
 
@@ -14,7 +17,7 @@
 - `验收/check_session_ui.py`：把旧的 `.cells` 断言换成 V3 阶段行，加历史页签、初始页、阶段结束静止的断言。
 - 新增 `REAL-IMPL-REPORT.md`（实施记录，见最后一节）。
 
-不改 `库/`、`目录/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/index.html`、`web/style.css`。
+不改 `books/<uid>/`、`tables/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/index.html`、`web/style.css`。
 不动 8765 上跑的旧服务，自测用 `--port 8798`。不动 8799 上的原型静态服务。
 
 ## 已定设计

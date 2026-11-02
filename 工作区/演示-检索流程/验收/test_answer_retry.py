@@ -13,8 +13,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEMO = os.path.dirname(HERE)
-SCRIPTS = os.path.join(os.path.dirname(DEMO), "脚本")
-for _p in (DEMO, SCRIPTS):
+INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-local")
+os.environ.setdefault("BOOKS_ROOT", INSTANCE)
+for _p in (DEMO,):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -24,16 +25,16 @@ answer.CACHE_DIR = tempfile.mkdtemp(prefix="answer-retry-")
 fails = []
 
 QUESTION = "黑洞的潮汐力是怎么来的"
-BOOK = "科学技术/物理与天文/史蒂芬·霍金/宇宙系列/黑洞与时间弯曲"
-PATH = "库/" + BOOK + "/md/05_序幕黑洞之旅.md"
+BOOK = "B0210"
+PATH = "books/B0210/md/05_序幕黑洞之旅.md"
 LINE = 119
 TERMS = ["黑洞", "潮汐力"]
 
-HBOOK = "科学技术/物理与天文/史蒂芬·霍金/宇宙系列/时间简史"
-HPATH = "库/" + HBOOK + "/md/08_第6章黑洞.md"
+HBOOK = "B0206"
+HPATH = "books/B0206/md/08_第6章黑洞.md"
 HLINE = 45
 
-BAD = ('{"answer":"判断\\n\\n## 节\\n正文","citations":[{"path":"库/x.md",'
+BAD = ('{"answer":"判断\\n\\n## 节\\n正文","citations":[{"path":"books/x.md",'
        '"line":1,"quote":"引"}]","confidence":"high","not_found":false}')
 GOOD = ('{"answer":"判断\\n\\n## 小标题\\n正文两句","citations":[],'
         '"confidence":"high","not_found":false}')

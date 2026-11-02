@@ -1,11 +1,14 @@
 # 回答阶段设计说明（2026-10-25）
 
+> **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
+
+
 在现有演示页上加两件事。
 
 1. 结果原文带 600 到 800 字前置上下文，命中段整段高亮。
 2. 结果区接 `pi` agent 与 `book-corpus-qa` 技能，给出多段依据的回答。
 
-现有代码在 `工作区/演示-检索流程/`。先读 `BRIEF.md` 的五阶段契约，再读本文件。不要改 `工作区/脚本/` 下任何文件，只在演示目录里改。
+现有代码在 `工作区/演示-检索流程/`。先读 `BRIEF.md` 的五阶段契约，再读本文件。不要改 `src/bookcorpus/scripts/` 下任何文件，只在演示目录里改。
 
 ## 为什么这么接
 
@@ -28,7 +31,7 @@
 ```json
 {
   "ok": true,
-  "path": "库/.../03_第二部....md",
+  "path": "books/<uid>/.../03_第二部....md",
   "title": "第二部威慑纪元12年，“青铜世纪”号",
   "text": "……前置 700 字 + 命中段 + 后置……",
   "hit_start": 701,
@@ -58,10 +61,10 @@
   "dissent": "",
   "gap": "",
   "citations": [
-    {"path": "库/.../03_第二部....md", "line": 1172, "quote": "你的威慑度在百分之十上下波动", "chapter": "第二部……", "verified": true}
+    {"path": "books/<uid>/.../03_第二部....md", "line": 1172, "quote": "你的威慑度在百分之十上下波动", "chapter": "第二部……", "verified": true}
   ],
   "passages": [
-    {"path": "库/.../03_第二部....md", "start": 1141, "end": 1205, "chars": 3000, "title": "第二部……"}
+    {"path": "books/<uid>/.../03_第二部....md", "start": 1141, "end": 1205, "chars": 3000, "title": "第二部……"}
   ],
   "confidence": "high",
   "not_found": false,
@@ -96,7 +99,7 @@
 
 ```json
 {"question": "...", "book": "文学/类型小说/刘慈欣/三体/死神永生",
- "path": "库/.../03_第二部....md", "line": 1180,
+ "path": "books/<uid>/.../03_第二部....md", "line": 1180,
  "terms": ["程心","执剑人","三体","威慑","黑暗森林","威慑度"],
  "groups": [{"name":"冰封封印","variants":["冰封","冰壁","封印","封魂咒"]}],
  "thinking": "high", "fresh": false}
@@ -123,7 +126,7 @@ pi -p --no-session --no-context-files \
 `book_grep` 只在这些目录里搜。提示词见下。
 
 7. 解析第一个 JSON 对象，去掉代码块围栏。`answer` 为空就返回 `not_found=true`。
-8. 回查引文。对每条 citation，取 `quote` 去空白后的前 20 字，在对应章文件的每一行里找去空白后的子串。找到就把 `line` 改成实际行号；找不到再试整章全文；仍找不到就丢掉这条，不放进 `citations`。`path` 必须 realpath 在 `库/` 下且 `.md` 结尾。引文通过后 `verified=true`。
+8. 回查引文。对每条 citation，取 `quote` 去空白后的前 20 字，在对应章文件的每一行里找去空白后的子串。找到就把 `line` 改成实际行号；找不到再试整章全文；仍找不到就丢掉这条，不放进 `citations`。`path` 必须 realpath 在 `books/<uid>/` 下且 `.md` 结尾。引文通过后 `verified=true`。
 9. 至少 2 条通过就 `confidence` 保持模型给的值；0 到 1 条降到 `low`，并在 `error` 里写「引文回查不足」。
 10. 缓存到 `缓存/answers/<sha1>.json`，键含 question、book、path、line、terms、groups、`PROMPT_VERSION`、思考等级。原子写。
     `use_cache=False`（页面「重新检索」的 `fresh=true`）跳过读缓存，重新调模型，结果照样回写。
@@ -166,7 +169,7 @@ pi -p --no-session --no-context-files \
 
 书里确实没有回答时，先用 book_grep 搜同义词与别名，确认搜不到再写「书里没有直接回答」并置 not_found，不要拿相邻话题凑一段。
 输出一行 JSON，不要代码块，不要解释。answer 里用 \n 换行，节标题行以 ## 开头：
-{"answer":"开头判断\n\n## 小标题\n正文\n\n## 分歧\n...\n\n## 缺口\n...","citations":[{"path":"库/...md","line":1166,"quote":"逐字引文"}],"confidence":"high|medium|low","not_found":false}
+{"answer":"开头判断\n\n## 小标题\n正文\n\n## 分歧\n...\n\n## 缺口\n...","citations":[{"path":"books/<uid>/...md","line":1166,"quote":"逐字引文"}],"confidence":"high|medium|low","not_found":false}
 
 候选章（前 {n} 章）：
 {chapters}
@@ -188,14 +191,14 @@ pi -p --no-session --no-context-files \
 请求在原来的字段上多一个可选的 `sources`：
 
 ```json
-{"question": "...", "book": "...", "path": "库/...md", "line": 1180,
+{"question": "...", "book": "...", "path": "books/<uid>/...md", "line": 1180,
  "terms": [], "groups": [],
- "sources": [{"book": "人文社科/教育/...", "title": "...", "path": "库/.../md/02_x.md", "line": 31}]}
+ "sources": [{"book": "B0606", "title": "...", "path": "books/<uid>/.../md/02_x.md", "line": 31}]}
 ```
 
-Source 就是 `{book, title, path, line}`，`book` 由 `path` 推（`库/.../md/` 前面那段），最多 8 本。
+Source 就是 `{book, title, path, line}`，`book` 由 `path` 推（`books/<uid>/.../md/` 前面那段），最多 8 本。
 服务端只验形状：每项是对象，`path` 非空字符串，`line` 是整数，`title` 可选字符串，否则 400。
-`answer.py` 再做入库校验：`path` realpath 在 `库/` 下且 `.md`，推不出书名就丢掉，同 path 去重，保序。
+`answer.py` 再做入库校验：`path` realpath 在 `books/<uid>/` 下且 `.md`，推不出书名就丢掉，同 path 去重，保序。
 
 ### 步骤与预算
 
@@ -232,7 +235,7 @@ Source 就是 `{book, title, path, line}`，`book` 由 `path` 推（`库/.../md/
 
 ### 回查与排序
 
-- citation 的 `path` 必须 realpath 在 `库/` 下，而且推出来的书必须在本次书单里；
+- citation 的 `path` 必须 realpath 在 `books/<uid>/` 下，而且推出来的书必须在本次书单里；
   单书的「同名文件兑底」在多书里关掉，不允许一本书的引文落到另一本书上。
 - `book`、`book_title` 由服务端从书单推，不信模型。
 - 排序：当前选中的那本（sources 第一项）在前，其余按书卡名次；每本内按离该书命中行的距离；
@@ -278,7 +281,7 @@ curl -s -X POST localhost:8765/api/run -H 'content-type: application/json' \
   -d '{"question":"《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球"}'
 ```
 
-- 结果 path 是 `库/文学/类型小说/刘慈欣/三体/死神永生/md/03_第二部威慑纪元12年，“青铜世纪”号.md`；命中行随当前索引可能是 1000 或 1180，不写死。
+- 结果 path 是 `books/B0024/md/03_第二部威慑纪元12年，“青铜世纪”号.md`；命中行随当前索引可能是 1000 或 1180，不写死。
 - `/api/chapter` 显式用 line 1180 加 `before=700`，`text` 的前置部分必须包含「你的威慑度在百分之十上下波动」，`hit_text` 必须包含「这支舰队应该是五年前派出的」。
 - `/api/answer` 的 answer 必须同时出现「威慑度」与「百分之十」，`citations` 至少一条 verified 行号是 1166 或 1172。第一跑约 11 到 50 秒（实测 11 到 49 秒），第二跑缓存小于 1 秒。
 - 不弹卡的问题（「乡土中国 差序格局」）也要能回答，至少 2 条引文。
@@ -295,7 +298,7 @@ curl -s -X POST localhost:8765/api/run -H 'content-type: application/json' \
 
 ## 禁止
 
-- 不写 `库/`、`目录/`、`工作区/脚本/`。只写演示目录与 `缓存/`。
+- 不写 `books/<uid>/`、`tables/`、`src/bookcorpus/scripts/`。只写演示目录与 `缓存/`。
 - 不跑 B4，不写 expand，不重建索引。
 - 不引外部依赖，不用 CDN。
 - 不让 agent 改文件。`pi` 只开 `book_grep,read`，不给 bash、edit、write；`book_grep` 限制在当前书 md 目录。

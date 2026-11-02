@@ -18,7 +18,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OPS = os.path.dirname(HERE)
-SCRIPTS = os.path.join(os.path.dirname(OPS), "脚本")
+SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(OPS)), "src", "bookcorpus", "scripts")
 SCRIPT = os.path.join(SCRIPTS, "split_md_batch.py")
 STUB = os.path.join(HERE, "fixtures", "pi_stub.py")
 sys.path.insert(0, SCRIPTS)
@@ -69,19 +69,18 @@ def sha(uid):
 def add_book(con, uid, fmt, path_state, md):
     con.execute("INSERT INTO book(uid,title,subject1,path,path_state,retention)"
                 " VALUES (?,?,?,?,?,'keep')",
-                (uid, "书" + uid, "文学", "文学/书" + uid, path_state))
+                (uid, "书" + uid, "文学", uid, path_state))
     con.execute("INSERT INTO source(uid,file,format,bytes,sha256,primary_src)"
                 " VALUES (?,?,?,?,?,1)",
-                (uid, "库/文学/书%s/source/书%s.%s" % (uid, uid, fmt), fmt, 1024, sha(uid)))
+                (uid, "books/%s/source/书%s.%s" % (uid, uid, fmt), fmt, 1024, sha(uid)))
     if md:
         con.execute("INSERT INTO derived(uid,kind,status,source_sha256)"
                     " VALUES (?,?,?,?)", (uid, "md", md, sha(uid)))
 
 
 def make_db(root):
-    cat = os.path.join(root, "目录")
-    os.makedirs(cat, exist_ok=True)
-    con = sqlite3.connect(os.path.join(cat, "library.db"))
+    os.makedirs(os.path.join(root, "build"), exist_ok=True)
+    con = sqlite3.connect(os.path.join(root, "build", "library.db"))
     con.executescript(SCHEMA)
     for uid, fmt, state, md in BOOKS:
         add_book(con, uid, fmt, state, md)
@@ -93,7 +92,7 @@ def make_db(root):
 def make_root():
     root = tempfile.mkdtemp(prefix="split-test-")
     os.makedirs(os.path.join(root, "工作区", "批次"))
-    os.makedirs(os.path.join(root, "库"))
+    os.makedirs(os.path.join(root, "books"))
     return root
 
 
@@ -192,13 +191,13 @@ def test_missing_source_rejected():
 
 FAKE_LOGS = {
     "B0001": {"uid": "B0001", "title": "书B0001", "status": "landed",
-              "dest": "库/文学/书B0001/md", "verify_rc": 0, "audit_rc": 0,
+              "dest": "books/B0001/md", "verify_rc": 0, "audit_rc": 0,
               "audit_ratio": 0.98, "chapters": 12, "chars": 250000},
     "B0002": {"uid": "B0002", "title": "书B0002", "status": "staged-review",
-              "dest": "库/文学/书B0002/md", "verify_rc": 1, "audit_rc": 0,
+              "dest": "books/B0002/md", "verify_rc": 1, "audit_rc": 0,
               "note": "verify rc=1, audit rc=0", "fix": [{"rc": 1, "ms": 5}]},
     "B0003": {"uid": "B0003", "title": "书B0003", "status": "replaced",
-              "dest": "库/文学/书B0003/md", "previous": "工作区/批次/x/out/B0003.prev-2026",
+              "dest": "books/B0003/md", "previous": "工作区/批次/x/out/B0003.prev-2026",
               "verify_rc": 0, "audit_rc": 0, "audit_ratio": 1.02},
 }
 
@@ -235,7 +234,7 @@ def test_report_json_cli():
         assert set(books) == {"B0001", "B0002", "B0003"}, books
         assert books["B0002"]["fix"] == 1 and books["B0002"]["verify_rc"] == 1, books["B0002"]
         assert books["B0003"]["previous"] == "工作区/批次/x/out/B0003.prev-2026", books["B0003"]
-        assert books["B0001"]["dest"] == "库/文学/书B0001/md", books["B0001"]
+        assert books["B0001"]["dest"] == "books/B0001/md", books["B0001"]
         assert books["B0001"]["fix"] == 0, books["B0001"]
         assert [b["uid"] for b in data["books"]] == ["B0001", "B0002", "B0003"], data["books"]
         # 文本报告不能被 --report-json 顶掉
@@ -248,7 +247,7 @@ def test_report_json_cli():
 def stage_and_dest(root, uid="B0001"):
     b = batch_dir(root, "md拆分-2026-10-18")
     stage = os.path.join(b, "out", uid)
-    dest = os.path.join(root, "库", "文学", "书" + uid, "md")
+    dest = os.path.join(root, "books", uid, "md")
     return b, stage, dest
 
 
@@ -350,7 +349,7 @@ def test_recheck_without_stage_says_no_stage():
             "S.L.ROOT = %r\nS.L.WORK = %r\nS.L.CAT = %r\n"
             "row = {'uid': 'B0001', 'title': '书B0001', 'format': 'epub',\n"
             "       'sha256': 'sha-B0001', 'path': '文学/书B0001',\n"
-            "       'src': '库/文学/书B0001/source/书B0001.epub'}\n"
+            "       'src': 'books/B0001/source/书B0001.epub'}\n"
             "ctx = {'batch': %r, 'batch_name': 'split-ops-20261024T2205',\n"
             "       'out': %r, 'tmp': %r, 'logs': %r, 'land': True,\n"
             "       'force': False, 'replace': False, 'recheck': True,\n"
@@ -385,7 +384,7 @@ def recheck_env(root, uid="B0001", fmt="epub"):
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     row = {"uid": uid, "title": "书" + uid, "format": fmt, "sha256": sha(uid),
            "path": "文学/书" + uid,
-           "src": "库/文学/书%s/source/书%s.%s" % (uid, uid, fmt)}
+           "src": "books/%s/source/书%s.%s" % (uid, uid, fmt)}
     ctx = {"batch": b, "batch_name": "split-ops-recheck",
            "out": os.path.join(b, "out"), "tmp": os.path.join(b, "tmp"),
            "logs": os.path.join(b, "logs"), "land": True, "force": False,
@@ -419,7 +418,7 @@ def test_recheck_only_lands_after_audit_passes():
         with patched(ROOT=root):
             S.VERIFY, S.AUDIT = verify, audit_bad
             first = S.recheck(row, ctx, {"uid": "B0001", "title": "书B0001",
-                                        "dest": "库/文学/书B0001/md"})
+                                        "dest": "books/B0001/md"})
             assert first["status"] == "staged-review", first
             assert first["verify_rc"] == 0 and first["audit_rc"] == 1, first
             assert not os.path.isdir(dest), "内容检查没过就进了库"
@@ -428,7 +427,7 @@ def test_recheck_only_lands_after_audit_passes():
 
             S.AUDIT = audit_ok
             second = S.recheck(row, ctx, {"uid": "B0001", "title": "书B0001",
-                                         "dest": "库/文学/书B0001/md"})
+                                         "dest": "books/B0001/md"})
             assert second["status"] == "landed", second
             assert "第一章.md" in os.listdir(dest), os.listdir(dest)
             man = json.load(open(os.path.join(dest, ".manifest.json"), encoding="utf-8"))
@@ -451,7 +450,7 @@ def test_recheck_without_epub_never_lands():
             S.VERIFY, S.AUDIT = verify, audit
             S.CALIBRE = os.path.join(root, "no-such-calibre")
             got = S.recheck(row, ctx, {"uid": "B0010", "title": "书B0010",
-                                       "dest": "库/文学/书B0010/md"})
+                                       "dest": "books/B0010/md"})
             assert got["status"] == "staged-review", got
             assert got["audit_rc"] is None, got
             assert not os.path.isdir(dest), "没跑内容检查就进了库"

@@ -1,5 +1,8 @@
 # 检索流程演示页 · 设计说明
 
+> **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
+
+
 给 `工作区/演示-检索流程/` 实现一个本地网页 demo：用户问一句人话，页面按阶段展示书库怎么找到答案，最后落到某一本书的某一章那一段。数据全部来自真实检索，不许编。
 
 ## 目标与边界
@@ -7,18 +10,18 @@
 - 观众：第一次接触这个书库的人。看完要能说出「它先切词，再换词检索，再给书打分，再选章，再弹书卡，最后给原文」。
 - 形式：`python3 工作区/演示-检索流程/server.py` 起本地服务，打开 `http://127.0.0.1:8765`。
 - 只用 Python 标准库；前端不用框架、不引 CDN、不联网取字体。
-- 只读 `目录/检索/index.db` 与 `目录/library.db`，只读 `库/**.md`。不写 `库/`，不改现有脚本。
+- 只读 `build/检索/index.db` 与 `build/library.db`，只读 `books/<uid>/**.md`。不写 `books/<uid>/`，不改现有脚本。
 - 页面中文。桌面优先，手机能看。
 
 ## 五个阶段
 
-1. **理解问题**：一句话 → 2 到 6 个检索词。由 `pi -p --no-tools --no-session --no-context-files --no-skills --no-extensions --model opencode-go/deepseek-v4.1-flash --thinking <档位>` 一次调用完成，提示词里给概念表（`目录/概念表.tsv` 的 126 个键与别名）与动作词表，要求只回 JSON `{"terms":["..."]}`。结果按问题与思考等级的 sha1 缓存到 `缓存/terms/<sha1>.json`。模型不可用时退回概念表包含匹配，再不行把整句当一个词，页面要如实标「降级」。
+1. **理解问题**：一句话 → 2 到 6 个检索词。由 `pi -p --no-tools --no-session --no-context-files --no-skills --no-extensions --model opencode-go/deepseek-v4.1-flash --thinking <档位>` 一次调用完成，提示词里给概念表（`tables/概念表.tsv` 的 126 个键与别名）与动作词表，要求只回 JSON `{"terms":["..."]}`。结果按问题与思考等级的 sha1 缓存到 `缓存/terms/<sha1>.json`。模型不可用时退回概念表包含匹配，再不行把整句当一个词，页面要如实标「降级」。
 2. **词法循环**：`book_query.run(terms)` 的 `rounds`。每轮一张小卡：第几轮、换词类型、本轮词、命中段数、top1 书名、分差、A/B/C 三个判据、是否采用、耗时。
 3. **打分与选章**：同一个 `Plan` 的 `ranking`（取前 8）与 `chapters`（取前 3 本，每本最多 3 章）。左半是书级分数条，右半或下方是章。这是真实打分，不重排。
 4. **书卡**：`book_cards.run(terms, question=q, expand={})` 的 `trigger`、`reasons`、`cards`、`next`。`expand={}` 是必须的，否则会跑 B4 调模型，一次 60 秒还会写索引。
    弹卡且超过一张时，触发行右侧有一个「全选 N 本」开关：开着时每张卡都算已选，且第 5 阶段的回答改用书卡上的所有书；
    点某一张卡就退出全选、回到单书。
-5. **结果**：默认选第一张卡（没弹卡就选 top1 书），显示它的最佳章开头原文。原文由 `/api/chapter` 从 `库/` 的 md 按 `line` 附近截取，带 700 字前置与命中段整块高亮。结果区还有一张回答卡：检索层取同书多段原文，交给 `book-corpus-qa` 的 agent 归纳，引文回查后显示；回答完成后原文窗口自动切到第一条依据（见 `ANSWER-BRIEF.md`）。用户点别的卡，第 5 阶段跟着换。全选时回答一次盖住所有卡上的书，`/api/answer` 多带 `sources`，回答带 `mode`、`sources`，每条引文带书名（见 `ANSWER-BRIEF.md` 的「多书回答」）。
+5. **结果**：默认选第一张卡（没弹卡就选 top1 书），显示它的最佳章开头原文。原文由 `/api/chapter` 从 `books/<uid>/` 的 md 按 `line` 附近截取，带 700 字前置与命中段整块高亮。结果区还有一张回答卡：检索层取同书多段原文，交给 `book-corpus-qa` 的 agent 归纳，引文回查后显示；回答完成后原文窗口自动切到第一条依据（见 `ANSWER-BRIEF.md`）。用户点别的卡，第 5 阶段跟着换。全选时回答一次盖住所有卡上的书，`/api/answer` 多带 `sources`，回答带 `mode`、`sources`，每条引文带书名（见 `ANSWER-BRIEF.md` 的「多书回答」）。
 
 阶段耗时用真实读数：理解 = 切词调用耗时；循环 = `sum(r.ms)`；打分选章 = `plan.ms - sum(r.ms)`；书卡 = `cards.ms`；结果 = 读窗口耗时 + 该次回答的 `ms`（回答落地后加上，读取期间只显示读窗口那半）。回答是第 5 阶段最贵的一步，不能只算读文件。
 
@@ -70,16 +73,16 @@
     "stop":"C","best_round":1,"ms":395.2,
     "ranking":[{"book":"...","title":"乡土中国（2）","type":"社科","chapters":18,
                 "score":27.88,"coverage":1.0,"groups":["礼治","秩序","法律"],
-                "best_path":"库/.../12_无讼.md","best_line":16,
+                "best_path":"books/<uid>/.../12_无讼.md","best_line":16,
                 "best_text":"◆法治秩序的建立……"}],
     "chapters":[{"book":"...","title":"乡土中国（2）","book_score":27.88,
-                 "selected":[{"chapter_path":"库/.../12_无讼.md","chapter_title":"无讼",
+                 "selected":[{"chapter_path":"books/<uid>/.../12_无讼.md","chapter_title":"无讼",
                               "line":16,"score":36.17,"snippet":"..."}]}]
   },
   "cards": {"trigger":true,"reasons":["margin","long","concept"],
             "hints":{"title":"","author":"","verbatim":false,"concept":true,"question":true},
             "cards":[{"book":"...","rank":1,"title":"乡土中国（2）","type":"社科",
-                      "chapters":18,"best_chapter":"库/.../12_无讼.md",
+                      "chapters":18,"best_chapter":"books/<uid>/.../12_无讼.md",
                       "best_chapter_title":"无讼","snippet":"...","matched_groups":[],
                       "score":27.88,"reason":"...","readme_status":"ok"}],
             "next":[{"book":"...","title":"...","chapters":18,"book_score":27.88,
@@ -92,7 +95,7 @@
 
 字段可以多，不能少；多余字段前端忽略。`ranking` 每条 `best_text` 截到 300 字，`scores` 不要带。`cards` 的全部保留。空结果（`ranking` 为空）要能渲染「没找到」状态，不许报错。
 
-`GET /api/chapter?path=库/.../12_无讼.md&line=16&chars=900` 返回 `{"ok":true,"path":"...","title":"无讼","text":"...","html":false}`。`path` 必须 realpath 在 `库/` 下且以 `.md` 结尾，否则 400。`html` 表示同书是否有 `html/index.html`。
+`GET /api/chapter?path=books/<uid>/.../12_无讼.md&line=16&chars=900` 返回 `{"ok":true,"path":"...","title":"无讼","text":"...","html":false}`。`path` 必须 realpath 在 `books/<uid>/` 下且以 `.md` 结尾，否则 400。`html` 表示同书是否有 `html/index.html`。
 
 `GET /api/health` 返回 `{"ok":true,"db":"ok","meta":{...}}`，启动自检用。
 
@@ -136,7 +139,7 @@
 
 ## 禁止
 
-- 不改 `工作区/脚本/` 下任何文件，不改 `库/`，不写 `目录/`。
+- 不改 `src/bookcorpus/scripts/` 下任何文件，不改 `books/<uid>/`，不写 `tables/`。
 - 不在默认路径 import torch、不调 B4、不写 expand。
 - 不引入 npm、CDN、外部字体、图表库。
 - 不把耗时、数字、书名写死在前端；全部来自 trace 或 `/api/health`。

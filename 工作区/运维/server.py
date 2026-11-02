@@ -253,11 +253,11 @@ def rc_of_detail(detail):
 class Env:
     """一个数据根下的全部路径。--root 换根，代码目录仍指本文件所在处。"""
 
-    def __init__(self, root):
+    def __init__(self, root, scripts=None):
         self.root = os.path.abspath(root)
         self.ops = os.path.join(self.root, "工作区", "运维")
         self.jobs = os.path.join(self.ops, "jobs")
-        self.scripts = _package_scripts()
+        self.scripts = os.path.abspath(scripts) if scripts else _package_scripts()
         self.batches = os.path.join(self.root, "工作区", "批次")
         self.lib = os.path.join(self.root, "books")
         self.inbox = os.path.join(self.lib, "_收件箱")
@@ -1668,7 +1668,7 @@ FILE_ALLOW = (
                r"result\.json|review\.json|dry-run\.json|report\.json|status\.json)$"),
     re.compile(r"^工作区/运维/jobs/[A-Za-z0-9._-]+/review/[A-Za-z0-9._-]+\.json$"),
     re.compile(r"^工作区/运维/jobs/[A-Za-z0-9._-]+/thumbs/[A-Za-z0-9._-]+\.png$"),
-    re.compile(r"^目录/(书目总表\.xlsx|书目总表\.csv|分类预填\.csv)$"),
+    re.compile(r"^(build/(书目总表\.xlsx|书目总表\.csv)|tables/分类预填\.csv)$"),
 )
 CONTENT_TYPES = {".json": "application/json; charset=utf-8",
                  ".txt": "text/plain; charset=utf-8",
@@ -2751,9 +2751,10 @@ def main(argv=None):
     ap.add_argument("--port", type=int, default=8770,
                     help="0 表示随机端口（测试用）")
     ap.add_argument("--root", default=REAL_ROOT, help="数据根，测试指向临时库")
+    ap.add_argument("--scripts", default=None, help="脚本目录，测试指向 stub")
     args = ap.parse_args(argv)
 
-    env = Env(args.root)
+    env = Env(args.root, args.scripts)
     app = App(env)
     Handler.app = app
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)

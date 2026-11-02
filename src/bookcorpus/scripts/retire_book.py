@@ -101,8 +101,12 @@ def find_book(ctx, uid):
     return None, None
 
 
-def resolve_source(book_dir, entry):
-    return os.path.normpath(os.path.join(book_dir, entry.get("file") or ""))
+def resolve_source(ctx, book_dir, entry):
+    """源文件路径。v2 的 book.json 记根相对路径，v1 遗留的记书目录相对路径。"""
+    file = entry.get("file") or ""
+    if file.startswith(("books/", "collections/")):
+        return os.path.normpath(os.path.join(ctx.root, file))
+    return os.path.normpath(os.path.join(book_dir, file))
 
 
 def scan_source_index(ctx):
@@ -115,7 +119,7 @@ def scan_source_index(ctx):
         for s in doc.get("sources") or []:
             if s.get("sha256"):
                 by_sha[s["sha256"]].add(uid)
-            path = resolve_source(book_dir, s)
+            path = resolve_source(ctx, book_dir, s)
             by_real[os.path.realpath(path)].add(uid)
             try:
                 st = os.stat(path)
@@ -235,7 +239,7 @@ def build_sources(ctx, book_dir, doc, cold_source_rel):
     used = set()
     out = []
     for s in doc.get("sources") or []:
-        path = resolve_source(book_dir, s)
+        path = resolve_source(ctx, book_dir, s)
         sha = s.get("sha256") or ""
         size = s.get("bytes") or 0
         exists = os.path.isfile(path)
@@ -298,10 +302,10 @@ def delete_list(book_dir):
     return out
 
 
-def leftover_files(book_dir, delete, source_entries):
+def leftover_files(ctx, book_dir, delete, source_entries):
     """书目录里既不删、也不进冷宫的东西。正常只有空的 source/，这里是兜底。"""
     skip_top = {x.rstrip("/") for x in delete}
-    referenced = {os.path.normpath(os.path.join(book_dir, s.get("file") or ""))
+    referenced = {resolve_source(ctx, book_dir, s)
                   for s in source_entries if s.get("file")}
     out = []
     for dirpath, _dirnames, filenames in os.walk(book_dir):
@@ -355,7 +359,7 @@ def build_preview(ctx, uid):
     cold_rel, cold_source_rel = cold_layout(ctx, doc)
     sources = build_sources(ctx, book_dir, doc, cold_source_rel)
     delete = delete_list(book_dir)
-    leftovers = leftover_files(book_dir, delete, doc.get("sources") or [])
+    leftovers = leftover_files(ctx, book_dir, delete, doc.get("sources") or [])
     has_db_row, db_awards = db_facts(ctx, uid)
     award_views, topic_views = find_view_links(ctx, book_dir)
     series_docs = find_series_docs(ctx, doc)

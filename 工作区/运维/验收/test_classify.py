@@ -15,7 +15,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-SCRIPTS = os.path.join(ROOT, "工作区", "脚本")
+SCRIPTS = os.path.join(ROOT, "src", "bookcorpus", "scripts")
 STUB = os.path.join(ROOT, "工作区", "运维", "验收", "fixtures", "pi_stub.py")
 sys.path.insert(0, SCRIPTS)
 import lib_common as L  # noqa: E402
@@ -37,8 +37,8 @@ def one(level1="文学", level2="类型小说", confidence=0.93, reason="作者�
 
 def make_library(tmp, name="lib"):
     root = os.path.join(tmp, name)
-    os.makedirs(os.path.join(root, "库", "_收件箱"))
-    os.makedirs(os.path.join(root, "目录"))
+    os.makedirs(os.path.join(root, "books", "_收件箱"))
+    os.makedirs(os.path.join(root, "tables"))
     return root
 
 
@@ -126,7 +126,7 @@ def test_classify_through_stub():
 
 def test_ingest_classify_adds(tmp):
     root = make_library(tmp, "ingest")
-    open(os.path.join(root, "库", "_收件箱", "新书 (张三).epub"), "wb").write(b"epub bytes")
+    open(os.path.join(root, "books", "_收件箱", "新书 (张三).epub"), "wb").write(b"epub bytes")
     r = run("ingest.py", ["scan", "--root", root, "--json"], {"PI_STUB_JSON": one()})
     items = json.loads(r.stdout)
     assert len(items) == 1 and items[0]["action"] == "add", items
@@ -173,7 +173,7 @@ def test_ingest_classify_adds(tmp):
 
 def test_ingest_bad_json(tmp):
     root = make_library(tmp, "badjson")
-    open(os.path.join(root, "库", "_收件箱", "杂书.epub"), "wb").write(b"x")
+    open(os.path.join(root, "books", "_收件箱", "杂书.epub"), "wb").write(b"x")
     r = run("ingest.py", ["scan", "--root", root, "--json"], {"PI_STUB_JSON": "模型今天不说话"})
     item = json.loads(r.stdout)[0]
     assert item["subjects"] == [], item
@@ -185,7 +185,7 @@ def test_ingest_bad_json(tmp):
 
 def make_books_root(tmp, name):
     root = os.path.join(tmp, name)
-    cat = os.path.join(root, "目录")
+    cat = os.path.join(root, "tables")
     os.makedirs(cat)
     ledger = [
         {"uid": "B0001", "一级": "文学", "二级": "类型小说", "作者层": "0", "保留": "keep",

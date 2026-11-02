@@ -15,7 +15,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-SCRIPT = os.path.join(ROOT, "工作区", "脚本", "retire_book.py")
+SCRIPT = os.path.join(ROOT, "src", "bookcorpus", "scripts", "retire_book.py")
 TODAY = datetime.date.today().isoformat()
 UNIQUE_BYTES = b"unique source bytes" * 100
 SHARED_BYTES = b"shared source bytes" * 200
@@ -46,7 +46,6 @@ def write_book(book_dir, uid, title, source_rel, series=None):
     doc = {
         "uid": uid, "title": title, "title_from_file": "", "author": "测试",
         "subjects": ["文学", "类型小说"],
-        "path": os.path.relpath(book_dir, os.path.join(ROOT_PLACEHOLDER[0], "库")).replace(os.sep, "/"),
         "series": series, "volume": None, "container": None, "retention": "keep",
         "sources": [{"file": source_rel, "format": "epub", "bytes": None, "sha256": "",
                      "primary_src": 1}],
@@ -66,42 +65,47 @@ def make_fixture(base, with_snapshot=True):
     root = os.path.join(base, "books")
     os.makedirs(root)
     ROOT_PLACEHOLDER[0] = root
-    lib = os.path.join(root, "库")
-    cat = os.path.join(root, "目录")
-    os.makedirs(os.path.join(lib, "文学", "类型小说"))
+    lib = os.path.join(root, "books")
+    cat = os.path.join(root, "tables")
     os.makedirs(os.path.join(lib, "_冷宫"))
-    os.makedirs(os.path.join(cat, "检索", "expand"))
+    os.makedirs(os.path.join(root, "build", "检索", "expand"))
     os.makedirs(os.path.join(cat, "系列"))
     os.makedirs(os.path.join(root, "工作区"))
 
-    unique_dir = os.path.join(lib, "文学", "类型小说", "独本")
-    shared_a = os.path.join(lib, "文学", "类型小说", "共享甲")
-    shared_b = os.path.join(lib, "文学", "类型小说", "共享乙")
+    unique_dir = os.path.join(lib, "B0001")
+    shared_a = os.path.join(lib, "B0002")
+    shared_b = os.path.join(lib, "B0003")
     os.makedirs(os.path.join(unique_dir, "source"))
     unique_src = os.path.join(unique_dir, "source", "独本.epub")
     with open(unique_src, "wb") as fh:
         fh.write(UNIQUE_BYTES)
-    shared_src = os.path.join(lib, "文学", "source", "合集.epub")
+    shared_src = os.path.join(root, "collections", "C9001", "source", "合集.epub")
     os.makedirs(os.path.dirname(shared_src))
     with open(shared_src, "wb") as fh:
         fh.write(SHARED_BYTES)
 
     books = {}
-    books["B0001"] = (unique_dir, write_book(unique_dir, "B0001", "独本", "source/独本.epub"))
-    books["B0002"] = (shared_a, write_book(shared_a, "B0002", "共享甲", "../../source/合集.epub",
+    books["B0001"] = (unique_dir, write_book(unique_dir, "B0001", "独本",
+                                             "books/B0001/source/独本.epub"))
+    books["B0002"] = (shared_a, write_book(shared_a, "B0002", "共享甲",
+                                          "collections/C9001/source/合集.epub",
                                           series="测试合集"))
-    books["B0003"] = (shared_b, write_book(shared_b, "B0003", "共享乙", "../../source/合集.epub",
+    books["B0003"] = (shared_b, write_book(shared_b, "B0003", "共享乙",
+                                          "collections/C9001/source/合集.epub",
                                           series="测试合集"))
     for uid, (book_dir, doc) in books.items():
         with open(os.path.join(book_dir, "book.json"), encoding="utf-8") as fh:
             doc = json.load(fh)
-        for s in doc["sources"]:
-            path = os.path.normpath(os.path.join(book_dir, s["file"]))
-            s["bytes"] = os.path.getsize(path)
+        for src in doc["sources"]:
+            if src["file"].startswith(("books/", "collections/")):
+                path = os.path.join(root, src["file"])
+            else:
+                path = os.path.normpath(os.path.join(book_dir, src["file"]))
+            src["bytes"] = os.path.getsize(path)
             h = hashlib.sha256()
             with open(path, "rb") as fh:
                 h.update(fh.read())
-            s["sha256"] = h.hexdigest()
+            src["sha256"] = h.hexdigest()
         with open(os.path.join(book_dir, "book.json"), "w", encoding="utf-8") as fh:
             json.dump(doc, fh, ensure_ascii=False, indent=1)
 
@@ -111,40 +115,40 @@ def make_fixture(base, with_snapshot=True):
         fh.write("B0002,文学,类型小说,0,keep,共享甲,测试\n")
         fh.write("B0003,文学,类型小说,0,keep,共享乙,测试\n")
 
-    con = sqlite3.connect(os.path.join(cat, "library.db"))
+    con = sqlite3.connect(os.path.join(root, "build", "library.db"))
     con.execute("CREATE TABLE book(uid TEXT PRIMARY KEY, title TEXT, path TEXT)")
     con.execute("CREATE TABLE book_award(uid TEXT, award TEXT, year TEXT)")
-    con.execute("INSERT INTO book VALUES('B0001','独本','文学/类型小说/独本')")
-    con.execute("INSERT INTO book VALUES('B0002','共享甲','文学/类型小说/共享甲')")
+    con.execute("INSERT INTO book VALUES('B0001','独本','B0001')")
+    con.execute("INSERT INTO book VALUES('B0002','共享甲','B0002')")
     con.execute("INSERT INTO book_award VALUES('B0001','某奖','2020')")
     con.commit()
     con.close()
 
-    idx = sqlite3.connect(os.path.join(cat, "检索", "index.db"))
+    idx = sqlite3.connect(os.path.join(root, "build", "检索", "index.db"))
     idx.execute("CREATE TABLE expand(path TEXT, kind TEXT, tok TEXT, text TEXT)")
     idx.execute("CREATE TABLE para(book TEXT, path TEXT, line INT, chars INT, tok TEXT, text TEXT)")
-    idx.execute("INSERT INTO expand VALUES('库/文学/类型小说/独本/md/01 章.md','prefix','t','x')")
+    idx.execute("INSERT INTO expand VALUES('books/B0001/md/01 章.md','prefix','t','x')")
     for i in range(3):
-        idx.execute("INSERT INTO para VALUES('文学/类型小说/独本','库/文学/类型小说/独本/md/"
+        idx.execute("INSERT INTO para VALUES('B0001','books/B0001/md/"
                     "01 章.md',? ,10,'t','x')", (i + 1,))
     idx.commit()
     idx.close()
-    with open(os.path.join(cat, "检索", "expand", "B0001.md"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(root, "build", "检索", "expand", "B0001.md"), "w", encoding="utf-8") as fh:
         fh.write("# B0001 扩展账\n")
     with open(os.path.join(cat, "系列", "测试合集-合集说明.md"), "w", encoding="utf-8") as fh:
         fh.write("# 测试合集\n\n- 独本\n")
 
     for top, key in (("奖项", "某奖"), ("主题", "某主题")):
-        d = os.path.join(root, "视图", top, key)
+        d = os.path.join(root, "build", "views", top, key)
         os.makedirs(d)
         target = os.path.relpath(unique_dir, d)
         os.symlink(target, os.path.join(d, "独本"))
 
     with open(os.path.join(lib, "_冷宫", "README.md"), "w", encoding="utf-8") as fh:
-        fh.write("# 库/_冷宫\n\n## 账\n\n"
+        fh.write("# books/_冷宫\n\n## 账\n\n"
                  "| 移入日期 | uid | 书名 | 原路径 | 源文件 | 原 md | 理由 |\n"
                  "|---|---|---|---|---|---|---|\n"
-                 "| 2026-10-21 | B1359 | 旧书 | 库/文学/旧书 | `a.epub` 1 字节 | 无 md | 试 |\n")
+                 "| 2026-10-21 | B1359 | 旧书 | books/B1359 | `a.epub` 1 字节 | 无 md | 试 |\n")
 
     snapshot = os.path.join(base, "books.snapshot-" + TODAY)
     if with_snapshot:
@@ -154,13 +158,13 @@ def make_fixture(base, with_snapshot=True):
 
 def ledger_rows(root):
     import csv
-    with open(os.path.join(root, "目录", "分类表.csv"), encoding="utf-8-sig", newline="") as fh:
+    with open(os.path.join(root, "tables", "分类表.csv"), encoding="utf-8-sig", newline="") as fh:
         return list(csv.DictReader(fh))
 
 
 def cold_json(root):
     hits = []
-    for dirpath, _dirnames, filenames in os.walk(os.path.join(root, "库", "_冷宫")):
+    for dirpath, _dirnames, filenames in os.walk(os.path.join(root, "books", "_冷宫")):
         for name in filenames:
             if name.endswith((".json", ".md")) and name != "README.md":
                 hits.append(os.path.join(dirpath, name))
@@ -176,7 +180,7 @@ def test_preview_and_apply():
         check(rc == 0, "dry-run 退出码 0（stderr: %s）" % err.strip())
         preview = json.loads(out)
         check(preview["uid"] == "B0001" and preview["title"] == "独本", "预览回 uid 与书名")
-        check(preview["book_dir"] == "库/文学/类型小说/独本", "书目录是库相对路径")
+        check(preview["book_dir"] == "books/B0001", "书目录是 books/<uid>")
         src = preview["sources"][0]
         check(src["action"] == "move" and src["shared_with"] == 0, "独占源动作 move，共享 0 本")
         check(src["bytes"] == len(UNIQUE_BYTES), "源字节与磁盘一致")
@@ -192,8 +196,8 @@ def test_preview_and_apply():
         check(preview["expand_rows"] == 1 and preview["index_rows"] == 3,
               "expand 行与 para 行数对得上")
         check(preview["expand_md"].endswith("expand/B0001.md"), "expand 账文件标出")
-        check(preview["cold_path"] == "库/_冷宫/独本/source", "冷宫 source 目录")
-        check(src["cold"] == "库/_冷宫/独本/source/独本.epub", "冷宫里每个源的目标文件")
+        check(preview["cold_path"] == "books/_冷宫/独本/source", "冷宫 source 目录")
+        check(src["cold"] == "books/_冷宫/独本/source/独本.epub", "冷宫里每个源的目标文件")
         check(preview["snapshot"].endswith("books.snapshot-" + TODAY) and preview["snapshot_ok"],
               "快照路径与就绪态")
         check(len(preview["plan_hash"]) == 64, "plan_hash 是 sha256")
@@ -209,7 +213,7 @@ def test_preview_and_apply():
         p2 = json.loads(out3)
         check(p2["sources"][0]["action"] == "hardlink" and p2["sources"][0]["shared_with"] == 1,
               "共享源动作 hardlink，共享 1 本")
-        check(p2["sources"][0]["path"] == "库/文学/source/合集.epub", "共享源在书目录外面")
+        check(p2["sources"][0]["path"] == "collections/C9001/source/合集.epub", "共享源在书目录外面")
         check(p2["sources"][0]["fallback"] == "", "同文件系统不用复制")
 
         rc, out4, err4 = run(["--uid", "B0001", "--reason", "测试移出", "--apply",
@@ -231,13 +235,13 @@ def test_preview_and_apply():
         report = json.loads(out6) if out6.strip().startswith("{") else {}
         check(rc == 0 and report.get("ok") is True, "apply 成功（stderr: %s）" % err6.strip())
         check(not os.path.exists(books["B0001"][0]), "书目录删掉了")
-        cold_src = os.path.join(root, "库", "_冷宫", "独本", "source", "独本.epub")
+        cold_src = os.path.join(root, "books", "_冷宫", "独本", "source", "独本.epub")
         check(os.path.isfile(cold_src), "独占源移进冷宫 source/")
         with open(cold_src, "rb") as fh:
             check(fh.read() == UNIQUE_BYTES, "冷宫里的源字节一致")
         check(not os.path.exists(unique_src), "原位置的独占源已移走")
         check(cold_json(root) == [], "冷宫没有 json 与章节 md")
-        check(sorted(os.listdir(os.path.join(root, "库", "_冷宫", "独本"))) == ["source"],
+        check(sorted(os.listdir(os.path.join(root, "books", "_冷宫", "独本"))) == ["source"],
               "冷宫书目录只有 source/")
         rows = ledger_rows(root)
         check([r["uid"] for r in rows] == ["B0002", "B0003"], "人账删掉 B0001 且其余行保持顺序")
@@ -250,7 +254,7 @@ def test_preview_and_apply():
         check(len(body[0]) == 16 and body[0]["note"] == "", "retired.tsv 16 列，note 空")
         check(body[0]["shared_with"] == "0" and body[0]["format"] == "epub",
               "retired.tsv 记了共享本数与格式")
-        with open(os.path.join(root, "库", "_冷宫", "README.md"), encoding="utf-8") as fh:
+        with open(os.path.join(root, "books", "_冷宫", "README.md"), encoding="utf-8") as fh:
             readme = fh.read().splitlines()
         new_rows = [line for line in readme if "B0001" in line]
         check(len(new_rows) == 1 and len(new_rows[0].strip().strip("|").split("|")) == 7,
@@ -268,7 +272,7 @@ def test_preview_and_apply():
         rc, out9, err9 = run(["--uid", "B0002", "--reason", "测试移出共享本", "--apply",
                               "--plan-hash", hash_b, "--json", "--root", root, "--no-rebuild"])
         check(rc == 0 and json.loads(out9)["ok"] is True, "共享本 apply 成功：%s" % err9.strip())
-        cold_link = os.path.join(root, "库", "_冷宫", "共享甲", "source", "合集.epub")
+        cold_link = os.path.join(root, "books", "_冷宫", "共享甲", "source", "合集.epub")
         check(os.path.isfile(cold_link), "共享源在冷宫里有一份")
         a = os.stat(cold_link)
         b = os.stat(shared_src)
@@ -278,7 +282,7 @@ def test_preview_and_apply():
         check(os.path.isfile(os.path.join(books["B0003"][0], "book.json")),
               "共用同一源的 B0003 还在")
         check([r["uid"] for r in ledger_rows(root)] == ["B0003"], "人账只剩 B0003")
-        with open(os.path.join(root, "库", "_冷宫", "README.md"), encoding="utf-8") as fh:
+        with open(os.path.join(root, "books", "_冷宫", "README.md"), encoding="utf-8") as fh:
             readme2 = fh.read()
         check("B0002" in readme2 and "与 1 本共用" in readme2, "共享本 README 行标了共用本数")
     finally:
@@ -302,7 +306,7 @@ def test_snapshot_override():
                               "--no-rebuild", "--no-snapshot"])
         check(rc == 0 and json.loads(out3)["ok"] is True,
               "--no-snapshot 放行（stderr: %s）" % err3.strip())
-        check(os.path.isfile(os.path.join(root, "库", "_冷宫", "独本", "source", "独本.epub")),
+        check(os.path.isfile(os.path.join(root, "books", "_冷宫", "独本", "source", "独本.epub")),
               "--no-snapshot 落地后冷宫有源")
         rc, out4, err4 = run(["--uid", "B0002", "--reason", "守卫测试", "--dry-run", "--json",
                               "--root", root])
@@ -314,7 +318,7 @@ def test_snapshot_override():
         check(os.path.isfile(os.path.join(books["B0002"][0], "book.json")), "守卫拒绝后书目录没动")
         rc, out6, err6 = run(["--uid", "B9999", "--reason", "不存在", "--dry-run", "--json",
                               "--root", root])
-        check(rc == 2 and "不在 库/" in (out6 + err6), "uid 不存在时退出码 2 且说明原因")
+        check(rc == 2 and "不在 books/" in (out6 + err6), "uid 不存在时退出码 2 且说明原因")
     finally:
         shutil.rmtree(base, ignore_errors=True)
 

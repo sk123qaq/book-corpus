@@ -1,11 +1,14 @@
 # 02 会话页接线 · 实施单
 
+> **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
+
+
 把 `原型-追问/v2-split.html` 的三栏研究台接上已经跑通的会话后端。只做页面与一个只读接口，不改回答逻辑。
 
 ## 边界
 
 - 只改 `工作区/演示-检索流程/` 下的 `web/`、`server.py`、`session.py`、`验收/check_session.py`，新增 `SESSION-UI-BRIEF.md`。
-- 不碰 `库/`、`目录/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/style.css`、`web/index.html` 的既有结构（只加一个入口链接）。
+- 不碰 `books/<uid>/`、`tables/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/style.css`、`web/index.html` 的既有结构（只加一个入口链接）。
 - 页面无外部依赖、无 CDN、无构建步骤。中文界面，纸感皮肤沿用 `原型-追问/shared/tokens.css`。
 - 1440×900 是一等公民；390 宽不许横向滚动，输入框必须在首屏可见。
 - 服务 8765 已在跑旧代码，不要动它。自测用 `--port 8799` 临时服务，测完杀掉。
@@ -53,7 +56,7 @@ trace 关键字段：
 `POST /api/answer` 返回：
 
 ```json
-{"ok":true,"mode":"single","answer":"…","lead":"…","sections":[{"heading":"…","body":"…"}],"dissent":"","gap":"","citations":[{"path":"库/…/06_差序格局.md","line":120,"quote":"…","chapter":"差序格局","verified":true,"book":"…","book_title":"…"}],"confidence":"high","not_found":false,"error":"","ms":24300,"thinking":"high","cached":false,"session_id":"…","turn":2,"related":{…},"history":{"used":true,"prev":1,"chars":4110,"budget":5000,"chapters":10,"paragraphs":2}}
+{"ok":true,"mode":"single","answer":"…","lead":"…","sections":[{"heading":"…","body":"…"}],"dissent":"","gap":"","citations":[{"path":"books/<uid>/…/06_差序格局.md","line":120,"quote":"…","chapter":"差序格局","verified":true,"book":"…","book_title":"…"}],"confidence":"high","not_found":false,"error":"","ms":24300,"thinking":"high","cached":false,"session_id":"…","turn":2,"related":{…},"history":{"used":true,"prev":1,"chars":4110,"budget":5000,"chapters":10,"paragraphs":2}}
 ```
 
 单书时没有 `sources` 与 `book` 字段也可用。引文 `book` 可能缺，按 `path` 推。
@@ -61,7 +64,7 @@ trace 关键字段：
 `GET /api/session` 的 turn：
 
 ```json
-{"n":2,"question":"…","thinking":"high","at":"…","related":{…},"anchor":{"path":"库/…","line":120,"title":"差序格局","quote":"…"},"trace":{…},"answer":{…},"context":{"prev":1,"budget":5000,"chars":4110,"text":"…","chapters":[…],"paragraphs":[…],"anchor_used":true,"truncated":0}}
+{"n":2,"question":"…","thinking":"high","at":"…","related":{…},"anchor":{"path":"books/<uid>/…","line":120,"title":"差序格局","quote":"…"},"trace":{…},"answer":{…},"context":{"prev":1,"budget":5000,"chars":4110,"text":"…","chapters":[…],"paragraphs":[…],"anchor_used":true,"truncated":0}}
 ```
 
 注意：落盘的 `answer` 没有 `history` 字段，刷新后用 `turn.context` 还原 `used/chars/budget`。

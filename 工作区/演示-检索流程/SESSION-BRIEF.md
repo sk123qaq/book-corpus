@@ -1,7 +1,10 @@
 # 会话追问 · 后端实施单
 
+> **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
+
+
 给 `工作区/演示-检索流程/` 加多轮会话。前端页面这轮不动，只做接口与回答阶段。
-只读 `库/`、`目录/检索/index.db`、`目录/library.db`。只写 `缓存/sessions`、`缓存/related`、`缓存/answers`。
+只读 `books/<uid>/`、`build/检索/index.db`、`build/library.db`。只写 `缓存/sessions`、`缓存/related`、`缓存/answers`。
 
 ## 数据形状
 
@@ -27,11 +30,11 @@
     {
       "n": 2,
       "related": {"related": true, "reason": "…", "against": [1], "ms": 2100, "source": "model", "thinking": "low"},
-      "anchor": {"path": "库/…/06_差序格局.md", "line": 120, "title": "差序格局", "quote": "愈推愈远，也愈推愈薄"},
+      "anchor": {"path": "books/<uid>/…/06_差序格局.md", "line": 120, "title": "差序格局", "quote": "愈推愈远，也愈推愈薄"},
       "context": {
         "prev": 1, "budget": 5000, "chars": 4123, "text": "…拼好的提示词片段…",
-        "chapters": [{"book": "…", "title": "差序格局", "path": "库/…", "line": 120}],
-        "paragraphs": [{"book": "…", "title": "…", "path": "库/…", "line": 120, "text": "…"}],
+        "chapters": [{"book": "…", "title": "差序格局", "path": "books/<uid>/…", "line": 120}],
+        "paragraphs": [{"book": "…", "title": "…", "path": "books/<uid>/…", "line": 120, "text": "…"}],
         "anchor_used": true, "truncated": 0
       }
     }
@@ -93,9 +96,9 @@ def build_context(turns, budget, anchor=None):
 上一轮回答（已经给过用户，不要整段重复）：
 …
 上一轮用到的章节：
-- 《乡土中国》· 差序格局 · 库/…/06_差序格局.md:120
+- 《乡土中国》· 差序格局 · books/<uid>/…/06_差序格局.md:120
 上一轮命中的原文：
-《乡土中国》 库/…/06_差序格局.md:110-150
+《乡土中国》 books/<uid>/…/06_差序格局.md:110-150
 …
 更早的轮次：
 第 1 问：… / 答：…
@@ -124,7 +127,7 @@ def build_context(turns, budget, anchor=None):
 - `related = related.check(question, 最近 3 轮)`。第 1 问跳过，直接 `None`。
 - `trace = tracer.build(...)`。
 - 写 turn：`n <= len(turns)` 时替换第 n 轮并截断后面的轮次（重跑同一问），否则追加。
-- `anchor` 校验：path 必须在 `库/` 下且 `.md`，line 是正整数；不合法就忽略。
+- `anchor` 校验：path 必须在 `books/<uid>/` 下且 `.md`，line 是正整数；不合法就忽略。
 - 返回：trace 原字段 + `session_id`、`turn`、`related`、`session`（`public(sess)`）。
 
 ### `/api/answer`
@@ -161,4 +164,4 @@ def build_context(turns, budget, anchor=None):
 
 - 不改 `web/` 的页面与脚本。这轮只做后端。
 - 不改 `trace.py` 的 `build`，会话信息由 server 包在外面。
-- 不动 `库/`、`目录/`、`工作区/脚本/`。
+- 不动 `books/<uid>/`、`tables/`、`src/bookcorpus/scripts/`。

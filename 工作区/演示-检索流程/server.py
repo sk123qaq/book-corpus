@@ -4,7 +4,7 @@
   python3 工作区/演示-检索流程/server.py
   http://127.0.0.1:8765
 
-只读 index.db / library.db 与 库/**.md；不写库、目录、脚本。
+只读 build/检索/index.db、build/library.db 与 books/**.md；不写书、账、脚本。
 """
 import argparse
 import json
@@ -49,7 +49,7 @@ def _turn_no(value):
 
 
 def _clean_anchor(value):
-    """anchor 只在 库/ 下的 .md + 正整数行号时采用，其余忽略。"""
+    """anchor 只在 books/ 下的 .md + 正整数行号时采用，其余忽略。"""
     if not isinstance(value, dict):
         return None
     try:

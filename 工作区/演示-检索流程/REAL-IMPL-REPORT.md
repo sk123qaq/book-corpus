@@ -1,5 +1,8 @@
 # 会话历史 + V3 阶段区 · 实施记录
 
+> **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
+
+
 单子：`REAL-IMPL-BRIEF.md`。参考原型：`原型-会话历史/`（只读，未改）。
 状态：**已落地，UI 验收全过**（56 条，0 败）；后端验收 `check_session.py` 全过（29 条，真调模型 3 轮）。
 
@@ -16,7 +19,7 @@
 | `验收/check_session_ui.py` | SNAP 去掉 `.cells`，加 17 个字段（stageRows/Values/Texts/Open/Active/Done、stripOpen、historyRows/Count、tabHistoryOn/tabCurrentOn、h2Size/pSize、starts/lastCards、histScroll/histWrap、histFirstGroup/histFirstCurrent/panelHistoryHidden）。旧断言改写 + 新增 11 条（见 §5） |
 | `REAL-IMPL-REPORT.md` | 本文件 |
 
-没动：`库/`、`目录/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/index.html`、`web/style.css`、`原型-会话历史/`。没有 `git add`/`commit`/任何改状态的 git 命令。
+没动：`books/<uid>/`、`tables/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/index.html`、`web/style.css`、`原型-会话历史/`。没有 `git add`/`commit`/任何改状态的 git 命令。
 
 ## 2. V3 字段映射
 

@@ -18,7 +18,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-SCRIPTS = os.path.join(REPO, "工作区", "脚本")
+SCRIPTS = os.path.join(REPO, "src", "bookcorpus", "scripts")
 DOC_NUMBERS = os.path.join(SCRIPTS, "doc_numbers.py")
 AUDIT = os.path.join(SCRIPTS, "audit_state.py")
 
@@ -118,27 +118,28 @@ def run(args):
 
 
 def build_root(root):
-    lib = os.path.join(root, "库")
+    lib = os.path.join(root, "books")
     for uid, title, rel, fmt, chapters in BOOKS:
-        book = os.path.join(lib, rel)
+        book = os.path.join(lib, uid)
         write(os.path.join(book, "book.json"),
-              json.dumps({"uid": uid, "title": title, "path": rel}, ensure_ascii=False))
+              json.dumps({"uid": uid, "title": title}, ensure_ascii=False))
         write(os.path.join(book, "source", "书." + fmt), "源文件 %s\n" % uid)
         for i in range(1, chapters + 1):
             write(os.path.join(book, "md", "%02d.md" % i), "# %s 第 %d 章\n正文。\n" % (title, i))
         if chapters:
             write(os.path.join(book, "md", "README.md"), "# %s\n\n- [第1章](01.md)\n" % title)
 
-    cat = os.path.join(root, "目录")
+    cat = os.path.join(root, "tables")
     os.makedirs(cat, exist_ok=True)
-    con = sqlite3.connect(os.path.join(cat, "library.db"))
+    os.makedirs(os.path.join(root, "build"), exist_ok=True)
+    con = sqlite3.connect(os.path.join(root, "build", "library.db"))
     con.executescript(LIB_SCHEMA)
     for uid, title, rel, fmt, chapters in BOOKS:
         con.execute("INSERT INTO book(uid,title,subject1,path,path_state) VALUES(?,?,?,?,?)",
-                    (uid, title, rel.split("/")[0], rel, "active"))
+                    (uid, title, rel.split("/")[0], uid, "active"))
         con.execute("INSERT INTO source(uid,file,format,bytes,sha256,primary_src) "
                     "VALUES(?,?,?,?,?,1)",
-                    (uid, "库/%s/source/书.%s" % (rel, fmt), fmt, 12, "sha-" + uid))
+                    (uid, "books/%s/source/书.%s" % (uid, fmt), fmt, 12, "sha-" + uid))
         if chapters:
             con.execute("INSERT INTO derived(uid,kind,status,chapters,bytes) VALUES(?,?,?,?,?)",
                         (uid, "md", "done", chapters, 100))
@@ -155,23 +156,23 @@ def build_root(root):
               for uid, title, rel, _, _ in BOOKS))
     write(os.path.join(cat, "对照表.csv"),
           "旧路径,新路径,uid\n" + "".join(
-              "旧/%s,库/%s,%s\n" % (title, rel, uid) for uid, title, rel, _, _ in BOOKS))
-    write(os.path.join(cat, "检索", "踩坑记录.md"),
+              "旧/%s,books/%s,%s\n" % (title, uid, uid) for uid, title, rel, _, _ in BOOKS))
+    write(os.path.join(root, "build", "检索", "踩坑记录.md"),
           "# 踩坑记录\n\n## A 类 模型接口\n\n## B 类 SQLite 与全文索引\n\n"
           "## 已修（2026-10-20 下午）\n\n## 已知未修（按优先级）\n")
 
-    idx = sqlite3.connect(os.path.join(cat, "检索", "index.db"))
+    idx = sqlite3.connect(os.path.join(root, "build", "检索", "index.db"))
     idx.executescript(INDEX_SCHEMA)
     for key, value in (("built_at", "2026-10-24T18:35:38+0800"), ("books", "2"),
                        ("chapters", "4"), ("paras", "4")):
         idx.execute("INSERT INTO meta(key,value) VALUES(?,?)", (key, value))
     for uid, title, rel, _, chapters in MD_BOOKS:
         for i in range(1, chapters + 1):
-            path = "库/%s/md/%02d.md" % (rel, i)
+            path = "books/%s/md/%02d.md" % (uid, i)
             idx.execute("INSERT INTO para(path,book,line,chars,tok,text) VALUES(?,?,?,?,?,?)",
-                        (path, rel, 1, 4, "正文", "正文。"))
+                        (path, uid, 1, 4, "正文", "正文。"))
     for i in (1, 2):
-        path = "库/文学/甲书/md/%02d.md" % i
+        path = "books/B0001/md/%02d.md" % i
         idx.execute("INSERT INTO expand(path,kind,tok,text,built_at) VALUES(?,?,?,?,?)",
                     (path, "prefix", "正文", "正文。", "2026-10-24T18:35:38+0800"))
         idx.execute("INSERT INTO expand_fts(path,tok,text) VALUES(?,?,?)",
@@ -179,12 +180,12 @@ def build_root(root):
     idx.commit()
     idx.close()
 
-    views = os.path.join(root, "视图")
-    for sub, name, rel in (("奖项", "测试奖", "甲书"), ("奖项", "测试奖", "乙书"),
-                           ("主题", "测试主题", "甲书")):
-        target = os.path.join(views, sub, name, rel)
+    views = os.path.join(root, "build", "views")
+    for sub, name, uid in (("奖项", "测试奖", "B0001"), ("奖项", "测试奖", "B0002"),
+                           ("主题", "测试主题", "B0001")):
+        target = os.path.join(views, sub, name, uid)
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        os.symlink(os.path.join("..", "..", "..", "库", "文学", rel), target)
+        os.symlink(os.path.join("..", "..", "..", "..", "books", uid), target)
     write(os.path.join(views, "奖项", "说明.txt"), "不是软链，不计数\n")
 
 
@@ -256,7 +257,7 @@ def fixture_checks(root):
     print("\n== 取数：fixture 六本 ==")
     counts = doc_numbers.collect(root)
     check("books 6", counts["books"] == 6, counts["books"])
-    check("md 2 本（看 库/<path>/md 是不是目录）", counts["md"] == 2, counts["md"])
+    check("md 2 本（看 books/<uid>/md 是不是目录）", counts["md"] == 2, counts["md"])
     check("待拆章 pdf/txt/djvu/other 各 1",
           counts["pending"] == {"pdf": 1, "txt": 1, "djvu": 1, "other": 1}, counts["pending"])
     check("待拆章合计 4", counts["pending_total"] == 4, counts["pending_total"])

@@ -291,7 +291,7 @@ def recheck(row, ctx, result):
     """只复核暂存区已有的产物：重跑 verify 与 audit，重写 manifest，过了就进库。"""
     uid = row["uid"]
     stage = os.path.join(ctx["out"], uid)
-    dest = L.PATHS.md(row["uid"])
+    dest = L.Layout(L.ROOT).md(row["uid"])
     if not os.path.isdir(stage):
         result.update(status="no-stage", note="暂存区没有产物，先重拆")
         return result
@@ -364,7 +364,7 @@ def recheck(row, ctx, result):
 
 def run_one(row, ctx):
     uid = row["uid"]
-    dest = L.PATHS.md(row["uid"])
+    dest = L.Layout(L.ROOT).md(row["uid"])
     stage = os.path.join(ctx["out"], uid)
     work = os.path.join(ctx["tmp"], uid)
     result = {"uid": uid, "title": row["title"], "format": row["format"],
@@ -617,7 +617,7 @@ def main():
            "fix_sessions": os.path.join(batch_path, "fix-sessions"),
            "stamp": now().replace(":", "").replace("+", "-"), "tool_version": tool_version()}
 
-    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.TABLES, "library.db"), uri=True)
+    con = sqlite3.connect("file:%s?mode=ro" % L.Layout(L.ROOT).library_db, uri=True)
     con.row_factory = sqlite3.Row
 
     if a.report:

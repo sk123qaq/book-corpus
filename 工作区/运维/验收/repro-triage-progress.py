@@ -38,14 +38,14 @@ def slow_stub(step):
 
 
 def add_pdf_books(root, count):
-    conn = sqlite3.connect(os.path.join(root, "目录", "library.db"))
+    conn = sqlite3.connect(os.path.join(root, "build", "library.db"))
     for i in range(count):
         uid = "B01%02d" % i
         conn.execute("INSERT OR REPLACE INTO book VALUES (?,?,?,?,?,?,?,?,?,?)",
                      (uid, "书 " + uid, "某人", "文学", "小说",
-                      "文学/小说/书 " + uid, "", "", "keep", "active"))
+                      uid, "", "", "keep", "active"))
         conn.execute("INSERT INTO source VALUES (?,?,?,?,?,?)",
-                     (uid, "库/文学/小说/书 %s/source/a.pdf" % uid, "pdf", 100,
+                     (uid, "books/%s/source/a.pdf" % uid, "pdf", 100,
                       uid.lower(), 1))
     conn.commit()
     conn.close()

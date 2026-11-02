@@ -680,7 +680,7 @@ def seed(port, root=""):
         with open(os.path.join(logs, "B0001.json"), "w", encoding="utf-8") as fh:
             json.dump({"uid": "B0001", "title": "书 B0001", "status": "staged-review",
                        "verify_rc": 0, "audit_rc": 1, "audit_ratio": 0.81,
-                       "chapters": 12, "dest": "库/文学/书 B0001/md",
+                       "chapters": 12, "dest": "books/B0001/md",
                        "note": "verify rc=0, audit rc=1"}, fh, ensure_ascii=False)
     time.sleep(2.0)
 

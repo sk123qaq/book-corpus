@@ -21,11 +21,11 @@ import urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765"
 THREE = "《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球"
-THREE_PATH = "库/文学/类型小说/刘慈欣/三体/死神永生/md/03_第二部威慑纪元12年，“青铜世纪”号.md"
+THREE_PATH = "books/B0024/md/03_第二部威慑纪元12年，“青铜世纪”号.md"
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-HAS_FIXTURES = os.path.exists(os.path.join(ROOT, THREE_PATH)) and bool(
-    glob.glob(os.path.join(ROOT, "库", "**", "凡人修仙传"), recursive=True))
+ROOT = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-local")
+HAS_FIXTURES = os.path.exists(os.path.join(ROOT, THREE_PATH)) and os.path.isdir(
+    os.path.join(ROOT, "books", "B0168"))
 fails = []
 
 

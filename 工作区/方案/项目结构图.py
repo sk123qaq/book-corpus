@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Emit 工作区/方案/项目结构图.html (one self-contained page, inline SVG flowchart).
 
+2026-11-02 布局迁移：图内文字仍是 v1 读数，重新生成时按 build/、tables/、books/ 取数。
+
 Regenerate after the layout changes: python3 工作区/方案/项目结构图.py
-Every number in the diagram was read from 目录/library.db (lq.py), 目录/分类表.csv,
-目录/概念表.tsv and the filesystem on 2026-10-19.
+Every number in the diagram was read from build/library.db (lq.py), tables/分类表.csv,
+tables/概念表.tsv and the filesystem on 2026-10-19.
 """
 
 W, H = 1660, 1360

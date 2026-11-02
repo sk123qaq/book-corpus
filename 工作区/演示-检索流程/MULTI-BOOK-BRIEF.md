@@ -1,5 +1,8 @@
 # 02 默认页与多书选择 · 实施单
 
+> **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
+
+
 两件事一起做：把 02 提成 `/`，旧五阶段页移到 `/classic`；在 02 里暴露检索已经给出的书卡，让用户选一本或多本，回答按选中的书走。
 
 读 `SESSION-UI-BRIEF.md` 的页面与接口形状，这份只写新增部分。
@@ -24,7 +27,7 @@ turn.answerSources = [source, ...] // 发起这次回答时的快照，用来判
 MAX_SOURCES = 8
 ```
 
-`book` 是库内相对书键，如 `人文社科/人类学与考古/乡土中国（2）`；`title` 是书名；`chapter` 是显示用的章名；`path` 以 `库/` 开头。
+`book` 是书的 uid，如 `B0606`；`title` 是书名；`chapter` 是显示用的章名；`path` 是 `books/<uid>/md/...`。
 
 来源三种：
 
@@ -204,7 +207,7 @@ MAX_SOURCES = 8
 ## 边界
 
 - 只改 `工作区/演示-检索流程/` 下的 `server.py`、`web/index.html`、`web/session.html`、`web/session.css`、`web/session.js`、`验收/check_session_ui.py`、`验收/check_session_live.py`、`验收/check_demo.py`、`验收/check_session.py`、`验收/shot.py`，新增本文件。`SESSION-UI-BRIEF.md` 的路由段同步改。
-- 不碰 `库/`、`目录/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/style.css`。
+- 不碰 `books/<uid>/`、`tables/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/style.css`。
 - 不调真实 `/api/run` / `/api/answer` 做自测。用 `7f0f8d8ba4c4`、`e4120ff4977d` 和假 `fetch`。
 - 8765 正在跑，别动。自测起 `--port 8799`，测完杀掉。
 - 不提交；父级审 diff 后分两个 commit。

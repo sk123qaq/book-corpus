@@ -103,6 +103,9 @@ def source_path(root, doc):
 
 
 def venv_python(root):
+    env = os.environ.get("BOOKS_PDF_PY")
+    if env and os.path.isfile(env):
+        return env
     local = os.path.join(root, "工作区", ".venv-pdf", "bin", "python")
     if os.path.isfile(local):
         return local

@@ -166,12 +166,12 @@
     const named = cite.book_title || cite.book;
     if (named) return named;
     const path = String(cite.path || '');
-    const head = path.startsWith('库/') ? path.slice(2) : path;
+    const head = path.startsWith('books/') ? path.slice(6) : path;
     return head.split('/md/')[0].split('/').pop() || '';
   }
 
   function bookKey(path) {
-    const raw = String(path || '').replace(/^库\//, '');
+    const raw = String(path || '').replace(/^books\//, '');
     const at = raw.indexOf('/md/');
     return at >= 0 ? raw.slice(0, at) : '';
   }

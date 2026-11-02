@@ -239,7 +239,7 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
 # ---- 原文 -----------------------------------------------------------
 
 def safe_md_path(path):
-    """把请求里的路径解析成 库/ 下的真实 .md 路径；不合法抛 ValueError。"""
+    """把请求里的路径解析成 books/ 下的真实 .md 路径；不合法抛 ValueError。"""
     if not isinstance(path, str) or not path.strip():
         raise ValueError("path 为空")
     raw = path.strip()
@@ -253,7 +253,7 @@ def safe_md_path(path):
     except ValueError:
         inside = False
     if not inside or not os.path.isfile(real):
-        raise ValueError("路径不在 库/ 下或文件不存在")
+        raise ValueError("路径不在 books/ 下或文件不存在")
     return real
 
 

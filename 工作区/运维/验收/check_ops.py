@@ -48,7 +48,7 @@ opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
 
 
 def item(name, action, uid, note=""):
-    return {"file": name, "path": "库/_收件箱/" + name, "sha256": name * 8, "bytes": 11,
+    return {"file": name, "path": "books/_收件箱/" + name, "sha256": name * 8, "bytes": 11,
             "format": os.path.splitext(name)[1].lstrip("."), "title": name,
             "author": "", "uid": uid, "target": "", "subjects": ["文学"],
             "retention": "keep", "action": action, "note": note,
@@ -169,7 +169,7 @@ for page in (1, 160, 320):
     with open(os.path.join(out, rel), "wb") as fh:
         fh.write(b"\\x89PNG\\r\\n\\x1a\\n")
     thumbs.append(rel)
-result = {"uid": uid, "title": "书 " + uid, "path": "库/x/source/a.pdf", "pages": 320,
+result = {"uid": uid, "title": "书 " + uid, "path": "books/%s/source/a.pdf" % uid, "pages": 320,
           "class": "C 扫描件(无文本层)",
           "metrics": {"text_page_share": 0.0, "ink": 0.42, "bands": 2,
                       "image_share": 1.0},
@@ -215,15 +215,15 @@ import json, sys
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
 uid = opt("--uid")
-preview = {"uid": uid, "title": "书 " + uid, "path": "文学/x/书 " + uid,
-           "book_dir": "库/文学/x/书 " + uid,
-           "sources": [{"path": "库/文学/x/书 " + uid + "/source/a.epub",
+preview = {"uid": uid, "title": "书 " + uid, "path": uid,
+           "book_dir": "books/" + uid,
+           "sources": [{"path": "books/" + uid + "/source/a.epub",
                         "sha256": "deadbeef", "bytes": 11, "shared_with": 2,
                         "action": "hardlink"}],
            "delete": ["md/", "html/", "book.json"], "ledger": True, "db": True,
            "awards": [], "views": [], "series_docs": [], "md_chapters": 12,
            "md_bytes": 4096, "expand_rows": 3, "index_rows": 0,
-           "cold_path": "库/_冷宫/书 " + uid + "/source/a.epub",
+           "cold_path": "books/_冷宫/" + uid + "/source/a.epub",
            "snapshot": "../books.snapshot-2026-10-24", "snapshot_ok": True,
            "plan_hash": (opt("--plan-hash") or "hash-" + uid)}
 if "--apply" in args:
@@ -231,7 +231,7 @@ if "--apply" in args:
         print(json.dumps({"ok": False, "error": "plan_hash 与现库不一致，拒绝"},
                          ensure_ascii=False))
         sys.exit(1)
-    print(json.dumps({"ok": True, "uid": uid, "cold": "库/_冷宫/书 " + uid,
+    print(json.dumps({"ok": True, "uid": uid, "cold": "books/_冷宫/" + uid,
                       "retired_tsv": "工作区/批次/移出-2026-10-24/retired.tsv"},
                      ensure_ascii=False))
     sys.exit(0)
@@ -284,8 +284,7 @@ STUBS = {
     "check_p1.py": STUB_P1,
     "audit_state.py": STUB_AUDIT,
     "build_para_index.py": STUB_QUIET,
-    "build_topic_views.py": STUB_QUIET,
-    "migrate_layout.py": STUB_QUIET,
+    "build_views.py": STUB_QUIET,
     "build_index.py": STUB_QUIET,
 }
 
@@ -308,9 +307,11 @@ FIXTURE_STATUS = {
 
 def build_root():
     root = tempfile.mkdtemp(prefix="ops-check-")
-    for rel in ("工作区/运维/jobs", "工作区/脚本", "工作区/批次", "目录",
-                "库/_收件箱", "视图/奖项", "视图/主题"):
+    for rel in ("工作区/运维/jobs", "工作区/脚本", "工作区/批次", "tables",
+                "books/_收件箱", "build/views/奖项", "build/views/主题", "build/检索"):
         os.makedirs(os.path.join(root, rel), exist_ok=True)
+    with open(os.path.join(root, "books.toml"), "w", encoding="utf-8") as fh:
+        fh.write('schema = 2\ntool = "book-corpus test"\n')
     os.makedirs(os.path.join(root, "工作区", ".venv-pdf", "bin"), exist_ok=True)
     os.symlink(sys.executable,
                os.path.join(root, "工作区", ".venv-pdf", "bin", "python"))
@@ -319,13 +320,13 @@ def build_root():
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(body)
         os.chmod(path, 0o755)
-    with open(os.path.join(root, "目录", "书目总表.csv"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(root, "build", "书目总表.csv"), "w", encoding="utf-8") as fh:
         fh.write("uid,title\nB0001,A\n")
-    with open(os.path.join(root, "目录", "分类预填.csv"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(root, "tables", "分类预填.csv"), "w", encoding="utf-8") as fh:
         fh.write("uid,一级模型\nB0001,文学\n")
-    with open(os.path.join(root, "目录", "书目总表.xlsx"), "wb") as fh:
+    with open(os.path.join(root, "build", "书目总表.xlsx"), "wb") as fh:
         fh.write(b"PK\x03\x04fake")
-    make_library_db(os.path.join(root, "目录", "library.db"))
+    make_library_db(os.path.join(root, "build", "library.db"))
     led = os.path.join(root, "工作区", "批次", "pdf-普查-2026-10-19")
     os.makedirs(led, exist_ok=True)
     with open(os.path.join(led, "triage_final.csv"), "w", encoding="utf-8") as fh:
@@ -343,18 +344,15 @@ def build_root():
     os.makedirs(os.path.join(ocr, "logs"), exist_ok=True)
     with open(os.path.join(ocr, "worklist.tsv"), "w", encoding="utf-8") as fh:
         fh.write("uid\ttitle\tsrc\tformat\tpages\tclass\n")
-        fh.write("B9001\t已落地的一本\t库/x/source/a.pdf\tpdf\t40\tC 扫描件\n")
-        fh.write("B9002\t失败的一本\t库/x/source/b.pdf\tpdf\t60\tC 扫描件\n")
-        fh.write("B9003\t没开跑的一本\t库/x/source/c.pdf\tpdf\t80\tC 扫描件\n")
+        fh.write("B9001\t已落地的一本\tbooks/B9001/source/a.pdf\tpdf\t40\tC 扫描件\n")
+        fh.write("B9002\t失败的一本\tbooks/B9002/source/b.pdf\tpdf\t60\tC 扫描件\n")
+        fh.write("B9003\t没开跑的一本\tbooks/B9003/source/c.pdf\tpdf\t80\tC 扫描件\n")
     for uid, status in (("B9001", "landed"), ("B9002", "api-fatal")):
         with open(os.path.join(ocr, "logs", uid + ".json"), "w", encoding="utf-8") as fh:
             json.dump({"uid": uid, "status": status, "pages": 10}, fh)
-    with open(os.path.join(root, "库", "_收件箱", "A.epub"), "wb") as fh:
-        fh.write(b"epub-a")
-    with open(os.path.join(root, "库", "_收件箱", "B.epub"), "wb") as fh:
-        fh.write(b"epub-b")
-    with open(os.path.join(root, "库", "_收件箱", "C.pdf"), "wb") as fh:
-        fh.write(b"pdf-c")
+    for name, blob in (("A.epub", b"epub-a"), ("B.epub", b"epub-b"), ("C.pdf", b"pdf-c")):
+        with open(os.path.join(root, "books", "_收件箱", name), "wb") as fh:
+            fh.write(blob)
     fixture = os.path.join(root, "status-fixture.json")
     with open(fixture, "w", encoding="utf-8") as fh:
         json.dump(FIXTURE_STATUS, fh, ensure_ascii=False)
@@ -398,24 +396,24 @@ CREATE VIEW v_pending_md AS
   WHERE d.uid IS NULL OR d.status != 'done';
 """)
     conn.execute("INSERT INTO book VALUES ('B0001','书 一','某人','文学','小说',"
-                 "'文学/小说/书 一','','','keep','active')")
+                 "'B0001','','','keep','active')")
     conn.execute("INSERT INTO book VALUES ('B0002','书 二','另一人','人文社科','',"
-                 "'人文社科/书 二','某系列','1','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0001','库/文学/小说/书 一/source/a.epub',"
+                 "'B0002','某系列','1','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0001','books/B0001/source/a.epub',"
                  "'epub',11,'aa',1)")
-    conn.execute("INSERT INTO source VALUES ('B0002','库/人文社科/书 二/source/b.pdf',"
+    conn.execute("INSERT INTO source VALUES ('B0002','books/B0002/source/b.pdf',"
                  "'pdf',22,'bb',1)")
     conn.execute("INSERT INTO book VALUES ('B0003','书 三','某人','艺术与图像','',"
-                 "'艺术与图像/书 三','','','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0003','库/艺术与图像/书 三/source/c.pdf',"
+                 "'B0003','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0003','books/B0003/source/c.pdf',"
                  "'pdf',33,'cc',1)")
     conn.execute("INSERT INTO book VALUES ('B0004','书 四','某人','文学','小说',"
-                 "'文学/小说/书 四','','','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0004','库/文学/小说/书 四/source/d.pdf',"
+                 "'B0004','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0004','books/B0004/source/d.pdf',"
                  "'pdf',44,'dd',1)")
     conn.execute("INSERT INTO book VALUES ('B0005','书 五','某人','文学','小说',"
-                 "'文学/小说/书 五','','','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0005','库/文学/小说/书 五/source/e.pdf',"
+                 "'B0005','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0005','books/B0005/source/e.pdf',"
                  "'pdf',55,'ee',1)")
     conn.execute("INSERT INTO derived VALUES ('B0002','md','done',12,4096,'bb')")
     conn.execute("INSERT INTO book_award VALUES ('B0002','某奖','2020','longlist')")
@@ -475,7 +473,8 @@ def start(root, fixture, port=0):
     env = dict(os.environ)
     env["OPS_STATUS_FIXTURE"] = fixture
     env.pop("OPS_HTTP_LOG", None)
-    proc = subprocess.Popen([sys.executable, SERVER, "--root", root, "--port", str(port)],
+    proc = subprocess.Popen([sys.executable, SERVER, "--root", root, "--port", str(port),
+                             "--scripts", os.path.join(root, "工作区", "脚本")],
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             env=env, start_new_session=True)
     line = proc.stdout.readline()
@@ -592,8 +591,8 @@ def finish():
 
 def word_coverage_checks():
     """驱动加了新状态，页面必须也认识：两张表对不上时页面会直接打出英文。"""
-    driver = os.path.join(os.path.dirname(os.path.dirname(OPS_DIR)), "工作区", "脚本",
-                          "split_md_batch.py")
+    driver = os.path.join(os.path.dirname(os.path.dirname(OPS_DIR)),
+                          "src", "bookcorpus", "scripts", "split_md_batch.py")
     page = os.path.join(OPS_DIR, "web", "app.js")
     dblock = re.search(r"^STATUS = \{(.*?)^\}",
                        open(driver, encoding="utf-8").read(), re.S | re.M)
@@ -656,11 +655,11 @@ def run_checks(root, ops, port, fixture):
                    headers={"Host": "evil.example"})
     check("外站 Host 被拒", code == 403)
 
-    code, body = get(port, "/api/file?path=" + urllib.request.quote("目录/书目总表.csv"))
+    code, body = get(port, "/api/file?path=" + urllib.request.quote("build/书目总表.csv"))
     check("白名单 CSV 可下", code == 200 and "uid,title" in body,
           "code=%s body=%r" % (code, str(body)[:40]))
-    for bad in ("目录/library.db", "工作区/脚本/ingest.py",
-                "工作区/运维/ops.db", "../etc/passwd", "/etc/passwd",
+    for bad in ("build/library.db", "src/bookcorpus/scripts/ingest.py",
+                "books/B0001/book.json", "工作区/运维/ops.db", "../etc/passwd", "/etc/passwd",
                 "工作区/运维/jobs/../../../../etc/passwd"):
         code, _ = get(port, "/api/file?path=" + urllib.request.quote(bad))
         check("白名单拒绝 %s" % bad, code == 404)
@@ -669,18 +668,18 @@ def run_checks(root, ops, port, fixture):
     code, body = post(port, "/api/import/upload",
                       raw=b"epub-bytes-here",
                       headers={"X-Filename": urllib.request.quote("测试 书.epub")})
-    inbox_file = os.path.join(root, "库", "_收件箱", "测试 书.epub")
+    inbox_file = os.path.join(root, "books", "_收件箱", "测试 书.epub")
     check("上传落收件箱",
           code == 200 and os.path.exists(inbox_file)
           and open(inbox_file, "rb").read() == b"epub-bytes-here",
           str(body.get("name") if isinstance(body, dict) else body))
     check("上传不留 .part",
-          not [n for n in os.listdir(os.path.join(root, "库", "_收件箱"))
+          not [n for n in os.listdir(os.path.join(root, "books", "_收件箱"))
                if n.endswith(".part")])
     code, body = post(port, "/api/import/upload", raw=b"x",
                       headers={"X-Filename": urllib.request.quote("../../pwn.epub")})
     check("上传文件名去路径",
-          code == 200 and os.path.exists(os.path.join(root, "库", "_收件箱", "pwn.epub"))
+          code == 200 and os.path.exists(os.path.join(root, "books", "_收件箱", "pwn.epub"))
           and not os.path.exists(os.path.join(root, "..", "pwn.epub")))
     code, _ = post(port, "/api/import/upload", raw=b"x", headers={"X-Filename": ".."})
     check("上传拒绝 ..", code == 400)
@@ -710,7 +709,7 @@ def run_checks(root, ops, port, fixture):
     check("最近计划能载入", code == 200 and body.get("job_id") == scan_id
           and len(body.get("plan") or []) == 3,
           "%s · %s 行" % (body.get("job_id"), len(body.get("plan") or [])))
-    inbox_a = os.path.join(root, "库", "_收件箱", "A.epub")
+    inbox_a = os.path.join(root, "books", "_收件箱", "A.epub")
     os.replace(inbox_a, inbox_a + ".away")
     try:
         code, body = get(port, "/api/import/latest")

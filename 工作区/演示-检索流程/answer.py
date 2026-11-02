@@ -4,7 +4,7 @@
   from answer import answer_question
   answer_question("《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球",
                   "文学/类型小说/刘慈欣/三体/死神永生",
-                  "库/文学/类型小说/刘慈欣/三体/死神永生/md/03_第二部....md", 1180,
+                  "books/B0123/md/03_第二部....md", 1180,
                   ["程心", "执剑人", "三体", "威慑", "黑暗森林", "威慑度"])
 
 步骤（见 ANSWER-BRIEF.md）：
@@ -132,7 +132,7 @@ PROMPT = """你是书库问答的回答阶段。依据这一本书的原文回�
 
 书里确实没有回答时，先用 book_grep 搜同义词与别名，确认搜不到再写「书里没有直接回答」并置 not_found，不要拿相邻话题凑一段。
 输出一行 JSON，不要代码块，不要解释。answer 里用 \\n 换行，节标题行以 ## 开头：
-{{"answer":"开头判断\\n\\n## 小标题\\n正文\\n\\n## 分歧\\n...\\n\\n## 缺口\\n...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
+{{"answer":"开头判断\\n\\n## 小标题\\n正文\\n\\n## 分歧\\n...\\n\\n## 缺口\\n...","citations":[{{"path":"books/<uid>/md/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
 
 候选章（前 {n} 章）：
 {chapters}
@@ -171,7 +171,7 @@ MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本�
 
 依据放在 citations，quote 必须逐字来自原文，path 用那本书 md 目录里的文件路径。尽量引到至少 2 个不同书的原文；只有所有书都没有相关原文时才写「书里没有直接回答」并置 not_found。
 输出一行 JSON，不要代码块，不要解释。answer 里用 \\n 换行，节标题行以 ## 开头：
-{{"answer":"开头判断\\n\\n## 小标题\\n正文\\n\\n## 分歧\\n...\\n\\n## 缺口\\n...","citations":[{{"path":"库/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
+{{"answer":"开头判断\\n\\n## 小标题\\n正文\\n\\n## 分歧\\n...\\n\\n## 缺口\\n...","citations":[{{"path":"books/<uid>/md/...md","line":1166,"quote":"逐字引文"}}],"confidence":"high|medium|low","not_found":false}}
 
 各书候选章：
 {chapters}
@@ -186,7 +186,7 @@ MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本�
 # ---- 小工具 ---------------------------------------------------------
 
 def _rel(path):
-    """统一成 库/... 形式的相对路径（正斜杠）。"""
+    """统一成 books/<uid>/... 形式的相对路径（正斜杠）。"""
     raw = str(path or "").strip().replace("\\", "/")
     if not raw:
         return ""
@@ -201,7 +201,7 @@ def _rel(path):
 
 
 def _inside_library(rel):
-    if not rel.startswith("库/") or not rel.endswith(".md"):
+    if not rel.startswith("books/") or not rel.endswith(".md"):
         return False
     real = os.path.realpath(os.path.join(ROOT, rel))
     lib = os.path.realpath(LIBRARY)
@@ -213,9 +213,9 @@ def _inside_library(rel):
 
 
 def book_from_path(rel):
-    """库/文学/.../死神永生/md/03_x.md → 文学/.../死神永生"""
-    if "/md/" in rel:
-        return rel[2:].split("/md/")[0]
+    """books/B0123/md/03_x.md → B0123"""
+    if rel.startswith("books/") and "/md/" in rel:
+        return rel.split("/")[1]
     return ""
 
 
@@ -560,12 +560,12 @@ def build_prompt(question, book, windows, chapters, history=""):
                     % (i, c["path"], c["line"], c["title"], c["score"], cov))
     history = (history.strip() + "\n") if history.strip() else ""
     limit = PROMPT_MAX + (HISTORY_CHARS_SINGLE if history else 0)
-    prompt = PROMPT.format(question=question, book=book, md="库/%s/md" % book,
+    prompt = PROMPT.format(question=question, book=book, md="books/%s/md" % book,
                            history=history, n=len(rows), chapters="\n".join(rows),
                            evidence="\n\n".join(blocks))
     while len(prompt) > limit and len(blocks) > 1:
         blocks.pop()
-        prompt = PROMPT.format(question=question, book=book, md="库/%s/md" % book,
+        prompt = PROMPT.format(question=question, book=book, md="books/%s/md" % book,
                                history=history, n=len(rows),
                                chapters="\n".join(rows),
                                evidence="\n\n".join(blocks))
@@ -619,7 +619,7 @@ def _coverage(terms):
     if not picked:
         picked = [min(stats, key=lambda s: s["count"])]
 
-    # 书名：目录/library.db 的 book 表按 path 取 title，查不到用路径最后一段
+    # 书名：build/library.db 的 book 表按 uid 取 title，查不到用 uid
     titles = {}
     try:
         bcon = sqlite3.connect("file:%s?mode=ro" % LIBRARY_DB, uri=True)
@@ -695,7 +695,7 @@ def build_multi_prompt(question, plans, windows, coverage="", history=""):
         book_rows, chapter_blocks = [], []
         for plan in plans:
             book = plan["source"]["book"]
-            md = "库/%s/md" % book
+            md = "books/%s/md" % book
             book_rows.append("- 《%s》 book=%s md=%s" % (labels[book], book, md))
             rows = ["《%s》 md=%s" % (labels[book], md)]
             for i, c in enumerate(plan["chapters"], 1):
@@ -725,7 +725,7 @@ def build_multi_prompt(question, plans, windows, coverage="", history=""):
 
 def call_pi(prompt, book, books=None, thinking=DEFAULT_THINKING):
     """返回 (raw_text, error)。失败时 raw_text 为 None。"""
-    roots = ["库/%s/md" % b for b in (books or [book])]
+    roots = ["books/%s/md" % b for b in (books or [book])]
     env = dict(os.environ)
     env["BOOK_MD"] = roots[0]
     env["BOOK_MDS"] = json.dumps(roots, ensure_ascii=False)
@@ -1065,7 +1065,7 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
                    thinking=DEFAULT_THINKING, history=""):
     rel = _rel(path)
     if not _inside_library(rel):
-        return _err("path 不在 库/ 下或不是 .md", ms=_ms(t0), thinking=thinking)
+        return _err("path 不在 books/ 下或不是 .md", ms=_ms(t0), thinking=thinking)
     try:
         line = max(1, int(line or 1))
     except (TypeError, ValueError):

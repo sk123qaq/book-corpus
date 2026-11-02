@@ -183,7 +183,7 @@ def summaries(limit=None):
 
 def _rel(path):
     raw = str(path or "").strip().replace("\\", "/")
-    if not raw.startswith("库/") or not raw.endswith(".md"):
+    if not raw.startswith("books/") or not raw.endswith(".md"):
         return ""
     return raw
 
@@ -193,6 +193,8 @@ def _book_of(book, path):
     if book:
         return book
     path = _rel(path)
+    if path.startswith("books/") and "/md/" in path:
+        return path.split("/")[1]
     return path[2:].split("/md/")[0] if "/md/" in path else ""
 
 
