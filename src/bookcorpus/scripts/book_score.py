@@ -110,7 +110,7 @@ def load_expand(con):
         return out
     for path, kind in rows:
         book = path.split("/md/")[0]
-        if book.startswith("库/"):
+        if book.startswith("books/"):
             book = book[2:]
         out.setdefault(book, set()).add(kind)
     return out

@@ -16,9 +16,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
-DB = os.path.join(L.CAT, "library.db")
-XLSX = os.path.join(L.CAT, "书目总表.xlsx")
-CSV = os.path.join(L.CAT, "书目总表.csv")
+DB = L.PATHS.library_db
+XLSX = L.PATHS.catalog_xlsx
+CSV = L.PATHS.catalog
 
 COLS = ["uid", "书名", "作者", "一级", "二级", "系列", "卷序", "容器", "保留",
         "源格式", "源文件", "md状态", "md章节", "md字节", "md方法", "html页数",
@@ -49,8 +49,10 @@ def query_rows(con):
          awards) in con.execute(BOOK_SQL):
         srcs = [f for f in (files or "").split("|") if f]
         primary = srcs[0] if srcs else ""
-        if primary.startswith("库/"):
-            primary = primary[len("库/"):]
+        for prefix in ("books/", "collections/"):
+            if primary.startswith(prefix):
+                primary = primary[len(prefix):]
+                break
         out.append({
             "uid": uid, "书名": title or "", "作者": author or "",
             "一级": s1 or "", "二级": s2 or "", "系列": series or "",
@@ -70,7 +72,7 @@ def audit(con):
     db_paths = {}
     for uid, path in con.execute("SELECT uid,path FROM book"):
         db_paths[uid] = path
-        if not os.path.isdir(os.path.join(L.LIB, path)):
+        if not os.path.isdir(os.path.join(L.BOOKS, path)):
             problems.append("书目目录不在: %s %s" % (uid, path))
     db_src = set()
     for (f,) in con.execute("SELECT DISTINCT file FROM source"):
@@ -83,7 +85,7 @@ def audit(con):
         kinds.setdefault(uid, set()).add(kind)
 
     n_disk_src = 0
-    for dirpath, dirnames, filenames in os.walk(L.LIB):
+    for dirpath, dirnames, filenames in os.walk(L.BOOKS):
         # 下划线目录不是账上的书（_收件箱 是新书入口，_冷宫 是移出流程的书）
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if os.path.basename(dirpath) == "source":
@@ -105,8 +107,8 @@ def audit(con):
             problems.append("book.json 的 path 与目录不符: %s vs %s" % (doc["path"], rel))
         uid = doc.get("uid") or ""
         has = kinds.get(uid, set())
-        md_dir = os.path.join(L.LIB, rel, "md")
-        html_dir = os.path.join(L.LIB, rel, "html")
+        md_dir = os.path.join(L.BOOKS, rel, "md")
+        html_dir = os.path.join(L.BOOKS, rel, "html")
         if os.path.isdir(md_dir):
             n_md += 1
             if "md" not in has:

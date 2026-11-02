@@ -132,8 +132,8 @@ def catalog_unmatched(p):
     sys.path.insert(0, HERE)
     import lib_common as L
     import gen_book_catalog as G
-    saved = (L.ROOT, L.LIB, L.CAT)
-    L.ROOT, L.LIB, L.CAT = p.root, p.lib, p.cat
+    saved = (L.ROOT, L.BOOKS, L.TABLES)
+    L.ROOT, L.BOOKS, L.TABLES = p.root, p.lib, p.cat
     try:
         con = ro(p.libdb)
         try:
@@ -141,7 +141,7 @@ def catalog_unmatched(p):
         finally:
             con.close()
     finally:
-        L.ROOT, L.LIB, L.CAT = saved
+        L.ROOT, L.BOOKS, L.TABLES = saved
     return len(problems)
 
 

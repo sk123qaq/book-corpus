@@ -55,7 +55,7 @@ def main():
     map_path = os.path.join(root, a.map_path) if not os.path.isabs(a.map_path) else a.map_path
     split_out = os.path.join(root, a.split_out) if not os.path.isabs(a.split_out) else a.split_out
     spec = json.load(open(map_path, encoding="utf-8"))
-    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.CAT, "library.db"), uri=True)
+    con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.library_db, uri=True)
     con.row_factory = sqlite3.Row
     os.makedirs(os.path.join(batch, "out"), exist_ok=True)
     stamp = now().replace(":", "").replace("+", "-")

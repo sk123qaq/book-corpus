@@ -494,7 +494,7 @@ def main():
         rows = con.execute("SELECT path, text FROM expand WHERE kind=?", (a.kind,)).fetchall()
         bybook = {}
         for p, t in rows:
-            m = re.match(r"库/(.*)/md/(.*)$", p)
+            m = re.match(r"books/(.*)/md/(.*)$", p)
             if m:
                 bybook.setdefault(m.group(1), {})[m.group(2)] = (p, t)
         uids = {rel: uid for uid, rel in books}
@@ -512,7 +512,7 @@ def main():
         only = {ln.rsplit("\t", 1)[-1].strip()
                 for ln in open(a.only_file, encoding="utf-8")
                 if ln.strip() and not ln.lstrip().startswith("#")}
-        only = {p for p in only if p.startswith("库/")}
+        only = {p for p in only if p.startswith("books/")}
     jobs = []
     for uid, rel in books:
         try:

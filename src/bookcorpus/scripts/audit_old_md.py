@@ -185,7 +185,7 @@ def batch_md_dirs():
 
 
 def scope():
-    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.CAT, "library.db"), uri=True)
+    con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.library_db, uri=True)
     con.row_factory = sqlite3.Row
     batch = batch_md_dirs()
     old = [d for d in md_dirs() if d not in batch]

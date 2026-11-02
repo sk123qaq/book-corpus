@@ -21,7 +21,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
-DB = os.path.join(L.CAT, "library.db")
+DB = L.PATHS.library_db
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -115,9 +115,9 @@ def finalize(con, t0, emit_json):
 
 def build(emit_json=False):
     books = L.iter_book_json()
-    if books:
-        return build_from_library(books, emit_json)
-    return build_from_inventory(emit_json)
+    if not books:
+        raise SystemExit("books/ 下一本 book.json 都没有，不建库。先跑 book-corpus doctor 看根对不对。")
+    return build_from_library(books, emit_json)
 
 
 # ---------------------------------------------------------------- 库模式
@@ -132,22 +132,19 @@ def award_roster():
 
 
 def build_from_library(books, emit_json=False):
-    ledger = {r["uid"]: r for r in L.read_csv(os.path.join(L.CAT, "分类表.csv"))}
+    ledger = {r["uid"]: r for r in L.read_csv(L.PATHS.ledger)}
     if not ledger:
-        raise SystemExit("缺少 目录/分类表.csv，库模式建不起来")
+        raise SystemExit("缺少 tables/分类表.csv，建不起来")
     t0 = time.time()
     con = fresh_db()
     awards_books = defaultdict(set)
     seen_uids = set()
-    for rel, doc in books:
-        uid = doc.get("uid") or ""
+    for uid, doc in books:
         seen_uids.add(uid)
         led = ledger.get(uid)
         if not led:
-            raise SystemExit("库里有书不在人账: %s (%s)" % (uid, rel))
-        if doc.get("path") and doc["path"] != rel:
-            raise SystemExit("book.json 的 path 与目录不符: %s vs %s (%s)" % (doc["path"], rel, uid))
-        bdir = os.path.join(L.LIB, rel)
+            raise SystemExit("books/ 里有书不在人账: %s" % uid)
+        bdir = os.path.join(L.BOOKS, uid)
         if not os.path.isdir(bdir):
             raise SystemExit("目录不存在: " + bdir)
         md_dir, html_dir = os.path.join(bdir, "md"), os.path.join(bdir, "html")
@@ -160,12 +157,14 @@ def build_from_library(books, emit_json=False):
                        path_state,series,volume,container,html_pages,retention,notes)
                        VALUES(?,?,?,?,?,?,?,'active',?,?,?,?,?,?)""",
                     (uid, led["正式书名"], doc.get("title_from_file", ""), doc.get("author", ""),
-                     led["一级"], led["二级"], rel, doc.get("series") or "", doc.get("volume") or "",
+                     led["一级"], led["二级"], uid, doc.get("series") or "",
+                     doc.get("volume") or "",
                      doc.get("container") or "", html_pages, led["保留"] or "keep", led["备注"]))
         for i, s in enumerate(sources):
+            owner = s.get("collection") or uid
             con.execute("""INSERT INTO source(uid,file,format,bytes,sha256,origin,batch,primary_src)
                            VALUES(?,?,?,?,?,'zlib',?,?)""",
-                        (uid, "库/" + os.path.normpath(os.path.join(rel, s["file"])),
+                        (uid, L.source_rel(owner, os.path.basename(s["file"])),
                          s.get("format", ""), int(s.get("bytes") or 0), s.get("sha256", ""),
                          "导入", 1 if i == 0 else 0))
         for a in awards:
@@ -177,7 +176,7 @@ def build_from_library(books, emit_json=False):
             chapters, bytes_ = L.count_md_dir(md_dir)
             method = man.get("method") or "ebook-to-md"
             primary = man.get("source_sha256") or (sources[0].get("sha256", "") if sources else "")
-            manifest = ("库/" + os.path.join(rel, "md", ".manifest.json")
+            manifest = (L.store_path(L.md_rel(uid), ".manifest.json")
                         if os.path.isfile(os.path.join(md_dir, ".manifest.json")) else "")
             con.execute("""INSERT OR REPLACE INTO derived(uid,kind,status,method,tool_version,
                            source_sha256,chapters,bytes,generated_at,manifest)
@@ -187,7 +186,7 @@ def build_from_library(books, emit_json=False):
             con.execute("INSERT INTO job(uid,kind,status,actor,batch,tool,source_sha256,evidence)"
                         " VALUES(?,'md','done',?,'导入',?,?,?)",
                         (uid, method, method, primary,
-                         manifest or ("库/" + os.path.join(rel, "md"))))
+                         manifest or L.md_rel(uid)))
         if os.path.isdir(html_dir):
             con.execute("""INSERT OR REPLACE INTO derived(uid,kind,status,method,chapters,bytes)
                            VALUES(?,'html','done','chapter-html-versions',?,0)""",
@@ -203,99 +202,31 @@ def build_from_library(books, emit_json=False):
     return finalize(con, t0, emit_json)
 
 
-# ---------------------------------------------------------------- 清单模式（L3 之前）
-def build_from_inventory(emit_json=False):
-    ledger = L.read_csv(os.path.join(L.CAT, "分类表.csv"))
-    inv = {r["uid"]: r for r in L.read_csv(os.path.join(L.CAT, "书目录清单.csv"))}
-    awards_csv = L.read_csv(os.path.join(L.WORK, "批次", "奖项下载-2026-10-18", "下载结果总表.csv"))
-    if not awards_csv:
-        awards_csv = L.read_csv(os.path.join(L.ROOT, "获奖名单与进度", "下载结果总表.csv"))
-    award_rows = defaultdict(list)
-    for r in awards_csv:
-        if r.get("状态", "").startswith("✅"):
-            award_rows[r.get("奖项", "")].append(r)
-
-    t0 = time.time()
-    con = fresh_db()
-
-    n_src = 0
-    for r in ledger:
-        uid = r["uid"]
-        m = inv.get(uid, {})
-        path = L.book_relpath(r, m)
-        state = "active" if os.path.isdir(os.path.join(L.LIB, path)) else "proposed"
-        con.execute("""INSERT INTO book(uid,title,title_from_file,author,subject1,subject2,path,
-                       path_state,series,volume,container,html_pages,retention,notes)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (uid, r["正式书名"],
-                     m.get("title_clean") or L.clean_title(
-                         os.path.basename(str(m.get("src_path") or ""))),
-                     m.get("作者", ""),
-                     r["一级"], r["二级"], path, state, m.get("系列", ""), m.get("卷序", ""),
-                     m.get("容器", ""), int(re.sub(r"\D", "", str(m.get("html_book") or "")) or 0),
-                     r["保留"] or "keep", r["备注"]))
-        srcs = [m.get("src_path", "")]
-        extra = (m.get("额外源") or "").strip()
-        if extra:
-            # 机器字段，JSON 数组。文件名里可能含「；」，不能用它当分隔符。
-            parsed = json.loads(extra)
-            if not isinstance(parsed, list):
-                raise SystemExit("额外源 不是 JSON 数组: %r" % extra[:80])
-            srcs += [str(x) for x in parsed]
-        for i, sp in enumerate([s for s in srcs if s]):
-            con.execute("""INSERT INTO source(uid,file,format,bytes,sha256,origin,batch,primary_src)
-                           VALUES(?,?,?,?,?,?,?,?)""",
-                        (uid, sp, m.get("format", ""), int(m.get("bytes") or 0),
-                         m.get("sha256", ""), "zlib", m.get("award", ""), 1 if i == 0 else 0))
-            n_src += 1
-        for aw in [a for a in (m.get("备注", "") or "").split("；") if a.startswith("奖项:")]:
-            name = aw.split(":", 1)[1]
-            rec = next((x for x in award_rows.get(name, []) if x.get("下载书名", "") ==
-                        os.path.basename(m.get("src_path", ""))), None)
-            con.execute("INSERT INTO book_award(uid,award,year,edition,result) VALUES(?,?,?,?,?)",
-                        (uid, name, (rec or {}).get("年份", ""), (rec or {}).get("届数", ""),
-                         (rec or {}).get("状态", "已在盘")))
-        if m.get("md_dir"):
-            con.execute("""INSERT OR REPLACE INTO derived(uid,kind,status,method,tool_version,
-                           source_sha256,chapters,bytes,generated_at,manifest)
-                           VALUES(?,'md','done','ebook-to-md','',?,?,?,?,'')""",
-                        (uid, m.get("sha256", ""), int(m.get("md_chapters") or 0),
-                         int(m.get("md_bytes") or 0), ""))
-            con.execute("INSERT INTO job(uid,kind,status,actor,batch,tool,source_sha256,evidence)"
-                        " VALUES(?,'md','done','ebook-to-md','导入','ebook-to-md',?,?)",
-                        (uid, m.get("sha256", ""), "书md/" + m["md_dir"]))
-        if m.get("html_book"):
-            con.execute("""INSERT OR REPLACE INTO derived(uid,kind,status,method,chapters,bytes)
-                           VALUES(?,'html','done','chapter-html-versions',?,0)""",
-                        (uid, int(re.sub(r"\D", "", str(m["html_book"])) or 0)))
-    for name in sorted({a for a in award_rows}):
-        con.execute("INSERT OR REPLACE INTO award(name,books) VALUES(?,?)",
-                    (name, len({r.get("下载书名", "") for r in award_rows[name]})))
-    con.commit()
-    return finalize(con, t0, emit_json)
-
-
 def emit_book_json(con):
     """给已落地的书写 book.json。book.json 是投影，唯一写入者就是这个函数。"""
     con.row_factory = sqlite3.Row
     written = 0
     for b in con.execute("SELECT * FROM book WHERE path_state='active'"):
-        dest = os.path.join(L.LIB, b["path"])
+        dest = os.path.join(L.BOOKS, b["uid"])
         if not os.path.isdir(dest):
             continue
         srcs = []
         for s in con.execute(
                 "SELECT file,format,bytes,sha256,primary_src FROM source WHERE uid=?", (b["uid"],)):
-            f = s["file"] or ""
-            if f.startswith("库/"):
-                # 共用源（合集）在容器目录里，书内相对路径可能是 ../source/x
-                f = os.path.relpath(f[len("库/"):], b["path"])
-            srcs.append({"file": f, "format": s["format"], "bytes": s["bytes"],
-                         "sha256": s["sha256"], "primary_src": s["primary_src"]})
+            parts = (s["file"] or "").split("/")
+            shared = len(parts) == 4 and parts[0] == "collections"
+            entry = {"format": s["format"], "bytes": s["bytes"],
+                     "sha256": s["sha256"], "primary_src": s["primary_src"]}
+            if shared:
+                entry["collection"] = parts[1]
+                entry["file"] = parts[3]
+            else:
+                entry["file"] = "source/" + parts[-1]
+            srcs.append(entry)
         awards = [dict(a) for a in con.execute(
             "SELECT award,year,edition,result FROM book_award WHERE uid=?", (b["uid"],))]
         doc = L.book_doc(b["uid"], b["title"], b["title_from_file"], b["author"],
-                         [b["subject1"], b["subject2"]], b["path"], b["series"], b["volume"],
+                         [b["subject1"], b["subject2"]], b["series"], b["volume"],
                          b["container"], b["retention"], b["notes"], srcs, awards)
         L.write_json_atomic(os.path.join(dest, "book.json"), doc)
         written += 1

@@ -52,7 +52,7 @@ def shingles(text, n=5):
 
 
 def sources():
-    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.CAT, "library.db"), uri=True)
+    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.TABLES, "library.db"), uri=True)
     return {r[0]: r[1] for r in con.execute(
         "SELECT uid, file FROM source WHERE primary_src=1")}
 
@@ -96,7 +96,7 @@ def main():
         raise SystemExit("用法: md_review_report.py <批次名> [uid ...] [--json out]")
     batch = os.path.join(L.WORK, "批次", argv[0])
     only = set(argv[1:]) or None
-    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.CAT, "library.db"), uri=True)
+    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.TABLES, "library.db"), uri=True)
     con.row_factory = sqlite3.Row
     out, skipped, no_src = [], collections.Counter(), []
     for name in sorted(os.listdir(os.path.join(batch, "logs"))):

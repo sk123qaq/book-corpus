@@ -204,7 +204,7 @@ def main():
     ap.add_argument("--no-hash", action="store_true")
     args = ap.parse_args()
 
-    old = L.read_csv(os.path.join(L.CAT, "书目录清单.csv"))
+    old = L.read_csv(os.path.join(L.TABLES, "书目录清单.csv"))
     old_by_key = {}
     for r in old:
         old_by_key[(r.get("sha256") or r.get("src_path"), r.get("md_dir") or r.get("正式书名"))] = r["uid"]
@@ -224,7 +224,7 @@ def main():
     series_docs = scan_series_docs()
     if not md_meta and not series_docs:
         print("警告：书md/ 与 系列/ 都没扫到，md_dir 与 系列列会全空")
-    if os.path.isfile(os.path.join(L.CAT, "路径冲突.csv")):
+    if os.path.isfile(os.path.join(L.TABLES, "路径冲突.csv")):
         print("警告：将覆盖已有的 路径冲突.csv（旧 schema），L2 后的人工结论请先另存")
     records = build_records(sources, by_src, md_meta, series_docs)
     assign_uids(records, old_by_key, next_uid)
@@ -262,25 +262,25 @@ def main():
     if len(order) != len(rows):
         print("同一本书多份源合并 %d 行" % (len(rows) - len(order)))
     rows = order
-    L.write_csv(os.path.join(L.CAT, "源文件清单.csv"), [
+    L.write_csv(os.path.join(L.TABLES, "源文件清单.csv"), [
         {"src_path": s["src_path"], "file": s["file"], "format": s["format"], "bytes": s["bytes"],
          "sha256": s["sha256"], "award": s["award"], "pool": s["pool"], "卷数": len(by_src.get(s["file"], [])),
          "title_clean": s["title_clean"], "author_guess": s["author_guess"], "损坏原因": s["损坏原因"],
          "一级预填": s["一级"], "二级预填": s["二级"]} for s in sources],
         ["src_path", "file", "format", "bytes", "sha256", "award", "pool", "卷数", "title_clean",
          "author_guess", "损坏原因", "一级预填", "二级预填"])
-    L.write_csv(os.path.join(L.CAT, "书目录清单.csv"), rows, BOOK_HEADER)
-    L.write_csv(os.path.join(L.CAT, "分类预填.csv"), rows, L.LEDGER_HEADER + ["预填依据"])
+    L.write_csv(os.path.join(L.TABLES, "书目录清单.csv"), rows, BOOK_HEADER)
+    L.write_csv(os.path.join(L.TABLES, "分类预填.csv"), rows, L.LEDGER_HEADER + ["预填依据"])
 
     dup = defaultdict(list)
     for s in sources:
         if s["sha256"]:
             dup[s["sha256"]].append(s)
-    L.write_csv(os.path.join(L.CAT, "重复.csv"), [
+    L.write_csv(os.path.join(L.TABLES, "重复.csv"), [
         {"sha256": h[:16], "文件数": len(v),
          "src_path": json.dumps([x["src_path"] for x in v], ensure_ascii=False)}
         for h, v in dup.items() if len(v) > 1], ["sha256", "文件数", "src_path"])
-    L.write_csv(os.path.join(L.CAT, "损坏.csv"), [
+    L.write_csv(os.path.join(L.TABLES, "损坏.csv"), [
         {"src_path": s["src_path"], "format": s["format"], "bytes": s["bytes"],
          "原因": s["损坏原因"]} for s in sources if s["损坏原因"]],
         ["src_path", "format", "bytes", "原因"])
@@ -301,7 +301,7 @@ def main():
                               "md_dir": r["md_dir"], "sha256前16": (r["sha256"] or "")[:16],
                               "处置": "同源重复，保留第一个 uid，其余记入 重复.csv" if len(hashes) == 1
                               else "不同源同名，正式书名加限定词"})
-    L.write_csv(os.path.join(L.CAT, "路径冲突.csv"), conflicts,
+    L.write_csv(os.path.join(L.TABLES, "路径冲突.csv"), conflicts,
                 ["提议路径", "uid", "src_path", "md_dir", "sha256前16", "处置"])
 
     print("源文件 %d 个，书记录 %d 条（合集 %d 个源拆出 %d 卷）"

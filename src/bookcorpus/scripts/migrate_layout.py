@@ -21,10 +21,10 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
-PLAN = os.path.join(L.CAT, "搬迁计划.csv")
-MAP = os.path.join(L.CAT, "对照表.csv")
+PLAN = os.path.join(L.TABLES, "搬迁计划.csv")
+MAP = os.path.join(L.TABLES, "对照表.csv")
 PLAN_HEADER = ["序号", "阶段", "uid", "类别", "旧路径", "新路径", "备注"]
-DB_URI = "file:" + os.path.join(L.CAT, "library.db") + "?mode=ro"
+DB_URI = "file:" + os.path.join(L.TABLES, "library.db") + "?mode=ro"
 BATCH = os.path.join("工作区", "批次", "奖项下载-2026-10-18")
 DISCARD = os.path.join("工作区", "废弃")
 OLD_TOP = ["原书", "原书pdf", "建筑", "漫画与动画", "人文社科", "文学", "写作与编剧",
@@ -34,8 +34,8 @@ OLD_TOP = ["原书", "原书pdf", "建筑", "漫画与动画", "人文社科", "
 
 def collect_plan():
     """(rows, meta)。所有路径相对 ROOT；阶段 1 的目录搬完后，阶段 2 的旧路径才成立。"""
-    ledger = L.read_csv(os.path.join(L.CAT, "分类表.csv"))
-    inv = {r["uid"]: r for r in L.read_csv(os.path.join(L.CAT, "书目录清单.csv"))}
+    ledger = L.read_csv(os.path.join(L.TABLES, "分类表.csv"))
+    inv = {r["uid"]: r for r in L.read_csv(os.path.join(L.TABLES, "书目录清单.csv"))}
     rows, meta = [], {"kinds": defaultdict(int)}
 
     def lsdir(relpath):
@@ -170,13 +170,13 @@ def pre_move(path, rows):
 
 def verify_plan(rows):
     bad = []
-    src_rows = {r["src_path"] for r in L.read_csv(os.path.join(L.CAT, "源文件清单.csv"))}
+    src_rows = {r["src_path"] for r in L.read_csv(os.path.join(L.TABLES, "源文件清单.csv"))}
     planned_src = {r["旧路径"] for r in rows if r["类别"] in ("源文件", "重复源")}
     if src_rows != planned_src:
         bad.append("源文件账对不上：清单 %d，计划 %d，缺 %s，多 %s"
                    % (len(src_rows), len(planned_src),
                       sorted(src_rows - planned_src)[:3], sorted(planned_src - src_rows)[:3]))
-    inv = L.read_csv(os.path.join(L.CAT, "书目录清单.csv"))
+    inv = L.read_csv(os.path.join(L.TABLES, "书目录清单.csv"))
     want_md = sum(1 for r in inv if r.get("md_dir"))
     got_md = sum(1 for r in rows if r["类别"] == "md")
     if want_md != got_md:
@@ -197,7 +197,7 @@ def verify_plan(rows):
             bad.append("跨设备: " + old)
         if os.path.exists(os.path.join(L.ROOT, r["新路径"])):
             bad.append("目标已存在: " + r["新路径"])
-    if os.path.exists(os.path.join(L.LIB, "book.json")):
+    if os.path.exists(os.path.join(L.BOOKS, "book.json")):
         bad.append("库/ 里已经有 book.json，先确认是不是已经搬过")
     if bad:
         print("计划校验不过：")
@@ -214,7 +214,7 @@ def write_plan(rows, meta):
         print("   %-12s %d" % (k, meta["kinds"][k]))
     print("校验通过：源 %d 个路径对清单 %d 条，目标无重复、无已存在，同一设备，OCR 书 %s"
           % (sum(1 for r in rows if r["类别"] in ("源文件", "重复源")),
-             len(L.read_csv(os.path.join(L.CAT, "源文件清单.csv"))),
+             len(L.read_csv(os.path.join(L.TABLES, "源文件清单.csv"))),
              ",".join(meta["ocr_uids"])))
 
 
@@ -251,7 +251,7 @@ def write_map():
 
 def db_awards():
     aw = defaultdict(list)
-    if not os.path.isfile(os.path.join(L.CAT, "library.db")):
+    if not os.path.isfile(os.path.join(L.TABLES, "library.db")):
         return aw
     con = sqlite3.connect(DB_URI, uri=True)
     for uid, award, year, edition, result in con.execute(
@@ -264,8 +264,8 @@ def db_awards():
 
 def write_book_jsons(rows):
     """给每本书写 book.json。源用书内相对路径（合集共享源会是 ../source/x）。"""
-    ledger = {r["uid"]: r for r in L.read_csv(os.path.join(L.CAT, "分类表.csv"))}
-    inv = {r["uid"]: r for r in L.read_csv(os.path.join(L.CAT, "书目录清单.csv"))}
+    ledger = {r["uid"]: r for r in L.read_csv(os.path.join(L.TABLES, "分类表.csv"))}
+    inv = {r["uid"]: r for r in L.read_csv(os.path.join(L.TABLES, "书目录清单.csv"))}
     ocr_uids = {r["uid"] for r in rows if r["类别"] == "ocr_md"}
     src_dir = {r["旧路径"]: r["新路径"] for r in rows if r["类别"] == "源文件"}
     awards_db = db_awards()
@@ -275,7 +275,7 @@ def write_book_jsons(rows):
         if not m:
             raise SystemExit("人账里的 %s 不在机器清单里" % uid)
         rel = L.book_relpath(led, m)
-        bdir = os.path.join(L.LIB, rel)
+        bdir = os.path.join(L.BOOKS, rel)
         if not os.path.isdir(bdir):
             raise SystemExit("书目录不存在: %s (%s)" % (bdir, uid))
         src_new = src_dir.get(m.get("src_path", ""))
@@ -311,7 +311,7 @@ def write_book_jsons(rows):
 
 def write_manifests():
     """只给 OCR 产物写 .manifest.json（低可信度必须可辨）；其余 md 默认 ebook-to-md。"""
-    inv = {r["uid"]: r for r in L.read_csv(os.path.join(L.CAT, "书目录清单.csv"))}
+    inv = {r["uid"]: r for r in L.read_csv(os.path.join(L.TABLES, "书目录清单.csv"))}
     n = 0
     for row in read_plan():
         if row["类别"] != "ocr_md":
@@ -331,7 +331,7 @@ def write_manifests():
 
 def build_views():
     """视图/奖项/<奖项>/<书名> -> 库/<path> 软链。"""
-    if not os.path.isfile(os.path.join(L.CAT, "library.db")):
+    if not os.path.isfile(os.path.join(L.TABLES, "library.db")):
         raise SystemExit("先建库再建视图")
     con = sqlite3.connect(DB_URI, uri=True)
     awards = defaultdict(list)
@@ -397,7 +397,7 @@ def do_apply():
         print("警告：%d 个旧目录 rmdir 失败（前 3 个）: %s" % (len(failed), failed[:3]))
     write_manifests()
     write_book_jsons(rows)
-    os.makedirs(os.path.join(L.LIB, "_收件箱"), exist_ok=True)
+    os.makedirs(os.path.join(L.BOOKS, "_收件箱"), exist_ok=True)
     rebuild_db()
     build_views()
     print("L3 执行完毕")
@@ -412,7 +412,7 @@ def do_reverse():
     keep = os.path.join(L.ROOT, "工作区", "中间态",
                         "reverse-trash-%s" % datetime.datetime.now().strftime("%Y%m%dT%H%M%S"))
     moved = 0
-    for dirpath, _dirs, files in os.walk(L.LIB, topdown=False):
+    for dirpath, _dirs, files in os.walk(L.BOOKS, topdown=False):
         for fn in files:
             if fn in ("book.json", ".manifest.json"):
                 src = os.path.join(dirpath, fn)
@@ -424,8 +424,8 @@ def do_reverse():
         print("--reverse 前把 %d 份 book.json/.manifest.json 移到 %s"
               % (moved, os.path.relpath(keep, L.ROOT)))
     failed = []
-    for dirpath, _dirs, _files in os.walk(L.LIB, topdown=False):
-        if dirpath != L.LIB:
+    for dirpath, _dirs, _files in os.walk(L.BOOKS, topdown=False):
+        if dirpath != L.BOOKS:
             try:
                 os.rmdir(dirpath)
             except OSError as e:

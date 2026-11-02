@@ -465,7 +465,7 @@ def gold_rows(path=GOLD):
     for r in rows:
         books = r["target_book"].split("|")
         chaps = set(r["target_chapters"].split("|"))
-        per_book = {b: {c for c in chaps if c.startswith("库/%s/" % b)} for b in books}
+        per_book = {b: {c for c in chaps if c.startswith("books/%s/" % b)} for b in books}
         out.append({"qid": r["qid"], "stratum": r["stratum"], "question": r["question"],
                     "terms": [t.strip() for t in r["terms"].split(",") if t.strip()],
                     "books": books, "chaps": chaps, "per_book": per_book})

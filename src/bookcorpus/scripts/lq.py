@@ -42,7 +42,7 @@ def main():
     sql = args.sql or sys.stdin.read()
     if not sql.strip():
         raise SystemExit("没有 SQL（放参数里或从标准输入读）")
-    db = os.path.join(L.CAT, "library.db")
+    db = L.PATHS.library_db
     if not os.path.isfile(db):
         raise SystemExit("没有 %s，先跑 build_library.py" % db)
     con = sqlite3.connect("file:" + db + "?mode=ro", uri=True)

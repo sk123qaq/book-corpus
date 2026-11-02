@@ -8,36 +8,42 @@ import re
 import shutil
 import unicodedata
 
+try:
+    from .layout import Layout, find_root
+    from .layout import SCHEMA  # noqa: F401
+    from .layout import RESERVED  # noqa: F401
+except ImportError:
+    from layout import Layout, find_root
+    from layout import SCHEMA  # noqa: F401
+    from layout import RESERVED  # noqa: F401
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = HERE
 
 
-def find_root(start=None):
-    """工作区根。BOOKS_ROOT 优先，其次从 cwd 向上找 books.toml 或 目录/分类表.csv。
-
-    安装后 HERE 在 site-packages 里，不能再拿它推根，不然会往安装目录写。
-    """
-    env = os.environ.get("BOOKS_ROOT")
-    if env:
-        return os.path.abspath(os.path.expanduser(env))
-    cur = os.path.abspath(start or os.getcwd())
-    while True:
-        if (os.path.exists(os.path.join(cur, "books.toml"))
-                or os.path.exists(os.path.join(cur, "目录", "分类表.csv"))):
-            return cur
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            return os.path.abspath(start or os.getcwd())
-        cur = parent
-
-
-ROOT = find_root()
-LIB = os.path.join(ROOT, "库")
-CAT = os.path.join(ROOT, "目录")
-WORK = os.path.join(ROOT, "工作区")
-BASELINE = os.path.join(WORK, "中间态", "基线")
+ROOT = find_root() or os.path.abspath(os.getcwd())
+PATHS = Layout(ROOT)
+BOOKS = PATHS.books
+COLLECTIONS = PATHS.collections
+TABLES = PATHS.tables
+BUILD = PATHS.build
+WORK = PATHS.work
 SKILLS = os.environ.get("BOOKS_SKILLS_DIR") or os.path.join(ROOT, ".agents", "skills")
 RG = os.environ.get("BOOKS_RG") or shutil.which("rg") or "rg"
+
+
+def store_path(*parts):
+    """落进 db 与索引的根相对路径。一律正斜杠，v2 下以 books/ 或 collections/ 开头。"""
+    return "/".join(p.strip("/") for p in parts if p)
+
+
+def md_rel(uid):
+    return "books/%s/md" % uid
+
+
+def source_rel(owner, name):
+    """源文件的根相对路径。owner 是书的 uid 或合集的 cuid。"""
+    return store_path("collections" if owner.startswith("C") else "books", owner, "source", name)
 
 
 def skill_dir(name):
@@ -327,43 +333,37 @@ def path_safe(s):
     return re.sub(r"[\\/:*?\"<>|\n\t]", "／", (s or "").strip()).strip(" .")
 
 
-def book_relpath(led, inv):
-    """书在 库/ 下的相对路径。人账给学科与作者层，机器清单给作者名、容器与正式书名。"""
-    parts = [led["一级"], led["二级"]]
-    if led.get("作者层") == "1" and (inv or {}).get("作者"):
-        parts.append(path_safe(inv["作者"]))
-    if (inv or {}).get("容器"):
-        parts.append(path_safe(inv["容器"]))
-    parts.append(path_safe(led["正式书名"]))
-    return os.path.join(*parts)
+def book_key(uid):
+    """书在 books/ 下的目录名。v2 就是 uid，不再由学科与书名拼出来。"""
+    return uid
 
 
 def iter_book_json():
-    """库/**/book.json -> [(库下相对目录, doc)]。_ 开头的目录不算书（_收件箱、_冷宫）。"""
+    """books/**/book.json -> [(uid, doc)]。下划线开头的目录不算书。"""
     out = []
-    if not os.path.isdir(LIB):
+    if not os.path.isdir(BOOKS):
         return out
-    for dirpath, _dirnames, filenames in os.walk(LIB):
+    for dirpath, dirnames, filenames in os.walk(BOOKS):
+        if dirpath == BOOKS:
+            dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if "book.json" not in filenames:
             continue
-        rel = os.path.relpath(dirpath, LIB)
-        if rel.split(os.sep)[0].startswith("_"):
-            continue
+        uid = os.path.basename(dirpath)
         try:
             with open(os.path.join(dirpath, "book.json"), encoding="utf-8") as fh:
-                out.append((rel, json.load(fh)))
+                out.append((uid, json.load(fh)))
         except (OSError, json.JSONDecodeError) as e:
             raise SystemExit("book.json 读不了: %s (%s)" % (os.path.join(dirpath, "book.json"), e))
     out.sort(key=lambda x: x[0])
     return out
 
 
-def book_doc(uid, title, title_from_file, author, subjects, path, series, volume, container,
+def book_doc(uid, title, title_from_file, author, subjects, series, volume, container,
              retention, notes, sources, awards, derived=None):
     """book.json 的唯一形状。derived 是磁盘状态，只在迁移脚本里显式写入。"""
     doc = {
         "uid": uid, "title": title, "title_from_file": title_from_file,
-        "author": author or "", "subjects": [x for x in (subjects or []) if x], "path": path,
+        "author": author or "", "subjects": [x for x in (subjects or []) if x],
         "series": series or None, "volume": volume or None, "container": container or None,
         "retention": retention or "keep",
         "sources": sources, "awards": awards, "notes": notes or "",

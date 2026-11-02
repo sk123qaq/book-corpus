@@ -28,12 +28,23 @@ ALIASES = {
     "stats": "corpus_stats",
 }
 
+# 这些脚本还按旧布局拼路径（库/ 目录/ 视图/）。在 v2 树上跑会静默指错地方，
+# 所以先拒跑，转完一个从这套里删一个。
+LEGACY = {
+    "audit_state", "migrate_layout", "ops_pdf_triage", "paddleocr_pilot",
+    "pdf_census", "retire_book",
+}
+
 HELP = """book-corpus <命令> [参数...]
 
 工作区
   init <目录> [--force]   建一个空工作区
   doctor [--json]         体检工作区
   list                    列出脚本与别名
+
+迁移
+  migrate [--apply]       把 v1 布局（库/ 目录/ 视图/）搬成 v2（books/ collections/ tables/ build/）
+                          --dest <目录> 落到新树，--mode move|link|copy，--out <目录> 写对照表
 
 跑脚本
   run <脚本> [参数...]    scripts/ 下任一脚本，例如 run scan_library --help
@@ -53,6 +64,9 @@ def script_path(name):
 
 def run_script(name, argv, root):
     path = script_path(name)
+    base = name[:-3] if name.endswith(".py") else name
+    if base in LEGACY:
+        raise SystemExit("%s 还没转到 v2 布局，先别在 v2 树上跑。见阶段 3 的剩余清单。" % base)
     os.environ["BOOKS_ROOT"] = root
     if SCRIPTS_DIR not in sys.path:
         sys.path.insert(0, SCRIPTS_DIR)
@@ -83,7 +97,7 @@ def cmd_init(target, force):
     path = workspace.init(target, __version__, force)
     print("工作区建好：%s" % path)
     print("概念表带 126 条通用概念，按自己的语料增删；--concept 只认表里的键。")
-    print("下一步：把书放进 %s/库/_收件箱，然后 cd 进去跑 book-corpus ingest scan" % path)
+    print("下一步：把书放进 %s/books/_收件箱，然后 cd 进去跑 book-corpus ingest scan" % path)
     return 0
 
 
@@ -99,6 +113,41 @@ def cmd_doctor(root, as_json):
     return 1 if any(lv == "fail" for lv, _lb, _d in rows) else 0
 
 
+def cmd_migrate(root, rest):
+    from . import migrate
+    dest = None
+    mode = None
+    out = "."
+    i = 0
+    while i < len(rest):
+        arg = rest[i]
+        if arg == "--dest" and i + 1 < len(rest):
+            dest = rest[i + 1]
+            i += 2
+            continue
+        if arg == "--mode" and i + 1 < len(rest):
+            mode = rest[i + 1]
+            i += 2
+            continue
+        if arg == "--out" and i + 1 < len(rest):
+            out = rest[i + 1]
+            i += 2
+            continue
+        i += 1
+    apply_it = "--apply" in rest
+    if mode not in (None, "move", "link", "copy"):
+        raise SystemExit("--mode 只认 move、link、copy")
+    root = workspace.resolve(root)
+    chosen = mode or ("move" if (dest or root) == root else "link")
+    code, lines = migrate.run(root, dest or root, chosen, apply_it, out, __version__)
+    for line in lines:
+        print(line)
+    if code == 0 and not apply_it:
+        print("")
+        print("没落盘。加 --apply 才动。")
+    return code
+
+
 def cmd_list():
     names = sorted(m.name for m in pkgutil.iter_modules([SCRIPTS_DIR]) if m.name != "lib_common")
     alias_of = {v: k for k, v in ALIASES.items()}
@@ -109,7 +158,8 @@ def cmd_list():
         except SyntaxError:
             doc = ""
         first = doc.strip().splitlines()[0] if doc.strip() else ""
-        print("%-24s %-10s %s" % (name, alias_of.get(name, ""), first[:70]))
+        mark = " 未转 v2" if name in LEGACY else ""
+        print("%-24s %-10s %s%s" % (name, alias_of.get(name, ""), first[:70], mark))
     return 0
 
 
@@ -133,6 +183,8 @@ def main(argv=None):
         return cmd_doctor(workspace.resolve(explicit_root), "--json" in rest)
     if cmd == "list":
         return cmd_list()
+    if cmd == "migrate":
+        return cmd_migrate(explicit_root, rest)
     if cmd == "run":
         if not rest:
             raise SystemExit("run 要脚本名：book-corpus run <脚本> [参数...]")

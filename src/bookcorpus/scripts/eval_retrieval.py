@@ -83,14 +83,14 @@ def grep_expanded(patterns, excludes):
 
 
 def defpass_files(terms, aliases):
-    cmd = [sys.executable, DEFPASS, "库", "-g", ",".join(terms), "-g", ",".join(aliases), "-n", "500"]
+    cmd = [sys.executable, DEFPASS, "books", "-g", ",".join(terms), "-g", ",".join(aliases), "-n", "500"]
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env())
     seen, order = set(), []
     for line in out.stdout.splitlines():
         m = re.match(r"^\[[^\]]+\]\s+(.+?):(\d+)$", line)
         if not m:
             continue
-        path = "库/" + m.group(1)
+        path = "books/" + m.group(1)
         if path not in seen:
             seen.add(path)
             order.append(path)

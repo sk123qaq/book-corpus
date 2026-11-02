@@ -34,7 +34,7 @@ import lib_common as L  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 PILOT = os.path.join(HERE, "paddleocr_pilot.py")
 VENV_PY = os.path.join(L.WORK, ".venv-pdf", "bin", "python")
-DB = os.path.join(L.CAT, "library.db")
+DB = os.path.join(L.TABLES, "library.db")
 
 KANA = re.compile(r"[\u3040-\u309f\u30a0-\u30ff]")
 HAN = re.compile(r"[\u4e00-\u9fff]")

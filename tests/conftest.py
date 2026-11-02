@@ -22,9 +22,33 @@ def run_cli(*args, cwd=None, env=None):
                           capture_output=True, text=True, cwd=cwd, env=full_env)
 
 
-def write_book(root, uid, subject, title, paragraphs=None, fmt="epub", sha=None):
-    rel = os.path.join(subject, title)
-    bdir = os.path.join(root, "库", rel)
+def _source_entry(uid, title, fmt, sha, collection, collection_file):
+    entry = {
+        "format": fmt,
+        "bytes": 100,
+        "sha256": sha or ("%064x" % int(uid[1:])),
+        "primary_src": 1,
+    }
+    if collection:
+        entry["collection"] = collection
+        entry["file"] = collection_file
+    else:
+        entry["file"] = "source/%s.%s" % (title, fmt)
+    return entry
+
+
+def write_collection(root, cuid, name):
+    target = os.path.join(root, "collections", cuid, "source")
+    os.makedirs(target, exist_ok=True)
+    with open(os.path.join(target, name), "wb") as f:
+        f.write(b"c" * 100)
+    return cuid
+
+
+def write_book(root, uid, subject, title, paragraphs=None, fmt="epub", sha=None,
+               collection=None, collection_file=None):
+    rel = uid
+    bdir = os.path.join(root, "books", uid)
     os.makedirs(os.path.join(bdir, "source"), exist_ok=True)
     if paragraphs:
         md = os.path.join(bdir, "md")
@@ -38,18 +62,11 @@ def write_book(root, uid, subject, title, paragraphs=None, fmt="epub", sha=None)
         "title_from_file": "",
         "author": "某人",
         "subjects": [subject],
-        "path": rel,
         "series": None,
         "volume": None,
         "container": None,
         "retention": "keep",
-        "sources": [{
-            "file": "source/%s.%s" % (title, fmt),
-            "format": fmt,
-            "bytes": 100,
-            "sha256": sha or ("%064x" % int(uid[1:])),
-            "primary_src": 1,
-        }],
+        "sources": [_source_entry(uid, title, fmt, sha, collection, collection_file)],
         "awards": [],
         "notes": "",
     }
@@ -59,7 +76,7 @@ def write_book(root, uid, subject, title, paragraphs=None, fmt="epub", sha=None)
 
 
 def write_ledger(root, rows):
-    path = os.path.join(root, "目录", "分类表.csv")
+    path = os.path.join(root, "tables", "分类表.csv")
     with open(path, "a", encoding="utf-8") as f:
         for uid, subject, title, note in rows:
             f.write("%s,%s,,0,keep,%s,%s\n" % (uid, subject, title, note))

@@ -10,7 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lib_common as L  # noqa: E402
 
-TABLE = os.path.join(L.CAT, "概念表.tsv")
+TABLE = os.path.join(L.TABLES, "概念表.tsv")
 RG = L.RG
 
 
@@ -36,7 +36,7 @@ def count_files(terms):
     cmd = [RG, "-l", "-F", "-g", "*.md", "-g", "!README.md"]
     for t in terms:
         cmd += ["-e", t]
-    cmd.append(L.LIB)
+    cmd.append(L.BOOKS)
     env = dict(os.environ)
     rg_dir = os.path.dirname(RG)
     if rg_dir:

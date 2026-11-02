@@ -18,7 +18,7 @@ WATCH = ("序言", "自序", "前言", "后记", "导读", "结语")
 
 
 def md_dirs():
-    for dp, dn, fn in os.walk(L.LIB):
+    for dp, dn, fn in os.walk(L.BOOKS):
         if os.path.basename(dp) == "md":
             yield dp, fn
 
@@ -42,7 +42,7 @@ def main():
                 p = os.path.join(img, f)
                 if os.path.isfile(p):
                     image_bytes += os.path.getsize(p)
-        long_books.append((len(mds), os.path.relpath(os.path.dirname(dp), L.LIB),
+        long_books.append((len(mds), os.path.relpath(os.path.dirname(dp), L.BOOKS),
                            sum(os.path.getsize(os.path.join(dp, f)) for f in mds)))
         rp = os.path.join(dp, "README.md")
         if not os.path.isfile(rp):
@@ -81,7 +81,7 @@ def main():
     for n, rel, b in long_books[:14]:
         print("   %-40.40s %5d 章  %6.1f MB" % (rel, n, b / MB))
 
-    con = sqlite3.connect("file:" + os.path.join(L.CAT, "library.db") + "?mode=ro", uri=True)
+    con = sqlite3.connect("file:" + L.PATHS.library_db + "?mode=ro", uri=True)
     books = con.execute("SELECT count(*) FROM book").fetchone()[0]
     rows = con.execute(
         "SELECT series, count(*) FROM book "

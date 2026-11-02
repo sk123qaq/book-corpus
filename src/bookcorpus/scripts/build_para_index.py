@@ -11,14 +11,14 @@ import argparse, os, sqlite3, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import PATHS, ROOT  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 from defpass import paragraphs
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-CONCEPTS = os.path.join(ROOT, "目录", "概念表.tsv")
-CORPUS = os.path.join(ROOT, "库")
+DB = PATHS.index_db
+CONCEPTS = PATHS.concepts
+CORPUS = PATHS.books
 SNAP = os.path.join(ROOT, "工作区", "中间态", "index-expand-snapshot.db")
 EXPAND_COLS = ("rowid", "path", "kind", "tok", "text", "model", "prompt_hash",
                "tokens_in", "tokens_out", "built_at")

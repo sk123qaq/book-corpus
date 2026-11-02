@@ -617,7 +617,7 @@ def main():
            "fix_sessions": os.path.join(batch_path, "fix-sessions"),
            "stamp": now().replace(":", "").replace("+", "-"), "tool_version": tool_version()}
 
-    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.CAT, "library.db"), uri=True)
+    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(L.TABLES, "library.db"), uri=True)
     con.row_factory = sqlite3.Row
 
     if a.report:

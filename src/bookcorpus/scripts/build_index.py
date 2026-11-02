@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
-TOP_INDEX = os.path.join(L.CAT, "阅读版索引.html")
+TOP_INDEX = L.PATHS.reading_index
 DATE = datetime.date.today().isoformat()
 
 # 现有两本书的手写文案；其余书由 book.json 生成通用文案
@@ -42,12 +42,12 @@ THEME_NAME = {
 
 
 def iter_html_books():
-    """库/**/html 目录。返回 [(书相对 库/ 的路径, book.json 文档, html 目录绝对路径)]。"""
+    """books/**/html 目录。返回 [(uid, book.json 文档, html 目录绝对路径)]。"""
     out = []
-    for dirpath, dirnames, _files in os.walk(L.LIB):
+    for dirpath, dirnames, _files in os.walk(L.BOOKS):
         if "html" not in dirnames:
             continue
-        rel = os.path.relpath(dirpath, L.LIB)
+        rel = os.path.relpath(dirpath, L.BOOKS)
         if rel.split(os.sep)[0].startswith("_"):
             continue
         html_dir = os.path.join(dirpath, "html")

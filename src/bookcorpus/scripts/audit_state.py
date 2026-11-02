@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from lib_common import ROOT  # noqa: E402
 CORPUS = os.path.join(ROOT, "库")
-CAT = os.path.join(ROOT, "目录")
+CAT = os.path.join(ROOT, "tables")
 CLASS_CSV = os.path.join(CAT, "分类表.csv")
 LIBDB = os.path.join(CAT, "library.db")
 INDEX = os.path.join(CAT, "检索", "index.db")

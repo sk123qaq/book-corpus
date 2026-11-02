@@ -16,7 +16,7 @@ import qsearch
 
 DB = os.path.join(ROOT, "目录", "检索", "index.db")
 OUT = os.path.join(ROOT, "视图", "主题")
-LIB = os.path.join(ROOT, "库")
+LIB = os.path.join(ROOT, "books")
 
 
 def main():

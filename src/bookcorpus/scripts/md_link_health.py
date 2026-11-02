@@ -24,7 +24,7 @@ import urllib.parse
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from lib_common import ROOT  # noqa: E402
-LIB = os.path.join(ROOT, "库")
+LIB = os.path.join(ROOT, "books")
 
 LINK_MD = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]*)\)")
 TOC_RE = re.compile(r"^(\s*)[-*]\s+\[(?P<label>.*)\]\((?P<target>.*)\)\s*$")

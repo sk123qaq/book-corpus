@@ -85,7 +85,7 @@ def norm(s):
 
 
 def library_index(root):
-    lib = os.path.join(root, "库")
+    lib = os.path.join(root, "books")
     books, shas = [], set()
     for dirpath, dirnames, filenames in os.walk(lib):
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
@@ -151,7 +151,7 @@ def plan_for(path, books, shas):
 
 
 def scan(root):
-    lib, cat = os.path.join(root, "库"), os.path.join(root, "目录")
+    lib, cat = os.path.join(root, "books"), os.path.join(root, "tables")
     inbox = os.path.join(lib, "_收件箱")
     books, shas = library_index(root)
     rows = L.read_csv(os.path.join(cat, "分类表.csv")) if os.path.exists(
@@ -300,8 +300,8 @@ def find_by_uid(root, uid):
     return None, None
 
 
-def book_json(uid, title, author, subjects, rel, sources, notes):
-    return L.book_doc(uid, title, "", author, subjects, rel, None, None, None,
+def book_json(uid, title, author, subjects, sources, notes):
+    return L.book_doc(uid, title, "", author, subjects, None, None, None,
                       "keep", notes, sources, [])
 
 

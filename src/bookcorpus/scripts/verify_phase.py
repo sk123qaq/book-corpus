@@ -6,7 +6,7 @@
   python3 verify_phase.py --box 1    # 只查一个箱子
 箱子 1 源文件 inode 与抽查 sha  2 md 章节数  3 奖项 resolve  4 顶层与 book.json
 箱子 5 从零重建一致
-箱子 6 检索层（index.db / 概念表 / 视图视图软链 / qsearch）
+箱子 6 检索层（index.db / 概念表 / build/views 软链 / qsearch）
 """
 import argparse
 import csv
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
 BASE = os.path.join(L.WORK, "中间态", "基线")
-MAP = os.path.join(L.CAT, "对照表.csv")
+MAP = os.path.join(L.TABLES, "对照表.csv")
 BATCH_CSV = os.path.join(L.WORK, "批次", "奖项下载-2026-10-18", "下载结果总表.csv")
 FAIL = []
 
@@ -135,7 +135,7 @@ def box2():
 
 def box3():
     print("箱子 3 · 奖项 resolve")
-    con = sqlite3.connect("file:" + os.path.join(L.CAT, "library.db") + "?mode=ro", uri=True)
+    con = sqlite3.connect("file:" + L.PATHS.library_db + "?mode=ro", uri=True)
     orphan = con.execute("SELECT count(*) FROM book_award ba LEFT JOIN award a "
                          "ON a.name=ba.award WHERE a.name IS NULL").fetchone()[0]
     if orphan:
@@ -189,7 +189,7 @@ def box3():
 def box4():
     print("箱子 4 · 顶层结构与 book.json")
     tops = sorted(n for n in os.listdir(L.ROOT) if os.path.isdir(os.path.join(L.ROOT, n)))
-    want = sorted(["库", "目录", "视图", "工作区"])
+    want = sorted(["books", "collections", "tables", "build", "工作区"])
     # .pi 是 pi 的项目配置目录、.git 是版本库、.agents 是随仓库提交的技能，
     # 都算工具账，不是库内容
     harness = [n for n in tops if n in (".pi", ".git", ".agents")]
@@ -197,36 +197,39 @@ def box4():
     if tops != want:
         fail("顶层目录 %s != %s" % (tops, want))
     elif harness:
-        ok("顶层内容目录只剩 库/ 目录/ 视图/ 工作区/，另有工具目录 %s" % ", ".join(harness))
+        ok("顶层内容目录只剩 books/ collections/ tables/ build/ 工作区/，另有工具目录 %s" % ", ".join(harness))
     else:
-        ok("顶层只剩 库/ 目录/ 视图/ 工作区/")
+        ok("顶层只剩 books/ collections/ tables/ build/ 工作区/")
     books = L.iter_book_json()
-    ledger_n = len(L.read_csv(os.path.join(L.CAT, "分类表.csv")))
+    ledger_n = len(L.read_csv(L.PATHS.ledger))
     if len(books) != ledger_n:
         fail("book.json 数 %d != 人账 %d 行" % (len(books), ledger_n))
     else:
-        ok("库/**/book.json 共 %d 份，与人账行数一致" % len(books))
+        ok("books/**/book.json 共 %d 份，与人账行数一致" % len(books))
     missing = []
     checked = 0
-    for rel, doc in books:
+    for uid, doc in books:
         for src in doc.get("sources") or []:
             checked += 1
-            p = os.path.normpath(os.path.join(L.LIB, rel, src.get("file", "")))
+            name = src.get("file", "")
+            owner = src.get("collection") or uid
+            p = os.path.join(L.COLLECTIONS if owner.startswith("C") else L.BOOKS,
+                             owner, "source", os.path.basename(name))
             if not os.path.exists(p):
-                missing.append((rel, src.get("file")))
+                missing.append((uid, name))
     if checked and len(missing) > checked * 0.5:
         skip("当前库缺 %d/%d 个源文件（克隆状态），跳过源路径检查" % (len(missing), checked))
     elif missing:
         for rel, f in missing[:3]:
-            fail("book.json 指的源不在: %s -> %s" % (rel, f))
+            fail("book.json 指的源不在: %s -> %s" % (uid, f))
     else:
         ok("每本书的 source 路径都能落到文件")
-    if os.path.isdir(os.path.join(L.LIB, "_收件箱")):
-        ok("库/_收件箱 已建")
+    if os.path.isdir(L.PATHS.inbox):
+        ok("books/_收件箱 已建")
 
 
 def db_dump():
-    con = sqlite3.connect("file:" + os.path.join(L.CAT, "library.db") + "?mode=ro", uri=True)
+    con = sqlite3.connect("file:" + L.PATHS.library_db + "?mode=ro", uri=True)
     lines = []
     for row in con.execute("SELECT uid,title,subject1,subject2,path,path_state,retention,"
                            "series,volume,container,html_pages FROM book ORDER BY uid"):
@@ -269,9 +272,9 @@ def box5():
 
 def box6():
     print("箱子 6 · 检索层（可重建产物）")
-    db = os.path.join(L.CAT, "检索", "index.db")
+    db = L.PATHS.index_db
     if not os.path.isfile(db):
-        skip("没有 目录/检索/index.db，先 build_para_index --rebuild")
+        skip("没有 build/检索/index.db，先 book-corpus index --rebuild")
         return
     con = sqlite3.connect("file:%s?mode=ro" % db, uri=True)
     meta = dict(con.execute("SELECT key,value FROM meta"))
@@ -283,12 +286,12 @@ def box6():
             npara, nchap, os.path.getsize(db) / 1e9))
     else:
         fail("index.db 段落数或 meta 不一致: %s vs %d" % (meta.get("paras"), npara))
-    bad = con.execute("SELECT count(*) FROM para WHERE path NOT LIKE '库/%'").fetchone()[0]
+    bad = con.execute("SELECT count(*) FROM para WHERE path NOT LIKE 'books/%'").fetchone()[0]
     if bad == 0:
-        ok("倒排只指向 库/ 下的路径")
+        ok("倒排只指向 books/ 下的路径")
     else:
-        fail("倒排里有 %d 段不在 库/ 下" % bad)
-    ctab = os.path.join(L.CAT, "概念表.tsv")
+        fail("倒排里有 %d 段不在 books/ 下" % bad)
+    ctab = L.PATHS.concepts
     rows = []
     if os.path.isfile(ctab):
         with open(ctab, encoding="utf-8-sig") as fh:
@@ -307,7 +310,7 @@ def box6():
     else:
         fail("概念剖面 %d 条，覆盖 %d/%d 本；重建后补 build_para_index --concepts"
              % (nbc, bbc, nbooks))
-    views = os.path.join(L.ROOT, "视图", "主题")
+    views = os.path.join(L.PATHS.views, "主题")
     if not os.path.isdir(views):
         skip("没有 视图/主题/（还没重建视图）")
     else:

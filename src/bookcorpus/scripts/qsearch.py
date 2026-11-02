@@ -12,12 +12,12 @@ import argparse, csv, json, math, os, re, sqlite3, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 
-DB = os.path.join(ROOT, "目录", "检索", "index.db")
-CONCEPTS = os.path.join(ROOT, "目录", "概念表.tsv")
+DB = PATHS.index_db
+CONCEPTS = PATHS.concepts
 
 
 def all_concepts():

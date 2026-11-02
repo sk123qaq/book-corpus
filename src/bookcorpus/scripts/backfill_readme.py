@@ -18,7 +18,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from lib_common import ROOT  # noqa: E402
-CORPUS = os.path.join(ROOT, "库")
+CORPUS = os.path.join(ROOT, "books")
 IMG_RE = re.compile(r"!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))\s*\)")
 FILE_AUTHOR = re.compile(r"\.(pdf|epub|mobi|azw3?|txt|djvu)$", re.I)
 UNLISTED_SCAN = "- 无（扫描书按页全收）"
