@@ -1,0 +1,1254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>段 · 章 · 窗口 —— 书库检索回答阶段</title>
+<style>
+  :root {
+    --paper: #f6f3ec;
+    --card: #fffdf8;
+    --ink: #1d1c1a;
+    --muted: #6f6a60;
+    --line: #d9d2c4;
+    --red: #a63d2f;
+    --red-soft: #f0e2dc;
+    --green: #3f6b52;
+    --green-soft: #e4ece5;
+    --amber: #8a6220;
+    --amber-soft: #f3ead6;
+    --soft: #fbf8f1;
+    --serif: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+    --sans: "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --shadow: 0 1px 0 rgba(0, 0, 0, .04);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .page {
+    width: min(1120px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 48px 0 80px;
+  }
+
+  .kicker {
+    margin: 0 0 14px;
+    color: var(--red);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: clamp(40px, 7vw, 72px);
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: .01em;
+  }
+
+  h1 .dot { color: var(--red); }
+
+  .lede {
+    max-width: 760px;
+    margin: 22px 0 0;
+    color: #4d4942;
+    font-size: 17px;
+    line-height: 1.85;
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .hero-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 26px;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .hero-chips span {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+  }
+
+  .hero-chips b { color: var(--red); font-size: 16px; font-weight: 600; }
+  .hero-chips i { color: var(--muted); font-style: normal; }
+
+  .rule {
+    height: 1px;
+    margin: 42px 0;
+    background: var(--line);
+  }
+
+  section { margin-top: 54px; }
+
+  h2 {
+    margin: 0 0 8px;
+    font-family: var(--serif);
+    font-size: clamp(25px, 3vw, 34px);
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+
+  .sub {
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  /* ---- three objects ------------------------------------------------ */
+  .objects {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .object {
+    position: relative;
+    overflow: hidden;
+    padding: 20px 20px 18px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+  }
+
+  .object::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--accent, var(--line));
+  }
+
+  .object .num {
+    color: var(--accent, var(--muted));
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+  }
+
+  .object h3 {
+    margin: 2px 0 8px;
+    font-family: var(--serif);
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  .object p { margin: 0; color: #504b43; font-size: 14px; line-height: 1.75; }
+
+  .object .tag {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft, var(--soft));
+    color: var(--accent, var(--muted));
+    font-size: 11px;
+    letter-spacing: .04em;
+  }
+
+  /* ---- flow ---------------------------------------------------------- */
+  .flow { display: flex; flex-direction: column; }
+
+  .step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: 26px;
+    padding: 22px 24px 22px 28px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+  }
+
+  .step::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 18px;
+    bottom: 18px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--accent, var(--line));
+  }
+
+  .step-head { display: flex; flex-direction: column; justify-content: center; }
+
+  .step-no {
+    color: var(--accent, var(--muted));
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+  }
+
+  .step h3 {
+    margin: 1px 0 2px;
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  .count {
+    color: var(--accent, var(--ink));
+    font-family: var(--mono);
+    font-size: 38px;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -.03em;
+  }
+
+  .count small {
+    margin-left: 3px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  .access {
+    display: inline-block;
+    align-self: flex-start;
+    margin-top: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft, var(--soft));
+    color: var(--accent, var(--muted));
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  .step-body { min-width: 0; }
+
+  .viz { display: flex; align-items: center; min-height: 58px; }
+
+  .note {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .note b { color: var(--ink); font-weight: 600; }
+
+  .note code {
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #f0ebdf;
+    color: #4a453c;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* dots */
+  .pool {
+    display: grid;
+    grid-template-columns: repeat(20, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .dot {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: #ddd6c7;
+  }
+
+  .dot.on { background: var(--green); }
+
+  /* chapter chips */
+  .chapters {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    max-width: 640px;
+  }
+
+  .chapter {
+    padding: 5px 6px 4px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--soft);
+  }
+
+  .chapter b {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .chapter i {
+    display: block;
+    width: var(--w, 50%);
+    height: 3px;
+    margin-top: 4px;
+    border-radius: 2px;
+    background: var(--green);
+  }
+
+  /* picked chips */
+  .picked {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 7px;
+    width: 100%;
+    max-width: 560px;
+  }
+
+  .pick {
+    height: 26px;
+    border: 1px dashed #c9c0af;
+    border-radius: 6px;
+    background: var(--soft);
+  }
+
+  .pick.current { border: 1px solid var(--red); background: var(--red); }
+  .pick.group { border: 1px solid var(--green); background: var(--green-soft); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 9px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+
+  .key {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    border: 1px solid #c9c0af;
+    background: var(--soft);
+  }
+
+  .key.current { border-color: var(--red); background: var(--red); }
+  .key.group { border-color: var(--green); background: var(--green-soft); }
+
+  /* windows */
+  .windows {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+  }
+
+  .window {
+    padding: 10px 11px 11px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #fff;
+  }
+
+  .window .tag {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .02em;
+  }
+
+  .window .tag b { color: var(--ink); font-weight: 600; }
+
+  .bar {
+    height: 4px;
+    margin-top: 6px;
+    border-radius: 2px;
+    background: #e5ddcd;
+  }
+
+  .bar.short { width: 62%; }
+  .bar.mid { width: 84%; }
+
+  .budget {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-top: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .budget b { color: var(--ink); font-weight: 600; }
+
+  /* connectors */
+  .connector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0 10px 26px;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+
+  .connector .arrow {
+    color: var(--red);
+    font-family: var(--mono);
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .connector b { color: var(--ink); font-weight: 600; }
+
+  /* ---- relation tree ------------------------------------------------ */
+  .tree {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 24px;
+    align-items: center;
+    padding: 22px 24px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+  }
+
+  .tree-root {
+    padding: 16px 12px;
+    border-radius: 10px;
+    background: var(--soft);
+    text-align: center;
+  }
+
+  .tree-root b {
+    display: block;
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 600;
+  }
+
+  .tree-root span { color: var(--muted); font-size: 11px; }
+
+  .tree-branches {
+    position: relative;
+    display: grid;
+    gap: 12px;
+    padding-left: 26px;
+  }
+
+  .tree-branches::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 24px;
+    bottom: 24px;
+    width: 1px;
+    background: var(--line);
+  }
+
+  .branch {
+    position: relative;
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .branch::before {
+    content: "";
+    position: absolute;
+    left: -26px;
+    top: 50%;
+    width: 26px;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .branch-op {
+    color: var(--red);
+    font-family: var(--mono);
+    font-size: 11px;
+    text-align: right;
+    line-height: 1.5;
+  }
+
+  .branch-node {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--soft);
+  }
+
+  .branch-node b {
+    font-family: var(--serif);
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .branch-node span { color: var(--muted); font-size: 11px; }
+
+  .branch-out {
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* ---- real trace ---------------------------------------------------- */
+  .trace {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 18px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+  }
+
+  .trace-q {
+    font-family: var(--serif);
+    font-size: 23px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .trace-meta {
+    margin: 6px 0 14px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    line-height: 1.7;
+  }
+
+  .trace-verdict {
+    padding: 12px 13px;
+    border-radius: 9px;
+    background: var(--red-soft);
+    color: #6b2a22;
+    font-size: 12.5px;
+    line-height: 1.8;
+  }
+
+  .trace-verdict b { color: var(--red); font-weight: 600; }
+
+  .calls {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .calls li {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--soft);
+  }
+
+  .call-tool {
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 10px;
+    text-align: center;
+  }
+
+  .call-tool.read { background: var(--red-soft); color: var(--red); }
+
+  .calls code {
+    overflow: hidden;
+    color: #4d4942;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .call-why {
+    color: var(--muted);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .budget-bars {
+    display: grid;
+    gap: 9px;
+    margin-top: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+  }
+
+  .budget-row {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr) 64px;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .budget-track {
+    overflow: hidden;
+    height: 12px;
+    border-radius: 6px;
+    background: #eee9dd;
+  }
+
+  .budget-track i {
+    display: block;
+    height: 100%;
+    border-radius: 6px;
+    background: var(--green);
+  }
+
+  .budget-row:nth-child(2) .budget-track i { background: var(--amber); }
+  .budget-row:nth-child(3) .budget-track i { background: var(--red); }
+
+  .budget-row b { text-align: right; font-weight: 600; }
+
+  @media (max-width: 900px) {
+    .trace { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 720px) {
+    .calls li { grid-template-columns: 64px minmax(0, 1fr); }
+    .call-why { grid-column: 2; }
+    .budget-row { grid-template-columns: 74px minmax(0, 1fr) 52px; }
+  }
+
+  /* ---- table --------------------------------------------------------- */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    white-space: nowrap;
+  }
+
+  tr:last-child td { border-bottom: 0; }
+
+  td.num, th.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+
+  tbody tr:hover { background: #fcf9f1; }
+
+  .tag-inline {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-size: 10px;
+    line-height: 1.7;
+  }
+
+  .tag-inline.red { background: var(--red-soft); color: var(--red); }
+
+  /* ---- multi --------------------------------------------------------- */
+  .multi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .mini-book {
+    padding: 12px 13px 13px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+  }
+
+  .mini-book h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+  }
+
+  .mini-nums {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .mini-nums b { font-size: 17px; font-weight: 600; }
+  .mini-nums .arrow { color: var(--muted); font-size: 10px; }
+  .mini-nums .win { color: var(--red); }
+
+  .mini-quota {
+    margin-top: 8px;
+    padding-top: 7px;
+    border-top: 1px dashed var(--line);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+
+  .total-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 20px;
+    margin-top: 12px;
+    padding: 12px 15px;
+    border-radius: 10px;
+    background: var(--ink);
+    color: #f6f3ec;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .total-strip b { color: #f0b9ad; font-size: 18px; font-weight: 600; }
+
+  .formula {
+    margin-top: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  /* ---- myths --------------------------------------------------------- */
+  .myths {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .myth {
+    padding: 16px 17px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+  }
+
+  .myth .wrong {
+    margin: 0 0 7px;
+    color: var(--red);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  .myth .wrong::before {
+    content: "×";
+    margin-right: 7px;
+    font-family: var(--mono);
+  }
+
+  .myth .right {
+    margin: 0;
+    color: #4d4942;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .myth .right::before {
+    content: "对";
+    display: inline-block;
+    margin-right: 7px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-size: 10px;
+    line-height: 1.7;
+  }
+
+  /* ---- source -------------------------------------------------------- */
+  .source {
+    margin-top: 46px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.9;
+  }
+
+  .source b { color: var(--ink); font-weight: 600; }
+
+  .source code {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #5a544a;
+  }
+
+  @media (max-width: 900px) {
+    .objects { grid-template-columns: 1fr; }
+    .multi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .myths { grid-template-columns: 1fr; }
+    .tree { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 720px) {
+    .page { width: min(100% - 28px, 1120px); padding-top: 30px; }
+    .step { grid-template-columns: 1fr; gap: 14px; padding: 18px 18px 18px 22px; }
+    .step-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 2px 12px; }
+    .step-no { grid-column: 1 / -1; }
+    .step h3 { grid-column: 1; margin: 0; }
+    .count { grid-column: 2; grid-row: 2 / 4; align-self: center; font-size: 30px; }
+    .access { grid-column: 1; margin-top: 5px; }
+    .chapters { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .picked { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    .windows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .multi-grid { grid-template-columns: 1fr; }
+    .branch { grid-template-columns: 1fr; gap: 4px; }
+    .branch-op { text-align: left; }
+    .branch-out { padding-left: 2px; }
+    .tree-branches { padding-left: 0; }
+    .tree-branches::before, .branch::before { display: none; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .page { width: 100%; padding: 0; }
+    .step, .object, .myth, .table-wrap, .mini-book { box-shadow: none; break-inside: avoid; }
+    .hero-chips { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <p class="kicker">书库检索 · 第 5 阶段「回答」</p>
+    <h1>段、章、窗口<span class="dot">。</span></h1>
+    <p class="lede">
+      三个量不在同一层：<strong>段</strong>是检索的原子，<strong>章</strong>是段的目录投影，
+      <strong>窗口</strong>是少数段扩出来的正文。回答阶段只把窗口的正文给模型；
+      章只给一行行目录，用来告诉模型“还能去哪找”。
+    </p>
+    <div class="hero-chips" aria-label="单书回答的四个数量">
+      <span><b>≤100</b><i>段</i></span>
+      <span>→</span>
+      <span><b>≤30</b><i>章</i></span>
+      <span>→</span>
+      <span><b>≤24</b><i>段</i></span>
+      <span>→</span>
+      <span><b>≤6</b><i>窗</i></span>
+    </div>
+  </header>
+
+  <section aria-labelledby="objects-title">
+    <h2 id="objects-title">先分清三个对象</h2>
+    <p class="sub">同一个“段”字，在流水线里出现两次：第一次是候选池，第二次是选中段。</p>
+
+    <div class="objects">
+      <article class="object" style="--accent:#6f6a60; --accent-soft:#eee9dd;">
+        <div class="num">01 / 原子</div>
+        <h3>段</h3>
+        <p>检索命中的一个段落或一行，带 <code>path</code>、<code>line</code>、<code>score</code>、<code>coverage</code>。它只是坐标，不是正文。</p>
+        <span class="tag">书内段池 ≤100</span>
+      </article>
+      <article class="object" style="--accent:#3f6b52; --accent-soft:#e4ece5;">
+        <div class="num">02 / 目录</div>
+        <h3>章</h3>
+        <p>段按章节文件 <code>path</code> 分组，每章只留最高分的一段，按分数排出候选章。给模型的是目录行，不是这一章全文。</p>
+        <span class="tag">目录地图 ≤30 行</span>
+      </article>
+      <article class="object" style="--accent:#a63d2f; --accent-soft:#f0e2dc;">
+        <div class="num">03 / 正文</div>
+        <h3>窗口</h3>
+        <p>从选中的段向上下各约 60 行取原文，按字数截断；同一文件里重叠或相邻的窗口合并。这才是提示词里的“原文”。</p>
+        <span class="tag">正文 ≤6 扇</span>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="flow-title">
+    <h2 id="flow-title">单书：一条从段到窗的流水线</h2>
+    <p class="sub">数字是上限；书不够大时有多少给多少。图按上限画。</p>
+
+    <div class="flow">
+
+      <article class="step" style="--accent:#6f6a60; --accent-soft:#eee9dd;">
+        <div class="step-head">
+          <span class="step-no">STEP 01</span>
+          <h3>书内段池</h3>
+          <div class="count">≤100<small>段</small></div>
+          <span class="access">不进提示词</span>
+        </div>
+        <div class="step-body">
+          <div class="viz"><div class="pool" id="pool" aria-hidden="true"></div></div>
+          <p class="note">
+            <code>qsearch.search</code> 在<strong>这一本书</strong>里取前 100 个命中段。
+            绿色是后面会被章地图收走的代表段。
+          </p>
+        </div>
+      </article>
+
+      <div class="connector"><span class="arrow">↓</span><span><b>按章文件聚合</b>：同一 <code>path</code> 只留最高分的一段，30 个章各留一个坐标</span></div>
+
+      <article class="step" style="--accent:#3f6b52; --accent-soft:#e4ece5;">
+        <div class="step-head">
+          <span class="step-no">STEP 02</span>
+          <h3>候选章地图</h3>
+          <div class="count">≤30<small>章</small></div>
+          <span class="access">目录进提示词</span>
+        </div>
+        <div class="step-body">
+          <div class="viz"><div class="chapters" id="chapters" aria-hidden="true"></div></div>
+          <p class="note">
+            给模型的是 <strong>30 行目录</strong>：<code>path:line 《章名》 score=… cov=…</code>。
+            没有这一章的正文。<strong>30 章不等于读了 30 章。</strong>
+          </p>
+        </div>
+      </article>
+
+      <div class="connector"><span class="arrow">↓</span><span><b>回选代表段</b>：当前命中 1 段 + 组覆盖前 4 段 + 章代表，封顶 24 段</span></div>
+
+      <article class="step" style="--accent:#a63d2f; --accent-soft:#f0e2dc;">
+        <div class="step-head">
+          <span class="step-no">STEP 03</span>
+          <h3>选中段</h3>
+          <div class="count">≤24<small>段</small></div>
+          <span class="access">不进提示词</span>
+        </div>
+        <div class="step-body">
+          <div class="viz"><div class="picked" id="picked" aria-hidden="true"></div></div>
+          <div class="legend" aria-hidden="true">
+            <span><i class="key current"></i>当前命中 1</span>
+            <span><i class="key group"></i>组覆盖 ≤4</span>
+            <span><i class="key"></i>章代表，补到 24</span>
+          </div>
+          <p class="note">
+            这 24 段是<strong>候选窗口的种子</strong>，不会全部进提示词；同一章可以有多段，所以
+            <strong>24 段不等于 24 章</strong>。
+          </p>
+        </div>
+      </article>
+
+      <div class="connector"><span class="arrow">↓</span><span><b>扩窗、合并、封顶</b>：每段上下各约 60 行取正文，同文件重叠就合并，最多 6 扇</span></div>
+
+      <article class="step" style="--accent:#1d1c1a; --accent-soft:#eee9dd;">
+        <div class="step-head">
+          <span class="step-no">STEP 04</span>
+          <h3>窗口</h3>
+          <div class="count">≤6<small>扇</small></div>
+          <span class="access">正文进提示词</span>
+        </div>
+        <div class="step-body">
+          <div class="viz">
+            <div class="windows" aria-hidden="true">
+              <div class="window"><div class="tag"><b>W1</b><span>命中行 ±60</span></div><div class="bar"></div><div class="bar mid"></div><div class="bar short"></div></div>
+              <div class="window"><div class="tag"><b>W2</b><span>命中行 ±60</span></div><div class="bar mid"></div><div class="bar"></div><div class="bar short"></div></div>
+              <div class="window"><div class="tag"><b>W3</b><span>命中行 ±60</span></div><div class="bar"></div><div class="bar short"></div><div class="bar mid"></div></div>
+              <div class="window"><div class="tag"><b>W4</b><span>命中行 ±60</span></div><div class="bar short"></div><div class="bar"></div><div class="bar mid"></div></div>
+              <div class="window"><div class="tag"><b>W5</b><span>命中行 ±60</span></div><div class="bar mid"></div><div class="bar short"></div><div class="bar"></div></div>
+              <div class="window"><div class="tag"><b>W6</b><span>命中行 ±60</span></div><div class="bar"></div><div class="bar mid"></div><div class="bar short"></div></div>
+            </div>
+          </div>
+          <div class="budget">
+            <span>每窗 <b>≤3500 字</b></span>
+            <span>合计 <b>≤14000 字</b></span>
+            <span>提示词 <b>≤26000 字</b></span>
+          </div>
+          <p class="note">
+            6 扇是<strong>合并后</strong>的窗口数。同章两处命中相隔很远，会留成两扇窗，所以
+            <strong>6 窗不保证覆盖 6 章</strong>；模型还能用 <code>book_grep</code> + <code>read</code>
+            越过这 6 扇去补读。
+          </p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section aria-labelledby="relation-title">
+    <h2 id="relation-title">三者的关系，一句话</h2>
+    <p class="sub">段是原料，章是索引，窗口是证据。流水线不是一直收窄，中间有一次“回到段”。</p>
+
+    <div class="tree">
+      <div class="tree-root">
+        <b>段</b>
+        <span>书内命中 ≤100</span>
+      </div>
+      <div class="tree-branches">
+        <div class="branch">
+          <span class="branch-op">按章聚合</span>
+          <div class="branch-node"><b>章</b><span>目录地图 ≤30</span></div>
+          <span class="branch-out">给模型看目录</span>
+        </div>
+        <div class="branch">
+          <span class="branch-op">回选 24 段 + 扩窗</span>
+          <div class="branch-node"><b>窗口</b><span>正文 ≤6</span></div>
+          <span class="branch-out">给模型读正文</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="note" style="margin-top:12px">
+      两条支路，不是一条直线：<strong>段 → 章</strong>去重成目录，<strong>段 → 窗口</strong>回选后扩成正文。
+      目录指路，窗口作证。
+    </p>
+  </section>
+
+  <section aria-labelledby="trace-title">
+    <h2 id="trace-title">目录到底有没有用？一次真实 trace</h2>
+    <p class="sub">问题「李瓶儿是怎么死的」·《金瓶梅词话》· 5 扇窗 · 24 行章地图。下面是模型实际发出的 6 次工具调用。</p>
+
+    <div class="trace">
+      <div>
+        <div class="trace-q">“李瓶儿是怎么死的”</div>
+        <div class="trace-meta">《金瓶梅词话》<br>5 扇窗 · 24 行地图 · 提示词 18.1k 字</div>
+        <div class="trace-verdict">
+          <b>2 次 read 都落在目录上</b><br>
+          第六十回（地图第 6 行）<br>
+          第六十二回（地图第 12 行，死亡章）
+        </div>
+        <p class="note">4 次 book_grep 是模型自己找词；它也没被目录限制，后来搜了地图外的第六十一回，引了地图外的第一百回。</p>
+      </div>
+      <ol class="calls">
+        <li><span class="call-tool read">read</span><code>063_第六十回…</code><span class="call-why">地图第 6 行</span></li>
+        <li><span class="call-tool read">read</span><code>065_第六十二回…</code><span class="call-why">地图第 12 行</span></li>
+        <li><span class="call-tool">book_grep</span><code>经水|崩漏|血崩|淋漓</code><span class="call-why">自己找词</span></li>
+        <li><span class="call-tool">book_grep</span><code>第六十一回</code><span class="call-why">地图外</span></li>
+        <li><span class="call-tool">book_grep</span><code>俺娘都因为着了那边五娘一口气|…</code><span class="call-why">自己找词</span></li>
+        <li><span class="call-tool">book_grep</span><code>只怕下边不止，饮食再不进</code><span class="call-why">自己找词</span></li>
+      </ol>
+    </div>
+
+    <div class="budget-bars" aria-label="本次提示词里三种内容的字数">
+      <div class="budget-row"><span>章地图</span><div class="budget-track"><i style="width:1%"></i></div><b>2.4k 字</b></div>
+      <div class="budget-row"><span>5 扇窗正文</span><div class="budget-track"><i style="width:5%"></i></div><b>11.2k 字</b></div>
+      <div class="budget-row"><span>24 章全文</span><div class="budget-track"><i style="width:100%"></i></div><b>234k 字</b></div>
+    </div>
+    <p class="note">本次提示词 18.1k 字。全给 24 章正文是它的 13 倍；目录只占 2.4k，约为 24 章全文的 1%。</p>
+    <p class="note" style="margin-top:8px">
+      结论：目录不是正文的替代，是正文的索引。窗口够时它确实不用；窗口不够时，它用 2.4k 字告诉模型
+      “还有这 24 章、path 和行号在这”，省掉全书盲搜。一次 trace 不是 A/B，不能证明准确率增益；
+      但它证明目录会被用到。
+    </p>
+  </section>
+
+  <section aria-labelledby="counts-title">
+    <h2 id="counts-title">单书与多书的数字</h2>
+    <p class="sub">多书不是把单书的 30 章平均分，而是每本书各走一遍单书流水线，再共用一次提示词。</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>环节</th>
+            <th class="num">单书</th>
+            <th class="num">多书 · 每本</th>
+            <th class="num">多书 · 8 本合计</th>
+            <th>给模型吗</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>书内段池</td>
+            <td class="num">≤100</td>
+            <td class="num">≤60</td>
+            <td class="num">≤480</td>
+            <td><span class="tag-inline red">否</span></td>
+          </tr>
+          <tr>
+            <td>候选章地图</td>
+            <td class="num">≤30</td>
+            <td class="num">4</td>
+            <td class="num">32</td>
+            <td><span class="tag-inline">目录</span></td>
+          </tr>
+          <tr>
+            <td>选中段</td>
+            <td class="num">≤24</td>
+            <td class="num">≤3</td>
+            <td class="num">≤24</td>
+            <td><span class="tag-inline red">否</span></td>
+          </tr>
+          <tr>
+            <td>窗口</td>
+            <td class="num">≤6</td>
+            <td class="num">≤3</td>
+            <td class="num">≤24</td>
+            <td><span class="tag-inline">正文</span></td>
+          </tr>
+          <tr>
+            <td>正文字数预算</td>
+            <td class="num">≤14000</td>
+            <td class="num">2200–3400</td>
+            <td class="num">约 18000</td>
+            <td><span class="tag-inline">正文</span></td>
+          </tr>
+          <tr>
+            <td>提示词上限</td>
+            <td class="num">26000</td>
+            <td class="num">—</td>
+            <td class="num">30000</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="multi-title">
+    <h2 id="multi-title">多书：每本各走一遍，最后装进一个提示词</h2>
+    <p class="sub">最多 8 本。每本书的预算先保第一扇窗，再铺第二、第三扇；任何一本都不会被挤掉唯一窗口。</p>
+
+    <div class="multi-grid" aria-hidden="true">
+      <div class="mini-book"><h4>BOOK 01</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+      <div class="mini-book"><h4>BOOK 02</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+      <div class="mini-book"><h4>BOOK 03</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+      <div class="mini-book"><h4>BOOK 04</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+      <div class="mini-book"><h4>BOOK 05</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+      <div class="mini-book"><h4>BOOK 06</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+      <div class="mini-book"><h4>BOOK 07</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+      <div class="mini-book"><h4>BOOK 08</h4><div class="mini-nums"><b>60</b>段<span class="arrow">→</span><b>4</b>章<span class="arrow">→</span><b>3</b>段<span class="arrow">→</span><b class="win">3</b>窗</div><div class="mini-quota">quota 2250 字 · 每窗 750</div></div>
+    </div>
+
+    <div class="total-strip">
+      <span>8 本 × 3 窗 = 最多 <b>24</b> 窗</span>
+      <span>正文约 <b>18000</b> 字</span>
+      <span>提示词封顶 <b>30000</b> 字</span>
+      <span>超了从末位书删最后一窗，每本至少留 1 窗</span>
+    </div>
+
+    <p class="formula">每本 quota = clamp(18000 ÷ N, 2200, 3400) 字；每窗 ≈ quota ÷ 3。N=5 时每本 3400 字，每窗约 1133 字。</p>
+
+    <p class="note" style="margin-top:12px">
+      每本的 <strong>4 章</strong>只是目录；<strong>3 扇窗</strong>才是正文。组覆盖补搜的段可能落在 4 章之外，
+      所以“4 章地图”也不等于“只读了 4 章”。
+    </p>
+  </section>
+
+  <section aria-labelledby="myths-title">
+    <h2 id="myths-title">四个常见误读</h2>
+    <p class="sub">尤其注意：页面上第 3 阶段显示的“每本 3 章”是演示，不是回答预算。</p>
+
+    <div class="myths">
+      <article class="myth">
+        <p class="wrong">30 章 = 读了 30 章</p>
+        <p class="right">30 章是目录地图，只有 path、line、score；正文只有 6 扇窗。</p>
+      </article>
+      <article class="myth">
+        <p class="wrong">24 段 = 24 章</p>
+        <p class="right">段按章分布，多段可同章；24 段只是扩窗前的种子，最后只留 6 扇。</p>
+      </article>
+      <article class="myth">
+        <p class="wrong">6 窗 = 6 章</p>
+        <p class="right">窗口按文件内位置合并，不按章去重；同章两处远隔的命中会占两扇窗。</p>
+      </article>
+      <article class="myth">
+        <p class="wrong">多书 4 章 = 只读 4 章</p>
+        <p class="right">4 章是地图；3 扇窗可能来自地图外，模型还能 book_grep + read 继续补读。</p>
+      </article>
+    </div>
+
+    <p class="note" style="margin-top:14px">
+      页面第 3 阶段的“8 本 × 每本 3 章”来自 <code>book_query.run(..., max_chapters=3)</code>，
+      是展示用的选章结果；第 5 阶段回答会按上面的单书 / 多书预算<strong>重新取段与扩窗</strong>。
+    </p>
+  </section>
+
+  <footer class="source">
+    <p><b>口径来源</b>（2026-10-27 代码）：</p>
+    <p>
+      <code>工作区/演示-检索流程/answer.py:59-78</code> 常量 ·
+      <code>answer.py:359-434</code> 取段与章地图 ·
+      <code>answer.py:474-527</code> 扩窗与合并 ·
+      <code>answer.py:631-645</code> 多书预算 ·
+      <code>工作区/脚本/book_expand.py:125-163</code> level 2 窗口 ·
+      <code>工作区/演示-检索流程/ANSWER-BRIEF.md:197-203</code> 多书口径 ·
+      <code>工作区/演示-检索流程/trace.py:472,528</code> 页面展示的 3 章/本。
+    </p>
+    <p>图按上限画，实际数量取“书里有多少给多少”。段池、选中段不进提示词；章地图只给目录；窗口才给正文。</p>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    // 100 个候选段：每 10 个里有 3 个被章地图收走，共 30 个。
+    var pool = document.getElementById('pool');
+    if (pool) {
+      for (var i = 0; i < 100; i++) {
+        var d = document.createElement('span');
+        d.className = 'dot' + ((i % 10 === 0 || i % 10 === 3 || i % 10 === 7) ? ' on' : '');
+        pool.appendChild(d);
+      }
+    }
+
+    // 30 个候选章：每个显示章号与一条示意分数条。
+    var chapters = document.getElementById('chapters');
+    if (chapters) {
+      for (var j = 0; j < 30; j++) {
+        var c = document.createElement('span');
+        c.className = 'chapter';
+        var n = String(j + 1).padStart(2, '0');
+        var w = 38 + ((j * 37) % 58);
+        c.innerHTML = '<b>' + n + '</b><i style="--w:' + w + '%"></i>';
+        chapters.appendChild(c);
+      }
+    }
+
+    // 24 个选中段：1 个当前命中、4 个组覆盖、其余为章代表。
+    var picked = document.getElementById('picked');
+    if (picked) {
+      for (var k = 0; k < 24; k++) {
+        var p = document.createElement('span');
+        p.className = 'pick' + (k === 0 ? ' current' : (k <= 4 ? ' group' : ''));
+        picked.appendChild(p);
+      }
+    }
+  })();
+</script>
+</body>
+</html>

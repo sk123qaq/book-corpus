@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>会话追问 · 前端设计原型</title>
+<link rel="stylesheet" href="proto.css">
+</head>
+<body data-screen="start" data-variant="v1">
+
+<div class="proto-bar" role="group" aria-label="设计原型控制">
+  <span class="proto-tag">设计原型</span>
+  <span class="proto-screens">
+    <button type="button" data-screen-btn="start" class="is-on">初始页</button>
+    <button type="button" data-screen-btn="running">检索中</button>
+    <button type="button" data-screen-btn="answering">回答中</button>
+    <button type="button" data-screen-btn="done">完成</button>
+    <button type="button" data-screen-btn="open">展开卡片</button>
+    <button type="button" data-screen-btn="history">历史切换</button>
+  </span>
+  <span class="proto-variants">
+    <span class="proto-lbl">展开样式</span>
+    <button type="button" data-variant-btn="v1" class="is-on">V1 居中</button>
+    <button type="button" data-variant-btn="v2">V2 时间线</button>
+    <button type="button" data-variant-btn="v3">V3 单卡</button>
+    <button type="button" data-variant-btn="v4">V4 台账</button>
+  </span>
+  <button type="button" class="proto-play" id="play">▶ 演示进度</button>
+  <span class="proto-status" id="proto-status" aria-live="polite">V1 · 居中索引</span>
+</div>
+
+<header class="masthead">
+  <a class="brand" href="#" id="brand">书库检索<span class="brand-dot"></span></a>
+  <div class="stats" aria-label="书库规模">
+    <span><b class="mono">1,954</b> 本</span>
+    <span><b class="mono">2,640,800</b> 段</span>
+    <span><b class="mono">90,736</b> 章</span>
+  </div>
+  <nav class="nav"><a href="http://127.0.0.1:8765/classic" target="_blank" rel="noreferrer">完整流程 ↗</a></nav>
+</header>
+
+<main class="app">
+  <aside class="rail" aria-label="会话">
+    <div class="rail-tabs" role="tablist" aria-label="会话视图">
+      <button class="rail-tab" type="button" id="tab-current" role="tab"
+              aria-selected="false" aria-controls="panel-current">
+        本次会话 <b id="count-current">3</b>
+      </button>
+      <button class="rail-tab is-on" type="button" id="tab-history" role="tab"
+              aria-selected="true" aria-controls="panel-history">
+        历史会话 <b id="count-history">57</b>
+      </button>
+    </div>
+
+    <div class="rail-panels">
+      <section class="rail-panel" id="panel-current" role="tabpanel" aria-labelledby="tab-current" hidden>
+        <p class="rail-sub"><span id="sub-current">3 问 · 正在看第 2 问</span></p>
+        <div class="rail-scroll" id="current-scroll">
+          <div class="rail-empty">
+            <p>还没有开始。</p>
+            <p>问一句，本次会话的线索会出现在这里。</p>
+          </div>
+          <ol class="rounds" id="rounds">
+            <li class="round" data-turn="1">
+              <span class="no">01</span>
+              <p class="q">乡土中国 差序格局</p>
+              <div class="meta">
+                <span class="chip">《乡土中国（2）》</span>
+                <span class="ids"><i>[1]</i><i>[2]</i><i>[3]</i></span>
+              </div>
+            </li>
+            <li class="round is-current" data-turn="2">
+              <span class="no">02 · 当前</span>
+              <p class="rel"><span class="from">承接 01</span><span class="cite">[1]</span><span class="qt">其最著名的，即是…</span></p>
+              <p class="q">那礼治秩序和差序格局是什么关系？</p>
+              <div class="meta">
+                <span class="chip">《乡土中国（2）》</span>
+                <span class="ids"><i>[1]</i><i>[2]</i><i>[3]</i><i>[4]</i><i>[5]</i><i>[6]</i></span>
+                <span class="round-status" id="turn-status" hidden></span>
+              </div>
+            </li>
+            <li class="round" data-turn="3">
+              <span class="no">03</span>
+              <p class="rel none"><span class="from">独立问题 · 没有参考上一问</span></p>
+              <p class="q">《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球</p>
+              <div class="meta">
+                <span class="chip">《死神永生》</span>
+                <span class="ids"><i>[1]</i><i>[2]</i><i>[3]</i><i>[4]</i><i>[5]</i><i>[6]</i></span>
+              </div>
+            </li>
+          </ol>
+        </div>
+        <button class="rail-foot" type="button" id="new-session"><span class="plus">+</span>新会话</button>
+      </section>
+
+      <section class="rail-panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history">
+        <div class="hist-search">
+          <span class="mag" aria-hidden="true">⌕</span>
+          <input id="hist-filter" type="text" autocomplete="off"
+                 placeholder="搜问题或书名" aria-label="搜索历史会话">
+        </div>
+        <div class="rail-scroll hist-scroll" id="hist-list"></div>
+        <p class="hist-note">打开历史会话会替换当前会话；当前会话已自动保存。</p>
+      </section>
+    </div>
+  </aside>
+
+  <section class="main" id="main">
+    <section class="start" id="start">
+      <p class="start-kicker">会话追问 · 书库检索</p>
+      <h1>问一句，<br>找到原文</h1>
+      <p class="start-lead">先问第一问，它会把命中的原文与依据递到你面前。之后点一条依据当落点，接着问。</p>
+      <div class="start-samples">
+        <button class="chip" type="button" data-ask="乡土中国 差序格局">乡土中国 差序格局</button>
+        <button class="chip" type="button" data-ask="礼治社会靠什么维持秩序">礼治社会靠什么维持秩序</button>
+        <button class="chip" type="button" data-ask="三体 程心 执剑人">三体 程心 执剑人</button>
+      </div>
+      <div class="start-last">
+        <span class="lbl mono">接着上次</span>
+        <button class="last-card" type="button" id="last-session">
+          <span class="last-when mono">昨天 21:32</span>
+          <span class="last-q">乡土中国 差序格局</span>
+          <span class="last-meta">3 问 · 《乡土中国（2）》《死神永生》</span>
+          <span class="last-go" aria-hidden="true">→</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="turn" id="turn">
+      <div class="kicker">
+        <span class="no">第 2 问</span>
+        <span class="chip">承接 01 [1]</span>
+        <span class="read mono" id="readout">检索 0.3s · 回答 39.2s</span>
+      </div>
+      <h1 class="question">那礼治秩序和差序格局是什么关系？</h1>
+      <section class="stages" id="stages" aria-label="检索进度"></section>
+      <div class="books" id="books"></div>
+      <button class="anchor" type="button" id="anchor"></button>
+      <article class="answer-body" id="answer"></article>
+      <p class="answer-pending" id="answer-pending"><span class="blink-dot"></span>回答还在路上，通常 40 到 90 秒。</p>
+      <section class="evidences" id="evidences"></section>
+    </section>
+  </section>
+
+  <aside class="drawer" id="drawer">
+    <div class="drawer-full" id="drawer-full"></div>
+    <div class="drawer-empty" id="drawer-empty">
+      <span class="lbl mono">原文</span>
+      <p>点一条依据，这里给出命中段与上下文。</p>
+    </div>
+  </aside>
+
+  <div class="ask">
+    <div class="ask-sugs">
+      <span class="lbl">接着问</span>
+      <button class="chip" type="button">还有别的例子吗？</button>
+      <button class="chip" type="button">这个说法有反例吗？</button>
+      <button class="chip" type="button">作者在别的章节怎么讲？</button>
+    </div>
+    <div class="ask-hint" id="hint"><span class="on">下一问挂在 <span class="cite">[1]</span><span class="qt">其最著名的，即是…</span> · <button class="x" type="button">取消</button></span></div>
+    <div class="ask-row">
+      <div class="ask-field">
+        <input class="field" id="q" type="text" maxlength="300" autocomplete="off"
+               placeholder="就 [1] 这一段接着问" aria-label="接着问">
+        <span class="caret" aria-hidden="true"></span>
+      </div>
+      <button class="btn btn-primary ask-send" type="button">追问</button>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="data.js"></script>
+<script src="proto.js"></script>
+</body>
+</html>
