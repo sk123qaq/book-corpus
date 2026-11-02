@@ -14,7 +14,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lib_common as L  # noqa: E402
 ROOT = L.ROOT
-CONCEPTS = os.path.join(ROOT, "目录", "概念表.tsv")
+CONCEPTS = os.path.join(ROOT, "tables", "概念表.tsv")
 DEFPASS = os.path.join(HERE, "defpass.py")
 RG = L.RG
 QEXPAND = os.path.join(HERE, "query_expand.py")
