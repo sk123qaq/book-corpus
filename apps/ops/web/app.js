@@ -40,7 +40,16 @@ const SPLIT_WORD = {
   'split-failed': '拆章失败', 'convert-failed': '转格式失败', error: '异常',
   pending_review: '待复核',
 };
-const ACTION_WORD = { add: '新增', replace: '换源', conflict: '冲突', skip: '跳过' };
+const ACTION_WORD = {
+  add: '新增', replace: '换源', delete: '删除', review: '待核',
+  conflict: '冲突', skip: '跳过',
+};
+const STATUS_WORD = {
+  new: ['新书', 'ok'], replace: ['换源', 'half'], in_library: ['已在库', 'miss'],
+  batch_dup: ['批次重复', 'miss'], same_format: ['同格式已在库', 'half'],
+  weaker: ['格式更低', 'half'], fuzzy: ['书名待核', 'half'],
+  candidates: ['多本同名', 'half'],
+};
 const RETENTION_WORD = { keep: '保留', review: '待定', drop: '不留' };
 const PDF_ROUTE_WORD = {
   'OCR': '扫描识别', '本地抽文本': '直接抽取', '不转-记图册': '存档·图册',
@@ -75,7 +84,7 @@ const S = {
   tab: 'overview',
   payload: null, status: {}, health: null,
   jobs: [], pending: [], inbox: [], pdf: null,
-  plan: null, planJob: null, planDirty: false,
+  plan: null, planJob: null, planDirty: false, legacyPlan: false,
   batch: null, splitBooks: [],
   review: null, reviewJob: null,
   retireHits: [], retireQuery: '', preview: null,
@@ -179,8 +188,8 @@ const SUMMARY_FIX = [
   [/，?\s*md (\d+) 章/g, '，Markdown $1 章'],
   [SPLIT_COUNT,
     (match, word, count) => SPLIT_WORD[word] + ' ' + count + ' 本'],
-  [/\b(add|replace|conflict|skip) (\d+)/g, (match, word, count) => ACTION_WORD[word] + ' ' + count],
-  [/\s+\/\s+(?=(?:新增|换源|冲突|跳过)\s*\d)/g, '，'],
+  [/\b(add|replace|delete|review|conflict|skip) (\d+)/g, (match, word, count) => ACTION_WORD[word] + ' ' + count],
+  [/\s+\/\s+(?=(?:新增|换源|删除|待核|冲突|跳过)\s*\d)/g, '，'],
   [/已确认 route=([^\s，,）)]+)/g, (match, name) => '已确认处理方式：' + routeWord(name)],
   [/→\s*(OCR|本地抽文本|不转-记图册|人工确认|日文暂缓)/g, (match, name) => '→ ' + routeWord(name)],
   [/route=([^\s，,）)]+)/g, (match, name) => '处理方式 ' + routeWord(name)],
@@ -568,26 +577,67 @@ function viewOverview() {
 }
 
 // ---- 新书导入 -----------------------------------------------------
+function nextPlanUid() {
+  let max = 0;
+  (S.plan || []).forEach((it) => {
+    const m = /^B(\d+)$/.exec(String(it.uid || ''));
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return 'B' + String(max + 1).padStart(4, '0');
+}
+
 function planRow(item, index) {
-  const low = item.classify && (item.classify.needs_review
-    || item.classify.conf1 < 0.45 || item.note.indexOf('需人工确认') >= 0);
+  const st = STATUS_WORD[item.status] || ['', ''];
+  const isDel = item.action === 'delete';
+  const isRev = item.action === 'review';
+  const isAdd = item.action === 'add';
+  const isRep = item.action === 'replace';
+  const note = String(item.note || '');
+  const low = !isDel && !isRev && item.classify
+    && (item.classify.needs_review || item.classify.conf1 < 0.45
+      || note.indexOf('需人工确认') >= 0);
   const subjects = Array.isArray(item.subjects) ? item.subjects.join('/') : (item.subjects || '');
-  return `<tr data-row="${index}"${low ? ' class="low"' : ''}>
+  const libSubjects = Array.isArray(item.target_subjects)
+    ? item.target_subjects.join('/') : (item.target_subjects || '');
+  const title = isAdd ? item.title : (isDel && !item.target_title ? '—' : (item.target_title || item.title || ''));
+  const author = isAdd ? (item.author || '') : (isDel && !item.target_title ? '—' : (item.target_author || item.author || ''));
+  const cls = isAdd ? subjects : libSubjects;
+  const rowClass = isDel ? ' class="del"' : (isRev ? ' class="review"' : (low ? ' class="low"' : ''));
+  return `<tr data-row="${index}"${rowClass}>
     <td><select data-field="action" data-idx="${index}">
-      ${['add', 'replace', 'conflict', 'skip'].map((a) => `<option value="${a}"${a === item.action ? ' selected' : ''}>${ACTION_WORD[a]}</option>`).join('')}
+      ${isRev ? '<option value="review" selected>待核</option>' : ''}
+      ${['add', 'replace', 'delete'].map((a) => `<option value="${a}"${a === item.action ? ' selected' : ''}>${ACTION_WORD[a]}</option>`).join('')}
     </select></td>
-    <td class="wrap">${esc(item.file)}</td>
-    <td><input type="text" data-field="title" data-idx="${index}" value="${esc(item.title)}" size="22"></td>
-    <td>${esc(item.author || '')}</td>
-    <td>${esc(item.format || '')}</td>
-    <td class="num">${fmtBytes(item.bytes)}</td>
-    <td><input type="text" data-field="subjects" data-idx="${index}" value="${esc(subjects)}" size="16" placeholder="一级/二级"></td>
-    <td><select data-field="retention" data-idx="${index}">
-      ${['keep', 'review', 'drop'].map((r) => `<option value="${r}"${r === item.retention ? ' selected' : ''}>${RETENTION_WORD[r]}</option>`).join('')}
-    </select></td>
-    <td><input type="text" data-field="uid" data-idx="${index}" value="${esc(item.uid || '')}" size="7"></td>
-    <td class="wrap small">${esc(item.note || '')}</td>
+    <td class="wrap"><span class="${isDel ? 'strike' : ''}">${esc(item.file)}</span></td>
+    <td class="nowrap">${esc(item.format || '')}<span class="small"> · ${fmtBytes(item.bytes)}</span></td>
+    <td><input type="text" data-field="title" data-idx="${index}" value="${esc(title)}" size="18"${isAdd ? '' : ' readonly'}></td>
+    <td class="wrap small">${esc(author || '—')}</td>
+    <td>${isAdd
+      ? `<input type="text" data-field="subjects" data-idx="${index}" value="${esc(subjects)}" size="12" placeholder="一级/二级">`
+      : esc(cls || '—')}</td>
+    <td>${(isDel || isRev) ? '—' : `<select data-field="retention" data-idx="${index}">
+      ${['keep', 'review', 'drop'].map((r) => `<option value="${r}"${r === (item.retention || 'keep') ? ' selected' : ''}>${RETENTION_WORD[r]}</option>`).join('')}
+    </select>`}</td>
+    <td>${isAdd
+      ? `<input type="text" data-field="uid" data-idx="${index}" value="${esc(item.uid || '')}" size="6">`
+      : (isRep
+        ? `<input type="text" data-field="uid" data-idx="${index}" value="${esc(item.uid || '')}" size="6" required>`
+        : esc(item.uid || '—'))}</td>
+    <td class="wrap small">${st[0] ? `<span class="pill ${st[1]}">${esc(st[0])}</span> ` : ''}${esc(note)}</td>
   </tr>`;
+}
+
+function planBlockers(plan) {
+  const out = [];
+  plan.forEach((it) => {
+    const name = it.file || '（无文件）';
+    if (it.action === 'review') out.push(name + '：待核，先选新增/换源/删除');
+    else if (it.action === 'add' && !(it.subjects && it.subjects.length)) out.push(name + '：缺分类');
+    else if (it.action === 'replace' && !String(it.uid || '').trim()) out.push(name + '：缺书号');
+    if (it.action !== 'delete' && !String(it.title || '').trim()
+      && !String(it.target_title || '').trim()) out.push(name + '：缺书名');
+  });
+  return out;
 }
 
 function inboxCard(inbox, hasPlan) {
@@ -629,11 +679,14 @@ function dropCard() {
 function viewImport() {
   const inbox = S.inbox || [];
   const plan = S.plan;
+  const bad = plan ? planBlockers(plan) : [];
   return `<h1>新书导入</h1>
-    <p class="lead">把文件拖进来，核对书名和分类，再确认入库。</p>
+    <p class="lead">收件箱里的文件先核对，再决定哪本进书库、哪本换源、哪本删掉。</p>
     ${S.importDone ? `<div class="banner"><span>已入库，接下来按格式去拆章或分诊。</span>
       <button class="btn sm" data-act="goto" data-tab="split">去拆章</button>
       <button class="btn sm" data-act="goto" data-tab="pdf">去分诊 PDF</button></div>` : ''}
+    ${S.legacyPlan ? `<div class="banner bad"><span>这份清单是旧版（冲突/跳过），按钮对不上，不能直接入库。重新生成一份再核对。</span>
+      <button class="btn sm" data-write data-act="import-scan">重新生成</button></div>` : ''}
     <div class="grid c2 section">
       ${dropCard()}
       ${inboxCard(inbox, !!plan)}
@@ -642,7 +695,7 @@ function viewImport() {
       <div class="card-head"><h2>${esc(planHead())}</h2>
         <span class="row tight">
           <button class="btn sm" data-act="plan-defaults" ${plan ? '' : 'disabled'}>采用建议分类</button>
-          <button class="btn sm${plan ? ' primary' : ''}" data-write data-act="import-apply" ${plan ? '' : 'disabled'}>确认入库</button>
+          <button class="btn sm${plan && !bad.length ? ' primary' : ''}" data-write data-act="import-apply" ${plan && !bad.length ? '' : 'disabled'}>确认入库</button>
         </span></div>
       ${plan ? planTable(plan) : '<p class="empty">收件箱里有书时，点「生成入库清单」。</p>'}
     </div>`;
@@ -653,18 +706,27 @@ function planTable(plan) {
     acc[row.action] = (acc[row.action] || 0) + 1;
     return acc;
   }, {});
-  const summary = ['add', 'replace', 'conflict', 'skip']
+  const summary = ['add', 'replace', 'delete', 'review']
     .map((key) => ACTION_WORD[key] + ' ' + num(counts[key] || 0)).join('，');
+  const bad = planBlockers(plan);
+  const sample = bad.slice(0, 3).join('；');
   return `<p class="hint">${esc(summary)}</p>
+    <div class="legend">
+      <span><b>新增</b> 收件箱 → 书库：建一本新书</span>
+      <span><b>换源</b> 收件箱 → 书库：只换已有书的主文件，书号不变</span>
+      <span><b>删除</b> 收件箱 → 回收站：书库不动，可恢复</span>
+      <span><b>待核</b> 先不动：决定后再入库</span>
+    </div>
+    ${bad.length ? `<div class="banner bad"><span>还有 ${num(bad.length)} 行没定：${esc(sample)}${bad.length > 3 ? ' …' : ''}</span></div>` : ''}
     <div class="tw"><table class="plan-table">
-    <colgroup><col style="width:92px"><col style="width:16%"><col style="width:14%"><col style="width:10%">
-      <col style="width:52px"><col style="width:84px"><col style="width:11%"><col style="width:78px">
-      <col style="width:82px"><col></colgroup>
-    <thead><tr><th>动作</th><th>文件</th><th>书名</th><th>作者</th><th>格式</th><th class="num">大小</th>
-      <th>分类</th><th>保留</th><th>编号</th><th>说明</th></tr></thead>
+    <colgroup><col style="width:88px"><col style="width:23%"><col style="width:94px"><col style="width:17%">
+      <col style="width:9%"><col style="width:12%"><col style="width:88px"><col style="width:72px"><col></colgroup>
+    <thead><tr class="group"><th></th><th colspan="2">收件箱</th><th colspan="5">书库（入库后）</th><th></th></tr>
+      <tr><th>动作</th><th>文件</th><th>格式 / 大小</th><th>书名</th><th>作者</th>
+      <th>分类</th><th>长期保留</th><th>编号</th><th>说明</th></tr></thead>
     <tbody>${plan.map(planRow).join('')}</tbody></table></div>
-    <p class="hint">黄色行建议再核对一遍。</p>
-    <p class="hint">确认后会更新书目与检索索引，接着就可以去拆章或分诊。</p>`;
+    <p class="hint">「长期保留」说的是这本书在书库里长期怎么处理：选「不留」也照常入库，之后去删书页处理。</p>
+    <p class="hint">删除只把收件箱文件移进回收站，书库里的书和正文都不动。</p>`;
 }
 
 // ---- 电子书 -------------------------------------------------------
@@ -1550,10 +1612,16 @@ async function loadPlan(jobId) {
 }
 
 async function loadLatestPlan() {
-  if (S.plan) return;
+  if (S.plan || S.legacyPlan) return;
   try {
     const body = await api('/api/import/latest');
+    if (body && body.legacy) {
+      S.legacyPlan = true;
+      S.planJob = body.job_id || null;
+      return;
+    }
     if (body && body.plan) {
+      S.legacyPlan = false;
       S.plan = body.plan;
       S.planJob = body.job_id;
       S.planDirty = false;
@@ -1869,6 +1937,7 @@ const actions = {
       if (detail && detail.job.state === 'awaiting_review') {
         S.planJob = body.job_id;
         await loadPlan(body.job_id);
+        S.legacyPlan = false;
         toast('清单好了，核对后入库');
       } else {
         toast(summaryText(detail && detail.job.summary) || '扫描没过', true);
@@ -1896,8 +1965,21 @@ const actions = {
 
   async 'import-apply'() {
     if (!S.plan || !S.planJob) return;
-    const conflicts = S.plan.filter((it) => it.action === 'conflict').length;
-    if (conflicts && !window.confirm(conflicts + ' 行冲突不会入库，文件留在收件箱。继续？')) return;
+    const bad = planBlockers(S.plan);
+    if (bad.length) {
+      toast('还有 ' + bad.length + ' 行没定，先处理', true);
+      return;
+    }
+    const count = (action) => S.plan.filter((it) => it.action === action).length;
+    const adds = count('add');
+    const reps = count('replace');
+    const dels = count('delete');
+    const bytes = S.plan.filter((it) => it.action === 'delete')
+      .reduce((sum, it) => sum + (Number(it.bytes) || 0), 0);
+    const msg = '确认入库？\n\n新增 ' + adds + ' 本，换源 ' + reps + ' 本，删除 '
+      + dels + ' 个收件箱文件（' + fmtBytes(bytes) + '，移到回收站，可恢复）。\n\n'
+      + '只动收件箱里的文件和书库记录，不会删书库里的书。';
+    if (!window.confirm(msg)) return;
     setBusy(true);
     try {
       await post('/api/import/plan', { job_id: S.planJob, items: S.plan });
@@ -1911,6 +1993,7 @@ const actions = {
         S.importDone = true;
         S.plan = null;
         S.planJob = null;
+        S.legacyPlan = false;
       } else {
         toast(summaryText(detail && detail.job.summary) || '入库没过，看日志', true);
       }
@@ -2429,6 +2512,25 @@ document.addEventListener('change', (ev) => {
     const item = S.plan[idx];
     if (!item) return;
     const field = el.dataset.field;
+    if (field === 'action') {
+      const wasAdd = item.action === 'add';
+      item.action = el.value;
+      if (el.value === 'add') {
+        item.status = 'new';
+        item.uid = nextPlanUid();
+      } else if (el.value === 'replace') {
+        item.status = 'replace';
+        const t = String(item.target || '');
+        item.uid = t && !t.includes(',') ? t : (wasAdd ? '' : (item.uid || ''));
+      } else if (el.value === 'delete') {
+        item.status = 'in_library';
+        const t = String(item.target || '');
+        item.uid = wasAdd ? '' : (t && !t.includes(',') ? t : (item.uid || ''));
+      } else item.status = 'fuzzy';
+      S.planDirty = true;
+      render();
+      return;
+    }
     if (field === 'subjects') {
       item.subjects = el.value.split('/').map((s) => s.trim()).filter(Boolean);
     } else {

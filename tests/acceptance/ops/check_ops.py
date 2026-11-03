@@ -49,10 +49,13 @@ opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
 
 
 def item(name, action, uid, note=""):
-    return {"file": name, "path": "books/_收件箱/" + name, "sha256": name * 8, "bytes": 11,
+    return {"plan_version": 2, "file": name, "path": "books/_收件箱/" + name,
+            "sha256": name * 8, "bytes": 11,
             "format": os.path.splitext(name)[1].lstrip("."), "title": name,
-            "author": "", "uid": uid, "target": "", "subjects": ["文学"],
-            "retention": "keep", "action": action, "note": note,
+            "author": "", "uid": uid, "target": uid, "target_title": "",
+            "target_author": "", "target_subjects": [], "subjects": ["文学"],
+            "retention": "keep", "action": action,
+            "status": "new" if action == "add" else action, "note": note,
             "classify": {"level1": "文学", "conf1": 0.91, "level2": "", "conf2": 0.91,
                          "needs_review": False}}
 
@@ -62,13 +65,13 @@ if cmd == "scan":
     out = opt("--out")
     plan = [item("A.epub", "add", "B0001"),
             item("B.epub", "replace", "B0002", "匹配《B》，epub 替 mobi"),
-            item("C.pdf", "conflict", "", "同名候选 B0003")]
+            item("C.pdf", "delete", "", "库里已有同一文件")]
     if out:
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:
             json.dump(plan, fh, ensure_ascii=False)
         print("plan -> " + out)
-    print("add 1 replace 1 conflict 1")
+    print("add 1 replace 1 delete 1")
     sys.exit(0)
 if cmd == "apply":
     plan = json.load(open(args[1], encoding="utf-8"))
@@ -695,7 +698,7 @@ def run_checks(root, ops, port, fixture):
           "%s · %s" % (job.get("state"), job.get("summary")))
     check("扫描门槛读计划",
           (job.get("summary") or "").startswith(
-              "计划待确认：add 1 / replace 1 / conflict 1 / skip 0"),
+              "计划待确认：add 1 / replace 1 / delete 1 / review 0"),
           str(job.get("summary")))
     check("步骤都跑完", all(s["state"] == "ok" for s in (detail or {}).get("steps", [])))
     plan_rel = "工作区/运维/jobs/%s/plan.json" % scan_id
@@ -703,13 +706,20 @@ def run_checks(root, ops, port, fixture):
     check("计划文件可读且三行", code == 200 and isinstance(plan, list) and len(plan) == 3)
     code, body = get(port, "/api/jobs?state=awaiting_review")
     check("待确认队列能查到", any(j["id"] == scan_id for j in body.get("jobs", [])))
-    check("日志接口有内容", "add 1 replace 1 conflict 1" in job_log(port, scan_id))
+    check("日志接口有内容", "add 1 replace 1 delete 1" in job_log(port, scan_id))
     check("一个任务只派发一次", job_log(port, scan_id).count("---- step scan ----") == 1,
           "step 标记 %d 个" % job_log(port, scan_id).count("---- step scan ----"))
     code, body = get(port, "/api/import/latest")
     check("最近计划能载入", code == 200 and body.get("job_id") == scan_id
           and len(body.get("plan") or []) == 3,
           "%s · %s 行" % (body.get("job_id"), len(body.get("plan") or [])))
+    with open(os.path.join(root, plan_rel), "w", encoding="utf-8") as fh:
+        json.dump([{"plan_version": 1, "file": "A.epub", "action": "conflict"}], fh)
+    code, body = get(port, "/api/import/latest")
+    check("旧计划不给按钮", code == 200 and body.get("legacy") is True
+          and body.get("plan") is None, str(body.get("legacy")))
+    with open(os.path.join(root, plan_rel), "w", encoding="utf-8") as fh:
+        json.dump(plan, fh, ensure_ascii=False)
     inbox_a = os.path.join(root, "books", "_收件箱", "A.epub")
     os.replace(inbox_a, inbox_a + ".away")
     try:
@@ -757,9 +767,12 @@ def run_checks(root, ops, port, fixture):
     # ---- 导入应用：门槛不过 ----------------------------------------
     bad_dir = os.path.join(ops, "jobs", "bad-plan")
     os.makedirs(bad_dir, exist_ok=True)
+    with open(os.path.join(root, "books", "_收件箱", "X.epub"), "wb") as fh:
+        fh.write(b"x")
     with open(os.path.join(bad_dir, "plan.json"), "w", encoding="utf-8") as fh:
-        json.dump([{"file": "X.epub", "action": "add", "note": "FAILGATE",
-                    "subjects": [], "uid": "B0009"}], fh)
+        json.dump([{"plan_version": 2, "file": "X.epub", "action": "add",
+                    "note": "FAILGATE", "subjects": ["文学"], "uid": "B0009",
+                    "title": "X"}], fh)
     code, body = post(port, "/api/import/apply",
                       {"plan_path": "工作区/运维/jobs/bad-plan/plan.json"})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))

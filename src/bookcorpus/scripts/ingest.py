@@ -14,6 +14,7 @@ opencode-go/deepseek-v4.1-flash；缓存 工作区/批次/ingest/classify.json �
 存，旧条目没有 model 与 prompt_version 也能读。
 """
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -85,8 +86,9 @@ def norm(s):
 
 
 def library_index(root):
+    """库里每本书的 uid/书名/作者/分类/主源，外加 sha→uid 与全部 sha。"""
     lib = os.path.join(root, "books")
-    books, shas = [], set()
+    books, shas, sha_uid = [], set(), {}
     for dirpath, dirnames, filenames in os.walk(lib):
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if "book.json" not in filenames:
@@ -95,10 +97,17 @@ def library_index(root):
         srcs = [x for x in (doc.get("sources") or []) if x.get("file")]
         primary = next((x for x in srcs if x.get("primary_src")), srcs[0] if srcs else {})
         books.append({"uid": doc.get("uid", ""), "title": doc.get("title", ""),
+                      "author": doc.get("author", ""),
+                      "subjects": doc.get("subjects") or [],
                       "path": os.path.relpath(dirpath, lib),
-                      "format": (primary.get("format") or "").lower()})
-        shas.update(x.get("sha256") for x in srcs if x.get("sha256"))
-    return books, shas
+                      "format": (primary.get("format") or "").lower(),
+                      "primary": primary, "sources": srcs})
+        for x in srcs:
+            sha = x.get("sha256")
+            if sha:
+                shas.add(sha)
+                sha_uid.setdefault(sha, doc.get("uid", ""))
+    return books, shas, sha_uid
 
 
 def match(title, books):
@@ -117,61 +126,115 @@ def next_uid(rows):
     return "B%04d" % (max(nums) + 1 if nums else 1)
 
 
-def plan_for(path, books, shas):
+def source_rank(fmt):
+    return FORMATS.get((fmt or "").lower(), 0)
+
+
+def _target(item, b):
+    item.update(uid=b["uid"], target=b["uid"], target_title=b["title"],
+                target_author=b.get("author", ""),
+                target_subjects=list(b.get("subjects") or []))
+
+
+def plan_for(path, books, sha_uid, seen, ret, batch_titles):
+    """收件箱一个文件一行。动作只出 add/replace/delete/review 四种。
+
+    review 是阻塞态，不是跳过：扫描拿不准时不给默认动作，必须人改成
+    新增、换源或删除，整张清单才能入库。
+    """
     base = os.path.basename(path)
     sha = sha256_file(path)
     title, author = parse_name(base)
     fmt = os.path.splitext(base)[1].lstrip(".").lower()
-    item = {"file": base, "path": path, "sha256": sha,
+    item = {"plan_version": 2, "file": base, "path": path, "sha256": sha,
             "bytes": os.path.getsize(path), "format": fmt,
             "title": title, "author": author, "uid": "", "target": "",
-            "subjects": [], "retention": "keep", "action": "", "note": ""}
-    if sha in shas:
-        item["action"], item["note"] = "skip", "同 sha256 已在库"
+            "target_title": "", "target_author": "", "target_subjects": [],
+            "subjects": [], "retention": "keep", "action": "",
+            "status": "", "note": ""}
+    old_uid = sha_uid.get(sha)
+    if old_uid:
+        item.update(action="delete", status="in_library", uid=old_uid, target=old_uid,
+                    note="库里已有同一文件：%s" % old_uid)
+        return item
+    if sha in seen:
+        item.update(action="delete", status="batch_dup",
+                    note="本批重复：%s" % seen[sha])
         return item
     hits = match(title, books)
-    if len(hits) > 1:
-        item["action"] = "conflict"
-        item["note"] = "同名候选 %s" % ",".join(b["uid"] for b in hits[:4])
-        return item
-    if len(hits) == 1:
-        b = hits[0]
-        item["uid"] = b["uid"]
-        new, old = FORMATS.get(fmt, 0), FORMATS.get(b["format"], 0)
-        if new > old:
-            item["action"] = "replace"
-            item["note"] = "匹配《%s》，%s 替 %s" % (b["title"], fmt, b["format"])
+    exact = [b for b in hits if norm(b["title"]) == norm(title)]
+    if len(exact) == 1:
+        b = exact[0]
+        _target(item, b)
+        item["retention"] = ret.get(b["uid"], "keep")
+        old = b.get("primary") or {}
+        old_sha = (old.get("sha256") or "").strip()
+        old_fmt = (old.get("format") or "").lower()
+        new_rank, old_rank = source_rank(fmt), source_rank(old_fmt)
+        known_old = old_fmt in FORMATS
+        if old_sha == sha:
+            item.update(action="delete", status="in_library",
+                        note="库里已有同一文件：%s" % b["uid"])
+        elif known_old and new_rank > old_rank:
+            item.update(action="replace", status="replace",
+                        note="换源：%s → %s；旧源保留，正文需重拆"
+                             % (old.get("file") or old_fmt, base))
+        elif known_old:
+            item.update(action="review",
+                        status="same_format" if new_rank == old_rank else "weaker",
+                        note="库里已有 %s，现有源 %s；确认换源还是删除"
+                             % (b["uid"], old.get("file") or old_fmt))
         else:
-            item["action"] = "conflict"
-            item["note"] = "匹配《%s》，已有同格式主源 %s" % (b["title"], b["format"] or "?")
+            item.update(action="review", status="weaker",
+                        note="库里已有 %s，没有可比的主源；确认换源还是删除" % b["uid"])
         return item
-    item["action"] = "add"
-    item["note"] = "新书，需填 subjects"
+    if len(exact) > 1:
+        item.update(action="review", status="candidates",
+                    target=",".join(b["uid"] for b in exact),
+                    note="同名候选：%s；选一本换源或删除"
+                         % "、".join("%s %s" % (b["uid"], b["title"]) for b in exact[:4]))
+        return item
+    if hits:
+        b = hits[0]
+        item.update(action="review", status="fuzzy",
+                    target=",".join(x["uid"] for x in hits),
+                    note="疑似同名《%s》；确认是同一本就换源，不是就新增"
+                         % "、".join(x["title"] for x in hits[:3]))
+        if len(hits) == 1:
+            _target(item, b)
+            item["retention"] = ret.get(b["uid"], "keep")
+        return item
+    key = norm(title)
+    if key and key in batch_titles:
+        item.update(action="review", status="fuzzy",
+                    note="本批已有同名：%s；确认是否同一本" % batch_titles[key])
+        return item
+    item.update(action="add", status="new", note="新书，需填分类")
     return item
 
 
 def scan(root):
-    lib, cat = os.path.join(root, "books"), os.path.join(root, "tables")
+    lib = os.path.join(root, "books")
     inbox = os.path.join(lib, "_收件箱")
-    books, shas = library_index(root)
+    books, _shas, sha_uid = library_index(root)
     rows = L.categories(root)
-    uid = next_uid(rows)
-    out = []
+    ret = {r["uid"]: (r.get("保留") or "keep") for r in rows}
+    base = int(next_uid(rows)[1:])
+    out, seen, batch_titles = [], {}, {}
     n = 0
-    seen = {}
     for name in sorted(os.listdir(inbox)):
         p = os.path.join(inbox, name)
         if not os.path.isfile(p) or name.startswith("."):
             continue
         if name.lower() in ("readme.md", "readme.txt"):
             continue
-        item = plan_for(p, books, shas)
-        if item["sha256"] in seen and item["action"] != "skip":
-            item["action"] = "skip"
-            item["note"] = "收件箱内重复：" + seen[item["sha256"]]
+        item = plan_for(p, books, sha_uid, seen, ret, batch_titles)
         seen.setdefault(item["sha256"], name)
+        key = norm(item["title"])
+        if key:
+            batch_titles.setdefault(key, name)
         if item["action"] == "add":
-            item["uid"] = "B%04d" % (int(uid[1:]) + n)
+            item["uid"] = "B%04d" % (base + n)
             n += 1
         out.append(item)
     return out
@@ -265,10 +328,11 @@ def journal(root, rows):
         if new:
             fh.write("ts\taction\tuid\tfile\tsha256\tbytes\tnote\n")
         for r in rows:
-            fh.write("\t".join(str(x) for x in (
-                time.strftime("%Y-%m-%dT%H:%M:%S%z"), r["action"], r.get("uid", ""),
-                r.get("file", ""), r.get("sha256", ""), r.get("bytes", ""),
-                r.get("note", ""))) + "\n")
+            vals = (time.strftime("%Y-%m-%dT%H:%M:%S%z"), r["action"], r.get("uid", ""),
+                    r.get("file", ""), r.get("sha256", ""), r.get("bytes", ""),
+                    r.get("note", ""))
+            fh.write("\t".join(str(x).replace("\t", " ").replace("\n", " ")
+                              for x in vals) + "\n")
 
 
 def take_lock(root):
@@ -298,63 +362,208 @@ def find_by_uid(root, uid):
     return None, None
 
 
-def book_json(uid, title, author, subjects, sources, notes):
+def book_json(uid, title, author, subjects, sources, notes, retention="keep"):
     return L.book_doc(uid, title, "", author, subjects, None, None, None,
-                      "keep", notes, sources, [])
+                      retention, notes, sources, [])
+
+
+def trash_dir(root):
+    return os.path.join(root, "工作区", "批次",
+                        "收件箱删除-" + time.strftime("%Y-%m-%d"))
+
+
+def free_path(path):
+    """目标已存在时加 -2/-3 后缀，绝不覆盖。"""
+    if not os.path.exists(path):
+        return path
+    base, ext = os.path.splitext(path)
+    n = 2
+    while os.path.exists("%s-%d%s" % (base, n, ext)):
+        n += 1
+    return "%s-%d%s" % (base, n, ext)
+
+
+def _manifest(root, row):
+    path = os.path.join(trash_dir(root), "deleted.tsv")
+    new = not os.path.exists(path)
+    with open(path, "a", encoding="utf-8") as fh:
+        if new:
+            fh.write("ts\tfile\tsha256\tbytes\treason\tuid\tdest\n")
+        fh.write("\t".join(str(x) for x in row) + "\n")
+
+
+def _trash_readme(root):
+    path = os.path.join(trash_dir(root), "README.md")
+    if os.path.exists(path):
+        return
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("# 收件箱删除\n\n"
+                 "这里是从 `books/_收件箱/` 删除的文件，书库里的书没有动。\n\n"
+                 "要找回：把文件移回 `books/_收件箱/`，再到「入库」页重新扫描；\n"
+                 "确认不要：整个日期目录删掉即可。\n")
+
+
+def _delete(root, it, src):
+    sha = sha256_file(src)
+    if it.get("sha256") and sha != it["sha256"]:
+        raise SystemExit("文件已变，重新扫描: " + it["file"])
+    dest = free_path(os.path.join(trash_dir(root), it["file"]))
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    try:
+        os.replace(src, dest)
+    except OSError as exc:
+        if exc.errno == errno.EXDEV:
+            raise SystemExit("收件箱与回收站不在同一磁盘，先手动移: " + src)
+        raise
+    _trash_readme(root)
+    reason = str(it.get("note") or it.get("status") or "删除")
+    reason = reason.replace("\t", " ").replace("\n", " ")
+    _manifest(root, (time.strftime("%Y-%m-%dT%H:%M:%S%z"), it["file"], sha,
+                     os.path.getsize(dest), reason, it.get("uid", ""),
+                     os.path.relpath(dest, root)))
+    return dict(it, action="delete", sha256=sha,
+                note="已移入回收站 %s" % os.path.relpath(dest, root))
+
+
+def _add(root, it, src):
+    lib = os.path.join(root, "books")
+    subj = [str(s).strip() for s in (it.get("subjects") or []) if str(s).strip()]
+    if not subj:
+        raise SystemExit("add 缺 subjects: %s" % it["file"])
+    title = str(it.get("title") or "").strip()
+    if not title:
+        raise SystemExit("add 缺书名: %s" % it["file"])
+    ret = it.get("retention") or "keep"
+    if ret not in ("keep", "review", "drop"):
+        raise SystemExit("保留值不认识: %s" % ret)
+    uid = str(it.get("uid") or "").strip()
+    if uid and not re.match(r"^B\d{4}$", uid):
+        raise SystemExit("uid 形如 B1234: %s" % uid)
+    rows = L.categories(root=root)
+    used = {r["uid"] for r in rows}
+    if not uid:
+        uid = next_uid(rows)
+    while uid in used or os.path.exists(os.path.join(lib, uid)):
+        uid = "B%04d" % (int(uid[1:]) + 1)
+    dest = os.path.join(lib, uid)
+    os.makedirs(os.path.join(dest, "source"), exist_ok=True)
+    target = free_path(os.path.join(dest, "source", it["file"]))
+    shutil.move(src, target)
+    name = os.path.basename(target)
+    sources = [{"file": "source/" + name, "format": it["format"],
+                "bytes": os.path.getsize(target), "sha256": it["sha256"],
+                "primary_src": 1}]
+    day = time.strftime("%Y-%m-%d")
+    L.write_json_atomic(os.path.join(dest, "book.json"),
+                        book_json(uid, title, it.get("author", ""), subj, sources,
+                                  "ingest:%s" % day, ret))
+    L.category_put({"uid": uid, "一级": subj[0],
+                    "二级": subj[1] if len(subj) > 1 else "",
+                    "作者层": "0", "保留": ret, "正式书名": title,
+                    "备注": "ingest:%s；待复核" % day}, "ingest", root=root)
+    return dict(it, action="add", uid=uid,
+                note="已入库 %s（保留 %s）" % (uid, ret))
+
+
+def _replace(root, it, src):
+    lib = os.path.join(root, "books")
+    uid = str(it.get("uid") or "").strip()
+    if not re.match(r"^B\d{4}$", uid):
+        raise SystemExit("replace 缺 uid: %s" % it["file"])
+    rel, doc = find_by_uid(root, uid)
+    if not rel:
+        raise SystemExit("库里没有 " + uid)
+    rows = [r for r in L.categories(root=root) if r["uid"] == uid]
+    cur = rows[0] if rows else {}
+    want = it.get("retention") or cur.get("保留") or doc.get("retention") or "keep"
+    if want not in ("keep", "review", "drop"):
+        raise SystemExit("保留值不认识: %s" % want)
+    dest = os.path.join(lib, rel)
+    os.makedirs(os.path.join(dest, "source"), exist_ok=True)
+    target = free_path(os.path.join(dest, "source", it["file"]))
+    shutil.move(src, target)
+    name = os.path.basename(target)
+    old, sources = None, []
+    for s in doc.get("sources") or []:
+        if old is None and s.get("primary_src"):
+            old = dict(s)
+        sources.append(dict(s, primary_src=0))
+    if old is None and sources:
+        old = dict(sources[0])
+    sources.insert(0, {"file": "source/" + name, "format": it["format"],
+                       "bytes": os.path.getsize(target), "sha256": it["sha256"],
+                       "primary_src": 1})
+    day = time.strftime("%Y-%m-%d")
+    doc["sources"] = sources
+    doc["retention"] = want
+    doc["notes"] = (doc.get("notes") or "") + "；替换源:%s" % day
+    L.write_json_atomic(os.path.join(dest, "book.json"), doc)
+    if cur:
+        row = dict(cur)
+        row["保留"] = want
+        L.category_put(row, "ingest", root=root)
+    else:
+        subj = [str(x) for x in (doc.get("subjects") or []) if str(x).strip()]
+        L.category_put({"uid": uid, "一级": subj[0] if subj else "",
+                        "二级": subj[1] if len(subj) > 1 else "",
+                        "作者层": "0", "保留": want,
+                        "正式书名": doc.get("title", ""),
+                        "备注": "ingest:%s；替换源" % day}, "ingest", root=root)
+    md_dir = os.path.join(root, L.md_rel(uid))
+    man = L.read_md_manifest(md_dir) if os.path.isdir(md_dir) else {}
+    marked = False
+    if man and not man.get("source_sha256") and old and old.get("sha256"):
+        man["source_sha256"] = old["sha256"]
+        man.setdefault("source", old.get("file", ""))
+        man.setdefault("uid", uid)
+        L.write_json_atomic(os.path.join(md_dir, ".manifest.json"), man)
+        marked = True
+    note = "新源置顶，旧源保留；md 仍是旧源产物，需重拆 %s" % uid
+    if marked:
+        note += "，旧 md 已标记待重拆"
+    return dict(it, action="replace", uid=uid, note=note)
 
 
 def apply_one(root, it, shas):
-    lib, cat = os.path.join(root, "books"), os.path.join(root, "tables")
-    if it["sha256"] in shas:
+    lib = os.path.join(root, "books")
+    action = it.get("action")
+    if action not in ("add", "replace", "delete"):
+        raise SystemExit("plan 里有未处理的动作: %s %s" % (action, it.get("file")))
+    name = str(it.get("file") or "")
+    if not name or name != os.path.basename(name) or name in (".", "..") or name.startswith("."):
+        raise SystemExit("文件名不合法: %r" % name)
+    inbox = os.path.realpath(os.path.join(lib, "_收件箱"))
+    src = os.path.realpath(it.get("path") or os.path.join(inbox, name))
+    if os.path.dirname(src) != inbox:
+        src = os.path.realpath(os.path.join(inbox, name))
+    if os.path.dirname(src) != inbox:
+        raise SystemExit("源文件不在收件箱: %s" % it.get("path"))
+    if action in ("add", "replace") and it.get("sha256") in shas:
         return dict(it, action="skip", note="同 sha256 已在库（幂等跳过）")
-    src = it.get("path") or os.path.join(lib, "_收件箱", it["file"])
-    if not os.path.isfile(src):
-        src = os.path.join(lib, "_收件箱", it["file"])
     if not os.path.isfile(src):
         raise SystemExit("收件箱里没有这个文件: " + src)
-    if it["action"] == "add":
-        subj = [s for s in (it.get("subjects") or []) if s]
-        if len(subj) < 1:
-            raise SystemExit("add 缺 subjects: %s（写在 plan 里或命令行给 --subjects）" % it["file"])
-        rel = it["uid"]
-        dest = os.path.join(lib, rel)
-        if os.path.exists(dest):
-            raise SystemExit("目标目录已存在: " + dest)
-        os.makedirs(os.path.join(dest, "source"), exist_ok=True)
-        name = it["file"]
-        shutil.move(src, os.path.join(dest, "source", name))
-        sources = [{"file": "source/" + name, "format": it["format"],
-                    "bytes": it["bytes"], "sha256": it["sha256"], "primary_src": 1}]
-        L.write_json_atomic(os.path.join(dest, "book.json"),
-                            book_json(it["uid"], it["title"], it.get("author", ""), subj,
-                                      sources, "ingest:%s" % time.strftime("%Y-%m-%d")))
-        L.category_put({"uid": it["uid"], "一级": subj[0], "二级": subj[1] if len(subj) > 1 else "",
-                        "作者层": "0", "保留": "keep", "正式书名": it["title"],
-                        "备注": "ingest:%s；待复核" % time.strftime("%Y-%m-%d")}, "ingest",
-                       root=root)
-        return dict(it, action="add", note="已入库 %s" % rel)
-    if it["action"] == "replace":
-        uid = it["uid"]
-        rows = [r for r in L.categories(root=root) if r["uid"] == uid]
-        if not rows:
-            raise SystemExit("人账里没有 " + uid)
-        rel, doc = find_by_uid(root, uid)
-        if not rel:
-            raise SystemExit("库里没有 " + uid)
-        dest = os.path.join(lib, rel)
-        name = it["file"]
-        os.makedirs(os.path.join(dest, "source"), exist_ok=True)
-        shutil.move(src, os.path.join(dest, "source", name))
-        sources = [{"file": "source/" + name, "format": it["format"], "bytes": it["bytes"],
-                    "sha256": it["sha256"], "primary_src": 1}]
-        for s in doc.get("sources") or []:
-            sources.append(dict(s, primary_src=0))
-        doc["sources"] = sources
-        doc["notes"] = (doc.get("notes") or "") + "；替换源:%s" % time.strftime("%Y-%m-%d")
-        L.write_json_atomic(os.path.join(dest, "book.json"), doc)
-        return dict(it, action="replace",
-                    note="新源置顶，旧源保留；md 仍是旧源产物，需重拆 %s" % uid)
-    raise SystemExit("plan 里有未处理的动作: %s %s" % (it["action"], it["file"]))
+    sha = sha256_file(src)
+    if it.get("sha256") and sha != it["sha256"]:
+        raise SystemExit("文件已变，重新扫描: " + name)
+    if action == "delete":
+        return _delete(root, it, src)
+    if action == "add":
+        return _add(root, it, src)
+    return _replace(root, it, src)
+
+
+def journal_keys(root):
+    path = journal_path(root)
+    keys = set()
+    if not os.path.exists(path):
+        return keys
+    with open(path, encoding="utf-8") as fh:
+        next(fh, None)
+        for line in fh:
+            cols = line.rstrip("\n").split("\t")
+            if len(cols) >= 4 and cols[1] in ("add", "replace", "delete"):
+                keys.add((cols[1], cols[3]))
+    return keys
 
 
 def rebuild():
@@ -380,6 +589,8 @@ def main():
     ap.add_argument("--no-rebuild", action="store_true")
     ap.add_argument("--no-classify", action="store_true",
                     help="跳过 deepseek 分类预填")
+    ap.add_argument("--retention", choices=("keep", "review", "drop"),
+                    help="新增/换源后的书库去留；不填则沿用账表现值")
     a = ap.parse_args()
 
     if a.cmd == "uid":
@@ -402,25 +613,53 @@ def main():
 
     if a.cmd == "apply":
         items = json.load(open(a.arg, encoding="utf-8"))
+        if not isinstance(items, list):
+            print("计划不是数组：" + a.arg, file=sys.stderr)
+            return 2
+        if any(not isinstance(i, dict) or i.get("plan_version") != 2 for i in items):
+            print("旧清单，先重新生成入库清单", file=sys.stderr)
+            return 2
     else:
         base = os.path.basename(a.arg)
-        it = {"file": base, "path": a.arg, "sha256": sha256_file(a.arg),
-              "bytes": os.path.getsize(a.arg),
+        it = {"plan_version": 2, "file": base, "path": a.arg,
+              "sha256": sha256_file(a.arg), "bytes": os.path.getsize(a.arg),
               "format": os.path.splitext(base)[1].lstrip(".").lower(),
               "title": a.title or parse_name(base)[0], "author": a.author,
               "uid": a.uid or "", "target": "",
+              "target_title": "", "target_author": "", "target_subjects": [],
               "subjects": (a.subjects or "").split("/") if a.subjects else [],
-              "retention": "keep", "action": a.cmd, "note": ""}
+              "retention": a.retention or "", "action": a.cmd,
+              "status": "new" if a.cmd == "add" else "replace", "note": ""}
         items = [it]
 
+    review = [i for i in items if i.get("action") == "review"]
+    if review:
+        print("还有 %d 行待核，先改成新增/换源/删除再入库：" % len(review), file=sys.stderr)
+        for i in review:
+            print("  %-44s %s" % (i.get("file", "")[:44], i.get("note", "")), file=sys.stderr)
+        return 2
+    unknown = [i for i in items if i.get("action") not in ("add", "replace", "delete")]
+    if unknown:
+        print("有认不出的动作：%s" % unknown[0].get("action"), file=sys.stderr)
+        return 2
     bad = [i for i in items if i["action"] == "add" and not (i.get("subjects") or [])]
     if bad:
         print("这些 add 还没填 subjects，先写进 plan 再 apply：", file=sys.stderr)
         for i in bad:
             print("  %-44s %s" % (i["file"][:44], i["uid"]), file=sys.stderr)
         return 2
+    no_title = [i for i in items if not str(i.get("title") or "").strip()]
+    if no_title:
+        print("这些行没有书名：", file=sys.stderr)
+        for i in no_title:
+            print("  " + str(i.get("file") or ""), file=sys.stderr)
+        return 2
+    bad_ret = [i for i in items if (i.get("retention") or "keep") not in ("keep", "review", "drop")]
+    if bad_ret:
+        print("保留值不认识：%s" % bad_ret[0].get("retention"), file=sys.stderr)
+        return 2
 
-    books, shas = library_index(a.root)
+    _books, shas, _sha_uid = library_index(a.root)
 
     # add 没写 uid 时按人账往下排：scan 已经排好，但手写 plan 与单本 add 容易漏，
     # 漏了会写出一行 uid 为空的 book.json 与分类表。
@@ -431,25 +670,41 @@ def main():
             if i["action"] == "add" and not (i.get("uid") or "").strip():
                 i["uid"] = "B%04d" % (base + n)
                 n += 1
-    todo = [i for i in items if i["action"] in ("add", "replace")]
+    todo = [i for i in items if i["action"] in ("add", "replace", "delete")]
     if not a.apply:
         print_plan(items)
         print("\n未写盘。确认后加 --apply。")
         return 0
 
     take_lock(a.root)
-    done = []
+    done, failed = [], []
+    done_keys = journal_keys(a.root)
     try:
         for it in todo:
-            done.append(apply_one(a.root, it, shas))
-            shas.add(it["sha256"])
-        journal(a.root, done)
+            src = os.path.join(a.root, "books", "_收件箱", it["file"])
+            if (it["action"], it["file"]) in done_keys and not os.path.isfile(src):
+                print("已处理，跳过：%s" % it["file"])
+                continue
+            try:
+                res = apply_one(a.root, it, shas)
+            except (SystemExit, OSError) as exc:
+                msg = str(exc) or type(exc).__name__
+                failed.append((it["file"], msg))
+                journal(a.root, [dict(it, action="failed", note=msg[:200])])
+                print("失败：%s：%s" % (it["file"], msg), file=sys.stderr)
+                continue
+            done.append(res)
+            journal(a.root, [res])
+            if res["action"] in ("add", "replace"):
+                shas.add(it["sha256"])
     finally:
         drop_lock(a.root)
     print_plan(done)
-    if not a.no_rebuild:
+    if failed:
+        print("\n%d 行失败，修好后可重跑（已处理的行会跳过）。" % len(failed), file=sys.stderr)
+    if done and any(r["action"] in ("add", "replace") for r in done) and not a.no_rebuild:
         print(rebuild())
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

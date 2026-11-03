@@ -432,6 +432,7 @@ pre.log {
 .issue-text { min-width: 0; overflow-wrap: anywhere; }
 .pill.half { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
 .pill.miss { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+.pill.ok { background: var(--green-soft); border-color: var(--green); color: var(--green); }
 
 /* ---- 流水线 ------------------------------------------------------- */
 .pipeline {
@@ -574,6 +575,25 @@ td.empty { text-align: center; padding: 16px 9px; }
 .plan-table { table-layout: fixed; }
 .plan-table th, .plan-table td { white-space: normal; }
 .plan-table input[type="text"], .plan-table select { width: 100%; min-width: 0; }
+.plan-table tr.group th {
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+.plan-table tbody tr.del td { background: var(--red-soft); }
+.plan-table tbody tr.review td { background: var(--amber-soft); }
+.plan-table .strike { text-decoration: line-through; color: var(--muted); }
+.banner.bad { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend b { color: var(--ink); font-weight: 600; }
 
 /* ---- 下一步的行 --------------------------------------------------- */
 .rowline {

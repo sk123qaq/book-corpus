@@ -416,11 +416,13 @@ def gate_import_scan(ctx):
     if not isinstance(plan, list):
         return "failed", "计划不是数组"
     counts = collections.Counter(str(i.get("action") or "?") for i in plan)
-    summary = "计划待确认：add %d / replace %d / conflict %d / skip %d" % (
+    summary = "计划待确认：add %d / replace %d / delete %d / review %d" % (
         counts.get("add", 0), counts.get("replace", 0),
-        counts.get("conflict", 0), counts.get("skip", 0))
-    if counts.get("conflict") or counts.get("replace"):
-        summary += "；有需要逐条定的行"
+        counts.get("delete", 0), counts.get("review", 0))
+    if counts.get("review"):
+        summary += "；有 %d 行待核" % counts["review"]
+    elif counts.get("replace"):
+        summary += "；有 %d 行换源" % counts["replace"]
     return "awaiting_review", summary
 
 
@@ -2217,8 +2219,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.fail(400, "每行必须是对象")
                 return
             row = dict(old)
+            if old.get("plan_version") != 2:
+                self.fail(409, "旧清单，先重新生成入库清单")
+                return
             action = new.get("action", old.get("action"))
-            if action not in ("add", "replace", "conflict", "skip"):
+            if action not in ("add", "replace", "delete", "review"):
                 self.fail(400, "动作不认识：%s" % action)
                 return
             retention = new.get("retention", old.get("retention"))
@@ -2228,6 +2233,9 @@ class Handler(BaseHTTPRequestHandler):
             uid = str(new.get("uid", old.get("uid")) or "").strip()
             if uid and not re.match(r"^B\d{4}$", uid):
                 self.fail(400, "uid 形如 B1234：%r" % uid)
+                return
+            if action == "replace" and not uid:
+                self.fail(400, "换源行要填书号：%s" % (old.get("file") or ""))
                 return
             subjects = new.get("subjects", old.get("subjects") or [])
             if isinstance(subjects, str):
@@ -2254,25 +2262,55 @@ class Handler(BaseHTTPRequestHandler):
         if job is not None:
             plan = read_json(os.path.join(self.app.env.job_dir(job["id"]), "plan.json"))
         if not isinstance(plan, list):
-            self.send_json(200, {"ok": True, "job_id": None, "plan": None})
+            self.send_json(200, {"ok": True, "job_id": None, "plan": None, "legacy": False})
             return
-        root = self.app.env.root
+        # 旧计划的 conflict/skip 没有对应按钮，也不再入库；让页面提示重新扫描。
+        if any(not isinstance(i, dict) or i.get("plan_version") != 2 for i in plan) or \
+                any(i.get("action") not in ("add", "replace", "delete", "review") for i in plan):
+            self.send_json(200, {"ok": True, "job_id": job["id"],
+                                 "created": job.get("created"), "plan": None,
+                                 "legacy": True})
+            return
         for item in plan:
-            if item.get("action") not in ("add", "replace"):
-                continue
-            src = str(item.get("path") or "")
-            if not src:
-                self.send_json(200, {"ok": True, "job_id": None, "plan": None})
-                return
-            path = src if os.path.isabs(src) else os.path.join(root, src)
-            if not os.path.isfile(path):
-                self.send_json(200, {"ok": True, "job_id": None, "plan": None})
+            name = os.path.basename(str(item.get("file") or ""))
+            if not name or not os.path.isfile(os.path.join(self.app.env.inbox, name)):
+                self.send_json(200, {"ok": True, "job_id": None, "plan": None,
+                                     "legacy": False})
                 return
         self.send_json(200, {"ok": True, "job_id": job["id"],
-                             "created": job.get("created"), "plan": plan})
+                             "created": job.get("created"), "plan": plan,
+                             "legacy": False})
 
     def api_import_apply(self, payload):
         plan = plan_path(self.app.env, payload.get("plan_path"))
+        items = read_json(plan)
+        if not isinstance(items, list):
+            self.fail(409, "计划不存在")
+            return
+        if any(not isinstance(i, dict) or i.get("plan_version") != 2 for i in items):
+            self.fail(409, "旧清单，先重新生成入库清单")
+            return
+        bad = [i for i in items if i.get("action") not in ("add", "replace", "delete", "review")]
+        if bad:
+            self.fail(400, "动作不认识：%s" % bad[0].get("action"))
+            return
+        review = [i for i in items if i.get("action") == "review"]
+        if review:
+            self.fail(400, "还有 %d 行待核，改成新增/换源/删除再入库" % len(review))
+            return
+        no_subj = [i for i in items if i.get("action") == "add" and not (i.get("subjects") or [])]
+        if no_subj:
+            self.fail(400, "还有 %d 行没填分类" % len(no_subj))
+            return
+        no_uid = [i for i in items if i.get("action") == "replace" and not str(i.get("uid") or "").strip()]
+        if no_uid:
+            self.fail(400, "还有 %d 行换源没填书号" % len(no_uid))
+            return
+        for item in items:
+            name = os.path.basename(str(item.get("file") or ""))
+            if not name or name != item.get("file") or not os.path.isfile(os.path.join(self.app.env.inbox, name)):
+                self.fail(400, "收件箱里没有这个文件：%s" % (item.get("file") or ""))
+                return
         commands = [make_cmd(self.app.env, "ingest apply", "ingest.py",
                              ["apply", plan, "--apply"], accepts_root=True)]
         commands += rebuild_commands(self.app.env)
