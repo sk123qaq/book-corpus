@@ -41,7 +41,7 @@ from dataclasses import asdict, dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import L, ROOT, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import book_readme  # noqa: E402
 import book_score  # noqa: E402
