@@ -59,6 +59,8 @@ def test_same_sha_is_deleted_to_trash(workspace):
     assert row["action"] == "delete"
     assert row["status"] == "in_library"
     assert row["uid"] == "B0001"
+    assert row["target_title"] == "甲书"
+    assert row["target_subjects"] == ["文学"]
 
     r = _apply(workspace, items)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -196,3 +198,23 @@ def test_add_keeps_retention_and_rerun_skips(workspace):
     n = con.execute("SELECT count(*) FROM 分类 WHERE uid=?", (row["uid"],)).fetchone()[0]
     con.close()
     assert n == 1
+
+
+def test_empty_category_falls_back_to_other(workspace):
+    _inbox(workspace, "戊书.epub", b"wu" * 30)
+    items = _scan(workspace)
+    row = next(i for i in items if i["file"] == "戊书.epub")
+    assert row["action"] == "add"
+    assert row["subjects"] == ["其他"], row
+
+    # 手改计划把分类清空，apply 也必须落到「其他」，不能写空。
+    row["subjects"] = []
+    r = _apply(workspace, items)
+    assert r.returncode == 0, r.stdout + r.stderr
+    con = sqlite3.connect(str(workspace / "tables" / "ledger.db"))
+    got = con.execute("SELECT 一级 FROM 分类 WHERE uid=?", (row["uid"],)).fetchone()
+    con.close()
+    assert got == ("其他",)
+    doc = json.loads((workspace / "books" / row["uid"] / "book.json")
+                     .read_text(encoding="utf-8"))
+    assert doc["subjects"] == ["其他"]

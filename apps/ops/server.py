@@ -1603,6 +1603,16 @@ class App:
             "SELECT uid, title, author, path, subject1, subject2, series, volume,"
             " retention FROM book WHERE uid=? OR title LIKE ? OR author LIKE ?"
             " ORDER BY uid LIMIT 30", (query, like, like))
+        return self._retire_enrich(rows)
+
+    def retire_drop(self, limit=100):
+        """账表里保留=drop 的书。删书页先列这一队，不用再靠搜。"""
+        rows = self.db_rows(
+            "SELECT uid, title, author, path, subject1, subject2, series, volume,"
+            " retention FROM book WHERE retention='drop' ORDER BY uid LIMIT ?", (limit,))
+        return self._retire_enrich(rows)
+
+    def _retire_enrich(self, rows):
         for row in rows:
             row["sources"] = self.db_rows(
                 "SELECT file, format, bytes, sha256, primary_src FROM source"
@@ -1943,6 +1953,8 @@ class Handler(BaseHTTPRequestHandler):
                                      "untriaged": untriaged_split(books)})
             elif route == "/api/ledger":
                 self.send_json(200, self.app.ledger_tables())
+            elif route == "/api/retire/drop":
+                self.send_json(200, {"ok": True, "books": self.app.retire_drop()})
             elif route == "/api/retire/search":
                 q = (query.get("q") or [""])[0].strip()
                 if not q:
@@ -2243,13 +2255,20 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(subjects, list):
                 self.fail(400, "subjects 必须是数组或 一级/二级")
                 return
+            subjects = [str(x).strip() for x in subjects if str(x).strip()] or ["其他"]
+            target_subjects = new.get("target_subjects", old.get("target_subjects") or [])
+            if isinstance(target_subjects, str):
+                target_subjects = [s.strip() for s in re.split(r"[/,]", target_subjects) if s.strip()]
+            if not isinstance(target_subjects, list):
+                self.fail(400, "target_subjects 必须是数组或 一级/二级")
+                return
+            target_subjects = [str(x).strip() for x in target_subjects if str(x).strip()] or ["其他"]
             title = str(new.get("title", old.get("title")) or "").strip()
             if not title:
                 self.fail(400, "书名不能空：%s" % (old.get("file") or ""))
                 return
             row.update(action=action, retention=retention, uid=uid,
-                       subjects=[str(x).strip() for x in subjects if str(x).strip()],
-                       title=title)
+                       subjects=subjects, target_subjects=target_subjects, title=title)
             merged.append(row)
         write_json_atomic(path, merged)
         self.send_json(200, {"ok": True, "items": len(merged),
@@ -2298,10 +2317,12 @@ class Handler(BaseHTTPRequestHandler):
         if review:
             self.fail(400, "还有 %d 行待核，改成新增/换源/删除再入库" % len(review))
             return
-        no_subj = [i for i in items if i.get("action") == "add" and not (i.get("subjects") or [])]
-        if no_subj:
-            self.fail(400, "还有 %d 行没填分类" % len(no_subj))
-            return
+        # 分类为空不再拦：落「其他」，且把归一后的值写回计划，页面与 apply 看到的一致。
+        for item in items:
+            if not (item.get("subjects") or []):
+                item["subjects"] = ["其他"]
+            if not (item.get("target_subjects") or []):
+                item["target_subjects"] = ["其他"]
         no_uid = [i for i in items if i.get("action") == "replace" and not str(i.get("uid") or "").strip()]
         if no_uid:
             self.fail(400, "还有 %d 行换源没填书号" % len(no_uid))
@@ -2311,6 +2332,7 @@ class Handler(BaseHTTPRequestHandler):
             if not name or name != item.get("file") or not os.path.isfile(os.path.join(self.app.env.inbox, name)):
                 self.fail(400, "收件箱里没有这个文件：%s" % (item.get("file") or ""))
                 return
+        write_json_atomic(plan, items)
         commands = [make_cmd(self.app.env, "ingest apply", "ingest.py",
                              ["apply", plan, "--apply"], accepts_root=True)]
         commands += rebuild_commands(self.app.env)

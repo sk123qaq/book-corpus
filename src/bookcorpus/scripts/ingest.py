@@ -86,19 +86,28 @@ def norm(s):
 
 
 def library_index(root):
-    """库里每本书的 uid/书名/作者/分类/主源，外加 sha→uid 与全部 sha。"""
+    """库里每本书的 uid/书名/作者/分类/主源，外加 sha→uid 与全部 sha。
+
+    分类以账表为准：账表有 1954 行且一级从不为空，book.json 是旧副本，
+    可能停在分类功能上线之前。账表读不到时才退回 book.json。
+    """
     lib = os.path.join(root, "books")
+    ledger = {r["uid"]: [str(x).strip() for x in (r.get("一级"), r.get("二级"))
+                          if str(x or "").strip()]
+              for r in L.categories(root=root)}
     books, shas, sha_uid = [], set(), {}
     for dirpath, dirnames, filenames in os.walk(lib):
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if "book.json" not in filenames:
             continue
         doc = json.load(open(os.path.join(dirpath, "book.json"), encoding="utf-8"))
+        uid = doc.get("uid", "")
+        subjects = ledger.get(uid) or [str(x).strip() for x in (doc.get("subjects") or [])]
         srcs = [x for x in (doc.get("sources") or []) if x.get("file")]
         primary = next((x for x in srcs if x.get("primary_src")), srcs[0] if srcs else {})
-        books.append({"uid": doc.get("uid", ""), "title": doc.get("title", ""),
+        books.append({"uid": uid, "title": doc.get("title", ""),
                       "author": doc.get("author", ""),
-                      "subjects": doc.get("subjects") or [],
+                      "subjects": [s for s in subjects if s],
                       "path": os.path.relpath(dirpath, lib),
                       "format": (primary.get("format") or "").lower(),
                       "primary": primary, "sources": srcs})
@@ -130,10 +139,27 @@ def source_rank(fmt):
     return FORMATS.get((fmt or "").lower(), 0)
 
 
+def norm_subjects(value):
+    """分类列表归一：空值落「其他」，一级在前，去重。"""
+    parts = [value] if isinstance(value, str) else list(value or [])
+    out = []
+    for part in parts:
+        for s in re.split(r"[/,，]", str(part)):
+            s = s.strip()
+            if s and s not in out:
+                out.append(s)
+    return out or ["其他"]
+
+
+def _shared_subjects(bs):
+    vals = {tuple(norm_subjects(b.get("subjects"))) for b in bs}
+    return list(next(iter(vals))) if len(vals) == 1 else []
+
+
 def _target(item, b):
     item.update(uid=b["uid"], target=b["uid"], target_title=b["title"],
                 target_author=b.get("author", ""),
-                target_subjects=list(b.get("subjects") or []))
+                target_subjects=norm_subjects(b.get("subjects")))
 
 
 def plan_for(path, books, sha_uid, seen, ret, batch_titles):
@@ -154,11 +180,15 @@ def plan_for(path, books, sha_uid, seen, ret, batch_titles):
             "status": "", "note": ""}
     old_uid = sha_uid.get(sha)
     if old_uid:
+        b = next((x for x in books if x["uid"] == old_uid), None)
+        if b:
+            _target(item, b)
         item.update(action="delete", status="in_library", uid=old_uid, target=old_uid,
+                    target_subjects=item["target_subjects"] or ["其他"],
                     note="库里已有同一文件：%s" % old_uid)
         return item
     if sha in seen:
-        item.update(action="delete", status="batch_dup",
+        item.update(action="delete", status="batch_dup", target_subjects=["其他"],
                     note="本批重复：%s" % seen[sha])
         return item
     hits = match(title, books)
@@ -191,25 +221,27 @@ def plan_for(path, books, sha_uid, seen, ret, batch_titles):
     if len(exact) > 1:
         item.update(action="review", status="candidates",
                     target=",".join(b["uid"] for b in exact),
+                    target_subjects=_shared_subjects(exact) or ["其他"],
                     note="同名候选：%s；选一本换源或删除"
                          % "、".join("%s %s" % (b["uid"], b["title"]) for b in exact[:4]))
         return item
     if hits:
-        b = hits[0]
         item.update(action="review", status="fuzzy",
                     target=",".join(x["uid"] for x in hits),
+                    target_subjects=_shared_subjects(hits) or ["其他"],
                     note="疑似同名《%s》；确认是同一本就换源，不是就新增"
                          % "、".join(x["title"] for x in hits[:3]))
         if len(hits) == 1:
-            _target(item, b)
-            item["retention"] = ret.get(b["uid"], "keep")
+            _target(item, hits[0])
+            item["retention"] = ret.get(hits[0]["uid"], "keep")
         return item
     key = norm(title)
     if key and key in batch_titles:
-        item.update(action="review", status="fuzzy",
+        item.update(action="review", status="fuzzy", target_subjects=["其他"],
                     note="本批已有同名：%s；确认是否同一本" % batch_titles[key])
         return item
-    item.update(action="add", status="new", note="新书，需填分类")
+    item.update(action="add", status="new", subjects=["其他"],
+                note="新书，分类未定，暂放其他")
     return item
 
 
@@ -275,7 +307,8 @@ def apply_class(item, rec):
     l1, l2 = rec.get("level1", ""), rec.get("level2", "")
     c1, c2 = _conf(rec, "conf1"), _conf(rec, "conf2")
     if l1 in ("", "拿不准") or c1 < CLS_MIN:
-        item["note"] = "低置信 %.2f（%s），需人工确认" % (c1, l1 or "无")
+        item["subjects"] = ["其他"]
+        item["note"] = "低置信 %.2f（%s），暂放其他，可手改" % (c1, l1 or "无")
         item["classify"] = dict(rec, needs_review=True)
         return
     subs = [l1]
@@ -306,7 +339,8 @@ def classify_adds(items, cache_path, enabled=True):
             msg = (str(exc) or type(exc).__name__)[:90]
             print("分类失败：%s" % msg, file=sys.stderr)
             for it in todo:
-                it["note"] = "分类失败：%s；需人工填 subjects" % msg
+                it["subjects"] = ["其他"]
+                it["note"] = "分类失败：%s；暂放其他" % msg
     for it in items:
         rec = cache.get(it["sha256"])
         if it["action"] == "add" and rec:
@@ -427,9 +461,7 @@ def _delete(root, it, src):
 
 def _add(root, it, src):
     lib = os.path.join(root, "books")
-    subj = [str(s).strip() for s in (it.get("subjects") or []) if str(s).strip()]
-    if not subj:
-        raise SystemExit("add 缺 subjects: %s" % it["file"])
+    subj = norm_subjects(it.get("subjects"))
     title = str(it.get("title") or "").strip()
     if not title:
         raise SystemExit("add 缺书名: %s" % it["file"])
@@ -475,6 +507,10 @@ def _replace(root, it, src):
         raise SystemExit("库里没有 " + uid)
     rows = [r for r in L.categories(root=root) if r["uid"] == uid]
     cur = rows[0] if rows else {}
+    if cur and str(cur.get("一级") or "").strip():
+        subj = norm_subjects([cur.get("一级"), cur.get("二级")])
+    else:
+        subj = norm_subjects(doc.get("subjects"))
     want = it.get("retention") or cur.get("保留") or doc.get("retention") or "keep"
     if want not in ("keep", "review", "drop"):
         raise SystemExit("保留值不认识: %s" % want)
@@ -496,15 +532,17 @@ def _replace(root, it, src):
     day = time.strftime("%Y-%m-%d")
     doc["sources"] = sources
     doc["retention"] = want
+    doc["subjects"] = subj
     doc["notes"] = (doc.get("notes") or "") + "；替换源:%s" % day
     L.write_json_atomic(os.path.join(dest, "book.json"), doc)
     if cur:
         row = dict(cur)
         row["保留"] = want
+        row["一级"] = subj[0]
+        row["二级"] = subj[1] if len(subj) > 1 else ""
         L.category_put(row, "ingest", root=root)
     else:
-        subj = [str(x) for x in (doc.get("subjects") or []) if str(x).strip()]
-        L.category_put({"uid": uid, "一级": subj[0] if subj else "",
+        L.category_put({"uid": uid, "一级": subj[0],
                         "二级": subj[1] if len(subj) > 1 else "",
                         "作者层": "0", "保留": want,
                         "正式书名": doc.get("title", ""),
@@ -642,12 +680,10 @@ def main():
     if unknown:
         print("有认不出的动作：%s" % unknown[0].get("action"), file=sys.stderr)
         return 2
-    bad = [i for i in items if i["action"] == "add" and not (i.get("subjects") or [])]
-    if bad:
-        print("这些 add 还没填 subjects，先写进 plan 再 apply：", file=sys.stderr)
-        for i in bad:
-            print("  %-44s %s" % (i["file"][:44], i["uid"]), file=sys.stderr)
-        return 2
+    # 分类为空不再拦：add 一律落「其他」，宁可粗分也不留空。
+    for i in items:
+        if i["action"] == "add":
+            i["subjects"] = norm_subjects(i.get("subjects"))
     no_title = [i for i in items if not str(i.get("title") or "").strip()]
     if no_title:
         print("这些行没有书名：", file=sys.stderr)

@@ -87,7 +87,7 @@ const S = {
   plan: null, planJob: null, planDirty: false, legacyPlan: false,
   batch: null, splitBooks: [],
   review: null, reviewJob: null,
-  retireHits: [], retireQuery: '', preview: null,
+  retireHits: [], retireDrop: [], retireQuery: '', preview: null,
   logJob: null, logDetail: null, follow: true, importDone: null,
   filter: '', selected: new Set(), busy: false,
   replaceMd: false, splitWorkers: 4,
@@ -601,7 +601,7 @@ function planRow(item, index) {
     ? item.target_subjects.join('/') : (item.target_subjects || '');
   const title = isAdd ? item.title : (isDel && !item.target_title ? '—' : (item.target_title || item.title || ''));
   const author = isAdd ? (item.author || '') : (isDel && !item.target_title ? '—' : (item.target_author || item.author || ''));
-  const cls = isAdd ? subjects : libSubjects;
+  const cls = isAdd ? (subjects || '其他') : (libSubjects || '其他');
   const rowClass = isDel ? ' class="del"' : (isRev ? ' class="review"' : (low ? ' class="low"' : ''));
   return `<tr data-row="${index}"${rowClass}>
     <td><select data-field="action" data-idx="${index}">
@@ -632,7 +632,6 @@ function planBlockers(plan) {
   plan.forEach((it) => {
     const name = it.file || '（无文件）';
     if (it.action === 'review') out.push(name + '：待核，先选新增/换源/删除');
-    else if (it.action === 'add' && !(it.subjects && it.subjects.length)) out.push(name + '：缺分类');
     else if (it.action === 'replace' && !String(it.uid || '').trim()) out.push(name + '：缺书号');
     if (it.action !== 'delete' && !String(it.title || '').trim()
       && !String(it.target_title || '').trim()) out.push(name + '：缺书名');
@@ -725,7 +724,7 @@ function planTable(plan) {
       <tr><th>动作</th><th>文件</th><th>格式 / 大小</th><th>书名</th><th>作者</th>
       <th>分类</th><th>长期保留</th><th>编号</th><th>说明</th></tr></thead>
     <tbody>${plan.map(planRow).join('')}</tbody></table></div>
-    <p class="hint">「长期保留」说的是这本书在书库里长期怎么处理：选「不留」也照常入库，之后去删书页处理。</p>
+    <p class="hint">「长期保留」说的是这本书在书库里长期怎么处理：选「不留」也照常入库，之后在删书页顶部的「不留的书」里处理。</p>
     <p class="hint">删除只把收件箱文件移进回收站，书库里的书和正文都不动。</p>`;
 }
 
@@ -1296,8 +1295,25 @@ function viewMaintain() {
 
 // ---- 删书 ---------------------------------------------------------
 function viewRetire() {
+  const drop = S.retireDrop || [];
   return `<h1>删书</h1>
     <p class="lead">删书是把书移出流程。原书留在冷宫，阅读用的 Markdown、页面和索引记录会删掉。</p>
+    <div class="section card">
+      <div class="card-head"><h2>不留的书 <span class="hint">${num(drop.length)} 本</span></h2>
+        <button class="btn sm" data-act="retire-drop-refresh">刷新</button></div>
+      <p class="hint">入库或账表里标成「不留」的书，书还在库里，只是等着移出。账表刚改完要先跑维护，这里才看得到。</p>
+      ${drop.length ? `<div class="tw"><table><thead><tr><th>编号</th><th>书名</th>
+        <th>分类</th><th class="num">章</th><th class="num">源文件</th><th class="num">奖项</th><th></th></tr></thead>
+        <tbody>${drop.map((b) => `<tr>
+          <td class="mono">${esc(b.uid)}</td>
+          <td class="wrap">${esc(b.title)}</td>
+          <td class="wrap small">${esc([b.subject1, b.subject2].filter(Boolean).join('/') || '其他')}</td>
+          <td class="num">${esc(b.md && b.md.chapters !== undefined ? b.md.chapters : 0)}</td>
+          <td class="num">${(b.sources || []).length}</td>
+          <td class="num">${(b.awards || []).length}</td>
+          <td><button class="btn sm" data-act="retire-preview" data-uid="${esc(b.uid)}">预览移出</button></td>
+        </tr>`).join('')}</tbody></table></div>` : '<p class="empty">没有标记为不留的书。入库时选「不留」，或在账表改保留再跑维护，这里就会出现。</p>'}
+    </div>
     <div class="section card">
       <h2>找书</h2>
       <div class="toolbar">
@@ -1309,7 +1325,7 @@ function viewRetire() {
         <tbody>${S.retireHits.map((b) => `<tr>
           <td class="mono">${esc(b.uid)}</td>
           <td class="wrap">${esc(b.title)}</td>
-          <td class="wrap small">${esc([b.subject1, b.subject2].filter(Boolean).join('/'))}</td>
+          <td class="wrap small">${esc([b.subject1, b.subject2].filter(Boolean).join('/') || '其他')}</td>
           <td class="num">${esc(b.md && b.md.chapters !== undefined ? b.md.chapters : 0)}</td>
           <td class="num">${(b.sources || []).length}</td>
           <td class="num">${(b.awards || []).length}</td>
@@ -1606,9 +1622,36 @@ async function loadHealth() {
 async function loadPlan(jobId) {
   const body = await api('/api/file?path=' + encodeURIComponent(
     '工作区/运维/jobs/' + jobId + '/plan.json'));
-  S.plan = body;
+  S.plan = normalizePlan(body);
   S.planJob = jobId;
   S.planDirty = false;
+}
+
+function normSubjects(value) {
+  const parts = Array.isArray(value) ? value : String(value || '').split(/[\/,，]/);
+  const out = [];
+  parts.forEach((part) => String(part).split(/[\/,，]/).forEach((s) => {
+    s = s.trim();
+    if (s && out.indexOf(s) < 0) out.push(s);
+  }));
+  return out.length ? out : ['其他'];
+}
+
+function normalizePlan(plan) {
+  (plan || []).forEach((it) => {
+    it.subjects = normSubjects(it.subjects);
+    it.target_subjects = normSubjects(it.target_subjects);
+  });
+  return plan;
+}
+
+async function loadRetireDrop() {
+  try {
+    const body = await api('/api/retire/drop');
+    S.retireDrop = body.books || [];
+  } catch (err) {
+    S.retireDrop = [];
+  }
 }
 
 async function loadLatestPlan() {
@@ -1622,7 +1665,7 @@ async function loadLatestPlan() {
     }
     if (body && body.plan) {
       S.legacyPlan = false;
-      S.plan = body.plan;
+      S.plan = normalizePlan(body.plan);
       S.planJob = body.job_id;
       S.planDirty = false;
     }
@@ -1702,8 +1745,10 @@ async function refreshTab() {
     await Promise.all([loadJobs(), loadPdfBooks()]);
   } else if (S.tab === 'ledger') {
     await loadLedger();
-  } else if (S.tab === 'maintain' || S.tab === 'retire') {
+  } else if (S.tab === 'maintain') {
     await Promise.all([loadStatus(), loadJobs()]);
+  } else if (S.tab === 'retire') {
+    await Promise.all([loadStatus(), loadJobs(), loadRetireDrop()]);
   } else if (S.tab === 'logs') {
     await loadJobs();
   }
@@ -2312,6 +2357,11 @@ const actions = {
     render();
   },
 
+  async 'retire-drop-refresh'() {
+    await loadRetireDrop();
+    render();
+  },
+
   async 'retire-search'() {
     const q = (($('#retire-q') || {}).value || '').trim();
     if (!q) {
@@ -2380,7 +2430,7 @@ const actions = {
         detail.job.state !== 'succeeded');
       S.preview = null;
       $('#modal').innerHTML = '';
-      await Promise.all([loadStatus(), loadJobs(), loadPending()]);
+      await Promise.all([loadStatus(), loadJobs(), loadPending(), loadRetireDrop()]);
       render();
     } catch (err) {
       toast(err.message, true);

@@ -166,9 +166,10 @@ def test_ingest_classify_adds(tmp):
     finally:
         os.environ.clear()
         os.environ.update(old)
-    assert items[0]["subjects"] == [] and "低置信" in items[0]["note"], items[0]
+    assert items[0]["subjects"] == ["其他"] and "低置信" in items[0]["note"], items[0]
+    assert "暂放其他" in items[0]["note"], items[0]
     assert items[0]["classify"]["needs_review"] is True, items[0]
-    print("ingest low confidence ok（拿不准降级人工）")
+    print("ingest low confidence ok（拿不准落其他）")
 
 
 def test_ingest_bad_json(tmp):
@@ -176,8 +177,8 @@ def test_ingest_bad_json(tmp):
     open(os.path.join(root, "books", "_收件箱", "杂书.epub"), "wb").write(b"x")
     r = run("ingest.py", ["scan", "--root", root, "--json"], {"PI_STUB_JSON": "模型今天不说话"})
     item = json.loads(r.stdout)[0]
-    assert item["subjects"] == [], item
-    assert "分类失败" in item["note"] and "需人工填 subjects" in item["note"], item
+    assert item["subjects"] == ["其他"], item
+    assert "分类失败" in item["note"] and "暂放其他" in item["note"], item
     assert "分类失败" in r.stderr, r.stderr
     assert not os.path.exists(os.path.join(root, "工作区", "批次", "ingest", "classify.json"))
     print("ingest bad JSON ok（stderr 报错，note 让人工填）")
