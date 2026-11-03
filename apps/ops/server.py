@@ -1130,6 +1130,16 @@ class App:
                        "jobs": {"running": 0, "awaiting_review": 0, "last": None}}
             error = error or "ops_status.py 未就绪，页面显示空状态"
         counts = self.store.counts()
+        pdf = self.pdf_books_index()
+        archived = [row for row in pdf.values()
+                    if row["disposition"] in ("gallery", "ja")]
+        payload["archive"] = {
+            "books": len(archived),
+            "pages": sum(int(row["pages"] or 0) for row in archived),
+            "gallery": sum(1 for row in archived if row["disposition"] == "gallery"),
+            "ja": sum(1 for row in archived if row["disposition"] == "ja")}
+        payload["convertible"] = max(
+            0, int(payload.get("pending", {}).get("total") or 0) - len(archived))
         payload["jobs"] = {
             "queued": counts.get("queued", 0),
             "running": counts.get("running", 0),

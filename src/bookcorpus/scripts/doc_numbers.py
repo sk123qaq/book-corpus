@@ -12,6 +12,7 @@
 取数只读：library.db 以 mode=ro 打开，md 本数看 books/<uid>/md 是不是目录，视图数 build/views 下的软链。
 """
 import argparse
+import csv
 import datetime
 import json
 import os
@@ -58,11 +59,13 @@ def collect(root=ROOT, as_of=None):
     finally:
         con.close()
     view = views(root)
+    ja, skip = archive_uids(root)
     return {
         "books": books,
         "md": sum(1 for p in paths if os.path.isdir(os.path.join(root, "books", p, "md"))),
         "pending_total": sum(pending.values()),
         "pending": pending,
+        "archive": {"ja": len(ja), "gallery": len(skip)},
         "awards": awards,
         "award_names": award_names,
         "view_total": sum(view.values()),
@@ -86,6 +89,31 @@ def views(root):
     return out
 
 
+def archive_uids(root):
+    """存档账：日文 uid 集（lang=ja）与图册 uid 集（普查与 ops 的 skip_list）。"""
+    batch = os.path.join(root, "工作区", "批次")
+
+    def rows(path):
+        path = os.path.join(batch, path)
+        if not os.path.isfile(path):
+            return
+        with open(path, encoding="utf-8-sig") as fh:
+            for row in csv.DictReader(fh, delimiter="\t"):
+                uid = (row.get("uid") or "").strip()
+                if uid:
+                    yield uid, row
+
+    ja, gallery = set(), set()
+    for uid, row in rows(os.path.join("pdf-ocr-2026-10-19", "defer", "lang.tsv")):
+        if (row.get("lang") or "").strip() == "ja":
+            ja.add(uid)
+    for uid, _row in rows(os.path.join("pdf-普查-2026-10-19", "skip_list.tsv")):
+        gallery.add(uid)
+    for uid, _row in rows(os.path.join("pdf-ocr-ops-2026-10-26", "skip_list.tsv")):
+        gallery.add(uid)
+    return ja, gallery
+
+
 def pitfall(root):
     path = os.path.join(root, "build", "检索", "踩坑记录.md")
     if not os.path.isfile(path):
@@ -102,10 +130,17 @@ def render(counts):
     if pending.get(OTHER):
         parts.append("%s %s" % (num(pending[OTHER]), OTHER))
     view = counts["view"]
-    line = ("As of %s：%s 本书，%s 本有 md，%s 本待拆章（%s）；%s 条奖项记录，"
+    a = counts.get("archive") or {}
+    archive_n = int(a.get("ja", 0)) + int(a.get("gallery", 0))
+    archive_note = ""
+    if archive_n:
+        archive_note = "；存档 %s：图册 %s、非中英文 %s，政策不转不删" % (
+            num(archive_n), num(a.get("gallery", 0)), num(a.get("ja", 0)))
+    line = ("As of %s：%s 本书，%s 本有 md，%s 本待拆章（%s%s）；%s 条奖项记录，"
             "视图 %s 条软链（奖项 %s、主题 %s）；坑账 %s 类。") % (
         counts["as_of"], num(counts["books"]), num(counts["md"]),
-        num(counts["pending_total"]), "、".join(parts), num(counts["awards"]),
+        num(counts["pending_total"]), "、".join(parts), archive_note,
+        num(counts["awards"]),
         num(counts["view_total"]), num(view["奖项"]), num(view["主题"]),
         num(counts["pitfall_classes"]))
     return "%s\n%s\n%s" % (START, line, END)

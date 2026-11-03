@@ -42,16 +42,16 @@ const SPLIT_WORD = {
 const ACTION_WORD = { add: '新增', replace: '换源', conflict: '冲突', skip: '跳过' };
 const RETENTION_WORD = { keep: '保留', review: '待定', drop: '不留' };
 const PDF_ROUTE_WORD = {
-  'OCR': '扫描识别', '本地抽文本': '直接抽取', '不转-记图册': '只记图册',
-  '人工确认': '待人工判断', '日文暂缓': '日文暂缓',
+  'OCR': '扫描识别', '本地抽文本': '直接抽取', '不转-记图册': '存档·图册',
+  '人工确认': '待人工判断', '日文暂缓': '存档·非中英文',
 };
-const PICK_TAG = [['convert', '可转'], ['gallery', '只记图册'], ['ja', '日文暂缓'],
+const PICK_TAG = [['convert', '可转'], ['gallery', '存档·图册'], ['ja', '存档·非中英文'],
   ['untriaged', '未分诊']];
 // 状态带按「先能转的，再要人动手的」排；清单筛选条沿用上面的处置顺序
 const STRIP_TAG = ['convert', 'untriaged', 'gallery', 'ja'];
 const PICK_SORT = [['pages', '页数多到少'], ['pages-asc', '页数少到多'], ['uid', '编号']];
 const PICK_WORD = {
-  convert: '可转', gallery: '只记图册', ja: '日文暂缓', untriaged: '未分诊',
+  convert: '可转', gallery: '存档·图册', ja: '存档·非中英文', untriaged: '未分诊',
 };
 const PICK_PROGRESS = {
   todo: ['未开始', 'out'], running: ['在跑', 'half'], landed: ['已落地', 'ok'],
@@ -256,11 +256,15 @@ function bookCounts() {
   const st = S.status || {};
   const pending = st.pending || {};
   const lagChapters = dig(st, 'index.lag_chapters', 0);
+  const convertible = st.convertible || null;
   return {
     books: dig(st, 'books', 0),
     readable: dig(st, 'md_done', 0),
     chapters: dig(st, 'md_chapters', 0),
-    toConvert: (pending.pdf || 0) + (pending.txt || 0) + (pending.djvu || 0),
+    // 待转口径在服务端：无 md 的书里去掉已定存档的。缺口径时退回旧公式
+    toConvert: convertible != null ? convertible
+      : (pending.pdf || 0) + (pending.txt || 0) + (pending.djvu || 0),
+    archive: st.archive || null,
     inbox: dig(st, 'inbox.files', 0),
     ledgerRows: dig(st, 'ledger.rows', 0),
     awards: dig(st, 'views.awards', 0),
@@ -325,9 +329,10 @@ function renderStats() {
     ['藏书', num(c.books)],
     ['可读', num(c.readable)],
     ['待转', num(c.toConvert)],
+    c.archive ? ['存档', num(c.archive.books)] : null,
     ['索引', c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本' : '已同步'],
     ['收件箱', num(c.inbox)],
-  ];
+  ].filter(Boolean);
   let html = items.map(([label, value]) => `<span class="stat">${esc(label)}<b>${esc(value)}</b></span>`).join('');
   if (!statsReadable()) {
     const detail = (S.payload && S.payload.error) || '';
@@ -823,8 +828,8 @@ function pickBreakdown() {
   if (!c.total) return '还没有选书';
   const bits = ['已选 ' + num(c.total) + ' 本'];
   if (c.convert) bits.push('可转 ' + num(c.convert) + ' 本');
-  if (c.gallery) bits.push('只记图册 ' + num(c.gallery) + ' 本');
-  if (c.ja) bits.push('日文暂缓 ' + num(c.ja) + ' 本');
+  if (c.gallery) bits.push('存档·图册 ' + num(c.gallery) + ' 本');
+  if (c.ja) bits.push('存档·非中英文 ' + num(c.ja) + ' 本');
   if (c.untriaged) bits.push('未分诊 ' + num(c.untriaged) + ' 本');
   return bits.join(' · ');
 }
@@ -943,7 +948,7 @@ function pickBar() {
   const converts = S.books.filter((row) => row.disposition === 'convert').length;
   const suggests = S.books.filter((row) => S.pick.has(row.uid) && row.suggestion).length;
   return `<b>已选 ${num(c.total)} 本</b>
-    <span class="hint">可转 ${num(c.convert)} · 只记图册 ${num(c.gallery)} · 日文暂缓 ${num(c.ja)} · 未分诊 ${num(c.untriaged)}</span>
+    <span class="hint">可转 ${num(c.convert)} · 存档·图册 ${num(c.gallery)} · 存档·非中英文 ${num(c.ja)} · 未分诊 ${num(c.untriaged)}</span>
     <button class="btn sm" data-act="pick-suggest-all"${suggests ? '' : ' disabled'}>按建议确认 ${num(suggests)} 本</button>
     <button class="btn sm" data-act="pick-all-convert"${converts ? '' : ' disabled'}>全选可转的</button>
     <button class="btn sm" data-act="pick-clear"${c.total ? '' : ' disabled'}>清空</button>
@@ -959,8 +964,8 @@ function viewPdfList() {
     + (counts.untriaged || 0);
   const rows = pickRows();
   const lead = '还没有正文的 PDF 都在这里，共 ' + num(total) + ' 本：可转 '
-    + num(counts.convert || 0) + ' 本、只记图册 ' + num(counts.gallery || 0) + ' 本、日文暂缓 '
-    + num(counts.ja || 0) + ' 本、未分诊 ' + num(counts.untriaged || 0) + ' 本。';
+    + num(counts.convert || 0) + ' 本、存档·图册 ' + num(counts.gallery || 0) + ' 本、存档·非中英文 '
+    + num(counts.ja || 0) + ' 本、未分诊 ' + num(counts.untriaged || 0) + ' 本。存档的书按政策不转不删。';
   return `<h1>待转 PDF 清单</h1>
     <p class="lead">${esc(lead)}</p>
     <div class="section card">
@@ -1098,7 +1103,7 @@ function runCard() {
     <label class="field"><span>同时处理</span>
       <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8"></label>
     <button class="btn primary" data-write data-act="pdf-run">开始转写</button>
-    <p class="hint">最多转几本跟着勾选的本数走，填 0 表示不限。勾了图册或日文会再问一次；未分诊的书只送去分诊，不出正文。</p>
+    <p class="hint">最多转几本跟着勾选的本数走，填 0 表示不限。存档的书（图册、非中英文）默认不动，要转得逐本点会再问一次；未分诊的书只送去分诊，不出正文。</p>
   </div>`;
 }
 
@@ -1819,7 +1824,7 @@ const actions = {
     else await go('pdf-list');
   },
 
-  // 明细就是清单筛成「日文暂缓 + 失败」
+  // 明细就是清单筛成「存档·非中英文 + 失败」
   async 'pdf-detail'() {
     S.pickTags = new Set(['ja']);
     S.pickProgress = new Set(['failed']);
@@ -1940,8 +1945,8 @@ const actions = {
     if (gallery.length || japanese.length) {
       const pages = gallery.concat(japanese)
         .reduce((sum, row) => sum + (Number(row.pages) || 0), 0);
-      const ask = '这 ' + num(gallery.length + japanese.length) + ' 本原定不转：只记图册 '
-        + num(gallery.length) + ' 本、日文暂缓 ' + num(japanese.length) + ' 本，合计 '
+      const ask = '这 ' + num(gallery.length + japanese.length) + ' 本原定不转：存档·图册 '
+        + num(gallery.length) + ' 本、存档·非中英文 ' + num(japanese.length) + ' 本，合计 '
         + num(pages) + ' 页。改成按扫描识别转？';
       if (!window.confirm(ask)) return;
       force = true;

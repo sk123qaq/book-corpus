@@ -96,7 +96,7 @@ GET  /api/file?path=...
 GET  /api/pdf/books
 ```
 
-`POST /api/pdf/run` 的 `force`：选中的书里含只记图册或日文暂缓时必须为 true，服务端先把它们改判成
+`POST /api/pdf/run` 的 `force`：选中的书里含存档书（gallery/ja，显示名存档·图册/存档·非中英文）时必须为 true，服务端先把它们改判成
 `OCR`（写批次 `triage.csv` 与 `review/<uid>.json`，跑 `pdf_apply_review.py`）再转；未分诊的书只投
 `pdf.triage`，不出正文，只选了未分诊时返回 `job_id: null`。`GET /api/pdf/books` 是清单页的数据源，
 返回 `{books, counts:{convert, gallery, ja, untriaged}, today:{used, cap}, untriaged}`，只读，
@@ -250,7 +250,7 @@ dry-run JSON 至少含：
 `server.py` 用标准库 `ThreadingHTTPServer`，零依赖。`web/` 用原生 JS。样式参考 `apps/demo/web/style.css` 的纸色与朱红，流程轨参考 `docs/design/流水线全景-2026-10-23.html` 的阶段与状态词。
 
 页面七块：总览、新书导入、电子书出正文、PDF 出正文、维护、删书、日志。顶栏有搜索入口与 8765 健康点。
-PDF 页是三块：四格状态带（可转 / 未分诊 / 只记图册 / 日文暂缓，各带本数、页数与一句说明）加一行
+PDF 页是三块：四格状态带（可转 / 未分诊 / 存档·图册 / 存档·非中英文，各带本数、页数与一句说明）加一行
 「今天额度」与旧批次摘要，再加两张动作卡（批量分诊、确认后转 md），最后是最近的分诊与转 md。
 另有 PDF 的子页待转 PDF 清单（`#pdf-list`），不进左侧导航，由 PDF 页的入口与状态带进入，
 列出四类处置，带两行筛选（处置 / 进度 / 只看复看 / 一级分类 / 关键字 / 排序）、建议与行内改处置、勾选与转写入口。
