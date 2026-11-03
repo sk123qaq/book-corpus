@@ -6,20 +6,22 @@
 
 本文件记录作者本机的书库实例。批次账与现状数字只对那份语料成立；新克隆的仓库按 `README.md` 从零搭建。
 
-## 这台机器上的三处目录（2026-11-02 收尾后）
+## 这台机器上的两处目录（2026-11-03 起单实例）
 
 | 目录 | 角色 | 有无 `.git` |
 |---|---|---|
 | `~/文档/book-corpus` | 工具仓（公开）：代码、文档、模板、操作台与演示应用 | 有，跟 origin/main |
-| `~/文档/book-corpus-data` | 私有数据仓：`books/<uid>/book.json`、`tables/`、批次机账 | 有，私有仓 |
-| `~/文档/book-corpus-local` | v2 实例：正文、源文件、`collections/`、`build/` | **没有** |
+| `~/文档/book-corpus-data` | **唯一工作区实例**（私有）：`books/`（book.json + 正文与源文件）、`collections/`、`tables/`、`build/`、`工作区/`（批次机账、运维、中间态）、`archive/`、`books.toml` | 有，私有仓；只跟账，正文与索引在 `.gitignore` 里 |
 
-`~/文档/books` 是便捷软链，指向 `book-corpus-local`。旧批次里 `~/文档/books/库/...`
+`~/文档/books` 是便捷软链，指向 `book-corpus-data`。旧批次里 `~/文档/books/库/...`
 是 v1 时代写死的记录，v2 没有 `库/`，软链救不了；要解析用 `tables/对照表.csv`
 与批次里的 `对照表-0002.csv`，不要把它们当活路径。
 
-2026-11-02 收尾把 `book-corpus-new` 改名成 `book-corpus-local`，旧 v1 树删掉。
-迁移账与验收读数见数据仓 `工作区/批次/2026-11-02-restructure/说明.md`。
+2026-11-02 收尾把 `book-corpus-new` 改名成 `book-corpus-local`，旧 v1 树删掉。2026-11-03 把 local 实例合并进数据仓，`book-corpus-local` 下线，单实例一根。
+迁移账与验收读数见数据仓 `工作区/批次/2026-11-03-合并单实例与账统一/说明.md`。
+
+**单实例纪律**：数据仓 `.git` 与 41G 未跟踪正文同树。`git clean -fdx` 会删正文；批次写操作集中在 `工作区/` 下，别在根下跑；`git add -A` 依赖 `.gitignore`，
+动 `.gitignore` 前先想清楚。
 
 ## 现状
 
@@ -150,7 +152,7 @@ As of 2026-11-02：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 书级默认入口（2026-10-23）：`book_query.py`。默认 `best_support` + B2.5 5 轮词法循环；触发时默认弹 5-8 张书卡，`--no-cards` 关闭；按需扩展默认关，`--expand-on-demand` 才跑 B4。`qsearch.py --book` 仍是旧 `mix` 口径，只作对照；`book_score.py` 是打分实验台。
 
 ```bash
-cd ~/文档/book-corpus-local
+cd ~/文档/book-corpus-data
 # 找书（书名或作者），把 波特 换成要查的词
 book-corpus run lq -H "SELECT uid,title,author,path FROM book WHERE title LIKE '%波特%' OR author LIKE '%波特%'"
 # 拿某本书的 md 目录，把 乡土中国 换成书名

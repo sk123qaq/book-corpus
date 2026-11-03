@@ -18,7 +18,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 SCRIPTS = os.path.join(REPO, "src", "bookcorpus", "scripts")
-REAL_ROOT = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-local")
+REAL_ROOT = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-data")
 OPS_STATUS = os.path.join(SCRIPTS, "ops_status.py")
 AUDIT = os.path.join(SCRIPTS, "audit_state.py")
 
