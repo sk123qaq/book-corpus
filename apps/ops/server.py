@@ -766,6 +766,7 @@ class Runner:
         self.stopping = False
         self.search_proc = None
         self._started = False
+        self.submit_lock = threading.Lock()
 
     def start(self):
         """起调度线程，幂等。必须晚于 adopt()：接管来的写任务不持 flock（旧进程
@@ -981,7 +982,23 @@ class Runner:
                 break
             if rc != 0:
                 break
+            marker = cmd.get("marker")
+            if marker and not re.search(
+                    marker, self._step_section(job_id, cmd["name"])):
+                self.store.step_state(job_id, seq, "fail",
+                                      "rc=0 但未出现门槛 %s" % marker)
+                break
         return rcs
+
+    def _step_section(self, job_id, name):
+        """某一步在 log.txt 里的段落，与 Ctx.section 同口径。"""
+        text = tail_bytes(os.path.join(self.env.job_dir(job_id), "log.txt"))
+        head = "---- step %s ----" % name
+        start = text.rfind(head)
+        if start < 0:
+            return ""
+        nxt = text.find("\n---- step ", start + len(head))
+        return text[start:] if nxt < 0 else text[start:nxt]
 
     def _log(self, job_id, text, truncate=False):
         path = os.path.join(self.env.job_dir(job_id), "log.txt")
@@ -2312,9 +2329,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.api_upload()
                 return
             payload = self.body_json()
-            if route in WRITE_ROUTES and self.writer_busy():
-                self.fail(409, "有写任务在跑，等它结束再发")
-                return
             handler = {
                 "/api/import/scan": lambda: self.api_import_scan(payload),
                 "/api/import/plan": lambda: self.api_import_plan(payload),
@@ -2338,7 +2352,16 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/ledger/concept/delete": lambda: self.send_json(200, self.app.ledger_concept_delete(payload)),
             }.get(route)
             if handler:
-                handler()
+                if route in WRITE_ROUTES:
+                    # busy 检查与 submit 必须原子：两个并发写请求都过了检查，
+                    # 就会各起一个写任务抢同一份人账
+                    with self.app.runner.submit_lock:
+                        if self.writer_busy():
+                            self.fail(409, "有写任务在跑，等它结束再发")
+                            return
+                        handler()
+                else:
+                    handler()
                 return
             if re.match(r"^/api/jobs/[^/]+/cancel$", route):
                 self.api_cancel(route.split("/")[3], payload)
@@ -2414,10 +2437,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def api_import_scan(self, _payload=None):
         def build(job_id):
-            out = os.path.join(self.app.env.rel(self.app.env.job_dir(job_id)),
-                               "plan.json")
+            job_rel = self.app.env.rel(self.app.env.job_dir(job_id))
+            out = os.path.join(job_rel, "plan.json")
+            # 分类缓存落任务自己的目录：import.scan 标了 readonly，
+            # 不能写共享的 工作区/批次/ingest/classify.json
+            cache = os.path.join(job_rel, "classify.json")
             return [make_cmd(self.app.env, "scan", "ingest.py",
-                             ["scan", "--json", "--out", out], accepts_root=True)]
+                             ["scan", "--json", "--out", out, "--cache", cache],
+                             accepts_root=True)]
         job_id = self.app.runner.submit("import.scan", "扫收件箱", build)
         self.send_json(200, {"ok": True, "job_id": job_id})
 
@@ -3050,12 +3077,18 @@ class Handler(BaseHTTPRequestHandler):
         if not commands:
             self.fail(409, "原来的命令行里没有可重跑的步骤")
             return
-        if not KINDS.get(job["kind"], {}).get("readonly") and self.writer_busy():
-            self.fail(409, "有写任务在跑，等它结束再发")
-            return
-        new_id = self.app.runner.submit(job["kind"], job["title"] + "（重跑）", commands,
-                                        batch_dir=job.get("batch_dir"),
-                                        plan_hash=job.get("plan_hash"))
+        def enqueue():
+            return self.app.runner.submit(job["kind"], job["title"] + "（重跑）",
+                                          commands, batch_dir=job.get("batch_dir"),
+                                          plan_hash=job.get("plan_hash"))
+        if KINDS.get(job["kind"], {}).get("readonly"):
+            new_id = enqueue()
+        else:
+            with self.app.runner.submit_lock:
+                if self.writer_busy():
+                    self.fail(409, "有写任务在跑，等它结束再发")
+                    return
+                new_id = enqueue()
         self.send_json(200, {"ok": True, "job_id": new_id})
 
 

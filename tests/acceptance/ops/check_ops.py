@@ -18,6 +18,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -243,7 +244,9 @@ print(json.dumps(preview, ensure_ascii=False))
 '''
 
 STUB_VERIFY = '''#!/usr/bin/env python3
-import os, sys
+import os, sys, time
+if os.path.exists(".verify-slow"):
+    time.sleep(2)
 if os.path.exists(".verify-bad"):
     print("门槛不过：1 项")
     sys.exit(1)
@@ -251,6 +254,10 @@ print("全过")
 '''
 
 STUB_P1 = '''#!/usr/bin/env python3
+import os, sys
+if os.path.exists(".p1-nomarker"):
+    print("完成")
+    sys.exit(0)
 print("失败 0 项")
 '''
 
@@ -1283,6 +1290,51 @@ def run_checks(root, ops, port, fixture):
     os.remove(os.path.join(root, ".verify-bad"))
     code, body = post(port, "/api/maintain", {"steps": ["nope"]})
     check("不认识的步骤被拒", code == 400)
+
+    # ---- 并发写请求：busy 检查与 submit 之间不能有缝 ------------------
+    open(os.path.join(root, ".verify-slow"), "w").close()
+    codes, accepted = [], []
+    barrier = threading.Barrier(2)
+
+    def fire():
+        barrier.wait()
+        code, body = post(port, "/api/maintain", {"steps": ["verify"]})
+        codes.append(code)
+        if code == 200:
+            accepted.append((body or {}).get("job_id"))
+
+    workers = [threading.Thread(target=fire) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=30)
+    check("并发写请求一个受理一个拒", sorted(codes) == [200, 409], str(codes))
+    check("并发写请求只接受一个 job_id", len(accepted) == 1 and bool(accepted[0]),
+          str(accepted))
+    detail = (wait_job(port, accepted[0], ("succeeded", "failed"))
+              if accepted else None)
+    state = ((detail or {}).get("job") or {}).get("state")
+    check("并发受理的写任务能跑完", state == "succeeded", str(state))
+    os.remove(os.path.join(root, ".verify-slow"))
+
+    # ---- marker 门槛：rc=0 但日志里没门槛就算失败，后面的步骤不再跑 ----
+    open(os.path.join(root, ".p1-nomarker"), "w").close()
+    code, body = post(port, "/api/maintain", {"steps": ["p1", "catalog"]})
+    detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
+    job = (detail or {}).get("job") or {}
+    steps = (detail or {}).get("steps") or []
+    p1 = next((s for s in steps if s.get("name") == "p1"), {})
+    check("rc=0 但没门槛判失败", job.get("state") == "failed"
+          and "未出现门槛" in (job.get("summary") or ""), str(job.get("summary")))
+    check("没门槛的那一步记 fail", p1.get("state") == "fail"
+          and "未出现门槛" in (p1.get("detail") or ""),
+          "%s · %s" % (p1.get("state"), p1.get("detail")))
+    check("没门槛后面那步不再跑",
+          next((s for s in steps if s.get("name") == "catalog"), {}).get("state")
+          in (None, "pending")
+          and "---- step catalog ----" not in job_log(port, body.get("job_id")),
+          str([(s.get("name"), s.get("state")) for s in steps]))
+    os.remove(os.path.join(root, ".p1-nomarker"))
 
     # ---- 删书 ------------------------------------------------------
     code, body = post(port, "/api/delete/dry-run", {"uid": "B0002", "reason": "重复"})

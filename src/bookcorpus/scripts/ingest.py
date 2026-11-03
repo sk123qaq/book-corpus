@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """收件箱入库：把 库/_收件箱 的文件变成人账一行、book.json 与 source/ 下的主源。
 
-  ingest.py scan [--json] [--out plan.json]     # 只读，出计划
+  ingest.py scan [--json] [--out plan.json] [--cache PATH]  # 只读，出计划
   ingest.py add FILE --subjects 文学/严肃文学小说 --title 书名 [--author 作者] [--apply]
   ingest.py replace FILE --uid B0929 [--apply]  # 新副本排到 sources 首位，旧源保留
   ingest.py apply plan.json [--apply] [--no-rebuild]
@@ -10,8 +10,8 @@
 journal、重建 DB。重复执行按 sha256 幂等，已在库的文件一律跳过。
 
 add 行的学科预填走 classify_model.classify，一次调用回一级与二级，模型默认
-opencode-go/deepseek-v4.1-flash；缓存 工作区/批次/ingest/classify.json 按 sha256
-存，旧条目没有 model 与 prompt_version 也能读。
+opencode-go/deepseek-v4.1-flash；缓存默认 工作区/批次/ingest/classify.json，可用
+--cache 指到别处，按 sha256 存，旧条目没有 model 与 prompt_version 也能读。
 """
 import argparse
 import errno
@@ -276,7 +276,6 @@ def next_uid_cmd(root):
     print(next_uid(L.categories(root)))
 
 
-CLASSIFY_CACHE = os.path.join(ROOT, "工作区", "批次", "ingest", "classify.json")
 CLS_MIN = 0.45
 CLASSIFY_MODEL = os.environ.get("INGEST_CLASSIFY_MODEL", CM.DEFAULT_MODEL)
 CLASSIFY_TIMEOUT = CM.TIMEOUT
@@ -333,7 +332,9 @@ def classify_adds(items, cache_path, enabled=True):
                 cache[it["sha256"]] = dict(rec, at=time.strftime("%Y-%m-%dT%H:%M:%S"),
                                             model=CLASSIFY_MODEL,
                                             prompt_version=CM.PROMPT_VERSION)
-            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            parent = os.path.dirname(cache_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             L.write_json_atomic(cache_path, cache)
         except (SystemExit, Exception) as exc:
             msg = (str(exc) or type(exc).__name__)[:90]
@@ -623,6 +624,8 @@ def main():
     ap.add_argument("--uid")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--out")
+    ap.add_argument("--cache",
+                    help="分类缓存路径，默认 <root>/工作区/批次/ingest/classify.json")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--no-rebuild", action="store_true")
     ap.add_argument("--no-classify", action="store_true",
@@ -636,8 +639,8 @@ def main():
 
     if a.cmd == "scan":
         items = scan(a.root)
-        classify_adds(items, os.path.join(a.root, "工作区", "批次", "ingest", "classify.json"),
-                      enabled=not a.no_classify)
+        cache = a.cache or os.path.join(a.root, "工作区", "批次", "ingest", "classify.json")
+        classify_adds(items, cache, enabled=not a.no_classify)
         if a.json or a.out:
             blob = json.dumps(items, ensure_ascii=False, indent=1)
             if a.out:

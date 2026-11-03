@@ -2,9 +2,13 @@
 
 import hashlib
 import json
+import os
 import sqlite3
 
 from conftest import run_cli, write_book, write_ledger
+
+STUB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acceptance",
+                    "fixtures", "pi_stub.py")
 
 
 def _sha(path):
@@ -198,6 +202,32 @@ def test_add_keeps_retention_and_rerun_skips(workspace):
     n = con.execute("SELECT count(*) FROM 分类 WHERE uid=?", (row["uid"],)).fetchone()[0]
     con.close()
     assert n == 1
+
+
+def test_scan_cache_honours_given_path(workspace):
+    """--cache 指到任务目录：分类缓存不落共享的 工作区/批次/ingest/classify.json。"""
+    _inbox(workspace, "己书.epub", b"ji" * 30)
+    job = workspace / "工作区" / "运维" / "jobs" / "scan-cache"
+    plan, cache = job / "plan.json", job / "classify.json"
+    payload = json.dumps([{"level1": "文学", "level2": "类型小说",
+                           "confidence": 0.93, "reason": "测试"}],
+                         ensure_ascii=False)
+
+    r = run_cli("--root", workspace, "run", "ingest", "scan", "--json",
+                "--out", str(plan), "--cache", str(cache),
+                env={"PI_BIN": STUB, "PI_STUB_JSON": payload})
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert plan.is_file(), r.stdout + r.stderr
+    assert cache.is_file(), r.stdout + r.stderr
+    assert json.loads(cache.read_text(encoding="utf-8")), cache.read_text(
+        encoding="utf-8")
+
+    row = next(i for i in json.loads(plan.read_text(encoding="utf-8"))
+               if i["file"] == "己书.epub")
+    assert row["action"] == "add"
+    assert row["subjects"] == ["文学", "类型小说"], row
+    shared = workspace / "工作区" / "批次" / "ingest" / "classify.json"
+    assert not shared.exists(), "共享缓存不该被写：%s" % shared
 
 
 def test_empty_category_falls_back_to_other(workspace):
