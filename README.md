@@ -113,7 +113,7 @@ book-corpus --version
 book-corpus init ~/书库            # 建一个空工作区
 ```
 
-`init` 顺带建 `工作区/.venv-pdf` 并装 PDF 依赖，第一次要联网，大约半分钟。离线时加 `--no-pdf-venv`，之后跑 `book-corpus venv` 补。
+`init` 顺带建 `工作区/.venv-pdf` 并装 PDF 依赖。第一次要联网：uv 按需下载一个 CPython 和六个包，网慢时六七分钟；装过一次之后重跑是十秒级。离线时加 `--no-pdf-venv`，之后跑 `book-corpus venv` 补。
 
 改代码时走项目环境：
 
