@@ -6,12 +6,15 @@ import json
 import os
 import pkgutil
 import runpy
+import sqlite3
+import subprocess
 import sys
 
-from . import __version__, workspace
-from .scripts import lib_common
+from . import __version__, pdfenv, workspace
 
-SCRIPTS_DIR = os.path.dirname(os.path.abspath(lib_common.__file__))
+# 不在这里 import lib_common：它 import 时就按 cwd 定根，先 import 会让
+# run_script 设的 BOOKS_ROOT 失效。只算路径，脚本自己 import。
+SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts")
 
 ALIASES = {
     "ingest": "ingest",
@@ -31,8 +34,13 @@ ALIASES = {
 HELP = """book-corpus <命令> [参数...]
 
 工作区
-  init <目录> [--force]   建一个空工作区
+  init <目录> [--force] [--no-pdf-venv]
+                          建一个空工作区；顺手建 工作区/.venv-pdf 并装 PDF 依赖
+  sample                  装内置样书《阿Q正传》，空库马上能检索
   doctor [--json]         体检工作区
+  venv [--check]          建/补 工作区/.venv-pdf；--check 只导入一遍依赖
+  model [set|setup-pi|check]
+                          看/改这个工作区用哪个 pi 模型、思考等级、端点和 key
   list                    列出脚本与别名
 
 迁移
@@ -85,12 +93,188 @@ def split_root(argv):
     return root, rest
 
 
-def cmd_init(target, force):
-    path = workspace.init(target, __version__, force)
+def cmd_init(target, force, pdf_venv):
+    path = workspace.init(target, __version__, force, pdf_venv)
     print("工作区建好：%s" % path)
+    ok, detail = pdfenv.versions(path)
+    if ok:
+        print("PDF 环境：%s" % detail)
+    else:
+        print("PDF 环境没建好：%s" % detail)
+        print("  重试：book-corpus venv --root %s" % path)
     print("概念表带通用概念（tables/ledger.db 的 概念 表，改表用操作台或直接改库），按自己的语料增删；--concept 只认表里的键。")
-    print("下一步：把书放进 %s/books/_收件箱，然后 cd 进去跑 book-corpus ingest scan" % path)
+    print("下一步：放一本书进 %s/books/_收件箱，或跑 book-corpus sample 用内置样书" % path)
     return 0
+
+
+def _index_books(root):
+    path = os.path.join(root, "build", "检索", "index.db")
+    if not os.path.exists(path):
+        return None
+    con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+    try:
+        row = con.execute("select value from meta where key='books'").fetchone()
+    finally:
+        con.close()
+    try:
+        return int(row[0]) if row else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+MODEL_SET_FLAGS = ("provider", "model", "thinking", "base_url", "api_key_env", "api")
+
+
+def _model_set(root, rest):
+    from . import pimodel
+
+    changes, i = {}, 0
+    while i < len(rest):
+        arg = rest[i]
+        if arg.startswith("--") and i + 1 < len(rest):
+            field = arg[2:].replace("-", "_")
+            if field not in MODEL_SET_FLAGS:
+                raise SystemExit("model set 不认 %s；能改：%s" % (arg, " ".join("--" + f.replace("_", "-") for f in MODEL_SET_FLAGS)))
+            changes[field] = rest[i + 1]
+            i += 2
+            continue
+        if arg == "--clear":
+            changes.update({f: "" for f in MODEL_SET_FLAGS})
+            i += 1
+            continue
+        raise SystemExit("model set 看不懂 %s；用法：book-corpus model set --model <id> [--thinking high]" % arg)
+    if not changes:
+        raise SystemExit("model set 要至少改一项：book-corpus model set --model <id>")
+    if changes.get("thinking") and changes["thinking"] not in pimodel.LEVELS:
+        raise SystemExit("--thinking 只认 %s" % "、".join(pimodel.LEVELS))
+    table = pimodel.save(root, changes)
+    cfg = pimodel.load(root)
+    print("写进 books.toml [model]：%s" % json.dumps(table, ensure_ascii=False))
+    print("实际调用：%s" % " ".join(pimodel.model_flags(cfg["values"]) or ["（用 pi 自己的默认）"]))
+    if cfg["values"]["base_url"]:
+        print("配了 base_url，要把它交给 pi：book-corpus model setup-pi")
+    print("验一次：book-corpus model check")
+    return 0
+
+
+def _model_show(root):
+    from . import pimodel
+
+    cfg = pimodel.load(root)
+    values, sources = cfg["values"], cfg["sources"]
+    for field in pimodel.FIELDS:
+        print("  %-12s %-38s %s" % (field, values[field] or "（空）", sources[field]))
+    flags = pimodel.model_flags(values)
+    print("  实际调用      pi %s" % (" ".join(flags) if flags else "（用 pi 自己的默认模型）"))
+    model_ref = cfg["ref"]
+    known = pimodel.known_models()
+    if not known:
+        print("  pi 模型表      读不到（pi 不在 PATH？），跳过核对")
+    elif model_ref and any(model_ref in line or model_ref.split("/", 1)[-1] in line for line in known):
+        print("  pi 模型表      有 %s" % model_ref)
+    elif model_ref:
+        print("  pi 模型表      没找到 %s —— 先 /model 看看 pi 里有什么，或 book-corpus model set --model <id>" % model_ref)
+    print("")
+    print("在 pi 里选（最省事）：/login 选 provider 并给 key，/model 选模型，/thinking 选思考等级；")
+    print("                     把选中的写进项目：book-corpus model set --provider <p> --model <id> --thinking <级>")
+    print("自己搭的 OpenAI 兼容端点：book-corpus model set --provider <名> --model <id> \\")
+    print("                         --base-url https://.../v1 --api-key-env <存 key 的环境变量>")
+    print("                        book-corpus model setup-pi   把这套端点写进 ~/.pi/agent/models.json")
+    print("验一次：book-corpus model check（真发一句，看回不回 ok）")
+    return 0
+
+
+def _model_check(root):
+    from . import pimodel
+
+    cfg = pimodel.load(root)
+    result = pimodel.run(cfg["values"], "只回复两个字：ok", timeout=120)
+    cmd = " ".join(result["argv"])
+    key = cfg["values"]["api_key_env"]
+    if key and os.environ.get(key):
+        cmd = cmd.replace(os.environ[key], "****")
+    print("跑：%s" % cmd)
+    if result["ok"]:
+        print("回：%s（%d ms）" % (result["text"][:200], result["ms"]))
+        return 0
+    print("失败：%s（%d ms）" % (result["error"], result["ms"]))
+    print("先按提示在 pi 里把 provider/key/模型配好，再回来 check。")
+    return 1
+
+
+def _model_setup_pi(root):
+    from . import pimodel
+
+    cfg = pimodel.load(root)
+    changed, detail = pimodel.setup_pi(cfg["values"])
+    print(detail)
+    if changed:
+        print("pi 下次启动/打开 /model 时读到新端点；之后 book-corpus model check 验一次。")
+    return 0
+
+
+def cmd_model(root, rest):
+    action = rest[0] if rest else "show"
+    if action in ("show", "--json"):
+        return _model_show(root)
+    if action == "set":
+        return _model_set(root, rest[1:])
+    if action == "setup-pi":
+        return _model_setup_pi(root)
+    if action == "check":
+        return _model_check(root)
+    raise SystemExit("model 只认 show、set、setup-pi、check")
+
+
+def _run_here(root, *argv):
+    """子进程跑本包：run_script 同进程跑会复用已 import 的 lib_common，根是旧值。"""
+    env = dict(os.environ, BOOKS_ROOT=root)
+    proc = subprocess.run([sys.executable, "-m", "bookcorpus", *argv],
+                          capture_output=True, text=True, env=env)
+    out = (proc.stdout or "").rstrip()
+    if out:
+        print(out)
+    if proc.returncode != 0:
+        err = (proc.stderr or "").rstrip()
+        print(err or "命令失败：book-corpus %s" % " ".join(argv))
+    return proc.returncode == 0
+
+
+def cmd_sample(root):
+    from . import sample
+
+    if not os.path.isfile(os.path.join(root, "books.toml")):
+        raise SystemExit("不是工作区：%s 里没有 books.toml。先 book-corpus init <目录>" % root)
+    have = sample.load_books(root)
+    if have:
+        uid, doc = have[0]
+        chapters, chars = sample._count(root, uid)
+        print("样书已在库：%s《%s》%d 章 %d 字" % (uid, doc.get("title") or sample.TITLE,
+                                               chapters, chars))
+    else:
+        uid, chapters, chars = sample.install(root)
+        print("样书入库：%s《%s》%d 章 %d 字（%s）" % (uid, sample.TITLE, chapters, chars,
+                                                   sample.SUBJECTS[0] + "/" + sample.SUBJECTS[1]))
+    _run_here(root, "library")
+    books = _index_books(root)
+    if books is None or books <= 1:
+        _run_here(root, "index", "--rebuild")
+    else:
+        print("索引里已有 %d 本书，没动它。要把样书加进检索：book-corpus index --rebuild" % books)
+    print("试一条：book-corpus search 你那里配姓赵")
+    print("问书：book-corpus query 阿Q为什么挨打")
+    return 0
+
+
+def cmd_venv(root, check):
+    if check:
+        ok, detail = pdfenv.versions(root)
+    else:
+        ok, detail = pdfenv.create(root)
+        if ok:
+            ok, detail = pdfenv.versions(root)
+    print(("PDF 环境：%s" % detail) if ok else ("PDF 环境不可用：%s" % detail))
+    return 0 if ok else 1
 
 
 def cmd_doctor(root, as_json):
@@ -195,11 +379,17 @@ def main(argv=None):
         return 0
 
     cmd, rest = argv[0], argv[1:]
+    if cmd == "model":
+        return cmd_model(workspace.resolve(explicit_root), rest)
+    if cmd == "sample":
+        return cmd_sample(workspace.resolve(explicit_root))
+    if cmd == "venv":
+        return cmd_venv(workspace.resolve(explicit_root), "--check" in rest)
     if cmd == "init":
         target = next((a for a in rest if not a.startswith("-")), None)
         if not target:
             raise SystemExit("init 要一个目录：book-corpus init <目录>")
-        return cmd_init(target, "--force" in rest)
+        return cmd_init(target, "--force" in rest, "--no-pdf-venv" not in rest)
     if cmd == "doctor":
         return cmd_doctor(workspace.resolve(explicit_root), "--json" in rest)
     if cmd == "list":

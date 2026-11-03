@@ -47,9 +47,24 @@ CACHE_DIR = os.path.join(HERE, "缓存", "terms")
 CONCEPTS = os.path.join(ROOT, "tables", "概念表.tsv")
 ACTIONS = os.path.join(ROOT, "tables", "概念表-动作词.tsv")
 
-MODEL = "opencode-go/deepseek-v4.1-flash"
-PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files",
-      "--no-skills", "--no-extensions", "--model", MODEL]
+try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
+    from bookcorpus import pimodel
+    _CFG = pimodel.load(ROOT)
+    MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
+    PI = pimodel.pi_head() + ["-p", "--no-tools", "--no-session", "--no-context-files",
+                              "--no-skills", "--no-extensions"]
+    DEFAULT_THINKING = normalize_thinking(pimodel.thinking(_CFG["values"]), DEFAULT_THINKING)
+
+    def pi_flags(level):
+        return pimodel.model_flags(_CFG["values"], level)
+except ImportError:
+    pimodel, _CFG = None, None
+    MODEL = "opencode-go/deepseek-v4.1-flash"
+    PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files",
+          "--no-skills", "--no-extensions"]
+
+    def pi_flags(level):
+        return ["--thinking", level, "--model", MODEL]
 PI_TIMEOUT = 90
 MAX_TERMS = 6
 TERM_VERSION = "terms-v3"
@@ -215,7 +230,7 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
     t0 = time.time()
     note = ""
     try:
-        res = subprocess.run(PI + ["--thinking", thinking, _prompt(question)],
+        res = subprocess.run(PI + pi_flags(thinking) + [_prompt(question)],
                              capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT)
         terms, groups = _parse_extract(res.stdout) if res.returncode == 0 else ([], [])
         # 只缓存读侧认的形态（terms 且 groups），否则这份缓存永远命中不了

@@ -30,7 +30,13 @@ import lib_common as L  # noqa: E402
 from pdf_census import classify  # noqa: E402  纯函数，只吃 census 行，不需要 pymupdf
 ROOT = L.ROOT
 
-MODEL = "opencode-go/deepseek-v4.1-flash"
+try:
+    from bookcorpus import pimodel
+    _CFG = pimodel.load(ROOT)
+    MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
+except ImportError:  # 单独跑脚本时包里没有 bookcorpus
+    pimodel, _CFG = None, None
+    MODEL = "opencode-go/deepseek-v4.1-flash"
 ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 SCAN_SAMPLE = 5
 THUMB_EDGE = 1200
@@ -280,8 +286,9 @@ def normalize_model(obj):
 
 
 def ask_model(out, thumbs, prompt):
+    flags = pimodel.model_flags(_CFG["values"]) if pimodel else ["--model", MODEL]
     argv = pi_prefix() + ["-p", "--no-tools", "--no-session", "--no-context-files",
-                          "--no-skills", "--no-extensions", "--model", MODEL]
+                          "--no-skills", "--no-extensions"] + flags
     argv += ["@" + t for t in thumbs] + [prompt]
     try:
         p = subprocess.run(argv, cwd=out, stdout=subprocess.PIPE, stderr=subprocess.PIPE,

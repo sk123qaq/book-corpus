@@ -277,7 +277,7 @@ def next_uid_cmd(root):
 
 
 CLS_MIN = 0.45
-CLASSIFY_MODEL = os.environ.get("INGEST_CLASSIFY_MODEL", CM.DEFAULT_MODEL)
+CLASSIFY_MODEL = os.environ.get("INGEST_CLASSIFY_MODEL") or CM.configured()[0]
 CLASSIFY_TIMEOUT = CM.TIMEOUT
 
 

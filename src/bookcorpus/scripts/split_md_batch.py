@@ -43,8 +43,16 @@ import lib_common as L  # noqa: E402
 SKILL = os.path.join(L.skill_dir("ebook-to-md"), "scripts")
 SKILL_DOC = os.path.join(os.path.dirname(SKILL), "SKILL.md")
 CONVERT = os.path.join(SKILL, "ebook_to_md.py")
-FIX_MODEL = os.environ.get("MD_FIX_MODEL", "opencode-go/deepseek-v4.1-flash")
+try:
+    from bookcorpus import pimodel
+    _CFG = pimodel.load(L.ROOT)
+except ImportError:  # 单独跑脚本时包里没有 bookcorpus
+    pimodel, _CFG = None, None
+FIX_MODEL = (os.environ.get("MD_FIX_MODEL")
+             or (pimodel.ref(_CFG["values"]) if pimodel else "")
+             or "opencode-go/deepseek-v4.1-flash")
 PI = os.environ.get("PI_BIN") or shutil.which("pi") or "pi"
+FIX_THINKING = pimodel.thinking(_CFG["values"]) if pimodel else ""
 FIX_PROMPT = """修一本书的拆章产物，目标：verify_output.py 与 audit_volume.py 都过。
 
 书：{uid}《{title}》，源文件 {src}
@@ -232,8 +240,10 @@ def agent_fix(ctx, row, target, vout, aout):
                                skill_doc=SKILL_DOC)
     t0 = time.time()
     try:
-        r = subprocess.run([PI, "-p", "--approve", "--model", ctx["fix_model"],
-                            "--session-dir", ctx["fix_sessions"], prompt],
+        thinking = ["--thinking", FIX_THINKING] if FIX_THINKING else []
+        r = subprocess.run([PI, "-p", "--approve"] + thinking
+                           + ["--model", ctx["fix_model"],
+                              "--session-dir", ctx["fix_sessions"], prompt],
                            cwd=L.ROOT, capture_output=True, text=True,
                            timeout=ctx["fix_timeout"])
         rc, out = r.returncode, (r.stdout or "") + (r.stderr or "")

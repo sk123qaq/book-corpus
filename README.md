@@ -87,13 +87,33 @@ sudo apt install calibre poppler-utils ripgrep
 
 ### 2. 装工具
 
-用 uv，`uv.lock` 在仓里。
+工具本身用 uv 装，`uv.lock` 在仓里。
+
+#### 先装 uv
+
+Arch / Omarchy 从官方仓库装：
+
+```bash
+sudo pacman -S --needed uv
+```
+
+其它 Linux 发行版与 macOS 用 Astral 的安装脚本：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+`uv --version` 有输出才算装好。安装脚本把 uv 放进 `~/.local/bin`，脚本最后会打印需要加进 PATH 的那一行；照它做，或者重开一个终端。
+
+#### 再装 book-corpus
 
 ```bash
 uv tool install .                  # 装成全局命令
 book-corpus --version
 book-corpus init ~/书库            # 建一个空工作区
 ```
+
+`init` 顺带建 `工作区/.venv-pdf` 并装 PDF 依赖，第一次要联网，大约半分钟。离线时加 `--no-pdf-venv`，之后跑 `book-corpus venv` 补。
 
 改代码时走项目环境：
 
@@ -108,12 +128,23 @@ uv run book-corpus --version
 
 核心流程基本只用标准库；EPUB 拆章走 `ebook-to-md`，需要 `beautifulsoup4`，已列进 `pyproject.toml` 的核心依赖。`qsearch.py`、`book_query.py`、`build_library.py`、`build_para_index.py`、`lq.py` 不需要装第三方包。
 
-PDF 路线与重排实验共用一个虚拟环境 `工作区/.venv-pdf/`：
+PDF 路线与重排实验共用一个虚拟环境 `工作区/.venv-pdf/`。`book-corpus init` 已经建好并装好了 `requirements.txt`，不用再动手。要查它在不在、包全不全：
 
 ```bash
-python3 -m venv 工作区/.venv-pdf
-工作区/.venv-pdf/bin/pip install -r requirements.txt
-# 只做重排实验时再装
+book-corpus venv --check
+```
+
+删了或换机器后重建，在旧工作区里跑一条命令：
+
+```bash
+book-corpus venv
+```
+
+`book-corpus init` 重建工作区时也会把它带上；只想重建目录与模板、不碰 Python 时加 `--no-pdf-venv`。
+
+只做重排实验时再补：
+
+```bash
 工作区/.venv-pdf/bin/pip install -r requirements-rerank.txt
 ```
 
@@ -123,14 +154,56 @@ PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当�
 
 ### 4. 模型与账号
 
-多数脚本通过 pi 调模型。文档扩展直连 provider 接口，自己从 `~/.pi/agent/auth.json` 读 key。
+分类、拆章修复、问答归纳都要调模型，调用都经由 pi。项目用的模型写在 `books.toml`：
+
+```toml
+[model]
+provider = "opencode-go"
+model = "deepseek-v4.1-flash"
+thinking = "high"
+```
+
+看当前生效的值，以及每一项是从哪里来的（文件、环境变量还是内置默认）：
+
+```bash
+book-corpus model
+```
+
+#### 用 pi 里已经登好的 provider
+
+先在 pi 里选 provider、配 key、选模型：进 pi 后用 `/login` 选 provider 并粘 API key，`/model` 选模型，`/thinking` 选思考等级。然后让项目跟它一致：
+
+```bash
+book-corpus model set --provider opencode-go --model deepseek-v4.1-flash --thinking high
+book-corpus model check
+```
+
+`book-corpus model` 会拿这几项去对 `pi --list-models`，provider 或模型名写错当场就能看见。`model check` 真发一句「只回复两个字：ok」，120 秒内没回算失败，key 在输出里会换成 `****`。
+
+#### 用自建端点（自己的 base_url 和 key）
+
+```bash
+book-corpus model set --provider acme --model my-model \
+  --base-url https://api.example.com/v1 --api-key-env ACME_API_KEY
+book-corpus model setup-pi
+export ACME_API_KEY=sk-...
+book-corpus model check
+```
+
+`model setup-pi` 把这套端点写进 `~/.pi/agent/models.json`（已有的文件先备份成 `models.json.bak.<时间>`）。key 在文件里只写 `$ACME_API_KEY` 这个引用，不落明文；`model check` 从环境变量读出 key 传给 pi。接口格式用 `--api` 选，默认 `openai-completions`，也可 `anthropic-messages`。
+
+思考等级取 `off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，默认 `high`。网页上只暴露关、低、中、高四档，其余档位仍可通过接口传。没有显式传等级的调用一律用 `books.toml` 里的值。
+
+这六项都能用环境变量临时覆盖，优先级高于 `books.toml`：`BOOKS_MODEL_PROVIDER`、`BOOKS_MODEL`、`BOOKS_THINKING`、`BOOKS_BASE_URL`、`BOOKS_API_KEY_ENV`、`BOOKS_MODEL_API`。
 
 | 默认模型 | 用在哪 | 怎么换 |
 |---|---|---|
-| `opencode-go/deepseek-v4.1-flash` | 书目分类、拆章失败修复、问答归纳 | `INGEST_CLASSIFY_MODEL`、`CLASSIFY_BOOKS_MODEL`、`MD_FIX_MODEL`、`ANSWER_MODEL` |
+| `opencode-go/deepseek-v4.1-flash` | 书目分类、拆章失败修复、问答归纳 | `book-corpus model set` |
 | `opencode-go/glm-5.3-flash` | pi 子代理的独立评审与验证 | `~/.pi/agent/settings.json` 的 `subagents.agentOverrides` |
 | `deepseek/deepseek-v4.1-flash`（commandcode） | `build_expand.py` 默认 provider | `build_expand.py --provider` |
 | `mimo-v2.6-flash` | `build_expand.py --provider mimo` | 密钥在 `~/.config/mimo/api_key` |
+
+单个脚本仍可用环境变量单独改：`INGEST_CLASSIFY_MODEL`、`CLASSIFY_BOOKS_MODEL`、`MD_FIX_MODEL`、`ANSWER_MODEL`、`OPS_TRIAGE_MODEL`。
 
 两个云 OCR 接口：
 
@@ -160,6 +233,15 @@ PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当�
 ## 准备语料
 
 克隆下来是空工作区：`books/` 里只有 `_收件箱/` 与 `_冷宫/` 的 README，`tables/` 下只有表头与通用概念表。
+
+想先看效果、不想自己备书，装一本公有领域样书：
+
+```bash
+book-corpus sample
+book-corpus search 你那里配姓赵
+```
+
+`sample` 把《阿Q正传》的源文与拆好的九章 md 复制进工作区，分配 uid、写 `book.json` 与分类表一行，再建库建索引。重复运行不会进第二本。文本来源、版本与许可见 `src/bookcorpus/sample/阿Q正传/README.md`。
 
 1. 把书拷进 `books/_收件箱/`。
 2. `book-corpus ingest scan` 出计划，`book-corpus ingest apply --apply` 落到 `books/<uid>/source/`，同时写 `book.json` 与 `tables/分类表.csv` 一行。

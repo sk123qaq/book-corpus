@@ -74,11 +74,14 @@ def build_prompt(titles, authors):
             % (tax, rubric, books, UNCERTAIN, NO_SUB))
 
 
-def pi_argv(model, prompt):
+def pi_argv(model, prompt, thinking=None):
     raw = os.environ.get("PI_BIN") or shutil.which("pi") or "pi"
     head = [sys.executable, raw] if raw.endswith(".py") else [raw]
-    return head + ["-p", "--no-tools", "--no-session", "--no-context-files",
-                   "--no-skills", "--no-extensions", "--model", model, prompt]
+    out = head + ["-p", "--no-tools", "--no-session", "--no-context-files",
+                  "--no-skills", "--no-extensions"]
+    if thinking:
+        out += ["--thinking", thinking]
+    return out + ["--model", model, prompt]
 
 
 def _head(text, n=120):
@@ -131,14 +134,27 @@ def parse(text, n):
     return out
 
 
-def classify(titles, authors, model=DEFAULT_MODEL, timeout=TIMEOUT):
+def configured():
+    """books.toml 的 [model]：分类默认用项目配的那个模型与思考等级。"""
+    try:
+        from bookcorpus import pimodel
+        from bookcorpus.paths import root
+    except ImportError:
+        return DEFAULT_MODEL, None
+    cfg = pimodel.load(root())
+    return pimodel.ref(cfg["values"]) or DEFAULT_MODEL, pimodel.thinking(cfg["values"]) or None
+
+
+def classify(titles, authors, model=None, timeout=TIMEOUT, thinking=None):
     """一次调用给全部书名两级分类。titles 为空返回空表，失败抛 ClassifyError。"""
     titles = [str(t) for t in (titles or [])]
     if not titles:
         return []
     authors = [str(a or "") for a in (authors or [])][:len(titles)]
     authors += [""] * (len(titles) - len(authors))
-    cmd = pi_argv(model, build_prompt(titles, authors))
+    if not model:
+        model, thinking = configured()
+    cmd = pi_argv(model, build_prompt(titles, authors), thinking)
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:

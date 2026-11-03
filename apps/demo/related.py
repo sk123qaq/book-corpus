@@ -20,7 +20,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 
 CACHE_DIR = os.path.join(HERE, "缓存", "related")
-MODEL = "opencode-go/deepseek-v4.1-flash"
+try:  # 项目配的模型；没装包时退回写死的那一套
+    from bookcorpus import pimodel
+    _CFG = pimodel.load(ROOT)
+    MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
+except ImportError:
+    pimodel, _CFG = None, None
+    MODEL = "opencode-go/deepseek-v4.1-flash"
 PI_TIMEOUT = 60
 PROMPT_VERSION = "related-v1"
 WINDOW = 3
@@ -28,7 +34,13 @@ REASON_CHARS = 40
 STOP = set("的是了和与在什么怎么为什么")
 MIN_OVERLAP = 3
 PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files",
-      "--no-skills", "--no-extensions", "--model", MODEL]
+      "--no-skills", "--no-extensions"]
+
+
+def pi_flags(level):
+    if pimodel:
+        return pimodel.model_flags(_CFG["values"], level)
+    return ["--thinking", level, "--model", MODEL]
 
 PROMPT = """判断「新问题」是不是在接着「上一轮」问，只回一行 JSON。
 
@@ -108,7 +120,7 @@ def _cache_path(question, previous):
 def _call(prompt, thinking):
     """调 pi 判一次。返回 (stdout, error)；失败时 stdout 为 None。"""
     try:
-        res = subprocess.run(PI + ["--thinking", thinking, prompt],
+        res = subprocess.run(PI + pi_flags(thinking) + [prompt],
                              capture_output=True, text=True,
                              timeout=PI_TIMEOUT, cwd=ROOT)
     except subprocess.TimeoutExpired:

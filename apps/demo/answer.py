@@ -65,7 +65,14 @@ LIBRARY_DB = os.path.join(ROOT, "build", "library.db")
 LIBRARY = os.path.join(ROOT, "books")
 CACHE_DIR = os.path.join(HERE, "缓存", "answers")
 SKILL = os.path.join(L.skill_dir("book-corpus-qa"), "SKILL.md")
-MODEL = os.environ.get("ANSWER_MODEL", "opencode-go/deepseek-v4.1-flash")
+try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
+    from bookcorpus import pimodel
+    _CFG = pimodel.load(ROOT)
+    DEFAULT_THINKING = normalize_thinking(pimodel.thinking(_CFG["values"]), DEFAULT_THINKING)
+except ImportError:
+    pimodel, _CFG = None, None
+MODEL = os.environ.get("ANSWER_MODEL") or (
+    pimodel.ref(_CFG["values"]) if pimodel else "") or "opencode-go/deepseek-v4.1-flash"
 PI_TIMEOUT = 240
 PROMPT_VERSION = "answer-v13"
 PROMPT_VERSION_MULTI = "answer-v19-multi"
@@ -122,9 +129,12 @@ EXT = os.path.join(HERE, "readonly_tools.ts")
 
 
 def pi_cmd(thinking):
-    return ["pi", "-p", "--no-session", "--no-context-files", "--skill", SKILL,
-            "-e", EXT, "--tools", "book_grep,read", "--model", MODEL,
-            "--thinking", thinking]
+    if pimodel:
+        head, flags = pimodel.pi_head(), pimodel.model_flags(_CFG["values"], thinking)
+    else:
+        head, flags = ["pi"], ["--model", MODEL, "--thinking", thinking]
+    return head + ["-p", "--no-session", "--no-context-files", "--skill", SKILL,
+                   "-e", EXT, "--tools", "book_grep,read"] + flags
 
 PROMPT = """你是书库问答的回答阶段。依据这一本书的原文回答，用自然、通顺的中文。
 

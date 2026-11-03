@@ -326,7 +326,7 @@ def main():
     ap.add_argument("--cache", help="缓存文件，默认 tables/分类缓存.jsonl")
     ap.add_argument("--include-other", action="store_true", help="一级为其他也问二级")
     args = ap.parse_args()
-    args.model = os.environ.get("CLASSIFY_BOOKS_MODEL", CM.DEFAULT_MODEL)
+    args.model = os.environ.get("CLASSIFY_BOOKS_MODEL") or CM.configured()[0]
     if args.stage and args.backend == "model":
         print("--stage 只对 --backend typesafe 有效；model 后端一次就回两级", file=sys.stderr)
         return 2

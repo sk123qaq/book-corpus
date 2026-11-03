@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import tomllib
 
+from . import pdfenv
 from .scripts import layout as L
 
 SCHEMA = L.SCHEMA
@@ -41,7 +42,7 @@ def read_manifest(root):
         return tomllib.load(f)
 
 
-def init(target, tool_version="0.1.0", force=False):
+def init(target, tool_version="0.1.0", force=False, pdf_venv=True):
     target = os.path.abspath(os.path.expanduser(target))
     if os.path.exists(manifest_path(target)) and not force:
         raise SystemExit("%s 已经是工作区（有 %s）。要重写就加 --force。" % (target, MANIFEST))
@@ -57,6 +58,8 @@ def init(target, tool_version="0.1.0", force=False):
         f.write("# book-corpus 工作区清单。工具靠它认根，别再改 schema。\n")
         f.write("schema = %d\n" % SCHEMA)
         f.write('tool = "book-corpus %s"\n' % tool_version)
+    if pdf_venv and not pdfenv.disabled():
+        _ok, _detail = pdfenv.create(target)
     return target
 
 
@@ -133,6 +136,11 @@ def check(root, version="0.1.0"):
                 meta.get("books", "?"), meta.get("built_at", "?")))
         except sqlite3.Error as exc:
             add("fail", "检索索引", "%s" % exc)
+
+    if os.path.exists(pdfenv.python(root)):
+        add("ok", "PDF 环境", "工作区/.venv-pdf 就绪")
+    else:
+        add("warn", "PDF 环境", "无 工作区/.venv-pdf，跑 book-corpus venv")
 
     add("ok", "工具", "book-corpus %s，Python %s" % (version, sys.version.split()[0]))
     return rows
