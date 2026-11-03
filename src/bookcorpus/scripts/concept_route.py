@@ -6,7 +6,7 @@
   concept_route.py --json "..." 
 
 为什么需要它：`qsearch --auto-concept` 做的是字符串包含，用户问句里没有概念表的词时返回 None
-（60 题 gold 只认出 10 题）。这一步改成让模型从 126 个键里挑 3 个，代价一次调用。
+（60 题 gold 只认出 10 题）。这一步改成让模型从概念表的键里挑 3 个，代价一次调用。
 缓存落 目录/检索/route_cache/<sha1>.json。
 """
 import argparse, hashlib, json, os, re, sqlite3, sys

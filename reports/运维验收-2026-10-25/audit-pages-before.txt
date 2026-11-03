@@ -1,3 +1,5 @@
+已脱敏，否则证据失效
+
 删书命中 ['B0289']
 预览弹窗出现 True 快照 不可用
 点弹窗输入框后弹窗还在 False
@@ -16,7 +18,7 @@ Traceback (most recent call last):
   File "/tmp/audit_pages.py", line 26, in js
     return shot_ops.eval_js(cdp, expr, await_promise=wait, timeout=60)
            ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/shike/文档/books/工作区/运维/验收/shot_ops.py", line 196, in eval_js
+  File "~/文档/books/工作区/运维/验收/shot_ops.py", line 196, in eval_js
     raise RuntimeError(str(res["exceptionDetails"])[:300])
 RuntimeError: {'exceptionId': 1, 'text': 'Uncaught', 'lineNumber': 0, 'columnNumber': 69, 'scriptId': '17', 'stackTrace': {'callFrames': [{'functionName': '', 'scriptId': '17', 'url': '', 'lineNumber': 0, 'columnNumber': 69}, {'functionName': '', 'scriptId': '17', 'url': '', 'lineNumber': 0, 'columnNumber': 93}]}
 维护页标题 维护

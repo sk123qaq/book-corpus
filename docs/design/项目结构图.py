@@ -90,13 +90,13 @@ NODES = {
     "R4": dict(col=3, y=824, tone="violet", title="目录/检索/index.db", badge="约 5.5 GiB，在涨",
                lines=["段落倒排 FTS5 bigram、概念剖面、章级扩展",
                       "切分与查询共用 lib_fts_cjk.py",
-                      "概念表 126 条在这里参与检索",
+                      "概念表在这里参与检索",
                       "改检索脚本前先看目录/检索/踩坑记录.md",
                       "build_expand.py 从 13:19 跑到现在，体积在涨"]),
     "R5": dict(col=3, y=1030, tone="violet", title="视图/主题/", badge="124 概念 1025 链",
                lines=["qsearch --book 的排序，build_topic_views.py 建链",
                       "124 个概念目录，1025 条软链，外加一份 README",
-                      "概念表 126 条：达克效应、人工智能对齐 还没有书"]),
+                      "概念表：达克效应、人工智能对齐 还没有书"]),
 }
 
 for k, n in NODES.items():

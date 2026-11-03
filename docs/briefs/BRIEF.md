@@ -17,7 +17,7 @@
 
 ## 五个阶段
 
-1. **理解问题**：一句话 → 2 到 6 个检索词。由 `pi -p --no-tools --no-session --no-context-files --no-skills --no-extensions --model opencode-go/deepseek-v4.1-flash --thinking <档位>` 一次调用完成，提示词里给概念表（`tables/概念表.tsv` 的 126 个键与别名）与动作词表，要求只回 JSON `{"terms":["..."]}`。结果按问题与思考等级的 sha1 缓存到 `缓存/terms/<sha1>.json`。模型不可用时退回概念表包含匹配，再不行把整句当一个词，页面要如实标「降级」。
+1. **理解问题**：一句话 → 2 到 6 个检索词。由 `pi -p --no-tools --no-session --no-context-files --no-skills --no-extensions --model opencode-go/deepseek-v4.1-flash --thinking <档位>` 一次调用完成，提示词里给概念表（`tables/概念表.tsv` 的键与别名）与动作词表，要求只回 JSON `{"terms":["..."]}`。结果按问题与思考等级的 sha1 缓存到 `缓存/terms/<sha1>.json`。模型不可用时退回概念表包含匹配，再不行把整句当一个词，页面要如实标「降级」。
 2. **词法循环**：`book_query.run(terms)` 的 `rounds`。每轮一张小卡：第几轮、换词类型、本轮词、命中段数、top1 书名、分差、A/B/C 三个判据、是否采用、耗时。
 3. **打分与选章**：同一个 `Plan` 的 `ranking`（取前 8）与 `chapters`（取前 3 本，每本最多 3 章）。左半是书级分数条，右半或下方是章。这是真实打分，不重排。
 4. **书卡**：`book_cards.run(terms, question=q, expand={})` 的 `trigger`、`reasons`、`cards`、`next`。`expand={}` 是必须的，否则会跑 B4 调模型，一次 60 秒还会写索引。
