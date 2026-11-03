@@ -294,7 +294,7 @@ class Planner:
             yield "drop-generic", rest, groups
 
     def plan(self, terms, broad=False, max_rounds=MAX_ROUNDS, chapters=True,
-             chapter_selector="score", max_chapters=3):
+             chapter_selector="score", max_chapters=3, focus=None):
         t0 = time.time()
         terms = dedup(terms)
         nouns = split_terms(terms, self.actions)
@@ -326,6 +326,11 @@ class Planner:
             res.stop = "exhausted"
         if not res.rounds:
             res.quality = ()
+            if focus:
+                pin_focus(res, focus, terms, None, terms, limit=self.limit,
+                          chapters=chapters, max_chapters=max_chapters,
+                          toc_fn=self.toc, scheme=self.scheme,
+                          exclude=self.exclude, meta=self.meta, expand=self.expand)
             res.ms = round((time.time() - t0) * 1000, 1)
             return res
         best = res.rounds[0]
@@ -336,6 +341,7 @@ class Planner:
         res.quality = quality(best)
         res.ranking = book_score.rank(self.search(best.terms)[0], best.terms,
                                       self.scheme, self.exclude, self.meta, self.expand)
+        hits = None
         if chapters:
             hits, _ = self.search(terms)          # 选章永远用全词集
             for b in res.ranking[:self.limit]:
@@ -346,6 +352,13 @@ class Planner:
                     r["readme_status"] = status
                 res.chapters.append({"book": b.book, "title": b.title,
                                      "book_score": round(b.score, 4), "selected": rows})
+        if focus:
+            pin_focus(res, focus, terms,
+                      hits if hits is not None else self.search(best.terms)[0],
+                      best.terms, limit=self.limit, chapters=chapters,
+                      max_chapters=max_chapters, toc_fn=self.toc,
+                      scheme=self.scheme, exclude=self.exclude, meta=self.meta,
+                      expand=self.expand)
         res.fetches = self.fetches
         res.ms = round((time.time() - t0) * 1000, 1)
         return res
@@ -380,15 +393,71 @@ def select_chapters(hits, book, terms, toc=None, max_chapters=3, selector="score
     return rows
 
 
+def focus_score(book, focus, rows, groups, scheme, exclude, meta, expand):
+    """focus 书在给定命中里的 BookScore；无命中时给一个 0 分占位，不让位给别的书。"""
+    own = [r for r in (rows or []) if r["book"] == book]
+    if own:
+        ranked = book_score.rank(own, groups, scheme, exclude, meta, expand)
+        if ranked:
+            return ranked[0]
+    m = (meta or {}).get(book)
+    return book_score.BookScore(
+        book=book, title=(getattr(m, "title", "") or focus.get("title") or book),
+        type=book_score.genre(meta, book), chapters=int(getattr(m, "chapters", 0) or 0),
+        best=0.0, best_path="", best_line=0, best_text="", support=0, topk=0.0,
+        coverage=0.0, score=0.0, groups=[], has_prefix=False, has_queries=False,
+        scores=[], hits=0, mean=0.0, total_groups=len(groups or []))
+
+
+def focus_rows(hits, book, terms, toc, max_chapters):
+    """focus 书的选章：先滤卷首卷尾；README 不认这些路径时退回打分序再滤一次。"""
+    rows = book_readme.select(hits, terms, terms, toc, max_chapters, 0.0, skip_front=True)
+    if rows:
+        return rows
+    rows = select_chapters(hits, book, terms, toc, max_chapters, "score")
+    kept = [r for r in rows if not book_readme.is_front_matter(r["chapter_title"])]
+    return kept or rows
+
+
+def pin_focus(plan, focus, terms, hits, best_terms, limit=10, chapters=True,
+              max_chapters=3, toc_fn=None, scheme="best_support", exclude=(),
+              meta=None, expand=None):
+    """精确书名钉到 ranking[0] 与 chapters[0]，回写 focus 的首章定位。"""
+    if not focus or focus.get("status") != "exact" or not focus.get("book"):
+        return plan
+    book = focus["book"]
+    focus_hits = [r for r in (hits or []) if r["book"] == book]
+    pinned = next((b for b in plan.ranking if b.book == book), None)
+    if pinned is None:
+        pinned = focus_score(book, focus, focus_hits or hits, terms, scheme, exclude,
+                             meta, expand)
+    pinned.pinned = True
+    plan.ranking = ([pinned] + [b for b in plan.ranking if b.book != book])[:limit]
+    if chapters:
+        toc, status = toc_fn(book) if toc_fn else ([], "")
+        rows = focus_rows(focus_hits, book, terms, toc, max_chapters)
+        for r in rows:
+            r["readme_status"] = status
+        entry = {"book": book, "title": pinned.title,
+                 "book_score": round(pinned.score, 4), "selected": rows, "pinned": True}
+        plan.chapters = ([entry] + [c for c in plan.chapters if c["book"] != book])[:limit]
+    if plan.chapters and plan.chapters[0]["book"] == book and plan.chapters[0]["selected"]:
+        top = plan.chapters[0]["selected"][0]
+        focus["best_path"], focus["best_line"] = top["chapter_path"], top["line"]
+    if not focus.get("best_path") and pinned.best_path:
+        focus["best_path"], focus["best_line"] = pinned.best_path, pinned.best_line
+    return plan
+
+
 def run(terms, con=None, broad=False, scheme="best_support", limit=10, max_chapters=3,
-        chapter_selector="score", planner=None):
+        chapter_selector="score", planner=None, focus=None):
     own = con is None
     if con is None:
         con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
     try:
         p = planner or Planner(con, scheme=scheme, limit=limit)
         return p.plan(terms, broad=broad, chapters=True, chapter_selector=chapter_selector,
-                      max_chapters=max_chapters)
+                      max_chapters=max_chapters, focus=focus)
     finally:
         if own:
             con.close()

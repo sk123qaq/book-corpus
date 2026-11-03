@@ -33,6 +33,8 @@ for _p in (SCRIPTS, HERE):
 
 import book_cards  # noqa: E402
 import book_query  # noqa: E402
+import book_score  # noqa: E402
+import book_title  # noqa: E402
 import lib_common as L  # noqa: E402
 from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinking  # noqa: E402
 
@@ -457,8 +459,47 @@ def _rounds_terms(plan):
     return list(best.terms) if best else list(plan.terms)
 
 
-def _pick_default(plan, cardset, select):
-    """默认结果：卡片 → next → top1。返回带 book/chapter 的定位。"""
+def _row_book(row):
+    return row["book"] if isinstance(row, dict) else row.book
+
+
+def _pick_rows(rows, limit, book):
+    """限长但保 focus：focus 书不在前 limit 条时挤掉末位换进来。"""
+    out = rows[:limit]
+    if book and book not in [_row_book(r) for r in out]:
+        extra = next((r for r in rows if _row_book(r) == book), None)
+        if extra is not None:
+            out = (out[:limit - 1] + [extra]) if limit > 1 else [extra]
+    return out
+
+
+def _focus_pick(plan, focus):
+    """精确 focus 的定位：优先 focus 章，其次 ranking 的 best_path，都没有就空。"""
+    book = focus["book"]
+    for entry in plan["chapters"]:
+        if entry["book"] != book:
+            continue
+        sel = entry.get("selected") or []
+        if sel:
+            return {"book": book, "title": entry["title"],
+                    "chapter": sel[0]["chapter_title"],
+                    "path": sel[0]["chapter_path"], "line": sel[0]["line"],
+                    "card": 0, "pinned": True}
+    for r in plan["ranking"]:
+        if r["book"] == book and r.get("best_path"):
+            return {"book": book, "title": r["title"],
+                    "chapter": chapter_title("", r["best_path"]),
+                    "path": r["best_path"], "line": r["best_line"],
+                    "card": 0, "pinned": True}
+    return {"book": book, "title": focus.get("title") or "", "chapter": "",
+            "path": "", "line": 0, "card": 0, "pinned": True,
+            "focus_empty": True}
+
+
+def _pick_default(plan, cardset, select, focus=None):
+    """默认结果：精确 focus → 卡片 → next → top1。返回带 book/chapter 的定位。"""
+    if focus and focus.get("status") == "exact" and focus.get("book"):
+        return _focus_pick(plan, focus)
     cards = cardset["cards"]
     nxt = cardset["next"]
     if cards:
@@ -492,11 +533,16 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
 
     con = _ro(INDEX_DB)
     try:
+        books = book_cards.load_books()
+        book_meta = book_score.load_meta()
+        hints = book_cards.query_hints(question, books, book_cards.load_concepts())
+        focus = book_title.resolve_title(question, books, book_meta,
+                                         hint=hints.get("title", ""))
         t_plan = time.time()
-        plan = book_query.run(terms, con=con, limit=8, max_chapters=3)
+        plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus)
         plan_ms = plan.ms
         cardset = book_cards.run(question, terms=plan.terms or terms, question=question,
-                                 expand={}, feedback=None, con=con)
+                                 expand={}, feedback=None, con=con, focus=focus)
         cards_ms = cardset.ms
 
         card_dicts = []
@@ -537,12 +583,13 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
                  "total_groups": b.total_groups,
                  "best_path": b.best_path, "best_line": b.best_line,
                  "best_text": " ".join((b.best_text or "").split())[:300],
-                 "support": b.support}
-                for b in plan.ranking[:8]
+                 "support": b.support, "pinned": b.pinned}
+                for b in _pick_rows(plan.ranking, 8, focus.get("book"))
             ],
             "chapters": [
                 {"book": c["book"], "title": c["title"],
                  "book_score": c["book_score"],
+                 "pinned": bool(c.get("pinned")),
                  "selected": [
                      {"chapter_path": s["chapter_path"],
                       "chapter_title": s["chapter_title"],
@@ -550,7 +597,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
                       "snippet": s.get("snippet", "")}
                      for s in c["selected"]
                  ]}
-                for c in plan.chapters[:3]
+                for c in _pick_rows(plan.chapters, 3, focus.get("book"))
             ],
         }
 
@@ -565,10 +612,14 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
             "terms": list(cardset.terms),
         }
 
-        pick = _pick_default(plan_dict, cards_dict, select)
+        pick = _pick_default(plan_dict, cards_dict, select, focus)
         t_res = time.time()
         result = None
-        if pick:
+        if pick and pick.pop("focus_empty", False):
+            result = {"book": pick["book"], "book_title": pick["title"],
+                      "chapter": "", "path": "", "line": 0, "text": "",
+                      "focus_empty": True}
+        elif pick:
             result = read_chapter(pick["path"], pick["line"], STAGE_CHARS)
             result.update({"book": pick["book"], "book_title": pick["title"],
                            "chapter": pick["chapter"], "card": pick["card"]})
@@ -587,6 +638,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
             "thinking": thinking,
             "extract": understand,
             "plan": plan_dict,
+            "focus": focus,
             "cards": cards_dict,
             "result": result,
             "stage_ms": stage_ms,

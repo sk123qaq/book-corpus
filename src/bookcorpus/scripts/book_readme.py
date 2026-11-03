@@ -145,8 +145,26 @@ def title_overlap(title, terms):
     return sum(1 for t in words if t in title) / len(words)
 
 
-def select(hits, groups, terms, toc, max_chapters=3, title_weight=0.0):
-    """在给定命中里按检索分挑章，最多 max_chapters 章。"""
+FRONT_MATTER = ("序言", "自序", "代序", "译者序", "编者序", "前言", "后记",
+                "译后记", "编后记", "附录", "纪事", "经典的历程", "出版说明",
+                "出版缘起", "出版始末", "版权", "目录", "注释", "致谢",
+                "名家推荐", "推荐序", "导读", "题记", "凡例", "参考书目",
+                "参考文献", "索引", "编者的话")
+FRONT_MATTER_EXACT = {"序", "跋", "后记", "致谢", "编后记", "出版说明"}
+
+
+def is_front_matter(title):
+    """卷首卷尾章：序跋、出版说明、附录、推荐与版权页之类。"""
+    t = re.sub(r"\s+", "", title or "")
+    if not t:
+        return False
+    if t in FRONT_MATTER_EXACT:
+        return True
+    return any(w in t for w in FRONT_MATTER)
+
+
+def select(hits, groups, terms, toc, max_chapters=3, title_weight=0.0, skip_front=False):
+    """在给定命中里按检索分挑章，最多 max_chapters 章。skip_front 只给 focus 用。"""
     order = {e["path"]: e for e in toc}
     by_path = {}
     for r in hits:
@@ -167,6 +185,9 @@ def select(hits, groups, terms, toc, max_chapters=3, title_weight=0.0):
             "chapter_order": order[path]["order"], "paragraphs": len(rs),
         })
     rows.sort(key=lambda r: (-r["score"], r["chapter_order"]))
+    if skip_front:
+        # 正文章一章都没命中时回退到未过滤的行，不把结果清空。
+        rows = [r for r in rows if not is_front_matter(r["chapter_title"])] or rows
     return rows[:max_chapters]
 
 

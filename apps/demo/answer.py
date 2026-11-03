@@ -18,11 +18,14 @@
      use_cache=False（页面「重新检索」）跳过读缓存，重新调模型
 
 多书（前端全选）时请求带 sources，每本取三段窗口，一次提示词要按问题结构逐书对照回答，引文按书归并。
+点名一本书（focus.status == "exact"）时走 anchored：前半只答点名书、只引点名书，
+后半只答其他书、不引点名书；两部分并行跑，各自回查，互不代答。
 
 只读 build/检索/index.db 与 books/**.md；只写 缓存/answers/。
 不跑 B4、不写 expand、不重建索引；pi 只开 book_grep 与 read，证据全部由服务端给。
 """
 import bisect
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -66,6 +69,21 @@ MODEL = os.environ.get("ANSWER_MODEL", "opencode-go/deepseek-v4.1-flash")
 PI_TIMEOUT = 240
 PROMPT_VERSION = "answer-v13"
 PROMPT_VERSION_MULTI = "answer-v19-multi"
+# anchored 的两部分各算各的缓存：前半沿用单书提示词，后半沿用多书提示词，
+# 只在开头加一段角色说明；版本带 -anchor- 前缀，不会和旧的单书/多书答案撞键。
+PROMPT_VERSION_ANCHOR_PRIMARY = "answer-v13-anchor-primary"
+PROMPT_VERSION_ANCHOR_SUPPLEMENT = "answer-v19-multi-anchor-supplement"
+PROMPT_VERSION_ANCHORED = "answer-v2-anchored"
+
+ROLE_PRIMARY = (
+    "这一问点名了《{title}》。这是整份回答的第一部分，只写这一本书：判断、机制和引文\n"
+    "都只能来自它，不要提别的书，也不要拿别的书的说法来补。\n"
+    "开头第一句就点明这本书的看法。\n\n"
+)
+ROLE_SUPPLEMENT = (
+    "这是整份回答的第二部分，只写其他书的补充。用户点名的是《{title}》，\n"
+    "那本书已经在前一部分答过：不要提它、不要引用它，也不要重复它已经说过的判断。\n\n"
+)
 
 JSON_REMIND = ("\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，"
                "不要解释，字符串里的双引号写成 \\\"。")
@@ -263,11 +281,11 @@ def _err(message, **kwargs):
 
 
 def cache_key(question, book, path, line, terms, groups=None,
-              thinking=DEFAULT_THINKING, history=""):
+              thinking=DEFAULT_THINKING, history="", version=None):
     payload = {"q": question, "book": book, "path": path, "line": int(line),
                "terms": sorted({str(t) for t in terms if str(t).strip()}),
                "groups": groups or [],
-               "v": PROMPT_VERSION, "model": MODEL, "thinking": thinking}
+               "v": version or PROMPT_VERSION, "model": MODEL, "thinking": thinking}
     if history:
         payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -275,13 +293,14 @@ def cache_key(question, book, path, line, terms, groups=None,
 
 
 def multi_cache_key(question, sources, terms, groups=None,
-                    thinking=DEFAULT_THINKING, history=""):
+                    thinking=DEFAULT_THINKING, history="", version=None):
     """多书回答的键：书单顺序也算输入，换掉一本书就不再命中。"""
     payload = {"q": question,
                "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
                "terms": sorted({str(t) for t in terms if str(t).strip()}),
                "groups": groups or [],
-               "v": PROMPT_VERSION_MULTI, "model": MODEL, "thinking": thinking}
+               "v": version or PROMPT_VERSION_MULTI, "model": MODEL,
+               "thinking": thinking}
     if history:
         payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -553,7 +572,18 @@ def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS,
     return windows
 
 
-def build_prompt(question, book, windows, chapters, history=""):
+def _role_head(role, focus_title=""):
+    """角色说明接在提示词最前面（不进模板正文），role 为空时返回空串。"""
+    title = (focus_title or "").strip() or "点名的那本书"
+    if role == "primary":
+        return ROLE_PRIMARY.format(title=title)
+    if role == "supplement":
+        return ROLE_SUPPLEMENT.format(title=title)
+    return ""
+
+
+def build_prompt(question, book, windows, chapters, history="", role="",
+                 focus_title=""):
     blocks = ["%s:%d-%d\n%s" % (w["path"], w["start"], w["end"], w["text"])
               for w in windows]
     rows = []
@@ -562,16 +592,19 @@ def build_prompt(question, book, windows, chapters, history=""):
         rows.append("%d. %s:%d 《%s》 score=%.2f cov=%s"
                     % (i, c["path"], c["line"], c["title"], c["score"], cov))
     history = (history.strip() + "\n") if history.strip() else ""
-    limit = PROMPT_MAX + (HISTORY_CHARS_SINGLE if history else 0)
-    prompt = PROMPT.format(question=question, book=book, md="books/%s/md" % book,
-                           history=history, n=len(rows), chapters="\n".join(rows),
-                           evidence="\n\n".join(blocks))
+    head = _role_head(role, focus_title)
+    limit = PROMPT_MAX + (HISTORY_CHARS_SINGLE if history else 0) + len(head)
+
+    def render(blocks):
+        return head + PROMPT.format(
+            question=question, book=book, md="books/%s/md" % book,
+            history=history, n=len(rows), chapters="\n".join(rows),
+            evidence="\n\n".join(blocks))
+
+    prompt = render(blocks)
     while len(prompt) > limit and len(blocks) > 1:
         blocks.pop()
-        prompt = PROMPT.format(question=question, book=book, md="books/%s/md" % book,
-                               history=history, n=len(rows),
-                               chapters="\n".join(rows),
-                               evidence="\n\n".join(blocks))
+        prompt = render(blocks)
     return prompt
 
 
@@ -684,7 +717,8 @@ def _drop_last_window(windows, rank):
     return False
 
 
-def build_multi_prompt(question, plans, windows, coverage="", history=""):
+def build_multi_prompt(question, plans, windows, coverage="", history="", role="",
+                       focus_title=""):
     """一次提示词装下所有书：库级覆盖 + 书名行 + 每书 4 章地图 + 按书分组的窗口。"""
     rank = {p["source"]["book"]: i for i, p in enumerate(plans)}
     labels = {p["source"]["book"]: _book_label(p["source"]) for p in plans}
@@ -692,7 +726,8 @@ def build_multi_prompt(question, plans, windows, coverage="", history=""):
     if coverage:
         coverage += "\n\n"
     history = (history.strip() + "\n") if history.strip() else ""
-    limit = PROMPT_MAX_MULTI + (HISTORY_CHARS_MULTI if history else 0)
+    head = _role_head(role, focus_title)
+    limit = PROMPT_MAX_MULTI + (HISTORY_CHARS_MULTI if history else 0) + len(head)
     keep = list(windows)
     while True:
         book_rows, chapter_blocks = [], []
@@ -715,7 +750,7 @@ def build_multi_prompt(question, plans, windows, coverage="", history=""):
         if empty:
             nowindow = ("无相关原文窗口的书：《%s》（这些书在回答里要写明没有相关原文）"
                         % "》《".join(empty))
-        prompt = MULTI_PROMPT.format(
+        prompt = head + MULTI_PROMPT.format(
             question=question, coverage=coverage, n=len(plans), history=history,
             books="\n".join(book_rows),
             chapters="\n\n".join(chapter_blocks), evidence="\n\n".join(blocks),
@@ -1042,11 +1077,12 @@ def _verify_multi(cites, windows, sources):
 
 def answer_question(question, book, path, line=1, terms=None, groups=None,
                     use_cache=True, sources=None, thinking=DEFAULT_THINKING,
-                    history=""):
+                    history="", focus=None):
     """返回 Answer dict（结构见 ANSWER-BRIEF.md 的「数据形状」）。
 
     use_cache=False 即前端「重新检索」：跳过答案缓存并重新调模型，本次结果照样回写。
     history 是上一轮的上下文片段，非空时进提示词也进缓存键。
+    focus 是这一问点名的书（status=exact 才算点名）：前一半只答它，后一半只答别的书。
     """
     t0 = time.time()
     question = (question or "").strip()
@@ -1057,6 +1093,24 @@ def answer_question(question, book, path, line=1, terms=None, groups=None,
     terms = [str(t).strip() for t in (terms or []) if str(t).strip()][:12]
     groups = [g for g in (groups or []) if isinstance(g, dict) and g.get("variants")]
     scope = _normalize_sources(sources)
+    named = _normalize_focus(focus)
+    if named and named["status"] == "exact" and named["book"]:
+        hit = _focus_source(named, scope, book, path, line)
+        if hit is None:
+            # 点名的书没落盘就明说，不拿检索第一名的书代答
+            return _err("点名的书没有可用原文（locked 或没有读到 md 路径），不拿别的书代答",
+                        ms=_ms(t0), thinking=thinking, focus=_focus_note(named))
+        note = _focus_note(named, hit)
+        rest = [s for s in scope if s["book"] != hit["book"]]
+        if not rest:
+            out = _answer_single(question, hit["book"], hit["path"], hit["line"],
+                                 terms, groups, use_cache, t0, thinking, history,
+                                 PROMPT_VERSION_ANCHOR_PRIMARY, "primary",
+                                 note["title"])
+            out["focus"] = note
+            return out
+        return _answer_anchored(question, named, hit, rest, terms, groups, use_cache,
+                                t0, thinking, history)
     if len(scope) >= 2:
         return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking,
                              history)
@@ -1065,7 +1119,8 @@ def answer_question(question, book, path, line=1, terms=None, groups=None,
 
 
 def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
-                   thinking=DEFAULT_THINKING, history=""):
+                   thinking=DEFAULT_THINKING, history="", version=None, role="",
+                   focus_title=""):
     rel = _rel(path)
     if not _inside_library(rel):
         return _err("path 不在 books/ 下或不是 .md", ms=_ms(t0), thinking=thinking)
@@ -1078,7 +1133,8 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     if line < first:
         line = first
 
-    key = cache_key(question, book, rel, line, terms, groups, thinking, history)
+    key = cache_key(question, book, rel, line, terms, groups, thinking, history,
+                    version)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
         cached = _read_cached(cache_path, t0, thinking)
@@ -1097,7 +1153,7 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     if not windows:
         return _err("没有取到原文窗口", ms=_ms(t0), thinking=thinking)
 
-    prompt = build_prompt(question, book, windows, chapters, history)
+    prompt = build_prompt(question, book, windows, chapters, history, role, focus_title)
     reply, raw, error = _request_reply(prompt, book, thinking=thinking)
     if raw is None:
         return _err(error, passages=_passages(windows), ms=_ms(t0),
@@ -1137,9 +1193,10 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
 
 
 def _answer_multi(question, sources, terms, groups, use_cache, t0,
-                  thinking=DEFAULT_THINKING, history=""):
+                  thinking=DEFAULT_THINKING, history="", version=None, role="",
+                  focus_title=""):
     """多书：每本取三段，一次提示词逐书回答，引文按书归并。"""
-    key = multi_cache_key(question, sources, terms, groups, thinking, history)
+    key = multi_cache_key(question, sources, terms, groups, thinking, history, version)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
         cached = _read_cached(cache_path, t0, thinking)
@@ -1170,7 +1227,8 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
     if not windows:
         return _err("没有取到原文窗口", passages=[], ms=_ms(t0), thinking=thinking)
     coverage = _coverage(terms)
-    prompt = build_multi_prompt(question, plans, windows, coverage, history)
+    prompt = build_multi_prompt(question, plans, windows, coverage, history, role,
+                                focus_title)
     # 模型给了 JSON 但没有任何正文时重问，别当成「库里没有」。
     reply, raw, error = _request_reply(
         prompt, sources[0]["book"], [s["book"] for s in sources], thinking,
@@ -1220,6 +1278,228 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
         _write_json(cache_path, out)
     except OSError:
         pass
+    return out
+
+
+# ---- 点名书（anchored） --------------------------------------------
+
+def _normalize_focus(focus):
+    """请求里的 focus 只认 status/book/title/best_path/best_line，其余丢掉。"""
+    if not isinstance(focus, dict):
+        return None
+
+    def text(key, limit=200):
+        value = focus.get(key)
+        return value.strip()[:limit] if isinstance(value, str) else ""
+
+    try:
+        best_line = max(1, int(focus.get("best_line") or 1))
+    except (TypeError, ValueError):
+        best_line = 1
+    return {"status": text("status", 20), "book": text("book", 40),
+            "title": text("title"), "best_path": text("best_path", 500),
+            "best_line": best_line}
+
+
+def _focus_source(focus, scope, book="", path="", line=1):
+    """点名书的那一条来源：先看本次范围，再看 best_path / 命中 path。"""
+    hit = next((s for s in scope if s["book"] == focus["book"]), None)
+    if hit:
+        return hit
+    tries = []
+    if focus["best_path"]:
+        tries.append({"path": focus["best_path"], "line": focus["best_line"],
+                      "title": focus["title"]})
+    if path and str(book or "").strip() == focus["book"]:
+        tries.append({"path": path, "line": line, "title": focus["title"]})
+    for item in tries:
+        found = _normalize_sources([item])
+        # 路径落到的书必须就是点名的那本，不然宁可报错也不换书答
+        if found and found[0]["book"] == focus["book"]:
+            return found[0]
+    return None
+
+
+def _focus_note(focus, src=None):
+    return {"book": focus["book"],
+            "title": focus["title"] or (src or {}).get("title") or focus["book"],
+            "status": "exact"}
+
+
+def anchored_cache_key(question, focus, sources, terms, groups=None,
+                       thinking=DEFAULT_THINKING, history=""):
+    """锚定回答的整份缓存键：点名书、书单顺序、两部分版本都在里面。"""
+    payload = {"q": question,
+               "focus": [focus.get("book"), focus.get("title")],
+               "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
+               "terms": sorted({str(t) for t in terms if str(t).strip()}),
+               "groups": groups or [],
+               "v": PROMPT_VERSION_ANCHORED,
+               "pv": [PROMPT_VERSION_ANCHOR_PRIMARY, PROMPT_VERSION_ANCHOR_SUPPLEMENT],
+               "model": MODEL, "thinking": thinking}
+    if history:
+        payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _part_citations(result, allowed, forbid="", labels=None):
+    """只留属于本次允许书的引文；越界的一条不留，返回 (引文, 丢掉的条数)。
+
+    `labels` 是 book -> 书名；单书回查的 citation 没有 book_title，
+    这里补齐，前端才不会把主书显示成《B0019》。
+    """
+    labels = labels or {}
+    out, dropped = [], 0
+    for item in result.get("citations") or []:
+        if not isinstance(item, dict):
+            continue
+        owner = item.get("book") or book_from_path(item.get("path") or "")
+        if owner not in allowed or (forbid and owner == forbid):
+            dropped += 1
+            continue
+        row = dict(item, book=owner)
+        title = labels.get(owner) or row.get("book_title")
+        if title:
+            row["book_title"] = title
+        out.append(row)
+    return out, dropped
+
+
+def _answer_part(kind, title, result, citations, dropped=0):
+    """一部分的结构：前一半是点名书，后一半是其他书，两半不同书。"""
+    error = result.get("error") or ""
+    if dropped:
+        note = "引文跨书（已丢弃 %d 条）" % dropped
+        error = (error + "；" + note) if error else note
+    return {"kind": kind, "title": title,
+            "lead": result.get("lead") or "",
+            "sections": [s for s in (result.get("sections") or [])
+                         if isinstance(s, dict)],
+            "dissent": result.get("dissent") or "",
+            "gap": result.get("gap") or "",
+            "citations": citations,
+            "not_found": bool(result.get("not_found")),
+            "error": error}
+
+
+def _answer_anchored(question, focus, focus_src, supplements, terms, groups,
+                     use_cache, t0, thinking, history):
+    """前一半只答点名书，后一半只答其他书；两部分并行，各自回查。
+
+    前一半失败不拿别的书顶替：整份报错，带上已经算好的补充部分。补充失败只降置信、
+    标 supplement_error，前半照样交，整份不进缓存。
+    """
+    note = _focus_note(focus, focus_src)
+    title = note["title"]
+    allowed_focus = {focus_src["book"]}
+    allowed_rest = {s["book"] for s in supplements}
+
+    key = anchored_cache_key(question, note, [focus_src] + supplements, terms, groups,
+                             thinking, history)
+    cache_path = os.path.join(CACHE_DIR, key + ".json")
+    if use_cache:
+        cached = _read_cached(cache_path, t0, thinking)
+        if cached:
+            return cached
+
+    one_rest = supplements[0] if len(supplements) == 1 else None
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        primary_done = pool.submit(
+            _answer_single, question, focus_src["book"], focus_src["path"],
+            focus_src["line"], terms, groups, use_cache, t0, thinking, history,
+            PROMPT_VERSION_ANCHOR_PRIMARY, "primary", title)
+        if one_rest is not None:
+            supplement_done = pool.submit(
+                _answer_single, question, one_rest["book"], one_rest["path"],
+                one_rest["line"], terms, groups, use_cache, t0, thinking, history,
+                PROMPT_VERSION_ANCHOR_SUPPLEMENT, "supplement", title)
+        else:
+            supplement_done = pool.submit(
+                _answer_multi, question, list(supplements), terms, groups, use_cache,
+                t0, thinking, history, PROMPT_VERSION_ANCHOR_SUPPLEMENT,
+                "supplement", title)
+        try:
+            primary = primary_done.result()
+        except Exception as exc:  # noqa: BLE001
+            primary = _err("点名的书没有答出（%s）" % exc.__class__.__name__)
+        try:
+            supplement = supplement_done.result()
+        except Exception as exc:  # noqa: BLE001
+            supplement = _err("补充没有答出（%s）" % exc.__class__.__name__)
+
+    rest_labels = {s["book"]: _book_label(s) for s in supplements}
+    primary_cites, primary_dropped = _part_citations(
+        primary, allowed_focus, labels={focus_src["book"]: title})
+    primary_part = _answer_part("primary", title, primary, primary_cites,
+                                primary_dropped)
+    if not primary.get("ok") or not (primary.get("answer") or "").strip():
+        parts = []
+        if supplement.get("ok") and (supplement.get("answer") or "").strip():
+            cites, dropped = _part_citations(supplement, allowed_rest,
+                                             focus_src["book"], labels=rest_labels)
+            parts.append(_answer_part("supplement", "其他书的补充", supplement, cites,
+                                      dropped))
+        return _err("点名的书没有答出：%s" % (primary.get("error") or "没有正文"),
+                    ms=_ms(t0), thinking=thinking, focus=note, parts=parts,
+                    supplement_error=supplement.get("error") or "")
+
+    supplement_part, supplement_error = None, ""
+    if supplement.get("ok") and (supplement.get("answer") or "").strip():
+        cites, dropped = _part_citations(supplement, allowed_rest, focus_src["book"],
+                                         labels=rest_labels)
+        supplement_part = _answer_part("supplement", "其他书的补充", supplement, cites,
+                                       dropped)
+    else:
+        supplement_error = supplement.get("error") or "补充书没有答出"
+
+    parts = [primary_part] + ([supplement_part] if supplement_part else [])
+    citations = (primary_cites + (supplement_part["citations"]
+                                  if supplement_part else []))[:MAX_CITATIONS_MULTI]
+    answer = primary.get("answer") or "未找到原文依据"
+    sections = list(primary_part["sections"])
+    passages = list(primary.get("passages") or [])
+    if supplement_part is not None:
+        answer = answer + "\n\n## 其他书的补充\n\n" + (supplement.get("answer") or "")
+        sections.append({"heading": "其他书的补充",
+                         "body": supplement.get("answer") or ""})
+        passages.extend(supplement.get("passages") or [])
+
+    confidence = primary.get("confidence")
+    if confidence not in ("high", "medium", "low"):
+        confidence = "medium"
+    if supplement_error and confidence == "high":
+        confidence = "medium"
+    not_found = primary_part["not_found"] and (supplement_part["not_found"]
+                                               if supplement_part else True)
+    errors = [e for e in (primary_part["error"], supplement_error) if e]
+
+    counts = {}
+    for cite in citations:
+        counts[cite["book"]] = counts.get(cite["book"], 0) + 1
+    sources = [{"book": focus_src["book"], "title": title,
+                "path": focus_src["path"], "line": focus_src["line"],
+                "citations": counts.get(focus_src["book"], 0)}]
+    for src in supplements:
+        sources.append({"book": src["book"], "title": _book_label(src),
+                        "path": src["path"], "line": src["line"],
+                        "citations": counts.get(src["book"], 0)})
+
+    out = _ok(answer=answer, lead=primary_part["lead"], sections=sections,
+              dissent=primary_part["dissent"], gap=primary_part["gap"],
+              citations=citations, passages=passages, confidence=confidence,
+              not_found=not_found, error="；".join(errors), ms=_ms(t0),
+              thinking=thinking)
+    out["mode"] = "anchored"
+    out["focus"] = note
+    out["parts"] = parts
+    out["sources"] = sources
+    out["supplement_error"] = supplement_error
+    if not supplement_error:
+        try:
+            _write_json(cache_path, out)
+        except OSError:
+            pass
     return out
 
 

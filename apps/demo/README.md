@@ -93,6 +93,10 @@ python3 apps/demo/server.py
 - `POST /api/run` `{"question":"...","thinking":"high","fresh":false}` → 五阶段 trace（结构见 `BRIEF.md` 的「数据契约」）。
   `thinking` 取 `off/minimal/low/medium/high/xhigh/max`（默认 `high`），进切词缓存键；
   `fresh=true` 跳过切词缓存重新调模型，本次结果仍写回。trace 顶层与 `extract` 都带 `thinking`。
+  问题里点名书名时，trace 顶层多一个 `focus`：`status` 为 `exact` / `ambiguous` / `missing`。
+  `exact` 会把该书的 `ranking[0]`、`chapters[0]` 和 `result` 钉在这本书上（`pinned:true`），
+  `cards.trigger` 为 `false`；`ambiguous` 触发书卡；`missing` 不拿别的书冒充，继续普通检索。
+  点名书没有可用正文时 `result.path` 为空、`result.focus_empty` 为 `true`。
 - `GET /api/chapter?path=库/...md&line=16&chars=900&before=700` → 从 1-based 行起截原文，命中整行保留，前置 700 字，YAML 前置块跳过。
   路径必须 realpath 在 `库/` 下且以 `.md` 结尾，否则 400。返回除 `text`/`title`/`html`/`ms` 外还有：
   `hit_line`、`hit_start`、`hit_end`、`hit_text`、`before`（请求的前置预算）、`before_chars`（实际前置字数）、
@@ -105,7 +109,8 @@ python3 apps/demo/server.py
    "groups": [{"name": "冰封封印", "variants": ["冰封","冰壁","封印","封魂咒"]}]}
   ```
   多书回答在同一份请求上多给 `sources`（最多 8 本，每项非空字符串 `path`、整数 `line`、可选字符串 `title`，
-  否则 400）：
+  否则 400）。点名书时再给 `focus`（`/api/run` 返回的对象）；`sources` 第一项应是主书，
+  其余书作为补充。主书只出现在回答前半，补充只出现在 `## 其他书的补充` 之后：
   ```json
   {"question": "...", "path": "库/...md", "line": 1180, "terms": [], "groups": [],
    "thinking": "high", "fresh": false,
@@ -114,7 +119,10 @@ python3 apps/demo/server.py
   可选 `thinking` 与 `fresh`：思考和切词共用同一套档位并进答案缓存键；`fresh=true` 跳过答案缓存重新调模型。
   返回 Answer：`ok`、`cached`、`ms`、`model`、`thinking`、`answer`、`citations[{path,line,quote,chapter,verified}]`、
   `passages[{path,start,end,chars,title}]`、`confidence`、`not_found`、`error`，另有
-  `mode`（`single` 或 `multi`）与 `sources[{book,title,path,line,citations}]`。
+  `mode`（`single`、`multi` 或点名书时的 `anchored`）与 `sources[{book,title,path,line,citations}]`。
+  `anchored` 另带 `focus` 和 `parts`：`parts[0]` 是主书（`kind:"primary"`），`parts[1]` 是其他书
+  （`kind:"supplement"`，标题固定为「其他书的补充」）；`citations` 主书在前，最多 8 条。
+  老客户端仍可只读扁平 `lead`/`sections`/`answer`；没有 `parts` 时按原样渲染。
    `lead`、`sections[{heading,body}]`、`dissent`、`gap` 单书与多书都会填；`answer` 是它们拼出来的纯文本。模型只给平铺 `answer` 时这四个字段为空。
   多书时每条 citation 多带 `book` 与 `book_title`。
   `citations` 只放回查通过的引文，`line` 是文件实际行号。

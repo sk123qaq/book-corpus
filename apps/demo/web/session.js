@@ -185,6 +185,7 @@
   /* ---- 回答范围：一本书或几本书 ---------------------------------- */
 
   const MAX_SOURCES = 8;
+  const MAX_SUPPLEMENTS = 3;
 
   function sourceFromAnchor(anchor) {
     if (!anchor || typeof anchor.path !== 'string' || !anchor.path) return null;
@@ -264,7 +265,112 @@
       .map((card) => sourceFromCard(card, result)).filter(Boolean);
   }
 
+  function focusOf(turn) {
+    const focus = turn && turn.trace && turn.trace.focus;
+    if (!focus || typeof focus !== 'object' || !focus.status) return null;
+    // 普通问题没有点名书：resolve_title 返回 missing 且 query_title 为空，
+    // 这不是“书库没找到《》”，按无 focus 处理。
+    if (focus.status === 'missing'
+        && !(focus.title || focus.query_title || focus.book)) return null;
+    return focus;
+  }
+
+  function focusExact(turn) {
+    const focus = focusOf(turn);
+    return focus && focus.status === 'exact' ? focus : null;
+  }
+
+  function focusName(focus) {
+    return (focus && (focus.title || focus.query_title || focus.book)) || '';
+  }
+
+  function sourceFromFocus(turn, list) {
+    const focus = focusOf(turn);
+    if (!focus || focus.status !== 'exact') return null;
+    const book = focus.book || '';
+    const name = focusName(focus);
+    const match = (source) => source && typeof source.path === 'string' && source.path
+      && (!book || (source.book || bookKey(source.path)) === book);
+    if (focus.best_path) {
+      return {
+        book,
+        title: name,
+        chapter: chapterOf({ path: focus.best_path }),
+        path: focus.best_path,
+        line: Number(focus.best_line) || 1,
+      };
+    }
+    const top = sourceFromResult((turn.trace || {}).result);
+    if (top && match(top)) return cloneSource(top);
+    const found = (list || []).find(match);
+    if (found) return cloneSource(found);
+    return null;
+  }
+
+  function focusSupplements(turn, focus) {
+    const trace = turn.trace || {};
+    const focusBook = focus.book || bookKey(focus.best_path || '');
+    const rows = [];
+    const seen = new Set(focusBook ? [focusBook] : []);
+    const add = (row) => {
+      const source = sourceFromAnswer(row);
+      if (!source) return;
+      const book = source.book || bookKey(source.path);
+      if (focusBook && book === focusBook) return;
+      const key = book || sourceKey(source);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      rows.push(source);
+    };
+    ((trace.cards && Array.isArray(trace.cards.next)) ? trace.cards.next : []).forEach((row) => {
+      const hit = (Array.isArray(row.selected) ? row.selected : [])[0];
+      add({
+        book: row.book, title: row.title,
+        chapter: (hit && hit.chapter_title) || '',
+        path: (hit && hit.chapter_path) || row.best_chapter || '',
+        line: (hit && hit.line) || row.line || 1,
+      });
+    });
+    (Array.isArray((trace.plan || {}).ranking) ? trace.plan.ranking : []).forEach((row) => {
+      add({
+        book: row.book, title: row.title,
+        chapter: chapterOf({ path: row.best_path || '' }),
+        path: row.best_path || '', line: row.best_line || 1,
+      });
+    });
+    return rows.slice(0, MAX_SUPPLEMENTS);
+  }
+
+  function focusFirstSources(turn, list) {
+    const out = [];
+    const seen = new Set();
+    (list || []).forEach((source) => {
+      if (!source || typeof source.path !== 'string' || !source.path) return;
+      const item = cloneSource(source);
+      const key = sourceKey(item);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      out.push(item);
+    });
+    const focus = focusExact(turn);
+    if (focus) {
+      const primary = sourceFromFocus(turn, out);
+      if (primary) {
+        const focusBook = focus.book || bookKey(primary.path);
+        const rest = out.filter((s) => (s.book || bookKey(s.path)) !== focusBook);
+        return [primary].concat(rest).slice(0, MAX_SOURCES);
+      }
+    }
+    return out.slice(0, MAX_SOURCES);
+  }
+
   function defaultSources(turn) {
+    const focus = focusExact(turn);
+    if (focus) {
+      const primary = sourceFromFocus(turn, turn.sources);
+      if (!primary) return [];
+      return [primary].concat(focusSupplements(turn, focus)).slice(0, MAX_SOURCES);
+    }
     const anchor = sourceFromAnchor(turn.anchor);
     if (anchor) return [anchor];
     const top = sourceFromResult((turn.trace || {}).result);
@@ -273,8 +379,14 @@
     return cards.length ? [cards[0]] : [];
   }
 
-  function roleOf(source, anchor, top) {
+  function focusOnlySources(turn) {
+    const primary = focusExact(turn) ? sourceFromFocus(turn, turn.sources) : null;
+    return primary ? [primary] : defaultSources(turn);
+  }
+
+  function roleOf(source, anchor, top, focus) {
     const key = sourceKey(source);
+    if (focus && sourceKey(focus) === key) return 'focus';
     if (anchor && sourceKey(anchor) === key) return 'anchor';
     if (top && sourceKey(top) === key) return 'top';
     return 'card';
@@ -283,15 +395,17 @@
   function bookChoices(turn) {
     const anchor = sourceFromAnchor(turn.anchor);
     const top = sourceFromResult((turn.trace || {}).result);
+    const focus = sourceFromFocus(turn, turn.sources);
     const seen = new Set();
     const rows = [];
     const push = (source, role) => {
       const key = sourceKey(source);
       if (!source || !key || seen.has(key)) return;
       seen.add(key);
-      rows.push({ source, role, locked: role === 'anchor' });
+      rows.push({ source, role, locked: role === 'anchor' || role === 'focus' });
     };
-    (turn.sources || []).forEach((source) => push(source, roleOf(source, anchor, top)));
+    push(focus, 'focus');
+    (turn.sources || []).forEach((source) => push(source, roleOf(source, anchor, top, focus)));
     push(anchor, 'anchor');
     push(top, 'top');
     cardSources(turn).forEach((source) => push(source, 'card'));
@@ -302,6 +416,11 @@
     const answer = turn.answer || {};
     if (answer.mode === 'multi' && Array.isArray(answer.sources) && answer.sources.length) {
       return answer.sources.map(sourceFromAnswer).filter(Boolean);
+    }
+    if (answer.mode === 'anchored') {
+      const used = (Array.isArray(turn.answerSources) && turn.answerSources.length)
+        ? turn.answerSources : turn.sources;
+      return focusFirstSources(turn, used || []);
     }
     if (Array.isArray(turn.answerSources) && turn.answerSources.length) return turn.answerSources;
     return turn.sources || [];
@@ -527,6 +646,17 @@
       || bookName(result.book) || '—';
     const resultChapter = one.chapter || result.chapter || result.title || '—';
     const scoreText = isFinite(topScore) ? topScore.toFixed(2) : '—';
+    const focus = focusOf(turn);
+    const lockName = focusName(focus);
+    const focusValue = focus
+      ? (focus.status === 'exact' ? '已锁定'
+        : focus.status === 'ambiguous' ? '有歧义' : '没找到')
+      : '';
+    const focusLead = focus
+      ? (focus.status === 'exact' ? '已锁定《' + lockName + '》· 前半部分只用这本书回答'
+        : focus.status === 'ambiguous' ? '书名有歧义《' + lockName + '》· 按书卡候选继续'
+        : '书库没有《' + lockName + '》· 按普通检索继续')
+      : '';
 
     return [
       {
@@ -568,12 +698,20 @@
         raw: { scheme: plan.scheme, ranking: plan.ranking, chapters: plan.chapters },
       },
       {
-        value: cards.trigger ? cardList.length + ' 张' : '未触发',
-        lead: cards.trigger ? cardList.length + ' 张书卡 · 触发' : '未触发 · 直接取 top1',
-        meta: cards.trigger ? '不确定时，把候选递给你' : '书级第一名够稳，不弹卡',
+        value: focus ? focusValue : (cards.trigger ? cardList.length + ' 张' : '未触发'),
+        lead: focus
+          ? focusLead
+          : (cards.trigger ? cardList.length + ' 张书卡 · 触发' : '未触发 · 直接取 top1'),
+        meta: focus
+          ? (focus.status === 'exact' ? '其他书放到后半部分补充' : '')
+          : (cards.trigger ? '不确定时，把候选递给你' : '书级第一名够稳，不弹卡'),
         field: {
           label: '候选',
-          chips: cardList.map((card) => '《' + (card.title || bookName(card.book)) + '》'),
+          chips: focus && focus.status === 'exact'
+            ? ['主书《' + lockName + '》']
+            : (focus && Array.isArray(focus.candidates) && focus.candidates.length
+              ? focus.candidates.map((row) => '《' + (row.title || bookName(row.book)) + '》')
+              : cardList.map((card) => '《' + (card.title || bookName(card.book)) + '》')),
         },
         raw: trace.cards,
       },
@@ -692,6 +830,7 @@
   function booksHTML(turn) {
     const choices = bookChoices(turn);
     const chosen = turn.sources || [];
+    const focus = focusExact(turn);
     if (choices.length < 2 || !chosen.length) return '';
     const last = lastTurn();
     const readonly = !last || last.n !== turn.n;
@@ -699,7 +838,7 @@
     const selectable = choices.slice(0, MAX_SOURCES);
     const allOn = selectable.every((row) => picked.has(sourceKey(row.source)));
     const head = '<div class="books-head">'
-      + '<span class="t">候选书 · ' + choices.length + ' 本</span>'
+      + '<span class="t">' + (focus ? '回答用书' : '候选书') + ' · ' + choices.length + ' 本</span>'
       + '<span class="h">' + (readonly
         ? '历史轮次 · 书单只读'
         : '已选 ' + chosen.length + '/' + choices.length + ' 本') + '</span>'
@@ -711,7 +850,8 @@
       const key = sourceKey(row.source);
       const on = picked.has(key);
       const full = i >= MAX_SOURCES;
-      const tag = row.role === 'anchor' ? '落点' : (row.role === 'top' ? '首选' : '');
+      const tag = row.role === 'focus' ? '指定'
+        : (row.role === 'anchor' ? '落点' : (row.role === 'top' ? '首选' : ''));
       const tagText = full ? '最多 ' + MAX_SOURCES + ' 本' : tag;
       const cls = 'book-pick' + (on ? ' is-on' : '') + (row.locked ? ' is-locked' : '')
         + (full ? ' is-full' : '');
@@ -725,6 +865,9 @@
         + '</button>';
     }).join('');
     const notes = [];
+    if (focus) {
+      notes.push('前半部分只用《' + focusName(focus) + '》回答，其余书放到后半部分补充。');
+    }
     if (choices.length > MAX_SOURCES) {
       notes.push('候选超过 ' + MAX_SOURCES + ' 本，最多选 ' + MAX_SOURCES + ' 本。');
     }
@@ -741,18 +884,57 @@
       + act + '</section>';
   }
 
+  function answerSectionHTML(section) {
+    if (!section || (!section.heading && !section.body)) return '';
+    const head = plain(section.heading);
+    const body = String(section.body || '').split(/\n+/).map(plain).filter(Boolean);
+    return '<section>' + (head ? '<h3>' + esc(head) + '</h3>' : '')
+      + body.map((p) => '<p>' + esc(p) + '</p>').join('') + '</section>';
+  }
+
+  function answerPartHTML(part, index, answer) {
+    const kind = part.kind || (index === 0 ? 'primary' : 'supplement');
+    let title = plain(part.title);
+    if (!title) {
+      if (kind === 'supplement') title = '其他书的补充';
+      else if (answer.focus) title = '《' + (answer.focus.title || answer.focus.book || '') + '》';
+    }
+    const blocks = [];
+    const lead = plain(part.lead);
+    if (lead) blocks.push('<p class="answer-lead">' + esc(lead) + '</p>');
+    (Array.isArray(part.sections) ? part.sections : []).forEach((section) => {
+      const html = answerSectionHTML(section);
+      if (html) blocks.push(html);
+    });
+    if (!blocks.length && !part.error && !part.not_found) {
+      blocks.push('<p class="answer-loading">没有拿到回答正文</p>');
+    }
+    if (part.not_found) blocks.push('<p class="answer-small">未找到原文依据</p>');
+    if (part.error) blocks.push('<p class="answer-error">' + esc(part.error) + '</p>');
+    if (part.dissent) {
+      blocks.push('<p class="answer-small">分歧 · ' + esc(plain(part.dissent)) + '</p>');
+    }
+    if (part.gap) {
+      blocks.push('<p class="answer-small">没讲到的 · ' + esc(plain(part.gap)) + '</p>');
+    }
+    return '<section class="answer-part' + (kind === 'supplement' ? ' is-supplement' : '') + '">'
+      + (title ? '<h3>' + esc(title) + '</h3>' : '') + blocks.join('') + '</section>';
+  }
+
   function answerBody(answer) {
+    const partList = Array.isArray(answer.parts)
+      ? answer.parts.filter((part) => part && typeof part === 'object') : [];
+    if (partList.length) {
+      return partList.map((part, i) => answerPartHTML(part, i, answer)).join('');
+    }
     const parts = [];
     const sections = Array.isArray(answer.sections) ? answer.sections : [];
     if (sections.length) {
       const lead = plain(answer.lead);
       if (lead) parts.push('<p class="answer-lead">' + esc(lead) + '</p>');
       sections.forEach((section) => {
-        if (!section) return;
-        const head = plain(section.heading);
-        const body = String(section.body || '').split(/\n+/).map(plain).filter(Boolean);
-        parts.push('<section>' + (head ? '<h3>' + esc(head) + '</h3>' : '')
-          + body.map((p) => '<p>' + esc(p) + '</p>').join('') + '</section>');
+        const html = answerSectionHTML(section);
+        if (html) parts.push(html);
       });
     } else {
       String(answer.answer || answer.lead || '').split(/\n\s*\n/).map(plain).filter(Boolean)
@@ -765,6 +947,13 @@
   function answerMeta(turn) {
     const data = turn.answer || {};
     const meta = [];
+    if (data.mode === 'anchored') {
+      const partCount = Array.isArray(data.parts) ? data.parts.length : 0;
+      const title = data.focus ? (data.focus.title || data.focus.book || '') : '';
+      const books = new Set(citesOf(turn).map((c) => bookOf(c)).filter(Boolean));
+      meta.push((partCount || 2) + ' 部分' + (title ? ' · 主书《' + title + '》' : ''));
+      if (books.size) meta.push('引 ' + books.size + ' 本书');
+    }
     if (data.confidence) meta.push('置信 ' + (CONFIDENCE[data.confidence] || data.confidence));
     const scope = scopeSources(turn);
     if (data.mode === 'multi' && scope.length > 1) meta.push(scope.length + ' 本书');
@@ -797,7 +986,11 @@
         + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></p>';
     }
     if (turn.status === 'answering') {
-      return '<p class="loading-card"><span class="dot-pulse"></span>正在组织回答，通常 40 到 90 秒 · '
+      const focus = focusExact(turn);
+      const line = focus
+        ? '先取指定书的原文，再取其他书补充，最长约 2 分钟…'
+        : '正在组织回答，通常 40 到 90 秒…';
+      return '<p class="loading-card"><span class="dot-pulse"></span>' + esc(line) + ' · '
         + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></p>';
     }
     if (turn.status === 'run-error') {
@@ -819,8 +1012,10 @@
     if (answer.ok === false) {
       return '<p class="answer-error">没有拿到回答：' + esc(answer.error || '未知错误') + '</p>';
     }
-    const dissent = plain(answer.dissent);
-    const gap = plain(answer.gap);
+    const dissent = (Array.isArray(answer.parts) && answer.parts.length)
+      ? '' : plain(answer.dissent);
+    const gap = (Array.isArray(answer.parts) && answer.parts.length)
+      ? '' : plain(answer.gap);
     return '<article class="answer">' + answerBody(answer) + '</article>'
       + (dissent ? '<p class="answer-small">分歧 · ' + esc(dissent) + '</p>' : '')
       + (gap ? '<p class="answer-small">没讲到的 · ' + esc(gap) + '</p>' : '')
@@ -1251,9 +1446,15 @@
       .filter((s) => s && typeof s.path === 'string' && s.path)
       .slice(0, MAX_SOURCES)
       .map(cloneSource);
-    if (!sources.length) {
+    const focus = focusOf(turn);
+    const ordered = focus && focus.status === 'exact'
+      ? focusFirstSources(turn, sources) : sources;
+    if (!ordered.length) {
+      const missing = focus && focus.status === 'exact' ? focusName(focus) : '';
       turn.status = 'answer-error';
-      turn.answerError = '这一轮没有可用的来源';
+      turn.answerError = missing
+        ? '《' + missing + '》没有可读的原文路径，未拿其他书代答'
+        : '这一轮没有可用的来源';
       turn.stageStates = ALL_DONE.slice();
       turn.stageOpen = new Set();
       turn.stripOpen = false;
@@ -1261,8 +1462,8 @@
       render();
       return;
     }
-    turn.sources = sources;
-    turn.answerSources = sources.map(cloneSource);
+    turn.sources = ordered;
+    turn.answerSources = ordered.map(cloneSource);
     turn.answer = null;
     turn.context = null;
     turn.status = 'answering';
@@ -1273,7 +1474,7 @@
     syncBusy();
     startClock();
     render();
-    const primary = sources[0];
+    const primary = ordered[0];
     const body = {
       question: turn.question,
       book: primary.book || bookKey(primary.path),
@@ -1281,9 +1482,10 @@
       line: Number(primary.line) || 1,
       terms: uniq([].concat(extract.terms || [], plan.nouns || [])).slice(0, 12),
       groups: Array.isArray(extract.groups) ? extract.groups : [],
-      sources: sources.map((s) => ({
+      sources: ordered.map((s) => ({
         book: s.book || '', title: s.title || '', path: s.path, line: Number(s.line) || 1,
       })),
+      focus: focus || null,
       session_id: state.sessionId,
       turn: turn.n,
       thinking: THINKING_LEVEL,
@@ -1377,7 +1579,7 @@
     const choice = bookChoices(turn).find((row) => sourceKey(row.source) === key);
     if (!choice) return;
     if (choice.locked) {
-      toast('落点那本固定入选，先取消落点再换');
+      toast(choice.role === 'focus' ? '指定书固定入选' : '落点那本固定入选，先取消落点再换');
       return;
     }
     const chosen = turn.sources || [];
@@ -1406,7 +1608,7 @@
     const picked = new Set((turn.sources || []).map(sourceKey));
     const allOn = selectable.every((row) => picked.has(sourceKey(row.source)));
     turn.sources = allOn
-      ? defaultSources(turn)
+      ? (focusExact(turn) ? focusOnlySources(turn) : defaultSources(turn))
       : selectable.map((row) => cloneSource(row.source));
     render();
   }
@@ -1684,6 +1886,15 @@
     if (answer.mode === 'multi' && Array.isArray(answer.sources) && answer.sources.length) {
       return answer.sources.map(sourceFromAnswer).filter(Boolean);
     }
+    if (answer.mode === 'anchored') {
+      const focus = focusExact(turn);
+      const used = (Array.isArray(answer.sources) && answer.sources.length)
+        ? answer.sources.map(sourceFromAnswer).filter(Boolean) : [];
+      const primary = sourceFromFocus(turn, used);
+      const list = (primary ? [primary] : []).concat(
+        used, focus ? focusSupplements(turn, focus) : []);
+      if (list.length) return focusFirstSources(turn, list);
+    }
     const anchor = sourceFromAnchor(turn.anchor);
     if (anchor) return [anchor];
     const top = sourceFromResult((turn.trace || {}).result);
@@ -1729,6 +1940,8 @@
     if (anchor && !row.sources.some((s) => sourceKey(s) === sourceKey(anchor))) {
       row.sources = [anchor].concat(row.sources);
     }
+    row.sources = focusFirstSources(row, row.sources);
+    row.answerSources = focusFirstSources(row, row.answerSources);
     return row;
   }
 

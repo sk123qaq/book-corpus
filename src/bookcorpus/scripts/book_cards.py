@@ -9,7 +9,7 @@
   book_cards.py --gate        # 60 题 gold 上的触发率与门槛
   book_cards.py --perf        # 20 题，开卡/不开卡交错
 
-触发（任一成立，且不是书名/作者/原句查询）：
+触发（任一成立，且不是唯一书名/作者/原句查询；同名歧义仍触发）：
   1 top1 与 top2 的分差 < 10%
   2 top10 跨至少三个类型
   3 top10 里有 >=50 章的书
@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.join(HERE))
 import book_query  # noqa: E402
 import book_readme  # noqa: E402
 import book_score  # noqa: E402
+import book_title  # noqa: E402
 import lib_fts_cjk as cjk  # noqa: E402
 
 DB = book_score.DB
@@ -92,8 +93,7 @@ class CardSet:
 
 
 def normalize(text):
-    return re.sub(r"[\s《》〈〉“”\"'「」『』（）()【】\[\]、，,。.！!？?：:；;·—\-]+", "",
-                  text or "")
+    return book_title.normalize(text)
 
 
 def load_books(libdb=LIBDB):
@@ -112,7 +112,7 @@ def load_concepts():
     return book_query.read_table()
 
 
-def query_hints(query, books, concepts, terms=None):
+def query_hints(query, books, concepts, terms=None, focus=None):
     """书名/作者/原句/概念/问句提示。只做词法判断。"""
     q = normalize(query)
     qw = [w for w in QUESTION_WORDS if w in q]
@@ -153,14 +153,24 @@ def query_hints(query, books, concepts, terms=None):
             if concept:
                 break
     return {"title": title, "author": author, "verbatim": verbatim,
-            "concept": concept, "question": bool(qw), "qw": qw}
+            "concept": concept, "question": bool(qw), "qw": qw, "focus": focus}
 
 
 def trigger(query, ranking, hints, cards=DEFAULT_CARDS):
-    """返回 (是否弹卡, 触发原因)。书名/作者/原句查询直接不弹。"""
+    """返回 (是否弹卡, 触发原因)。唯一书名/作者/原句查询不弹；同名歧义弹。
+
+    focus 精确命中一本书时不弹；同名多本只弹候选；没匹配到书时书名提示不压制。
+    """
     if not ranking:
         return False, []
-    if hints.get("title") or hints.get("author") or hints.get("verbatim"):
+    status = (hints.get("focus") or {}).get("status")
+    if status == "exact":
+        return False, []
+    if status == "ambiguous":
+        return True, ["title_ambiguous"]
+    if hints.get("author") or hints.get("verbatim"):
+        return False, []
+    if hints.get("title") and status != "missing":
         return False, []
     reasons = []
     if len(ranking) > 1 and ranking[0].score > 0:
@@ -350,8 +360,26 @@ def next_books(cards, hits, terms, max_chapters=3, toc_fn=None, select_fn=None):
     return out
 
 
+def focus_order(ranking, focus):
+    """精确 focus 提头；同名候选按候选顺序提头，其余保持打分序。"""
+    if not focus or not ranking:
+        return ranking
+    status, book = focus.get("status"), focus.get("book")
+    if status == "exact" and book:
+        order = {book: 0}
+    elif status == "ambiguous":
+        order = {c["book"]: i for i, c in enumerate(focus.get("candidates") or [])}
+    else:
+        return ranking
+    if not order:
+        return ranking
+    head = sorted((b for b in ranking if b.book in order), key=lambda b: order[b.book])
+    tail = [b for b in ranking if b.book not in order]
+    return head + tail
+
+
 def cards_for(planner, terms, question, n=DEFAULT_CARDS, books=None, concepts=None,
-              toc_fn=None, select_fn=None):
+              toc_fn=None, select_fn=None, focus=None):
     """用已有 Planner 的首轮缓存建卡，不重复检索。
 
     返回 (CardSet, hits, nouns, ranking)。book_query 默认开卡时复用它，避免再查一遍。
@@ -368,7 +396,8 @@ def cards_for(planner, terms, question, n=DEFAULT_CARDS, books=None, concepts=No
     hits, _ = planner.search(terms) if terms != nouns else (noun_hits, 0.0)
     books = load_books() if books is None else books
     concepts = load_concepts() if concepts is None else concepts
-    hints = query_hints(question, books, concepts, terms)
+    hints = query_hints(question, books, concepts, terms, focus)
+    ranking = focus_order(ranking, focus)
     fire, reasons = trigger(question, ranking, hints, n)
     cards = build_cards(ranking, hits, terms, n, toc_fn, select_fn) if fire else []
     res = CardSet(query=question, terms=terms, trigger=fire, reasons=reasons,
@@ -408,7 +437,7 @@ def expand_selected(question, books, expand_fn=None):
 def run(query, terms=None, question=None, n=DEFAULT_CARDS, select="", exclude="",
         refresh=False, answer_found="", feedback=FEEDBACK, con=None, meta=None,
         expand=None, books=None, concepts=None, toc_fn=None, select_fn=None,
-        expand_fn=None):
+        expand_fn=None, focus=None):
     """首轮 → 触发 → 卡片 → 动作 → 下一步。不调模型（--expand 除外）。"""
     t0 = time.time()
     terms = terms or cjk.split_groups(query or "")
@@ -423,7 +452,7 @@ def run(query, terms=None, question=None, n=DEFAULT_CARDS, select="", exclude=""
         concepts = load_concepts() if concepts is None else concepts
         planner = book_query.Planner(con, meta, expand, limit=max(n, 10))
         res, hits, nouns, ranking = cards_for(planner, terms, question, n, books,
-                                              concepts, toc_fn, select_fn)
+                                              concepts, toc_fn, select_fn, focus)
         res.query = query
         direct = []
         if not res.trigger:

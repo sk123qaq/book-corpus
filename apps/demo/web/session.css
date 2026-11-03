@@ -843,6 +843,7 @@ a { color: inherit; text-decoration: none; }
   padding-top: 0;
   margin-top: 8px;
 }
+.answer-part.is-supplement { margin-top: 34px; }
 .answer-lead { color: var(--ink); }
 .answer-meta {
   margin: 18px 0 0;

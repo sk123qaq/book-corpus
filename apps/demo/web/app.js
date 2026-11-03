@@ -399,16 +399,57 @@
     return reason;
   }
 
+  function focusInfo(trace) {
+    const focus = trace && trace.focus;
+    if (!focus || typeof focus !== 'object' || !focus.status) return null;
+    if (focus.status === 'missing'
+        && !(focus.title || focus.query_title || focus.book)) return null;
+    return focus;
+  }
+
+  function focusName(focus) {
+    return (focus && (focus.title || focus.query_title || focus.book)) || '';
+  }
+
+  function focusHTML(focus, hasCards) {
+    if (!focus) return '';
+    const name = esc(focusName(focus));
+    if (focus.status === 'exact') {
+      return `<p class="trigger-line"><span>已锁定《${name}》</span>` +
+        '<span class="signal">前半部分只用这本书回答；其他书放在后半部分</span></p>';
+    }
+    if (focus.status === 'ambiguous') {
+      if (hasCards) {
+        return `<p class="trigger-line"><span>书名有歧义《${name}》</span>` +
+          '<span class="signal">候选列在下面，选一本再问</span></p>';
+      }
+      const candidates = (Array.isArray(focus.candidates) ? focus.candidates : [])
+        .filter((c) => c && (c.title || c.book))
+        .slice(0, 5)
+        .map((c) => `<span class="signal">《${esc(c.title || c.book)}》` +
+          (c.author ? ' · ' + esc(c.author) : '') + '</span>')
+        .join('');
+      return `<p class="trigger-line"><span>书名有歧义《${name}》</span>${candidates}</p>` +
+        '<p class="no-cards">先按普通检索继续；候选书只作提示。</p>';
+    }
+    if (focus.status === 'missing') {
+      return `<p class="trigger-line"><span>书库没有《${name}》</span>` +
+        '<span class="signal">按普通检索继续</span></p>';
+    }
+    return '';
+  }
+
   function renderStage3(trace) {
     const cardsData = trace.cards || {};
     const cards = cardsData.cards || [];
     const reasons = cardsData.reasons || [];
     const u = cardsData.uncertainty || {};
     const hints = cardsData.hints || {};
+    const focus = focusInfo(trace);
     const all = cardsSelected();
     const signals = reasons.map((r) =>
       `<span class="signal">${esc(reasonText(r, u))}</span>`).join('');
-    let body = '';
+    let body = focusHTML(focus, !!(cardsData.trigger && cards.length));
     if (cardsData.trigger && cards.length) {
       const toggle = cards.length > 1
         ? `<button type="button" class="select-all ${all ? 'on' : ''}" id="select-all" aria-pressed="${all}">` +
@@ -432,7 +473,9 @@
       }
     } else {
       let why = '没有命中，无法选书';
-      if ((trace.plan && trace.plan.ranking || []).length) {
+      if (focus && focus.status === 'exact') {
+        why = '书名已锁定，直接给这本书的章节';
+      } else if ((trace.plan && trace.plan.ranking || []).length) {
         if (hints.title) why = '书名精确命中，直接给章节';
         else if (hints.author) why = '作者精确命中，直接给章节';
         else why = '结果足够明确，直接给章节';
@@ -441,10 +484,19 @@
         '<p class="no-cards">跳过选择，第 5 阶段直接给出最佳章节。</p>';
     }
     $('.stage-body', stages[3]).innerHTML = body;
+    let summary = cardsData.trigger ? cards.length + ' 张书卡' : '未触发书卡';
+    if (focus && focus.status === 'exact') summary = '已锁定《' + focusName(focus) + '》';
+    else if (focus && focus.status === 'ambiguous') summary = '书名有歧义《' + focusName(focus) + '》';
+    else if (focus && focus.status === 'missing') summary = '书库没有《' + focusName(focus) + '》';
+    const evidence = cards.length
+      ? cards.map((c) => `<span class="mini-term">${esc(c.title)}</span>`)
+      : (focus && focus.status === 'exact'
+        ? [`<span class="mini-term">主书《${esc(focusName(focus))}》</span>`,
+           '<span class="mini-term">其他书作补充</span>']
+        : ['<span class="mini-term">直接给章节</span>']);
     $('.stage-summary', stages[3]).innerHTML =
-      `<p class="summary-line">${cardsData.trigger ? cards.length + ' 张书卡' : '未触发书卡'} · ${fmtMs(cardsData.ms)}</p>` +
-      `<div class="summary-evidence">${(cards.length ? cards.map((c) =>
-        `<span class="mini-term">${esc(c.title)}</span>`) : ['直接给章节']).join('')}</div>`;
+      `<p class="summary-line">${esc(summary)} · ${fmtMs(cardsData.ms)}</p>` +
+      `<div class="summary-evidence">${evidence.join('')}</div>`;
   }
 
   function resultHTML(result) {
@@ -540,12 +592,19 @@
   function answerHTML() {
     const a = state.answer;
     if (!a) return '';
+    const focus = (a.locator && a.locator.focus)
+      || (state.trace && state.trace.focus) || null;
+    const anchored = !!(focus && focus.status === 'exact');
     if (a.loading) {
       const n = ((a.locator && a.locator.sources) || []).length;
-      const note = n > 1 ? '先取 ' + n + ' 本书的多段原文，再逐书归纳' : '先取同书多段原文，再归纳';
-      const line = n > 1
-        ? `正在检索 ${n} 本书的原文并组织回答，最长约 2 分钟…`
-        : '正在检索原文并组织回答，最长约 90 秒…';
+      const note = anchored
+        ? '前半部分用指定书回答'
+        : (n > 1 ? '先取 ' + n + ' 本书的多段原文，再逐书归纳' : '先取同书多段原文，再归纳');
+      const line = anchored
+        ? '先取指定书的原文，再取其他书补充，最长约 2 分钟…'
+        : (n > 1
+          ? `正在检索 ${n} 本书的原文并组织回答，最长约 2 分钟…`
+          : '正在检索原文并组织回答，最长约 90 秒…');
       return `<section class="answer-card is-loading">
         <div class="answer-head">
           <span class="answer-label">回答</span>
@@ -563,21 +622,46 @@
     }
     const d = a.data || {};
     const multi = d.mode === 'multi';
+    const isAnchored = d.mode === 'anchored';
     const scope = multi ? (d.sources || []) : [];
     const covered = new Set(((d.citations || []).map((c) => c.book || c.book_title)).filter(Boolean)).size;
     // 正文按换行拆段：空行与单换行各成一段。
     const paragraphs = (text) => String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    const partList = Array.isArray(d.parts) ? d.parts.filter((p) => p && typeof p === 'object') : [];
+    const sectionHTML = (section) => {
+      if (!section || (!section.heading && !section.body)) return '';
+      const head = section.heading ? `<h3 class="answer-h">${esc(section.heading)}</h3>` : '';
+      const ps = paragraphs(section.body).map((p) => `<p>${esc(p)}</p>`).join('');
+      return `<section class="answer-section">${head}${ps}</section>`;
+    };
     let body;
-    if (Array.isArray(d.sections) && d.sections.length) {
+    if (partList.length) {
+      body = partList.map((part, i) => {
+        const kind = part.kind || (i === 0 ? 'primary' : 'supplement');
+        let title = part.title || '';
+        if (!title) {
+          if (kind === 'supplement') title = '其他书的补充';
+          else if (d.focus) title = '《' + (d.focus.title || d.focus.book || '') + '》';
+        }
+        const head = title ? `<h3 class="answer-h">${esc(title)}</h3>` : '';
+        const lead = part.lead ? `<p class="answer-lead">${esc(part.lead)}</p>` : '';
+        const sections = (Array.isArray(part.sections) ? part.sections : [])
+          .map(sectionHTML).join('');
+        const empty = !lead && !sections && !part.error && !part.not_found
+          ? '<p class="answer-empty">未找到原文依据</p>' : '';
+        const notFound = part.not_found
+          ? '<p class="answer-empty">未找到原文依据</p>' : '';
+        const dissent = part.dissent
+          ? `<p class="answer-dissent">${esc(part.dissent)}</p>` : '';
+        const gap = part.gap ? `<p class="answer-gap">${esc(part.gap)}</p>` : '';
+        const error = part.error
+          ? `<p class="answer-gap">${esc(part.error)}</p>` : '';
+        return `<section class="answer-section">${head}${lead}${sections}${notFound}${empty}${error}${dissent}${gap}</section>`;
+      }).join('');
+    } else if (Array.isArray(d.sections) && d.sections.length) {
       body = [
         d.lead ? `<p class="answer-lead">${esc(d.lead)}</p>` : '',
-        d.sections
-          .filter((s) => s && (s.heading || s.body))
-          .map((s) => {
-            const head = s.heading ? `<h3 class="answer-h">${esc(s.heading)}</h3>` : '';
-            const ps = paragraphs(s.body).map((p) => `<p>${esc(p)}</p>`).join('');
-            return `<section class="answer-section">${head}${ps}</section>`;
-          }).join(''),
+        d.sections.map(sectionHTML).join(''),
         d.dissent ? `<p class="answer-dissent">${esc(d.dissent)}</p>` : '',
         d.gap ? `<p class="answer-gap">${esc(d.gap)}</p>` : '',
       ].join('');
@@ -589,6 +673,11 @@
     }
     if (!body) body = '<p class="answer-empty">未找到原文依据</p>';
     const meta = [];
+    if (isAnchored) {
+      const focusTitle = d.focus && (d.focus.title || d.focus.book);
+      meta.push((partList.length || 2) + ' 部分'
+        + (focusTitle ? ' · 主书《' + focusTitle + '》' : ''));
+    }
     if (d.confidence) meta.push('置信 ' + confidenceText(d.confidence));
     if (multi) meta.push(scope.length + ' 本书');
     if (d.not_found) meta.push('未找到原文依据');
@@ -597,6 +686,7 @@
     if (d.passages && d.passages.length) meta.push(d.passages.length + ' 段原文');
     if (verified) meta.push(verified + ' 条引文已回查');
     if (multi && covered) meta.push('覆盖 ' + covered + ' 本');
+    if (isAnchored && covered) meta.push('引 ' + covered + ' 本书');
     const note = d.not_found ? '未找到可引用的原文'
       : (verified ? '由模型根据原文归纳，引文已回查' : '引文回查不足，仅供参考');
     if (d.cached) meta.push('缓存命中');
@@ -653,8 +743,75 @@
     return state.selectAll && cards.length > 1;
   }
 
+  function sourceOfResult(result) {
+    if (!result || !result.path) return null;
+    return {
+      book: result.book || '',
+      title: result.book_title || result.title || '',
+      path: result.path,
+      line: Number(result.hit_line || result.line) || 1,
+    };
+  }
+
+  function focusSource(trace, focus) {
+    const book = focus.book || '';
+    const name = focusName(focus);
+    const loc = state.locator;
+    const rows = [
+      loc && loc.path ? {
+        book: loc.book || '', title: loc.book_title || name,
+        path: loc.path, line: Number(loc.line) || 1,
+      } : null,
+      sourceOfResult(trace.result),
+      focus.best_path ? {
+        book, title: name, path: focus.best_path, line: Number(focus.best_line) || 1,
+      } : null,
+    ];
+    return rows.find((s) => s && s.path && (!book || !s.book || s.book === book)) || null;
+  }
+
+  function focusOtherSources(trace, focus) {
+    const focusBook = focus.book || '';
+    const list = [];
+    const seen = new Set();
+    const add = (source) => {
+      if (!source || !source.path) return;
+      const book = source.book || '';
+      if (focusBook && book === focusBook) return;
+      const key = book || source.path;
+      if (seen.has(key) || list.some((s) => s.path === source.path)) return;
+      seen.add(key);
+      list.push({
+        book, title: source.title || '', path: source.path,
+        line: Number(source.line) || 1,
+      });
+    };
+    ((trace.cards && trace.cards.next) || []).forEach((book) => {
+      const hit = (book.selected || [])[0];
+      add({
+        book: book.book || '',
+        title: book.title || '',
+        path: (hit && hit.chapter_path) || book.best_chapter || '',
+        line: (hit && hit.line) || book.line || 1,
+      });
+    });
+    ((trace.plan && trace.plan.ranking) || []).forEach((row) => {
+      add({ book: row.book || '', title: row.title || '',
+            path: row.best_path || '', line: row.best_line || 1 });
+    });
+    return list;
+  }
+
   function allSources() {
-    const cards = ((state.trace || {}).cards || {}).cards || [];
+    const trace = state.trace || {};
+    const focus = focusInfo(trace);
+    if (focus && focus.status === 'exact') {
+      const primary = focusSource(trace, focus);
+      if (!primary) return [];
+      const rest = focusOtherSources(trace, focus).slice(0, 3);
+      return [primary].concat(rest).slice(0, 4);
+    }
+    const cards = (trace.cards || {}).cards || [];
     if (!cardsSelected()) return [];
     const seed = (state.locator && state.locator.book) || '';
     const list = cards.map((c) => ({
@@ -668,30 +825,62 @@
     return list.slice(0, 8);
   }
 
+  function focusFallbackPath(trace, focus) {
+    if (focus && focus.best_path) {
+      return { path: focus.best_path, line: Number(focus.best_line) || 1 };
+    }
+    if (trace && trace.result && trace.result.path) {
+      return {
+        path: trace.result.path,
+        line: Number(trace.result.hit_line || trace.result.line) || 1,
+      };
+    }
+    const first = allSources()[0];
+    return first ? { path: first.path, line: Number(first.line) || 1 } : null;
+  }
+
   function answerLocator() {
     const trace = state.trace;
+    if (!trace) return null;
     const loc = state.locator;
-    if (!trace || !loc || !loc.path) return null;
+    const focus = focusInfo(trace);
+    let path = (loc && loc.path) || '';
+    let line = Number(loc && loc.line) || 1;
+    if (!path && focus && focus.status === 'exact') {
+      const fallback = focusFallbackPath(trace, focus);
+      if (fallback) {
+        path = fallback.path;
+        line = fallback.line;
+      }
+    }
+    if (!path) return null;
     const ex = (trace.extract && trace.extract.terms) || [];
     const plan = trace.plan || {};
     const terms = [...new Set([...(ex || []), ...(plan.nouns || [])])].slice(0, 12);
     const out = {
       question: trace.question || '',
-      book: loc.book || '',
-      path: loc.path,
-      line: loc.line || 1,
+      book: (loc && loc.book) || (focus && focus.book) || '',
+      path,
+      line,
       terms,
       groups: (trace.extract && trace.extract.groups) || [],
     };
+    if (focus) out.focus = focus;
     const sources = allSources();
-    if (sources.length > 1) out.sources = sources;
+    if (sources.length > 1 || (focus && focus.status === 'exact' && sources.length === 1)) {
+      out.sources = sources;
+    }
     return out;
   }
 
   function locatorKey(loc) {
     if (!loc) return '';
     const sig = (loc.sources || []).map((s) => [s.book, s.path, s.line].join(',')).join(';');
-    return [loc.question, loc.book, loc.path, loc.line, sig, state.thinking].join('|');
+    const focus = loc.focus || (state.trace && state.trace.focus) || null;
+    const fsig = focus
+      ? [focus.status, focus.book || '', focus.title || focus.query_title || ''].join(',')
+      : '';
+    return [loc.question, loc.book, loc.path, loc.line, sig, fsig, state.thinking].join('|');
   }
 
   function cancelAnswer() {
@@ -703,7 +892,18 @@
   }
 
   async function startAnswer(loc, opts = {}) {
-    if (!loc || !loc.path || !loc.question) return;
+    if (!loc || !loc.question) return;
+    const focus = loc.focus || (state.trace && state.trace.focus) || null;
+    let path = loc.path || '';
+    let line = Number(loc.line) || 1;
+    if (!path && focus && focus.status === 'exact') {
+      const fallback = focusFallbackPath(state.trace || {}, focus);
+      if (fallback) {
+        path = fallback.path;
+        line = fallback.line;
+      }
+    }
+    if (!path) return;
     let fresh = opts.fresh;
     if (fresh == null) fresh = !!state.answerFresh;
     state.answerFresh = false;
@@ -720,9 +920,10 @@
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          question: loc.question, book: loc.book, path: loc.path,
-          line: loc.line, terms: loc.terms, groups: loc.groups || [],
+          question: loc.question, book: loc.book || (focus && focus.book) || '',
+          path, line, terms: loc.terms, groups: loc.groups || [],
           sources: loc.sources || [],
+          focus,
           thinking: state.thinking,
           fresh: !!fresh,
         }),

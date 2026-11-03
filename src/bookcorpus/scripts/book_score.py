@@ -75,6 +75,7 @@ class BookScore:
     hits: int
     mean: float
     total_groups: int
+    pinned: bool = False
 
 
 def genre(meta, book):

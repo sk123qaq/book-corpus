@@ -71,6 +71,58 @@ def _clean_anchor(value):
             "quote": quote.strip() if isinstance(quote, str) else ""}
 
 
+def _clean_focus(value):
+    """请求里的 focus 只留 status/book/title/best_path/best_line/candidates。
+
+    前端（或上一轮 trace）传什么对象都不直接往下传，只取这几个字段。
+    """
+    if not isinstance(value, dict):
+        return None
+
+    def text(src, key, limit=200):
+        raw = src.get(key)
+        return raw.strip()[:limit] if isinstance(raw, str) else ""
+
+    try:
+        best_line = max(1, int(value.get("best_line") or 1))
+    except (TypeError, ValueError):
+        best_line = 1
+    out = {"status": text(value, "status", 20), "book": text(value, "book", 40),
+           "title": text(value, "title"), "best_path": text(value, "best_path", 500),
+           "best_line": best_line}
+    candidates = []
+    rows = value.get("candidates")
+    for item in rows if isinstance(rows, list) else []:
+        if not isinstance(item, dict) or len(candidates) >= answerer.MAX_SOURCES:
+            continue
+        book = text(item, "book", 40)
+        if not book:
+            continue
+        try:
+            line = max(1, int(item.get("line") or 1))
+        except (TypeError, ValueError):
+            line = 1
+        candidates.append({"book": book, "title": text(item, "title"),
+                           "path": text(item, "path", 500), "line": line})
+    if candidates:
+        out["candidates"] = candidates
+    if not (out["status"] or out["book"]):
+        return None
+    return out
+
+
+def _focus_path(focus):
+    """focus 里能落到具体文件的那一条：先 best_path，再看与 book 同号的候选。"""
+    if not focus or focus.get("status") != "exact":
+        return "", 1
+    if focus.get("best_path"):
+        return focus["best_path"], focus.get("best_line") or 1
+    for item in focus.get("candidates") or []:
+        if item.get("book") == focus.get("book") and item.get("path"):
+            return item["path"], item.get("line") or 1
+    return "", 1
+
+
 def _previous(sess, n):
     """第 n 问之前最近 3 轮，answer 传全文（related 需要读到回答尾部）。"""
     rows = []
@@ -150,7 +202,13 @@ def _pin_rows(prev, book):
 
 def _pin_followup(data, sess, n, rel, anchor):
     """related 且没点 anchor 时，把 trace.result 换回上一轮的书。
-    不满足条件、找不到落点、读章节失败时原样返回 data（同一对象）。"""
+    不满足条件、找不到落点、读章节失败时原样返回 data（同一对象）。
+    这一问已经点名了新的书（focus exact/ambiguous，或带了 query_title）时不钉：
+    钉回旧书会和点名冲突。"""
+    focus = data.get("focus")
+    if isinstance(focus, dict) and (
+            focus.get("status") in ("exact", "ambiguous") or focus.get("query_title")):
+        return data
     if not (isinstance(rel, dict) and rel.get("related")) or anchor:
         return data
     src = _previous_source(sess, n)
@@ -199,6 +257,29 @@ def _pin_followup(data, sess, n, rel, anchor):
             plan[key] = hit + rest
     data["pin"] = {"book": src["book"], "path": src["path"], "line": src["line"],
                    "from_turn": prev.get("n") if prev else None}
+    return data
+
+
+def _inherit_focus(data, sess, n, rel):
+    """related 的追问没点名时，把上一轮点名的书抄过来（标 inherited）。
+
+    当前已经是 exact 的不动；上一轮不是 exact、或没有 trace.focus 时也不动。
+    """
+    if not (isinstance(rel, dict) and rel.get("related")):
+        return data
+    cur = data.get("focus") if isinstance(data.get("focus"), dict) else {}
+    # 只有“纯这本书”的追问才继承：当前没点名（missing 且 query_title 为空）。
+    # 当前 exact/ambiguous，或点名了一个书库没有的标题，都不能拿上一轮的书顶替。
+    if cur and (cur.get("status") != "missing" or cur.get("query_title")):
+        return data
+    prev = _prev_turn(sess, n)
+    if prev is None:
+        return data
+    trace = prev.get("trace") if isinstance(prev.get("trace"), dict) else {}
+    old = trace.get("focus") if isinstance(trace.get("focus"), dict) else {}
+    if old.get("status") != "exact" or not old.get("book"):
+        return data
+    data["focus"] = dict(old, inherited=True)
     return data
 
 
@@ -397,6 +478,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(sources, list) or len(sources) > answerer.MAX_SOURCES:
             self.fail(400, "sources 必须是数组，最多 %d 本" % answerer.MAX_SOURCES)
             return
+        focus = _clean_focus(payload.get("focus"))
         clean = []
         for item in sources:
             if not isinstance(item, dict):
@@ -419,10 +501,13 @@ class Handler(BaseHTTPRequestHandler):
         if clean:
             path, line = clean[0]["path"], clean[0]["line"]
         elif not path:
-            self.fail(400, "path 为空")
-            return
+            path, line = _focus_path(focus)
+            if not path:
+                self.fail(400, "path 为空")
+                return
+            book = book or focus["book"]
         self.api_answer(question, book, path, line, terms, groups, clean,
-                        thinking=payload.get("thinking"),
+                        focus=focus, thinking=payload.get("thinking"),
                         use_cache=not _flag(payload.get("fresh")),
                         session_id=_session_id(payload.get("session_id")),
                         turn=_turn_no(payload.get("turn")))
@@ -486,6 +571,7 @@ class Handler(BaseHTTPRequestHandler):
             if sess and n > 1:
                 rel = related.check(question, _previous(sess, n))
                 data = _pin_followup(data, sess, n, rel, anchor)
+                data = _inherit_focus(data, sess, n, rel)
             if sess is None:
                 sess = session.create()
             _write_turn(sess, n, question, data, rel, anchor)
@@ -528,7 +614,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, info)
 
     def api_answer(self, question, book, path, line, terms, groups, sources=None,
-                   thinking=None, use_cache=True, session_id="", turn=None):
+                   focus=None, thinking=None, use_cache=True, session_id="",
+                   turn=None):
         sid, n, rel, ctx = "", 0, None, None
         try:
             if session_id:
@@ -536,7 +623,8 @@ class Handler(BaseHTTPRequestHandler):
             info = answerer.answer_question(question, book, path, line, terms,
                                             groups=groups, sources=sources,
                                             thinking=thinking, use_cache=use_cache,
-                                            history=ctx["text"] if ctx else "")
+                                            history=ctx["text"] if ctx else "",
+                                            focus=focus)
             if sid and n:
                 self.store_answer(sid, n, info, ctx)
             self.send_json(200, dict(info, session_id=sid, turn=n, related=rel,
