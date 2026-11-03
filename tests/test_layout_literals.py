@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = sorted((ROOT / "src" / "bookcorpus").rglob("*.py"))
-TARGETS.append(ROOT / "工作区" / "运维" / "server.py")
+TARGETS.append(ROOT / "apps" / "ops" / "server.py")
 # migrate.py 的职责就是读 v1 树，必须认识旧名字。
 SKIP = {ROOT / "src" / "bookcorpus" / "migrate.py"}
 OLD = {"目录", "库", "视图"}
@@ -61,7 +61,7 @@ def test_no_script_names_the_old_tree():
 def test_no_script_hardcodes_a_home_directory():
     bad = {}
     for path in sorted(set(TARGETS) | set((ROOT / "tests").rglob("*.py"))
-                       | set((ROOT / "工作区").rglob("*.py"))):
+                       | set((ROOT / "apps").rglob("*.py"))):
         found = HOME_PTR.findall(path.read_text(encoding="utf-8"))
         if found:
             bad[str(path.relative_to(ROOT))] = sorted(set(found))

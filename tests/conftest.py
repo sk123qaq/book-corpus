@@ -5,6 +5,12 @@ import sys
 
 import pytest
 
+# 这些脚本由 test_acceptance.py 以子进程入口跑，不让 pytest 二次收集。
+collect_ignore_glob = [
+    "acceptance/ops/test_*.py",
+    "acceptance/demo/test_*.py",
+]
+
 BOOKS = [
     ("B0001", "文学", "甲书", ["官场的铁笼把人变成机器上的零件，科层制把每个具体的人压成一个可以互换的编号。",
      "第二段讲自由与独立判断，一个人若不肯放弃自己的判断，就只能在铁笼里保持清醒。"]),

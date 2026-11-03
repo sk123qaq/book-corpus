@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-OPS = REPO / "工作区" / "运维" / "验收"
-DEMO = REPO / "工作区" / "演示-检索流程" / "验收"
+OPS = REPO / "tests" / "acceptance" / "ops"
+DEMO = REPO / "tests" / "acceptance" / "demo"
 INSTANCE = Path(os.environ.get("BOOKS_ROOT") or (Path.home() / "文档" / "book-corpus-local"))
 
 OFFLINE = [
@@ -35,7 +35,6 @@ def pdf_python():
     if os.environ.get("BOOKS_PDF_PY"):
         candidates.append(os.environ["BOOKS_PDF_PY"])
     candidates += [str(INSTANCE / "工作区" / ".venv-pdf" / "bin" / "python"),
-                   str(REPO / "工作区" / ".venv-pdf" / "bin" / "python"),
                    str(Path.home() / "teleocr" / ".venv" / "bin" / "python"),
                    sys.executable]
     for path in candidates:

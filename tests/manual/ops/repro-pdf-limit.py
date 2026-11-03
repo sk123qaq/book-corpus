@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """复现：「最多转几本」跟着已选本数走。
 
-  python3 工作区/运维/验收/repro-pdf-limit.py
+  python3 tests/manual/ops/repro-pdf-limit.py
 
 临时根 + stub 脚本 + headless Chrome，不碰真库也不调模型。勾一本看输入框是不是 1，
 勾两本看是不是 2，手填 5 再切一个不改数量的筛选看还是不是 5，清空看是不是回到 0，
@@ -16,7 +16,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(REPO, "tests", "acceptance", "ops"))
 
 import check_ops  # noqa: E402
 import shot_ops  # noqa: E402

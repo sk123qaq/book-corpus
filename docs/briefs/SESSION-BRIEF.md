@@ -1,9 +1,11 @@
 # 会话追问 · 后端实施单
 
+
+状态：已完成 · 2026-10-27
 > **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
 
 
-给 `工作区/演示-检索流程/` 加多轮会话。前端页面这轮不动，只做接口与回答阶段。
+给 `apps/demo/` 加多轮会话。前端页面这轮不动，只做接口与回答阶段。
 只读 `books/<uid>/`、`build/检索/index.db`、`build/library.db`。只写 `缓存/sessions`、`缓存/related`、`缓存/answers`。
 
 ## 数据形状

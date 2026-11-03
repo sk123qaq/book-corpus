@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """检索流程演示页的本地服务。
 
-  python3 工作区/演示-检索流程/server.py
+  python3 apps/demo/server.py
   http://127.0.0.1:8765
 
 只读 build/检索/index.db、build/library.db 与 books/**.md；不写书、账、脚本。

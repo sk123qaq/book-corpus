@@ -12,9 +12,11 @@
 - 管书：入库、分类、拆章、出 HTML 阅读版、PDF 转 Markdown、删书与冷宫。
 - 看库：本地操作台（8770）与检索演示页（8765），默认只绑 `127.0.0.1`。
 
-## 工作区结构
+## 实例结构
 
 `book-corpus init` 铺出来的树。一个目录一种东西，`build/` 整目录删掉能重建。
+
+这是**实例**的布局；工具仓自己的代码与文档在 `apps/`、`docs/`、`src/`、`tests/`，见下节。
 
 | 路径 | 内容 |
 |---|---|
@@ -30,9 +32,25 @@
 | `build/views/` | 指向 `books/<uid>/` 的奖项与主题软链树，产物 |
 | `build/书目总表.csv` | 从 DB 导出的书目，产物 |
 | `build/阅读版索引.html` | 有阅读版 HTML 的书的总索引，产物 |
-| `工作区/` | 批次账、运维、演示与本地缓存；运行时可重建 |
+| `工作区/` | 批次账、缓存与运行时状态；运行时可重建，不进工具仓 |
 
 `book.json` 只记源元数据（uid、书名、学科、sources、awards）。目录名就是 uid，`book.json` 不再存路径。md 与 html 状态在 `library.db` 的 `derived` 表里，由 `build_library.py` 按磁盘生成，不写回 `book.json`。
+
+## 仓库结构
+
+克隆者先读这份 README；改代码读 `CONTRIBUTING.md`；`AGENTS.md` 只记本机实例的约束与账。
+
+| 路径 | 内容 |
+|---|---|
+| `apps/ops/` | 统一操作台服务与 web，127.0.0.1:8770 |
+| `apps/demo/` | 检索流程演示页与回答实现，127.0.0.1:8765 |
+| `src/bookcorpus/` | 命令行包；`scripts/` 是全部可复跑脚本 |
+| `tests/acceptance/` | 离线验收，由 pytest 收集 |
+| `tests/manual/` | 需要 Chrome、真实模型或真实会话的手工验收，清单见其 README |
+| `docs/design/` | 设计方案、决策记录与流程图 |
+| `docs/briefs/` | 已完成的任务书，标完成日期 |
+| `docs/检索/` | 检索层方案、口径与踩坑账 |
+| `reports/` | 验收审计与一次性报告 |
 
 ## 装
 
@@ -210,14 +228,14 @@ book-corpus query 关键词 关键词 --no-cards
 
 ### 起两个本地页面
 
-在工具仓里跑，用 `--root` 指工作区：
+在工具仓里跑，认实例根：
 
 ```bash
-python3 工作区/演示-检索流程/server.py --root ~/书库   # http://127.0.0.1:8765
-python3 工作区/运维/server.py --root ~/书库             # http://127.0.0.1:8770
+BOOKS_ROOT=<实例根> python3 apps/demo/server.py   # http://127.0.0.1:8765
+python3 apps/ops/server.py --root <实例根>        # http://127.0.0.1:8770
 ```
 
-演示页只读索引与 `books/**.md`，回答缓存写到工作区的 `工作区/演示-检索流程/缓存/`。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调脚本。
+`<实例根>` 是有 `books.toml` 的那层；演示页从 `BOOKS_ROOT` 认根，操作台用 `--root`。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。
 
 ### 重建产物
 
@@ -252,7 +270,7 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 
 `verify_phase.py`、`check_p1.py` 与 `gen_book_catalog.py` 是作者实例检查。缺基线、评测书时，前两个会打印 `[跳过]` 或 `SKIP`；`gen_book_catalog.py` 需要源文件在盘，克隆状态不会通过。
 
-`工作区/运维/验收/` 与 `工作区/演示-检索流程/验收/` 的脚本已改成 v2 临时根。8 个离线入口（`check_ops`、`test_status`、`test_classify`、`test_doc_numbers`、`test_split`、`test_retire`、`test_pdf`、`test_answer_retry`）由 `tests/test_acceptance.py` 接进 pytest；需要 Chrome、真实模型或真实会话的 `check_demo`、`check_session*`、`check_result_ms`、`shot_ops`、`repro-*` 仍是手工验收。
+`tests/acceptance/` 的 8 个离线入口（`check_ops`、`test_status`、`test_classify`、`test_doc_numbers`、`test_split`、`test_retire`、`test_pdf`、`test_answer_retry`）由 pytest 收集；需要 Chrome、真实模型或真实会话的 `check_demo`、`check_session*`、`check_result_ms`、`shot_ops`、`repro-*` 在 `tests/manual/`，清单与跑法见 `tests/manual/README.md`。
 
 ## 路径与配置
 
@@ -285,9 +303,10 @@ MIT，见 `LICENSE`。
 ## 更多文档
 
 - `AGENTS.md`：作者本机实例的运行手册，含批次账与脚本表。新克隆的仓库没有那些批次数据。
-- `工作区/方案/设计方案-书目结构.md`：权威方案，L0 到 L5 门槛与目标结构。
+- `docs/design/设计方案-书目结构.md`：权威方案，L0 到 L5 门槛与目标结构。
+- `CONTRIBUTING.md`：改代码、跑测试与提交的约定。
 - `docs/检索/README.md`：检索层方案与实测基线。
 - `docs/检索/踩坑记录.md`：检索层按类型分的踩坑账。改检索脚本前先查。
-- `工作区/运维/README.md` 与 `工作区/运维/CONTRACT.md`：操作台的起停、接口与文件归属。
-- `工作区/演示-检索流程/BRIEF.md`：演示页的任务书。
+- `apps/ops/README.md` 与 `apps/ops/CONTRACT.md`：操作台的起停、接口与文件归属。
+- `docs/briefs/BRIEF.md`：演示页的任务书。
 - `reports/运维验收-2026-10-25/`：七页交互审计与证据。

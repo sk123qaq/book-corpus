@@ -16,7 +16,8 @@ import urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765"
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+ROOT = os.path.join(REPO, "apps", "demo")
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 

@@ -1,5 +1,7 @@
 # 02 会话页接线 · 实施单
 
+
+状态：已完成 · 2026-10-27
 > **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
 
 
@@ -7,7 +9,7 @@
 
 ## 边界
 
-- 只改 `工作区/演示-检索流程/` 下的 `web/`、`server.py`、`session.py`、`验收/check_session.py`，新增 `SESSION-UI-BRIEF.md`。
+- 只改 `apps/demo/` 下的 `web/`、`server.py`、`session.py`、`验收/check_session.py`，新增 `SESSION-UI-BRIEF.md`。
 - 不碰 `books/<uid>/`、`tables/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/style.css`、`web/index.html` 的既有结构（只加一个入口链接）。
 - 页面无外部依赖、无 CDN、无构建步骤。中文界面，纸感皮肤沿用 `原型-追问/shared/tokens.css`。
 - 1440×900 是一等公民；390 宽不许横向滚动，输入框必须在首屏可见。

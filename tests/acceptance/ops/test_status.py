@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ops_status.py 与 audit_state.py --json 的验收：临时根 fixture + 真库只读。
 
-  python3 工作区/运维/验收/test_status.py     # 末行 ALL PASS
+  python3 tests/acceptance/ops/test_status.py     # 末行 ALL PASS
 
 fixture 造一个能过 audit_state 的三本小库：两本有 md，一本待转 pdf，索引只覆盖一本，
 好让「索引落后」有非零读数。真库部分只读打开 library.db 与 index.db，不跑模型、不重建索引。

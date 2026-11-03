@@ -1,6 +1,6 @@
 # 书库项目
 
-`~/文档/books` 是个人电子书库。2026-10 按 `工作区/方案/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
+`~/文档/books` 是个人电子书库。2026-10 按 `docs/design/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
 
 新会话先读本文件，再按「文件地图」与「脚本」按需深入。方案 §8 开头有两段执行修订，正文里写死的原型数字按修订块读。
 
@@ -54,10 +54,11 @@ As of 2026-11-02：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `src/bookcorpus/` | 包与脚本。入口 `book-corpus`，`book-corpus list` 列全部 |
 | `docs/检索/` | 检索层方案、口径与踩坑账。工具仓文档，不在工作区 |
 | `.agents/skills/` | 随仓库提交的 pi 技能：`book-corpus-qa`、`ebook-to-md`、`chapter-html-versions`、`mineru`、`typesafe-ai` |
-| `工作区/方案/` | 权威方案与决策记录 |
-| `工作区/演示-检索流程/` | 检索流程演示页，127.0.0.1:8765 |
-| `工作区/运维/` | 统一操作台服务、web 与验收，127.0.0.1:8770 |
-| `工作区/批次/` | 工具仓只留 README；批次机账在私有数据仓同名路径下 |
+| `apps/ops/` | 统一操作台服务、web 与运维文档，127.0.0.1:8770；验收在 `tests/acceptance/ops/` 与 `tests/manual/ops/` |
+| `apps/demo/` | 检索流程演示页、回答与会话实现，127.0.0.1:8765；验收在 `tests/acceptance/demo/` 与 `tests/manual/demo/` |
+| `docs/design/` | 权威方案、决策记录与流程图 |
+| `docs/briefs/` | 已完成任务书，标注完成日期 |
+| `工作区/批次/` | 只在实例与数据仓；工具仓不再保留 |
 | `工作区/中间态/`、`工作区/废弃/`、`工作区/models/` | 只在实例磁盘上，派生或可再生，不进任何仓 |
 
 `book.json` 是源元数据投影。md 与 html 状态只在 `library.db` 的 `derived` 表里，由 `book-corpus library` 按磁盘生成，不写回 `book.json`。
@@ -138,9 +139,10 @@ As of 2026-11-02：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 
 2026-10-25 起是 Git 仓库，分支 `main`。只跟结构与账，不跟书的正文。
 
-- 跟：每本书的 `book.json`、`tables/` 的人工账与小型过程账、`工作区/` 的脚本与方案、操作台代码与测试、批次的小型机账（worklist、说明、triage、logs、review）。
+- 跟：每本书的 `book.json`、`tables/` 的人工账与小型过程账、`src/` 的脚本、`apps/` 的应用与测试、`docs/` 的方案与任务书。
 - 不跟：`books/**/source/`、`md/`、`html/`、`books/_收件箱/`、`books/_冷宫/`（只留 README）、`build/检索/`（只留 `README.md` 与 `踩坑记录.md`）、`build/views/`、批次 `work/ out/ live/ tmp/ drill/`、模型与虚拟环境、运行态。
 - 规则在根 `.gitignore`。`git status` 里书目录的变化应当只有 `book.json` 与账本；出现正文或索引文件就是规则漏了。
+- 批次账不存本仓。每一批转换、评测、下载的机账在私有数据仓 `book-corpus-data` 的 `工作区/批次/` 下，随语料走：worklist、uid、页数、sha256 只对那份语料成立，克隆者无法复核。要复跑某一批，从数据仓拿；重跑入口在 `src/bookcorpus/`，不要在本仓再放一份批次脚本。
 
 ## 查书
 

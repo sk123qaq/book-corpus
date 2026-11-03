@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """doc_numbers.py 的验收：渲染格式、换块、补块、--check 退出码，以及 audit_state 的文档 WARN。
 
-  python3 工作区/运维/验收/test_doc_numbers.py     # 末行 ALL PASS
+  python3 tests/acceptance/ops/test_doc_numbers.py     # 末行 ALL PASS
 
 fixture 六本书：两本有 md，四本待拆章（pdf/txt/djvu/azw3 各一），奖项记录两条、奖项名一个，
 视图软链三条（奖项两条、主题一条）。全部读写都在 tempfile 里，真 AGENTS.md 只记指纹不写。

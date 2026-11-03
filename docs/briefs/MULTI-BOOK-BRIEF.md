@@ -1,5 +1,7 @@
 # 02 默认页与多书选择 · 实施单
 
+
+状态：已完成 · 2026-10-27
 > **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
 
 
@@ -206,7 +208,7 @@ MAX_SOURCES = 8
 
 ## 边界
 
-- 只改 `工作区/演示-检索流程/` 下的 `server.py`、`web/index.html`、`web/session.html`、`web/session.css`、`web/session.js`、`验收/check_session_ui.py`、`验收/check_session_live.py`、`验收/check_demo.py`、`验收/check_session.py`、`验收/shot.py`，新增本文件。`SESSION-UI-BRIEF.md` 的路由段同步改。
+- 只改 `apps/demo/` 下的 `server.py`、`web/index.html`、`web/session.html`、`web/session.css`、`web/session.js`、`验收/check_session_ui.py`、`验收/check_session_live.py`、`验收/check_demo.py`、`验收/check_session.py`、`验收/shot.py`，新增本文件。`SESSION-UI-BRIEF.md` 的路由段同步改。
 - 不碰 `books/<uid>/`、`tables/`、`answer.py`、`related.py`、`trace.py`、`web/app.js`、`web/style.css`。
 - 不调真实 `/api/run` / `/api/answer` 做自测。用 `7f0f8d8ba4c4`、`e4120ff4977d` 和假 `fetch`。
 - 8765 正在跑，别动。自测起 `--port 8799`，测完杀掉。

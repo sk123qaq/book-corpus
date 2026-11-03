@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """统一操作台页面自检：headless Chrome + CDP，两个断点，报控制台错误与横向溢出。
 
-  python3 工作区/运维/验收/shot_ops.py
-  python3 工作区/运维/验收/shot_ops.py --url http://127.0.0.1:8770
+  python3 tests/manual/ops/shot_ops.py
+  python3 tests/manual/ops/shot_ops.py --url http://127.0.0.1:8770
 
 自己起一个临时根的服务（stub 脚本 + fixture 状态），把七个页签都点一遍收
 console.error 与异常，最后出 1440x900 与 390x844 两张图。末行 SHOT PASS。

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """复现：批量分诊的进度条到点消失，任务还在跑。
 
-  python3 工作区/运维/验收/repro-triage-progress.py
-  python3 工作区/运维/验收/repro-triage-progress.py --books 7 --step 30
+  python3 tests/manual/ops/repro-triage-progress.py
+  python3 tests/manual/ops/repro-triage-progress.py --books 7 --step 30
 
 临时根 + stub 分诊脚本 + headless Chrome，不碰真库也不调模型。每本书的 stub
 故意慢，让批次跑过前后端两处等待上限，看页面的进度条还在不在。
@@ -19,7 +19,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(REPO, "tests", "acceptance", "ops"))
 
 import check_ops  # noqa: E402
 import shot_ops  # noqa: E402

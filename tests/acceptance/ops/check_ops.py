@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """统一操作台验收：随机端口、临时根、stub 脚本，不碰真库与真模型。
 
-  python3 工作区/运维/验收/check_ops.py [-v]
+  python3 tests/acceptance/ops/check_ops.py [-v]
 
 做这些事：起服务，看 /api/status 与静态页；跑任务生命周期（queued → running →
 判门槛）、写任务互斥与取消、上传、文件白名单与路径穿越、stub 导入与 PDF 分诊、
@@ -26,7 +26,8 @@ from urllib.parse import quote as urlquote
 sys.dont_write_bytecode = True
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OPS_DIR = os.path.dirname(HERE)
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+OPS_DIR = os.path.join(REPO, "apps", "ops")
 SERVER = os.path.join(OPS_DIR, "server.py")
 VERBOSE = False
 FAILS = []

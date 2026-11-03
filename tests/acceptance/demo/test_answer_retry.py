@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """回答路径的重问验收：无效 JSON 要换一句提醒重问一次，超时不重问。
 
-  python3 验收/test_answer_retry.py
+  python3 tests/acceptance/demo/test_answer_retry.py
 
 离线跑，不调模型：call_pi 换成一队 (raw, error) 应答，记下它收到的提示词。
 单书一次无效 JSON 曾直接变成失败卡（模型在 citations 数组后多打了一个引号），
@@ -12,7 +12,8 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEMO = os.path.dirname(HERE)
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+DEMO = os.path.join(REPO, "apps", "demo")
 INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-local")
 os.environ.setdefault("BOOKS_ROOT", INSTANCE)
 for _p in (DEMO,):

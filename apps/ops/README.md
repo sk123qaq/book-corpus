@@ -1,19 +1,19 @@
 # 统一操作台（127.0.0.1:8770）
 
 书库日常操作的本地控制台。页面读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调
-`工作区/脚本/` 里的脚本。页面不写 `目录/分类表.csv`、`library.db`、`book.json`、
+`src/bookcorpus/scripts/` 里的脚本。页面不写 `目录/分类表.csv`、`library.db`、`book.json`、
 `目录/检索/index.db`，除「上传」把文件放进 `库/_收件箱/` 外不碰 `库/`。
 
-方案见 `工作区/方案/统一操作台-方案-2026-10-24.md`，接口与文件归属见
-`工作区/运维/CONTRACT.md`。
+方案见 `docs/design/统一操作台-方案-2026-10-24.md`，接口与文件归属见
+`apps/ops/CONTRACT.md`。
 
 ## 起与停
 
 ```bash
 cd <工作副本根目录>
-python3 工作区/运维/server.py                 # 127.0.0.1:8770
-python3 工作区/运维/server.py --port 0        # 随机端口（测试用，stdout 打印实际端口）
-python3 工作区/运维/server.py --root /tmp/x   # 换数据根，代码仍指本文件所在处
+python3 apps/ops/server.py                 # 127.0.0.1:8770
+python3 apps/ops/server.py --port 0        # 随机端口（测试用，stdout 打印实际端口）
+python3 apps/ops/server.py --root /tmp/x   # 换数据根，代码仍指本文件所在处
 ```
 
 Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手前已经在跑的子进程。
@@ -36,7 +36,7 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
 
 ## 三条只读数据源
 
-1. `工作区/脚本/ops_status.py --json --root <root>`：顶栏与总览的读数。脚本不存在时回落到
+1. `src/bookcorpus/scripts/ops_status.py --json --root <root>`：顶栏与总览的读数。脚本不存在时回落到
    `OPS_STATUS_FIXTURE` 指向的 JSON 文件，两者都没有就显示空状态并在顶栏标「状态：缺」。
 2. `ops.db`：任务、步骤、日志路径、状态计数。
 3. `目录/library.db`（只读打开）与各批次的 `worklist.tsv`、`logs/<uid>.json`、
@@ -122,7 +122,7 @@ POST /api/maintain                     # {steps:[db,index,topics,awards,audit,ve
 POST /api/delete/dry-run               # {uid, reason}
 POST /api/delete/apply                 # {uid, reason, plan_hash, confirm_uid}
 GET  /api/search/health                # 代理查 8765 /api/health，避开浏览器跨域
-POST /api/search/start                 # sys.executable 工作区/演示-检索流程/server.py
+POST /api/search/start                 # sys.executable apps/demo/server.py
 GET  /api/file?path=...                # 白名单文件；文本产物走脱敏，png/xlsx 原样
 GET  /api/inbox                        # 收件箱清单
 GET  /api/import/latest                # 最近一份可用计划（源文件还在收件箱）
@@ -166,29 +166,29 @@ GET  /api/retire/search?q=             # uid 或书名，带源、md、奖项
 服务跑的命令（argv 列表，`shell=False`，cwd 为数据根）：
 
 ```text
-python3 工作区/脚本/ingest.py scan --json --out 工作区/运维/jobs/<id>/plan.json --root <root>
-python3 工作区/脚本/ingest.py apply <plan> --apply --root <root>
-python3 工作区/脚本/build_library.py --emit-json
-python3 工作区/脚本/gen_book_catalog.py
-python3 工作区/脚本/split_md_batch.py --batch split-ops-<ts> --uids B1,B2 --workers N --report-json [--replace]
-python3 工作区/脚本/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json
-python3 工作区/脚本/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json --force
-python3 工作区/脚本/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json --recheck
-python3 工作区/脚本/md_review_report.py <batch> B0001 --json 工作区/运维/jobs/<id>/result.json
-python3 工作区/脚本/build_library.py --emit-json     # 拆章与 PDF 任务跑完后接
-python3 工作区/脚本/gen_book_catalog.py              # 拆章与 PDF 任务跑完后接
-python3 工作区/脚本/ops_pdf_triage.py --uid B1234 --out 工作区/运维/jobs/<id> --root <root>
-python3 工作区/脚本/pdf_apply_review.py --batch pdf-ocr-ops-<日期> \
+python3 src/bookcorpus/scripts/ingest.py scan --json --out 工作区/运维/jobs/<id>/plan.json --root <root>
+python3 src/bookcorpus/scripts/ingest.py apply <plan> --apply --root <root>
+python3 src/bookcorpus/scripts/build_library.py --emit-json
+python3 src/bookcorpus/scripts/gen_book_catalog.py
+python3 src/bookcorpus/scripts/split_md_batch.py --batch split-ops-<ts> --uids B1,B2 --workers N --report-json [--replace]
+python3 src/bookcorpus/scripts/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json
+python3 src/bookcorpus/scripts/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json --force
+python3 src/bookcorpus/scripts/split_md_batch.py --batch <batch> --only B0001 --workers 1 --report-json --recheck
+python3 src/bookcorpus/scripts/md_review_report.py <batch> B0001 --json 工作区/运维/jobs/<id>/result.json
+python3 src/bookcorpus/scripts/build_library.py --emit-json     # 拆章与 PDF 任务跑完后接
+python3 src/bookcorpus/scripts/gen_book_catalog.py              # 拆章与 PDF 任务跑完后接
+python3 src/bookcorpus/scripts/ops_pdf_triage.py --uid B1234 --out 工作区/运维/jobs/<id> --root <root>
+python3 src/bookcorpus/scripts/pdf_apply_review.py --batch pdf-ocr-ops-<日期> \
         --triage 工作区/批次/pdf-ocr-ops-<日期>/triage.csv \
         --out-dir 工作区/批次/pdf-ocr-ops-<日期> \
         --review 工作区/批次/pdf-ocr-ops-<日期>/review    # 清单里二次确认的图册/日文也走这条，排在转 md 前一步
-python3 工作区/脚本/pdf_md_batch.py --batch pdf-ocr-ops-<日期> --route ocr|text --uids ... --workers N \
+python3 src/bookcorpus/scripts/pdf_md_batch.py --batch pdf-ocr-ops-<日期> --route ocr|text --uids ... --workers N \
         --triage 工作区/批次/pdf-ocr-ops-<日期>/triage_final.csv --report-json [--limit N]
-python3 工作区/脚本/build_library.py --emit-json     # PDF 任务跑完后接
-python3 工作区/脚本/gen_book_catalog.py              # PDF 任务跑完后接
-python3 工作区/脚本/retire_book.py --uid U --reason R --dry-run --json --root <root>
-python3 工作区/脚本/retire_book.py --uid U --reason R --plan-hash H --apply --root <root>
-python3 工作区/脚本/ops_status.py --json --root <root>
+python3 src/bookcorpus/scripts/build_library.py --emit-json     # PDF 任务跑完后接
+python3 src/bookcorpus/scripts/gen_book_catalog.py              # PDF 任务跑完后接
+python3 src/bookcorpus/scripts/retire_book.py --uid U --reason R --dry-run --json --root <root>
+python3 src/bookcorpus/scripts/retire_book.py --uid U --reason R --plan-hash H --apply --root <root>
+python3 src/bookcorpus/scripts/ops_status.py --json --root <root>
 ```
 
 脚本不存在时任务立刻判失败，日志里写「[缺] 脚本不存在：<路径>」，不会静默当成功。
@@ -211,12 +211,12 @@ python3 工作区/脚本/ops_status.py --json --root <root>
 
 ```bash
 cd <工作副本根目录>
-python3 -m py_compile 工作区/运维/server.py 工作区/运维/验收/check_ops.py 工作区/运维/验收/shot_ops.py
-python3 工作区/运维/验收/check_ops.py        # 随机端口 + 临时根 + stub 脚本，末行 ALL PASS
-python3 工作区/运维/验收/shot_ops.py         # 1440x900 与 390x844，报 CONSOLE ERROR n 与 overflow=
+python3 -m py_compile apps/ops/server.py tests/acceptance/ops/check_ops.py tests/manual/ops/shot_ops.py
+python3 tests/acceptance/ops/check_ops.py        # 随机端口 + 临时根 + stub 脚本，末行 ALL PASS
+python3 tests/manual/ops/shot_ops.py         # 1440x900 与 390x844，报 CONSOLE ERROR n 与 overflow=
 ```
 
-`check_ops.py` 自己造临时根：`工作区/脚本/` 下写一套 stub（`ingest.py`、`split_md_batch.py`、
+`check_ops.py` 自己造临时根：`src/bookcorpus/scripts/` 下写一套 stub（`ingest.py`、`split_md_batch.py`、
 `pdf_md_batch.py`、`ops_pdf_triage.py`、`retire_book.py` 等），`目录/library.db` 造五本书的最小表（含三本待转 PDF），
 `OPS_STATUS_FIXTURE` 给状态。它验这些东西：状态字段、静态页、任务生命周期与门槛、写互斥（真去
 `flock` 探一次）、取消、上传与文件名、文件白名单与路径穿越、跨站与 Host 拒绝、计划写回、stub 导入、

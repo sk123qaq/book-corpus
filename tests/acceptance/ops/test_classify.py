@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """classify_model、ingest 预填与 classify_books 合并的 stub 验收。
 
-  python3 工作区/运维/验收/test_classify.py
+  python3 tests/acceptance/ops/test_classify.py
 
-模型一律走 PI_BIN=工作区/运维/验收/fixtures/pi_stub.py，不联网。临时根在
+模型一律走 PI_BIN=tests/acceptance/fixtures/pi_stub.py，不联网。临时根在
 tempfile.mkdtemp() 下，不碰真库、真收件箱、真人账。末行 ALL PASS。
 """
 import json
@@ -16,7 +16,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 SCRIPTS = os.path.join(ROOT, "src", "bookcorpus", "scripts")
-STUB = os.path.join(ROOT, "工作区", "运维", "验收", "fixtures", "pi_stub.py")
+STUB = os.path.join(ROOT, "tests", "acceptance", "fixtures", "pi_stub.py")
 sys.path.insert(0, SCRIPTS)
 import lib_common as L  # noqa: E402
 import classify_model as CM  # noqa: E402

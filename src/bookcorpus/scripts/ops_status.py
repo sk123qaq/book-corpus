@@ -2,7 +2,7 @@
 """只读状态：操作台顶栏与总览要的数字，一次采集。
 
   ops_status.py                 # 人读
-  ops_status.py --json          # 字段见 工作区/运维/CONTRACT.md §5
+  ops_status.py --json          # 字段见 apps/ops/CONTRACT.md §5
   ops_status.py --deep          # 另跑 audit_state --deep，写 工作区/运维/last-audit.json
   ops_status.py --root /tmp/x   # 全部路径跟着换（临时库测试用）
 

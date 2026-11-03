@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Emit 工作区/方案/检索重排路线图.html as one self-contained page with inline SVG.
+"""Emit docs/design/检索重排路线图.html as one self-contained page with inline SVG.
 
-Run python3 工作区/方案/检索重排路线图.py to regenerate after editing a table below.
+Run python3 docs/design/检索重排路线图.py to regenerate after editing a table below.
 Every label and number comes from 工作区/批次/qa-检索-2026-10-19/make_检索重排路线图.py,
 which rendered 图-检索重排与路线-2026-10-21.png on 2026-10-21.
 """

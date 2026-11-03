@@ -4,7 +4,7 @@
 页面读 ops_status.py 的 JSON 与 ops.db；按钮排队调 src/bookcorpus/scripts/ 里的脚本。
 不写 tables/、build/，不重建真索引；除上传落 books/_收件箱/ 外不碰 books/。
 
-  python3 工作区/运维/server.py [--port 8770] [--root .]
+  python3 apps/ops/server.py [--port 8770] [--root .]
 """
 import argparse
 import collections
@@ -1162,7 +1162,7 @@ class App:
         health = self.search_health()
         if health["running"]:
             return {"ok": True, "already": True, "health": health}
-        script = os.path.join(self.env.root, "工作区", "演示-检索流程", "server.py")
+        script = os.path.join(REAL_ROOT, "apps", "demo", "server.py")
         if not os.path.exists(script):
             return {"ok": False, "error": "演示页脚本不存在：%s" % self.env.rel(script)}
         os.makedirs(self.env.ops, exist_ok=True)

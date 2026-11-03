@@ -11,7 +11,7 @@
 ## 起
 
 ```bash
-python3 工作区/演示-检索流程/server.py
+python3 apps/demo/server.py
 ```
 
 打开 http://127.0.0.1:8765 。默认只监听 127.0.0.1:8765，`--port` 可换。
@@ -44,7 +44,7 @@ python3 工作区/演示-检索流程/server.py
    只在前 100 候选上跑，不扫全库，避免 README 和无关章把候选冲上来。
 4. 当前命中 + 组覆盖 + 章聚类 → `book_expand.make_packet(..., level=2, max_chars=3500)`
    取有界窗口；最多 5 窗、合计 18000 字。候选章地图单独给 agent。窗口参数的理由见
-   `工作区/演示-检索流程/窗口参数-决策记录.md`。
+   `docs/design/窗口参数-决策记录-2026-11-02.md`。
 5. 提示词带候选章地图、窗口和两个只读工具：
    `pi -p -e readonly_tools.ts --tools book_grep,read --skill ~/.agents/skills/book-corpus-qa/SKILL.md
    --model opencode-go/deepseek-v4.1-flash --thinking <档位> "<prompt>"`，超时 240 秒。
@@ -160,7 +160,7 @@ python3 工作区/演示-检索流程/server.py
 ## 验收
 
 ```bash
-python3 工作区/演示-检索流程/验收/check_demo.py
+python3 tests/manual/demo/check_demo.py
 ```
 
 自检健康检查、两个示例（一个弹卡、一个不弹卡）、章节截取、路径穿越拒绝、空问题拒绝，另加下面几条：
@@ -178,14 +178,14 @@ python3 工作区/演示-检索流程/验收/check_demo.py
 末行 `ALL PASS`。截图与交互检查用 CDP（只依赖标准库）：
 
 ```bash
-python3 工作区/演示-检索流程/验收/shot.py --width 1440 --height 900 --scroll stage4 --out 验收/回答-1440x900.png
-python3 工作区/演示-检索流程/验收/shot.py --width 1440 --height 900 --scroll hit-center --out 验收/命中块-1440x900.png
-python3 工作区/演示-检索流程/验收/shot.py --width 390 --height 844 --scroll stage4 --out 验收/手机-回答-390x844.png
-python3 工作区/演示-检索流程/验收/shot.py --width 390 --height 844 --scroll hit-center --out 验收/手机-命中块-390x844.png
-python3 工作区/演示-检索流程/验收/shot.py --width 1440 --height 900 --click-cite   # 另查点依据、横向溢出、控制台报错
-python3 工作区/演示-检索流程/验收/shot.py --width 1440 --height 900 --click-all --question "内卷和教育之间是什么关系"
-python3 工作区/演示-检索流程/验收/shot.py --width 1440 --height 900 --click-all --question "内卷和教育之间是什么关系" --scroll stage3 --out 验收/全选-书卡-1440x900.png
-python3 工作区/演示-检索流程/验收/shot.py --width 390 --height 844 --click-all --question "内卷和教育之间是什么关系" --scroll stage4 --out 验收/全选-手机-390x844.png
+python3 tests/manual/demo/shot.py --width 1440 --height 900 --scroll stage4 --out 验收/回答-1440x900.png
+python3 tests/manual/demo/shot.py --width 1440 --height 900 --scroll hit-center --out 验收/命中块-1440x900.png
+python3 tests/manual/demo/shot.py --width 390 --height 844 --scroll stage4 --out 验收/手机-回答-390x844.png
+python3 tests/manual/demo/shot.py --width 390 --height 844 --scroll hit-center --out 验收/手机-命中块-390x844.png
+python3 tests/manual/demo/shot.py --width 1440 --height 900 --click-cite   # 另查点依据、横向溢出、控制台报错
+python3 tests/manual/demo/shot.py --width 1440 --height 900 --click-all --question "内卷和教育之间是什么关系"
+python3 tests/manual/demo/shot.py --width 1440 --height 900 --click-all --question "内卷和教育之间是什么关系" --scroll stage3 --out 验收/全选-书卡-1440x900.png
+python3 tests/manual/demo/shot.py --width 390 --height 844 --click-all --question "内卷和教育之间是什么关系" --scroll stage4 --out 验收/全选-手机-390x844.png
 ```
 
 `shot.py` 末行打印 `CONSOLE ERROR n`，并报 `overflow=`（横向溢出）与点依据前后的 `path:line`。

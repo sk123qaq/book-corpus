@@ -5,7 +5,7 @@
 几个被驱动读的表视图。不跑转换器、不调模型、不碰真库。PI_BIN 指到 stub，万一走到
 agent 修复也只会拿到伪 JSON。
 
-用法: python3 工作区/运维/验收/test_split.py
+用法: python3 tests/acceptance/ops/test_split.py
 """
 import contextlib
 import json
@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OPS = os.path.dirname(HERE)
 SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(OPS)), "src", "bookcorpus", "scripts")
 SCRIPT = os.path.join(SCRIPTS, "split_md_batch.py")
-STUB = os.path.join(HERE, "fixtures", "pi_stub.py")
+STUB = os.path.join(os.path.dirname(HERE), "fixtures", "pi_stub.py")
 sys.path.insert(0, SCRIPTS)
 import split_md_batch as S  # noqa: E402
 

@@ -1,14 +1,16 @@
 # 检索流程演示页 · 设计说明
 
+
+状态：已完成 · 2026-10-25
 > **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
 
 
-给 `工作区/演示-检索流程/` 实现一个本地网页 demo：用户问一句人话，页面按阶段展示书库怎么找到答案，最后落到某一本书的某一章那一段。数据全部来自真实检索，不许编。
+给 `apps/demo/` 实现一个本地网页 demo：用户问一句人话，页面按阶段展示书库怎么找到答案，最后落到某一本书的某一章那一段。数据全部来自真实检索，不许编。
 
 ## 目标与边界
 
 - 观众：第一次接触这个书库的人。看完要能说出「它先切词，再换词检索，再给书打分，再选章，再弹书卡，最后给原文」。
-- 形式：`python3 工作区/演示-检索流程/server.py` 起本地服务，打开 `http://127.0.0.1:8765`。
+- 形式：`python3 apps/demo/server.py` 起本地服务，打开 `http://127.0.0.1:8765`。
 - 只用 Python 标准库；前端不用框架、不引 CDN、不联网取字体。
 - 只读 `build/检索/index.db` 与 `build/library.db`，只读 `books/<uid>/**.md`。不写 `books/<uid>/`，不改现有脚本。
 - 页面中文。桌面优先，手机能看。
@@ -109,7 +111,7 @@
 
 ## 验收
 
-1. `python3 工作区/演示-检索流程/server.py` 起在 8765，`curl -s localhost:8765/api/health` 通。
+1. `python3 apps/demo/server.py` 起在 8765，`curl -s localhost:8765/api/health` 通。
 2. `curl -s -X POST localhost:8765/api/run -H 'content-type: application/json' -d '{"question":"内卷和教育之间是什么关系"}'` 返回五阶段 trace，`rounds` 至少 2 轮，`cards.trigger` 为 true。
 3. 同一个接口问「乡土中国 差序格局」，`cards.trigger` 为 false，`cards.cards` 为空，结果仍能出。
 4. 浏览器验收（用 `google-chrome-stable --headless=new` 截图，存 `验收/`）：
@@ -123,7 +125,7 @@
 ## 文件
 
 ```
-工作区/演示-检索流程/
+apps/demo/
   server.py           HTTP 服务、/api/*、静态文件
   trace.py            切词缓存 + 跑 plan/cards + 组装 trace + 读章节
   answer.py           回答阶段：取窗、调 pi、回查引文、答案缓存

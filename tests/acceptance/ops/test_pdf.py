@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PDF 这一组的离线验收：分诊、模型四列、批次队列与统计。不碰真库、不调真模型。
 
-跑法：BOOKS_PDF_PY=/path/to/venv/bin/python python3 工作区/运维/验收/test_pdf.py
+跑法：BOOKS_PDF_PY=/path/to/venv/bin/python python3 tests/acceptance/ops/test_pdf.py
 （该解释器要能 import pymupdf；没有就跳过，不伪装成通过。）
 """
 import csv
@@ -21,8 +21,9 @@ SCRIPTS = os.path.join(REPO, "src", "bookcorpus", "scripts")
 TRIAGE_PY = os.path.join(SCRIPTS, "ops_pdf_triage.py")
 APPLY_PY = os.path.join(SCRIPTS, "pdf_apply_review.py")
 BATCH_PY = os.path.join(SCRIPTS, "pdf_md_batch.py")
-VENV_PY = os.environ.get("BOOKS_PDF_PY") or os.path.join(REPO, "工作区/.venv-pdf/bin/python")
-STUB = os.path.join(REPO, "工作区/运维/验收/fixtures/pi_stub.py")
+INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-local")
+VENV_PY = os.environ.get("BOOKS_PDF_PY") or os.path.join(INSTANCE, "工作区/.venv-pdf/bin/python")
+STUB = os.path.join(REPO, "tests/acceptance/fixtures/pi_stub.py")
 SKIP_HEADER = "uid\ttitle\tsubject1\tsubject2\tpages\tmb\timage_share\twhy\tverdict\troute_metric"
 MODEL_COLS = ["model_route", "model_confidence", "model_reason", "model_at"]
 TRIAGE_COLS = ["uid", "title", "subject1", "subject2", "class", "route", "pages", "mb",

@@ -144,7 +144,7 @@
 </style>
 </head>
 <body>
-<div style="margin:12px 16px;padding:10px 14px;border-left:4px solid #b58900;background:#fff8e1;font:14px/1.6 system-ui,sans-serif;color:#333"><b>布局说明（2026-11-02）</b>：这是 v1 时代生成的图。图中的 <code>库/</code> 现在对应 <code>books/&lt;uid&gt;/</code>，<code>目录/library.db</code> 对应 <code>build/library.db</code>，<code>目录/检索/</code> 对应 <code>build/检索/</code>，<code>视图/</code> 对应 <code>build/views/</code>，<code>工作区/脚本/</code> 对应 <code>src/bookcorpus/scripts/</code>。</div>
+<div style="margin:12px 16px;padding:10px 14px;border-left:4px solid #b58900;background:#fff8e1;font:14px/1.6 system-ui,sans-serif;color:#333"><b>布局说明（2026-11-02）</b>：这是 v1 时代生成的图。图中的 <code>库/</code> 现在对应 <code>books/&lt;uid&gt;/</code>，<code>目录/library.db</code> 对应 <code>build/library.db</code>，<code>目录/检索/</code> 对应 <code>build/检索/</code>，<code>视图/</code> 对应 <code>build/views/</code>，<code>src/bookcorpus/scripts/</code> 对应 <code>src/bookcorpus/scripts/</code>。</div>
 
 <div class="wrap">
 
@@ -285,7 +285,7 @@
 <table>
   <thead><tr><th style="width:52px">编号</th><th style="width:150px">位置</th><th style="width:64px">程度</th><th>症状</th><th style="width:330px">证据</th></tr></thead>
   <tbody>
-    <tr><td class="id">G1</td><td>收件箱 → 人账</td><td><span class="sev b-ok">通</span></td><td><span class="p">ingest.py scan</span> 出计划（add / replace / conflict / skip），<span class="p">apply</span> 落文件、book.json、人账行与 journal，再重建 DB。2026-10-24 已 apply：3 本换源并落地 md，其中 1 本由拆章失败自动叫的 agent 修好；2 本因已有 md 跳过，1 本冲突跳过。</td><td class="ev">工作区/脚本/ingest.py；ingest-2026-10-24/{plan.json,test_ingest.py}</td></tr>
+    <tr><td class="id">G1</td><td>收件箱 → 人账</td><td><span class="sev b-ok">通</span></td><td><span class="p">ingest.py scan</span> 出计划（add / replace / conflict / skip），<span class="p">apply</span> 落文件、book.json、人账行与 journal，再重建 DB。2026-10-24 已 apply：3 本换源并落地 md，其中 1 本由拆章失败自动叫的 agent 修好；2 本因已有 md 跳过，1 本冲突跳过。</td><td class="ev">src/bookcorpus/scripts/ingest.py；ingest-2026-10-24/{plan.json,test_ingest.py}</td></tr>
     <tr><td class="id">G2</td><td>新 uid → 分类表</td><td><span class="sev b-ok">通</span></td><td><span class="p">classify_books.py --merge --add-new</span> 追加清单里未入账的 uid（一级二级取 TypeSafe，备注 auto:classify），默认仍只补已有行。ingest 也追加新行。</td><td class="ev">classify_books.py merge_ledger(add_new)；ingest-2026-10-24/test_ingest.py</td></tr>
     <tr><td class="id">G3</td><td>分类表 → 目录名</td><td><span class="sev b-half">半</span></td><td>目录名是分类表的投影，改分类不改目录，要手工 <span class="p">mv</span> 再重建。</td><td class="ev">build_library.py 无 rename/replace；AGENTS.md 写入规则第 1 条</td></tr>
     <tr><td class="id">G4</td><td>DB → 转换批次</td><td><span class="sev b-half">半</span></td><td>PDF 批次范围取自 <span class="p">triage_final.csv</span>，不是 <span class="p">v_pending_md</span>。epub 批次的 <span class="p">worklist.tsv</span> 只写一次，之后新书不会进这个批次。</td><td class="ev">pdf_md_batch.py:172；split_md_batch.py:67</td></tr>
@@ -318,12 +318,12 @@
 <footer>
   数据取自 2026-10-23 22:00 前后的实测，2026-10-24 复核书目与索引数字未变。改完人账跑 <span class="p">build_library.py --emit-json</span>，改完检索层跑 <span class="p">check_p1.py</span> 与 <span class="p">verify_phase.py --box 6</span>。
   <table class="cmdtab">
-    <tr><td><code>python3 工作区/脚本/lq.py "SELECT count(*) FROM book"</code></td><td>1693</td></tr>
+    <tr><td><code>python3 src/bookcorpus/scripts/lq.py "SELECT count(*) FROM book"</code></td><td>1693</td></tr>
     <tr><td><code>find 库 -type d -name md | wc -l</code></td><td>1535</td></tr>
     <tr><td><code>find 库 -path '*/md/*.md' | wc -l</code></td><td>88928</td></tr>
-    <tr><td><code>python3 工作区/脚本/lq.py "SELECT format,count(*) FROM v_pending_md GROUP BY 1"</code></td><td>pdf 151 / txt 5 / djvu 2</td></tr>
+    <tr><td><code>python3 src/bookcorpus/scripts/lq.py "SELECT format,count(*) FROM v_pending_md GROUP BY 1"</code></td><td>pdf 151 / txt 5 / djvu 2</td></tr>
     <tr><td><code>du -h 目录/检索/index.db</code></td><td>6.1G</td></tr>
-    <tr><td><code>python3 工作区/脚本/audit_state.py --deep</code></td><td>FAIL 0 项 / WARN 3 项</td></tr>
+    <tr><td><code>python3 src/bookcorpus/scripts/audit_state.py --deep</code></td><td>FAIL 0 项 / WARN 3 项</td></tr>
     <tr><td><code>工作区/.venv-pdf/bin/python 工作区/批次/qa-检索-2026-10-22-书级融合/noword_rerank.py --report</code></td><td>无原词 4/20 · 原词 17/20 · 近义 10/20（缓存为 K=2000 口径）</td></tr>
     <tr><td><code>工作区/.venv-pdf/bin/python 工作区/批次/qa-检索-2026-10-22-书级融合/k_curve.py --plot</code></td><td>live/pilot-noword/k-curve.png</td></tr>
   </table>

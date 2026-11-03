@@ -1,10 +1,12 @@
 # 会话历史 + V3 阶段区 · 真实实现单
 
+
+状态：已完成 · 2026-10-28
 > **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
 
 
 把 `原型-会话历史` 里已批准的 V3 方案接进生产会话页。前后端都做。
-原型目录只读参考，不改。生产文件在 `工作区/演示-检索流程/` 下。
+原型目录只读参考，不改。生产文件在 `apps/demo/` 下。
 
 ## 只改这些
 
@@ -392,7 +394,7 @@ pSize: q('.answer p') ? getComputedStyle(q('.answer p')).fontSize : '',
 ### 验收命令
 
 ```bash
-cd ~/文档/books/工作区/演示-检索流程
+cd ~/文档/book-corpus/apps/demo
 python3 -m py_compile server.py session.py
 nohup python3 server.py --port 8798 > /tmp/session-8798.log 2>&1 &
 python3 验收/check_session_ui.py --base http://127.0.0.1:8798
@@ -403,7 +405,7 @@ UI 检查必须全过。`check_session.py` 会真调模型三次，跑一次；�
 
 ## 报告
 
-写 `工作区/演示-检索流程/REAL-IMPL-REPORT.md`：
+写 `reports/演示-会话历史-V3-实施记录-2026-10-28.md`：
 
 - 改了哪些文件，每个文件做了什么。
 - V3 的字段映射与动画时序。

@@ -1,6 +1,6 @@
 # 统一操作台实现契约（2026-10-24）
 
-先读 `工作区/方案/统一操作台-方案-2026-10-24.md`。本文件只定接口、文件归属与测试边界。方案与本文件冲突时，以本文件为准，并在报告里指出。
+先读 `docs/design/统一操作台-方案-2026-10-24.md`。本文件只定接口、文件归属与测试边界。方案与本文件冲突时，以本文件为准，并在报告里指出。
 
 ## 1. 文件归属
 
@@ -8,14 +8,14 @@
 
 | agent | 只改 |
 |---|---|
-| status | `工作区/脚本/ops_status.py`（新）、`工作区/脚本/audit_state.py`、`工作区/运维/验收/test_status.py`（新） |
-| classify | `工作区/脚本/classify_model.py`（新）、`工作区/脚本/ingest.py`、`工作区/脚本/classify_books.py`、`工作区/运维/验收/test_classify.py`（新） |
-| split | `工作区/脚本/split_md_batch.py`、`工作区/运维/验收/test_split.py`（新） |
-| pdf | `工作区/脚本/ops_pdf_triage.py`（新）、`工作区/脚本/pdf_apply_review.py`、`工作区/脚本/pdf_md_batch.py`、`工作区/运维/验收/test_pdf.py`（新） |
-| retire | `工作区/脚本/retire_book.py`（新）、`工作区/运维/验收/test_retire.py`（新） |
-| console | `工作区/运维/server.py`（新）、`工作区/运维/web/`、`工作区/运维/README.md`、`工作区/运维/验收/check_ops.py`（新）、`工作区/运维/验收/shot_ops.py`（新） |
+| status | `src/bookcorpus/scripts/ops_status.py`（新）、`src/bookcorpus/scripts/audit_state.py`、`tests/acceptance/ops/test_status.py`（新） |
+| classify | `src/bookcorpus/scripts/classify_model.py`（新）、`src/bookcorpus/scripts/ingest.py`、`src/bookcorpus/scripts/classify_books.py`、`tests/acceptance/ops/test_classify.py`（新） |
+| split | `src/bookcorpus/scripts/split_md_batch.py`、`tests/acceptance/ops/test_split.py`（新） |
+| pdf | `src/bookcorpus/scripts/ops_pdf_triage.py`（新）、`src/bookcorpus/scripts/pdf_apply_review.py`、`src/bookcorpus/scripts/pdf_md_batch.py`、`tests/acceptance/ops/test_pdf.py`（新） |
+| retire | `src/bookcorpus/scripts/retire_book.py`（新）、`tests/acceptance/ops/test_retire.py`（新） |
+| console | `apps/ops/server.py`（新）、`apps/ops/web/`、`apps/ops/README.md`、`tests/acceptance/ops/check_ops.py`（新）、`tests/manual/ops/shot_ops.py`（新） |
 
-不改 `工作区/脚本/` 里别人名下的文件。不改 `lib_common.py`、`qsearch.py`、`book_query.py`、`build_*.py`、`gen_book_catalog.py`。不改 `库/`、`目录/`、`视图/` 的任何真实文件。不改 `工作区/演示-检索流程/`。
+不改 `src/bookcorpus/scripts/` 里别人名下的文件。不改 `lib_common.py`、`qsearch.py`、`book_query.py`、`build_*.py`、`gen_book_catalog.py`。不改 `库/`、`目录/`、`视图/` 的任何真实文件。不改 `apps/demo/`。
 
 备份在 `工作区/运维/backup-2026-10-24/`，只读。
 
@@ -220,8 +220,8 @@ pi -p --no-tools --no-session --no-context-files --no-skills --no-extensions \
 ### retire_book.py
 
 ```text
-python3 工作区/脚本/retire_book.py --uid B1234 --reason "..." --dry-run --json [--root .]
-python3 工作区/脚本/retire_book.py --uid B1234 --reason "..." --plan-hash <sha> --apply [--root .]
+python3 src/bookcorpus/scripts/retire_book.py --uid B1234 --reason "..." --dry-run --json [--root .]
+python3 src/bookcorpus/scripts/retire_book.py --uid B1234 --reason "..." --plan-hash <sha> --apply [--root .]
 ```
 
 dry-run JSON 至少含：
@@ -239,15 +239,15 @@ dry-run JSON 至少含：
 
 ## 7. 测试
 
-- 每个脚本的测试放自己名下的 `工作区/运维/验收/test_*.py`。
+- 每个脚本的测试放自己名下的 `tests/acceptance/ops/test_*.py`。
 - 临时根用 `tempfile.mkdtemp()`，必要时造最小的 `目录/`、`库/`、`工作区/`。
-- 模型调用一律 `PI_BIN` stub。stub 是 `工作区/运维/验收/fixtures/pi_stub.py`，只回预先写好的 JSON，不联网。
+- 模型调用一律 `PI_BIN` stub。stub 是 `tests/acceptance/fixtures/pi_stub.py`，只回预先写好的 JSON，不联网。
 - 测试不写真实库。测试结束删临时根。
 - 报告：改了哪些文件、跑了哪些命令、结果、与契约的偏差、已知风险。
 
 ## 8. 控制台
 
-`server.py` 用标准库 `ThreadingHTTPServer`，零依赖。`web/` 用原生 JS。样式参考 `工作区/演示-检索流程/web/style.css` 的纸色与朱红，流程轨参考 `工作区/方案/流水线全景-2026-10-23.html` 的阶段与状态词。
+`server.py` 用标准库 `ThreadingHTTPServer`，零依赖。`web/` 用原生 JS。样式参考 `apps/demo/web/style.css` 的纸色与朱红，流程轨参考 `docs/design/流水线全景-2026-10-23.html` 的阶段与状态词。
 
 页面七块：总览、新书导入、电子书出正文、PDF 出正文、维护、删书、日志。顶栏有搜索入口与 8765 健康点。
 PDF 页是三块：四格状态带（可转 / 未分诊 / 只记图册 / 日文暂缓，各带本数、页数与一句说明）加一行

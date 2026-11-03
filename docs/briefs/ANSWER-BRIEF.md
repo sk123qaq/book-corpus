@@ -1,5 +1,7 @@
 # 回答阶段设计说明（2026-10-25）
 
+
+状态：已完成 · 2026-10-25
 > **布局说明（2026-11-02）**：`<uid>` 是书目录占位，例如 `B0024`。v2 下书目录是 `books/<uid>/`，索引是 `build/检索/index.db`，书目库是 `build/library.db`，人账在 `tables/`。本文示例已按 v2 改写。
 
 
@@ -8,7 +10,7 @@
 1. 结果原文带 600 到 800 字前置上下文，命中段整段高亮。
 2. 结果区接 `pi` agent 与 `book-corpus-qa` 技能，给出多段依据的回答。
 
-现有代码在 `工作区/演示-检索流程/`。先读 `BRIEF.md` 的五阶段契约，再读本文件。不要改 `src/bookcorpus/scripts/` 下任何文件，只在演示目录里改。
+现有代码在 `apps/demo/`。先读 `BRIEF.md` 的五阶段契约，再读本文件。不要改 `src/bookcorpus/scripts/` 下任何文件，只在演示目录里改。
 
 ## 为什么这么接
 
@@ -125,7 +127,7 @@
 ```bash
 pi -p --no-session --no-context-files \
   --skill .agents/skills/book-corpus-qa/SKILL.md \
-  -e 工作区/演示-检索流程/readonly_tools.ts --tools book_grep,read \
+  -e apps/demo/readonly_tools.ts --tools book_grep,read \
   --model opencode-go/deepseek-v4.1-flash --thinking <档位> "<prompt>"
 ```
 
@@ -303,7 +305,7 @@ curl -s -X POST localhost:8765/api/run -H 'content-type: application/json' \
 - `验收/check_demo.py` 增加上面几条，末行 `ALL PASS`。
 - `验收/test_answer_retry.py`：离线用桩替换 `call_pi`，不调模型。首答坏 JSON、次答好 JSON 时单书与多书都要
   `ok:true` 且模型被调两次；两次都坏要 `ok:false`；`pi` 调用本身失败只调一次。
-  `python3 工作区/演示-检索流程/验收/test_answer_retry.py` 末行 `ALL PASS`。
+  `python3 tests/acceptance/demo/test_answer_retry.py` 末行 `ALL PASS`。
 - 截图：三体题的回答卡与依据、原文命中块，桌面 1440×900；手机 390×844。控制台 0 报错。
 
 ## 禁止

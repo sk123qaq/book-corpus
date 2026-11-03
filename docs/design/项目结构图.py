@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Emit 工作区/方案/项目结构图.html (one self-contained page, inline SVG flowchart).
+"""Emit docs/design/项目结构图.html (one self-contained page, inline SVG flowchart).
 
 2026-11-02 布局迁移：图内文字仍是 v1 读数，重新生成时按 build/、tables/、books/ 取数。
 
-Regenerate after the layout changes: python3 工作区/方案/项目结构图.py
+Regenerate after the layout changes: python3 docs/design/项目结构图.py
 Every number in the diagram was read from build/library.db (lq.py), tables/分类表.csv,
 tables/概念表.tsv and the filesystem on 2026-10-19.
 
@@ -35,7 +35,7 @@ NODES = {
     "L2": dict(col=1, y=200, tone="slate", title="库/_收件箱/",
                lines=["新书先落这里，再从人账开一条",
                       "ingest.py 还没实现，入库靠手工加行"]),
-    "L5": dict(col=1, y=344, tone="slate", title="工作区/脚本/", badge="46 个 py",
+    "L5": dict(col=1, y=344, tone="slate", title="src/bookcorpus/scripts/", badge="46 个 py",
                lines=["每个动作都是可重跑脚本，不手改产物",
                       "一个账本一个写者：人写人账，脚本写产物"]),
     "L4": dict(col=1, y=556, tone="slate", title="../books.snapshot-2026-10-18",
@@ -213,7 +213,7 @@ html = f"""<!doctype html>
 </style>
 </head>
 <body>
-<div style="margin:12px 16px;padding:10px 14px;border-left:4px solid #b58900;background:#fff8e1;font:14px/1.6 system-ui,sans-serif;color:#333"><b>布局说明（2026-11-02）</b>：这是 v1 时代生成的图。图中的 <code>库/</code> 现在对应 <code>books/&lt;uid&gt;/</code>，<code>目录/library.db</code> 对应 <code>build/library.db</code>，<code>目录/检索/</code> 对应 <code>build/检索/</code>，<code>视图/</code> 对应 <code>build/views/</code>，<code>工作区/脚本/</code> 对应 <code>src/bookcorpus/scripts/</code>。</div>
+<div style="margin:12px 16px;padding:10px 14px;border-left:4px solid #b58900;background:#fff8e1;font:14px/1.6 system-ui,sans-serif;color:#333"><b>布局说明（2026-11-02）</b>：这是 v1 时代生成的图。图中的 <code>库/</code> 现在对应 <code>books/&lt;uid&gt;/</code>，<code>目录/library.db</code> 对应 <code>build/library.db</code>，<code>目录/检索/</code> 对应 <code>build/检索/</code>，<code>视图/</code> 对应 <code>build/views/</code>，<code>src/bookcorpus/scripts/</code> 对应 <code>src/bookcorpus/scripts/</code>。</div>
 
 <h1>书库项目结构图</h1>
 <p class="sub">数字取自 目录/library.db、目录/分类表.csv、目录/概念表.tsv 与盘上实测（2026-10-20，分类表那一行是 10-19）。按写入者分栏读，不按文件夹列。</p>
@@ -232,11 +232,11 @@ html = f"""<!doctype html>
 <h2>规则与方案住哪</h2>
 <ul>
   <li><code>AGENTS.md</code> 现状数字、文件地图、脚本表、改完跑什么</li>
-  <li><code>工作区/方案/设计方案-书目结构.md</code> L0 到 L5 的门槛与目标结构</li>
-  <li><code>工作区/方案/决策记录.tsv</code> 每个决定的理由与证据</li>
+  <li><code>docs/design/设计方案-书目结构.md</code> L0 到 L5 的门槛与目标结构</li>
+  <li><code>book-corpus-data/archive/决策记录-2026-10-18_2026-10-26.tsv</code> 每个决定的理由与证据</li>
   <li><code>目录/检索/README.md</code> 与 <code>踩坑记录.md</code>，改检索脚本前先查</li>
 </ul>
-<p class="sub" style="margin-top:22px">这张图由 <code>工作区/方案/项目结构图.py</code> 生成，改节点或坐标后重跑它即可。</p>
+<p class="sub" style="margin-top:22px">这张图由 <code>docs/design/项目结构图.py</code> 生成，改节点或坐标后重跑它即可。</p>
 </body>
 </html>
 """
