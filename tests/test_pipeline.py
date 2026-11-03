@@ -18,6 +18,16 @@ def test_library_builds_from_ledger(workspace):
     con.close()
 
 
+def test_library_builds_empty_workspace(tmp_path):
+    root = tmp_path / "ws"
+    assert run_cli("init", root).returncode == 0
+    r = run_cli("--root", root, "library")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads(r.stdout)["books"] == 0
+    r = run_cli("--root", root, "index", "--rebuild")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
 def test_library_refuses_ledger_without_book(workspace):
     with open(workspace / "tables" / "分类表.csv", "a", encoding="utf-8") as f:
         f.write("B9999,文学,,0,keep,幽灵书,\n")

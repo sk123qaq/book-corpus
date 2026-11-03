@@ -319,6 +319,15 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             self.send_json(500, {"ok": False, "db": "error", "error": str(exc)})
             return
+        if info["index"] != "ok":
+            message = "未建索引" if info["index"] == "missing" else "索引为空"
+            self.send_json(200, {"ok": True, "db": info["index"], "degraded": True,
+                                 "message": message, "meta": info})
+            return
+        if info["library"] != "ok":
+            self.send_json(200, {"ok": True, "db": "missing", "degraded": True,
+                                 "message": "未建书目库", "meta": info})
+            return
         self.send_json(200, {"ok": True, "db": "ok", "meta": info})
 
     def api_sessions(self, query):

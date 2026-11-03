@@ -89,7 +89,7 @@ python3 apps/demo/server.py
 
 ## 接口
 
-- `GET /api/health` → 书库规模与索引构建时间。
+- `GET /api/health` → 书库规模与索引构建时间。索引未建时仍返 200，带 `degraded:true` 与 `message:"未建索引"`；真正的库错误才返 500。
 - `POST /api/run` `{"question":"...","thinking":"high","fresh":false}` → 五阶段 trace（结构见 `BRIEF.md` 的「数据契约」）。
   `thinking` 取 `off/minimal/low/medium/high/xhigh/max`（默认 `high`），进切词缓存键；
   `fresh=true` 跳过切词缓存重新调模型，本次结果仍写回。trace 顶层与 `extract` 都带 `thinking`。

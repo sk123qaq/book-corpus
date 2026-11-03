@@ -420,25 +420,30 @@ def meta(refresh=False):
     now = time.time()
     if not refresh and _META_CACHE["value"] and now - _META_CACHE["at"] < 60:
         return _META_CACHE["value"]
-    out = {"books": 0, "paras": 0, "chapters": 0, "index_built_at": ""}
-    lib = _ro(LIB_DB)
-    try:
-        out["books"] = lib.execute("SELECT count(*) FROM book").fetchone()[0]
-    finally:
-        lib.close()
-    con = _ro(INDEX_DB)
-    try:
-        vals = dict(con.execute("SELECT key,value FROM meta"))
-        for key, target in (("paras", "paras"), ("chapters", "chapters")):
-            try:
-                out[target] = int(vals.get(key) or 0)
-            except ValueError:
-                out[target] = 0
-        out["index_built_at"] = vals.get("built_at") or ""
-        if not out["paras"]:
-            out["paras"] = con.execute("SELECT count(*) FROM para").fetchone()[0]
-    finally:
-        con.close()
+    out = {"books": 0, "paras": 0, "chapters": 0, "index_built_at": "",
+           "library": "missing", "index": "missing"}
+    if os.path.exists(LIB_DB):
+        lib = _ro(LIB_DB)
+        try:
+            out["books"] = lib.execute("SELECT count(*) FROM book").fetchone()[0]
+        finally:
+            lib.close()
+        out["library"] = "ok"
+    if os.path.exists(INDEX_DB):
+        con = _ro(INDEX_DB)
+        try:
+            vals = dict(con.execute("SELECT key,value FROM meta"))
+            for key, target in (("paras", "paras"), ("chapters", "chapters")):
+                try:
+                    out[target] = int(vals.get(key) or 0)
+                except ValueError:
+                    out[target] = 0
+            out["index_built_at"] = vals.get("built_at") or ""
+            if not out["paras"]:
+                out["paras"] = con.execute("SELECT count(*) FROM para").fetchone()[0]
+        finally:
+            con.close()
+        out["index"] = "ok" if out["paras"] else "empty"
     _META_CACHE.update(at=now, value=out)
     return out
 
