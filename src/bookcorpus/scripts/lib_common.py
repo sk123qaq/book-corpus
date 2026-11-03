@@ -382,6 +382,7 @@ def write_json_atomic(path, doc):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, indent=1)
+        fh.write("\n")
     os.replace(tmp, path)
 
 
