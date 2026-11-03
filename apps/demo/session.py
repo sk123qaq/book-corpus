@@ -35,6 +35,16 @@ HEAD = "【同一会话的上一轮，先读这一节】"
 FOOT = ("这一问如果是在接着上面问，就用这些事实定位，不要从零重判；"
         "如果另起话题，忽略这一节。")
 
+# 一轮回答的状态。pending 是刚跑完检索、还没人答；running 有任务在答。
+# incomplete 与 run_error 只由旧会话派生：有 trace 没回答算没答完，连 trace
+# 都没有说明那一轮没跑成。新写入的 turn 不用这两个值。
+ANSWER_STATES = ("pending", "running", "ready", "error", "interrupted")
+LEGACY_ANSWER_STATES = ("incomplete", "run_error")
+INTERRUPTED_ERROR = "服务重启，上次回答已中断"
+
+# 状态函数都要 load → 改 → save 一整套，串行化才不会被并发写盖掉。
+STATE_LOCK = threading.RLock()
+
 
 def now():
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
@@ -42,6 +52,11 @@ def now():
 
 def new_id():
     return secrets.token_hex(6)
+
+
+def new_run_token():
+    """一次 /api/run 的标记。重跑同一问也换新的，旧任务凭它对不上号。"""
+    return secrets.token_hex(8)
 
 
 def create():
@@ -75,7 +90,40 @@ def load(sid):
     sess["turns"] = [t for t in turns if isinstance(t, dict)
                      and isinstance(t.get("n"), int)]
     sess["turns"].sort(key=lambda t: t["n"])
+    for turn in sess["turns"]:
+        _turn_defaults(turn)
     return sess
+
+
+def _turn_defaults(turn):
+    """补齐回答状态字段。旧会话没有这些字段，按已有答案与 trace 派生。"""
+    if not isinstance(turn.get("run_token"), str):
+        turn["run_token"] = ""
+    if not isinstance(turn.get("answer_owner"), str):
+        turn["answer_owner"] = ""
+    turn["answer_error"] = str(turn.get("answer_error") or "")
+    try:
+        turn["answer_attempt"] = max(0, int(turn.get("answer_attempt") or 0))
+    except (TypeError, ValueError):
+        turn["answer_attempt"] = 0
+    turn["answer_started_at"] = turn.get("answer_started_at") or None
+    turn["answer_finished_at"] = turn.get("answer_finished_at") or None
+    if turn.get("answer_state") in ANSWER_STATES + LEGACY_ANSWER_STATES:
+        return
+    ans = turn.get("answer")
+    if isinstance(ans, dict):
+        turn["answer_state"] = answer_state_for(ans)
+        if turn["answer_state"] == "error" and not turn["answer_error"]:
+            turn["answer_error"] = str(ans.get("error") or "回答失败")
+    elif isinstance(turn.get("trace"), dict):
+        turn["answer_state"] = "incomplete"
+    else:
+        turn["answer_state"] = "run_error"
+
+
+def answer_state_for(info):
+    """答案 dict 对应的状态：ok 明确为假才算 error。"""
+    return "ready" if isinstance(info, dict) and info.get("ok") is not False else "error"
 
 
 def save(sess):
@@ -88,7 +136,8 @@ def save(sess):
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(sess, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
-    os.replace(tmp, path)
+    with STATE_LOCK:
+        os.replace(tmp, path)
     return path
 
 
@@ -103,6 +152,172 @@ def find(sess, n):
     return None
 
 
+# ---- 回答状态 -------------------------------------------------------
+
+def _turn_meta(sid, turn):
+    return {"session_id": sid, "n": turn.get("n"),
+            "run_token": turn.get("run_token") or "",
+            "answer_state": turn.get("answer_state") or "pending",
+            "answer_error": turn.get("answer_error") or "",
+            "answer_attempt": turn.get("answer_attempt") or 0,
+            "answer_owner": turn.get("answer_owner") or "",
+            "answer_started_at": turn.get("answer_started_at"),
+            "answer_finished_at": turn.get("answer_finished_at"),
+            "answered": isinstance(turn.get("answer"), dict)}
+
+
+def turn_meta(sid, n):
+    """一轮的状态快照；会话或轮次不在时返回 None。只读。"""
+    with STATE_LOCK:
+        turn = find(load(sid), n)
+        return _turn_meta(sid, turn) if turn is not None else None
+
+
+def _token_matches(turn, token):
+    return token is None or (turn.get("run_token") or "") == token
+
+
+def begin_answer(sid, n, attempt, owner, token=None):
+    """标成 running。轮次不在、token 已换（重新 /api/run）、attempt 旧了都返回 False。"""
+    with STATE_LOCK:
+        sess = load(sid)
+        turn = find(sess, n)
+        if turn is None or not _token_matches(turn, token):
+            return False
+        try:
+            attempt = int(attempt)
+        except (TypeError, ValueError):
+            return False
+        if attempt <= 0 or (turn.get("answer_attempt") or 0) > attempt:
+            return False
+        turn["answer_attempt"] = attempt
+        turn["answer_state"] = "running"
+        turn["answer_owner"] = str(owner or "")
+        turn["answer_started_at"] = now()
+        turn["answer_error"] = ""
+        turn["answer_finished_at"] = None
+        save(sess)
+        return True
+
+
+def finish_answer(sid, n, attempt, info, ctx=None, token=None):
+    """写回答。只认当前 attempt（与 token，给了的话）；旧任务返回 False。"""
+    with STATE_LOCK:
+        sess = load(sid)
+        turn = find(sess, n)
+        if turn is None or not _token_matches(turn, token):
+            return False
+        if (turn.get("answer_attempt") or 0) != _attempt(attempt):
+            return False
+        info = dict(info) if isinstance(info, dict) else {}
+        if not info:
+            info = {"ok": False, "error": "回答为空"}
+        turn["answer"] = info
+        turn["context"] = ctx
+        turn["answer_state"] = answer_state_for(info)
+        turn["answer_error"] = ("" if turn["answer_state"] == "ready"
+                                else str(info.get("error") or "回答失败"))
+        turn["answer_finished_at"] = now()
+        turn["answer_owner"] = ""
+        save(sess)
+        return True
+
+
+def fail_answer(sid, n, attempt, message, token=None):
+    """回答过程抛错。同样只认当前 attempt；不动已有的 answer。"""
+    with STATE_LOCK:
+        sess = load(sid)
+        turn = find(sess, n)
+        if turn is None or not _token_matches(turn, token):
+            return False
+        if (turn.get("answer_attempt") or 0) != _attempt(attempt):
+            return False
+        turn["answer_state"] = "error"
+        turn["answer_error"] = str(message or "回答失败")
+        turn["answer_finished_at"] = now()
+        turn["answer_owner"] = ""
+        save(sess)
+        return True
+
+
+def _attempt(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
+def _owner_alive(owner):
+    """owner 是一个仍存活的进程 id 时为真；解析不出、不算进程都当死。"""
+    try:
+        pid = int(str(owner).strip())
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def recover_interrupted():
+    """启动时把上一个进程留下的 running 标成 interrupted。返回改动轮数。
+
+    owner 是别的仍存活进程时不动（可能是另一个实例正在答）；owner 为空、
+    等于当前进程（上一个同 pid 的进程已经没了）或已死才标。
+    """
+    me = str(os.getpid())
+    count = 0
+    with STATE_LOCK:
+        for sid in _session_ids():
+            sess = load(sid)
+            if sess is None:
+                continue
+            changed = False
+            for turn in sess["turns"]:
+                if turn.get("answer_state") != "running":
+                    continue
+                owner = turn.get("answer_owner") or ""
+                if owner and owner != me and _owner_alive(owner):
+                    continue
+                turn["answer_state"] = "interrupted"
+                turn["answer_error"] = INTERRUPTED_ERROR
+                turn["answer_finished_at"] = now()
+                turn["answer_owner"] = ""
+                changed = True
+                count += 1
+            if changed:
+                save(sess)
+    return count
+
+
+def _session_ids():
+    try:
+        names = os.listdir(SESS_DIR)
+    except OSError:
+        return []
+    return sorted(name[:-5] for name in names
+                  if name.endswith(".json") and valid_id(name[:-5]))
+
+
+def delete(sid):
+    """删一个会话文件。返回 "deleted" 或 "missing"；id 不合法抛 ValueError。"""
+    if not valid_id(sid):
+        raise ValueError("会话 id 不合法")
+    with STATE_LOCK:
+        try:
+            os.unlink(_path(sid))
+        except FileNotFoundError:
+            return "missing"
+        return "deleted"
+
+
 def public(sess):
     out = []
     for turn in (sess or {}).get("turns") or []:
@@ -111,6 +326,8 @@ def public(sess):
         out.append({"n": turn.get("n"),
                     "question": turn.get("question") or "",
                     "related": turn.get("related"),
+                    "answer_state": turn.get("answer_state") or "pending",
+                    "answer_error": turn.get("answer_error") or "",
                     "answer_lead": str(lead or "")})
     return {"id": (sess or {}).get("id") or "", "turns": out}
 
@@ -130,13 +347,14 @@ def _book_names(turn):
     plan = trace.get("plan") if isinstance(trace.get("plan"), dict) else {}
     for row in plan.get("ranking") or []:
         if isinstance(row, dict):
-            add(row.get("book"))
+            add(row.get("title") or row.get("book"))
     if not names:
         ans = turn.get("answer")
         if isinstance(ans, dict):
             for cite in ans.get("citations") or []:
                 if isinstance(cite, dict):
-                    add(_book_of(cite.get("book"), cite.get("path")))
+                    add(cite.get("book_title")
+                        or _book_of(cite.get("book"), cite.get("path")))
         if not names:
             result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
             add(result.get("book_title") or result.get("book"))
@@ -174,6 +392,8 @@ def summaries(limit=None):
                      "turns": len(turns),
                      "question": str(turns[0].get("question") or ""),
                      "last_question": str(turns[-1].get("question") or ""),
+                     "answer_state": turns[-1].get("answer_state") or "pending",
+                     "answer_error": turns[-1].get("answer_error") or "",
                      "books": _book_names(turns[-1])})
     rows.sort(key=lambda r: (r["updated_at"], r["id"]), reverse=True)
     return rows[:cap] if cap > 0 else rows

@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import threading
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
@@ -29,9 +30,55 @@ MAX_BODY = 16 * 1024
 LOCK = threading.Lock()
 SESSION_LOCK = threading.Lock()
 
+# 同一轮（会话 + 轮次 + run_token）只跑一个回答任务。第一个请求负责调模型，
+# 同时进来的第二个请求等它的 Event，拿到同一份结果，不再调一次模型。
+ANSWER_JOBS = {}
+ANSWER_JOBS_LOCK = threading.Lock()
+ANSWER_WAIT_SECONDS = 300
+ANSWER_JOB_TTL = 60
+MAX_DELETE = 100
+
 
 def json_bytes(value):
     return json.dumps(value, ensure_ascii=False).encode("utf-8")
+
+
+def answer_job_key(sid, n, run_token):
+    """同轮回答的键。重新 /api/run 会换 run_token，自然另起一个任务。"""
+    return (str(sid or ""), int(n or 0), str(run_token or ""))
+
+
+def _purge_answer_jobs(at):
+    for key in [k for k, job in ANSWER_JOBS.items()
+                if job["event"].is_set() and job["expires"] and job["expires"] <= at]:
+        ANSWER_JOBS.pop(key, None)
+
+
+def claim_answer_job(key, attempt=0, fresh=False):
+    """连同轮任务。返回 (job, owner)；owner 为真时由调用方跑模型并 publish。
+    已有任务且还没结束时一律加入；已结束的任务只有 fresh 才重开，
+    否则普通重复请求复用上一次的结果。"""
+    with ANSWER_JOBS_LOCK:
+        _purge_answer_jobs(time.time())
+        job = ANSWER_JOBS.get(key)
+        if job is not None:
+            if not job["event"].is_set() or not fresh:
+                return job, False
+            # 用户点了「重试回答」：旧任务只留给还拿着它引用的等待者，
+            # 这次重新调模型，不能把上一次的错误或结果当成这一次的回答。
+            ANSWER_JOBS.pop(key, None)
+        job = {"event": threading.Event(), "result": None, "error": None,
+               "attempt": attempt, "expires": 0.0}
+        ANSWER_JOBS[key] = job
+        return job, True
+
+
+def publish_answer_job(job, result=None, error=None):
+    """写结果、开 Event。job 再保留 ANSWER_JOB_TTL 秒，迟到请求还能复用。"""
+    job["result"] = result
+    job["error"] = error
+    job["expires"] = time.time() + ANSWER_JOB_TTL
+    job["event"].set()
 
 
 def _session_id(value):
@@ -284,11 +331,18 @@ def _inherit_focus(data, sess, n, rel):
 
 
 def _write_turn(sess, n, question, data, rel, anchor):
-    """n 已经存在就替掉它并截断后面的轮次（重跑同一问），否则追加。"""
+    """n 已经存在就替掉它并截断后面的轮次（重跑同一问），否则追加。
+
+    每个 turn 带一个新的 run_token：旧回答任务即使晚到也认不上这个 token。
+    """
     turns = sess.setdefault("turns", [])
     turn = {"n": n, "question": question, "thinking": data.get("thinking") or "",
             "at": session.now(), "related": rel, "anchor": anchor,
-            "trace": data, "answer": None, "context": None}
+            "trace": data, "answer": None, "context": None,
+            "run_token": session.new_run_token(), "answer_state": "pending",
+            "answer_error": "", "answer_started_at": None,
+            "answer_finished_at": None, "answer_attempt": 0,
+            "answer_owner": ""}
     index = next((i for i, t in enumerate(turns) if t.get("n") == n), -1)
     if index >= 0:
         turns[index:] = [turn]
@@ -395,7 +449,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         route = unquote(urlparse(self.path).path)
-        if route not in ("/api/run", "/api/answer"):
+        if route not in ("/api/run", "/api/answer", "/api/sessions/delete"):
             self.fail(404, "unknown api")
             return
         payload = self.read_payload()
@@ -403,8 +457,34 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/api/run":
             self.handle_run(payload)
-        else:
+        elif route == "/api/answer":
             self.handle_answer(payload)
+        else:
+            self.handle_sessions_delete(payload)
+
+    def handle_sessions_delete(self, payload):
+        ids = payload.get("ids")
+        if not isinstance(ids, list) or not 1 <= len(ids) <= MAX_DELETE:
+            self.fail(400, "ids 必须是 1 到 %d 个会话 id 的数组" % MAX_DELETE)
+            return
+        clean = []
+        for sid in ids:
+            if not session.valid_id(sid):
+                self.fail(400, "会话 id 不合法")
+                return
+            if sid not in clean:
+                clean.append(sid)
+        deleted, missing = [], []
+        for sid in clean:
+            try:
+                outcome = session.delete(sid)
+            except OSError as exc:  # noqa: BLE001
+                traceback.print_exc()
+                self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
+                return
+            (deleted if outcome == "deleted" else missing).append(sid)
+        self.send_json(200, {"ok": True, "deleted": deleted, "missing": missing,
+                             "count": len(deleted)})
 
     def read_payload(self):
         try:
@@ -506,9 +586,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.fail(400, "path 为空")
                 return
             book = book or focus["book"]
+        fresh = _flag(payload.get("fresh"))
         self.api_answer(question, book, path, line, terms, groups, clean,
                         focus=focus, thinking=payload.get("thinking"),
-                        use_cache=not _flag(payload.get("fresh")),
+                        use_cache=not fresh, fresh=fresh,
                         session_id=_session_id(payload.get("session_id")),
                         turn=_turn_no(payload.get("turn")))
 
@@ -574,8 +655,18 @@ class Handler(BaseHTTPRequestHandler):
                 data = _inherit_focus(data, sess, n, rel)
             if sess is None:
                 sess = session.create()
-            _write_turn(sess, n, question, data, rel, anchor)
-            session.save(sess)
+                _write_turn(sess, n, question, data, rel, anchor)
+                session.save(sess)
+            else:
+                # 重新读一遍再写：这期间可能刚完成一个回答，不能拿旧快照盖掉它。
+                with session.STATE_LOCK:
+                    current = session.load(sess["id"])
+                    if current is None:
+                        self.fail(404, "会话不存在")
+                        return
+                    _write_turn(current, n, question, data, rel, anchor)
+                    session.save(current)
+                sess = current
             self.send_json(200, dict(data, session_id=sess["id"], turn=n,
                                      related=rel, session=session.public(sess)))
         except ValueError as exc:
@@ -615,18 +706,73 @@ class Handler(BaseHTTPRequestHandler):
 
     def api_answer(self, question, book, path, line, terms, groups, sources=None,
                    focus=None, thinking=None, use_cache=True, session_id="",
-                   turn=None):
+                   turn=None, fresh=False):
         sid, n, rel, ctx = "", 0, None, None
+        if session_id:
+            sid, n, rel, ctx = self.session_context(session_id, turn, sources)
+        meta = session.turn_meta(sid, n) if sid and n else None
+        if meta is None:
+            # 没带会话、或会话里没这一轮：老的同路无状态路径。
+            self.answer_once(question, book, path, line, terms, groups, sources,
+                             focus, thinking, use_cache, ctx, sid, n, rel)
+            return
+        key = answer_job_key(sid, n, meta["run_token"])
+        attempt = (meta["answer_attempt"] or 0) + 1
+        job, owner = claim_answer_job(key, attempt, fresh=fresh)
+        if not owner:
+            if not job["event"].wait(ANSWER_WAIT_SECONDS):
+                self.fail(504, "回答仍在生成，请稍后刷新")
+                return
+            if job["error"]:
+                self.fail(*job["error"])
+            elif job["result"] is None:
+                self.fail(500, "回答任务没有结果")
+            else:
+                self.send_json(200, job["result"])
+            return
+        token = meta["run_token"]
+        if not session.begin_answer(sid, n, attempt, os.getpid(), token=token):
+            message = "这一轮已重跑，本次回答作废"
+            self.fail(409, message)
+            publish_answer_job(job, error=(409, message))
+            return
         try:
-            if session_id:
-                sid, n, rel, ctx = self.session_context(session_id, turn, sources)
             info = answerer.answer_question(question, book, path, line, terms,
                                             groups=groups, sources=sources,
                                             thinking=thinking, use_cache=use_cache,
                                             history=ctx["text"] if ctx else "",
                                             focus=focus)
-            if sid and n:
-                self.store_answer(sid, n, info, ctx)
+            if not session.finish_answer(sid, n, attempt, info, ctx, token=token):
+                # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
+                message = "这一轮已重跑，本次回答作废"
+                publish_answer_job(job, error=(409, message))
+                self.fail(409, message)
+                return
+            body = dict(info, session_id=sid, turn=n, related=rel,
+                        history=self.history_brief(ctx), run_token=token,
+                        answer_state=session.answer_state_for(info))
+            publish_answer_job(job, result=body)
+            self.send_json(200, body)
+        except ValueError as exc:
+            session.fail_answer(sid, n, attempt, str(exc), token=token)
+            publish_answer_job(job, error=(400, str(exc)))
+            self.fail(400, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            message = "%s: %s" % (exc.__class__.__name__, exc)
+            session.fail_answer(sid, n, attempt, message, token=token)
+            publish_answer_job(job, error=(500, message))
+            self.fail(500, message)
+
+    def answer_once(self, question, book, path, line, terms, groups, sources,
+                    focus, thinking, use_cache, ctx, sid, n, rel):
+        """不带会话状态的回答：照旧调一次模型并把结果发回去。"""
+        try:
+            info = answerer.answer_question(question, book, path, line, terms,
+                                            groups=groups, sources=sources,
+                                            thinking=thinking, use_cache=use_cache,
+                                            history=ctx["text"] if ctx else "",
+                                            focus=focus)
             self.send_json(200, dict(info, session_id=sid, turn=n, related=rel,
                                      history=self.history_brief(ctx)))
         except ValueError as exc:
@@ -665,17 +811,12 @@ class Handler(BaseHTTPRequestHandler):
             return sess["id"], n, rel, ctx
 
     def store_answer(self, sid, n, info, ctx):
-        with SESSION_LOCK:
-            sess = session.load(sid)
-            turn = session.find(sess, n) if sess else None
-            if turn is None:
-                return
-            turn["answer"] = dict(info)
-            turn["context"] = ctx
-            try:
-                session.save(sess)
-            except OSError:
-                pass
+        """兼容旧调用：写一轮回答，不带 attempt 时写当前轮。"""
+        meta = session.turn_meta(sid, n)
+        if not meta:
+            return
+        session.finish_answer(sid, n, meta["answer_attempt"], info, ctx,
+                              token=meta["run_token"])
 
 
 def main(argv=None):
@@ -683,6 +824,12 @@ def main(argv=None):
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args(argv)
+    try:
+        count = session.recover_interrupted()
+        print("启动恢复：%d 轮上次未完成的回答已标为 interrupted" % count,
+              flush=True)
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     httpd.daemon_threads = True
     print("书库检索演示：http://%s:%d" % (args.host, args.port), flush=True)

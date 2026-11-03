@@ -45,8 +45,13 @@
           <input id="hist-filter" type="text" autocomplete="off"
                  placeholder="搜问题或书名" aria-label="搜索历史会话">
         </div>
+        <div class="hist-tools" id="hist-tools">
+          <label class="hist-all"><input type="checkbox" id="hist-all"><span>全选</span></label>
+          <span class="hist-picked" id="hist-picked">已选 0</span>
+          <button class="hist-del" type="button" id="hist-delete" disabled>删除选中</button>
+        </div>
         <div class="rail-scroll hist-scroll" id="hist-list"></div>
-        <p class="hist-note">打开历史会话会替换当前会话；当前会话已自动保存。</p>
+        <p class="hist-note">切换只是换视图：正在跑的回答会在后台继续，可回来查看。</p>
       </section>
     </div>
   </aside>
@@ -54,12 +59,6 @@
   <section class="main" id="main"></section>
 
   <div class="ask">
-    <div class="ask-sugs">
-      <span class="lbl">接着问</span>
-      <button class="chip" type="button" data-ask="还有别的例子吗？">还有别的例子吗？</button>
-      <button class="chip" type="button" data-ask="这个说法有反例吗？">这个说法有反例吗？</button>
-      <button class="chip" type="button" data-ask="作者在别的章节怎么讲？">作者在别的章节怎么讲？</button>
-    </div>
     <div class="ask-hint" id="hint"></div>
     <div class="ask-row">
       <div class="ask-field" id="ask-field">

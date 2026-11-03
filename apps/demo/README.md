@@ -87,6 +87,39 @@ python3 apps/demo/server.py
 失败路径：`pi` 非 0、超时、JSON 解析失败都返回 `ok:false` 与可读的 `error`，页面显示错误与「重试」，
 原文照常显示。
 
+## 会话与回答状态
+
+会话落盘在 `缓存/sessions/<12 位小写 hex>.json`，一轮一个 turn。除 trace 与 answer 外，
+每个 turn 还带回答状态字段，刷新页面或重启服务后读同一份事实：
+
+| 字段 | 含义 |
+|---|---|
+| `run_token` | 这一次 `/api/run` 的标记。每次写 turn 都换新的，重跑同一问也换；旧回答任务凭它对不上号 |
+| `answer_state` | `pending`（检索完，还没人答）、`running`（有任务在答）、`ready`、`error`、`interrupted`（服务重启打断） |
+| `answer_error` | 失败原因。只有真实错误，没有「未知错误」这种占位 |
+| `answer_started_at` / `answer_finished_at` | 开始与结束时间 |
+| `answer_attempt` | 这一轮第几次回答。`finish`/`fail` 只写当前 attempt，晚到的旧任务返回 `False` |
+| `answer_owner` | 正在答的进程 pid。重启恢复靠它判断任务是否真的还在跑 |
+
+旧会话没有这些字段，`session.load` 按已有内容补：有 `answer` 就是 `ready`，`ok:false` 就是 `error`
+（错误取 answer 里的 `error`）；有 trace 没 answer 记 `incomplete`；连 trace 都没有记 `run_error`。
+`/api/sessions` 的每一行与 `/api/session` 的每个 turn 都带 `answer_state`、`answer_error`。
+
+同轮去重：`/api/answer` 以 `(session_id, turn, run_token)` 为键，第一个请求调模型，
+同时进来的第二个请求等它的 `threading.Event`（最多 300 秒）后复用同一份结果，不再调一次模型；
+超时返回 504「回答仍在生成，请稍后刷新」。重新 `/api/run` 换了 `run_token` 就是新任务。
+完成的任务保留 60 秒供迟到请求复用，之后清掉；普通重复请求（`fresh` 不传）直接复用已完成的结果，
+前端点「重试回答」带 `fresh:true`，服务端会开新任务、重新调模型，同一 `run_token` 也重试。
+任务还在跑时 `fresh:true` 也是加入等待，不并发起第二个模型调用。不带 `session_id` 的请求仍是原来的同步路径。
+
+重启恢复：`server.main` 建 httpd 之前调 `session.recover_interrupted()`，把仍为 `running` 的 turn 标成
+`interrupted`，`answer_error` 写「服务重启，上次回答已中断」，并打印恢复轮数。
+`answer_owner` 是另一个仍存活的进程时不标（可能另一个实例正在答）；owner 为空、等于当前进程或已死才标。
+恢复失败只打印堆栈，不阻止启动。
+
+刷新后的答案来自会话文件，不是答案缓存。`缓存/answers/` 的键含 `PROMPT_VERSION`，
+提示词版本变过之后旧缓存不会自动命中，别把「刷新还能看到回答」当成缓存修复。
+
 ## 接口
 
 - `GET /api/health` → 书库规模与索引构建时间。索引未建时仍返 200，带 `degraded:true` 与 `message:"未建索引"`；真正的库错误才返 500。
@@ -127,6 +160,11 @@ python3 apps/demo/server.py
   多书时每条 citation 多带 `book` 与 `book_title`。
   `citations` 只放回查通过的引文，`line` 是文件实际行号。
   只给 `book`/`path`/`line` 的老请求行为与返回形状不变，`mode` 为 `single`、`sources` 为空。
+  带 `session_id` 时返回多 `run_token` 与 `answer_state`；同一轮正在生成时第二个请求等结果（最多 300 秒），
+  重试带 `fresh:true` 才会重新调模型。
+- `POST /api/sessions/delete` `{"ids":["0123456789ab", ...]}` → 删除 1 到 100 个会话文件。
+  返回 `{"ok":true,"deleted":[...],"missing":[...],"count":N}`，`count` 是实际删掉的个数；
+  不存在的 id 进 `missing`，不算错。`ids` 不是数组、超过 100 个或含非法 id（不是 12 位小写 hex）时 400。
 
 调试参数：`?q=...&instant=1` 不播动画直接出结果；`&select=2` 选第二张书卡；`&all=1` 全选所有书卡；
 `&top=1` 不自动滚到结果（截图用）；`&hit=1` 滚到命中段（截图用）。
@@ -161,9 +199,9 @@ python3 apps/demo/server.py
 ## 只读与边界
 
 - 只读 `目录/检索/index.db`、`目录/library.db`、`库/**.md`。
-- 只写 `缓存/terms/` 与 `缓存/answers/`，按 sha1 分文件，原子替换。
+- 只写 `缓存/terms/`、`缓存/answers/` 与 `缓存/sessions/`，按 sha1 或会话 id 分文件，原子替换。
 - 不跑 B4、不写 expand、不改 `库/` 与 `工作区/脚本/`。
-- `/api/run` 有一把锁；`/api/answer` 不加锁，长回答不挡换卡与下一次检索。
+- `/api/run` 有一把锁；`/api/answer` 不加整段锁，长回答不挡换卡与下一次检索；同一轮只在第一个请求里调模型。
 
 ## 验收
 

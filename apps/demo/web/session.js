@@ -10,12 +10,15 @@
   const STATUS_TEXT = {
     retrieving: '检索中', answering: '回答中',
     'run-error': '检索失败', 'answer-error': '回答失败',
+    'answer-interrupted': '回答中断', 'answer-incomplete': '未回答',
   };
   const THINKING_LEVEL = 'high';
   const ALL_DONE = ['done', 'done', 'done', 'done', 'done'];
   const ALL_PENDING = ['pending', 'pending', 'pending', 'pending', 'pending'];
   const REPLAY_MS = 900;
   const HISTORY_PAGE = 10;
+  const ANSWER_POLL_MS = 2000;
+  const ANSWER_POLL_MAX = 5 * 60 * 1000;
 
   const state = {
     sessionId: '',
@@ -35,6 +38,9 @@
     historyQuery: '',
     historyAll: false,
     historyError: '',
+    historySelected: new Set(),
+    historyVisible: [],
+    historyDeleting: false,
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -50,6 +56,9 @@
   const panelHistoryEl = $('#panel-history');
   const histListEl = $('#hist-list');
   const histFilterEl = $('#hist-filter');
+  const histAllEl = $('#hist-all');
+  const histPickedEl = $('#hist-picked');
+  const histDeleteEl = $('#hist-delete');
   const railSubEl = $('#rail-sub');
   const railEmptyEl = $('#rail-empty');
   const field = $('#q');
@@ -95,6 +104,10 @@
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function networkError(message) {
+    return /failed to fetch|networkerror|load failed|network|连接/i.test(String(message || ''));
   }
 
   function bookName(value) {
@@ -496,6 +509,109 @@
     }
   }
 
+  /* ---- 回答轮询 -------------------------------------------------- */
+
+  let answerPoll = null;
+  let answerPollSeq = 0;
+
+  function stopAnswerPoll() {
+    answerPollSeq += 1;
+    if (answerPoll && answerPoll.timer) clearTimeout(answerPoll.timer);
+    answerPoll = null;
+  }
+
+  function savedStatusOf(saved) {
+    const answer = saved.answer && typeof saved.answer === 'object' ? saved.answer : null;
+    // 显式状态优先：重试失败时后端会保留旧 answer，不能据此报 ready。
+    const name = String(saved.answer_state || '');
+    if (name === 'running') return { status: 'answering', error: '' };
+    if (name === 'interrupted') {
+      return { status: 'answer-interrupted', error: String(saved.answer_error || '') };
+    }
+    if (name === 'error') {
+      return { status: 'answer-error', error: String(saved.answer_error || '') };
+    }
+    if (answer) {
+      return answer.ok === false
+        ? { status: 'answer-error', error: String(answer.error || '') }
+        : { status: 'ready', error: '' };
+    }
+    if (name === 'pending' || name === 'incomplete') return { status: 'answer-incomplete', error: '' };
+    if (name === 'ready') return { status: 'answer-incomplete', error: '' };
+    // 旧会话没有 answer_state：有 trace 只说明检索完成，不能当回答失败。
+    const trace = saved.trace && typeof saved.trace === 'object' ? saved.trace : null;
+    return { status: trace ? 'answer-incomplete' : 'run-error', error: '' };
+  }
+
+  function answerStateName(status) {
+    if (status === 'answering') return 'running';
+    if (status === 'answer-interrupted') return 'interrupted';
+    if (status === 'answer-error') return 'error';
+    if (status === 'answer-incomplete') return 'incomplete';
+    if (status === 'ready') return 'ready';
+    return '';
+  }
+
+  function mergeSavedTurn(saved) {
+    const row = turnFromSaved(saved);
+    const at = state.turns.findIndex((t) => t.n === row.n);
+    if (at < 0) return null;
+    state.turns[at] = row;
+    syncBusy();
+    if (state.busy) {
+      if (!state.timer) startClock();
+    } else {
+      stopClock();
+    }
+    render();
+    loadSessions();
+    return row;
+  }
+
+  // 会话详情里最后一轮还在跑时，用 /api/session 每 2 秒看一眼；
+  // epoch 变了（切会话/新会话）就作废，后台请求本身不取消。
+  function startAnswerPoll(sessionId, n, epoch) {
+    stopAnswerPoll();
+    if (!sessionId || !n) return;
+    const seq = answerPollSeq;
+    const token = epoch == null ? state.epoch : epoch;
+    const started = Date.now();
+    const alive = () => seq === answerPollSeq && token === state.epoch && state.sessionId === sessionId;
+    const schedule = () => {
+      if (!alive()) return;
+      answerPoll = {
+        timer: setTimeout(tick, ANSWER_POLL_MS),
+        sessionId, n, epoch: token, started,
+      };
+    };
+    const tick = async () => {
+      answerPoll = null;
+      if (!alive()) return;
+      if (Date.now() - started > ANSWER_POLL_MAX) return;
+      let data = null;
+      try {
+        data = await fetchJSON('/api/session?id=' + encodeURIComponent(sessionId));
+      } catch (err) {
+        schedule();
+        return;
+      }
+      if (!alive()) return;
+      const sess = data.session || {};
+      const saved = (Array.isArray(sess.turns) ? sess.turns : [])
+        .find((t) => t && t.n === n);
+      const turn = state.turns.find((t) => t.n === n);
+      if (!saved || !turn) return;
+      const name = String(saved.answer_state || '');
+      const next = savedStatusOf(saved);
+      if (next.status === 'answering' || (next.status === 'answer-incomplete' && name === 'pending')) {
+        schedule();
+        return;
+      }
+      mergeSavedTurn(saved);
+    };
+    schedule();
+  }
+
   /* ---- 页头统计 -------------------------------------------------- */
 
   async function loadStats() {
@@ -581,11 +697,7 @@
       + '<h1>问一句，<br>找到原文</h1>'
       + '<p class="start-lead">先问第一问，它会把命中的原文与依据递到你面前。'
       + '之后点一条依据当落点，接着问。</p>'
-      + '<div class="start-samples">'
-      + '<button class="chip" type="button" data-ask="乡土中国 差序格局">乡土中国 差序格局</button>'
-      + '<button class="chip" type="button" data-ask="礼治社会靠什么维持秩序">礼治社会靠什么维持秩序</button>'
-      + '<button class="chip" type="button" data-ask="三体 程心 执剑人">三体 程心 执剑人</button>'
-      + '</div>' + card + '</section>' + error;
+      + card + '</section>' + error;
   }
 
   function relChip(turn) {
@@ -994,14 +1106,40 @@
         + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></p>';
     }
     if (turn.status === 'run-error') {
-      return '<p class="answer-error">检索失败：' + esc(turn.runError || '未知错误') + '</p>'
+      return '<p class="answer-error">检索失败：' + esc(turn.runError || '没有记录原因，可能服务重启或连接断开') + '</p>'
         + '<button class="btn" type="button" data-retry-run="' + turn.n + '">重试</button>';
     }
     if (turn.status === 'answer-error') {
       const last = lastTurn();
       const canRetry = last && last.n === turn.n;
-      return '<p class="answer-error">回答失败：' + esc(turn.answerError || '未知错误') + '</p>'
+      const detail = String(turn.answerError || '').trim();
+      const text = !detail
+        ? '回答没有完成，也没有记录原因。刷新或重试回答。'
+        : (networkError(detail)
+          ? '连接中断，回答可能仍在后台，刷新或稍后重试'
+          : '回答失败：' + detail);
+      return '<p class="answer-error">' + esc(text) + '</p>'
         + '<p class="answer-meta">' + (canRetry
+          ? '检索结果已保留，重试只重发回答。'
+          : '历史轮次，回答不再重试。') + '</p>'
+        + (canRetry
+          ? '<button class="btn" type="button" data-retry-answer="' + turn.n + '">重试回答</button>'
+          : '');
+    }
+    if (turn.status === 'answer-interrupted' || turn.status === 'answer-incomplete') {
+      const last = lastTurn();
+      const canRetry = last && last.n === turn.n;
+      const interrupted = turn.status === 'answer-interrupted';
+      let text = '上次只完成检索，还没有生成回答';
+      if (interrupted) {
+        text = networkError(turn.answerError)
+          ? '连接中断，回答可能仍在后台，刷新或稍后重试'
+          : '上次回答被中断（服务重启或连接断开）';
+      }
+      return '<p class="answer-error">' + esc(text) + '</p>'
+        + '<p class="answer-meta">' + (interrupted && turn.answerError && !networkError(turn.answerError)
+          ? '原因：' + esc(turn.answerError) + ' · ' : '')
+        + (canRetry
           ? '检索结果已保留，重试只重发回答。'
           : '历史轮次，回答不再重试。') + '</p>'
         + (canRetry
@@ -1010,7 +1148,8 @@
     }
     const answer = turn.answer || {};
     if (answer.ok === false) {
-      return '<p class="answer-error">没有拿到回答：' + esc(answer.error || '未知错误') + '</p>';
+      return '<p class="answer-error">没有拿到回答：'
+        + esc(answer.error || '刷新或重试回答') + '</p>';
     }
     const dissent = (Array.isArray(answer.parts) && answer.parts.length)
       ? '' : plain(answer.dissent);
@@ -1165,9 +1304,6 @@
     sendBtn.textContent = state.busy ? (answering() ? '回答中…' : '检索中…')
       : (state.turns.length ? '追问' : '提问');
     sendBtn.disabled = state.busy;
-    document.querySelectorAll('[data-ask]').forEach((el) => { el.disabled = state.busy; });
-    const sugs = document.querySelector('.ask-sugs');
-    if (sugs) sugs.hidden = state.turns.length === 0;
   }
 
   function scrollRail() {
@@ -1238,20 +1374,41 @@
         question: first.question || '',
         last_question: last.question || '',
         books: uniq(books).slice(0, 3),
+        answer_state: answerStateName(last.status) || (found && found.answer_state) || '',
       };
     }
     return state.history.find((row) => row.id === state.sessionId) || null;
   }
 
+  function historyStatusTag(row) {
+    const name = String(row.answer_state || '');
+    if (name === 'pending' || name === 'incomplete') return { text: '未回答', cls: 'is-incomplete' };
+    if (name === 'interrupted') return { text: '已中断', cls: 'is-interrupted' };
+    if (name === 'error') return { text: '失败', cls: 'is-error' };
+    if (name === 'running') return { text: '回答中', cls: 'is-running' };
+    return null;
+  }
+
   function histRowHTML(row, current) {
     const books = (row.books || []).length ? '《' + row.books.join('》《') + '》' : '';
-    return '<button class="hist-row' + (current ? ' is-current' : '') + '" type="button"'
+    const known = state.history.some((item) => item.id === row.id);
+    const picked = known && state.historySelected.has(row.id);
+    const tag = historyStatusTag(row);
+    const check = known
+      ? '<input class="hist-check" type="checkbox" data-session-check="' + esc(row.id) + '"'
+        + (picked ? ' checked' : '') + ' aria-label="选择这个会话">'
+      : '<span class="hist-check-gap" aria-hidden="true"></span>';
+    return '<div class="hist-item' + (current ? ' is-current' : '')
+      + (picked ? ' is-picked' : '') + '">' + check
+      + '<button class="hist-row' + (current ? ' is-current' : '') + '" type="button"'
       + ' data-open-session="' + esc(row.id) + '">'
       + '<span class="top"><span>' + esc(whenText(row.updated_at)) + '</span>'
       + '<span>' + (Number(row.turns) || 0) + ' 问'
       + (current ? ' <span class="pin">当前</span>' : '') + '</span></span>'
       + '<span class="q">' + esc(row.question || row.last_question || '') + '</span>'
-      + '<span class="meta">' + esc(books) + '</span></button>';
+      + '<span class="meta">' + esc(books)
+      + (tag ? '<span class="hist-state ' + tag.cls + '">' + tag.text + '</span>' : '')
+      + '</span></button></div>';
   }
 
   function histMatch(row, q) {
@@ -1260,12 +1417,33 @@
     return text.toLowerCase().includes(q);
   }
 
+  function renderHistTools() {
+    if (!histAllEl) return;
+    const known = new Set(state.history.map((row) => row.id));
+    Array.from(state.historySelected).forEach((id) => {
+      if (!known.has(id)) state.historySelected.delete(id);
+    });
+    const ids = state.historyVisible.filter((id) => known.has(id));
+    const picked = ids.filter((id) => state.historySelected.has(id));
+    const all = ids.length > 0 && picked.length === ids.length;
+    histAllEl.checked = all;
+    histAllEl.indeterminate = picked.length > 0 && !all;
+    histAllEl.disabled = ids.length === 0;
+    if (histPickedEl) histPickedEl.textContent = '已选 ' + state.historySelected.size;
+    if (histDeleteEl) {
+      histDeleteEl.disabled = state.historySelected.size === 0 || state.historyDeleting;
+      histDeleteEl.textContent = state.historyDeleting ? '删除中…' : '删除选中';
+    }
+  }
+
   function renderHistory() {
     if (!histListEl) return;
     const q = state.historyQuery.trim().toLowerCase();
     const cur = currentSummary();
     const curId = cur ? cur.id : '';
     const rows = state.history.filter((row) => row.id !== curId);
+    const known = new Set(state.history.map((row) => row.id));
+    const visible = [];
     let html = '';
     let shown = 0;
     if (state.historyError) {
@@ -1274,6 +1452,7 @@
     if (cur && histMatch(cur, q)) {
       html += '<p class="hist-group">当前打开</p>' + histRowHTML(cur, true);
       shown += 1;
+      if (known.has(cur.id)) visible.push(cur.id);
     }
     const matched = rows.filter((row) => histMatch(row, q));
     const list = (q || state.historyAll)
@@ -1284,6 +1463,7 @@
       if (!part.length) return;
       html += '<p class="hist-group">' + group + '</p>'
         + part.map((row) => histRowHTML(row, false)).join('');
+      part.forEach((row) => visible.push(row.id));
     });
     if (!q) {
       const rest = matched.length - list.length;
@@ -1295,7 +1475,9 @@
       }
     }
     if (!html) html = '<p class="hist-empty">没有匹配的会话。</p>';
+    state.historyVisible = visible;
     histListEl.innerHTML = html;
+    renderHistTools();
   }
 
   async function loadSessions() {
@@ -1307,8 +1489,40 @@
       state.history = [];
       state.historyError = '历史会话加载失败：' + err.message;
     }
+    const known = new Set(state.history.map((row) => row.id));
+    Array.from(state.historySelected).forEach((id) => {
+      if (!known.has(id)) state.historySelected.delete(id);
+    });
     renderRail();
     if (!state.turns.length) renderMain();
+  }
+
+  async function deleteSelectedSessions() {
+    const ids = Array.from(state.historySelected);
+    if (!ids.length || state.historyDeleting) return;
+    if (!window.confirm('删除 ' + ids.length + ' 个会话？删除后不可恢复')) return;
+    state.historyDeleting = true;
+    renderHistTools();
+    try {
+      const data = await postJSON('/api/sessions/delete', { ids });
+      const gone = new Set(ids);
+      state.history = state.history.filter((row) => !gone.has(row.id));
+      state.historySelected.clear();
+      state.historyDeleting = false;
+      const count = Number(data.count != null ? data.count : data.deleted);
+      const label = Number.isFinite(count) ? count : ids.length;
+      if (gone.has(state.sessionId)) {
+        newSession();
+        toast('已删除 ' + label + ' 个会话，已回到新会话');
+      } else {
+        render();
+        toast('已删除 ' + label + ' 个会话');
+      }
+    } catch (err) {
+      state.historyDeleting = false;
+      renderHistTools();
+      toast('删除失败：' + err.message);
+    }
   }
 
   /* ---- 左栏渲染 -------------------------------------------------- */
@@ -1494,6 +1708,7 @@
     try {
       const data = await postJSON('/api/answer', body);
       if (epoch !== state.epoch) return;
+      stopAnswerPoll();
       turn.answer = data;
       turn.status = 'ready';
       if (data.session_id && !state.sessionId) {
@@ -1502,8 +1717,15 @@
       }
     } catch (err) {
       if (epoch !== state.epoch) return;
-      turn.status = 'answer-error';
-      turn.answerError = err.message;
+      if (networkError(err.message)) {
+        // 连接断了不代表服务端失败：先按中断展示，再轮询会话详情。
+        turn.status = 'answer-interrupted';
+        turn.answerError = '连接中断，回答可能仍在后台，刷新或稍后重试';
+        if (state.sessionId) startAnswerPoll(state.sessionId, turn.n, epoch);
+      } else {
+        turn.status = 'answer-error';
+        turn.answerError = err.message;
+      }
     }
     if (epoch !== state.epoch) return;
     turn.stageStates = ALL_DONE.slice();
@@ -1568,6 +1790,7 @@
     const turn = state.turns.find((t) => t.n === n);
     const last = lastTurn();
     if (!turn || !last || last.n !== n || state.busy) return;
+    stopAnswerPoll();
     state.viewN = n;
     answerTurn(turn, { fresh: true });
   }
@@ -1641,6 +1864,7 @@
   function newSession() {
     state.epoch += 1;
     stopClock();
+    stopAnswerPoll();
     state.sessionId = '';
     state.turns = [];
     state.viewN = 0;
@@ -1730,11 +1954,6 @@
       drawerEl.classList.toggle('is-open');
       return;
     }
-    const asker = e.target.closest('[data-ask]');
-    if (asker) {
-      ask(asker.dataset.ask);
-      return;
-    }
     if (e.target.closest('[data-clear]')) {
       state.selected = null;
       render();
@@ -1819,11 +2038,11 @@
         render();
         return;
       }
-      if (state.busy) {
-        toast('这一问还在跑，落地后再切');
-        return;
-      }
       openSession(id);
+      return;
+    }
+    if (e.target.closest('#hist-delete')) {
+      deleteSelectedSessions();
       return;
     }
     if (e.target.closest('[data-hist-more]')) {
@@ -1871,6 +2090,32 @@
     });
   }
 
+  if (histListEl) {
+    histListEl.addEventListener('change', (e) => {
+      const box = e.target.closest('[data-session-check]');
+      if (!box) return;
+      const id = box.dataset.sessionCheck;
+      if (box.checked) state.historySelected.add(id);
+      else state.historySelected.delete(id);
+      const item = box.closest('.hist-item');
+      if (item) item.classList.toggle('is-picked', box.checked);
+      renderHistTools();
+    });
+  }
+
+  if (histAllEl) {
+    histAllEl.addEventListener('change', () => {
+      const ids = state.historyVisible.filter((id) =>
+        state.history.some((row) => row.id === id));
+      if (histAllEl.checked) ids.forEach((id) => state.historySelected.add(id));
+      else ids.forEach((id) => state.historySelected.delete(id));
+      renderHistory();
+    });
+  }
+
+  window.addEventListener('beforeunload', stopAnswerPoll);
+  window.addEventListener('pagehide', stopAnswerPoll);
+
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.isComposing) return;
     if (e.target && e.target.id === 'q') {
@@ -1915,6 +2160,7 @@
   function turnFromSaved(turn) {
     const answer = turn.answer && typeof turn.answer === 'object' ? turn.answer : null;
     const trace = turn.trace && typeof turn.trace === 'object' ? turn.trace : null;
+    const saved = savedStatusOf(turn);
     const row = {
       n: turn.n,
       question: turn.question || '',
@@ -1926,9 +2172,9 @@
       context: turn.context || null,
       sources: [],
       answerSources: [],
-      status: answer ? 'ready' : (trace ? 'answer-error' : 'run-error'),
+      status: saved.status,
       runError: '',
-      answerError: '',
+      answerError: saved.error,
       stageStates: ALL_DONE.slice(),
       stageOpen: new Set(),
       stripOpen: false,
@@ -1946,9 +2192,12 @@
   }
 
   async function openSession(sessionId) {
-    state.epoch += 1;
+    stopClock();
+    stopAnswerPoll();
+    const epoch = ++state.epoch;
     try {
       const data = await fetchJSON('/api/session?id=' + encodeURIComponent(sessionId));
+      if (epoch !== state.epoch) return;
       const sess = data.session || {};
       state.sessionId = sess.id || sessionId;
       state.turns = (sess.turns || []).filter((t) => t && typeof t.n === 'number')
@@ -1961,14 +2210,21 @@
       state.rail = 'current';
       state.historyAll = false;
       setUrl(state.sessionId);
+      syncBusy();
+      if (state.busy) startClock();
       render();
       if (last) showCitation(defaultRef(last));
+      if (last && last.status === 'answering') {
+        startAnswerPoll(state.sessionId, last.n, epoch);
+      }
     } catch (err) {
+      if (epoch !== state.epoch) return;
       state.error = '会话载入失败：' + err.message;
       state.sessionId = '';
       state.turns = [];
       state.viewN = 0;
       state.rail = 'current';
+      state.busy = false;
       setUrl('');
       render();
     }

@@ -111,4 +111,5 @@ check("D 多书空正文后重问成功",
 check("D 共调两次", len(d_prompts) == 2, "calls=%d" % len(d_prompts))
 
 print("\nALL PASS" if not fails else "\n失败 %d 项：%s" % (len(fails), ", ".join(fails)))
-sys.exit(0 if not fails else 1)
+if __name__ == "__main__":
+    sys.exit(0 if not fails else 1)
