@@ -11,7 +11,7 @@ uv run --frozen pytest
 
 Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库；`tests/acceptance/` 用临时根和 `pi` stub，离线可跑。
 
-需要 Chrome、真实模型或真实会话的验收在 `tests/manual/`，不进 CI，跑法与前置条件见 `tests/manual/README.md`。
+需要 Chrome、真实模型或真实会话的验收在 `tests/manual/`，不进 CI，跑法与前置条件见 `tests/manual/README.md`。ops 的健康接口是 `/api/status`（没有 `/api/health`），验收按等价执行。
 
 ## 目录约定
 
