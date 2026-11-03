@@ -106,7 +106,7 @@ uv run book-corpus --version
 
 ### 3. Python 环境
 
-核心流程只用标准库。`qsearch.py`、`book_query.py`、`build_library.py`、`build_para_index.py`、`lq.py` 不需要装第三方包。
+核心流程基本只用标准库；EPUB 拆章走 `ebook-to-md`，需要 `beautifulsoup4`，已列进 `pyproject.toml` 的核心依赖。`qsearch.py`、`book_query.py`、`build_library.py`、`build_para_index.py`、`lq.py` 不需要装第三方包。
 
 PDF 路线与重排实验共用一个虚拟环境 `工作区/.venv-pdf/`：
 
@@ -119,7 +119,7 @@ python3 -m venv 工作区/.venv-pdf
 
 PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当前解释器能否 `import pymupdf`，不能就直接退出。
 
-`requirements.txt` 还包含 `beautifulsoup4`，`ebook-to-md` 技能解析 EPUB 要用。两个可选包按需装：`pip install commonmark lxml`。`commonmark` 让 `md_link_health.py` 按渲染结果判断链接，`lxml` 让 EPUB 解析更快。`book-corpus catalog` 想额外出 xlsx 时装 `openpyxl`，没装只出 CSV。
+`requirements.txt` 也包含 `beautifulsoup4`，给 PDF 环境里的 `ebook-to-md` 用；主环境已由核心依赖安装。两个可选包按需装：`pip install commonmark lxml`。`commonmark` 让 `md_link_health.py` 按渲染结果判断链接，`lxml` 让 EPUB 解析更快。`book-corpus catalog` 想额外出 xlsx 时装 `openpyxl`，没装只出 CSV。
 
 ### 4. 模型与账号
 

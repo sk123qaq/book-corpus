@@ -9,7 +9,9 @@ description = "本地电子书库工具箱：入库、拆章、索引、检索�
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "beautifulsoup4>=4.12",
+]
 
 [project.optional-dependencies]
 pdf = [
@@ -18,7 +20,6 @@ pdf = [
   "requests>=2.31",
   "numpy>=1.26",
   "pillow>=10",
-  "beautifulsoup4>=4.12",
 ]
 rerank = ["torch>=2.2", "transformers>=4.40"]
 
