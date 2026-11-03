@@ -60,32 +60,22 @@ MIN_CHARS = 40
 POOL = 2000
 
 
-def read_table(path):
+def read_table(which="main"):
+    """概念表 → {key: {aliases, exclude}}。which='broad' 读宽词层。"""
     out = {}
-    if not os.path.exists(path):
-        return out
-    with open(path, encoding="utf-8-sig") as fh:
-        for row in csv.DictReader(fh, delimiter="\t"):
-            key = (row.get("key") or "").strip()
-            if not key:
-                continue
-            aliases = [a.strip() for a in (row.get("aliases") or "").split(",") if a.strip()]
-            exclude = [a.strip() for a in (row.get("exclude") or "").split(",")
-                       if a.strip() and a.strip() != "无"]
-            out[key] = {"aliases": aliases, "exclude": exclude}
+    for row in L.concept_rows("broad" if which == "broad" else "main"):
+        key = (row.get("key") or "").strip()
+        if not key:
+            continue
+        aliases = [a.strip() for a in L.split_aliases(row.get("aliases", ""))]
+        exclude = [a.strip() for a in L.split_exclude(row.get("exclude", ""))]
+        out[key] = {"aliases": aliases, "exclude": exclude}
     return out
 
 
-def load_actions(path=ACTIONS):
-    out = set()
-    if not os.path.exists(path):
-        return out
-    with open(path, encoding="utf-8-sig") as fh:
-        for row in csv.DictReader(fh, delimiter="\t"):
-            term = (row.get("term") or "").strip()
-            if term:
-                out.add(term)
-    return out
+def load_actions(path=None):
+    del path
+    return {w["term"] for w in L.action_word_rows() if (w.get("term") or "").strip()}
 
 
 def split_terms(terms, actions):
@@ -210,8 +200,8 @@ class Planner:
         self.meta = book_score.load_meta() if meta is None else meta
         self.expand = book_score.load_expand(con) if expand is None else expand
         self.actions = load_actions() if actions is None else set(actions)
-        self.concepts = read_table(CONCEPTS) if concepts is None else concepts
-        self.broad = read_table(BROAD) if broad is None else broad
+        self.concepts = read_table("main") if concepts is None else concepts
+        self.broad = read_table("broad") if broad is None else broad
         self.scheme = scheme
         self.pool = pool
         self.min_chars = min_chars

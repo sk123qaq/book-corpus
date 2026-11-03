@@ -201,7 +201,7 @@ def box4():
     else:
         ok("顶层只剩 books/ collections/ tables/ build/ 工作区/")
     books = L.iter_book_json()
-    ledger_n = len(L.read_csv(L.PATHS.ledger))
+    ledger_n = L.categories_count()
     if len(books) != ledger_n:
         fail("book.json 数 %d != 人账 %d 行" % (len(books), ledger_n))
     else:
@@ -291,11 +291,7 @@ def box6():
         ok("倒排只指向 books/ 下的路径")
     else:
         fail("倒排里有 %d 段不在 books/ 下" % bad)
-    ctab = L.PATHS.concepts
-    rows = []
-    if os.path.isfile(ctab):
-        with open(ctab, encoding="utf-8-sig") as fh:
-            rows = list(csv.DictReader(fh, delimiter="\t"))
+    rows = L.concept_rows()
     keys = [r["key"] for r in rows]
     if len(rows) >= 100 and len(set(keys)) == len(keys):
         ok("概念表 %d 条，键不重复" % len(rows))

@@ -41,10 +41,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `books/_收件箱/` | 新书先落这里，入库走 `book-corpus ingest`：`scan` 出计划，`apply` 落文件与账；换源用 `replace` |
 | `books/_冷宫/` | 移出处理流程的书，只留原书文件。无 `book.json`、不在人账、不进检索与扩展。规则与账见 `books/_冷宫/README.md` |
 | `collections/<Cuid>/source/` | 拆书前的合集原书；书的 `book.json` 用 `sources[].collection` 引用 |
-| `tables/分类表.csv` | 唯一人账，一行一本书。uid、一级、二级、作者层、保留、正式书名、备注。只有它允许人改 |
-| `tables/概念表.tsv` | 检索层的概念键与同义词组，127 条。人写人改 |
-| `tables/概念表-broad.tsv` | 宽词层实验表，10 个宽词。独立于 127 主表，未并入生产 |
-| `tables/概念表-动作词.tsv` | 查询动作词表 |
+| `tables/ledger.db` | **唯一人账**（SQLite）：`分类` 1,954 行（uid、一级、二级、作者层、保留、正式书名、备注、updated_at）、`概念` 127 条、`概念broad` 10 条（宽词层实验，未并入生产）、`动作词` 15 条、`ledger_meta`。人在操作台「账表」页或直接 SQL 改；活账 CSV 已归档 `archive/账切换-2026-11-03/` |
 | `tables/系列/` | 21 份合集的卷序说明 |
 | `tables/对照表.csv`、`搬迁计划.csv`、`标注样本.csv`、`书目录清单.csv`、`源文件清单.csv` | v1 目录结构与 L0–L2 的过程账，历史留档 |
 | `build/library.db` | 全库书目，SQLite。产物，可重建。查询用 `lq.py` 只读打开 |
@@ -131,11 +128,11 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 
 ## 写入规则
 
-- 改已有书的分类、书名、保留策略改 `tables/分类表.csv`，然后跑 `build_library.py --emit-json` 重建 DB 与 `book.json`。新书不要手填人账，走 `ingest.py` 的 `add` 或 `apply`。v2 的目录名是 uid，改书名不动目录。
+- 改已有书的分类、书名、保留策略改人账 `tables/ledger.db` 的 `分类` 表（操作台「账表」页，或 `lib_common.category_put`），然后跑 `build_library.py --emit-json` 重建 DB 与 `book.json`。新书不要手填人账，走 `ingest.py` 的 `add` 或 `apply`。v2 的目录名是 uid，改书名不动目录。2026-11-03 起活账可用 CSV 已停：`分类表.csv/概念表.tsv` 等只在 `archive/账切换-2026-11-03/` 留档，脚本读 CSV 的路全下线。
 - 写文件用 tmp 加 `os.replace`。库里的旧文件与 `../books.snapshot-2026-10-18` 共享 inode，截断式原地写会同时改掉快照。
-- 一个账本一个写者。人账的已有行只由人改；新行由 `ingest.py` 与 `classify_books.py --add-new` 追加，两者写同一个文件，同一时刻只跑一个。脚本写产物（`library.db`、`book.json`、`tables/` 下的导出），批次机账只追加。
+- 一个账本一个写者。人账的已有行只由人改；新行由 `ingest.py` 与 `classify_books.py --add-new` 追加，写 `tables/ledger.db`（写者走 `.writer.lock` 互斥）。脚本写产物（`library.db`、`book.json`、`tables/` 下的导出），批次机账只追加。
 - 拆章产物落 `books/<uid>/md/` 才算落地，`v_pending_md` 视图只认这个目录。
-- 把一本书移出流程：删 `md/`，`book.json` 改名 `book.json.归档`，书目录移入 `books/_冷宫/`，从 `tables/分类表.csv` 删行，跑 `build_library.py --emit-json`，再重建 `index.db` 与 `build/views/`。步骤与理由见 `books/_冷宫/README.md`。
+- 把一本书移出流程：删 `md/`，`book.json` 改名 `book.json.归档`，书目录移入 `books/_冷宫/`，从人账 `tables/ledger.db` 删行，跑 `build_library.py --emit-json`，再重建 `index.db` 与 `build/views/`。步骤与理由见 `books/_冷宫/README.md`。
 
 ## Git
 
@@ -165,7 +162,7 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
-| 人账 `tables/分类表.csv` | `book-corpus library --emit-json` | 输出里 `conflicts=0`，`books` 等于人账行数 |
+| 人账 `tables/ledger.db` | `book-corpus library --emit-json` | 输出里 `conflicts=0`，`books` 等于人账行数 |
 | 任何代码 | `uv run --frozen pytest`（在工具仓） | 全部通过 |
 | 结构、脚本、html | `book-corpus verify` | 末行「全过」 |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |

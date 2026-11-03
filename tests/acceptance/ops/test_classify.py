@@ -224,6 +224,18 @@ def make_books_root(tmp, name):
     return root, cat
 
 
+def db_ledger(cat):
+    import sqlite3
+    path = os.path.join(cat, "ledger.db")
+    if not os.path.isfile(path):
+        return None
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    rows = [dict(r) for r in con.execute("SELECT * FROM 分类 ORDER BY uid")]
+    con.close()
+    return rows
+
+
 def test_merge_identical(tmp):
     root, cat = make_books_root(tmp, "merge")
     ledger = os.path.join(cat, "分类表.csv")
@@ -242,6 +254,7 @@ def test_merge_identical(tmp):
     assert rows["B9002"]["一级模型"] == "文学", rows["B9002"]
     assert rows["B9003"]["一级模型"] == "", "model 后端读了 typesafe 条目：%s" % rows["B9003"]
     assert rows["B9003"]["一级TypeSafe"] == "", rows["B9003"]
+    assert len(db_ledger(cat)) == 2, "merge 不加行（B9002/B9003 不入人账）"
     print("merge identical ok（人账字节不变，预填四列写入，typesafe 条目不读）")
 
 
@@ -251,15 +264,12 @@ def test_add_new_one_row(tmp):
     before = open(ledger, "rb").read()
     run("classify_books.py", ["--merge", "--add-new", "--backend", "model", "--root", root])
     after = open(ledger, "rb").read()
-    assert after.startswith(before), "已有行不在地账前部"
-    new = after[len(before):]
-    assert new.count(b"\n") == 1, new
-    added = L.read_csv(ledger)[-1]
-    assert added["uid"] == "B9002", added
+    assert after == before, "人账 CSV 是切换档，merge 不该再写"
+    added = next(r for r in db_ledger(cat) if r["uid"] == "B9002")
     assert added["一级"] == "文学" and added["二级"] == "严肃文学小说", added
     assert added["备注"] == "auto:classify；待复核", added
     assert added["保留"] == "keep" and added["作者层"] == "0", added
-    assert len(L.read_csv(ledger)) == 3, "只该多一行：%d" % len(L.read_csv(ledger))
+    assert len(db_ledger(cat)) == 3, "只该多一行：%d" % len(db_ledger(cat))
     print("add-new one row ok（只追加 B9002，其余字节不变）")
 
 

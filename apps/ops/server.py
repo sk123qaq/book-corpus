@@ -1613,6 +1613,125 @@ class App:
             row["retired"] = self._retired(row["uid"])
         return rows
 
+    # ---- 账表（tables/ledger.db 的人账与检索词表，读改写都走 lib_common） ----
+    @staticmethod
+    def _ledger_mod():
+        scripts = _package_scripts()
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import lib_common as LC
+        return LC
+
+    def ledger_tables(self):
+        LC = self._ledger_mod()
+        root = self.env.root
+        p = LC.ledger_path(root)
+        out = {"ok": True, "ledger_db": p if os.path.isfile(p) else None,
+               "ledger": LC.categories(root=root),
+               "concepts": LC.concept_rows("main", root=root),
+               "broad": LC.concept_rows("broad", root=root),
+               "actions": LC.action_word_rows(root=root)}
+        out["ledger"].sort(key=lambda r: r.get("uid") or "")
+        return out
+
+    def ledger_row_put(self, payload):
+        LC = self._ledger_mod()
+        row = payload.get("row")
+        if not isinstance(row, dict) or not str(row.get("uid") or "").strip():
+            raise ValueError("row.uid 为空")
+        uid = str(row["uid"]).strip()
+        if not re.match(r"^B\d{4}$", uid):
+            raise ValueError("uid 形如 B1234")
+        known = {r["uid"] for r in LC.categories(root=self.env.root, create=False)}
+        if uid not in known:
+            raise ValueError("人账里没有 %s，新书走「新书导入」，不在这里加" % uid)
+        clean = {
+            "uid": uid, "一级": str(row.get("一级") or "").strip(),
+            "二级": str(row.get("二级") or "").strip(),
+            "作者层": str(row.get("作者层") or "0").strip() or "0",
+            "保留": str(row.get("保留") or "keep").strip(),
+            "正式书名": str(row.get("正式书名") or "").strip(),
+            "备注": str(row.get("备注") or "").strip()}
+        if clean["保留"] not in ("keep", "review", "drop"):
+            raise ValueError("保留只收 keep、review、drop")
+        if not clean["一级"]:
+            raise ValueError("一级不能为空")
+        stamp = ""
+        with ledger_lock(self.env):
+            stamp = LC.category_put(clean, updated_by="ops", root=self.env.root)
+        return {"ok": True, "uid": uid, "updated_at": stamp}
+
+    def ledger_rows_delete(self, payload):
+        LC = self._ledger_mod()
+        uids = [str(u).strip() for u in (payload.get("uids") or []) if str(u).strip()]
+        if not uids:
+            raise ValueError("uids 为空")
+        bad = [u for u in uids if not re.match(r"^B\d{4}$", u)]
+        if bad:
+            raise ValueError("这些不是 uid：%s" % "、".join(bad))
+        with ledger_lock(self.env):
+            n = LC.categories_delete(uids, root=self.env.root)
+        return {"ok": True, "deleted": n}
+
+    def ledger_concept_put(self, payload):
+        LC = self._ledger_mod()
+        which = payload.get("which") or "main"
+        if which not in ("main", "broad", "action"):
+            raise ValueError("which 只收 main/broad/action")
+        row = payload.get("row")
+        if not isinstance(row, dict):
+            raise ValueError("row 为空")
+        col = "term" if which == "action" else "key"
+        key = str(row.get(col) or "").strip()
+        if not key:
+            raise ValueError("%s 为空" % col)
+        note = str(row.get("note") or "").strip()
+        aliases = str(row.get("aliases") or "").strip()
+        exclude = str(row.get("exclude") or "").strip()
+        kind = str(row.get("kind") or "").strip()
+        with ledger_lock(self.env):
+            if which == "action":
+                con = LC.ledger_connect("rw", root=self.env.root)
+                try:
+                    con.execute("INSERT INTO 动作词(term,kind,note) VALUES(?,?,?)"
+                                " ON CONFLICT(term) DO UPDATE SET kind=excluded.kind,"
+                                " note=excluded.note",
+                                (key, kind, note))
+                    con.commit()
+                finally:
+                    con.close()
+            else:
+                con = LC.ledger_connect("rw", root=self.env.root)
+                table = "概念" if which == "main" else "概念broad"
+                try:
+                    con.execute("INSERT INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)"
+                                " ON CONFLICT(key) DO UPDATE SET aliases=excluded.aliases,"
+                                " exclude=excluded.exclude, note=excluded.note" % table,
+                                (key, aliases, exclude, note))
+                    con.commit()
+                finally:
+                    con.close()
+        return {"ok": True, "which": which, "key": key}
+
+    def ledger_concept_delete(self, payload):
+        LC = self._ledger_mod()
+        which = payload.get("which") or "main"
+        if which not in ("main", "broad", "action"):
+            raise ValueError("which 只收 main/broad/action")
+        col = "term" if which == "action" else "key"
+        key = str(payload.get("key") or "").strip()
+        if not key:
+            raise ValueError("%s 为空" % col)
+        with ledger_lock(self.env):
+            con = LC.ledger_connect("rw", root=self.env.root)
+            try:
+                table = {"main": "概念", "broad": "概念broad", "action": "动作词"}[which]
+                n = con.execute("DELETE FROM %s WHERE %s=?" % (table, col), (key,)).rowcount
+                con.commit()
+            finally:
+                con.close()
+        return {"ok": True, "deleted": n}
+
     def _retired(self, uid):
         batch_root = os.path.join(self.env.batches)
         if not os.path.isdir(batch_root):
@@ -1820,6 +1939,8 @@ class Handler(BaseHTTPRequestHandler):
                                      "counts": counts,
                                      "today": self.app.pdf_today(),
                                      "untriaged": untriaged_split(books)})
+            elif route == "/api/ledger":
+                self.send_json(200, self.app.ledger_tables())
             elif route == "/api/retire/search":
                 q = (query.get("q") or [""])[0].strip()
                 if not q:
@@ -1980,6 +2101,10 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/delete/apply": lambda: self.api_delete_apply(payload),
                 "/api/jobs/clean": lambda: self.api_clean(payload),
                 "/api/search/start": lambda: self.send_json(200, self.app.search_start()),
+                "/api/ledger/row": lambda: self.send_json(200, self.app.ledger_row_put(payload)),
+                "/api/ledger/rows/delete": lambda: self.send_json(200, self.app.ledger_rows_delete(payload)),
+                "/api/ledger/concept": lambda: self.send_json(200, self.app.ledger_concept_put(payload)),
+                "/api/ledger/concept/delete": lambda: self.send_json(200, self.app.ledger_concept_delete(payload)),
             }.get(route)
             if handler:
                 handler()
@@ -2620,7 +2745,8 @@ class Handler(BaseHTTPRequestHandler):
 
 WRITE_ROUTES = ("/api/import/apply", "/api/split/run", "/api/split/recheck",
                 "/api/pdf/settle", "/api/pdf/confirm", "/api/pdf/run", "/api/maintain",
-                "/api/delete/apply")
+                "/api/delete/apply", "/api/ledger/row", "/api/ledger/rows/delete",
+                "/api/ledger/concept", "/api/ledger/concept/delete")
 PDF_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 
 

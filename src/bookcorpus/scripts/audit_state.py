@@ -19,7 +19,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import L, ROOT, PATHS  # noqa: E402
 CORPUS = PATHS.books
 CAT = PATHS.tables
 CLASS_CSV = PATHS.ledger
@@ -164,8 +164,7 @@ def main():
         return 1
 
     say("== 人账 / 库 ==")
-    with open(CLASS_CSV, encoding="utf-8-sig") as fh:
-        rows = list(csv.DictReader(fh))
+    rows = L.categories(root=ROOT)
     csv_uids = [r["uid"] for r in rows]
     dup = {u for u in csv_uids if csv_uids.count(u) > 1}
     if dup:

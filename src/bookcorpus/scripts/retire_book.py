@@ -354,8 +354,8 @@ def build_preview(ctx, uid):
     if doc is None:
         raise LookupError("uid 不在 books/ 里: %s" % uid)
     rel_dir = ctx.rel(book_dir)
-    _header, ledger_rows = read_ledger(ctx.ledger)
-    led_row = next((r for r in ledger_rows if (r.get("uid") or "").strip() == uid), None)
+    led_row = next((r for r in L.categories(root=ctx.root)
+                    if (r.get("uid") or "").strip() == uid), None)
     cold_rel, cold_source_rel = cold_layout(ctx, doc)
     sources = build_sources(ctx, book_dir, doc, cold_source_rel)
     delete = delete_list(book_dir)
@@ -377,7 +377,7 @@ def build_preview(ctx, uid):
         warnings.append("有源文件不在磁盘上: " + ", ".join(
             s["path"] for s in sources if not s["exists"]))
     if led_row is None:
-        warnings.append("分类表.csv 里没有这行，删行会跳过")
+        warnings.append("人账里没有这行，删行会跳过")
     readme_ok, readme_note = readme_state(ctx)
     if not readme_ok:
         blockers.append(readme_note)
@@ -651,13 +651,11 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
             note("book-dir", "书目录已经不在")
 
         current = "ledger"
-        header, rows = read_ledger(ctx.ledger)
-        kept = [r for r in rows if (r.get("uid") or "").strip() != uid]
-        if len(kept) == len(rows):
+        n = L.categories_delete([uid], root=ctx.root)
+        if not n:
             note("ledger", "人账本来就没有这行")
         else:
-            L.write_csv(ctx.ledger, kept, header)
-            note("ledger", "删 %d 行，剩 %d 行" % (len(rows) - len(kept), len(kept)))
+            note("ledger", "删 %d 行，剩 %d 行" % (n, L.categories_count(root=ctx.root)))
 
         current = "records"
         tsv = append_retired_tsv(ctx, retired_row(preview, reason, preview["snapshot"]))

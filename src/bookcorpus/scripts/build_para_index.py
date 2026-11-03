@@ -11,7 +11,7 @@ import argparse, os, sqlite3, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import PATHS, ROOT  # noqa: E402
+from lib_common import L, PATHS, ROOT  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 from defpass import paragraphs
@@ -53,12 +53,9 @@ def chapters(limit_books=0):
 
 
 def read_concepts():
-    import csv
     out = []
-    with open(CONCEPTS, encoding="utf-8-sig") as f:
-        for r in csv.DictReader(f, delimiter="\t"):
-            aliases = [a for a in r["aliases"].split(",") if a]
-            out.append((r["key"], [r["key"]] + aliases))
+    for r in L.concept_rows():
+        out.append((r["key"], [r["key"]] + L.split_aliases(r["aliases"])))
     return out
 
 

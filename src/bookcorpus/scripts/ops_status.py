@@ -21,7 +21,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import L, ROOT  # noqa: E402
 AUDIT = os.path.join(HERE, "audit_state.py")
 AUDIT_TIMEOUT = 1800
 OCR_QUOTA = "20000/天"
@@ -111,15 +111,15 @@ def inbox(p, state):
 
 def ledger(p, state):
     rows = 0
-    if os.path.isfile(p.class_csv):
-        try:
-            with open(p.class_csv, encoding="utf-8-sig") as fh:
-                rows = sum(1 for _ in csv.DictReader(fh))
-        except (OSError, csv.Error) as exc:
-            state["problems"].append("分类表.csv 读不了: %s" % exc)
-    else:
-        state["problems"].append("没有 tables/分类表.csv")
-    state["ledger"] = {"rows": rows, "mtime": mtime_of(p.class_csv)}
+    db = L.ledger_path(p.root)
+    try:
+        rows = L.categories_count(root=p.root)
+    except SystemExit as exc:
+        state["problems"].append(str(exc))
+    state["ledger"] = {
+        "rows": rows, "mtime": mtime_of(db) if os.path.isfile(db) else mtime_of(p.class_csv),
+        "db": db if os.path.isfile(db) else None,
+        "legacy_csv": p.class_csv if os.path.isfile(p.class_csv) else None}
 
 
 def catalog_unmatched(p):
@@ -393,7 +393,8 @@ def collect(p, deep=False):
     state = {"at": now_iso(), "root": p.root, "books": 0, "md_done": 0, "md_chapters": 0,
              "md_indexable": 0,
              "pending": {k: 0 for k in PENDING_KEYS + ("total",)},
-             "inbox": {"files": 0, "items": []}, "ledger": {"rows": 0, "mtime": None},
+             "inbox": {"files": 0, "items": []}, "ledger": {"rows": 0, "mtime": None,
+                                                            "db": None, "legacy_csv": None},
              "catalog": {"mtime": None, "unmatched": None},
              "index": {"built_at": None, "paras": 0, "chapters": 0, "books": 0,
                        "lag_books": 0, "lag_chapters": 0, "lag_exact": False},
@@ -433,7 +434,7 @@ def render(state):
             pending, state["pending"]["total"]),
         "收件箱 %d 个文件" % state["inbox"]["files"],
         "人账 %d 行 (%s) | 书目表 (%s) 未匹配 %s" % (
-            state["ledger"]["rows"], state["ledger"]["mtime"] or "无",
+            state["ledger"]["rows"], (state["ledger"].get("db") or "ledger.db"),
             state["catalog"]["mtime"] or "无",
             "未知" if state["catalog"]["unmatched"] is None else state["catalog"]["unmatched"]),
         "索引 %d 本 / %d 章 / %d 段 (%s) 落后 %d 本 / %d 章%s" % (

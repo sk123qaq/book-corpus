@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 
 from conftest import run_cli
 
@@ -22,7 +23,9 @@ def test_ingest_add_lands_in_uid_directory(workspace):
     assert "path" not in doc
     assert (workspace / "books" / "B0004" / "source" / "新书.epub").is_file()
     assert not (workspace / "库").exists()
-    assert "B0004" in (workspace / "tables" / "分类表.csv").read_text(encoding="utf-8")
+    con = sqlite3.connect(str(workspace / "tables" / "ledger.db"))
+    assert "B0004" in {r[0] for r in con.execute("SELECT uid FROM 分类")}
+    con.close()
 
 
 def test_status_reads_v2_paths(workspace):

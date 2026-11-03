@@ -33,7 +33,7 @@ def test_doctor_accepts_fresh_workspace(tmp_path):
     run_cli("init", root)
     r = run_cli("doctor", "--root", root)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "分类表.csv 0 行" in r.stdout
+    assert "tables/ledger.db 0 行" in r.stdout
     assert "无 build/library.db" in r.stdout
 
 
@@ -47,7 +47,7 @@ def test_root_found_by_walking_up(workspace):
     nested = os.path.join(workspace, "books")
     r = run_cli("doctor", cwd=nested)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "分类表.csv 3 行" in r.stdout
+    assert "tables/ledger.db 3 行" in r.stdout
 
 
 def test_list_marks_aliases():

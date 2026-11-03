@@ -369,12 +369,14 @@ def main():
         print("[%s] 一级置信度分布: %s" % (args.backend, dict(sorted(by_conf.items()))))
         if args.merge:
             L.write_csv(os.path.join(cat, "分类预填.csv"), rows, L.LEDGER_HEADER + PREFILL_EXTRA)
-            ledger_old = L.read_csv(os.path.join(cat, "分类表.csv"))
+            if not L._ensure_ledger(root=args.root, create=True):
+                raise SystemExit("tables/ledger.db 建不起来，merge 停")
+            ledger_old = L.categories(root=args.root)
             ledger, ignored, added = merge_ledger(rows, ledger_old, args.add_new)
             if added:
-                L.write_csv(os.path.join(cat, "分类表.csv"),
-                            [{k: r.get(k, "") for k in L.LEDGER_HEADER} for r in ledger],
-                            L.LEDGER_HEADER)
+                L.category_put_many(
+                    [r for r in ledger if r.get("uid") in set(added)], "classify",
+                    root=args.root)
             print("已写 分类预填.csv；人账 %d 行%s"
                   % (len(ledger_old) + len(added),
                      "，新增 %d 本" % len(added) if added else "，一个字段没动（加 --add-new 才追加）"))

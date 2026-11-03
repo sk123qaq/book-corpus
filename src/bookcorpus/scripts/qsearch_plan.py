@@ -32,7 +32,7 @@ from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import L, PATHS, ROOT  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk  # noqa: E402
 import qsearch  # noqa: E402
@@ -49,12 +49,9 @@ def load_plan(path):
 
 
 def load_broad(key):
-    with open(BROAD, encoding="utf-8-sig") as fh:
-        for r in csv.DictReader(fh, delimiter="\t"):
-            if r["key"] == key:
-                aliases = [a for a in r["aliases"].split(",") if a]
-                exclude = [x for x in r["exclude"].split(",") if x and x != "无"]
-                return [key] + aliases, exclude
+    for r in L.concept_rows("broad"):
+        if r["key"] == key:
+            return [key] + L.split_aliases(r["aliases"]), L.split_exclude(r.get("exclude", ""))
     raise KeyError(key)
 
 

@@ -6,6 +6,9 @@ import json
 import os
 import re
 import shutil
+import sqlite3
+import sys
+import time
 import unicodedata
 
 try:
@@ -320,6 +323,14 @@ def read_csv(path):
         return list(csv.DictReader(fh))
 
 
+def read_tsv(path):
+    """词表 TSV：utf-8-sig 去掉表头 BOM，tab 分列。"""
+    if not os.path.isfile(path):
+        return []
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        return list(csv.DictReader(fh, delimiter="\t"))
+
+
 def write_csv(path, rows, header):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
@@ -332,6 +343,262 @@ def write_csv(path, rows, header):
 
 
 LEDGER_HEADER = ["uid", "一级", "二级", "作者层", "保留", "正式书名", "备注"]
+
+LEDGER_DB = "ledger.db"
+
+LEDGER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS 分类(
+  uid TEXT PRIMARY KEY,
+  一级 TEXT NOT NULL,
+  二级 TEXT NOT NULL DEFAULT '',
+  作者层 TEXT NOT NULL DEFAULT '0',
+  保留 TEXT NOT NULL DEFAULT 'keep' CHECK(保留 IN ('keep','review','drop')),
+  正式书名 TEXT NOT NULL DEFAULT '',
+  备注 TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS 概念(
+  key TEXT PRIMARY KEY, aliases TEXT NOT NULL DEFAULT '',
+  exclude TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS 概念broad(
+  key TEXT PRIMARY KEY, aliases TEXT NOT NULL DEFAULT '',
+  exclude TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS 动作词(
+  term TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS ledger_meta(
+  key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');
+"""
+
+
+def ledger_path(root=None):
+    """tables/ledger.db 的路径；root 给了就指向那个根下的 tables。"""
+    tables = os.path.join(os.path.abspath(os.path.expanduser(root)), "tables") \
+        if root else TABLES
+    return os.path.join(tables, LEDGER_DB)
+
+
+def ledger_connect(mode="rw", root=None):
+    """mode='ro' 只读打开（库不存在会抛错，先 _ensure_ledger）；'rw' 可写，30s 忙等。"""
+    path = ledger_path(root)
+    if mode == "ro":
+        con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+    else:
+        con = sqlite3.connect(path, timeout=30)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _ensure_ledger(root=None, create=False):
+    """DB 缺失时自举建一次：有活账 CSV 就当种子导入，否则建空库。
+
+    root 给了就自举那个根（--root 场景、doctor、测试工作区），不给用 import 时的全局根。
+    默认 create=False：只读场景不落盘，缺库时让调用方退回读 CSV。
+    建不了（只读盘等）返回 False，读会退回 CSV。
+    """
+    if os.path.isfile(ledger_path(root)):
+        return True
+    if not create:
+        return False
+    tables = os.path.dirname(ledger_path(root))
+    if not os.path.isdir(tables):
+        try:
+            os.makedirs(tables, exist_ok=True)
+        except OSError as exc:
+            sys.stderr.write("ledger.db 建库失败：%r\n" % (exc,))
+            return False
+    cat_csv = os.path.join(tables, "分类表.csv")
+    concepts_csv = os.path.join(tables, "概念表.tsv")
+    broad_csv = os.path.join(tables, "概念表-broad.tsv")
+    action_csv = os.path.join(tables, "概念表-动作词.tsv")
+    if not (os.path.isfile(cat_csv) or os.path.isfile(concepts_csv)):
+        # 没有种子可导：建空库（init 后的全新工作区走这里）
+        try:
+            con = sqlite3.connect(ledger_path(root), timeout=30)
+            try:
+                con.executescript(LEDGER_SCHEMA)
+                con.commit()
+            finally:
+                con.close()
+            return True
+        except (OSError, sqlite3.Error) as exc:
+            sys.stderr.write("ledger.db 建库失败：%r\n" % (exc,))
+            return False
+    try:
+        con = sqlite3.connect(ledger_path(root), timeout=30)
+        try:
+            con.executescript(LEDGER_SCHEMA)
+            now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            for row in read_csv(cat_csv):
+                con.execute("INSERT OR IGNORE INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                            " VALUES(?,?,?,?,?,?,?,?)",
+                            (row.get("uid", ""), row.get("一级", ""), row.get("二级", ""),
+                             row.get("作者层", ""), row.get("保留", "keep"),
+                             row.get("正式书名", ""), row.get("备注", ""), now))
+            for table, path in (("概念", concepts_csv), ("概念broad", broad_csv)):
+                for row in read_tsv(path):
+                    con.execute("INSERT OR IGNORE INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)" % table,
+                                (row.get("key", ""), row.get("aliases", ""),
+                                 row.get("exclude", ""), row.get("note", "")))
+            for row in read_tsv(action_csv):
+                con.execute("INSERT OR IGNORE INTO 动作词(term,kind,note) VALUES(?,?,?)",
+                            (row.get("term", ""), row.get("kind", ""), row.get("note", "")))
+            con.execute("INSERT OR REPLACE INTO ledger_meta VALUES('imported_from', ?)", (now,))
+            con.commit()
+        finally:
+            con.close()
+        return True
+    except (OSError, sqlite3.Error) as exc:
+        sys.stderr.write("ledger.db 自举失败：%r\n" % (exc,))
+        return False
+
+
+def split_aliases(text):
+    """aliases 列 → 非空列表。"""
+    return [a for a in (text or "").split(",") if a]
+
+
+def split_exclude(text):
+    """exclude 列 → 排除词列表。空与「无」都不算。"""
+    return [x for x in (text or "").split(",") if x and x != "无"]
+
+
+def categories(root=None, create=False):
+    """人账全表，uid 序。缺库且不建时退回读旧分类表.csv（只读兜底）。"""
+    if _ensure_ledger(root, create):
+        con = ledger_connect("ro", root)
+        try:
+            return [dict(r) for r in con.execute("SELECT * FROM 分类 ORDER BY uid")]
+        finally:
+            con.close()
+    return read_csv(legacy_csv(root))
+
+
+def legacy_csv(root=None):
+    """切换前的活账 CSV 路径（现在只是 ledger.db 的种子与文件档）。"""
+    return os.path.join(os.path.dirname(ledger_path(root)), "分类表.csv")
+
+
+def categories_count(root=None, create=False):
+    if _ensure_ledger(root, create):
+        con = ledger_connect("ro", root)
+        try:
+            return con.execute("SELECT count(*) FROM 分类").fetchone()[0]
+        finally:
+            con.close()
+    return len(read_csv(legacy_csv(root)))
+
+
+def _resolve_writable_root(root):
+    """写人账前认根：给定的（或 cwd 抓默认的）目录必须有工作区标志。
+
+    防呆：测试与脚本忘了传 --root 时，默认 cwd 若不是工作区就拒写，
+    账库永远不会在工具仓或用户家目录里凭空长出来。
+    """
+    root = os.path.abspath(os.path.expanduser(root)) if root else os.path.abspath(os.getcwd())
+    if any(os.path.exists(os.path.join(root, marker))
+           for marker in ("books.toml", "books", "tables")):
+        return root
+    raise SystemExit("这不是书库工作区（缺 books.toml/books/tables），拒绝写人账：%s" % root)
+
+
+def category_put(row, updated_by="", root=None):
+    """插入或整行更新一条人账。写时戳：操作时间；updated_by 只进日志不进库。"""
+    root = _resolve_writable_root(root)
+    _ensure_ledger(root, create=True) or raise_systemexit_ledger()
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    con = ledger_connect("rw", root)
+    try:
+        con.execute("INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                    " VALUES(?,?,?,?,?,?,?,?)"
+                    " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
+                    " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
+                    " 备注=excluded.备注, updated_at=excluded.updated_at",
+                    (row["uid"], row.get("一级", ""), row.get("二级", ""),
+                     row.get("作者层", "0"), row.get("保留", "keep") or "keep",
+                     row.get("正式书名", ""), row.get("备注", ""), now))
+        con.commit()
+    finally:
+        con.close()
+    return now
+
+
+def category_put_many(rows, updated_by="", root=None):
+    """整批 upsert，一个事务。返回写时戳。"""
+    root = _resolve_writable_root(root)
+    _ensure_ledger(root, create=True) or raise_systemexit_ledger()
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    con = ledger_connect("rw", root)
+    try:
+        for row in rows:
+            con.execute("INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                        " VALUES(?,?,?,?,?,?,?,?)"
+                        " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
+                        " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
+                        " 备注=excluded.备注, updated_at=excluded.updated_at",
+                        (row["uid"], row.get("一级", ""), row.get("二级", ""),
+                         row.get("作者层", "0"), row.get("保留", "keep") or "keep",
+                         row.get("正式书名", ""), row.get("备注", ""), now))
+        con.commit()
+    finally:
+        con.close()
+    return now
+
+
+def categories_delete(uids, root=None):
+    """整批删行，一个事务。返回删掉的行数。"""
+    root = _resolve_writable_root(root)
+    _ensure_ledger(root, create=True) or raise_systemexit_ledger()
+    uids = [(u or "").strip() for u in uids if (u or "").strip()]
+    if not uids:
+        return 0
+    con = ledger_connect("rw", root)
+    try:
+        n = 0
+        for uid in uids:
+            n += con.execute("DELETE FROM 分类 WHERE uid=?", (uid,)).rowcount
+        con.commit()
+    finally:
+        con.close()
+    return n
+
+
+def raise_systemexit_ledger():
+    raise SystemExit("tables/ledger.db 建不起来，先查 tables/ 可写性")
+
+
+def concept_rows(which="main", root=None, create=False):
+    """词表行。which='main'|'broad'。退 CSV 的兜底同 categories()。"""
+    if _ensure_ledger(root, create):
+        con = ledger_connect("ro", root)
+        try:
+            return [dict(r) for r in con.execute(
+                "SELECT key,aliases,exclude,note FROM %s ORDER BY key"
+                % ("概念" if which == "main" else "概念broad"))]
+        finally:
+            con.close()
+    tables = os.path.dirname(ledger_path(root))
+    src = os.path.join(tables, "概念表.tsv" if which == "main" else "概念表-broad.tsv")
+    return read_tsv(src)
+
+
+def concept_fingerprint(which="main", root=None, create=False):
+    """词表内容指纹（进缓存键）。按行文规整后哈希，同一内容换引擎不换键。"""
+    parts = []
+    for row in concept_rows(which, root, create):
+        parts.append("%s|%s|%s|%s" % (row.get("key", ""), row.get("aliases", ""),
+                                      row.get("exclude", ""), row.get("note", "")))
+    blob = "\n".join(parts).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()[:8]
+
+
+def action_word_rows(root=None, create=False):
+    if _ensure_ledger(root, create):
+        con = ledger_connect("ro", root)
+        try:
+            return [dict(r) for r in con.execute(
+                "SELECT term,kind,note FROM 动作词 ORDER BY term")]
+        finally:
+            con.close()
+    return read_tsv(os.path.join(os.path.dirname(ledger_path(root)), "概念表-动作词.tsv"))
 
 
 def path_safe(s):
@@ -407,3 +674,8 @@ def read_md_manifest(md_dir):
         except (OSError, json.JSONDecodeError):
             return {}
     return {}
+
+
+# 本模块即「L」。有的脚本写 from lib_common import L，有的写 import lib_common as L，
+# 两种都得到这一个模块对象。
+L = sys.modules[__name__]

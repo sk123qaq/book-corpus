@@ -88,7 +88,7 @@ def split_root(argv):
 def cmd_init(target, force):
     path = workspace.init(target, __version__, force)
     print("工作区建好：%s" % path)
-    print("概念表带通用概念（见 tables/概念表.tsv），按自己的语料增删；--concept 只认表里的键。")
+    print("概念表带通用概念（tables/ledger.db 的 概念 表，改表用操作台或直接改库），按自己的语料增删；--concept 只认表里的键。")
     print("下一步：把书放进 %s/books/_收件箱，然后 cd 进去跑 book-corpus ingest scan" % path)
     return 0
 

@@ -81,25 +81,19 @@ def check(root, version="0.1.0"):
     else:
         add("ok", "清单", "%s schema=%d tool=%s" % (MANIFEST, SCHEMA, man.get("tool", "?")))
 
-    if not os.path.exists(paths.ledger):
-        add("fail", "人账", "缺 tables/分类表.csv")
-    else:
-        with open(paths.ledger, encoding="utf-8-sig") as f:
-            head = f.readline().lstrip("\ufeff").strip()
-        cols = head.split(",")
-        if cols[:len(L.LEDGER_COLS)] != L.LEDGER_COLS:
-            add("fail", "人账", "表头是 %s" % head)
-        else:
-            with open(paths.ledger, encoding="utf-8-sig") as f:
-                n = sum(1 for _ in f) - 1
-            add("ok", "人账", "分类表.csv %d 行" % n)
+    try:
+        from .scripts import lib_common as LC
+        n = LC.categories_count(root=str(root))
+        add("ok" if n else "warn", "人账", "tables/ledger.db %d 行" % n)
+    except SystemExit as exc:
+        add("fail", "人账", str(exc))
 
-    if not os.path.exists(paths.concepts):
-        add("fail", "概念表", "缺 tables/概念表.tsv")
-    else:
-        with open(paths.concepts, encoding="utf-8-sig") as f:
-            n = sum(1 for _ in f) - 1
-        add("ok" if n else "warn", "概念表", "概念表.tsv %d 条" % n)
+    try:
+        from .scripts import lib_common as LC
+        n = len(LC.concept_rows(root=str(root)))
+        add("ok" if n else "warn", "概念表", "ledger.db 概念 %d 条" % n)
+    except (OSError, sqlite3.Error) as exc:
+        add("fail", "概念表", "%s" % exc)
 
     books = 0
     for dirpath, dirnames, filenames in os.walk(paths.books):

@@ -14,7 +14,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lib_common as L  # noqa: E402
 ROOT = L.ROOT
-CONCEPTS = os.path.join(ROOT, "tables", "概念表.tsv")
 DEFPASS = os.path.join(HERE, "defpass.py")
 RG = L.RG
 QEXPAND = os.path.join(HERE, "query_expand.py")
@@ -25,12 +24,11 @@ CAP = 99
 
 def concept_table():
     table = {}
-    with open(CONCEPTS, encoding="utf-8-sig") as f:
-        for r in csv.DictReader(f, delimiter="\t"):
-            table[r["key"]] = (
-                [a for a in r["aliases"].split(",") if a],
-                [x for x in r["exclude"].split(",") if x and x != "无"],
-            )
+    for r in L.concept_rows():
+        table[r["key"]] = (
+            L.split_aliases(r["aliases"]),
+            L.split_exclude(r.get("exclude", "")),
+        )
     return table
 
 

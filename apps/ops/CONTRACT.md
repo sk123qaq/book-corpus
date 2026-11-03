@@ -93,6 +93,11 @@ POST /api/delete/apply             {uid, reason, plan_hash, confirm_uid}
 GET  /api/search/health
 POST /api/search/start
 GET  /api/file?path=...
+GET  /api/ledger                        # tables/ledger.db 全量：ledger/concepts/broad/actions + ledger_db 路径
+POST /api/ledger/row                    # {row} upsert 人账一行；新 uid 拒收；写锁 .writer.lock
+POST /api/ledger/rows/delete            # {uids} 删人账行（不动机书目录）
+POST /api/ledger/concept                # {which: main|broad|action, row} upsert 词表条目
+POST /api/ledger/concept/delete         # {which, key} 删词表条目
 GET  /api/pdf/books
 ```
 

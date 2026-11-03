@@ -116,8 +116,6 @@ def finalize(con, t0, emit_json):
 def build(emit_json=False):
     books = L.iter_book_json()
     if not books:
-        if not os.path.exists(L.PATHS.ledger):
-            raise SystemExit("缺少 tables/分类表.csv，建不起来。先跑 book-corpus doctor 看根对不对。")
         return build_from_library([], emit_json)
     return build_from_library(books, emit_json)
 
@@ -134,9 +132,9 @@ def award_roster():
 
 
 def build_from_library(books, emit_json=False):
-    ledger = {r["uid"]: r for r in L.read_csv(L.PATHS.ledger)}
+    ledger = {r["uid"]: r for r in L.categories()}
     if not ledger and books:
-        raise SystemExit("缺少 tables/分类表.csv，建不起来")
+        raise SystemExit("人账 ledger.db 是空的且 books/ 有书，查清楚再建")
     t0 = time.time()
     con = fresh_db()
     awards_books = defaultdict(set)

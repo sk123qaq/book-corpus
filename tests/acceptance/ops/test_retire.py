@@ -157,9 +157,24 @@ def make_fixture(base, with_snapshot=True):
 
 
 def ledger_rows(root):
+    """人账行（ledger.db 的分类表）；库还没建时按旧 CSV 读（拒绝路径不写盘）。"""
+    import csv as _csv
+    import sqlite3
+    dbp = os.path.join(root, "tables", "ledger.db")
+    if not os.path.isfile(dbp):
+        with open(os.path.join(root, "tables", "分类表.csv"), encoding="utf-8-sig",
+                  newline="") as fh:
+            return list(_csv.DictReader(fh))
+    con = sqlite3.connect(dbp)
+    rows = [{"uid": r[0]} for r in con.execute("SELECT uid FROM 分类 ORDER BY uid")]
+    con.close()
+    return rows
+
+
+def legacy_csv_uids(root):
     import csv
     with open(os.path.join(root, "tables", "分类表.csv"), encoding="utf-8-sig", newline="") as fh:
-        return list(csv.DictReader(fh))
+        return [r["uid"] for r in csv.DictReader(fh)]
 
 
 def cold_json(root):
@@ -221,7 +236,6 @@ def test_preview_and_apply():
         check(rc == 2 and "不一致" in (out4 + err4), "哈希不一致拒绝")
         check(os.path.isfile(os.path.join(books["B0001"][0], "book.json")), "拒绝后书目录没动")
         check(len(ledger_rows(root)) == 3, "拒绝后人账没动")
-
         os.rename(snapshot, snapshot + ".off")
         rc, out5, err5 = run(["--uid", "B0001", "--reason", "测试移出", "--apply",
                               "--plan-hash", hash_a, "--json", "--root", root])
@@ -245,6 +259,8 @@ def test_preview_and_apply():
               "冷宫书目录只有 source/")
         rows = ledger_rows(root)
         check([r["uid"] for r in rows] == ["B0002", "B0003"], "人账删掉 B0001 且其余行保持顺序")
+        check(legacy_csv_uids(root) == ["B0001", "B0002", "B0003"],
+              "切换档 CSV 不随删行变（活账在 ledger.db）")
         tsv = os.path.join(root, "工作区", "批次", "移出-" + TODAY, "retired.tsv")
         check(os.path.isfile(tsv), "retired.tsv 落在 移出-<日期>/ 下")
         with open(tsv, encoding="utf-8", newline="") as fh:

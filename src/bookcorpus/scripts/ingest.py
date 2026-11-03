@@ -154,8 +154,7 @@ def scan(root):
     lib, cat = os.path.join(root, "books"), os.path.join(root, "tables")
     inbox = os.path.join(lib, "_收件箱")
     books, shas = library_index(root)
-    rows = L.read_csv(os.path.join(cat, "分类表.csv")) if os.path.exists(
-        os.path.join(cat, "分类表.csv")) else []
+    rows = L.categories(root)
     uid = next_uid(rows)
     out = []
     n = 0
@@ -179,8 +178,7 @@ def scan(root):
 
 
 def next_uid_cmd(root):
-    rows = L.read_csv(os.path.join(root, "tables", "分类表.csv"))
-    print(next_uid(rows))
+    print(next_uid(L.categories(root)))
 
 
 CLASSIFY_CACHE = os.path.join(ROOT, "工作区", "批次", "ingest", "classify.json")
@@ -330,15 +328,14 @@ def apply_one(root, it, shas):
         L.write_json_atomic(os.path.join(dest, "book.json"),
                             book_json(it["uid"], it["title"], it.get("author", ""), subj,
                                       sources, "ingest:%s" % time.strftime("%Y-%m-%d")))
-        rows = L.read_csv(os.path.join(cat, "分类表.csv"))
-        rows.append({"uid": it["uid"], "一级": subj[0], "二级": subj[1] if len(subj) > 1 else "",
-                     "作者层": "0", "保留": "keep", "正式书名": it["title"],
-                     "备注": "ingest:%s；待复核" % time.strftime("%Y-%m-%d")})
-        L.write_csv(os.path.join(cat, "分类表.csv"), rows, L.LEDGER_HEADER)
+        L.category_put({"uid": it["uid"], "一级": subj[0], "二级": subj[1] if len(subj) > 1 else "",
+                        "作者层": "0", "保留": "keep", "正式书名": it["title"],
+                        "备注": "ingest:%s；待复核" % time.strftime("%Y-%m-%d")}, "ingest",
+                       root=root)
         return dict(it, action="add", note="已入库 %s" % rel)
     if it["action"] == "replace":
         uid = it["uid"]
-        rows = [r for r in L.read_csv(os.path.join(cat, "分类表.csv")) if r["uid"] == uid]
+        rows = [r for r in L.categories(root=root) if r["uid"] == uid]
         if not rows:
             raise SystemExit("人账里没有 " + uid)
         rel, doc = find_by_uid(root, uid)
@@ -428,8 +425,7 @@ def main():
     # add 没写 uid 时按人账往下排：scan 已经排好，但手写 plan 与单本 add 容易漏，
     # 漏了会写出一行 uid 为空的 book.json 与分类表。
     if any(i["action"] == "add" and not (i.get("uid") or "").strip() for i in items):
-        led = os.path.join(a.root, "tables", "分类表.csv")
-        rows = L.read_csv(led) if os.path.exists(led) else []
+        rows = L.categories(a.root)
         base, n = int(next_uid(rows)[1:]), 0
         for i in items:
             if i["action"] == "add" and not (i.get("uid") or "").strip():

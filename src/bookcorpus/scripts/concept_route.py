@@ -13,7 +13,7 @@ import argparse, hashlib, json, os, re, sqlite3, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import L, PATHS, ROOT  # noqa: E402
 sys.path.insert(0, HERE)
 import build_expand
 import lib_fts_cjk as cjk
@@ -49,9 +49,7 @@ PROMPT = """下面是书库的概念表，一行一个键，冒号后是它的�
 
 
 def table_keys():
-    import csv
-    with open(CTAB, encoding="utf-8-sig") as fh:
-        return list(csv.DictReader(fh, delimiter="\t"))
+    return L.concept_rows()
 
 
 def live_keys(db=DB):
@@ -77,9 +75,8 @@ def drop_dead(rows, db=DB):
 
 
 def table_fingerprint():
-    """概念表.tsv 的内容哈希前 8 位。它进缓存键，概念表改了就不命中旧缓存。"""
-    with open(CTAB, "rb") as fh:
-        return hashlib.sha1(fh.read()).hexdigest()[:8]
+    """概念表的行内容哈希前 8 位。它进缓存键，概念表改了就不命中旧缓存。"""
+    return L.concept_fingerprint("main")
 
 
 def compact_table(rows):

@@ -109,7 +109,7 @@ def load_books(libdb=LIBDB):
 
 
 def load_concepts():
-    return book_query.read_table(book_query.CONCEPTS)
+    return book_query.read_table()
 
 
 def query_hints(query, books, concepts, terms=None):

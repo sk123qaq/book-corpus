@@ -2,7 +2,8 @@
 
 const TABS = [
   ['overview', '总览'], ['import', '新书导入'], ['split', '电子书'],
-  ['pdf', 'PDF'], ['maintain', '维护'], ['retire', '删书'], ['logs', '日志'],
+  ['pdf', 'PDF'], ['maintain', '维护'], ['ledger', '账表'], ['retire', '删书'],
+  ['logs', '日志'],
 ];
 // pdf-list 是 PDF 页的子页，不进左侧导航，但能用 #pdf-list 直接打开
 const EXTRA_TABS = ['pdf-list'];
@@ -68,6 +69,9 @@ const VERIFY_WORD = {
 const EBOOK = /^(epub|mobi|azw3|azw)$/;
 
 const S = {
+  ledger: null,
+  ledgerQ: '',
+  ledgerEdit: null,
   tab: 'overview',
   payload: null, status: {}, health: null,
   jobs: [], pending: [], inbox: [], pdf: null,
@@ -365,7 +369,7 @@ function render() {
   const map = {
     overview: viewOverview, import: viewImport, split: viewSplit, pdf: viewPdf,
     'pdf-list': viewPdfList,
-    maintain: viewMaintain, retire: viewRetire, logs: viewLogs,
+    maintain: viewMaintain, ledger: viewLedger, retire: viewRetire, logs: viewLogs,
   };
   view.innerHTML = (map[S.tab] || viewOverview)();
   afterRender();
@@ -1294,6 +1298,137 @@ function previewModal(p) {
 }
 
 // ---- 日志 ---------------------------------------------------------
+// ---- 账表 -----------------------------------------------------------
+async function loadLedger() {
+  try {
+    S.ledger = await api('/api/ledger');
+  } catch (err) {
+    S.ledger = null;
+    toast(err.message, true);
+  }
+}
+
+const LEDGER_ROW_FIELDS = [
+  ['uid', '编号', 'readonly'], ['一级', '一级', ''],
+  ['二级', '二级', ''], ['作者层', '作者层', 'narrow'],
+  ['保留', '保留', 'select'], ['正式书名', '正式书名', ''],
+  ['备注', '备注', ''],
+];
+const LEDGER_DEL = { main: '概念', broad: '宽词', action: '动作词' };
+const LEDGER_CONCEPT_FIELDS = {
+  main: [['key', '键', ''], ['aliases', '同义词（逗号分隔）', ''], ['exclude', '排除词（逗号分隔，「无」表示不排）', ''], ['note', '说明', '']],
+  broad: [['key', '键', ''], ['aliases', '同义词', ''], ['exclude', '排除词', ''], ['note', '说明', '']],
+  action: [['key', '词', ''], ['kind', ' 类型（动作/事件…）', ''], ['note', '说明', '']],
+};
+
+function ledgerRowFiltered() {
+  const rows = (S.ledger && S.ledger.ledger) || [];
+  const q = (S.ledgerQ || '').trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter((r) => [r.uid, r.正式书名, r.一级, r.二级, r.备注]
+    .some((v) => (v || '').toLowerCase().includes(q)));
+}
+
+function ledgerRowHtml(row) {
+  const editing = S.ledgerEdit && S.ledgerEdit.type === 'row' && S.ledgerEdit.uid === row.uid;
+  if (!editing) {
+    return `<tr>
+      <td class="num">${esc(row.uid)}</td>
+      <td>${esc(row.一级)}</td>
+      <td>${esc(row.二级)}</td>
+      <td class="num">${esc(row.作者层)}</td>
+      <td>${esc(RETENTION_WORD[row.保留] || row.保留)}</td>
+      <td class="wrap">${esc(row.正式书名)}</td>
+      <td class="wrap small">${esc(row.备注)}</td>
+      <td class="nowrap"><button class="btn sm" data-act="ledger-row-edit" data-uid="${esc(row.uid)}">改</button>
+        <button class="btn sm miss" data-write data-act="ledger-row-delete" data-uid="${esc(row.uid)}">移出</button></td>
+    </tr>`;
+  }
+  const f = (name, label) => {
+    const v = row[name] == null ? '' : String(row[name]);
+    if (name === '保留') {
+      return `<select id="led-f-保留">${
+        ['keep', 'review', 'drop'].map((k) => `<option value="${k}"${v === k ? ' selected' : ''}>${RETENTION_WORD[k]}</option>`).join('')}</select>`;
+    }
+    return `<input id="led-f-${esc(name)}" value="${esc(v)}"${name === 'uid' ? ' readonly' : ''}>`;
+  };
+  return `<tr class="editing">
+    <td>${f('uid')}</td><td>${f('一级')}</td><td>${f('二级')}</td>
+    <td>${f('作者层')}</td><td>${f('保留')}</td>
+    <td>${f('正式书名')}</td><td class="wrap">${f('备注')}</td>
+    <td class="nowrap"><button class="btn sm primary" data-write data-act="ledger-row-save" data-uid="${esc(row.uid)}">存</button>
+      <button class="btn sm" data-act="ledger-edit-clear">取消</button></td>
+  </tr>`;
+}
+
+function ledgerConceptHtml(which, row) {
+  const fields = LEDGER_CONCEPT_FIELDS[which];
+  const edit = S.ledgerEdit && S.ledgerEdit.type === 'concept'
+    && S.ledgerEdit.which === which && String(S.ledgerEdit.key) === String(row.key);
+  const main = which === 'main' ? `${esc(row.aliases || '')}` : '';
+  if (!edit) {
+    return `<tr>
+      ${(which === 'action')
+    ? `<td class="num">${esc(row.term)}</td><td>${esc(row.kind)}</td><td class="wrap small">${esc(row.note)}</td>`
+    : `<td class="num">${esc(row.key)}</td><td class="wrap">${esc(row.aliases)}</td><td class="wrap small">${esc(row.exclude)}</td><td class="wrap small">${esc(row.note)}</td>`}
+      <td class="nowrap"><button class="btn sm" data-act="ledger-concept-edit" data-which="${which}" data-key="${esc(which === 'action' ? row.term : row.key)}">改</button>
+        <button class="btn sm miss" data-write data-act="ledger-concept-delete" data-which="${which}" data-key="${esc(which === 'action' ? row.term : row.key)}">删</button></td>
+    </tr>`;
+  }
+  const val = which === 'action'
+    ? { key: row.term || '', kind: row.kind || '', note: row.note || '' }
+    : { key: row.key || '', aliases: row.aliases || '', exclude: row.exclude || '', note: row.note || '' };
+  const inputs = fields.map(([name, label]) =>
+    `<td><input id="led-c-${esc(name)}" value="${esc(val[name] || '')}"${(S.ledgerEdit && S.ledgerEdit.isNew) ? '' : (name === 'key' ? ' readonly' : '')} title="${esc(label)}"></td>`);
+  return `<tr class="editing">${inputs.join('')}
+    <td class="nowrap"><button class="btn sm primary" data-write data-act="ledger-concept-save" data-which="${which}">存</button>
+      <button class="btn sm" data-act="ledger-edit-clear">取消</button></td>
+  </tr>`;
+}
+
+function viewLedger() {
+  const L = S.ledger;
+  if (!L) {
+    return `<div class="list"><p>账表还没加载。</p></div>`;
+  }
+  const rows = ledgerRowFiltered();
+  const shown = rows.length !== L.ledger.length
+    ? `<p class="hint">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '';
+  const pick = (list, which) => `
+    <div class="card">
+      <div class="card-head"><h2>${LEDGER_DEL[which]}（${num(list.length)}）</h2>
+        <span class="row tight">
+          <button class="btn sm" data-act="ledger-concept-edit" data-which="${which}" data-key="">加一条</button>
+          <button class="btn sm" data-act="ledger-load">刷新</button></span></div>
+      <div class="tw"><table class="ledger-table">
+        <thead><tr>${which === 'action'
+    ? '<th>词</th><th>类型</th><th>说明</th>'
+    : '<th>键</th><th>同义词</th><th>排除词</th><th>说明</th>'}
+          <th style="width:120px"></th></tr></thead>
+        <tbody>${list.map((row) => ledgerConceptHtml(which, row)).join('')}</tbody>
+      </table></div>
+    </div>`;
+  return `
+    <div class="list">
+      <div class="section card">
+        <div class="card-head"><h2>分类表（${num(L.ledger.length)} 行 · ${esc(L.ledger_db || 'tables/ledger.db')}）</h2>
+          <span class="row tight">
+            <input id="ledger-q" value="${esc(S.ledgerQ || '')}" placeholder="编号 / 书名 / 分类 / 备注">
+            <button class="btn sm" data-act="ledger-load">刷新</button></span></div>
+        ${shown}
+        <div class="tw"><table class="ledger-table">
+          <thead><tr><th>编号</th><th>一级</th><th>二级</th><th>作者层</th><th>保留</th><th>正式书名</th><th>备注</th><th style="width:140px"></th></tr></thead>
+          <tbody>${rows.map(ledgerRowHtml).join('')}</tbody>
+        </table></div>
+        <p class="hint">编号行是入库给的，加书走「新书导入」；这里改的是已有行——顺序、保留与分类。改完人账，去「维护」跑一次收尾，书目库与总表才会跟上。</p>
+      </div>
+      ${pick(L.concepts || [], 'main')}
+      ${pick(L.broad || [], 'broad')}
+      ${pick(L.actions || [], 'action')}
+      <p class="hint">词表改键或加词只影响之后跑的检索与索引；要影响已建剖面，得在「维护」里重建索引（--concepts 步骤）。</p>
+    </div>`;
+}
+
 function viewLogs() {
   const rows = S.jobs.filter((j) => !S.filter || j.state === S.filter);
   const states = ['', 'queued', 'running', 'awaiting_review', 'succeeded', 'failed',
@@ -1497,6 +1632,8 @@ async function refreshTab() {
     await Promise.all([loadJobs(), loadPdf(), loadPdfBooks()]);
   } else if (S.tab === 'pdf-list') {
     await Promise.all([loadJobs(), loadPdfBooks()]);
+  } else if (S.tab === 'ledger') {
+    await loadLedger();
   } else if (S.tab === 'maintain' || S.tab === 'retire') {
     await Promise.all([loadStatus(), loadJobs()]);
   } else if (S.tab === 'logs') {
@@ -1592,6 +1729,100 @@ async function runMaintain(steps) {
 
 // ---- 动作 ---------------------------------------------------------
 const actions = {
+  // ---- 账表 ----
+  async 'ledger-load'() {
+    await loadLedger();
+    S.ledgerEdit = null;
+    render();
+  },
+
+  async 'ledger-row-edit'(el) {
+    S.ledgerEdit = { type: 'row', uid: el.dataset.uid };
+    render();
+  },
+
+  async 'ledger-row-save'(el) {
+    const uid = el.dataset.uid;
+    const val = (id) => (document.getElementById(id) || {}).value;
+    const row = {
+      uid: uid,
+      一级: val('led-f-一级'),
+      二级: val('led-f-二级'),
+      作者层: val('led-f-作者层'),
+      保留: val('led-f-保留'),
+      正式书名: val('led-f-正式书名'),
+      备注: val('led-f-备注'),
+    };
+    try {
+      await post('/api/ledger/row', { row });
+      S.ledgerEdit = null;
+      await loadLedger();
+      render();
+      toast('已存 ' + uid);
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'ledger-row-delete'(el) {
+    const uid = el.dataset.uid;
+    if (!window.confirm('把 ' + uid + ' 从人账里移出？这句只删账行，不动书目录；删书请走「删书」。')) return;
+    try {
+      const body = await post('/api/ledger/rows/delete', { uids: [uid] });
+      toast('删了 ' + (body.deleted || 0) + ' 行');
+      await loadLedger();
+      render();
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'ledger-concept-edit'(el) {
+    const which = el.dataset.which || 'main';
+    const key = el.dataset.key || '';
+    S.ledgerEdit = { type: 'concept', which: which, key: key, isNew: key === '' };
+    render();
+  },
+
+  async 'ledger-concept-save'(el) {
+    const which = el.dataset.which || 'main';
+    const val = (id) => (document.getElementById(id) || {}).value || '';
+    const isNew = S.ledgerEdit && S.ledgerEdit.isNew;
+    const key = isNew ? val('led-c-key') : String(S.ledgerEdit.key);
+    if (!key.trim()) { toast('键/词不能为空', true); return; }
+    const row = which === 'action'
+      ? { term: key, kind: val('led-c-kind'), note: val('led-c-note') }
+      : { key: key, aliases: val('led-c-aliases'), exclude: val('led-c-exclude'), note: val('led-c-note') };
+    try {
+      await post('/api/ledger/concept', { which: which, row: row });
+      S.ledgerEdit = null;
+      await loadLedger();
+      render();
+      toast('已存 ' + LEDGER_DEL[which] + ' ' + key);
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'ledger-concept-delete'(el) {
+    const which = el.dataset.which || 'main';
+    const key = el.dataset.key || '';
+    if (!window.confirm('删掉 ' + LEDGER_DEL[which] + ' 里的「' + key + '」？概念剖面里已落地的行要在维护里重建才会清掉。')) return;
+    try {
+      const body = await post('/api/ledger/concept/delete', { which: which, key: key });
+      toast('删了 ' + ((body.deleted || 0) ? '1' : '0') + ' 条');
+      await loadLedger();
+      render();
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'ledger-edit-clear'() {
+    S.ledgerEdit = null;
+    render();
+  },
+
   async 'status-refresh'() {
     await loadStatus(true);
     await loadJobs();
@@ -2139,7 +2370,18 @@ document.addEventListener('drop', (ev) => ev.preventDefault());
 
 document.addEventListener('input', (ev) => {
   const el = ev.target;
-  if (!el || el.id !== 'pick-q') return;
+  if (!el) return;
+  if (el.id === 'ledger-q') {
+    S.ledgerQ = el.value;
+    const tbody = document.querySelector('#view .ledger-table tbody');
+    const rows = ledgerRowFiltered();
+    if (tbody && tbody.closest('.card')) {
+      // 只刷分类表那一段正文，不整页重绘（不打断输入）
+      tbody.innerHTML = rows.map(ledgerRowHtml).join('');
+    }
+    return;
+  }
+  if (el.id !== 'pick-q') return;
   S.pickQ = el.value;
   paintPick();
 });

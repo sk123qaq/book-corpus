@@ -6,13 +6,13 @@
   qsearch.py 自由 --book -n 20
   qsearch.py 自由 --json
 
-概念模式把 目录/概念表.tsv 的同义词当 OR 组展开，排除词只在重排时扣分，不在召回时过滤。
+概念模式把 tables/ledger.db 概念表的同义词当 OR 组展开，排除词只在重排时扣分，不在召回时过滤。
 """
 import argparse, csv, json, math, os, re, sqlite3, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import PATHS  # noqa: E402
+from lib_common import L, PATHS  # noqa: E402
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 
@@ -21,11 +21,7 @@ CONCEPTS = PATHS.concepts
 
 
 def all_concepts():
-    out = {}
-    with open(CONCEPTS, encoding="utf-8-sig") as f:
-        for r in csv.DictReader(f, delimiter="\t"):
-            out[r["key"]] = [a for a in r["aliases"].split(",") if a]
-    return out
+    return {r["key"]: L.split_aliases(r["aliases"]) for r in L.concept_rows()}
 
 
 def resolve(text):
@@ -45,12 +41,9 @@ def resolve(text):
 
 
 def load_concept(key):
-    with open(CONCEPTS, encoding="utf-8-sig") as f:
-        for r in csv.DictReader(f, delimiter="\t"):
-            if r["key"] == key:
-                aliases = [a for a in r["aliases"].split(",") if a]
-                exclude = [x for x in r["exclude"].split(",") if x and x != "无"]
-                return [key] + aliases, exclude
+    for r in L.concept_rows():
+        if r["key"] == key:
+            return [key] + L.split_aliases(r["aliases"]), L.split_exclude(r.get("exclude", ""))
     sys.exit("概念表里没有 " + key)
 
 

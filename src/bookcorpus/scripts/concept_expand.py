@@ -10,17 +10,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lib_common as L  # noqa: E402
 
-TABLE = os.path.join(L.TABLES, "概念表.tsv")
 RG = L.RG
 
 
 def load():
     out = {}
-    with open(TABLE, encoding="utf-8-sig") as f:
-        for r in csv.DictReader(f, delimiter="\t"):
-            aliases = [a for a in r["aliases"].split(",") if a]
-            exclude = [x for x in r["exclude"].split(",") if x and x != "无"]
-            out[r["key"]] = {"aliases": aliases, "exclude": exclude}
+    for r in L.concept_rows():
+        out[r["key"]] = {"aliases": L.split_aliases(r["aliases"]),
+                         "exclude": L.split_exclude(r.get("exclude", ""))}
     return out
 
 

@@ -381,10 +381,12 @@ def real_checks():
     check("真库索引落后 = 可索引 md 本数 - 索引书数",
           state["index"]["lag_books"] == indexable - int(meta["books"]), state["index"])
     check("真库索引 built_at 有值", bool(state["index"]["built_at"]), state["index"])
-    check("真库人账行数与分类表行数一致",
-          state["ledger"]["rows"] == sum(
-              1 for _ in open(os.path.join(REAL_ROOT, "tables", "分类表.csv"), encoding="utf-8-sig"))
-          - 1, state["ledger"])
+    con = sqlite3.connect("file:%s?mode=ro" % os.path.join(REAL_ROOT, "tables", "ledger.db"),
+                          uri=True)
+    ledger_n = con.execute("SELECT count(*) FROM 分类").fetchone()[0]
+    con.close()
+    check("真库人账行数与 ledger.db 一致",
+          state["ledger"]["rows"] == ledger_n, state["ledger"])
     broken = total = 0
     for sub in ("奖项", "主题"):
         for dirpath, dirnames, filenames in os.walk(os.path.join(REAL_ROOT, "build", "views", sub)):
