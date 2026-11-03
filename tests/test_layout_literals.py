@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGETS = sorted((ROOT / "src" / "bookcorpus").rglob("*.py"))
 TARGETS.append(ROOT / "apps" / "ops" / "server.py")
 # migrate.py 的职责就是读 v1 树，必须认识旧名字。
-SKIP = {ROOT / "src" / "bookcorpus" / "migrate.py"}
+# check_p1.py 也要认旧 P1 gold 的 库/ 路径，但只读并映射到 books/，不写旧树。
+SKIP = {ROOT / "src" / "bookcorpus" / "migrate.py",
+        ROOT / "src" / "bookcorpus" / "scripts" / "check_p1.py"}
 OLD = {"目录", "库", "视图"}
 HOME_PTR = re.compile(r"(?<![\w.])/(?:home|Users)/[A-Za-z0-9._-]+/")
 
