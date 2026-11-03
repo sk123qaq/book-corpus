@@ -183,7 +183,7 @@ def _fallback(question, previous):
 
 
 def check(question, previous, use_cache=True, thinking="low"):
-    """previous: [{"n": 1, "question": "…", "answer": "…"}]，answer 传前 300 字即可。
+    """previous: [{"n": 1, "question": "…", "answer": "…"}]，answer 传上一轮回答全文（server 不再截断）。
 
     只比较最后 3 个 previous。第 1 问（没有 previous）直接判 unrelated，不调模型。
     """

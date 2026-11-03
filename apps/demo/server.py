@@ -7,6 +7,7 @@
 只读 build/检索/index.db、build/library.db 与 books/**.md；不写书、账、脚本。
 """
 import argparse
+import copy
 import json
 import os
 import sys
@@ -71,7 +72,7 @@ def _clean_anchor(value):
 
 
 def _previous(sess, n):
-    """第 n 问之前最近 3 轮，answer 只留前 300 字。"""
+    """第 n 问之前最近 3 轮，answer 传全文（related 需要读到回答尾部）。"""
     rows = []
     for turn in sess.get("turns") or []:
         if turn.get("n", 0) >= n:
@@ -83,8 +84,122 @@ def _previous(sess, n):
             result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
             body = result.get("text") or ""
         rows.append({"n": turn["n"], "question": turn.get("question") or "",
-                     "answer": str(body or "")[:300]})
+                     "answer": str(body or "")})
     return rows[-3:]
+
+
+def _book_title(turn, book):
+    """从上一轮 trace/answer 里找这本书的显示名，找不到退回 book。"""
+    trace = turn.get("trace") if isinstance(turn.get("trace"), dict) else {}
+    plan = trace.get("plan") if isinstance(trace.get("plan"), dict) else {}
+    for row in plan.get("ranking") or []:
+        if isinstance(row, dict) and row.get("book") == book:
+            title = str(row.get("title") or "").strip()
+            if title:
+                return title
+    result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
+    if not book or result.get("book") == book:
+        title = str(result.get("book_title") or "").strip()
+        if title:
+            return title
+    ans = turn.get("answer") if isinstance(turn.get("answer"), dict) else {}
+    for src in ans.get("sources") or []:
+        if isinstance(src, dict) and src.get("book") == book:
+            title = str(src.get("title") or "").strip()
+            if title:
+                return title
+    return str(book or "")
+
+
+def _prev_turn(sess, n):
+    """第 n 问之前最近的一轮；没有就返回 None。"""
+    turns = [t for t in sess.get("turns") or [] if t.get("n", 0) < n]
+    return max(turns, key=lambda t: t.get("n", 0)) if turns else None
+
+
+def _previous_source(sess, n):
+    """第 n 问之前最近一轮最可信的落点：citation → 选章 → result。
+    返回 {"book","book_title","title","path","line"} 或 None。"""
+    prev = _prev_turn(sess, n)
+    if prev is None:
+        return None
+    rows = session._chapter_candidates(prev)
+    if not rows:
+        return None
+    src = rows[0]
+    book = str(src.get("book") or "")
+    return {"book": book, "book_title": _book_title(prev, book),
+            "title": src.get("title") or "", "path": src.get("path"),
+            "line": src.get("line")}
+
+
+def _pin_rows(prev, book):
+    """上一轮 plan 里同书的 ranking / chapters 行（深拷贝）；没有就是 None。"""
+    trace = prev.get("trace") if isinstance(prev.get("trace"), dict) else {}
+    plan = trace.get("plan") if isinstance(trace.get("plan"), dict) else {}
+    out = []
+    for key in ("ranking", "chapters"):
+        row = None
+        for item in plan.get(key) or []:
+            if isinstance(item, dict) and item.get("book") == book:
+                row = copy.deepcopy(item)
+                break
+        out.append(row)
+    return out[0], out[1]
+
+
+def _pin_followup(data, sess, n, rel, anchor):
+    """related 且没点 anchor 时，把 trace.result 换回上一轮的书。
+    不满足条件、找不到落点、读章节失败时原样返回 data（同一对象）。"""
+    if not (isinstance(rel, dict) and rel.get("related")) or anchor:
+        return data
+    src = _previous_source(sess, n)
+    if not src:
+        return data
+    result = data.get("result") if isinstance(data.get("result"), dict) else {}
+    try:
+        same = (result.get("path") == src["path"]
+                and int(result.get("line") or 0) == src["line"])
+    except (TypeError, ValueError):
+        same = False
+    if same:
+        return data
+    try:
+        window = tracer.read_chapter(src["path"], src["line"], tracer.STAGE_CHARS)
+    except (ValueError, OSError):
+        return data
+    info = {"book": src["book"], "book_title": src["book_title"],
+            "chapter": src["title"] or result.get("title") or result.get("chapter") or "",
+            "card": 0}
+    data["result"] = dict(window, **info)
+    prev = _prev_turn(sess, n)
+    rank_seed, chapter_seed = _pin_rows(prev, src["book"]) if prev else (None, None)
+    plan = data.get("plan")
+    if isinstance(plan, dict):
+        for key, seed in (("ranking", rank_seed), ("chapters", chapter_seed)):
+            rows = plan.get(key)
+            rows = rows if isinstance(rows, list) else []
+            hit = [r for r in rows
+                   if isinstance(r, dict) and r.get("book") == src["book"]]
+            rest = [r for r in rows
+                    if not (isinstance(r, dict) and r.get("book") == src["book"])]
+            if not hit:
+                if seed is None:
+                    if key == "ranking":
+                        seed = {"book": src["book"],
+                                "title": src["book_title"] or src["book"]}
+                    else:
+                        seed = {"book": src["book"],
+                                "title": src["book_title"] or src["book"],
+                                "selected": [{"chapter_path": src["path"],
+                                              "chapter_title": src["title"],
+                                              "line": src["line"], "score": 0}]}
+                seed = dict(seed, pinned=True)
+                hit = [seed]
+            plan[key] = hit + rest
+    data["pin"] = {"book": src["book"], "path": src["path"], "line": src["line"],
+                   "from_turn": prev.get("n") if prev else None}
+    return data
 
 
 def _write_turn(sess, n, question, data, rel, anchor):
@@ -370,6 +485,7 @@ class Handler(BaseHTTPRequestHandler):
             rel = None
             if sess and n > 1:
                 rel = related.check(question, _previous(sess, n))
+                data = _pin_followup(data, sess, n, rel, anchor)
             if sess is None:
                 sess = session.create()
             _write_turn(sess, n, question, data, rel, anchor)
