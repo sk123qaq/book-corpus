@@ -783,6 +783,14 @@
     return meta.join(' · ');
   }
 
+  function reanswerHTML(turn) {
+    if (!turn.answer || turn.answer.ok === false) return '';
+    return '<div class="turn-actions">'
+      + '<button class="btn turn-reanswer" type="button" data-reanswer-turn="' + turn.n + '"'
+      + ' title="清掉当前回答，按同一组来源重新生成"'
+      + (state.busy ? ' disabled' : '') + '>重新回答</button></div>';
+  }
+
   function bodyHTML(turn) {
     if (turn.status === 'retrieving') {
       return '<p class="loading-card"><span class="dot-pulse"></span>正在检索，通常 20 到 60 秒 · '
@@ -850,7 +858,10 @@
     }
     const parts = [kickerHTML(turn), '<h1 class="question">' + esc(turn.question) + '</h1>',
       stagesHTML(turn), booksHTML(turn), scopeHTML(turn), bodyHTML(turn)];
-    if (turn.answer) parts.push(evidenceHTML(turn));
+    if (turn.answer) {
+      parts.push(reanswerHTML(turn));
+      parts.push(evidenceHTML(turn));
+    }
     mainEl.innerHTML = parts.join('');
     mainEl.scrollTop = top;
   }
@@ -1405,6 +1416,16 @@
     answerTurn(turn, { sources: turn.sources, fresh: false });
   }
 
+  function reanswerTurn(n) {
+    const turn = state.turns.find((t) => t.n === n);
+    if (!turn || !turn.answer || turn.answer.ok === false || state.busy) return;
+    const sources = scopeSources(turn);
+    state.viewN = n;
+    if (state.selected && state.selected.fromN === n) state.selected = null;
+    if (state.shown && state.shown.fromN === n) state.shown = null;
+    answerTurn(turn, sources.length ? { sources, fresh: true } : { fresh: true });
+  }
+
   function newSession() {
     state.epoch += 1;
     stopClock();
@@ -1515,6 +1536,11 @@
     const allBooks = e.target.closest('[data-books-all]');
     if (allBooks) {
       toggleAllBooks(Number(allBooks.dataset.booksAll));
+      return;
+    }
+    const reanswerTurnBtn = e.target.closest('[data-reanswer-turn]');
+    if (reanswerTurnBtn) {
+      reanswerTurn(Number(reanswerTurnBtn.dataset.reanswerTurn));
       return;
     }
     const reanswerBtn = e.target.closest('[data-reanswer]');

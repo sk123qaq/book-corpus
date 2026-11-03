@@ -62,6 +62,12 @@ SNAP = r"""
     question: q('.question') ? q('.question').textContent.trim() : '',
     answerParas: qa('.answer p').length,
     answerText: q('.answer') ? q('.answer').textContent.replace(/\s+/g, ' ').trim().slice(0, 40) : '',
+    answerBox: rect(q('.answer')),
+    evBox: rect(q('.evidences')),
+    reBtn: rect(q('.turn-reanswer')),
+    reBtnText: q('.turn-reanswer') ? q('.turn-reanswer').textContent.trim() : '',
+    reBtns: qa('.turn-reanswer').length,
+    turnActions: qa('.turn-actions').length,
     meta: q('.answer-meta') ? q('.answer-meta').textContent.replace(/\s+/g, ' ').trim() : '',
     cites: qa('.ev').length,
     evOn: qa('.ev.is-on').length,
@@ -159,6 +165,41 @@ FAKE = r"""
     }
     if (u.includes('/api/answer')) {
       window.__calls.push({kind: 'answer', body: JSON.parse(opts.body)});
+      return new Response(JSON.stringify(answer), {status: 200,
+        headers: {'content-type': 'application/json'}});
+    }
+    return window.__realFetch(url, opts);
+  };
+  return true;
+})()
+"""
+
+
+REANSWER = r"""
+(() => {
+  window.__calls = [];
+  window.__realFetch = window.fetch;
+  window.__release = null;
+  window.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('/api/answer')) {
+      const body = JSON.parse(opts.body);
+      window.__calls.push({kind: 'answer', body});
+      await new Promise((resolve) => { window.__release = resolve; });
+      const sources = body.sources || [];
+      const citations = sources.map((s, i) => ({
+        path: s.path, line: s.line || 1, quote: '重答引文' + (i + 1),
+        chapter: '重答章', verified: true, book: s.book, book_title: s.title,
+      }));
+      const answer = {
+        ok: true, answer: '重新回答的正文', lead: '重新回答的正文', sections: [],
+        dissent: '', gap: '', citations, confidence: 'high', not_found: false,
+        error: '', ms: 10, thinking: 'high', cached: false,
+        session_id: body.session_id, turn: body.turn,
+        related: {related: true, reason: '模拟重答', against: [body.turn - 1], ms: 1},
+        history: {used: true, prev: body.turn - 1, chars: 100, budget: 5000,
+                  chapters: 1, paragraphs: 1},
+      };
       return new Response(JSON.stringify(answer), {status: 200,
         headers: {'content-type': 'application/json'}});
     }
@@ -337,6 +378,60 @@ def main(argv=None):
               "paras=%d cites=%d" % (s0["answerParas"], s0["cites"]))
         check("1440 无横向溢出", not s0["overflow"],
               "scrollWidth=%s innerWidth=%s" % (s0["scrollWidth"], s0["innerWidth"]))
+        check("每轮有重新回答按钮", s0["reBtns"] == 1 and s0["turnActions"] == 1
+              and s0["reBtnText"] == "重新回答",
+              "btns=%d actions=%d text=%s" % (s0["reBtns"], s0["turnActions"],
+                                              s0["reBtnText"]))
+        rb, ab, eb = s0["reBtn"], s0["answerBox"], s0["evBox"]
+        check("重新回答在答案与依据之间靠右",
+              bool(rb and ab and eb) and rb["top"] >= ab["bottom"]
+              and rb["bottom"] <= eb["top"] and abs(rb["right"] - eb["right"]) <= 1,
+              "answer=%s btn=%s ev=%s" % (ab, rb, eb))
+        eval_js(cdp, "document.querySelector('.turn-reanswer').scrollIntoView({block:'center'}); true")
+        time.sleep(0.25)
+        shot = cdp.call("Page.captureScreenshot", {"format": "png"})
+        re_shot = os.path.join(a.out_dir, "会话-重新回答-1440x900.png")
+        with open(re_shot, "wb") as fh:
+            fh.write(base64.b64decode(shot["data"]))
+        check("重新回答 1440 截图", os.path.getsize(re_shot) > 20000,
+              "%s %d B" % (re_shot, os.path.getsize(re_shot)))
+        eval_js(cdp, "document.querySelector('#main').scrollTop = 0; true")
+
+        old_answer = s0["answerText"]
+        eval_js(cdp, REANSWER)
+        eval_js(cdp, "document.querySelector('.turn-reanswer').click(); true")
+        cleared = wait_js(cdp, "!document.querySelector('.answer')"
+                                " && !document.querySelector('.turn-actions')", 8)
+        held = eval_js(cdp, "typeof window.__release === 'function'")
+        s_pending = eval_js(cdp, SNAP)
+        check("重答先清旧答案与依据", cleared and held and s_pending["answerParas"] == 0
+              and s_pending["cites"] == 0 and s_pending["reBtns"] == 0
+              and s_pending["answerText"] == "",
+              "cleared=%s held=%s paras=%d cites=%d btns=%d" % (
+                  cleared, held, s_pending["answerParas"], s_pending["cites"],
+                  s_pending["reBtns"]))
+        eval_js(cdp, "window.__release(); true")
+        redone = wait_js(cdp, "!!document.querySelector('.answer')"
+                              " && document.querySelector('.answer').textContent.includes('重新回答的正文')"
+                              " && !!document.querySelector('.turn-reanswer')", 10)
+        s_re = eval_js(cdp, SNAP)
+        calls = json.loads(eval_js(cdp, "JSON.stringify(window.__calls)"))
+        ans = next((c["body"] for c in calls if c["kind"] == "answer"), {})
+        ans_srcs = ans.get("sources") or []
+        check("重答只发一次回答请求", redone and len(calls) == 1
+              and calls[0]["kind"] == "answer",
+              "redone=%s calls=%s" % (redone, [c["kind"] for c in calls]))
+        check("重答带 fresh 且沿用原来源", ans.get("fresh") is True
+              and ans.get("session_id") == SESSION and ans.get("turn") == 3
+              and len(ans_srcs) >= 1 and ans.get("path") == ans_srcs[0].get("path"),
+              json.dumps(ans, ensure_ascii=False)[:220])
+        check("重答后新答案与按钮回来", s_re["answerText"].startswith("重新回答的正文")
+              and s_re["reBtnText"] == "重新回答" and s_re["cites"] >= 1,
+              "answer=%s btn=%s cites=%d" % (s_re["answerText"], s_re["reBtnText"],
+                                             s_re["cites"]))
+        check("重答替换而不是追加", old_answer != s_re["answerText"]
+              and s_re["rounds"] == 3, "old=%s new=%s rounds=%d" % (
+                  old_answer, s_re["answerText"], s_re["rounds"]))
         check("历史页签有列表", s0["historyRows"] > 0 and s0["historyCount"] != "",
               "rows=%d count=%s" % (s0["historyRows"], s0["historyCount"]))
         check("回答标题与正文同字号", s0["h2Size"] != "" and s0["h2Size"] == s0["pSize"],
@@ -350,6 +445,8 @@ def main(argv=None):
         check("第 2 轮有落点框", ok2 and s1["anchors"] == 1 and s1["scopes"] == 0
               and "承接 01" in s1["kicker"],
               "anchors=%d scopes=%d kicker=%s" % (s1["anchors"], s1["scopes"], s1["kicker"]))
+        check("历史轮也有重新回答", s1["reBtns"] == 1 and s1["reBtnText"] == "重新回答",
+              "btns=%d text=%s" % (s1["reBtns"], s1["reBtnText"]))
         anchor_title = anchor2.get("title") or ""
         anchor_book = (anchor2.get("path") or "").split("/")[1] if anchor2.get("path") else ""
         check("右栏默认落在本轮落点", s1["drawerCite"] == "[1]"

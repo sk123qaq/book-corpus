@@ -944,6 +944,17 @@ a { color: inherit; text-decoration: none; }
 .empty { padding: 40px 0 8px; }
 
 /* 本轮依据 */
+.turn-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 0;
+}
+
+.turn-actions .btn {
+  font-size: 11.5px;
+  padding: 4px 11px;
+}
+
 .evidences { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .ev-head {
   display: flex;
