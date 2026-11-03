@@ -182,6 +182,26 @@ REANSWER = r"""
   window.__release = null;
   window.fetch = async (url, opts) => {
     const u = String(url);
+    if (u.includes('/api/run')) {
+      const body = JSON.parse(opts.body);
+      window.__calls.push({kind: 'run', body});
+      const trace = {
+        question: body.question || '',
+        extract: {terms: ['测试'], groups: []},
+        plan: {rounds: [], chapters: [], ranking: [], nouns: [], stop: 'cap'},
+        stage_ms: {understand: 1, rounds: 1, rank: 1, cards: 1, result: 1},
+        cards: {trigger: false, cards: [], reasons: []},
+        result: {book: 'B0606', book_title: '乡土中国（2）',
+                 chapter: '无讼', path: 'books/B0606/md/12_无讼.md',
+                 line: 26, text: '模拟原文'},
+        total_ms: 10, session_id: body.session_id || '', turn: body.turn,
+        related: {related: true, reason: '模拟重跑', against: [body.turn - 1],
+                  ms: 1, source: 'model', thinking: 'low'},
+        session: {id: body.session_id || '', turns: []},
+      };
+      return new Response(JSON.stringify(trace), {status: 200,
+        headers: {'content-type': 'application/json'}});
+    }
     if (u.includes('/api/answer')) {
       const body = JSON.parse(opts.body);
       window.__calls.push({kind: 'answer', body});
@@ -402,7 +422,7 @@ def main(argv=None):
         eval_js(cdp, "document.querySelector('.turn-reanswer').click(); true")
         cleared = wait_js(cdp, "!document.querySelector('.answer')"
                                 " && !document.querySelector('.turn-actions')", 8)
-        held = eval_js(cdp, "typeof window.__release === 'function'")
+        held = wait_js(cdp, "typeof window.__release === 'function'", 8)
         s_pending = eval_js(cdp, SNAP)
         check("重答先清旧答案与依据", cleared and held and s_pending["answerParas"] == 0
               and s_pending["cites"] == 0 and s_pending["reBtns"] == 0
@@ -416,12 +436,16 @@ def main(argv=None):
                               " && !!document.querySelector('.turn-reanswer')", 10)
         s_re = eval_js(cdp, SNAP)
         calls = json.loads(eval_js(cdp, "JSON.stringify(window.__calls)"))
+        run = next((c["body"] for c in calls if c["kind"] == "run"), {})
         ans = next((c["body"] for c in calls if c["kind"] == "answer"), {})
         ans_srcs = ans.get("sources") or []
-        check("重答只发一次回答请求", redone and len(calls) == 1
-              and calls[0]["kind"] == "answer",
+        check("重答先重跑检索再回答", redone and len(calls) == 2
+              and [c["kind"] for c in calls] == ["run", "answer"],
               "redone=%s calls=%s" % (redone, [c["kind"] for c in calls]))
-        check("重答带 fresh 且沿用原来源", ans.get("fresh") is True
+        check("重跑带 fresh 且定位同一轮", run.get("fresh") is True
+              and run.get("session_id") == SESSION and run.get("turn") == 3,
+              json.dumps(run, ensure_ascii=False)[:220])
+        check("重答带 fresh 且沿用新来源", ans.get("fresh") is True
               and ans.get("session_id") == SESSION and ans.get("turn") == 3
               and len(ans_srcs) >= 1 and ans.get("path") == ans_srcs[0].get("path"),
               json.dumps(ans, ensure_ascii=False)[:220])

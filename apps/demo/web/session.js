@@ -787,7 +787,7 @@
     if (!turn.answer || turn.answer.ok === false) return '';
     return '<div class="turn-actions">'
       + '<button class="btn turn-reanswer" type="button" data-reanswer-turn="' + turn.n + '"'
-      + ' title="清掉当前回答，按同一组来源重新生成"'
+      + ' title="清掉当前回答，重新检索并回答"'
       + (state.busy ? ' disabled' : '') + '>重新回答</button></div>';
   }
 
@@ -1195,7 +1195,8 @@
     return true;
   }
 
-  async function runTurn(turn) {
+  async function runTurn(turn, opts) {
+    const options = opts || {};
     const epoch = state.epoch;
     turn.status = 'retrieving';
     turn.runError = '';
@@ -1211,6 +1212,7 @@
       body.turn = turn.n;
     }
     if (turn.anchor) body.anchor = turn.anchor;
+    if (options.fresh) body.fresh = true;
     try {
       const data = await postJSON('/api/run', body);
       if (epoch !== state.epoch) return;
@@ -1225,7 +1227,7 @@
       render();
       loadSessions();
       if (!(await replayStages(turn))) return;
-      await answerTurn(turn);
+      await answerTurn(turn, options.fresh ? { fresh: true } : {});
     } catch (err) {
       if (epoch !== state.epoch) return;
       turn.status = 'run-error';
@@ -1419,11 +1421,19 @@
   function reanswerTurn(n) {
     const turn = state.turns.find((t) => t.n === n);
     if (!turn || !turn.answer || turn.answer.ok === false || state.busy) return;
-    const sources = scopeSources(turn);
+    const later = state.turns.filter((t) => t.n > n);
+    if (later.length && !window.confirm(
+      '重新回答第 ' + n + ' 问会清掉它之后的 ' + later.length + ' 个问题，继续？'
+    )) return;
     state.viewN = n;
-    if (state.selected && state.selected.fromN === n) state.selected = null;
-    if (state.shown && state.shown.fromN === n) state.shown = null;
-    answerTurn(turn, sources.length ? { sources, fresh: true } : { fresh: true });
+    state.epoch += 1;
+    state.turns = state.turns.filter((t) => t.n <= n);
+    if (state.selected && state.selected.fromN >= n) state.selected = null;
+    if (state.shown && state.shown.fromN >= n) state.shown = null;
+    turn.answer = null;
+    turn.context = null;
+    turn.answerSources = [];
+    runTurn(turn, { fresh: true });
   }
 
   function newSession() {
