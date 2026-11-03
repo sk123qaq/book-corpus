@@ -339,6 +339,8 @@ def classify_adds(items, cache_path, enabled=True):
         except (SystemExit, Exception) as exc:
             msg = (str(exc) or type(exc).__name__)[:90]
             print("分类失败：%s" % msg, file=sys.stderr)
+            print("  没配模型时会这样：book-corpus model 看当前配置，README「模型与账号」配一次；"
+                  "不配也能入库，学科之后用 book-corpus run classify_books 补。", file=sys.stderr)
             for it in todo:
                 it["subjects"] = ["其他"]
                 it["note"] = "分类失败：%s；暂放其他" % msg
