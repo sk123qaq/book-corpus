@@ -1254,14 +1254,27 @@ def run_checks(root, ops, port, fixture):
           code == 200 and isinstance(health.get("running"), bool)
           and "8765" in (health.get("url") or ""),
           "running=%s" % health.get("running"))
-    code, body = post(port, "/api/search/start")
     if health.get("running"):
+        code, body = post(port, "/api/search/start")
         check("已在跑时启动幂等", code == 200 and body.get("ok") is True
               and body.get("already") is True)
     else:
-        check("演示页不在时报错",
-              code == 200 and body.get("ok") is False
-              and "演示页" in (body.get("error") or ""), str(body.get("error")))
+        # v2 布局里演示页就在 apps/demo/。这条要验的是「演示页不在时报错」，
+        # 请求前把脚本临时挪开，请求后无论成败都放回。
+        demo = os.path.join(REPO, "apps", "demo", "server.py")
+        hidden = demo + ".check-hidden-%d" % os.getpid()
+        moved = False
+        try:
+            if os.path.exists(demo):
+                os.replace(demo, hidden)
+                moved = True
+            code, body = post(port, "/api/search/start")
+            check("演示页不在时报错",
+                  code == 200 and body.get("ok") is False
+                  and "演示页" in (body.get("error") or ""), str(body.get("error")))
+        finally:
+            if moved:
+                os.replace(hidden, demo)
 
     # ---- 状态脚本优先级 --------------------------------------------
     with open(os.path.join(root, "工作区", "脚本", "ops_status.py"), "w",
