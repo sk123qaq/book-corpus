@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
 DB = L.PATHS.library_db
+BUILD_DB = DB + ".building"   # 先建在这里，全部写完再 os.replace 换掉活的库
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -79,13 +80,26 @@ CREATE VIEW v_series AS
 """
 
 
+def _remove_db_files(path):
+    """删主文件与 WAL/SHM 边车。只给临时库用，活库永远不在这里删。"""
+    for suf in ("", "-wal", "-shm", "-journal"):
+        p = path + suf
+        if os.path.exists(p):
+            os.remove(p)
+
+
+def _remove_sidecars(path):
+    for suf in ("-wal", "-shm", "-journal"):
+        p = path + suf
+        if os.path.exists(p):
+            os.remove(p)
+
+
 def fresh_db():
-    if os.path.exists(DB):
-        for suf in ("", "-wal", "-shm"):
-            p = DB + suf
-            if os.path.exists(p):
-                os.remove(p)
-    con = sqlite3.connect(DB)
+    """建一张临时库。校验与写入都落在 .building 上，失败不碰活的 library.db。"""
+    _remove_db_files(BUILD_DB)
+    os.makedirs(os.path.dirname(BUILD_DB) or ".", exist_ok=True)
+    con = sqlite3.connect(BUILD_DB)
     con.executescript(SCHEMA)
     con.execute("PRAGMA foreign_keys=ON")
     return con
@@ -106,10 +120,23 @@ def finalize(con, t0, emit_json):
         "db_bytes": 0,
     }
     con.commit()
-    if emit_json:
-        stats["book_json"] = emit_book_json(con)
+    # 换名前把 WAL 收干净：-wal/-shm 是按 .building 的名字开的，换名后会变孤儿
+    try:
+        con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        con.execute("PRAGMA journal_mode=DELETE")
+    except sqlite3.Error:
+        pass
     con.close()
+    _remove_sidecars(BUILD_DB)
+    os.replace(BUILD_DB, DB)                  # 只有走到这里旧库才被替换
     stats["db_bytes"] = os.path.getsize(DB)   # close 之后才 checkpoint 完
+    if emit_json:
+        # book.json 是投影，按已落地的库写，别让失败路径写出比库新的投影
+        con = sqlite3.connect(DB)
+        try:
+            stats["book_json"] = emit_book_json(con)
+        finally:
+            con.close()
     return stats
 
 
@@ -135,8 +162,29 @@ def build_from_library(books, emit_json=False):
     ledger = {r["uid"]: r for r in L.categories()}
     if not ledger and books:
         raise SystemExit("人账 ledger.db 是空的且 books/ 有书，查清楚再建")
+    if not books:
+        # 空输入可能是真空库，也可能是 books/ 丢了或读不出来；后者用空库
+        # 替换活库等于把整座库抹掉，先挡住。
+        if not os.path.isdir(L.BOOKS):
+            raise SystemExit("books/ 不在，拒绝用空库替换 library.db")
+        if ledger:
+            raise SystemExit("人账还有 %d 行但 books/ 里没有书，拒绝清空 library.db"
+                             % len(ledger))
     t0 = time.time()
     con = fresh_db()
+    try:
+        return _build_rows(con, books, ledger, t0, emit_json)
+    except BaseException:
+        # 任何一步失败（含 SystemExit 校验）都清掉临时库，活的 library.db 原样保留
+        try:
+            con.close()
+        except sqlite3.Error:
+            pass
+        _remove_db_files(BUILD_DB)
+        raise
+
+
+def _build_rows(con, books, ledger, t0, emit_json):
     awards_books = defaultdict(set)
     seen_uids = set()
     for uid, doc in books:

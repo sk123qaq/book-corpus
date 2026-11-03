@@ -40,6 +40,14 @@ SKIP_COLS = ["uid", "title", "subject1", "subject2", "pages", "mb", "image_share
 REASON_MAX = 200
 
 
+def num_pages(value):
+    """pages 列可能是空串/小数/None，统计打印不能崩（CSV 已落盘，崩了就白写）。"""
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def load_verdicts(*dirs):
     """返回 (uid -> 复核记录, 坏 JSON 文件数)。"""
     out, bad = {}, 0
@@ -196,18 +204,19 @@ def main():
     print("== 最终路线")
     for k, v in Counter(r["route"] for r in rows).most_common():
         g = [r for r in rows if r["route"] == k]
-        print("  %-12s %4d 本 %7d 页" % (k, v, sum(int(r["pages"]) for r in g)))
+        print("  %-12s %4d 本 %7d 页" % (k, v, sum(num_pages(r["pages"]) for r in g)))
     ocr = [r for r in rows if r["route"] == "OCR"]
-    pages = sum(int(r["pages"]) for r in ocr)
+    pages = sum(num_pages(r["pages"]) for r in ocr)
     print("\nOCR 队列 %d 本 %d 页 = %.1f 天（%d 页/天）" % (len(ocr), pages, pages / a.per_day, a.per_day))
-    small = [r for r in ocr if int(r["pages"]) <= 300]
+    small = [r for r in ocr if num_pages(r["pages"]) <= 300]
     print("其中 ≤300 页的 %d 本 %d 页 = %.1f 天"
-          % (len(small), sum(int(r["pages"]) for r in small),
-             sum(int(r["pages"]) for r in small) / a.per_day))
+          % (len(small), sum(num_pages(r["pages"]) for r in small),
+             sum(num_pages(r["pages"]) for r in small) / a.per_day))
     print("\n不转 %d 本，按原因：" % len(skip))
     for k, v in Counter(s["why"] for s in skip).most_common():
         g = [s for s in skip if s["why"] == k]
-        print("  %-24s %3d 本 %6d 页" % (k.replace("图片占比", "图占比"), v, sum(int(s["pages"]) for s in g)))
+        print("  %-24s %3d 本 %6d 页" % (k.replace("图片占比", "图占比"), v,
+                                       sum(num_pages(s["pages"]) for s in g)))
     print("\nCSV: %s\n不转清单: %s" % (os.path.relpath(out, ROOT), os.path.relpath(sl, ROOT)))
     agree = sum(1 for r in rows if r["model_route"]
                 and r["model_route"] == r["route"])

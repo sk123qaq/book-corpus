@@ -272,8 +272,11 @@ def main(argv=None):
     gold_path, source, notes = resolve_gold(args.gold)
     if not gold_path:
         skip("P1 gold", "；".join(notes))
-        print("失败 0 项")
-        return 0
+        # 没有 gold 就是一项都没跑，不能打成「失败 0 项」：维护门槛按末行判过，会假绿
+        check(False, "P1 gold", "找不到 gold.tsv，P1 检索验收零检查，不算通过")
+        print("汇总 PASS %d / FAIL %d / SKIP %d" % (passes, len(fails), len(skips)))
+        print("失败 %d 项" % len(fails))
+        return 1
     print("P1 gold: %s（来源：%s）" % (gold_path, source))
     for note in notes:
         print("注  " + note)

@@ -106,6 +106,10 @@ SKIP_COLS = ["at", "uid", "page", "paddle_chars", "mineru_chars", "action", "not
 RATIO_RE = re.compile(r"([\d,]+)\s*/\s*([\d,]+)\s+([\d.]+)%\s+\d+\s+md\b")
 ANCHOR_RE = re.compile(r"锚点\s*:\s*([\d,]+)\s*/\s*([\d,]+)\s+窗命中\s+([\d.]+)%")
 GREEN = ("landed", "replaced", "accepted", "staged-green")
+# 驱动的真实状态词（result["status"]）。gate_pdf 与 pdf_queue 不要再自己拼词表。
+HARD_FAIL = ("api-fatal", "chunk-failed", "assemble-failed", "source-missing",
+             "source-changed", "chunk-mismatch", "incomplete-chunks", "no-chunks", "error")
+DEFER = ("deferred", "interrupted")
 
 
 class MergeError(Exception):
@@ -1337,6 +1341,9 @@ def report_json(ctx):
     return {"batch": ctx["batch_name"], "route": ctx["route"],
             "queued": len(rows),
             "landed": sum(1 for r in results if r.get("status") in GREEN),
+            # 派生键：状态词是 chunk-failed/deferred 这类，没有裸 failed/quota
+            "failed": sum(1 for r in results if r.get("status") in HARD_FAIL),
+            "quota": sum(1 for r in results if r.get("status") in DEFER),
             "pages": sum(int(r.get("pages") or 0) for r in rows),
             "remaining_books": len(left),
             "remaining_pages": sum(int(r.get("pages") or 0) for r in left),
@@ -1509,6 +1516,13 @@ def main():
     report(ctx)
     if a.report_json:
         print(json.dumps(report_json(ctx), ensure_ascii=False))
+    hard = [r for r in results if str(r.get("status")) in HARD_FAIL]
+    if hard:
+        # 有硬失败就不能让调用方（操作台 gate）按 rc=0 判成功
+        print("\n本次硬失败 %d 本：%s" % (
+            len(hard), " ".join("%s(%s)" % (r.get("uid"), r.get("status")) for r in hard)),
+            file=sys.stderr)
+        return 1
     return 0
 
 

@@ -387,32 +387,41 @@ def ledger_connect(mode="rw", root=None):
     return con
 
 
-def _ensure_ledger(root=None, create=False):
-    """DB 缺失时自举建一次：有活账 CSV 就当种子导入，否则建空库。
+def _ledger_ready(root=None):
+    """库文件在且核心表能查才算可用。空文件、半建库、坏文件都返回 False。
 
-    root 给了就自举那个根（--root 场景、doctor、测试工作区），不给用 import 时的全局根。
-    默认 create=False：只读场景不落盘，缺库时让调用方退回读 CSV。
-    建不了（只读盘等）返回 False，读会退回 CSV。
+    只看 os.path.isfile 会把 0 字节库当成好的，后续查询永远抛 no such table，
+    读账的人（操作台、脚本）就永久读不了。
     """
-    if os.path.isfile(ledger_path(root)):
-        return True
-    if not create:
+    path = ledger_path(root)
+    if not os.path.isfile(path):
         return False
-    tables = os.path.dirname(ledger_path(root))
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=5)
+    except sqlite3.Error:
+        return False
+    try:
+        con.execute("SELECT 1 FROM 分类 LIMIT 1").fetchone()
+        return True
+    except sqlite3.Error:
+        return False
+    finally:
+        con.close()
+
+
+def _ensure_schema(root=None):
+    """建/补 tables/ledger.db 的 schema。不是 SQLite 库的文件改名留档后重建。"""
+    path = ledger_path(root)
+    tables = os.path.dirname(path)
     if not os.path.isdir(tables):
         try:
             os.makedirs(tables, exist_ok=True)
         except OSError as exc:
             sys.stderr.write("ledger.db 建库失败：%r\n" % (exc,))
             return False
-    cat_csv = os.path.join(tables, "分类表.csv")
-    concepts_csv = os.path.join(tables, "概念表.tsv")
-    broad_csv = os.path.join(tables, "概念表-broad.tsv")
-    action_csv = os.path.join(tables, "概念表-动作词.tsv")
-    if not (os.path.isfile(cat_csv) or os.path.isfile(concepts_csv)):
-        # 没有种子可导：建空库（init 后的全新工作区走这里）
+    for attempt in (1, 2):
         try:
-            con = sqlite3.connect(ledger_path(root), timeout=30)
+            con = sqlite3.connect(path, timeout=30)
             try:
                 con.executescript(LEDGER_SCHEMA)
                 con.commit()
@@ -420,12 +429,49 @@ def _ensure_ledger(root=None, create=False):
                 con.close()
             return True
         except (OSError, sqlite3.Error) as exc:
-            sys.stderr.write("ledger.db 建库失败：%r\n" % (exc,))
-            return False
+            msg = str(exc).lower()
+            # 只有「文件不是 SQLite 库/已损坏」才改名重建。database is locked、
+            # 磁盘只读这类是暂时/环境错误，把活库 os.replace 走会丢数据。
+            corrupt = isinstance(exc, sqlite3.DatabaseError) and any(
+                s in msg for s in ("not a database", "malformed", "file is encrypted"))
+            if not corrupt or attempt == 2:
+                sys.stderr.write("ledger.db 建库失败：%r\n" % (exc,))
+                return False
+            backup = "%s.broken-%s" % (path, time.strftime("%Y%m%d%H%M%S%f"))
+            try:
+                os.replace(path, backup)
+            except OSError as exc2:
+                sys.stderr.write("ledger.db 不能用（%r），改名留档也失败：%r\n" % (exc, exc2))
+                return False
+            sys.stderr.write("ledger.db 不是可用的 SQLite 库（%r），已改名留档 %s 并重建\n"
+                             % (exc, backup))
+    return False
+
+
+def _ensure_ledger(root=None, create=False):
+    """DB 缺失或没 schema 时自举：有活账 CSV 就当种子导入，否则建空库。
+
+    root 给了就自举那个根（--root 场景、doctor、测试工作区），不给用 import 时的全局根。
+    默认 create=False：只读场景不落盘，缺库时让调用方退回读 CSV。
+    建不了（只读盘等）返回 False，读会退回 CSV。
+    """
+    if _ledger_ready(root):
+        return True
+    if not create:
+        return False
+    if not _ensure_schema(root):
+        return False
+    tables = os.path.dirname(ledger_path(root))
+    cat_csv = os.path.join(tables, "分类表.csv")
+    concepts_csv = os.path.join(tables, "概念表.tsv")
+    broad_csv = os.path.join(tables, "概念表-broad.tsv")
+    action_csv = os.path.join(tables, "概念表-动作词.tsv")
+    if not (os.path.isfile(cat_csv) or os.path.isfile(concepts_csv)):
+        # 没有种子可导：空 schema 就够了（init 后的全新工作区走这里）
+        return True
     try:
         con = sqlite3.connect(ledger_path(root), timeout=30)
         try:
-            con.executescript(LEDGER_SCHEMA)
             now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
             for row in read_csv(cat_csv):
                 con.execute("INSERT OR IGNORE INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"

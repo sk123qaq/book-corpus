@@ -24,7 +24,7 @@ const FINISH_DEFAULT = ['db', 'index', 'topics', 'awards', 'audit', 'verify', 'p
 const SETTLE_ROUTES = ['OCR', '本地抽文本', '不转-记图册', '日文暂缓'];
 const JOB_WORD = {
   queued: '排队', running: '在跑', awaiting_review: '待确认', succeeded: '完成',
-  failed: '失败', cancelled: '取消', orphaned: '失联',
+  failed: '失败', cancelled: '取消', cancelling: '停止中', orphaned: '失联',
 };
 const KIND_WORD = {
   'import.scan': '识别新书', 'import.apply': '入库', 'split.run': '拆章',
@@ -63,12 +63,15 @@ const PICK_SORT = [['pages', '页数多到少'], ['pages-asc', '页数少到多'
 const PICK_WORD = {
   convert: '可转', gallery: '存档·图册', ja: '存档·非中英文', untriaged: '未分诊',
 };
+// 进度词来自服务端 pdf_books_index：landed/running/failed/deferred/staged/todo
 const PICK_PROGRESS = {
   todo: ['未开始', 'out'], running: ['在跑', 'half'], landed: ['已落地', 'ok'],
-  failed: ['失败', 'miss'],
+  failed: ['失败', 'miss'], deferred: ['暂缓·待额度', 'half'],
+  staged: ['待确认', 'half'],
 };
 // 清单页的进度筛选只管这三档：已有正文的书不会出现在待转清单里
-const PICK_PROGRESS_FILTER = [['todo', '未开始'], ['running', '在跑'], ['failed', '失败']];
+const PICK_PROGRESS_FILTER = [['todo', '未开始'], ['running', '在跑'], ['failed', '失败'],
+  ['staged', '待确认'], ['deferred', '暂缓']];
 const SOURCE_WORD = { move: '移动', hardlink: '硬链接' };
 // 结构检查的报警键换成普通说法
 const VERIFY_WORD = {
@@ -89,16 +92,24 @@ const S = {
   review: null, reviewJob: null,
   retireHits: [], retireDrop: [], retireQuery: '', preview: null,
   logJob: null, logDetail: null, follow: true, importDone: null,
+  logOpenId: null, logScroll: 0, logStick: true, logRowsHtml: '',
+  logStepsFp: '', logCmdFp: '',
+  overviewHtml: '',
   filter: '', selected: new Set(), busy: false,
   replaceMd: false, splitWorkers: 4,
   pdfLimit: 0, pdfLimitFrom: -1, pdfWorkers: 3, triageSeen: null, pdfToday: null,
   pdfUntriaged: null,
   books: [], bookCounts: null, pick: new Set(), pickQ: '',
   pickTags: new Set(['convert', 'untriaged', 'gallery', 'ja']),
-  pickProgress: new Set(['todo', 'running', 'failed']), pickRecheck: false,
+  pickProgress: new Set(['todo', 'running', 'failed', 'staged', 'deferred']), pickRecheck: false,
   pickSubject: '', pickSort: 'pages', settle: null,
   maintainSteps: new Set(FINISH_DEFAULT),
 };
+
+// 轮询没有「超时失败」这回事：到上限只是降频继续看，别把在跑的任务当没跑
+const WATCH_TICK = 700;
+const WATCH_LOOPS = 900;
+const MAINTAIN_LOOPS = 1200;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -380,13 +391,21 @@ function render() {
     'pdf-list': viewPdfList,
     maintain: viewMaintain, ledger: viewLedger, retire: viewRetire, logs: viewLogs,
   };
-  view.innerHTML = (map[S.tab] || viewOverview)();
+  // 整页重画会丢掉日志框的滚动位置：画之前先记下，paintJobDetail 再落回去
+  const logPre = document.querySelector('#job-log');
+  if (logPre) {
+    S.logScroll = logPre.scrollTop;
+    S.logStick = logNearBottom(logPre);
+  }
+  const html = (map[S.tab] || viewOverview)();
+  S.overviewHtml = S.tab === 'overview' ? html : '';
+  view.innerHTML = html;
   afterRender();
 }
 
 function afterRender() {
   wireDrop();
-  if (S.tab === 'logs' && S.logJob && S.logJob.id) openLog(S.logJob.id);
+  if (S.tab === 'logs' && S.logJob && S.logJob.id) openLog(S.logJob.id, true);
 }
 
 function wireDrop() {
@@ -849,17 +868,24 @@ function queueStrip() {
   const recheck = S.books.filter((row) => row.recheck).length;
   const stuck = S.books.filter((row) => row.disposition === 'ja'
     && row.progress === 'failed').length;
+  // 暂缓（额度用尽）跟失败、未开跑是三回事，分开数
+  const paused = S.books.filter((row) => row.progress === 'deferred').length;
+  const staged = S.books.filter((row) => row.progress === 'staged').length;
   const note = {
     convert: '已确认处置，可以直接转',
     untriaged: '还没看过，先分诊',
     gallery: recheck ? '其中 ' + num(recheck) + ' 本标了复看' : '图册不转文字',
     ja: stuck ? num(stuck) + ' 本上次失败' : '日文原版暂缓处理',
   };
+  const extra = [];
+  if (paused) extra.push(num(paused) + ' 本暂缓·待额度');
+  if (staged) extra.push(num(staged) + ' 本待确认');
   return `<div class="strip">${STRIP_TAG.map((key) => `<a class="strip-cell" href="#pdf-list" data-act="pdf-jump" data-tag="${esc(key)}">
     <div class="strip-name">${esc(PICK_WORD[key])}</div>
     <div class="strip-read">${num(S.bookCounts[key] || 0)} 本 · ${num(pages[key] || 0)} 页</div>
     <div class="note">${esc(note[key])}</div>
-  </a>`).join('')}</div>`;
+  </a>`).join('')}</div>${extra.length
+    ? `<p class="hint">清单里另有 ${esc(extra.join('、'))}，不算未开跑。</p>` : ''}`;
 }
 
 function quotaLine(batch) {
@@ -868,7 +894,7 @@ function quotaLine(batch) {
   const day = /(\d{4}-\d{2}-\d{2})$/.exec(String(batch.name || ''));
   const archived = !!batch.name && Number(batch.worklist) > 0;
   const old = archived
-    ? `${esc(day ? day[1] : batch.name)} 已封存 · ${num(batch.worklist)} 本里 ${num(part.landed)} 落地、${num(part.left)} 未落地（${num(part.failed)} 失败 / ${num(part.staged)} 待复核 / ${num(part.untouched)} 未开跑）`
+    ? `${esc(day ? day[1] : batch.name)} 已封存 · ${num(batch.worklist)} 本里 ${num(part.landed)} 落地、${num(part.left)} 未落地（${num(part.failed)} 失败 / ${num(part.staged)} 待复核 / ${num(part.deferred)} 暂缓·待额度 / ${num(part.untouched)} 未开跑）`
     : '还没封存过批次。';
   return `<div class="toolbar" style="margin-top:10px">
     <span class="small">今天额度 <b>${num(today.used)}</b> / ${num(today.cap)} 页</span>
@@ -916,17 +942,21 @@ function pickRowHtml(rows) {
   return rows.map((row) => {
     const tag = `<span class="tag tag-${esc(row.disposition)}">${esc(PICK_WORD[row.disposition] || row.disposition)}</span>`;
     const marks = [];
-    if (row.disposition === 'untriaged' && row.suggestion) {
+    if (row.disposition === 'untriaged' && row.suggestion && !row.suggestion.manual) {
       const conf = row.suggestion.confidence === null
         || row.suggestion.confidence === undefined ? ''
         : ' ' + Number(row.suggestion.confidence).toFixed(2);
       marks.push(`<span class="hint">建议 ${esc(routeWord(row.suggestion.route))}${esc(conf)}</span>`);
     }
+    // 模型判不了的书带 manual: true：不当可确认的建议，也不该再进分诊队列
+    if (row.suggestion && row.suggestion.manual) {
+      marks.push(`<span class="hint" title="${esc((row.suggestion || {}).reason || '')}">模型：需人工判断</span>`);
+    }
     if (row.route) marks.push(`<span class="hint">${esc(routeWord(row.route))}</span>`);
     if (row.recheck) marks.push('<span class="hint">复看</span>');
     const pages = row.pages === null || row.pages === undefined ? '—' : num(row.pages);
     const note = pickNote(row);
-    const act = row.disposition === 'untriaged' && row.suggestion
+    const act = row.disposition === 'untriaged' && row.suggestion && !row.suggestion.manual
       ? `<button class="btn sm" data-act="pick-suggest" data-uid="${esc(row.uid)}">按建议确认</button>`
       : `<button class="btn sm" data-act="pick-settle" data-uid="${esc(row.uid)}">改处置</button>`;
     return `<tr>
@@ -945,6 +975,10 @@ function pickRowHtml(rows) {
 function pickNote(row) {
   if (row.disposition === 'gallery' && row.why) return row.why;
   if (row.progress === 'failed' && row.last) return '上次 ' + row.last;
+  if (row.progress === 'deferred') return '额度用尽，下一批接着跑';
+  if (row.suggestion && row.suggestion.manual) {
+    return '需人工判断' + (row.suggestion.reason ? '：' + row.suggestion.reason : '');
+  }
   if (row.suggestion && row.suggestion.reason) return '分诊建议：' + row.suggestion.reason;
   return '';
 }
@@ -1011,14 +1045,16 @@ function pickFilterBar() {
 function pickBar() {
   const c = pickCounts();
   const converts = S.books.filter((row) => row.disposition === 'convert').length;
-  const suggests = S.books.filter((row) => S.pick.has(row.uid) && row.suggestion).length;
+  // 需人工判断的没有可照发的 route，不能进「按建议确认」
+  const suggests = S.books.filter((row) => S.pick.has(row.uid) && row.suggestion
+    && !row.suggestion.manual).length;
   return `<b>已选 ${num(c.total)} 本</b>
     <span class="hint">可转 ${num(c.convert)} · 存档·图册 ${num(c.gallery)} · 存档·非中英文 ${num(c.ja)} · 未分诊 ${num(c.untriaged)}</span>
     <button class="btn sm" data-act="pick-suggest-all"${suggests ? '' : ' disabled'}>按建议确认 ${num(suggests)} 本</button>
     <button class="btn sm" data-act="pick-all-convert"${converts ? '' : ' disabled'}>全选可转的</button>
     <button class="btn sm" data-act="pick-clear"${c.total ? '' : ' disabled'}>清空</button>
     <span class="spacer"></span>
-    <label class="check">最多转 <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0" style="width:64px"> 本</label>
+    <label class="check" title="按全书合计，含文本层抽取、OCR 与强制转的存档书">最多转 <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0" style="width:64px"> 本（合计）</label>
     <label class="check">同时处理 <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8" style="width:64px"> 本</label>
     <button class="btn primary" data-write data-act="pdf-run"${c.total ? '' : ' disabled'}>开始转写</button>`;
 }
@@ -1049,7 +1085,8 @@ function viewPdfList() {
     </div>`;
 }
 
-// 关键字边打边筛：只重画表格与计数，整页 render 会丢焦点
+// 关键字边打边筛：只重画表格与计数，整页 render 会丢焦点。
+// 上限是全书合计（文本层、OCR、强制转的存档书都占名额），勾选变了就跟着改
 function syncPdfLimit() {
   const total = pickCounts().total;
   if (total === S.pdfLimitFrom) return;
@@ -1132,7 +1169,19 @@ function triageCard() {
   const untriaged = S.books.filter((row) => row.disposition === 'untriaged');
   const total = split ? split.books : untriaged.length;
   const have = untriaged.filter((row) => row.suggestion).length;
+  // 模型判不了的书带 manual: true：也算「出过建议」，不再送分诊，不能进 todo
+  const manual = untriaged.filter((row) => row.suggestion && row.suggestion.manual);
   const todo = Math.max(0, total - have);
+  const reasons = [];
+  manual.forEach((row) => {
+    const why = String((row.suggestion || {}).reason || '').trim();
+    if (why && reasons.indexOf(why) < 0 && reasons.length < 3) reasons.push(why);
+  });
+  const manualLine = manual.length
+    ? '其中 ' + num(manual.length) + ' 本模型：需人工判断'
+      + (reasons.length ? '（' + reasons.join('；') + '）' : '')
+      + '，这些不再送分诊，请在清单里逐本定处置。'
+    : '';
   const bits = [];
   if (split && split.text.books + split.scan.books === split.books) {
     if (split.text.books) {
@@ -1147,8 +1196,9 @@ function triageCard() {
       + (bits.length ? '：' + bits.join('，') + '。'
         : '，共 ' + num(split ? split.pages : 0) + ' 页。')
     : '现在没有未分诊的 PDF。';
+  const auto = have - manual.length;
   const second = have
-    ? '其中 ' + num(have) + ' 本已经出了建议，等你在清单里确认。'
+    ? (auto ? '其中 ' + num(auto) + ' 本已经出了建议，等你在清单里确认。' : '') + manualLine
     : '分诊只看指标与三张缩略图，不出正文。出的建议在清单页逐行确认，也可以一次按建议确认。';
   return `<div class="card">
     <h2>批量分诊</h2>
@@ -1163,12 +1213,12 @@ function runCard() {
   return `<div class="card">
     <h2>确认后转 md</h2>
     ${pdfPickSummary()}
-    <label class="field"><span>最多转几本</span>
+    <label class="field"><span>最多转几本（合计）</span>
       <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0"></label>
     <label class="field"><span>同时处理</span>
       <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8"></label>
     <button class="btn primary" data-write data-act="pdf-run">开始转写</button>
-    <p class="hint">最多转几本跟着勾选的本数走，填 0 表示不限。存档的书（图册、非中英文）默认不动，要转得逐本点会再问一次；未分诊的书只送去分诊，不出正文。</p>
+    <p class="hint">最多转几本按全书合计：文本层抽取、OCR 与强制转的存档书都占名额，填 0 表示不限。存档的书（图册、非中英文）默认不动，要转得逐本点会再问一次；未分诊的书只送去分诊，不出正文。</p>
   </div>`;
 }
 
@@ -1282,7 +1332,7 @@ function viewMaintain() {
       <div class="card"><h2>下载</h2>
         <p><a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.xlsx')}">书目总表（Excel）</a>
            <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.csv')}">书目总表（CSV）</a>
-           <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/分类预填.csv')}">分类预填表</a></p>
+           <a class="btn sm" href="/api/file?path=${encodeURIComponent('tables/分类预填.csv')}">分类预填表</a></p>
         <p class="hint">书目总表改于 ${esc(fmtTime(c.catalogAt).slice(5))}，分类预填表只包含新书。</p>
       </div>
       <div class="card"><h2>清理旧记录</h2>
@@ -1396,7 +1446,8 @@ const LEDGER_DEL = { main: '概念', broad: '宽词', action: '动作词' };
 const LEDGER_CONCEPT_FIELDS = {
   main: [['key', '键', ''], ['aliases', '同义词（逗号分隔）', ''], ['exclude', '排除词（逗号分隔，「无」表示不排）', ''], ['note', '说明', '']],
   broad: [['key', '键', ''], ['aliases', '同义词', ''], ['exclude', '排除词', ''], ['note', '说明', '']],
-  action: [['key', '词', ''], ['kind', ' 类型（动作/事件…）', ''], ['note', '说明', '']],
+  // 动作词行没有 key，只认 term（lib_common 的 动作词 表就是 term/kind/note）
+  action: [['term', '词', ''], ['kind', ' 类型（动作/事件…）', ''], ['note', '说明', '']],
 };
 
 function ledgerRowFiltered() {
@@ -1439,25 +1490,28 @@ function ledgerRowHtml(row) {
   </tr>`;
 }
 
-function ledgerConceptHtml(which, row) {
+function ledgerConceptHtml(which, row, force) {
   const fields = LEDGER_CONCEPT_FIELDS[which];
-  const edit = S.ledgerEdit && S.ledgerEdit.type === 'concept'
-    && S.ledgerEdit.which === which && String(S.ledgerEdit.key) === String(row.key);
-  const main = which === 'main' ? `${esc(row.aliases || '')}` : '';
+  const keyOf = (r) => (which === 'action' ? r.term : r.key);
+  const edit = !!force || (S.ledgerEdit && S.ledgerEdit.type === 'concept'
+    && S.ledgerEdit.which === which && String(S.ledgerEdit.key)
+      === String(keyOf(row) == null ? '' : keyOf(row)));
   if (!edit) {
     return `<tr>
       ${(which === 'action')
     ? `<td class="num">${esc(row.term)}</td><td>${esc(row.kind)}</td><td class="wrap small">${esc(row.note)}</td>`
     : `<td class="num">${esc(row.key)}</td><td class="wrap">${esc(row.aliases)}</td><td class="wrap small">${esc(row.exclude)}</td><td class="wrap small">${esc(row.note)}</td>`}
-      <td class="nowrap"><button class="btn sm" data-act="ledger-concept-edit" data-which="${which}" data-key="${esc(which === 'action' ? row.term : row.key)}">改</button>
-        <button class="btn sm miss" data-write data-act="ledger-concept-delete" data-which="${which}" data-key="${esc(which === 'action' ? row.term : row.key)}">删</button></td>
+      <td class="nowrap"><button class="btn sm" data-act="ledger-concept-edit" data-which="${which}" data-key="${esc(keyOf(row) || '')}">改</button>
+        <button class="btn sm miss" data-write data-act="ledger-concept-delete" data-which="${which}" data-key="${esc(keyOf(row) || '')}">删</button></td>
     </tr>`;
   }
   const val = which === 'action'
-    ? { key: row.term || '', kind: row.kind || '', note: row.note || '' }
+    ? { term: row.term || '', kind: row.kind || '', note: row.note || '' }
     : { key: row.key || '', aliases: row.aliases || '', exclude: row.exclude || '', note: row.note || '' };
+  const isNew = !!(S.ledgerEdit && S.ledgerEdit.isNew);
+  const readonly = (name) => (isNew || !(name === 'key' || name === 'term') ? '' : ' readonly');
   const inputs = fields.map(([name, label]) =>
-    `<td><input id="led-c-${esc(name)}" value="${esc(val[name] || '')}"${(S.ledgerEdit && S.ledgerEdit.isNew) ? '' : (name === 'key' ? ' readonly' : '')} title="${esc(label)}"></td>`);
+    `<td><input id="led-c-${esc(name)}" value="${esc(val[name] || '')}"${readonly(name)} title="${esc(label.trim())}"></td>`);
   return `<tr class="editing">${inputs.join('')}
     <td class="nowrap"><button class="btn sm primary" data-write data-act="ledger-concept-save" data-which="${which}">存</button>
       <button class="btn sm" data-act="ledger-edit-clear">取消</button></td>
@@ -1472,7 +1526,15 @@ function viewLedger() {
   const rows = ledgerRowFiltered();
   const shown = rows.length !== L.ledger.length
     ? `<p class="hint">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '';
-  const pick = (list, which) => `
+  const pick = (list, which) => {
+    // 「加一条」没有真行可选：先插一行空的带输入框的表单，不然存按钮读不到 #led-c-*
+    const adding = !!(S.ledgerEdit && S.ledgerEdit.type === 'concept'
+      && S.ledgerEdit.isNew && S.ledgerEdit.which === which);
+    const body = (adding ? [null].concat(list) : list)
+      .map((row) => (row === null
+        ? ledgerConceptHtml(which, {}, true)
+        : ledgerConceptHtml(which, row))).join('');
+    return `
     <div class="card">
       <div class="card-head"><h2>${LEDGER_DEL[which]}（${num(list.length)}）</h2>
         <span class="row tight">
@@ -1483,9 +1545,10 @@ function viewLedger() {
     ? '<th>词</th><th>类型</th><th>说明</th>'
     : '<th>键</th><th>同义词</th><th>排除词</th><th>说明</th>'}
           <th style="width:120px"></th></tr></thead>
-        <tbody>${list.map((row) => ledgerConceptHtml(which, row)).join('')}</tbody>
+        <tbody>${body}</tbody>
       </table></div>
     </div>`;
+  };
   return `
     <div class="list">
       <div class="section card">
@@ -1507,10 +1570,28 @@ function viewLedger() {
     </div>`;
 }
 
+function logRows() {
+  return S.jobs.filter((j) => !S.filter || j.state === S.filter);
+}
+
+function logRowsHtml(rows) {
+  return rows.length ? rows.map((j) => `<tr>
+        <td class="nowrap">${esc(fmtTime(j.created))}</td>
+        <td class="nowrap">${esc(KIND_WORD[j.kind] || j.kind)}</td>
+        <td class="wrap">${esc(summaryText(j.title))}</td>
+        <td><span class="pill">${esc(JOB_WORD[j.state] || j.state)}</span></td>
+        <td class="num">${j.started && j.ended ? esc(seconds(j.started, j.ended)) : '—'}</td>
+        <td class="wrap small">${esc(summaryText(j.summary))}</td>
+        <td><button class="btn sm" data-act="job-open" data-id="${esc(j.id)}">详情</button></td>
+      </tr>`).join('') : '<tr><td colspan="7" class="empty">没有任务。</td></tr>';
+}
+
 function viewLogs() {
-  const rows = S.jobs.filter((j) => !S.filter || j.state === S.filter);
+  const rows = logRows();
   const states = ['', 'queued', 'running', 'awaiting_review', 'succeeded', 'failed',
     'cancelled', 'orphaned'];
+  const body = logRowsHtml(rows);
+  S.logRowsHtml = body;
   return `<h1>日志</h1>
     <p class="lead">每个任务按自己的检查判定成败，日志里的密钥会隐藏。</p>
     <div class="section card">
@@ -1519,19 +1600,11 @@ function viewLogs() {
           ${states.map((s) => `<option value="${s}"${s === S.filter ? ' selected' : ''}>${s ? JOB_WORD[s] : '全部'}</option>`).join('')}
         </select></label>
         <button class="btn sm" data-act="jobs-refresh">刷新</button>
-        <span class="hint">共 ${num(rows.length)} 个任务</span>
+        <span class="hint" id="log-count">共 ${num(rows.length)} 个任务</span>
       </div>
       <div class="tw"><table><thead><tr><th>创建</th><th>类型</th><th>标题</th><th>状态</th>
         <th class="num">耗时</th><th>摘要</th><th></th></tr></thead>
-      <tbody>${rows.length ? rows.map((j) => `<tr>
-        <td class="nowrap">${esc(fmtTime(j.created))}</td>
-        <td class="nowrap">${esc(KIND_WORD[j.kind] || j.kind)}</td>
-        <td class="wrap">${esc(summaryText(j.title))}</td>
-        <td><span class="pill">${esc(JOB_WORD[j.state] || j.state)}</span></td>
-        <td class="num">${j.started && j.ended ? esc(seconds(j.started, j.ended)) : '—'}</td>
-        <td class="wrap small">${esc(summaryText(j.summary))}</td>
-        <td><button class="btn sm" data-act="job-open" data-id="${esc(j.id)}">详情</button></td>
-      </tr>`).join('') : '<tr><td colspan="7" class="empty">没有任务。</td></tr>'}</tbody></table></div>
+      <tbody id="log-rows">${body}</tbody></table></div>
     </div>
     <div class="section${S.logJob ? ' card' : ''}" id="job-detail">${jobDetail()}</div>`;
 }
@@ -1544,35 +1617,126 @@ function seconds(start, end) {
   return s < 60 ? s + ' 秒' : Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒';
 }
 
+function stepsHtml(detail) {
+  const steps = (detail && detail.steps) || [];
+  return steps.length ? steps.map((s) => `<tr><td class="num">${s.seq + 1}</td>
+        <td>${esc(s.name)}</td><td>${esc(STEP_WORD[s.state] || s.state)}</td>
+        <td class="wrap small">${esc(stepNote(s.detail))}</td>
+        <td class="nowrap">${esc(fmtTime(s.started))}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="empty">没有步骤</td></tr>';
+}
+
+function commandsHtml(detail) {
+  const command = ((detail && detail.commands) || []).map((c) => (c.argv || []).join(' ')).join('\n');
+  return `<pre class="log">${esc(command || '没有记录')}</pre>`;
+}
+
 function jobDetail() {
   const job = S.logJob;
   if (!job) return '<p class="empty">点上面表格里的「详情」，这里会显示步骤和日志。</p>';
   const detail = S.logDetail || {};
-  const steps = detail.steps || [];
-  const tail = detail.log_tail || '';
-  const command = (detail.commands || []).map((c) => (c.argv || []).join(' ')).join('\n');
+  const running = ['queued', 'running'].indexOf(job.state) >= 0;
   return `<div class="card-head"><h2>${esc(summaryText(job.title))}</h2>
       <span class="row tight">
-        <span class="pill">${esc(JOB_WORD[job.state] || job.state)}</span>
-        ${['queued', 'running'].indexOf(job.state) >= 0
-    ? `<button class="btn sm" data-act="job-cancel" data-id="${esc(job.id)}">停止</button>` : ''}
+        <span class="pill" id="job-state">${esc(JOB_WORD[job.state] || job.state)}</span>
+        <button class="btn sm" id="job-cancel" data-act="job-cancel" data-id="${esc(job.id)}" style="${running ? '' : 'display:none'}">停止</button>
         <button class="btn sm" data-write data-act="job-rerun" data-id="${esc(job.id)}">重跑</button>
         <a class="btn sm" href="/api/file?path=${encodeURIComponent('工作区/运维/jobs/' + job.id + '/log.txt')}">下载日志</a>
       </span></div>
-    <p class="hint">任务号 ${esc(job.id)} · ${esc(fmtTime(job.started))} → ${esc(fmtTime(job.ended))}</p>
-    <p class="small">${esc(summaryText(job.summary))}</p>
-    <details class="adv">
+    <p class="hint" id="job-meta">任务号 ${esc(job.id)} · ${esc(fmtTime(job.started))} → ${esc(fmtTime(job.ended))}</p>
+    <p class="small" id="job-summary">${esc(summaryText(job.summary))}</p>
+    <details class="adv" id="job-commands">
       <summary>运行命令</summary>
-      <pre class="log">${esc(command || '没有记录')}</pre>
+      ${commandsHtml(detail)}
     </details>
-    <div class="tw"><table><thead><tr><th>#</th><th>步骤</th><th>状态</th><th>说明</th><th>开始</th></tr></thead>
-      <tbody>${steps.length ? steps.map((s) => `<tr><td class="num">${s.seq + 1}</td>
-        <td>${esc(s.name)}</td><td>${esc(STEP_WORD[s.state] || s.state)}</td>
-        <td class="wrap small">${esc(stepNote(s.detail))}</td>
-        <td class="nowrap">${esc(fmtTime(s.started))}</td></tr>`).join('')
-    : '<tr><td colspan="5" class="empty">没有步骤</td></tr>'}</tbody></table></div>
+    <div class="tw" id="job-steps"><table><thead><tr><th>#</th><th>步骤</th><th>状态</th><th>说明</th><th>开始</th></tr></thead>
+      <tbody>${stepsHtml(detail)}</tbody></table></div>
     <h3 style="margin-top:14px">日志尾部 200 行</h3>
-    <pre class="log" id="job-log">${esc(tail)}</pre>`;
+    <pre class="log" id="job-log" data-painted="0">${esc(detail.log_tail || '')}</pre>`;
+}
+
+// ---- 日志页就地刷新 -------------------------------------------------
+// 轮询每 2.5 秒跑一次：只改文本与步骤表，不整块换 #job-detail 的 innerHTML，
+// 否则选中的文字、滚到一半的日志每两秒被重置一次（task-1 F3/F7）。
+function logNearBottom(pre) {
+  return pre.scrollHeight - pre.scrollTop - pre.clientHeight < 8;
+}
+
+function paintJobDetail() {
+  const job = S.logJob;
+  const box = document.querySelector('#job-detail');
+  if (!job || !box) return;
+  const detail = S.logDetail || {};
+  let pre = box.querySelector('#job-log');
+  const fresh = !pre || pre.dataset.painted !== '1';
+  if (fresh || S.logOpenId !== job.id) {
+    const switched = S.logOpenId !== job.id;
+    box.className = 'section card';
+    box.innerHTML = jobDetail();
+    pre = box.querySelector('#job-log');
+    if (!pre) return;
+    if (switched) S.logScroll = 0;
+    S.logOpenId = job.id;
+    S.logStepsFp = '';
+    S.logCmdFp = '';
+    S.follow = switched ? true : S.logStick;
+    pre.dataset.painted = '1';
+    pre.onscroll = () => { S.follow = logNearBottom(pre); };
+    pre.textContent = detail.log_tail || '';
+    pre.scrollTop = S.follow ? pre.scrollHeight : (S.logScroll || 0);
+  }
+  // 结构已经在了：状态、摘要、步骤、命令、日志尾部一律就地改
+  const stateEl = box.querySelector('#job-state');
+  const word = JOB_WORD[job.state] || job.state;
+  if (stateEl && stateEl.textContent !== word) stateEl.textContent = word;
+  const cancel = box.querySelector('#job-cancel');
+  if (cancel) {
+    const running = ['queued', 'running'].indexOf(job.state) >= 0;
+    cancel.style.display = running ? '' : 'none';
+  }
+  const meta = box.querySelector('#job-meta');
+  if (meta) {
+    const text = '任务号 ' + job.id + ' · ' + fmtTime(job.started) + ' → ' + fmtTime(job.ended);
+    if (meta.textContent !== text) meta.textContent = text;
+  }
+  const sumEl = box.querySelector('#job-summary');
+  if (sumEl) {
+    const text = summaryText(job.summary);
+    if (sumEl.textContent !== text) sumEl.textContent = text;
+  }
+  const steps = box.querySelector('#job-steps');
+  const stepsBody = stepsHtml(detail);
+  if (steps && S.logStepsFp !== stepsBody) {
+    S.logStepsFp = stepsBody;
+    const tb = steps.querySelector('tbody');
+    if (tb) tb.innerHTML = stepsBody;
+  }
+  const cmdBox = box.querySelector('#job-commands');
+  const cmdBody = commandsHtml(detail);
+  if (cmdBox && S.logCmdFp !== cmdBody) {
+    S.logCmdFp = cmdBody;
+    cmdBox.innerHTML = '<summary>运行命令</summary>' + cmdBody;
+  }
+  if (pre) {
+    const stick = S.follow && logNearBottom(pre);
+    const top = pre.scrollTop;
+    const text = detail.log_tail || '';
+    if (pre.textContent !== text) pre.textContent = text;
+    pre.scrollTop = stick ? pre.scrollHeight : top;
+  }
+}
+
+function paintLogRows() {
+  const tb = document.querySelector('#log-rows');
+  if (!tb) return;
+  const rows = logRows();
+  const html = logRowsHtml(rows);
+  if (html !== S.logRowsHtml) {
+    S.logRowsHtml = html;
+    tb.innerHTML = html;
+  }
+  const count = document.querySelector('#log-count');
+  if (count) count.textContent = '共 ' + num(rows.length) + ' 个任务';
 }
 
 // ---- 数据加载 -----------------------------------------------------
@@ -1593,6 +1757,21 @@ async function loadJobs() {
   S.jobs = body.jobs || [];
   if (S.payload) S.payload.state_counts = body.counts || {};
   renderNav();
+  if (S.tab !== 'logs') return;
+  const sel = S.logJob && S.logJob.id
+    ? S.jobs.filter((row) => row.id === S.logJob.id)[0] : null;
+  if (sel && S.logJob.state && sel.state !== S.logJob.state) {
+    // 选中的任务换了状态：先把新状态落到缓存，再把表格与详情一起重画，
+    // 否则拉详情失败时每 2.5 秒都会因为「状态不同」重画一次
+    S.logJob = Object.assign({}, S.logJob, {
+      state: sel.state, summary: sel.summary, started: sel.started, ended: sel.ended,
+    });
+    render();
+    return;
+  }
+  paintLogRows();
+  if (!sel && S.logJob && S.logJob.id) await openLog(S.logJob.id, true);
+  else if (sel && ['queued', 'running'].indexOf(sel.state) >= 0) await openLog(sel.id, true);
 }
 
 async function loadPending() {
@@ -1766,25 +1945,21 @@ async function go(tab) {
 }
 
 // ---- 任务轮询 -----------------------------------------------------
-async function openLog(jobId) {
+async function openLog(jobId, quiet) {
   try {
     const body = await api('/api/jobs/' + encodeURIComponent(jobId));
+    if (!body || !body.job) return;
     S.logJob = body.job;
     S.logDetail = body;
-    const box = document.querySelector('#job-detail');
-    if (box) {
-      box.className = 'section card';
-      box.innerHTML = jobDetail();
-      const pre = document.querySelector('#job-log');
-      if (pre) pre.scrollTop = pre.scrollHeight;
-    }
+    if (S.logOpenId !== body.job.id) S.logOpenId = body.job.id;
+    paintJobDetail();
   } catch (err) {
-    toast(err.message, true);
+    if (!quiet) toast(err.message, true);
   }
 }
 
 async function watchJob(jobId, done, maxLoops) {
-  const cap = maxLoops || 240;
+  const cap = maxLoops || WATCH_LOOPS;
   let misses = 0;
   for (let i = 0; i < cap; i += 1) {
     let body;
@@ -1794,14 +1969,43 @@ async function watchJob(jobId, done, maxLoops) {
       // 单次失败（服务重启/网络抖动）不算完：连续 10 次（约 7 秒）都不通才放弃
       misses += 1;
       if (misses >= 10) return null;
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await new Promise((resolve) => setTimeout(resolve, WATCH_TICK));
       continue;
     }
     misses = 0;
     if (done && done(body.job)) return body;
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    await new Promise((resolve) => setTimeout(resolve, WATCH_TICK));
   }
+  // 到上限不等于失败：任务可能还在跑，降频接着看，别让调用方拿 null 当「跑完了」
+  toast('任务仍在跑，稍后刷新');
+  keepWatching(jobId, done);
   return null;
+}
+
+function keepWatching(jobId, done) {
+  let left = 240;                       // 15 秒 × 240 ≈ 1 小时
+  const tick = async () => {
+    if (left <= 0) return;
+    left -= 1;
+    let body = null;
+    try {
+      body = await api('/api/jobs/' + encodeURIComponent(jobId));
+    } catch (err) {
+      body = null;
+    }
+    if (body && done && done(body.job)) {
+      toast(jobNote(body.job), jobBad(body.job));
+      await Promise.all([loadJobs(), loadPdf(), loadPdfBooks(), loadPending()]);
+      render();
+      return;
+    }
+    if (body) {
+      await loadJobs();
+      render();
+    }
+    setTimeout(tick, 15000);
+  };
+  setTimeout(tick, 15000);
 }
 
 // awaiting_review 也是终态：进程已经退出，只是产物等人确认。
@@ -1829,8 +2033,14 @@ async function runMaintain(steps) {
   try {
     const body = await post('/api/maintain', { steps });
     toast('收尾已排队：' + body.job_id);
-    const detail = await watchJob(body.job_id, afterJob);
+    const detail = await watchJob(body.job_id, afterJob, MAINTAIN_LOOPS);
     if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+    // 没结束就只轻量刷一遍：深度状态要跑全库扫描，任务还在写文件时没意义
+    if (!detail) {
+      await loadJobs();
+      render();
+      return;
+    }
     await Promise.all([loadStatus(true), loadJobs(), loadPending()]);
     render();
   } catch (err) {
@@ -1901,8 +2111,10 @@ const actions = {
     const which = el.dataset.which || 'main';
     const val = (id) => (document.getElementById(id) || {}).value || '';
     const isNew = S.ledgerEdit && S.ledgerEdit.isNew;
-    const key = isNew ? val('led-c-key') : String(S.ledgerEdit.key);
-    if (!key.trim()) { toast('键/词不能为空', true); return; }
+    const key = isNew
+      ? (which === 'action' ? val('led-c-term') : val('led-c-key'))
+      : String(S.ledgerEdit.key);
+    if (!key.trim()) { toast(which === 'action' ? '词不能为空' : '键不能为空', true); return; }
     const row = which === 'action'
       ? { term: key, kind: val('led-c-kind'), note: val('led-c-note') }
       : { key: key, aliases: val('led-c-aliases'), exclude: val('led-c-exclude'), note: val('led-c-note') };
@@ -2183,11 +2395,14 @@ const actions = {
     else await go('pdf-list');
   },
 
-  // 明细就是清单筛成「存档·非中英文 + 失败」
+  // 明细 = 所有硬失败的书（不限定处置：存档的、可转的、未分诊的都可能失败）
   async 'pdf-detail'() {
-    S.pickTags = new Set(['ja']);
-    S.pickProgress = new Set(['failed']);
+    const bad = S.books.filter((row) => row.progress === 'failed').length;
+    S.pickTags = new Set();
+    // 一本失败都没有就别筛：筛出来空表比不筛更糟
+    S.pickProgress = new Set(bad ? ['failed'] : []);
     S.pickRecheck = false;
+    if (!bad) toast('现在没有失败的书');
     if (location.hash !== '#pdf-list') location.hash = '#pdf-list';
     else await go('pdf-list');
   },
@@ -2195,7 +2410,7 @@ const actions = {
   async 'pdf-jump'(el) {
     const tag = el.dataset.tag;
     S.pickTags = new Set(tag ? [tag] : ['convert', 'untriaged', 'gallery', 'ja']);
-    S.pickProgress = new Set(['todo', 'running', 'failed']);
+    S.pickProgress = new Set(['todo', 'running', 'failed', 'staged', 'deferred']);
     S.pickRecheck = false;
     if (location.hash !== '#pdf-list') location.hash = '#pdf-list';
     else await go('pdf-list');
@@ -2252,15 +2467,20 @@ const actions = {
   async 'pick-suggest'(el) {
     const row = S.books.find((item) => item.uid === el.dataset.uid);
     if (!row || !row.suggestion) return;
+    if (row.suggestion.manual) {
+      toast('这本模型判不了，得自己定处置', true);
+      return;
+    }
     const items = [{ uid: row.uid, route: row.suggestion.route }];
     await applySettle(items, settleAsk(items));
   },
 
   async 'pick-suggest-all'() {
-    const items = S.books.filter((row) => S.pick.has(row.uid) && row.suggestion)
+    const items = S.books.filter((row) => S.pick.has(row.uid) && row.suggestion
+      && !row.suggestion.manual)
       .map((row) => ({ uid: row.uid, route: row.suggestion.route }));
     if (!items.length) {
-      toast('选中的书里没有带建议的', true);
+      toast('选中的书里没有可直接确认的建议', true);
       return;
     }
     await applySettle(items, settleAsk(items));
@@ -2306,7 +2526,8 @@ const actions = {
         .reduce((sum, row) => sum + (Number(row.pages) || 0), 0);
       const ask = '这 ' + num(gallery.length + japanese.length) + ' 本原定不转：存档·图册 '
         + num(gallery.length) + ' 本、存档·非中英文 ' + num(japanese.length) + ' 本，合计 '
-        + num(pages) + ' 页。改成按扫描识别转？';
+        + num(pages) + ' 页。改成按扫描识别转？'
+        + (limit ? '（最多转 ' + num(limit) + ' 本是全书合计，强制转的也占名额）' : '');
       if (!window.confirm(ask)) return;
       force = true;
     }
@@ -2423,7 +2644,7 @@ const actions = {
     setBusy(true);
     try {
       const body = await post('/api/delete/apply', {
-        uid, reason, plan_hash: el.dataset.hash, confirm_uid: typed,
+        uid, reason, plan_hash: el.dataset.hash, confirm_uid: typed, confirm: true,
       });
       const detail = await watchJob(body.job_id, afterJob);
       if (detail) toast(summaryText(detail.job.summary) || detail.job.state,
@@ -2448,6 +2669,8 @@ const actions = {
   async 'job-open'(el) {
     S.tab = 'logs';
     S.logJob = { id: el.dataset.id, title: '载入中', state: 'running', kind: '', created: '' };
+    // 换了任务就要从头画：不重置的话 paintJobDetail 会以为还在看上一个
+    if (S.logOpenId !== el.dataset.id) S.logOpenId = null;
     if (location.hash !== '#logs') location.hash = '#logs';
     await loadJobs();
     render();
@@ -2458,7 +2681,9 @@ const actions = {
     try {
       await post('/api/jobs/' + encodeURIComponent(el.dataset.id) + '/cancel');
       toast('已发停止，等 10 秒收尾');
-      await openLog(el.dataset.id);
+      // 立刻刷一遍列表与详情：不然页面停在「停止中」，服务端已经收完了也不显示
+      await loadJobs();
+      render();
     } catch (err) {
       toast(err.message, true);
     }
@@ -2696,13 +2921,12 @@ async function boot() {
         }
       }
       if (S.tab === 'overview') {
-        const view = document.querySelector('#view');
-        if (view) view.innerHTML = viewOverview();
-      }
-      if (S.tab === 'logs' && S.logJob && S.logJob.id) {
-        const el = S.logJob;
-        if (['queued', 'running'].indexOf(el.state) >= 0) {
-          await openLog(el.id);
+        // 只在内容真变了才写：无条件写会把焦点、选区、滚动位置每 2.5 秒清一次
+        const html = viewOverview();
+        if (html !== S.overviewHtml) {
+          S.overviewHtml = html;
+          const view = document.querySelector('#view');
+          if (view) view.innerHTML = html;
         }
       }
     } catch (err) {

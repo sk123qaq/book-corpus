@@ -24,9 +24,12 @@ BASE = os.path.join(L.WORK, "中间态", "基线")
 MAP = os.path.join(L.TABLES, "对照表.csv")
 BATCH_CSV = os.path.join(L.WORK, "批次", "奖项下载-2026-10-18", "下载结果总表.csv")
 FAIL = []
+PASSED = []
+SKIPPED = []
 
 
 def ok(msg):
+    PASSED.append(msg)
     print("  [过] " + msg)
 
 
@@ -36,6 +39,7 @@ def fail(msg):
 
 
 def skip(msg):
+    SKIPPED.append(msg)
     print("  [跳过] " + msg)
 
 
@@ -363,6 +367,14 @@ def main():
     print()
     if FAIL:
         print("门槛不过：%d 项" % len(FAIL))
+        sys.exit(1)
+    if not PASSED:
+        # 一项都没验到（空语料、缺基线、缺 index.db）不能打「全过」：那是假绿
+        print("没验到东西：0 项通过、%d 项跳过，不算全过" % len(SKIPPED))
+        sys.exit(1)
+    if SKIPPED:
+        # 部分箱子跳过、其余通过也不是全过，维护门的 ^全过$ 会假绿
+        print("通过 %d 项，跳过 %d 项，不算全过" % (len(PASSED), len(SKIPPED)))
         sys.exit(1)
     print("全过")
 

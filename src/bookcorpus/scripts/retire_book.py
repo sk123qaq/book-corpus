@@ -101,12 +101,30 @@ def find_book(ctx, uid):
     return None, None
 
 
+def _under(path, base):
+    """path 的 realpath 是不是在 base 之内（base 本身算）。"""
+    real, base_real = os.path.realpath(path), os.path.realpath(base)
+    return real == base_real or real.startswith(base_real + os.sep)
+
+
 def resolve_source(ctx, book_dir, entry):
-    """源文件路径。v2 的 book.json 记根相对路径，v1 遗留的记书目录相对路径。"""
+    """源文件路径。v2 的 book.json 记根相对路径，v1 遗留的记书目录相对路径。
+
+    book.json 是普通文件，可能被手改或写坏：绝对路径与 `..` 逃逸都在这里挡住，
+    否则 apply 的搬移/删除会落到库外。
+    """
     file = entry.get("file") or ""
+    if os.path.isabs(file):
+        raise SystemExit("book.json 的源文件是绝对路径，拒绝处理: %s" % file)
     if file.startswith(("books/", "collections/")):
-        return os.path.normpath(os.path.join(ctx.root, file))
-    return os.path.normpath(os.path.join(book_dir, file))
+        path = os.path.normpath(os.path.join(ctx.root, file))
+        allowed = (os.path.join(ctx.root, "books"), os.path.join(ctx.root, "collections"))
+    else:
+        path = os.path.normpath(os.path.join(book_dir, file))
+        allowed = (book_dir,)
+    if not any(_under(path, base) for base in allowed):
+        raise SystemExit("源文件跑出书目录/合集目录，拒绝处理: %s -> %s" % (file, path))
+    return path
 
 
 def scan_source_index(ctx):
@@ -225,10 +243,11 @@ def find_series_docs(ctx, doc):
 
 def cold_layout(ctx, doc):
     """(冷宫书目录, 冷宫 source 目录)，root 相对。同名目录已存在就带 uid。"""
-    title = L.path_safe(doc.get("title") or "") or (doc.get("uid") or "未命名")
+    title = L.path_safe(doc.get("title") or "") or L.path_safe(doc.get("uid") or "") or "未命名"
+    uid = L.path_safe(doc.get("uid") or "") or "未命名"
     rel_dir = "books/_冷宫/" + title
     if os.path.exists(os.path.join(ctx.root, rel_dir)):
-        rel_dir = "books/_冷宫/%s（%s）" % (title, doc.get("uid") or "")
+        rel_dir = "books/_冷宫/%s（%s）" % (title, uid)
     return rel_dir, rel_dir + "/source"
 
 
@@ -373,6 +392,8 @@ def build_preview(ctx, uid):
     warnings = []
     if rel_dir.split("/")[0] != "books" or rel_dir.startswith("books/_"):
         blockers.append("书目录不在正常书区: " + rel_dir)
+    if os.path.basename(book_dir) != uid:
+        blockers.append("uid 与书目录名不一致: %s vs %s" % (uid, os.path.basename(book_dir)))
     if any(not s["exists"] for s in sources):
         warnings.append("有源文件不在磁盘上: " + ", ".join(
             s["path"] for s in sources if not s["exists"]))
@@ -565,18 +586,34 @@ def retired_row(preview, reason, snapshot, note=""):
 
 
 def rebuild_derived(ctx, preview, run):
-    """DB、书目表、expand 行、软链视图。只在真库上跑。"""
+    """DB、书目表、expand 行、检索层行、软链视图。只在真库上跑。"""
     done = []
+    rel_dir = preview["book_dir"]
+    book_key = rel_dir.split("/", 1)[1] if "/" in rel_dir else rel_dir
     if os.path.isfile(ctx.index):
         con = sqlite3.connect(ctx.index)
         try:
-            con.execute("DELETE FROM expand WHERE path LIKE ? ESCAPE '\\'",
-                        (like_prefix(preview["book_dir"]),))
-            con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
+            # 旧索引可能没建概念剖面，缺表就跳过，不能让整本移出卡在这里
+            have = {r[0] for r in con.execute("SELECT name FROM sqlite_master")}
+            if "expand" in have:
+                con.execute("DELETE FROM expand WHERE path LIKE ? ESCAPE '\\'",
+                            (like_prefix(rel_dir),))
+                if "expand_fts" in have:
+                    con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
+                done.append("expand rows")
+            if "para" in have:
+                para = con.execute("DELETE FROM para WHERE book=?", (book_key,)).rowcount
+                # para 是 para_fts 的 content 表，删完必须重建倒排，否则旧行还留在索引里
+                if "para_fts" in have:
+                    con.execute("INSERT INTO para_fts(para_fts) VALUES('rebuild')")
+                done.append("para rows %d" % max(para, 0))
+            if "book_concept" in have:
+                concept = con.execute(
+                    "DELETE FROM book_concept WHERE book=?", (book_key,)).rowcount
+                done.append("book_concept rows %d" % max(concept, 0))
             con.commit()
         finally:
             con.close()
-        done.append("expand rows")
     if preview["expand_md"]:
         path = os.path.join(ctx.root, preview["expand_md"])
         if os.path.isfile(path):
@@ -616,6 +653,13 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
         if snapshot_gate and not preview["snapshot_ok"]:
             raise RuntimeError("当天快照不在: %s" % preview["snapshot"])
         note("snapshot", preview["snapshot"] if snapshot_gate else "跳过（--no-snapshot）")
+
+        # 动文件之前先落 pending 快照：中途失败/被杀时重跑能接着补重建。
+        # 不在 retired.tsv 里额外写 pending 行：一次落地只应该有一条账，
+        # 失败时下面补的是带 note 的失败行（被 retired_record 忽略）。
+        current = "pending"
+        pending = write_pending(ctx, preview, reason)
+        note("pending", pending)
 
         current = "cold-source"
         os.makedirs(cold_source, exist_ok=True)
@@ -657,17 +701,25 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
         else:
             note("ledger", "删 %d 行，剩 %d 行" % (n, L.categories_count(root=ctx.root)))
 
-        current = "records"
-        tsv = append_retired_tsv(ctx, retired_row(preview, reason, preview["snapshot"]))
-        readme, added = append_cold_readme(ctx, preview, reason)
-        note("records", "%s；%s%s" % (tsv, readme, "" if added else "（已有该行）"))
-
         current = "rebuild"
         if rebuild:
             note("rebuild", "; ".join(rebuild_derived(ctx, preview, run)))
         else:
             note("rebuild", "跳过（--no-rebuild），索引与验收留给收尾")
+
+        # 重建成功才写成功行，否则重跑会命中 already_retired 而不补索引。
+        # 冷宫 README 先写：它失败时还没有成功行，pending 重跑能补上；
+        # README 成功而 TSV 失败时，重跑 README 幂等返回 added=false，再补 TSV。
+        current = "records"
+        readme, added = append_cold_readme(ctx, preview, reason)
+        tsv = append_retired_tsv(ctx, retired_row(preview, reason, preview["snapshot"]))
+        note("records", "%s；%s%s" % (readme, tsv, "" if added else "（已有该行）"))
+        clear_pending(ctx, uid)
     except Exception as e:  # noqa: BLE001
+        try:
+            write_pending(ctx, preview, reason, status="failed: %s" % current)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             tsv = append_retired_tsv(ctx, retired_row(
                 preview, reason, preview["snapshot"],
@@ -675,7 +727,9 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
         except Exception:  # noqa: BLE001
             tsv = ""
         return {"ok": False, "uid": uid, "failed_step": current, "error": str(e),
-                "steps": steps, "retired_tsv": tsv, "cold_path": preview["cold_path"]}
+                "steps": steps, "retired_tsv": tsv, "cold_path": preview["cold_path"],
+                "hint": "书目录已不在时，重跑同一条 --apply 会补完重建"
+                        if current in ("rebuild", "records") else ""}
     return {"ok": True, "uid": uid, "title": preview["title"],
             "cold_path": preview["cold_path"], "plan_hash": preview["plan_hash"],
             "steps": steps}
@@ -685,15 +739,132 @@ def _run(cmd):
     return subprocess.run(cmd, cwd=ROOT, shell=False).returncode
 
 
-def retired_record(ctx, uid):
-    """工作区/批次/移出-*/retired.tsv 里这个 uid 的冷宫路径，没有就是空。"""
+def resume_rebuild(ctx, uid, last, rebuild, run):
+    """上一次落地挂在重建前：书目录已经不在，照着 pending 快照补完重建与账表。
+
+    前提是 pending/<uid>.json 还在（apply 动文件前就写了）；不在就不猜，报错交人。
+    """
+    steps = []
+    current = "resume"
+    paths = pending_files(ctx, uid)
+    if not paths:
+        return {"ok": False, "uid": uid, "failed_step": current,
+                "error": "缺 pending 快照，无法自动续跑，请人工核对冷宫与索引",
+                "steps": steps}
+    pending = paths[-1]
+    with open(pending, encoding="utf-8") as fh:
+        preview = json.load(fh)
+    reason = (last.get("reason") or preview.get("reason") or "").strip()
+    snapshot = preview.get("snapshot") or (last.get("snapshot") or "")
+    steps.append({"step": "resume", "detail": "按 %s 续跑" % ctx.rel(pending)})
+    try:
+        if preview.get("uid") != uid:
+            raise RuntimeError("pending 快照 uid 不符: %s" % ctx.rel(pending))
+        if os.path.isdir(os.path.join(ctx.root, preview["book_dir"])):
+            raise RuntimeError("书目录又出现了，先重跑 --dry-run 出计划: " + preview["book_dir"])
+
+        # 与 apply 同序：先删账行再重建。若上次卡在 ledger 一步，账行还在，
+        # 先重建会让 build_library 看到一本目录已不在的书而再次失败。
+        current = "ledger"
+        n = L.categories_delete([uid], root=ctx.root)
+        steps.append({"step": "ledger", "detail": "删 %d 行" % n})
+
+        current = "rebuild"
+        if rebuild:
+            steps.append({"step": "rebuild",
+                          "detail": "; ".join(rebuild_derived(ctx, preview, run))})
+        else:
+            steps.append({"step": "rebuild", "detail": "跳过（--no-rebuild）"})
+
+        current = "records"
+        readme, added = append_cold_readme(ctx, preview, reason)
+        tsv = append_retired_tsv(ctx, retired_row(preview, reason, snapshot))
+        steps.append({"step": "records", "detail": "%s；%s%s" % (
+            readme, tsv, "" if added else "（已有该行）")})
+        clear_pending(ctx, uid)
+    except Exception as e:  # noqa: BLE001
+        try:
+            write_pending(ctx, preview, reason, status="failed: %s" % current)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            append_retired_tsv(ctx, retired_row(
+                preview, reason, snapshot, note="failed at %s: %s" % (current, e)))
+        except Exception:  # noqa: BLE001
+            pass
+        return {"ok": False, "uid": uid, "failed_step": current, "error": str(e),
+                "steps": steps, "resumed": True}
+    return {"ok": True, "uid": uid, "resumed": True, "title": preview.get("title", ""),
+            "cold_path": preview.get("cold_dir", last.get("cold_path") or ""),
+            "steps": steps}
+
+
+def retired_rows(ctx, uid):
+    """这个 uid 在 retired.tsv 里的全部行，按时间从新到旧。"""
+    out = []
     for path in sorted(glob.glob(os.path.join(ctx.work, "批次", "移出-*", "retired.tsv")),
                        reverse=True):
         with open(path, encoding="utf-8", newline="") as fh:
-            for row in csv.DictReader(fh, delimiter="\t"):
-                if (row.get("uid") or "").strip() == uid and not row.get("note"):
-                    return row.get("cold_path") or ""
+            rows = [r for r in csv.DictReader(fh, delimiter="\t")
+                    if (r.get("uid") or "").strip() == uid]
+        out.extend(reversed(rows))
+    return out
+
+
+def retired_record(ctx, uid):
+    """工作区/批次/移出-*/retired.tsv 里这个 uid 已落地的冷宫路径，没有就是空。
+
+    只有 note 为空的行算落地。pending/failed 行不算，否则重建没完成也会被当成移出过。
+    """
+    for row in retired_rows(ctx, uid):
+        if not (row.get("note") or "").strip():
+            return row.get("cold_path") or ""
     return ""
+
+
+RESUME_STEPS = ("pending", "ledger", "rebuild", "records", "resume")
+
+
+def failure_step(row):
+    """账行 note 里记的步骤名。pending 行返回 pending，成功行返回空。"""
+    note = (row.get("note") or "").strip()
+    if note.startswith("pending"):
+        return "pending"
+    if note.startswith("failed at "):
+        return note[len("failed at "):].split(":", 1)[0].strip()
+    return ""
+
+
+def pending_files(ctx, uid):
+    name = L.path_safe(uid) + ".json"
+    out = []
+    for d in sorted(glob.glob(os.path.join(ctx.work, "批次", "移出-*", "pending"))):
+        path = os.path.join(d, name)
+        if os.path.isfile(path):
+            out.append(path)
+    return out
+
+
+def write_pending(ctx, preview, reason, status="started"):
+    """动文件之前把预览落盘：中途被打断，重跑能照着它补完重建。"""
+    path = os.path.join(os.path.dirname(retired_tsv_path(ctx)), "pending",
+                        L.path_safe(preview["uid"]) + ".json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    doc = dict(preview, reason=reason, status=status,
+               updated_at=datetime.datetime.now().isoformat(timespec="seconds"))
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+    return ctx.rel(path)
+
+
+def clear_pending(ctx, uid):
+    for path in pending_files(ctx, uid):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def main(argv=None):
@@ -716,12 +887,43 @@ def main(argv=None):
     try:
         preview = build_preview(ctx, uid)
     except LookupError as e:
-        cold = retired_record(ctx, uid) if args.apply else ""
-        if cold:
-            out = {"ok": True, "uid": uid, "already_retired": True, "cold_path": cold}
-            print(json.dumps(out, ensure_ascii=False) if args.json
-                  else "%s 已经移出，冷宫在 %s" % (uid, cold))
-            return 0
+        if args.apply:
+            cold = retired_record(ctx, uid)
+            if cold:
+                out = {"ok": True, "uid": uid, "already_retired": True, "cold_path": cold}
+                print(json.dumps(out, ensure_ascii=False) if args.json
+                      else "%s 已经移出，冷宫在 %s" % (uid, cold))
+                return 0
+            rows = retired_rows(ctx, uid)
+            last = rows[0] if rows else None
+            step = failure_step(last) if last else ""
+            # 可续跑：有 pending 快照（被杀也会留），或最后一条是失败行
+            if pending_files(ctx, uid) or step in RESUME_STEPS:
+                refuse = ("--root 不是真库却要重建派生数据，测试请加 --no-rebuild"
+                          if not args.no_rebuild and ctx.root != ROOT else None)
+                if refuse:
+                    print(json.dumps({"ok": False, "uid": uid, "refused": refuse},
+                                     ensure_ascii=False) if args.json
+                          else refuse, file=sys.stdout if args.json else sys.stderr)
+                    return 2
+                report = resume_rebuild(ctx, uid, last or {}, not args.no_rebuild, _run)
+                if args.json:
+                    print(json.dumps(report, ensure_ascii=False, indent=1))
+                else:
+                    print("续跑 %s：%s" % (uid, "完成" if report["ok"] else
+                                           "卡在 %s 步: %s" % (report["failed_step"],
+                                                                  report["error"])))
+                    for s in report["steps"]:
+                        print("  %-12s %s" % (s["step"], s["detail"]))
+                return 0 if report["ok"] else 3
+            if last is not None:
+                payload = {"ok": False, "uid": uid,
+                           "error": "%s；上一次落地卡在 %s 步，不在可续跑范围，需人工核对" % (
+                               e, step or "未知")}
+                print(json.dumps(payload, ensure_ascii=False) if args.json
+                      else payload["error"],
+                      file=sys.stdout if args.json else sys.stderr)
+                return 3
         payload = {"ok": False, "error": str(e)}
         print(json.dumps(payload, ensure_ascii=False) if args.json else str(e),
               file=sys.stdout if args.json else sys.stderr)

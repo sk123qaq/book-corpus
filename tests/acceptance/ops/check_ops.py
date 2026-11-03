@@ -460,6 +460,19 @@ def post(port, path, payload=None, **kw):
     return http(port, "POST", path, payload=payload if payload is not None else {}, **kw)
 
 
+def get_with_headers(port, path, timeout=30):
+    """get() 只回码与正文；下载头（Content-Disposition）得另开一条口取。"""
+    url = "http://127.0.0.1:%d%s" % (port, path)
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, dict(resp.headers), resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers), exc.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, ConnectionError, OSError) as exc:
+        return 0, {}, str(exc)
+
+
 def wait_ready(port, timeout=20):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -662,6 +675,35 @@ def run_checks(root, ops, port, fixture):
     code, body = get(port, "/api/file?path=" + urllib.request.quote("build/书目总表.csv"))
     check("白名单 CSV 可下", code == 200 and "uid,title" in body,
           "code=%s body=%r" % (code, str(body)[:40]))
+    code, headers, body = get_with_headers(
+        port, "/api/file?path=" + urllib.request.quote("tables/分类预填.csv"))
+    check("下载口带 attachment 头",
+          code == 200 and headers.get("Content-Disposition", "").startswith("attachment")
+          and "uid,一级模型" in body,
+          "code=%s disposition=%r" % (code, headers.get("Content-Disposition")))
+    code, _ = get(port, "/api/file?path=" + urllib.request.quote(
+        "工作区/运维/jobs/../log.txt"))
+    check("jobs 里的点段不给过白名单", code in (400, 404), "code=%s" % code)
+    # 白名单外的路径 README 与设计文档都规定回 404（apps/ops/README.md:143），
+    # 400 只是可接受的防御性返回；真正的判据是读不到内容。在根与 tables/ 下各放
+    # 一份带哨兵的 README 当诱饵，穿越或归一化后仍不能被端出去。
+    for decoy in ("README.md", os.path.join("tables", "README.md")):
+        with open(os.path.join(root, decoy), "w", encoding="utf-8") as fh:
+            fh.write("# SECRET-DECOY-README\n这份不在白名单里\n")
+    for bad in ("../README.md", "tables/../README.md"):
+        code, body = get(port, "/api/file?path=" + urllib.request.quote(bad))
+        text = body if isinstance(body, str) else json.dumps(body, ensure_ascii=False)
+        check("越界路径读不到 %s" % bad,
+              code in (400, 404) and "SECRET-DECOY-README" not in text,
+              "code=%s body=%r" % (code, text[:60]))
+    # 批次名也是路径：点段或绝对路径既不能列出批次里的书，也不能 500。
+    # 契约为「不泄露」：4xx，或 200 且 books 为空；状态码不作为判据。
+    code, body = get(port, "/api/split/books?batch="
+                     + urllib.request.quote("../../etc"))
+    listed = body.get("books") if isinstance(body, dict) else None
+    check("批次参数越界不泄露书",
+          code >= 400 or (code == 200 and not listed),
+          "code=%s books=%r" % (code, listed))
     for bad in ("build/library.db", "src/bookcorpus/scripts/ingest.py",
                 "books/B0001/book.json", "工作区/运维/ops.db", "../etc/passwd", "/etc/passwd",
                 "工作区/运维/jobs/../../../../etc/passwd"):
@@ -848,6 +890,27 @@ def run_checks(root, ops, port, fixture):
     check("查看问题取消后是 cancelled",
           (detail or {}).get("job", {}).get("state") == "cancelled",
           str((detail or {}).get("job", {}).get("state")))
+    os.remove(os.path.join(root, ".slow-review"))
+
+    # ---- 提交后立刻取消：终态必须是 cancelled，不能被门槛回写成成功/失败 ----
+    open(os.path.join(root, ".slow-review"), "w").close()
+    code, body = post(port, "/api/split/inspect", {"uid": "B0001", "batch": slow_batch})
+    quick_id = body.get("job_id")
+    check("立刻取消的长任务受理", code == 200 and bool(quick_id), str(body.get("error")))
+    code, body = post(port, "/api/jobs/%s/cancel" % quick_id)
+    check("提交后立刻取消被接受", code == 200, str(body))
+    detail = wait_job(port, quick_id, ("cancelled", "failed", "succeeded", "orphaned"),
+                      timeout=40)
+    state = ((detail or {}).get("job") or {}).get("state")
+    check("立刻取消的任务终态是 cancelled", state == "cancelled", str(state))
+    # finalize 是异步的：等它跑完再读一次，确认没被门槛覆盖
+    time.sleep(0.8)
+    again = (get(port, "/api/jobs/%s" % quick_id)[1] or {}).get("job") or {}
+    check("取消不会被门槛回写", again.get("state") == "cancelled", str(again.get("state")))
+    body = get(port, "/api/jobs")[1] or {}
+    row = next((j for j in body.get("jobs", []) if j.get("id") == quick_id), {})
+    check("任务列表里也是 cancelled", row.get("state") == "cancelled",
+          str(row.get("state")))
     os.remove(os.path.join(root, ".slow-review"))
 
     # ---- 拆章门槛读 report-json ------------------------------------
@@ -1234,18 +1297,30 @@ def run_checks(root, ops, port, fixture):
           and preview.get("sources"), str(preview.get("plan_hash")))
     code, body = post(port, "/api/delete/apply",
                       {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
-                       "confirm_uid": "B0003"})
+                       "confirm_uid": "B0002"})
+    check("没带 confirm 拒绝应用", code == 400, str(body))
+    code, body = post(port, "/api/delete/apply",
+                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
+                       "confirm_uid": "B0002", "confirm": False})
+    check("confirm=false 拒绝应用", code == 400, str(body))
+    code, body = post(port, "/api/delete/apply",
+                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
+                       "confirm_uid": "B0002", "confirm": "true"})
+    check("confirm 只认布尔 true", code == 400, str(body))
+    code, body = post(port, "/api/delete/apply",
+                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
+                       "confirm_uid": "B0003", "confirm": True})
     check("uid 不一致拒绝应用", code == 400)
     code, body = post(port, "/api/delete/apply",
                       {"uid": "B0002", "reason": "重复", "plan_hash": "bad",
-                       "confirm_uid": "B0002"})
+                       "confirm_uid": "B0002", "confirm": True})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check("plan_hash 不一致判失败", job.get("state") == "failed"
           and "plan_hash" in (job.get("summary") or ""), str(job.get("summary")))
     code, body = post(port, "/api/delete/apply",
                       {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
-                       "confirm_uid": "B0002"})
+                       "confirm_uid": "B0002", "confirm": True})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check("删书应用成功", job.get("state") == "succeeded", str(job.get("summary")))
