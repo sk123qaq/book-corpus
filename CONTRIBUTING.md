@@ -15,7 +15,7 @@ Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库�
 
 ## 目录约定
 
-- `apps/ops/`：操作台服务与 web。`apps/demo/`：检索演示与回答。两个应用都只从 `--root` 读实例，代码路径按自身位置推导。
+- `apps/ops/`：操作台服务与 web。`apps/demo/`：检索演示与回答。两个应用都从实例根读数据（操作台 `--root`，演示页 `BOOKS_ROOT`），代码路径按自身位置推导。
 - `src/bookcorpus/scripts/`：全部可复跑脚本。批次的一次性脚本不进本仓，放数据仓的批次目录。
 - `tests/acceptance/`：pytest 收集的离线验收。`tests/manual/`：手工验收。测试产物写临时目录，不写仓库。
 - `docs/design/`：方案与决策记录。`docs/briefs/`：已完成的任务书。`docs/检索/`：检索层口径与踩坑账。`reports/`：一次性审计与证据。
