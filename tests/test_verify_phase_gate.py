@@ -1,8 +1,9 @@
-"""verify_phase 的门槛判据：四个箱子，没有「跳过」。
+r"""verify_phase 的门槛判据：四个箱子，没有「跳过」。
 
 新库没有迁移基线、奖项下载批次、旧路径对照表，这些东西已经不在门槛里。
 箱子只看每个库都有的东西：奖项 resolve、顶层与 book.json、从零重建、检索层。
-所以「全过」就是真全过，末行必须是独占一行的 ^全过。
+所以「全过」就是真全过，末行必须是独占一行的「全过：N 项」，
+维护门（apps/ops/server.py 的 verify 步骤 marker）按 ^全过：\d+ 项 认。
 """
 
 import importlib.util
@@ -59,14 +60,14 @@ def test_failed_box_exits_1(vp, monkeypatch, capsys):
     code, out = _run(vp, capsys)
     assert code == 1, out
     assert "门槛不过" in out
-    assert "全过" not in _lines(out)
+    assert not any(line.startswith("全过") for line in _lines(out))
 
 
 def test_all_passed_prints_all_pass(vp, monkeypatch, capsys):
     _sets(vp, monkeypatch, ["箱子 1 过了", "箱子 4 过了"], [])
     code, out = _run(vp, capsys)
     assert code == 0, out
-    assert _lines(out)[-1].startswith("全过"), "维护门按 ^全过 认：\n" + out
+    assert _lines(out)[-1] == "全过：2 项", "维护门按 ^全过：N 项 认：\n" + out
 
 
 def test_box_out_of_range_is_rejected(vp, monkeypatch):
@@ -83,7 +84,7 @@ def test_fresh_library_passes_without_skips(tmp_path):
     run_cli("sample", "--root", str(ws))
     out = subprocess.run([sys.executable, str(SCRIPT)], cwd=str(ws), capture_output=True, text=True)
     assert out.returncode == 0, out.stdout + out.stderr
-    assert "全过" in out.stdout
+    assert "全过：" in out.stdout
     assert "跳过" not in out.stdout
     assert "SKIP" not in out.stdout
     assert "对照表" not in out.stdout
