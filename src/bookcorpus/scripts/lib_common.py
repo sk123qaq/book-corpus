@@ -448,6 +448,41 @@ def _ensure_schema(root=None):
     return False
 
 
+def ledger_init(root=None):
+    """把 ledger.db 建出来：有种子 CSV 就导进去，没有就只建空 schema。
+
+    init 建工作区时调它，别等人账第一次被写才建库——那之前读的都是 CSV 种子，
+    两本账一旦分叉，doctor 和审计都会读错。
+    """
+    return _ensure_ledger(root, create=True)
+
+
+def ledger_exists(root=None):
+    """库文件在、schema 也在。doctor 靠它决定报「ledger.db」还是「CSV 种子」。"""
+    return os.path.isfile(ledger_path(root)) and _ledger_ready(root)
+
+
+def batch_dir(prefix, root=None, create=False):
+    """工作区/批次 下最近一个 <prefix>YYYY-MM-DD 目录；没有就用今天。
+
+    批次目录名带日期是惯例（pdf-普查-2026-10-19），别在代码里写死某一天：
+    新建的库没有那天的目录，读出来永远是空表。
+    """
+    root = root or ROOT
+    base = os.path.join(root, "工作区", "批次")
+    pat = re.compile(r"^%s\d{4}-\d{2}-\d{2}$" % re.escape(prefix))
+    names = []
+    try:
+        names = sorted(n for n in os.listdir(base)
+                       if pat.match(n) and os.path.isdir(os.path.join(base, n)))
+    except OSError:
+        pass
+    path = os.path.join(base, names[-1] if names else prefix + time.strftime("%Y-%m-%d"))
+    if create:
+        os.makedirs(path, exist_ok=True)
+    return path
+
+
 def _ensure_ledger(root=None, create=False):
     """DB 缺失或没 schema 时自举：有活账 CSV 就当种子导入，否则建空库。
 

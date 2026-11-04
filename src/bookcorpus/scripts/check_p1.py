@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""P1 验收：2 字词可查且有序、译名墙案例、原词类不低于裸 grep、查询边界回归。
+"""P1 验收：2 字词可查且有序、原词类不低于裸 grep、查询边界回归。
 
 边界回归段（edge_cases）覆盖：不可索引字符不崩、全角数字归一可查、
-全角逗号当分隔符、ASCII 大小写覆盖口径、--pool all 不被吞。
-只读。任一不过就退出码 1。
+全角逗号当分隔符、ASCII 大小写覆盖口径、--pool all 不被吞。只读。
 
-gold 发现顺序：工作区默认批次 -> --gold -> BOOKS_P1_GOLD -> SKIP 并打印原因。
-旧布局 `库/.../md/...` 经 tables/对照表.csv 的「新路径 -> uid」映射成
-`books/<uid>/md/...`；映射不到的行逐条 SKIP，不硬 FAIL。译名墙用
-build/library.db 把书名解析成 uid 再断言；解析不到也 SKIP。
+这是「外部题集」验收，不是每个库都能跑：需要 gold.tsv（qid/path/category）
+和同目录的 eval-baseline.tsv、eval-index.tsv。缺任何一项就退出码 2
+（前置缺失，没跑），不打印「全过」。gold 行指向的正文不在库里的，算失败：
+题集和库对不上，验收就没有意义。
+
+退出码：0 通过；1 有失败项；2 没跑（缺题集或读数）。
 """
 import argparse
 import csv
@@ -26,8 +27,7 @@ import lib_common as L  # noqa: E402
 ROOT = L.ROOT
 QSEARCH = os.path.join(HERE, "qsearch.py")
 RG = L.RG
-DEFAULT_GOLD = os.path.join(
-    ROOT, "工作区", "批次", "qa-检索-2026-10-19", "gold.tsv")
+BATCH_ROOT = os.path.join(ROOT, "工作区", "批次")
 fails = []
 skips = []
 passes = 0
@@ -58,129 +58,47 @@ def check(ok, name, detail):
         fails.append(name)
 
 
-def skip(name, detail):
-    print("SKIP " + name + "  " + detail)
-    skips.append(name)
+def find_gold(explicit=None):
+    """按 --gold -> BOOKS_P1_GOLD -> 最近一个 qa-检索-* 批次的顺序找 gold。
 
-
-def read_path_map(root=ROOT):
-    """tables/对照表.csv 的 库/.../md -> uid 映射。同一条旧路径指向两个 uid 时丢弃。"""
-    path = os.path.join(root, "tables", "对照表.csv")
-    if not os.path.isfile(path):
-        return {}
-    table, dup = {}, set()
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        for row in csv.DictReader(fh):
-            old = (row.get("新路径") or "").strip()
-            if not old.startswith("库/"):
-                alt = (row.get("旧路径") or "").strip()
-                if alt.startswith("库/"):
-                    old = alt
-            old = old.rstrip("/")
-            uid = (row.get("uid") or "").strip()
-            if not old or not uid:
-                continue
-            if old in table and table[old] != uid:
-                dup.add(old)
-            table[old] = uid
-    for old in dup:
-        table.pop(old, None)
-    return table
-
-
-def map_gold_path(path, table):
-    """库/.../md/x.md -> books/<uid>/md/x.md。
-
-    返回 (新路径, "")；映射不到返回 (None, 原因)。
+    返回 (路径, 来源)；找不到返回 (None, "")。
     """
-    p = (path or "").strip().replace("\\", "/")
-    while p.startswith("./"):
-        p = p[2:]
-    if not p:
-        return None, "空路径"
-    if p.startswith("books/"):
-        return p, ""
-    if "/md/" in p:
-        pre, base = p.split("/md/", 1)
-        pre = pre.rstrip("/")
-        uid = table.get(pre + "/md") or table.get(pre)
-        if uid:
-            return "books/%s/md/%s" % (uid, base), ""
-    for old in sorted(table, key=len, reverse=True):
-        if p == old or p.startswith(old + "/"):
-            return "books/%s%s" % (table[old], p[len(old):]), ""
-    return None, "tables/对照表.csv 无匹配行"
-
-
-def resolve_gold(explicit=None):
-    """按 默认批次 -> --gold -> BOOKS_P1_GOLD 的顺序找 gold。
-
-    返回 (路径, 来源, 说明列表)；找不到时路径为 None。
-    """
-    notes = []
-    if os.path.isfile(DEFAULT_GOLD):
-        return DEFAULT_GOLD, "工作区默认批次", notes
+    candidates = []
     if explicit:
-        path = os.path.abspath(os.path.expanduser(explicit))
-        if os.path.isfile(path):
-            return path, "--gold", notes
-        notes.append("--gold 不存在: %s" % path)
+        candidates.append((os.path.abspath(os.path.expanduser(explicit)), "--gold"))
     env = os.environ.get("BOOKS_P1_GOLD")
     if env:
-        path = os.path.abspath(os.path.expanduser(env))
+        candidates.append((os.path.abspath(os.path.expanduser(env)), "BOOKS_P1_GOLD"))
+    for path, why in candidates:
         if os.path.isfile(path):
-            return path, "BOOKS_P1_GOLD", notes
-        notes.append("BOOKS_P1_GOLD 不存在: %s" % path)
-    notes.append("默认路径不存在: %s" % DEFAULT_GOLD)
-    return None, "", notes
+            return path, why
+    if os.path.isdir(BATCH_ROOT):
+        batches = sorted((n for n in os.listdir(BATCH_ROOT) if n.startswith("qa-检索-")),
+                         reverse=True)
+        for name in batches:
+            path = os.path.join(BATCH_ROOT, name, "gold.tsv")
+            if os.path.isfile(path):
+                return path, "最近的 qa-检索 批次 %s" % name
+    return None, ""
 
 
 def load_gold(path):
-    """读 gold 并把 库/ 路径映射到 books/<uid>/；不可映射的行逐条 SKIP。"""
+    """读 gold；指向的正文不在库里的算失败，逐条打印。"""
     with open(path, encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh, delimiter="\t"))
-    table = read_path_map(ROOT)
     mapped = []
     for row in rows:
-        new, reason = map_gold_path(row.get("path"), table)
-        if not new:
-            skip("gold %s" % (row.get("qid") or "?"),
-                 "%s  %s" % (row.get("path") or "", reason))
-            continue
-        if not os.path.exists(os.path.join(ROOT, new)):
-            skip("gold %s" % (row.get("qid") or "?"),
-                 "映射后文件不存在: %s（原 %s）" % (new, row.get("path") or ""))
+        qid = row.get("qid") or "?"
+        new = (row.get("path") or "").strip().replace("\\", "/")
+        while new.startswith("./"):
+            new = new[2:]
+        if not new or not os.path.isfile(os.path.join(ROOT, new)):
+            check(False, "gold " + qid, "题集指的正文不在库里: %s" % (new or "（空路径）"))
             continue
         mapped.append((row, new))
-    if mapped and len(mapped) == len(rows):
-        check(True, "gold 路径映射", "%d/%d 行可用" % (len(mapped), len(rows)))
-    elif mapped:
-        skip("gold 路径映射", "%d/%d 行可用；%d 条逐条 SKIP" % (
-            len(mapped), len(rows), len(rows) - len(mapped)))
-    else:
-        skip("gold 路径映射", "0/%d 行可用；见上方逐条 SKIP" % len(rows))
+    if rows and len(mapped) == len(rows):
+        check(True, "gold 路径", "%d/%d 行都落在库里" % (len(mapped), len(rows)))
     return rows, mapped
-
-
-def title_uids(want):
-    """build/library.db 里按书名找 uid：先精确，再唯一子串。"""
-    path = os.path.join(ROOT, "build", "library.db")
-    if not os.path.isfile(path):
-        return [], "缺 build/library.db"
-    con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
-    try:
-        rows = con.execute("SELECT uid, title FROM book").fetchall()
-    finally:
-        con.close()
-    exact = [uid for uid, title in rows if title == want]
-    if exact:
-        return exact, "精确匹配"
-    sub = [uid for uid, title in rows if want in (title or "")]
-    if len(sub) == 1:
-        return sub, "唯一子串匹配"
-    if not sub:
-        return [], "build/library.db 无此书"
-    return [], "书名匹配到 %d 本，无法唯一确定" % len(sub)
 
 
 def two_char_words():
@@ -193,19 +111,6 @@ def two_char_words():
             and ms < 2000 and (time.time() - t0) < 5
         first = ("%s:%d" % (hits[0]["path"], hits[0]["line"])) if hits else "无命中"
         check(ok, "2字词 " + q, "%d 条 %.0f ms 首条 %s" % (len(hits), ms, first))
-
-
-def wall(word, want_book, want_any=True):
-    uids, how = title_uids(want_book)
-    if not uids:
-        skip("译名墙 " + word, "书名解析不到 uid：%s（%s）" % (want_book, how))
-        return
-    res = run([word, "--auto-concept", "-n", "20"])
-    got = [h["path"] for h in res["hits"]]
-    hit = [p for p in got if any(p.startswith("books/%s/" % u) for u in uids)]
-    check(bool(hit) == want_any, "译名墙 " + word,
-          "书名->uid %s（%s）；语料命中 %d 文件；在 top20: %s" % (
-              ",".join(uids), how, len(corpus_files(word)), bool(hit)))
 
 
 def safe_run(args):
@@ -269,28 +174,21 @@ def main(argv=None):
     parser.add_argument("--gold", help="gold.tsv 路径；默认先找工作区批次")
     args = parser.parse_args(argv)
 
-    gold_path, source, notes = resolve_gold(args.gold)
+    gold_path, source = find_gold(args.gold)
     if not gold_path:
-        skip("P1 gold", "；".join(notes))
-        # 没有 gold 就是一项都没跑，不能打成「失败 0 项」：维护门槛按末行判过，会假绿
-        check(False, "P1 gold", "找不到 gold.tsv，P1 检索验收零检查，不算通过")
-        print("汇总 PASS %d / FAIL %d / SKIP %d" % (passes, len(fails), len(skips)))
-        print("失败 %d 项" % len(fails))
-        return 1
+        print("没跑：库里没有题集（gold.tsv）。P1 验收要用自己的检索题集：")
+        print("  --gold <path>/gold.tsv，或放 工作区/批次/qa-检索-<日期>/gold.tsv；")
+        print("  列：qid  question  path  category（取值见 docs/检索/README.md）。")
+        print("  不看题集也能查检索层：book-corpus verify（箱子 4）。")
+        return 2
     print("P1 gold: %s（来源：%s）" % (gold_path, source))
-    for note in notes:
-        print("注  " + note)
     rows, mapped = load_gold(gold_path)
+    if not mapped:
+        print("没跑：题集里没有一行能落到库里的正文。")
+        return 2
 
     two_char_words()
     edge_cases()
-    wall("过密化", "八次危机")
-    wall("群己权界论", "金克木集")
-    wall("消极自由", "刘擎西方现代思想讲义")
-    for word in ("达克效应", "灰犀牛"):
-        n = len(corpus_files(word))
-        print("注  %s 语料命中 %d 个文件，不足以做译名墙验收（只记数，不计入通过/失败）"
-              % (word, n))
 
     batch_dir = os.path.dirname(gold_path)
     idx_db = L.PATHS.index_db
@@ -310,7 +208,8 @@ def main(argv=None):
         qids = [q for q, r in gold.items() if r.get("category") == "原词"]
         missing = [q for q in qids if q + "A" not in base or q + "E" not in idx]
         if not qids:
-            skip("原词类不低于裸 grep", "gold 没有 原词 行")
+            check(False, "原词类不低于裸 grep",
+                  "gold 没有 category=原词 的行，这项判据跑不了；题集要覆盖原词类")
         elif missing:
             check(False, "原词类不低于裸 grep", "读数缺 qid: %s" % " ".join(missing))
         else:
@@ -325,9 +224,12 @@ def main(argv=None):
                       sum(1 for x in e if x <= 10), len(qids),
                       sum(1 for x in a if x <= 10), len(qids)))
 
-    print("汇总 PASS %d / FAIL %d / SKIP %d" % (passes, len(fails), len(skips)))
-    print("失败 %d 项" % len(fails))
-    return 1 if fails else 0
+    print("汇总 PASS %d / FAIL %d" % (passes, len(fails)))
+    if fails:
+        print("失败 %d 项" % len(fails))
+        return 1
+    print("全过：P1 %d 项" % passes)
+    return 0
 
 
 if __name__ == "__main__":

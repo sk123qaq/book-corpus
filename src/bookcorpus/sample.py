@@ -40,7 +40,8 @@ def load_books(root):
 
 def _count(root, uid):
     md = os.path.join(root, "books", uid, "md")
-    files = sorted(f for f in os.listdir(md) if f.endswith(".md")) if os.path.isdir(md) else []
+    files = sorted(f for f in os.listdir(md)
+                   if f.endswith(".md") and f != "README.md") if os.path.isdir(md) else []
     chars = 0
     for name in files:
         with open(os.path.join(md, name), encoding="utf-8") as fh:
@@ -71,9 +72,8 @@ def install(root):
           "bytes": os.path.getsize(os.path.join(dest, src)),
           "sha256": L.sha256_file(os.path.join(dest, src)), "primary_src": 1}], []))
 
-    rows.append({"uid": uid, "一级": SUBJECTS[0], "二级": SUBJECTS[1], "作者层": "0",
-                 "保留": "keep", "正式书名": TITLE,
-                 "备注": "sample:待复核 %s" % time.strftime("%Y-%m-%d")})
-    L.write_csv(os.path.join(root, "tables", "分类表.csv"), rows, L.LEDGER_HEADER)
+    L.category_put({"uid": uid, "一级": SUBJECTS[0], "二级": SUBJECTS[1], "作者层": "0",
+                    "保留": "keep", "正式书名": TITLE,
+                    "备注": "sample:待复核 %s" % time.strftime("%Y-%m-%d")}, root=root)
     chapters, chars = _count(root, uid)
     return uid, chapters, chars

@@ -42,7 +42,8 @@ def test_health_degrades_on_empty_workspace(tmp_path):
         assert resp.status == 200, body
         assert body["ok"] is True
         assert body["degraded"] is True
-        assert "未建索引" in body["message"]
+        # init 现在就把空索引建好，所以这里是「索引为空」而不是「未建索引」
+        assert body["message"] in ("索引为空", "未建索引"), body["message"]
         assert body["meta"]["books"] == 0
     finally:
         proc.terminate()

@@ -8,13 +8,13 @@ SHARED = "合集甲乙丙（套装三册）.epub"
 
 def _two_books_in_one_collection(root):
     write_collection(root, "C0001", SHARED)
-    write_ledger(root, [])
+    rows = []
     for uid, title in (("B0101", "甲卷"), ("B0102", "乙卷")):
         write_book(root, uid, "文学", title, ["正文一段。"],
                    collection="C0001", collection_file=SHARED,
                    sha="a" * 64)
-        with open(root / "tables" / "分类表.csv", "a", encoding="utf-8") as f:
-            f.write("%s,文学,,0,keep,%s,\n" % (uid, title))
+        rows.append((uid, "文学", title, ""))
+    write_ledger(root, rows)
 
 
 def test_shared_source_points_at_collection(workspace):

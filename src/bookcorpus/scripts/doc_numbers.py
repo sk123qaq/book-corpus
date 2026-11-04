@@ -104,13 +104,17 @@ def archive_uids(root):
                     yield uid, row
 
     ja, gallery = set(), set()
-    for uid, row in rows(os.path.join("pdf-ocr-2026-10-19", "defer", "lang.tsv")):
-        if (row.get("lang") or "").strip() == "ja":
-            ja.add(uid)
-    for uid, _row in rows(os.path.join("pdf-普查-2026-10-19", "skip_list.tsv")):
-        gallery.add(uid)
-    for uid, _row in rows(os.path.join("pdf-ocr-ops-2026-10-26", "skip_list.tsv")):
-        gallery.add(uid)
+    try:
+        batches = sorted(n for n in os.listdir(batch)
+                         if os.path.isdir(os.path.join(batch, n)))
+    except OSError:
+        batches = []
+    for name in batches:
+        for uid, row in rows(os.path.join(name, "defer", "lang.tsv")):
+            if (row.get("lang") or "").strip() == "ja":
+                ja.add(uid)
+        for uid, _row in rows(os.path.join(name, "skip_list.tsv")):
+            gallery.add(uid)
     return ja, gallery
 
 

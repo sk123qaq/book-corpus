@@ -55,8 +55,35 @@ KILL_WAIT = 10
 LOG_TAIL_LINES = 200
 SEARCH_URL = "http://127.0.0.1:8765"
 TRIAGE_BATCH_PREFIX = "pdf-ocr-ops-"
-TRIAGE_PDF_DIR = os.path.join("工作区", "批次", "pdf-普查-2026-10-19")
-OCR_BATCH = os.path.join("工作区", "批次", "pdf-ocr-2026-10-19")
+CENSUS_BATCH_PREFIX = "pdf-普查-"
+OCR_BATCH_PREFIX = "pdf-ocr-"
+
+
+def _latest_batch(root, prefix):
+    """<root>/工作区/批次 下最近一个 <prefix>YYYY-MM-DD；没有就用今天的。"""
+    pat = re.compile(r"^%s\d{4}-\d{2}-\d{2}$" % re.escape(prefix))
+    base = os.path.join(root, "工作区", "批次")
+    names = []
+    try:
+        names = sorted(n for n in os.listdir(base)
+                       if pat.match(n) and os.path.isdir(os.path.join(base, n)))
+    except OSError:
+        pass
+    return os.path.join(base, names[-1] if names else prefix + time.strftime("%Y-%m-%d"))
+
+
+def _bind_batches(root):
+    """批次名带日期，不能写死 2026-10-19：新库没有那天的目录，读出来永远是空表。"""
+    global TRIAGE_PDF_DIR, OCR_BATCH, PDF_SKIP_LIST, PDF_DEFER, PDF_WORKLIST
+    TRIAGE_PDF_DIR = _latest_batch(root, CENSUS_BATCH_PREFIX)
+    OCR_BATCH = _latest_batch(root, OCR_BATCH_PREFIX)
+    PDF_SKIP_LIST = os.path.join(TRIAGE_PDF_DIR, "skip_list.tsv")
+    PDF_DEFER = os.path.join(OCR_BATCH, "defer", "lang.tsv")
+    PDF_WORKLIST = os.path.join(OCR_BATCH, "worklist.tsv")
+
+
+TRIAGE_PDF_DIR = _latest_batch(".", CENSUS_BATCH_PREFIX)
+OCR_BATCH = _latest_batch(".", OCR_BATCH_PREFIX)
 PDF_SKIP_LIST = os.path.join(TRIAGE_PDF_DIR, "skip_list.tsv")
 PDF_DEFER = os.path.join(OCR_BATCH, "defer", "lang.tsv")
 PDF_WORKLIST = os.path.join(OCR_BATCH, "worklist.tsv")
@@ -703,17 +730,15 @@ MAINTAIN_STEPS = {
     "awards": {"label": "奖项软链", "script": "build_views.py", "args": ["--only", "awards"]},
     "audit": {"label": "深审计", "script": "audit_state.py", "args": ["--deep"],
               "marker": r"FAIL 0 项"},
-    "verify": {"label": "六箱验收", "script": "verify_phase.py", "args": [],
+    "verify": {"label": "四箱验收", "script": "verify_phase.py", "args": [],
                "marker": r"(?m)^全过\s*$"},
-    "p1": {"label": "检索验收", "script": "check_p1.py", "args": [],
-           "marker": r"失败 0 项"},
     "catalog": {"label": "书目总表", "script": "gen_book_catalog.py", "args": [],
                 "marker": r"未匹配 0 条"},
     "doc": {"label": "阅读版 html", "script": "build_index.py", "args": []},
 }
-MAINTAIN_ORDER = ("db", "index", "topics", "awards", "audit", "verify", "p1",
+MAINTAIN_ORDER = ("db", "index", "topics", "awards", "audit", "verify",
                   "catalog", "doc")
-FINISH_DEFAULT = ("db", "index", "topics", "awards", "audit", "verify", "p1",
+FINISH_DEFAULT = ("db", "index", "topics", "awards", "audit", "verify",
                   "catalog")
 
 
@@ -3238,6 +3263,7 @@ def main(argv=None):
     ap.add_argument("--root", default=REAL_ROOT, help="数据根，测试指向临时库")
     ap.add_argument("--scripts", default=None, help="脚本目录，测试指向 stub")
     args = ap.parse_args(argv)
+    _bind_batches(args.root)
 
     env = Env(args.root, args.scripts)
     app = App(env)

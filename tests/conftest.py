@@ -84,10 +84,15 @@ def write_book(root, uid, subject, title, paragraphs=None, fmt="epub", sha=None,
 
 
 def write_ledger(root, rows):
-    path = os.path.join(root, "tables", "分类表.csv")
-    with open(path, "a", encoding="utf-8") as f:
-        for uid, subject, title, note in rows:
-            f.write("%s,%s,,0,keep,%s,%s\n" % (uid, subject, title, note))
+    """写人账走 ledger.db（init 起就是库，CSV 只是种子）。"""
+    src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from bookcorpus.scripts import lib_common as L
+    for uid, subject, title, note in rows:
+        L.category_put({"uid": uid, "一级": subject, "二级": "", "作者层": "0",
+                        "保留": "keep", "正式书名": title, "备注": note},
+                       "test", root=str(root))
 
 
 @pytest.fixture

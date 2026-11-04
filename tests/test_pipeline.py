@@ -1,7 +1,7 @@
 import json
 import sqlite3
 
-from conftest import run_cli
+from conftest import run_cli, write_ledger
 
 
 def test_library_builds_from_ledger(workspace):
@@ -29,8 +29,7 @@ def test_library_builds_empty_workspace(tmp_path):
 
 
 def test_library_refuses_ledger_without_book(workspace):
-    with open(workspace / "tables" / "分类表.csv", "a", encoding="utf-8") as f:
-        f.write("B9999,文学,,0,keep,幽灵书,\n")
+    write_ledger(workspace, [("B9999", "文学", "幽灵书", "")])
     r = run_cli("--root", workspace, "library")
     assert r.returncode != 0
     assert "B9999" in r.stdout + r.stderr

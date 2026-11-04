@@ -72,7 +72,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `lq.py` | 只读查询 DB。`lq.py [-H] "SELECT ..."`，字段用制表符分隔 |
 | `gen_book_catalog.py` | 出 `build/书目总表.xlsx` 与 `.csv`，并核对每条记录能落到磁盘。有未匹配时只报错，不覆盖旧目录 |
 | `build_index.py` | 重建每本书的 `html/index.html` 与 `build/阅读版索引.html` |
-| `verify_phase.py` | L3 与 L5 的六箱门槛检查。源文件 inode、md 章节数、奖项 resolve、顶层结构、DB 重建一致、检索层（`--box 6`） |
+| `verify_phase.py` | 四箱门槛检查，对任何新库成立、没有「跳过」：奖项 resolve、顶层结构与 book.json（含源文件在盘）、从零重建一致、检索层（`--box 4`）。迁移基线、奖项批次、旧路径对照表都不在门槛里 |
 | `defpass.py` | 段落级概念检索。`defpass.py <md目录> -g 词1,词2 -g 词3 -n 5`，或 `-c 概念键` 走概念表；`-w` 调段落宽度 |
 | `layout.py` | v2 树形的唯一定义：`books/`、`collections/`、`tables/`、`build/`。别的脚本不许再拼旧名字 |
 | `migrate.py` | v1 → v2 迁移：`book-corpus migrate`，默认只打印，`--mode move\|link\|copy`，写对照表 |
@@ -116,7 +116,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `sem_index.py` | 段落向量（`bge-m3`）。**待建，向量层当前不做** |
 | `build_views.py` | 重建 `build/views/主题/<概念>/` 与 `奖项/<奖项>/` 的相对软链与清单，排序与 `qsearch --book` 一致 |
 | `eval_report.py` | 把 `eval-*.tsv` 汇总成 README §2.2 的两张表 |
-| `check_p1.py` | P1 验收：2 字词、译名墙案例、原词类不低于裸 grep |
+| `check_p1.py` | P1 题集验收：2 字词、原词类不低于裸 grep、查询边界回归。要 gold.tsv 与同目录的 eval-baseline/eval-index 读数，缺了退出码 2（没跑） |
 
 路径与技能解析：`BOOKS_ROOT` 换数据根，`BOOKS_SKILLS_DIR` 换技能根，`BOOKS_RG` 指定 `rg`，`PI_BIN` 指定 `pi`。默认值都由脚本位置推导，不写死绝对路径。
 
@@ -164,7 +164,7 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 |---|---|---|
 | 人账 `tables/ledger.db` | `book-corpus library --emit-json` | 输出里 `conflicts=0`，`books` 等于人账行数 |
 | 任何代码 | `uv run --frozen pytest`（在工具仓） | 全部通过 |
-| 结构、脚本、html | `book-corpus verify` | 末行「全过」 |
+| 结构、脚本、html | `book-corpus verify` | 末行「全过：N 项」 |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
-| 检索层（索引、概念表、build/views/主题） | `book-corpus run check_p1` 与 `book-corpus verify --box 6` | 前者「失败 0 项」，后者「全过」 |
+| 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |
 | 书级默认值或书卡 | `python3 ~/文档/book-corpus-data/工作区/批次/qa-检索-2026-10-22-书级融合/probe_b6.py --lanes --gate --perf` | 末行 `ALL PASS`；gate 证据为 `drop`，默认卡是产品决定 |

@@ -34,7 +34,8 @@ def test_doctor_accepts_fresh_workspace(tmp_path):
     r = run_cli("doctor", "--root", root)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "tables/ledger.db 0 行" in r.stdout
-    assert "无 build/library.db" in r.stdout
+    assert "书目库    book 表 0 行" in r.stdout
+    assert "检索索引   段 0 章 0 书 0" in r.stdout
 
 
 def test_doctor_rejects_empty_dir(tmp_path):

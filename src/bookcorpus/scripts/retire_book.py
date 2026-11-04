@@ -46,7 +46,7 @@ class Ctx:
         self.views = os.path.join(self.root, "build", "views")
         self.cold = os.path.join(self.lib, "_冷宫")
         self.cold_readme = os.path.join(self.cold, "README.md")
-        self.ledger = os.path.join(self.cat, "分类表.csv")
+        self.ledger = os.path.join(self.cat, "ledger.db")
         self.db = os.path.join(self.root, "build", "library.db")
         self.index = os.path.join(self.root, "build", "检索", "index.db")
         self.expand_dir = os.path.join(self.root, "build", "检索", "expand")
@@ -62,18 +62,6 @@ class Ctx:
         if self._source_index is None:
             self._source_index = scan_source_index(self)
         return self._source_index
-
-
-def read_ledger(path):
-    """(表头, 行列表)。表头原样保留，写回时不动别的列。"""
-    if not os.path.isfile(path):
-        return list(L.LEDGER_HEADER), []
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        rows = list(csv.reader(fh))
-    if not rows:
-        return list(L.LEDGER_HEADER), []
-    header, body = rows[0], rows[1:]
-    return header, [dict(zip(header, r)) for r in body if r]
 
 
 def iter_book_docs(ctx):

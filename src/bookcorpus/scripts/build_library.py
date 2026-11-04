@@ -149,10 +149,15 @@ def build(emit_json=False):
 
 # ---------------------------------------------------------------- 库模式
 def award_roster():
-    """奖项名单：迁移后看 工作区/批次/奖项下载-2026-10-18/，迁移前看 获奖名单与进度/。"""
-    for p in (os.path.join(L.WORK, "批次", "奖项下载-2026-10-18", "下载结果总表.csv"),
-              os.path.join(L.ROOT, "获奖名单与进度", "下载结果总表.csv")):
-        rows = L.read_csv(p)
+    """奖项名单：只在 工作区/批次 里找带下载表的批次，新库没有就空着。"""
+    base = os.path.join(L.WORK, "批次")
+    try:
+        batches = sorted(n for n in os.listdir(base)
+                         if n.startswith("奖项下载-") and os.path.isdir(os.path.join(base, n)))
+    except OSError:
+        batches = []
+    for name in reversed(batches):
+        rows = L.read_csv(os.path.join(base, name, "下载结果总表.csv"))
         if rows:
             return sorted({r.get("奖项", "") for r in rows if r.get("奖项")})
     return []

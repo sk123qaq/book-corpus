@@ -31,11 +31,11 @@ def load(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--batch", default="工作区/批次/pdf-普查-2026-10-19")
+    ap.add_argument("--batch", help="普查批次目录；默认工作区/批次 下最近一个 pdf-普查-*，没有就用今天")
     ap.add_argument("--csv")
     ap.add_argument("--per-day", type=int, default=20000, help="日额度页数，按平台硬额度算排期")
     a = ap.parse_args()
-    bp = os.path.join(ROOT, a.batch)
+    bp = os.path.join(ROOT, a.batch or L.batch_dir("pdf-普查-", root=ROOT, create=True))
     census = {r["uid"]: r for r in load(os.path.join(bp, "census.jsonl"))}
     probes = {}
     for f in ("scan_probe2.jsonl", "scan_probe_enc.jsonl"):

@@ -11,7 +11,6 @@ FAIL 表示有孤儿行、断链或对不上的账；WARN 表示批次在跑时�
 「== 文档 ==」一节只 WARN：AGENTS.md 的数字块与现库不一致就提示 doc_numbers.py --write。
 """
 import argparse
-import csv
 import json
 import os
 import sqlite3
@@ -22,11 +21,9 @@ sys.path.insert(0, HERE)
 from lib_common import L, ROOT, PATHS  # noqa: E402
 CORPUS = PATHS.books
 CAT = PATHS.tables
-CLASS_CSV = PATHS.ledger
 LIBDB = PATHS.library_db
 INDEX = PATHS.index_db
 VIEWS = PATHS.views
-MAP_CSV = os.path.join(CAT, "对照表.csv")
 
 FAIL = []
 WARN = []
@@ -95,17 +92,15 @@ def walk_md(books):
 
 
 def use_root(root):
-    global ROOT, CORPUS, CAT, CLASS_CSV, LIBDB, INDEX, VIEWS, MAP_CSV
+    global ROOT, CORPUS, CAT, LIBDB, INDEX, VIEWS
     ROOT = os.path.abspath(root)
     from lib_common import Layout
     paths = Layout(ROOT)
     CORPUS = paths.books
     CAT = paths.tables
-    CLASS_CSV = paths.ledger
     LIBDB = paths.library_db
     INDEX = paths.index_db
     VIEWS = paths.views
-    MAP_CSV = os.path.join(CAT, "对照表.csv")
 
 
 def docs():
@@ -281,11 +276,14 @@ def main():
                 sys.path.insert(0, HERE)
                 import build_expand
                 stub = sum(1 for p in missing_ch if build_expand.is_stub(os.path.join(ROOT, p)))
-            warn("expand 未覆盖 %d 章（空正文章 %d，待扩 %d）%s" % (
-                len(missing_ch), stub, len(missing_ch) - stub,
-                "" if args.deep else "；--deep 才区分"))
+            note = "" if args.deep else "；--deep 才区分"
+            if n_expand == 0:
+                say("  未启用扩写（可选阶段，不影响检索）：%d 章待扩%s" % (len(missing_ch), note))
+            else:
+                warn("expand 未覆盖 %d 章（空正文章 %d，待扩 %d）%s" % (
+                    len(missing_ch), stub, len(missing_ch) - stub, note))
 
-    say("\n== 视图 / 对照表 ==")
+    say("\n== 视图 ==")
     links = broken = 0
     for dirpath, dirnames, filenames in os.walk(VIEWS):
         for fn in dirnames + filenames:
@@ -298,15 +296,6 @@ def main():
         bad("视图软链 %d 条，断链 %d" % (links, broken))
     else:
         ok("视图软链 %d 条全部 resolve" % links)
-    with open(MAP_CSV, encoding="utf-8-sig") as fh:
-        map_rows = list(csv.DictReader(fh))
-    map_missing = [r["uid"] or r["旧路径"] for r in map_rows
-                   if r["新路径"].startswith(("books/", "collections/"))
-                   and not os.path.exists(os.path.join(ROOT, r["新路径"]))]
-    if map_missing:
-        bad("对照表指向不存在的库路径 %d: %s" % (len(map_missing), sample(map_missing)))
-    else:
-        ok("对照表的 v2 目标全部存在")
 
     say("\n== 文档 ==")
     docs()

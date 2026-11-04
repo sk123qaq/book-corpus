@@ -58,9 +58,19 @@ def init(target, tool_version="0.1.0", force=False, pdf_venv=True):
         f.write("# book-corpus 工作区清单。工具靠它认根，别再改 schema。\n")
         f.write("schema = %d\n" % SCHEMA)
         f.write('tool = "book-corpus %s"\n' % tool_version)
+    init_ledger(target)
     if pdf_venv and not pdfenv.disabled():
         _ok, _detail = pdfenv.create(target)
     return target
+
+
+def init_ledger(target):
+    """init 就把人账建成库；建不了不拦，doctor 会报「读的是 CSV 种子」。"""
+    try:
+        from .scripts import lib_common as LC
+        return LC.ledger_init(target)
+    except (OSError, sqlite3.Error, ImportError):
+        return False
 
 
 def check(root, version="0.1.0"):
@@ -87,7 +97,10 @@ def check(root, version="0.1.0"):
     try:
         from .scripts import lib_common as LC
         n = LC.categories_count(root=str(root))
-        add("ok" if n else "warn", "人账", "tables/ledger.db %d 行" % n)
+        if not LC.ledger_exists(str(root)):
+            add("warn", "人账", "无 tables/ledger.db，读的是 分类表.csv 种子；跑 book-corpus init --force 建库")
+        else:
+            add("ok" if n else "warn", "人账", "tables/ledger.db %d 行" % n)
     except SystemExit as exc:
         add("fail", "人账", str(exc))
 

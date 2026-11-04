@@ -98,14 +98,14 @@ def text_share(uid, census, probes):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--batch", default="工作区/批次/pdf-普查-2026-10-19")
+    ap.add_argument("--batch", help="普查批次目录；默认工作区/批次 下最近一个 pdf-普查-*，没有就用今天")
     ap.add_argument("--triage", help="输入分诊表，默认 <批次>/triage.csv，其次 <批次>/triage_final.csv")
     ap.add_argument("--out-dir", dest="out_dir", help="写账目录，默认批次目录")
     ap.add_argument("--review", action="append",
                     help="复核 JSON 目录，可多次给；默认 <批次>/review 与 <批次>/review_pic")
     ap.add_argument("--per-day", type=int, default=20000)
     a = ap.parse_args()
-    bp = os.path.join(ROOT, a.batch)
+    bp = os.path.join(ROOT, a.batch or L.batch_dir("pdf-普查-", root=ROOT, create=True))
     out_dir = os.path.abspath(a.out_dir) if a.out_dir else bp
     triage = a.triage or next(
         (p for p in (os.path.join(bp, "triage.csv"), os.path.join(bp, "triage_final.csv"))

@@ -93,6 +93,21 @@ def split_root(argv):
     return root, rest
 
 
+def _init_build(root):
+    """新库也要有 library.db 与 index.db：没书时 search/query 返回 0 条，不是报错。"""
+    made = []
+    if not os.path.exists(os.path.join(root, "build", "library.db")):
+        made.append(("书目库", _run_here(root, "library", quiet=True)))
+    if not os.path.exists(os.path.join(root, "build", "检索", "index.db")):
+        made.append(("检索索引", _run_here(root, "index", "--rebuild", quiet=True)))
+    for label, ok in made:
+        if not ok:
+            print("%s 没建好，跑 book-corpus %s 重试" % (label, "library" if label == "书目库" else "index --rebuild"))
+        else:
+            print("%s：空库已建好" % label)
+    return all(ok for _label, ok in made)
+
+
 def cmd_init(target, force, pdf_venv):
     path = workspace.init(target, __version__, force, pdf_venv)
     print("工作区建好：%s" % path)
@@ -103,6 +118,7 @@ def cmd_init(target, force, pdf_venv):
         print("PDF 环境没建好：%s" % detail)
         print("  重试：book-corpus venv --root %s" % path)
     print("概念表带通用概念（tables/ledger.db 的 概念 表，改表用操作台或直接改库），按自己的语料增删；--concept 只认表里的键。")
+    _init_build(path)
     print("下一步：放一本书进 %s/books/_收件箱，或跑 book-corpus sample 用内置样书" % path)
     return 0
 
@@ -226,11 +242,13 @@ def cmd_model(root, rest):
     raise SystemExit("model 只认 show、set、setup-pi、check")
 
 
-def _run_here(root, *argv):
+def _run_here(root, *argv, quiet=False):
     """子进程跑本包：run_script 同进程跑会复用已 import 的 lib_common，根是旧值。"""
     env = dict(os.environ, BOOKS_ROOT=root)
     proc = subprocess.run([sys.executable, "-m", "bookcorpus", *argv],
                           capture_output=True, text=True, env=env)
+    if quiet and proc.returncode == 0:
+        return True
     out = (proc.stdout or "").rstrip()
     if out:
         print(out)

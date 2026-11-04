@@ -41,4 +41,4 @@ uv run --frozen pytest
 git status --short
 ```
 
-改了结构或脚本再跑 `book-corpus doctor` 与 `book-corpus verify`；改了检索层加 `book-corpus run check_p1` 与 `book-corpus verify --box 6`。判据见 `README.md` 的「改完跑什么」。
+改了结构或脚本再跑 `book-corpus doctor` 与 `book-corpus verify`；改了检索层 `book-corpus verify --box 4`；有自己的检索题集时再跑 `book-corpus run check_p1 --gold <题集>/gold.tsv`。判据见 `README.md` 的「改完跑什么」。

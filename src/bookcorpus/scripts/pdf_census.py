@@ -232,7 +232,8 @@ def main():
         rows = rows[:a.limit]
     if (a.uid or a.limit) and not a.out:
         raise SystemExit("--uid/--limit 是子集跑法，必须给 --out，别覆盖定稿普查账")
-    out = a.out or os.path.join(ROOT, "工作区/批次/pdf-普查-2026-10-19/census.jsonl")
+    out = a.out or os.path.join(
+        L.batch_dir("pdf-普查-", root=ROOT, create=True), "census.jsonl")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     tmp = out + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f, ThreadPoolExecutor(a.workers) as ex:

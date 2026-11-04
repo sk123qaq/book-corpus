@@ -1,31 +1,29 @@
 #!/usr/bin/env python3
-"""L3/L5 门槛检查。拿基线（工作区/中间态/基线/）与 目录/对照表.csv 对现状。
+"""收尾门槛：四个箱子，对任何新库都成立，没有「跳过」。
 
 用法:
-  python3 verify_phase.py            # 六个箱子全查
-  python3 verify_phase.py --box 1    # 只查一个箱子
-箱子 1 源文件 inode 与抽查 sha  2 md 章节数  3 奖项 resolve  4 顶层与 book.json
-箱子 5 从零重建一致
-箱子 6 检索层（index.db / 概念表 / build/views 软链 / qsearch）
+  python3 verify_phase.py            # 四个箱子全查
+  python3 verify_phase.py --box 2    # 只查一个箱子
+箱子 1 奖项 resolve  2 顶层与 book.json  3 从零重建一致  4 检索层
+
+退出码：0 全过；1 有失败项。没有「跳过」：箱子里的检查在空库、单本库、
+多本库上都给出过或不过，验不到东西就不该放进这里。
+
+迁移库的源文件 inode 基线、奖项下载批次对盘、旧路径对照表，都是作者迁移
+一次性的输入，不在这个门槛里；对照表只剩 remap.py 的显式 --map 参数。
 """
 import argparse
-import csv
 import hashlib
 import os
 import sqlite3
 import subprocess
 import sys
-import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L  # noqa: E402
 
-BASE = os.path.join(L.WORK, "中间态", "基线")
-MAP = os.path.join(L.TABLES, "对照表.csv")
-BATCH_CSV = os.path.join(L.WORK, "批次", "奖项下载-2026-10-18", "下载结果总表.csv")
 FAIL = []
 PASSED = []
-SKIPPED = []
 
 
 def ok(msg):
@@ -38,160 +36,35 @@ def fail(msg):
     print("  [败] " + msg)
 
 
-def skip(msg):
-    SKIPPED.append(msg)
-    print("  [跳过] " + msg)
-
-
-def load_map():
-    m = {}
-    for r in L.read_csv(MAP):
-        m[r["旧路径"]] = r["新路径"]
-    return m
-
-
 def box1():
-    print("箱子 1 · 源文件 inode 与 sha256")
-    if not os.path.isfile(os.path.join(BASE, "源文件inode清单.txt")) or not os.path.isfile(
-            os.path.join(BASE, "抽查20本.csv")):
-        skip("箱子 1 缺作者基线")
+    print("箱子 1 · 奖项 resolve")
+    try:
+        con = sqlite3.connect("file:" + L.PATHS.library_db + "?mode=ro", uri=True)
+    except sqlite3.Error as exc:
+        fail("打不开 build/library.db（先 book-corpus library）：%s" % exc)
         return
-    mp = load_map()
-    with open(os.path.join(BASE, "源文件inode清单.txt"), encoding="utf-8") as fh:
-        base = [l.rstrip("\n") for l in fh if l.strip()]
-    if not base:
-        fail("基线 inode 清单是空的")
-    else:
-        ok("基线 inode 清单 %d 行（以清单自身为准）" % len(base))
-    bad = 0
-    for line in base:
-        parts = line.split(" ", 2)
-        if len(parts) != 3:
-            fail("基线行格式怪: " + line[:60])
-            continue
-        ino, size, old = parts
-        new = mp.get(old)
-        if not new:
-            fail("对照表没有: " + old)
-            bad += 1
-            continue
-        p = os.path.join(L.ROOT, new)
-        if not os.path.exists(p):
-            fail("搬完后文件不在: " + new)
-            bad += 1
-            continue
-        st = os.stat(p)
-        if str(st.st_ino) != ino or str(st.st_size) != size:
-            fail("inode/size 不符: " + new)
-            bad += 1
-    if not bad:
-        ok("1392 个源文件按对照表逐行对上，inode 与字节数不变")
-    # 多余源文件
-    extra = [r["新路径"] for r in L.read_csv(MAP)
-             if r["类别"] in ("源文件", "重复源") and not os.path.exists(
-                 os.path.join(L.ROOT, r["新路径"]))]
-    if extra:
-        fail("对照表里的源文件缺 %d 个: %s" % (len(extra), extra[:3]))
-    # 抽查 20 本 sha
-    rows = L.read_csv(os.path.join(BASE, "抽查20本.csv"))
-    bad = 0
-    for r in rows:
-        new = mp.get(r["路径"])
-        if not new:
-            fail("抽查书目不在对照表: " + r["路径"])
-            bad += 1
-            continue
-        got = L.sha256_file(os.path.join(L.ROOT, new))
-        if got != r["sha256"]:
-            fail("sha256 变了: " + new)
-            bad += 1
-    if not bad:
-        ok("抽查 %d 本 sha256 与迁移前一致" % len(rows))
+    try:
+        orphan = con.execute("SELECT count(*) FROM book_award ba LEFT JOIN award a "
+                             "ON a.name=ba.award WHERE a.name IS NULL").fetchone()[0]
+        if orphan:
+            fail("book_award 有 %d 条对不上 award" % orphan)
+        else:
+            ok("book_award %d 条全部落在 award 表里" % con.execute(
+                "SELECT count(*) FROM book_award").fetchone()[0])
+        uid_bad = con.execute("SELECT count(*) FROM book_award ba LEFT JOIN book b "
+                              "ON b.uid=ba.uid WHERE b.uid IS NULL").fetchone()[0]
+        if uid_bad:
+            fail("book_award 有 %d 条对不上书" % uid_bad)
+        else:
+            ok("每条奖项记录都能 resolve 到具体书")
+    except sqlite3.Error as exc:
+        fail("奖项表查询失败：%s" % exc)
+    finally:
+        con.close()
 
 
 def box2():
-    print("箱子 2 · md 目录章节数")
-    if not os.path.isfile(os.path.join(BASE, "md章节数.csv")):
-        skip("箱子 2 缺作者基线")
-        return
-    mp = load_map()
-    base = L.read_csv(os.path.join(BASE, "md章节数.csv"))
-    bad = 0
-    for r in base:
-        old = os.path.join("书md", r["md目录"])
-        new = mp.get(old)
-        if not new:
-            fail("对照表没有 md 目录: " + old)
-            bad += 1
-            continue
-        p = os.path.join(L.ROOT, new)
-        if not os.path.isdir(p):
-            fail("搬完后 md 目录不在: " + new)
-            bad += 1
-            continue
-        ch, by = L.count_md_dir(p)
-        if ch != int(r["章节数"]) or by != int(r["字节数"]):
-            fail("md 不符 %s: %s/%s -> %d/%d" % (r["md目录"], r["章节数"], r["字节数"], ch, by))
-            bad += 1
-    if not bad:
-        ok("%d 个 md 目录、%d 章逐一对上" % (len(base), sum(int(r["章节数"]) for r in base)))
-
-
-def box3():
-    print("箱子 3 · 奖项 resolve")
-    con = sqlite3.connect("file:" + L.PATHS.library_db + "?mode=ro", uri=True)
-    orphan = con.execute("SELECT count(*) FROM book_award ba LEFT JOIN award a "
-                         "ON a.name=ba.award WHERE a.name IS NULL").fetchone()[0]
-    if orphan:
-        fail("book_award 有 %d 条对不上 award" % orphan)
-    else:
-        ok("book_award %d 条全部落在 award 表里" % con.execute(
-            "SELECT count(*) FROM book_award").fetchone()[0])
-    uid_bad = con.execute("SELECT count(*) FROM book_award ba LEFT JOIN book b "
-                          "ON b.uid=ba.uid WHERE b.uid IS NULL").fetchone()[0]
-    if uid_bad:
-        fail("book_award 有 %d 条对不上书" % uid_bad)
-    else:
-        ok("每条奖项记录都能 resolve 到具体书")
-    # 批次总表里成功的行，按「文件路径」逐条落到磁盘（库或废弃）
-    batch_work = os.path.join(L.ROOT, "工作区", "批次", "奖项下载-2026-10-18", "work")
-    if not os.path.isdir(batch_work):
-        skip("箱子 3 缺批次工作目录，跳过批次总表对盘")
-    elif not os.path.isfile(BATCH_CSV):
-        fail("批次总表不存在: %s" % BATCH_CSV)
-    else:
-        rows = L.read_csv(BATCH_CSV)
-        good = [r for r in rows if (r.get("状态") or "").startswith("✅")]
-        mp = load_map()
-        miss, in_lib, in_discard = [], 0, 0
-        for r in good:
-            fp = (r.get("文件路径") or "").strip()
-            if not fp:
-                rel = ""
-            elif os.path.isabs(fp):
-                rel = os.path.relpath(fp, L.ROOT)
-            else:
-                rel = fp
-            new = mp.get(rel)
-            if not new and os.path.exists(os.path.join(L.ROOT, rel)):
-                new = rel          # L4 之后批次表里记的已是新路径
-            if not new or not os.path.exists(os.path.join(L.ROOT, new)):
-                miss.append((r.get("奖项"), (r.get("下载书名") or "")[:40], rel[:70]))
-                continue
-            if new.startswith(os.path.join("工作区", "废弃")):
-                in_discard += 1
-            else:
-                in_lib += 1
-        if miss:
-            fail("批次总表 %d 条成功记录对不上磁盘: %s" % (len(miss), miss[:3]))
-        else:
-            ok("批次总表 %d 条成功记录的 文件路径 全部落到磁盘（库 %d，废弃 %d）"
-               % (len(good), in_lib, in_discard))
-    con.close()
-
-
-def box4():
-    print("箱子 4 · 顶层结构与 book.json")
+    print("箱子 2 · 顶层结构与 book.json")
     tops = sorted(n for n in os.listdir(L.ROOT) if os.path.isdir(os.path.join(L.ROOT, n)))
     want = sorted(["books", "collections", "tables", "build", "工作区"])
     # .pi 是 pi 的项目配置目录、.git 是版本库、.agents 是随仓库提交的技能，
@@ -201,7 +74,8 @@ def box4():
     if tops != want:
         fail("顶层目录 %s != %s" % (tops, want))
     elif harness:
-        ok("顶层内容目录只剩 books/ collections/ tables/ build/ 工作区/，另有工具目录 %s" % ", ".join(harness))
+        ok("顶层内容目录只剩 books/ collections/ tables/ build/ 工作区/，另有工具目录 %s"
+           % ", ".join(harness))
     else:
         ok("顶层只剩 books/ collections/ tables/ build/ 工作区/")
     books = L.iter_book_json()
@@ -221,15 +95,17 @@ def box4():
                              owner, "source", os.path.basename(name))
             if not os.path.exists(p):
                 missing.append((uid, name))
-    if checked and len(missing) > checked * 0.5:
-        skip("当前库缺 %d/%d 个源文件（克隆状态），跳过源路径检查" % (len(missing), checked))
-    elif missing:
-        for rel, f in missing[:3]:
+    if missing:
+        for uid, f in missing[:3]:
             fail("book.json 指的源不在: %s -> %s" % (uid, f))
-    else:
-        ok("每本书的 source 路径都能落到文件")
+        if len(missing) > 3:
+            fail("共 %d/%d 个源文件找不到" % (len(missing), checked))
+    elif checked:
+        ok("每本书的 source 路径都能落到文件（%d 个）" % checked)
     if os.path.isdir(L.PATHS.inbox):
         ok("books/_收件箱 已建")
+    else:
+        fail("缺 books/_收件箱（book-corpus init 会建）")
 
 
 def db_dump():
@@ -251,8 +127,8 @@ def db_dump():
     return "\n".join(lines)
 
 
-def box5():
-    print("箱子 5 · 从零重建一致")
+def box3():
+    print("箱子 3 · 从零重建一致")
     before = db_dump()
     h1 = hashlib.sha256(before.encode()).hexdigest()
     out = subprocess.run([sys.executable, os.path.join(L.SCRIPTS, "build_library.py")],
@@ -274,109 +150,111 @@ def box5():
     print("    重建输出: " + out.stdout.strip().replace("\n", " "))
 
 
-def box6():
-    print("箱子 6 · 检索层（可重建产物）")
+def _qsearch_hits(word):
+    out = subprocess.run([sys.executable, os.path.join(L.SCRIPTS, "qsearch.py"), word,
+                          "-n", "3", "--json"], capture_output=True, text=True)
+    if out.returncode != 0:
+        return None, out.stderr[-200:]
+    try:
+        import json
+        body = json.loads(out.stdout)
+    except ValueError:
+        return None, "输出不是 JSON: " + out.stdout[:120]
+    return body.get("hits") or [], ""
+
+
+def box4():
+    print("箱子 4 · 检索层（可重建产物）")
     db = L.PATHS.index_db
     if not os.path.isfile(db):
-        skip("没有 build/检索/index.db，先 book-corpus index --rebuild")
+        fail("没有 build/检索/index.db（先 book-corpus index --rebuild）")
         return
     con = sqlite3.connect("file:%s?mode=ro" % db, uri=True)
-    meta = dict(con.execute("SELECT key,value FROM meta"))
-    nbooks = int(meta.get("books", 0))
-    npara = con.execute("SELECT count(*) FROM para").fetchone()[0]
-    nchap = con.execute("SELECT count(DISTINCT path) FROM para").fetchone()[0]
-    if npara and nchap and int(meta.get("paras", 0)) == npara:
-        ok("index.db %d 段 / %d 章，meta 一致（%.2f GB）" % (
-            npara, nchap, os.path.getsize(db) / 1e9))
-    else:
-        fail("index.db 段落数或 meta 不一致: %s vs %d" % (meta.get("paras"), npara))
-    bad = con.execute("SELECT count(*) FROM para WHERE path NOT LIKE 'books/%'").fetchone()[0]
-    if bad == 0:
-        ok("倒排只指向 books/ 下的路径")
-    else:
-        fail("倒排里有 %d 段不在 books/ 下" % bad)
-    rows = L.concept_rows()
-    keys = [r["key"] for r in rows]
-    if len(rows) >= 100 and len(set(keys)) == len(keys):
-        ok("概念表 %d 条，键不重复" % len(rows))
-    else:
-        fail("概念表条数 %d，或键有重复" % len(rows))
-    nbc, bbc = con.execute(
-        "SELECT count(*), count(DISTINCT book) FROM book_concept").fetchone()
-    if nbooks < 10:
-        skip("概念剖面 %d 条（语料只有 %d 本）" % (nbc, nbooks))
-    elif nbc and bbc >= 0.8 * nbooks:
-        ok("概念剖面 %d 条，覆盖 %d/%d 本" % (nbc, bbc, nbooks))
-    else:
-        fail("概念剖面 %d 条，覆盖 %d/%d 本；重建后补 build_para_index --concepts"
-             % (nbc, bbc, nbooks))
-    views = os.path.join(L.PATHS.views, "主题")
-    if not os.path.isdir(views):
-        skip("没有 build/views/主题/（还没重建视图）")
-    else:
-        links = broken = 0
-        for dirpath, dirnames, files in os.walk(views):
-            for fn in dirnames + [f for f in files if f != "README.md"]:
-                p = os.path.join(dirpath, fn)
-                if not os.path.islink(p):
-                    continue
-                links += 1
-                if not os.path.exists(p):
-                    broken += 1
-        if links and not broken:
-            ok("build/views/主题 %d 条软链全部 resolve" % links)
-        elif not links and not broken:
-            skip("build/views/主题 为空（语料太小或未建主题视图）")
+    try:
+        meta = dict(con.execute("SELECT key,value FROM meta"))
+        npara = con.execute("SELECT count(*) FROM para").fetchone()[0]
+        nchap = con.execute("SELECT count(DISTINCT path) FROM para").fetchone()[0]
+        if int(meta.get("paras", -1)) == npara and int(meta.get("chapters", -1)) == nchap:
+            ok("index.db %d 段 / %d 章，meta 一致（%.2f GB）" % (
+                npara, nchap, os.path.getsize(db) / 1e9))
         else:
-            fail("build/views/主题 软链 %d 条，断链 %d 条" % (links, broken))
-    awards = os.path.join(L.PATHS.views, "奖项")
-    if os.path.isdir(awards):
-        links = broken = 0
-        for dirpath, dirnames, files in os.walk(awards):
-            for fn in dirnames + [f for f in files if f != "README.md"]:
-                p = os.path.join(dirpath, fn)
-                if os.path.islink(p):
-                    links += 1
-                    broken += 0 if os.path.exists(p) else 1
-        if links and not broken:
-            ok("build/views/奖项 %d 条软链全部 resolve" % links)
-        elif not links and not broken:
-            skip("build/views/奖项 为空")
+            fail("meta 与表不一致: paras %s/%d chapters %s/%d" % (
+                meta.get("paras"), npara, meta.get("chapters"), nchap))
+        outside = con.execute("SELECT count(*) FROM para WHERE path NOT LIKE 'books/%'"
+                             ).fetchone()[0]
+        if outside:
+            fail("倒排里有 %d 段不在 books/ 下" % outside)
+        gone = [p for (p,) in con.execute("SELECT DISTINCT path FROM para")
+                if not os.path.isfile(os.path.join(L.ROOT, p))]
+        if gone:
+            fail("倒排指向 %d 个不存在的文件，例：%s" % (len(gone), gone[:3]))
         else:
-            fail("build/views/奖项 软链 %d 条，断链 %d 条" % (links, broken))
+            ok("倒排路径全部落在 books/ 且文件都在")
+        rows = L.concept_rows()
+        keys = [r["key"] for r in rows]
+        if not rows or len(set(keys)) != len(keys):
+            fail("概念表 %d 条，或键有重复" % len(rows))
+        else:
+            ok("概念表 %d 条，键不重复" % len(rows))
+        known = set(keys)
+        bc = con.execute("SELECT key, count(*) FROM book_concept GROUP BY key"
+                         ).fetchall()
+        stray = [c for c, _ in bc if c not in known]
+        if stray:
+            fail("概念剖面里有 %d 个键不在概念表：%s" % (len(stray), stray[:3]))
+        else:
+            ok("概念剖面 %d 条，键都在概念表里" % sum(n for _, n in bc))
+    except sqlite3.Error as exc:
+        fail("index.db 查询失败：%s" % exc)
+    finally:
+        con.close()
+    views = L.PATHS.views
+    links = broken = 0
+    outside = []
+    for dirpath, dirnames, files in os.walk(views):
+        for fn in dirnames + [f for f in files if f != "README.md"]:
+            p = os.path.join(dirpath, fn)
+            if not os.path.islink(p):
+                continue
+            links += 1
+            if not os.path.exists(p):
+                broken += 1
+            elif not os.path.realpath(p).startswith(os.path.realpath(L.PATHS.books) + os.sep):
+                outside.append(p)
+    if broken:
+        fail("build/views 有 %d/%d 条软链断了" % (broken, links))
+    elif outside:
+        fail("build/views 有 %d 条软链指到 books/ 之外，例：%s" % (len(outside), outside[:3]))
+    else:
+        ok("build/views %d 条软链全部 resolve 且指向 books/" % links)
     for word in ("自由", "内卷"):
-        out = subprocess.run([sys.executable, os.path.join(L.SCRIPTS, "qsearch.py"), word,
-                              "-n", "3", "--json"], capture_output=True, text=True)
-        if out.returncode == 0 and '"hits"' in out.stdout and '"path"' in out.stdout:
-            ok("qsearch %s 有结果" % word)
-        elif nbooks < 10:
-            skip("qsearch %s 无结果（语料只有 %d 本）" % (word, nbooks))
+        hits, err = _qsearch_hits(word)
+        if hits is None:
+            fail("qsearch %s 跑不通: %s" % (word, err))
+            continue
+        bad = [h for h in hits if not os.path.isfile(os.path.join(L.ROOT, h.get("path", "")))]
+        if bad:
+            fail("qsearch %s 的 %d 条命中指向不存在的文件" % (word, len(bad)))
         else:
-            fail("qsearch %s 没结果: %s" % (word, out.stderr[-200:]))
+            ok("qsearch %s 返回 %d 条，路径都在盘上" % (word, len(hits)))
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--box", type=int, default=0)
     args = ap.parse_args()
-    boxes = {1: box1, 2: box2, 3: box3, 4: box4, 5: box5, 6: box6}
+    boxes = {1: box1, 2: box2, 3: box3, 4: box4}
+    if args.box and args.box not in boxes:
+        ap.error("--box 只认 1-4")
     for i in sorted(boxes):
         if args.box and args.box != i:
             continue
         boxes[i]()
     print()
     if FAIL:
-        print("门槛不过：%d 项" % len(FAIL))
+        print("门槛不过：%d 项失败，%d 项通过" % (len(FAIL), len(PASSED)))
         sys.exit(1)
-    if not PASSED:
-        # 一项都没验到（空语料、缺基线、缺 index.db）不能打「全过」：那是假绿
-        print("没验到东西：0 项通过、%d 项跳过，不算全过" % len(SKIPPED))
-        sys.exit(1)
-    if SKIPPED:
-        # 部分箱子跳过、其余通过也不是全过，维护门的 ^全过$ 会假绿
-        print("通过 %d 项，跳过 %d 项，不算全过" % (len(PASSED), len(SKIPPED)))
-        sys.exit(1)
-    print("全过")
+    print("全过：%d 项" % len(PASSED))
 
 
 if __name__ == "__main__":

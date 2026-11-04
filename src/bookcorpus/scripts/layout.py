@@ -80,6 +80,11 @@ class Layout:
 
     @property
     def ledger(self):
+        """人账本体是库；分类表.csv 只是 init 的种子。"""
+        return os.path.join(self.tables, "ledger.db")
+
+    @property
+    def ledger_seed(self):
         return os.path.join(self.tables, "分类表.csv")
 
     @property

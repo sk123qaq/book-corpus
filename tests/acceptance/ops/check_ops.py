@@ -90,6 +90,10 @@ print(json.dumps({"books": 3, "sources": 3, "conflicts": 0, "md_done": 1}))
 '''
 
 STUB_CATALOG = '''#!/usr/bin/env python3
+import os, sys
+if os.path.exists(".catalog-nomarker"):
+    print("完成")
+    sys.exit(0)
 print("未匹配 0 条")
 '''
 
@@ -1273,14 +1277,13 @@ def run_checks(root, ops, port, fixture):
           "%s 步骤=%s" % (body, names))
 
     # ---- 收尾 ------------------------------------------------------
-    code, body = post(port, "/api/maintain", {"steps": ["verify", "p1", "catalog"]})
+    code, body = post(port, "/api/maintain", {"steps": ["verify", "catalog"]})
     maintain_id = body.get("job_id")
     detail = wait_job(port, maintain_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check("收尾门槛全过", job.get("state") == "succeeded", str(job.get("summary")))
     check("收尾按既定顺序",
-          [s["name"] for s in (detail or {}).get("steps", [])] == ["verify", "p1",
-                                                                   "catalog"])
+          [s["name"] for s in (detail or {}).get("steps", [])] == ["verify", "catalog"])
     open(os.path.join(root, ".verify-bad"), "w").close()
     code, body = post(port, "/api/maintain", {"steps": ["verify"]})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
@@ -1318,23 +1321,23 @@ def run_checks(root, ops, port, fixture):
     os.remove(os.path.join(root, ".verify-slow"))
 
     # ---- marker 门槛：rc=0 但日志里没门槛就算失败，后面的步骤不再跑 ----
-    open(os.path.join(root, ".p1-nomarker"), "w").close()
-    code, body = post(port, "/api/maintain", {"steps": ["p1", "catalog"]})
+    open(os.path.join(root, ".catalog-nomarker"), "w").close()
+    code, body = post(port, "/api/maintain", {"steps": ["catalog", "doc"]})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     steps = (detail or {}).get("steps") or []
-    p1 = next((s for s in steps if s.get("name") == "p1"), {})
+    p1 = next((s for s in steps if s.get("name") == "catalog"), {})
     check("rc=0 但没门槛判失败", job.get("state") == "failed"
           and "未出现门槛" in (job.get("summary") or ""), str(job.get("summary")))
     check("没门槛的那一步记 fail", p1.get("state") == "fail"
           and "未出现门槛" in (p1.get("detail") or ""),
           "%s · %s" % (p1.get("state"), p1.get("detail")))
     check("没门槛后面那步不再跑",
-          next((s for s in steps if s.get("name") == "catalog"), {}).get("state")
+          next((s for s in steps if s.get("name") == "doc"), {}).get("state")
           in (None, "pending")
-          and "---- step catalog ----" not in job_log(port, body.get("job_id")),
+          and "---- step doc ----" not in job_log(port, body.get("job_id")),
           str([(s.get("name"), s.get("state")) for s in steps]))
-    os.remove(os.path.join(root, ".p1-nomarker"))
+    os.remove(os.path.join(root, ".catalog-nomarker"))
 
     # ---- 删书 ------------------------------------------------------
     code, body = post(port, "/api/delete/dry-run", {"uid": "B0002", "reason": "重复"})

@@ -13,41 +13,68 @@ def _load_check_p1():
     return mod
 
 
-def test_gold_path_map_from_duizhaobiao(tmp_path):
-    """合成 gold（2 条 库/ 路径）+ 对照表，锁 库/ -> books/<uid> 映射。"""
+def _ws(tmp_path):
     root = tmp_path / "ws"
-    (root / "tables").mkdir(parents=True)
-    for uid, name in (("B0001", "甲"), ("B0002", "乙")):
-        md = root / "books" / uid / "md"
-        md.mkdir(parents=True)
-        (md / "x.md").write_text("x", encoding="utf-8")
+    (root / "books" / "B0001" / "md").mkdir(parents=True)
+    (root / "books" / "B0001" / "md" / "x.md").write_text("x", encoding="utf-8")
+    (root / "工作区" / "批次").mkdir(parents=True)
+    return root
 
-    rows = [
-        ["序号", "阶段", "uid", "类别", "旧路径", "新路径", "备注"],
-        ["1", "3", "B0001", "md", "书md/甲", "库/文学/甲/md", ""],
-        ["2", "3", "B0002", "md", "书md/乙", "库/文学/乙/md", ""],
-    ]
-    with open(root / "tables" / "对照表.csv", "w", encoding="utf-8-sig", newline="") as fh:
-        csv.writer(fh).writerows(rows)
 
+def test_find_gold_takes_latest_batch(tmp_path, monkeypatch):
+    """默认按最近一个 qa-检索-* 批次取 gold，不再写死 2026-10-19。"""
+    root = _ws(tmp_path)
+    for day in ("2026-10-19", "2026-11-05"):
+        batch = root / "工作区" / "批次" / ("qa-检索-" + day)
+        batch.mkdir()
+        (batch / "gold.tsv").write_text("qid\tpath\n", encoding="utf-8")
+    mod = _load_check_p1()
+    monkeypatch.setattr(mod, "BATCH_ROOT", str(root / "工作区" / "批次"))
+    got, why = mod.find_gold()
+    assert got.endswith("qa-检索-2026-11-05/gold.tsv")
+    assert "2026-11-05" in why
+
+    explicit = root / "其它" / "g.tsv"
+    explicit.parent.mkdir()
+    explicit.write_text("qid\tpath\n", encoding="utf-8")
+    assert mod.find_gold(str(explicit)) == (str(explicit), "--gold")
+
+
+def test_gold_rows_outside_library_fail(tmp_path, monkeypatch):
+    """题集指的正文不在库里就算失败，不再静默 SKIP。"""
+    root = _ws(tmp_path)
     gold = root / "gold.tsv"
     gold.write_text(
         "qid\tcategory\tpath\n"
-        "q1\t原词\t库/文学/甲/md/x.md\n"
-        "q2\t原词\t库/文学/乙/md/x.md\n"
-        "q3\t原词\t库/文学/丙/md/z.md\n",
+        "q1\t原词\tbooks/B0001/md/x.md\n"
+        "q2\t原词\tbooks/B9999/md/y.md\n",
         encoding="utf-8")
-
     mod = _load_check_p1()
-    table = mod.read_path_map(root)
-    assert table["库/文学/甲/md"] == "B0001"
-    assert table["库/文学/乙/md"] == "B0002"
+    monkeypatch.setattr(mod, "ROOT", str(root))
+    mod.fails.clear()
+    rows, mapped = mod.load_gold(str(gold))
+    assert len(rows) == 2 and len(mapped) == 1
+    assert mod.fails == ["gold q2"]
 
-    with open(gold, encoding="utf-8") as fh:
-        got = [(r["qid"], mod.map_gold_path(r["path"], table))
-               for r in csv.DictReader(fh, delimiter="\t")]
-    assert got[0][1] == ("books/B0001/md/x.md", "")
-    assert got[1][1] == ("books/B0002/md/x.md", "")
-    assert got[2][1][0] is None
-    assert "无匹配" in got[2][1][1]
-    assert mod.map_gold_path("books/B0001/md/x.md", table) == ("books/B0001/md/x.md", "")
+
+def test_no_gold_exits_2(tmp_path, monkeypatch):
+    """没有题集 = 没跑：退出码 2，不是 0。"""
+    root = _ws(tmp_path)
+    mod = _load_check_p1()
+    monkeypatch.setattr(mod, "ROOT", str(root))
+    monkeypatch.setattr(mod, "BATCH_ROOT", str(root / "工作区" / "批次"))
+    monkeypatch.delenv("BOOKS_P1_GOLD", raising=False)
+    assert mod.main([]) == 2
+
+
+def test_empty_gold_exits_2(tmp_path, monkeypatch):
+    """题集只有表头 = 没有可验的行：退出码 2。"""
+    root = _ws(tmp_path)
+    batch = root / "工作区" / "批次" / "qa-检索-2026-11-05"
+    batch.mkdir()
+    (batch / "gold.tsv").write_text("qid\tcategory\tpath\n", encoding="utf-8")
+    mod = _load_check_p1()
+    monkeypatch.setattr(mod, "ROOT", str(root))
+    monkeypatch.setattr(mod, "BATCH_ROOT", str(root / "工作区" / "批次"))
+    monkeypatch.delenv("BOOKS_P1_GOLD", raising=False)
+    assert mod.main([]) == 2

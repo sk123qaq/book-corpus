@@ -24,7 +24,7 @@
 | `books/_收件箱/` | 新书落地处，入库走 `book-corpus ingest` |
 | `books/_冷宫/` | 移出处理流程的书，只留原书文件，不在人账，不进检索 |
 | `collections/<Cuid>/source/` | 拆书前的合集原书，由书的 `book.json` 用 `collection` 引用 |
-| `tables/分类表.csv` | 唯一人账，一行一本书。只有它允许人改 |
+| `tables/ledger.db` | 唯一人账（`分类` 表一行一本书，`概念`/`概念broad`/`动作词` 是检索词表）。`tables/分类表.csv` 只是 init 的种子，入库后不再读它 |
 | `tables/概念表*.tsv` | 检索层的概念键与同义词组，人写人改 |
 | `tables/系列/` | 书系说明，卷序看这里 |
 | `build/library.db` | 全库书目，SQLite，产物，可重建 |
@@ -241,10 +241,10 @@ book-corpus sample
 book-corpus search 你那里配姓赵
 ```
 
-`sample` 把《阿Q正传》的源文与拆好的九章 md 复制进工作区，分配 uid、写 `book.json` 与分类表一行，再建库建索引。重复运行不会进第二本。文本来源、版本与许可见 `src/bookcorpus/sample/阿Q正传/README.md`。
+`sample` 把《阿Q正传》的源文与拆好的九章 md 复制进工作区，分配 uid、写 `book.json` 与人账 `tables/ledger.db` 一行，再建库建索引。重复运行不会进第二本。文本来源、版本与许可见 `src/bookcorpus/sample/阿Q正传/README.md`。
 
 1. 把书拷进 `books/_收件箱/`。
-2. `book-corpus ingest scan` 出计划，`book-corpus ingest apply --apply` 落到 `books/<uid>/source/`，同时写 `book.json` 与 `tables/分类表.csv` 一行。
+2. `book-corpus ingest scan` 出计划，`book-corpus ingest apply --apply` 落到 `books/<uid>/source/`，同时写 `book.json` 与 `tables/ledger.db` 的 `分类` 表一行。
 3. `book-corpus library` 建库，`book-corpus run split_md_batch --batch <批次名> --uids <uid>` 拆章，`book-corpus index --rebuild` 建检索索引。
 
 ```bash
@@ -277,7 +277,7 @@ book-corpus library
 book-corpus index --rebuild
 ```
 
-`build_library.py` 读 `tables/分类表.csv` 与 `book.json`，重建 `build/library.db`。`build_para_index.py --rebuild` 全量重建检索索引，耗时随语料增长，几十分钟到几小时。
+`build_library.py` 读 `tables/ledger.db` 与 `book.json`，重建 `build/library.db`。`build_para_index.py --rebuild` 全量重建检索索引，耗时随语料增长，几十分钟到几小时。
 
 ## 常用命令
 
@@ -344,13 +344,14 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
 | 任何代码 | `uv run --frozen pytest` | 全部通过 |
-| 人账 `tables/分类表.csv` | `book-corpus library` | `conflicts=0`，`books` 等于人账行数 |
+| 人账 `tables/ledger.db` | `book-corpus library` | `conflicts=0`，`books` 等于人账行数 |
 | 结构、脚本 | `book-corpus doctor` | 无 `fail` |
-| 结构、检索层 | `book-corpus verify` | 末行「全过」，缺基线时部分箱子打印「跳过」 |
+| 结构、检索层 | `book-corpus verify` | 末行「全过：N 项」 |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
-| 检索层 | `book-corpus run check_p1` 与 `book-corpus verify --box 6` | 前者「失败 0 项」或 `SKIP`，后者「全过」 |
+| 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |
 
-`verify_phase.py`、`check_p1.py` 与 `gen_book_catalog.py` 是作者实例检查。缺基线、评测书时，前两个会打印 `[跳过]` 或 `SKIP`；`gen_book_catalog.py` 需要源文件在盘，克隆状态不会通过。
+`verify` 是四个箱子：奖项 resolve、顶层与 `book.json`、从零重建一致、检索层（`--box 4`）。四个箱子对任何新库都成立，所以它没有「跳过」，末行不是「全过」就是失败。
+脚本的退出码统一成：`0` 通过，`1` 有断言失败，`2` 前置缺失（没跑，比如没有题集）。`check_p1` 属于第三种：它验的是你自己的检索题集，新库没有题集就不该把它塞进收尾流程，一键收尾默认也不跑它。
 
 `tests/acceptance/` 的 8 个离线入口（`check_ops`、`test_status`、`test_classify`、`test_doc_numbers`、`test_split`、`test_retire`、`test_pdf`、`test_answer_retry`）由 pytest 收集；需要 Chrome、真实模型或真实会话的 `check_demo`、`check_session*`、`check_result_ms`、`shot_ops`、`repro-*` 在 `tests/manual/`，清单与跑法见 `tests/manual/README.md`。
 
@@ -368,7 +369,7 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 - 一个账本一个写者。人账的已有行只由人改。新行由 `ingest.py` 与 `classify_books.py --add-new` 追加，同一时刻只跑一个。
 - 写文件用 tmp 加 `os.replace`。库里的旧文件可能与快照共享 inode，截断式原地写会同时改掉快照。
 - 拆章产物落 `books/<uid>/md/` 才算落地。`v_pending_md` 视图只认这个目录。
-- 把一本书移出流程：删 `md/`，`book.json` 改名 `book.json.归档`，书目录移入 `books/_冷宫/`，从 `tables/分类表.csv` 删行，再重建 DB、检索索引与视图。
+- 把一本书移出流程：删 `md/`，`book.json` 改名 `book.json.归档`，书目录移入 `books/_冷宫/`，从 `tables/ledger.db` 删行（`book-corpus run retire_book` 会做这一步），再重建 DB、检索索引与视图。
 - 批次机账只追加。`worklist.tsv` 一旦生成就以它为准，不重写。
 
 ## 已知限制
