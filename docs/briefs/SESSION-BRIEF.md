@@ -65,16 +65,18 @@ def check(question, previous, use_cache=True, thinking="low"):
 ## 新模块 `session.py`
 
 ```python
-SESS_DIR = 缓存/sessions
+SESS_DIR = HERE / "缓存" / "sessions"
 HISTORY_CHARS_SINGLE = 5000
 HISTORY_CHARS_MULTI = 10000
 
-def new_id(): ...            # secrets.token_hex(6)
-def create(): ...            # {"id","created_at","updated_at","turns":[]}
-def load(sid): ...           # dict | None；坏文件返回 None，不抛
-def save(sess): ...          # 原子写，tmp + os.replace
-def find(sess, n): ...       # turn | None
-def public(sess): ...        # {"id","turns":[{"n","question","related","answer_lead"}]}
+
+def new_id(): ...  # secrets.token_hex(6)
+def create(): ...  # {"id","created_at","updated_at","turns":[]}
+def load(sid): ...  # dict | None；坏文件返回 None，不抛
+def save(sess): ...  # 原子写，tmp + os.replace
+def find(sess, n): ...  # turn | None
+def public(sess): ...  # {"id","turns":[{"n","question","related","answer_lead"}]}
+
 
 def build_context(turns, budget, anchor=None):
     """turns 是当前会话里当前问之前的所有 turn，最后一个是上一轮。

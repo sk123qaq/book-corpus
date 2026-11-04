@@ -45,6 +45,7 @@ def _book_names(turn):
     # 退路：answer.citations[].book / path -> /md/ 前最后一段
     # 再退路：trace.result.book_title
 
+
 def summaries(limit=None):
     """历史会话摘要，按 updated_at 倒序。只读。
     返回 [{id, updated_at, turns, question, last_question, books}]
@@ -346,12 +347,20 @@ CSS 从原型 rail 段照搬，适配生产 `.rail` 的 18px 内边距与现有 
 ```python
 status, data = get_json("/api/sessions")
 rows = data.get("sessions") or []
-check("会话列表接口", status == 200 and data.get("ok") is True
-      and any(r.get("id") == sid for r in rows), "rows=%d" % len(rows))
+check(
+    "会话列表接口",
+    status == 200 and data.get("ok") is True and any(r.get("id") == sid for r in rows),
+    "rows=%d" % len(rows),
+)
 row = next((r for r in rows if r.get("id") == sid), {})
-check("会话摘要字段", row.get("turns") == 3 and bool(row.get("question"))
-      and bool(row.get("updated_at")) and isinstance(row.get("books"), list),
-      str(row)[:180])
+check(
+    "会话摘要字段",
+    row.get("turns") == 3
+    and bool(row.get("question"))
+    and bool(row.get("updated_at"))
+    and isinstance(row.get("books"), list),
+    str(row)[:180],
+)
 ```
 
 ### `验收/check_session_ui.py`
