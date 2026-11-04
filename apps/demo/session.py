@@ -10,6 +10,7 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import sys
 import threading
 import time
@@ -22,6 +23,7 @@ import trace as tracer  # noqa: E402
 from answer import HISTORY_CHARS_MULTI, HISTORY_CHARS_SINGLE  # noqa: E402,F401
 
 SESS_DIR = os.path.join(HERE, "缓存", "sessions")
+LIBRARY_DB = tracer.LIB_DB
 ID_RE = re.compile(r"^[a-f0-9]{12}$")
 
 MAX_CHAPTERS = 12
@@ -353,8 +355,7 @@ def _book_names(turn):
         if isinstance(ans, dict):
             for cite in ans.get("citations") or []:
                 if isinstance(cite, dict):
-                    add(cite.get("book_title")
-                        or _book_of(cite.get("book"), cite.get("path")))
+                    add(citation_title(turn, cite))
         if not names:
             result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
             add(result.get("book_title") or result.get("book"))
@@ -420,6 +421,75 @@ def _book_of(book, path):
 
 def _book_name(book):
     return str(book or "").strip().rsplit("/", 1)[-1]
+
+
+def library_title(book):
+    """build/library.db 的 book 表按 uid 取书名；查不到返回空串。"""
+    book = str(book or "").strip()
+    if not book:
+        return ""
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % LIBRARY_DB, uri=True)
+        try:
+            row = con.execute("SELECT title FROM book WHERE path = ?",
+                              (book,)).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return ""
+    return str(row[0]).strip() if row and row[0] else ""
+
+
+def book_title(turn, book):
+    """从 turn 的 trace/answer 里找这本书的显示名，找不到退回 book。"""
+    trace = turn.get("trace") if isinstance(turn.get("trace"), dict) else {}
+    plan = trace.get("plan") if isinstance(trace.get("plan"), dict) else {}
+    for row in plan.get("ranking") or []:
+        if isinstance(row, dict) and row.get("book") == book:
+            title = str(row.get("title") or "").strip()
+            if title:
+                return title
+    result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
+    if not book or result.get("book") == book:
+        title = str(result.get("book_title") or "").strip()
+        if title:
+            return title
+    ans = turn.get("answer") if isinstance(turn.get("answer"), dict) else {}
+    for src in ans.get("sources") or []:
+        if isinstance(src, dict) and src.get("book") == book:
+            title = str(src.get("title") or "").strip()
+            if title:
+                return title
+    return str(book or "")
+
+
+def citation_title(turn, cite):
+    """一条引文的书名：已有值 → 本轮 trace → build/library.db → uid。"""
+    book = _book_of(cite.get("book"), cite.get("path"))
+    title = str(cite.get("book_title") or "").strip()
+    if not title and book:
+        title = book_title(turn, book)
+    if (not title or title == book) and book:
+        title = library_title(book) or title
+    return title or book
+
+
+def fill_citations(turn):
+    """就地给 turn 的 answer.citations 补 book 与 book_title。
+
+    其余字段（quote/line/path/verified）与顺序都不动。"""
+    ans = turn.get("answer") if isinstance(turn, dict) else None
+    cites = ans.get("citations") if isinstance(ans, dict) else None
+    if not isinstance(cites, list):
+        return turn
+    for cite in cites:
+        if not isinstance(cite, dict):
+            continue
+        book = _book_of(cite.get("book"), cite.get("path"))
+        if book:
+            cite["book"] = book
+        cite["book_title"] = citation_title(turn, cite)
+    return turn
 
 
 def _prev_answer(turn):

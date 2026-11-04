@@ -45,11 +45,7 @@
           <input id="hist-filter" type="text" autocomplete="off"
                  placeholder="搜问题或书名" aria-label="搜索历史会话">
         </div>
-        <div class="hist-tools" id="hist-tools">
-          <label class="hist-all"><input type="checkbox" id="hist-all"><span>全选</span></label>
-          <span class="hist-picked" id="hist-picked">已选 0</span>
-          <button class="hist-del" type="button" id="hist-delete" disabled>删除选中</button>
-        </div>
+        <div class="hist-selbar" id="hist-selbar" hidden></div>
         <div class="rail-scroll hist-scroll" id="hist-list"></div>
         <p class="hist-note">切换只是换视图：正在跑的回答会在后台继续，可回来查看。</p>
       </section>
@@ -78,6 +74,7 @@
   </aside>
 </main>
 
+<div class="hist-menu" id="hist-menu" role="menu" aria-label="会话操作" hidden></div>
 <div class="toast" id="toast" hidden></div>
 <script src="/session.js"></script>
 </body>

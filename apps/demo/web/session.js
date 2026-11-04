@@ -41,6 +41,8 @@
     historySelected: new Set(),
     historyVisible: [],
     historyDeleting: false,
+    historySelectMode: false,
+    histMenu: null,
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -56,9 +58,8 @@
   const panelHistoryEl = $('#panel-history');
   const histListEl = $('#hist-list');
   const histFilterEl = $('#hist-filter');
-  const histAllEl = $('#hist-all');
-  const histPickedEl = $('#hist-picked');
-  const histDeleteEl = $('#hist-delete');
+  const histBarEl = $('#hist-selbar');
+  const histMenuEl = $('#hist-menu');
   const railSubEl = $('#rail-sub');
   const railEmptyEl = $('#rail-empty');
   const field = $('#q');
@@ -1317,6 +1318,7 @@
   window.addEventListener('resize', () => {
     railShown = 0;
     scrollRail();
+    if (state.histMenu) closeHistMenu();
   });
 
   /* ---- 历史会话 -------------------------------------------------- */
@@ -1393,13 +1395,17 @@
     const books = (row.books || []).length ? '《' + row.books.join('》《') + '》' : '';
     const known = state.history.some((item) => item.id === row.id);
     const picked = known && state.historySelected.has(row.id);
+    const selecting = state.historySelectMode;
+    const menuOpen = !!(state.histMenu && state.histMenu.id === row.id);
     const tag = historyStatusTag(row);
-    const check = known
-      ? '<input class="hist-check" type="checkbox" data-session-check="' + esc(row.id) + '"'
-        + (picked ? ' checked' : '') + ' aria-label="选择这个会话">'
-      : '<span class="hist-check-gap" aria-hidden="true"></span>';
+    const check = !selecting ? ''
+      : known
+        ? '<input class="hist-check" type="checkbox" data-session-check="' + esc(row.id) + '"'
+          + (picked ? ' checked' : '') + ' aria-label="选择这个会话">'
+        : '<span class="hist-check-gap" aria-hidden="true"></span>';
     return '<div class="hist-item' + (current ? ' is-current' : '')
-      + (picked ? ' is-picked' : '') + '">' + check
+      + (picked ? ' is-picked' : '')
+      + (menuOpen ? ' is-menu' : '') + '">' + check
       + '<button class="hist-row' + (current ? ' is-current' : '') + '" type="button"'
       + ' data-open-session="' + esc(row.id) + '">'
       + '<span class="top"><span>' + esc(whenText(row.updated_at)) + '</span>'
@@ -1408,7 +1414,11 @@
       + '<span class="q">' + esc(row.question || row.last_question || '') + '</span>'
       + '<span class="meta">' + esc(books)
       + (tag ? '<span class="hist-state ' + tag.cls + '">' + tag.text + '</span>' : '')
-      + '</span></button></div>';
+      + '</span></button>'
+      + '<button class="hist-more-btn" type="button" data-hist-menu="' + esc(row.id) + '"'
+      + ' aria-haspopup="menu" aria-expanded="' + (menuOpen ? 'true' : 'false') + '"'
+      + ' aria-label="会话操作">…</button>'
+      + '</div>';
   }
 
   function histMatch(row, q) {
@@ -1417,8 +1427,13 @@
     return text.toLowerCase().includes(q);
   }
 
-  function renderHistTools() {
-    if (!histAllEl) return;
+  function renderHistBar() {
+    if (!histBarEl) return;
+    if (!state.historySelectMode) {
+      histBarEl.hidden = true;
+      histBarEl.innerHTML = '';
+      return;
+    }
     const known = new Set(state.history.map((row) => row.id));
     Array.from(state.historySelected).forEach((id) => {
       if (!known.has(id)) state.historySelected.delete(id);
@@ -1426,13 +1441,167 @@
     const ids = state.historyVisible.filter((id) => known.has(id));
     const picked = ids.filter((id) => state.historySelected.has(id));
     const all = ids.length > 0 && picked.length === ids.length;
-    histAllEl.checked = all;
-    histAllEl.indeterminate = picked.length > 0 && !all;
-    histAllEl.disabled = ids.length === 0;
-    if (histPickedEl) histPickedEl.textContent = '已选 ' + state.historySelected.size;
-    if (histDeleteEl) {
-      histDeleteEl.disabled = state.historySelected.size === 0 || state.historyDeleting;
-      histDeleteEl.textContent = state.historyDeleting ? '删除中…' : '删除选中';
+    const busy = state.historyDeleting;
+    histBarEl.hidden = false;
+    histBarEl.innerHTML =
+      '<span class="hist-sel-count">已选择 ' + state.historySelected.size + ' 个对话</span>'
+      + '<button class="hist-sel-all" type="button" data-hist-select-all'
+      + (!ids.length || busy ? ' disabled' : '') + '>' + (all ? '取消全选' : '全选') + '</button>'
+      + '<button class="hist-sel-del" type="button" data-hist-select-delete'
+      + (state.historySelected.size === 0 || busy ? ' disabled' : '') + '>'
+      + (busy ? '删除中…' : '删除选中') + '</button>'
+      + '<button class="hist-sel-cancel" type="button" data-hist-select-cancel'
+      + (busy ? ' disabled' : '') + ' aria-label="退出多选">×</button>';
+  }
+
+  function enterHistSelect() {
+    state.historySelectMode = true;
+    state.historySelected.clear();
+    renderHistory();
+  }
+
+  function exitHistSelect() {
+    if (state.historyDeleting) return;
+    state.historySelectMode = false;
+    state.historySelected.clear();
+    renderHistory();
+  }
+
+  function toggleHistPick(id, on) {
+    const next = typeof on === 'boolean' ? on : !state.historySelected.has(id);
+    if (next) state.historySelected.add(id);
+    else state.historySelected.delete(id);
+    renderHistory();
+  }
+
+  function toggleHistSelectAll() {
+    const known = new Set(state.history.map((row) => row.id));
+    const ids = state.historyVisible.filter((id) => known.has(id));
+    const all = ids.length > 0 && ids.every((id) => state.historySelected.has(id));
+    ids.forEach((id) => {
+      if (all) state.historySelected.delete(id);
+      else state.historySelected.add(id);
+    });
+    renderHistory();
+  }
+
+  function histMenuHTML() {
+    const menu = state.histMenu;
+    if (!menu) return '';
+    const id = esc(menu.id);
+    if (menu.view === 'download') {
+      return '<button class="hist-menu-head" type="button" data-hist-back>‹ 下载</button>'
+        + '<button type="button" role="menuitem" data-hist-format="md" data-id="' + id + '">'
+        + 'Markdown<span class="hist-menu-ext">.md</span></button>'
+        + '<button type="button" role="menuitem" data-hist-format="docx" data-id="' + id + '">'
+        + 'Word<span class="hist-menu-ext">.docx</span></button>';
+    }
+    return '<button type="button" role="menuitem" data-hist-act="download" data-id="' + id + '">'
+      + '下载<span class="hist-menu-chev">›</span></button>'
+      + '<button type="button" role="menuitem" data-hist-act="multi" data-id="' + id + '">多选</button>'
+      + '<button type="button" role="menuitem" class="is-danger" data-hist-act="delete" data-id="'
+      + id + '">删除</button>';
+  }
+
+  function positionHistMenu() {
+    const menu = state.histMenu;
+    if (!menu || !histMenuEl) return;
+    const rect = menu.anchor.getBoundingClientRect();
+    histMenuEl.style.left = '0px';
+    histMenuEl.style.top = '0px';
+    const width = histMenuEl.offsetWidth;
+    const height = histMenuEl.offsetHeight;
+    let left = rect.right - width;
+    let top = rect.bottom + 6;
+    if (left < 8) left = 8;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    if (top + height > window.innerHeight - 8) top = rect.top - height - 6;
+    if (top < 8) top = 8;
+    histMenuEl.style.left = Math.round(left) + 'px';
+    histMenuEl.style.top = Math.round(top) + 'px';
+  }
+
+  function renderHistMenu() {
+    if (!histMenuEl || !state.histMenu) return;
+    histMenuEl.innerHTML = histMenuHTML();
+    histMenuEl.hidden = false;
+    positionHistMenu();
+    const first = histMenuEl.querySelector('button');
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  function closeHistMenu(refocus) {
+    const menu = state.histMenu;
+    state.histMenu = null;
+    if (histMenuEl) {
+      histMenuEl.hidden = true;
+      histMenuEl.innerHTML = '';
+    }
+    document.querySelectorAll('.hist-item.is-menu').forEach((item) => {
+      item.classList.remove('is-menu');
+    });
+    document.querySelectorAll('[data-hist-menu][aria-expanded="true"]').forEach((btn) => {
+      btn.setAttribute('aria-expanded', 'false');
+    });
+    if (refocus && menu && menu.anchor && menu.anchor.isConnected) menu.anchor.focus();
+  }
+
+  function openHistMenu(id, anchor) {
+    if (!histMenuEl || !anchor) return;
+    if (state.histMenu) {
+      if (state.histMenu.id === id) {
+        closeHistMenu(true);
+        return;
+      }
+      closeHistMenu();
+    }
+    state.histMenu = { id, view: 'root', anchor };
+    const item = anchor.closest('.hist-item');
+    if (item) item.classList.add('is-menu');
+    anchor.setAttribute('aria-expanded', 'true');
+    renderHistMenu();
+  }
+
+  function downloadSession(id, format) {
+    if (format !== 'md' && format !== 'docx') return;
+    const a = document.createElement('a');
+    a.href = '/api/export?id=' + encodeURIComponent(id) + '&format=' + format;
+    a.download = '';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function handleHistMenuClick(e) {
+    const menu = state.histMenu;
+    if (!menu) return;
+    if (e.target.closest('[data-hist-back]')) {
+      menu.view = 'root';
+      renderHistMenu();
+      return;
+    }
+    const format = e.target.closest('[data-hist-format]');
+    if (format) {
+      const id = format.dataset.id || menu.id;
+      const kind = format.dataset.histFormat;
+      closeHistMenu(true);
+      downloadSession(id, kind);
+      return;
+    }
+    const act = e.target.closest('[data-hist-act]');
+    if (!act) return;
+    const id = act.dataset.id || menu.id;
+    const kind = act.dataset.histAct;
+    if (kind === 'download') {
+      menu.view = 'download';
+      renderHistMenu();
+    } else if (kind === 'multi') {
+      closeHistMenu();
+      enterHistSelect();
+    } else if (kind === 'delete') {
+      closeHistMenu();
+      deleteSession(id);
     }
   }
 
@@ -1476,8 +1645,9 @@
     }
     if (!html) html = '<p class="hist-empty">没有匹配的会话。</p>';
     state.historyVisible = visible;
+    closeHistMenu();
     histListEl.innerHTML = html;
-    renderHistTools();
+    renderHistBar();
   }
 
   async function loadSessions() {
@@ -1502,15 +1672,16 @@
     if (!ids.length || state.historyDeleting) return;
     if (!window.confirm('删除 ' + ids.length + ' 个会话？删除后不可恢复')) return;
     state.historyDeleting = true;
-    renderHistTools();
+    renderHistory();
     try {
       const data = await postJSON('/api/sessions/delete', { ids });
       const gone = new Set(ids);
-      state.history = state.history.filter((row) => !gone.has(row.id));
-      state.historySelected.clear();
-      state.historyDeleting = false;
       const count = Number(data.count != null ? data.count : data.deleted);
       const label = Number.isFinite(count) ? count : ids.length;
+      state.historyDeleting = false;
+      state.historySelected.clear();
+      state.historySelectMode = false;
+      state.history = state.history.filter((row) => !gone.has(row.id));
       if (gone.has(state.sessionId)) {
         newSession();
         toast('已删除 ' + label + ' 个会话，已回到新会话');
@@ -1518,9 +1689,34 @@
         render();
         toast('已删除 ' + label + ' 个会话');
       }
+      await loadSessions();
     } catch (err) {
       state.historyDeleting = false;
-      renderHistTools();
+      renderHistory();
+      toast('删除失败：' + err.message);
+    }
+  }
+
+  async function deleteSession(id) {
+    if (!id) return;
+    const row = state.history.find((item) => item.id === id);
+    const q = String((row && (row.question || row.last_question)) || '').trim();
+    const label = q ? q.slice(0, 20) : '这个会话';
+    if (!window.confirm('删除「' + label + '」？删除后不可恢复')) return;
+    try {
+      await postJSON('/api/sessions/delete', { ids: [id] });
+      const current = id === state.sessionId;
+      state.historySelected.delete(id);
+      state.history = state.history.filter((item) => item.id !== id);
+      if (current) {
+        newSession();
+        toast('已删除会话，已回到新会话');
+      } else {
+        render();
+        toast('已删除会话');
+      }
+      await loadSessions();
+    } catch (err) {
       toast('删除失败：' + err.message);
     }
   }
@@ -1877,6 +2073,8 @@
     state.rail = 'history';
     state.historyAll = false;
     state.historyQuery = '';
+    state.historySelectMode = false;
+    state.historySelected.clear();
     if (histFilterEl) histFilterEl.value = '';
     field.value = '';
     field.closest('.ask-field').classList.remove('has-text');
@@ -1950,6 +2148,16 @@
   }
 
   document.addEventListener('click', (e) => {
+    const menuBtn = e.target.closest('[data-hist-menu]');
+    if (menuBtn) {
+      openHistMenu(menuBtn.dataset.histMenu, menuBtn);
+      return;
+    }
+    if (histMenuEl && histMenuEl.contains(e.target)) {
+      handleHistMenuClick(e);
+      return;
+    }
+    if (state.histMenu) closeHistMenu();
     if (e.target.closest('#drawer-toggle')) {
       drawerEl.classList.toggle('is-open');
       return;
@@ -2029,6 +2237,10 @@
     }
     const opener = e.target.closest('[data-open-session]');
     if (opener) {
+      if (state.historySelectMode) {
+        toggleHistPick(opener.dataset.openSession);
+        return;
+      }
       const id = opener.dataset.openSession;
       const cur = currentSummary();
       if (cur && cur.id === id && state.turns.length) {
@@ -2041,8 +2253,16 @@
       openSession(id);
       return;
     }
-    if (e.target.closest('#hist-delete')) {
+    if (e.target.closest('[data-hist-select-cancel]')) {
+      exitHistSelect();
+      return;
+    }
+    if (e.target.closest('[data-hist-select-delete]')) {
       deleteSelectedSessions();
+      return;
+    }
+    if (e.target.closest('[data-hist-select-all]')) {
+      toggleHistSelectAll();
       return;
     }
     if (e.target.closest('[data-hist-more]')) {
@@ -2094,29 +2314,23 @@
     histListEl.addEventListener('change', (e) => {
       const box = e.target.closest('[data-session-check]');
       if (!box) return;
-      const id = box.dataset.sessionCheck;
-      if (box.checked) state.historySelected.add(id);
-      else state.historySelected.delete(id);
-      const item = box.closest('.hist-item');
-      if (item) item.classList.toggle('is-picked', box.checked);
-      renderHistTools();
+      toggleHistPick(box.dataset.sessionCheck, box.checked);
     });
   }
 
-  if (histAllEl) {
-    histAllEl.addEventListener('change', () => {
-      const ids = state.historyVisible.filter((id) =>
-        state.history.some((row) => row.id === id));
-      if (histAllEl.checked) ids.forEach((id) => state.historySelected.add(id));
-      else ids.forEach((id) => state.historySelected.delete(id));
-      renderHistory();
-    });
-  }
+  document.addEventListener('scroll', () => {
+    if (state.histMenu) closeHistMenu();
+  }, true);
 
   window.addEventListener('beforeunload', stopAnswerPoll);
   window.addEventListener('pagehide', stopAnswerPoll);
 
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.histMenu) {
+      e.preventDefault();
+      closeHistMenu(true);
+      return;
+    }
     if (e.key !== 'Enter' || e.isComposing) return;
     if (e.target && e.target.id === 'q') {
       e.preventDefault();
@@ -2194,6 +2408,7 @@
   async function openSession(sessionId) {
     stopClock();
     stopAnswerPoll();
+    closeHistMenu();
     const epoch = ++state.epoch;
     try {
       const data = await fetchJSON('/api/session?id=' + encodeURIComponent(sessionId));

@@ -21,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import answer as answerer  # noqa: E402
+import export_session  # noqa: E402
 import related  # noqa: E402
 import session  # noqa: E402
 import trace as tracer  # noqa: E402
@@ -188,26 +189,16 @@ def _previous(sess, n):
 
 
 def _book_title(turn, book):
-    """从上一轮 trace/answer 里找这本书的显示名，找不到退回 book。"""
-    trace = turn.get("trace") if isinstance(turn.get("trace"), dict) else {}
-    plan = trace.get("plan") if isinstance(trace.get("plan"), dict) else {}
-    for row in plan.get("ranking") or []:
-        if isinstance(row, dict) and row.get("book") == book:
-            title = str(row.get("title") or "").strip()
-            if title:
-                return title
-    result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
-    if not book or result.get("book") == book:
-        title = str(result.get("book_title") or "").strip()
-        if title:
-            return title
-    ans = turn.get("answer") if isinstance(turn.get("answer"), dict) else {}
-    for src in ans.get("sources") or []:
-        if isinstance(src, dict) and src.get("book") == book:
-            title = str(src.get("title") or "").strip()
-            if title:
-                return title
-    return str(book or "")
+    """从 trace/answer 里找这本书的显示名，找不到退回 book。"""
+    return session.book_title(turn, book)
+
+
+def _fill_citations(payload):
+    """就地把响应顶层 citations 补齐 book/book_title，其它字段不动。"""
+    if isinstance(payload, dict) and isinstance(payload.get("citations"), list):
+        trace = payload if isinstance(payload.get("plan"), dict) else {"result": payload}
+        session.fill_citations({"answer": payload, "trace": trace})
+    return payload
 
 
 def _prev_turn(sess, n):
@@ -435,6 +426,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.api_sessions(parse_qs(parsed.query))
             elif route == "/api/session":
                 self.api_session(parse_qs(parsed.query))
+            elif route == "/api/export":
+                self.api_export(parse_qs(parsed.query))
             elif route == "/api/chapter":
                 self.api_chapter(parse_qs(parsed.query))
             elif route == "/favicon.ico":
@@ -628,7 +621,27 @@ class Handler(BaseHTTPRequestHandler):
         if sess is None:
             self.fail(404, "会话不存在")
             return
+        for turn in sess.get("turns") or []:
+            session.fill_citations(turn)
         self.send_json(200, {"ok": True, "session": sess})
+
+    def api_export(self, query):
+        sid = (query.get("id") or [""])[0]
+        if not session.valid_id(sid):
+            self.fail(400, "会话 id 不合法")
+            return
+        sess = session.load(sid)
+        if sess is None:
+            self.fail(404, "会话不存在")
+            return
+        fmt = ((query.get("format") or ["md"])[0] or "md").strip().lower()
+        if fmt not in ("md", "docx"):
+            self.fail(400, "format 只支持 md 或 docx")
+            return
+        for turn in sess.get("turns") or []:
+            session.fill_citations(turn)
+        body, ctype, headers = export_session.response(sess, sid, fmt)
+        self.send(200, body, ctype, headers)
 
     def api_run(self, question, select, thinking=None, fresh=False,
                 session_id="", turn=None, anchor=None):
@@ -648,6 +661,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.fail(400, "turn 超出会话范围")
                     return
             data = tracer.build(question, select, thinking=thinking, fresh=fresh)
+            _fill_citations(data)
             rel = None
             if sess and n > 1:
                 rel = related.check(question, _previous(sess, n))
@@ -742,6 +756,7 @@ class Handler(BaseHTTPRequestHandler):
                                             thinking=thinking, use_cache=use_cache,
                                             history=ctx["text"] if ctx else "",
                                             focus=focus)
+            _fill_citations(info)
             if not session.finish_answer(sid, n, attempt, info, ctx, token=token):
                 # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
                 message = "这一轮已重跑，本次回答作废"
@@ -773,6 +788,7 @@ class Handler(BaseHTTPRequestHandler):
                                             thinking=thinking, use_cache=use_cache,
                                             history=ctx["text"] if ctx else "",
                                             focus=focus)
+            _fill_citations(info)
             self.send_json(200, dict(info, session_id=sid, turn=n, related=rel,
                                      history=self.history_brief(ctx)))
         except ValueError as exc:

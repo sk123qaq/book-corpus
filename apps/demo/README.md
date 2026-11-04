@@ -104,6 +104,11 @@ python3 apps/demo/server.py
 旧会话没有这些字段，`session.load` 按已有内容补：有 `answer` 就是 `ready`，`ok:false` 就是 `error`
 （错误取 answer 里的 `error`）；有 trace 没 answer 记 `incomplete`；连 trace 都没有记 `run_error`。
 `/api/sessions` 的每一行与 `/api/session` 的每个 turn 都带 `answer_state`、`answer_error`。
+`/api/session` 的每条 citation 另带 `book` 与 `book_title`，书名按 `build/library.db` 的 `book.path` 查，
+查不到才退回 uid；`quote`、`line`、`path`、`verified` 不动。
+
+历史会话每行右上角的「…」在悬停或聚焦时出现，菜单是 下载› / 多选 / 删除。
+勾选框只在「多选」里出现，退出多选就收掉；窄屏与触屏常显「…」。
 
 同轮去重：`/api/answer` 以 `(session_id, turn, run_token)` 为键，第一个请求调模型，
 同时进来的第二个请求等它的 `threading.Event`（最多 300 秒）后复用同一份结果，不再调一次模型；
@@ -165,6 +170,11 @@ python3 apps/demo/server.py
 - `POST /api/sessions/delete` `{"ids":["0123456789ab", ...]}` → 删除 1 到 100 个会话文件。
   返回 `{"ok":true,"deleted":[...],"missing":[...],"count":N}`，`count` 是实际删掉的个数；
   不存在的 id 进 `missing`，不算错。`ids` 不是数组、超过 100 个或含非法 id（不是 12 位小写 hex）时 400。
+- `GET /api/export?id=<12 位 hex>&format=md|docx` → 下载整条会话。`md` 返 `text/markdown`，
+  `docx` 返 OOXML（标准库手写，不依赖第三方包）。每轮依次给问题、范围、回答、本轮依据；
+  范围只认该轮 `sources`，没有就整行不写，和页面「范围」行同口径；依据带书名、章节、`path:line` 与引文。
+  文件名 `会话-<时间>-<问题前 12 字>.<ext>`，同时给 ASCII 回退名。
+  id 不合法 400，会话不存在 404，`format` 不是 `md`/`docx` 也 400。
 
 调试参数：`?q=...&instant=1` 不播动画直接出结果；`&select=2` 选第二张书卡；`&all=1` 全选所有书卡；
 `&top=1` 不自动滚到结果（截图用）；`&hit=1` 滚到命中段（截图用）。
