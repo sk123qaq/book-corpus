@@ -765,7 +765,7 @@ MAINTAIN_STEPS = {
     "topics": {"label": "主题软链", "script": "build_views.py", "args": ["--only", "topics"]},
     "awards": {"label": "奖项软链", "script": "build_views.py", "args": ["--only", "awards"]},
     "audit": {"label": "深审计", "script": "audit_state.py", "args": ["--deep"], "marker": r"FAIL 0 项"},
-    "verify": {"label": "四箱验收", "script": "verify_phase.py", "args": [], "marker": r"(?m)^全过\s*$"},
+    "verify": {"label": "四箱验收", "script": "verify_phase.py", "args": [], "marker": r"(?m)^全过：\d+ 项\s*$"},
     "catalog": {"label": "书目总表", "script": "gen_book_catalog.py", "args": [], "marker": r"未匹配 0 条"},
     "doc": {"label": "阅读版 html", "script": "build_index.py", "args": []},
 }

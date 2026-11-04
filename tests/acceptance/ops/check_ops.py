@@ -256,7 +256,7 @@ if os.path.exists(".verify-slow"):
 if os.path.exists(".verify-bad"):
     print("门槛不过：1 项")
     sys.exit(1)
-print("全过")
+print("全过：14 项")
 """
 
 STUB_P1 = """#!/usr/bin/env python3

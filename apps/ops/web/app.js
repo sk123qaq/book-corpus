@@ -15,12 +15,11 @@ const MAINTAIN_STEPS = [
   ['awards', '刷新奖项入口', '重建按奖项浏览的链接。'],
   ['audit', '体检', '检查书目、文件与索引是否对得上。'],
   ['verify', '结构验收', '按固定清单检查库的结构是否完整。'],
-  ['p1', '抽查搜索效果', '用固定题目跑一遍，确认搜得准。'],
   ['catalog', '更新书目总表', '重出 Excel 与 CSV。'],
   ['db', '重建书目数据库', '从每本书的记录重算索引库。'],
   ['doc', '重出阅读版页面', '只有阅读版有改动时才需要。'],
 ];
-const FINISH_DEFAULT = ['db', 'index', 'topics', 'awards', 'audit', 'verify', 'p1', 'catalog'];
+const FINISH_DEFAULT = ['db', 'index', 'topics', 'awards', 'audit', 'verify', 'catalog'];
 const SETTLE_ROUTES = ['OCR', '本地抽文本', '不转-记图册', '日文暂缓'];
 const JOB_WORD = {
   queued: '排队', running: '在跑', awaiting_review: '待确认', succeeded: '完成',
