@@ -1,0 +1,35 @@
+# 严格档：pre-commit 的「新代码」闸门用这份独立配置。
+# 与 pyproject.toml 的区别只有一处——不 extend-ignore PTH / UP031，
+# 于是 os.path 拼接和 % 格式化在**新增文件**里会被拦下来。
+# 存量文件走 .ruff-legacy-files.txt 白名单（由 tools/ruff_strict_new.py 过滤），
+# 迁移一个文件就把它从白名单删掉，逐步把老代码也拉进严格档。
+
+line-length = 120
+target-version = "py311"
+src = ["src", "tests", "apps"]
+extend-exclude = [".git", ".venv", "__pycache__", "books", "build", "dist", "工作区", "apps/demo/缓存", ".agents"]
+
+[lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "PT", "RUF", "S"]
+# 与主配置保持同一套豁免理由，见 pyproject.toml 的注释。
+ignore = ["RUF001", "RUF002", "RUF003", "S311", "N812"]
+
+[lint.isort]
+known-first-party = ["bookcorpus"]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "PT011", "S105", "S106", "E402", "S603", "S607", "S310", "S103"]
+"src/bookcorpus/**" = ["E402", "S101", "S603", "S607"]
+"apps/**" = ["E402", "S603", "S310"]
+"tools/**" = ["S603", "S607"]
+"apps/ops/server.py" = ["E402", "S603", "S310", "N806"]
+"apps/demo/answer.py" = ["E402", "S603", "E501"]
+"apps/demo/trace.py" = ["E402", "S603", "E501"]
+"tests/acceptance/ops/check_ops.py" = ["S101", "PT011", "S105", "S106", "E402", "S603", "S607", "S310", "S103", "E501"]
+"docs/design/**" = ["C408", "E501", "S101"]
+"**/__init__.py" = ["F401"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

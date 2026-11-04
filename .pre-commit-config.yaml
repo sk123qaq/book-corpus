@@ -1,0 +1,34 @@
+# pre-commit：提交前自动跑 ruff。
+#
+# 全员用同一个 gate，所以 hook 走本地 venv（uv run），不需要联网拉 hook 环境：
+#   uv sync && uv run pre-commit install
+#
+# 三道闸：
+#   1. ruff-check   —— 全仓规则，等于 `ruff check`，自动修能修的（修过即失败，重跑即可）
+#   2. ruff-format  —— 格式化，等于 `ruff format`
+#   3. ruff-strict  —— 「新代码」严格档：不在 .ruff-legacy-files.txt 里的文件额外禁止
+#                      os.path 拼接（PTH）和 % 格式化（UP031），见 tools/ruff_strict_new.py
+#
+# 紧急绕过：SKIP=ruff-strict git commit -m "..."（只跳过严格档）
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --force-exclude --fix --exit-non-zero-on-fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-strict
+        name: ruff strict (new code only)
+        entry: uv run python tools/ruff_strict_new.py
+        language: system
+        types_or: [python, pyi]
+        require_serial: true

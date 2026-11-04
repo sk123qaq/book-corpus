@@ -38,7 +38,31 @@ Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库�
 
 ```bash
 uv run --frozen pytest
+uv run --frozen ruff check .
+uv run --frozen ruff format --check .
 git status --short
 ```
+
+这三步也可以交给 git hook：
+
+```bash
+uv sync                       # 装上 pre-commit
+uv run pre-commit install     # 之后每次提交自动跑
+```
+
+hook 跑三道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`。
+
+### ruff 严格档：新代码不许 os.path 拼接和 % 格式化
+
+存量代码里 `os.path.join` 和 `"%s" % x` 有几千处，一次性改风险太大，所以按文件做增量治理：
+
+- `pyproject.toml` 里 `extend-ignore = ["PTH", "UP031"]`，老代码照常能跑。
+- `.ruff-legacy-files.txt` 是存量文件清单，里面的文件不受严格档约束。
+- 不在清单里的文件（新加的文件、或已经迁干净的文件）必须通过 `ruff-strict.toml`：用 `pathlib` 而不是 `os.path`，用 f-string 而不是 `%`。
+- 迁移一个老文件时，改干净后把它从 `.ruff-legacy-files.txt` 删掉，它就永久进严格档。
+- 确有必要时写 `# noqa: PTH118 理由是……`，noqa 必须带中文理由。
+- 紧急绕过：在命令前加 `SKIP=ruff-strict` 环境变量即可只跳过严格档。
+
+单独跑严格档：`uv run python tools/ruff_strict_new.py <文件...>`（不带参数则检查全仓里所有不在清单中的文件）。
 
 改了结构或脚本再跑 `book-corpus doctor` 与 `book-corpus verify`；改了检索层 `book-corpus verify --box 4`；有自己的检索题集时再跑 `book-corpus run check_p1 --gold <题集>/gold.tsv`。判据见 `README.md` 的「改完跑什么」。
