@@ -12,18 +12,21 @@
   python3 md_link_health.py --verbose           # 有问题的书逐本列出
   python3 md_link_health.py --json X            # 机器可读结果落 X
 """
+
 import argparse
 import datetime
 import html
 import json
 import os
+import pathlib
 import re
 import sys
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT
+
 LIB = os.path.join(ROOT, "books")
 
 LINK_MD = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]*)\)")
@@ -59,11 +62,11 @@ def link_dest_ok(target):
 
 
 def body_of(path):
-    t = open(path, encoding="utf-8", errors="ignore").read()
+    t = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore")
     if t.startswith("---"):
         e = t.find("\n---", 3)
         if e != -1:
-            t = t[t.find("\n", e + 1) + 1:]
+            t = t[t.find("\n", e + 1) + 1 :]
     return t
 
 
@@ -86,11 +89,10 @@ def toc_section(text):
 
 
 def readme_stats(path):
-    text = open(path, encoding="utf-8", errors="ignore").read()
+    text = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore")
     lines = toc_section(text)
     if lines is None:
-        return {"toc_section": False, "toc_lines": 0, "literal": 0, "links": 0,
-                "first_indent": None}
+        return {"toc_section": False, "toc_lines": 0, "literal": 0, "links": 0, "first_indent": None}
     rows = []
     first_indent = None
     for line in lines:
@@ -100,8 +102,9 @@ def readme_stats(path):
         if m:
             rows.append((m.group(1), m.group("target")))
     rendered = render_html("\n".join(lines))
-    hrefs = ({urllib.parse.unquote(html.unescape(h)) for h in HREF_RE.findall(rendered)}
-             if rendered is not None else None)
+    hrefs = (
+        {urllib.parse.unquote(html.unescape(h)) for h in HREF_RE.findall(rendered)} if rendered is not None else None
+    )
     literal = 0
     for _indent, target in rows:
         if hrefs is None:
@@ -113,8 +116,13 @@ def readme_stats(path):
             t = t[1:-1]
         if t not in hrefs:
             literal += 1
-    return {"toc_section": True, "toc_lines": len(rows), "literal": literal,
-            "links": len(rows) - literal, "first_indent": first_indent}
+    return {
+        "toc_section": True,
+        "toc_lines": len(rows),
+        "literal": literal,
+        "links": len(rows) - literal,
+        "first_indent": first_indent,
+    }
 
 
 def scan():
@@ -146,8 +154,7 @@ def scan():
         s = readme_stats(rp)
         s["readme"] = os.path.relpath(rp, ROOT)
         readmes.append(s)
-    return {"md_dirs": len(dirs), "readmes": readmes, "no_readme": no_readme,
-            "self_links": self_links}
+    return {"md_dirs": len(dirs), "readmes": readmes, "no_readme": no_readme, "self_links": self_links}
 
 
 def main():
@@ -159,17 +166,14 @@ def main():
     r = scan()
     bad_self = r["self_links"]
     bad_literal = [s for s in r["readmes"] if s["literal"]]
-    bad_indent = [s for s in r["readmes"] if s["first_indent"] is not None
-                  and s["first_indent"] >= 4]
+    bad_indent = [s for s in r["readmes"] if s["first_indent"] is not None and s["first_indent"] >= 4]
     no_section = [s for s in r["readmes"] if not s["toc_section"]]
     total_lines = sum(s["toc_lines"] for s in r["readmes"])
     total_links = sum(s["links"] for s in r["readmes"])
 
-    print("md 目录 %d 个，README %d 个（无 README %d 个）"
-          % (r["md_dirs"], len(r["readmes"]), len(r["no_readme"])))
+    print("md 目录 %d 个，README %d 个（无 README %d 个）" % (r["md_dirs"], len(r["readmes"]), len(r["no_readme"])))
     print("判据 1 · 自链  %d 个文件，共 %d 条" % (len(bad_self), sum(n for _p, n in bad_self)))
-    print("判据 2 · 目录行合计 %d，成链接 %d，渲染成字面 %d"
-          % (total_lines, total_links, total_lines - total_links))
+    print("判据 2 · 目录行合计 %d，成链接 %d，渲染成字面 %d" % (total_lines, total_links, total_lines - total_links))
     print("判据 2 · 首行缩进 >=4 的 README %d 个" % len(bad_indent))
     print("判据 2 · 没有 `## 目录` 段的 README %d 个" % len(no_section))
 
@@ -177,23 +181,32 @@ def main():
         for p, n in bad_self:
             print("  自链 %d 条  %s" % (n, p))
         for s in bad_literal + bad_indent + no_section:
-            print("  目录问题  %s  行 %d 字面 %d 首行缩进 %s"
-                  % (s["readme"], s["toc_lines"], s["literal"], s["first_indent"]))
+            print(
+                "  目录问题  %s  行 %d 字面 %d 首行缩进 %s"
+                % (s["readme"], s["toc_lines"], s["literal"], s["first_indent"])
+            )
         for p in r["no_readme"]:
             print("  无 README  %s" % p)
 
     ok = not (bad_self or bad_literal or bad_indent or no_section)
     payload = {
         "at": datetime.datetime.now().astimezone().replace(microsecond=0).isoformat(),
-        "md_dirs": r["md_dirs"], "readmes": len(r["readmes"]),
+        "md_dirs": r["md_dirs"],
+        "readmes": len(r["readmes"]),
         "no_readme": r["no_readme"],
-        "self_links": {"files": len(bad_self), "entries": sum(n for _p, n in bad_self),
-                       "per_file": {p: n for p, n in bad_self}},
-        "toc": {"toc_lines": total_lines, "links": total_links,
-                "literal": total_lines - total_links,
-                "bad_literal": {s["readme"]: s["literal"] for s in bad_literal},
-                "bad_indent": {s["readme"]: s["first_indent"] for s in bad_indent},
-                "no_section": [s["readme"] for s in no_section]},
+        "self_links": {
+            "files": len(bad_self),
+            "entries": sum(n for _p, n in bad_self),
+            "per_file": dict(bad_self),
+        },
+        "toc": {
+            "toc_lines": total_lines,
+            "links": total_links,
+            "literal": total_lines - total_links,
+            "bad_literal": {s["readme"]: s["literal"] for s in bad_literal},
+            "bad_indent": {s["readme"]: s["first_indent"] for s in bad_indent},
+            "no_section": [s["readme"] for s in no_section],
+        },
         "ok": ok,
     }
     if a.json:

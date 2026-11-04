@@ -14,6 +14,7 @@ pymupdf/numpy/PIL 只装在 工作区/.venv-pdf/，所以本脚本用那个解�
   book-corpus run ops_pdf_triage --uid B1234 --out 工作区/运维/jobs/<id>
   book-corpus run ops_pdf_triage --uid B1234 --out /tmp/j --root <临时库> --no-model
 """
+
 import argparse
 import csv
 import datetime
@@ -26,12 +27,14 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
-from pdf_census import classify  # noqa: E402  纯函数，只吃 census 行，不需要 pymupdf
+import lib_common as L
+from pdf_census import classify
+
 ROOT = L.ROOT
 
 try:
     from bookcorpus import pimodel
+
     _CFG = pimodel.load(ROOT)
     MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
 except ImportError:  # 单独跑脚本时包里没有 bookcorpus
@@ -42,9 +45,25 @@ SCAN_SAMPLE = 5
 THUMB_EDGE = 1200
 MODEL_TIMEOUT = 240
 PROBE_TIMEOUT = 1800
-TRIAGE_COLS = ["uid", "title", "subject1", "subject2", "class", "route", "pages",
-               "mb", "ppi", "text_page_share", "ink", "bands", "note", "verdict",
-               "image_share", "measure", "route_metric"]
+TRIAGE_COLS = [
+    "uid",
+    "title",
+    "subject1",
+    "subject2",
+    "class",
+    "route",
+    "pages",
+    "mb",
+    "ppi",
+    "text_page_share",
+    "ink",
+    "bands",
+    "note",
+    "verdict",
+    "image_share",
+    "measure",
+    "route_metric",
+]
 
 
 def now():
@@ -129,6 +148,7 @@ def thumb_name(page):
 
 def render_thumbs(pdf, out, pages):
     import pymupdf
+
     tdir = os.path.join(out, "thumbs")
     os.makedirs(tdir, exist_ok=True)
     doc = pymupdf.open(pdf)
@@ -137,8 +157,7 @@ def render_thumbs(pdf, out, pages):
             page = doc.load_page(pno - 1)
             edge = max(page.rect.width, page.rect.height) or 1
             zoom = min(THUMB_EDGE / edge, 3.0)
-            pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom),
-                                  colorspace=pymupdf.csRGB)
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), colorspace=pymupdf.csRGB)
             final = os.path.join(tdir, thumb_name(pno) + ".png")
             tmp = final + ".tmp.png"
             pix.save(tmp)
@@ -158,8 +177,14 @@ def worker(root, uid, out, pdf, sample=SCAN_SAMPLE):
 
     doc = find_book(root, uid) or {}
     subs = doc.get("subjects") or []
-    row = pdf_census.measure(uid, doc.get("title") or "", subs[0] if subs else "",
-                             subs[1] if len(subs) > 1 else "", pdf, os.path.getsize(pdf))
+    row = pdf_census.measure(
+        uid,
+        doc.get("title") or "",
+        subs[0] if subs else "",
+        subs[1] if len(subs) > 1 else "",
+        pdf,
+        os.path.getsize(pdf),
+    )
     pages = int(row.get("pages") or 0)
     if pages <= 0:
         write_jsonl(os.path.join(out, "census.jsonl"), [row])
@@ -201,7 +226,7 @@ def build_metrics(census, probe):
     bands = probe.get("bands_median") if probe else None
     if isinstance(bands, float) and bands.is_integer():
         bands = int(bands)
-    m = {
+    return {
         "text_page_share": share,
         "ink": probe.get("ink_median") if probe else None,
         "bands": bands,
@@ -214,7 +239,6 @@ def build_metrics(census, probe):
         "full_page_images": census.get("full_page_images"),
         "pages_with_text": census.get("pages_with_text"),
     }
-    return m
 
 
 PROMPT = """你是书库的 PDF 分诊助手。三张缩略图依次是首页、正文中页、末页。看图与指标，判断这本书该走哪条转换路线。
@@ -247,9 +271,14 @@ OCR
 def build_prompt(doc, census, cls, metrics):
     subs = doc.get("subjects") or []
     line = " ".join("%s=%s" % (k, "-" if v is None else v) for k, v in metrics.items())
-    return PROMPT.format(title=doc.get("title") or "", subject1=subs[0] if subs else "",
-                         subject2=subs[1] if len(subs) > 1 else "",
-                         pages=census.get("pages"), cls=cls, metrics=line)
+    return PROMPT.format(
+        title=doc.get("title") or "",
+        subject1=subs[0] if subs else "",
+        subject2=subs[1] if len(subs) > 1 else "",
+        pages=census.get("pages"),
+        cls=cls,
+        metrics=line,
+    )
 
 
 def pi_prefix():
@@ -278,8 +307,7 @@ def normalize_model(obj):
         conf = round(float(obj.get("confidence")), 2)
     except (TypeError, ValueError):
         conf = None
-    out = {"route": route, "confidence": conf,
-           "reason": str(obj.get("reason") or "").strip(), "at": now()}
+    out = {"route": route, "confidence": conf, "reason": str(obj.get("reason") or "").strip(), "at": now()}
     if route not in ROUTES:
         out["warn"] = "route 不在词表：%s" % route
     return out
@@ -287,12 +315,19 @@ def normalize_model(obj):
 
 def ask_model(out, thumbs, prompt):
     flags = pimodel.model_flags(_CFG["values"]) if pimodel else ["--model", MODEL]
-    argv = pi_prefix() + ["-p", "--no-tools", "--no-session", "--no-context-files",
-                          "--no-skills", "--no-extensions"] + flags
+    argv = [
+        *pi_prefix(),
+        "-p",
+        "--no-tools",
+        "--no-session",
+        "--no-context-files",
+        "--no-skills",
+        "--no-extensions",
+        *flags,
+    ]
     argv += ["@" + t for t in thumbs] + [prompt]
     try:
-        p = subprocess.run(argv, cwd=out, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                           timeout=MODEL_TIMEOUT)
+        p = subprocess.run(argv, cwd=out, capture_output=True, timeout=MODEL_TIMEOUT)
     except subprocess.TimeoutExpired:
         return None, "模型超时 %d 秒" % MODEL_TIMEOUT
     except OSError as exc:
@@ -310,19 +345,23 @@ def write_triage(out, result, census, metrics):
     model = result.get("model") or {}
     route = model.get("route") or "人工确认"
     row = {
-        "uid": result["uid"], "title": result["title"],
+        "uid": result["uid"],
+        "title": result["title"],
         "subject1": census.get("subject1") or "",
         "subject2": census.get("subject2") or "",
-        "class": result["class"], "route": route,
+        "class": result["class"],
+        "route": route,
         "pages": result["pages"],
         "mb": round(float(census.get("bytes") or 0) / 1000000.0, 1),
         "ppi": metrics.get("img_ppi_median") or "",
         "text_page_share": metrics.get("text_page_share"),
-        "ink": metrics.get("ink"), "bands": metrics.get("bands"),
+        "ink": metrics.get("ink"),
+        "bands": metrics.get("bands"),
         "note": model.get("reason") or "ops 分诊",
         "verdict": "",
         "image_share": metrics.get("image_share"),
-        "measure": "ops 分诊", "route_metric": route,
+        "measure": "ops 分诊",
+        "route_metric": route,
     }
     for key in ("text_page_share", "ink", "bands", "image_share"):
         if row[key] is None:
@@ -341,8 +380,7 @@ def main():
     ap.add_argument("--uid", required=True)
     ap.add_argument("--out", required=True, help="输出目录，相对路径按 --root 解析")
     ap.add_argument("--root", default=ROOT, help="书库根，测试指到临时库")
-    ap.add_argument("--no-model", dest="model", action="store_false",
-                    help="只出指标与缩略图，不调模型")
+    ap.add_argument("--no-model", dest="model", action="store_false", help="只出指标与缩略图，不调模型")
     ap.add_argument("--pdf", help=argparse.SUPPRESS)
     ap.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     a = ap.parse_args()
@@ -368,16 +406,14 @@ def main():
     if not os.path.isfile(py):
         sys.exit("缺带 pymupdf 的解释器：%s" % py)
 
-    cmd = [py, os.path.abspath(__file__), "--worker", "--root", root, "--uid", a.uid,
-           "--out", out, "--pdf", pdf]
+    cmd = [py, os.path.abspath(__file__), "--worker", "--root", root, "--uid", a.uid, "--out", out, "--pdf", pdf]
     try:
-        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                           timeout=PROBE_TIMEOUT)
+        p = subprocess.run(cmd, capture_output=True, timeout=PROBE_TIMEOUT)
     except subprocess.TimeoutExpired:
         sys.exit("探针超时 %d 秒：%s" % (PROBE_TIMEOUT, pdf))
     rows = read_jsonl(os.path.join(out, "census.jsonl"))
     if p.returncode != 0 or not rows:
-        tail = (p.stderr.decode("utf-8", "replace") or p.stdout.decode("utf-8", "replace"))
+        tail = p.stderr.decode("utf-8", "replace") or p.stdout.decode("utf-8", "replace")
         sys.exit("探针跑失败（rc=%d）：%s" % (p.returncode, tail.strip()[-800:] or "没有产物"))
 
     census = rows[0]
@@ -388,8 +424,7 @@ def main():
     probe = probes[0] if probes else None
     metrics = build_metrics(census, probe)
     tdir = os.path.join(out, "thumbs")
-    thumbs = sorted("thumbs/" + n for n in os.listdir(tdir) if n.endswith(".png")) \
-        if os.path.isdir(tdir) else []
+    thumbs = sorted("thumbs/" + n for n in os.listdir(tdir) if n.endswith(".png")) if os.path.isdir(tdir) else []
 
     prompt = build_prompt(doc, census, cls, metrics)
 
@@ -409,7 +444,7 @@ def main():
         "errors": census.get("errors") or [],
     }
     if not thumbs:
-        result["errors"] = list(result["errors"]) + ["缩略图没生成"]
+        result["errors"] = [*list(result["errors"]), "缩略图没生成"]
     if a.model and thumbs:
         model, err = ask_model(out, thumbs, prompt)
         result["model"] = model
@@ -420,13 +455,13 @@ def main():
     write_json(os.path.join(out, "result.json"), result)
 
     m = metrics
-    print("%s %s 页 %s %s 指标 text_page_share=%s ink=%s bands=%s 图 %d 张"
-          % (a.uid, result["title"][:30], pages, cls, m.get("text_page_share"),
-             m.get("ink"), m.get("bands"), len(thumbs)))
+    print(
+        "%s %s 页 %s %s 指标 text_page_share=%s ink=%s bands=%s 图 %d 张"
+        % (a.uid, result["title"][:30], pages, cls, m.get("text_page_share"), m.get("ink"), m.get("bands"), len(thumbs))
+    )
     if result.get("model"):
         mm = result["model"]
-        print("模型建议 %s 置信 %s %s" % (mm.get("route"), mm.get("confidence"),
-                                          mm.get("reason", "")[:60]))
+        print("模型建议 %s 置信 %s %s" % (mm.get("route"), mm.get("confidence"), mm.get("reason", "")[:60]))
     elif result.get("model_error"):
         print("模型没回 JSON：%s" % result["model_error"])
     return 0

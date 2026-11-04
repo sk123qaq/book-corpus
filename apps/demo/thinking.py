@@ -4,10 +4,10 @@
 `pi --thinking` 接受 off/minimal/low/medium/high/xhigh/max。页面只暴露
 关/低/中/高四档；接口传其它合法值也照收，非法值退回默认 high。
 """
+
 LEVELS = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 UI_LEVELS = ("off", "low", "medium", "high")
-LABELS = {"off": "关", "minimal": "最低", "low": "低", "medium": "中",
-          "high": "高", "xhigh": "极高", "max": "最大"}
+LABELS = {"off": "关", "minimal": "最低", "low": "低", "medium": "中", "high": "高", "xhigh": "极高", "max": "最大"}
 DEFAULT = "high"
 
 

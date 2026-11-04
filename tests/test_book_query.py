@@ -14,16 +14,13 @@ def _point_tables_at(monkeypatch, tmp_path):
 
 def test_read_table_splits_aliases_and_drops_wu_exclude(monkeypatch, tmp_path):
     tables = _point_tables_at(monkeypatch, tmp_path)
-    (tables / "概念表.tsv").write_text(
-        "key\taliases\texclude\tnote\n平等\t公平,均等\t无\t\n", encoding="utf-8")
+    (tables / "概念表.tsv").write_text("key\taliases\texclude\tnote\n平等\t公平,均等\t无\t\n", encoding="utf-8")
 
-    assert book_query.read_table("main") == {
-        "平等": {"aliases": ["公平", "均等"], "exclude": []}}
+    assert book_query.read_table("main") == {"平等": {"aliases": ["公平", "均等"], "exclude": []}}
 
 
 def test_load_actions_reads_action_word_table(monkeypatch, tmp_path):
     tables = _point_tables_at(monkeypatch, tmp_path)
-    (tables / "概念表-动作词.tsv").write_text(
-        "term\tkind\tnote\n收拾\t动作\t\n", encoding="utf-8")
+    (tables / "概念表-动作词.tsv").write_text("term\tkind\tnote\n收拾\t动作\t\n", encoding="utf-8")
 
     assert book_query.load_actions() == {"收拾"}

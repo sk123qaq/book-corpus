@@ -12,10 +12,24 @@ collect_ignore_glob = [
 ]
 
 BOOKS = [
-    ("B0001", "文学", "甲书", ["官场的铁笼把人变成机器上的零件，科层制把每个具体的人压成一个可以互换的编号。",
-     "第二段讲自由与独立判断，一个人若不肯放弃自己的判断，就只能在铁笼里保持清醒。"]),
-    ("B0002", "人文社科", "乙书", ["礼治秩序与法治不同，礼治靠的是传统与教化，法治靠的是国家权力与成文规则。",
-     "差序格局是乡土中国的结构，人与人的关系像石子投水，一圈一圈推出去，越远越薄。"]),
+    (
+        "B0001",
+        "文学",
+        "甲书",
+        [
+            "官场的铁笼把人变成机器上的零件，科层制把每个具体的人压成一个可以互换的编号。",
+            "第二段讲自由与独立判断，一个人若不肯放弃自己的判断，就只能在铁笼里保持清醒。",
+        ],
+    ),
+    (
+        "B0002",
+        "人文社科",
+        "乙书",
+        [
+            "礼治秩序与法治不同，礼治靠的是传统与教化，法治靠的是国家权力与成文规则。",
+            "差序格局是乡土中国的结构，人与人的关系像石子投水，一圈一圈推出去，越远越薄。",
+        ],
+    ),
 ]
 
 
@@ -26,8 +40,9 @@ def run_cli(*args, cwd=None, env=None):
     full_env.setdefault("BOOKS_NO_PDF_VENV", "1")
     if env:
         full_env.update(env)
-    return subprocess.run([sys.executable, "-m", "bookcorpus", *map(str, args)],
-                          capture_output=True, text=True, cwd=cwd, env=full_env)
+    return subprocess.run(
+        [sys.executable, "-m", "bookcorpus", *map(str, args)], capture_output=True, text=True, cwd=cwd, env=full_env
+    )
 
 
 def _source_entry(uid, title, fmt, sha, collection, collection_file):
@@ -53,8 +68,7 @@ def write_collection(root, cuid, name):
     return cuid
 
 
-def write_book(root, uid, subject, title, paragraphs=None, fmt="epub", sha=None,
-               collection=None, collection_file=None):
+def write_book(root, uid, subject, title, paragraphs=None, fmt="epub", sha=None, collection=None, collection_file=None):
     rel = uid
     bdir = os.path.join(root, "books", uid)
     os.makedirs(os.path.join(bdir, "source"), exist_ok=True)
@@ -89,10 +103,13 @@ def write_ledger(root, rows):
     if src not in sys.path:
         sys.path.insert(0, src)
     from bookcorpus.scripts import lib_common as L
+
     for uid, subject, title, note in rows:
-        L.category_put({"uid": uid, "一级": subject, "二级": "", "作者层": "0",
-                        "保留": "keep", "正式书名": title, "备注": note},
-                       "test", root=str(root))
+        L.category_put(
+            {"uid": uid, "一级": subject, "二级": "", "作者层": "0", "保留": "keep", "正式书名": title, "备注": note},
+            "test",
+            root=str(root),
+        )
 
 
 @pytest.fixture

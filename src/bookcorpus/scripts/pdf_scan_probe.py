@@ -10,6 +10,7 @@
 输出一行一本书的 JSONL，含 text_page_share，用来把 census 判为 C/C2 的扫描件里
 「值得 OCR 的扫描文字书」与「图册/写真/画册」分开。跑法同 census，纯 poppler + numpy + PIL。
 """
+
 import argparse
 import json
 import os
@@ -22,7 +23,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 ROOT = L.ROOT
 MIN_INK, MAX_INK, MIN_BANDS = 0.004, 0.35, 8
 
@@ -42,6 +44,7 @@ def ink_bands(png):
     """(ink, 行带数, 列带数)。行带取横排文字行，列带取竖排文字的列。"""
     import numpy as np
     from PIL import Image
+
     a = np.asarray(Image.open(png).convert("L"), dtype=np.float32) / 255.0
     dark = a < 0.62
     return float(dark.mean()), _bands(dark.mean(axis=1)), _bands(dark.mean(axis=0))
@@ -64,9 +67,10 @@ def probe(relpath, pages, sample=5):
     try:
         for p in sample_pages(pages, sample):
             rc = subprocess.run(
-                ["pdftoppm", "-r", "70", "-gray", "-png", "-f", str(p), "-l", str(p),
-                 abspath, os.path.join(tmp, "p")],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180).returncode
+                ["pdftoppm", "-r", "70", "-gray", "-png", "-f", str(p), "-l", str(p), abspath, os.path.join(tmp, "p")],
+                capture_output=True,
+                timeout=180,
+            ).returncode
             pngs = [f for f in os.listdir(tmp) if f.endswith(".png")]
             if rc != 0 or not pngs:
                 out["errors"].append("page %d render rc=%d" % (p, rc))
@@ -74,18 +78,21 @@ def probe(relpath, pages, sample=5):
             ink, bands_r, bands_c = ink_bands(os.path.join(tmp, pngs[0]))
             for f in pngs:
                 os.remove(os.path.join(tmp, f))
-            out["sampled"].append({
-                "page": p, "ink": round(ink, 4), "bands_row": bands_r, "bands_col": bands_c,
-                "text_page": bool(MIN_INK <= ink <= MAX_INK
-                                  and max(bands_r, bands_c) >= MIN_BANDS),
-            })
+            out["sampled"].append(
+                {
+                    "page": p,
+                    "ink": round(ink, 4),
+                    "bands_row": bands_r,
+                    "bands_col": bands_c,
+                    "text_page": bool(MIN_INK <= ink <= MAX_INK and max(bands_r, bands_c) >= MIN_BANDS),
+                }
+            )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     n = len(out["sampled"])
     if n:
         out["ink_median"] = round(statistics.median(s["ink"] for s in out["sampled"]), 4)
-        out["bands_median"] = statistics.median(
-            max(s["bands_row"], s["bands_col"]) for s in out["sampled"])
+        out["bands_median"] = statistics.median(max(s["bands_row"], s["bands_col"]) for s in out["sampled"])
         out["text_page_share"] = round(sum(s["text_page"] for s in out["sampled"]) / n, 2)
     return out
 
@@ -101,13 +108,15 @@ def main():
     ap.add_argument("--sample", type=int, default=5, help="每本抽几页（图册复核用更大值）")
     a = ap.parse_args()
     from pdf_census import classify
-    rows = [json.loads(l) for l in open(a.census, encoding="utf-8")]
+
+    with open(a.census, encoding="utf-8") as fh:
+        rows = [json.loads(line) for line in fh]
     kinds = tuple(a.kinds.split(","))
     if a.uid:
         rows = [r for r in rows if r["uid"] in set(a.uid)]
     want = [r for r in rows if any(classify(r).startswith(k) for k in kinds)]
     if a.limit:
-        want = want[:a.limit]
+        want = want[: a.limit]
     print("待探 %d 本" % len(want), file=sys.stderr)
 
     def job(r):
@@ -115,9 +124,17 @@ def main():
             p = probe(r["relpath"], r.get("pages") or 1, a.sample)
         except Exception as e:
             p = {"relpath": r["relpath"], "errors": ["%s: %s" % (type(e).__name__, e)]}
-        p.update({"uid": r["uid"], "title": r["title"], "subject1": r["subject1"],
-                  "subject2": r["subject2"], "pages": r.get("pages"),
-                  "bytes": r["bytes"], "ppi": r.get("img_ppi_median")})
+        p.update(
+            {
+                "uid": r["uid"],
+                "title": r["title"],
+                "subject1": r["subject1"],
+                "subject2": r["subject2"],
+                "pages": r.get("pages"),
+                "bytes": r["bytes"],
+                "ppi": r.get("img_ppi_median"),
+            }
+        )
         return p
 
     with open(a.out + ".tmp", "w", encoding="utf-8") as fh, ThreadPoolExecutor(a.workers) as ex:
@@ -125,9 +142,19 @@ def main():
         for i, f in enumerate(futs, 1):
             p = f.result()
             fh.write(json.dumps(p, ensure_ascii=False) + "\n")
-            print("[%d/%d] %s share=%s ink=%s bands=%s %s" % (
-                i, len(want), p["uid"], p.get("text_page_share"), p.get("ink_median"),
-                p.get("bands_median"), (p.get("errors") or [""])[0]), file=sys.stderr)
+            print(
+                "[%d/%d] %s share=%s ink=%s bands=%s %s"
+                % (
+                    i,
+                    len(want),
+                    p["uid"],
+                    p.get("text_page_share"),
+                    p.get("ink_median"),
+                    p.get("bands_median"),
+                    (p.get("errors") or [""])[0],
+                ),
+                file=sys.stderr,
+            )
     os.replace(a.out + ".tmp", a.out)
     print(a.out, file=sys.stderr)
 

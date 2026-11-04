@@ -1,5 +1,4 @@
 import json
-import os
 
 from conftest import run_cli
 
@@ -38,27 +37,29 @@ def test_save_keeps_other_keys_and_skips_empty(tmp_path):
     from bookcorpus import pimodel
 
     root = _root(tmp_path)
-    pimodel.save(str(root), {"provider": "acme", "model": "m1", "base_url": "http://x/v1",
-                             "api_key_env": "ACME_KEY"})
+    pimodel.save(str(root), {"provider": "acme", "model": "m1", "base_url": "http://x/v1", "api_key_env": "ACME_KEY"})
     pimodel.save(str(root), {"base_url": ""})
     text = (root / "books.toml").read_text(encoding="utf-8")
-    assert "schema = 2" in text and "tool = " in text
-    assert "base_url" not in text and "$" not in text
-    assert "[model]" in text and 'model = "m1"' in text
+    assert "schema = 2" in text
+    assert "tool = " in text
+    assert "base_url" not in text
+    assert "$" not in text
+    assert "[model]" in text
+    assert 'model = "m1"' in text
 
 
 def test_model_flags_order_and_api_key(tmp_path, monkeypatch):
     from bookcorpus import pimodel
 
     root = _root(tmp_path)
-    pimodel.save(str(root), {"provider": "acme", "model": "m1", "thinking": "medium",
-                             "api_key_env": "ACME_KEY"})
+    pimodel.save(str(root), {"provider": "acme", "model": "m1", "thinking": "medium", "api_key_env": "ACME_KEY"})
     monkeypatch.setenv("ACME_KEY", "sk-test")
     cfg = pimodel.load(str(root))
     flags = pimodel.model_flags(cfg["values"])
     assert flags == ["--thinking", "medium", "--model", "acme/m1", "--api-key", "sk-test"]
     argv = pimodel.argv(cfg["values"], "PROMPT")
-    assert argv[-1] == "PROMPT" and "--model" in argv
+    assert argv[-1] == "PROMPT"
+    assert "--model" in argv
 
 
 def test_thinking_only_accepts_levels(tmp_path):
@@ -74,8 +75,7 @@ def test_setup_pi_writes_models_json_with_backup(tmp_path, monkeypatch):
 
     path = tmp_path / "agent" / "models.json"
     monkeypatch.setattr(pimodel, "PI_CONFIG", str(path))
-    values = {"provider": "acme", "model": "acme/m1", "base_url": "http://x/v1",
-              "api_key_env": "ACME_KEY", "api": ""}
+    values = {"provider": "acme", "model": "acme/m1", "base_url": "http://x/v1", "api_key_env": "ACME_KEY", "api": ""}
     changed, detail = pimodel.setup_pi(values)
     assert changed, detail
     first = json.loads(path.read_text(encoding="utf-8"))
@@ -94,7 +94,8 @@ def test_setup_pi_without_base_url_changes_nothing(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pimodel, "PI_CONFIG", str(tmp_path / "models.json"))
     changed, detail = pimodel.setup_pi({"provider": "acme", "model": "m1", "base_url": ""})
-    assert not changed and "base_url" in detail
+    assert not changed
+    assert "base_url" in detail
     assert not (tmp_path / "models.json").exists()
 
 
@@ -109,11 +110,11 @@ def test_cli_model_shows_and_sets(tmp_path):
     assert bad.returncode != 0
     assert "--thinking" in bad.stderr
 
-    saved = run_cli("model", "set", "--provider", "acme", "--model", "m1",
-                    "--thinking", "low", "--root", root)
+    saved = run_cli("model", "set", "--provider", "acme", "--model", "m1", "--thinking", "low", "--root", root)
     assert saved.returncode == 0, saved.stdout + saved.stderr
     text = (root / "books.toml").read_text(encoding="utf-8")
-    assert 'provider = "acme"' in text and 'model = "m1"' in text
+    assert 'provider = "acme"' in text
+    assert 'model = "m1"' in text
 
     stub = tmp_path / "pi_stub.py"
     stub.write_text("import sys\nprint('ok')\n", encoding="utf-8")

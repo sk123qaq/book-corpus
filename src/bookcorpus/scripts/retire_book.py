@@ -8,6 +8,7 @@
 预览有挡住项都拒绝，避免预览后库变了。冷宫只留 source/，元数据进
 工作区/批次/移出-<日期>/retired.tsv 与 books/_冷宫/README.md。
 """
+
 import argparse
 import collections
 import csv
@@ -23,14 +24,31 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+import contextlib
 
-RETIRED_HEADER = ["retired_at", "uid", "title", "old_path", "cold_path", "sources",
-                  "source_sha256", "format", "bytes", "md_chapters", "md_bytes", "reason",
-                  "snapshot", "shared_with", "series_docs", "note"]
+from lib_common import ROOT
+
+RETIRED_HEADER = [
+    "retired_at",
+    "uid",
+    "title",
+    "old_path",
+    "cold_path",
+    "sources",
+    "source_sha256",
+    "format",
+    "bytes",
+    "md_chapters",
+    "md_bytes",
+    "reason",
+    "snapshot",
+    "shared_with",
+    "series_docs",
+    "note",
+]
 
 README_COLS = 7
 
@@ -79,7 +97,7 @@ def iter_book_docs(ctx):
             with open(os.path.join(dirpath, "book.json"), encoding="utf-8") as fh:
                 yield dirpath, json.load(fh)
         except (OSError, json.JSONDecodeError) as e:
-            raise SystemExit("book.json 读不了: %s (%s)" % (dirpath, e))
+            raise SystemExit("book.json 读不了: %s (%s)" % (dirpath, e)) from None
 
 
 def find_book(ctx, uid):
@@ -162,8 +180,8 @@ def index_counts(ctx, rel_dir):
     con = sqlite3.connect("file:%s?mode=ro" % ctx.index, uri=True)
     try:
         expand = con.execute(
-            "SELECT count(*) FROM expand WHERE path LIKE ? ESCAPE '\\'",
-            (like_prefix(rel_dir),)).fetchone()[0]
+            "SELECT count(*) FROM expand WHERE path LIKE ? ESCAPE '\\'", (like_prefix(rel_dir),)
+        ).fetchone()[0]
         paras = con.execute("SELECT count(*) FROM para WHERE book=?", (book_key,)).fetchone()[0]
     except sqlite3.Error:
         return 0, 0
@@ -179,8 +197,7 @@ def db_facts(ctx, uid):
     con = sqlite3.connect("file:%s?mode=ro" % ctx.db, uri=True)
     try:
         row = con.execute("SELECT title FROM book WHERE uid=?", (uid,)).fetchone()
-        awards = [r[0] for r in con.execute(
-            "SELECT award FROM book_award WHERE uid=? ORDER BY award", (uid,))]
+        awards = [r[0] for r in con.execute("SELECT award FROM book_award WHERE uid=? ORDER BY award", (uid,))]
     except sqlite3.Error:
         return False, []
     finally:
@@ -210,8 +227,7 @@ def find_series_docs(ctx, doc):
     """提到了这本或它所属系列的 tables/系列/*.md，只标出，不自动改。"""
     if not os.path.isdir(ctx.series_dir):
         return []
-    needles = [x for x in {(doc.get("title") or "").strip(),
-                           (doc.get("series") or "").strip()} if len(x) >= 2]
+    needles = [x for x in {(doc.get("title") or "").strip(), (doc.get("series") or "").strip()} if len(x) >= 2]
     if not needles:
         return []
     hits = []
@@ -272,23 +288,23 @@ def build_sources(ctx, book_dir, doc, cold_source_rel):
         used.add(name)
         action = "move" if not others else "hardlink"
         fallback = ""
-        if action == "hardlink" and not same_filesystem(
-                path, os.path.join(ctx.root, cold_source_rel)):
+        if action == "hardlink" and not same_filesystem(path, os.path.join(ctx.root, cold_source_rel)):
             fallback = "copy"
-        out.append({
-            "path": ctx.rel(path),
-            "sha256": sha,
-            "bytes": size,
-            "shared_with": len(others),
-            "shared_uids": sorted(others)[:10],
-            "action": action,
-            "fallback": fallback,
-            "primary_src": bool(s.get("primary_src")),
-            "exists": exists,
-            "in_book_dir": os.path.realpath(path).startswith(
-                os.path.realpath(book_dir) + os.sep),
-            "cold": cold_source_rel + "/" + name,
-        })
+        out.append(
+            {
+                "path": ctx.rel(path),
+                "sha256": sha,
+                "bytes": size,
+                "shared_with": len(others),
+                "shared_uids": sorted(others)[:10],
+                "action": action,
+                "fallback": fallback,
+                "primary_src": bool(s.get("primary_src")),
+                "exists": exists,
+                "in_book_dir": os.path.realpath(path).startswith(os.path.realpath(book_dir) + os.sep),
+                "cold": cold_source_rel + "/" + name,
+            }
+        )
     return out
 
 
@@ -312,8 +328,7 @@ def delete_list(book_dir):
 def leftover_files(ctx, book_dir, delete, source_entries):
     """书目录里既不删、也不进冷宫的东西。正常只有空的 source/，这里是兜底。"""
     skip_top = {x.rstrip("/") for x in delete}
-    referenced = {resolve_source(ctx, book_dir, s)
-                  for s in source_entries if s.get("file")}
+    referenced = {resolve_source(ctx, book_dir, s) for s in source_entries if s.get("file")}
     out = []
     for dirpath, _dirnames, filenames in os.walk(book_dir):
         for name in filenames:
@@ -329,12 +344,25 @@ def leftover_files(ctx, book_dir, delete, source_entries):
 
 def plan_hash(preview):
     """预览里决定破坏范围的部分。派生状态（索引行数、时间）不进哈希。"""
-    keep = ["uid", "title", "book_dir", "sources", "delete", "leftovers", "ledger", "db",
-            "awards", "views", "series_docs", "md_chapters", "md_bytes", "expand_md",
-            "cold_path"]
+    keep = [
+        "uid",
+        "title",
+        "book_dir",
+        "sources",
+        "delete",
+        "leftovers",
+        "ledger",
+        "db",
+        "awards",
+        "views",
+        "series_docs",
+        "md_chapters",
+        "md_bytes",
+        "expand_md",
+        "cold_path",
+    ]
     body = {k: preview.get(k) for k in keep}
-    body["sources"] = [{k: v for k, v in s.items() if k != "shared_uids"}
-                       for s in preview.get("sources") or []]
+    body["sources"] = [{k: v for k, v in s.items() if k != "shared_uids"} for s in preview.get("sources") or []]
     blob = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -361,8 +389,7 @@ def build_preview(ctx, uid):
     if doc is None:
         raise LookupError("uid 不在 books/ 里: %s" % uid)
     rel_dir = ctx.rel(book_dir)
-    led_row = next((r for r in L.categories(root=ctx.root)
-                    if (r.get("uid") or "").strip() == uid), None)
+    led_row = next((r for r in L.categories(root=ctx.root) if (r.get("uid") or "").strip() == uid), None)
     cold_rel, cold_source_rel = cold_layout(ctx, doc)
     sources = build_sources(ctx, book_dir, doc, cold_source_rel)
     delete = delete_list(book_dir)
@@ -383,8 +410,7 @@ def build_preview(ctx, uid):
     if os.path.basename(book_dir) != uid:
         blockers.append("uid 与书目录名不一致: %s vs %s" % (uid, os.path.basename(book_dir)))
     if any(not s["exists"] for s in sources):
-        warnings.append("有源文件不在磁盘上: " + ", ".join(
-            s["path"] for s in sources if not s["exists"]))
+        warnings.append("有源文件不在磁盘上: " + ", ".join(s["path"] for s in sources if not s["exists"]))
     if led_row is None:
         warnings.append("人账里没有这行，删行会跳过")
     readme_ok, readme_note = readme_state(ctx)
@@ -426,23 +452,41 @@ def build_preview(ctx, uid):
 
 
 def format_preview(preview):
-    lines = ["%s  %s" % (preview["uid"], preview["title"]),
-             "  书目录  %s" % preview["book_dir"],
-             "  删除    %s" % (", ".join(preview["delete"]) or "（无）"),
-             "  附带    %s" % (", ".join(preview["leftovers"]) or "（无）"),
-             "  md      %d 章 / %d 字节" % (preview["md_chapters"], preview["md_bytes"])]
+    lines = [
+        "%s  %s" % (preview["uid"], preview["title"]),
+        "  书目录  %s" % preview["book_dir"],
+        "  删除    %s" % (", ".join(preview["delete"]) or "（无）"),
+        "  附带    %s" % (", ".join(preview["leftovers"]) or "（无）"),
+        "  md      %d 章 / %d 字节" % (preview["md_chapters"], preview["md_bytes"]),
+    ]
     for s in preview["sources"]:
-        lines.append("  源      %s  %d 字节  sha256 %s  共享 %d 本  %s%s" % (
-            s["path"], s["bytes"], s["sha256"][:12], s["shared_with"], s["action"],
-            "（跨文件系统改复制）" if s["fallback"] == "copy" else ""))
-    lines.append("  账      人账行 %s  DB 行 %s  奖项 %d  视图 %d  系列文档 %d" % (
-        "有" if preview["ledger"] else "无", "有" if preview["db"] else "无",
-        len(preview["awards"]), len(preview["views"]), len(preview["series_docs"])))
-    lines.append("  检索    expand %d 行  expand.md %s  para %d 行" % (
-        preview["expand_rows"], preview["expand_md"] or "无", preview["index_rows"]))
+        lines.append(
+            "  源      %s  %d 字节  sha256 %s  共享 %d 本  %s%s"
+            % (
+                s["path"],
+                s["bytes"],
+                s["sha256"][:12],
+                s["shared_with"],
+                s["action"],
+                "（跨文件系统改复制）" if s["fallback"] == "copy" else "",
+            )
+        )
+    lines.append(
+        "  账      人账行 %s  DB 行 %s  奖项 %d  视图 %d  系列文档 %d"
+        % (
+            "有" if preview["ledger"] else "无",
+            "有" if preview["db"] else "无",
+            len(preview["awards"]),
+            len(preview["views"]),
+            len(preview["series_docs"]),
+        )
+    )
+    lines.append(
+        "  检索    expand %d 行  expand.md %s  para %d 行"
+        % (preview["expand_rows"], preview["expand_md"] or "无", preview["index_rows"])
+    )
     lines.append("  冷宫    %s" % preview["cold_path"])
-    lines.append("  快照    %s  %s" % (
-        preview["snapshot"], "就绪" if preview["snapshot_ok"] else "缺失"))
+    lines.append("  快照    %s  %s" % (preview["snapshot"], "就绪" if preview["snapshot_ok"] else "缺失"))
     lines.append("  计划    %s" % preview["plan_hash"])
     for b in preview["blockers"]:
         lines.append("  挡住    " + b)
@@ -522,28 +566,48 @@ def append_cold_readme(ctx, preview, reason):
     if ("| %s |" % preview["uid"]) in old:
         return ctx.rel(path), False
     today = datetime.date.today().isoformat()
-    src_text = "；".join(
-        "`%s` %s 字节，sha256 `%s…`（%s，与 %d 本共用%s）" % (
-            os.path.basename(s["path"]), format(s["bytes"], ","), s["sha256"][:8],
-            "移动" if s["action"] == "move" else "硬链接", s["shared_with"],
-            "，跨文件系统复制" if s["fallback"] == "copy" else "")
-        for s in preview["sources"]) or "无源文件"
-    md_text = ("%d 章 / %s 字节；%s 删除" % (
-        preview["md_chapters"], format(preview["md_bytes"], ","), today)
-        if preview["md_chapters"] else "无 md")
-    cells = [today, preview["uid"], preview["title"], preview["book_dir"], src_text,
-             md_text, reason]
+    src_text = (
+        "；".join(
+            "`%s` %s 字节，sha256 `%s…`（%s，与 %d 本共用%s）"
+            % (
+                os.path.basename(s["path"]),
+                format(s["bytes"], ","),
+                s["sha256"][:8],
+                "移动" if s["action"] == "move" else "硬链接",
+                s["shared_with"],
+                "，跨文件系统复制" if s["fallback"] == "copy" else "",
+            )
+            for s in preview["sources"]
+        )
+        or "无源文件"
+    )
+    md_text = (
+        "%d 章 / %s 字节；%s 删除" % (preview["md_chapters"], format(preview["md_bytes"], ","), today)
+        if preview["md_chapters"]
+        else "无 md"
+    )
+    cells = [today, preview["uid"], preview["title"], preview["book_dir"], src_text, md_text, reason]
     row = "| " + " | ".join(_cell(c).replace("|", "／") for c in cells) + " |"
-    lines = old.splitlines() if old else [
-        "# books/_冷宫", "",
-        "| 移入日期 | uid | 书名 | 原路径 | 源文件 | 原 md | 理由 |",
-        "|---|---|---|---|---|---|---|"]
+    lines = (
+        old.splitlines()
+        if old
+        else [
+            "# books/_冷宫",
+            "",
+            "| 移入日期 | uid | 书名 | 原路径 | 源文件 | 原 md | 理由 |",
+            "|---|---|---|---|---|---|---|",
+        ]
+    )
     last_table = max((i for i, line in enumerate(lines) if line.startswith("|")), default=-1)
     if last_table >= 0:
         lines.insert(last_table + 1, row)
     else:
-        lines += ["", "| 移入日期 | uid | 书名 | 原路径 | 源文件 | 原 md | 理由 |",
-                  "|---|---|---|---|---|---|---|", row]
+        lines += [
+            "",
+            "| 移入日期 | uid | 书名 | 原路径 | 源文件 | 原 md | 理由 |",
+            "|---|---|---|---|---|---|---|",
+            row,
+        ]
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
@@ -584,8 +648,7 @@ def rebuild_derived(ctx, preview, run):
             # 旧索引可能没建概念剖面，缺表就跳过，不能让整本移出卡在这里
             have = {r[0] for r in con.execute("SELECT name FROM sqlite_master")}
             if "expand" in have:
-                con.execute("DELETE FROM expand WHERE path LIKE ? ESCAPE '\\'",
-                            (like_prefix(rel_dir),))
+                con.execute("DELETE FROM expand WHERE path LIKE ? ESCAPE '\\'", (like_prefix(rel_dir),))
                 if "expand_fts" in have:
                     con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
                 done.append("expand rows")
@@ -596,8 +659,7 @@ def rebuild_derived(ctx, preview, run):
                     con.execute("INSERT INTO para_fts(para_fts) VALUES('rebuild')")
                 done.append("para rows %d" % max(para, 0))
             if "book_concept" in have:
-                concept = con.execute(
-                    "DELETE FROM book_concept WHERE book=?", (book_key,)).rowcount
+                concept = con.execute("DELETE FROM book_concept WHERE book=?", (book_key,)).rowcount
                 done.append("book_concept rows %d" % max(concept, 0))
             con.commit()
         finally:
@@ -627,9 +689,11 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
     uid = preview["uid"]
     book_dir = os.path.join(ctx.root, preview["book_dir"])
     cold_source = os.path.join(ctx.root, preview["cold_path"])
-    protected = {os.path.realpath(os.path.join(ctx.root, s["path"]))
-                 for s in preview["sources"]
-                 if s["shared_with"] > 0 and s["in_book_dir"]}
+    protected = {
+        os.path.realpath(os.path.join(ctx.root, s["path"]))
+        for s in preview["sources"]
+        if s["shared_with"] > 0 and s["in_book_dir"]
+    }
     steps = []
     current = "start"
 
@@ -703,24 +767,33 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
         tsv = append_retired_tsv(ctx, retired_row(preview, reason, preview["snapshot"]))
         note("records", "%s；%s%s" % (readme, tsv, "" if added else "（已有该行）"))
         clear_pending(ctx, uid)
-    except Exception as e:  # noqa: BLE001
-        try:
+    except Exception as e:
+        with contextlib.suppress(Exception):
             write_pending(ctx, preview, reason, status="failed: %s" % current)
-        except Exception:  # noqa: BLE001
-            pass
         try:
-            tsv = append_retired_tsv(ctx, retired_row(
-                preview, reason, preview["snapshot"],
-                note="failed at %s: %s" % (current, e)))
-        except Exception:  # noqa: BLE001
+            tsv = append_retired_tsv(
+                ctx, retired_row(preview, reason, preview["snapshot"], note="failed at %s: %s" % (current, e))
+            )
+        except Exception:
             tsv = ""
-        return {"ok": False, "uid": uid, "failed_step": current, "error": str(e),
-                "steps": steps, "retired_tsv": tsv, "cold_path": preview["cold_path"],
-                "hint": "书目录已不在时，重跑同一条 --apply 会补完重建"
-                        if current in ("rebuild", "records") else ""}
-    return {"ok": True, "uid": uid, "title": preview["title"],
-            "cold_path": preview["cold_path"], "plan_hash": preview["plan_hash"],
-            "steps": steps}
+        return {
+            "ok": False,
+            "uid": uid,
+            "failed_step": current,
+            "error": str(e),
+            "steps": steps,
+            "retired_tsv": tsv,
+            "cold_path": preview["cold_path"],
+            "hint": "书目录已不在时，重跑同一条 --apply 会补完重建" if current in ("rebuild", "records") else "",
+        }
+    return {
+        "ok": True,
+        "uid": uid,
+        "title": preview["title"],
+        "cold_path": preview["cold_path"],
+        "plan_hash": preview["plan_hash"],
+        "steps": steps,
+    }
 
 
 def _run(cmd):
@@ -736,9 +809,13 @@ def resume_rebuild(ctx, uid, last, rebuild, run):
     current = "resume"
     paths = pending_files(ctx, uid)
     if not paths:
-        return {"ok": False, "uid": uid, "failed_step": current,
-                "error": "缺 pending 快照，无法自动续跑，请人工核对冷宫与索引",
-                "steps": steps}
+        return {
+            "ok": False,
+            "uid": uid,
+            "failed_step": current,
+            "error": "缺 pending 快照，无法自动续跑，请人工核对冷宫与索引",
+            "steps": steps,
+        }
     pending = paths[-1]
     with open(pending, encoding="utf-8") as fh:
         preview = json.load(fh)
@@ -759,42 +836,37 @@ def resume_rebuild(ctx, uid, last, rebuild, run):
 
         current = "rebuild"
         if rebuild:
-            steps.append({"step": "rebuild",
-                          "detail": "; ".join(rebuild_derived(ctx, preview, run))})
+            steps.append({"step": "rebuild", "detail": "; ".join(rebuild_derived(ctx, preview, run))})
         else:
             steps.append({"step": "rebuild", "detail": "跳过（--no-rebuild）"})
 
         current = "records"
         readme, added = append_cold_readme(ctx, preview, reason)
         tsv = append_retired_tsv(ctx, retired_row(preview, reason, snapshot))
-        steps.append({"step": "records", "detail": "%s；%s%s" % (
-            readme, tsv, "" if added else "（已有该行）")})
+        steps.append({"step": "records", "detail": "%s；%s%s" % (readme, tsv, "" if added else "（已有该行）")})
         clear_pending(ctx, uid)
-    except Exception as e:  # noqa: BLE001
-        try:
+    except Exception as e:
+        with contextlib.suppress(Exception):
             write_pending(ctx, preview, reason, status="failed: %s" % current)
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            append_retired_tsv(ctx, retired_row(
-                preview, reason, snapshot, note="failed at %s: %s" % (current, e)))
-        except Exception:  # noqa: BLE001
-            pass
-        return {"ok": False, "uid": uid, "failed_step": current, "error": str(e),
-                "steps": steps, "resumed": True}
-    return {"ok": True, "uid": uid, "resumed": True, "title": preview.get("title", ""),
-            "cold_path": preview.get("cold_dir", last.get("cold_path") or ""),
-            "steps": steps}
+        with contextlib.suppress(Exception):
+            append_retired_tsv(ctx, retired_row(preview, reason, snapshot, note="failed at %s: %s" % (current, e)))
+        return {"ok": False, "uid": uid, "failed_step": current, "error": str(e), "steps": steps, "resumed": True}
+    return {
+        "ok": True,
+        "uid": uid,
+        "resumed": True,
+        "title": preview.get("title", ""),
+        "cold_path": preview.get("cold_dir", last.get("cold_path") or ""),
+        "steps": steps,
+    }
 
 
 def retired_rows(ctx, uid):
     """这个 uid 在 retired.tsv 里的全部行，按时间从新到旧。"""
     out = []
-    for path in sorted(glob.glob(os.path.join(ctx.work, "批次", "移出-*", "retired.tsv")),
-                       reverse=True):
+    for path in sorted(glob.glob(os.path.join(ctx.work, "批次", "移出-*", "retired.tsv")), reverse=True):
         with open(path, encoding="utf-8", newline="") as fh:
-            rows = [r for r in csv.DictReader(fh, delimiter="\t")
-                    if (r.get("uid") or "").strip() == uid]
+            rows = [r for r in csv.DictReader(fh, delimiter="\t") if (r.get("uid") or "").strip() == uid]
         out.extend(reversed(rows))
     return out
 
@@ -819,7 +891,7 @@ def failure_step(row):
     if note.startswith("pending"):
         return "pending"
     if note.startswith("failed at "):
-        return note[len("failed at "):].split(":", 1)[0].strip()
+        return note[len("failed at ") :].split(":", 1)[0].strip()
     return ""
 
 
@@ -835,11 +907,9 @@ def pending_files(ctx, uid):
 
 def write_pending(ctx, preview, reason, status="started"):
     """动文件之前把预览落盘：中途被打断，重跑能照着它补完重建。"""
-    path = os.path.join(os.path.dirname(retired_tsv_path(ctx)), "pending",
-                        L.path_safe(preview["uid"]) + ".json")
+    path = os.path.join(os.path.dirname(retired_tsv_path(ctx)), "pending", L.path_safe(preview["uid"]) + ".json")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    doc = dict(preview, reason=reason, status=status,
-               updated_at=datetime.datetime.now().isoformat(timespec="seconds"))
+    doc = dict(preview, reason=reason, status=status, updated_at=datetime.datetime.now().isoformat(timespec="seconds"))
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, indent=1)
@@ -849,10 +919,8 @@ def write_pending(ctx, preview, reason, status="started"):
 
 def clear_pending(ctx, uid):
     for path in pending_files(ctx, uid):
-        try:
+        with contextlib.suppress(OSError):
             os.remove(path)
-        except OSError:
-            pass
 
 
 def main(argv=None):
@@ -866,8 +934,7 @@ def main(argv=None):
     ap.add_argument("--plan-hash", default="")
     ap.add_argument("--root", default=ROOT)
     ap.add_argument("--no-snapshot", action="store_true", help="跳过快照门槛，只给测试用")
-    ap.add_argument("--no-rebuild", action="store_true",
-                    help="不重建 DB、书目表、视图与 expand，留给收尾")
+    ap.add_argument("--no-rebuild", action="store_true", help="不重建 DB、书目表、视图与 expand，留给收尾")
     args = ap.parse_args(argv)
     ctx = Ctx(args.root)
     uid = args.uid.strip()
@@ -879,42 +946,53 @@ def main(argv=None):
             cold = retired_record(ctx, uid)
             if cold:
                 out = {"ok": True, "uid": uid, "already_retired": True, "cold_path": cold}
-                print(json.dumps(out, ensure_ascii=False) if args.json
-                      else "%s 已经移出，冷宫在 %s" % (uid, cold))
+                print(json.dumps(out, ensure_ascii=False) if args.json else "%s 已经移出，冷宫在 %s" % (uid, cold))
                 return 0
             rows = retired_rows(ctx, uid)
             last = rows[0] if rows else None
             step = failure_step(last) if last else ""
             # 可续跑：有 pending 快照（被杀也会留），或最后一条是失败行
             if pending_files(ctx, uid) or step in RESUME_STEPS:
-                refuse = ("--root 不是真库却要重建派生数据，测试请加 --no-rebuild"
-                          if not args.no_rebuild and ctx.root != ROOT else None)
+                refuse = (
+                    "--root 不是真库却要重建派生数据，测试请加 --no-rebuild"
+                    if not args.no_rebuild and ctx.root != ROOT
+                    else None
+                )
                 if refuse:
-                    print(json.dumps({"ok": False, "uid": uid, "refused": refuse},
-                                     ensure_ascii=False) if args.json
-                          else refuse, file=sys.stdout if args.json else sys.stderr)
+                    print(
+                        json.dumps({"ok": False, "uid": uid, "refused": refuse}, ensure_ascii=False)
+                        if args.json
+                        else refuse,
+                        file=sys.stdout if args.json else sys.stderr,
+                    )
                     return 2
                 report = resume_rebuild(ctx, uid, last or {}, not args.no_rebuild, _run)
                 if args.json:
                     print(json.dumps(report, ensure_ascii=False, indent=1))
                 else:
-                    print("续跑 %s：%s" % (uid, "完成" if report["ok"] else
-                                           "卡在 %s 步: %s" % (report["failed_step"],
-                                                                  report["error"])))
+                    print(
+                        "续跑 %s：%s"
+                        % (uid, "完成" if report["ok"] else "卡在 %s 步: %s" % (report["failed_step"], report["error"]))
+                    )
                     for s in report["steps"]:
                         print("  %-12s %s" % (s["step"], s["detail"]))
                 return 0 if report["ok"] else 3
             if last is not None:
-                payload = {"ok": False, "uid": uid,
-                           "error": "%s；上一次落地卡在 %s 步，不在可续跑范围，需人工核对" % (
-                               e, step or "未知")}
-                print(json.dumps(payload, ensure_ascii=False) if args.json
-                      else payload["error"],
-                      file=sys.stdout if args.json else sys.stderr)
+                payload = {
+                    "ok": False,
+                    "uid": uid,
+                    "error": "%s；上一次落地卡在 %s 步，不在可续跑范围，需人工核对" % (e, step or "未知"),
+                }
+                print(
+                    json.dumps(payload, ensure_ascii=False) if args.json else payload["error"],
+                    file=sys.stdout if args.json else sys.stderr,
+                )
                 return 3
         payload = {"ok": False, "error": str(e)}
-        print(json.dumps(payload, ensure_ascii=False) if args.json else str(e),
-              file=sys.stdout if args.json else sys.stderr)
+        print(
+            json.dumps(payload, ensure_ascii=False) if args.json else str(e),
+            file=sys.stdout if args.json else sys.stderr,
+        )
         return 2
 
     if args.dry_run:
@@ -930,16 +1008,23 @@ def main(argv=None):
     elif preview["blockers"]:
         refuse = "预览有挡住项: " + "；".join(preview["blockers"])
     elif args.plan_hash != preview["plan_hash"]:
-        refuse = ("plan_hash 不一致，库在预览后变了，拒绝落地\n  给的 %s\n  现在 %s"
-                  % (args.plan_hash, preview["plan_hash"]))
+        refuse = "plan_hash 不一致，库在预览后变了，拒绝落地\n  给的 %s\n  现在 %s" % (
+            args.plan_hash,
+            preview["plan_hash"],
+        )
     elif not args.no_snapshot and not preview["snapshot_ok"]:
         refuse = "当天快照不在: %s（只给测试用 --no-snapshot）" % preview["snapshot"]
     elif not args.no_rebuild and ctx.root != ROOT:
         refuse = "--root 不是真库却要重建派生数据，测试请加 --no-rebuild"
     if refuse:
-        print(json.dumps({"ok": False, "uid": uid, "refused": refuse,
-                          "plan_hash": preview["plan_hash"]}, ensure_ascii=False)
-              if args.json else refuse, file=sys.stdout if args.json else sys.stderr)
+        print(
+            json.dumps(
+                {"ok": False, "uid": uid, "refused": refuse, "plan_hash": preview["plan_hash"]}, ensure_ascii=False
+            )
+            if args.json
+            else refuse,
+            file=sys.stdout if args.json else sys.stderr,
+        )
         return 2
 
     report = apply(ctx, preview, args.reason, not args.no_snapshot, not args.no_rebuild, _run)

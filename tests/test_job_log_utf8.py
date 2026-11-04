@@ -10,7 +10,7 @@ import json
 import types
 from pathlib import Path
 
-SERVER = (Path(__file__).resolve().parents[1] / "apps" / "ops" / "server.py")
+SERVER = Path(__file__).resolve().parents[1] / "apps" / "ops" / "server.py"
 
 
 def _load_server():
@@ -52,7 +52,7 @@ def test_truncated_multibyte_tail_is_held_back(tmp_path):
     mod = _load_server()
     log = tmp_path / "log.txt"
     good = "第一行\n中"
-    log.write_bytes(good.encode("utf-8") + "文".encode("utf-8")[:1])
+    log.write_bytes(good.encode("utf-8") + "文".encode()[:1])
 
     first = _page(mod, tmp_path)
     assert first["text"] == good, first["text"]
@@ -60,7 +60,7 @@ def test_truncated_multibyte_tail_is_held_back(tmp_path):
     assert first["eof"] is False
 
     # 后续字节补上：从同一个 offset 再读，半截字符能完整拼出来
-    log.write_bytes(log.read_bytes() + "文".encode("utf-8")[1:] + "结束\n".encode("utf-8"))
+    log.write_bytes(log.read_bytes() + "文".encode()[1:] + "结束\n".encode())
     second = _page(mod, tmp_path, first["next"])
     assert second["text"] == "文结束\n", second["text"]
     assert second["next"] == log.stat().st_size == second["size"], second
@@ -94,7 +94,9 @@ def test_offset_past_eof_is_clamped(tmp_path):
     mod = _load_server()
     (tmp_path / "log.txt").write_bytes(b"abc\n")
     page = _page(mod, tmp_path, 9999)
-    assert page["offset"] == 4 and page["next"] == 4 and page["eof"] is True
+    assert page["offset"] == 4
+    assert page["next"] == 4
+    assert page["eof"] is True
 
 
 def test_unknown_job_is_404(tmp_path):
@@ -103,7 +105,8 @@ def test_unknown_job_is_404(tmp_path):
     handler.app.store = types.SimpleNamespace(get=lambda _jid: None)
     mod.Handler.api_job_log(handler, "job-missing", {"offset": ["0"]})
     code, payload = handler.sent
-    assert code == 404 and payload.get("ok") is False
+    assert code == 404
+    assert payload.get("ok") is False
 
 
 def test_secret_in_log_is_redacted(tmp_path):

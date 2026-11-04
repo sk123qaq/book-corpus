@@ -1,9 +1,7 @@
-import csv
 import importlib.util
 from pathlib import Path
 
-SCRIPT = (Path(__file__).resolve().parents[1]
-          / "src" / "bookcorpus" / "scripts" / "check_p1.py")
+SCRIPT = Path(__file__).resolve().parents[1] / "src" / "bookcorpus" / "scripts" / "check_p1.py"
 
 
 def _load_check_p1():
@@ -45,15 +43,14 @@ def test_gold_rows_outside_library_fail(tmp_path, monkeypatch):
     root = _ws(tmp_path)
     gold = root / "gold.tsv"
     gold.write_text(
-        "qid\tcategory\tpath\n"
-        "q1\t原词\tbooks/B0001/md/x.md\n"
-        "q2\t原词\tbooks/B9999/md/y.md\n",
-        encoding="utf-8")
+        "qid\tcategory\tpath\nq1\t原词\tbooks/B0001/md/x.md\nq2\t原词\tbooks/B9999/md/y.md\n", encoding="utf-8"
+    )
     mod = _load_check_p1()
     monkeypatch.setattr(mod, "ROOT", str(root))
     mod.fails.clear()
     rows, mapped = mod.load_gold(str(gold))
-    assert len(rows) == 2 and len(mapped) == 1
+    assert len(rows) == 2
+    assert len(mapped) == 1
     assert mod.fails == ["gold q2"]
 
 

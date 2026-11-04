@@ -41,6 +41,7 @@ pdf_audit_volume.py 做 PDF 侧字数比与逐页锚点覆盖率，门槛全过�
   python3 pdf_md_batch.py --batch pdf-ocr-ops-2026-10-25 --uids B1234,B2345 \
       --triage 工作区/批次/pdf-ocr-ops-2026-10-25/triage_final.csv
 """
+
 import argparse
 import collections
 import concurrent.futures as futures
@@ -49,6 +50,7 @@ import datetime
 import hashlib
 import json
 import os
+import pathlib
 import re
 import shutil
 import sqlite3
@@ -58,7 +60,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VENV_PY = os.path.join(L.WORK, ".venv-pdf", "bin", "python")
@@ -72,29 +74,42 @@ TRIAGE = os.path.join(CENSUS_DIR, "triage_final.csv")
 SKIP_LIST = os.path.join(CENSUS_DIR, "skip_list.tsv")
 DB = L.PATHS.library_db
 
-MAX_SLICE_MB = 15          # 官方上限是本地文件 50 MB；实测 29.9 MB 切片第一次上传就 180 秒超时，
-                           # 11.8 MB 与 14.2 MB 能拿到干净回话，而 56.6 MB/118 MB 直接断，所以压到 15 MB
+MAX_SLICE_MB = 15  # 官方上限是本地文件 50 MB；实测 29.9 MB 切片第一次上传就 180 秒超时，
+# 11.8 MB 与 14.2 MB 能拿到干净回话，而 56.6 MB/118 MB 直接断，所以压到 15 MB
 MIN_CHUNK_PAGES = 25
-MAX_CHUNK_PAGES = 150      # 单任务实测 150 页能全解析（官方上限 1000 页）
-MAX_CHUNK_ATTEMPTS = 2     # 同一段范围两次都失败就切半（小于 25 页的记 failed）
-MAX_RESUME_ATTEMPTS = 3    # 任务已受理但没下完，续跑同一个 job 的次数上限
+MAX_CHUNK_PAGES = 150  # 单任务实测 150 页能全解析（官方上限 1000 页）
+MAX_CHUNK_ATTEMPTS = 2  # 同一段范围两次都失败就切半（小于 25 页的记 failed）
+MAX_RESUME_ATTEMPTS = 3  # 任务已受理但没下完，续跑同一个 job 的次数上限
 MAX_DEAD_JOB_RESUBMIT = 3  # 平台把任务判 failed（state=failed）：续跑同一 jobId 永远是 failed，
-                           # 必须丢掉 jobId 重提一个新任务；2026-10-20 实测 B1623 末段 5 页就这样卡死
-QUEUE_BACKOFF = (20, 45, 90, 180, 300)   # 10010 队列满的退避阶梯，不切分，等它腾出来
-CANCEL_GRACE = 60          # 额度用尽后给在飞分片的宽限：已受理的任务可能马上就 done，能落就落；
-                           # 宽限过后 terminate，免得 driver 陪它等到 pilot 的 1800 秒超时
-MIN_INK, MAX_INK, MIN_BANDS = 0.004, 0.35, 8      # 同 pdf_scan_probe.py
-DARK_MAX = int(0.62 * 255)                        # 灰度样本 <= 这个值算暗像素
+# 必须丢掉 jobId 重提一个新任务；2026-10-20 实测 B1623 末段 5 页就这样卡死
+QUEUE_BACKOFF = (20, 45, 90, 180, 300)  # 10010 队列满的退避阶梯，不切分，等它腾出来
+CANCEL_GRACE = 60  # 额度用尽后给在飞分片的宽限：已受理的任务可能马上就 done，能落就落；
+# 宽限过后 terminate，免得 driver 陪它等到 pilot 的 1800 秒超时
+MIN_INK, MAX_INK, MIN_BANDS = 0.004, 0.35, 8  # 同 pdf_scan_probe.py
+DARK_MAX = int(0.62 * 255)  # 灰度样本 <= 这个值算暗像素
 SUSPECT_CHARS = 20
 PROBE_DPI, REVIEW_DPI, MAX_REVIEW_PAGES = 70, 100, 12
 JOBID_RE = re.compile(r"^jobId\s+(\S+)")
 DOC_RE = re.compile(r"(\d+)")
 IMG_REF_RE = re.compile(r"(?:imgs|images)/[^\"')\s>]+")
-WORKLIST_COLS = ["uid", "title", "path", "src", "sha256", "format", "pages", "class",
-                 "verdict", "subject1", "subject2", "author", "series"]
-DEFER_LEDGER = os.path.join("defer", "lang.tsv")   # pdf_lang_probe.py 按内容探页定的语种账
+WORKLIST_COLS = [
+    "uid",
+    "title",
+    "path",
+    "src",
+    "sha256",
+    "format",
+    "pages",
+    "class",
+    "verdict",
+    "subject1",
+    "subject2",
+    "author",
+    "series",
+]
+DEFER_LEDGER = os.path.join("defer", "lang.tsv")  # pdf_lang_probe.py 按内容探页定的语种账
 ROUTE_TRIAGE = {"ocr": "OCR", "text": "本地抽文本"}
-MIN_AUDIT_RATIO, MIN_AUDIT_ANCHORS = 0.95, 0.90   # 与 pdf_audit_volume.py 的默认门槛一致
+MIN_AUDIT_RATIO, MIN_AUDIT_ANCHORS = 0.95, 0.90  # 与 pdf_audit_volume.py 的默认门槛一致
 # MinerU 兜底：Paddle 读出 0 字但有字迹的页交它补投。官方上限单文件 200 页 / 200 MB，
 # 每账号每天 1000 页最高优先级、超出降速、5000 页封顶。
 MINERU_CLI = os.path.join(L.skill_dir("mineru"), "scripts", "mineru.py")
@@ -107,8 +122,17 @@ RATIO_RE = re.compile(r"([\d,]+)\s*/\s*([\d,]+)\s+([\d.]+)%\s+\d+\s+md\b")
 ANCHOR_RE = re.compile(r"锚点\s*:\s*([\d,]+)\s*/\s*([\d,]+)\s+窗命中\s+([\d.]+)%")
 GREEN = ("landed", "replaced", "accepted", "staged-green")
 # 驱动的真实状态词（result["status"]）。gate_pdf 与 pdf_queue 不要再自己拼词表。
-HARD_FAIL = ("api-fatal", "chunk-failed", "assemble-failed", "source-missing",
-             "source-changed", "chunk-mismatch", "incomplete-chunks", "no-chunks", "error")
+HARD_FAIL = (
+    "api-fatal",
+    "chunk-failed",
+    "assemble-failed",
+    "source-missing",
+    "source-changed",
+    "chunk-mismatch",
+    "incomplete-chunks",
+    "no-chunks",
+    "error",
+)
 DEFER = ("deferred", "interrupted")
 
 
@@ -155,7 +179,9 @@ def db_row(con, uid):
         """SELECT b.uid AS uid, b.title AS title, b.path AS path, b.author AS author,
                   b.series AS series, s.file AS src, s.format AS format, s.sha256 AS sha256
            FROM book b JOIN source s ON s.uid=b.uid AND s.primary_src=1
-           WHERE b.uid=?""", (uid,)).fetchone()
+           WHERE b.uid=?""",
+        (uid,),
+    ).fetchone()
     return dict(r) if r else None
 
 
@@ -186,8 +212,7 @@ def read_worklist(batch_path):
         return None
     with open(path, encoding="utf-8") as fh:
         cols = fh.readline().rstrip("\n").split("\t")
-        return [dict(zip(cols, line.rstrip("\n").split("\t")))
-                for line in fh if line.strip()]
+        return [dict(zip(cols, line.rstrip("\n").split("\t"), strict=False)) for line in fh if line.strip()]
 
 
 def triage_routes(triage):
@@ -215,7 +240,8 @@ def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, sk
     """
     want = ROUTE_TRIAGE[route]
     path = os.path.join(batch_path, "worklist.tsv")
-    triage_rows = list(csv.DictReader(open(triage or TRIAGE, encoding="utf-8")))
+    with open(triage or TRIAGE, encoding="utf-8") as fh:
+        triage_rows = list(csv.DictReader(fh))
     route_of = triage_routes(triage)
     skipped = skip_uids() if skip is None else skip_uids(skip)
     wanted = {u.strip() for u in (uids or []) if u.strip()}
@@ -230,18 +256,30 @@ def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, sk
             if uid not in wanted:
                 continue
         elif rows:
-            continue        # 账已在且没点名：重跑账上的书，不往里添
+            continue  # 账已在且没点名：重跑账上的书，不往里添
         if uid in skipped:
             dropped += 1
             continue
         d = db_row(con, uid)
         if not d or d["format"] != "pdf":
             sys.exit("triage 里 route=%s 的 %s 在库里拿不到 pdf 主源: %r" % (want, uid, d))
-        added.append({"uid": uid, "title": d["title"], "path": d["path"], "src": d["src"],
-                      "sha256": d["sha256"], "format": d["format"], "pages": t["pages"],
-                      "class": t["class"], "verdict": t.get("verdict", ""),
-                      "subject1": t["subject1"], "subject2": t["subject2"],
-                      "author": d["author"] or "", "series": d["series"] or ""})
+        added.append(
+            {
+                "uid": uid,
+                "title": d["title"],
+                "path": d["path"],
+                "src": d["src"],
+                "sha256": d["sha256"],
+                "format": d["format"],
+                "pages": t["pages"],
+                "class": t["class"],
+                "verdict": t.get("verdict", ""),
+                "subject1": t["subject1"],
+                "subject2": t["subject2"],
+                "author": d["author"] or "",
+                "series": d["series"] or "",
+            }
+        )
         known.add(uid)
     rows += added
     rows.sort(key=lambda r: (int(r["pages"] or 0), r["uid"]))
@@ -249,12 +287,13 @@ def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, sk
     if wanted:
         in_skip = sorted(wanted & skipped)
         if in_skip:
-            sys.exit("--uids 里这些 uid 列在 skip_list.tsv（不转），不能排进这批：%s"
-                     % ", ".join(in_skip))
+            sys.exit("--uids 里这些 uid 列在 skip_list.tsv（不转），不能排进这批：%s" % ", ".join(in_skip))
         missing = sorted(wanted - {r["uid"] for r in out})
         if missing:
-            sys.exit("--uids 里这些 uid 不在 route=%s 的范围里（分诊表里没有，或分的不是这条线）：%s"
-                     % (route, ", ".join(missing)))
+            sys.exit(
+                "--uids 里这些 uid 不在 route=%s 的范围里（分诊表里没有，或分的不是这条线）：%s"
+                % (route, ", ".join(missing))
+            )
     if not dry and (added or not known):
         with open(path + ".tmp", "w", encoding="utf-8") as fh:
             fh.write("\t".join(WORKLIST_COLS) + "\n")
@@ -262,16 +301,14 @@ def build_worklist(con, batch_path, route, dry=False, uids=None, triage=None, sk
                 fh.write("\t".join(str(r[c]) for c in WORKLIST_COLS) + "\n")
         os.replace(path + ".tmp", path)
     if dropped:
-        print("注意：triage_final 里 %d 本 route=%s 但也列在 skip_list.tsv，未排进队列"
-              % (dropped, want))
+        print("注意：triage_final 里 %d 本 route=%s 但也列在 skip_list.tsv，未排进队列" % (dropped, want))
     return out
 
 
 # ------------------------------------------------------------------ 分片账
 def plan_ranges(npages, src):
     per_page = os.path.getsize(src) / float(max(1, npages))
-    per_chunk = max(MIN_CHUNK_PAGES, min(MAX_CHUNK_PAGES,
-                                         int(MAX_SLICE_MB * 1e6 / per_page)))
+    per_chunk = max(MIN_CHUNK_PAGES, min(MAX_CHUNK_PAGES, int(MAX_SLICE_MB * 1e6 / per_page)))
     return [(a, min(a + per_chunk - 1, npages)) for a in range(1, npages + 1, per_chunk)], per_chunk
 
 
@@ -287,8 +324,9 @@ def load_ledger(ctx, uid):
         with open(p, encoding="utf-8") as fh:
             return json.load(fh) or []
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("分片账坏了（%s）：%s；先修账再跑，否则已付的 jobId 会失联"
-                           % (os.path.relpath(p, ctx["batch"]), exc))
+        raise RuntimeError(
+            "分片账坏了（%s）：%s；先修账再跑，否则已付的 jobId 会失联" % (os.path.relpath(p, ctx["batch"]), exc)
+        ) from exc
 
 
 def save_ledger(ctx, uid, ledger):
@@ -331,8 +369,15 @@ def run_pilot(ctx, uid, a, b, cdir, job, on_job, log):
     if job:
         cmd += ["--job", str(job)]
     log.write("$ %s\n" % " ".join(cmd))
-    p = subprocess.Popen(cmd, cwd=L.ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         text=True, bufsize=1, env=dict(os.environ, PYTHONUNBUFFERED="1"))
+    p = subprocess.Popen(
+        cmd,
+        cwd=L.ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        env=dict(os.environ, PYTHONUNBUFFERED="1"),
+    )
     with ctx["pilot_lock"]:
         ctx["pilots"][uid] = p
     tail = []
@@ -365,7 +410,7 @@ def cancel_pilots(ctx, grace=None):
         if ctx.get("cancelling"):
             return None
         if not ctx["pilots"]:
-            return None            # 没有在飞的，不用等宽限期
+            return None  # 没有在飞的，不用等宽限期
         ctx["cancelling"] = True
 
     def run():
@@ -409,7 +454,8 @@ def classify_failure(tail):
     if re.search(r"HTTP\s*40[13]|Invalid token|token 不对|Token Invalid", text):
         return "fatal"
     if re.search(r"Traceback", text) and re.search(
-            r"ConnectionError|Timeout|RemoteDisconnected|Broken pipe|Max retries", text):
+        r"ConnectionError|Timeout|RemoteDisconnected|Broken pipe|Max retries", text
+    ):
         return "transport"
     return "other"
 
@@ -449,28 +495,33 @@ def work_chunk(ctx, uid, ledger, a, b, log, result):
             e["status"] = "interrupted"
             e["attempts"] = max(0, e.get("attempts", 1) - 1)
             save_ledger(ctx, uid, ledger)
-            result.update(status="interrupted",
-                          note="额度用尽中断：分片 %d-%d %s，账已留，下次续跑不加失败次数"
-                               % (a, b, ("已受理 jobId=%s" % e["jobId"]) if e.get("jobId")
-                                  else "未受理，下次重提"))
-            log.write("  %s：%d-%d 因 %s 中断（jobId=%s，attempts 退回 %d）\n"
-                      % (uid, a, b, ctx["abort"], e.get("jobId"), e["attempts"]))
+            result.update(
+                status="interrupted",
+                note="额度用尽中断：分片 %d-%d %s，账已留，下次续跑不加失败次数"
+                % (a, b, ("已受理 jobId=%s" % e["jobId"]) if e.get("jobId") else "未受理，下次重提"),
+            )
+            log.write(
+                "  %s：%d-%d 因 %s 中断（jobId=%s，attempts 退回 %d）\n"
+                % (uid, a, b, ctx["abort"], e.get("jobId"), e["attempts"])
+            )
             return False
         kind = classify_failure(tail)
         if kind == "fatal":
             e["status"] = "api-fatal"
             save_ledger(ctx, uid, ledger)
-            result.update(status="api-fatal",
-                          note="接口鉴权/参数类错误，重试与切分都没用：%s"
-                               % " | ".join(x for x in tail[-3:] if x.strip())[:180])
+            result.update(
+                status="api-fatal",
+                note="接口鉴权/参数类错误，重试与切分都没用：%s" % " | ".join(x for x in tail[-3:] if x.strip())[:180],
+            )
             log.write("  %s：接口回了不可重试的错误，停下来\n" % uid)
             return False
         if kind == "quota":
             e["status"] = "quota"
             save_ledger(ctx, uid, ledger)
-            result.update(status="deferred",
-                          note="接口报「已达每日页数上限」（HTTP 403 code 12001），额度已尽，"
-                               "本次未消耗；次日复跑即续")
+            result.update(
+                status="deferred",
+                note="接口报「已达每日页数上限」（HTTP 403 code 12001），额度已尽，本次未消耗；次日复跑即续",
+            )
             ctx["abort"] = "日额度用尽"
             log.write("  %s：接口报每日页数上限，本批停在这里，剩下的书没提交\n" % uid)
             cancel_pilots(ctx)
@@ -481,15 +532,15 @@ def work_chunk(ctx, uid, ledger, a, b, log, result):
                 wait = QUEUE_BACKOFF[rounds]
                 e["queue_rounds"], e["status"] = rounds + 1, "queued"
                 save_ledger(ctx, uid, ledger)
-                log.write("  %s：%d-%d 提交队列已满，等 %d 秒再试（第 %d 次）\n"
-                          % (uid, a, b, wait, rounds + 1))
+                log.write("  %s：%d-%d 提交队列已满，等 %d 秒再试（第 %d 次）\n" % (uid, a, b, wait, rounds + 1))
                 time.sleep(wait)
                 continue
             e["status"] = "queue-full"
             save_ledger(ctx, uid, ledger)
-            result.update(status="deferred",
-                          note="接口提交队列已满，%d-%d 退避 %d 次仍未受理；额度未消耗，下次跑接着试"
-                               % (a, b, rounds))
+            result.update(
+                status="deferred",
+                note="接口提交队列已满，%d-%d 退避 %d 次仍未受理；额度未消耗，下次跑接着试" % (a, b, rounds),
+            )
             # 队列满是账号/平台级的状态，不是这一本的事：再排下一本只是接着等
             ctx["abort"] = "队列满"
             log.write("  %s：队列满退避用完，本批停在这里，剩下的书没提交\n" % uid)
@@ -498,20 +549,18 @@ def work_chunk(ctx, uid, ledger, a, b, log, result):
             resubmits = e.get("dead_jobs", 0) + 1
             e["dead_jobs"], e["jobId"] = resubmits, None
             save_ledger(ctx, uid, ledger)
-            log.write("  %s：%d-%d 平台把任务判 failed，jobId 作废重新提交（第 %d 次）\n"
-                      % (uid, a, b, resubmits))
+            log.write("  %s：%d-%d 平台把任务判 failed，jobId 作废重新提交（第 %d 次）\n" % (uid, a, b, resubmits))
             if resubmits <= MAX_DEAD_JOB_RESUBMIT:
                 continue
         if e.get("jobId") and e["attempts"] < MAX_RESUME_ATTEMPTS:
-            log.write("  %s：%d-%d 任务已受理（jobId=%s）但没下完，续跑同一任务\n"
-                      % (uid, a, b, e["jobId"]))
+            log.write("  %s：%d-%d 任务已受理（jobId=%s）但没下完，续跑同一任务\n" % (uid, a, b, e["jobId"]))
             continue
         if kind == "transport" and e["attempts"] < MAX_CHUNK_ATTEMPTS:
-            log.write("  %s：%d-%d 第 %d 次上传/网络没成（rc=%d），重试同一段\n"
-                      % (uid, a, b, e["attempts"], rc))
+            log.write("  %s：%d-%d 第 %d 次上传/网络没成（rc=%d），重试同一段\n" % (uid, a, b, e["attempts"], rc))
             continue
-        log.write("  %s：%d-%d 第 %d 次没成（rc=%d，%s，jobId=%s）\n"
-                  % (uid, a, b, e["attempts"], rc, kind, e.get("jobId")))
+        log.write(
+            "  %s：%d-%d 第 %d 次没成（rc=%d，%s，jobId=%s）\n" % (uid, a, b, e["attempts"], rc, kind, e.get("jobId"))
+        )
         break
     if n >= MIN_CHUNK_PAGES:
         e["status"] = "split"
@@ -555,8 +604,7 @@ def gray_stats(pix):
                 cols[x] += 1
         rows[y] = rd
         dark += rd
-    return (dark / float(w * h), _bands([c / float(w) for c in rows]),
-            _bands([c / float(h) for c in cols]))
+    return (dark / float(w * h), _bands([c / float(w) for c in rows]), _bands([c / float(h) for c in cols]))
 
 
 def page_files(pages_dir):
@@ -567,15 +615,13 @@ def page_files(pages_dir):
 
 def check_chunk(ctx, cdir, a, b):
     """一段分片的页码与页数必须和账里的 range 一致，不然拼出来是错位的书。"""
-    run = json.load(open(os.path.join(cdir, "paddle_run.json"), encoding="utf-8"))
+    run = json.loads(pathlib.Path(os.path.join(cdir, "paddle_run.json")).read_text(encoding="utf-8"))
     pp = run.get("per_page") or []
     if len(pp) != b - a + 1:
-        raise MergeError("%s: per_page %d 条，range %d-%d 要 %d 条"
-                         % (brel(ctx, cdir), len(pp), a, b, b - a + 1))
+        raise MergeError("%s: per_page %d 条，range %d-%d 要 %d 条" % (brel(ctx, cdir), len(pp), a, b, b - a + 1))
     pages = [p.get("page") for p in pp]
     if pages != list(range(a, b + 1)):
-        raise MergeError("%s: per_page 页码 %s…%s 与 range %d-%d 不符"
-                         % (brel(ctx, cdir), pages[:2], pages[-2:], a, b))
+        raise MergeError("%s: per_page 页码 %s…%s 与 range %d-%d 不符" % (brel(ctx, cdir), pages[:2], pages[-2:], a, b))
     files = page_files(os.path.join(cdir, "pages"))
     if len(files) != len(pp):
         raise MergeError("%s: %d 个页文件，per_page %d 条" % (brel(ctx, cdir), len(files), len(pp)))
@@ -605,10 +651,18 @@ def merge(ctx, uid, row, ledger, log, result):
     merged = os.path.join(ctx["work"], uid, "merged")
     run_path = os.path.join(merged, "run.json")
     if os.path.isfile(run_path) and not ctx["force"]:
-        doc = json.load(open(run_path, encoding="utf-8"))
-        log.write("复用已有合并产物：%d 页（第 %s 到 %s 页），覆盖 1-%d：%s；逐页字数见 %s\n"
-                  % (doc["pages"], doc["first_page"], doc["last_page"], doc["book_pages"],
-                     doc["coverage_ok"], brel(ctx, run_path)))
+        doc = json.loads(pathlib.Path(run_path).read_text(encoding="utf-8"))
+        log.write(
+            "复用已有合并产物：%d 页（第 %s 到 %s 页），覆盖 1-%d：%s；逐页字数见 %s\n"
+            % (
+                doc["pages"],
+                doc["first_page"],
+                doc["last_page"],
+                doc["book_pages"],
+                doc["coverage_ok"],
+                brel(ctx, run_path),
+            )
+        )
         return merged, doc
 
     done = [e for e in ledger if e.get("status") == "done"]
@@ -626,32 +680,43 @@ def merge(ctx, uid, row, ledger, log, result):
         cdir = chunk_dir(ctx, uid, ledger, a, b)
         pp, files = check_chunk(ctx, cdir, a, b)
         cpages = os.path.join(cdir, "pages")
-        for page, fname in zip((p["page"] for p in pp), files):
+        for page, fname in zip((p["page"] for p in pp), files, strict=False):
             if page in seen:
                 raise MergeError("第 %d 页出现两次" % page)
             seen.add(page)
             seq += 1
-            text = open(os.path.join(cpages, fname), encoding="utf-8").read()
+            text = pathlib.Path(os.path.join(cpages, fname)).read_text(encoding="utf-8")
             text, nimg = rewrite_page_images(text, cpages, imgs_dir, page, missing)
             with open(os.path.join(pages_dir, "doc_%04d.md" % seq), "w", encoding="utf-8") as fh:
                 fh.write(text)
-            per_page.append({"page": page, "seq": seq, "chars": len(text), "images": nimg,
-                             "head": " ".join(text.split())[:160]})
+            per_page.append(
+                {"page": page, "seq": seq, "chars": len(text), "images": nimg, "head": " ".join(text.split())[:160]}
+            )
     got = sorted(seen)
     if got != list(range(got[0], got[-1] + 1)):
         raise MergeError("页号不连续：%d…%d 之间缺页" % (got[0], got[-1]))
     npages = int(row["pages"])
-    doc = {"uid": uid, "source": row["src"], "pages": len(per_page), "book_pages": npages,
-           "first_page": got[0], "last_page": got[-1], "coverage_ok": got == list(range(1, npages + 1)),
-           "chunks": [{"range": e["range"], "jobId": e.get("jobId")} for e in done],
-           "missing_images": missing, "generated_at": now(), "per_page": per_page}
+    doc = {
+        "uid": uid,
+        "source": row["src"],
+        "pages": len(per_page),
+        "book_pages": npages,
+        "first_page": got[0],
+        "last_page": got[-1],
+        "coverage_ok": got == list(range(1, npages + 1)),
+        "chunks": [{"range": e["range"], "jobId": e.get("jobId")} for e in done],
+        "missing_images": missing,
+        "generated_at": now(),
+        "per_page": per_page,
+    }
     if os.path.isdir(merged):
         shutil.rmtree(merged)
     os.rename(fresh, merged)
     write_json(run_path, doc)
-    log.write("合并 %d 页（第 %d 到 %d 页），覆盖 1-%d：%s；缺图 %d 张；逐页字数见 %s\n"
-              % (len(per_page), got[0], got[-1], npages, doc["coverage_ok"], len(missing),
-                 brel(ctx, run_path)))
+    log.write(
+        "合并 %d 页（第 %d 到 %d 页），覆盖 1-%d：%s；缺图 %d 张；逐页字数见 %s\n"
+        % (len(per_page), got[0], got[-1], npages, doc["coverage_ok"], len(missing), brel(ctx, run_path))
+    )
     return merged, doc
 
 
@@ -660,17 +725,41 @@ def assemble(ctx, row, merged, stage, log, result):
     pages_dir = os.path.join(merged, "pages")
     run_json = os.path.join(merged, "run.json")
     method = ctx.get("method") or "paddle-ocr"
-    cmd = [VENV_PY, ASSEMBLER, "--pages-dir", pages_dir, "--run-json", run_json,
-           "--out", stage, "--uid", row["uid"], "--title", row["title"],
-           "--author", row.get("author") or "", "--collection", row.get("series") or "",
-           "--source", row["src"], "--source-sha256", row["sha256"],
-           "--structure", "single", "--method", method,
-           "--tool-version", ctx["tool_version"]]
+    cmd = [
+        VENV_PY,
+        ASSEMBLER,
+        "--pages-dir",
+        pages_dir,
+        "--run-json",
+        run_json,
+        "--out",
+        stage,
+        "--uid",
+        row["uid"],
+        "--title",
+        row["title"],
+        "--author",
+        row.get("author") or "",
+        "--collection",
+        row.get("series") or "",
+        "--source",
+        row["src"],
+        "--source-sha256",
+        row["sha256"],
+        "--structure",
+        "single",
+        "--method",
+        method,
+        "--tool-version",
+        ctx["tool_version"],
+    ]
     log.write("$ %s\n" % " ".join(cmd))
     p = subprocess.run(cmd, cwd=L.ROOT, capture_output=True, text=True)
     log.write(p.stdout + p.stderr)
-    result["commands"].append("pdf_ocr_to_md.py --pages-dir work/%s/merged/pages --out out/%s "
-                              "--structure single --method %s" % (row["uid"], row["uid"], method))
+    result["commands"].append(
+        "pdf_ocr_to_md.py --pages-dir work/%s/merged/pages --out out/%s "
+        "--structure single --method %s" % (row["uid"], row["uid"], method)
+    )
     return p.returncode
 
 
@@ -679,10 +768,12 @@ def parse_verify(out):
     c = re.search(r"characters\s*:\s*([\d,]+)", out)
     i = re.search(r"images used\s*:\s*(\d+) \(on disk: (\d+)\)", out)
     p = re.search(r"problems\s*:\s*(\d+)", out)
-    return {"chapters": int(m.group(1)) if m else None,
-            "chars": int(c.group(1).replace(",", "")) if c else None,
-            "images": int(i.group(1)) if i else None,
-            "problems": int(p.group(1)) if p else None}
+    return {
+        "chapters": int(m.group(1)) if m else None,
+        "chars": int(c.group(1).replace(",", "")) if c else None,
+        "images": int(i.group(1)) if i else None,
+        "problems": int(p.group(1)) if p else None,
+    }
 
 
 def verify(ctx, stage, log):
@@ -696,33 +787,55 @@ def parse_audit(out):
     1,234,567 / 1,240,000  99.56%  14 md 与 锚点 : 40/42 窗命中 95.24%。
     """
     m, k = RATIO_RE.search(out), ANCHOR_RE.search(out)
-    return {"md_chars": int(m.group(1).replace(",", "")) if m else None,
-            "pdf_chars": int(m.group(2).replace(",", "")) if m else None,
-            "ratio": float(m.group(3)) / 100.0 if m else None,
-            "anchor_hits": int(k.group(1).replace(",", "")) if k else None,
-            "anchor_total": int(k.group(2).replace(",", "")) if k else None,
-            "anchors": float(k.group(3)) / 100.0 if k else None}
+    return {
+        "md_chars": int(m.group(1).replace(",", "")) if m else None,
+        "pdf_chars": int(m.group(2).replace(",", "")) if m else None,
+        "ratio": float(m.group(3)) / 100.0 if m else None,
+        "anchor_hits": int(k.group(1).replace(",", "")) if k else None,
+        "anchor_total": int(k.group(2).replace(",", "")) if k else None,
+        "anchors": float(k.group(3)) / 100.0 if k else None,
+    }
 
 
 def audit_pdf(ctx, src, stage, log):
-    p = subprocess.run([VENV_PY, AUDIT, src, "-o", stage], cwd=L.ROOT,
-                       capture_output=True, text=True)
-    log.write("$ pdf_audit_volume.py %s -o %s\n%s%s\n"
-              % (rel(src), brel(ctx, stage), p.stdout, p.stderr))
+    p = subprocess.run([VENV_PY, AUDIT, src, "-o", stage], cwd=L.ROOT, capture_output=True, text=True)
+    log.write("$ pdf_audit_volume.py %s -o %s\n%s%s\n" % (rel(src), brel(ctx, stage), p.stdout, p.stderr))
     return p.returncode, parse_audit(p.stdout + p.stderr)
 
 
 def assemble_text(ctx, row, src, stage, log, result):
-    cmd = [VENV_PY, TEXT_ASSEMBLER, "--pdf", src, "--out", stage, "--uid", row["uid"],
-           "--title", row["title"], "--author", row.get("author") or "",
-           "--collection", row.get("series") or "", "--date", row.get("date") or "",
-           "--source-sha256", row["sha256"], "--method", "pdf-text",
-           "--structure", "auto", "--tool-version", ctx["tool_version"]]
+    cmd = [
+        VENV_PY,
+        TEXT_ASSEMBLER,
+        "--pdf",
+        src,
+        "--out",
+        stage,
+        "--uid",
+        row["uid"],
+        "--title",
+        row["title"],
+        "--author",
+        row.get("author") or "",
+        "--collection",
+        row.get("series") or "",
+        "--date",
+        row.get("date") or "",
+        "--source-sha256",
+        row["sha256"],
+        "--method",
+        "pdf-text",
+        "--structure",
+        "auto",
+        "--tool-version",
+        ctx["tool_version"],
+    ]
     log.write("$ %s\n" % " ".join(cmd))
     p = subprocess.run(cmd, cwd=L.ROOT, capture_output=True, text=True)
     log.write(p.stdout + p.stderr)
-    result["commands"].append("pdf_text_to_md.py --pdf %s --out out/%s --structure auto "
-                              "--method pdf-text" % (row["src"], row["uid"]))
+    result["commands"].append(
+        "pdf_text_to_md.py --pdf %s --out out/%s --structure auto --method pdf-text" % (row["src"], row["uid"])
+    )
     return p.returncode
 
 
@@ -742,6 +855,7 @@ def pdf_checks(ctx, row, per_page, log, result):
     这正是 MinerU 静默丢页那一种。字数少但读出了字的（篇章扉页、图版页）只记数不拦。
     """
     import pymupdf as fitz
+
     blank, suspect, short = [], [], []
     src = os.path.join(L.ROOT, row["src"])
     doc = fitz.open(src)
@@ -751,11 +865,10 @@ def pdf_checks(ctx, row, per_page, log, result):
             if chars >= SUSPECT_CHARS:
                 continue
             page = doc[p["page"] - 1]
-            ink, br, bc = gray_stats(page.get_pixmap(
-                matrix=fitz.Matrix(PROBE_DPI / 72.0, PROBE_DPI / 72.0),
-                colorspace=fitz.csGRAY))
-            rec = {"page": p["page"], "chars": p["chars"], "ink": round(ink, 4),
-                   "bands_row": br, "bands_col": bc}
+            ink, br, bc = gray_stats(
+                page.get_pixmap(matrix=fitz.Matrix(PROBE_DPI / 72.0, PROBE_DPI / 72.0), colorspace=fitz.csGRAY)
+            )
+            rec = {"page": p["page"], "chars": p["chars"], "ink": round(ink, 4), "bands_row": br, "bands_col": bc}
             if not chars:
                 blank.append(rec)
                 if MIN_INK <= ink <= MAX_INK and max(br, bc) >= MIN_BANDS:
@@ -770,11 +883,17 @@ def pdf_checks(ctx, row, per_page, log, result):
             pix.save(os.path.join(review, "p%04d.png" % s["page"]))
     finally:
         doc.close()
-    log.write("空页 %d 个；读出 0 字但有字迹的可疑页 %d 个%s；读出 1-%d 字的短页 %d 个%s\n"
-              % (len(blank), len(suspect),
-                 ("：" + ", ".join(str(s["page"]) for s in suspect[:MAX_REVIEW_PAGES])) if suspect else "",
-                 SUSPECT_CHARS - 1, len(short),
-                 ("：" + ", ".join(str(s["page"]) for s in short[:MAX_REVIEW_PAGES])) if short else ""))
+    log.write(
+        "空页 %d 个；读出 0 字但有字迹的可疑页 %d 个%s；读出 1-%d 字的短页 %d 个%s\n"
+        % (
+            len(blank),
+            len(suspect),
+            ("：" + ", ".join(str(s["page"]) for s in suspect[:MAX_REVIEW_PAGES])) if suspect else "",
+            SUSPECT_CHARS - 1,
+            len(short),
+            ("：" + ", ".join(str(s["page"]) for s in short[:MAX_REVIEW_PAGES])) if short else "",
+        )
+    )
     result["blank_pages"] = len(blank)
     result["suspect_miss_pages"] = len(suspect)
     result["suspect_pages"] = [s["page"] for s in suspect]
@@ -796,8 +915,7 @@ def mineru_pages_today(ctx):
         return 0
     today = now()[:10]
     with open(path, encoding="utf-8") as fh:
-        return sum(1 for r in csv.DictReader(fh, delimiter="\t")
-                   if (r.get("at") or "").startswith(today))
+        return sum(1 for r in csv.DictReader(fh, delimiter="\t") if (r.get("at") or "").startswith(today))
 
 
 def skip_rows(ctx, rows):
@@ -812,13 +930,16 @@ def skip_rows(ctx, rows):
 
 def mineru_page_text(blocks, page_idx):
     """一页的正文：按 bbox 从上到下拼文字块。页码与页脚不取（它们本来就不进 markdown）。"""
+
     def key(b):
         box = b.get("bbox") or [0, 0, 0, 0]
         return (box[1], box[0])
-    picked = [b for b in blocks
-              if b.get("page_idx") == page_idx
-              and (b.get("text") or "").strip()
-              and b.get("type") not in MINERU_SKIP_TYPES]
+
+    picked = [
+        b
+        for b in blocks
+        if b.get("page_idx") == page_idx and (b.get("text") or "").strip() and b.get("type") not in MINERU_SKIP_TYPES
+    ]
     return "\n\n".join((b.get("text") or "").strip() for b in sorted(picked, key=key))
 
 
@@ -842,10 +963,13 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
         return None
     batch = pages[:MINERU_MAX_PAGES]
     if used + len(batch) > MINERU_FREE_PAGES:
-        log.write("MinerU 今日已投 %d 页，本次 %d 页会超出 %d 页最高优先级额度（降速，不影响正确性）\n"
-                  % (used, len(batch), MINERU_FREE_PAGES))
+        log.write(
+            "MinerU 今日已投 %d 页，本次 %d 页会超出 %d 页最高优先级额度（降速，不影响正确性）\n"
+            % (used, len(batch), MINERU_FREE_PAGES)
+        )
 
     import pymupdf as fitz
+
     src = os.path.join(L.ROOT, row["src"])
     outd = os.path.join(ctx["tmp"], "mineru", row["uid"])
     os.makedirs(outd, exist_ok=True)
@@ -867,29 +991,58 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
 
     defer = defer_uids(os.path.join(ctx["batch"], DEFER_LEDGER))
     lang = "japan" if row["uid"] in defer else "ch"
-    cmd = [VENV_PY, MINERU_CLI, slice_pdf, "-o", outd, "--mode", "precision", "--model", "vlm",
-           "--ocr", "--lang", lang, "--json", "--timeout", "900"]
+    cmd = [
+        VENV_PY,
+        MINERU_CLI,
+        slice_pdf,
+        "-o",
+        outd,
+        "--mode",
+        "precision",
+        "--model",
+        "vlm",
+        "--ocr",
+        "--lang",
+        lang,
+        "--json",
+        "--timeout",
+        "900",
+    ]
     log.write("$ %s\n" % " ".join(cmd))
     p = subprocess.run(cmd, cwd=L.ROOT, capture_output=True, text=True, timeout=1800)
     log.write(p.stdout[-4000:] + p.stderr[-4000:])
-    result["commands"].append("mineru.py %s --mode precision --model vlm --ocr --lang %s"
-                              % (rel(slice_pdf), lang))
+    result["commands"].append("mineru.py %s --mode precision --model vlm --ocr --lang %s" % (rel(slice_pdf), lang))
 
     hits = []
     for root, _dirs, names in os.walk(outd):
-        hits += [os.path.join(root, n) for n in names
-                 if n.endswith("_content_list.json") and not n.endswith("_v2_content_list.json")]
+        hits += [
+            os.path.join(root, n)
+            for n in names
+            if n.endswith("_content_list.json") and not n.endswith("_v2_content_list.json")
+        ]
     if p.returncode != 0 or not hits:
         tail = " ".join((p.stdout or "").strip().splitlines()[-3:])[:300] or "无输出"
         log.write("MinerU 兜底失败：rc=%d，%s\n" % (p.returncode, tail))
-        skip_rows(ctx, [{"at": now(), "uid": row["uid"], "page": page,
-                         "paddle_chars": 0, "mineru_chars": -1, "action": "mineru-failed",
-                         "note": tail} for page in batch])
-        return {page: -1 for page in batch}
+        skip_rows(
+            ctx,
+            [
+                {
+                    "at": now(),
+                    "uid": row["uid"],
+                    "page": page,
+                    "paddle_chars": 0,
+                    "mineru_chars": -1,
+                    "action": "mineru-failed",
+                    "note": tail,
+                }
+                for page in batch
+            ],
+        )
+        return dict.fromkeys(batch, -1)
 
-    blocks = json.load(open(sorted(hits, key=os.path.getmtime)[-1], encoding="utf-8"))
+    blocks = json.loads(pathlib.Path(sorted(hits, key=os.path.getmtime)[-1]).read_text(encoding="utf-8"))
     run_path = os.path.join(merged, "run.json")
-    run = json.load(open(run_path, encoding="utf-8"))
+    run = json.loads(pathlib.Path(run_path).read_text(encoding="utf-8"))
     seq = {e["page"]: e["seq"] for e in run["per_page"]}
     got, rows = {}, []
     for idx, page in enumerate(batch):
@@ -907,18 +1060,29 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
             for e in doc["per_page"]:
                 if e.get("page") == page:
                     e["chars"], e["head"] = entry["chars"], entry["head"]
-        rows.append({"at": now(), "uid": row["uid"], "page": page, "paddle_chars": 0,
-                     "mineru_chars": len(text),
-                     "action": "rescued" if text.strip() else "skip",
-                     "note": "MinerU 补投 %s 页" % len(batch)})
+        rows.append(
+            {
+                "at": now(),
+                "uid": row["uid"],
+                "page": page,
+                "paddle_chars": 0,
+                "mineru_chars": len(text),
+                "action": "rescued" if text.strip() else "skip",
+                "note": "MinerU 补投 %s 页" % len(batch),
+            }
+        )
     write_json(run_path, run)
     skip_rows(ctx, rows)
     result["mineru_pages"] = batch
     result["mineru_rescued"] = [p for p in batch if got.get(p, 0) > 0]
-    log.write("MinerU 补投 %d 页：读出 %s；仍空 %s\n"
-              % (len(batch),
-                 ", ".join("%d(%d 字)" % (p, got[p]) for p in batch if got.get(p, 0) > 0) or "无",
-                 ", ".join(str(p) for p in batch if not got.get(p, 0)) or "无"))
+    log.write(
+        "MinerU 补投 %d 页：读出 %s；仍空 %s\n"
+        % (
+            len(batch),
+            ", ".join("%d(%d 字)" % (p, got[p]) for p in batch if got.get(p, 0) > 0) or "无",
+            ", ".join(str(p) for p in batch if not got.get(p, 0)) or "无",
+        )
+    )
     return got
 
 
@@ -927,8 +1091,7 @@ def gate_text(v, audit_rc, audit):
     if v["verify_rc"] != 0:
         fails.append("verify rc=%d（problems=%s）" % (v["verify_rc"], v["problems"]))
     if audit_rc != 0:
-        fails.append("PDF 侧审计 rc=%d（字数比 %s，锚点 %s）"
-                     % (audit_rc, audit.get("ratio"), audit.get("anchors")))
+        fails.append("PDF 侧审计 rc=%d（字数比 %s，锚点 %s）" % (audit_rc, audit.get("ratio"), audit.get("anchors")))
     if (v["chapters"] or 0) < 1 or not (v["chars"] or 0):
         fails.append("内容文件 %s 个、%s 字" % (v["chapters"], v["chars"]))
     if (audit.get("ratio") or 0) < MIN_AUDIT_RATIO:
@@ -944,20 +1107,33 @@ def enrich_text_manifest(stage, ctx, row, v, audit_rc, audit, accept):
     """
     man = L.read_md_manifest(stage)
     chapters, bytes_ = L.count_md_dir(stage)
-    man.update({
-        "method": "pdf-text", "tool": "pdf_text_to_md.py",
-        "tool_version": ctx["tool_version"], "batch": ctx["batch_name"],
-        "source": row["src"], "source_sha256": row["sha256"], "source_format": "pdf",
-        "chapters": chapters, "bytes": bytes_, "chars": v["chars"],
-        "images": v["images"], "structure": man.get("structure"),
-        "single_file": man.get("single_file"),
-        "toc_entries": man.get("toc_entries"),
-        "toc_rejected": man.get("toc_rejected", ""),
-        "audit_chars": audit.get("md_chars"), "audit_ratio": audit.get("ratio"),
-        "audit_anchors": audit.get("anchors"), "audit_rc": audit_rc,
-        "verify_rc": v["verify_rc"], "generated_at": now(),
-        "verified": v["verify_rc"] == 0 and audit_rc == 0, "accepted": accept or "",
-    })
+    man.update(
+        {
+            "method": "pdf-text",
+            "tool": "pdf_text_to_md.py",
+            "tool_version": ctx["tool_version"],
+            "batch": ctx["batch_name"],
+            "source": row["src"],
+            "source_sha256": row["sha256"],
+            "source_format": "pdf",
+            "chapters": chapters,
+            "bytes": bytes_,
+            "chars": v["chars"],
+            "images": v["images"],
+            "structure": man.get("structure"),
+            "single_file": man.get("single_file"),
+            "toc_entries": man.get("toc_entries"),
+            "toc_rejected": man.get("toc_rejected", ""),
+            "audit_chars": audit.get("md_chars"),
+            "audit_ratio": audit.get("ratio"),
+            "audit_anchors": audit.get("anchors"),
+            "audit_rc": audit_rc,
+            "verify_rc": v["verify_rc"],
+            "generated_at": now(),
+            "verified": v["verify_rc"] == 0 and audit_rc == 0,
+            "accepted": accept or "",
+        }
+    )
     write_json(os.path.join(stage, ".manifest.json"), man)
     return man
 
@@ -977,25 +1153,39 @@ def gate(v, coverage_ok, suspect, missing):
     return fails
 
 
-def enrich_manifest(stage, ctx, row, v, doc, coverage_ok, blank, suspect, short, accept,
-                    rescued=(), skipped=()):
+def enrich_manifest(stage, ctx, row, v, doc, coverage_ok, blank, suspect, short, accept, rescued=(), skipped=()):
     man = L.read_md_manifest(stage)
     chapters, bytes_ = L.count_md_dir(stage)
-    man.update({
-        "method": "paddle-ocr", "tool": "paddleocr_pilot.py",
-        "tool_version": ctx["tool_version"], "batch": ctx["batch_name"],
-        "source": row["src"], "source_sha256": row["sha256"], "source_format": "pdf",
-        "pages": doc["pages"], "book_pages": doc["book_pages"],
-        "chapters": chapters, "bytes": bytes_, "chars": v["chars"], "images": v["images"],
-        "verify_rc": v["verify_rc"], "coverage_ok": coverage_ok,
-        "blank_pages": len(blank), "suspect_miss_pages": len(suspect),
-        "structure": "single", "single_file": True,
-        "suspect_pages": [s["page"] for s in suspect],
-        "short_pages": len(short),
-        "mineru_rescued_pages": list(rescued),
-        "skipped_unreadable_pages": list(skipped),
-        "generated_at": now(), "verified": v["verify_rc"] == 0, "accepted": accept or "",
-    })
+    man.update(
+        {
+            "method": "paddle-ocr",
+            "tool": "paddleocr_pilot.py",
+            "tool_version": ctx["tool_version"],
+            "batch": ctx["batch_name"],
+            "source": row["src"],
+            "source_sha256": row["sha256"],
+            "source_format": "pdf",
+            "pages": doc["pages"],
+            "book_pages": doc["book_pages"],
+            "chapters": chapters,
+            "bytes": bytes_,
+            "chars": v["chars"],
+            "images": v["images"],
+            "verify_rc": v["verify_rc"],
+            "coverage_ok": coverage_ok,
+            "blank_pages": len(blank),
+            "suspect_miss_pages": len(suspect),
+            "structure": "single",
+            "single_file": True,
+            "suspect_pages": [s["page"] for s in suspect],
+            "short_pages": len(short),
+            "mineru_rescued_pages": list(rescued),
+            "skipped_unreadable_pages": list(skipped),
+            "generated_at": now(),
+            "verified": v["verify_rc"] == 0,
+            "accepted": accept or "",
+        }
+    )
     write_json(os.path.join(stage, ".manifest.json"), man)
     return man
 
@@ -1017,8 +1207,16 @@ def run_one_text(row, ctx):
     uid = row["uid"]
     dest = L.PATHS.md(row["uid"])
     stage = os.path.join(ctx["out"], uid)
-    result = {"uid": uid, "title": row["title"], "format": row["format"], "route": "text",
-              "pages": int(row["pages"]), "dest": rel(dest), "at": now(), "commands": []}
+    result = {
+        "uid": uid,
+        "title": row["title"],
+        "format": row["format"],
+        "route": "text",
+        "pages": int(row["pages"]),
+        "dest": rel(dest),
+        "at": now(),
+        "commands": [],
+    }
     os.makedirs(ctx["logs"], exist_ok=True)
     logpath = os.path.join(ctx["logs"], uid + ".log")
     if os.path.isdir(dest) and not ctx["replace"]:
@@ -1033,14 +1231,12 @@ def run_one_text(row, ctx):
             write_result(ctx, result)
             return result
         if L.sha256_file(src) != row["sha256"]:
-            result.update(status="source-changed",
-                          note="源文件 sha256 与库内人账不符，没抽文本：%s" % row["src"])
+            result.update(status="source-changed", note="源文件 sha256 与库内人账不符，没抽文本：%s" % row["src"])
             log.write("源文件 sha256 与库内人账不符，没抽文本\n")
             write_result(ctx, result)
             return result
 
-        have_stage = os.path.isdir(stage) and os.path.isfile(
-            os.path.join(stage, ".manifest.json"))
+        have_stage = os.path.isdir(stage) and os.path.isfile(os.path.join(stage, ".manifest.json"))
         if have_stage and not ctx["force"]:
             result["note"] = "暂存区已有抽好的产物，只复查门槛"
         else:
@@ -1058,18 +1254,27 @@ def run_one_text(row, ctx):
         v["verify_rc"] = rc
         audit_rc, audit = audit_pdf(ctx, src, stage, log)
         man = L.read_md_manifest(stage)
-        result.update(verify_rc=rc, audit_rc=audit_rc, audit_ratio=audit.get("ratio"),
-                      audit_anchors=audit.get("anchors"), audit_chars=audit.get("md_chars"),
-                      chapters=v["chapters"], chars=v["chars"], images=v["images"],
-                      problems=v["problems"], structure=man.get("structure"),
-                      single_file=man.get("single_file"), pdf_pages=man.get("pages"),
-                      toc_entries=man.get("toc_entries"),
-                      toc_rejected=man.get("toc_rejected", ""),
-                      empty_chapters=man.get("empty_chapters"))
+        result.update(
+            verify_rc=rc,
+            audit_rc=audit_rc,
+            audit_ratio=audit.get("ratio"),
+            audit_anchors=audit.get("anchors"),
+            audit_chars=audit.get("md_chars"),
+            chapters=v["chapters"],
+            chars=v["chars"],
+            images=v["images"],
+            problems=v["problems"],
+            structure=man.get("structure"),
+            single_file=man.get("single_file"),
+            pdf_pages=man.get("pages"),
+            toc_entries=man.get("toc_entries"),
+            toc_rejected=man.get("toc_rejected", ""),
+            empty_chapters=man.get("empty_chapters"),
+        )
         override = os.path.join(ctx["batch"], "overrides", uid + ".json")
         accept = ""
         if os.path.isfile(override):
-            spec = json.load(open(override, encoding="utf-8"))
+            spec = json.loads(pathlib.Path(override).read_text(encoding="utf-8"))
             accept = (spec.get("accept") if isinstance(spec, dict) else "") or ""
             result["override"] = spec
         enrich_text_manifest(stage, ctx, row, v, audit_rc, audit, accept)
@@ -1101,8 +1306,15 @@ def run_one(row, ctx):
     uid = row["uid"]
     dest = L.PATHS.md(row["uid"])
     stage = os.path.join(ctx["out"], uid)
-    result = {"uid": uid, "title": row["title"], "format": row["format"],
-              "pages": int(row["pages"]), "dest": rel(dest), "at": now(), "commands": []}
+    result = {
+        "uid": uid,
+        "title": row["title"],
+        "format": row["format"],
+        "pages": int(row["pages"]),
+        "dest": rel(dest),
+        "at": now(),
+        "commands": [],
+    }
     os.makedirs(ctx["work"], exist_ok=True)
     os.makedirs(ctx["logs"], exist_ok=True)
     logpath = os.path.join(ctx["logs"], uid + ".log")
@@ -1120,8 +1332,7 @@ def run_one(row, ctx):
                 write_result(ctx, result)
                 return result
             if L.sha256_file(src) != row["sha256"]:
-                result.update(status="source-changed",
-                              note="源文件 sha256 与库内人账不符，未提交：%s" % row["src"])
+                result.update(status="source-changed", note="源文件 sha256 与库内人账不符，未提交：%s" % row["src"])
                 log.write("源文件 sha256 与库内人账不符，没提交 OCR\n")
                 write_result(ctx, result)
                 return result
@@ -1130,18 +1341,21 @@ def run_one(row, ctx):
             for e in ledger:
                 if list(e.get("range") or []) in plan or e.get("status") == "done":
                     continue
-                e["status"] = "superseded"   # 切片计划变了（页数或上限变了），旧账作废
+                e["status"] = "superseded"  # 切片计划变了（页数或上限变了），旧账作废
             for a, b in ranges:
                 e = entry_for(ledger, a, b)
                 if e.get("status") != "done":
                     # 每跑一次给一段新的阶梯预算：退避与重试都在本次运行内有界
                     e["attempts"], e["queue_rounds"], e["status"] = 0, 0, "pending"
             save_ledger(ctx, uid, ledger)
-            result.update(chunks_planned=len(ranges), pages_per_chunk=per_chunk,
-                          slice_mb_estimate=round(per_chunk * os.path.getsize(src)
-                                                  / int(row["pages"]) / 1e6, 1))
-            log.write("切片计划 %d 段，每段 %d 页，约 %.1f MB/段\n"
-                      % (len(ranges), per_chunk, result["slice_mb_estimate"]))
+            result.update(
+                chunks_planned=len(ranges),
+                pages_per_chunk=per_chunk,
+                slice_mb_estimate=round(per_chunk * os.path.getsize(src) / int(row["pages"]) / 1e6, 1),
+            )
+            log.write(
+                "切片计划 %d 段，每段 %d 页，约 %.1f MB/段\n" % (len(ranges), per_chunk, result["slice_mb_estimate"])
+            )
             for a, b in ranges:
                 if not work_chunk(ctx, uid, ledger, a, b, log, result):
                     write_result(ctx, result)
@@ -1151,14 +1365,11 @@ def run_one(row, ctx):
         else:
             done = [e for e in ledger if e.get("status") == "done"]
             if not done:
-                result.update(status="no-chunks",
-                              note="assemble-only 要 work/%s/chunks.json 里有完成分片" % uid)
+                result.update(status="no-chunks", note="assemble-only 要 work/%s/chunks.json 里有完成分片" % uid)
                 return result
-            bad = ["%s" % e["range"] for e in done
-                   if not chunk_done(chunk_dir(ctx, uid, ledger, *e["range"]))]
+            bad = ["%s" % e["range"] for e in done if not chunk_done(chunk_dir(ctx, uid, ledger, *e["range"]))]
             if bad:
-                result.update(status="incomplete-chunks",
-                              note="分片目录里没有 paddle_run.json: " + ", ".join(bad))
+                result.update(status="incomplete-chunks", note="分片目录里没有 paddle_run.json: " + ", ".join(bad))
                 return result
 
         try:
@@ -1168,12 +1379,13 @@ def run_one(row, ctx):
             log.write("合并停住：%s\n" % exc)
             write_result(ctx, result)
             return result
-        result.update(merged_pages=doc["pages"], coverage_ok=doc["coverage_ok"],
-                      merged_run_json=os.path.relpath(os.path.join(merged, "run.json"),
-                                                      ctx["batch"]))
+        result.update(
+            merged_pages=doc["pages"],
+            coverage_ok=doc["coverage_ok"],
+            merged_run_json=os.path.relpath(os.path.join(merged, "run.json"), ctx["batch"]),
+        )
 
-        have_stage = os.path.isdir(stage) and os.path.isfile(
-            os.path.join(stage, ".manifest.json"))
+        have_stage = os.path.isdir(stage) and os.path.isfile(os.path.join(stage, ".manifest.json"))
         if have_stage and not ctx["force"]:
             result["note"] = "暂存区已有拼装产物，只复查门槛"
         else:
@@ -1190,8 +1402,9 @@ def run_one(row, ctx):
 
         rc, v = verify(ctx, stage, log)
         v["verify_rc"] = rc
-        result.update(verify_rc=rc, chapters=v["chapters"], chars=v["chars"],
-                      images=v["images"], problems=v["problems"])
+        result.update(
+            verify_rc=rc, chapters=v["chapters"], chars=v["chars"], images=v["images"], problems=v["problems"]
+        )
         blank, suspect, short = pdf_checks(ctx, row, doc["per_page"], log, result)
         skipped = []
         if suspect and ctx["api"]:
@@ -1208,8 +1421,7 @@ def run_one(row, ctx):
                         blank, suspect, short = pdf_checks(ctx, row, doc["per_page"], log, result)
                     else:
                         log.write("MinerU 补页后重拼装失败，重新拼装一次再复查\n")
-                        if assemble(ctx, row, merged, stage, log, result) == 0 \
-                                and os.path.isdir(stage):
+                        if assemble(ctx, row, merged, stage, log, result) == 0 and os.path.isdir(stage):
                             rc, v = verify(ctx, stage, log)
                             v["verify_rc"] = rc
                             blank, suspect, short = pdf_checks(ctx, row, doc["per_page"], log, result)
@@ -1217,19 +1429,35 @@ def run_one(row, ctx):
                             result["note"] = "MinerU 补页后重新拼装仍失败，页数待查"
                 skipped = [s["page"] for s in suspect]
                 result["skipped_unreadable_pages"] = skipped
-            result.update(verify_rc=v["verify_rc"], chapters=v["chapters"], chars=v["chars"],
-                          images=v["images"], problems=v["problems"])
+            result.update(
+                verify_rc=v["verify_rc"],
+                chapters=v["chapters"],
+                chars=v["chars"],
+                images=v["images"],
+                problems=v["problems"],
+            )
         override = os.path.join(ctx["batch"], "overrides", uid + ".json")
         human = ""
         if os.path.isfile(override):
-            spec = json.load(open(override, encoding="utf-8"))
+            spec = json.loads(pathlib.Path(override).read_text(encoding="utf-8"))
             human = (spec.get("accept") if isinstance(spec, dict) else "") or ""
             result["override"] = spec
-        auto = ("MinerU 也读不出，按跳过受理：第 %s 页"
-                % ", ".join(str(p) for p in skipped)) if skipped else ""
+        auto = ("MinerU 也读不出，按跳过受理：第 %s 页" % ", ".join(str(p) for p in skipped)) if skipped else ""
         accept = "；".join(x for x in (human, auto) if x)
-        man = enrich_manifest(stage, ctx, row, v, doc, doc["coverage_ok"], blank, suspect, short,
-                              accept, result.get("mineru_rescued") or [], skipped)
+        man = enrich_manifest(
+            stage,
+            ctx,
+            row,
+            v,
+            doc,
+            doc["coverage_ok"],
+            blank,
+            suspect,
+            short,
+            accept,
+            result.get("mineru_rescued") or [],
+            skipped,
+        )
         result["accepted"] = man["accepted"]
         fails = gate(v, doc["coverage_ok"], suspect, doc["missing_images"])
         if skipped:
@@ -1288,8 +1516,7 @@ def report(ctx):
         print("没有日志目录: %s" % ctx["logs"])
         return
     if broken:
-        print("警告：%d 份 logs 读不出，统计不含它们：%s"
-              % (len(broken), " ".join(broken[:5])))
+        print("警告：%d 份 logs 读不出，统计不含它们：%s" % (len(broken), " ".join(broken[:5])))
     counts = collections.Counter(r.get("status") for r in results)
     print("\n状态统计")
     for k, v in sorted(counts.items(), key=lambda x: str(x[0])):
@@ -1298,33 +1525,54 @@ def report(ctx):
     deferred = defer_uids(dpath)
     if deferred:
         print("\n暂缓（语种账 %s）" % os.path.relpath(dpath, ctx["batch"]))
-        print("  ja%-16s %d 本 / %d 页"
-              % ("", len(deferred),
-                 sum(int(r.get("pages") or 0) for r in deferred.values())))
+        print("  ja%-16s %d 本 / %d 页" % ("", len(deferred), sum(int(r.get("pages") or 0) for r in deferred.values())))
     if not results:
         return
     print("\n逐本")
     for r in sorted(results, key=lambda x: (int(x["pages"]), x["uid"])):
         if r.get("route") == "text":
-            print("  %-6s %-13s %-30.30s 页 %4s/%s %-8s 章 %-3s 字 %s 比 %s 锚 %s rc=%s/%s %s"
-                  % (r["uid"], r.get("status"), r.get("title", ""), r.get("pdf_pages"),
-                     r.get("pages"), r.get("structure"), r.get("chapters"), r.get("chars"),
-                     pct(r.get("audit_ratio")), pct(r.get("audit_anchors")),
-                     r.get("verify_rc"), r.get("audit_rc"),
-                     ("受理：" + r["accepted"]) if r.get("accepted") else r.get("note", "")))
+            print(
+                "  %-6s %-13s %-30.30s 页 %4s/%s %-8s 章 %-3s 字 %s 比 %s 锚 %s rc=%s/%s %s"
+                % (
+                    r["uid"],
+                    r.get("status"),
+                    r.get("title", ""),
+                    r.get("pdf_pages"),
+                    r.get("pages"),
+                    r.get("structure"),
+                    r.get("chapters"),
+                    r.get("chars"),
+                    pct(r.get("audit_ratio")),
+                    pct(r.get("audit_anchors")),
+                    r.get("verify_rc"),
+                    r.get("audit_rc"),
+                    ("受理：" + r["accepted"]) if r.get("accepted") else r.get("note", ""),
+                )
+            )
             continue
-        print("  %-6s %-7s %-30.30s 页 %4s/%s 章 %s 字 %s rc=%s 覆盖=%s 空页=%s 可疑=%s 短页=%s %s"
-              % (r["uid"], r.get("status"), r.get("title", ""), r.get("merged_pages"),
-                 r.get("pages"), r.get("chapters"), r.get("chars"), r.get("verify_rc"),
-                 r.get("coverage_ok"), r.get("blank_pages"), r.get("suspect_miss_pages"),
-                 r.get("short_pages"),
-                 ("受理：" + r["accepted"]) if r.get("accepted") else r.get("note", "")))
-    bad = [r for r in results if r.get("status") not in GREEN + ("skipped-has-md",)]
+        print(
+            "  %-6s %-7s %-30.30s 页 %4s/%s 章 %s 字 %s rc=%s 覆盖=%s 空页=%s 可疑=%s 短页=%s %s"
+            % (
+                r["uid"],
+                r.get("status"),
+                r.get("title", ""),
+                r.get("merged_pages"),
+                r.get("pages"),
+                r.get("chapters"),
+                r.get("chars"),
+                r.get("verify_rc"),
+                r.get("coverage_ok"),
+                r.get("blank_pages"),
+                r.get("suspect_miss_pages"),
+                r.get("short_pages"),
+                ("受理：" + r["accepted"]) if r.get("accepted") else r.get("note", ""),
+            )
+        )
+    bad = [r for r in results if r.get("status") not in (*GREEN, "skipped-has-md")]
     if bad:
         print("\n待查 %d 本" % len(bad))
         for r in bad:
-            print("  %-6s %-18s %-38.38s %s"
-                  % (r["uid"], r.get("status"), r.get("title", ""), r.get("note", "")))
+            print("  %-6s %-18s %-38.38s %s" % (r["uid"], r.get("status"), r.get("title", ""), r.get("note", "")))
 
 
 def report_json(ctx):
@@ -1334,57 +1582,76 @@ def report_json(ctx):
     if rows is None:
         rows = read_worklist(ctx["batch"]) or []
     results = [r for r in results if r.get("uid") in {x["uid"] for x in rows}]
-    finished = {r.get("uid") for r in results
-                if r.get("status") in GREEN + ("skipped-has-md",)}
+    finished = {r.get("uid") for r in results if r.get("status") in (*GREEN, "skipped-has-md")}
     left = [r for r in rows if r["uid"] not in finished]
     counts = collections.Counter(str(r.get("status")) for r in results)
-    return {"batch": ctx["batch_name"], "route": ctx["route"],
-            "queued": len(rows),
-            "landed": sum(1 for r in results if r.get("status") in GREEN),
-            # 派生键：状态词是 chunk-failed/deferred 这类，没有裸 failed/quota
-            "failed": sum(1 for r in results if r.get("status") in HARD_FAIL),
-            "quota": sum(1 for r in results if r.get("status") in DEFER),
-            "pages": sum(int(r.get("pages") or 0) for r in rows),
-            "remaining_books": len(left),
-            "remaining_pages": sum(int(r.get("pages") or 0) for r in left),
-            "status_counts": dict(sorted(counts.items())),
-            "broken_logs": len(broken)}
+    return {
+        "batch": ctx["batch_name"],
+        "route": ctx["route"],
+        "queued": len(rows),
+        "landed": sum(1 for r in results if r.get("status") in GREEN),
+        # 派生键：状态词是 chunk-failed/deferred 这类，没有裸 failed/quota
+        "failed": sum(1 for r in results if r.get("status") in HARD_FAIL),
+        "quota": sum(1 for r in results if r.get("status") in DEFER),
+        "pages": sum(int(r.get("pages") or 0) for r in rows),
+        "remaining_books": len(left),
+        "remaining_pages": sum(int(r.get("pages") or 0) for r in left),
+        "status_counts": dict(sorted(counts.items())),
+        "broken_logs": len(broken),
+    }
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--batch", required=True, help="批次目录名，在 工作区/批次/ 下")
-    ap.add_argument("--route", choices=("ocr", "text"), default="ocr",
-                    help="ocr 走扫描件那条（切片+接口），text 抽纯文本层 PDF 的文本层")
-    ap.add_argument("--batch-dir", dest="batch_dir",
-                    help="把批次目录指到别处（离线演练/测试用），默认 工作区/批次/<批次>")
+    ap.add_argument(
+        "--route",
+        choices=("ocr", "text"),
+        default="ocr",
+        help="ocr 走扫描件那条（切片+接口），text 抽纯文本层 PDF 的文本层",
+    )
+    ap.add_argument(
+        "--batch-dir", dest="batch_dir", help="把批次目录指到别处（离线演练/测试用），默认 工作区/批次/<批次>"
+    )
     ap.add_argument("--workers", type=int, default=3, help="同时跑几本；一本书的分片是串行的")
     ap.add_argument("--only", help="只跑这些 uid，逗号分隔")
     ap.add_argument("--limit", type=int, help="最多跑几本（调试用）")
     ap.add_argument("--no-land", action="store_true", dest="noland", help="只做暂存，不进 books/")
-    ap.add_argument("--force", action="store_true",
-                    help="重拼装：忽略暂存区已有产物。缺的分片会重新提交，那是要花 OCR 额度的")
-    ap.add_argument("--replace", action="store_true",
-                    help="目标 md 已存在时也重做并替换，旧版本改名留在批次区")
-    ap.add_argument("--assemble-only", dest="assemble_only", metavar="UID",
-                    help="只合并已落盘的分片并拼装这一本，不调接口；要求分片目录完整")
-    ap.add_argument("--queue-rounds", dest="queue_rounds", type=int, default=len(QUEUE_BACKOFF),
-                    help="接口报提交队列已满（10010）时，同一段最多退避重试几次（默认 %d）"
-                         % len(QUEUE_BACKOFF))
+    ap.add_argument(
+        "--force", action="store_true", help="重拼装：忽略暂存区已有产物。缺的分片会重新提交，那是要花 OCR 额度的"
+    )
+    ap.add_argument("--replace", action="store_true", help="目标 md 已存在时也重做并替换，旧版本改名留在批次区")
+    ap.add_argument(
+        "--assemble-only",
+        dest="assemble_only",
+        metavar="UID",
+        help="只合并已落盘的分片并拼装这一本，不调接口；要求分片目录完整",
+    )
+    ap.add_argument(
+        "--queue-rounds",
+        dest="queue_rounds",
+        type=int,
+        default=len(QUEUE_BACKOFF),
+        help="接口报提交队列已满（10010）时，同一段最多退避重试几次（默认 %d）" % len(QUEUE_BACKOFF),
+    )
     ap.add_argument("--report", action="store_true", help="只读 logs/ 出统计，不干活")
-    ap.add_argument("--report-json", dest="report_json", action="store_true",
-                    help="跑完（或 --report）在 stdout 最后一行再给一份 JSON，给页面读")
+    ap.add_argument(
+        "--report-json",
+        dest="report_json",
+        action="store_true",
+        help="跑完（或 --report）在 stdout 最后一行再给一份 JSON，给页面读",
+    )
     ap.add_argument("--uids", help="本次要跑哪些 uid（账上没有的补进账），逗号分隔")
-    ap.add_argument("--triage", metavar="CSV",
-                    help="分诊表路径，默认全局 triage_final.csv；新批次可指自己的"
-                         "（同目录的 skip_list.tsv 优先，没有就用全局的）")
-    ap.add_argument("--dry-run", dest="dry_run", action="store_true",
-                    help="只打印本次会跑哪些书，不调接口、不改账")
-    ap.add_argument("--defer", metavar="TSV",
-                    help="语种账路径，默认 <批次>/%s；账里 lang=ja 的书本次不跑"
-                         % DEFER_LEDGER)
-    ap.add_argument("--ignore-defer", dest="ignore_defer", action="store_true",
-                    help="忽略语种账，日文原版也跑")
+    ap.add_argument(
+        "--triage",
+        metavar="CSV",
+        help="分诊表路径，默认全局 triage_final.csv；新批次可指自己的（同目录的 skip_list.tsv 优先，没有就用全局的）",
+    )
+    ap.add_argument("--dry-run", dest="dry_run", action="store_true", help="只打印本次会跑哪些书，不调接口、不改账")
+    ap.add_argument(
+        "--defer", metavar="TSV", help="语种账路径，默认 <批次>/%s；账里 lang=ja 的书本次不跑" % DEFER_LEDGER
+    )
+    ap.add_argument("--ignore-defer", dest="ignore_defer", action="store_true", help="忽略语种账，日文原版也跑")
     a = ap.parse_args()
 
     if a.route == "text" and a.assemble_only:
@@ -1392,24 +1659,36 @@ def main():
     batch_path = a.batch_dir or os.path.join(L.WORK, "批次", a.batch)
     out = os.path.join(batch_path, "out")
     tmp = os.path.join(batch_path, "tmp")
-    ctx = {"batch": batch_path, "batch_name": a.batch, "out": out, "tmp": tmp,
-           "logs": os.path.join(batch_path, "logs"), "work": os.path.join(batch_path, "work"),
-           "review": os.path.join(batch_path, "review"), "land": not a.noland,
-           "force": a.force, "replace": a.replace, "api": not a.assemble_only,
-           "route": a.route,
-           "assemble_only": a.assemble_only, "queue_rounds": a.queue_rounds, "abort": "",
-           "pilots": {}, "pilot_lock": threading.Lock(), "cancelling": False, "canceller": None,
-           "stamp": now().replace(":", "").replace("+", "-"),
-           "tool_version": text_tool_version() if a.route == "text" else tool_version()}
+    ctx = {
+        "batch": batch_path,
+        "batch_name": a.batch,
+        "out": out,
+        "tmp": tmp,
+        "logs": os.path.join(batch_path, "logs"),
+        "work": os.path.join(batch_path, "work"),
+        "review": os.path.join(batch_path, "review"),
+        "land": not a.noland,
+        "force": a.force,
+        "replace": a.replace,
+        "api": not a.assemble_only,
+        "route": a.route,
+        "assemble_only": a.assemble_only,
+        "queue_rounds": a.queue_rounds,
+        "abort": "",
+        "pilots": {},
+        "pilot_lock": threading.Lock(),
+        "cancelling": False,
+        "canceller": None,
+        "stamp": now().replace(":", "").replace("+", "-"),
+        "tool_version": text_tool_version() if a.route == "text" else tool_version(),
+    }
 
     picked_uids = [u.strip() for u in (a.uids or "").split(",") if u.strip()]
     if a.report:
         ledger = read_worklist(batch_path) or []
-        ctx["rows"] = worklist_scope(ledger, triage_routes(a.triage), ROUTE_TRIAGE[a.route],
-                                     picked_uids)
+        ctx["rows"] = worklist_scope(ledger, triage_routes(a.triage), ROUTE_TRIAGE[a.route], picked_uids)
         if ledger and not ctx["rows"]:
-            print("账上 %d 本都不在 route=%s 这条线上，换 --route 再看"
-                  % (len(ledger), a.route))
+            print("账上 %d 本都不在 route=%s 这条线上，换 --route 再看" % (len(ledger), a.route))
         report(ctx)
         if a.report_json:
             print(json.dumps(report_json(ctx), ensure_ascii=False))
@@ -1430,32 +1709,30 @@ def main():
         skip_path = SKIP_LIST
     if picked_uids and os.path.exists(os.path.join(batch_path, "worklist.tsv")):
         print("批次已有 worklist.tsv，点名的书补进账，本次只跑点名的")
-    rows = build_worklist(con, batch_path, a.route, dry=a.dry_run, uids=picked_uids,
-                          triage=triage_path, skip=skip_path)
+    rows = build_worklist(con, batch_path, a.route, dry=a.dry_run, uids=picked_uids, triage=triage_path, skip=skip_path)
     ctx["rows"] = rows
     known = {r["uid"]: r for r in rows}
-    deferred = {} if a.ignore_defer else defer_uids(
-        a.defer or os.path.join(batch_path, DEFER_LEDGER))
+    deferred = {} if a.ignore_defer else defer_uids(a.defer or os.path.join(batch_path, DEFER_LEDGER))
     pick = a.only or a.assemble_only
     if pick:
         wanted = [u.strip() for u in pick.split(",") if u.strip()]
         rows = [known[u] for u in wanted if u in known]
         missing = [u for u in wanted if u not in known]
         if missing:
-            sys.exit("worklist 里没有 route=%s 的 %s（账上是另一条 route 的书？）"
-                     % (a.route, ", ".join(missing)))
+            sys.exit("worklist 里没有 route=%s 的 %s（账上是另一条 route 的书？）" % (a.route, ", ".join(missing)))
         picked = [r["uid"] for r in rows if r["uid"] in deferred]
         if picked:
             print("注意：%s 在语种账里是日文原版，--only 点名了就跑" % ", ".join(picked))
     elif deferred:
         keep = [r for r in rows if r["uid"] not in deferred]
         if len(keep) != len(rows):
-            print("暂缓 %d 本日文原版（%d 页），本次不跑"
-                  % (len(rows) - len(keep),
-                     sum(int(r["pages"] or 0) for r in rows if r["uid"] in deferred)))
+            print(
+                "暂缓 %d 本日文原版（%d 页），本次不跑"
+                % (len(rows) - len(keep), sum(int(r["pages"] or 0) for r in rows if r["uid"] in deferred))
+            )
         rows = keep
     if a.limit is not None:
-        rows = rows[:a.limit]
+        rows = rows[: a.limit]
     if a.dry_run:
         keep_existing = a.replace or (a.assemble_only and a.route != "text")
         run, skip_n, skip_pages = [], 0, 0
@@ -1472,10 +1749,17 @@ def main():
         for r in run:
             print("  %-6s 页 %4s  %s" % (r["uid"], r["pages"], r["title"][:50]))
         return 0
-    print("批次 %s%s，%s %d 本，%d 并发，%s"
-          % (a.batch, ("（assemble-only，不调接口）" if a.assemble_only else ""),
-             "待抽文本" if a.route == "text" else "待 OCR", len(rows),
-             a.workers, "入库" if ctx["land"] else "只暂存"))
+    print(
+        "批次 %s%s，%s %d 本，%d 并发，%s"
+        % (
+            a.batch,
+            ("（assemble-only，不调接口）" if a.assemble_only else ""),
+            "待抽文本" if a.route == "text" else "待 OCR",
+            len(rows),
+            a.workers,
+            "入库" if ctx["land"] else "只暂存",
+        )
+    )
 
     results, done = [], 0
     lock = threading.Lock()
@@ -1496,17 +1780,32 @@ def main():
             try:
                 res = run_one(r, ctx)
             except Exception as exc:  # 单本炸了不拖住整批
-                res = {"uid": r["uid"], "title": r["title"], "format": r["format"],
-                       "pages": int(r["pages"]), "dest": rel(L.PATHS.md(r["uid"])), "at": now(),
-                       "status": "error", "note": "%s: %s" % (type(exc).__name__, exc)}
+                res = {
+                    "uid": r["uid"],
+                    "title": r["title"],
+                    "format": r["format"],
+                    "pages": int(r["pages"]),
+                    "dest": rel(L.PATHS.md(r["uid"])),
+                    "at": now(),
+                    "status": "error",
+                    "note": "%s: %s" % (type(exc).__name__, exc),
+                }
             with lock:
                 write_result(ctx, res)
                 results.append(res)
                 done += 1
-                print("[%d/%d] %s %-16s %-38.38s %s" %
-                      (done, len(rows), res["uid"], res.get("status"), res.get("title", ""),
-                       "章 %s 字 %s rc %s" % (res.get("chapters"), res.get("chars"),
-                                              res.get("verify_rc"))), flush=True)
+                print(
+                    "[%d/%d] %s %-16s %-38.38s %s"
+                    % (
+                        done,
+                        len(rows),
+                        res["uid"],
+                        res.get("status"),
+                        res.get("title", ""),
+                        "章 %s 字 %s rc %s" % (res.get("chapters"), res.get("chars"), res.get("verify_rc")),
+                    ),
+                    flush=True,
+                )
 
     with futures.ThreadPoolExecutor(max_workers=a.workers) as pool:
         list(pool.map(lambda _: work(), range(min(a.workers, len(rows)))))
@@ -1519,9 +1818,10 @@ def main():
     hard = [r for r in results if str(r.get("status")) in HARD_FAIL]
     if hard:
         # 有硬失败就不能让调用方（操作台 gate）按 rc=0 判成功
-        print("\n本次硬失败 %d 本：%s" % (
-            len(hard), " ".join("%s(%s)" % (r.get("uid"), r.get("status")) for r in hard)),
-            file=sys.stderr)
+        print(
+            "\n本次硬失败 %d 本：%s" % (len(hard), " ".join("%s(%s)" % (r.get("uid"), r.get("status")) for r in hard)),
+            file=sys.stderr,
+        )
         return 1
     return 0
 

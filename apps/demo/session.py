@@ -6,6 +6,7 @@ turn 结构见 SESSION-BRIEF.md 的「数据形状」。这里只管读写、校
 
 会话 id 是 12 位小写 hex，load 先校验再拼路径，校验不过当没有这个会话。
 """
+
 import json
 import os
 import re
@@ -19,8 +20,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import trace as tracer  # noqa: E402
-from answer import HISTORY_CHARS_MULTI, HISTORY_CHARS_SINGLE  # noqa: E402,F401
+import trace as tracer
+
+from answer import HISTORY_CHARS_MULTI, HISTORY_CHARS_SINGLE  # noqa: F401 供本模块与其他调用方从这里取常量
 
 SESS_DIR = os.path.join(HERE, "缓存", "sessions")
 LIBRARY_DB = tracer.LIB_DB
@@ -34,8 +36,7 @@ EARLIER_TURNS = 2
 EARLIER_ANSWER_CHARS = 300
 
 HEAD = "【同一会话的上一轮，先读这一节】"
-FOOT = ("这一问如果是在接着上面问，就用这些事实定位，不要从零重判；"
-        "如果另起话题，忽略这一节。")
+FOOT = "这一问如果是在接着上面问，就用这些事实定位，不要从零重判；如果另起话题，忽略这一节。"
 
 # 一轮回答的状态。pending 是刚跑完检索、还没人答；running 有任务在答。
 # incomplete 与 run_error 只由旧会话派生：有 trace 没回答算没答完，连 trace
@@ -89,8 +90,7 @@ def load(sid):
     turns = sess.get("turns")
     if not isinstance(turns, list):
         return None
-    sess["turns"] = [t for t in turns if isinstance(t, dict)
-                     and isinstance(t.get("n"), int)]
+    sess["turns"] = [t for t in turns if isinstance(t, dict) and isinstance(t.get("n"), int)]
     sess["turns"].sort(key=lambda t: t["n"])
     for turn in sess["turns"]:
         _turn_defaults(turn)
@@ -156,16 +156,20 @@ def find(sess, n):
 
 # ---- 回答状态 -------------------------------------------------------
 
+
 def _turn_meta(sid, turn):
-    return {"session_id": sid, "n": turn.get("n"),
-            "run_token": turn.get("run_token") or "",
-            "answer_state": turn.get("answer_state") or "pending",
-            "answer_error": turn.get("answer_error") or "",
-            "answer_attempt": turn.get("answer_attempt") or 0,
-            "answer_owner": turn.get("answer_owner") or "",
-            "answer_started_at": turn.get("answer_started_at"),
-            "answer_finished_at": turn.get("answer_finished_at"),
-            "answered": isinstance(turn.get("answer"), dict)}
+    return {
+        "session_id": sid,
+        "n": turn.get("n"),
+        "run_token": turn.get("run_token") or "",
+        "answer_state": turn.get("answer_state") or "pending",
+        "answer_error": turn.get("answer_error") or "",
+        "answer_attempt": turn.get("answer_attempt") or 0,
+        "answer_owner": turn.get("answer_owner") or "",
+        "answer_started_at": turn.get("answer_started_at"),
+        "answer_finished_at": turn.get("answer_finished_at"),
+        "answered": isinstance(turn.get("answer"), dict),
+    }
 
 
 def turn_meta(sid, n):
@@ -217,8 +221,7 @@ def finish_answer(sid, n, attempt, info, ctx=None, token=None):
         turn["answer"] = info
         turn["context"] = ctx
         turn["answer_state"] = answer_state_for(info)
-        turn["answer_error"] = ("" if turn["answer_state"] == "ready"
-                                else str(info.get("error") or "回答失败"))
+        turn["answer_error"] = "" if turn["answer_state"] == "ready" else str(info.get("error") or "回答失败")
         turn["answer_finished_at"] = now()
         turn["answer_owner"] = ""
         save(sess)
@@ -304,8 +307,7 @@ def _session_ids():
         names = os.listdir(SESS_DIR)
     except OSError:
         return []
-    return sorted(name[:-5] for name in names
-                  if name.endswith(".json") and valid_id(name[:-5]))
+    return sorted(name[:-5] for name in names if name.endswith(".json") and valid_id(name[:-5]))
 
 
 def delete(sid):
@@ -325,12 +327,16 @@ def public(sess):
     for turn in (sess or {}).get("turns") or []:
         ans = turn.get("answer")
         lead = ans.get("lead") if isinstance(ans, dict) else ""
-        out.append({"n": turn.get("n"),
-                    "question": turn.get("question") or "",
-                    "related": turn.get("related"),
-                    "answer_state": turn.get("answer_state") or "pending",
-                    "answer_error": turn.get("answer_error") or "",
-                    "answer_lead": str(lead or "")})
+        out.append(
+            {
+                "n": turn.get("n"),
+                "question": turn.get("question") or "",
+                "related": turn.get("related"),
+                "answer_state": turn.get("answer_state") or "pending",
+                "answer_error": turn.get("answer_error") or "",
+                "answer_lead": str(lead or ""),
+            }
+        )
     return {"id": (sess or {}).get("id") or "", "turns": out}
 
 
@@ -389,18 +395,24 @@ def summaries(limit=None):
         if not turns:
             continue
         stamp = sess.get("updated_at") or turns[-1].get("at") or ""
-        rows.append({"id": sid, "updated_at": str(stamp or ""),
-                     "turns": len(turns),
-                     "question": str(turns[0].get("question") or ""),
-                     "last_question": str(turns[-1].get("question") or ""),
-                     "answer_state": turns[-1].get("answer_state") or "pending",
-                     "answer_error": turns[-1].get("answer_error") or "",
-                     "books": _book_names(turns[-1])})
+        rows.append(
+            {
+                "id": sid,
+                "updated_at": str(stamp or ""),
+                "turns": len(turns),
+                "question": str(turns[0].get("question") or ""),
+                "last_question": str(turns[-1].get("question") or ""),
+                "answer_state": turns[-1].get("answer_state") or "pending",
+                "answer_error": turns[-1].get("answer_error") or "",
+                "books": _book_names(turns[-1]),
+            }
+        )
     rows.sort(key=lambda r: (r["updated_at"], r["id"]), reverse=True)
     return rows[:cap] if cap > 0 else rows
 
 
 # ---- 上下文 ---------------------------------------------------------
+
 
 def _rel(path):
     raw = str(path or "").strip().replace("\\", "/")
@@ -431,8 +443,7 @@ def library_title(book):
     try:
         con = sqlite3.connect("file:%s?mode=ro" % LIBRARY_DB, uri=True)
         try:
-            row = con.execute("SELECT title FROM book WHERE path = ?",
-                              (book,)).fetchone()
+            row = con.execute("SELECT title FROM book WHERE path = ?", (book,)).fetchone()
         finally:
             con.close()
     except sqlite3.Error:
@@ -517,15 +528,13 @@ def _chapter_candidates(turn):
         if not path or (path, line) in seen:
             return
         seen.add((path, line))
-        rows.append({"book": _book_of(book, path), "title": str(title or "").strip(),
-                     "path": path, "line": line})
+        rows.append({"book": _book_of(book, path), "title": str(title or "").strip(), "path": path, "line": line})
 
     ans = turn.get("answer")
     if isinstance(ans, dict):
         for cite in ans.get("citations") or []:
             if isinstance(cite, dict):
-                add(cite.get("book"), cite.get("chapter") or cite.get("title"),
-                    cite.get("path"), cite.get("line"))
+                add(cite.get("book"), cite.get("chapter") or cite.get("title"), cite.get("path"), cite.get("line"))
     trace = turn.get("trace") if isinstance(turn.get("trace"), dict) else {}
     plan = trace.get("plan") if isinstance(trace.get("plan"), dict) else {}
     for group in plan.get("chapters") or []:
@@ -533,11 +542,14 @@ def _chapter_candidates(turn):
             continue
         for sel in group.get("selected") or []:
             if isinstance(sel, dict):
-                add(group.get("book"), sel.get("chapter_title"),
-                    sel.get("chapter_path"), sel.get("line"))
+                add(group.get("book"), sel.get("chapter_title"), sel.get("chapter_path"), sel.get("line"))
     result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
-    add(result.get("book"), result.get("chapter") or result.get("title"),
-        result.get("path"), result.get("line") or result.get("hit_line"))
+    add(
+        result.get("book"),
+        result.get("chapter") or result.get("title"),
+        result.get("path"),
+        result.get("line") or result.get("hit_line"),
+    )
     return rows[:MAX_CHAPTERS]
 
 
@@ -586,8 +598,7 @@ def _fill(chapters, budget):
             continue
         seen.add(key)
         try:
-            info = tracer.read_chapter(item["path"], item["line"],
-                                       chars=PARA_CHARS, before=PARA_BEFORE)
+            info = tracer.read_chapter(item["path"], item["line"], chars=PARA_CHARS, before=PARA_BEFORE)
         except (ValueError, OSError):
             continue
         text = str(info.get("text") or "").strip()
@@ -595,10 +606,10 @@ def _fill(chapters, budget):
             continue
         line = int(info.get("line") or item["line"])
         start, end = _span(info)
-        paragraphs.append({"book": item["book"], "title": item["title"],
-                           "path": item["path"], "line": line, "text": text})
-        span = "%s:%d-%d" % (item["path"], start, end) if end > start \
-            else "%s:%d" % (item["path"], start)
+        paragraphs.append(
+            {"book": item["book"], "title": item["title"], "path": item["path"], "line": line, "text": text}
+        )
+        span = "%s:%d-%d" % (item["path"], start, end) if end > start else "%s:%d" % (item["path"], start)
         blocks.append("《%s》 %s\n%s" % (_book_name(item["book"]), span, text))
         used += len(text)
         if used >= budget:
@@ -610,17 +621,23 @@ def _earlier(turns):
     rows = []
     for turn in turns[-EARLIER_TURNS:]:
         body, _done = _prev_answer(turn)
-        rows.append("第 %d 问：%s / 答：%s"
-                    % (turn["n"], " ".join(str(turn.get("question") or "").split()),
-                       " ".join(body.split())[:EARLIER_ANSWER_CHARS] or "（未完成）"))
+        rows.append(
+            "第 %d 问：%s / 答：%s"
+            % (
+                turn["n"],
+                " ".join(str(turn.get("question") or "").split()),
+                " ".join(body.split())[:EARLIER_ANSWER_CHARS] or "（未完成）",
+            )
+        )
     return rows
 
 
 def _render(n, question, answer, finished, chapters, blocks, earlier):
     parts = [HEAD, "第 %d 问：%s" % (n, question)]
     if answer:
-        head = ("上一轮回答（已经给过用户，不要整段重复）：" if finished
-                else "上一轮回答未完成，下面是它停下的那段原文：")
+        head = (
+            "上一轮回答（已经给过用户，不要整段重复）：" if finished else "上一轮回答未完成，下面是它停下的那段原文："
+        )
         parts.append(head + "\n" + answer)
     if chapters:
         rows = []
@@ -648,10 +665,17 @@ def build_context(turns, budget, anchor=None):
         budget = max(0, int(budget or 0))
     except (TypeError, ValueError):
         budget = 0
-    out = {"prev": 0, "budget": budget, "chars": 0, "text": "",
-           "chapters": [], "paragraphs": [], "anchor_used": False, "truncated": 0}
-    rows = [t for t in (turns or []) if isinstance(t, dict)
-            and isinstance(t.get("n"), int)]
+    out = {
+        "prev": 0,
+        "budget": budget,
+        "chars": 0,
+        "text": "",
+        "chapters": [],
+        "paragraphs": [],
+        "anchor_used": False,
+        "truncated": 0,
+    }
+    rows = [t for t in (turns or []) if isinstance(t, dict) and isinstance(t.get("n"), int)]
     rows.sort(key=lambda t: t["n"])
     if not rows:
         return out
@@ -678,12 +702,12 @@ def build_context(turns, budget, anchor=None):
             chapters.pop()
         elif answer:
             over = len(text) - budget
-            answer = answer[:max(0, len(answer) - over - 2)].rstrip() + "…"
+            answer = answer[: max(0, len(answer) - over - 2)].rstrip() + "…"
             if not answer.strip("…"):
                 answer = ""
         elif question:
             over = len(text) - budget
-            question = question[:max(0, len(question) - over - 2)].rstrip() + "…"
+            question = question[: max(0, len(question) - over - 2)].rstrip() + "…"
             if not question.strip("…"):
                 question = ""
         else:
@@ -693,7 +717,15 @@ def build_context(turns, budget, anchor=None):
     if len(text) > budget:
         text = text[:budget]
 
-    out.update({"prev": n, "chars": len(text), "text": text,
-                "chapters": chapters, "paragraphs": paragraphs,
-                "anchor_used": index >= 0, "truncated": dropped})
+    out.update(
+        {
+            "prev": n,
+            "chars": len(text),
+            "text": text,
+            "chapters": chapters,
+            "paragraphs": paragraphs,
+            "anchor_used": index >= 0,
+            "truncated": dropped,
+        }
+    )
     return out

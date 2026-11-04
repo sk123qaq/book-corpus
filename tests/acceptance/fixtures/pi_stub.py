@@ -3,6 +3,7 @@
 
 Set PI_STUB_JSON to a string, or PI_STUB_FILE to a file containing it.
 """
+
 import os
 import sys
 

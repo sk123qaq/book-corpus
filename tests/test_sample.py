@@ -1,4 +1,3 @@
-import csv
 import sqlite3
 
 from conftest import run_cli
@@ -17,8 +16,7 @@ def test_sample_seeds_a_searchable_corpus(tmp_path):
     assert "样书入库" in r.stdout
 
     assert len(_books(root)) == 1
-    md = sorted(p for p in (root / "books" / "B0001" / "md").glob("*.md")
-                if p.name != "README.md")
+    md = sorted(p for p in (root / "books" / "B0001" / "md").glob("*.md") if p.name != "README.md")
     assert len(md) == 9
     assert (root / "books" / "B0001" / "md" / "README.md").exists()
     assert (root / "books" / "B0001" / "source" / "阿Q正传.txt").exists()

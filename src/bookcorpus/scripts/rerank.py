@@ -2,6 +2,7 @@
 """交叉编码器精排封装：Reranker().score(query, texts) 按入参顺序返回打分。
 
 实验台用，未接入 book_query；定位与边界见 qa-检索-2026-10-22-书级融合/P3-重排器-实测-2026-10-24.md。"""
+
 import argparse
 import os
 import sys
@@ -9,12 +10,13 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT
+
 DEFAULT_MODEL = os.path.join(ROOT, "工作区", "models", "bge-reranker-v2-m3")
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-import torch  # noqa: E402
-from transformers import AutoModelForSequenceClassification, AutoTokenizer  # noqa: E402
+import torch
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 
 class Reranker:
@@ -24,8 +26,9 @@ class Reranker:
         self.max_len = max_len
         self.batch = batch
         self.tok = AutoTokenizer.from_pretrained(path)
-        self.model = (AutoModelForSequenceClassification.from_pretrained(
-            path, dtype=torch.float16).to(self.device).eval())
+        self.model = (
+            AutoModelForSequenceClassification.from_pretrained(path, dtype=torch.float16).to(self.device).eval()
+        )
 
     def score(self, query, texts):
         if not texts:
@@ -35,12 +38,17 @@ class Reranker:
         out = [0.0] * len(texts)
         with torch.inference_mode():
             for s in range(0, len(order), self.batch):
-                idx = order[s:s + self.batch]
-                enc = self.tok([query] * len(idx), [texts[i] for i in idx],
-                               padding=True, truncation=True, max_length=self.max_len,
-                               return_tensors="pt").to(self.device)
+                idx = order[s : s + self.batch]
+                enc = self.tok(
+                    [query] * len(idx),
+                    [texts[i] for i in idx],
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_len,
+                    return_tensors="pt",
+                ).to(self.device)
                 pairs = self.model(**enc).logits.reshape(-1).float().tolist()
-                for i, v in zip(idx, pairs):
+                for i, v in zip(idx, pairs, strict=False):
                     out[i] = v
         return out
 
@@ -56,7 +64,7 @@ THROUGHPUT_PAIRS = 256
 
 def selftest(model_dir):
     r = Reranker(model_dir=model_dir)
-    for s, t in zip(r.score(QUERY, TEXTS), TEXTS):
+    for s, t in zip(r.score(QUERY, TEXTS), TEXTS, strict=False):
         print("%.4f\t%s" % (s, t[:24]))
     # 计时前先同步，避开异步 kernel 队列把耗时记到下一轮
     r.score(QUERY, [TEXTS[0]] * THROUGHPUT_PAIRS)  # 首批含 ROCm kernel 编译，不计时

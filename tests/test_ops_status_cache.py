@@ -8,8 +8,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "apps" / "ops"))
 
-_spec = importlib.util.spec_from_file_location(
-    "ops_server_status_test", REPO / "apps" / "ops" / "server.py")
+_spec = importlib.util.spec_from_file_location("ops_server_status_test", REPO / "apps" / "ops" / "server.py")
 server = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(server)
 

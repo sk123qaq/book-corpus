@@ -16,11 +16,11 @@ lang ∈ ja / zh / en / empty（该页无字）/ unknown（探页失败，留在
   $PY book-corpus run pdf_lang_probe --batch pdf-ocr-2026-10-19 --uids B1051,B1064
   $PY book-corpus run pdf_lang_probe --batch pdf-ocr-2026-10-19 --list         # 只列会探谁，不花额度
 """
+
 import argparse
-import csv
 import concurrent.futures as futures
+import csv
 import datetime
-import json
 import os
 import re
 import subprocess
@@ -29,7 +29,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PILOT = os.path.join(HERE, "paddleocr_pilot.py")
@@ -39,15 +39,28 @@ DB = L.PATHS.library_db
 KANA = re.compile(r"[\u3040-\u309f\u30a0-\u30ff]")
 HAN = re.compile(r"[\u4e00-\u9fff]")
 LATIN = re.compile(r"[A-Za-z]")
-DEPTHS = (0.40, 0.60, 0.20)      # 先探正文中段，空页/图版就换一处
-JA_KANA_SHARE = 0.15             # 日文正文实测 63-76%，中文译本是 0.0%
+DEPTHS = (0.40, 0.60, 0.20)  # 先探正文中段，空页/图版就换一处
+JA_KANA_SHARE = 0.15  # 日文正文实测 63-76%，中文译本是 0.0%
 EN_LATIN_SHARE = 0.60
 MIN_CHARS = 20
-RETRY_BACKOFF = (5, 15, 45, 90)   # 队列满与偶发 job failed 都走这条；2026-10-20 实测
-                                  # 单页 job 会偶发 state=failed，同一页重提即成功
+RETRY_BACKOFF = (5, 15, 45, 90)  # 队列满与偶发 job failed 都走这条；2026-10-20 实测
+# 单页 job 会偶发 state=failed，同一页重提即成功
 QUOTA_RE = re.compile(r"12001|每日页数上限")
-LEDGER_COLS = ["uid", "title", "pages", "lang", "sample_page", "chars", "kana", "han",
-               "latin", "kana_share", "latin_share", "job", "at"]
+LEDGER_COLS = [
+    "uid",
+    "title",
+    "pages",
+    "lang",
+    "sample_page",
+    "chars",
+    "kana",
+    "han",
+    "latin",
+    "kana_share",
+    "latin_share",
+    "job",
+    "at",
+]
 
 
 def now():
@@ -65,11 +78,12 @@ def worklist(path):
     p = os.path.join(path, "worklist.tsv")
     with open(p, encoding="utf-8") as fh:
         cols = fh.readline().rstrip("\n").split("\t")
-        return [dict(zip(cols, line.rstrip("\n").split("\t"))) for line in fh if line.strip()]
+        return [dict(zip(cols, line.rstrip("\n").split("\t"), strict=False)) for line in fh if line.strip()]
 
 
 def has_md(uid):
     import sqlite3
+
     con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True)
     try:
         row = con.execute("SELECT path FROM book WHERE uid=?", (uid,)).fetchone()
@@ -81,7 +95,7 @@ def has_md(uid):
 def sample_pages(npages):
     out = []
     for d in DEPTHS:
-        p = int(round(npages * d))
+        p = round(npages * d)
         p = max(1, min(npages, p))
         if p not in out:
             out.append(p)
@@ -100,15 +114,26 @@ def read_doc(out_dir):
     return ""
 
 
-class QuotaExhausted(Exception):
+class QuotaExhaustedError(Exception):
     """日额度用尽：探页和 OCR 都不该继续，直接停。"""
 
 
 def probe_page(uid, page, work, log):
     """探一页。队列满（10010）与偶发 state=failed 退避重提同一页；额度用尽立刻停整批。"""
     out = os.path.join(work, "%s_p%04d" % (uid, page))
-    cmd = [VENV_PY, "-u", PILOT, "--uid", uid, "--pages", "%d-%d" % (page, page),
-           "--out", out, "--timeout", "120"]   # 一页 10 秒的事；平台回 500 时别让它卡满 30 分钟
+    cmd = [
+        VENV_PY,
+        "-u",
+        PILOT,
+        "--uid",
+        uid,
+        "--pages",
+        "%d-%d" % (page, page),
+        "--out",
+        out,
+        "--timeout",
+        "120",
+    ]  # 一页 10 秒的事；平台回 500 时别让它卡满 30 分钟
     last = ""
     for i in range(len(RETRY_BACKOFF) + 1):
         p = subprocess.run(cmd, cwd=L.ROOT, capture_output=True, text=True)
@@ -121,7 +146,7 @@ def probe_page(uid, page, work, log):
             return read_doc(out), job
         last = " ".join(text.split())[-160:]
         if QUOTA_RE.search(text):
-            raise QuotaExhausted(last)
+            raise QuotaExhaustedError(last)
         if i < len(RETRY_BACKOFF):
             wait = RETRY_BACKOFF[i]
             log("%s p%d 探页失败，%ds 后重提: %s" % (uid, page, wait, last))
@@ -144,9 +169,21 @@ def classify(chars):
 
 def probe_book(row, work, log):
     uid, npages = row["uid"], int(row["pages"] or 0)
-    rec = {"uid": uid, "title": row["title"], "pages": npages, "lang": "unknown",
-           "sample_page": "", "chars": 0, "kana": 0, "han": 0, "latin": 0,
-           "kana_share": 0.0, "latin_share": 0.0, "job": "", "at": now()}
+    rec = {
+        "uid": uid,
+        "title": row["title"],
+        "pages": npages,
+        "lang": "unknown",
+        "sample_page": "",
+        "chars": 0,
+        "kana": 0,
+        "han": 0,
+        "latin": 0,
+        "kana_share": 0.0,
+        "latin_share": 0.0,
+        "job": "",
+        "at": now(),
+    }
     got = False
     for page in sample_pages(npages):
         text, job = probe_page(uid, page, work, log)
@@ -154,9 +191,18 @@ def probe_book(row, work, log):
             continue
         got = True
         lang, kana, han, latin = classify(text)
-        rec.update({"sample_page": page, "chars": len(text), "kana": kana, "han": han,
-                    "latin": latin, "kana_share": round(ratio(kana, kana + han), 4),
-                    "latin_share": round(ratio(latin, kana + han + latin), 4), "job": job})
+        rec.update(
+            {
+                "sample_page": page,
+                "chars": len(text),
+                "kana": kana,
+                "han": han,
+                "latin": latin,
+                "kana_share": round(ratio(kana, kana + han), 4),
+                "latin_share": round(ratio(latin, kana + han + latin), 4),
+                "job": job,
+            }
+        )
         if lang != "empty":
             rec["lang"] = lang
             return rec
@@ -205,16 +251,17 @@ def main():
     rows = [r for r in rows if not has_md(r["uid"])]
     if not a.force and os.path.isfile(ledger):
         with open(ledger, encoding="utf-8") as fh:
-            seen = {r["uid"] for r in csv.DictReader(fh, delimiter="\t")
-                    if r["lang"] not in ("", "unknown")}
+            seen = {r["uid"] for r in csv.DictReader(fh, delimiter="\t") if r["lang"] not in ("", "unknown")}
         before = len(rows)
         rows = [r for r in rows if r["uid"] not in seen]
         if before != len(rows):
             print("账上已探过 %d 本，跳过" % (before - len(rows)))
 
     if a.list:
-        print("待探 %d 本，%d 页书，约花 %d 页额度上限"
-              % (len(rows), sum(int(r["pages"] or 0) for r in rows), len(rows) * len(DEPTHS)))
+        print(
+            "待探 %d 本，%d 页书，约花 %d 页额度上限"
+            % (len(rows), sum(int(r["pages"] or 0) for r in rows), len(rows) * len(DEPTHS))
+        )
         for r in rows:
             print("  %-6s 页 %4s  %s" % (r["uid"], r["pages"], r["title"][:50]))
         return 0
@@ -239,7 +286,7 @@ def main():
             return
         try:
             rec = probe_book(r, work, log)
-        except QuotaExhausted as exc:
+        except QuotaExhaustedError as exc:
             with lock:
                 abort.append(str(exc))
             return
@@ -247,10 +294,22 @@ def main():
             done[0] += 1
             records.append(rec)
             write_ledger(ledger, [rec])
-            print("[%d/%d] %-6s %-7s 页 %4s/%s 假名 %5.1f%% 拉丁 %4.1f%% 字 %5d  %.40s"
-                  % (done[0], len(rows), rec["uid"], rec["lang"], rec["sample_page"],
-                     rec["pages"], rec["kana_share"] * 100, rec["latin_share"] * 100,
-                     rec["chars"], rec["title"]), flush=True)
+            print(
+                "[%d/%d] %-6s %-7s 页 %4s/%s 假名 %5.1f%% 拉丁 %4.1f%% 字 %5d  %.40s"
+                % (
+                    done[0],
+                    len(rows),
+                    rec["uid"],
+                    rec["lang"],
+                    rec["sample_page"],
+                    rec["pages"],
+                    rec["kana_share"] * 100,
+                    rec["latin_share"] * 100,
+                    rec["chars"],
+                    rec["title"],
+                ),
+                flush=True,
+            )
 
     with futures.ThreadPoolExecutor(max_workers=a.workers) as pool:
         list(pool.map(one, rows))

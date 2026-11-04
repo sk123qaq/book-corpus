@@ -7,6 +7,7 @@
 离线跑，不调模型。真实数据只在 library.db 与 index.db 都在时用作集成用例，
 缺库时跳过；其余用合成簿与手写 plan，断言解析规则与 _pick_default 的优先级。
 """
+
 import os
 import sqlite3
 import sys
@@ -15,18 +16,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-data")
 os.environ.setdefault("BOOKS_ROOT", INSTANCE)
-for _p in (os.path.join(REPO, "src", "bookcorpus", "scripts"),
-           os.path.join(REPO, "src"), os.path.join(REPO, "apps", "demo")):
+for _p in (
+    os.path.join(REPO, "src", "bookcorpus", "scripts"),
+    os.path.join(REPO, "src"),
+    os.path.join(REPO, "apps", "demo"),
+):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import pytest  # noqa: E402
+import trace
 
-import book_cards  # noqa: E402
-import book_query  # noqa: E402
-import book_score  # noqa: E402
-import book_title  # noqa: E402
-import trace  # noqa: E402
+import book_cards
+import book_query
+import book_score
+import book_title
+import pytest
 
 LIB_DB = os.path.join(INSTANCE, "build", "library.db")
 INDEX_DB = os.path.join(INSTANCE, "build", "检索", "index.db")
@@ -113,18 +117,37 @@ def test_no_title_is_missing():
 def _focus_plan():
     return {
         "ranking": [
-            {"book": "B1114", "title": "别的书", "best_path": "books/B1114/md/01.md",
-             "best_line": 3},
-            {"book": FOCUS_BOOK, "title": "万历十五年",
-             "best_path": "books/B0019/md/06_第一章万历皇帝.md", "best_line": 7},
+            {"book": "B1114", "title": "别的书", "best_path": "books/B1114/md/01.md", "best_line": 3},
+            {
+                "book": FOCUS_BOOK,
+                "title": "万历十五年",
+                "best_path": "books/B0019/md/06_第一章万历皇帝.md",
+                "best_line": 7,
+            },
         ],
         "chapters": [
-            {"book": FOCUS_BOOK, "title": "万历十五年", "book_score": 0.0, "pinned": True,
-             "selected": [{"chapter_path": "books/B0019/md/06_第一章万历皇帝.md",
-                           "chapter_title": "第一章 万历皇帝", "line": 7, "score": 1.0}]},
-            {"book": "B1114", "title": "别的书", "book_score": 2.0,
-             "selected": [{"chapter_path": "books/B1114/md/01.md",
-                           "chapter_title": "第一章", "line": 3, "score": 2.0}]},
+            {
+                "book": FOCUS_BOOK,
+                "title": "万历十五年",
+                "book_score": 0.0,
+                "pinned": True,
+                "selected": [
+                    {
+                        "chapter_path": "books/B0019/md/06_第一章万历皇帝.md",
+                        "chapter_title": "第一章 万历皇帝",
+                        "line": 7,
+                        "score": 1.0,
+                    }
+                ],
+            },
+            {
+                "book": "B1114",
+                "title": "别的书",
+                "book_score": 2.0,
+                "selected": [
+                    {"chapter_path": "books/B1114/md/01.md", "chapter_title": "第一章", "line": 3, "score": 2.0}
+                ],
+            },
         ],
     }
 
@@ -139,9 +162,10 @@ def test_pick_default_exact_focus_beats_ranking_top1():
 
 
 def test_pick_default_focus_without_path_is_empty_not_top1():
-    plan = {"ranking": [{"book": "B1114", "title": "别的书",
-                         "best_path": "books/B1114/md/01.md", "best_line": 3}],
-            "chapters": []}
+    plan = {
+        "ranking": [{"book": "B1114", "title": "别的书", "best_path": "books/B1114/md/01.md", "best_line": 3}],
+        "chapters": [],
+    }
     focus = {"status": "exact", "book": FOCUS_BOOK, "title": "万历十五年"}
     pick = trace._pick_default(plan, {"cards": [], "next": []}, 0, focus)
     assert pick["book"] == FOCUS_BOOK

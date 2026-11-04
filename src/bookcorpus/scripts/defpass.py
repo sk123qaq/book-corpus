@@ -9,7 +9,15 @@
   defpass.py ROOT -g 猜疑链 -g 怎样想 -g 魔鬼 -n 3
 每个 -g 是「一组同义/近义词」，一段里命中不同组的数量越多分越高（组覆盖 > 词频）。
 """
-import argparse, os, re, subprocess, sys, math
+
+import argparse
+import math
+import os
+import pathlib
+import re
+import subprocess
+import sys
+
 
 def rg_candidates(root, terms):
     # 全部组的词 OR 成一个正则粗筛，宁滥勿缺：组多时 rg 会慢，收窄交给阶段2打分
@@ -18,7 +26,8 @@ def rg_candidates(root, terms):
     # rg 用 1 表示没有命中，2 及以上是路径错一类的真错误，不能当成 0 命中
     if r.returncode not in (0, 1):
         sys.exit("rg 退出码 %d：%s" % (r.returncode, (r.stderr or "").strip()))
-    return [l for l in r.stdout.splitlines() if l]
+    return [line for line in r.stdout.splitlines() if line]
+
 
 FRONT_MATTER_KEY = re.compile(r"^[A-Za-z_][\w-]*:\s*\S")
 
@@ -67,15 +76,15 @@ def paragraphs(path, keep_front_matter=False):
     可索引 token 的章兜底。
     """
     try:
-        lines = open(path, encoding="utf-8", errors="ignore").read().split("\n")
+        lines = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore").split("\n")
     except OSError:
         return []
     base = 1
     end = front_matter_end(lines)
-    if end is not None and not keep_front_matter and any(x.strip() for x in lines[end + 1:]):
+    if end is not None and not keep_front_matter and any(x.strip() for x in lines[end + 1 :]):
         base = end + 2
     out, buf, start = [], [], base
-    for i, ln in enumerate(lines[base - 1:], base):
+    for i, ln in enumerate(lines[base - 1 :], base):
         if ln.strip():
             if not buf:
                 start = i
@@ -95,10 +104,12 @@ def paragraphs(path, keep_front_matter=False):
             merged.append((s, t))
     return merged
 
+
 def score(text, groups):
     hit = sum(1 for g in groups if any(w in text for w in g))
     freq = sum(text.count(w) for g in groups for w in g)
     return hit, hit * 100 + math.log1p(freq)
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -113,6 +124,7 @@ def main():
     if a.concept:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from concept_expand import expand
+
         terms, ex = expand(a.concept)
         groups = [terms]
         exclude = re.compile("|".join(map(re.escape, ex))) if ex else None
@@ -136,6 +148,7 @@ def main():
         snippet = re.sub(r"\s+", " ", txt)[: a.width]
         print(f"\n[{hit}/{len(groups)} 组 · {sc:.1f}] {os.path.relpath(f, a.root)}:{start}")
         print(f"  {snippet}")
+
 
 if __name__ == "__main__":
     main()

@@ -23,6 +23,7 @@ README 缺失时回退到排序后的 md/*.md 文件名，标记 missing；READM
 
 只读 库/、index.db 与 library.db，不写 md/，不索引 README。
 """
+
 import argparse
 import json
 import os
@@ -32,7 +33,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import ROOT
+
 sys.path.insert(0, HERE)
 import book_score
 import lib_fts_cjk as cjk
@@ -83,8 +85,7 @@ def entry(book, target, title, order, volume):
     path = os.path.normpath("books/%s/md/%s" % (book, target)).replace(os.sep, "/")
     if not path.startswith("books/%s/md/" % book) or ".." in path.split("/"):
         return None
-    return {"book": book, "path": path, "title": title or title_from_name(target),
-            "order": order, "volume": volume}
+    return {"book": book, "path": path, "title": title or title_from_name(target), "order": order, "volume": volume}
 
 
 def readme_toc(book, root=None):
@@ -95,9 +96,10 @@ def readme_toc(book, root=None):
     except OSError:
         return [], "missing"
     rp = os.path.join(base, "README.md")
-    fallback = [{"book": book, "path": "books/%s/md/%s" % (book, f),
-                 "title": title_from_name(f), "order": i, "volume": ""}
-                for i, f in enumerate(files)]
+    fallback = [
+        {"book": book, "path": "books/%s/md/%s" % (book, f), "title": title_from_name(f), "order": i, "volume": ""}
+        for i, f in enumerate(files)
+    ]
     if not os.path.exists(rp):
         return fallback, "missing"
     with open(rp, encoding="utf-8", errors="ignore") as fh:
@@ -130,9 +132,15 @@ def readme_toc(book, root=None):
         order += 1
     for f in files:
         if f not in seen:
-            entries.append({"book": book, "path": "books/%s/md/%s" % (book, f),
-                            "title": title_from_name(f), "order": order,
-                            "volume": ""})
+            entries.append(
+                {
+                    "book": book,
+                    "path": "books/%s/md/%s" % (book, f),
+                    "title": title_from_name(f),
+                    "order": order,
+                    "volume": "",
+                }
+            )
             order += 1
     status = "partial" if stale or len(seen) != len(files) else "ok"
     return entries, status
@@ -145,11 +153,36 @@ def title_overlap(title, terms):
     return sum(1 for t in words if t in title) / len(words)
 
 
-FRONT_MATTER = ("序言", "自序", "代序", "译者序", "编者序", "前言", "后记",
-                "译后记", "编后记", "附录", "纪事", "经典的历程", "出版说明",
-                "出版缘起", "出版始末", "版权", "目录", "注释", "致谢",
-                "名家推荐", "推荐序", "导读", "题记", "凡例", "参考书目",
-                "参考文献", "索引", "编者的话")
+FRONT_MATTER = (
+    "序言",
+    "自序",
+    "代序",
+    "译者序",
+    "编者序",
+    "前言",
+    "后记",
+    "译后记",
+    "编后记",
+    "附录",
+    "纪事",
+    "经典的历程",
+    "出版说明",
+    "出版缘起",
+    "出版始末",
+    "版权",
+    "目录",
+    "注释",
+    "致谢",
+    "名家推荐",
+    "推荐序",
+    "导读",
+    "题记",
+    "凡例",
+    "参考书目",
+    "参考文献",
+    "索引",
+    "编者的话",
+)
 FRONT_MATTER_EXACT = {"序", "跋", "后记", "致谢", "编后记", "出版说明"}
 
 
@@ -176,14 +209,21 @@ def select(hits, groups, terms, toc, max_chapters=3, title_weight=0.0, skip_fron
         cov = len({g for g in groups if any(g in r["text"] for r in rs)}) / max(1, len(groups))
         title = title_overlap(order[path]["title"], terms)
         score = best["score"] * (1 + 0.10 * cov + title_weight * title)
-        rows.append({
-            "book": order[path]["book"], "chapter_path": path,
-            "chapter_title": order[path]["title"], "volume": order[path]["volume"],
-            "line": best["line"], "snippet": re.sub(r"\s+", " ", best["text"])[:150],
-            "score": round(score, 4), "reason": "best=%.2f cov=%.2f title=%.2f"
-            % (best["score"], cov, title), "readme_status": "",
-            "chapter_order": order[path]["order"], "paragraphs": len(rs),
-        })
+        rows.append(
+            {
+                "book": order[path]["book"],
+                "chapter_path": path,
+                "chapter_title": order[path]["title"],
+                "volume": order[path]["volume"],
+                "line": best["line"],
+                "snippet": re.sub(r"\s+", " ", best["text"])[:150],
+                "score": round(score, 4),
+                "reason": "best=%.2f cov=%.2f title=%.2f" % (best["score"], cov, title),
+                "readme_status": "",
+                "chapter_order": order[path]["order"],
+                "paragraphs": len(rs),
+            }
+        )
     rows.sort(key=lambda r: (-r["score"], r["chapter_order"]))
     if skip_front:
         # 正文章一章都没命中时回退到未过滤的行，不把结果清空。
@@ -202,8 +242,9 @@ def search(con, terms, exclude=(), pool=2000):
     return qsearch.search(con, expr, terms, list(exclude), 2000, 40, False, pool)
 
 
-def run(query, con, meta, expand, scheme="best_support", concept=None, limit=10,
-        max_chapters=3, pool=2000, title_weight=0.0):
+def run(
+    query, con, meta, expand, scheme="best_support", concept=None, limit=10, max_chapters=3, pool=2000, title_weight=0.0
+):
     if concept:
         groups, exclude = qsearch.load_concept(concept)
         label = concept
@@ -216,16 +257,21 @@ def run(query, con, meta, expand, scheme="best_support", concept=None, limit=10,
     out = []
     for b in ranked[:limit]:
         toc, status = readme_toc(b.book)
-        rows = select([r for r in hits if r["book"] == b.book], groups, groups, toc,
-                      max_chapters, title_weight)
+        rows = select([r for r in hits if r["book"] == b.book], groups, groups, toc, max_chapters, title_weight)
         for r in rows:
             r["readme_status"] = status
-        out.append({"book": b.book, "title": b.title, "chapters": b.chapters,
-                    "book_score": b.score, "readme_status": status,
-                    "context": context_line(toc) if len(toc) > 200 else "",
-                    "selected": rows})
-    return {"query": label, "scheme": scheme, "ms": round(ms, 1), "hits": len(hits),
-            "books": out}
+        out.append(
+            {
+                "book": b.book,
+                "title": b.title,
+                "chapters": b.chapters,
+                "book_score": b.score,
+                "readme_status": status,
+                "context": context_line(toc) if len(toc) > 200 else "",
+                "selected": rows,
+            }
+        )
+    return {"query": label, "scheme": scheme, "ms": round(ms, 1), "hits": len(hits), "books": out}
 
 
 def main(argv=None):
@@ -236,8 +282,7 @@ def main(argv=None):
     ap.add_argument("--max-chapters", type=int, default=3)
     ap.add_argument("--book-score", default="best_support", choices=list(book_score.SCHEMES))
     ap.add_argument("--pool", type=int, default=2000)
-    ap.add_argument("--title-weight", type=float, default=0.0,
-                    help="章标题重合度权重，默认 0（对照实验未过 5 点门槛）")
+    ap.add_argument("--title-weight", type=float, default=0.0, help="章标题重合度权重，默认 0（对照实验未过 5 点门槛）")
     ap.add_argument("--db", default=DB)
     ap.add_argument("--libdb", default=LIBDB)
     ap.add_argument("--json", action="store_true")
@@ -248,21 +293,19 @@ def main(argv=None):
     con = sqlite3.connect("file:%s?mode=ro" % a.db, uri=True)
     meta = book_score.load_meta(a.libdb)
     expand = book_score.load_expand(con)
-    res = run(a.query, con, meta, expand, a.book_score, a.concept, a.limit,
-              a.max_chapters, a.pool, a.title_weight)
+    res = run(a.query, con, meta, expand, a.book_score, a.concept, a.limit, a.max_chapters, a.pool, a.title_weight)
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return 0
-    print("%s  %d 本  %s  %.0f ms" % (res["query"], len(res["books"]), res["scheme"],
-                                      res["ms"]), file=sys.stderr)
+    print("%s  %d 本  %s  %.0f ms" % (res["query"], len(res["books"]), res["scheme"], res["ms"]), file=sys.stderr)
     for i, b in enumerate(res["books"], 1):
-        print("%2d %-46s ch=%-5d %s  %.2f" % (i, b["book"], b["chapters"],
-                                              b["readme_status"], b["book_score"]))
+        print("%2d %-46s ch=%-5d %s  %.2f" % (i, b["book"], b["chapters"], b["readme_status"], b["book_score"]))
         if b["context"]:
             print("   " + b["context"])
         for r in b["selected"]:
-            print("   [%s] %s:%d  %.2f  %s" % (r["chapter_title"], r["chapter_path"],
-                                               r["line"], r["score"], r["reason"]))
+            print(
+                "   [%s] %s:%d  %.2f  %s" % (r["chapter_title"], r["chapter_path"], r["line"], r["score"], r["reason"])
+            )
             if a.explain:
                 print("      " + r["snippet"])
     return 0

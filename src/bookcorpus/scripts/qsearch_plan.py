@@ -19,10 +19,10 @@
   qsearch_plan.py --plan plan.json -n 20
   qsearch_plan.py --plan - --json < plan.json
 """
+
 import argparse
-import csv
+import contextlib
 import json
-import math
 import os
 import re
 import sqlite3
@@ -32,10 +32,11 @@ from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import L, PATHS, ROOT  # noqa: E402
+from lib_common import PATHS, L
+
 sys.path.insert(0, HERE)
-import lib_fts_cjk as cjk  # noqa: E402
-import qsearch  # noqa: E402
+import lib_fts_cjk as cjk
+import qsearch
 
 DB = PATHS.index_db
 BROAD = PATHS.concepts_broad
@@ -51,7 +52,7 @@ def load_plan(path):
 def load_broad(key):
     for r in L.concept_rows("broad"):
         if r["key"] == key:
-            return [key] + L.split_aliases(r["aliases"]), L.split_exclude(r.get("exclude", ""))
+            return [key, *L.split_aliases(r["aliases"])], L.split_exclude(r.get("exclude", ""))
     raise KeyError(key)
 
 
@@ -64,20 +65,16 @@ def normalize(plan):
     for g in plan.get("groups") or []:
         terms = [str(t).strip() for t in (g.get("terms") or []) if str(t).strip()]
         if terms:
-            groups.append({"name": g.get("name") or "组", "terms": terms,
-                           "weight": weight(g.get("weight"))})
+            groups.append({"name": g.get("name") or "组", "terms": terms, "weight": weight(g.get("weight"))})
     if not groups and plan.get("must"):
-        groups.append({"name": "原词", "terms": [str(t) for t in plan["must"]],
-                       "weight": 1.0})
+        groups.append({"name": "原词", "terms": [str(t) for t in plan["must"]], "weight": 1.0})
     exclude = [str(x) for x in (plan.get("exclude") or []) if str(x).strip()]
     for key in plan.get("concepts") or []:
-        try:
+        terms, ex = [], []
+        with contextlib.suppress(Exception):
             terms, ex = qsearch.load_concept(key)
-        except Exception:
-            continue
         if terms:
-            groups.append({"name": "概念:" + key, "terms": terms,
-                           "weight": weight(plan.get("concept_weight"))})
+            groups.append({"name": "概念:" + key, "terms": terms, "weight": weight(plan.get("concept_weight"))})
             exclude += ex
     for key in plan.get("broad") or []:
         try:
@@ -85,9 +82,9 @@ def normalize(plan):
         except KeyError:
             continue
         if terms:
-            groups.append({"name": "宽:" + key, "terms": terms,
-                           "weight": weight(plan.get("broad_weight")),
-                           "exclude": ex})
+            groups.append(
+                {"name": "宽:" + key, "terms": terms, "weight": weight(plan.get("broad_weight")), "exclude": ex}
+            )
     return groups, exclude
 
 
@@ -95,8 +92,7 @@ def run_group(con, terms, exclude, limit=100, min_chars=40, pool=2000, group_exc
     expr = " OR ".join("(%s)" % cjk.query_expr(t) for t in terms if cjk.query_expr(t))
     if not expr:
         return []
-    hits, _ = qsearch.search(con, expr, terms, exclude + (group_exclude or []),
-                             limit, min_chars, False, pool)
+    hits, _ = qsearch.search(con, expr, terms, exclude + (group_exclude or []), limit, min_chars, False, pool)
     return hits
 
 
@@ -106,11 +102,10 @@ def run(plan, limit=20, pool=2000, min_chars=40, db=DB, group_limit=100):
     if not groups:
         raise SystemExit("计划里没有可检索的词组")
     con = sqlite3.connect("file:%s?mode=ro" % db, uri=True)
-    scores, best = defaultdict(float), {}
+    scores, _best = defaultdict(float), {}
     group_hits = []
     for g in groups:
-        hits = run_group(con, g["terms"], exclude, group_limit, min_chars, pool,
-                         g.get("exclude"))
+        hits = run_group(con, g["terms"], exclude, group_limit, min_chars, pool, g.get("exclude"))
         group_hits.append(hits)
         for i, r in enumerate(hits, 1):
             scores[r["path"]] += g["weight"] / (60 + i)
@@ -126,10 +121,12 @@ def run(plan, limit=20, pool=2000, min_chars=40, db=DB, group_limit=100):
                 if r["path"] == p:
                     paras[(r["line"], r["text"])] = r
         cand = []
-        for (line, text), r in paras.items():
-            hit = [gi for gi, g in enumerate(groups)
-                   if any(t in text for t in g["terms"])
-                   and not any(x in text for x in g.get("exclude", []))]
+        for (_line, text), r in paras.items():
+            hit = [
+                gi
+                for gi, g in enumerate(groups)
+                if any(t in text for t in g["terms"]) and not any(x in text for x in g.get("exclude", []))
+            ]
             mh = sum(1 for t in must if t in text)
             cand.append((len(hit), mh, r.get("score", 0), r, hit))
         if not cand:
@@ -141,24 +138,34 @@ def run(plan, limit=20, pool=2000, min_chars=40, db=DB, group_limit=100):
         if any(x in text for x in exclude):
             continue
         score = base + 0.10 * cov + 0.20 * mh
-        out.append({"path": p, "book": r.get("book") or p.split("/md/")[0][2:],
-                    "line": r.get("line", 0), "text": text,
-                    "score": round(score, 6), "groups_hit": cov,
-                    "must_hit": mh, "group_names": [groups[i]["name"] for i in hit]})
+        out.append(
+            {
+                "path": p,
+                "book": r.get("book") or p.split("/md/")[0][2:],
+                "line": r.get("line", 0),
+                "text": text,
+                "score": round(score, 6),
+                "groups_hit": cov,
+                "must_hit": mh,
+                "group_names": [groups[i]["name"] for i in hit],
+            }
+        )
     out.sort(key=lambda r: (-r["score"], r["path"], r["line"]))
-    return {"question": plan.get("question", ""), "hits": out[:limit],
-            "groups": groups, "exclude": exclude,
-            "ms": round((time.time() - t0) * 1000, 1)}
+    return {
+        "question": plan.get("question", ""),
+        "hits": out[:limit],
+        "groups": groups,
+        "exclude": exclude,
+        "ms": round((time.time() - t0) * 1000, 1),
+    }
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--plan", required=True)
     ap.add_argument("-n", "--limit", type=int, default=20)
-    ap.add_argument("--pool", type=int, default=2000,
-                    help="每组先取多少段进打分，2000 是默认；0 表示不限")
-    ap.add_argument("--group-limit", type=int, default=100,
-                    help="每组重排后留多少段进融合，默认 100")
+    ap.add_argument("--pool", type=int, default=2000, help="每组先取多少段进打分，2000 是默认；0 表示不限")
+    ap.add_argument("--group-limit", type=int, default=100, help="每组重排后留多少段进融合，默认 100")
     ap.add_argument("--min-chars", type=int, default=40)
     ap.add_argument("--db", default=DB)
     ap.add_argument("--json", action="store_true")
@@ -167,11 +174,9 @@ def main():
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return
-    print("%s  %d 条  %.0f ms" % (res["question"], len(res["hits"]), res["ms"]),
-          file=sys.stderr)
+    print("%s  %d 条  %.0f ms" % (res["question"], len(res["hits"]), res["ms"]), file=sys.stderr)
     for i, r in enumerate(res["hits"], 1):
-        print("%2d %-66s:%d  %.4f  组%d 原词%d" % (
-            i, r["path"], r["line"], r["score"], r["groups_hit"], r["must_hit"]))
+        print("%2d %-66s:%d  %.4f  组%d 原词%d" % (i, r["path"], r["line"], r["score"], r["groups_hit"], r["must_hit"]))
         print("   " + re.sub(r"\s+", " ", r["text"])[:150])
 
 

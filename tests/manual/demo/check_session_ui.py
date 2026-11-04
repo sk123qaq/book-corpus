@@ -5,19 +5,19 @@
 只读页面与会话接口，不调真实 /api/run 或 /api/answer；追问与重新回答那两步用假 fetch 截请求体。
 会话 id 默认从 /api/sessions 动态选：一个 3 轮会话、一个最后一轮带多书 sources 的会话。
 """
+
 import argparse
 import base64
 import json
 import os
 import shutil
 import sys
-import tempfile
 import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from shot import CDP, WS, eval_js, launch  # noqa: E402
+from shot import CDP, WS, eval_js, launch
 
 SESSION = "7f0f8d8ba4c4"
 SESSION_MULTI = "e4120ff4977d"
@@ -351,190 +351,275 @@ def main(argv=None):
     _, three_payload = get_json(base, "/api/session?id=" + SESSION)
     three_turns = (three_payload.get("session") or {}).get("turns") or []
     anchor2 = (three_turns[1].get("anchor") or {}) if len(three_turns) > 1 else {}
-    turn2_mode = ((three_turns[1].get("answer") or {}).get("mode")
-                  if len(three_turns) > 1 else "") or "single"
+    turn2_mode = ((three_turns[1].get("answer") or {}).get("mode") if len(three_turns) > 1 else "") or "single"
     _, multi_payload = get_json(base, "/api/session?id=" + SESSION_MULTI)
     multi_turns = (multi_payload.get("session") or {}).get("turns") or []
-    init_sources = (((multi_turns[-1].get("answer") or {}).get("sources") or [])
-                    if multi_turns else [])
+    init_sources = ((multi_turns[-1].get("answer") or {}).get("sources") or []) if multi_turns else []
     n0 = len(init_sources)
     if len(three_turns) != 3:
         raise SystemExit("3 轮会话形状不对：%s 轮" % len(three_turns))
     if n0 < 1:
         raise SystemExit("多书会话最后一轮没有 sources")
-    print("[会话] 3 轮 %s，第 2 轮 %s；多书 %s，初始 %d 本" %
-          (SESSION, turn2_mode, SESSION_MULTI, n0))
+    print("[会话] 3 轮 %s，第 2 轮 %s；多书 %s，初始 %d 本" % (SESSION, turn2_mode, SESSION_MULTI, n0))
     url = base + "/?session=" + SESSION
     status, classic = get_html(base, "/classic")
-    check("旧页在 /classic", status == 200 and "ask-form" in classic,
-          "status=%s" % status)
+    check("旧页在 /classic", status == 200 and "ask-form" in classic, "status=%s" % status)
     status, home = get_html(base, "/")
-    check("/ 是 02 页", status == 200 and "session.js" in home and "id=\"main\"" in home,
-          "status=%s" % status)
+    check("/ 是 02 页", status == 200 and "session.js" in home and 'id="main"' in home, "status=%s" % status)
     proc, profile, ws_url = launch(1440, 900, "about:blank", a.port)
     try:
         cdp = CDP(WS(ws_url))
         for method in ("Runtime.enable", "Log.enable", "Page.enable", "Network.enable"):
             cdp.call(method)
-        cdp.call("Emulation.setDeviceMetricsOverride",
-                 {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False})
+        cdp.call(
+            "Emulation.setDeviceMetricsOverride",
+            {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False},
+        )
         cdp.call("Page.navigate", {"url": base + "/session?session=" + SESSION})
-        loaded = wait_js(cdp, "document.querySelectorAll('.round').length === 3"
-                              " && !!document.querySelector('.answer p')", 25)
+        loaded = wait_js(
+            cdp, "document.querySelectorAll('.round').length === 3 && !!document.querySelector('.answer p')", 25
+        )
         check("恢复 3 轮会话", loaded)
-        check("/session 别名可用且 URL 归一",
-              eval_js(cdp, "location.pathname === '/' && location.search.includes("
-                          + json.dumps("session=" + SESSION) + ")"),
-              eval_js(cdp, "location.pathname + location.search"))
+        check(
+            "/session 别名可用且 URL 归一",
+            eval_js(
+                cdp, "location.pathname === '/' && location.search.includes(" + json.dumps("session=" + SESSION) + ")"
+            ),
+            eval_js(cdp, "location.pathname + location.search"),
+        )
         s0 = eval_js(cdp, SNAP)
-        check("页头统计不是占位", all(v not in ("—", "") for v in s0["stats"]),
-              ",".join(s0["stats"]))
-        check("默认看第 3 轮", s0["current"] == "3" and s0["question"] != "",
-              "current=%s q=%s" % (s0["current"], s0["question"][:20]))
-        check("第 3 轮无落点框", s0["anchors"] == 0 and s0["scopes"] == 1
-              and "独立问题" in s0["scopeText"],
-              "anchors=%d scopes=%d %s" % (s0["anchors"], s0["scopes"], s0["scopeText"]))
-        check("第 3 轮回答与依据", s0["answerParas"] > 0 and s0["cites"] > 0,
-              "paras=%d cites=%d" % (s0["answerParas"], s0["cites"]))
-        check("1440 无横向溢出", not s0["overflow"],
-              "scrollWidth=%s innerWidth=%s" % (s0["scrollWidth"], s0["innerWidth"]))
-        check("每轮有重新回答按钮", s0["reBtns"] == 1 and s0["turnActions"] == 1
-              and s0["reBtnText"] == "重新回答",
-              "btns=%d actions=%d text=%s" % (s0["reBtns"], s0["turnActions"],
-                                              s0["reBtnText"]))
+        check("页头统计不是占位", all(v not in ("—", "") for v in s0["stats"]), ",".join(s0["stats"]))
+        check(
+            "默认看第 3 轮",
+            s0["current"] == "3" and s0["question"] != "",
+            "current=%s q=%s" % (s0["current"], s0["question"][:20]),
+        )
+        check(
+            "第 3 轮无落点框",
+            s0["anchors"] == 0 and s0["scopes"] == 1 and "独立问题" in s0["scopeText"],
+            "anchors=%d scopes=%d %s" % (s0["anchors"], s0["scopes"], s0["scopeText"]),
+        )
+        check(
+            "第 3 轮回答与依据",
+            s0["answerParas"] > 0 and s0["cites"] > 0,
+            "paras=%d cites=%d" % (s0["answerParas"], s0["cites"]),
+        )
+        check(
+            "1440 无横向溢出",
+            not s0["overflow"],
+            "scrollWidth=%s innerWidth=%s" % (s0["scrollWidth"], s0["innerWidth"]),
+        )
+        check(
+            "每轮有重新回答按钮",
+            s0["reBtns"] == 1 and s0["turnActions"] == 1 and s0["reBtnText"] == "重新回答",
+            "btns=%d actions=%d text=%s" % (s0["reBtns"], s0["turnActions"], s0["reBtnText"]),
+        )
         rb, ab, eb = s0["reBtn"], s0["answerBox"], s0["evBox"]
-        check("重新回答在答案与依据之间靠右",
-              bool(rb and ab and eb) and rb["top"] >= ab["bottom"]
-              and rb["bottom"] <= eb["top"] and abs(rb["right"] - eb["right"]) <= 1,
-              "answer=%s btn=%s ev=%s" % (ab, rb, eb))
+        check(
+            "重新回答在答案与依据之间靠右",
+            bool(rb and ab and eb)
+            and rb["top"] >= ab["bottom"]
+            and rb["bottom"] <= eb["top"]
+            and abs(rb["right"] - eb["right"]) <= 1,
+            "answer=%s btn=%s ev=%s" % (ab, rb, eb),
+        )
         eval_js(cdp, "document.querySelector('.turn-reanswer').scrollIntoView({block:'center'}); true")
         time.sleep(0.25)
         shot = cdp.call("Page.captureScreenshot", {"format": "png"})
         re_shot = os.path.join(a.out_dir, "会话-重新回答-1440x900.png")
         with open(re_shot, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("重新回答 1440 截图", os.path.getsize(re_shot) > 20000,
-              "%s %d B" % (re_shot, os.path.getsize(re_shot)))
+        check("重新回答 1440 截图", os.path.getsize(re_shot) > 20000, "%s %d B" % (re_shot, os.path.getsize(re_shot)))
         eval_js(cdp, "document.querySelector('#main').scrollTop = 0; true")
 
         old_answer = s0["answerText"]
         eval_js(cdp, REANSWER)
         eval_js(cdp, "document.querySelector('.turn-reanswer').click(); true")
-        cleared = wait_js(cdp, "!document.querySelector('.answer')"
-                                " && !document.querySelector('.turn-actions')", 8)
+        cleared = wait_js(cdp, "!document.querySelector('.answer') && !document.querySelector('.turn-actions')", 8)
         held = wait_js(cdp, "typeof window.__release === 'function'", 8)
         s_pending = eval_js(cdp, SNAP)
-        check("重答先清旧答案与依据", cleared and held and s_pending["answerParas"] == 0
-              and s_pending["cites"] == 0 and s_pending["reBtns"] == 0
-              and s_pending["answerText"] == "",
-              "cleared=%s held=%s paras=%d cites=%d btns=%d" % (
-                  cleared, held, s_pending["answerParas"], s_pending["cites"],
-                  s_pending["reBtns"]))
+        check(
+            "重答先清旧答案与依据",
+            cleared
+            and held
+            and s_pending["answerParas"] == 0
+            and s_pending["cites"] == 0
+            and s_pending["reBtns"] == 0
+            and s_pending["answerText"] == "",
+            "cleared=%s held=%s paras=%d cites=%d btns=%d"
+            % (cleared, held, s_pending["answerParas"], s_pending["cites"], s_pending["reBtns"]),
+        )
         eval_js(cdp, "window.__release(); true")
-        redone = wait_js(cdp, "!!document.querySelector('.answer')"
-                              " && document.querySelector('.answer').textContent.includes('重新回答的正文')"
-                              " && !!document.querySelector('.turn-reanswer')", 10)
+        redone = wait_js(
+            cdp,
+            "!!document.querySelector('.answer')"
+            " && document.querySelector('.answer').textContent.includes('重新回答的正文')"
+            " && !!document.querySelector('.turn-reanswer')",
+            10,
+        )
         s_re = eval_js(cdp, SNAP)
         calls = json.loads(eval_js(cdp, "JSON.stringify(window.__calls)"))
         run = next((c["body"] for c in calls if c["kind"] == "run"), {})
         ans = next((c["body"] for c in calls if c["kind"] == "answer"), {})
         ans_srcs = ans.get("sources") or []
-        check("重答先重跑检索再回答", redone and len(calls) == 2
-              and [c["kind"] for c in calls] == ["run", "answer"],
-              "redone=%s calls=%s" % (redone, [c["kind"] for c in calls]))
-        check("重跑带 fresh 且定位同一轮", run.get("fresh") is True
-              and run.get("session_id") == SESSION and run.get("turn") == 3,
-              json.dumps(run, ensure_ascii=False)[:220])
-        check("重答带 fresh 且沿用新来源", ans.get("fresh") is True
-              and ans.get("session_id") == SESSION and ans.get("turn") == 3
-              and len(ans_srcs) >= 1 and ans.get("path") == ans_srcs[0].get("path"),
-              json.dumps(ans, ensure_ascii=False)[:220])
-        check("重答后新答案与按钮回来", s_re["answerText"].startswith("重新回答的正文")
-              and s_re["reBtnText"] == "重新回答" and s_re["cites"] >= 1,
-              "answer=%s btn=%s cites=%d" % (s_re["answerText"], s_re["reBtnText"],
-                                             s_re["cites"]))
-        check("重答替换而不是追加", old_answer != s_re["answerText"]
-              and s_re["rounds"] == 3, "old=%s new=%s rounds=%d" % (
-                  old_answer, s_re["answerText"], s_re["rounds"]))
-        check("历史页签有列表", s0["historyRows"] > 0 and s0["historyCount"] != "",
-              "rows=%d count=%s" % (s0["historyRows"], s0["historyCount"]))
-        check("回答标题与正文同字号", s0["h2Size"] != "" and s0["h2Size"] == s0["pSize"],
-              "h2=%s p=%s" % (s0["h2Size"], s0["pSize"]))
+        check(
+            "重答先重跑检索再回答",
+            redone and len(calls) == 2 and [c["kind"] for c in calls] == ["run", "answer"],
+            "redone=%s calls=%s" % (redone, [c["kind"] for c in calls]),
+        )
+        check(
+            "重跑带 fresh 且定位同一轮",
+            run.get("fresh") is True and run.get("session_id") == SESSION and run.get("turn") == 3,
+            json.dumps(run, ensure_ascii=False)[:220],
+        )
+        check(
+            "重答带 fresh 且沿用新来源",
+            ans.get("fresh") is True
+            and ans.get("session_id") == SESSION
+            and ans.get("turn") == 3
+            and len(ans_srcs) >= 1
+            and ans.get("path") == ans_srcs[0].get("path"),
+            json.dumps(ans, ensure_ascii=False)[:220],
+        )
+        check(
+            "重答后新答案与按钮回来",
+            s_re["answerText"].startswith("重新回答的正文") and s_re["reBtnText"] == "重新回答" and s_re["cites"] >= 1,
+            "answer=%s btn=%s cites=%d" % (s_re["answerText"], s_re["reBtnText"], s_re["cites"]),
+        )
+        check(
+            "重答替换而不是追加",
+            old_answer != s_re["answerText"] and s_re["rounds"] == 3,
+            "old=%s new=%s rounds=%d" % (old_answer, s_re["answerText"], s_re["rounds"]),
+        )
+        check(
+            "历史页签有列表",
+            s0["historyRows"] > 0 and s0["historyCount"] != "",
+            "rows=%d count=%s" % (s0["historyRows"], s0["historyCount"]),
+        )
+        check(
+            "回答标题与正文同字号",
+            s0["h2Size"] != "" and s0["h2Size"] == s0["pSize"],
+            "h2=%s p=%s" % (s0["h2Size"], s0["pSize"]),
+        )
 
         eval_js(cdp, "document.querySelector('.round[data-turn=\"2\"]').click(); true")
-        ok2 = wait_js(cdp, "document.querySelector('.round.is-current')"
-                          " && document.querySelector('.round.is-current').dataset.turn === '2'"
-                          " && !!document.querySelector('.current')", 20)
+        ok2 = wait_js(
+            cdp,
+            "document.querySelector('.round.is-current')"
+            " && document.querySelector('.round.is-current').dataset.turn === '2'"
+            " && !!document.querySelector('.current')",
+            20,
+        )
         s1 = eval_js(cdp, SNAP)
-        check("第 2 轮有落点框", ok2 and s1["anchors"] == 1 and s1["scopes"] == 0
-              and "承接 01" in s1["kicker"],
-              "anchors=%d scopes=%d kicker=%s" % (s1["anchors"], s1["scopes"], s1["kicker"]))
-        check("历史轮也有重新回答", s1["reBtns"] == 1 and s1["reBtnText"] == "重新回答",
-              "btns=%d text=%s" % (s1["reBtns"], s1["reBtnText"]))
+        check(
+            "第 2 轮有落点框",
+            ok2 and s1["anchors"] == 1 and s1["scopes"] == 0 and "承接 01" in s1["kicker"],
+            "anchors=%d scopes=%d kicker=%s" % (s1["anchors"], s1["scopes"], s1["kicker"]),
+        )
+        check(
+            "历史轮也有重新回答",
+            s1["reBtns"] == 1 and s1["reBtnText"] == "重新回答",
+            "btns=%d text=%s" % (s1["reBtns"], s1["reBtnText"]),
+        )
         anchor_title = anchor2.get("title") or ""
         anchor_book = (anchor2.get("path") or "").split("/")[1] if anchor2.get("path") else ""
-        check("右栏默认落在本轮落点", s1["drawerCite"] == "[1]"
-              and (not anchor_title or anchor_title in s1["drawerBook"]
-                   or (anchor_book and anchor_book in s1["drawerBook"]))
-              and "这一问的落点" in " ".join(s1["pins"]),
-              "cite=%s book=%s expected=%s/%s pins=%s" % (
-                  s1["drawerCite"], s1["drawerBook"], anchor_title, anchor_book, s1["pins"]))
-        check("五阶段可展开", eval_js(cdp, "(() => { const b=document.querySelector('.strip-bar');"
-                                      " if(!b) return false; b.click();"
-                                      " return document.querySelectorAll('.stage-row').length===5; })()"))
+        check(
+            "右栏默认落在本轮落点",
+            s1["drawerCite"] == "[1]"
+            and (
+                not anchor_title
+                or anchor_title in s1["drawerBook"]
+                or (anchor_book and anchor_book in s1["drawerBook"])
+            )
+            and "这一问的落点" in " ".join(s1["pins"]),
+            "cite=%s book=%s expected=%s/%s pins=%s"
+            % (s1["drawerCite"], s1["drawerBook"], anchor_title, anchor_book, s1["pins"]),
+        )
+        check(
+            "五阶段可展开",
+            eval_js(
+                cdp,
+                "(() => { const b=document.querySelector('.strip-bar');"
+                " if(!b) return false; b.click();"
+                " return document.querySelectorAll('.stage-row').length===5; })()",
+            ),
+        )
         s_cells = eval_js(cdp, SNAP)
-        check("V3 阶段面板五行展开", s_cells["stageRows"] == 5 and s_cells["stripOpen"]
-              and len(s_cells["stageValues"]) == 5
-              and all(v and v != "—" for v in s_cells["stageValues"]),
-              "rows=%d open=%s vals=%s" % (s_cells["stageRows"], s_cells["stripOpen"],
-                                           s_cells["stageValues"]))
-        check("第 2 轮候选书有选中与锁定",
-              s_cells["books"] >= 1 and s_cells["picksOn"] >= 1
-              and s_cells["picksLocked"] >= 1 and "候选书" in s_cells["booksHead"],
-              "books=%d on=%d locked=%d head=%s" % (s_cells["books"], s_cells["picksOn"],
-                                                    s_cells["picksLocked"], s_cells["booksHead"]))
+        check(
+            "V3 阶段面板五行展开",
+            s_cells["stageRows"] == 5
+            and s_cells["stripOpen"]
+            and len(s_cells["stageValues"]) == 5
+            and all(v and v != "—" for v in s_cells["stageValues"]),
+            "rows=%d open=%s vals=%s" % (s_cells["stageRows"], s_cells["stripOpen"], s_cells["stageValues"]),
+        )
+        check(
+            "第 2 轮候选书有选中与锁定",
+            s_cells["books"] >= 1
+            and s_cells["picksOn"] >= 1
+            and s_cells["picksLocked"] >= 1
+            and "候选书" in s_cells["booksHead"],
+            "books=%d on=%d locked=%d head=%s"
+            % (s_cells["books"], s_cells["picksOn"], s_cells["picksLocked"], s_cells["booksHead"]),
+        )
         if turn2_mode == "multi":
-            check("左栏范围与回答元信息按多书",
-                  s_cells["railChips"] and s_cells["railChips"][-1].endswith("本")
-                  and "本书" in s_cells["meta"] and "10,000" in s_cells["meta"],
-                  "chips=%s meta=%s" % (s_cells["railChips"], s_cells["meta"]))
-            check("五阶段第 5 格是跨书",
-                  len(s_cells["stageTexts"]) == 5 and "跨书" in s_cells["stageTexts"][4],
-                  s_cells["stageTexts"][4][:120] if len(s_cells["stageTexts"]) > 4
-                  else "rows=%d" % len(s_cells["stageTexts"]))
+            check(
+                "左栏范围与回答元信息按多书",
+                s_cells["railChips"]
+                and s_cells["railChips"][-1].endswith("本")
+                and "本书" in s_cells["meta"]
+                and "10,000" in s_cells["meta"],
+                "chips=%s meta=%s" % (s_cells["railChips"], s_cells["meta"]),
+            )
+            check(
+                "五阶段第 5 格是跨书",
+                len(s_cells["stageTexts"]) == 5 and "跨书" in s_cells["stageTexts"][4],
+                s_cells["stageTexts"][4][:120]
+                if len(s_cells["stageTexts"]) > 4
+                else "rows=%d" % len(s_cells["stageTexts"]),
+            )
         else:
             print("[跳过] 第 2 轮是单书，跳过跨书左栏断言")
-        check("历史轮次书单只读",
-              s_cells["booksAll"] == "" and s_cells["picksOff"] == s_cells["picks"]
-              and "历史轮次 · 书单只读" in s_cells["booksHead"] and s_cells["booksAct"] == "",
-              "all=%s off=%d/%d head=%s act=%s" % (s_cells["booksAll"], s_cells["picksOff"],
-                                                    s_cells["picks"], s_cells["booksHead"],
-                                                    s_cells["booksAct"]))
+        check(
+            "历史轮次书单只读",
+            s_cells["booksAll"] == ""
+            and s_cells["picksOff"] == s_cells["picks"]
+            and "历史轮次 · 书单只读" in s_cells["booksHead"]
+            and s_cells["booksAct"] == "",
+            "all=%s off=%d/%d head=%s act=%s"
+            % (s_cells["booksAll"], s_cells["picksOff"], s_cells["picks"], s_cells["booksHead"], s_cells["booksAct"]),
+        )
 
         eval_js(cdp, "document.querySelectorAll('.stage-row .stage-row-head')[2].click(); true")
         s_open = eval_js(cdp, SNAP)
-        check("阶段行可点开", s_open["stageOpen"] == 1 and s_open["stripOpen"],
-              "open=%d strip=%s" % (s_open["stageOpen"], s_open["stripOpen"]))
+        check(
+            "阶段行可点开",
+            s_open["stageOpen"] == 1 and s_open["stripOpen"],
+            "open=%d strip=%s" % (s_open["stageOpen"], s_open["stripOpen"]),
+        )
         shot = cdp.call("Page.captureScreenshot", {"format": "png"})
         v3shot = os.path.join(a.out_dir, "会话-V3-阶段-1440x900.png")
         with open(v3shot, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("V3 阶段 1440 截图", os.path.getsize(v3shot) > 20000,
-              "%s %d B" % (v3shot, os.path.getsize(v3shot)))
+        check("V3 阶段 1440 截图", os.path.getsize(v3shot) > 20000, "%s %d B" % (v3shot, os.path.getsize(v3shot)))
 
         eval_js(cdp, "document.querySelector('.ev').click(); true")
         on = wait_js(cdp, "document.querySelectorAll('.ev.is-on').length === 1", 10)
         s2 = eval_js(cdp, SNAP)
-        check("点依据设置下一问落点", on and "下一问挂在 [1]" in s2["hint"]
-              and "下一问的落点" in " ".join(s2["pins"]),
-              "evOn=%d hint=%s pins=%s" % (s2["evOn"], s2["hint"], s2["pins"]))
-        check("占位跟着落点变", "就 [1] 这一段接着问" == s2["placeholder"], s2["placeholder"])
+        check(
+            "点依据设置下一问落点",
+            on and "下一问挂在 [1]" in s2["hint"] and "下一问的落点" in " ".join(s2["pins"]),
+            "evOn=%d hint=%s pins=%s" % (s2["evOn"], s2["hint"], s2["pins"]),
+        )
+        check("占位跟着落点变", s2["placeholder"] == "就 [1] 这一段接着问", s2["placeholder"])
         eval_js(cdp, "document.querySelector('.ev').click(); true")
         off = wait_js(cdp, "document.querySelectorAll('.ev.is-on').length === 0", 10)
         s3 = eval_js(cdp, SNAP)
-        check("再点一次取消落点", off and "不选依据" in s3["hint"]
-              and "下一问的落点" not in " ".join(s3["pins"]),
-              "evOn=%d hint=%s" % (s3["evOn"], s3["hint"]))
+        check(
+            "再点一次取消落点",
+            off and "不选依据" in s3["hint"] and "下一问的落点" not in " ".join(s3["pins"]),
+            "evOn=%d hint=%s" % (s3["evOn"], s3["hint"]),
+        )
 
         eval_js(cdp, "document.querySelector('.ev').click(); true")
         wait_js(cdp, "document.querySelectorAll('.ev.is-on').length === 1", 10)
@@ -543,94 +628,150 @@ def main(argv=None):
         path1440 = os.path.join(a.out_dir, "会话-1440x900.png")
         with open(path1440, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("1440 截图", os.path.getsize(path1440) > 20000,
-              "%s %d B" % (path1440, os.path.getsize(path1440)))
+        check("1440 截图", os.path.getsize(path1440) > 20000, "%s %d B" % (path1440, os.path.getsize(path1440)))
 
         eval_js(cdp, FAKE.replace("7f0f8d8ba4c4", SESSION))
-        eval_js(cdp, "document.querySelector('#q').value='带落点的问题';"
-                     "document.querySelector('#q').dispatchEvent(new Event('input', {bubbles:true}));"
-                     "document.querySelector('#send').click(); true")
-        done = wait_js(cdp, "document.querySelectorAll('.round').length === 4"
-                            " && !!document.querySelector('.answer')"
-                            " && document.querySelector('.answer').textContent.includes('模拟回答')", 15)
+        eval_js(
+            cdp,
+            "document.querySelector('#q').value='带落点的问题';"
+            "document.querySelector('#q').dispatchEvent(new Event('input', {bubbles:true}));"
+            "document.querySelector('#send').click(); true",
+        )
+        done = wait_js(
+            cdp,
+            "document.querySelectorAll('.round').length === 4"
+            " && !!document.querySelector('.answer')"
+            " && document.querySelector('.answer').textContent.includes('模拟回答')",
+            15,
+        )
         s4 = eval_js(cdp, SNAP)
         calls = json.loads(eval_js(cdp, "JSON.stringify(window.__calls)"))
         run = next((c["body"] for c in calls if c["kind"] == "run"), {})
         ans = next((c["body"] for c in calls if c["kind"] == "answer"), {})
-        check("追问追加第 4 轮", done and s4["rounds"] == 4 and s4["current"] == "4",
-              "rounds=%d current=%s" % (s4["rounds"], s4["current"]))
+        check(
+            "追问追加第 4 轮",
+            done and s4["rounds"] == 4 and s4["current"] == "4",
+            "rounds=%d current=%s" % (s4["rounds"], s4["current"]),
+        )
         ranchor = run.get("anchor") or {}
-        check("追问请求带会话、轮次和落点",
-              run.get("session_id") == SESSION and run.get("turn") == 4
-              and (ranchor.get("path") or "").startswith("books/")
-              and int(ranchor.get("line") or 0) > 0
-              and bool(ranchor.get("quote")), json.dumps(run, ensure_ascii=False)[:180])
+        check(
+            "追问请求带会话、轮次和落点",
+            run.get("session_id") == SESSION
+            and run.get("turn") == 4
+            and (ranchor.get("path") or "").startswith("books/")
+            and int(ranchor.get("line") or 0) > 0
+            and bool(ranchor.get("quote")),
+            json.dumps(run, ensure_ascii=False)[:180],
+        )
         ans_srcs = ans.get("sources") or []
-        check("回答请求带会话、轮次，且只带一本来源",
-              ans.get("session_id") == SESSION and ans.get("turn") == 4
-              and len(ans_srcs) == 1 and ans_srcs[0].get("path") == ans.get("path")
-              and ans.get("path") == ranchor.get("path") and ans.get("line") == ranchor.get("line")
-              and ans.get("book") == ans_srcs[0].get("book"),
-              json.dumps(ans, ensure_ascii=False)[:200])
+        check(
+            "回答请求带会话、轮次，且只带一本来源",
+            ans.get("session_id") == SESSION
+            and ans.get("turn") == 4
+            and len(ans_srcs) == 1
+            and ans_srcs[0].get("path") == ans.get("path")
+            and ans.get("path") == ranchor.get("path")
+            and ans.get("line") == ranchor.get("line")
+            and ans.get("book") == ans_srcs[0].get("book"),
+            json.dumps(ans, ensure_ascii=False)[:200],
+        )
         check("上下文提示出现在回答里", "接上一问 · 上下文 10/5,000 字" in s4["meta"], s4["meta"])
 
-        still = wait_js(cdp, "document.querySelectorAll('.strip .step.is-active').length === 0"
-                            " && document.querySelectorAll('.strip .step.is-done').length === 5"
-                            " && !!document.querySelector('.stages')"
-                            " && !document.querySelector('.stages').classList.contains('is-open')"
-                            " && document.querySelectorAll('.stage-row.is-open').length === 0", 20)
+        still = wait_js(
+            cdp,
+            "document.querySelectorAll('.strip .step.is-active').length === 0"
+            " && document.querySelectorAll('.strip .step.is-done').length === 5"
+            " && !!document.querySelector('.stages')"
+            " && !document.querySelector('.stages').classList.contains('is-open')"
+            " && document.querySelectorAll('.stage-row.is-open').length === 0",
+            20,
+        )
         s5a = eval_js(cdp, SNAP)
-        check("阶段结束后静止", still and s5a["stageActive"] == 0 and s5a["stageDone"] == 5
-              and not s5a["stripOpen"] and s5a["stageOpen"] == 0,
-              "active=%d done=%d strip=%s open=%d" % (s5a["stageActive"], s5a["stageDone"],
-                                                     s5a["stripOpen"], s5a["stageOpen"]))
+        check(
+            "阶段结束后静止",
+            still
+            and s5a["stageActive"] == 0
+            and s5a["stageDone"] == 5
+            and not s5a["stripOpen"]
+            and s5a["stageOpen"] == 0,
+            "active=%d done=%d strip=%s open=%d"
+            % (s5a["stageActive"], s5a["stageDone"], s5a["stripOpen"], s5a["stageOpen"]),
+        )
 
         cdp.call("Page.navigate", {"url": base + "/"})
-        home = wait_js(cdp, "document.querySelectorAll('.hist-row').length > 0"
-                            " && !!document.querySelector('.last-card')", 25)
+        home = wait_js(
+            cdp, "document.querySelectorAll('.hist-row').length > 0 && !!document.querySelector('.last-card')", 25
+        )
         s7 = eval_js(cdp, SNAP)
-        check("初始页默认历史", home and s7["tabHistoryOn"] and not s7["tabCurrentOn"]
-              and s7["starts"] == 1 and s7["lastCards"] == 1 and s7["historyRows"] > 0,
-              "hist=%d start=%d last=%d tabH=%s tabC=%s" % (s7["historyRows"], s7["starts"],
-                                                            s7["lastCards"], s7["tabHistoryOn"],
-                                                            s7["tabCurrentOn"]))
+        check(
+            "初始页默认历史",
+            home
+            and s7["tabHistoryOn"]
+            and not s7["tabCurrentOn"]
+            and s7["starts"] == 1
+            and s7["lastCards"] == 1
+            and s7["historyRows"] > 0,
+            "hist=%d start=%d last=%d tabH=%s tabC=%s"
+            % (s7["historyRows"], s7["starts"], s7["lastCards"], s7["tabHistoryOn"], s7["tabCurrentOn"]),
+        )
         shot = cdp.call("Page.captureScreenshot", {"format": "png"})
         hist1440 = os.path.join(a.out_dir, "会话-历史-1440x900.png")
         with open(hist1440, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("历史 1440 截图", os.path.getsize(hist1440) > 20000,
-              "%s %d B" % (hist1440, os.path.getsize(hist1440)))
+        check("历史 1440 截图", os.path.getsize(hist1440) > 20000, "%s %d B" % (hist1440, os.path.getsize(hist1440)))
         eval_js(cdp, "document.querySelector('.last-card').click(); true")
-        back = wait_js(cdp, "document.querySelectorAll('.round').length > 0"
-                            " && document.querySelector('#tab-current')"
-                            " .classList.contains('is-on')", 25)
+        back = wait_js(
+            cdp,
+            "document.querySelectorAll('.round').length > 0"
+            " && document.querySelector('#tab-current')"
+            " .classList.contains('is-on')",
+            25,
+        )
         s8 = eval_js(cdp, SNAP)
-        check("接着上次能打开会话", back and s8["rounds"] > 0 and s8["tabCurrentOn"],
-              "rounds=%d tabC=%s" % (s8["rounds"], s8["tabCurrentOn"]))
+        check(
+            "接着上次能打开会话",
+            back and s8["rounds"] > 0 and s8["tabCurrentOn"],
+            "rounds=%d tabC=%s" % (s8["rounds"], s8["tabCurrentOn"]),
+        )
         eval_js(cdp, "document.querySelector('#tab-history').click(); true")
-        pinned = wait_js(cdp, "document.querySelector('#panel-history')"
-                             " && !document.querySelector('#panel-history').hidden"
-                             " && document.querySelectorAll('.hist-row.is-current').length === 1", 10)
+        pinned = wait_js(
+            cdp,
+            "document.querySelector('#panel-history')"
+            " && !document.querySelector('#panel-history').hidden"
+            " && document.querySelectorAll('.hist-row.is-current').length === 1",
+            10,
+        )
         s8b = eval_js(cdp, SNAP)
-        check("历史里当前会话置顶",
-              pinned and s8b["histFirstGroup"] == "当前打开" and s8b["histFirstCurrent"]
-              and s8b["panelHistoryHidden"] is False,
-              "group=%s first=%s hidden=%s" % (s8b["histFirstGroup"], s8b["histFirstCurrent"],
-                                              s8b["panelHistoryHidden"]))
+        check(
+            "历史里当前会话置顶",
+            pinned
+            and s8b["histFirstGroup"] == "当前打开"
+            and s8b["histFirstCurrent"]
+            and s8b["panelHistoryHidden"] is False,
+            "group=%s first=%s hidden=%s" % (s8b["histFirstGroup"], s8b["histFirstCurrent"], s8b["panelHistoryHidden"]),
+        )
 
-        cdp.call("Emulation.setDeviceMetricsOverride",
-                 {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
+        cdp.call(
+            "Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True}
+        )
         cdp.call("Page.navigate", {"url": url})
-        wait_js(cdp, "document.querySelectorAll('.round').length === 3"
-                     " && !!document.querySelector('.answer p')", 25)
+        wait_js(cdp, "document.querySelectorAll('.round').length === 3 && !!document.querySelector('.answer p')", 25)
         s5 = eval_js(cdp, SNAP)
-        check("390 无横向溢出", not s5["overflow"] and s5["scrollWidth"] == 390,
-              "scrollWidth=%s innerWidth=%s" % (s5["scrollWidth"], s5["innerWidth"]))
-        check("390 composer 在视口内", s5["ask"] and s5["ask"]["top"] > 0
-              and s5["ask"]["bottom"] <= 844,
-              "ask=%s" % (s5["ask"],))
-        check("390 回答标题与正文同字号", s5["h2Size"] != "" and s5["h2Size"] == s5["pSize"],
-              "h2=%s p=%s" % (s5["h2Size"], s5["pSize"]))
+        check(
+            "390 无横向溢出",
+            not s5["overflow"] and s5["scrollWidth"] == 390,
+            "scrollWidth=%s innerWidth=%s" % (s5["scrollWidth"], s5["innerWidth"]),
+        )
+        check(
+            "390 composer 在视口内",
+            s5["ask"] and s5["ask"]["top"] > 0 and s5["ask"]["bottom"] <= 844,
+            "ask=%s" % (s5["ask"],),
+        )
+        check(
+            "390 回答标题与正文同字号",
+            s5["h2Size"] != "" and s5["h2Size"] == s5["pSize"],
+            "h2=%s p=%s" % (s5["h2Size"], s5["pSize"]),
+        )
         check("390 有新会话入口", s5["newSession"] != "none", s5["newSession"])
         check("390 有原文开关", s5["drawerToggle"] != "none", s5["drawerToggle"])
         eval_js(cdp, "document.querySelector('.ev').click(); true")
@@ -644,36 +785,48 @@ def main(argv=None):
         path390 = os.path.join(a.out_dir, "会话-390x844.png")
         with open(path390, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("390 截图", os.path.getsize(path390) > 10000,
-              "%s %d B" % (path390, os.path.getsize(path390)))
+        check("390 截图", os.path.getsize(path390) > 10000, "%s %d B" % (path390, os.path.getsize(path390)))
 
         cdp.call("Page.navigate", {"url": base + "/"})
-        h390 = wait_js(cdp, "document.querySelectorAll('.hist-row').length > 0"
-                            " && !!document.querySelector('.last-card')", 25)
+        h390 = wait_js(
+            cdp, "document.querySelectorAll('.hist-row').length > 0 && !!document.querySelector('.last-card')", 25
+        )
         s9 = eval_js(cdp, SNAP)
-        check("390 初始页历史可滚", h390 and not s9["overflow"] and s9["scrollWidth"] == 390
-              and s9["histScroll"] in ("auto", "scroll") and s9["histWrap"] == "nowrap",
-              "overflow=%s sw=%s scroll=%s wrap=%s" % (s9["overflow"], s9["scrollWidth"],
-                                                      s9["histScroll"], s9["histWrap"]))
+        check(
+            "390 初始页历史可滚",
+            h390
+            and not s9["overflow"]
+            and s9["scrollWidth"] == 390
+            and s9["histScroll"] in ("auto", "scroll")
+            and s9["histWrap"] == "nowrap",
+            "overflow=%s sw=%s scroll=%s wrap=%s"
+            % (s9["overflow"], s9["scrollWidth"], s9["histScroll"], s9["histWrap"]),
+        )
         shot = cdp.call("Page.captureScreenshot", {"format": "png"})
         hist390 = os.path.join(a.out_dir, "会话-历史-390x844.png")
         with open(hist390, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("历史 390 截图", os.path.getsize(hist390) > 10000,
-              "%s %d B" % (hist390, os.path.getsize(hist390)))
+        check("历史 390 截图", os.path.getsize(hist390) > 10000, "%s %d B" % (hist390, os.path.getsize(hist390)))
 
-        cdp.call("Emulation.setDeviceMetricsOverride",
-                 {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False})
+        cdp.call(
+            "Emulation.setDeviceMetricsOverride",
+            {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False},
+        )
         cdp.call("Page.navigate", {"url": base + "/?session=" + SESSION_MULTI})
-        loaded2 = wait_js(cdp, "document.querySelectorAll('.round').length === 2"
-                               " && !!document.querySelector('.answer p')", 25)
+        loaded2 = wait_js(
+            cdp, "document.querySelectorAll('.round').length === 2 && !!document.querySelector('.answer p')", 25
+        )
         m0 = eval_js(cdp, SNAP)
-        check("最后一轮出多书选择器",
-              loaded2 and m0["books"] >= 1 and m0["picksOn"] == n0
-              and m0["picksLocked"] >= 1 and m0["booksAll"] == "全选",
-              "books=%d on=%d locked=%d n0=%d all=%s head=%s" % (
-                  m0["books"], m0["picksOn"], m0["picksLocked"], n0,
-                  m0["booksAll"], m0["booksHead"]))
+        check(
+            "最后一轮出多书选择器",
+            loaded2
+            and m0["books"] >= 1
+            and m0["picksOn"] == n0
+            and m0["picksLocked"] >= 1
+            and m0["booksAll"] == "全选",
+            "books=%d on=%d locked=%d n0=%d all=%s head=%s"
+            % (m0["books"], m0["picksOn"], m0["picksLocked"], n0, m0["booksAll"], m0["booksHead"]),
+        )
         check("换书前没有过期条", m0["booksAct"] == "", m0["booksAct"])
 
         eval_js(cdp, MULTI)
@@ -681,63 +834,86 @@ def main(argv=None):
         bar = wait_js(cdp, "!!document.querySelector('[data-reanswer]')", 10)
         m1 = eval_js(cdp, SNAP)
         pre = json.loads(eval_js(cdp, "JSON.stringify(window.__calls || [])"))
-        check("点书卡出现过期条且不发请求",
-              bar and bool(picked)
-              and m1["booksActBtn"] == "用这 %d 本重新回答" % (n0 + 1) and not pre,
-              "picked=%s btn=%s calls=%d act=%s" % (picked, m1["booksActBtn"], len(pre),
-                                                   m1["booksAct"]))
+        check(
+            "点书卡出现过期条且不发请求",
+            bar and bool(picked) and m1["booksActBtn"] == "用这 %d 本重新回答" % (n0 + 1) and not pre,
+            "picked=%s btn=%s calls=%d act=%s" % (picked, m1["booksActBtn"], len(pre), m1["booksAct"]),
+        )
 
         eval_js(cdp, "document.querySelector('[data-reanswer]').click(); true")
-        redone = wait_js(cdp, "!document.querySelector('.books-act')"
-                              " && !!document.querySelector('.answer-meta')"
-                              " && document.querySelector('.answer-meta').textContent"
-                                 ".includes('3,625/10,000')", 20)
+        redone = wait_js(
+            cdp,
+            "!document.querySelector('.books-act')"
+            " && !!document.querySelector('.answer-meta')"
+            " && document.querySelector('.answer-meta').textContent"
+            ".includes('3,625/10,000')",
+            20,
+        )
         m2 = eval_js(cdp, SNAP)
         calls = json.loads(eval_js(cdp, "JSON.stringify(window.__calls || [])"))
         ans2 = next((c["body"] for c in calls if c["kind"] == "answer"), {})
         srcs = ans2.get("sources") or []
-        check("重新回答的请求带 n0+1 本来源",
-              ans2.get("session_id") == SESSION_MULTI and ans2.get("turn") == 2
-              and len(srcs) == n0 + 1 and srcs[-1].get("book") == picked
-              and srcs[0].get("path") == (init_sources[0].get("path") if init_sources else ""),
-              json.dumps(ans2, ensure_ascii=False)[:220])
-        check("多书回答回到页面",
-              redone and m2["railChips"][-1] == "%d 本" % (n0 + 1)
-              and ("%d 本书" % (n0 + 1)) in m2["meta"]
-              and "3,625/10,000 字" in m2["meta"] and m2["picksOn"] == n0 + 1,
-              "chips=%s meta=%s on=%d" % (m2["railChips"], m2["meta"], m2["picksOn"]))
+        check(
+            "重新回答的请求带 n0+1 本来源",
+            ans2.get("session_id") == SESSION_MULTI
+            and ans2.get("turn") == 2
+            and len(srcs) == n0 + 1
+            and srcs[-1].get("book") == picked
+            and srcs[0].get("path") == (init_sources[0].get("path") if init_sources else ""),
+            json.dumps(ans2, ensure_ascii=False)[:220],
+        )
+        check(
+            "多书回答回到页面",
+            redone
+            and m2["railChips"][-1] == "%d 本" % (n0 + 1)
+            and ("%d 本书" % (n0 + 1)) in m2["meta"]
+            and "3,625/10,000 字" in m2["meta"]
+            and m2["picksOn"] == n0 + 1,
+            "chips=%s meta=%s on=%d" % (m2["railChips"], m2["meta"], m2["picksOn"]),
+        )
 
         shot = cdp.call("Page.captureScreenshot", {"format": "png"})
         multi1440 = os.path.join(a.out_dir, "会话-multi-1440x900.png")
         with open(multi1440, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("multi 1440 截图", os.path.getsize(multi1440) > 20000,
-              "%s %d B" % (multi1440, os.path.getsize(multi1440)))
+        check(
+            "multi 1440 截图", os.path.getsize(multi1440) > 20000, "%s %d B" % (multi1440, os.path.getsize(multi1440))
+        )
 
-        cdp.call("Emulation.setDeviceMetricsOverride",
-                 {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
+        cdp.call(
+            "Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True}
+        )
         time.sleep(0.4)
         m3 = eval_js(cdp, SNAP)
-        check("390 multi 无横向溢出", not m3["overflow"] and m3["scrollWidth"] == 390,
-              "scrollWidth=%s innerWidth=%s" % (m3["scrollWidth"], m3["innerWidth"]))
-        check("390 multi composer 在视口内",
-              m3["ask"] and m3["ask"]["top"] > 0 and m3["ask"]["bottom"] <= 844,
-              "ask=%s" % (m3["ask"],))
-        check("390 书卡横向滚动",
-              m3["picksWrap"] == "nowrap" and m3["picksScroll"] in ("auto", "scroll"),
-              "wrap=%s scroll=%s" % (m3["picksWrap"], m3["picksScroll"]))
+        check(
+            "390 multi 无横向溢出",
+            not m3["overflow"] and m3["scrollWidth"] == 390,
+            "scrollWidth=%s innerWidth=%s" % (m3["scrollWidth"], m3["innerWidth"]),
+        )
+        check(
+            "390 multi composer 在视口内",
+            m3["ask"] and m3["ask"]["top"] > 0 and m3["ask"]["bottom"] <= 844,
+            "ask=%s" % (m3["ask"],),
+        )
+        check(
+            "390 书卡横向滚动",
+            m3["picksWrap"] == "nowrap" and m3["picksScroll"] in ("auto", "scroll"),
+            "wrap=%s scroll=%s" % (m3["picksWrap"], m3["picksScroll"]),
+        )
         shot = cdp.call("Page.captureScreenshot", {"format": "png"})
         multi390 = os.path.join(a.out_dir, "会话-multi-390x844.png")
         with open(multi390, "wb") as fh:
             fh.write(base64.b64decode(shot["data"]))
-        check("multi 390 截图", os.path.getsize(multi390) > 10000,
-              "%s %d B" % (multi390, os.path.getsize(multi390)))
+        check("multi 390 截图", os.path.getsize(multi390) > 10000, "%s %d B" % (multi390, os.path.getsize(multi390)))
 
         cdp.wait_events(0.5)
         errs = cdp.errors()
         check("控制台 0 错误", not errs, "; ".join(errs)[:300])
-        reqs = [((e.get("params") or {}).get("request") or {}).get("url")
-                for e in cdp.events if e.get("method") == "Network.requestWillBeSent"]
+        reqs = [
+            ((e.get("params") or {}).get("request") or {}).get("url")
+            for e in cdp.events
+            if e.get("method") == "Network.requestWillBeSent"
+        ]
         outside = [u for u in reqs if u and not u.startswith(base) and u != "about:blank"]
         check("无外部请求", not outside, ",".join(outside[:3]))
     finally:

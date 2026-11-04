@@ -7,12 +7,22 @@ L 与 M 写 目录/检索/route_cache/。
 
   eval_retrieval.py --gold gold.tsv --system A,B,C,D --k 10,20 --out eval-baseline.tsv
 """
-import argparse, csv, json, os, re, subprocess, sys, time
+
+import argparse
+import csv
+import functools
+import json
+import os
+import re
+import subprocess
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 ROOT = L.ROOT
 DEFPASS = os.path.join(HERE, "defpass.py")
 RG = L.RG
@@ -47,7 +57,7 @@ def grep_files(patterns, literal=True):
         cmd += ["-e", p]
     cmd.append("books")
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
-    return [l for l in out.stdout.splitlines() if l]
+    return [line for line in out.stdout.splitlines() if line]
 
 
 def rg_files(patterns):
@@ -56,7 +66,7 @@ def rg_files(patterns):
         cmd += ["-e", p]
     cmd.append("books")
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env())
-    return [l for l in out.stdout.splitlines() if l]
+    return [line for line in out.stdout.splitlines() if line]
 
 
 def grep_expanded(patterns, excludes):
@@ -96,15 +106,17 @@ def defpass_files(terms, aliases):
 
 
 def qsearch_files(args):
-    out = subprocess.run([sys.executable, QSEARCH] + args + ["--json", "-n", "100"],
-                         cwd=ROOT, capture_output=True, text=True)
+    out = subprocess.run(
+        [sys.executable, QSEARCH, *args, "--json", "-n", "100"], cwd=ROOT, capture_output=True, text=True
+    )
     if out.returncode != 0:
-        raise RuntimeError("%s 退出码 %d：%s" % (os.path.basename(QSEARCH), out.returncode,
-                                              (out.stderr or "").strip()[-300:]))
+        raise RuntimeError(
+            "%s 退出码 %d：%s" % (os.path.basename(QSEARCH), out.returncode, (out.stderr or "").strip()[-300:])
+        )
     try:
         hits = json.loads(out.stdout)["hits"]
     except (json.JSONDecodeError, KeyError) as exc:
-        raise RuntimeError("%s 回包读不出 hits：%s" % (os.path.basename(QSEARCH), exc))
+        raise RuntimeError("%s 回包读不出 hits：%s" % (os.path.basename(QSEARCH), exc)) from exc
     seen, order = set(), []
     for h in hits:
         path = h["path"]
@@ -115,15 +127,17 @@ def qsearch_files(args):
 
 
 def qexpand_files(args):
-    out = subprocess.run([sys.executable, QEXPAND] + args + ["--json", "-n", "100"],
-                         cwd=ROOT, capture_output=True, text=True)
+    out = subprocess.run(
+        [sys.executable, QEXPAND, *args, "--json", "-n", "100"], cwd=ROOT, capture_output=True, text=True
+    )
     if out.returncode != 0:
-        raise RuntimeError("%s 退出码 %d：%s" % (os.path.basename(QEXPAND), out.returncode,
-                                              (out.stderr or "").strip()[-300:]))
+        raise RuntimeError(
+            "%s 退出码 %d：%s" % (os.path.basename(QEXPAND), out.returncode, (out.stderr or "").strip()[-300:])
+        )
     try:
         hits = json.loads(out.stdout)["hits"]
     except (json.JSONDecodeError, KeyError) as exc:
-        raise RuntimeError("%s 回包读不出 hits：%s" % (os.path.basename(QEXPAND), exc))
+        raise RuntimeError("%s 回包读不出 hits：%s" % (os.path.basename(QEXPAND), exc)) from exc
     seen, order = set(), []
     for h in hits:
         path = h["path"]
@@ -134,15 +148,17 @@ def qexpand_files(args):
 
 
 def route_files(args):
-    out = subprocess.run([sys.executable, QROUTE] + args + ["--json", "-n", "100"],
-                         cwd=ROOT, capture_output=True, text=True)
+    out = subprocess.run(
+        [sys.executable, QROUTE, *args, "--json", "-n", "100"], cwd=ROOT, capture_output=True, text=True
+    )
     if out.returncode != 0:
-        raise RuntimeError("%s 退出码 %d：%s" % (os.path.basename(QROUTE), out.returncode,
-                                              (out.stderr or "").strip()[-300:]))
+        raise RuntimeError(
+            "%s 退出码 %d：%s" % (os.path.basename(QROUTE), out.returncode, (out.stderr or "").strip()[-300:])
+        )
     try:
         hits = json.loads(out.stdout)["hits"]
     except (json.JSONDecodeError, KeyError) as exc:
-        raise RuntimeError("%s 回包读不出 hits：%s" % (os.path.basename(QROUTE), exc))
+        raise RuntimeError("%s 回包读不出 hits：%s" % (os.path.basename(QROUTE), exc)) from exc
     seen, order = set(), []
     for h in hits:
         path = h["path"]
@@ -171,7 +187,8 @@ def main():
     a = ap.parse_args()
     systems = a.system.split(",")
     ks = [int(x) for x in a.k.split(",")]
-    gold = list(csv.DictReader(open(a.gold, encoding="utf-8"), delimiter="\t"))
+    with open(a.gold, encoding="utf-8") as fh:
+        gold = list(csv.DictReader(fh, delimiter="\t"))
     if a.limit:
         gold = gold[: a.limit]
     table = concept_table()
@@ -205,9 +222,17 @@ def main():
         elif sysname == "K":
             cand = qexpand_files([" ".join(terms), "--question", r["question"]])
         elif sysname in ("K1", "K2"):
-            cand = qexpand_files([" ".join(terms), "--question", r["question"],
-                                  "--grain", "chapter",
-                                  "--base-weight", "1" if sysname == "K1" else "2"])
+            cand = qexpand_files(
+                [
+                    " ".join(terms),
+                    "--question",
+                    r["question"],
+                    "--grain",
+                    "chapter",
+                    "--base-weight",
+                    "1" if sysname == "K1" else "2",
+                ]
+            )
         elif sysname == "J":
             cand = qsearch_files(["--expand", "--expand-kind", "queries", " ".join(terms)])
         elif sysname == "H":
@@ -217,18 +242,24 @@ def main():
         else:
             sys.exit("未知系统 " + sysname)
         rank, pos = rank_of(r["path"], cand)
-        return {"qid": r["qid"], "system": sysname, "rank": rank, "pos": pos,
-                "hit10": int(rank <= 10), "hit20": int(rank <= 20)}
+        return {
+            "qid": r["qid"],
+            "system": sysname,
+            "rank": rank,
+            "pos": pos,
+            "hit10": int(rank <= 10),
+            "hit20": int(rank <= 20),
+        }
 
     rows, summary, skipped = [], {}, {}
     for sysname in systems:
         t0 = time.time()
         if a.jobs > 1:
             with ThreadPoolExecutor(a.jobs) as ex:
-                recs = list(ex.map(lambda r: one(sysname, r), gold))
+                recs = list(ex.map(functools.partial(one, sysname), gold))
         else:
             recs = [one(sysname, r) for r in gold]
-        for r, rec in zip(gold, recs):
+        for r, rec in zip(gold, recs, strict=False):
             if rec is None:
                 skipped.setdefault(sysname, []).append(r["qid"])
                 continue
@@ -238,17 +269,26 @@ def main():
         summary[sysname]["secs"] = round(time.time() - t0, 1)
         print(sysname, "完成", summary[sysname]["secs"], "秒", file=sys.stderr)
         if skipped.get(sysname):
-            print("%s 跳过 %d 题：概念表里没有 %s" % (
-                sysname, len(skipped[sysname]),
-                " ".join(sorted({r["concept"] for r in gold
-                                 if r["qid"] in skipped[sysname]}))), file=sys.stderr)
+            print(
+                "%s 跳过 %d 题：概念表里没有 %s"
+                % (
+                    sysname,
+                    len(skipped[sysname]),
+                    " ".join(sorted({r["concept"] for r in gold if r["qid"] in skipped[sysname]})),
+                ),
+                file=sys.stderr,
+            )
 
     tmp = a.out + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         f.write("qid\tsystem\trank\tpos\t" + "\t".join("hit%d" % k for k in ks) + "\n")
         for rec in rows:
-            f.write("\t".join([rec["qid"], rec["system"], str(rec["rank"]), str(rec["pos"])] +
-                              [str(rec["hit%d" % k]) for k in ks]) + "\n")
+            f.write(
+                "\t".join(
+                    [rec["qid"], rec["system"], str(rec["rank"]), str(rec["pos"])] + [str(rec["hit%d" % k]) for k in ks]
+                )
+                + "\n"
+            )
     os.replace(tmp, a.out)
 
     sp = a.out.rsplit(".", 1)[0] + "-summary.tsv"
@@ -258,12 +298,15 @@ def main():
         for sysname in systems:
             allr = [x for v in summary[sysname]["cat"].values() for x in v]
             no = summary[sysname]["cat"].get("无原词", [])
-            row = [sysname,
-                   "%.3f" % (sum(1 for x in allr if x <= 10) / len(allr)),
-                   "%.3f" % (sum(1 for x in allr if x <= 20) / len(allr)),
-                   "%.3f" % (sum(1.0 / x for x in allr if x < CAP) / len(allr)),
-                   "%.3f" % (sum(1 for x in no if x <= 20) / len(no)) if no else "nan",
-                   str(len(allr)), str(summary[sysname]["secs"])]
+            row = [
+                sysname,
+                "%.3f" % (sum(1 for x in allr if x <= 10) / len(allr)),
+                "%.3f" % (sum(1 for x in allr if x <= 20) / len(allr)),
+                "%.3f" % (sum(1.0 / x for x in allr if x < CAP) / len(allr)),
+                "%.3f" % (sum(1 for x in no if x <= 20) / len(no)) if no else "nan",
+                str(len(allr)),
+                str(summary[sysname]["secs"]),
+            ]
             f.write("\t".join(row) + "\n")
             print("  ".join(row))
     os.replace(stmp, sp)

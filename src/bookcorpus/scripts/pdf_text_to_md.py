@@ -21,6 +21,7 @@ README、.manifest.json、front matter、文件名清洗、目录链接都复用
   python3 pdf_text_to_md.py --pdf books/<uid>/source/x.pdf --out out/B0517 --uid B0517 --title Hokusai \
       --author "Edmond de Goncourt" --source-sha256 xxx --method pdf-text --structure auto
 """
+
 import argparse
 import collections
 import os
@@ -28,9 +29,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import pdf_ocr_to_md as A  # noqa: E402
-
-import pymupdf as fitz  # noqa: E402
+import pdf_ocr_to_md as A
+import pymupdf as fitz
 
 MIN_IMAGE_PX = 64
 CJK_RE = re.compile(r"[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]")
@@ -39,13 +39,17 @@ UNLISTED_SINGLE = "- 无（文本层按页全收）"
 
 SENT_END = "。！？…；：!?.;:"
 SENT_CLOSERS = "\u201d\u2019\"'\u300d\u300f\uff09\u3011\u300b\u3009"
-LIST_START = re.compile(r"^(?:[\u2022\u00b7*#>\-\u2013\u2014]|\d+[.\u3001)]"
-                        r"|[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]+[\u3001.]"
-                        r"|[\uff08(][\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\d]+[)\uff09])")
-HEAD_START = re.compile(r"^(?:\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e0-9]+[\u7ae0\u8282\u7bc7\u90e8]"
-                        r"|[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]+[\u3001.]"
-                        r"|[\uff08(][\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\d]+[)\uff09]"
-                        r"|\d+(?:\.\d+)*[\u3001.\s])")
+LIST_START = re.compile(
+    r"^(?:[\u2022\u00b7*#>\-\u2013\u2014]|\d+[.\u3001)]"
+    r"|[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]+[\u3001.]"
+    r"|[\uff08(][\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\d]+[)\uff09])"
+)
+HEAD_START = re.compile(
+    r"^(?:\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e0-9]+[\u7ae0\u8282\u7bc7\u90e8]"
+    r"|[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]+[\u3001.]"
+    r"|[\uff08(][\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\d]+[)\uff09]"
+    r"|\d+(?:\.\d+)*[\u3001.\s])"
+)
 
 
 def block_text(b):
@@ -77,16 +81,24 @@ def body_size(blocks):
 
 def block_metrics(b, text, body):
     """并段要用的块几何：bbox、块内最大字号（正文缺省）、每行高度。"""
-    lines = [ln for ln in (b.get("lines") or [])
-             if "".join(sp.get("text") or "" for sp in ln.get("spans") or []).strip()]
+    lines = [
+        ln for ln in (b.get("lines") or []) if "".join(sp.get("text") or "" for sp in ln.get("spans") or []).strip()
+    ]
     size = 0.0
     for ln in lines:
         for sp in ln.get("spans") or []:
             if (sp.get("text") or "").strip():
                 size = max(size, round(sp["size"], 1))
     x0, y0, x1, y1 = b["bbox"]
-    return {"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1,
-            "size": size or body, "lh": (y1 - y0) / max(1, len(lines))}
+    return {
+        "text": text,
+        "x0": x0,
+        "y0": y0,
+        "x1": x1,
+        "y1": y1,
+        "size": size or body,
+        "lh": (y1 - y0) / max(1, len(lines)),
+    }
 
 
 def _can_merge(a, b, body, page_w):
@@ -187,7 +199,7 @@ def usable_toc(doc, toc):
         return "目录只有 %d 条（要 ≥3 条）" % len(toc)
     if doc.page_count < 20:
         return "全书 %d 页（要 ≥20 页）" % doc.page_count
-    for i, (lv, title, pg) in enumerate(toc):
+    for i, (_lv, title, pg) in enumerate(toc):
         if not (1 <= int(pg) <= doc.page_count):
             return "第 %d 条「%s」页号 %d 不在 1..%d 内" % (i + 1, title[:20], pg, doc.page_count)
     pages = [int(t[2]) for t in toc]
@@ -242,9 +254,14 @@ def write_single(doc, pages, a, out_dir):
     parts = ["\n\n".join(p["parts"]) for p in pages if p["parts"]]
     body = demote_h1("\n\n".join(parts))
     fname = A.sanitize_filename(a.title, a.uid) + ".md"
-    text = ('---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\npages: %d\n---\n\n# %s\n\n%s\n'
-            % (A.fm_title(a.title), A.fm_title(a.author), os.path.basename(a.pdf),
-               doc.page_count, a.title, body))
+    text = '---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\npages: %d\n---\n\n# %s\n\n%s\n' % (
+        A.fm_title(a.title),
+        A.fm_title(a.author),
+        os.path.basename(a.pdf),
+        doc.page_count,
+        a.title,
+        body,
+    )
     with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
         fh.write(text)
     chapters = [{"index": 1, "title": a.title, "file": fname, "chars": len(body)}]
@@ -258,16 +275,20 @@ def write_chapters(doc, pages, a, out_dir):
     total_chars, total_bytes = 0, 0
     for k, (title, s) in enumerate(starts):
         end = starts[k + 1][1] - 1 if k + 1 < len(starts) else doc.page_count
-        body = "\n\n".join(x for x in ("\n\n".join(p["parts"]) for p in pages[s - 1:end])
-                           if x.strip())
+        body = "\n\n".join(x for x in ("\n\n".join(p["parts"]) for p in pages[s - 1 : end]) if x.strip())
         if not body.strip():
             empty += 1
             continue
         title = A.clean_title(" ".join(title.split()), seen) or ("%s 第 %d 章" % (a.title, s))
         body = demote_h1(body)
         idx = len(chapters) + 1
-        fm = ('---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\nchapter: %d\npage: %d\n---\n'
-              % (A.fm_title(title), A.fm_title(a.author), os.path.basename(a.pdf), idx, s))
+        fm = '---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\nchapter: %d\npage: %d\n---\n' % (
+            A.fm_title(title),
+            A.fm_title(a.author),
+            os.path.basename(a.pdf),
+            idx,
+            s,
+        )
         text = fm + "\n# %s\n\n%s\n" % (title, body)
         fname = ("%02d_%s.md" % (idx, title))[:120].replace(" ", "_")
         with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
@@ -291,8 +312,12 @@ def main():
     ap.add_argument("--method", default="pdf-text")
     ap.add_argument("--tool-version", default="")
     ap.add_argument("--structure", choices=("auto", "single", "chapters"), default="auto")
-    ap.add_argument("--merge-blocks", action=argparse.BooleanOptionalAction, default=True,
-                    help="跨块并段（默认开）。--no-merge-blocks 回到逐块成段，供对照与回滚")
+    ap.add_argument(
+        "--merge-blocks",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="跨块并段（默认开）。--no-merge-blocks 回到逐块成段，供对照与回滚",
+    )
     a = ap.parse_args()
 
     doc = fitz.open(a.pdf)
@@ -313,25 +338,48 @@ def main():
         chapters, chars, bytes_, empty = write_single(doc, pages, a, a.out)
         unlisted = UNLISTED_SINGLE
 
-    A.write_readme(a.out, a.title, a.collection, a.author, a.date, len(chapters), used,
-                   os.path.basename(a.pdf), [(c["title"], c["file"]) for c in chapters],
-                   unlisted)
+    A.write_readme(
+        a.out,
+        a.title,
+        a.collection,
+        a.author,
+        a.date,
+        len(chapters),
+        used,
+        os.path.basename(a.pdf),
+        [(c["title"], c["file"]) for c in chapters],
+        unlisted,
+    )
     manifest = {
-        "uid": a.uid, "method": a.method, "tool_version": a.tool_version,
-        "source": a.pdf, "source_sha256": a.source_sha256,
-        "pages": doc.page_count, "chapters": len(chapters), "bytes": bytes_, "chars": chars,
-        "images": used, "images_dropped": dropped, "empty_chapters": empty,
-        "structure": structure, "single_file": structure == "single",
-        "toc_entries": len(toc), "toc_levels": len({t[0] for t in toc}),
+        "uid": a.uid,
+        "method": a.method,
+        "tool_version": a.tool_version,
+        "source": a.pdf,
+        "source_sha256": a.source_sha256,
+        "pages": doc.page_count,
+        "chapters": len(chapters),
+        "bytes": bytes_,
+        "chars": chars,
+        "images": used,
+        "images_dropped": dropped,
+        "empty_chapters": empty,
+        "structure": structure,
+        "single_file": structure == "single",
+        "toc_entries": len(toc),
+        "toc_levels": len({t[0] for t in toc}),
         "toc_rejected": reject if (toc and structure == "single") else "",
-        "generated_at": A.now(), "assembler": "pdf_text_to_md.py", "verified": False,
+        "generated_at": A.now(),
+        "assembler": "pdf_text_to_md.py",
+        "verified": False,
     }
     A.write_manifest(a.out, manifest)
 
     if manifest["toc_rejected"]:
         print("目录不可用，走单文件：%s" % manifest["toc_rejected"])
-    print("结构 %s，写出 %d 个内容文件，%d 字，图 %d 张（丢 %d 张过小的），%d 页输入 -> %s"
-          % (structure, len(chapters), chars, used, dropped, doc.page_count, a.out))
+    print(
+        "结构 %s，写出 %d 个内容文件，%d 字，图 %d 张（丢 %d 张过小的），%d 页输入 -> %s"
+        % (structure, len(chapters), chars, used, dropped, doc.page_count, a.out)
+    )
     if empty:
         print("  空章 %d 个未写出" % empty)
     for c in chapters[:6]:

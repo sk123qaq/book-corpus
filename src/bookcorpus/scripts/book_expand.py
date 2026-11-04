@@ -22,14 +22,17 @@
 章改动即失效；不同窗口分开缓存。缓存命中零模型调用。
 只读 库/ 与 index.db，只写 expand_cache/。
 """
+
 import argparse
 import hashlib
 import json
 import os
+import pathlib
 import re
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -37,7 +40,8 @@ from dataclasses import asdict, dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import PATHS, ROOT
+
 sys.path.insert(0, HERE)
 import book_readme
 import book_score
@@ -53,15 +57,45 @@ PROMPT_VERSION = "b4-v1"
 MODES = {
     # 操作人 2026-10-23 定 B：接受提供方 8-50 秒/次，保留 24 次硬上限。
     # default 3 本×1 章×3 轮=9；deep 3×2×3=18；max 8×3×1=24（广扫，不再多轮）。
-    "default": {"books": 3, "chapters": 1, "rounds": 3, "calls": 9, "workers": 3,
-                "budget": 60.0, "allow_l2": True, "allow_l3": True, "allow_l4": False,
-                "window_chars": 2000, "timeout": 40.0},
-    "deep": {"books": 3, "chapters": 2, "rounds": 3, "calls": 18, "workers": 4,
-             "budget": 80.0, "allow_l2": True, "allow_l3": True, "allow_l4": False,
-             "window_chars": 6000, "timeout": 40.0},
-    "max": {"books": 8, "chapters": 1, "rounds": 3, "calls": 24, "workers": 6,
-            "budget": 120.0, "allow_l2": True, "allow_l3": True, "allow_l4": True,
-            "window_chars": 6000, "timeout": 40.0},
+    "default": {
+        "books": 3,
+        "chapters": 1,
+        "rounds": 3,
+        "calls": 9,
+        "workers": 3,
+        "budget": 60.0,
+        "allow_l2": True,
+        "allow_l3": True,
+        "allow_l4": False,
+        "window_chars": 2000,
+        "timeout": 40.0,
+    },
+    "deep": {
+        "books": 3,
+        "chapters": 2,
+        "rounds": 3,
+        "calls": 18,
+        "workers": 4,
+        "budget": 80.0,
+        "allow_l2": True,
+        "allow_l3": True,
+        "allow_l4": False,
+        "window_chars": 6000,
+        "timeout": 40.0,
+    },
+    "max": {
+        "books": 8,
+        "chapters": 1,
+        "rounds": 3,
+        "calls": 24,
+        "workers": 6,
+        "budget": 120.0,
+        "allow_l2": True,
+        "allow_l3": True,
+        "allow_l4": True,
+        "window_chars": 6000,
+        "timeout": 40.0,
+    },
 }
 MAX_FULL_CHARS = 20000
 CONTEXT_LINES = 5
@@ -111,7 +145,7 @@ class ChapterResult:
 
 
 def sha1(text):
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def full_path(path):
@@ -138,7 +172,7 @@ def window_for(lines, best_line, level, window_chars):
     span = {0: 3, 1: 20, 2: 60}.get(level, 20)
     start, end = max(floor, best_line - span), min(total, best_line + span)
     while True:
-        chunk = "\n".join(lines[start - 1:end])
+        chunk = "\n".join(lines[start - 1 : end])
         if len(chunk) <= window_chars or (start == floor and end == total):
             break
         if end - best_line >= best_line - start and end > best_line:
@@ -149,7 +183,7 @@ def window_for(lines, best_line, level, window_chars):
             end -= 1
         else:
             break
-    text = "\n".join(lines[start - 1:end])
+    text = "\n".join(lines[start - 1 : end])
     if len(text) > window_chars:
         text = text[:window_chars]
     has_before, has_after = start > floor, end < total
@@ -170,7 +204,7 @@ def boundary_window(lines, side, max_chars):
     if side == "prev":
         end = total
         start = end
-        while start > 1 and len("\n".join(lines[start - 2:end])) <= max_chars:
+        while start > 1 and len("\n".join(lines[start - 2 : end])) <= max_chars:
             start -= 1
     else:
         start = 1
@@ -178,9 +212,9 @@ def boundary_window(lines, side, max_chars):
         if fm is not None:
             start = next((i + 1 for i in range(fm + 1, total) if lines[i].strip()), 1)
         end = start
-        while end < total and len("\n".join(lines[start - 1:end + 1])) <= max_chars:
+        while end < total and len("\n".join(lines[start - 1 : end + 1])) <= max_chars:
             end += 1
-    text = "\n".join(lines[start - 1:end])[:max_chars]
+    text = "\n".join(lines[start - 1 : end])[:max_chars]
     return start, end, text
 
 
@@ -198,8 +232,7 @@ def neighbor_block(nbrs, max_chars):
     return "\n\n".join(out)
 
 
-def make_packet(book, path, title, lines, best_line, level, max_chars, readme_status,
-                start=None, end=None):
+def make_packet(book, path, title, lines, best_line, level, max_chars, readme_status, start=None, end=None):
     """窗口按行。给了 start/end 时保证覆盖这一段（不超过 max_chars）。"""
     total = len(lines)
     best_line = defpass.content_line(lines, best_line)
@@ -210,21 +243,29 @@ def make_packet(book, path, title, lines, best_line, level, max_chars, readme_st
         mid = (lo + hi) // 2
         span = 60 if level >= 2 else 20
         a, b = max(1, min(lo, mid - span)), min(total, max(hi, mid + span))
-        while len("\n".join(lines[a - 1:b])) > max_chars and (a < lo or b > hi):
+        while len("\n".join(lines[a - 1 : b])) > max_chars and (a < lo or b > hi):
             if b - hi >= lo - a and b > hi:
                 b -= 1
             elif a < lo:
                 a += 1
             else:
                 b -= 1
-        text = "\n".join(lines[a - 1:b])[:max_chars]
+        text = "\n".join(lines[a - 1 : b])[:max_chars]
         has_before, has_after = a > 1, b < total
-    return ChapterPacket(path=path, title=title,
-                         chars=sum(len(x) + 1 for x in lines), lines=total,
-                         best_line=max(1, min(total, best_line)), window_start=a,
-                         window_end=b, window_text=text, level=level,
-                         has_before=has_before, has_after=has_after,
-                         readme_status=readme_status)
+    return ChapterPacket(
+        path=path,
+        title=title,
+        chars=sum(len(x) + 1 for x in lines),
+        lines=total,
+        best_line=max(1, min(total, best_line)),
+        window_start=a,
+        window_end=b,
+        window_text=text,
+        level=level,
+        has_before=has_before,
+        has_after=has_after,
+        readme_status=readme_status,
+    )
 
 
 def clamp_context(value):
@@ -252,7 +293,7 @@ def targeted(lines, request, max_chars):
             return None
         if not (1 <= a <= b <= total):
             return None
-        text = "\n".join(lines[a - 1:b])[:max_chars]
+        text = "\n".join(lines[a - 1 : b])[:max_chars]
         return [(a, b)], text
     if kind == "grep":
         terms = [str(t).strip() for t in (request.get("terms") or []) if str(t).strip()]
@@ -282,27 +323,40 @@ def targeted(lines, request, max_chars):
 
 
 def prompt_for(question, book, packet, extra=""):
-    head = ("你是图书检索助手。用户的问题：%s\n"
-            "书：%s\n本章：%s\n路径：%s\n总字数 %d，总行数 %d，最佳命中行 %d。\n"
-            % (question, book, packet.title, packet.path, packet.chars, packet.lines,
-               packet.best_line))
+    head = "你是图书检索助手。用户的问题：%s\n书：%s\n本章：%s\n路径：%s\n总字数 %d，总行数 %d，最佳命中行 %d。\n" % (
+        question,
+        book,
+        packet.title,
+        packet.path,
+        packet.chars,
+        packet.lines,
+        packet.best_line,
+    )
     if packet.window_text:
-        head += ("下面是第 %d 到 %d 行（层级 L%d），只依据这些内容，不要补充没出现的细节。\n"
-                 % (packet.window_start, packet.window_end, packet.level))
+        head += "下面是第 %d 到 %d 行（层级 L%d），只依据这些内容，不要补充没出现的细节。\n" % (
+            packet.window_start,
+            packet.window_end,
+            packet.level,
+        )
     body = ("---\n%s\n---\n" % packet.window_text) if packet.window_text else ""
     if packet.neighbor_text:
-        body += ("\n【本章的邻章片段，只作背景】\n" + packet.neighbor_text + "\n"
-                 "引用只能来自本章窗口的行号，邻章片段不能当引用。\n")
-    rules = ('只输出一个 JSON 对象，不加代码围栏。够回答时：\n'
-             '{"need_more": false, "summary": "本章与问题相关的 30 到 120 字概括", '
-             '"evidence_lines": [88, 92], "queries": ["检索式1", "检索式2", "检索式3"]}\n'
-             '不够时输出：\n'
-             '{"need_more": true, "reason": "缺什么", "request": {"type": "lines", "start": 60, "end": 140}}\n'
-             '或 {"need_more": true, "reason": "...", "request": {"type": "grep", "terms": ["支配", "强制"], "context": 5}}\n'
-             '或 {"need_more": true, "reason": "...", "request": {"type": "full"}}\n'
-             "约束：evidence_lines 必须是上面给出的行号；queries 恰好 3 条，每条至少两个原文没出现的词。\n"
-             "检索式正例（原文没有「次贷」「衍生品」）：\"房贷风险是怎么转手的\"、\"评级机构为什么不可信\"。\n"
-             "不要照抄本章的专名和术语。")
+        body += (
+            "\n【本章的邻章片段，只作背景】\n" + packet.neighbor_text + "\n"
+            "引用只能来自本章窗口的行号，邻章片段不能当引用。\n"
+        )
+    rules = (
+        "只输出一个 JSON 对象，不加代码围栏。够回答时：\n"
+        '{"need_more": false, "summary": "本章与问题相关的 30 到 120 字概括", '
+        '"evidence_lines": [88, 92], "queries": ["检索式1", "检索式2", "检索式3"]}\n'
+        "不够时输出：\n"
+        '{"need_more": true, "reason": "缺什么", "request": {"type": "lines", "start": 60, "end": 140}}\n'
+        '或 {"need_more": true, "reason": "...", "request": '
+        '{"type": "grep", "terms": ["支配", "强制"], "context": 5}}\n'
+        '或 {"need_more": true, "reason": "...", "request": {"type": "full"}}\n'
+        "约束：evidence_lines 必须是上面给出的行号；queries 恰好 3 条，每条至少两个原文没出现的词。\n"
+        '检索式正例（原文没有「次贷」「衍生品」）："房贷风险是怎么转手的"、"评级机构为什么不可信"。\n'
+        "不要照抄本章的专名和术语。"
+    )
     return head + extra + body + rules
 
 
@@ -330,7 +384,7 @@ def out_of_text_bigrams(query, window_text):
     grams = set()
     for seg in q.split():
         for i in range(len(seg) - 1):
-            grams.add(seg[i:i + 2])
+            grams.add(seg[i : i + 2])
     return [g for g in grams if g not in window_text]
 
 
@@ -350,16 +404,20 @@ def validate_reply(obj, given_ranges, window_text, level):
                 return False, "行范围不是整数"
             if a > b or a < 1:
                 return False, "行范围越界"
-            return True, {"need_more": True, "request": {"type": "lines", "start": a, "end": b},
-                          "reason": obj.get("reason", "")}
+            return True, {
+                "need_more": True,
+                "request": {"type": "lines", "start": a, "end": b},
+                "reason": obj.get("reason", ""),
+            }
         if kind == "grep":
             terms = [str(t).strip() for t in (req.get("terms") or []) if str(t).strip()]
             if not terms:
                 return False, "grep 词为空"
-            return True, {"need_more": True,
-                          "request": {"type": "grep", "terms": terms,
-                                      "context": clamp_context(req.get("context"))},
-                          "reason": obj.get("reason", "")}
+            return True, {
+                "need_more": True,
+                "request": {"type": "grep", "terms": terms, "context": clamp_context(req.get("context"))},
+                "reason": obj.get("reason", ""),
+            }
         return False, "未知的请求类型"
     summary = str(obj.get("summary") or "").strip()
     if not summary:
@@ -384,13 +442,11 @@ def validate_reply(obj, given_ranges, window_text, level):
     for q in queries[:3]:
         if len(out_of_text_bigrams(q, window_text)) < 2:
             return False, "检索式正文外词不足：%s" % q
-    return True, {"need_more": False, "summary": summary, "evidence_lines": evidence,
-                  "queries": queries[:3]}
+    return True, {"need_more": False, "summary": summary, "evidence_lines": evidence, "queries": queries[:3]}
 
 
 def cache_path(path, level, window_text, prompt, mtime):
-    key = sha1("|".join([path, "expand", str(level), sha1(window_text),
-                         sha1(prompt), "%.0f" % mtime, PROMPT_VERSION]))
+    key = sha1("|".join([path, "expand", str(level), sha1(window_text), sha1(prompt), "%.0f" % mtime, PROMPT_VERSION]))
     return os.path.join(CACHE, key + ".json")
 
 
@@ -423,21 +479,33 @@ MAX_OUT = int(os.environ.get("BOOK_EXPAND_MAX_OUT", "6000"))
 def default_call(prompt, timeout):
     """opencode-go 的 deepseek-v4.1-flash。effort 与 max_tokens 按 B4 实测定。"""
     import urllib.request
+
     import build_expand
-    body = {"model": build_expand.OPENCODE_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": MAX_OUT, "stream": False, "reasoning_effort": EFFORT}
-    req = urllib.request.Request(
-        build_expand.OPENCODE_URL, data=json.dumps(body).encode(),
-        headers={"Authorization": "Bearer " + json.load(open(build_expand.AUTH))["opencode-go"]["key"],
-                 "Content-Type": "application/json",
-                 "User-Agent": build_expand.OPENCODE_UA,
-                 "x-opencode-session": build_expand.OPENCODE_SESSION})
+
+    body = {
+        "model": build_expand.OPENCODE_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": MAX_OUT,
+        "stream": False,
+        "reasoning_effort": EFFORT,
+    }
+    req = urllib.request.Request(  # noqa: S310 URL 来自模块内 https 常量
+        build_expand.OPENCODE_URL,
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": "Bearer "
+            + json.loads(pathlib.Path(build_expand.AUTH).read_text(encoding="utf-8"))["opencode-go"]["key"],
+            "Content-Type": "application/json",
+            "User-Agent": build_expand.OPENCODE_UA,
+            "x-opencode-session": build_expand.OPENCODE_SESSION,
+        },
+    )
     import time
     import urllib.error
+
     for attempt in range(2):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 端点来自模块内 https 常量，urlopen 不接外部输入
                 d = json.load(r)
             break
         except (urllib.error.URLError, ConnectionError) as exc:
@@ -446,41 +514,68 @@ def default_call(prompt, timeout):
             time.sleep(3)
     msg = (d.get("choices") or [{}])[0].get("message") or {}
     usage = d.get("usage") or {}
-    return msg.get("content") or "", {"input_tokens": usage.get("prompt_tokens", 0),
-                                      "output_tokens": usage.get("completion_tokens", 0)}
+    return msg.get("content") or "", {
+        "input_tokens": usage.get("prompt_tokens", 0),
+        "output_tokens": usage.get("completion_tokens", 0),
+    }
 
 
-def run_chapter(question, book, path, title, best_line, mode, call, deadline,
-                readme_status="ok", use_cache=True, counter=None, nbrs=None,
-                use_neighbors=False):
+def run_chapter(
+    question,
+    book,
+    path,
+    title,
+    best_line,
+    mode,
+    call,
+    deadline,
+    readme_status="ok",
+    use_cache=True,
+    counter=None,
+    nbrs=None,
+    use_neighbors=False,
+):
     cfg = MODES[mode]
     lines = read_lines(path)
     total_chars = sum(len(x) + 1 for x in lines)
     mtime = os.stat(full_path(path)).st_mtime
     res = ChapterResult(path=path, title=title, book=book, level=1, status="ok")
     first = int(os.environ.get("BOOK_EXPAND_FIRST_LEVEL", cfg.get("first", 1)))
-    given, packet = [], make_packet(book, path, title, lines, best_line, first,
-                                    cfg["window_chars"] if first == 1 else LEVEL_CHARS[first],
-                                    readme_status)
+    given, packet = (
+        [],
+        make_packet(
+            book,
+            path,
+            title,
+            lines,
+            best_line,
+            first,
+            cfg["window_chars"] if first == 1 else LEVEL_CHARS[first],
+            readme_status,
+        ),
+    )
     for round_no in range(1, cfg["rounds"] + 1):
         if time.monotonic() > deadline:
             res.status, res.reason = "partial", "预算用尽"
             return res
-        if counter is not None and counter["cap"] is not None \
-                and counter["used"] >= counter["cap"]:
+        if counter is not None and counter["cap"] is not None and counter["used"] >= counter["cap"]:
             res.status, res.reason = "partial", "调用次数用尽"
             return res
-        prompt = prompt_for(question, book, packet,
-                            "上一轮你请求了更多内容，下面是补上的部分。\n" if round_no > 1 else "")
+        prompt = prompt_for(
+            question, book, packet, "上一轮你请求了更多内容，下面是补上的部分。\n" if round_no > 1 else ""
+        )
         if packet.window_text:
             given.extend(packet.ranges or [(packet.window_start, packet.window_end)])
         hit = cache_get(path, packet.level, packet.window_text, prompt, mtime) if use_cache else None
         if hit:
             res.cached = True
             reply = hit.get("reply") or {}
-            obj = {"need_more": False, "summary": reply.get("summary", ""),
-                   "evidence_lines": reply.get("evidence_lines", []),
-                   "queries": reply.get("queries", [])}
+            obj = {
+                "need_more": False,
+                "summary": reply.get("summary", ""),
+                "evidence_lines": reply.get("evidence_lines", []),
+                "queries": reply.get("queries", []),
+            }
             ok, parsed = validate_reply(obj, given, packet.window_text, packet.level)
             if not ok:
                 res.status, res.reason = "partial", "缓存内容不合格：%s" % parsed
@@ -516,11 +611,18 @@ def run_chapter(question, book, path, title, best_line, mode, call, deadline,
             res.evidence_lines = parsed["evidence_lines"]
             res.queries = parsed["queries"]
             if not res.cached:
-                cache_put(path, packet.level, packet.window_text, prompt, mtime,
-                          {"reply": {"summary": res.summary,
-                                     "evidence_lines": res.evidence_lines,
-                                     "queries": res.queries},
-                           "level": packet.level, "prompt_version": PROMPT_VERSION})
+                cache_put(
+                    path,
+                    packet.level,
+                    packet.window_text,
+                    prompt,
+                    mtime,
+                    {
+                        "reply": {"summary": res.summary, "evidence_lines": res.evidence_lines, "queries": res.queries},
+                        "level": packet.level,
+                        "prompt_version": PROMPT_VERSION,
+                    },
+                )
             res.status = "cached" if res.cached else "ok"
             return res
         req = parsed["request"]
@@ -547,12 +649,14 @@ def run_chapter(question, book, path, title, best_line, mode, call, deadline,
                 return res
             mid = (a + b) // 2
             if cfg["allow_l2"] and b - a + 1 <= 120:
-                packet = make_packet(book, path, title, lines, mid, 2,
-                                     cfg["window_chars"], readme_status, start=a, end=b)
+                packet = make_packet(
+                    book, path, title, lines, mid, 2, cfg["window_chars"], readme_status, start=a, end=b
+                )
             else:
-                text = "\n".join(lines[a - 1:b])[:LEVEL_CHARS[3]]
-                packet = ChapterPacket(path, title, total_chars, len(lines), best_line,
-                                       a, b, text, 3, a > 1, b < len(lines), readme_status)
+                text = "\n".join(lines[a - 1 : b])[: LEVEL_CHARS[3]]
+                packet = ChapterPacket(
+                    path, title, total_chars, len(lines), best_line, a, b, text, 3, a > 1, b < len(lines), readme_status
+                )
         elif kind == "grep":
             if not cfg["allow_l3"]:
                 res.status, res.reason = "partial", "默认档不允许定向读取"
@@ -563,9 +667,21 @@ def run_chapter(question, book, path, title, best_line, mode, call, deadline,
                 return res
             ranges, text = got
             a, b = ranges[0][0], ranges[-1][1]
-            packet = ChapterPacket(path, title, total_chars, len(lines), best_line, a, b,
-                                   text, 3, a > 1, b < len(lines), readme_status,
-                                   ranges=ranges)
+            packet = ChapterPacket(
+                path,
+                title,
+                total_chars,
+                len(lines),
+                best_line,
+                a,
+                b,
+                text,
+                3,
+                a > 1,
+                b < len(lines),
+                readme_status,
+                ranges=ranges,
+            )
         elif kind == "full":
             if not cfg["allow_l4"]:
                 res.status, res.reason = "partial", "本档不允许全文"
@@ -573,8 +689,7 @@ def run_chapter(question, book, path, title, best_line, mode, call, deadline,
             if total_chars > MAX_FULL_CHARS:
                 res.status, res.reason = "partial", "章超过 20000 字，拒绝全文"
                 return res
-            packet = make_packet(book, path, title, lines, best_line, 4,
-                                 LEVEL_CHARS[4], readme_status)
+            packet = make_packet(book, path, title, lines, best_line, 4, LEVEL_CHARS[4], readme_status)
         else:
             res.status, res.reason = "partial", "未知请求"
             return res
@@ -590,11 +705,11 @@ def collect_units(question, con, meta, expand, mode, limit=None):
     ranked = book_score.rank(hits, terms, "best_support", [], meta, expand)
     cfg = {"books": 10, "chapters": 3} if mode == "off" else MODES[mode]
     units, books = [], []
-    for b in ranked[:cfg["books"]]:
+    for b in ranked[: cfg["books"]]:
         toc, status = book_readme.readme_toc(b.book)
         chapters = book_readme.select([r for r in hits if r["book"] == b.book], terms, terms, toc)
         order = {e["path"]: i for i, e in enumerate(toc)}
-        for c in chapters[:cfg["chapters"]]:
+        for c in chapters[: cfg["chapters"]]:
             i = order.get(c["chapter_path"])
             nbrs = {}
             if i is not None:
@@ -603,26 +718,48 @@ def collect_units(question, con, meta, expand, mode, limit=None):
                 if i + 1 < len(toc):
                     nbrs["next"] = (toc[i + 1]["path"], toc[i + 1]["title"])
             units.append((b.book, c["chapter_path"], c["chapter_title"], c["line"], status, nbrs))
-        books.append({"book": b.book, "chapters": len(toc), "readme_status": status,
-                      "has_prefix": b.has_prefix, "has_queries": b.has_queries,
-                      "selected": [{"chapter_path": c["chapter_path"],
-                                    "chapter_title": c["chapter_title"],
-                                    "line": c["line"], "score": c["score"]} for c in chapters]})
+        books.append(
+            {
+                "book": b.book,
+                "chapters": len(toc),
+                "readme_status": status,
+                "has_prefix": b.has_prefix,
+                "has_queries": b.has_queries,
+                "selected": [
+                    {
+                        "chapter_path": c["chapter_path"],
+                        "chapter_title": c["chapter_title"],
+                        "line": c["line"],
+                        "score": c["score"],
+                    }
+                    for c in chapters
+                ],
+            }
+        )
     return {"terms": terms, "hits": len(hits), "books": books, "units": units}
 
 
-def run(question, mode="default", call=None, con=None, meta=None, expand=None,
-        use_cache=True, limit=None):
+def run(question, mode="default", call=None, con=None, meta=None, expand=None, use_cache=True, limit=None):
     con = con or sqlite3.connect("file:%s?mode=ro" % DB, uri=True)
     meta = meta if meta is not None else book_score.load_meta(LIBDB)
     expand = expand if expand is not None else book_score.load_expand(con)
     t0 = time.monotonic()
     base = collect_units(question, con, meta, expand, mode)
     if mode == "off":
-        return {"question": question, "mode": mode,
-                "ms": round((time.monotonic() - t0) * 1000, 1), "calls": 0,
-                "rounds": 0, "cached": 0, "books": base["books"], "chapters": [],
-                "tokens_in": 0, "tokens_out": 0, "input_chars": 0, "partial": 0}
+        return {
+            "question": question,
+            "mode": mode,
+            "ms": round((time.monotonic() - t0) * 1000, 1),
+            "calls": 0,
+            "rounds": 0,
+            "cached": 0,
+            "books": base["books"],
+            "chapters": [],
+            "tokens_in": 0,
+            "tokens_out": 0,
+            "input_chars": 0,
+            "partial": 0,
+        }
     cfg = dict(MODES[mode])
     cfg["neighbors"] = NEIGHBORS
     deadline = t0 + cfg["budget"]
@@ -630,14 +767,31 @@ def run(question, mode="default", call=None, con=None, meta=None, expand=None,
     counter = {"used": 0, "cap": cfg["calls"], "lock": threading.Lock()}
     results = []
     with ThreadPoolExecutor(max_workers=cfg["workers"]) as pool:
-        futures = [pool.submit(run_chapter, question, book, path, title, line, mode, call,
-                               deadline, status, use_cache, counter, nbrs, NEIGHBORS)
-                   for book, path, title, line, status, nbrs in base["units"]]
+        futures = [
+            pool.submit(
+                run_chapter,
+                question,
+                book,
+                path,
+                title,
+                line,
+                mode,
+                call,
+                deadline,
+                status,
+                use_cache,
+                counter,
+                nbrs,
+                NEIGHBORS,
+            )
+            for book, path, title, line, status, nbrs in base["units"]
+        ]
         for f in futures:
             results.append(f.result())
     results.sort(key=lambda r: (r.book, r.path))
     return {
-        "question": question, "mode": mode,
+        "question": question,
+        "mode": mode,
         "ms": round((time.monotonic() - t0) * 1000, 1),
         "calls": sum(r.calls for r in results),
         "rounds": sum(r.rounds for r in results),
@@ -657,24 +811,24 @@ def main(argv=None):
     ap.add_argument("query")
     ap.add_argument("--mode", default="default", choices=["default", "deep", "max", "off"])
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--background", action="store_true",
-                    help="先打首轮结果，扩展交子进程，完成后写 --out")
+    ap.add_argument("--background", action="store_true", help="先打首轮结果，扩展交子进程，完成后写 --out")
     ap.add_argument("--no-wait", action="store_true", help="等同 --background")
     ap.add_argument("--out", default="")
     ap.add_argument("--explain", action="store_true")
     a = ap.parse_args(argv)
     if a.background or a.no_wait:
-        out = a.out or os.path.join("/tmp", "book_expand_%d.json" % int(time.time()))
+        out = a.out or os.path.join(tempfile.gettempdir(), "book_expand_%d.json" % int(time.time()))
         con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True)
         meta = book_score.load_meta(LIBDB)
         expand = book_score.load_expand(con)
         first = collect_units(a.query, con, meta, expand, a.mode)
-        print(json.dumps({"first_round": first, "refined_out": out}, ensure_ascii=False,
-                         indent=1))
-        subprocess.Popen([sys.executable, os.path.abspath(__file__), a.query,
-                          "--mode", a.mode, "--json", "--out", out],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=True)
+        print(json.dumps({"first_round": first, "refined_out": out}, ensure_ascii=False, indent=1))
+        subprocess.Popen(
+            [sys.executable, os.path.abspath(__file__), a.query, "--mode", a.mode, "--json", "--out", out],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
         return 0
     res = run(a.query, a.mode)
     if a.out:
@@ -683,13 +837,34 @@ def main(argv=None):
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return 0
-    print("%s  %s  %.0f ms  调用 %d  轮 %d  缓存 %d  partial %d  tokens %d/%d"
-          % (a.query, a.mode, res["ms"], res["calls"], res["rounds"], res["cached"],
-             res["partial"], res["tokens_in"], res["tokens_out"]), file=sys.stderr)
+    print(
+        "%s  %s  %.0f ms  调用 %d  轮 %d  缓存 %d  partial %d  tokens %d/%d"
+        % (
+            a.query,
+            a.mode,
+            res["ms"],
+            res["calls"],
+            res["rounds"],
+            res["cached"],
+            res["partial"],
+            res["tokens_in"],
+            res["tokens_out"],
+        ),
+        file=sys.stderr,
+    )
     for c in res["chapters"]:
-        print("%-42s L%d %-7s 行 %d-%d 字 %d  %s" % (
-            c["path"].split("/md/")[-1], c["level"], c["status"], c["window_start"],
-            c["window_end"], c["window_chars"], c["title"]))
+        print(
+            "%-42s L%d %-7s 行 %d-%d 字 %d  %s"
+            % (
+                c["path"].split("/md/")[-1],
+                c["level"],
+                c["status"],
+                c["window_start"],
+                c["window_end"],
+                c["window_chars"],
+                c["title"],
+            )
+        )
         if c["summary"]:
             print("   摘要：" + c["summary"])
             print("   证据行：%s" % ",".join(map(str, c["evidence_lines"])))

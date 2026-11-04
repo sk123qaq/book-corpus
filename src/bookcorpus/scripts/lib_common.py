@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """书库共享工具。所有脚本从这里取路径、书名清洗、作者猜测、学科预填与 CSV 读写。"""
+
+import contextlib
 import csv
 import hashlib
 import json
@@ -12,13 +14,19 @@ import time
 import unicodedata
 
 try:
-    from .layout import Layout, find_root
-    from .layout import SCHEMA  # noqa: F401
-    from .layout import RESERVED  # noqa: F401
+    from .layout import (
+        RESERVED,
+        SCHEMA,
+        Layout,
+        find_root,
+    )
 except ImportError:
-    from layout import Layout, find_root
-    from layout import SCHEMA  # noqa: F401
-    from layout import RESERVED  # noqa: F401
+    from layout import (
+        RESERVED,  # noqa: F401 对外再导出，本模块自身不用
+        SCHEMA,  # noqa: F401 对外再导出，本模块自身不用
+        Layout,
+        find_root,
+    )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = HERE
@@ -64,8 +72,18 @@ def skill_dir(name):
 
 
 EXT = {".epub", ".pdf", ".mobi", ".azw3", ".azw", ".txt", ".djvu"}
-CONTENT_POOLS = ["原书", "原书pdf", "建筑", "漫画与动画", "人文社科", "文学",
-                 "写作与编剧", "艺术", "游戏设定", "游戏设计"]
+CONTENT_POOLS = [
+    "原书",
+    "原书pdf",
+    "建筑",
+    "漫画与动画",
+    "人文社科",
+    "文学",
+    "写作与编剧",
+    "艺术",
+    "游戏设定",
+    "游戏设计",
+]
 AWARD_DIR = "奖项书"
 
 # 来源目录 -> (一级, 二级)
@@ -132,16 +150,20 @@ KEYWORD_SUBJECT = [
     (("游戏设定", "设定集", "原画", "概念艺术", "攻略", "画集"), ("游戏", "设定集与美术集")),
     (("电影", "动画", "漫画", "分镜", "特典"), ("影视动画漫画", "")),
     (("编剧", "对白", "写作", "创作法", "故事"), ("写作与编剧", "")),
-    (("建筑", "古建", "寺", "祠", "庙", "石窟", "长城", "古城", "园林", "文物保护"),
-     ("建筑与古迹", "")),
-    (("美术", "艺术", "画册", "摄影", "写真", "雕塑", "佛像", "菩萨", "壁画", "书法"),
-     ("艺术与图像", "")),
-    (("史", "政治", "经济", "哲学", "宗教", "社会", "考古", "人类学", "文化", "神话", "制度", "战争"),
-     ("人文社科", "")),
-    (("科学", "数学", "物理", "生物", "认知", "算法", "计算", "技术", "工程", "心理", "思维", "博弈"),
-     ("科学技术", "")),
-    (("竞争", "管理", "投资", "股东", "公司", "创新", "战略", "营销", "品牌", "商业", "金融", "财务"),
-     ("商业与管理", "")),
+    (("建筑", "古建", "寺", "祠", "庙", "石窟", "长城", "古城", "园林", "文物保护"), ("建筑与古迹", "")),
+    (("美术", "艺术", "画册", "摄影", "写真", "雕塑", "佛像", "菩萨", "壁画", "书法"), ("艺术与图像", "")),
+    (
+        ("史", "政治", "经济", "哲学", "宗教", "社会", "考古", "人类学", "文化", "神话", "制度", "战争"),
+        ("人文社科", ""),
+    ),
+    (
+        ("科学", "数学", "物理", "生物", "认知", "算法", "计算", "技术", "工程", "心理", "思维", "博弈"),
+        ("科学技术", ""),
+    ),
+    (
+        ("竞争", "管理", "投资", "股东", "公司", "创新", "战略", "营销", "品牌", "商业", "金融", "财务"),
+        ("商业与管理", ""),
+    ),
 ]
 FALLBACK_SUBJECT = ("其他", "待归类")
 
@@ -149,17 +171,78 @@ ZLIB = re.compile(r"\s*\(z-library\.sk,\s*1lib\.sk,\s*z-lib\.sk\)$", re.I)
 TRUNC = re.compile(r"\s*\(\d+\)$")
 STRONG_SEP = re.compile(r"[=＝]|——")
 COUNTRY_LIKE = {
-    "中国", "美国", "英国", "法国", "德国", "日本", "韩国", "俄罗斯", "俄国", "苏联",
-    "意大利", "西班牙", "葡萄牙", "奥地利", "瑞士", "荷兰", "比利时", "丹麦", "挪威",
-    "芬兰", "瑞典", "波兰", "捷克", "匈牙利", "希腊", "印度", "埃及", "以色列",
-    "加拿大", "澳大利亚", "巴西", "阿根廷", "墨西哥", "智利", "秘鲁", "土耳其", "伊朗",
-    "黎巴嫩", "尼日利亚", "南非", "爱尔兰", "冰岛", "哥伦比亚", "古巴", "新西兰",
-    "越南", "泰国", "新加坡", "古希腊", "古罗马", "古代", "中世纪",
+    "中国",
+    "美国",
+    "英国",
+    "法国",
+    "德国",
+    "日本",
+    "韩国",
+    "俄罗斯",
+    "俄国",
+    "苏联",
+    "意大利",
+    "西班牙",
+    "葡萄牙",
+    "奥地利",
+    "瑞士",
+    "荷兰",
+    "比利时",
+    "丹麦",
+    "挪威",
+    "芬兰",
+    "瑞典",
+    "波兰",
+    "捷克",
+    "匈牙利",
+    "希腊",
+    "印度",
+    "埃及",
+    "以色列",
+    "加拿大",
+    "澳大利亚",
+    "巴西",
+    "阿根廷",
+    "墨西哥",
+    "智利",
+    "秘鲁",
+    "土耳其",
+    "伊朗",
+    "黎巴嫩",
+    "尼日利亚",
+    "南非",
+    "爱尔兰",
+    "冰岛",
+    "哥伦比亚",
+    "古巴",
+    "新西兰",
+    "越南",
+    "泰国",
+    "新加坡",
+    "古希腊",
+    "古罗马",
+    "古代",
+    "中世纪",
 }
 AUTHOR_LABEL = re.compile(r"^(?:作者|著者|编者|译者|主编|著)\s*[:：]\s*")
 AUTHOR_BRACKET = re.compile(r"^[\[（(【][^\]）)】]{1,10}[\]）)】]\s*")
-AUTHOR_JUNK = {"etc", "etc.", "unknown", "pdgpic", "pdg2pic", "套装共册", "套装共卷",
-               "著", "作者", "佚名", "无", "none", "null", "-", "—"}
+AUTHOR_JUNK = {
+    "etc",
+    "etc.",
+    "unknown",
+    "pdgpic",
+    "pdg2pic",
+    "套装共册",
+    "套装共卷",
+    "著",
+    "作者",
+    "佚名",
+    "无",
+    "none",
+    "null",
+    "-",
+    "—",
+}
 
 
 def clean_author(a):
@@ -290,6 +373,7 @@ def check_file(path, fmt):
         return True, "空文件"
     if fmt == "epub":
         import zipfile
+
         try:
             with zipfile.ZipFile(path) as z:
                 names = z.namelist()
@@ -300,7 +384,7 @@ def check_file(path, fmt):
                     return True, "zip 校验失败:" + bad
         except zipfile.BadZipFile as e:
             return True, "不是完整 zip:" + str(e)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return True, "读取异常:" + type(e).__name__
         return False, ""
     if fmt == "pdf":
@@ -371,18 +455,14 @@ CREATE TABLE IF NOT EXISTS ledger_meta(
 
 def ledger_path(root=None):
     """tables/ledger.db 的路径；root 给了就指向那个根下的 tables。"""
-    tables = os.path.join(os.path.abspath(os.path.expanduser(root)), "tables") \
-        if root else TABLES
+    tables = os.path.join(os.path.abspath(os.path.expanduser(root)), "tables") if root else TABLES
     return os.path.join(tables, LEDGER_DB)
 
 
 def ledger_connect(mode="rw", root=None):
     """mode='ro' 只读打开（库不存在会抛错，先 _ensure_ledger）；'rw' 可写，30s 忙等。"""
     path = ledger_path(root)
-    if mode == "ro":
-        con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
-    else:
-        con = sqlite3.connect(path, timeout=30)
+    con = sqlite3.connect("file:%s?mode=ro" % path, uri=True) if mode == "ro" else sqlite3.connect(path, timeout=30)
     con.row_factory = sqlite3.Row
     return con
 
@@ -433,7 +513,8 @@ def _ensure_schema(root=None):
             # 只有「文件不是 SQLite 库/已损坏」才改名重建。database is locked、
             # 磁盘只读这类是暂时/环境错误，把活库 os.replace 走会丢数据。
             corrupt = isinstance(exc, sqlite3.DatabaseError) and any(
-                s in msg for s in ("not a database", "malformed", "file is encrypted"))
+                s in msg for s in ("not a database", "malformed", "file is encrypted")
+            )
             if not corrupt or attempt == 2:
                 sys.stderr.write("ledger.db 建库失败：%r\n" % (exc,))
                 return False
@@ -443,8 +524,7 @@ def _ensure_schema(root=None):
             except OSError as exc2:
                 sys.stderr.write("ledger.db 不能用（%r），改名留档也失败：%r\n" % (exc, exc2))
                 return False
-            sys.stderr.write("ledger.db 不是可用的 SQLite 库（%r），已改名留档 %s 并重建\n"
-                             % (exc, backup))
+            sys.stderr.write("ledger.db 不是可用的 SQLite 库（%r），已改名留档 %s 并重建\n" % (exc, backup))
     return False
 
 
@@ -472,11 +552,8 @@ def batch_dir(prefix, root=None, create=False):
     base = os.path.join(root, "工作区", "批次")
     pat = re.compile(r"^%s\d{4}-\d{2}-\d{2}$" % re.escape(prefix))
     names = []
-    try:
-        names = sorted(n for n in os.listdir(base)
-                       if pat.match(n) and os.path.isdir(os.path.join(base, n)))
-    except OSError:
-        pass
+    with contextlib.suppress(OSError):
+        names = sorted(n for n in os.listdir(base) if pat.match(n) and os.path.isdir(os.path.join(base, n)))
     path = os.path.join(base, names[-1] if names else prefix + time.strftime("%Y-%m-%d"))
     if create:
         os.makedirs(path, exist_ok=True)
@@ -509,19 +586,31 @@ def _ensure_ledger(root=None, create=False):
         try:
             now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
             for row in read_csv(cat_csv):
-                con.execute("INSERT OR IGNORE INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
-                            " VALUES(?,?,?,?,?,?,?,?)",
-                            (row.get("uid", ""), row.get("一级", ""), row.get("二级", ""),
-                             row.get("作者层", ""), row.get("保留", "keep"),
-                             row.get("正式书名", ""), row.get("备注", ""), now))
+                con.execute(
+                    "INSERT OR IGNORE INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                    " VALUES(?,?,?,?,?,?,?,?)",
+                    (
+                        row.get("uid", ""),
+                        row.get("一级", ""),
+                        row.get("二级", ""),
+                        row.get("作者层", ""),
+                        row.get("保留", "keep"),
+                        row.get("正式书名", ""),
+                        row.get("备注", ""),
+                        now,
+                    ),
+                )
             for table, path in (("概念", concepts_csv), ("概念broad", broad_csv)):
                 for row in read_tsv(path):
-                    con.execute("INSERT OR IGNORE INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)" % table,
-                                (row.get("key", ""), row.get("aliases", ""),
-                                 row.get("exclude", ""), row.get("note", "")))
+                    con.execute(
+                        "INSERT OR IGNORE INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)" % table,
+                        (row.get("key", ""), row.get("aliases", ""), row.get("exclude", ""), row.get("note", "")),
+                    )
             for row in read_tsv(action_csv):
-                con.execute("INSERT OR IGNORE INTO 动作词(term,kind,note) VALUES(?,?,?)",
-                            (row.get("term", ""), row.get("kind", ""), row.get("note", "")))
+                con.execute(
+                    "INSERT OR IGNORE INTO 动作词(term,kind,note) VALUES(?,?,?)",
+                    (row.get("term", ""), row.get("kind", ""), row.get("note", "")),
+                )
             con.execute("INSERT OR REPLACE INTO ledger_meta VALUES('imported_from', ?)", (now,))
             con.commit()
         finally:
@@ -575,8 +664,7 @@ def _resolve_writable_root(root):
     账库永远不会在工具仓或用户家目录里凭空长出来。
     """
     root = os.path.abspath(os.path.expanduser(root)) if root else os.path.abspath(os.getcwd())
-    if any(os.path.exists(os.path.join(root, marker))
-           for marker in ("books.toml", "books", "tables")):
+    if any(os.path.exists(os.path.join(root, marker)) for marker in ("books.toml", "books", "tables")):
         return root
     raise SystemExit("这不是书库工作区（缺 books.toml/books/tables），拒绝写人账：%s" % root)
 
@@ -588,14 +676,23 @@ def category_put(row, updated_by="", root=None):
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     con = ledger_connect("rw", root)
     try:
-        con.execute("INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
-                    " VALUES(?,?,?,?,?,?,?,?)"
-                    " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
-                    " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
-                    " 备注=excluded.备注, updated_at=excluded.updated_at",
-                    (row["uid"], row.get("一级", ""), row.get("二级", ""),
-                     row.get("作者层", "0"), row.get("保留", "keep") or "keep",
-                     row.get("正式书名", ""), row.get("备注", ""), now))
+        con.execute(
+            "INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+            " VALUES(?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
+            " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
+            " 备注=excluded.备注, updated_at=excluded.updated_at",
+            (
+                row["uid"],
+                row.get("一级", ""),
+                row.get("二级", ""),
+                row.get("作者层", "0"),
+                row.get("保留", "keep") or "keep",
+                row.get("正式书名", ""),
+                row.get("备注", ""),
+                now,
+            ),
+        )
         con.commit()
     finally:
         con.close()
@@ -610,14 +707,23 @@ def category_put_many(rows, updated_by="", root=None):
     con = ledger_connect("rw", root)
     try:
         for row in rows:
-            con.execute("INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
-                        " VALUES(?,?,?,?,?,?,?,?)"
-                        " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
-                        " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
-                        " 备注=excluded.备注, updated_at=excluded.updated_at",
-                        (row["uid"], row.get("一级", ""), row.get("二级", ""),
-                         row.get("作者层", "0"), row.get("保留", "keep") or "keep",
-                         row.get("正式书名", ""), row.get("备注", ""), now))
+            con.execute(
+                "INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                " VALUES(?,?,?,?,?,?,?,?)"
+                " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
+                " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
+                " 备注=excluded.备注, updated_at=excluded.updated_at",
+                (
+                    row["uid"],
+                    row.get("一级", ""),
+                    row.get("二级", ""),
+                    row.get("作者层", "0"),
+                    row.get("保留", "keep") or "keep",
+                    row.get("正式书名", ""),
+                    row.get("备注", ""),
+                    now,
+                ),
+            )
         con.commit()
     finally:
         con.close()
@@ -651,9 +757,10 @@ def concept_rows(which="main", root=None, create=False):
     if _ensure_ledger(root, create):
         con = ledger_connect("ro", root)
         try:
-            return [dict(r) for r in con.execute(
-                "SELECT key,aliases,exclude,note FROM %s ORDER BY key"
-                % ("概念" if which == "main" else "概念broad"))]
+            sql = "SELECT key,aliases,exclude,note FROM %s ORDER BY key" % (  # noqa: S608 表名只在本模块两张常量表之间二选一
+                "概念" if which == "main" else "概念broad"
+            )
+            return [dict(r) for r in con.execute(sql)]
         finally:
             con.close()
     tables = os.path.dirname(ledger_path(root))
@@ -665,8 +772,9 @@ def concept_fingerprint(which="main", root=None, create=False):
     """词表内容指纹（进缓存键）。按行文规整后哈希，同一内容换引擎不换键。"""
     parts = []
     for row in concept_rows(which, root, create):
-        parts.append("%s|%s|%s|%s" % (row.get("key", ""), row.get("aliases", ""),
-                                      row.get("exclude", ""), row.get("note", "")))
+        parts.append(
+            "%s|%s|%s|%s" % (row.get("key", ""), row.get("aliases", ""), row.get("exclude", ""), row.get("note", ""))
+        )
     blob = "\n".join(parts).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()[:8]
 
@@ -675,8 +783,7 @@ def action_word_rows(root=None, create=False):
     if _ensure_ledger(root, create):
         con = ledger_connect("ro", root)
         try:
-            return [dict(r) for r in con.execute(
-                "SELECT term,kind,note FROM 动作词 ORDER BY term")]
+            return [dict(r) for r in con.execute("SELECT term,kind,note FROM 动作词 ORDER BY term")]
         finally:
             con.close()
     return read_tsv(os.path.join(os.path.dirname(ledger_path(root)), "概念表-动作词.tsv"))
@@ -706,20 +813,40 @@ def iter_book_json():
             with open(os.path.join(dirpath, "book.json"), encoding="utf-8") as fh:
                 out.append((uid, json.load(fh)))
         except (OSError, json.JSONDecodeError) as e:
-            raise SystemExit("book.json 读不了: %s (%s)" % (os.path.join(dirpath, "book.json"), e))
+            raise SystemExit("book.json 读不了: %s (%s)" % (os.path.join(dirpath, "book.json"), e)) from None
     out.sort(key=lambda x: x[0])
     return out
 
 
-def book_doc(uid, title, title_from_file, author, subjects, series, volume, container,
-             retention, notes, sources, awards, derived=None):
+def book_doc(
+    uid,
+    title,
+    title_from_file,
+    author,
+    subjects,
+    series,
+    volume,
+    container,
+    retention,
+    notes,
+    sources,
+    awards,
+    derived=None,
+):
     """book.json 的唯一形状。derived 是磁盘状态，只在迁移脚本里显式写入。"""
     doc = {
-        "uid": uid, "title": title, "title_from_file": title_from_file,
-        "author": author or "", "subjects": [x for x in (subjects or []) if x],
-        "series": series or None, "volume": volume or None, "container": container or None,
+        "uid": uid,
+        "title": title,
+        "title_from_file": title_from_file,
+        "author": author or "",
+        "subjects": [x for x in (subjects or []) if x],
+        "series": series or None,
+        "volume": volume or None,
+        "container": container or None,
         "retention": retention or "keep",
-        "sources": sources, "awards": awards, "notes": notes or "",
+        "sources": sources,
+        "awards": awards,
+        "notes": notes or "",
     }
     if derived is not None:
         doc["derived"] = derived

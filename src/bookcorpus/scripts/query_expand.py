@@ -9,11 +9,20 @@
 本脚本只在查询时扩 4 条短语（约 $0.0003、1 次调用），用于补「一个原文词都没有」的召回缺口。
 缓存落 目录/检索/expand_queries/<sha1前16位>.json，同一问法第二次不再调用模型。
 """
-import argparse, hashlib, json, os, re, sqlite3, sys, time
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sqlite3
+import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import PATHS
+
 sys.path.insert(0, HERE)
 import build_expand
 import lib_fts_cjk as cjk
@@ -22,7 +31,9 @@ import qsearch
 DB = PATHS.index_db
 CACHE = os.path.join(PATHS.index_dir, "expand_queries")
 
-PROMPT = """读者在中文书库里找答案，但他打的词原文里一个都没有。请给出 4 条检索式，每条不超过 14 字，用于在书里找到讲这件事的段落。
+PROMPT = (
+    "读者在中文书库里找答案，但他打的词原文里一个都没有。"
+    """请给出 4 条检索式，每条不超过 14 字，用于在书里找到讲这件事的段落。
 
 硬性要求：
 1. 每条至少含 1 个读者没打过、但正文学者会写的词（学术用语、译名、上位概念）；
@@ -34,15 +45,17 @@ PROMPT = """读者在中文书库里找答案，但他打的词原文里一个�
 竞品条目：1. 官僚制把人变成零件 2. 异化劳动 3. 工具理性 4. 服从权威的实验
 
 读者问：{q}"""
+)
 
 # 提示词内容指纹进缓存键：改 PROMPT 后旧缓存自然失效
-PROMPT_VERSION = hashlib.sha1(PROMPT.encode()).hexdigest()[:8]
+PROMPT_VERSION = hashlib.sha1(PROMPT.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def phrases(q, effort="low", max_out=12000, timeout=300, provider="commandcode"):
     os.makedirs(CACHE, exist_ok=True)
-    h = hashlib.sha1((PROMPT_VERSION + "|" + provider + "|" + effort + "|" + q)
-                     .encode()).hexdigest()[:16]
+    h = hashlib.sha1(
+        (PROMPT_VERSION + "|" + provider + "|" + effort + "|" + q).encode(), usedforsecurity=False
+    ).hexdigest()[:16]
     p = os.path.join(CACHE, h + ".json")
     if os.path.isfile(p):
         try:
@@ -65,8 +78,7 @@ def phrases(q, effort="low", max_out=12000, timeout=300, provider="commandcode")
         out = out[:4]
         if len(out) >= 3:
             with open(p + ".tmp", "w", encoding="utf-8") as fh:
-                json.dump({"q": q, "phrases": out, "usage": usage}, fh,
-                          ensure_ascii=False, indent=1)
+                json.dump({"q": q, "phrases": out, "usage": usage}, fh, ensure_ascii=False, indent=1)
                 fh.write("\n")
             os.replace(p + ".tmp", p)
             return out
@@ -116,15 +128,29 @@ def main():
     ap.add_argument("--question", help="给人看的原始问法；模型按它扩展，基底仍用 query")
     ap.add_argument("-n", "--limit", type=int, default=20)
     ap.add_argument("--effort", default="low")
-    ap.add_argument("--provider", default="commandcode",
-                    help="扩展用的模型提供方，默认 commandcode；mimo 有内容风控，opencode 走本机 key")
+    ap.add_argument(
+        "--provider",
+        default="commandcode",
+        help="扩展用的模型提供方，默认 commandcode；mimo 有内容风控，opencode 走本机 key",
+    )
     ap.add_argument("--phrases-only", action="store_true")
     ap.add_argument("--min-chars", type=int, default=40)
     ap.add_argument("--rerank", action="store_true")
-    ap.add_argument("--grain", default="para", choices=["para", "chapter"],
-                    help="融合粒度：para 章内段落级（旧口径）/ chapter 章级名次，累加式 w/(k+i) 同 qsearch --route-mode rrf；但 qsearch 两路等权 1:1，这里基底权重看 --base-weight")
-    ap.add_argument("--base-weight", type=float, default=3.0,
-                    help="基底列表的 RRF 权重（original-copies）；扩展短语恒为 1.0。旧口径是 3，章级实验测 1 与 2")
+    ap.add_argument(
+        "--grain",
+        default="para",
+        choices=["para", "chapter"],
+        help=(
+            "融合粒度：para 章内段落级（旧口径）/ chapter 章级名次，累加式 w/(k+i) 同 qsearch --route-mode rrf；"
+            "但 qsearch 两路等权 1:1，这里基底权重看 --base-weight"
+        ),
+    )
+    ap.add_argument(
+        "--base-weight",
+        type=float,
+        default=3.0,
+        help="基底列表的 RRF 权重（original-copies）；扩展短语恒为 1.0。旧口径是 3，章级实验测 1 与 2",
+    )
     ap.add_argument("--db", default=DB)
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
@@ -147,12 +173,15 @@ def main():
         lists.append((run(con, p, 20, a.min_chars, a.rerank)[0], 1.0))
     out = rrf(lists, 60, a.limit, a.grain)
     if a.json:
-        print(json.dumps({"query": q, "phrases": ps,
-                          "ms": round((time.time() - t0) * 1000, 1), "hits": out},
-                         ensure_ascii=False, indent=1))
+        print(
+            json.dumps(
+                {"query": q, "phrases": ps, "ms": round((time.time() - t0) * 1000, 1), "hits": out},
+                ensure_ascii=False,
+                indent=1,
+            )
+        )
         return
-    print("%s  %d 条  %.1f s  扩展 %s" % (q, len(out), time.time() - t0,
-                                        " / ".join(ps)), file=sys.stderr)
+    print("%s  %d 条  %.1f s  扩展 %s" % (q, len(out), time.time() - t0, " / ".join(ps)), file=sys.stderr)
     for i, r in enumerate(out, 1):
         print("%2d %-66s:%d  %.4f" % (i, r["path"], r["line"], r["score"]))
         print("   " + re.sub(r"\s+", " ", r["text"])[:150])

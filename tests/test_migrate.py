@@ -6,8 +6,7 @@ from conftest import run_cli
 
 
 def v1_workspace(root):
-    for rel in ("目录", "库/文学/甲书/md", "库/文学/乙书/md", "库/文学/乙书/source",
-                "库/文学/source", "库/_收件箱"):
+    for rel in ("目录", "库/文学/甲书/md", "库/文学/乙书/md", "库/文学/乙书/source", "库/文学/source", "库/_收件箱"):
         os.makedirs(os.path.join(root, rel), exist_ok=True)
 
     with open(os.path.join(root, "目录", "分类表.csv"), "w", encoding="utf-8-sig") as f:
@@ -27,13 +26,18 @@ def v1_workspace(root):
     con.commit()
     con.close()
 
-    shared = {"uid": "B0001", "sources": [{"file": "../source/合集.epub",
-                                           "format": "epub", "bytes": 100,
-                                           "sha256": "a" * 64, "primary_src": 1}],
-              "path": "文学/甲书"}
-    own = {"uid": "B0002", "sources": [{"file": "source/乙.epub", "format": "epub",
-                                        "bytes": 100, "sha256": "b" * 64, "primary_src": 1}],
-           "path": "文学/乙书"}
+    shared = {
+        "uid": "B0001",
+        "sources": [
+            {"file": "../source/合集.epub", "format": "epub", "bytes": 100, "sha256": "a" * 64, "primary_src": 1}
+        ],
+        "path": "文学/甲书",
+    }
+    own = {
+        "uid": "B0002",
+        "sources": [{"file": "source/乙.epub", "format": "epub", "bytes": 100, "sha256": "b" * 64, "primary_src": 1}],
+        "path": "文学/乙书",
+    }
     for uid, doc in (("B0001", shared), ("B0002", own)):
         base = os.path.join(root, "库", "文学", "甲书" if uid == "B0001" else "乙书")
         with open(os.path.join(base, "book.json"), "w", encoding="utf-8") as f:
@@ -71,8 +75,7 @@ def test_migrate_copy_builds_v2_tree(tmp_path):
     root = tmp_path / "old"
     v1_workspace(str(root))
     new = tmp_path / "new"
-    r = run_cli("migrate", "--root", str(root), "--dest", str(new),
-                "--mode", "copy", "--apply", "--out", str(tmp_path))
+    r = run_cli("migrate", "--root", str(root), "--dest", str(new), "--mode", "copy", "--apply", "--out", str(tmp_path))
     assert r.returncode == 0, r.stdout + r.stderr
 
     assert (new / "books" / "B0001" / "md" / "001.md").exists()
@@ -101,8 +104,12 @@ def test_migrated_tree_builds_library(tmp_path):
     root = tmp_path / "old"
     v1_workspace(str(root))
     new = tmp_path / "new"
-    assert run_cli("migrate", "--root", str(root), "--dest", str(new), "--mode", "copy",
-                   "--apply", "--out", str(tmp_path)).returncode == 0
+    assert (
+        run_cli(
+            "migrate", "--root", str(root), "--dest", str(new), "--mode", "copy", "--apply", "--out", str(tmp_path)
+        ).returncode
+        == 0
+    )
     r = run_cli("--root", str(new), "library")
     assert r.returncode == 0, r.stdout + r.stderr
     con = sqlite3.connect(str(new / "build" / "library.db"))

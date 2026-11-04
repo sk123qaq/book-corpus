@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """从 build/library.db 出书目总表，并核对每条记录能落到磁盘。
 
 L4 之前这个脚本扫 原书/ 与 原书pdf/ 做 200 行模糊匹配；L3 之后书目录、源文件、
@@ -9,20 +8,39 @@ md、html 都收在 books/**，书与产物的对应关系由 book.json 与 DB �
 输出: build/书目总表.xlsx、build/书目总表.csv（xlsx 需要 openpyxl，没装只出 CSV）
 门槛: 末行必须是「未匹配 0 条」，否则以非零码退出。
 """
+
 import os
 import sqlite3
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 DB = L.PATHS.library_db
 XLSX = L.PATHS.catalog_xlsx
 CSV = L.PATHS.catalog
 
-COLS = ["uid", "书名", "作者", "一级", "二级", "系列", "卷序", "容器", "保留",
-        "源格式", "源文件", "md状态", "md章节", "md字节", "md方法", "html页数",
-        "奖项", "路径", "备注"]
+COLS = [
+    "uid",
+    "书名",
+    "作者",
+    "一级",
+    "二级",
+    "系列",
+    "卷序",
+    "容器",
+    "保留",
+    "源格式",
+    "源文件",
+    "md状态",
+    "md章节",
+    "md字节",
+    "md方法",
+    "html页数",
+    "奖项",
+    "路径",
+    "备注",
+]
 
 BOOK_SQL = """
 SELECT b.uid, b.title, b.author, b.subject1, b.subject2, b.series, b.volume,
@@ -44,25 +62,56 @@ ORDER BY b.subject1, b.subject2, b.title
 
 def query_rows(con):
     out = []
-    for (uid, title, author, s1, s2, series, volume, container, retention, path,
-         html_pages, notes, formats, files, md_status, md_chapters, md_bytes, md_method,
-         awards) in con.execute(BOOK_SQL):
+    for (
+        uid,
+        title,
+        author,
+        s1,
+        s2,
+        series,
+        volume,
+        container,
+        retention,
+        path,
+        html_pages,
+        notes,
+        formats,
+        files,
+        md_status,
+        md_chapters,
+        md_bytes,
+        md_method,
+        awards,
+    ) in con.execute(BOOK_SQL):
         srcs = [f for f in (files or "").split("|") if f]
         primary = srcs[0] if srcs else ""
         for prefix in ("books/", "collections/"):
             if primary.startswith(prefix):
-                primary = primary[len(prefix):]
+                primary = primary[len(prefix) :]
                 break
-        out.append({
-            "uid": uid, "书名": title or "", "作者": author or "",
-            "一级": s1 or "", "二级": s2 or "", "系列": series or "",
-            "卷序": volume or "", "容器": container or "", "保留": retention or "",
-            "源格式": formats or "", "源文件": primary,
-            "md状态": md_status or "无", "md章节": md_chapters if md_chapters is not None else "",
-            "md字节": md_bytes if md_bytes is not None else "",
-            "md方法": md_method or "", "html页数": html_pages or 0,
-            "奖项": awards or "", "路径": path or "", "备注": notes or "",
-        })
+        out.append(
+            {
+                "uid": uid,
+                "书名": title or "",
+                "作者": author or "",
+                "一级": s1 or "",
+                "二级": s2 or "",
+                "系列": series or "",
+                "卷序": volume or "",
+                "容器": container or "",
+                "保留": retention or "",
+                "源格式": formats or "",
+                "源文件": primary,
+                "md状态": md_status or "无",
+                "md章节": md_chapters if md_chapters is not None else "",
+                "md字节": md_bytes if md_bytes is not None else "",
+                "md方法": md_method or "",
+                "html页数": html_pages or 0,
+                "奖项": awards or "",
+                "路径": path or "",
+                "备注": notes or "",
+            }
+        )
     return out
 
 
@@ -158,10 +207,8 @@ def write_xlsx(rows, counts):
     for r in rows:
         ws.append([r[c] for c in COLS])
         row = ws.max_row
-        ws.cell(row=row, column=COLS.index("md状态") + 1).fill = (
-            md_fill if r["md状态"] == "done" else no_fill)
-    for i, w in enumerate([8, 34, 18, 10, 12, 18, 6, 12, 7, 12, 46, 9, 8, 10, 16, 9, 24, 40, 30],
-                          start=1):
+        ws.cell(row=row, column=COLS.index("md状态") + 1).fill = md_fill if r["md状态"] == "done" else no_fill
+    for i, w in enumerate([8, 34, 18, 10, 12, 18, 6, 12, 7, 12, 46, 9, 8, 10, 16, 9, 24, 40, 30], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = "A1:%s%d" % (get_column_letter(len(COLS)), ws.max_row)
@@ -171,11 +218,16 @@ def write_xlsx(rows, counts):
     for c in ws2[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = head_fill
-    for k, v in (("书名", counts["books"]), ("源文件行", counts["src_rows"]),
-                 ("源文件（去重）", counts["src_files"]),
-                 ("盘上 source/ 文件", counts["disk_src_files"]),
-                 ("md 目录", counts["md"]), ("html 目录", counts["html"]),
-                 ("奖项记录", counts["awards"]), ("奖项名", counts["award_names"])):
+    for k, v in (
+        ("书名", counts["books"]),
+        ("源文件行", counts["src_rows"]),
+        ("源文件（去重）", counts["src_files"]),
+        ("盘上 source/ 文件", counts["disk_src_files"]),
+        ("md 目录", counts["md"]),
+        ("html 目录", counts["html"]),
+        ("奖项记录", counts["awards"]),
+        ("奖项名", counts["award_names"]),
+    ):
         ws2.append([k, v])
     ws2.column_dimensions["A"].width = 22
     ws2.column_dimensions["B"].width = 12
@@ -207,10 +259,20 @@ def main():
     else:
         print("已生成: %s" % XLSX)
     print("已生成: %s" % CSV)
-    print("书名 %d | 源文件 %d 行 / %d 个文件（盘上 %d）| md %d 目录 | html %d 目录 | "
-          "奖项记录 %d（%d 个奖项）"
-          % (counts["books"], counts["src_rows"], counts["src_files"], counts["disk_src_files"],
-             counts["md"], counts["html"], counts["awards"], counts["award_names"]))
+    print(
+        "书名 %d | 源文件 %d 行 / %d 个文件（盘上 %d）| md %d 目录 | html %d 目录 | "
+        "奖项记录 %d（%d 个奖项）"
+        % (
+            counts["books"],
+            counts["src_rows"],
+            counts["src_files"],
+            counts["disk_src_files"],
+            counts["md"],
+            counts["html"],
+            counts["awards"],
+            counts["award_names"],
+        )
+    )
     for p in problems[:20]:
         print("  [未匹配] " + p)
     if len(problems) > 20:

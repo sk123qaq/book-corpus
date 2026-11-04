@@ -53,6 +53,7 @@ def test_index_and_search_round_trip(workspace):
 
 def test_search_reports_no_index(tmp_path, workspace):
     import shutil
+
     shutil.rmtree(workspace / "build" / "检索")
     r = run_cli("--root", workspace, "search", "铁笼", "--json")
     assert r.returncode != 0

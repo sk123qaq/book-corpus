@@ -10,7 +10,7 @@
      第二跑命中缓存
   5. thinking 透传到切词与回答；/api/run 与 /api/answer 的 fresh=true 跳过缓存重新生成
 """
-import glob
+
 import json
 import os
 import sys
@@ -24,8 +24,7 @@ THREE = "《三体》里为什么程心刚成为执剑人没多久三体就入�
 THREE_PATH = "books/B0024/md/03_第二部威慑纪元12年，“青铜世纪”号.md"
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-data")
-HAS_FIXTURES = os.path.exists(os.path.join(ROOT, THREE_PATH)) and os.path.isdir(
-    os.path.join(ROOT, "books", "B0168"))
+HAS_FIXTURES = os.path.exists(os.path.join(ROOT, THREE_PATH)) and os.path.isdir(os.path.join(ROOT, "books", "B0168"))
 fails = []
 
 
@@ -41,8 +40,9 @@ def get(path, timeout=60):
 
 
 def post(path, obj, timeout=240):
-    req = urllib.request.Request(BASE + path, data=json.dumps(obj).encode("utf-8"),
-                                 headers={"content-type": "application/json"})
+    req = urllib.request.Request(
+        BASE + path, data=json.dumps(obj).encode("utf-8"), headers={"content-type": "application/json"}
+    )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status, r.read().decode("utf-8")
 
@@ -79,58 +79,85 @@ t1 = json.loads(body)
 plan = t1.get("plan") or {}
 cards = t1.get("cards") or {}
 check("接口返回 200", status == 200 and bool(t1.get("extract", {}).get("terms")))
-check("轮次至少 2 轮", len(plan.get("rounds") or []) >= 2,
-      "rounds=%d stop=%s" % (len(plan.get("rounds") or []), plan.get("stop")))
+check(
+    "轮次至少 2 轮",
+    len(plan.get("rounds") or []) >= 2,
+    "rounds=%d stop=%s" % (len(plan.get("rounds") or []), plan.get("stop")),
+)
 check("书级榜与选章", bool(plan.get("ranking")) and bool(plan.get("chapters")))
-check("书卡触发且 5 到 8 张", cards.get("trigger") is True and 5 <= len(cards.get("cards") or []) <= 8,
-      "cards=%d reasons=%s" % (len(cards.get("cards") or []), cards.get("reasons")))
-check("阶段耗时齐全", set(("understand", "rounds", "rank", "cards", "result")) <= set(t1.get("stage_ms") or {}))
-check("结果原文", len((t1.get("result") or {}).get("text") or "") > 200,
-      "%d 字" % len((t1.get("result") or {}).get("text") or ""))
+check(
+    "书卡触发且 5 到 8 张",
+    cards.get("trigger") is True and 5 <= len(cards.get("cards") or []) <= 8,
+    "cards=%d reasons=%s" % (len(cards.get("cards") or []), cards.get("reasons")),
+)
+check("阶段耗时齐全", {"understand", "rounds", "rank", "cards", "result"} <= set(t1.get("stage_ms") or {}))
+check(
+    "结果原文",
+    len((t1.get("result") or {}).get("text") or "") > 200,
+    "%d 字" % len((t1.get("result") or {}).get("text") or ""),
+)
 
 # ---- 全选：一次回答盖住书单里所有书 ----------------------------------
 srcs = []
 for c in cards.get("cards") or []:
     if not c.get("best_chapter"):
         continue
-    srcs.append({"book": c.get("book", ""), "title": c.get("title", ""),
-                 "path": c["best_chapter"], "line": int(c.get("line") or 1)})
+    srcs.append(
+        {
+            "book": c.get("book", ""),
+            "title": c.get("title", ""),
+            "path": c["best_chapter"],
+            "line": int(c.get("line") or 1),
+        }
+    )
 scope = {s["book"] for s in srcs}
 if len(srcs) < 2:
     check("全选多书回答", False, "书卡不足 2 张，拼不出 sources")
 else:
-    loc_all = {"question": t1.get("question") or "",
-               "book": srcs[0]["book"], "path": srcs[0]["path"], "line": srcs[0]["line"],
-               "terms": (t1.get("extract") or {}).get("terms") or [],
-               "groups": (t1.get("extract") or {}).get("groups") or [],
-               "sources": srcs}
+    loc_all = {
+        "question": t1.get("question") or "",
+        "book": srcs[0]["book"],
+        "path": srcs[0]["path"],
+        "line": srcs[0]["line"],
+        "terms": (t1.get("extract") or {}).get("terms") or [],
+        "groups": (t1.get("extract") or {}).get("groups") or [],
+        "sources": srcs,
+    }
     t0 = time.time()
     _, body = post("/api/answer", loc_all, timeout=300)
     multi = json.loads(body)
     multi_ms = (time.time() - t0) * 1000
     cites_m = multi.get("citations") or []
     books_m = {c.get("book") for c in cites_m if c.get("verified")}
-    check("全选多书回答", multi.get("ok") is True and multi.get("mode") == "multi"
-          and len(multi.get("answer") or "") > 40,
-          "mode=%s sources=%d %.1f s" % (multi.get("mode"),
-                                         len(multi.get("sources") or []),
-                                         multi_ms / 1000.0))
-    check("多书引文覆盖 3 本书以上", len(books_m) >= 3 and len(cites_m) >= 4,
-          "books=%d cites=%d" % (len(books_m), len(cites_m)))
-    check("多书引文全部回查且在书单内",
-          bool(cites_m) and all(c.get("verified") for c in cites_m) and books_m <= scope,
-          "cites=%d scope=%d" % (len(cites_m), len(scope)))
+    check(
+        "全选多书回答",
+        multi.get("ok") is True and multi.get("mode") == "multi" and len(multi.get("answer") or "") > 40,
+        "mode=%s sources=%d %.1f s" % (multi.get("mode"), len(multi.get("sources") or []), multi_ms / 1000.0),
+    )
+    check(
+        "多书引文覆盖 3 本书以上",
+        len(books_m) >= 3 and len(cites_m) >= 4,
+        "books=%d cites=%d" % (len(books_m), len(cites_m)),
+    )
+    check(
+        "多书引文全部回查且在书单内",
+        bool(cites_m) and all(c.get("verified") for c in cites_m) and books_m <= scope,
+        "cites=%d scope=%d" % (len(cites_m), len(scope)),
+    )
     secs = [s for s in (multi.get("sections") or []) if isinstance(s, dict)]
-    check("多书分节", len(secs) >= 2 and bool((multi.get("lead") or "").strip())
-          and all((s.get("heading") or "").strip() and (s.get("body") or "").strip()
-                  for s in secs),
-          "lead=%d 字 sections=%d" % (len((multi.get("lead") or "").strip()), len(secs)))
-    bookish = [ln for ln in (multi.get("answer") or "").splitlines()
-               if ln.strip().startswith("《")]
+    check(
+        "多书分节",
+        len(secs) >= 2
+        and bool((multi.get("lead") or "").strip())
+        and all((s.get("heading") or "").strip() and (s.get("body") or "").strip() for s in secs),
+        "lead=%d 字 sections=%d" % (len((multi.get("lead") or "").strip()), len(secs)),
+    )
+    bookish = [ln for ln in (multi.get("answer") or "").splitlines() if ln.strip().startswith("《")]
     check("多书不做逐书行", len(bookish) <= 2, "lines=%d" % len(bookish))
-    blob = "\n".join([multi.get("lead") or "", multi.get("dissent") or "",
-                      multi.get("gap") or ""]
-                     + [s.get("heading", "") + "\n" + s.get("body", "") for s in secs])
+    blob = "\n".join(
+        [multi.get("lead") or "", multi.get("dissent") or "", multi.get("gap") or ""]
+        + [s.get("heading", "") + "\n" + s.get("body", "") for s in secs]
+    )
     check("回答无标记残留", not any(m in blob for m in ("##", "**")), blob[:40])
     body_books = "".join(s.get("body", "") for s in secs).count("《")
     check("正文不逐书点名", body_books <= 2, "《=%d" % body_books)
@@ -140,38 +167,53 @@ else:
     _, body = post("/api/answer", loc_all, timeout=300)
     again_m = json.loads(body)
     again_m_ms = (time.time() - t0) * 1000
-    check("多书回答缓存命中", again_m.get("cached") is True and again_m_ms < 1500,
-          "cached=%s %.0f ms" % (again_m.get("cached"), again_m_ms))
+    check(
+        "多书回答缓存命中",
+        again_m.get("cached") is True and again_m_ms < 1500,
+        "cached=%s %.0f ms" % (again_m.get("cached"), again_m_ms),
+    )
 
 _, body = post("/api/run", {"question": "乡土中国 差序格局"})
 t2 = json.loads(body)
-check("不弹卡路径", (t2.get("cards") or {}).get("trigger") is False
-      and not (t2.get("cards") or {}).get("cards"), "trigger=false, cards=0")
+check(
+    "不弹卡路径",
+    (t2.get("cards") or {}).get("trigger") is False and not (t2.get("cards") or {}).get("cards"),
+    "trigger=false, cards=0",
+)
 check("不弹卡仍有结果", len((t2.get("result") or {}).get("text") or "") > 200)
 
 # ---- 思考等级与「重新检索」跳过缓存 -----------------------------------
 _, body = post("/api/run", {"question": "乡土中国 差序格局", "thinking": "low"})
 t_low = json.loads(body)
-check("思考等级透传", (t_low.get("extract") or {}).get("thinking") == "low"
-      and t_low.get("thinking") == "low",
-      "%s/%s" % (t_low.get("thinking"), (t_low.get("extract") or {}).get("thinking")))
+check(
+    "思考等级透传",
+    (t_low.get("extract") or {}).get("thinking") == "low" and t_low.get("thinking") == "low",
+    "%s/%s" % (t_low.get("thinking"), (t_low.get("extract") or {}).get("thinking")),
+)
 _, body = post("/api/run", {"question": "乡土中国 差序格局", "thinking": "low"})
 t_low_cached = json.loads(body)
-check("同档切词缓存命中", (t_low_cached.get("extract") or {}).get("source") == "cache",
-      "source=%s" % (t_low_cached.get("extract") or {}).get("source"))
-_, body = post("/api/run", {"question": "乡土中国 差序格局", "thinking": "low",
-                            "fresh": True})
+check(
+    "同档切词缓存命中",
+    (t_low_cached.get("extract") or {}).get("source") == "cache",
+    "source=%s" % (t_low_cached.get("extract") or {}).get("source"),
+)
+_, body = post("/api/run", {"question": "乡土中国 差序格局", "thinking": "low", "fresh": True})
 t_low_fresh = json.loads(body)
-check("重新检索跳过切词缓存",
-      (t_low_fresh.get("extract") or {}).get("source") == "model",
-      "source=%s" % (t_low_fresh.get("extract") or {}).get("source"))
+check(
+    "重新检索跳过切词缓存",
+    (t_low_fresh.get("extract") or {}).get("source") == "model",
+    "source=%s" % (t_low_fresh.get("extract") or {}).get("source"),
+)
 
 ch = ((t1.get("plan") or {}).get("chapters") or [{}])[0].get("selected", [{}])[0]
 q = urllib.parse.quote(ch.get("chapter_path", ""))
 status, body = get("/api/chapter?path=%s&line=%s&chars=600" % (q, ch.get("line", 1)))
 chap = json.loads(body)
-check("章节截取", status == 200 and chap.get("ok") and len(chap.get("text", "")) > 100,
-      "%d 字" % len(chap.get("text", "")))
+check(
+    "章节截取",
+    status == 200 and chap.get("ok") and len(chap.get("text", "")) > 100,
+    "%d 字" % len(chap.get("text", "")),
+)
 check("路径穿越拒绝", code_of("/api/chapter?path=../../etc/passwd&line=1") == 400)
 check("非 md 拒绝", code_of("/api/chapter?path=/etc/passwd&line=1") == 400)
 try:
@@ -184,25 +226,25 @@ except urllib.error.HTTPError as exc:
 _, body = post("/api/run", {"question": THREE})
 t3 = json.loads(body)
 r3 = t3.get("result") or {}
-loc = {"question": THREE, "book": r3.get("book", ""), "path": r3.get("path", ""),
-       "line": r3.get("hit_line") or r3.get("line") or 1,
-       "terms": (t3.get("extract") or {}).get("terms") or [],
-       "groups": (t3.get("extract") or {}).get("groups") or []}
-check("三体题定位", loc["path"] == THREE_PATH,
-      "%s:%s" % (loc["path"].split("/")[-1], loc["line"]))
+loc = {
+    "question": THREE,
+    "book": r3.get("book", ""),
+    "path": r3.get("path", ""),
+    "line": r3.get("hit_line") or r3.get("line") or 1,
+    "terms": (t3.get("extract") or {}).get("terms") or [],
+    "groups": (t3.get("extract") or {}).get("groups") or [],
+}
+check("三体题定位", loc["path"] == THREE_PATH, "%s:%s" % (loc["path"].split("/")[-1], loc["line"]))
 
-status, body = get("/api/chapter?path=%s&line=1180&chars=900&before=700"
-                   % urllib.parse.quote(loc["path"]))
+status, body = get("/api/chapter?path=%s&line=1180&chars=900&before=700" % urllib.parse.quote(loc["path"]))
 chap3 = json.loads(body)
 text3 = chap3.get("text") or ""
 hs, he = chap3.get("hit_start"), chap3.get("hit_end")
 hit3 = chap3.get("hit_text") or ""
 pre3 = text3[:hs] if isinstance(hs, int) else ""
-check("前置上下文含威慑度", "你的威慑度在百分之十上下波动" in pre3,
-      "前置 %d 字" % len(pre3))
+check("前置上下文含威慑度", "你的威慑度在百分之十上下波动" in pre3, "前置 %d 字" % len(pre3))
 check("命中段原文", "这支舰队应该是五年前派出的" in hit3, "命中 %d 字" % len(hit3))
-check("命中偏移自洽", isinstance(hs, int) and isinstance(he, int)
-      and text3[hs:he] == hit3 and he > hs)
+check("命中偏移自洽", isinstance(hs, int) and isinstance(he, int) and text3[hs:he] == hit3 and he > hs)
 
 t0 = time.time()
 status, body = post("/api/answer", loc)
@@ -210,65 +252,88 @@ first = json.loads(body)
 first_ms = (time.time() - t0) * 1000
 answer3 = first.get("answer") or ""
 cites3 = [c for c in (first.get("citations") or []) if c.get("verified")]
-check("回答接口可用", status == 200 and first.get("ok") is True,
-      "ok=%s cached=%s %.1f s passages=%d" % (first.get("ok"), first.get("cached"),
-                                             first_ms / 1000.0, len(first.get("passages") or [])))
+check(
+    "回答接口可用",
+    status == 200 and first.get("ok") is True,
+    "ok=%s cached=%s %.1f s passages=%d"
+    % (first.get("ok"), first.get("cached"), first_ms / 1000.0, len(first.get("passages") or [])),
+)
 check("回答含威慑度与百分之十", "威慑度" in answer3 and "百分之十" in answer3, answer3[:60])
-check("回答思考等级默认 high", first.get("thinking") == "high",
-      "thinking=%s" % first.get("thinking"))
+check("回答思考等级默认 high", first.get("thinking") == "high", "thinking=%s" % first.get("thinking"))
 secs1 = [s for s in (first.get("sections") or []) if isinstance(s, dict)]
-check("单书分节", bool(secs1) and bool((first.get("lead") or "").strip())
-      and all((s.get("heading") or "").strip() and (s.get("body") or "").strip()
-              for s in secs1)
-      and not any(m in answer3 for m in ("##", "**")),
-      "lead=%d 字 sections=%d" % (len((first.get("lead") or "").strip()), len(secs1)))
-check("引文回查行号 1166/1172", any(c.get("line") in (1166, 1172) for c in cites3),
-      "lines=%s" % [c.get("line") for c in cites3])
+check(
+    "单书分节",
+    bool(secs1)
+    and bool((first.get("lead") or "").strip())
+    and all((s.get("heading") or "").strip() and (s.get("body") or "").strip() for s in secs1)
+    and not any(m in answer3 for m in ("##", "**")),
+    "lead=%d 字 sections=%d" % (len((first.get("lead") or "").strip()), len(secs1)),
+)
+check(
+    "引文回查行号 1166/1172",
+    any(c.get("line") in (1166, 1172) for c in cites3),
+    "lines=%s" % [c.get("line") for c in cites3],
+)
 
 t0 = time.time()
 status, body = post("/api/answer", loc)
 again = json.loads(body)
 again_ms = (time.time() - t0) * 1000
-check("回答缓存命中", again.get("cached") is True and again_ms < 1500,
-      "cached=%s %.0f ms" % (again.get("cached"), again_ms))
+check(
+    "回答缓存命中",
+    again.get("cached") is True and again_ms < 1500,
+    "cached=%s %.0f ms" % (again.get("cached"), again_ms),
+)
 
 t0 = time.time()
 status, body = post("/api/answer", dict(loc, fresh=True), timeout=300)
 fresh3 = json.loads(body)
 fresh3_ms = (time.time() - t0) * 1000
-check("回答 fresh 跳过缓存", fresh3.get("ok") is True and fresh3.get("cached") is False,
-      "cached=%s %.1f s" % (fresh3.get("cached"), fresh3_ms / 1000.0))
+check(
+    "回答 fresh 跳过缓存",
+    fresh3.get("ok") is True and fresh3.get("cached") is False,
+    "cached=%s %.1f s" % (fresh3.get("cached"), fresh3_ms / 1000.0),
+)
 
 # ---- 凡人修仙传：qsearch 前 100 + 组覆盖 + 只读 grep -----------------
 FANREN = "凡人修仙传里有次南宫婉受伤，好像还被冰封，是什么人下的手"
 _, body = post("/api/run", {"question": FANREN})
 t4 = json.loads(body)
 r4 = t4.get("result") or {}
-loc4 = {"question": FANREN, "book": r4.get("book", ""), "path": r4.get("path", ""),
-        "line": r4.get("hit_line") or r4.get("line") or 1,
-        "terms": (t4.get("extract") or {}).get("terms") or [],
-        "groups": (t4.get("extract") or {}).get("groups") or []}
+loc4 = {
+    "question": FANREN,
+    "book": r4.get("book", ""),
+    "path": r4.get("path", ""),
+    "line": r4.get("hit_line") or r4.get("line") or 1,
+    "terms": (t4.get("extract") or {}).get("terms") or [],
+    "groups": (t4.get("extract") or {}).get("groups") or [],
+}
 _, body = post("/api/answer", loc4)
 a4 = json.loads(body)
 answer4 = a4.get("answer") or ""
 cites4 = [c for c in (a4.get("citations") or []) if c.get("verified")]
-check("凡人题回答", a4.get("ok") is True and a4.get("not_found") is not True
-      and ("长老" in answer4 or "阴罗宗" in answer4), answer4[:80])
-check("凡人题引文落到 0783 与 0790/0791",
-      any("0783" in (c.get("path") or "") for c in cites4)
-      and any(("0790" in (c.get("path") or "") or "0791" in (c.get("path") or ""))
-              for c in cites4),
-      "lines=%s" % [(c.get("path", "").split("/")[-1][:12], c.get("line")) for c in cites4])
+check(
+    "凡人题回答",
+    a4.get("ok") is True and a4.get("not_found") is not True and ("长老" in answer4 or "阴罗宗" in answer4),
+    answer4[:80],
+)
+check(
+    "凡人题引文落到 0783 与 0790/0791",
+    any("0783" in (c.get("path") or "") for c in cites4)
+    and any(("0790" in (c.get("path") or "") or "0791" in (c.get("path") or "")) for c in cites4),
+    "lines=%s" % [(c.get("path", "").split("/")[-1][:12], c.get("line")) for c in cites4],
+)
 
 # ---- 库里没有的问题 -------------------------------------------------
 loc_none = dict(loc)
-loc_none.update({"question": "拜占庭帝国的军区制是怎么运转的",
-                 "line": 1180, "terms": ["拜占庭", "军区制"]})
+loc_none.update({"question": "拜占庭帝国的军区制是怎么运转的", "line": 1180, "terms": ["拜占庭", "军区制"]})
 _, body = post("/api/answer", loc_none)
 none = json.loads(body)
-check("无答案题 not_found", none.get("not_found") is True
-      or "未找到原文依据" in (none.get("answer") or ""),
-      "not_found=%s cites=%d" % (none.get("not_found"), len(none.get("citations") or [])))
+check(
+    "无答案题 not_found",
+    none.get("not_found") is True or "未找到原文依据" in (none.get("answer") or ""),
+    "not_found=%s cites=%d" % (none.get("not_found"), len(none.get("citations") or [])),
+)
 
 print("\nALL PASS" if not fails else "\n失败 %d 项：%s" % (len(fails), ", ".join(fails)))
 sys.exit(0 if not fails else 1)

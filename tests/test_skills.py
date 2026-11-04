@@ -1,4 +1,5 @@
 """技能目录解析：工作区没有 .agents/skills 时，源码仓那份要能兜住。"""
+
 import os
 
 from bookcorpus.scripts import lib_common as L

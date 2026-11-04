@@ -1,6 +1,5 @@
 """book-corpus 命令行。子命令都是对 scripts/ 下脚本的分发，行为与直接跑脚本一致。"""
 
-import argparse
 import ast
 import json
 import os
@@ -70,7 +69,7 @@ def run_script(name, argv, root):
     os.environ["BOOKS_ROOT"] = root
     if SCRIPTS_DIR not in sys.path:
         sys.path.insert(0, SCRIPTS_DIR)
-    sys.argv = [path] + list(argv)
+    sys.argv = [path, *list(argv)]
     runpy.run_path(path, run_name="__main__")
 
 
@@ -117,7 +116,10 @@ def cmd_init(target, force, pdf_venv):
     else:
         print("PDF 环境没建好：%s" % detail)
         print("  重试：book-corpus venv --root %s" % path)
-    print("概念表带通用概念（tables/ledger.db 的 概念 表，改表用操作台或直接改库），按自己的语料增删；--concept 只认表里的键。")
+    print(
+        "概念表带通用概念（tables/ledger.db 的 概念 表，改表用操作台或直接改库），"
+        "按自己的语料增删；--concept 只认表里的键。"
+    )
     _init_build(path)
     print("下一步：放一本书进 %s/books/_收件箱，或跑 book-corpus sample 用内置样书" % path)
     return 0
@@ -150,12 +152,14 @@ def _model_set(root, rest):
         if arg.startswith("--") and i + 1 < len(rest):
             field = arg[2:].replace("-", "_")
             if field not in MODEL_SET_FLAGS:
-                raise SystemExit("model set 不认 %s；能改：%s" % (arg, " ".join("--" + f.replace("_", "-") for f in MODEL_SET_FLAGS)))
+                raise SystemExit(
+                    "model set 不认 %s；能改：%s" % (arg, " ".join("--" + f.replace("_", "-") for f in MODEL_SET_FLAGS))
+                )
             changes[field] = rest[i + 1]
             i += 2
             continue
         if arg == "--clear":
-            changes.update({f: "" for f in MODEL_SET_FLAGS})
+            changes.update(dict.fromkeys(MODEL_SET_FLAGS, ""))
             i += 1
             continue
         raise SystemExit("model set 看不懂 %s；用法：book-corpus model set --model <id> [--thinking high]" % arg)
@@ -189,7 +193,10 @@ def _model_show(root):
     elif model_ref and any(model_ref in line or model_ref.split("/", 1)[-1] in line for line in known):
         print("  pi 模型表      有 %s" % model_ref)
     elif model_ref:
-        print("  pi 模型表      没找到 %s —— 先 /model 看看 pi 里有什么，或 book-corpus model set --model <id>" % model_ref)
+        print(
+            "  pi 模型表      没找到 %s —— 先 /model 看看 pi 里有什么，或 book-corpus model set --model <id>"
+            % model_ref
+        )
     print("")
     print("在 pi 里选（最省事）：/login 选 provider 并给 key，/model 选模型，/thinking 选思考等级；")
     print("                     把选中的写进项目：book-corpus model set --provider <p> --model <id> --thinking <级>")
@@ -245,8 +252,7 @@ def cmd_model(root, rest):
 def _run_here(root, *argv, quiet=False):
     """子进程跑本包：run_script 同进程跑会复用已 import 的 lib_common，根是旧值。"""
     env = dict(os.environ, BOOKS_ROOT=root)
-    proc = subprocess.run([sys.executable, "-m", "bookcorpus", *argv],
-                          capture_output=True, text=True, env=env)
+    proc = subprocess.run([sys.executable, "-m", "bookcorpus", *argv], capture_output=True, text=True, env=env)
     if quiet and proc.returncode == 0:
         return True
     out = (proc.stdout or "").rstrip()
@@ -267,12 +273,13 @@ def cmd_sample(root):
     if have:
         uid, doc = have[0]
         chapters, chars = sample._count(root, uid)
-        print("样书已在库：%s《%s》%d 章 %d 字" % (uid, doc.get("title") or sample.TITLE,
-                                               chapters, chars))
+        print("样书已在库：%s《%s》%d 章 %d 字" % (uid, doc.get("title") or sample.TITLE, chapters, chars))
     else:
         uid, chapters, chars = sample.install(root)
-        print("样书入库：%s《%s》%d 章 %d 字（%s）" % (uid, sample.TITLE, chapters, chars,
-                                                   sample.SUBJECTS[0] + "/" + sample.SUBJECTS[1]))
+        print(
+            "样书入库：%s《%s》%d 章 %d 字（%s）"
+            % (uid, sample.TITLE, chapters, chars, sample.SUBJECTS[0] + "/" + sample.SUBJECTS[1])
+        )
     _run_here(root, "library")
     books = _index_books(root)
     if books is None or books <= 1:
@@ -298,8 +305,7 @@ def cmd_venv(root, check):
 def cmd_doctor(root, as_json):
     rows = workspace.check(root, __version__)
     if as_json:
-        print(json.dumps([{"level": lv, "label": lb, "detail": d} for lv, lb, d in rows],
-                         ensure_ascii=False, indent=2))
+        print(json.dumps([{"level": lv, "label": lb, "detail": d} for lv, lb, d in rows], ensure_ascii=False, indent=2))
     else:
         width = max(len(lb) for _lv, lb, _d in rows)
         for level, label, detail in rows:
@@ -310,6 +316,7 @@ def cmd_doctor(root, as_json):
 def cmd_remap(root, rest):
     from . import remap
     from .scripts import layout as LY
+
     db = os.path.join(LY.Layout(workspace.resolve(root)).index_dir, "index.db")
     old_db = None
     mapping = None
@@ -339,6 +346,7 @@ def cmd_remap(root, rest):
 
 def cmd_migrate(root, rest):
     from . import migrate
+
     dest = None
     mode = None
     out = "."
@@ -378,7 +386,8 @@ def cmd_list():
     for name in names:
         path = os.path.join(SCRIPTS_DIR, name + ".py")
         try:
-            doc = ast.get_docstring(ast.parse(open(path, encoding="utf-8").read())) or ""
+            with open(path, encoding="utf-8") as fh:
+                doc = ast.get_docstring(ast.parse(fh.read())) or ""
         except SyntaxError:
             doc = ""
         first = doc.strip().splitlines()[0] if doc.strip() else ""

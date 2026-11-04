@@ -9,6 +9,7 @@
 需要 pymupdf，用带它的解释器跑，例如：
   工作区/.venv-pdf/bin/python src/bookcorpus/scripts/pdf_text_probe.py --census <census.jsonl> --out probe.jsonl
 """
+
 import argparse
 import json
 import os
@@ -18,7 +19,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 ROOT = L.ROOT
 BAD_RE = re.compile(r"[\ufffd\ue000-\uf8ff\x00-\x08\x0b\x0e-\x1f]")
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
@@ -26,6 +28,7 @@ CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 
 def probe(relpath):
     import pymupdf
+
     out = {"relpath": relpath}
     doc = pymupdf.open(os.path.join(ROOT, relpath))
     try:
@@ -74,7 +77,9 @@ def main():
     ap.add_argument("--kinds", default="A,B")
     a = ap.parse_args()
     from pdf_census import classify
-    rows = [json.loads(l) for l in open(a.census, encoding="utf-8")]
+
+    with open(a.census, encoding="utf-8") as fh:
+        rows = [json.loads(line) for line in fh]
     kinds = tuple(a.kinds.split(","))
     want = [r for r in rows if any(classify(r).startswith(k) for k in kinds)]
     print("待测 %d 本" % len(want), file=sys.stderr)
@@ -88,9 +93,18 @@ def main():
             p["title"] = r["title"]
             p["subject1"] = r["subject1"]
             fh.write(json.dumps(p, ensure_ascii=False) + "\n")
-            print("[%d/%d] %s toc=%s text=%s bad=%s" % (
-                i, len(want), r["uid"], p.get("toc_entries"), p.get("chars_per_text_page_median"),
-                p.get("bad_char_ratio")), file=sys.stderr)
+            print(
+                "[%d/%d] %s toc=%s text=%s bad=%s"
+                % (
+                    i,
+                    len(want),
+                    r["uid"],
+                    p.get("toc_entries"),
+                    p.get("chars_per_text_page_median"),
+                    p.get("bad_char_ratio"),
+                ),
+                file=sys.stderr,
+            )
     os.replace(a.out + ".tmp", a.out)
 
 

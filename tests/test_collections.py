@@ -10,9 +10,7 @@ def _two_books_in_one_collection(root):
     write_collection(root, "C0001", SHARED)
     rows = []
     for uid, title in (("B0101", "甲卷"), ("B0102", "乙卷")):
-        write_book(root, uid, "文学", title, ["正文一段。"],
-                   collection="C0001", collection_file=SHARED,
-                   sha="a" * 64)
+        write_book(root, uid, "文学", title, ["正文一段。"], collection="C0001", collection_file=SHARED, sha="a" * 64)
         rows.append((uid, "文学", title, ""))
     write_ledger(root, rows)
 
@@ -22,8 +20,7 @@ def test_shared_source_points_at_collection(workspace):
     r = run_cli("--root", workspace, "library")
     assert r.returncode == 0, r.stdout + r.stderr
     con = sqlite3.connect(str(workspace / "build" / "library.db"))
-    rows = con.execute("select uid, file, primary_src from source where uid like 'B010%'"
-                       " order by uid").fetchall()
+    rows = con.execute("select uid, file, primary_src from source where uid like 'B010%' order by uid").fetchall()
     assert rows == [
         ("B0101", "collections/C0001/source/" + SHARED, 1),
         ("B0102", "collections/C0001/source/" + SHARED, 1),

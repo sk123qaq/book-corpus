@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """扫描 books/**/html/，给每本有阅读版的书重建 html/index.html，并重建 build/阅读版索引.html。
 
 可重复运行：每次按当前 html/ 目录内容重建。书名与分类从同目录的 book.json 读，
@@ -7,6 +6,7 @@
 
 用法: book-corpus render
 """
+
 import datetime
 import html
 import json
@@ -15,7 +15,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 TOP_INDEX = L.PATHS.reading_index
 DATE = datetime.date.today().isoformat()
@@ -72,8 +72,7 @@ def probe(path):
         if key in raw.lower():
             theme = name
             break
-    figs = sum(len(re.findall(r"<" + t, raw, re.I))
-               for t in ("figure", "svg", "table", "details"))
+    figs = sum(len(re.findall(r"<" + t, raw, re.I)) for t in ("figure", "svg", "table", "details"))
     txt = re.sub(r"(?is)<style.*?</style>", "", raw)
     txt = re.sub(r"(?is)<script.*?</script>", "", txt)
     txt = html.unescape(re.sub(r"(?s)<[^>]+>", " ", txt))
@@ -93,11 +92,17 @@ def chapter_rows(html_dir):
         m = re.match(r"^(\d+)[_．.\s]*(.*)$", stem)
         num, title = (m.group(1), m.group(2)) if m else ("", stem)
         theme, figs, cn = probe(p)
-        out.append({
-            "file": f, "num": num, "title": title,
-            "kb": os.path.getsize(p) / 1024.0,
-            "theme": theme, "figs": figs, "cn": cn,
-        })
+        out.append(
+            {
+                "file": f,
+                "num": num,
+                "title": title,
+                "kb": os.path.getsize(p) / 1024.0,
+                "theme": theme,
+                "figs": figs,
+                "cn": cn,
+            }
+        )
     return out
 
 
@@ -185,14 +190,19 @@ def book_page(title, subtitle, blurb, rows, date):
         num = ('<span class="n">第 %s 章</span>' % html.escape(r["num"])) if r["num"] else ""
         lis.append(
             '<li><a class="chap" href="{f}">'
-            '{num}'
+            "{num}"
             '<span class="t">{title}</span>'
             '<span class="meta"><span>{kb:.0f} KB</span><span>{figs} 个图表</span>'
-            '<span>{theme}</span><span>{cn:,} 字</span></span>'
+            "<span>{theme}</span><span>{cn:,} 字</span></span>"
             "</a></li>".format(
-                f=html.escape(r["file"]), num=num,
-                title=html.escape(r["title"]), kb=r["kb"], figs=r["figs"],
-                theme=html.escape(r["theme"]), cn=r["cn"])
+                f=html.escape(r["file"]),
+                num=num,
+                title=html.escape(r["title"]),
+                kb=r["kb"],
+                figs=r["figs"],
+                theme=html.escape(r["theme"]),
+                cn=r["cn"],
+            )
         )
     body = (
         '<h2 class="sec">章节<span class="cnt">共 {} 章</span></h2>'
@@ -204,11 +214,9 @@ def book_page(title, subtitle, blurb, rows, date):
         "<li>原书插图已按扫描件重建，扫描件原件收在对应图下方的折叠块里备查。</li>"
         "<li>「今天还成立吗」区分「已核验」与「基于逻辑推断」两类；详见总索引的核验说明。</li>"
         "</ul></div>"
-        '<footer>来源：{book}（{sub}）｜生成日期：{date}</footer>'
-    ).format(len(rows), "".join(lis), book=html.escape(title),
-             sub=html.escape(subtitle), date=date)
-    return page(f"{title} · 可视化阅读版", "CHAPTERS · 可视化阅读版",
-                title, html.escape(blurb), body)
+        "<footer>来源：{book}（{sub}）｜生成日期：{date}</footer>"
+    ).format(len(rows), "".join(lis), book=html.escape(title), sub=html.escape(subtitle), date=date)
+    return page(f"{title} · 可视化阅读版", "CHAPTERS · 可视化阅读版", title, html.escape(blurb), body)
 
 
 def top_page(books, date):
@@ -217,9 +225,9 @@ def top_page(books, date):
     cards = []
     for title, blurb, href, n in books:
         cards.append(
-            '<div class="bookcard"><h3>{b}</h3><p>{d}</p>'
-            '<a class="go" href="{h}">打开 {n} 章索引 →</a></div>'.format(
-                b=html.escape(title), d=html.escape(blurb), h=html.escape(href), n=n))
+            f'<div class="bookcard"><h3>{html.escape(title)}</h3><p>{html.escape(blurb)}</p>'
+            f'<a class="go" href="{html.escape(href)}">打开 {n} 章索引 →</a></div>'
+        )
     total = sum(n for _t, _b, _h, n in books)
     notes = []
     if {"竞争优势", "竞争战略"} & known:
@@ -233,7 +241,8 @@ def top_page(books, date):
             "因此《竞争战略》第 14–17 章的全部条目、以及部分章节的若干条目只能标为"
             "「基于逻辑推断」；已核验条目也未能逐条二次复核。引用具体数字前请自行核对原始来源。</li>"
             "<li>页脚日期为生成日期，不代表内容的事实核验日期。</li>"
-            "</ul></div>")
+            "</ul></div>"
+        )
     if "竞争战略" in known:
         notes.append(
             '<div class="note"><h3>一处已知的体例例外</h3><ul>'
@@ -242,17 +251,21 @@ def top_page(books, date):
             "因此该页正文比高于其他章节的 30–45% 目标。</li>"
             "<li>这是刻意保留：如硬压到 45% 就必须删掉必备区块或原书结论，得不偿失。"
             "该页的 BCG 四象限与 GE 九宫格均已按原书扫描件重建。</li>"
-            "</ul></div>")
+            "</ul></div>"
+        )
     body = (
-        '<h2 class="sec">有阅读版的书<span class="cnt">共 {} 本 · {} 章</span></h2>'.format(
-            len(books), total)
-        + "".join(cards) + "".join(notes)
-        + '<footer>生成日期：{d}｜本页与各书索引由 book-corpus render 重建</footer>'.format(d=date)
+        f'<h2 class="sec">有阅读版的书<span class="cnt">共 {len(books)} 本 · {total} 章</span></h2>'
+        + "".join(cards)
+        + "".join(notes)
+        + f"<footer>生成日期：{date}｜本页与各书索引由 book-corpus render 重建</footer>"
     )
-    return page("书库 · 章节可视化阅读版", "LIBRARY · 章节可视化阅读版",
-                "书库 · 章节可视化阅读版",
-                "把库里有可视化阅读版的书逐章做成一页图表为主、10 分钟读完的 HTML。",
-                body)
+    return page(
+        "书库 · 章节可视化阅读版",
+        "LIBRARY · 章节可视化阅读版",
+        "书库 · 章节可视化阅读版",
+        "把库里有可视化阅读版的书逐章做成一页图表为主、10 分钟读完的 HTML。",
+        body,
+    )
 
 
 def main():

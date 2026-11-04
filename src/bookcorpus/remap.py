@@ -9,10 +9,8 @@ v1 → v2 时 expand.path 从 `库/<旧相对路径>/md/<文件>` 变成 `books/
 import csv
 import os
 import sqlite3
-import sys
 
-COLS = ("rowid", "path", "kind", "tok", "text", "model", "prompt_hash",
-        "tokens_in", "tokens_out", "built_at")
+COLS = ("rowid", "path", "kind", "tok", "text", "model", "prompt_hash", "tokens_in", "tokens_out", "built_at")
 BATCH = 4000
 
 
@@ -55,8 +53,7 @@ def _existing_paths(db):
 def _flush(db, rows):
     con = sqlite3.connect(db)
     try:
-        con.executemany("INSERT INTO expand(%s) VALUES(%s)"
-                        % (", ".join(COLS), ", ".join("?" * len(COLS))), rows)
+        con.executemany("INSERT INTO expand(%s) VALUES(%s)" % (", ".join(COLS), ", ".join("?" * len(COLS))), rows)
         con.commit()
     finally:
         con.close()
@@ -81,7 +78,8 @@ def run(db, map_path, old_db=None, apply_it=False):
         con = sqlite3.connect("file:%s?mode=ro" % old_db, uri=True)
         try:
             total = con.execute("select count(*) from expand").fetchone()[0]
-            rows = con.execute("select %s from expand" % ", ".join(COLS)).fetchall()
+            sql = "select %s from expand" % ", ".join(COLS)  # noqa: S608 列名来自模块常量 COLS，不含外部输入
+            rows = con.execute(sql).fetchall()
         finally:
             con.close()
         have = _existing_paths(db) if os.path.exists(db) else set()
@@ -95,9 +93,8 @@ def run(db, map_path, old_db=None, apply_it=False):
                 dup += 1
                 continue
             have.add(new_path)
-            out.append((row[0], new_path) + tuple(row[2:]))
-        lines.append("旧 expand %d 行，可换前缀 %d 行，已在目标 %d 行，换不了 %d 行"
-                     % (total, len(out), dup, missed))
+            out.append((row[0], new_path, *tuple(row[2:])))
+        lines.append("旧 expand %d 行，可换前缀 %d 行，已在目标 %d 行，换不了 %d 行" % (total, len(out), dup, missed))
     else:
         con = sqlite3.connect("file:%s?mode=ro" % db, uri=True)
         try:
@@ -118,7 +115,7 @@ def run(db, map_path, old_db=None, apply_it=False):
         return (0 if missed == 0 else 2), lines
     if old_db:
         for i in range(0, len(out), BATCH):
-            _flush(db, out[i:i + BATCH])
+            _flush(db, out[i : i + BATCH])
         _rebuild_fts(db)
         lines.append("新 expand 现在 %d 行" % _expand_count(db))
     elif out:

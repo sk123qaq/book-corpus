@@ -8,12 +8,13 @@
 拆章的单本重拆/重新检查/查看问题、页面状态词与驱动状态表对齐、
 收尾门槛、删书预览与应用、重启接管与孤儿。末行 ALL PASS。
 """
+
 import argparse
+import contextlib
 import json
 import os
 import re
 import shutil
-import socket
 import sqlite3
 import subprocess
 import sys
@@ -22,6 +23,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import quote as urlquote
 
 sys.dont_write_bytecode = True
@@ -43,7 +45,7 @@ def check(name, ok, detail=""):
     return ok
 
 
-STUB_INGEST = '''#!/usr/bin/env python3
+STUB_INGEST = """#!/usr/bin/env python3
 import json, os, sys
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
@@ -82,22 +84,22 @@ if cmd == "apply":
     print("已入库 %d 条" % len(plan))
     sys.exit(0)
 sys.exit(2)
-'''
+"""
 
-STUB_BUILD_LIBRARY = '''#!/usr/bin/env python3
+STUB_BUILD_LIBRARY = """#!/usr/bin/env python3
 import json
 print(json.dumps({"books": 3, "sources": 3, "conflicts": 0, "md_done": 1}))
-'''
+"""
 
-STUB_CATALOG = '''#!/usr/bin/env python3
+STUB_CATALOG = """#!/usr/bin/env python3
 import os, sys
 if os.path.exists(".catalog-nomarker"):
     print("完成")
     sys.exit(0)
 print("未匹配 0 条")
-'''
+"""
 
-STUB_SPLIT = '''#!/usr/bin/env python3
+STUB_SPLIT = """#!/usr/bin/env python3
 import json, os, sys, time
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
@@ -127,9 +129,9 @@ for b in books:
     counts[b["status"]] = counts.get(b["status"], 0) + 1
 print(json.dumps({"batch": batch, "status_counts": counts, "books": books,
                   "pending_review": pending}, ensure_ascii=False))
-'''
+"""
 
-STUB_REVIEW = '''#!/usr/bin/env python3
+STUB_REVIEW = """#!/usr/bin/env python3
 import json, os, sys, time
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
@@ -151,9 +153,9 @@ if out:
         json.dump(rows, fh, ensure_ascii=False)
     os.replace(out + ".tmp", out)
 print("核对 %s %s：%s 本" % (batch, uid, len(rows)))
-'''
+"""
 
-STUB_PDF = '''#!/usr/bin/env python3
+STUB_PDF = """#!/usr/bin/env python3
 import json, sys
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
@@ -163,9 +165,9 @@ print("批次 %s 路线 %s 本数 %d" % (opt("--batch"), route, len(uids)))
 print(json.dumps({"route": route, "batch": opt("--batch"), "queued": len(uids),
                   "landed": len(uids), "remaining_books": 0, "remaining_pages": 0,
                   "status_counts": {"landed": len(uids)}}, ensure_ascii=False))
-'''
+"""
 
-STUB_TRIAGE = '''#!/usr/bin/env python3
+STUB_TRIAGE = """#!/usr/bin/env python3
 import json, os, sys, time
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
@@ -191,9 +193,9 @@ with open(os.path.join(out, "triage.csv"), "w", encoding="utf-8") as fh:
     fh.write("uid,title,subject1,subject2,class,route,pages,mb,ppi,text_page_share,ink,bands,note,verdict,image_share,measure,route_metric\\n")
     fh.write('"%s","书 %s","文学","","C 扫描件","OCR","320","1.0","","0.0","0.42","2","stub","","1.0","stub","OCR"\\n' % (uid, uid))
 print(json.dumps(result, ensure_ascii=False))
-'''
+"""
 
-STUB_APPLY_REVIEW = '''#!/usr/bin/env python3
+STUB_APPLY_REVIEW = """#!/usr/bin/env python3
 import csv, os, sys
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
@@ -217,9 +219,9 @@ if rows and path:
         writer.writerows(keep)
     os.replace(tmp, path)
 print("写回 %s 的 review，四列已并。" % opt("--batch"))
-'''
+"""
 
-STUB_RETIRE = '''#!/usr/bin/env python3
+STUB_RETIRE = """#!/usr/bin/env python3
 import json, sys
 args = sys.argv[1:]
 opt = lambda n, d=None: args[args.index(n) + 1] if n in args else d
@@ -245,9 +247,9 @@ if "--apply" in args:
                      ensure_ascii=False))
     sys.exit(0)
 print(json.dumps(preview, ensure_ascii=False))
-'''
+"""
 
-STUB_VERIFY = '''#!/usr/bin/env python3
+STUB_VERIFY = """#!/usr/bin/env python3
 import os, sys, time
 if os.path.exists(".verify-slow"):
     time.sleep(2)
@@ -255,25 +257,25 @@ if os.path.exists(".verify-bad"):
     print("门槛不过：1 项")
     sys.exit(1)
 print("全过")
-'''
+"""
 
-STUB_P1 = '''#!/usr/bin/env python3
+STUB_P1 = """#!/usr/bin/env python3
 import os, sys
 if os.path.exists(".p1-nomarker"):
     print("完成")
     sys.exit(0)
 print("失败 0 项")
-'''
+"""
 
-STUB_AUDIT = '''#!/usr/bin/env python3
+STUB_AUDIT = """#!/usr/bin/env python3
 print("FAIL 0 项 / WARN 1 项")
-'''
+"""
 
-STUB_QUIET = '''#!/usr/bin/env python3
+STUB_QUIET = """#!/usr/bin/env python3
 print("done")
-'''
+"""
 
-STUB_STATUS = '''#!/usr/bin/env python3
+STUB_STATUS = """#!/usr/bin/env python3
 import json, sys
 print(json.dumps({"at": "2026-10-24T23:00:00+08:00", "books": 42, "md_done": 41,
                   "pending": {"pdf": 1, "txt": 0, "djvu": 0},
@@ -283,7 +285,7 @@ print(json.dumps({"at": "2026-10-24T23:00:00+08:00", "books": 42, "md_done": 41,
                   "audit": {"fail": 0, "warn": 0, "items": []},
                   "ocr": {"remaining_books": 0, "remaining_pages": 0},
                   "ledger": {"rows": 42}, "catalog": {"unmatched": 0}}))
-'''
+"""
 
 STUBS = {
     "ingest.py": STUB_INGEST,
@@ -304,32 +306,50 @@ STUBS = {
 }
 
 FIXTURE_STATUS = {
-    "at": "2026-10-24T22:00:00+08:00", "books": 11, "md_done": 7,
+    "at": "2026-10-24T22:00:00+08:00",
+    "books": 11,
+    "md_done": 7,
     "pending": {"pdf": 2, "txt": 1, "djvu": 1},
     "inbox": {"files": 2, "items": []},
     "ledger": {"rows": 11, "mtime": "2026-10-24T21:00:00+08:00"},
     "catalog": {"mtime": "2026-10-24T21:07:00+08:00", "unmatched": 0},
-    "index": {"built_at": "2026-10-24T20:00:00+08:00", "paras": 100, "chapters": 20,
-              "books": 7, "lag_books": 3, "lag_chapters": 9},
+    "index": {
+        "built_at": "2026-10-24T20:00:00+08:00",
+        "paras": 100,
+        "chapters": 20,
+        "books": 7,
+        "lag_books": 3,
+        "lag_chapters": 9,
+    },
     "views": {"awards": 2, "topics": 3, "broken": 0},
-    "audit": {"fail": 0, "warn": 2, "at": "2026-10-24T21:30:00+08:00",
-              "items": ["WARN 缺 README 的 md 1 本: B0002", "warn: 批次在跑"]},
-    "ocr": {"batch": "pdf-ocr-2026-10-19", "remaining_books": 0,
-            "remaining_pages": 0, "quota": "20000/天"},
+    "audit": {
+        "fail": 0,
+        "warn": 2,
+        "at": "2026-10-24T21:30:00+08:00",
+        "items": ["WARN 缺 README 的 md 1 本: B0002", "warn: 批次在跑"],
+    },
+    "ocr": {"batch": "pdf-ocr-2026-10-19", "remaining_books": 0, "remaining_pages": 0, "quota": "20000/天"},
     "jobs": {"running": 0, "awaiting_review": 0, "last": None},
 }
 
 
 def build_root():
     root = tempfile.mkdtemp(prefix="ops-check-")
-    for rel in ("工作区/运维/jobs", "工作区/脚本", "工作区/批次", "tables",
-                "books/_收件箱", "build/views/奖项", "build/views/主题", "build/检索"):
+    for rel in (
+        "工作区/运维/jobs",
+        "工作区/脚本",
+        "工作区/批次",
+        "tables",
+        "books/_收件箱",
+        "build/views/奖项",
+        "build/views/主题",
+        "build/检索",
+    ):
         os.makedirs(os.path.join(root, rel), exist_ok=True)
     with open(os.path.join(root, "books.toml"), "w", encoding="utf-8") as fh:
         fh.write('schema = 2\ntool = "book-corpus test"\n')
     os.makedirs(os.path.join(root, "工作区", ".venv-pdf", "bin"), exist_ok=True)
-    os.symlink(sys.executable,
-               os.path.join(root, "工作区", ".venv-pdf", "bin", "python"))
+    os.symlink(sys.executable, os.path.join(root, "工作区", ".venv-pdf", "bin", "python"))
     for name, body in STUBS.items():
         path = os.path.join(root, "工作区", "脚本", name)
         with open(path, "w", encoding="utf-8") as fh:
@@ -349,12 +369,9 @@ def build_root():
         fh.write("B0002,书 二,人文社科,,C 扫描件,不转-记图册,22\n")
         fh.write("B0003,书 三,艺术与图像,,A 图册,不转-记图册,33\n")
     with open(os.path.join(led, "skip_list.tsv"), "w", encoding="utf-8") as fh:
-        fh.write("uid\ttitle\tsubject1\tsubject2\tpages\tmb\timage_share\twhy"
-                 "\tverdict\troute_metric\n")
-        fh.write("B0002\t书 二\t人文社科\t\t22\t1.0\t0.9\t图片占比 90% 超过一半"
-                 "\t图片书\t图册不转\n")
-        fh.write("B0003\t书 三\t艺术与图像\t\t33\t2.0\t0.9\t设定集与美术集"
-                 "\t图片书\t图册不转\n")
+        fh.write("uid\ttitle\tsubject1\tsubject2\tpages\tmb\timage_share\twhy\tverdict\troute_metric\n")
+        fh.write("B0002\t书 二\t人文社科\t\t22\t1.0\t0.9\t图片占比 90% 超过一半\t图片书\t图册不转\n")
+        fh.write("B0003\t书 三\t艺术与图像\t\t33\t2.0\t0.9\t设定集与美术集\t图片书\t图册不转\n")
     ocr = os.path.join(root, "工作区", "批次", "pdf-ocr-2026-10-19")
     os.makedirs(os.path.join(ocr, "logs"), exist_ok=True)
     with open(os.path.join(ocr, "worklist.tsv"), "w", encoding="utf-8") as fh:
@@ -376,6 +393,7 @@ def build_root():
 
 def server_module():
     import importlib.util
+
     spec = importlib.util.spec_from_file_location("ops_server", SERVER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -410,26 +428,18 @@ CREATE VIEW v_pending_md AS
   LEFT JOIN derived d ON d.uid = b.uid AND d.kind = 'md'
   WHERE d.uid IS NULL OR d.status != 'done';
 """)
-    conn.execute("INSERT INTO book VALUES ('B0001','书 一','某人','文学','小说',"
-                 "'B0001','','','keep','active')")
-    conn.execute("INSERT INTO book VALUES ('B0002','书 二','另一人','人文社科','',"
-                 "'B0002','某系列','1','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0001','books/B0001/source/a.epub',"
-                 "'epub',11,'aa',1)")
-    conn.execute("INSERT INTO source VALUES ('B0002','books/B0002/source/b.pdf',"
-                 "'pdf',22,'bb',1)")
-    conn.execute("INSERT INTO book VALUES ('B0003','书 三','某人','艺术与图像','',"
-                 "'B0003','','','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0003','books/B0003/source/c.pdf',"
-                 "'pdf',33,'cc',1)")
-    conn.execute("INSERT INTO book VALUES ('B0004','书 四','某人','文学','小说',"
-                 "'B0004','','','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0004','books/B0004/source/d.pdf',"
-                 "'pdf',44,'dd',1)")
-    conn.execute("INSERT INTO book VALUES ('B0005','书 五','某人','文学','小说',"
-                 "'B0005','','','keep','active')")
-    conn.execute("INSERT INTO source VALUES ('B0005','books/B0005/source/e.pdf',"
-                 "'pdf',55,'ee',1)")
+    conn.execute("INSERT INTO book VALUES ('B0001','书 一','某人','文学','小说','B0001','','','keep','active')")
+    conn.execute(
+        "INSERT INTO book VALUES ('B0002','书 二','另一人','人文社科','','B0002','某系列','1','keep','active')"
+    )
+    conn.execute("INSERT INTO source VALUES ('B0001','books/B0001/source/a.epub','epub',11,'aa',1)")
+    conn.execute("INSERT INTO source VALUES ('B0002','books/B0002/source/b.pdf','pdf',22,'bb',1)")
+    conn.execute("INSERT INTO book VALUES ('B0003','书 三','某人','艺术与图像','','B0003','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0003','books/B0003/source/c.pdf','pdf',33,'cc',1)")
+    conn.execute("INSERT INTO book VALUES ('B0004','书 四','某人','文学','小说','B0004','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0004','books/B0004/source/d.pdf','pdf',44,'dd',1)")
+    conn.execute("INSERT INTO book VALUES ('B0005','书 五','某人','文学','小说','B0005','','','keep','active')")
+    conn.execute("INSERT INTO source VALUES ('B0005','books/B0005/source/e.pdf','pdf',55,'ee',1)")
     conn.execute("INSERT INTO derived VALUES ('B0002','md','done',12,4096,'bb')")
     conn.execute("INSERT INTO book_award VALUES ('B0002','某奖','2020','longlist')")
     conn.commit()
@@ -488,7 +498,7 @@ def wait_ready(port, timeout=20):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            code, body = get(port, "/api/status", timeout=5)
+            code, _body = get(port, "/api/status", timeout=5)
             if code == 200:
                 return True
         except (urllib.error.URLError, ConnectionError, OSError):
@@ -501,10 +511,23 @@ def start(root, fixture, port=0):
     env = dict(os.environ)
     env["OPS_STATUS_FIXTURE"] = fixture
     env.pop("OPS_HTTP_LOG", None)
-    proc = subprocess.Popen([sys.executable, SERVER, "--root", root, "--port", str(port),
-                             "--scripts", os.path.join(root, "工作区", "脚本")],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                            env=env, start_new_session=True)
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            SERVER,
+            "--root",
+            root,
+            "--port",
+            str(port),
+            "--scripts",
+            os.path.join(root, "工作区", "脚本"),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
     line = proc.stdout.readline()
     match = re.search(r"127\.0\.0\.1:(\d+)", line or "")
     if not match:
@@ -558,10 +581,8 @@ def split_flags(root):
 
 
 def clear_split_flags(root):
-    try:
+    with contextlib.suppress(OSError):
         os.remove(os.path.join(root, ".split-args.json"))
-    except OSError:
-        pass
 
 
 def main(argv=None):
@@ -619,36 +640,44 @@ def finish():
 
 def word_coverage_checks():
     """驱动加了新状态，页面必须也认识：两张表对不上时页面会直接打出英文。"""
-    driver = os.path.join(os.path.dirname(os.path.dirname(OPS_DIR)),
-                          "src", "bookcorpus", "scripts", "split_md_batch.py")
+    driver = os.path.join(
+        os.path.dirname(os.path.dirname(OPS_DIR)), "src", "bookcorpus", "scripts", "split_md_batch.py"
+    )
     page = os.path.join(OPS_DIR, "web", "app.js")
-    dblock = re.search(r"^STATUS = \{(.*?)^\}",
-                       open(driver, encoding="utf-8").read(), re.S | re.M)
+    dblock = re.search(r"^STATUS = \{(.*?)^\}", Path(driver).read_text(encoding="utf-8"), re.S | re.M)
     status = set(re.findall(r'"([A-Za-z][\w-]*)"\s*:', dblock.group(1))) if dblock else set()
-    wblock = re.search(r"const SPLIT_WORD = \{(.*?)\n\};",
-                       open(page, encoding="utf-8").read(), re.S)
-    words = set(re.findall(r"['\"]?([A-Za-z][\w-]*)['\"]?\s*:\s*'",
-                           wblock.group(1))) if wblock else set()
+    wblock = re.search(r"const SPLIT_WORD = \{(.*?)\n\};", Path(page).read_text(encoding="utf-8"), re.S)
+    words = set(re.findall(r"['\"]?([A-Za-z][\w-]*)['\"]?\s*:\s*'", wblock.group(1))) if wblock else set()
     missing = sorted(status - words)
-    check("页面认得每个拆章状态", bool(status) and not missing,
-          "驱动 %d 个状态，页面缺 %s" % (len(status), "、".join(missing) or "无"))
+    check(
+        "页面认得每个拆章状态",
+        bool(status) and not missing,
+        "驱动 %d 个状态，页面缺 %s" % (len(status), "、".join(missing) or "无"),
+    )
 
 
 def run_checks(root, ops, port, fixture):
     # ---- 只读总览 --------------------------------------------------
     code, body = get(port, "/api/status")
     status = body.get("status") or {}
-    check("status 200 且用 fixture", code == 200 and body.get("source") == "fixture",
-          "source=%s error=%s" % (body.get("source"), body.get("error")))
-    check("status 字段与 fixture 一致",
-          status.get("books") == 11 and status.get("md_done") == 7
-          and status.get("pending", {}).get("pdf") == 2
-          and status.get("index", {}).get("lag_books") == 3,
-          "books=%s md=%s lag=%s" % (status.get("books"), status.get("md_done"),
-                                     (status.get("index") or {}).get("lag_books")))
-    check("ops 计数由 ops.db 提供",
-          (body.get("ops") or {}).get("writer") is False
-          and status.get("jobs", {}).get("running") == 0)
+    check(
+        "status 200 且用 fixture",
+        code == 200 and body.get("source") == "fixture",
+        "source=%s error=%s" % (body.get("source"), body.get("error")),
+    )
+    check(
+        "status 字段与 fixture 一致",
+        status.get("books") == 11
+        and status.get("md_done") == 7
+        and status.get("pending", {}).get("pdf") == 2
+        and status.get("index", {}).get("lag_books") == 3,
+        "books=%s md=%s lag=%s"
+        % (status.get("books"), status.get("md_done"), (status.get("index") or {}).get("lag_books")),
+    )
+    check(
+        "ops 计数由 ops.db 提供",
+        (body.get("ops") or {}).get("writer") is False and status.get("jobs", {}).get("running") == 0,
+    )
 
     code, html = get(port, "/")
     check("首页渲染", code == 200 and "书库操作台" in html, "len=%d" % len(html or ""))
@@ -661,39 +690,41 @@ def run_checks(root, ops, port, fixture):
 
     # ---- 只读数据接口 ----------------------------------------------
     code, body = get(port, "/api/pending")
-    check("待拆列表读 library.db",
-          code == 200 and any(r["uid"] == "B0001" for r in body.get("items", [])),
-          "n=%d" % len(body.get("items") or []))
+    check(
+        "待拆列表读 library.db",
+        code == 200 and any(r["uid"] == "B0001" for r in body.get("items", [])),
+        "n=%d" % len(body.get("items") or []),
+    )
     code, body = get(port, "/api/inbox")
     check("收件箱三只", code == 200 and len(body.get("items", [])) == 3)
     code, body = get(port, "/api/retire/search?q=B0002")
     book = (body.get("books") or [{}])[0]
-    check("删书搜索带源与奖项",
-          code == 200 and book.get("uid") == "B0002" and book.get("sources")
-          and book.get("awards") and (book.get("md") or {}).get("chapters") == 12)
+    check(
+        "删书搜索带源与奖项",
+        code == 200
+        and book.get("uid") == "B0002"
+        and book.get("sources")
+        and book.get("awards")
+        and (book.get("md") or {}).get("chapters") == 12,
+    )
     code, body = get(port, "/api/pdf/queue")
-    check("PDF 队列容忍空账", code == 200 and body.get("ok") is True,
-          "groups=%d" % len(body.get("groups") or []))
+    check("PDF 队列容忍空账", code == 200 and body.get("ok") is True, "groups=%d" % len(body.get("groups") or []))
 
     # ---- 跨站与文件边界 --------------------------------------------
-    code, _ = post(port, "/api/import/scan", {},
-                   headers={"Origin": "http://evil.example"})
+    code, _ = post(port, "/api/import/scan", {}, headers={"Origin": "http://evil.example"})
     check("跨站 Origin 被拒", code == 403)
-    code, _ = http(port, "POST", "/api/import/scan", payload={},
-                   headers={"Host": "evil.example"})
+    code, _ = http(port, "POST", "/api/import/scan", payload={}, headers={"Host": "evil.example"})
     check("外站 Host 被拒", code == 403)
 
     code, body = get(port, "/api/file?path=" + urllib.request.quote("build/书目总表.csv"))
-    check("白名单 CSV 可下", code == 200 and "uid,title" in body,
-          "code=%s body=%r" % (code, str(body)[:40]))
-    code, headers, body = get_with_headers(
-        port, "/api/file?path=" + urllib.request.quote("tables/分类预填.csv"))
-    check("下载口带 attachment 头",
-          code == 200 and headers.get("Content-Disposition", "").startswith("attachment")
-          and "uid,一级模型" in body,
-          "code=%s disposition=%r" % (code, headers.get("Content-Disposition")))
-    code, _ = get(port, "/api/file?path=" + urllib.request.quote(
-        "工作区/运维/jobs/../log.txt"))
+    check("白名单 CSV 可下", code == 200 and "uid,title" in body, "code=%s body=%r" % (code, str(body)[:40]))
+    code, headers, body = get_with_headers(port, "/api/file?path=" + urllib.request.quote("tables/分类预填.csv"))
+    check(
+        "下载口带 attachment 头",
+        code == 200 and headers.get("Content-Disposition", "").startswith("attachment") and "uid,一级模型" in body,
+        "code=%s disposition=%r" % (code, headers.get("Content-Disposition")),
+    )
+    code, _ = get(port, "/api/file?path=" + urllib.request.quote("工作区/运维/jobs/../log.txt"))
     check("jobs 里的点段不给过白名单", code in (400, 404), "code=%s" % code)
     # 白名单外的路径 README 与设计文档都规定回 404（apps/ops/README.md:143），
     # 400 只是可接受的防御性返回；真正的判据是读不到内容。在根与 tables/ 下各放
@@ -704,40 +735,48 @@ def run_checks(root, ops, port, fixture):
     for bad in ("../README.md", "tables/../README.md"):
         code, body = get(port, "/api/file?path=" + urllib.request.quote(bad))
         text = body if isinstance(body, str) else json.dumps(body, ensure_ascii=False)
-        check("越界路径读不到 %s" % bad,
-              code in (400, 404) and "SECRET-DECOY-README" not in text,
-              "code=%s body=%r" % (code, text[:60]))
+        check(
+            "越界路径读不到 %s" % bad,
+            code in (400, 404) and "SECRET-DECOY-README" not in text,
+            "code=%s body=%r" % (code, text[:60]),
+        )
     # 批次名也是路径：点段或绝对路径既不能列出批次里的书，也不能 500。
     # 契约为「不泄露」：4xx，或 200 且 books 为空；状态码不作为判据。
-    code, body = get(port, "/api/split/books?batch="
-                     + urllib.request.quote("../../etc"))
+    code, body = get(port, "/api/split/books?batch=" + urllib.request.quote("../../etc"))
     listed = body.get("books") if isinstance(body, dict) else None
-    check("批次参数越界不泄露书",
-          code >= 400 or (code == 200 and not listed),
-          "code=%s books=%r" % (code, listed))
-    for bad in ("build/library.db", "src/bookcorpus/scripts/ingest.py",
-                "books/B0001/book.json", "工作区/运维/ops.db", "../etc/passwd", "/etc/passwd",
-                "工作区/运维/jobs/../../../../etc/passwd"):
+    check("批次参数越界不泄露书", code >= 400 or (code == 200 and not listed), "code=%s books=%r" % (code, listed))
+    for bad in (
+        "build/library.db",
+        "src/bookcorpus/scripts/ingest.py",
+        "books/B0001/book.json",
+        "工作区/运维/ops.db",
+        "../etc/passwd",
+        "/etc/passwd",
+        "工作区/运维/jobs/../../../../etc/passwd",
+    ):
         code, _ = get(port, "/api/file?path=" + urllib.request.quote(bad))
         check("白名单拒绝 %s" % bad, code == 404)
 
     # ---- 上传 ------------------------------------------------------
-    code, body = post(port, "/api/import/upload",
-                      raw=b"epub-bytes-here",
-                      headers={"X-Filename": urllib.request.quote("测试 书.epub")})
+    code, body = post(
+        port, "/api/import/upload", raw=b"epub-bytes-here", headers={"X-Filename": urllib.request.quote("测试 书.epub")}
+    )
     inbox_file = os.path.join(root, "books", "_收件箱", "测试 书.epub")
-    check("上传落收件箱",
-          code == 200 and os.path.exists(inbox_file)
-          and open(inbox_file, "rb").read() == b"epub-bytes-here",
-          str(body.get("name") if isinstance(body, dict) else body))
-    check("上传不留 .part",
-          not [n for n in os.listdir(os.path.join(root, "books", "_收件箱"))
-               if n.endswith(".part")])
-    code, body = post(port, "/api/import/upload", raw=b"x",
-                      headers={"X-Filename": urllib.request.quote("../../pwn.epub")})
-    check("上传文件名去路径",
-          code == 200 and os.path.exists(os.path.join(root, "books", "_收件箱", "pwn.epub"))
-          and not os.path.exists(os.path.join(root, "..", "pwn.epub")))
+    check(
+        "上传落收件箱",
+        code == 200 and os.path.exists(inbox_file) and Path(inbox_file).read_bytes() == b"epub-bytes-here",
+        str(body.get("name") if isinstance(body, dict) else body),
+    )
+    check("上传不留 .part", not [n for n in os.listdir(os.path.join(root, "books", "_收件箱")) if n.endswith(".part")])
+    code, body = post(
+        port, "/api/import/upload", raw=b"x", headers={"X-Filename": urllib.request.quote("../../pwn.epub")}
+    )
+    check(
+        "上传文件名去路径",
+        code == 200
+        and os.path.exists(os.path.join(root, "books", "_收件箱", "pwn.epub"))
+        and not os.path.exists(os.path.join(root, "..", "pwn.epub")),
+    )
     code, _ = post(port, "/api/import/upload", raw=b"x", headers={"X-Filename": ".."})
     check("上传拒绝 ..", code == 400)
 
@@ -747,12 +786,16 @@ def run_checks(root, ops, port, fixture):
     check("扫描返回 job_id", code == 200 and bool(scan_id))
     detail = wait_job(port, scan_id, ("awaiting_review", "failed"))
     job = (detail or {}).get("job") or {}
-    check("扫描落到 awaiting_review", job.get("state") == "awaiting_review",
-          "%s · %s" % (job.get("state"), job.get("summary")))
-    check("扫描门槛读计划",
-          (job.get("summary") or "").startswith(
-              "计划待确认：add 1 / replace 1 / delete 1 / review 0"),
-          str(job.get("summary")))
+    check(
+        "扫描落到 awaiting_review",
+        job.get("state") == "awaiting_review",
+        "%s · %s" % (job.get("state"), job.get("summary")),
+    )
+    check(
+        "扫描门槛读计划",
+        (job.get("summary") or "").startswith("计划待确认：add 1 / replace 1 / delete 1 / review 0"),
+        str(job.get("summary")),
+    )
     check("步骤都跑完", all(s["state"] == "ok" for s in (detail or {}).get("steps", [])))
     plan_rel = "工作区/运维/jobs/%s/plan.json" % scan_id
     code, plan = get(port, "/api/file?path=" + urllib.request.quote(plan_rel))
@@ -760,32 +803,42 @@ def run_checks(root, ops, port, fixture):
     code, body = get(port, "/api/jobs?state=awaiting_review")
     check("待确认队列能查到", any(j["id"] == scan_id for j in body.get("jobs", [])))
     check("日志接口有内容", "add 1 replace 1 delete 1" in job_log(port, scan_id))
-    check("一个任务只派发一次", job_log(port, scan_id).count("---- step scan ----") == 1,
-          "step 标记 %d 个" % job_log(port, scan_id).count("---- step scan ----"))
+    check(
+        "一个任务只派发一次",
+        job_log(port, scan_id).count("---- step scan ----") == 1,
+        "step 标记 %d 个" % job_log(port, scan_id).count("---- step scan ----"),
+    )
     code, body = get(port, "/api/import/latest")
-    check("最近计划能载入", code == 200 and body.get("job_id") == scan_id
-          and len(body.get("plan") or []) == 3,
-          "%s · %s 行" % (body.get("job_id"), len(body.get("plan") or [])))
+    check(
+        "最近计划能载入",
+        code == 200 and body.get("job_id") == scan_id and len(body.get("plan") or []) == 3,
+        "%s · %s 行" % (body.get("job_id"), len(body.get("plan") or [])),
+    )
     with open(os.path.join(root, plan_rel), "w", encoding="utf-8") as fh:
         json.dump([{"plan_version": 1, "file": "A.epub", "action": "conflict"}], fh)
     code, body = get(port, "/api/import/latest")
-    check("旧计划不给按钮", code == 200 and body.get("legacy") is True
-          and body.get("plan") is None, str(body.get("legacy")))
+    check(
+        "旧计划不给按钮",
+        code == 200 and body.get("legacy") is True and body.get("plan") is None,
+        str(body.get("legacy")),
+    )
     with open(os.path.join(root, plan_rel), "w", encoding="utf-8") as fh:
         json.dump(plan, fh, ensure_ascii=False)
     inbox_a = os.path.join(root, "books", "_收件箱", "A.epub")
     os.replace(inbox_a, inbox_a + ".away")
     try:
         code, body = get(port, "/api/import/latest")
-        check("源文件不在就不给计划", code == 200 and body.get("plan") is None,
-              str(body.get("job_id")))
+        check("源文件不在就不给计划", code == 200 and body.get("plan") is None, str(body.get("job_id")))
     finally:
         os.replace(inbox_a + ".away", inbox_a)
     code, _ = post(port, "/api/jobs/%s/cancel" % scan_id)
     check("待确认任务不能停止", code == 409)
     code, body = get(port, "/api/jobs/%s" % scan_id)
-    check("拒绝停止后仍是待确认", (body.get("job") or {}).get("state") == "awaiting_review",
-          str((body.get("job") or {}).get("state")))
+    check(
+        "拒绝停止后仍是待确认",
+        (body.get("job") or {}).get("state") == "awaiting_review",
+        str((body.get("job") or {}).get("state")),
+    )
 
     edited = json.loads(json.dumps(plan))
     edited[0]["subjects"] = ["文学", "类型小说"]
@@ -793,9 +846,11 @@ def run_checks(root, ops, port, fixture):
     code, body = post(port, "/api/import/plan", {"job_id": scan_id, "items": edited})
     check("计划编辑写回", code == 200 and body.get("items") == 3)
     saved = get(port, "/api/file?path=" + urllib.request.quote(plan_rel))[1]
-    check("写回的是改过的书名与分类",
-          saved[0]["title"] == "改过的书名"
-          and saved[0]["subjects"] == ["文学", "类型小说"], str(saved[0]["title"]))
+    check(
+        "写回的是改过的书名与分类",
+        saved[0]["title"] == "改过的书名" and saved[0]["subjects"] == ["文学", "类型小说"],
+        str(saved[0]["title"]),
+    )
     code, _ = post(port, "/api/import/plan", {"job_id": scan_id, "items": edited[:2]})
     check("计划行数与磁盘不一致被拒", code == 400)
 
@@ -805,17 +860,21 @@ def run_checks(root, ops, port, fixture):
     check("应用返回 job_id", code == 200 and bool(apply_id))
     detail = wait_job(port, apply_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("应用成功看 conflicts 与未匹配",
-          job.get("state") == "succeeded"
-          and job.get("summary") == "conflicts=0，未匹配 0 条",
-          "%s · %s" % (job.get("state"), job.get("summary")))
-    check("应用三步骤", [s["name"] for s in (detail or {}).get("steps", [])]
-          == ["ingest apply", "build_library", "gen_book_catalog"])
+    check(
+        "应用成功看 conflicts 与未匹配",
+        job.get("state") == "succeeded" and job.get("summary") == "conflicts=0，未匹配 0 条",
+        "%s · %s" % (job.get("state"), job.get("summary")),
+    )
+    check(
+        "应用三步骤",
+        [s["name"] for s in (detail or {}).get("steps", [])] == ["ingest apply", "build_library", "gen_book_catalog"],
+    )
     commands = get(port, "/api/jobs/" + apply_id)[1]["commands"]
-    check("应用 argv 用契约命令",
-          commands[-1]["argv"][1].endswith("gen_book_catalog.py")
-          and "--emit-json" in commands[1]["argv"],
-          " · ".join(" ".join(c["argv"][2:]) for c in commands))
+    check(
+        "应用 argv 用契约命令",
+        commands[-1]["argv"][1].endswith("gen_book_catalog.py") and "--emit-json" in commands[1]["argv"],
+        " · ".join(" ".join(c["argv"][2:]) for c in commands),
+    )
 
     # ---- 导入应用：门槛不过 ----------------------------------------
     bad_dir = os.path.join(ops, "jobs", "bad-plan")
@@ -823,33 +882,48 @@ def run_checks(root, ops, port, fixture):
     with open(os.path.join(root, "books", "_收件箱", "X.epub"), "wb") as fh:
         fh.write(b"x")
     with open(os.path.join(bad_dir, "plan.json"), "w", encoding="utf-8") as fh:
-        json.dump([{"plan_version": 2, "file": "X.epub", "action": "add",
-                    "note": "FAILGATE", "subjects": ["文学"], "uid": "B0009",
-                    "title": "X"}], fh)
-    code, body = post(port, "/api/import/apply",
-                      {"plan_path": "工作区/运维/jobs/bad-plan/plan.json"})
+        json.dump(
+            [
+                {
+                    "plan_version": 2,
+                    "file": "X.epub",
+                    "action": "add",
+                    "note": "FAILGATE",
+                    "subjects": ["文学"],
+                    "uid": "B0009",
+                    "title": "X",
+                }
+            ],
+            fh,
+        )
+    code, body = post(port, "/api/import/apply", {"plan_path": "工作区/运维/jobs/bad-plan/plan.json"})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("应用失败判失败", job.get("state") == "failed"
-          and "ingest apply" in (job.get("summary") or ""),
-          "%s · %s" % (job.get("state"), job.get("summary")))
+    check(
+        "应用失败判失败",
+        job.get("state") == "failed" and "ingest apply" in (job.get("summary") or ""),
+        "%s · %s" % (job.get("state"), job.get("summary")),
+    )
 
     # ---- 写任务互斥与取消 ------------------------------------------
     open(os.path.join(root, ".slow-split"), "w").close()
-    code, body = post(port, "/api/split/run",
-                      {"uids": ["B0001", "B0002"], "workers": 2, "replace": False})
+    code, body = post(port, "/api/split/run", {"uids": ["B0001", "B0002"], "workers": 2, "replace": False})
     slow_id = body.get("job_id")
     slow_batch = body.get("batch") or ""
-    check("拆章返回 job_id 与批次", code == 200 and slow_id
-          and slow_batch.startswith("split-ops-"), str(slow_batch))
+    check("拆章返回 job_id 与批次", code == 200 and slow_id and slow_batch.startswith("split-ops-"), str(slow_batch))
     detail = wait_job(port, slow_id, ("running",))
     check("拆章进入 running", (detail or {}).get("job", {}).get("state") == "running")
     argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
-    check("拆章 argv 含 --uids 与 --workers",
-          "--uids" in argv and argv[argv.index("--uids") + 1] == "B0001,B0002"
-          and argv[argv.index("--workers") + 1] == "2" and "--report-json" in argv,
-          " ".join(argv[2:]))
+    check(
+        "拆章 argv 含 --uids 与 --workers",
+        "--uids" in argv
+        and argv[argv.index("--uids") + 1] == "B0001,B0002"
+        and argv[argv.index("--workers") + 1] == "2"
+        and "--report-json" in argv,
+        " ".join(argv[2:]),
+    )
     import fcntl
+
     lock_path = os.path.join(ops, ".writer.lock")
     holder = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
     try:
@@ -864,18 +938,18 @@ def run_checks(root, ops, port, fixture):
     check("写任务在跑时第二个写任务被拒", code == 409, str(body.get("error")))
     os.makedirs(os.path.join(root, "工作区", "批次", slow_batch, "logs"), exist_ok=True)
     code, body = post(port, "/api/split/inspect", {"uid": "B0001", "batch": slow_batch})
-    check("查看问题不进写任务入口", code == 200 and body.get("job_id"),
-          str(body.get("error")))
+    check("查看问题不进写任务入口", code == 200 and body.get("job_id"), str(body.get("error")))
     # ---- 读任务不该被写任务卡住 ------------------------------------
     open(os.path.join(root, ".slow-review"), "w").close()
     code, body = post(port, "/api/split/inspect", {"uid": "B0001", "batch": slow_batch})
     inspect_id = body.get("job_id")
-    check("慢查看问题受理，拆章还在跑", code == 200 and inspect_id,
-          str(body.get("error")))
+    check("慢查看问题受理，拆章还在跑", code == 200 and inspect_id, str(body.get("error")))
     detail = wait_job(port, inspect_id, ("running",), timeout=15)
-    check("拆章在跑时查看问题照样 running",
-          (detail or {}).get("job", {}).get("state") == "running",
-          str((detail or {}).get("job", {}).get("state")))
+    check(
+        "拆章在跑时查看问题照样 running",
+        (detail or {}).get("job", {}).get("state") == "running",
+        str((detail or {}).get("job", {}).get("state")),
+    )
     lock_path = os.path.join(ops, ".reader.lock")
     holder = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
     try:
@@ -889,18 +963,22 @@ def run_checks(root, ops, port, fixture):
     code, body = post(port, "/api/jobs/%s/cancel" % slow_id)
     check("停止接口接受", code == 200)
     detail = wait_job(port, slow_id, ("cancelled", "failed"), timeout=40)
-    check("取消后是 cancelled",
-          (detail or {}).get("job", {}).get("state") == "cancelled",
-          str((detail or {}).get("job", {}).get("state")))
+    check(
+        "取消后是 cancelled",
+        (detail or {}).get("job", {}).get("state") == "cancelled",
+        str((detail or {}).get("job", {}).get("state")),
+    )
     os.remove(os.path.join(root, ".slow-split"))
     code, body = post(port, "/api/jobs/%s/cancel" % slow_id)
     check("已结束的任务不能再取消", code == 409)
     code, body = post(port, "/api/jobs/%s/cancel" % inspect_id)
     check("跑着的查看问题可取消", code == 200, str(body.get("error")))
     detail = wait_job(port, inspect_id, ("cancelled", "failed"), timeout=20)
-    check("查看问题取消后是 cancelled",
-          (detail or {}).get("job", {}).get("state") == "cancelled",
-          str((detail or {}).get("job", {}).get("state")))
+    check(
+        "查看问题取消后是 cancelled",
+        (detail or {}).get("job", {}).get("state") == "cancelled",
+        str((detail or {}).get("job", {}).get("state")),
+    )
     os.remove(os.path.join(root, ".slow-review"))
 
     # ---- 提交后立刻取消：终态必须是 cancelled，不能被门槛回写成成功/失败 ----
@@ -910,8 +988,7 @@ def run_checks(root, ops, port, fixture):
     check("立刻取消的长任务受理", code == 200 and bool(quick_id), str(body.get("error")))
     code, body = post(port, "/api/jobs/%s/cancel" % quick_id)
     check("提交后立刻取消被接受", code == 200, str(body))
-    detail = wait_job(port, quick_id, ("cancelled", "failed", "succeeded", "orphaned"),
-                      timeout=40)
+    detail = wait_job(port, quick_id, ("cancelled", "failed", "succeeded", "orphaned"), timeout=40)
     state = ((detail or {}).get("job") or {}).get("state")
     check("立刻取消的任务终态是 cancelled", state == "cancelled", str(state))
     # finalize 是异步的：等它跑完再读一次，确认没被门槛覆盖
@@ -920,34 +997,42 @@ def run_checks(root, ops, port, fixture):
     check("取消不会被门槛回写", again.get("state") == "cancelled", str(again.get("state")))
     body = get(port, "/api/jobs")[1] or {}
     row = next((j for j in body.get("jobs", []) if j.get("id") == quick_id), {})
-    check("任务列表里也是 cancelled", row.get("state") == "cancelled",
-          str(row.get("state")))
+    check("任务列表里也是 cancelled", row.get("state") == "cancelled", str(row.get("state")))
     os.remove(os.path.join(root, ".slow-review"))
 
     # ---- 拆章门槛读 report-json ------------------------------------
     code, body = post(port, "/api/split/run", {"uids": ["B0003"], "workers": 1})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("拆章成功读统计",
-          job.get("state") == "succeeded" and "landed" in (job.get("summary") or ""),
-          "%s · %s" % (job.get("state"), job.get("summary")))
-    check("拆章步骤名", [s["name"] for s in (detail or {}).get("steps", [])[:3]]
-          == ["split", "build_library", "gen_book_catalog"])
+    check(
+        "拆章成功读统计",
+        job.get("state") == "succeeded" and "landed" in (job.get("summary") or ""),
+        "%s · %s" % (job.get("state"), job.get("summary")),
+    )
+    check(
+        "拆章步骤名",
+        [s["name"] for s in (detail or {}).get("steps", [])[:3]] == ["split", "build_library", "gen_book_catalog"],
+    )
 
     os.makedirs(os.path.join(root, "工作区", "批次", slow_batch, "logs"), exist_ok=True)
     clear_split_flags(root)
-    code, body = post(port, "/api/split/run",
-                      {"uids": ["B0004"], "only": "B0004", "batch": slow_batch,
-                       "workers": 1})
+    code, body = post(port, "/api/split/run", {"uids": ["B0004"], "only": "B0004", "batch": slow_batch, "workers": 1})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
-    check("单本重跑带 --only 且复用批次",
-          code == 200 and "--only" in argv and argv[argv.index("--only") + 1] == "B0004"
-          and argv[argv.index("--batch") + 1] == slow_batch, " ".join(argv[2:]))
+    check(
+        "单本重跑带 --only 且复用批次",
+        code == 200
+        and "--only" in argv
+        and argv[argv.index("--only") + 1] == "B0004"
+        and argv[argv.index("--batch") + 1] == slow_batch,
+        " ".join(argv[2:]),
+    )
     flags = split_flags(root)
-    check("单本重跑真的重拆",
-          flags.get("force") is True and flags.get("only") == "B0004"
-          and "--force" in (flags.get("argv") or []), str(flags))
+    check(
+        "单本重跑真的重拆",
+        flags.get("force") is True and flags.get("only") == "B0004" and "--force" in (flags.get("argv") or []),
+        str(flags),
+    )
 
     clear_split_flags(root)
     code, body = post(port, "/api/split/recheck", {"uid": "B0004", "batch": slow_batch})
@@ -955,47 +1040,67 @@ def run_checks(root, ops, port, fixture):
     job = (detail or {}).get("job") or {}
     flags = split_flags(root)
     argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
-    check("重新检查只复核不重拆",
-          code == 200 and flags.get("recheck") is True and flags.get("only") == "B0004"
-          and flags.get("force") is False and "--recheck" in argv
-          and "--force" not in argv, str(flags))
-    check("重新检查读完统计判完成",
-          job.get("state") == "succeeded" and "待复核" not in (job.get("summary") or ""),
-          "%s · %s" % (job.get("state"), job.get("summary")))
+    check(
+        "重新检查只复核不重拆",
+        code == 200
+        and flags.get("recheck") is True
+        and flags.get("only") == "B0004"
+        and flags.get("force") is False
+        and "--recheck" in argv
+        and "--force" not in argv,
+        str(flags),
+    )
+    check(
+        "重新检查读完统计判完成",
+        job.get("state") == "succeeded" and "待复核" not in (job.get("summary") or ""),
+        "%s · %s" % (job.get("state"), job.get("summary")),
+    )
 
-    code, body = post(port, "/api/split/run",
-                      {"uids": ["B0005"], "only": "B0005", "batch": slow_batch,
-                       "workers": 1})
+    code, body = post(port, "/api/split/run", {"uids": ["B0005"], "only": "B0005", "batch": slow_batch, "workers": 1})
     detail = wait_job(port, body.get("job_id"), ("awaiting_review", "succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("暂存区有产物时停在待复核",
-          job.get("state") == "awaiting_review" and "待复核" in (job.get("summary") or ""),
-          "%s · %s" % (job.get("state"), job.get("summary")))
+    check(
+        "暂存区有产物时停在待复核",
+        job.get("state") == "awaiting_review" and "待复核" in (job.get("summary") or ""),
+        "%s · %s" % (job.get("state"), job.get("summary")),
+    )
 
     code, body = post(port, "/api/split/inspect", {"uid": "B0004", "batch": slow_batch})
     inspect_id = body.get("job_id")
     detail = wait_job(port, inspect_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("查看问题给出审计比与未收录页",
-          job.get("state") == "succeeded" and "审计比" in (job.get("summary") or "")
-          and "未收录" in (job.get("summary") or ""),
-          "%s · %s" % (job.get("state"), job.get("summary")))
+    check(
+        "查看问题给出审计比与未收录页",
+        job.get("state") == "succeeded"
+        and "审计比" in (job.get("summary") or "")
+        and "未收录" in (job.get("summary") or ""),
+        "%s · %s" % (job.get("state"), job.get("summary")),
+    )
     argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
-    check("查看问题 argv 用契约命令",
-          len(argv) == 6 and argv[1].endswith("md_review_report.py")
-          and argv[2] == slow_batch and argv[3] == "B0004" and argv[4] == "--json"
-          and argv[5] == "工作区/运维/jobs/%s/result.json" % inspect_id,
-          " ".join(argv[2:]))
-    code, rows = get(port, "/api/file?path=" + urllib.request.quote(
-        "工作区/运维/jobs/%s/result.json" % inspect_id))
-    check("核对证据能从文件接口读回",
-          code == 200 and isinstance(rows, list) and rows[0].get("uid") == "B0004"
-          and rows[0].get("dup_shingles") == 2, "code=%s" % code)
+    check(
+        "查看问题 argv 用契约命令",
+        len(argv) == 6
+        and argv[1].endswith("md_review_report.py")
+        and argv[2] == slow_batch
+        and argv[3] == "B0004"
+        and argv[4] == "--json"
+        and argv[5] == "工作区/运维/jobs/%s/result.json" % inspect_id,
+        " ".join(argv[2:]),
+    )
+    code, rows = get(port, "/api/file?path=" + urllib.request.quote("工作区/运维/jobs/%s/result.json" % inspect_id))
+    check(
+        "核对证据能从文件接口读回",
+        code == 200 and isinstance(rows, list) and rows[0].get("uid") == "B0004" and rows[0].get("dup_shingles") == 2,
+        "code=%s" % code,
+    )
     code, body = post(port, "/api/split/inspect", {"uid": "B0009", "batch": slow_batch})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("没有证据时查看问题判失败", job.get("state") == "failed"
-          and "暂存区" in (job.get("summary") or ""), str(job.get("summary")))
+    check(
+        "没有证据时查看问题判失败",
+        job.get("state") == "failed" and "暂存区" in (job.get("summary") or ""),
+        str(job.get("summary")),
+    )
     for route in ("/api/split/inspect", "/api/split/recheck"):
         code, body = post(port, route, {"uid": "B0004", "batch": "nope-20260101"})
         check("批次不存在时 %s 回 404" % route, code == 404, str(body.get("error")))
@@ -1006,72 +1111,92 @@ def run_checks(root, ops, port, fixture):
     detail = wait_job(port, triage_id, ("awaiting_review", "failed"))
     job = (detail or {}).get("job") or {}
     check("分诊落到 awaiting_review", job.get("state") == "awaiting_review")
-    check("分诊摘要带模型建议", "OCR" in (job.get("summary") or ""),
-          str(job.get("summary")))
+    check("分诊摘要带模型建议", "OCR" in (job.get("summary") or ""), str(job.get("summary")))
     triage_dir = os.path.join(ops, "jobs", triage_id)
-    check("分诊产物齐全",
-          os.path.exists(os.path.join(triage_dir, "result.json"))
-          and os.path.exists(os.path.join(triage_dir, "thumbs", "160.png")))
-    code, result = get(port, "/api/file?path=" + urllib.request.quote(
-        "工作区/运维/jobs/%s/result.json" % triage_id))
-    check("分诊结果可读且带 model",
-          code == 200 and (result.get("model") or {}).get("route") == "OCR")
-    code, _ = get(port, "/api/file?path=" + urllib.request.quote(
-        "工作区/运维/jobs/%s/thumbs/001.png" % triage_id))
+    check(
+        "分诊产物齐全",
+        os.path.exists(os.path.join(triage_dir, "result.json"))
+        and os.path.exists(os.path.join(triage_dir, "thumbs", "160.png")),
+    )
+    code, result = get(port, "/api/file?path=" + urllib.request.quote("工作区/运维/jobs/%s/result.json" % triage_id))
+    check("分诊结果可读且带 model", code == 200 and (result.get("model") or {}).get("route") == "OCR")
+    code, _ = get(port, "/api/file?path=" + urllib.request.quote("工作区/运维/jobs/%s/thumbs/001.png" % triage_id))
     check("缩略图可下", code == 200)
     triage_argv = ((detail or {}).get("commands") or [{}])[0]["argv"]
-    check("分诊 argv 用契约命令",
-          triage_argv[1].endswith("ops_pdf_triage.py")
-          and triage_argv[triage_argv.index("--uid") + 1] == "B0001"
-          and triage_argv[triage_argv.index("--out") + 1] ==
-          "工作区/运维/jobs/" + triage_id, " ".join(triage_argv[2:]))
+    check(
+        "分诊 argv 用契约命令",
+        triage_argv[1].endswith("ops_pdf_triage.py")
+        and triage_argv[triage_argv.index("--uid") + 1] == "B0001"
+        and triage_argv[triage_argv.index("--out") + 1] == "工作区/运维/jobs/" + triage_id,
+        " ".join(triage_argv[2:]),
+    )
 
     # ---- PDF 确认 --------------------------------------------------
-    code, body = post(port, "/api/pdf/confirm",
-                      {"uid": "B0001", "route": "OCR", "reason": "人工看有字迹",
-                       "verdict": "文字书",
-                       "model": {"route": "OCR", "confidence": 0.86, "reason": "有字迹"}})
+    code, body = post(
+        port,
+        "/api/pdf/confirm",
+        {
+            "uid": "B0001",
+            "route": "OCR",
+            "reason": "人工看有字迹",
+            "verdict": "文字书",
+            "model": {"route": "OCR", "confidence": 0.86, "reason": "有字迹"},
+        },
+    )
     confirm_id = body.get("job_id")
-    check("确认返回 batch", code == 200 and str(body.get("batch", "")).startswith(
-        "pdf-ocr-ops-"), str(body.get("batch")))
+    check(
+        "确认返回 batch", code == 200 and str(body.get("batch", "")).startswith("pdf-ocr-ops-"), str(body.get("batch"))
+    )
     detail = wait_job(port, confirm_id, ("succeeded", "failed"))
-    check("确认任务成功", (detail or {}).get("job", {}).get("state") == "succeeded",
-          str((detail or {}).get("job", {}).get("summary")))
+    check(
+        "确认任务成功",
+        (detail or {}).get("job", {}).get("state") == "succeeded",
+        str((detail or {}).get("job", {}).get("summary")),
+    )
     review_rel = body.get("review") or ""
-    review = json.load(open(os.path.join(root, review_rel), encoding="utf-8"))
-    check("review.json 形状对",
-          review.get("uid") == "B0001" and review.get("route") == "OCR"
-          and (review.get("model") or {}).get("confidence") == 0.86)
+    review = json.loads(Path(os.path.join(root, review_rel)).read_text(encoding="utf-8"))
+    check(
+        "review.json 形状对",
+        review.get("uid") == "B0001"
+        and review.get("route") == "OCR"
+        and (review.get("model") or {}).get("confidence") == 0.86,
+    )
     code, body = post(port, "/api/pdf/confirm", {"uid": "B0001", "route": "瞎写"})
     check("非法 route 被拒", code == 400)
 
     # ---- PDF 转 md -------------------------------------------------
     batch_dir = os.path.join(root, "工作区", "批次")
-    triage_batch = [n for n in os.listdir(batch_dir) if n.startswith("pdf-ocr-ops-")][0]
-    with open(os.path.join(batch_dir, triage_batch, "triage_final.csv"), "w",
-              encoding="utf-8") as fh:
+    triage_batch = next(n for n in os.listdir(batch_dir) if n.startswith("pdf-ocr-ops-"))
+    with open(os.path.join(batch_dir, triage_batch, "triage_final.csv"), "w", encoding="utf-8") as fh:
         fh.write("uid,title,subject1,subject2,class,route,pages\n")
         fh.write("B0005,书 五,文学,,C 扫描件,OCR,40\n")
         fh.write("B0002,书 二,文学,,C 扫描件,不转-记图册,20\n")
     code, body = post(port, "/api/pdf/run", {"uids": ["B0005"], "workers": 1})
     pdf_id = body.get("job_id")
-    check("PDF 运行按 route 分组",
-          code == 200 and (body.get("routes") or {}).get("ocr") == 1, str(body))
+    check("PDF 运行按 route 分组", code == 200 and (body.get("routes") or {}).get("ocr") == 1, str(body))
     detail = wait_job(port, pdf_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("PDF 成功读统计", job.get("state") == "succeeded"
-          and "落地" in (job.get("summary") or ""), str(job.get("summary")))
-    check("PDF 步骤接重建", [s["name"] for s in (detail or {}).get("steps", [])][-2:]
-          == ["build_library", "gen_book_catalog"])
+    check(
+        "PDF 成功读统计",
+        job.get("state") == "succeeded" and "落地" in (job.get("summary") or ""),
+        str(job.get("summary")),
+    )
+    check(
+        "PDF 步骤接重建",
+        [s["name"] for s in (detail or {}).get("steps", [])][-2:] == ["build_library", "gen_book_catalog"],
+    )
     argv = ((detail or {}).get("commands") or [{}])[0]["argv"]
-    check("PDF argv 带 --triage 与新批次",
-          "--route" in argv and argv[argv.index("--route") + 1] == "ocr"
-          and argv[argv.index("--batch") + 1] == triage_batch, " ".join(argv[2:]))
+    check(
+        "PDF argv 带 --triage 与新批次",
+        "--route" in argv
+        and argv[argv.index("--route") + 1] == "ocr"
+        and argv[argv.index("--batch") + 1] == triage_batch,
+        " ".join(argv[2:]),
+    )
     venv_py = os.path.join(root, "工作区", ".venv-pdf", "bin", "python")
-    check("PDF 转写用 .venv-pdf 的解释器",
-          os.path.abspath(argv[0]) == venv_py, argv[0])
+    check("PDF 转写用 .venv-pdf 的解释器", os.path.abspath(argv[0]) == venv_py, argv[0])
     cpath = os.path.join(root, "工作区", "运维", "jobs", pdf_id, "commands.json")
-    stale = json.load(open(cpath, encoding="utf-8"))
+    stale = json.loads(Path(cpath).read_text(encoding="utf-8"))
     stale[0]["argv"][0] = sys.executable
     with open(cpath, "w", encoding="utf-8") as fh:
         json.dump(stale, fh, ensure_ascii=False)
@@ -1085,8 +1210,7 @@ def run_checks(root, ops, port, fixture):
     check("PDF 重跑开新任务", code == 200 and rerun_id not in (None, pdf_id), str(body))
     detail = wait_job(port, rerun_id, ("succeeded", "failed"))
     rerun_argv = ((detail or {}).get("commands") or [{}])[0]["argv"]
-    check("PDF 重跑也用 .venv-pdf 的解释器",
-          os.path.abspath(rerun_argv[0]) == venv_py, rerun_argv[0])
+    check("PDF 重跑也用 .venv-pdf 的解释器", os.path.abspath(rerun_argv[0]) == venv_py, rerun_argv[0])
     try:
         os.remove(venv_py)
         code, body = post(port, "/api/pdf/run", {"uids": ["B0005"], "workers": 1})
@@ -1094,9 +1218,11 @@ def run_checks(root, ops, port, fixture):
     finally:
         os.symlink(sys.executable, venv_py)
     job = (detail or {}).get("job") or {}
-    check("缺 PDF 解释器时日志写明，不抛服务端异常",
-          job.get("state") == "failed" and "解释器不存在" in str((detail or {}).get("log_tail")),
-          str(job.get("summary")))
+    check(
+        "缺 PDF 解释器时日志写明，不抛服务端异常",
+        job.get("state") == "failed" and "解释器不存在" in str((detail or {}).get("log_tail")),
+        str(job.get("summary")),
+    )
     code, body = post(port, "/api/pdf/run", {"uids": ["B0002"]})
     check("没有可转 route 时拒绝", code == 400, str(body.get("error")))
 
@@ -1106,150 +1232,180 @@ def run_checks(root, ops, port, fixture):
     gid = "gate-pdf-skip"
     os.makedirs(env.job_dir(gid), exist_ok=True)
     with open(os.path.join(env.job_dir(gid), "report.json"), "w", encoding="utf-8") as fh:
-        json.dump({"landed": 0, "remaining_books": 0, "remaining_pages": 0,
-                   "status_counts": {"skipped-has-md": 3}}, fh)
+        json.dump({"landed": 0, "remaining_books": 0, "remaining_pages": 0, "status_counts": {"skipped-has-md": 3}}, fh)
     state, summary = mod.gate_pdf(mod.Ctx(env, {"id": gid}, [], [("pdf ocr", 0)]))
-    check("空转那次的摘要写明是已有 md 跳过",
-          state == "succeeded" and "落地 0 本" in summary and "3 本已有 md 跳过" in summary,
-          "%s · %s" % (state, summary))
+    check(
+        "空转那次的摘要写明是已有 md 跳过",
+        state == "succeeded" and "落地 0 本" in summary and "3 本已有 md 跳过" in summary,
+        "%s · %s" % (state, summary),
+    )
 
     # ---- 待转 PDF 清单 ---------------------------------------------
     code, body = get(port, "/api/pdf/books")
     books = (body or {}).get("books") or []
     counts = (body or {}).get("counts") or {}
-    check("待转清单给 books 与四类计数",
-          code == 200 and isinstance(books, list)
-          and set(counts) == {"convert", "gallery", "ja", "untriaged"},
-          "code=%s 本数=%d 计数=%s" % (code, len(books), counts))
+    check(
+        "待转清单给 books 与四类计数",
+        code == 200 and isinstance(books, list) and set(counts) == {"convert", "gallery", "ja", "untriaged"},
+        "code=%s 本数=%d 计数=%s" % (code, len(books), counts),
+    )
     row = next((r for r in books if r.get("uid") == "B0003"), {})
-    check("不转清单里的书处置判为只记图册", row.get("disposition") == "gallery",
-          "%s → %s" % (row.get("uid"), row.get("disposition")))
+    check(
+        "不转清单里的书处置判为只记图册",
+        row.get("disposition") == "gallery",
+        "%s → %s" % (row.get("uid"), row.get("disposition")),
+    )
     code, body = post(port, "/api/pdf/run", {"uids": ["B0003"]})
-    check("只记图册未二次确认就不转",
-          code == 400 and "只记图册" in str(body.get("error")), str(body.get("error")))
+    check("只记图册未二次确认就不转", code == 400 and "只记图册" in str(body.get("error")), str(body.get("error")))
     code, body = post(port, "/api/pdf/run", {"uids": ["B0003"], "force": True})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     commands = (detail or {}).get("commands") or []
     names = [c.get("name") for c in commands]
-    batch_argv = next((c.get("argv") or [] for c in commands
-                       if len(c.get("argv") or []) > 1
-                       and str(c["argv"][1]).endswith("pdf_md_batch.py")), [])
-    review = os.path.join(root, "工作区", "批次", body.get("batch") or "", "review",
-                          "B0003.json")
-    check("二次确认后先改判再按扫描识别转",
-          code == 200 and body.get("forced") == 1 and names[:1] == ["apply_review"]
-          and (detail or {}).get("job", {}).get("state") == "succeeded"
-          and batch_argv
-          and batch_argv[batch_argv.index("--route") + 1] == "ocr"
-          and "B0003" in batch_argv[batch_argv.index("--uids") + 1].split(",")
-          and str(body.get("batch") or "").startswith("pdf-ocr-ops-")
-          and os.path.isfile(review),
-          "步骤=%s 判定=%s 批次=%s" % (names, (detail or {}).get("job", {}).get("summary"),
-                                  body.get("batch")))
+    batch_argv = next(
+        (
+            c.get("argv") or []
+            for c in commands
+            if len(c.get("argv") or []) > 1 and str(c["argv"][1]).endswith("pdf_md_batch.py")
+        ),
+        [],
+    )
+    review = os.path.join(root, "工作区", "批次", body.get("batch") or "", "review", "B0003.json")
+    check(
+        "二次确认后先改判再按扫描识别转",
+        code == 200
+        and body.get("forced") == 1
+        and names[:1] == ["apply_review"]
+        and (detail or {}).get("job", {}).get("state") == "succeeded"
+        and batch_argv
+        and batch_argv[batch_argv.index("--route") + 1] == "ocr"
+        and "B0003" in batch_argv[batch_argv.index("--uids") + 1].split(",")
+        and str(body.get("batch") or "").startswith("pdf-ocr-ops-")
+        and os.path.isfile(review),
+        "步骤=%s 判定=%s 批次=%s" % (names, (detail or {}).get("job", {}).get("summary"), body.get("batch")),
+    )
     code, body = post(port, "/api/pdf/run", {"uids": ["B0004"]})
     triage_id = (body.get("triage_jobs") or [None])[0]
     detail = wait_job(port, triage_id, ("awaiting_review", "failed")) if triage_id else None
     argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
-    check("未分诊的书只送分诊不建转写任务",
-          code == 200 and body.get("job_id") is None and body.get("triaged") == 1
-          and len(body.get("triage_jobs") or []) == 1
-          and argv[argv.index("--uid") + 1] == "B0004", str(body))
+    check(
+        "未分诊的书只送分诊不建转写任务",
+        code == 200
+        and body.get("job_id") is None
+        and body.get("triaged") == 1
+        and len(body.get("triage_jobs") or []) == 1
+        and argv[argv.index("--uid") + 1] == "B0004",
+        str(body),
+    )
 
     # ---- 批量分诊与改处置 -------------------------------------------
     code, body = get(port, "/api/pdf/books")
-    untriaged = [r["uid"] for r in (body.get("books") or [])
-                 if r.get("disposition") == "untriaged"]
+    untriaged = [r["uid"] for r in (body.get("books") or []) if r.get("disposition") == "untriaged"]
     target = untriaged[0] if untriaged else ""
     check("清单里还有未分诊的书", bool(untriaged), str(untriaged))
     code, body = post(port, "/api/pdf/triage-batch", {})
-    check("已经有了建议的书，默认不再重跑分诊", code == 400
-          and "建议" in str(body.get("error")), str(body.get("error")))
+    check(
+        "已经有了建议的书，默认不再重跑分诊", code == 400 and "建议" in str(body.get("error")), str(body.get("error"))
+    )
     code, body = post(port, "/api/pdf/triage-batch", {"uids": untriaged})
     batch_id = body.get("job_id")
     detail = wait_job(port, batch_id, ("awaiting_review", "failed"))
     steps = (detail or {}).get("steps") or []
     argvs = [c.get("argv") or [] for c in ((detail or {}).get("commands") or [])]
-    check("批量分诊按未分诊本数出步，每步 --out 落在自己的目录",
-          code == 200 and len(steps) == len(untriaged) and bool(argvs)
-          and all("--out" in argv_one
-                  and argv_one[argv_one.index("--out") + 1].endswith("/" + uid)
-                  for argv_one, uid in zip(argvs, untriaged)),
-          "步数=%d 未分诊=%s" % (len(steps), untriaged))
+    check(
+        "批量分诊按未分诊本数出步，每步 --out 落在自己的目录",
+        code == 200
+        and len(steps) == len(untriaged)
+        and bool(argvs)
+        and all(
+            "--out" in argv_one and argv_one[argv_one.index("--out") + 1].endswith("/" + uid)
+            for argv_one, uid in zip(argvs, untriaged, strict=False)
+        ),
+        "步数=%d 未分诊=%s" % (len(steps), untriaged),
+    )
     job = (detail or {}).get("job") or {}
     summary = job.get("summary") or ""
-    check("批量分诊停在待确认，摘要写本数与建议",
-          job.get("state") == "awaiting_review" and "本" in summary
-          and "建议" in summary, str(summary))
+    check(
+        "批量分诊停在待确认，摘要写本数与建议",
+        job.get("state") == "awaiting_review" and "本" in summary and "建议" in summary,
+        str(summary),
+    )
     code, body = get(port, "/api/pdf/books")
     row = next((r for r in (body.get("books") or []) if r.get("uid") == target), {})
     suggestion = row.get("suggestion") or {}
-    check("未分诊的行带建议，并指向出建议的那个任务",
-          suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
-          "%s 建议=%s 任务=%s" % (target, suggestion, row.get("suggest_job")))
+    check(
+        "未分诊的行带建议，并指向出建议的那个任务",
+        suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
+        "%s 建议=%s 任务=%s" % (target, suggestion, row.get("suggest_job")),
+    )
     ops_db = os.path.join(root, "工作区", "运维", "ops.db")
     set_job_state(ops_db, batch_id, "failed")
     code, body = get(port, "/api/pdf/books")
     row = next((r for r in (body.get("books") or []) if r.get("uid") == target), {})
     suggestion = row.get("suggestion") or {}
-    check("任务后来判失败，已落盘的建议仍然算",
-          suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
-          "%s 建议=%s 来自=%s 期望=%s" % (target, suggestion.get("route"),
-                                     row.get("suggest_job"), batch_id))
+    check(
+        "任务后来判失败，已落盘的建议仍然算",
+        suggestion.get("route") == "OCR" and row.get("suggest_job") == batch_id,
+        "%s 建议=%s 来自=%s 期望=%s" % (target, suggestion.get("route"), row.get("suggest_job"), batch_id),
+    )
     job_csv = os.path.join(ops, "jobs", batch_id, target, "triage.csv")
     with open(job_csv, "w", encoding="utf-8") as fh:
-        fh.write("uid,title,subject1,subject2,class,route,pages,mb,ppi,text_page_share,"
-                 "ink,bands,note,verdict,image_share,measure,route_metric\n")
-        fh.write("%s,书 %s,文学,,C 扫描件 批次标记,OCR,320,1.0,,0.0,0.42,2,stub,,"
-                 "1.0,stub,OCR\n" % (target, target))
-    code, body = post(port, "/api/pdf/settle",
-                      {"items": [{"uid": target, "route": "OCR"}]})
+        fh.write(
+            "uid,title,subject1,subject2,class,route,pages,mb,ppi,text_page_share,"
+            "ink,bands,note,verdict,image_share,measure,route_metric\n"
+        )
+        fh.write("%s,书 %s,文学,,C 扫描件 批次标记,OCR,320,1.0,,0.0,0.42,2,stub,,1.0,stub,OCR\n" % (target, target))
+    code, body = post(port, "/api/pdf/settle", {"items": [{"uid": target, "route": "OCR"}]})
     wait_job(port, body.get("job_id"), ("succeeded", "failed"))
-    review_path = os.path.join(root, "工作区", "批次", body.get("batch") or "",
-                               "review", target + ".json")
-    review = json.load(open(review_path, encoding="utf-8")) \
-        if os.path.isfile(review_path) else {}
-    batch_csv = os.path.join(root, "工作区", "批次", body.get("batch") or "",
-                             "triage.csv")
-    line = next((ln for ln in open(batch_csv, encoding="utf-8")
-                 if ln.split(",", 1)[0] == target), "") \
-        if os.path.isfile(batch_csv) else ""
-    check("失败任务的分诊行还是改处置的底表",
-          (review.get("model") or {}).get("route") == "OCR"
-          and "批次标记" in line,
-          "review=%s 行=%s" % ((review.get("model") or {}).get("route"),
-                               line.strip()[:80]))
+    review_path = os.path.join(root, "工作区", "批次", body.get("batch") or "", "review", target + ".json")
+    review = json.loads(Path(review_path).read_text(encoding="utf-8")) if os.path.isfile(review_path) else {}
+    batch_csv = os.path.join(root, "工作区", "批次", body.get("batch") or "", "triage.csv")
+    line = (
+        next(
+            (ln for ln in Path(batch_csv).read_text(encoding="utf-8").splitlines() if ln.split(",", 1)[0] == target),
+            "",
+        )
+        if os.path.isfile(batch_csv)
+        else ""
+    )
+    check(
+        "失败任务的分诊行还是改处置的底表",
+        (review.get("model") or {}).get("route") == "OCR" and "批次标记" in line,
+        "review=%s 行=%s" % ((review.get("model") or {}).get("route"), line.strip()[:80]),
+    )
     set_job_state(ops_db, batch_id, "awaiting_review")
-    code, body = post(port, "/api/pdf/settle",
-                      {"items": [{"uid": target, "route": "本地抽文本"}]})
+    code, body = post(port, "/api/pdf/settle", {"items": [{"uid": target, "route": "本地抽文本"}]})
     settle_id = body.get("job_id")
     detail = wait_job(port, settle_id, ("succeeded", "failed"))
-    review_path = os.path.join(root, "工作区", "批次", body.get("batch") or "",
-                              "review", target + ".json")
-    review = json.load(open(review_path, encoding="utf-8")) \
-        if os.path.isfile(review_path) else {}
+    review_path = os.path.join(root, "工作区", "批次", body.get("batch") or "", "review", target + ".json")
+    review = json.loads(Path(review_path).read_text(encoding="utf-8")) if os.path.isfile(review_path) else {}
     settle_steps = [s["name"] for s in ((detail or {}).get("steps") or [])]
-    check("改处置先写 review，再跑 apply_review",
-          code == 200 and settle_steps[:1] == ["apply_review"]
-          and review.get("route") == "本地抽文本"
-          and (detail or {}).get("job", {}).get("state") == "succeeded",
-          "步骤=%s route=%s" % (settle_steps, review.get("route")))
+    check(
+        "改处置先写 review，再跑 apply_review",
+        code == 200
+        and settle_steps[:1] == ["apply_review"]
+        and review.get("route") == "本地抽文本"
+        and (detail or {}).get("job", {}).get("state") == "succeeded",
+        "步骤=%s route=%s" % (settle_steps, review.get("route")),
+    )
     code, body = get(port, "/api/pdf/books")
     row = next((r for r in (body.get("books") or []) if r.get("uid") == target), {})
-    check("改处置之后那本书算可转", row.get("disposition") == "convert",
-          "%s → %s" % (target, row.get("disposition")))
-    code, body = post(port, "/api/pdf/settle",
-                      {"items": [{"uid": target, "route": "人工确认"}]})
+    check("改处置之后那本书算可转", row.get("disposition") == "convert", "%s → %s" % (target, row.get("disposition")))
+    code, body = post(port, "/api/pdf/settle", {"items": [{"uid": target, "route": "人工确认"}]})
     check("人工确认不算一个处置，改处置拒绝它", code == 400, str(body.get("error")))
     code, body = get(port, "/api/pdf/books")
     today = (body or {}).get("today") or {}
-    check("清单给今天的额度", today.get("cap") == 20000
-          and isinstance(today.get("used"), int), str(today))
+    check("清单给今天的额度", today.get("cap") == 20000 and isinstance(today.get("used"), int), str(today))
     code, body = get(port, "/api/pdf/queue")
     part = ((body or {}).get("batch") or {}).get("partition") or {}
-    check("旧批次给落地与未落地的分解",
-          part.get("landed") == 1 and part.get("failed") == 1
-          and part.get("staged") == 0 and part.get("untouched") == 1
-          and part.get("left") == 2, str(part))
+    check(
+        "旧批次给落地与未落地的分解",
+        part.get("landed") == 1
+        and part.get("failed") == 1
+        and part.get("staged") == 0
+        and part.get("untouched") == 1
+        and part.get("left") == 2,
+        str(part),
+    )
 
     # ---- 跨日的分诊表 -----------------------------------------------
     today_name = mod.TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")
@@ -1258,23 +1414,32 @@ def run_checks(root, ops, port, fixture):
         kept = [ln for ln in fh if not ln.startswith(target + ",")]
     with open(today_final, "w", encoding="utf-8") as fh:
         fh.writelines(kept)
-    old_name = mod.TRIAGE_BATCH_PREFIX + time.strftime(
-        "%Y-%m-%d", time.localtime(time.time() - 86400))
+    old_name = mod.TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
     old_dir = os.path.join(root, "工作区", "批次", old_name)
     os.makedirs(old_dir, exist_ok=True)
     with open(os.path.join(old_dir, "triage_final.csv"), "w", encoding="utf-8") as fh:
         fh.write("uid,title,subject1,subject2,class,route,pages\n")
         fh.write("%s,书 %s,文学,,C 扫描件,OCR,320\n" % (target, target))
     code, body = post(port, "/api/pdf/run", {"uids": [target], "workers": 1})
-    detail = (wait_job(port, body.get("job_id"), ("succeeded", "failed"))
-              if body.get("job_id") else None)
+    detail = wait_job(port, body.get("job_id"), ("succeeded", "failed")) if body.get("job_id") else None
     names = [c.get("name") for c in ((detail or {}).get("commands") or [])]
-    argv = next((c.get("argv") or [] for c in ((detail or {}).get("commands") or [])
-                 if str((c.get("argv") or ["", ""])[1]).endswith("pdf_md_batch.py")), [])
-    check("昨天的分诊行今天照样能转",
-          code == 200 and body.get("carried") == 1 and names[:1] == ["apply_review"]
-          and "--uids" in argv and target in argv[argv.index("--uids") + 1].split(","),
-          "%s 步骤=%s" % (body, names))
+    argv = next(
+        (
+            c.get("argv") or []
+            for c in ((detail or {}).get("commands") or [])
+            if str((c.get("argv") or ["", ""])[1]).endswith("pdf_md_batch.py")
+        ),
+        [],
+    )
+    check(
+        "昨天的分诊行今天照样能转",
+        code == 200
+        and body.get("carried") == 1
+        and names[:1] == ["apply_review"]
+        and "--uids" in argv
+        and target in argv[argv.index("--uids") + 1].split(","),
+        "%s 步骤=%s" % (body, names),
+    )
 
     # ---- 收尾 ------------------------------------------------------
     code, body = post(port, "/api/maintain", {"steps": ["verify", "catalog"]})
@@ -1282,14 +1447,16 @@ def run_checks(root, ops, port, fixture):
     detail = wait_job(port, maintain_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check("收尾门槛全过", job.get("state") == "succeeded", str(job.get("summary")))
-    check("收尾按既定顺序",
-          [s["name"] for s in (detail or {}).get("steps", [])] == ["verify", "catalog"])
+    check("收尾按既定顺序", [s["name"] for s in (detail or {}).get("steps", [])] == ["verify", "catalog"])
     open(os.path.join(root, ".verify-bad"), "w").close()
     code, body = post(port, "/api/maintain", {"steps": ["verify"]})
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("验收不过判失败", job.get("state") == "failed"
-          and "verify" in (job.get("summary") or ""), str(job.get("summary")))
+    check(
+        "验收不过判失败",
+        job.get("state") == "failed" and "verify" in (job.get("summary") or ""),
+        str(job.get("summary")),
+    )
     os.remove(os.path.join(root, ".verify-bad"))
     code, body = post(port, "/api/maintain", {"steps": ["nope"]})
     check("不认识的步骤被拒", code == 400)
@@ -1312,10 +1479,8 @@ def run_checks(root, ops, port, fixture):
     for worker in workers:
         worker.join(timeout=30)
     check("并发写请求一个受理一个拒", sorted(codes) == [200, 409], str(codes))
-    check("并发写请求只接受一个 job_id", len(accepted) == 1 and bool(accepted[0]),
-          str(accepted))
-    detail = (wait_job(port, accepted[0], ("succeeded", "failed"))
-              if accepted else None)
+    check("并发写请求只接受一个 job_id", len(accepted) == 1 and bool(accepted[0]), str(accepted))
+    detail = wait_job(port, accepted[0], ("succeeded", "failed")) if accepted else None
     state = ((detail or {}).get("job") or {}).get("state")
     check("并发受理的写任务能跑完", state == "succeeded", str(state))
     os.remove(os.path.join(root, ".verify-slow"))
@@ -1327,16 +1492,22 @@ def run_checks(root, ops, port, fixture):
     job = (detail or {}).get("job") or {}
     steps = (detail or {}).get("steps") or []
     p1 = next((s for s in steps if s.get("name") == "catalog"), {})
-    check("rc=0 但没门槛判失败", job.get("state") == "failed"
-          and "未出现门槛" in (job.get("summary") or ""), str(job.get("summary")))
-    check("没门槛的那一步记 fail", p1.get("state") == "fail"
-          and "未出现门槛" in (p1.get("detail") or ""),
-          "%s · %s" % (p1.get("state"), p1.get("detail")))
-    check("没门槛后面那步不再跑",
-          next((s for s in steps if s.get("name") == "doc"), {}).get("state")
-          in (None, "pending")
-          and "---- step doc ----" not in job_log(port, body.get("job_id")),
-          str([(s.get("name"), s.get("state")) for s in steps]))
+    check(
+        "rc=0 但没门槛判失败",
+        job.get("state") == "failed" and "未出现门槛" in (job.get("summary") or ""),
+        str(job.get("summary")),
+    )
+    check(
+        "没门槛的那一步记 fail",
+        p1.get("state") == "fail" and "未出现门槛" in (p1.get("detail") or ""),
+        "%s · %s" % (p1.get("state"), p1.get("detail")),
+    )
+    check(
+        "没门槛后面那步不再跑",
+        next((s for s in steps if s.get("name") == "doc"), {}).get("state") in (None, "pending")
+        and "---- step doc ----" not in job_log(port, body.get("job_id")),
+        str([(s.get("name"), s.get("state")) for s in steps]),
+    )
     os.remove(os.path.join(root, ".catalog-nomarker"))
 
     # ---- 删书 ------------------------------------------------------
@@ -1345,43 +1516,58 @@ def run_checks(root, ops, port, fixture):
     detail = wait_job(port, dry_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check("删书预览成功", job.get("state") == "succeeded", str(job.get("summary")))
-    code, preview = get(port, "/api/file?path=" + urllib.request.quote(
-        "工作区/运维/jobs/%s/dry-run.json" % dry_id))
-    check("预览 JSON 落盘",
-          code == 200 and preview.get("plan_hash") == "hash-B0002"
-          and preview.get("sources"), str(preview.get("plan_hash")))
-    code, body = post(port, "/api/delete/apply",
-                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
-                       "confirm_uid": "B0002"})
+    code, preview = get(port, "/api/file?path=" + urllib.request.quote("工作区/运维/jobs/%s/dry-run.json" % dry_id))
+    check(
+        "预览 JSON 落盘",
+        code == 200 and preview.get("plan_hash") == "hash-B0002" and preview.get("sources"),
+        str(preview.get("plan_hash")),
+    )
+    code, body = post(
+        port, "/api/delete/apply", {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002", "confirm_uid": "B0002"}
+    )
     check("没带 confirm 拒绝应用", code == 400, str(body))
-    code, body = post(port, "/api/delete/apply",
-                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
-                       "confirm_uid": "B0002", "confirm": False})
+    code, body = post(
+        port,
+        "/api/delete/apply",
+        {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002", "confirm_uid": "B0002", "confirm": False},
+    )
     check("confirm=false 拒绝应用", code == 400, str(body))
-    code, body = post(port, "/api/delete/apply",
-                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
-                       "confirm_uid": "B0002", "confirm": "true"})
+    code, body = post(
+        port,
+        "/api/delete/apply",
+        {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002", "confirm_uid": "B0002", "confirm": "true"},
+    )
     check("confirm 只认布尔 true", code == 400, str(body))
-    code, body = post(port, "/api/delete/apply",
-                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
-                       "confirm_uid": "B0003", "confirm": True})
+    code, body = post(
+        port,
+        "/api/delete/apply",
+        {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002", "confirm_uid": "B0003", "confirm": True},
+    )
     check("uid 不一致拒绝应用", code == 400)
-    code, body = post(port, "/api/delete/apply",
-                      {"uid": "B0002", "reason": "重复", "plan_hash": "bad",
-                       "confirm_uid": "B0002", "confirm": True})
+    code, body = post(
+        port,
+        "/api/delete/apply",
+        {"uid": "B0002", "reason": "重复", "plan_hash": "bad", "confirm_uid": "B0002", "confirm": True},
+    )
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("plan_hash 不一致判失败", job.get("state") == "failed"
-          and "plan_hash" in (job.get("summary") or ""), str(job.get("summary")))
-    code, body = post(port, "/api/delete/apply",
-                      {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002",
-                       "confirm_uid": "B0002", "confirm": True})
+    check(
+        "plan_hash 不一致判失败",
+        job.get("state") == "failed" and "plan_hash" in (job.get("summary") or ""),
+        str(job.get("summary")),
+    )
+    code, body = post(
+        port,
+        "/api/delete/apply",
+        {"uid": "B0002", "reason": "重复", "plan_hash": "hash-B0002", "confirm_uid": "B0002", "confirm": True},
+    )
     detail = wait_job(port, body.get("job_id"), ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check("删书应用成功", job.get("state") == "succeeded", str(job.get("summary")))
     argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
-    check("删书 argv 带 --plan-hash 与 --apply",
-          "--plan-hash" in argv and "--apply" in argv and "--dry-run" not in argv)
+    check(
+        "删书 argv 带 --plan-hash 与 --apply", "--plan-hash" in argv and "--apply" in argv and "--dry-run" not in argv
+    )
 
     # ---- 重跑与清理 ------------------------------------------------
     code, body = post(port, "/api/jobs/%s/rerun" % scan_id)
@@ -1393,14 +1579,14 @@ def run_checks(root, ops, port, fixture):
 
     # ---- 搜索入口 --------------------------------------------------
     code, health = get(port, "/api/search/health")
-    check("搜索健康点可查",
-          code == 200 and isinstance(health.get("running"), bool)
-          and "8765" in (health.get("url") or ""),
-          "running=%s" % health.get("running"))
+    check(
+        "搜索健康点可查",
+        code == 200 and isinstance(health.get("running"), bool) and "8765" in (health.get("url") or ""),
+        "running=%s" % health.get("running"),
+    )
     if health.get("running"):
         code, body = post(port, "/api/search/start")
-        check("已在跑时启动幂等", code == 200 and body.get("ok") is True
-              and body.get("already") is True)
+        check("已在跑时启动幂等", code == 200 and body.get("ok") is True and body.get("already") is True)
     else:
         # v2 布局里演示页就在 apps/demo/。这条要验的是「演示页不在时报错」，
         # 请求前把脚本临时挪开，请求后无论成败都放回。
@@ -1412,22 +1598,24 @@ def run_checks(root, ops, port, fixture):
                 os.replace(demo, hidden)
                 moved = True
             code, body = post(port, "/api/search/start")
-            check("演示页不在时报错",
-                  code == 200 and body.get("ok") is False
-                  and "演示页" in (body.get("error") or ""), str(body.get("error")))
+            check(
+                "演示页不在时报错",
+                code == 200 and body.get("ok") is False and "演示页" in (body.get("error") or ""),
+                str(body.get("error")),
+            )
         finally:
             if moved:
                 os.replace(hidden, demo)
 
     # ---- 状态脚本优先级 --------------------------------------------
-    with open(os.path.join(root, "工作区", "脚本", "ops_status.py"), "w",
-              encoding="utf-8") as fh:
+    with open(os.path.join(root, "工作区", "脚本", "ops_status.py"), "w", encoding="utf-8") as fh:
         fh.write(STUB_STATUS)
     code, body = get(port, "/api/status?refresh=1")
-    check("有脚本时用脚本",
-          body.get("source") == "script" and body["status"].get("books") == 42,
-          "source=%s books=%s" % (body.get("source"),
-                                  (body.get("status") or {}).get("books")))
+    check(
+        "有脚本时用脚本",
+        body.get("source") == "script" and body["status"].get("books") == 42,
+        "source=%s books=%s" % (body.get("source"), (body.get("status") or {}).get("books")),
+    )
 
 
 def adoption_checks(root, fixture):
@@ -1438,35 +1626,50 @@ def adoption_checks(root, fixture):
     slow = os.path.join(root, ".slow-split")
     open(slow, "w").close()
     argv = [sys.executable, script, "--batch", "adopt-probe", "--uids", "B0001"]
-    matched = subprocess.Popen(argv, cwd=root, start_new_session=True,
-                               stdout=subprocess.DEVNULL)
+    matched = subprocess.Popen(argv, cwd=root, start_new_session=True, stdout=subprocess.DEVNULL)
     try:
         time.sleep(0.8)
         ensure_ops_db(ops_db).close()
         conn = sqlite3.connect(ops_db)
         for job_id, pid, cmd_argv in (
-                ("adopt-miss", sleeper.pid, ["/bin/echo", "/nope/not-ours.py"]),
-                ("adopt-hit", matched.pid, argv)):
+            ("adopt-miss", sleeper.pid, ["/bin/echo", "/nope/not-ours.py"]),
+            ("adopt-hit", matched.pid, argv),
+        ):
             conn.execute(
                 "INSERT OR REPLACE INTO job (id, kind, title, argv, state, pid,"
                 " created, started, ended, exit_code, summary, log_path, batch_dir,"
                 " plan_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (job_id, "split.run", "接管探针", json.dumps(cmd_argv), "running", pid,
-                 time.strftime("%Y-%m-%dT%H:%M:%S"), time.strftime("%Y-%m-%dT%H:%M:%S"),
-                 None, None, "", "工作区/运维/jobs/%s/log.txt" % job_id, None, None))
+                (
+                    job_id,
+                    "split.run",
+                    "接管探针",
+                    json.dumps(cmd_argv),
+                    "running",
+                    pid,
+                    time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    None,
+                    None,
+                    "",
+                    "工作区/运维/jobs/%s/log.txt" % job_id,
+                    None,
+                    None,
+                ),
+            )
         conn.commit()
         conn.close()
         proc, port = start(root, fixture)
         try:
             code, body = get(port, "/api/jobs/adopt-miss")
             job = body.get("job") or {}
-            check("PID 对不上标孤儿", job.get("state") == "orphaned",
-                  str(job.get("summary")))
+            check("PID 对不上标孤儿", job.get("state") == "orphaned", str(job.get("summary")))
             code, body = get(port, "/api/jobs/adopt-hit")
             job = body.get("job") or {}
-            check("PID 对得上继续 running",
-                  job.get("state") == "running" and "接管" in (job.get("summary") or ""),
-                  "%s · %s" % (job.get("state"), job.get("summary")))
+            check(
+                "PID 对得上继续 running",
+                job.get("state") == "running" and "接管" in (job.get("summary") or ""),
+                "%s · %s" % (job.get("state"), job.get("summary")),
+            )
             check("接管没杀进程", sleeper.poll() is None and matched.poll() is None)
             code, body = post(port, "/api/jobs/adopt-hit/cancel")
             check("接管的活任务能停", code == 200, str(body.get("error")))
@@ -1501,22 +1704,32 @@ def adoption_resume_check(root, fixture):
         fh.write("import time\ntime.sleep(10)\n")
     finish = os.path.join(scripts, "adopt-finish.py")
     with open(finish, "w", encoding="utf-8") as fh:
-        fh.write("import os\n"
-                 "open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"
-                 " '.adopt-ran'), 'w').close()\n")
+        fh.write(
+            "import os\nopen(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.adopt-ran'), 'w').close()\n"
+        )
     job_id = "adopt-resume"
     job_dir = os.path.join(root, "工作区", "运维", "jobs", job_id)
     os.makedirs(job_dir, exist_ok=True)
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
     commands = [
-        {"name": "pdf ocr", "script": "adopt-probe.py",
-         "argv": [sys.executable, probe], "marker": None, "capture": None},
-        {"name": "pdf text", "script": "adopt-finish.py",
-         "argv": [sys.executable, finish], "marker": None, "capture": None}]
+        {
+            "name": "pdf ocr",
+            "script": "adopt-probe.py",
+            "argv": [sys.executable, probe],
+            "marker": None,
+            "capture": None,
+        },
+        {
+            "name": "pdf text",
+            "script": "adopt-finish.py",
+            "argv": [sys.executable, finish],
+            "marker": None,
+            "capture": None,
+        },
+    ]
     with open(os.path.join(job_dir, "commands.json"), "w", encoding="utf-8") as fh:
         json.dump(commands, fh, ensure_ascii=False)
-    child = subprocess.Popen(commands[0]["argv"], cwd=root, start_new_session=True,
-                             stdout=subprocess.DEVNULL)
+    child = subprocess.Popen(commands[0]["argv"], cwd=root, start_new_session=True, stdout=subprocess.DEVNULL)
     try:
         time.sleep(0.3)
         conn = ensure_ops_db(ops_db)
@@ -1524,35 +1737,54 @@ def adoption_resume_check(root, fixture):
             "INSERT OR REPLACE INTO job (id, kind, title, argv, state, pid,"
             " created, started, ended, exit_code, summary, log_path, batch_dir,"
             " plan_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (job_id, "pdf.confirm", "接管续跑探针",
-             json.dumps(commands[0]["argv"]), "running", child.pid, stamp, stamp,
-             None, None, "", "工作区/运维/jobs/%s/log.txt" % job_id, None, None))
+            (
+                job_id,
+                "pdf.confirm",
+                "接管续跑探针",
+                json.dumps(commands[0]["argv"]),
+                "running",
+                child.pid,
+                stamp,
+                stamp,
+                None,
+                None,
+                "",
+                "工作区/运维/jobs/%s/log.txt" % job_id,
+                None,
+                None,
+            ),
+        )
         for seq, name, state in ((0, "pdf ocr", "running"), (1, "pdf text", "pending")):
-            conn.execute("INSERT OR REPLACE INTO step (job_id, seq, name, state,"
-                         " detail, started) VALUES (?,?,?,?,?,?)",
-                         (job_id, seq, name, state, None, stamp))
+            conn.execute(
+                "INSERT OR REPLACE INTO step (job_id, seq, name, state, detail, started) VALUES (?,?,?,?,?,?)",
+                (job_id, seq, name, state, None, stamp),
+            )
         conn.commit()
         conn.close()
         proc, port = start(root, fixture)
         try:
-            detail = wait_job(port, job_id,
-                              ("succeeded", "failed", "awaiting_review"), timeout=40)
+            detail = wait_job(port, job_id, ("succeeded", "failed", "awaiting_review"), timeout=40)
             job = (detail or {}).get("job") or {}
             steps = {s["seq"]: s for s in (detail or {}).get("steps") or []}
-            check("接管来的那一步记 unknown",
-                  (steps.get(0) or {}).get("state") == "unknown"
-                  and "退出码" in ((steps.get(0) or {}).get("detail") or ""),
-                  str((steps.get(0) or {}).get("state")))
-            check("接管后剩下的步骤接着跑",
-                  (steps.get(1) or {}).get("state") == "ok"
-                  and os.path.isfile(os.path.join(scripts, ".adopt-ran")),
-                  str((steps.get(1) or {}).get("state")))
-            check("退出码拿不到时不冒充成功",
-                  job.get("state") == "awaiting_review"
-                  and "接管" in (job.get("summary") or "")
-                  and "退出码" in (job.get("summary") or ""), str(job.get("summary")))
-            check("接管续跑写进日志",
-                  "[接管]" in ((detail or {}).get("log_tail") or ""))
+            check(
+                "接管来的那一步记 unknown",
+                (steps.get(0) or {}).get("state") == "unknown"
+                and "退出码" in ((steps.get(0) or {}).get("detail") or ""),
+                str((steps.get(0) or {}).get("state")),
+            )
+            check(
+                "接管后剩下的步骤接着跑",
+                (steps.get(1) or {}).get("state") == "ok" and os.path.isfile(os.path.join(scripts, ".adopt-ran")),
+                str((steps.get(1) or {}).get("state")),
+            )
+            check(
+                "退出码拿不到时不冒充成功",
+                job.get("state") == "awaiting_review"
+                and "接管" in (job.get("summary") or "")
+                and "退出码" in (job.get("summary") or ""),
+                str(job.get("summary")),
+            )
+            check("接管续跑写进日志", "[接管]" in ((detail or {}).get("log_tail") or ""))
         finally:
             stop(proc)
     finally:
@@ -1574,10 +1806,23 @@ def insert_job(ops_db, job_id, kind="split.run", state="succeeded", pid=None):
         "INSERT OR REPLACE INTO job (id, kind, title, argv, state, pid,"
         " created, started, ended, exit_code, summary, log_path, batch_dir,"
         " plan_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (job_id, kind, "加固探针", json.dumps(["/bin/echo", "x"]), state, pid,
-         stamp, stamp, stamp if state != "running" else None,
-         0 if state == "succeeded" else None, "",
-         "工作区/运维/jobs/%s/log.txt" % job_id, None, None))
+        (
+            job_id,
+            kind,
+            "加固探针",
+            json.dumps(["/bin/echo", "x"]),
+            state,
+            pid,
+            stamp,
+            stamp,
+            stamp if state != "running" else None,
+            0 if state == "succeeded" else None,
+            "",
+            "工作区/运维/jobs/%s/log.txt" % job_id,
+            None,
+            None,
+        ),
+    )
     conn.commit()
     conn.close()
 
@@ -1609,8 +1854,7 @@ def hardening_checks(root, fixture):
     os.makedirs(thumb_dir, exist_ok=True)
     with open(os.path.join(thumb_dir, "t2.png"), "w", encoding="utf-8") as fh:
         fh.write("x")
-    with open(os.path.join(jobs, "clean-thumb", "log.txt"), "w",
-              encoding="utf-8") as fh:
+    with open(os.path.join(jobs, "clean-thumb", "log.txt"), "w", encoding="utf-8") as fh:
         fh.write("x")
     os.utime(os.path.join(jobs, "clean-thumb", "log.txt"), (old, old))
 
@@ -1628,16 +1872,13 @@ def hardening_checks(root, fixture):
     proc, port = start(root, fixture)
     try:
         # GET 也得拒站外：DNS rebinding 的页面靠伪造 Host 读任务与日志
-        for path in ("/api/status", "/api/jobs",
-                     "/api/file?path=" + urlquote("工作区/运维/jobs/seed-file/log.txt")):
+        for path in ("/api/status", "/api/jobs", "/api/file?path=" + urlquote("工作区/运维/jobs/seed-file/log.txt")):
             code, _ = http(port, "GET", path, headers={"Host": "evil.example"})
             check("GET 拒伪造 Host " + path.split("?")[0], code == 403, str(code))
 
-        code, blob = get(port, "/api/file?path="
-                         + urlquote("工作区/运维/jobs/seed-file/log.txt"))
+        code, blob = get(port, "/api/file?path=" + urlquote("工作区/运维/jobs/seed-file/log.txt"))
         text = blob if isinstance(blob, str) else ""
-        check("日志下载脱敏", code == 200 and "[redacted]" in text
-              and "sk-abc123" not in text, str(code))
+        check("日志下载脱敏", code == 200 and "[redacted]" in text and "sk-abc123" not in text, str(code))
 
         # 分页读到 eof 拼回去要和原文一致：漂移会产生 U+FFFD 与丢字
         got, offset, guard = [], 0, 0
@@ -1651,8 +1892,11 @@ def hardening_checks(root, fixture):
                 break
             offset = body["next"]
         joined = "".join(got)
-        check("日志分页不漂移", joined == page_text and "\ufffd" not in joined,
-              "页数 %d，重建 %d 字 vs 原文 %d 字" % (guard, len(joined), len(page_text)))
+        check(
+            "日志分页不漂移",
+            joined == page_text and "\ufffd" not in joined,
+            "页数 %d，重建 %d 字 vs 原文 %d 字" % (guard, len(joined), len(page_text)),
+        )
 
         code, body = post(port, "/api/jobs/clean")
         check("清理接口可用", code == 200 and "removed" in body)
@@ -1660,16 +1904,18 @@ def hardening_checks(root, fixture):
         check("清理删行", code == 404, str(code))
         check("清理删树（含子目录）", not os.path.exists(os.path.join(jobs, "clean-old")))
         code, body = get(port, "/api/jobs/clean-thumb")
-        check("缩略图保留期内整本跳过", code == 200
-              and os.path.isfile(os.path.join(thumb_dir, "t2.png")))
+        check("缩略图保留期内整本跳过", code == 200 and os.path.isfile(os.path.join(thumb_dir, "t2.png")))
 
         # 出错响应要断开连接：keep-alive 下没读尽的请求体会污染下一条请求
         import socket
+
         conn = socket.create_connection(("127.0.0.1", port), timeout=5)
         try:
-            conn.sendall(b"POST /api/import/upload HTTP/1.1\r\n"
-                         b"Host: 127.0.0.1\r\nX-Filename: x.epub\r\n"
-                         b"Content-Length: 3000000000\r\n\r\n")
+            conn.sendall(
+                b"POST /api/import/upload HTTP/1.1\r\n"
+                b"Host: 127.0.0.1\r\nX-Filename: x.epub\r\n"
+                b"Content-Length: 3000000000\r\n\r\n"
+            )
             head = b""
             while b"\r\n\r\n" not in head:
                 chunk = conn.recv(4096)
@@ -1680,23 +1926,24 @@ def hardening_checks(root, fixture):
             # 若 keep-alive 没断，这里会超时或收到对下一个请求的响应
             m = re.search(rb"Content-Length: (\d+)", head)
             want = int(m.group(1)) if m else 0
-            rest = head[head.index(b"\r\n\r\n") + 4:]
+            rest = head[head.index(b"\r\n\r\n") + 4 :]
             conn.settimeout(2)
             while len(rest) < want:
                 chunk = conn.recv(4096)
                 if not chunk:
                     break
                 rest += chunk
-            try:
+            with contextlib.suppress(OSError):
                 conn.sendall(b"GET /api/status HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-            except OSError:
-                pass
             try:
                 after = conn.recv(4096)
             except (TimeoutError, OSError):
                 after = b"\x00TIMEOUT"  # 没断开才算失败
-            check("413 断开连接", b"413" in head and b"Connection: close" in head
-                  and after == b"", "%d 字节头，续收 %s" % (len(head), after[:40]))
+            check(
+                "413 断开连接",
+                b"413" in head and b"Connection: close" in head and after == b"",
+                "%d 字节头，续收 %s" % (len(head), after[:40]),
+            )
         finally:
             conn.close()
     finally:

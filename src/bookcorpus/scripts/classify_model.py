@@ -10,6 +10,7 @@ ingest.py 的导入预填与 classify_books.py --backend model 共用这里的�
 解析失败抛 ClassifyError，调用方降级为人工填。不依赖 TypeSafe，不写盘。
 PI_BIN 指向 .py 文件时用当前解释器跑它，测试的 stub 就靠这条。
 """
+
 import json
 import os
 import re
@@ -25,8 +26,16 @@ NO_SUB = "不细分"
 
 TAXONOMY = {
     "文学": ("严肃文学小说", "类型小说", "网络文学", "诗歌", "散文随笔", "戏剧", "儿童与青少年文学"),
-    "人文社科": ("历史", "思想与哲学", "宗教与神话", "政治与法律", "社会与经济",
-             "人类学与考古", "心理与认知", "语言与文字"),
+    "人文社科": (
+        "历史",
+        "思想与哲学",
+        "宗教与神话",
+        "政治与法律",
+        "社会与经济",
+        "人类学与考古",
+        "心理与认知",
+        "语言与文字",
+    ),
     "商业与管理": ("战略", "管理与组织", "投资与金融", "创新与创业", "营销与品牌"),
     "科学技术": ("数学与统计", "物理与天文", "生命与医学", "计算机与技术", "工程与制造", "科普"),
     "建筑与古迹": ("中国古建筑", "宗教建筑", "城市与聚落", "建筑史与理论", "地方文物"),
@@ -61,27 +70,29 @@ class ClassifyError(RuntimeError):
 def build_prompt(titles, authors):
     tax = "\n".join("%s：%s" % (k, "、".join(v)) for k, v in TAXONOMY.items())
     rubric = "\n".join("%s：%s" % (k, v) for k, v in TOP_RUBRIC.items())
-    books = "\n".join("%d. 书名《%s》，作者 %s" % (i + 1, t, a or "未知")
-                      for i, (t, a) in enumerate(zip(titles, authors)))
-    return ("只输出一行 JSON 数组，不要解释，不要代码块。\n"
-            "分类体系（一级：该一级下的二级）：\n%s\n"
-            "一级说明：\n%s\n"
-            "书：\n%s\n"
-            "为每本书给 level1（必须取体系里的一级名，拿不准写「%s」）、"
-            "level2（取该一级下的二级名，没有合适的写「%s」）、"
-            "confidence（0 到 1）、reason（不超过 20 字，说依据）。\n"
-            "输出 [{\"level1\":\"\",\"level2\":\"\",\"confidence\":0.0,\"reason\":\"\"}]"
-            % (tax, rubric, books, UNCERTAIN, NO_SUB))
+    books = "\n".join(
+        "%d. 书名《%s》，作者 %s" % (i + 1, t, a or "未知")
+        for i, (t, a) in enumerate(zip(titles, authors, strict=False))
+    )
+    return (
+        "只输出一行 JSON 数组，不要解释，不要代码块。\n"
+        "分类体系（一级：该一级下的二级）：\n%s\n"
+        "一级说明：\n%s\n"
+        "书：\n%s\n"
+        "为每本书给 level1（必须取体系里的一级名，拿不准写「%s」）、"
+        "level2（取该一级下的二级名，没有合适的写「%s」）、"
+        "confidence（0 到 1）、reason（不超过 20 字，说依据）。\n"
+        '输出 [{"level1":"","level2":"","confidence":0.0,"reason":""}]' % (tax, rubric, books, UNCERTAIN, NO_SUB)
+    )
 
 
 def pi_argv(model, prompt, thinking=None):
     raw = os.environ.get("PI_BIN") or shutil.which("pi") or "pi"
     head = [sys.executable, raw] if raw.endswith(".py") else [raw]
-    out = head + ["-p", "--no-tools", "--no-session", "--no-context-files",
-                  "--no-skills", "--no-extensions"]
+    out = [*head, "-p", "--no-tools", "--no-session", "--no-context-files", "--no-skills", "--no-extensions"]
     if thinking:
         out += ["--thinking", thinking]
-    return out + ["--model", model, prompt]
+    return [*out, "--model", model, prompt]
 
 
 def _head(text, n=120):
@@ -96,7 +107,7 @@ def _array_text(text):
     start, end = body.find("["), body.rfind("]")
     if start < 0 or end < start:
         raise ClassifyError("模型没回 JSON 数组：" + _head(text))
-    return body[start:end + 1]
+    return body[start : end + 1]
 
 
 def _norm(rec):
@@ -111,8 +122,7 @@ def _norm(rec):
     except (TypeError, ValueError):
         conf = 0.0
     reason = re.sub(r"\s+", " ", str(rec.get("reason") or "")).strip()
-    return {"level1": l1, "level2": l2, "confidence": round(min(1.0, max(0.0, conf)), 3),
-            "reason": reason}
+    return {"level1": l1, "level2": l2, "confidence": round(min(1.0, max(0.0, conf)), 3), "reason": reason}
 
 
 def parse(text, n):
@@ -121,7 +131,7 @@ def parse(text, n):
     try:
         got = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ClassifyError("JSON 解析失败：%s；片段 %s" % (exc, _head(raw, 160)))
+        raise ClassifyError("JSON 解析失败：%s；片段 %s" % (exc, _head(raw, 160))) from exc
     if not isinstance(got, list):
         raise ClassifyError("模型回的不是数组：%s" % _head(raw))
     if len(got) != n:
@@ -150,18 +160,17 @@ def classify(titles, authors, model=None, timeout=TIMEOUT, thinking=None):
     titles = [str(t) for t in (titles or [])]
     if not titles:
         return []
-    authors = [str(a or "") for a in (authors or [])][:len(titles)]
+    authors = [str(a or "") for a in (authors or [])][: len(titles)]
     authors += [""] * (len(titles) - len(authors))
     if not model:
         model, thinking = configured()
     cmd = pi_argv(model, build_prompt(titles, authors), thinking)
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        raise ClassifyError("pi 超时 %ds，模型 %s 没回" % (timeout, model))
+    except subprocess.TimeoutExpired as exc:
+        raise ClassifyError("pi 超时 %ds，模型 %s 没回" % (timeout, model)) from exc
     except OSError as exc:
-        raise ClassifyError("起不了 pi（%s）：%s" % (cmd[0], exc))
+        raise ClassifyError("起不了 pi（%s）：%s" % (cmd[0], exc)) from exc
     if r.returncode != 0:
-        raise ClassifyError("pi 退出 %d：%s"
-                            % (r.returncode, _head(r.stderr or r.stdout, 160)))
+        raise ClassifyError("pi 退出 %d：%s" % (r.returncode, _head(r.stderr or r.stdout, 160)))
     return parse(r.stdout, len(titles))

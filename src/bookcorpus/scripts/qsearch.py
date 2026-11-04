@@ -8,11 +8,20 @@
 
 概念模式把 tables/ledger.db 概念表的同义词当 OR 组展开，排除词只在重排时扣分，不在召回时过滤。
 """
-import argparse, csv, json, math, os, re, sqlite3, sys, time
+
+import argparse
+import json
+import math
+import os
+import re
+import sqlite3
+import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import L, PATHS  # noqa: E402
+from lib_common import PATHS, L
+
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 
@@ -34,16 +43,15 @@ def resolve(text):
         for al in aliases:
             if al == text:
                 return key
-            if len(al) >= 2 and (al in text or text in al):
-                if best is None or len(al) > len(best[1]):
-                    best = (key, al)
+            if len(al) >= 2 and (al in text or text in al) and (best is None or len(al) > len(best[1])):
+                best = (key, al)
     return best[0] if best else None
 
 
 def load_concept(key):
     for r in L.concept_rows():
         if r["key"] == key:
-            return [key] + L.split_aliases(r["aliases"]), L.split_exclude(r.get("exclude", ""))
+            return [key, *L.split_aliases(r["aliases"])], L.split_exclude(r.get("exclude", ""))
     sys.exit("概念表里没有 " + key)
 
 
@@ -106,9 +114,11 @@ def search(con, expr, groups, exclude, limit, min_chars, rerank=False, pool=400)
         # 查询词全是不可索引字符（全角符号/假名等）时 expr 为空，
         # MATCH '' 是 FTS5 语法错；这里返回空结果，不炸。
         return [], 0.0
-    sql = ("SELECT p.id, p.path, p.book, p.line, p.text, bm25(para_fts) AS score "
-           "FROM para_fts f JOIN para p ON p.id=f.rowid "
-           "WHERE para_fts MATCH ? AND p.chars >= ? ORDER BY score")
+    sql = (
+        "SELECT p.id, p.path, p.book, p.line, p.text, bm25(para_fts) AS score "
+        "FROM para_fts f JOIN para p ON p.id=f.rowid "
+        "WHERE para_fts MATCH ? AND p.chars >= ? ORDER BY score"
+    )
     if pool and pool > 0:
         rows = con.execute(sql + " LIMIT ?", (expr, min_chars, pool)).fetchall()
     else:
@@ -134,9 +144,19 @@ def search(con, expr, groups, exclude, limit, min_chars, rerank=False, pool=400)
         rank_score = (-score + 0.8 * cov + 0.15 * math.log1p(len(text))) * penalty
         if rerank:
             rank_score += rerank_bonus(text, line, groups)
-        cand.append({"id": pid, "path": path, "book": book, "line": line,
-                     "text": text, "bm25": round(score, 4), "kana": round(kana / len(text), 2) if text else 0.0,
-                     "coverage": cov, "score": round(rank_score, 4)})
+        cand.append(
+            {
+                "id": pid,
+                "path": path,
+                "book": book,
+                "line": line,
+                "text": text,
+                "bm25": round(score, 4),
+                "kana": round(kana / len(text), 2) if text else 0.0,
+                "coverage": cov,
+                "score": round(rank_score, 4),
+            }
+        )
     cand.sort(key=lambda r: (-r["score"], r["path"], r["line"]))
     ms = (time.time() - t0) * 1000
     return cand[:limit], ms
@@ -149,9 +169,11 @@ def search_expand(con, expr, kind="both", limit=200):
     args = (expr, limit) if kind == "both" else (expr, kind, limit)
     try:
         rows = con.execute(
-            "SELECT e.path, e.text, bm25(expand_fts) AS score FROM expand_fts "
+            "SELECT e.path, e.text, bm25(expand_fts) AS score FROM expand_fts "  # noqa: S608 cond 只是本函数里二选一的占位符片段
             "JOIN expand e ON e.rowid = expand_fts.rowid "
-            "WHERE expand_fts MATCH ?" + cond + " ORDER BY score LIMIT ?", args).fetchall()
+            "WHERE expand_fts MATCH ?" + cond + " ORDER BY score LIMIT ?",
+            args,
+        ).fetchall()
     except sqlite3.OperationalError as exc:
         print("expand 档不可用（%s），只跑段落档" % exc, file=sys.stderr)
         return []
@@ -182,8 +204,7 @@ def rollup_by_book(cand, con, limit, mode="mix"):
     """
     best = {}
     for r in cand:
-        b = best.setdefault(r["book"], {"book": r["book"], "paras": 0, "score": 0.0,
-                                        "best": r})
+        b = best.setdefault(r["book"], {"book": r["book"], "paras": 0, "score": 0.0, "best": r})
         b["paras"] += 1
         b["score"] += r["score"]
         if r["score"] > b["best"]["score"]:
@@ -204,18 +225,26 @@ def main():
     ap.add_argument("--auto-concept", action="store_true", help="把查询词认成概念键再展开")
     ap.add_argument("-n", "--limit", type=int, default=20)
     ap.add_argument("--book", action="store_true")
-    ap.add_argument("--book-score", default="mix", choices=["mix", "sum"],
-                    help="qsearch 旧书级口径：mix=0.7*最好段+0.3*段落均值（默认）；"
-                         "sum=段落求和（旧口径）。新书级默认 best_support 见 book_query.py")
+    ap.add_argument(
+        "--book-score",
+        default="mix",
+        choices=["mix", "sum"],
+        help="qsearch 旧书级口径：mix=0.7*最好段+0.3*段落均值（默认）；"
+        "sum=段落求和（旧口径）。新书级默认 best_support 见 book_query.py",
+    )
     ap.add_argument("--expand", action="store_true", help="并上 build/检索/expand 的扩展文本档")
     ap.add_argument("--expand-kind", default="both", choices=["both", "prefix", "queries"])
     ap.add_argument("--rerank", action="store_true", help="加模型无关的定义式/引号/卷首页特征")
-    ap.add_argument("--route-mode", default="append", choices=["append", "rrf"],
-                    help="默认 append，保留基底前 10 名再把路由结果接在后面；rrf 为等权融合")
-    ap.add_argument("--route", action="store_true",
-                    help="模型把问句路由到概念表 3 个键，再与段落档等权 RRF（需联网，结果有缓存）")
-    ap.add_argument("--pool", default="medium",
-                    help="取多少段进打分：low=400 / medium=2000 / all=不限 / 也可给数字")
+    ap.add_argument(
+        "--route-mode",
+        default="append",
+        choices=["append", "rrf"],
+        help="默认 append，保留基底前 10 名再把路由结果接在后面；rrf 为等权融合",
+    )
+    ap.add_argument(
+        "--route", action="store_true", help="模型把问句路由到概念表 3 个键，再与段落档等权 RRF（需联网，结果有缓存）"
+    )
+    ap.add_argument("--pool", default="medium", help="取多少段进打分：low=400 / medium=2000 / all=不限 / 也可给数字")
     ap.add_argument("--min-chars", type=int, default=40)
     ap.add_argument("--db", default=DB)
     ap.add_argument("--json", action="store_true")
@@ -240,23 +269,23 @@ def main():
         expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
         label = a.query
     con = sqlite3.connect("file:%s?mode=ro" % a.db, uri=True)
-    pool = {"low": 400, "medium": 2000, "all": 0}.get(a.pool, None)
+    pool = {"low": 400, "medium": 2000, "all": 0}.get(a.pool)
     if pool is None:
         try:
             pool = int(a.pool)
         except ValueError:
             ap.error("--pool 只认 low / medium / all 或整数")
-    hits, ms = search(con, expr, groups, exclude,
-                      max(a.limit, 2000) if a.book else a.limit,
-                      a.min_chars, a.rerank, pool)
+    hits, ms = search(
+        con, expr, groups, exclude, max(a.limit, 2000) if a.book else a.limit, a.min_chars, a.rerank, pool
+    )
     if a.route and a.book:
         print("--book 是书级聚合，不支持问句路由；本次忽略 --route", file=sys.stderr)
     if a.route and not a.book:
         try:
             import concept_route
+
             keys = concept_route.route(a.query or label)
-            second, ms2 = concept_route.search_keys(con, keys, 200, a.min_chars,
-                                                    pool=pool)
+            second, ms2 = concept_route.search_keys(con, keys, 200, a.min_chars, pool=pool)
         except Exception as exc:
             print("路由失败，退回段落档: %s" % exc, file=sys.stderr)
             keys, second = [], []
@@ -287,21 +316,28 @@ def main():
             best.update({r["path"]: r for r in reversed(second)})
             hits = []
             for pth in order[: a.limit]:
-                r = dict(best.get(pth) or {"path": pth, "line": 0, "text": "",
-                                           "book": pth.split("/md/")[0][2:], "coverage": 0})
+                r = dict(
+                    best.get(pth)
+                    or {"path": pth, "line": 0, "text": "", "book": pth.split("/md/")[0][2:], "coverage": 0}
+                )
                 r["score"] = round(scores[pth], 6)
                 hits.append(r)
             ms += ms2
     if a.expand:
-        exp = search_expand(con, expr, a.expand_kind,
-                            max(400, pool) if pool > 0 else -1)
+        exp = search_expand(con, expr, a.expand_kind, max(400, pool) if pool > 0 else -1)
         order, scores = fuse(hits, exp)
         best = {r["path"]: r for r in reversed(hits)}
         expmap = {r["path"]: r for r in exp}
         out = []
         for p in order[: a.limit] if not a.book else order[:400]:
-            r = best.get(p) or {"path": p, "book": p.split("/md/")[0][2:], "line": 0,
-                                "text": "", "score": 0.0, "coverage": 0}
+            r = best.get(p) or {
+                "path": p,
+                "book": p.split("/md/")[0][2:],
+                "line": 0,
+                "text": "",
+                "score": 0.0,
+                "coverage": 0,
+            }
             if p in expmap:
                 r = dict(r)
                 r["expand"] = expmap[p]["text"]
@@ -314,15 +350,13 @@ def main():
     else:
         out = hits
     if a.json:
-        print(json.dumps({"query": label, "ms": round(ms, 1), "hits": out},
-                         ensure_ascii=False, indent=1))
+        print(json.dumps({"query": label, "ms": round(ms, 1), "hits": out}, ensure_ascii=False, indent=1))
         return
     print("%s  %d 条  %.0f ms" % (label, len(out), ms), file=sys.stderr)
     for i, r in enumerate(out, 1):
         if a.book:
             b = r["best"]
-            print("%2d %-58s +%d 段  %.2f  %s:%d" % (
-                i, r["book"], r["paras"], r["score"], b["path"], b["line"]))
+            print("%2d %-58s +%d 段  %.2f  %s:%d" % (i, r["book"], r["paras"], r["score"], b["path"], b["line"]))
             print("   " + re.sub(r"\s+", " ", b["text"])[:150])
         else:
             print("%2d %-66s:%d  %.2f" % (i, r["path"], r["line"], r["score"]))

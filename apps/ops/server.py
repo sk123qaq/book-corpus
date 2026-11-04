@@ -6,6 +6,7 @@
 
   python3 apps/ops/server.py [--port 8770] [--root .]
 """
+
 import argparse
 import collections
 import csv
@@ -21,11 +22,11 @@ import subprocess
 import sys
 import threading
 import time
-from contextlib import contextmanager
 import traceback
 import urllib.error
 import urllib.request
 import uuid
+from contextlib import contextmanager, suppress
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, unquote, urlparse
@@ -34,21 +35,21 @@ CODE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(CODE_DIR, "web")
 REAL_ROOT = os.path.dirname(os.path.dirname(CODE_DIR))
 
+
 def _package_scripts():
     try:
         from bookcorpus.paths import scripts_dir
+
         return scripts_dir()
     except ImportError:
         return os.path.join(os.path.dirname(os.path.dirname(CODE_DIR)), "src", "bookcorpus", "scripts")
 
 
-
-STATES = ("queued", "running", "awaiting_review", "succeeded", "failed",
-          "cancelled", "orphaned")
+STATES = ("queued", "running", "awaiting_review", "succeeded", "failed", "cancelled", "orphaned")
 DONE_STATES = ("succeeded", "failed", "cancelled", "orphaned")
 READ_SLOTS = 2
 JSON_MAX = 1024 * 1024
-UPLOAD_MAX = 2 * 1024 ** 3
+UPLOAD_MAX = 2 * 1024**3
 STATUS_TTL = 6.0
 PDF_PROBE_RETRY = 30.0
 KILL_WAIT = 10
@@ -64,11 +65,8 @@ def _latest_batch(root, prefix):
     pat = re.compile(r"^%s\d{4}-\d{2}-\d{2}$" % re.escape(prefix))
     base = os.path.join(root, "工作区", "批次")
     names = []
-    try:
-        names = sorted(n for n in os.listdir(base)
-                       if pat.match(n) and os.path.isdir(os.path.join(base, n)))
-    except OSError:
-        pass
+    with suppress(OSError):
+        names = sorted(n for n in os.listdir(base) if pat.match(n) and os.path.isdir(os.path.join(base, n)))
     return os.path.join(base, names[-1] if names else prefix + time.strftime("%Y-%m-%d"))
 
 
@@ -96,9 +94,11 @@ PENDING_PDF_SQL = (
     "SELECT b.uid, b.title, b.subject1, b.subject2, s.file FROM book b"
     " JOIN source s ON s.uid = b.uid AND s.primary_src = 1"
     " WHERE s.format = 'pdf' AND NOT EXISTS (SELECT 1 FROM derived d"
-    " WHERE d.uid = b.uid AND d.kind = 'md' AND d.status = 'done')")
+    " WHERE d.uid = b.uid AND d.kind = 'md' AND d.status = 'done')"
+)
 PROBE_TEXT_MIN_CHARS = 100
-PDF_PAGE_SCRIPT = '''import json, sys
+PDF_PAGE_SCRIPT = (
+    """import json, sys
 import pymupdf
 TEXT_MIN = %d
 out = {}
@@ -114,7 +114,9 @@ for item in json.load(sys.stdin):
     out[item["uid"]] = {"pages": pages,
                         "text": int(bool(picks) and hits * 2 >= len(picks))}
 print(json.dumps(out))
-''' % PROBE_TEXT_MIN_CHARS
+"""
+    % PROBE_TEXT_MIN_CHARS
+)
 PDF_DAILY_CAP = 20000
 PDF_SETTLE_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "日文暂缓")
 PDF_RECHECK_METRICS = ("OCR-复看", "复看-可能OCR")
@@ -123,9 +125,20 @@ PDF_RECHECK_METRICS = ("OCR-复看", "复看-可能OCR")
 # chunk-failed/source-missing/source-changed/assemble-failed/staged-review/
 # no-chunks/incomplete-chunks/chunk-mismatch/error/interrupted，从来没有裸 failed。
 # 库里老批次有 failed、分片账里有 quota，也一并认，门禁与清单不再各拼各的字符串。
-PDF_FAIL_STATUSES = frozenset({"failed", "error", "api-fatal", "chunk-failed",
-                               "assemble-failed", "source-missing", "source-changed",
-                               "chunk-mismatch", "incomplete-chunks", "no-chunks"})
+PDF_FAIL_STATUSES = frozenset(
+    {
+        "failed",
+        "error",
+        "api-fatal",
+        "chunk-failed",
+        "assemble-failed",
+        "source-missing",
+        "source-changed",
+        "chunk-mismatch",
+        "incomplete-chunks",
+        "no-chunks",
+    }
+)
 PDF_DEFER_STATUSES = frozenset({"deferred", "interrupted", "quota"})
 PDF_STAGED_STATUSES = frozenset({"staged-review"})
 PDF_OK_STATUSES = frozenset({"landed", "skipped-has-md", "accepted", "replaced"})
@@ -271,7 +284,7 @@ def pid_alive(pid):
             stat = fh.read()
     except OSError:
         return False
-    tail = stat[stat.rfind(")") + 1:].split()
+    tail = stat[stat.rfind(")") + 1 :].split()
     return not (tail and tail[0] in ("Z", "X", "x"))
 
 
@@ -352,49 +365,67 @@ class Store:
             "INSERT INTO job (id, kind, title, argv, state, pid, created, started,"
             " ended, exit_code, summary, log_path, batch_dir, plan_hash)"
             " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (row["id"], row["kind"], row["title"], row["argv"], row["state"],
-             row.get("pid"), row["created"], row.get("started"), row.get("ended"),
-             row.get("exit_code"), row.get("summary"), row.get("log_path"),
-             row.get("batch_dir"), row.get("plan_hash")))
+            (
+                row["id"],
+                row["kind"],
+                row["title"],
+                row["argv"],
+                row["state"],
+                row.get("pid"),
+                row["created"],
+                row.get("started"),
+                row.get("ended"),
+                row.get("exit_code"),
+                row.get("summary"),
+                row.get("log_path"),
+                row.get("batch_dir"),
+                row.get("plan_hash"),
+            ),
+        )
 
     def update(self, job_id, **fields):
         if not fields:
             return
         keys = sorted(fields)
-        self._exec("UPDATE job SET %s WHERE id=?" % ", ".join("%s=?" % k for k in keys),
-                   tuple(fields[k] for k in keys) + (job_id,))
+        self._exec(
+            "UPDATE job SET %s WHERE id=?" % ", ".join("%s=?" % k for k in keys),  # noqa: S608 列名只来自 **fields 的关键字参数
+            (*tuple(fields[k] for k in keys), job_id),
+        )
 
     def get(self, job_id):
         rows = self._rows("SELECT * FROM job WHERE id=?", (job_id,))
         return rows[0] if rows else None
 
     def queued(self, limit=50):
-        return self._rows("SELECT * FROM job WHERE state='queued' ORDER BY created ASC"
-                          " LIMIT ?", (limit,))
+        return self._rows("SELECT * FROM job WHERE state='queued' ORDER BY created ASC LIMIT ?", (limit,))
 
     def list(self, state=None, limit=200):
         if state:
-            return self._rows("SELECT rowid AS seq, * FROM job WHERE state=?"
-                              " ORDER BY created DESC LIMIT ?", (state, limit))
-        return self._rows("SELECT rowid AS seq, * FROM job ORDER BY created DESC LIMIT ?",
-                          (limit,))
+            return self._rows(
+                "SELECT rowid AS seq, * FROM job WHERE state=? ORDER BY created DESC LIMIT ?", (state, limit)
+            )
+        return self._rows("SELECT rowid AS seq, * FROM job ORDER BY created DESC LIMIT ?", (limit,))
 
     def counts(self):
         rows = self._rows("SELECT state, count(*) n FROM job GROUP BY state")
         return {r["state"]: r["n"] for r in rows}
 
     def add_step(self, job_id, seq, name, state="pending", detail=None):
-        self._exec("INSERT OR REPLACE INTO step (job_id, seq, name, state, detail,"
-                   " started) VALUES (?,?,?,?,?,?)",
-                   (job_id, seq, name, state, detail, now_iso()))
+        self._exec(
+            "INSERT OR REPLACE INTO step (job_id, seq, name, state, detail, started) VALUES (?,?,?,?,?,?)",
+            (job_id, seq, name, state, detail, now_iso()),
+        )
 
     def step_state(self, job_id, seq, state, detail=None):
-        self._exec("UPDATE step SET state=?, detail=?, ended=? WHERE job_id=? AND seq=?",
-                   (state, detail, now_iso(), job_id, seq))
+        self._exec(
+            "UPDATE step SET state=?, detail=?, ended=? WHERE job_id=? AND seq=?",
+            (state, detail, now_iso(), job_id, seq),
+        )
 
     def steps(self, job_id):
-        return self._rows("SELECT seq, name, state, detail, started, ended FROM step"
-                          " WHERE job_id=? ORDER BY seq", (job_id,))
+        return self._rows(
+            "SELECT seq, name, state, detail, started, ended FROM step WHERE job_id=? ORDER BY seq", (job_id,)
+        )
 
     def delete(self, job_id):
         self._exec("DELETE FROM step WHERE job_id=?", (job_id,))
@@ -436,15 +467,13 @@ class Ctx:
 def gate_rc(ctx):
     blob = last_json_blob(ctx.text())
     why, fail_why = "", ""
-    if isinstance(blob, dict):
-        if blob.get("ok") is False or blob.get("error"):
-            # rc=0 不等于脚本说成功：retire_book/pdf_apply_review 都会带 ok:false
-            why = "：" + str(blob.get("error") or blob.get("ok"))[:200]
-            fail_why = why
+    if isinstance(blob, dict) and (blob.get("ok") is False or blob.get("error")):
+        # rc=0 不等于脚本说成功：retire_book/pdf_apply_review 都会带 ok:false
+        why = "：" + str(blob.get("error") or blob.get("ok"))[:200]
+        fail_why = why
     bad = ctx.failed()
     if bad:
-        return "failed", "失败步：%s%s" % (
-            "、".join("%s(rc=%s)" % (n, rc) for n, rc in bad), why)
+        return "failed", "失败步：%s%s" % ("、".join("%s(rc=%s)" % (n, rc) for n, rc in bad), why)
     if fail_why:
         return "failed", "脚本报告失败%s" % fail_why
     return "succeeded", "%d 步完成%s" % (len(ctx.rcs), why)
@@ -461,8 +490,11 @@ def gate_import_scan(ctx):
         return "failed", "计划不是数组"
     counts = collections.Counter(str(i.get("action") or "?") for i in plan)
     summary = "计划待确认：add %d / replace %d / delete %d / review %d" % (
-        counts.get("add", 0), counts.get("replace", 0),
-        counts.get("delete", 0), counts.get("review", 0))
+        counts.get("add", 0),
+        counts.get("replace", 0),
+        counts.get("delete", 0),
+        counts.get("review", 0),
+    )
     if counts.get("review"):
         summary += "；有 %d 行待核" % counts["review"]
     elif counts.get("replace"):
@@ -499,11 +531,12 @@ def gate_split(ctx):
     if not isinstance(pending, list):
         return "failed", "统计里没有待复核清单，重跑一次"
     counts = report.get("status_counts") or {}
-    summary = "批次 %s：%s" % (report.get("batch") or "?",
-                             "，".join("%s %d" % (k, v) for k, v in sorted(counts.items())))
+    summary = "批次 %s：%s" % (
+        report.get("batch") or "?",
+        "，".join("%s %d" % (k, v) for k, v in sorted(counts.items())),
+    )
     if pending:
-        return "awaiting_review", summary + "；待复核 %d 本（%s）" % (
-            len(pending), "、".join(pending[:6]))
+        return "awaiting_review", summary + "；待复核 %d 本（%s）" % (len(pending), "、".join(pending[:6]))
     return "succeeded", summary
 
 
@@ -526,8 +559,7 @@ def gate_inspect(ctx):
         bits.append("跨文件重复 %d 处" % row["dup_shingles"])
     if not bits:
         bits.append("没有发现疑点")
-    return "succeeded", "《%s》%s" % (row.get("title") or row.get("uid") or "这本书",
-                                    "，".join(bits))
+    return "succeeded", "《%s》%s" % (row.get("title") or row.get("uid") or "这本书", "，".join(bits))
 
 
 def pdf_reports(ctx):
@@ -574,8 +606,9 @@ def gate_pdf(ctx):
     summary += "，本次范围剩 %s 本 / %s 页" % (remaining, pages)
     if hard:
         # 硬失败先判：额度用完的书改天还能续，坏书得人看
-        detail = "、".join("%s %d" % (status, counts[status])
-                           for status in sorted(counts) if status in PDF_FAIL_STATUSES)
+        detail = "、".join(
+            "%s %d" % (status, counts[status]) for status in sorted(counts) if status in PDF_FAIL_STATUSES
+        )
         return "failed", summary + "；硬失败 %d 本（%s）" % (hard, detail)
     if deferred:
         return "awaiting_review", summary + "；%d 本暂缓（额度/中断），改天续跑" % deferred
@@ -596,8 +629,7 @@ def gate_triage(ctx):
     model = result.get("model") or {}
     thumbs = result.get("thumbs") or []
     if model.get("route"):
-        summary = "模型建议 %s（%s）待人工确认" % (
-            model["route"], format_conf(model.get("confidence")))
+        summary = "模型建议 %s（%s）待人工确认" % (model["route"], format_conf(model.get("confidence")))
     else:
         summary = "无模型建议，待人工判断"
     summary += "；缩略图 %d 张" % len(thumbs)
@@ -618,8 +650,7 @@ def gate_triage_batch(ctx):
         return "failed", "分诊没有结果文件 result.json"
     routed = sum(1 for one in results if (one.get("model") or {}).get("route"))
     thumbs = sum(len(one.get("thumbs") or []) for one in results)
-    return "awaiting_review", "%d 本出建议，%d 本有模型路线；缩略图共 %d 张" % (
-        len(results), routed, thumbs)
+    return "awaiting_review", "%d 本出建议，%d 本有模型路线；缩略图共 %d 张" % (len(results), routed, thumbs)
 
 
 def gate_dryrun(ctx):
@@ -633,8 +664,11 @@ def gate_dryrun(ctx):
         return "failed", str(blob.get("error") or "预览拒绝")[:200]
     sources = blob.get("sources") or []
     summary = "预览 %s：源 %d 个，md %s 章，plan_hash %s" % (
-        blob.get("title") or blob.get("uid"), len(sources),
-        blob.get("md_chapters"), str(blob.get("plan_hash") or "")[:12])
+        blob.get("title") or blob.get("uid"),
+        len(sources),
+        blob.get("md_chapters"),
+        str(blob.get("plan_hash") or "")[:12],
+    )
     if blob.get("snapshot_ok") is False:
         summary += "；快照不可用，不能应用"
     return "succeeded", summary
@@ -688,8 +722,7 @@ def recheck_row(row):
 
 
 def untriaged_split(books):
-    out = {"books": 0, "pages": 0,
-           "text": {"books": 0, "pages": 0}, "scan": {"books": 0, "pages": 0}}
+    out = {"books": 0, "pages": 0, "text": {"books": 0, "pages": 0}, "scan": {"books": 0, "pages": 0}}
     for row in books.values():
         if row["disposition"] != "untriaged":
             continue
@@ -722,29 +755,29 @@ KINDS = {
 
 
 MAINTAIN_STEPS = {
-    "db": {"label": "重建 library.db", "script": "build_library.py",
-           "args": ["--emit-json"], "marker": r'"conflicts":\s*0'},
-    "index": {"label": "检索索引", "script": "build_para_index.py",
-              "args": ["--rebuild", "--concepts"]},
+    "db": {
+        "label": "重建 library.db",
+        "script": "build_library.py",
+        "args": ["--emit-json"],
+        "marker": r'"conflicts":\s*0',
+    },
+    "index": {"label": "检索索引", "script": "build_para_index.py", "args": ["--rebuild", "--concepts"]},
     "topics": {"label": "主题软链", "script": "build_views.py", "args": ["--only", "topics"]},
     "awards": {"label": "奖项软链", "script": "build_views.py", "args": ["--only", "awards"]},
-    "audit": {"label": "深审计", "script": "audit_state.py", "args": ["--deep"],
-              "marker": r"FAIL 0 项"},
-    "verify": {"label": "四箱验收", "script": "verify_phase.py", "args": [],
-               "marker": r"(?m)^全过\s*$"},
-    "catalog": {"label": "书目总表", "script": "gen_book_catalog.py", "args": [],
-                "marker": r"未匹配 0 条"},
+    "audit": {"label": "深审计", "script": "audit_state.py", "args": ["--deep"], "marker": r"FAIL 0 项"},
+    "verify": {"label": "四箱验收", "script": "verify_phase.py", "args": [], "marker": r"(?m)^全过\s*$"},
+    "catalog": {"label": "书目总表", "script": "gen_book_catalog.py", "args": [], "marker": r"未匹配 0 条"},
     "doc": {"label": "阅读版 html", "script": "build_index.py", "args": []},
 }
-MAINTAIN_ORDER = ("db", "index", "topics", "awards", "audit", "verify",
-                  "catalog", "doc")
-FINISH_DEFAULT = ("db", "index", "topics", "awards", "audit", "verify",
-                  "catalog")
+MAINTAIN_ORDER = ("db", "index", "topics", "awards", "audit", "verify", "catalog", "doc")
+FINISH_DEFAULT = ("db", "index", "topics", "awards", "audit", "verify", "catalog")
 
 
 def rebuild_commands(env):
-    return [make_cmd(env, "build_library", "build_library.py", ["--emit-json"]),
-            make_cmd(env, "gen_book_catalog", "gen_book_catalog.py", [])]
+    return [
+        make_cmd(env, "build_library", "build_library.py", ["--emit-json"]),
+        make_cmd(env, "gen_book_catalog", "gen_book_catalog.py", []),
+    ]
 
 
 def pdf_interpreter(env):
@@ -760,11 +793,10 @@ def script_interpreter(env, script):
 
 def make_cmd(env, name, script, args, accepts_root=False, marker=None, capture=None):
     path = os.path.join(env.scripts, script)
-    argv = [script_interpreter(env, script), path] + list(args)
+    argv = [script_interpreter(env, script), path, *list(args)]
     if accepts_root:
         argv += ["--root", env.root]
-    return {"name": name, "script": script, "argv": argv, "marker": marker,
-            "capture": capture}
+    return {"name": name, "script": script, "argv": argv, "marker": marker, "capture": capture}
 
 
 def retarget(env, cmd):
@@ -813,12 +845,17 @@ class Runner:
         if callable(commands):
             commands = commands(job_id)
         write_json_atomic(os.path.join(job_dir, "commands.json"), commands)
-        row = {"id": job_id, "kind": kind, "title": title,
-               "argv": json.dumps(commands[0]["argv"], ensure_ascii=False)
-               if commands else "[]",
-               "state": "queued", "created": now_iso(),
-               "log_path": self.env.rel(os.path.join(job_dir, "log.txt")),
-               "batch_dir": batch_dir, "plan_hash": plan_hash}
+        row = {
+            "id": job_id,
+            "kind": kind,
+            "title": title,
+            "argv": json.dumps(commands[0]["argv"], ensure_ascii=False) if commands else "[]",
+            "state": "queued",
+            "created": now_iso(),
+            "log_path": self.env.rel(os.path.join(job_dir, "log.txt")),
+            "batch_dir": batch_dir,
+            "plan_hash": plan_hash,
+        }
         self.store.create(row)
         for seq, cmd in enumerate(commands):
             self.store.add_step(job_id, seq, cmd["name"], "pending")
@@ -828,9 +865,7 @@ class Runner:
 
     def snapshot(self):
         with self.cv:
-            return {"writer": bool(self.active_write),
-                    "readers": int(self.active_read),
-                    "active": sorted(self.active)}
+            return {"writer": bool(self.active_write), "readers": int(self.active_read), "active": sorted(self.active)}
 
     def cancel(self, job_id):
         job = self.store.get(job_id)
@@ -843,14 +878,12 @@ class Runner:
         self.cancels.add(job_id)
         pid = self.procs[job_id].pid if job_id in self.procs else job.get("pid")
         if not pid:
-            self.store.update(job_id, state="cancelled", summary="已取消（还没起进程）",
-                              ended=now_iso())
+            self.store.update(job_id, state="cancelled", summary="已取消（还没起进程）", ended=now_iso())
             if not picked:
                 # 没人会再消费这个标记：DB 已是 cancelled，别让集合无限长
                 self.cancels.discard(job_id)
             return True
-        threading.Thread(target=self._terminate, args=(job_id, int(pid)),
-                         daemon=True).start()
+        threading.Thread(target=self._terminate, args=(job_id, int(pid)), daemon=True).start()
         return True
 
     def adopt(self):
@@ -872,18 +905,16 @@ class Runner:
                         self.active_write += 1
                     self.cv.notify_all()
                 self.store.update(row["id"], summary="接管：进程仍在跑")
-                threading.Thread(target=self._watch_adopted, args=(row["id"], int(pid)),
-                                 daemon=True).start()
+                threading.Thread(target=self._watch_adopted, args=(row["id"], int(pid)), daemon=True).start()
             else:
                 for step in self.store.steps(row["id"]):
                     if step["state"] == "running":
                         # 步骤表不能停在一个永远 running 的状态：被打断的那步
                         # 退出码没人知道，记 unknown 交给 _finalize 降级
-                        self.store.step_state(
-                            row["id"], step["seq"], "unknown",
-                            "服务重启，进程已不在，退出码未知")
-                self.store.update(row["id"], state="orphaned", ended=now_iso(),
-                                  summary="服务重启，PID 核对不上，已标孤儿")
+                        self.store.step_state(row["id"], step["seq"], "unknown", "服务重启，进程已不在，退出码未知")
+                self.store.update(
+                    row["id"], state="orphaned", ended=now_iso(), summary="服务重启，PID 核对不上，已标孤儿"
+                )
 
     # ---- internals -------------------------------------------------
     @staticmethod
@@ -926,7 +957,7 @@ class Runner:
                     if picked is None:
                         self.cv.wait(0.4)
                         continue
-            except Exception:  # noqa: BLE001
+            except Exception:
                 # 调度线程死了 = 队列永久停摆（ops.db 被外部锁住等）。吞掉记日志，
                 # 缓一缓再回来；HTTP 侧还能照常受理与查询。
                 traceback.print_exc()
@@ -951,28 +982,25 @@ class Runner:
         lock_fd = None
         try:
             commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
-            lock_fd = os.open(self._lock_file(self.env, spec),
-                              os.O_CREAT | os.O_RDWR, 0o644)
-            fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly")
-                        else fcntl.LOCK_EX)
+            lock_fd = os.open(self._lock_file(self.env, spec), os.O_CREAT | os.O_RDWR, 0o644)
+            fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly") else fcntl.LOCK_EX)
             # 拿锁可能等了几百 ms，这期间取消已经落库：以 DB 为准回读一次，
             # 不能拿内存集合当唯一依据，更不能把 cancelled 回写成 running
             state = (self.store.get(job_id) or {}).get("state")
             if state == "cancelled" or job_id in self.cancels:
-                self.store.update(job_id, state="cancelled", ended=now_iso(),
-                                  summary="已取消（拿锁前）")
+                self.store.update(job_id, state="cancelled", ended=now_iso(), summary="已取消（拿锁前）")
                 self.cancels.discard(job_id)
                 return
             self.store.update(job_id, state="running", started=now_iso(), summary="")
-            self._log(job_id, "=== %s %s %s\n" % (job_id, job["kind"], job["title"]),
-                      truncate=True)
+            self._log(job_id, "=== %s %s %s\n" % (job_id, job["kind"], job["title"]), truncate=True)
             rcs = self._play(job_id, commands)
             self._finalize(job_id, job, commands, rcs, spec=spec)
-        except Exception:  # noqa: BLE001
+        except Exception:
             detail = traceback.format_exc(limit=4)
             self._log(job_id, "[服务异常]\n" + detail + "\n")
-            self.store.update(job_id, state="failed", ended=now_iso(),
-                              summary="服务端异常：" + detail.strip().splitlines()[-1][:160])
+            self.store.update(
+                job_id, state="failed", ended=now_iso(), summary="服务端异常：" + detail.strip().splitlines()[-1][:160]
+            )
         finally:
             if lock_fd is not None:
                 try:
@@ -982,17 +1010,14 @@ class Runner:
                     pass
             self.procs.pop(job_id, None)
             self._release(job_id, spec)
-            try:
+            with suppress(OSError):
                 os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
-            except OSError:
-                pass
 
     def _play(self, job_id, commands, start=0, rcs=None):
         """从 start 开始按顺序跑命令，逐步记状态；rcs 里是前面几步已经知道的退出码。"""
         rcs = list(rcs or [])
         for seq in range(start, len(commands)):
-            if job_id in self.cancels or (self.store.get(job_id) or {}).get(
-                    "state") == "cancelled":
+            if job_id in self.cancels or (self.store.get(job_id) or {}).get("state") == "cancelled":
                 # 每步之前都看一眼：取消落在两步之间时，下一步不能再起
                 break
             cmd = commands[seq]
@@ -1008,10 +1033,8 @@ class Runner:
             if rc != 0:
                 break
             marker = cmd.get("marker")
-            if marker and not re.search(
-                    marker, self._step_section(job_id, cmd["name"])):
-                self.store.step_state(job_id, seq, "fail",
-                                      "rc=0 但未出现门槛 %s" % marker)
+            if marker and not re.search(marker, self._step_section(job_id, cmd["name"])):
+                self.store.step_state(job_id, seq, "fail", "rc=0 但未出现门槛 %s" % marker)
                 break
         return rcs
 
@@ -1032,8 +1055,7 @@ class Runner:
 
     def _spawn(self, job_id, cmd):
         argv = cmd["argv"]
-        self._log(job_id, "\n---- step %s ----\n$ %s\n" % (cmd["name"],
-                                                          " ".join(argv)))
+        self._log(job_id, "\n---- step %s ----\n$ %s\n" % (cmd["name"], " ".join(argv)))
         if not os.path.exists(argv[0]):
             self._log(job_id, "[缺] 解释器不存在：%s\n" % argv[0])
             return 127
@@ -1042,13 +1064,17 @@ class Runner:
             return 127
         path = os.path.join(self.env.job_dir(job_id), "log.txt")
         with open(path, "ab") as fh:
-            proc = subprocess.Popen(argv, cwd=self.env.root, stdout=fh,
-                                    stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                    start_new_session=True)
+            proc = subprocess.Popen(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+                argv,
+                cwd=self.env.root,
+                stdout=fh,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
         self.procs[job_id] = proc
         self.store.update(job_id, pid=proc.pid)
-        write_text_atomic(os.path.join(self.env.job_dir(job_id), "pid"),
-                          "%d\n" % proc.pid)
+        write_text_atomic(os.path.join(self.env.job_dir(job_id), "pid"), "%d\n" % proc.pid)
         return proc.wait()
 
     def _capture(self, job_id, name):
@@ -1070,34 +1096,35 @@ class Runner:
         ctx = Ctx(self.env, job, commands, rcs)
         try:
             state, summary = spec["gate"](ctx)
-        except Exception:  # noqa: BLE001
-            state, summary = "failed", "门槛判定出错：" + traceback.format_exc(
-                limit=2).strip().splitlines()[-1][:160]
+        except Exception:
+            state, summary = "failed", "门槛判定出错：" + traceback.format_exc(limit=2).strip().splitlines()[-1][:160]
         unknown = [name for name, rc in rcs if rc is None]
         if unknown:
             summary += "；接管：%s 的退出码拿不到" % "、".join(unknown)
             if state == "succeeded":
                 state = "awaiting_review"
-        self.store.update(job_id, state=state, ended=now_iso(), summary=summary,
-                          exit_code=(rcs[-1][1] if rcs else None))
+        self.store.update(
+            job_id, state=state, ended=now_iso(), summary=summary, exit_code=(rcs[-1][1] if rcs else None)
+        )
         self._log(job_id, "\n---- 判定 %s：%s ----\n" % (state, summary))
         if job["kind"] == "maintain" and state in ("succeeded", "awaiting_review"):
-            threading.Thread(target=self._refresh_audit, args=(job_id,),
-                             daemon=True).start()
+            threading.Thread(target=self._refresh_audit, args=(job_id,), daemon=True).start()
 
     def _refresh_audit(self, job_id):
         """收尾跑完就重写体检缓存。页面关着也照样刷新，下次打开不再显示跑之前的读数。"""
-        argv = [sys.executable, self.env.status_script, "--json", "--deep",
-                "--root", self.env.root]
+        argv = [sys.executable, self.env.status_script, "--json", "--deep", "--root", self.env.root]
         try:
-            proc = subprocess.run(argv, cwd=self.env.root, capture_output=True,
-                                  text=True, timeout=180)
+            proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+                argv, cwd=self.env.root, capture_output=True, text=True, timeout=180
+            )
         except (OSError, subprocess.SubprocessError) as exc:
             self._log(job_id, "[体检缓存] 刷新失败：%s\n" % exc)
             return
         if proc.returncode != 0:
-            self._log(job_id, "[体检缓存] ops_status rc=%d：%s\n"
-                      % (proc.returncode, (proc.stderr or proc.stdout).strip()[-200:]))
+            self._log(
+                job_id,
+                "[体检缓存] ops_status rc=%d：%s\n" % (proc.returncode, (proc.stderr or proc.stdout).strip()[-200:]),
+            )
 
     def _watch_adopted(self, job_id, pid):
         """等接管来的进程退出，再把剩下的步骤跑完，最后按产物收尾。"""
@@ -1109,18 +1136,19 @@ class Runner:
                     self._terminate(job_id, pid)
                 time.sleep(1.0)
             self.resume(job_id, spec)
-        except Exception:  # noqa: BLE001
+        except Exception:
             detail = traceback.format_exc(limit=4)
             self._log(job_id, "[接管异常]\n" + detail + "\n")
-            self.store.update(job_id, state="failed", ended=now_iso(),
-                              summary="接管后收尾失败："
-                                      + detail.strip().splitlines()[-1][:160])
+            self.store.update(
+                job_id,
+                state="failed",
+                ended=now_iso(),
+                summary="接管后收尾失败：" + detail.strip().splitlines()[-1][:160],
+            )
         finally:
             self._release(job_id, spec)
-            try:
+            with suppress(OSError):
                 os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
-            except OSError:
-                pass
 
     def resume(self, job_id, spec):
         """接管后的续跑：跑到一半的那一步没人知道退出码，记 unknown；剩下的命令接着跑。"""
@@ -1129,19 +1157,15 @@ class Runner:
             return
         lock_fd = None
         try:
-            commands = read_json(os.path.join(self.env.job_dir(job_id),
-                                              "commands.json")) or []
-            lock_fd = os.open(self._lock_file(self.env, spec),
-                              os.O_CREAT | os.O_RDWR, 0o644)
-            fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly")
-                        else fcntl.LOCK_EX)
+            commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
+            lock_fd = os.open(self._lock_file(self.env, spec), os.O_CREAT | os.O_RDWR, 0o644)
+            fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly") else fcntl.LOCK_EX)
             rcs, start = self._adopted_rcs(job_id)
             if job_id in self.cancels:
                 self._finalize(job_id, job, commands, rcs, spec=spec or None)
                 return
             if start < len(commands):
-                self._log(job_id, "\n[接管] 服务重启过，剩下的 %d 步接着跑\n"
-                          % (len(commands) - start))
+                self._log(job_id, "\n[接管] 服务重启过，剩下的 %d 步接着跑\n" % (len(commands) - start))
             rcs = self._play(job_id, commands, start, rcs)
             self._finalize(job_id, job, commands, rcs, spec=spec or None)
         finally:
@@ -1162,8 +1186,7 @@ class Runner:
                 start = step["seq"] + 1
                 continue
             if step["state"] == "running":
-                self.store.step_state(job_id, step["seq"], "unknown",
-                                      "接管：进程退出，退出码未知")
+                self.store.step_state(job_id, step["seq"], "unknown", "接管：进程退出，退出码未知")
                 rcs.append((step["name"], None))
                 start = step["seq"] + 1
             break
@@ -1194,10 +1217,8 @@ class Runner:
             os.killpg(pgid, 0)
         except OSError:
             return
-        try:
+        with suppress(OSError):
             os.killpg(pgid, signal.SIGKILL)
-        except OSError:
-            pass
 
 
 class App:
@@ -1246,8 +1267,9 @@ class App:
             if deep:
                 argv.append("--deep")
             try:
-                proc = subprocess.run(argv, cwd=self.env.root, capture_output=True,
-                                      text=True, timeout=120)
+                proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+                    argv, cwd=self.env.root, capture_output=True, text=True, timeout=120
+                )
                 if proc.returncode == 0:
                     blob = last_json_blob(proc.stdout)
                     if isinstance(blob, dict):
@@ -1268,30 +1290,31 @@ class App:
             else:
                 error = (error or "") + " fixture 读不出"
         if payload is None:
-            payload = {"at": now_iso(), "books": 0, "md_done": 0,
-                       "pending": {"pdf": 0, "txt": 0, "djvu": 0},
-                       "inbox": {"files": 0, "items": []},
-                       "ledger": {"rows": 0, "mtime": None},
-                       "catalog": {"mtime": None, "unmatched": 0},
-                       "index": {"built_at": None, "paras": 0, "chapters": 0,
-                                 "books": 0, "lag_books": 0, "lag_chapters": 0},
-                       "views": {"awards": 0, "topics": 0, "broken": 0},
-                       "audit": {"fail": 0, "warn": 0, "items": []},
-                       "ocr": {"remaining_books": 0, "remaining_pages": 0,
-                               "quota": "20000/天"},
-                       "jobs": {"running": 0, "awaiting_review": 0, "last": None}}
+            payload = {
+                "at": now_iso(),
+                "books": 0,
+                "md_done": 0,
+                "pending": {"pdf": 0, "txt": 0, "djvu": 0},
+                "inbox": {"files": 0, "items": []},
+                "ledger": {"rows": 0, "mtime": None},
+                "catalog": {"mtime": None, "unmatched": 0},
+                "index": {"built_at": None, "paras": 0, "chapters": 0, "books": 0, "lag_books": 0, "lag_chapters": 0},
+                "views": {"awards": 0, "topics": 0, "broken": 0},
+                "audit": {"fail": 0, "warn": 0, "items": []},
+                "ocr": {"remaining_books": 0, "remaining_pages": 0, "quota": "20000/天"},
+                "jobs": {"running": 0, "awaiting_review": 0, "last": None},
+            }
             error = error or "ops_status.py 未就绪，页面显示空状态"
         counts = self.store.counts()
         pdf = self.pdf_books_index()
-        archived = [row for row in pdf.values()
-                    if row["disposition"] in ("gallery", "ja")]
+        archived = [row for row in pdf.values() if row["disposition"] in ("gallery", "ja")]
         payload["archive"] = {
             "books": len(archived),
             "pages": sum(int(row["pages"] or 0) for row in archived),
             "gallery": sum(1 for row in archived if row["disposition"] == "gallery"),
-            "ja": sum(1 for row in archived if row["disposition"] == "ja")}
-        payload["convertible"] = max(
-            0, int(payload.get("pending", {}).get("total") or 0) - len(archived))
+            "ja": sum(1 for row in archived if row["disposition"] == "ja"),
+        }
+        payload["convertible"] = max(0, int(payload.get("pending", {}).get("total") or 0) - len(archived))
         payload["jobs"] = {
             "queued": counts.get("queued", 0),
             "running": counts.get("running", 0),
@@ -1300,19 +1323,26 @@ class App:
             "last": (self.store.list(limit=1) or [None])[0],
         }
         snap = self.runner.snapshot()
-        return {"ok": error is None, "source": source, "error": error,
-                "status": payload, "ops": snap, "state_counts": counts,
-                "at": now_iso()}
+        return {
+            "ok": error is None,
+            "source": source,
+            "error": error,
+            "status": payload,
+            "ops": snap,
+            "state_counts": counts,
+            "at": now_iso(),
+        }
 
     # ---- search ----------------------------------------------------
     def search_health(self):
-        out = {"ok": True, "running": False, "url": SEARCH_URL, "pid": None,
-               "meta": None, "error": None}
+        out = {"ok": True, "running": False, "url": SEARCH_URL, "pid": None, "meta": None, "error": None}
         pid_file = read_json(self.env.search_pid)
         if isinstance(pid_file, dict):
             out["pid"] = pid_file.get("pid")
         try:
-            with urllib.request.urlopen(SEARCH_URL + "/api/health", timeout=1.5) as r:
+            with urllib.request.urlopen(  # noqa: S310 SEARCH_URL 是模块常量（http://127.0.0.1:8765）
+                SEARCH_URL + "/api/health", timeout=1.5
+            ) as r:
                 blob = json.loads(r.read().decode("utf-8"))
             out["running"] = True
             out["meta"] = blob.get("meta")
@@ -1330,11 +1360,15 @@ class App:
         os.makedirs(self.env.ops, exist_ok=True)
         with open(self.env.search_log, "ab") as fh:
             fh.write(("\n=== %s 启动 8765 ===\n" % now_iso()).encode("utf-8"))
-            proc = subprocess.Popen([sys.executable, script], cwd=self.env.root,
-                                    stdout=fh, stderr=subprocess.STDOUT,
-                                    stdin=subprocess.DEVNULL, start_new_session=True)
-        write_json_atomic(self.env.search_pid,
-                          {"pid": proc.pid, "at": now_iso(), "argv": [sys.executable, script]})
+            proc = subprocess.Popen(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+                [sys.executable, script],
+                cwd=self.env.root,
+                stdout=fh,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        write_json_atomic(self.env.search_pid, {"pid": proc.pid, "at": now_iso(), "argv": [sys.executable, script]})
         deadline = time.time() + 8
         while time.time() < deadline:
             time.sleep(0.3)
@@ -1355,13 +1389,13 @@ class App:
             conn.close()
 
     def pending(self):
-        rows = self.db_rows(
+        return self.db_rows(
             "SELECT p.uid, p.title, p.subject1, p.subject2, p.format, s.bytes,"
             " s.file, b.path, b.series, b.volume, b.author"
             " FROM v_pending_md p JOIN book b ON b.uid = p.uid"
             " LEFT JOIN source s ON s.uid = p.uid AND s.primary_src = 1"
-            " ORDER BY p.uid")
-        return rows
+            " ORDER BY p.uid"
+        )
 
     def inbox(self):
         out = []
@@ -1371,10 +1405,14 @@ class App:
                 if not os.path.isfile(path) or name.startswith(".") or name.endswith(".part"):
                     continue
                 st = os.stat(path)
-                out.append({"name": name, "bytes": st.st_size,
-                            "format": os.path.splitext(name)[1].lstrip(".").lower(),
-                            "mtime": datetime.fromtimestamp(
-                                st.st_mtime).astimezone().isoformat(timespec="seconds")})
+                out.append(
+                    {
+                        "name": name,
+                        "bytes": st.st_size,
+                        "format": os.path.splitext(name)[1].lstrip(".").lower(),
+                        "mtime": datetime.fromtimestamp(st.st_mtime).astimezone().isoformat(timespec="seconds"),
+                    }
+                )
         return out
 
     def split_books(self, batch):
@@ -1383,8 +1421,7 @@ class App:
         if not batch or not re.match(r"^(?!\.{1,2}$)[A-Za-z0-9._-]+$", batch):
             return []
         batch_dir = os.path.join(self.env.batches, batch)
-        if os.path.realpath(batch_dir) != os.path.join(
-                os.path.realpath(self.env.batches), batch):
+        if os.path.realpath(batch_dir) != os.path.join(os.path.realpath(self.env.batches), batch):
             return []
         logs = os.path.join(batch_dir, "logs")
         out = []
@@ -1396,20 +1433,26 @@ class App:
             row = read_json(os.path.join(logs, name))
             if not isinstance(row, dict):
                 continue
-            out.append({"uid": row.get("uid") or name[:-5], "title": row.get("title"),
-                        "status": row.get("status"), "verify_rc": row.get("verify_rc"),
-                        "audit_rc": row.get("audit_rc"),
-                        "audit_ratio": row.get("audit_ratio"),
-                        "chapters": row.get("chapters"), "images": row.get("images"),
-                        "fix": len(row.get("fix") or []) if isinstance(row.get("fix"),
-                                                                      list) else row.get("fix"),
-                        "dest": row.get("dest"), "previous": row.get("previous"),
-                        "note": row.get("note")})
+            out.append(
+                {
+                    "uid": row.get("uid") or name[:-5],
+                    "title": row.get("title"),
+                    "status": row.get("status"),
+                    "verify_rc": row.get("verify_rc"),
+                    "audit_rc": row.get("audit_rc"),
+                    "audit_ratio": row.get("audit_ratio"),
+                    "chapters": row.get("chapters"),
+                    "images": row.get("images"),
+                    "fix": len(row.get("fix") or []) if isinstance(row.get("fix"), list) else row.get("fix"),
+                    "dest": row.get("dest"),
+                    "previous": row.get("previous"),
+                    "note": row.get("note"),
+                }
+            )
         return out
 
     def pdf_queue(self):
-        triage = read_table(self.env.root, os.path.join(TRIAGE_PDF_DIR,
-                                                        "triage_final.csv"), ",")
+        triage = read_table(self.env.root, os.path.join(TRIAGE_PDF_DIR, "triage_final.csv"), ",")
         skip = read_table(self.env.root, os.path.join(TRIAGE_PDF_DIR, "skip_list.tsv"))
         defer = read_table(self.env.root, os.path.join(OCR_BATCH, "defer", "lang.tsv"))
         work = read_table(self.env.root, os.path.join(OCR_BATCH, "worklist.tsv"))
@@ -1422,7 +1465,8 @@ class App:
                     done[name[:-5]] = row.get("status")
         groups = collections.OrderedDict(
             (k, {"route": k, "books": 0, "pages": 0, "uids": []})
-            for k in ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓"))
+            for k in ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
+        )
         for row in triage:
             route = (row.get("route") or "").strip()
             if not route:
@@ -1434,51 +1478,65 @@ class App:
         ja_rows = [r for r in defer if (r.get("lang") or "").strip() == "ja"]
         ja_deferred = {r.get("uid") for r in ja_rows}
         groups["日文暂缓"] = {
-            "route": "日文暂缓", "books": len(ja_rows),
+            "route": "日文暂缓",
+            "books": len(ja_rows),
             "pages": sum(int(float(r.get("pages") or 0)) for r in ja_rows),
-            "uids": [r.get("uid") for r in ja_rows]}
-        batch_landed = sum(1 for uid, status in done.items()
-                           if status in ("landed", "skipped-has-md", "accepted"))
+            "uids": [r.get("uid") for r in ja_rows],
+        }
+        batch_landed = sum(1 for uid, status in done.items() if status in ("landed", "skipped-has-md", "accepted"))
         remaining = [r for r in work if r.get("uid") not in done]
         counts = collections.Counter(s for s in done.values() if s)
         # 分账只算 worklist 里的书：logs 里可能有别的批次顺带跑过的 uid，
         # 拿 len(work)-landed-failed-staged 减出来的数不是划分。
         work_uids = [r.get("uid") for r in work if r.get("uid")]
-        mine = collections.Counter(done[uid] for uid in work_uids
-                                   if done.get(uid))
+        mine = collections.Counter(done[uid] for uid in work_uids if done.get(uid))
         landed = sum(n for status, n in mine.items() if status in PDF_OK_STATUSES)
         failed = sum(n for status, n in mine.items() if status in PDF_FAIL_STATUSES)
         deferred = sum(n for status, n in mine.items() if status in PDF_DEFER_STATUSES)
         staged = sum(n for status, n in mine.items() if status in PDF_STAGED_STATUSES)
         # 没 log 的书才是真的没开跑：有 log 但状态不认识的不能算未开跑
         untouched = sum(1 for uid in work_uids if not done.get(uid))
-        batch = {"name": os.path.basename(OCR_BATCH), "readonly": True,
-                 "worklist": len(work), "landed": batch_landed,
-                 "remaining_books": len(remaining),
-                 "remaining_pages": sum(int(float(r.get("pages") or 0))
-                                        for r in remaining),
-                 "quota": "20000/天",
-                 "partition": {"landed": landed, "failed": failed, "staged": staged,
-                               "deferred": deferred, "untouched": untouched,
-                               "left": failed + staged + deferred + untouched},
-                 "status_counts": counts}
-        return {"groups": list(groups.values()), "skip": len(skip),
-                "deferred": deferred, "deferred_ja": len(ja_deferred),
-                "batch": batch,
-                "triage_path": os.path.join(TRIAGE_PDF_DIR, "triage_final.csv")}
+        batch = {
+            "name": os.path.basename(OCR_BATCH),
+            "readonly": True,
+            "worklist": len(work),
+            "landed": batch_landed,
+            "remaining_books": len(remaining),
+            "remaining_pages": sum(int(float(r.get("pages") or 0)) for r in remaining),
+            "quota": "20000/天",
+            "partition": {
+                "landed": landed,
+                "failed": failed,
+                "staged": staged,
+                "deferred": deferred,
+                "untouched": untouched,
+                "left": failed + staged + deferred + untouched,
+            },
+            "status_counts": counts,
+        }
+        return {
+            "groups": list(groups.values()),
+            "skip": len(skip),
+            "deferred": deferred,
+            "deferred_ja": len(ja_deferred),
+            "batch": batch,
+            "triage_path": os.path.join(TRIAGE_PDF_DIR, "triage_final.csv"),
+        }
 
     def pdf_batches(self):
         """后建的批次盖前面的那一份。"""
         root = self.env.batches
         if not os.path.isdir(root):
             return []
-        return [os.path.join("工作区", "批次", name) for name in sorted(os.listdir(root))
-                if name.startswith(TRIAGE_BATCH_PREFIX)
-                and os.path.isdir(os.path.join(root, name))]
+        return [
+            os.path.join("工作区", "批次", name)
+            for name in sorted(os.listdir(root))
+            if name.startswith(TRIAGE_BATCH_PREFIX) and os.path.isdir(os.path.join(root, name))
+        ]
 
     def pdf_last_status(self):
         out = {}
-        for rel in [OCR_BATCH] + self.pdf_batches():
+        for rel in [OCR_BATCH, *self.pdf_batches()]:
             logs = os.path.join(self.env.root, rel, "logs")
             if not os.path.isdir(logs):
                 continue
@@ -1494,10 +1552,8 @@ class App:
         argvs = [c.get("argv") or [] for c in commands if isinstance(c, dict)]
         row = self.store.get(job_id) or {}
         if row.get("argv"):
-            try:
+            with suppress(ValueError):
                 argvs.append(json.loads(row["argv"]))
-            except ValueError:
-                pass
         return argvs
 
     def pdf_running(self):
@@ -1535,12 +1591,16 @@ class App:
         if not os.path.isfile(interpreter):
             self.pdf_probe_down_until = time.time() + PDF_PROBE_RETRY
             return out
-        payload = json.dumps([{"uid": uid, "path": rel} for uid, rel, _stamp in todo],
-                             ensure_ascii=False)
+        payload = json.dumps([{"uid": uid, "path": rel} for uid, rel, _stamp in todo], ensure_ascii=False)
         try:
-            proc = subprocess.run([interpreter, "-c", PDF_PAGE_SCRIPT], input=payload,
-                                  cwd=self.env.root, capture_output=True, text=True,
-                                  timeout=30)
+            proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+                [interpreter, "-c", PDF_PAGE_SCRIPT],
+                input=payload,
+                cwd=self.env.root,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
         except (OSError, subprocess.SubprocessError):
             self.pdf_probe_down_until = time.time() + PDF_PROBE_RETRY
             return out
@@ -1575,23 +1635,23 @@ class App:
     def pdf_books_index(self):
         try:
             pending = self.db_rows(PENDING_PDF_SQL)
-            landed = {r["uid"] for r in self.db_rows(
-                "SELECT uid FROM derived WHERE kind='md' AND status='done'")}
+            landed = {r["uid"] for r in self.db_rows("SELECT uid FROM derived WHERE kind='md' AND status='done'")}
         except FileNotFoundError:
             return {}
         pages, route = {}, {}
         # 先读全局普查表（542 行），再用 ops 批次覆盖：ops 批次只记当天改过的书，
         # 只读它会把普查里已有的 route 全丢掉，清单页整片变「未分诊」。
-        for row in read_table(self.env.root, os.path.join(TRIAGE_PDF_DIR,
-                                                         "triage_final.csv"), ","):
+        for row in read_table(self.env.root, os.path.join(TRIAGE_PDF_DIR, "triage_final.csv"), ","):
             uid = row.get("uid")
             if not uid:
                 continue
             route[uid] = row.get("route") or ""
             pages[uid] = row.get("pages")
-        for row in (read_table(self.env.root, PDF_WORKLIST)
-                    + read_table(self.env.root, PDF_SKIP_LIST)
-                    + read_table(self.env.root, PDF_DEFER)):
+        for row in (
+            read_table(self.env.root, PDF_WORKLIST)
+            + read_table(self.env.root, PDF_SKIP_LIST)
+            + read_table(self.env.root, PDF_DEFER)
+        ):
             uid = row.get("uid")
             if uid and not pages.get(uid):
                 pages[uid] = row.get("pages")
@@ -1603,10 +1663,8 @@ class App:
                 route[uid] = row.get("route") or ""
                 if row.get("pages"):
                     pages[uid] = row.get("pages")
-        skipped = {r["uid"]: r for r in read_table(self.env.root, PDF_SKIP_LIST)
-                   if r.get("uid")}
-        japanese = {r.get("uid") for r in read_table(self.env.root, PDF_DEFER)
-                    if (r.get("lang") or "").strip() == "ja"}
+        skipped = {r["uid"]: r for r in read_table(self.env.root, PDF_SKIP_LIST) if r.get("uid")}
+        japanese = {r.get("uid") for r in read_table(self.env.root, PDF_DEFER) if (r.get("lang") or "").strip() == "ja"}
         last = self.pdf_last_status()
         running = self.pdf_running()
         books = {}
@@ -1637,18 +1695,23 @@ class App:
             except (TypeError, ValueError):
                 count = None
             books[uid] = {
-                "uid": uid, "title": row.get("title"),
+                "uid": uid,
+                "title": row.get("title"),
                 "subject1": row.get("subject1") or "",
                 "subject2": row.get("subject2") or "",
-                "pages": count, "disposition": disposition,
+                "pages": count,
+                "disposition": disposition,
                 "route": route.get(uid) if disposition == "convert" else None,
                 "progress": progress,
                 "recheck": disposition == "gallery" and recheck_row(skipped.get(uid)),
                 "why": (skipped.get(uid) or {}).get("why") if disposition == "gallery" else None,
-                "last": last.get(uid)}
-        todo = [(row["uid"], row.get("file") or "") for row in pending
-                if books[row["uid"]]["pages"] is None
-                or books[row["uid"]]["disposition"] == "untriaged"]
+                "last": last.get(uid),
+            }
+        todo = [
+            (row["uid"], row.get("file") or "")
+            for row in pending
+            if books[row["uid"]]["pages"] is None or books[row["uid"]]["disposition"] == "untriaged"
+        ]
         probe = self.pdf_probe(todo)
         for uid, info in probe.items():
             if uid not in books:
@@ -1656,22 +1719,27 @@ class App:
             if books[uid]["pages"] is None:
                 books[uid]["pages"] = info["pages"]
             books[uid]["text_layer"] = (info["text"] == 1) if info["text"] is not None else None
-        suggestions = self.pdf_suggestions(
-            [uid for uid, row in books.items() if row["disposition"] == "untriaged"])
+        suggestions = self.pdf_suggestions([uid for uid, row in books.items() if row["disposition"] == "untriaged"])
         for uid, row in books.items():
             row.setdefault("text_layer", None)
             hit = suggestions.get(uid)
-            row["suggestion"] = ({"route": hit["route"], "confidence": hit["confidence"],
-                                  "reason": hit["reason"],
-                                  "manual": bool(hit.get("manual"))} if hit else None)
+            row["suggestion"] = (
+                {
+                    "route": hit["route"],
+                    "confidence": hit["confidence"],
+                    "reason": hit["reason"],
+                    "manual": bool(hit.get("manual")),
+                }
+                if hit
+                else None
+            )
             row["suggest_job"] = hit["job"] if hit else None
         return dict(sorted(books.items()))
 
     def pdf_today(self):
         """只有真走 OCR 的书占当天额度：skipped-has-md 没提交，text 路线不花额度，
         deferred 是没提交成的，都不算。"""
-        logs = os.path.join(self.env.batches,
-                            TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d"), "logs")
+        logs = os.path.join(self.env.batches, TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d"), "logs")
         used = 0
         if os.path.isdir(logs):
             for name in os.listdir(logs):
@@ -1682,10 +1750,8 @@ class App:
                     continue
                 if row.get("route") == "text" or row.get("status") == "deferred":
                     continue
-                try:
+                with suppress(TypeError, ValueError):
                     used += int(float(row.get("pages") or 0))
-                except (TypeError, ValueError):
-                    pass
         return {"used": used, "cap": PDF_DAILY_CAP}
 
     def pdf_triage_jobs(self):
@@ -1694,11 +1760,8 @@ class App:
         失败、被取消、还在跑，都不该让已经出来的建议和分诊行消失。
         同一秒建的任务按 id 排是随机的，rowid 才是真的先后。
         """
-        jobs = [row for row in self.store.list(limit=500)
-                if row.get("kind") == "pdf.triage"]
-        return sorted(jobs, key=lambda row: (row.get("seq") or 0,
-                                             row.get("created") or ""),
-                      reverse=True)
+        jobs = [row for row in self.store.list(limit=500) if row.get("kind") == "pdf.triage"]
+        return sorted(jobs, key=lambda row: (row.get("seq") or 0, row.get("created") or ""), reverse=True)
 
     def pdf_suggestions(self, uids):
         out, want = {}, set(uids)
@@ -1730,20 +1793,25 @@ class App:
                 route = model.get("route") or "人工确认"
                 if route not in PDF_ROUTES:
                     continue
-                out[uid] = {"route": route, "confidence": model.get("confidence"),
-                            "reason": model.get("reason") or "", "job": job["id"],
-                            "manual": route == "人工确认"}
+                out[uid] = {
+                    "route": route,
+                    "confidence": model.get("confidence"),
+                    "reason": model.get("reason") or "",
+                    "job": job["id"],
+                    "manual": route == "人工确认",
+                }
         return out
 
     def pdf_triage_row(self, uid, index):
         for job in self.pdf_triage_jobs():
-            for rel in (os.path.join("jobs", job["id"], uid, "triage.csv"),
-                        os.path.join("jobs", job["id"], "triage.csv")):
+            for rel in (
+                os.path.join("jobs", job["id"], uid, "triage.csv"),
+                os.path.join("jobs", job["id"], "triage.csv"),
+            ):
                 for row in read_table(self.env.ops, rel, ","):
                     if row.get("uid") == uid:
                         return row, (row.get("verdict") or "").strip()
-        sources = [os.path.join(rel, "triage_final.csv")
-                   for rel in reversed(self.pdf_batches())]
+        sources = [os.path.join(rel, "triage_final.csv") for rel in reversed(self.pdf_batches())]
         sources.append(os.path.join(TRIAGE_PDF_DIR, "triage_final.csv"))
         for rel in sources:
             for row in read_table(self.env.root, rel, ","):
@@ -1751,12 +1819,18 @@ class App:
                     return row, (row.get("verdict") or "").strip()
         work = {r.get("uid"): r for r in read_table(self.env.root, PDF_WORKLIST)}
         book = index.get(uid) or {}
-        return {"uid": uid, "title": book.get("title") or "",
-                "subject1": book.get("subject1") or "",
-                "subject2": book.get("subject2") or "",
-                "class": (work.get(uid) or {}).get("class") or "", "route": "",
-                "pages": "" if book.get("pages") is None else book["pages"],
-                "mb": "", "note": "", "verdict": ""}, ""
+        return {
+            "uid": uid,
+            "title": book.get("title") or "",
+            "subject1": book.get("subject1") or "",
+            "subject2": book.get("subject2") or "",
+            "class": (work.get(uid) or {}).get("class") or "",
+            "route": "",
+            "pages": "" if book.get("pages") is None else book["pages"],
+            "mb": "",
+            "note": "",
+            "verdict": "",
+        }, ""
 
     def pdf_metrics_dir(self, uid):
         """分诊产物目录：与 pdf_triage_row 同一顺序，新的任务先看。
@@ -1787,10 +1861,8 @@ class App:
                 for line in fh:
                     if not line.strip():
                         continue
-                    try:
+                    with suppress(ValueError):
                         rows.append(json.loads(line))
-                    except ValueError:
-                        pass
             merge_jsonl(os.path.join(batch_dir, name), rows, uid)
 
     def pdf_settle(self, items, index):
@@ -1805,25 +1877,45 @@ class App:
             row["route"] = route
             upsert_csv(batch_triage, row, list(row.keys()))
             suggestion = item.get("suggestion") or {}
-            review = {"uid": uid, "verdict": item.get("verdict") or verdict or route,
-                      "evidence": "", "route": route,
-                      "reason": item.get("reason") or "在 PDF 清单里改处置",
-                      "model": ({"route": suggestion.get("route"),
-                                 "confidence": suggestion.get("confidence"),
-                                 "reason": suggestion.get("reason") or "",
-                                 "at": now_iso()} if suggestion.get("route") else None),
-                      "at": now_iso()}
+            review = {
+                "uid": uid,
+                "verdict": item.get("verdict") or verdict or route,
+                "evidence": "",
+                "route": route,
+                "reason": item.get("reason") or "在 PDF 清单里改处置",
+                "model": (
+                    {
+                        "route": suggestion.get("route"),
+                        "confidence": suggestion.get("confidence"),
+                        "reason": suggestion.get("reason") or "",
+                        "at": now_iso(),
+                    }
+                    if suggestion.get("route")
+                    else None
+                ),
+                "at": now_iso(),
+            }
             write_json_atomic(os.path.join(review_dir, uid + ".json"), review)
             # carry/forced 的书分诊指标还在 job 目录里；不并进当天批次，
             # apply_review 的 image_share 恒空。此处已在 settle_pdf 的锁里，别再套锁。
             metrics_dir = self.pdf_metrics_dir(uid)
             if metrics_dir:
                 self.merge_pdf_metrics(batch_dir, metrics_dir, uid)
-        command = make_cmd(self.env, "apply_review", "pdf_apply_review.py",
-                           ["--batch", batch,
-                            "--triage", self.env.rel(batch_triage),
-                            "--out-dir", self.env.rel(batch_dir),
-                            "--review", self.env.rel(review_dir)])
+        command = make_cmd(
+            self.env,
+            "apply_review",
+            "pdf_apply_review.py",
+            [
+                "--batch",
+                batch,
+                "--triage",
+                self.env.rel(batch_triage),
+                "--out-dir",
+                self.env.rel(batch_dir),
+                "--review",
+                self.env.rel(review_dir),
+            ],
+        )
         return batch, command
 
     def retire_search(self, query):
@@ -1831,26 +1923,28 @@ class App:
         rows = self.db_rows(
             "SELECT uid, title, author, path, subject1, subject2, series, volume,"
             " retention FROM book WHERE uid=? OR title LIKE ? OR author LIKE ?"
-            " ORDER BY uid LIMIT 30", (query, like, like))
+            " ORDER BY uid LIMIT 30",
+            (query, like, like),
+        )
         return self._retire_enrich(rows)
 
     def retire_drop(self, limit=100):
         """账表里保留=drop 的书。删书页先列这一队，不用再靠搜。"""
         rows = self.db_rows(
             "SELECT uid, title, author, path, subject1, subject2, series, volume,"
-            " retention FROM book WHERE retention='drop' ORDER BY uid LIMIT ?", (limit,))
+            " retention FROM book WHERE retention='drop' ORDER BY uid LIMIT ?",
+            (limit,),
+        )
         return self._retire_enrich(rows)
 
     def _retire_enrich(self, rows):
         for row in rows:
             row["sources"] = self.db_rows(
-                "SELECT file, format, bytes, sha256, primary_src FROM source"
-                " WHERE uid=?", (row["uid"],))
-            md = self.db_rows("SELECT chapters, bytes, status FROM derived"
-                              " WHERE uid=? AND kind='md'", (row["uid"],))
+                "SELECT file, format, bytes, sha256, primary_src FROM source WHERE uid=?", (row["uid"],)
+            )
+            md = self.db_rows("SELECT chapters, bytes, status FROM derived WHERE uid=? AND kind='md'", (row["uid"],))
             row["md"] = md[0] if md else None
-            row["awards"] = self.db_rows(
-                "SELECT award, year, result FROM book_award WHERE uid=?", (row["uid"],))
+            row["awards"] = self.db_rows("SELECT award, year, result FROM book_award WHERE uid=?", (row["uid"],))
             row["retired"] = self._retired(row["uid"])
         return rows
 
@@ -1861,17 +1955,21 @@ class App:
         if scripts not in sys.path:
             sys.path.insert(0, scripts)
         import lib_common as LC
+
         return LC
 
     def ledger_tables(self):
         LC = self._ledger_mod()
         root = self.env.root
         p = LC.ledger_path(root)
-        out = {"ok": True, "ledger_db": p if os.path.isfile(p) else None,
-               "ledger": LC.categories(root=root),
-               "concepts": LC.concept_rows("main", root=root),
-               "broad": LC.concept_rows("broad", root=root),
-               "actions": LC.action_word_rows(root=root)}
+        out = {
+            "ok": True,
+            "ledger_db": p if os.path.isfile(p) else None,
+            "ledger": LC.categories(root=root),
+            "concepts": LC.concept_rows("main", root=root),
+            "broad": LC.concept_rows("broad", root=root),
+            "actions": LC.action_word_rows(root=root),
+        }
         out["ledger"].sort(key=lambda r: r.get("uid") or "")
         return out
 
@@ -1887,16 +1985,21 @@ class App:
         with ledger_lock(self.env):
             # 读已知 uid 与现有行都放进锁里：锁外读、锁内写会让并发的删行
             # 与这里的 upsert 互相插回已删的 uid
-            known = {r["uid"]: r for r in LC.categories(root=self.env.root,
-                                                        create=False)}
+            known = {r["uid"]: r for r in LC.categories(root=self.env.root, create=False)}
             if uid not in known:
                 raise ValueError("人账里没有 %s，新书走「新书导入」，不在这里加" % uid)
             old = known[uid]
             # 只覆盖请求里出现的键。category_put 是整行 upsert，缺键用默认值
             # 会清掉备注/保留/作者层/正式书名（页面只改一个字段时就会发生）
             clean = {"uid": uid}
-            for key, default in (("一级", ""), ("二级", ""), ("作者层", "0"),
-                                 ("保留", "keep"), ("正式书名", ""), ("备注", "")):
+            for key, _default in (
+                ("一级", ""),
+                ("二级", ""),
+                ("作者层", "0"),
+                ("保留", "keep"),
+                ("正式书名", ""),
+                ("备注", ""),
+            ):
                 value = row[key] if key in row and row[key] is not None else old.get(key)
                 clean[key] = "" if value is None else str(value).strip()
             clean["作者层"] = clean["作者层"] or "0"
@@ -1943,10 +2046,12 @@ class App:
             if which == "action":
                 con = LC.ledger_connect("rw", root=self.env.root)
                 try:
-                    con.execute("INSERT INTO 动作词(term,kind,note) VALUES(?,?,?)"
-                                " ON CONFLICT(term) DO UPDATE SET kind=excluded.kind,"
-                                " note=excluded.note",
-                                (key, kind, note))
+                    con.execute(
+                        "INSERT INTO 动作词(term,kind,note) VALUES(?,?,?)"
+                        " ON CONFLICT(term) DO UPDATE SET kind=excluded.kind,"
+                        " note=excluded.note",
+                        (key, kind, note),
+                    )
                     con.commit()
                 finally:
                     con.close()
@@ -1954,10 +2059,12 @@ class App:
                 con = LC.ledger_connect("rw", root=self.env.root)
                 table = "概念" if which == "main" else "概念broad"
                 try:
-                    con.execute("INSERT INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)"
-                                " ON CONFLICT(key) DO UPDATE SET aliases=excluded.aliases,"
-                                " exclude=excluded.exclude, note=excluded.note" % table,
-                                (key, aliases, exclude, note))
+                    con.execute(
+                        "INSERT INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)"
+                        " ON CONFLICT(key) DO UPDATE SET aliases=excluded.aliases,"
+                        " exclude=excluded.exclude, note=excluded.note" % table,
+                        (key, aliases, exclude, note),
+                    )
                     con.commit()
                 finally:
                     con.close()
@@ -1977,7 +2084,10 @@ class App:
             con = LC.ledger_connect("rw", root=self.env.root)
             try:
                 table = {"main": "概念", "broad": "概念broad", "action": "动作词"}[which]
-                n = con.execute("DELETE FROM %s WHERE %s=?" % (table, col), (key,)).rowcount
+                n = con.execute(
+                    "DELETE FROM %s WHERE %s=?" % (table, col),  # noqa: S608 table/col 取自本函数的常量映射
+                    (key,),
+                ).rowcount
                 con.commit()
             finally:
                 con.close()
@@ -2007,15 +2117,14 @@ class App:
     # ---- ops.db maintenance ----------------------------------------
     def clean(self, keep_days=90, keep_jobs=200, thumb_days=30):
         jobs = self.store.list(limit=10000)
-        keep = set(j["id"] for j in jobs[:keep_jobs])
+        keep = {j["id"] for j in jobs[:keep_jobs]}
         cutoff = time.time() - keep_days * 86400
         removed = []
         for job in jobs:
             if job["state"] not in DONE_STATES:
                 continue
             try:
-                ended = os.path.getmtime(os.path.join(self.env.job_dir(job["id"]),
-                                                      "log.txt"))
+                ended = os.path.getmtime(os.path.join(self.env.job_dir(job["id"]), "log.txt"))
             except OSError:
                 ended = 0
             stale = bool(ended) and ended <= cutoff
@@ -2052,18 +2161,21 @@ def json_bytes(value):
 # id 段不收点段：`jobs/../log.txt` 这种能过白名单，realpath 会落到 jobs 外
 JOB_ID_SEG = r"(?!\.{1,2}/)[A-Za-z0-9._-]+"
 FILE_ALLOW = (
-    re.compile(r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/(log\.txt|plan\.json|commands\.json|"
-               r"result\.json|review\.json|dry-run\.json|report\.json|status\.json)$"),
+    re.compile(
+        r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/(log\.txt|plan\.json|commands\.json|"
+        r"result\.json|review\.json|dry-run\.json|report\.json|status\.json)$"
+    ),
     re.compile(r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/review/[A-Za-z0-9._-]+\.json$"),
     re.compile(r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/thumbs/[A-Za-z0-9._-]+\.png$"),
     re.compile(r"^(build/(书目总表\.xlsx|书目总表\.csv)|tables/分类预填\.csv)$"),
 )
-CONTENT_TYPES = {".json": "application/json; charset=utf-8",
-                 ".txt": "text/plain; charset=utf-8",
-                 ".csv": "text/csv; charset=utf-8",
-                 ".png": "image/png",
-                 ".xlsx": "application/vnd.openxmlformats-officedocument."
-                          "spreadsheetml.sheet"}
+CONTENT_TYPES = {
+    ".json": "application/json; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+    ".csv": "text/csv; charset=utf-8",
+    ".png": "image/png",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 # 这些走 /api/file 时按文本解码头再脱敏；png/xlsx 是二进制，原样下发
 TEXT_DOWNLOAD_EXTS = {".txt", ".json", ".csv", ".tsv", ".log", ".md"}
 
@@ -2127,8 +2239,7 @@ class Handler(BaseHTTPRequestHandler):
         host = self.headers.get("Host") or ""
         origin = self.headers.get("Origin")
         host_ok = bool(re.match(r"^(127\.0\.0\.1|localhost)(:\d+)?$", host))
-        origin_ok = origin is None or bool(
-            re.match(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$", origin))
+        origin_ok = origin is None or bool(re.match(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$", origin))
         return host_ok and origin_ok
 
     def body_json(self):
@@ -2144,7 +2255,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             value = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
-            raise ValueError("请求体不是合法 JSON")
+            raise ValueError("请求体不是合法 JSON") from None
         if not isinstance(value, dict):
             raise ValueError("请求体必须是 JSON 对象")
         return value
@@ -2185,8 +2296,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "items": self.app.pending()})
             elif route == "/api/split/books":
                 batch = (query.get("batch") or [""])[0]
-                self.send_json(200, {"ok": True, "batch": batch,
-                                     "books": self.app.split_books(batch)})
+                self.send_json(200, {"ok": True, "batch": batch, "books": self.app.split_books(batch)})
             elif route == "/api/pdf/queue":
                 self.send_json(200, dict(self.app.pdf_queue(), ok=True))
             elif route == "/api/pdf/books":
@@ -2194,10 +2304,16 @@ class Handler(BaseHTTPRequestHandler):
                 counts = dict.fromkeys(PDF_DISPOSITIONS, 0)
                 for row in books.values():
                     counts[row["disposition"]] += 1
-                self.send_json(200, {"ok": True, "books": list(books.values()),
-                                     "counts": counts,
-                                     "today": self.app.pdf_today(),
-                                     "untriaged": untriaged_split(books)})
+                self.send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "books": list(books.values()),
+                        "counts": counts,
+                        "today": self.app.pdf_today(),
+                        "untriaged": untriaged_split(books),
+                    },
+                )
             elif route == "/api/ledger":
                 self.send_json(200, self.app.ledger_tables())
             elif route == "/api/retire/drop":
@@ -2220,7 +2336,7 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(404, str(exc))
         except ValueError as exc:
             self.fail(400, str(exc))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             traceback.print_exc()
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
 
@@ -2237,8 +2353,7 @@ class Handler(BaseHTTPRequestHandler):
         jobs = self.app.store.list(state=state, limit=limit)
         for job in jobs:
             job["steps"] = self.app.store.steps(job["id"])
-        self.send_json(200, {"ok": True, "jobs": jobs,
-                             "counts": self.app.store.counts()})
+        self.send_json(200, {"ok": True, "jobs": jobs, "counts": self.app.store.counts()})
 
     def api_job(self, job_id):
         job = self.app.store.get(job_id)
@@ -2246,17 +2361,19 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(404, "没有这个任务")
             return
         log_path = os.path.join(self.app.env.job_dir(job_id), "log.txt")
-        payload = {"ok": True, "job": job, "steps": self.app.store.steps(job_id),
-                   "log_tail": redact(tail_lines(tail_bytes(log_path))),
-                   "commands": read_json(os.path.join(self.app.env.job_dir(job_id),
-                                                      "commands.json")) or [],
-                   "files": self.job_files(job_id)}
+        payload = {
+            "ok": True,
+            "job": job,
+            "steps": self.app.store.steps(job_id),
+            "log_tail": redact(tail_lines(tail_bytes(log_path))),
+            "commands": read_json(os.path.join(self.app.env.job_dir(job_id), "commands.json")) or [],
+            "files": self.job_files(job_id),
+        }
         self.send_json(200, payload)
 
     def job_files(self, job_id):
         out = {}
-        for name in ("plan.json", "result.json", "review.json", "dry-run.json",
-                     "report.json", "commands.json"):
+        for name in ("plan.json", "result.json", "review.json", "dry-run.json", "report.json", "commands.json"):
             path = os.path.join(self.app.env.job_dir(job_id), name)
             if os.path.exists(path):
                 out[name] = self.app.env.rel(path)
@@ -2295,12 +2412,20 @@ class Handler(BaseHTTPRequestHandler):
                     text = raw[:1].decode("utf-8", "replace")
                     consumed = 1
                 else:
-                    text = raw[:exc.start].decode("utf-8")
+                    text = raw[: exc.start].decode("utf-8")
                     consumed = exc.start
         next_offset = offset + consumed
-        self.send_json(200, {"ok": True, "offset": offset, "next": next_offset,
-                             "size": size, "eof": next_offset >= size,
-                             "text": redact(text)})
+        self.send_json(
+            200,
+            {
+                "ok": True,
+                "offset": offset,
+                "next": next_offset,
+                "size": size,
+                "eof": next_offset >= size,
+                "text": redact(text),
+            },
+        )
 
     def api_file(self, relpath):
         if not relpath:
@@ -2339,8 +2464,7 @@ class Handler(BaseHTTPRequestHandler):
         if not ctype.startswith("image/"):
             # 裸 <a href> 下载拿不到自定义头：没 Content-Disposition 的话浏览器
             # 会把 .xlsx/.csv 存成 file.xlsx / file.csv
-            extra["Content-Disposition"] = "attachment; filename*=UTF-8''%s" % quote(
-                os.path.basename(path), safe="")
+            extra["Content-Disposition"] = "attachment; filename*=UTF-8''%s" % quote(os.path.basename(path), safe="")
         self.send(200, body, ctype, extra)
 
     # ---- POST ------------------------------------------------------
@@ -2397,7 +2521,7 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(404, "没有这个接口")
         except ValueError as exc:
             self.fail(400, str(exc))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             traceback.print_exc()
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
 
@@ -2406,10 +2530,7 @@ class Handler(BaseHTTPRequestHandler):
         if snap["writer"]:
             return True
         # 只看排队中的「写」任务：只读任务排队不该让写按钮报「有写任务在跑」
-        for row in self.app.store.queued(limit=200):
-            if not (KINDS.get(row["kind"]) or {}).get("readonly"):
-                return True
-        return False
+        return any(not (KINDS.get(row["kind"]) or {}).get("readonly") for row in self.app.store.queued(limit=200))
 
     def api_upload(self):
         try:
@@ -2424,8 +2545,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         raw = self.headers.get("X-Filename") or ""
         name = unquote(raw).replace("\\", "/").split("/")[-1].strip()
-        if (not name or name in (".", "..") or name.startswith(".")
-                or any(ch in name for ch in "\x00\r\n")):
+        if not name or name in (".", "..") or name.startswith(".") or any(ch in name for ch in "\x00\r\n"):
             self.fail(400, "文件名不合法：%r" % raw)
             return
         if ".." in name:
@@ -2450,15 +2570,14 @@ class Handler(BaseHTTPRequestHandler):
                 fh.write(chunk)
                 got += len(chunk)
         if got != length:
-            try:
+            with suppress(OSError):
                 os.remove(part)
-            except OSError:
-                pass
             self.fail(400, "上传中断：收到 %d / %d" % (got, length))
             return
         os.replace(part, target)
-        self.send_json(200, {"ok": True, "name": os.path.basename(target),
-                             "path": self.app.env.rel(target), "bytes": got})
+        self.send_json(
+            200, {"ok": True, "name": os.path.basename(target), "path": self.app.env.rel(target), "bytes": got}
+        )
 
     def api_import_scan(self, _payload=None):
         def build(job_id):
@@ -2467,9 +2586,16 @@ class Handler(BaseHTTPRequestHandler):
             # 分类缓存落任务自己的目录：import.scan 标了 readonly，
             # 不能写共享的 工作区/批次/ingest/classify.json
             cache = os.path.join(job_rel, "classify.json")
-            return [make_cmd(self.app.env, "scan", "ingest.py",
-                             ["scan", "--json", "--out", out, "--cache", cache],
-                             accepts_root=True)]
+            return [
+                make_cmd(
+                    self.app.env,
+                    "scan",
+                    "ingest.py",
+                    ["scan", "--json", "--out", out, "--cache", cache],
+                    accepts_root=True,
+                )
+            ]
+
         job_id = self.app.runner.submit("import.scan", "扫收件箱", build)
         self.send_json(200, {"ok": True, "job_id": job_id})
 
@@ -2495,7 +2621,7 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(400, "计划行数与磁盘上的不一致")
             return
         merged = []
-        for old, new in zip(plan, items):
+        for old, new in zip(plan, items, strict=False):
             if not isinstance(new, dict):
                 self.fail(400, "每行必须是对象")
                 return
@@ -2536,12 +2662,17 @@ class Handler(BaseHTTPRequestHandler):
             if not title:
                 self.fail(400, "书名不能空：%s" % (old.get("file") or ""))
                 return
-            row.update(action=action, retention=retention, uid=uid,
-                       subjects=subjects, target_subjects=target_subjects, title=title)
+            row.update(
+                action=action,
+                retention=retention,
+                uid=uid,
+                subjects=subjects,
+                target_subjects=target_subjects,
+                title=title,
+            )
             merged.append(row)
         write_json_atomic(path, merged)
-        self.send_json(200, {"ok": True, "items": len(merged),
-                             "plan_path": self.app.env.rel(path)})
+        self.send_json(200, {"ok": True, "items": len(merged), "plan_path": self.app.env.rel(path)})
 
     def api_import_latest(self):
         jobs = self.app.store.list(state="awaiting_review", limit=50)
@@ -2553,21 +2684,21 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True, "job_id": None, "plan": None, "legacy": False})
             return
         # 旧计划的 conflict/skip 没有对应按钮，也不再入库；让页面提示重新扫描。
-        if any(not isinstance(i, dict) or i.get("plan_version") != 2 for i in plan) or \
-                any(i.get("action") not in ("add", "replace", "delete", "review") for i in plan):
-            self.send_json(200, {"ok": True, "job_id": job["id"],
-                                 "created": job.get("created"), "plan": None,
-                                 "legacy": True})
+        if any(not isinstance(i, dict) or i.get("plan_version") != 2 for i in plan) or any(
+            i.get("action") not in ("add", "replace", "delete", "review") for i in plan
+        ):
+            self.send_json(
+                200, {"ok": True, "job_id": job["id"], "created": job.get("created"), "plan": None, "legacy": True}
+            )
             return
         for item in plan:
             name = os.path.basename(str(item.get("file") or ""))
             if not name or not os.path.isfile(os.path.join(self.app.env.inbox, name)):
-                self.send_json(200, {"ok": True, "job_id": None, "plan": None,
-                                     "legacy": False})
+                self.send_json(200, {"ok": True, "job_id": None, "plan": None, "legacy": False})
                 return
-        self.send_json(200, {"ok": True, "job_id": job["id"],
-                             "created": job.get("created"), "plan": plan,
-                             "legacy": False})
+        self.send_json(
+            200, {"ok": True, "job_id": job["id"], "created": job.get("created"), "plan": plan, "legacy": False}
+        )
 
     def api_import_apply(self, payload):
         plan = plan_path(self.app.env, payload.get("plan_path"))
@@ -2602,12 +2733,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.fail(400, "收件箱里没有这个文件：%s" % (item.get("file") or ""))
                 return
         write_json_atomic(plan, items)
-        commands = [make_cmd(self.app.env, "ingest apply", "ingest.py",
-                             ["apply", plan, "--apply"], accepts_root=True)]
+        commands = [make_cmd(self.app.env, "ingest apply", "ingest.py", ["apply", plan, "--apply"], accepts_root=True)]
         commands += rebuild_commands(self.app.env)
         job_id = self.app.runner.submit(
-            "import.apply", "导入入库 %s" % os.path.basename(os.path.dirname(plan)),
-            commands, plan_hash=plan_file_hash(plan))
+            "import.apply",
+            "导入入库 %s" % os.path.basename(os.path.dirname(plan)),
+            commands,
+            plan_hash=plan_file_hash(plan),
+        )
         self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_split_run(self, payload):
@@ -2648,9 +2781,11 @@ class Handler(BaseHTTPRequestHandler):
         commands = [make_cmd(self.app.env, "split", "split_md_batch.py", argv_args)]
         commands += rebuild_commands(self.app.env)
         job_id = self.app.runner.submit(
-            "split.run", "%s %d 本" % ("重拆" if replace else "拆章", len(uids)),
+            "split.run",
+            "%s %d 本" % ("重拆" if replace else "拆章", len(uids)),
             commands,
-            batch_dir=os.path.join("工作区", "批次", batch))
+            batch_dir=os.path.join("工作区", "批次", batch),
+        )
         self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch})
 
     def split_target(self, payload):
@@ -2672,13 +2807,18 @@ class Handler(BaseHTTPRequestHandler):
         if target is None:
             return
         batch, uid = target
-        commands = [make_cmd(self.app.env, "split", "split_md_batch.py",
-                             ["--batch", batch, "--only", uid, "--workers", "1",
-                              "--report-json", "--recheck"])]
+        commands = [
+            make_cmd(
+                self.app.env,
+                "split",
+                "split_md_batch.py",
+                ["--batch", batch, "--only", uid, "--workers", "1", "--report-json", "--recheck"],
+            )
+        ]
         commands += rebuild_commands(self.app.env)
         job_id = self.app.runner.submit(
-            "split.run", "重新检查 %s" % uid, commands,
-            batch_dir=os.path.join("工作区", "批次", batch))
+            "split.run", "重新检查 %s" % uid, commands, batch_dir=os.path.join("工作区", "批次", batch)
+        )
         self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_split_inspect(self, payload):
@@ -2688,10 +2828,9 @@ class Handler(BaseHTTPRequestHandler):
         batch, uid = target
 
         def build(job_id):
-            out = os.path.join(self.app.env.rel(self.app.env.job_dir(job_id)),
-                               "result.json")
-            return [make_cmd(self.app.env, "review", "md_review_report.py",
-                             [batch, uid, "--json", out])]
+            out = os.path.join(self.app.env.rel(self.app.env.job_dir(job_id)), "result.json")
+            return [make_cmd(self.app.env, "review", "md_review_report.py", [batch, uid, "--json", out])]
+
         job_id = self.app.runner.submit("split.inspect", "查看问题 %s" % uid, build)
         self.send_json(200, {"ok": True, "job_id": job_id})
 
@@ -2700,10 +2839,13 @@ class Handler(BaseHTTPRequestHandler):
         if not re.match(r"^B\d{4}$", uid):
             self.fail(400, "uid 形如 B1234")
             return
+
         def build(job_id):
             out = self.app.env.rel(self.app.env.job_dir(job_id))
-            return [make_cmd(self.app.env, "triage", "ops_pdf_triage.py",
-                             ["--uid", uid, "--out", out], accepts_root=True)]
+            return [
+                make_cmd(self.app.env, "triage", "ops_pdf_triage.py", ["--uid", uid, "--out", out], accepts_root=True)
+            ]
+
         job_id = self.app.runner.submit("pdf.triage", "分诊 %s" % uid, build)
         self.send_json(200, {"ok": True, "job_id": job_id})
 
@@ -2721,25 +2863,42 @@ class Handler(BaseHTTPRequestHandler):
         job_id = (payload.get("job_id") or "").strip()
         job = self.app.store.get(job_id) if job_id else None
         if job is None or job.get("kind") != "pdf.triage":
-            job = next((row for row in self.app.store.list(limit=500)
-                        if row.get("kind") == "pdf.triage"
-                        and row.get("title") == "分诊 " + uid), None)
+            job = next(
+                (
+                    row
+                    for row in self.app.store.list(limit=500)
+                    if row.get("kind") == "pdf.triage" and row.get("title") == "分诊 " + uid
+                ),
+                None,
+            )
         if not job:
             self.fail(400, "先对这个 uid 做分诊，分诊结果里才有 triage.csv")
             return
         job_dir = self.app.env.job_dir(job["id"])
         # 批量分诊把产物写进 jobs/<id>/<uid>/，单本分诊写在 jobs/<id>/ 下
         per_uid = os.path.join(job_dir, uid)
-        triage_csv = next((p for p in (os.path.join(per_uid, "triage.csv"),
-                                       os.path.join(job_dir, "triage.csv"))
-                           if os.path.isfile(p)), None)
+        triage_csv = next(
+            (
+                p
+                for p in (os.path.join(per_uid, "triage.csv"), os.path.join(job_dir, "triage.csv"))
+                if os.path.isfile(p)
+            ),
+            None,
+        )
         if triage_csv is None:
             self.fail(400, "分诊结果没有 triage.csv，重跑分诊")
             return
-        result = next((blob for blob in (
-            read_json(os.path.join(per_uid, "result.json")),
-            read_json(os.path.join(job_dir, "result.json")))
-            if isinstance(blob, dict) and blob.get("uid") == uid), None)
+        result = next(
+            (
+                blob
+                for blob in (
+                    read_json(os.path.join(per_uid, "result.json")),
+                    read_json(os.path.join(job_dir, "result.json")),
+                )
+                if isinstance(blob, dict) and blob.get("uid") == uid
+            ),
+            None,
+        )
         if not result:
             self.fail(400, "分诊结果与 uid 不一致")
             return
@@ -2764,33 +2923,60 @@ class Handler(BaseHTTPRequestHandler):
             # 指标文件与 triage.csv 同目录：批量分诊在 jobs/<id>/<uid>/，单本在
             # jobs/<id>/。用 triage_csv 的目录，别硬编码 job 根。
             self.app.merge_pdf_metrics(batch_dir, os.path.dirname(triage_csv), uid)
-            review = {"uid": uid, "verdict": payload.get("verdict") or route,
-                      "evidence": payload.get("evidence") or "",
-                      "route": route, "reason": reason,
-                      "model": ({"route": model.get("route"),
-                                 "confidence": model.get("confidence"),
-                                 "reason": model.get("reason"),
-                                 "at": model.get("at") or now_iso()}
-                                if isinstance(model, dict) and model.get("route") else None),
-                      "at": now_iso()}
+            review = {
+                "uid": uid,
+                "verdict": payload.get("verdict") or route,
+                "evidence": payload.get("evidence") or "",
+                "route": route,
+                "reason": reason,
+                "model": (
+                    {
+                        "route": model.get("route"),
+                        "confidence": model.get("confidence"),
+                        "reason": model.get("reason"),
+                        "at": model.get("at") or now_iso(),
+                    }
+                    if isinstance(model, dict) and model.get("route")
+                    else None
+                ),
+                "at": now_iso(),
+            }
             write_json_atomic(os.path.join(review_dir, uid + ".json"), review)
             job_id = self.app.runner.submit(
-                "pdf.confirm", "分诊确认 %s → %s" % (uid, route),
-                [make_cmd(self.app.env, "apply_review", "pdf_apply_review.py",
-                          ["--batch", batch,
-                           "--triage", self.app.env.rel(batch_triage),
-                           "--out-dir", self.app.env.rel(batch_dir),
-                           "--review", self.app.env.rel(review_dir)])],
-                batch_dir=os.path.join("工作区", "批次", batch))
+                "pdf.confirm",
+                "分诊确认 %s → %s" % (uid, route),
+                [
+                    make_cmd(
+                        self.app.env,
+                        "apply_review",
+                        "pdf_apply_review.py",
+                        [
+                            "--batch",
+                            batch,
+                            "--triage",
+                            self.app.env.rel(batch_triage),
+                            "--out-dir",
+                            self.app.env.rel(batch_dir),
+                            "--review",
+                            self.app.env.rel(review_dir),
+                        ],
+                    )
+                ],
+                batch_dir=os.path.join("工作区", "批次", batch),
+            )
         # 只有校验与落盘都过了，分诊任务才算确认完：先改状态再写，写失败就
         # 停在 succeeded，人以为那本书已经处置了
         if job.get("state") == "awaiting_review":
-            self.app.store.update(job["id"], state="succeeded", ended=now_iso(),
-                                  summary="已确认 route=%s" % route)
-        self.send_json(200, {"ok": True, "job_id": job_id,
-                             "review": self.app.env.rel(
-                                 os.path.join(review_dir, uid + ".json")),
-                             "batch": batch})
+            self.app.store.update(job["id"], state="succeeded", ended=now_iso(), summary="已确认 route=%s" % route)
+        self.send_json(
+            200,
+            {
+                "ok": True,
+                "job_id": job_id,
+                "review": self.app.env.rel(os.path.join(review_dir, uid + ".json")),
+                "batch": batch,
+            },
+        )
 
     def api_pdf_triage_batch(self, payload):
         uids = uid_list(payload.get("uids"))
@@ -2812,12 +2998,20 @@ class Handler(BaseHTTPRequestHandler):
             if not uids:
                 self.fail(400, "未分诊的书都已经有建议，去清单里确认")
                 return
+
         def build(job_id):
             job_dir = self.app.env.job_dir(job_id)
-            return [make_cmd(self.app.env, "triage " + uid, "ops_pdf_triage.py",
-                             ["--uid", uid,
-                              "--out", self.app.env.rel(os.path.join(job_dir, uid))],
-                             accepts_root=True) for uid in uids]
+            return [
+                make_cmd(
+                    self.app.env,
+                    "triage " + uid,
+                    "ops_pdf_triage.py",
+                    ["--uid", uid, "--out", self.app.env.rel(os.path.join(job_dir, uid))],
+                    accepts_root=True,
+                )
+                for uid in uids
+            ]
+
         job_id = self.app.runner.submit("pdf.triage", "批量分诊 %d 本" % len(uids), build)
         self.send_json(200, {"ok": True, "job_id": job_id, "uids": uids})
 
@@ -2859,10 +3053,9 @@ class Handler(BaseHTTPRequestHandler):
         with ledger_lock(self.app.env):
             batch, command = self.app.pdf_settle(clean, index)
             job_id = self.app.runner.submit(
-                "pdf.confirm", "改处置 %d 本" % len(clean), [command],
-                batch_dir=os.path.join("工作区", "批次", batch))
-        self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch,
-                             "routes": dict(routes)})
+                "pdf.confirm", "改处置 %d 本" % len(clean), [command], batch_dir=os.path.join("工作区", "批次", batch)
+            )
+        self.send_json(200, {"ok": True, "job_id": job_id, "batch": batch, "routes": dict(routes)})
 
     def api_pdf_run(self, payload):
         uids = uid_list(payload.get("uids"))
@@ -2895,9 +3088,11 @@ class Handler(BaseHTTPRequestHandler):
             if already and not force:
                 untriaged = [uid for uid in untriaged if uid not in already]
         if (gallery or japanese) and not force:
-            self.fail(400, "选中的 %d 本里有 %d 本只记图册、%d 本日文暂缓，默认不转；"
-                           "要转就再确认一次"
-                      % (len(gallery) + len(japanese), len(gallery), len(japanese)))
+            self.fail(
+                400,
+                "选中的 %d 本里有 %d 本只记图册、%d 本日文暂缓，默认不转；"
+                "要转就再确认一次" % (len(gallery) + len(japanese), len(gallery), len(japanese)),
+            )
             return
         batch = TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")
         batch_dir = os.path.join(self.app.env.batches, batch)
@@ -2917,8 +3112,7 @@ class Handler(BaseHTTPRequestHandler):
                     placed.add(uid)
             missing = [uid for uid in convert if uid not in placed]
             if missing:
-                self.fail(400, "这些 uid 在 %s 里没有可转的 route，先做分诊确认：%s"
-                          % (triage, "、".join(missing)))
+                self.fail(400, "这些 uid 在 %s 里没有可转的 route，先做分诊确认：%s" % (triage, "、".join(missing)))
                 return
         forced = gallery + japanese
         if forced:
@@ -2930,8 +3124,8 @@ class Handler(BaseHTTPRequestHandler):
         if limit:
             for name in sorted(routes):
                 group = routes[name]
-                keep = group[:max(0, budget)]
-                skipped.extend(group[len(keep):])
+                keep = group[: max(0, budget)]
+                skipped.extend(group[len(keep) :])
                 routes[name] = keep
                 budget -= len(keep)
         allocated = {uid for group in routes.values() for uid in group}
@@ -2947,36 +3141,55 @@ class Handler(BaseHTTPRequestHandler):
             group = routes[name]
             if not group:
                 continue
-            args = ["--batch", batch, "--route", name, "--uids", ",".join(group),
-                    "--workers", str(workers), "--triage", triage,
-                    "--report-json"]
-            commands.append(make_cmd(self.app.env, "pdf %s" % name, "pdf_md_batch.py",
-                                     args))
+            args = [
+                "--batch",
+                batch,
+                "--route",
+                name,
+                "--uids",
+                ",".join(group),
+                "--workers",
+                str(workers),
+                "--triage",
+                triage,
+                "--report-json",
+            ]
+            commands.append(make_cmd(self.app.env, "pdf %s" % name, "pdf_md_batch.py", args))
         triage_jobs = []
         for uid in untriaged:
+
             def build(job_id, uid=uid):
                 out = self.app.env.rel(self.app.env.job_dir(job_id))
-                return [make_cmd(self.app.env, "triage", "ops_pdf_triage.py",
-                                 ["--uid", uid, "--out", out], accepts_root=True)]
+                return [
+                    make_cmd(
+                        self.app.env, "triage", "ops_pdf_triage.py", ["--uid", uid, "--out", out], accepts_root=True
+                    )
+                ]
+
             triage_jobs.append(self.app.runner.submit("pdf.triage", "分诊 %s" % uid, build))
         job_id = None
         if commands:
             commands += rebuild_commands(self.app.env)
             job_id = self.app.runner.submit(
-                "pdf.run", "PDF 转 md %d 本" % len(allocated), commands,
-                batch_dir=os.path.join("工作区", "批次", batch))
-        response = {"ok": True, "job_id": job_id,
-                    "batch": batch if job_id else "",
-                    "routes": {k: len(v) for k, v in routes.items() if v},
-                    "forced": len([uid for uid in forced if uid in allocated]),
-                    "triaged": len(untriaged),
-                    "carried": len([uid for uid in carried if uid in allocated]),
-                    "triage_jobs": triage_jobs,
-                    "limit": limit, "over_limit": len(skipped)}
+                "pdf.run", "PDF 转 md %d 本" % len(allocated), commands, batch_dir=os.path.join("工作区", "批次", batch)
+            )
+        response = {
+            "ok": True,
+            "job_id": job_id,
+            "batch": batch if job_id else "",
+            "routes": {k: len(v) for k, v in routes.items() if v},
+            "forced": len([uid for uid in forced if uid in allocated]),
+            "triaged": len(untriaged),
+            "carried": len([uid for uid in carried if uid in allocated]),
+            "triage_jobs": triage_jobs,
+            "limit": limit,
+            "over_limit": len(skipped),
+        }
         if skipped:
-            response["note"] = ("限额 %d 本是这次任务的总预算（含二次确认的书），"
-                                "超出的 %d 本没排进，留在分诊表里下次再转"
-                                % (limit, len(skipped)))
+            response["note"] = (
+                "限额 %d 本是这次任务的总预算（含二次确认的书），"
+                "超出的 %d 本没排进，留在分诊表里下次再转" % (limit, len(skipped))
+            )
         self.send_json(200, response)
 
     def settle_pdf(self, carried, forced, index):
@@ -2985,11 +3198,14 @@ class Handler(BaseHTTPRequestHandler):
         carried 沿用之前批次的 route；forced 改判 OCR。两类都在同一份批次账里，
         必须一次写完，否则第二条命令会把第一条的行覆盖掉。
         """
-        items = [{"uid": uid, "route": index[uid]["route"],
-                  "reason": "今天这张表里没有这本书，沿用之前批次的 route"}
-                 for uid in carried]
-        items += [{"uid": uid, "route": "OCR", "verdict": "文字书",
-                   "reason": "在 PDF 清单里二次确认按扫描识别转"} for uid in forced]
+        items = [
+            {"uid": uid, "route": index[uid]["route"], "reason": "今天这张表里没有这本书，沿用之前批次的 route"}
+            for uid in carried
+        ]
+        items += [
+            {"uid": uid, "route": "OCR", "verdict": "文字书", "reason": "在 PDF 清单里二次确认按扫描识别转"}
+            for uid in forced
+        ]
         # 与 api_pdf_confirm 用同一把锁：两处都在读改写当天的 triage.csv，
         # 并发时后写的一方会把前一方刚加的行抹掉。
         with ledger_lock(self.app.env):
@@ -3017,10 +3233,8 @@ class Handler(BaseHTTPRequestHandler):
         commands = []
         for key in ordered:
             spec = MAINTAIN_STEPS[key]
-            commands.append(make_cmd(self.app.env, key, spec["script"], spec["args"],
-                                     marker=spec.get("marker")))
-        job_id = self.app.runner.submit(
-            "maintain", "收尾 %d 步" % len(ordered), commands)
+            commands.append(make_cmd(self.app.env, key, spec["script"], spec["args"], marker=spec.get("marker")))
+        job_id = self.app.runner.submit("maintain", "收尾 %d 步" % len(ordered), commands)
         self.send_json(200, {"ok": True, "job_id": job_id, "steps": ordered})
 
     def api_delete_dry(self, payload):
@@ -3033,10 +3247,19 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(400, "理由不能空")
             return
         job_id = self.app.runner.submit(
-            "delete.dry-run", "删书预览 %s" % uid,
-            [make_cmd(self.app.env, "dry-run", "retire_book.py",
-                      ["--uid", uid, "--reason", reason, "--dry-run", "--json"],
-                      accepts_root=True, capture="dry-run.json")])
+            "delete.dry-run",
+            "删书预览 %s" % uid,
+            [
+                make_cmd(
+                    self.app.env,
+                    "dry-run",
+                    "retire_book.py",
+                    ["--uid", uid, "--reason", reason, "--dry-run", "--json"],
+                    accepts_root=True,
+                    capture="dry-run.json",
+                )
+            ],
+        )
         self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_delete_apply(self, payload):
@@ -3065,11 +3288,19 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(409, "有写任务在跑，等它结束再发")
             return
         job_id = self.app.runner.submit(
-            "delete.apply", "删书 %s" % uid,
-            [make_cmd(self.app.env, "retire", "retire_book.py",
-                      ["--uid", uid, "--reason", reason, "--plan-hash", plan_hash,
-                       "--apply"], accepts_root=True)],
-            plan_hash=plan_hash)
+            "delete.apply",
+            "删书 %s" % uid,
+            [
+                make_cmd(
+                    self.app.env,
+                    "retire",
+                    "retire_book.py",
+                    ["--uid", uid, "--reason", reason, "--plan-hash", plan_hash, "--apply"],
+                    accepts_root=True,
+                )
+            ],
+            plan_hash=plan_hash,
+        )
         self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_clean(self, payload):
@@ -3093,8 +3324,7 @@ class Handler(BaseHTTPRequestHandler):
         if not job:
             self.fail(404, "没有这个任务")
             return
-        commands = read_json(os.path.join(self.app.env.job_dir(job_id),
-                                          "commands.json"))
+        commands = read_json(os.path.join(self.app.env.job_dir(job_id), "commands.json"))
         if not commands:
             self.fail(409, "找不到原来的命令行")
             return
@@ -3102,10 +3332,16 @@ class Handler(BaseHTTPRequestHandler):
         if not commands:
             self.fail(409, "原来的命令行里没有可重跑的步骤")
             return
+
         def enqueue():
-            return self.app.runner.submit(job["kind"], job["title"] + "（重跑）",
-                                          commands, batch_dir=job.get("batch_dir"),
-                                          plan_hash=job.get("plan_hash"))
+            return self.app.runner.submit(
+                job["kind"],
+                job["title"] + "（重跑）",
+                commands,
+                batch_dir=job.get("batch_dir"),
+                plan_hash=job.get("plan_hash"),
+            )
+
         if KINDS.get(job["kind"], {}).get("readonly"):
             new_id = enqueue()
         else:
@@ -3117,10 +3353,20 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "job_id": new_id})
 
 
-WRITE_ROUTES = ("/api/import/apply", "/api/split/run", "/api/split/recheck",
-                "/api/pdf/settle", "/api/pdf/confirm", "/api/pdf/run", "/api/maintain",
-                "/api/delete/apply", "/api/ledger/row", "/api/ledger/rows/delete",
-                "/api/ledger/concept", "/api/ledger/concept/delete")
+WRITE_ROUTES = (
+    "/api/import/apply",
+    "/api/split/run",
+    "/api/split/recheck",
+    "/api/pdf/settle",
+    "/api/pdf/confirm",
+    "/api/pdf/run",
+    "/api/maintain",
+    "/api/delete/apply",
+    "/api/ledger/row",
+    "/api/ledger/rows/delete",
+    "/api/ledger/concept",
+    "/api/ledger/concept/delete",
+)
 PDF_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 
 
@@ -3231,8 +3477,7 @@ def merge_jsonl(path, rows, uid):
                 if (obj.get("uid") or "") != uid:
                     keep.append(obj)
     keep.extend(rows)
-    write_text_atomic(path, "".join(json.dumps(x, ensure_ascii=False) + "\n"
-                                     for x in keep))
+    write_text_atomic(path, "".join(json.dumps(x, ensure_ascii=False) + "\n" for x in keep))
 
 
 def read_table(root, rel, delim="\t"):
@@ -3243,23 +3488,21 @@ def read_table(root, rel, delim="\t"):
     with open(path, encoding="utf-8", newline="") as fh:
         if delim == ",":
             reader = csv.DictReader(fh)
-            return [{(k or "").strip(): (v or "").strip() for k, v in row.items()}
-                    for row in reader]
+            return [{(k or "").strip(): (v or "").strip() for k, v in row.items()} for row in reader]
         head = [h.strip() for h in fh.readline().rstrip("\n").split(delim)]
         rows = []
         for line in fh:
             cells = line.rstrip("\n").split(delim)
             if len(cells) != len(head):
                 continue
-            rows.append(dict(zip(head, [c.strip() for c in cells])))
+            rows.append(dict(zip(head, [c.strip() for c in cells], strict=False)))
         return rows
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="统一操作台服务（127.0.0.1:8770）")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8770,
-                    help="0 表示随机端口（测试用）")
+    ap.add_argument("--port", type=int, default=8770, help="0 表示随机端口（测试用）")
     ap.add_argument("--root", default=REAL_ROOT, help="数据根，测试指向临时库")
     ap.add_argument("--scripts", default=None, help="脚本目录，测试指向 stub")
     args = ap.parse_args(argv)

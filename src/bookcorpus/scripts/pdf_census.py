@@ -7,6 +7,7 @@
 
 判定类型是 census.jsonl 上的纯函数（classify），阈值改了只需重跑 --report，不必重扫。
 """
+
 import argparse
 import json
 import os
@@ -18,7 +19,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 ROOT = L.ROOT
 DB = L.PATHS.library_db
 TIMEOUT = 300
@@ -28,7 +30,7 @@ CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff\uac0
 
 def run(cmd, timeout=TIMEOUT):
     try:
-        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, timeout=timeout)
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
         return -9, b"", b"timeout"
@@ -58,15 +60,20 @@ def page_size_pt(info):
 
 def measure(uid, title, subj1, subj2, relpath, size):
     row = {
-        "uid": uid, "title": title, "subject1": subj1, "subject2": subj2,
-        "bytes": size, "relpath": relpath, "errors": [],
+        "uid": uid,
+        "title": title,
+        "subject1": subj1,
+        "subject2": subj2,
+        "bytes": size,
+        "relpath": relpath,
+        "errors": [],
     }
     abspath = os.path.join(ROOT, relpath)
     if not os.path.exists(abspath):
         row["errors"].append("missing_file")
         return row
 
-    rc, out, err = run(["pdfinfo", abspath])
+    rc, out, _err = run(["pdfinfo", abspath])
     info = parse_info(out)
     row["info"] = info
     row["pages"] = int(info.get("Pages", 0) or 0)
@@ -81,12 +88,12 @@ def measure(uid, title, subj1, subj2, relpath, size):
         row["errors"].append("pdfinfo_rc=%d" % rc)
 
     rc, out, _ = run(["pdffonts", abspath])
-    fonts = [l for l in out.decode("utf-8", "replace").splitlines()[2:] if l.strip()]
+    fonts = [line for line in out.decode("utf-8", "replace").splitlines()[2:] if line.strip()]
     row["n_fonts"] = len(fonts)
-    row["n_fonts_embedded"] = sum(1 for l in fonts if re.search(r"\syes\s+\S+\s+\S+\s+\d+\s+\d+\s*$", l))
-    row["font_types"] = sorted({l.split()[1:3][0] for l in fonts if len(l.split()) > 2})
+    row["n_fonts_embedded"] = sum(1 for line in fonts if re.search(r"\syes\s+\S+\s+\S+\s+\d+\s+\d+\s*$", line))
+    row["font_types"] = sorted({line.split()[1:3][0] for line in fonts if len(line.split()) > 2})
 
-    rc, out, err = run(["pdftotext", "-q", "-enc", "UTF-8", abspath, "-"])
+    rc, out, _err = run(["pdftotext", "-q", "-enc", "UTF-8", abspath, "-"])
     if rc == -9:
         row["errors"].append("pdftotext_timeout")
         text = ""
@@ -109,7 +116,7 @@ def measure(uid, title, subj1, subj2, relpath, size):
     row["chars_per_text_page_median"] = round(statistics.median(with_text), 1) if with_text else 0
     row["text_head"] = re.sub(r"\s+", " ", text[:400]).strip()
     mid = len(pages_txt) // 2
-    row["text_mid"] = re.sub(r"\s+", " ", " ".join(pages_txt[mid:mid + 2]))[:300].strip()
+    row["text_mid"] = re.sub(r"\s+", " ", " ".join(pages_txt[mid : mid + 2]))[:300].strip()
 
     rc, out, _ = run(["pdfimages", "-list", abspath])
     pages_img, ppis, full = {}, [], 0
@@ -119,7 +126,16 @@ def measure(uid, title, subj1, subj2, relpath, size):
         m = IMG_ROW.match(line)
         if not m:
             continue
-        pg, _num, typ, w, h, color, _comp, bpc = int(m.group(1)), m.group(2), m.group(3), int(m.group(4)), int(m.group(5)), m.group(6), m.group(7), int(m.group(8))
+        pg, _num, typ, w, h, color, _comp, bpc = (
+            int(m.group(1)),
+            m.group(2),
+            m.group(3),
+            int(m.group(4)),
+            int(m.group(5)),
+            m.group(6),
+            m.group(7),
+            int(m.group(8)),
+        )
         xppi, yppi = float(m.group(13)), float(m.group(14))
         pages_img.setdefault(pg, 0)
         pages_img[pg] += w * h
@@ -131,7 +147,7 @@ def measure(uid, title, subj1, subj2, relpath, size):
             area_pt = (w / xppi * 72) * (h / yppi * 72)
             if area_pt >= 0.8 * page_area_pt:
                 full += 1
-    row["n_images"] = sum(pages_img.values()) and len(pages_img) or 0
+    row["n_images"] = (sum(pages_img.values()) and len(pages_img)) or 0
     row["image_objs"] = len(ppis)
     row["pages_with_image"] = len(pages_img)
     row["full_page_images"] = full
@@ -153,13 +169,13 @@ def classify(r):
         if "missing_file" in r["errors"]:
             return "源文件缺失"
         return "读取失败"
-    pages = r.get("pages") or 0
+    r.get("pages") or 0
     ratio = r.get("text_page_ratio") or 0
     cpp = r.get("chars_per_page") or 0
     img_ratio = r.get("img_page_ratio") or 0
     full = r.get("full_page_images") or 0
     cjk = r.get("cjk_chars") or 0
-    ppi = r.get("img_ppi_median") or 0
+    r.get("img_ppi_median") or 0
     scanish = img_ratio >= 0.8 and full >= 0.8 * max(r.get("pages_with_image") or 1, 1)
     if ratio >= 0.9 and cpp >= 200 and (img_ratio < 0.5 or r.get("n_images") == 0):
         return "A 纯文本层" if cjk >= 0.2 * max(r.get("text_chars") or 1, 1) else "A 纯文本层(非中文)"
@@ -176,6 +192,7 @@ def classify(r):
 
 def report(rows):
     from collections import Counter, defaultdict
+
     c = Counter(classify(r) for r in rows)
     print("== 类型分布（%d 本）" % len(rows))
     for k, v in sorted(c.items(), key=lambda kv: -kv[1]):
@@ -193,10 +210,18 @@ def report(rows):
             print("   扫描分辨率中位数分布:", d.most_common(6))
             print("   位深:", Counter(k2 for x in g for k2 in x.get("img_bpc", {})).most_common(4))
         for x in sorted(g, key=lambda y: -y["bytes"])[:5]:
-            print("   %s %s %.0fMB %s页 text=%s%% ppi=%s %s" % (
-                x["uid"], x["title"][:28], x["bytes"] / 1e6, x.get("pages"),
-                round(100 * (x.get("text_page_ratio") or 0)), x.get("img_ppi_median"),
-                x.get("subject1")))
+            print(
+                "   %s %s %.0fMB %s页 text=%s%% ppi=%s %s"
+                % (
+                    x["uid"],
+                    x["title"][:28],
+                    x["bytes"] / 1e6,
+                    x.get("pages"),
+                    round(100 * (x.get("text_page_ratio") or 0)),
+                    x.get("img_ppi_median"),
+                    x.get("subject1"),
+                )
+            )
     print("\n== 一级学科 x 类型")
     cross = Counter((r.get("subject1"), classify(r)) for r in rows)
     subs = sorted({k[0] for k in cross})
@@ -216,11 +241,13 @@ def main():
     a = ap.parse_args()
 
     if a.report:
-        rows = [json.loads(l) for l in open(a.report, encoding="utf-8")]
+        with open(a.report, encoding="utf-8") as fh:
+            rows = [json.loads(line) for line in fh]
         report(rows)
         return
 
     import sqlite3
+
     con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True)
     q = """SELECT b.uid, b.title, b.subject1, b.subject2, s.file, s.bytes, s.format
            FROM book b JOIN source s ON s.uid=b.uid AND s.primary_src=1
@@ -229,20 +256,17 @@ def main():
     if a.uid:
         rows = [r for r in rows if r[0] in set(a.uid)]
     if a.limit:
-        rows = rows[:a.limit]
+        rows = rows[: a.limit]
     if (a.uid or a.limit) and not a.out:
         raise SystemExit("--uid/--limit 是子集跑法，必须给 --out，别覆盖定稿普查账")
-    out = a.out or os.path.join(
-        L.batch_dir("pdf-普查-", root=ROOT, create=True), "census.jsonl")
+    out = a.out or os.path.join(L.batch_dir("pdf-普查-", root=ROOT, create=True), "census.jsonl")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     tmp = out + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f, ThreadPoolExecutor(a.workers) as ex:
         futs = {ex.submit(measure, *r[:6]): r[0] for r in rows}
-        done = 0
-        for fut, uid in futs.items():
+        for done, (fut, uid) in enumerate(futs.items(), 1):
             row = fut.result()
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            done += 1
             print("%4d/%d %s %s" % (done, len(rows), uid, classify(row)), file=sys.stderr)
     os.replace(tmp, out)
     print(out, file=sys.stderr)

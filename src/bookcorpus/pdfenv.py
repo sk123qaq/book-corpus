@@ -36,8 +36,7 @@ def disabled():
 
 
 def _tail(proc):
-    lines = [x.strip() for x in ((proc.stderr or "") + (proc.stdout or "")).splitlines()
-             if x.strip()]
+    lines = [x.strip() for x in ((proc.stderr or "") + (proc.stdout or "")).splitlines() if x.strip()]
     return lines[-1] if lines else "退出码 %d" % proc.returncode
 
 
@@ -48,8 +47,7 @@ def create(root, packages=REQUIREMENTS, timeout=TIMEOUT):
     if not os.path.exists(py):
         os.makedirs(os.path.dirname(d), exist_ok=True)
         try:
-            proc = subprocess.run([sys.executable, "-m", "venv", d],
-                                  capture_output=True, text=True, timeout=timeout)
+            proc = subprocess.run([sys.executable, "-m", "venv", d], capture_output=True, text=True, timeout=timeout)
         except (OSError, subprocess.TimeoutExpired) as exc:
             return False, "建 venv 失败：%s" % exc
         if proc.returncode != 0:
@@ -57,9 +55,12 @@ def create(root, packages=REQUIREMENTS, timeout=TIMEOUT):
     if not packages:
         return True, "%s（未装包）" % d
     try:
-        proc = subprocess.run([py, "-m", "pip", "install", "--disable-pip-version-check",
-                               "-q", *packages],
-                              capture_output=True, text=True, timeout=timeout)
+        proc = subprocess.run(
+            [py, "-m", "pip", "install", "--disable-pip-version-check", "-q", *packages],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, "pip 装包失败：%s" % exc
     if proc.returncode != 0:
@@ -72,8 +73,10 @@ def versions(root, timeout=120):
     py = python(root)
     if not os.path.exists(py):
         return False, "没有 %s" % venv_dir(root)
-    code = ("import pymupdf, pypdf, numpy, PIL, bs4, requests;"
-            "print(pymupdf.__version__, pypdf.__version__, numpy.__version__)")
+    code = (
+        "import pymupdf, pypdf, numpy, PIL, bs4, requests;"
+        "print(pymupdf.__version__, pypdf.__version__, numpy.__version__)"
+    )
     try:
         proc = subprocess.run([py, "-c", code], capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as exc:

@@ -28,16 +28,14 @@ def _workspace(tmp_path):
     os.symlink("../../../../books/B0001", views / "主题" / "文学" / "甲书")
     (root / "build" / "检索").mkdir(parents=True)
     (root / "books" / "B0001").mkdir(parents=True)
-    (root / "books.toml").write_text('schema = 2\ntool = "book-corpus test"\n',
-                                     encoding="utf-8")
+    (root / "books.toml").write_text('schema = 2\ntool = "book-corpus test"\n', encoding="utf-8")
     return root
 
 
 def _run(root, *args):
     env = dict(os.environ)
     env.pop("BOOKS_ROOT", None)
-    return subprocess.run([sys.executable, str(SCRIPT), *args], cwd=str(root),
-                          capture_output=True, text=True, env=env)
+    return subprocess.run([sys.executable, str(SCRIPT), *args], cwd=str(root), capture_output=True, text=True, env=env)
 
 
 def _assert_old_view_intact(root):
@@ -45,8 +43,7 @@ def _assert_old_view_intact(root):
     assert readme.is_file(), "旧视图 README 被删了"
     assert readme.read_text(encoding="utf-8") == OLD_VIEW, "旧视图 README 被改写了"
     assert (root / "build" / "views" / "主题" / "文学").is_dir(), "旧视图目录被删了"
-    assert not (root / "build" / "views" / "主题.building").exists(), \
-        "失败后 .building 暂存目录没清掉"
+    assert not (root / "build" / "views" / "主题.building").exists(), "失败后 .building 暂存目录没清掉"
 
 
 def test_topics_missing_index_db_keeps_old_view(tmp_path):
@@ -129,4 +126,3 @@ def test_promote_restores_leftover_backup_on_failure(tmp_path, monkeypatch):
 
     assert (out / "README.md").read_text(encoding="utf-8") == "old\n"
     assert not backup.exists(), "失败后旧树应回到 out，不留 .old"
-

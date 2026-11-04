@@ -11,6 +11,7 @@
 用法：
   python3 pdf_triage.py --batch 工作区/批次/pdf-普查-2026-10-19 [--csv 路径]
 """
+
 import argparse
 import json
 import os
@@ -19,14 +20,15 @@ from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 ROOT = L.ROOT
 TEXT_SUBJECTS = {"文学", "人文社科", "科学技术", "商业与管理", "写作与编剧", "影视动画漫画"}
 PICTURE_SUBJECT2 = {"图册与写真", "设定集与美术集", "漫画与画集", "绘画与概念设计"}
 
 
 def load(path):
-    return [json.loads(l) for l in open(path, encoding="utf-8")]
+    return [json.loads(line) for line in open(path, encoding="utf-8")]
 
 
 def main():
@@ -65,14 +67,23 @@ def main():
             route, why = "复看-可能OCR", "抽样低但学科是 %s，竖排或稀疏版式会被判低" % subj1
         else:
             route, why = "图册不转", "抽样无文字页，%s/%s" % (subj1, subj2)
-        rows.append({
-            "uid": uid, "title": c["title"], "subject1": subj1, "subject2": subj2,
-            "class": cls, "route": route, "pages": c.get("pages") or 0,
-            "mb": round((c.get("bytes") or 0) / 1e6, 1), "ppi": c.get("img_ppi_median") or "",
-            "text_page_share": "" if share is None else share,
-            "ink": p.get("ink_median", ""), "bands": p.get("bands_median", ""),
-            "note": why,
-        })
+        rows.append(
+            {
+                "uid": uid,
+                "title": c["title"],
+                "subject1": subj1,
+                "subject2": subj2,
+                "class": cls,
+                "route": route,
+                "pages": c.get("pages") or 0,
+                "mb": round((c.get("bytes") or 0) / 1e6, 1),
+                "ppi": c.get("img_ppi_median") or "",
+                "text_page_share": "" if share is None else share,
+                "ink": p.get("ink_median", ""),
+                "bands": p.get("bands_median", ""),
+                "note": why,
+            }
+        )
 
     out = a.csv or os.path.join(bp, "triage.csv")
     if not rows:
@@ -91,13 +102,14 @@ def main():
         print("  %-14s %4d 本  %7d 页  %7.1f MB" % (k, v, pg, mb))
     print("\n== OCR 队列按学科（页数是 OCR 额度，摊到每天 %d 页）" % a.per_day)
     q = [r for r in rows if r["route"] in ("OCR", "OCR-复看")]
-    for s, v in Counter(r["subject1"] for r in q).most_common():
+    for s, _v in Counter(r["subject1"] for r in q).most_common():
         g = [r for r in q if r["subject1"] == s]
         pg = sum(r["pages"] for r in g)
         print("  %-12s %4d 本 %7d 页 = %4.1f 天" % (s, len(g), pg, pg / a.per_day))
-    print("  合计 %d 本 %d 页 = %.1f 天（%d 页/天 高优先额度）"
-          % (len(q), sum(r["pages"] for r in q), sum(r["pages"] for r in q) / a.per_day,
-             a.per_day))
+    print(
+        "  合计 %d 本 %d 页 = %.1f 天（%d 页/天 高优先额度）"
+        % (len(q), sum(r["pages"] for r in q), sum(r["pages"] for r in q) / a.per_day, a.per_day)
+    )
     print("\n== 本地抽文本 的书")
     for r in rows:
         if r["route"] == "本地抽文本":

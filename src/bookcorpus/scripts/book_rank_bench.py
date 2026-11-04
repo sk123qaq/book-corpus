@@ -18,6 +18,7 @@
 
 只读 index.db 与 library.db，不改任何东西。
 """
+
 import argparse
 import os
 import sqlite3
@@ -45,8 +46,9 @@ def collect(con, key, depth=2000):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("concepts", nargs="*", help="概念键，默认 自由 内卷 规训 异化 荒诞")
-    ap.add_argument("--depth", type=int, default=2000,
-                    help="每个概念取多少段进打分，默认 2000（与 qsearch --book 同口径）")
+    ap.add_argument(
+        "--depth", type=int, default=2000, help="每个概念取多少段进打分，默认 2000（与 qsearch --book 同口径）"
+    )
     a = ap.parse_args()
     concepts = a.concepts or ["自由", "内卷", "规训", "异化", "荒诞"]
     con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True)
@@ -68,8 +70,7 @@ def main():
             print("\n-- %-20s 前10里 网文/类型 %d 本，社科 %d 本" % (scheme, noise, social))
             fn = SCHEMES[scheme]
             for i, b in enumerate(rows, 1):
-                print("   %2d %-28s %7.2f  %2d段  %s"
-                      % (i, b.book.split("/")[-1][:26], fn(b), b.hits, b.type))
+                print("   %2d %-28s %7.2f  %2d段  %s" % (i, b.book.split("/")[-1][:26], fn(b), b.hits, b.type))
 
 
 if __name__ == "__main__":

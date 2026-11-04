@@ -9,6 +9,7 @@
 本地图片去重计数。只有一章时目录条目用书名，多章时用章内首个 H1，没有 H1 用文件名。
 作者字段是文件名（以 .pdf/.epub 等结尾）时不写，免得把来源当成作者印进目录页。
 """
+
 import argparse
 import json
 import os
@@ -17,7 +18,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT
+
 CORPUS = os.path.join(ROOT, "books")
 IMG_RE = re.compile(r"!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))\s*\)")
 FILE_AUTHOR = re.compile(r"\.(pdf|epub|mobi|azw3?|txt|djvu)$", re.I)
@@ -107,9 +109,11 @@ def author_line(meta, notes):
 
 def readme_text(uid, book, md_dir, meta):
     notes = []
-    chapters = sorted(f for f in os.listdir(md_dir)
-                      if f.endswith(".md") and f != "README.md"
-                      and os.path.isfile(os.path.join(md_dir, f)))
+    chapters = sorted(
+        f
+        for f in os.listdir(md_dir)
+        if f.endswith(".md") and f != "README.md" and os.path.isfile(os.path.join(md_dir, f))
+    )
     title = (meta.get("title") or "").strip() or book
     if len(chapters) == 1:
         toc = [(title, chapters[0])]
@@ -133,8 +137,7 @@ def readme_text(uid, book, md_dir, meta):
         lines.append("- [%s](%s)" % (label, link_dest(fname)))
     method = method_of(md_dir, meta).lower()
     scan = any(k in method for k in ("ocr", "mineru", "paddle"))
-    lines += ["", "## 未收录（卷首/卷尾页）", "",
-              UNLISTED_SCAN if scan else UNLISTED_TEXT, ""]
+    lines += ["", "## 未收录（卷首/卷尾页）", "", UNLISTED_SCAN if scan else UNLISTED_TEXT, ""]
     return "\n".join(lines), notes
 
 

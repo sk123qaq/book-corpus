@@ -7,6 +7,7 @@
   from export_session import response
   body, ctype, headers = response(sess, sid, "docx")
 """
+
 import io
 import re
 import time
@@ -15,8 +16,7 @@ from urllib.parse import quote
 
 import session
 
-DOCX_CT = ("application/vnd.openxmlformats-officedocument"
-           ".wordprocessingml.document")
+DOCX_CT = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 _XML_BAD = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ud800-\udfff\ufffe\uffff]")
 _NAME_BAD = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]+')
@@ -45,7 +45,7 @@ def _scope(turn):
             names.append(name)
 
     ans = turn.get("answer") if isinstance(turn.get("answer"), dict) else {}
-    for src in (turn.get("sources") or ans.get("sources") or []):
+    for src in turn.get("sources") or ans.get("sources") or []:
         if isinstance(src, dict):
             add(src.get("title"))
     return names
@@ -71,10 +71,15 @@ def _cites(turn):
             line = int(cite.get("line") or 0)
         except (TypeError, ValueError):
             line = 0
-        rows.append({"title": session.citation_title(turn, cite),
-                     "chapter": _text(cite.get("chapter")),
-                     "path": _text(cite.get("path")), "line": line,
-                     "quote": " ".join(_text(cite.get("quote")).split())})
+        rows.append(
+            {
+                "title": session.citation_title(turn, cite),
+                "chapter": _text(cite.get("chapter")),
+                "path": _text(cite.get("path")),
+                "line": line,
+                "quote": " ".join(_text(cite.get("quote")).split()),
+            }
+        )
     return rows
 
 
@@ -84,17 +89,24 @@ def model(sess, stamp=None):
     for turn in (sess or {}).get("turns") or []:
         if not isinstance(turn, dict):
             continue
-        turns.append({"n": turn.get("n") or len(turns) + 1,
-                      "question": _text(turn.get("question")),
-                      "scope": _scope(turn),
-                      "answer": _answer(turn),
-                      "citations": _cites(turn)})
-    return {"title": _first_question(sess)[:40] or "会话",
-            "stamp": stamp or time.strftime("%Y-%m-%d %H:%M"),
-            "turns": turns}
+        turns.append(
+            {
+                "n": turn.get("n") or len(turns) + 1,
+                "question": _text(turn.get("question")),
+                "scope": _scope(turn),
+                "answer": _answer(turn),
+                "citations": _cites(turn),
+            }
+        )
+    return {
+        "title": _first_question(sess)[:40] or "会话",
+        "stamp": stamp or time.strftime("%Y-%m-%d %H:%M"),
+        "turns": turns,
+    }
 
 
 # ---- Markdown ------------------------------------------------------
+
 
 def _cite_line(index, cite):
     parts = ["《%s》" % cite["title"]]
@@ -105,8 +117,7 @@ def _cite_line(index, cite):
 
 
 def markdown(doc):
-    out = ["# " + doc["title"], "",
-           "导出时间：%s　轮数：%d" % (doc["stamp"], len(doc["turns"])), ""]
+    out = ["# " + doc["title"], "", "导出时间：%s　轮数：%d" % (doc["stamp"], len(doc["turns"])), ""]
     for turn in doc["turns"]:
         out += ["## 第 %d 轮" % turn["n"], ""]
         out += ["**问题**：" + turn["question"], ""]
@@ -126,17 +137,16 @@ def markdown(doc):
 
 # ---- docx ----------------------------------------------------------
 
+
 def _xml(value):
     text = _XML_BAD.sub("", str(value if value is not None else ""))
-    return (text.replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace('"', "&quot;"))
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
 def _run(text, bold=False, italic=False):
     props = ("<w:b/>" if bold else "") + ("<w:i/>" if italic else "")
     rpr = "<w:rPr>%s</w:rPr>" % props if props else ""
-    return ('<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r>'
-            % (rpr, _xml(text)))
+    return '<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r>' % (rpr, _xml(text))
 
 
 def _para(runs="", style="", indent=0):
@@ -157,15 +167,15 @@ def _answer_paras(body):
 
 
 def _document(doc):
-    body = [_para(_run(doc["title"]), style="Heading1"),
-            _para(_run("导出时间：%s　轮数：%d"
-                       % (doc["stamp"], len(doc["turns"]))))]
+    body = [
+        _para(_run(doc["title"]), style="Heading1"),
+        _para(_run("导出时间：%s　轮数：%d" % (doc["stamp"], len(doc["turns"])))),
+    ]
     for turn in doc["turns"]:
         body.append(_para(_run("第 %d 轮" % turn["n"]), style="Heading2"))
         body.append(_para(_run("问题", bold=True) + _run("：" + turn["question"])))
         if turn["scope"]:
-            body.append(_para(_run("范围", bold=True)
-                              + _run("：" + "".join("《%s》" % n for n in turn["scope"]))))
+            body.append(_para(_run("范围", bold=True) + _run("：" + "".join("《%s》" % n for n in turn["scope"]))))
         if turn["answer"]:
             body.append(_para(_run("回答", bold=True)))
             body.append(_answer_paras(turn["answer"]))
@@ -174,15 +184,17 @@ def _document(doc):
             for i, cite in enumerate(turn["citations"], 1):
                 body.append(_para(_run(_cite_line(i, cite))))
                 if cite["quote"]:
-                    body.append(_para(_run("引用：" + cite["quote"], italic=True),
-                                      indent=720))
-    body.append('<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
-                '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" '
-                'w:left="1440"/></w:sectPr>')
-    return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            '<w:document xmlns:w="http://schemas.openxmlformats.org/'
-            'wordprocessingml/2006/main"><w:body>%s</w:body></w:document>'
-            % "".join(body))
+                    body.append(_para(_run("引用：" + cite["quote"], italic=True), indent=720))
+    body.append(
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" '
+        'w:left="1440"/></w:sectPr>'
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main"><w:body>%s</w:body></w:document>' % "".join(body)
+    )
 
 
 _CONTENT_TYPES = (
@@ -195,27 +207,30 @@ _CONTENT_TYPES = (
     'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
     '<Override PartName="/word/styles.xml" ContentType="application/'
     'vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
-    '</Types>')
+    "</Types>"
+)
 
 _ROOT_RELS = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/'
     'relationships"><Relationship Id="rId1" Type="http://schemas.'
     'openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
-    'Target="word/document.xml"/></Relationships>')
+    'Target="word/document.xml"/></Relationships>'
+)
 
 _DOC_RELS = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/'
     'relationships"><Relationship Id="rId1" Type="http://schemas.'
     'openxmlformats.org/officeDocument/2006/relationships/styles" '
-    'Target="styles.xml"/></Relationships>')
+    'Target="styles.xml"/></Relationships>'
+)
 
 _STYLES = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/'
     '2006/main">'
-    '<w:docDefaults><w:rPrDefault><w:rPr>'
+    "<w:docDefaults><w:rPrDefault><w:rPr>"
     '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="宋体"/>'
     '<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault>'
     '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="300" '
@@ -232,7 +247,8 @@ _STYLES = (
     '<w:next w:val="Normal"/><w:qFormat/>'
     '<w:pPr><w:spacing w:before="200" w:after="120"/></w:pPr>'
     '<w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style>'
-    '</w:styles>')
+    "</w:styles>"
+)
 
 
 def docx(doc):
@@ -248,6 +264,7 @@ def docx(doc):
 
 # ---- 文件名与响应 --------------------------------------------------
 
+
 def _stem(doc, limit):
     name = _NAME_BAD.sub("", " ".join(doc["title"].split())).strip(" .")
     return name[:limit] or "会话"
@@ -258,8 +275,7 @@ def _disposition(sid, doc, ext):
     ascii_name = "session-%s.%s" % (sid, ext)
     stamp = doc["stamp"].replace("-", "").replace(" ", "-").replace(":", "")
     utf8_name = "会话-%s-%s.%s" % (stamp, _stem(doc, 12), ext)
-    return 'attachment; filename="%s"; filename*=UTF-8\'\'%s' % (
-        ascii_name, quote(utf8_name, safe=""))
+    return "attachment; filename=\"%s\"; filename*=UTF-8''%s" % (ascii_name, quote(utf8_name, safe=""))
 
 
 def response(sess, sid, fmt, stamp=None):
@@ -267,5 +283,8 @@ def response(sess, sid, fmt, stamp=None):
     doc = model(sess, stamp)
     if fmt == "docx":
         return docx(doc), DOCX_CT, {"Content-Disposition": _disposition(sid, doc, "docx")}
-    return (markdown(doc).encode("utf-8"), "text/markdown; charset=utf-8",
-            {"Content-Disposition": _disposition(sid, doc, "md")})
+    return (
+        markdown(doc).encode("utf-8"),
+        "text/markdown; charset=utf-8",
+        {"Content-Disposition": _disposition(sid, doc, "md")},
+    )

@@ -12,6 +12,7 @@ ambiguous 并给出候选。不做任意 2 字子串匹配，避免「中国」�
 `books` 是 {uid: {"title","author"}}（book_cards.load_books），`meta` 是
 {uid: book_score.Meta}（可为 None）。返回只含 JSON 安全类型。
 """
+
 import re
 
 SEP_RE = re.compile(r"[：:—–\-（(]")
@@ -36,8 +37,7 @@ def detect_title(query, books):
         t = normalize(rec.get("title"))
         if not t:
             continue
-        hit = (len(t) >= 3 and t in q) or \
-            (len(t) == 2 and (q == t or (q.startswith(t) and q[2:3] in SHORT_TAIL)))
+        hit = (len(t) >= 3 and t in q) or (len(t) == 2 and (q == t or (q.startswith(t) and q[2:3] in SHORT_TAIL)))
         if hit and len(t) > len(best):
             best = t
     quoted = QUOTE_RE.search(query or "")
@@ -59,9 +59,14 @@ def _candidates(uids, books, meta):
     out = []
     for uid in uids:
         rec = books.get(uid) or {}
-        out.append({"book": uid, "title": rec.get("title") or "",
-                    "author": rec.get("author") or "",
-                    "chapters": _chapters(meta, uid)})
+        out.append(
+            {
+                "book": uid,
+                "title": rec.get("title") or "",
+                "author": rec.get("author") or "",
+                "chapters": _chapters(meta, uid),
+            }
+        )
     out.sort(key=lambda c: (-c["chapters"], c["book"]))
     return out
 
@@ -84,8 +89,9 @@ def _match(title, books):
     if len(title) >= 2:
         hits = []
         for uid, rec in books.items():
-            if normalize(rec.get("title")).startswith(title) or \
-                    normalize(main_title(rec.get("title"))).startswith(title):
+            if normalize(rec.get("title")).startswith(title) or normalize(main_title(rec.get("title"))).startswith(
+                title
+            ):
                 hits.append(uid)
         if hits:
             return "prefix", hits
@@ -100,15 +106,13 @@ def _decide(candidates):
     """同全名同作者取章数最多的一本；作者缺一个也算不同作者，交给用户选。"""
     titles = {normalize(c["title"]) for c in candidates}
     authors = [_author_names(c["author"]) for c in candidates]
-    same_author = all(not a for a in authors) or \
-        (all(authors) and len({frozenset(a) for a in authors}) == 1)
+    same_author = all(not a for a in authors) or (all(authors) and len({frozenset(a) for a in authors}) == 1)
     if len(titles) == 1 and same_author:
         return "exact", candidates[0]
     return "ambiguous", None
 
 
-def _result(status, query_title, matched_by="", book="", books=None, meta=None,
-            candidates=None):
+def _result(status, query_title, matched_by="", book="", books=None, meta=None, candidates=None):
     rec = (books or {}).get(book) if book else {}
     rec = rec or {}
     return {

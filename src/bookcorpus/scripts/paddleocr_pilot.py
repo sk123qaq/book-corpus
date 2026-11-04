@@ -10,6 +10,7 @@ token 读 ~/.config/PaddleOCR/api_key，脚本不打印密钥。
   paddleocr_pilot.py --uid B0540 --pages 3-8 --out <dir>
   paddleocr_pilot.py --job 105481013747945472 --pages 3-8 --out <dir>
 """
+
 import argparse
 import json
 import os
@@ -20,7 +21,8 @@ JOB_URL = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
 KEY_PATH = os.path.expanduser("~/.config/PaddleOCR/api_key")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 ROOT = L.ROOT
 
 
@@ -31,6 +33,7 @@ def token():
 
 def slice_pdf(src, pages, dest):
     from pypdf import PdfReader, PdfWriter
+
     reader = PdfReader(src)
     writer = PdfWriter()
     for p in pages:
@@ -86,7 +89,10 @@ def fetch(jid, args, requests, pages, elapsed):
         prog = d.get("extractProgress") or {}
         cur = (state, prog.get("extractedPages"), prog.get("totalPages"))
         if cur != last:
-            print("[%.0fs] %s %s/%s" % (time.time() - t0, state, prog.get("extractedPages"), prog.get("totalPages")), flush=True)
+            print(
+                "[%.0fs] %s %s/%s" % (time.time() - t0, state, prog.get("extractedPages"), prog.get("totalPages")),
+                flush=True,
+            )
             last = cur
         if state in ("done", "failed"):
             break
@@ -102,7 +108,7 @@ def fetch(jid, args, requests, pages, elapsed):
     pages_dir = os.path.join(args.out, "pages")
     os.makedirs(pages_dir, exist_ok=True)
     ledger, total_chars, images = [], 0, 0
-    for line in [l for l in text.split("\n") if l.strip()]:
+    for line in [raw for raw in text.split("\n") if raw.strip()]:
         result = json.loads(line)["result"]
         for res in result.get("layoutParsingResults", []):
             idx = len(ledger) + 1
@@ -119,20 +125,32 @@ def fetch(jid, args, requests, pages, elapsed):
                     fh.write(requests.get(url, timeout=120).content)
                 os.replace(dst + ".tmp", dst)
                 images += 1
-            ledger.append({
-                "page": pages[idx - 1] if idx <= len(pages) else None,
-                "chars": len(md),
-                "images": len(res["markdown"].get("images") or {}),
-                "head": " ".join(md.split())[:160],
-            })
+            ledger.append(
+                {
+                    "page": pages[idx - 1] if idx <= len(pages) else None,
+                    "chars": len(md),
+                    "images": len(res["markdown"].get("images") or {}),
+                    "head": " ".join(md.split())[:160],
+                }
+            )
     run_json = os.path.join(args.out, "paddle_run.json")
     with open(run_json + ".tmp", "w", encoding="utf-8") as fh:
-        json.dump({
-            "uid": args.uid, "source": getattr(args, "source_label", args.pdf),
-            "pages": pages, "model": args.model, "jobId": jid,
-            "elapsed_s": round(elapsed, 1), "chars_total": total_chars,
-            "images": images, "per_page": ledger,
-        }, fh, ensure_ascii=False, indent=1)
+        json.dump(
+            {
+                "uid": args.uid,
+                "source": getattr(args, "source_label", args.pdf),
+                "pages": pages,
+                "model": args.model,
+                "jobId": jid,
+                "elapsed_s": round(elapsed, 1),
+                "chars_total": total_chars,
+                "images": images,
+                "per_page": ledger,
+            },
+            fh,
+            ensure_ascii=False,
+            indent=1,
+        )
     os.replace(run_json + ".tmp", run_json)
     print("落盘 %s，页数 %d，正文 %d 字，图片 %d 张" % (pages_dir, len(ledger), total_chars, images))
 
@@ -151,6 +169,7 @@ def main():
 
     if a.uid:
         import sqlite3
+
         con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.library_db, uri=True)
         row = con.execute("SELECT file FROM source WHERE uid=? AND format='pdf'", (a.uid,)).fetchone()
         if not row:
@@ -173,11 +192,13 @@ def main():
     headers = {"Authorization": "bearer %s" % token()}
     payload = {
         "model": a.model,
-        "optionalPayload": json.dumps({
-            "useDocOrientationClassify": False,
-            "useDocUnwarping": False,
-            "useChartRecognition": False,
-        }),
+        "optionalPayload": json.dumps(
+            {
+                "useDocOrientationClassify": False,
+                "useDocUnwarping": False,
+                "useChartRecognition": False,
+            }
+        ),
     }
     t0 = time.time()
     with open(chunk, "rb") as fh:

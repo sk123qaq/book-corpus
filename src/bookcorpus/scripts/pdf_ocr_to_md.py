@@ -21,17 +21,21 @@ per_page，页序即文件序）。输出与 ebook-to-md 同形，好让 verify_
       --uid B0540 --title 中国神话史 --source books/<uid>/source/x.pdf --source-sha256 xxx --out <outdir>
   python3 pdf_ocr_to_md.py … --structure chapters   # 按标题切章
 """
+
 import argparse
 import datetime
 import json
 import os
+import pathlib
 import re
 import shutil
 import sys
 
 SRC_IMG_RE = re.compile(r"<div[^>]*>\s*<img[^>]*src=\"([^\"]+)\"[^>]*/?>\s*</div>", re.I)
 IMG_TAG_RE = re.compile(r"<img[^>]*src=\"([^\"]+)\"[^>]*/?>", re.I)
-CHAPTER_RE = re.compile(r"^(#+)\s*(第[〇零一二三四五六七八九十百千0-9]+[章篇部卷]|附录|后记|前言|序言|自序|导言|尾声|结语)\b")
+CHAPTER_RE = re.compile(
+    r"^(#+)\s*(第[〇零一二三四五六七八九十百千0-9]+[章篇部卷]|附录|后记|前言|序言|自序|导言|尾声|结语)\b"
+)
 SKIP_IMG = re.compile(r"(footer|header)", re.I)
 BAD_FILENAME = re.compile(r"[\\/:*?\"<>|]")
 UNLISTED_NONE = "- 无（扫描书按页全收）"
@@ -72,17 +76,18 @@ def load_pages(pages_dir, run_json):
 
     pages = []
     for name in sorted((n for n in os.listdir(pages_dir) if n.endswith(".md")), key=order):
-        text = open(os.path.join(pages_dir, name), encoding="utf-8").read()
+        text = pathlib.Path(os.path.join(pages_dir, name)).read_text(encoding="utf-8")
         pages.append({"file": name, "text": escape_bare_links(text)})
     mapping = []
     if run_json and os.path.exists(run_json):
-        run = json.load(open(run_json, encoding="utf-8"))
+        run = json.loads(pathlib.Path(run_json).read_text(encoding="utf-8"))
         mapping = [p.get("page") for p in run.get("per_page", [])]
     return pages, mapping
 
 
 def rewrite_images(text, pages_dir, out_dir, used):
     """把 <div><img></div> 与裸 <img> 换成 markdown 图链，只搬被引用的图。"""
+
     def repl(m):
         src = m.group(1)
         if SKIP_IMG.search(src):
@@ -97,13 +102,14 @@ def rewrite_images(text, pages_dir, out_dir, used):
             shutil.copyfile(src_path, dst_path)
         used.add(dst_rel)
         return "\n![](%s)\n" % dst_rel
+
     text = SRC_IMG_RE.sub(repl, text)
-    text = IMG_TAG_RE.sub(repl, text)
-    return text
+    return IMG_TAG_RE.sub(repl, text)
 
 
 def split_units(pages, fallback_pages, mapping=None):
     """(标题, 起始页序号, 正文) 列表。"""
+
     def page_no(i):
         return mapping[i] if mapping and i < len(mapping) else i + 1
 
@@ -141,10 +147,9 @@ def split_units(pages, fallback_pages, mapping=None):
     if len([u for u in units if u["title"]]) == 0:
         units = []
         for i in range(0, len(pages), fallback_pages):
-            chunk = [p["text"].rstrip() for p in pages[i:i + fallback_pages]]
+            chunk = [p["text"].rstrip() for p in pages[i : i + fallback_pages]]
             last = min(i + fallback_pages, len(pages)) - 1
-            units.append({"title": "第 %d 至 %d 页" % (page_no(i), page_no(last)),
-                          "start": i, "parts": chunk})
+            units.append({"title": "第 %d 至 %d 页" % (page_no(i), page_no(last)), "start": i, "parts": chunk})
     return units
 
 
@@ -161,8 +166,7 @@ def clean_title(head, seen):
     return t
 
 
-def write_readme(out_dir, title, collection, author, date, chapters, images, source_name, toc,
-                 unlisted):
+def write_readme(out_dir, title, collection, author, date, chapters, images, source_name, toc, unlisted):
     """一个 README 生成器，single 与 chapters 共用。toc 是 [(标签, 文件名)]。"""
     lines = ["# %s" % title, ""]
     if collection:
@@ -197,13 +201,17 @@ def build_single(pages, a, used, out_dir):
     parts = [p["text"].strip() for p in pages if p["text"].strip()]
     body = re.sub(r"(?m)^#\s+", "### ", "\n\n".join(parts))
     fname = sanitize_filename(a.title, a.uid) + ".md"
-    text = ('---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\npages: %d\n---\n\n# %s\n\n%s\n'
-            % (fm_title(a.title), fm_title(a.author),
-               os.path.basename(a.source) if a.source else "", len(pages), a.title, body))
+    text = '---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\npages: %d\n---\n\n# %s\n\n%s\n' % (
+        fm_title(a.title),
+        fm_title(a.author),
+        os.path.basename(a.source) if a.source else "",
+        len(pages),
+        a.title,
+        body,
+    )
     with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
         fh.write(text)
-    return [{"index": 1, "title": a.title, "file": fname, "chars": len(body)}], len(body), \
-        len(text.encode("utf-8"))
+    return [{"index": 1, "title": a.title, "file": fname, "chars": len(body)}], len(body), len(text.encode("utf-8"))
 
 
 def build_chapters(pages, a, mapping, used, out_dir):
@@ -217,9 +225,12 @@ def build_chapters(pages, a, mapping, used, out_dir):
         idx = len(chapters) + 1  # 空章不写，章号只数写出来的章
         body = re.sub(r"(?m)^#\s+", "### ", body)
         page_no = mapping[u["start"]] if u["start"] < len(mapping) else u["start"] + 1
-        fm = ('---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\nchapter: %d\n'
-              % (fm_title(title), fm_title(a.author),
-                 os.path.basename(a.source) if a.source else "", idx))
+        fm = '---\ntitle: "%s"\nauthor: "%s"\nsource: "%s"\nchapter: %d\n' % (
+            fm_title(title),
+            fm_title(a.author),
+            os.path.basename(a.source) if a.source else "",
+            idx,
+        )
         if page_no is not None:
             fm += "page: %d\n" % page_no
         fm += "---\n"
@@ -264,20 +275,40 @@ def main():
     else:
         chapters, total_chars, total_bytes = build_chapters(pages, a, mapping, used, a.out)
 
-    write_readme(a.out, a.title, a.collection, a.author, a.date,
-                 len(chapters), len(used), os.path.basename(a.source) if a.source else "",
-                 [(c["title"], c["file"]) for c in chapters], UNLISTED_NONE)
+    write_readme(
+        a.out,
+        a.title,
+        a.collection,
+        a.author,
+        a.date,
+        len(chapters),
+        len(used),
+        os.path.basename(a.source) if a.source else "",
+        [(c["title"], c["file"]) for c in chapters],
+        UNLISTED_NONE,
+    )
     manifest = {
-        "uid": a.uid, "method": a.method, "tool_version": a.tool_version,
-        "source": a.source, "source_sha256": a.source_sha256,
-        "pages": len(pages), "chapters": len(chapters), "bytes": total_bytes,
-        "chars": total_chars, "images": len(used), "structure": a.structure,
+        "uid": a.uid,
+        "method": a.method,
+        "tool_version": a.tool_version,
+        "source": a.source,
+        "source_sha256": a.source_sha256,
+        "pages": len(pages),
+        "chapters": len(chapters),
+        "bytes": total_bytes,
+        "chars": total_chars,
+        "images": len(used),
+        "structure": a.structure,
         "single_file": a.structure == "single",
-        "generated_at": now(), "assembler": "pdf_ocr_to_md.py", "verified": False,
+        "generated_at": now(),
+        "assembler": "pdf_ocr_to_md.py",
+        "verified": False,
     }
     write_manifest(a.out, manifest)
-    print("结构 %s，写出 %d 个内容文件，%d 字，%d 图，%d 页输入 -> %s"
-          % (a.structure, len(chapters), total_chars, len(used), len(pages), a.out))
+    print(
+        "结构 %s，写出 %d 个内容文件，%d 字，%d 图，%d 页输入 -> %s"
+        % (a.structure, len(chapters), total_chars, len(used), len(pages), a.out)
+    )
     for c in chapters[:6]:
         print("  %s  %d 字" % (c["file"], c["chars"]))
 

@@ -1,6 +1,5 @@
 import os
-
-import pytest
+from pathlib import Path
 
 from conftest import run_cli
 
@@ -9,7 +8,7 @@ def _requirements():
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = os.path.join(here, "requirements.txt")
     out = []
-    for line in open(path, encoding="utf-8"):
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
         line = line.split("#", 1)[0].strip()
         if line:
             out.append(line)
@@ -19,7 +18,7 @@ def _requirements():
 def test_requirements_txt_matches_pdf_venv_packages():
     from bookcorpus import pdfenv
 
-    assert pdfenv.REQUIREMENTS == tuple(_requirements()), "改 requirements.txt 记得同步 pdfenv.REQUIREMENTS"
+    assert tuple(_requirements()) == pdfenv.REQUIREMENTS, "改 requirements.txt 记得同步 pdfenv.REQUIREMENTS"
 
 
 def test_init_creates_pdf_venv_unless_disabled(tmp_path, monkeypatch):

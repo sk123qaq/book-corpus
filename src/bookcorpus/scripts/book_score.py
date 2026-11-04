@@ -23,6 +23,7 @@ rrf5, best_support_length。只有 best_support_length 含长度项
 
 只读 目录/检索/index.db 与 目录/library.db。
 """
+
 import argparse
 import json
 import math
@@ -34,7 +35,8 @@ from dataclasses import asdict, dataclass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import PATHS, ROOT
+
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 import qsearch
@@ -42,8 +44,10 @@ import qsearch
 DB = PATHS.index_db
 LIBDB = PATHS.library_db
 
-CHAPTER_SQL = ("SELECT b.path, b.title, b.subject1, b.subject2, d.chapters "
-               "FROM book b LEFT JOIN derived d ON d.uid = b.uid AND d.kind = 'md'")
+CHAPTER_SQL = (
+    "SELECT b.path, b.title, b.subject1, b.subject2, d.chapters "
+    "FROM book b LEFT JOIN derived d ON d.uid = b.uid AND d.kind = 'md'"
+)
 
 
 @dataclass
@@ -96,8 +100,7 @@ def load_meta(libdb=LIBDB):
     out = {}
     try:
         for path, title, s1, s2, chapters in lib.execute(CHAPTER_SQL):
-            out[path] = Meta(title=title or "", subject1=s1 or "", subject2=s2 or "",
-                             chapters=chapters or 0)
+            out[path] = Meta(title=title or "", subject1=s1 or "", subject2=s2 or "", chapters=chapters or 0)
     finally:
         lib.close()
     return out
@@ -147,8 +150,9 @@ SCHEMES = {
     "best": lambda b: b.best,
     "mix": lambda b: 0.7 * b.best + 0.3 * b.mean,
     "best_support": lambda b: b.score,
-    "best_top3_support": lambda b: (0.60 * b.best + 0.25 * top3_mean(b.scores)
-                                    + 0.15 * b.coverage + 0.05 * math.log1p(b.support)),
+    "best_top3_support": lambda b: (
+        0.60 * b.best + 0.25 * top3_mean(b.scores) + 0.15 * b.coverage + 0.05 * math.log1p(b.support)
+    ),
     "rrf5": lambda b: sum(1.0 / (60 + i) for i in range(1, min(5, len(b.scores)) + 1)),
     "best_support_length": lambda b: b.score - 0.02 * math.log1p(b.chapters),
 }
@@ -160,7 +164,7 @@ def aggregate(book, rows, groups, exclude, meta, expand, total_groups):
         return None
     best = sorted(rows, key=lambda r: (-r["score"], r["path"], r["line"]))[0]
     support = min(5, sum(1 for s in scores if s >= 0.75 * scores[0]))
-    topk = sum(scores[:min(3, support)]) / min(3, support)
+    topk = sum(scores[: min(3, support)]) / min(3, support)
     seen = []
     for r in rows:
         for g in matched_groups(r["text"], groups, exclude):
@@ -183,8 +187,7 @@ def aggregate(book, rows, groups, exclude, meta, expand, total_groups):
         support=support,
         topk=topk,
         coverage=coverage,
-        score=(0.60 * scores[0] + 0.25 * topk + 0.15 * coverage
-               + 0.05 * math.log1p(support)),
+        score=(0.60 * scores[0] + 0.25 * topk + 0.15 * coverage + 0.05 * math.log1p(support)),
         groups=seen,
         has_prefix="prefix" in kinds,
         has_queries="queries" in kinds,
@@ -250,11 +253,10 @@ def main(argv=None):
     except ValueError:
         ap.error("--pool 只认 low / medium / all 或整数")
     con = sqlite3.connect("file:%s?mode=ro" % a.db, uri=True)
-    hits, ms = qsearch.search(con, expr, groups, exclude, max(a.limit, 2000),
-                              a.min_chars, False, pool)
+    hits, ms = qsearch.search(con, expr, groups, exclude, max(a.limit, 2000), a.min_chars, False, pool)
     meta = load_meta(a.libdb)
     expand = load_expand(con)
-    rows = rank(hits, groups, a.book_score, exclude, meta, expand)[:a.limit]
+    rows = rank(hits, groups, a.book_score, exclude, meta, expand)[: a.limit]
     if a.json:
         print(json.dumps([asdict(b) for b in rows], ensure_ascii=False, indent=1))
         return 0
@@ -265,15 +267,26 @@ def main(argv=None):
     fn = SCHEMES[a.book_score]
     for i, b in enumerate(rows, 1):
         if a.explain:
-            print("%2d %-46s ch=%-5d best=%.3f topk=%.3f support=%d cov=%.2f "
-                  "groups=%s prefix=%d queries=%d score=%.3f"
-                  % (i, b.book, b.chapters, b.best, b.topk, b.support, b.coverage,
-                     ",".join(b.groups) or "-", int(b.has_prefix), int(b.has_queries),
-                     fn(b)))
+            print(
+                "%2d %-46s ch=%-5d best=%.3f topk=%.3f support=%d cov=%.2f "
+                "groups=%s prefix=%d queries=%d score=%.3f"
+                % (
+                    i,
+                    b.book,
+                    b.chapters,
+                    b.best,
+                    b.topk,
+                    b.support,
+                    b.coverage,
+                    ",".join(b.groups) or "-",
+                    int(b.has_prefix),
+                    int(b.has_queries),
+                    fn(b),
+                )
+            )
             print("   %s:%d" % (b.best_path, b.best_line))
         else:
-            print("%2d %-46s %2d段  %.2f  %-8s %s:%d"
-                  % (i, b.book, b.hits, fn(b), b.type, b.best_path, b.best_line))
+            print("%2d %-46s %2d段  %.2f  %-8s %s:%d" % (i, b.book, b.hits, fn(b), b.type, b.best_path, b.best_line))
             print("   " + snippet(b.best_text))
     return 0
 

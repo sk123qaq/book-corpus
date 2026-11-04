@@ -9,18 +9,20 @@
 
 用法: python3 md_review_report.py <批次目录> [uid ...]
 """
+
 import collections
 import json
 import os
+import pathlib
 import re
 import sqlite3
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 sys.path.insert(0, os.path.join(L.skill_dir("ebook-to-md"), "scripts"))
-from ebook_to_md import Epub  # noqa: E402
+from ebook_to_md import Epub
 
 IMG_MD = re.compile(r"!\[[^\]]*\]\(([^)]*)\)")
 LINK_MD = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]*)\)")
@@ -29,11 +31,11 @@ STATUSES = ("staged-review", "error", "convert-failed", "split-failed", "staged"
 
 
 def body_of(path):
-    t = open(path, encoding="utf-8", errors="ignore").read()
+    t = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore")
     if t.startswith("---"):
         e = t.find("\n---", 3)
         if e != -1:
-            t = t[t.find("\n", e + 1) + 1:]
+            t = t[t.find("\n", e + 1) + 1 :]
     return t
 
 
@@ -48,13 +50,12 @@ def shingles(text, n=5):
     if len(text) < SHINGLE:
         return [text] if len(text) >= 20 else []
     step = max(1, (len(text) - SHINGLE) // n)
-    return [text[i * step:i * step + SHINGLE] for i in range(n)]
+    return [text[i * step : i * step + SHINGLE] for i in range(n)]
 
 
 def sources():
     con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.library_db, uri=True)
-    return {r[0]: r[1] for r in con.execute(
-        "SELECT uid, file FROM source WHERE primary_src=1")}
+    return {r[0]: r[1] for r in con.execute("SELECT uid, file FROM source WHERE primary_src=1")}
 
 
 def source_paths(uid, fmt, batch):
@@ -63,8 +64,7 @@ def source_paths(uid, fmt, batch):
         return None, None
     if fmt not in ("mobi", "azw3", "azw"):
         return os.path.join(L.ROOT, src), os.path.join(L.ROOT, src)
-    for cand in (os.path.join(batch, "tmp", uid, "book.epub"),
-                 os.path.join(batch, "prepared", uid + ".epub")):
+    for cand in (os.path.join(batch, "tmp", uid, "book.epub"), os.path.join(batch, "prepared", uid + ".epub")):
         if os.path.exists(cand):
             return os.path.join(L.ROOT, src), cand
     return os.path.join(L.ROOT, src), None
@@ -91,7 +91,7 @@ def main():
     if "--json" in argv:
         i = argv.index("--json")
         json_out = argv[i + 1]
-        del argv[i:i + 2]
+        del argv[i : i + 2]
     if not argv:
         raise SystemExit("用法: md_review_report.py <批次名> [uid ...] [--json out]")
     batch = os.path.join(L.WORK, "批次", argv[0])
@@ -102,7 +102,7 @@ def main():
     for name in sorted(os.listdir(os.path.join(batch, "logs"))):
         if not name.endswith(".json"):
             continue
-        r = json.load(open(os.path.join(batch, "logs", name), encoding="utf-8"))
+        r = json.loads(pathlib.Path(os.path.join(batch, "logs", name)).read_text(encoding="utf-8"))
         if r["status"] not in STATUSES:
             skipped[r["status"]] += 1
             continue
@@ -110,13 +110,17 @@ def main():
             continue
         uid = r["uid"]
         folder = os.path.join(batch, "out", uid)
-        info = {"uid": uid, "title": r["title"][:34], "status": r["status"],
-                "format": r["format"], "chapters": r.get("chapters"),
-                "ratio": r.get("audit_ratio")}
+        info = {
+            "uid": uid,
+            "title": r["title"][:34],
+            "status": r["status"],
+            "format": r["format"],
+            "chapters": r.get("chapters"),
+            "ratio": r.get("audit_ratio"),
+        }
         probes = []
         if os.path.isdir(folder):
-            files = [f for f in sorted(os.listdir(folder))
-                     if f.endswith(".md") and f != "README.md"]
+            files = [f for f in sorted(os.listdir(folder)) if f.endswith(".md") and f != "README.md"]
             seen, dup, img_chars, text_chars, self_links = {}, 0, 0, 0, 0
             for f in files:
                 b = body_of(os.path.join(folder, f))
@@ -129,24 +133,34 @@ def main():
                         dup += 1
                     seen.setdefault(sh, f)
                 probes.append(body)
-            info.update(files=len(files), text_chars=text_chars,
-                        image_path_chars=img_chars, dup_shingles=dup,
-                        self_links=self_links)
+            info.update(
+                files=len(files),
+                text_chars=text_chars,
+                image_path_chars=img_chars,
+                dup_shingles=dup,
+                self_links=self_links,
+            )
             rp = os.path.join(folder, "README.md")
             if os.path.isfile(rp):
-                t = open(rp, encoding="utf-8", errors="ignore").read()
+                t = pathlib.Path(rp).read_text(encoding="utf-8", errors="ignore")
                 sec = t.split("## 未收录")[-1] if "## 未收录" in t else ""
-                info["excluded"] = dict(collections.Counter(
-                    re.sub(r"^.*?— ", "", ln.strip()).strip()
-                    for ln in sec.splitlines() if ln.strip().startswith("- ")))
+                info["excluded"] = dict(
+                    collections.Counter(
+                        re.sub(r"^.*?— ", "", ln.strip()).strip()
+                        for ln in sec.splitlines()
+                        if ln.strip().startswith("- ")
+                    )
+                )
         log = os.path.join(batch, "logs", uid + ".log")
         if os.path.isfile(log) and os.path.getsize(log):
-            t = open(log, encoding="utf-8", errors="ignore").read()
-            pats = {"identical": r"identical content[^\n]*",
-                    "broken link": r"broken link ->[^\n]*",
-                    "missing image": r"missing image[^\n]*",
-                    "orphan image": r"orphan image on disk[^\n]*",
-                    "no H1": r"no H1 chapter title[^\n]*"}
+            t = pathlib.Path(log).read_text(encoding="utf-8", errors="ignore")
+            pats = {
+                "identical": r"identical content[^\n]*",
+                "broken link": r"broken link ->[^\n]*",
+                "missing image": r"missing image[^\n]*",
+                "orphan image": r"orphan image on disk[^\n]*",
+                "no H1": r"no H1 chapter title[^\n]*",
+            }
             v = {}
             for k, p in pats.items():
                 hits = re.findall(p, t)
@@ -154,7 +168,7 @@ def main():
                     v[k] = hits[:2] if k != "identical" else hits[:3]
             if v:
                 info["verify"] = v
-        src, epub_path = source_paths(uid, r["format"], batch)
+        _src, epub_path = source_paths(uid, r["format"], batch)
         if epub_path and probes:
             try:
                 info["uncovered"] = coverage(Epub(epub_path), probes)
@@ -164,25 +178,26 @@ def main():
             no_src.append(uid)
         out.append(info)
     if skipped:
-        print("本批次状态不在白名单、被跳过：%s"
-              % ", ".join("%s %d" % kv for kv in skipped.most_common()))
+        print("本批次状态不在白名单、被跳过：%s" % ", ".join("%s %d" % kv for kv in skipped.most_common()))
     if no_src:
-        print("mobi/azw3 找不到中间 EPUB（tmp/ 与 prepared/ 都没有），spine 未收录检查跳过 %d 本：%s"
-              % (len(no_src), " ".join(no_src[:10])))
+        print(
+            "mobi/azw3 找不到中间 EPUB（tmp/ 与 prepared/ 都没有），spine 未收录检查跳过 %d 本：%s"
+            % (len(no_src), " ".join(no_src[:10]))
+        )
 
     for i in out:
         ex = i.get("excluded") or {}
         ratio = "?" if i["ratio"] is None else "%.1f%%" % (i["ratio"] * 100)
-        print(f"\n{i['uid']} {i['title']}  [{i['status']}/{i['format']}]  "
-              f"ch={i['chapters']} ratio={ratio}")
-        print(f"   正文 {i.get('text_chars', 0):,} | 图片路径 {i.get('image_path_chars', 0):,} | "
-              f"跨文件重复片段 {i.get('dup_shingles', 0)} | 自链 {i.get('self_links', 0)}")
+        print(f"\n{i['uid']} {i['title']}  [{i['status']}/{i['format']}]  ch={i['chapters']} ratio={ratio}")
+        print(
+            f"   正文 {i.get('text_chars', 0):,} | 图片路径 {i.get('image_path_chars', 0):,} | "
+            f"跨文件重复片段 {i.get('dup_shingles', 0)} | 自链 {i.get('self_links', 0)}"
+        )
         un = i.get("uncovered")
         if isinstance(un, list):
             if un:
                 total = sum(n for n, _ in un)
-                print(f"   md 未收录的 spine 页 {len(un)} 个，合计 {total:,} 字；"
-                      f"前几个：{[n for n, _ in un[:5]]}")
+                print(f"   md 未收录的 spine 页 {len(un)} 个，合计 {total:,} 字；前几个：{[n for n, _ in un[:5]]}")
             else:
                 print("   md 未收录的 spine 页 0 个（原文正文全覆盖）")
         elif un:

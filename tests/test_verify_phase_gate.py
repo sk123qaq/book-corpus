@@ -81,9 +81,9 @@ def test_fresh_library_passes_without_skips(tmp_path):
     ws = tmp_path / "ws"
     run_cli("init", str(ws), "--no-pdf-venv")
     run_cli("sample", "--root", str(ws))
-    out = subprocess.run([sys.executable, str(SCRIPT)], cwd=str(ws),
-                         capture_output=True, text=True)
+    out = subprocess.run([sys.executable, str(SCRIPT)], cwd=str(ws), capture_output=True, text=True)
     assert out.returncode == 0, out.stdout + out.stderr
     assert "全过" in out.stdout
-    assert "跳过" not in out.stdout and "SKIP" not in out.stdout
+    assert "跳过" not in out.stdout
+    assert "SKIP" not in out.stdout
     assert "对照表" not in out.stdout

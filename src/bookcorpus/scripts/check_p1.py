@@ -11,6 +11,7 @@
 
 退出码：0 通过；1 有失败项；2 没跑（缺题集或读数）。
 """
+
 import argparse
 import csv
 import json
@@ -22,7 +23,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 ROOT = L.ROOT
 QSEARCH = os.path.join(HERE, "qsearch.py")
@@ -34,8 +35,7 @@ passes = 0
 
 
 def run(args):
-    out = subprocess.run([sys.executable, QSEARCH] + args + ["--json"], cwd=ROOT,
-                         capture_output=True, text=True)
+    out = subprocess.run([sys.executable, QSEARCH, *args, "--json"], cwd=ROOT, capture_output=True, text=True)
     return json.loads(out.stdout)
 
 
@@ -44,9 +44,10 @@ def corpus_files(term):
     rg_dir = os.path.dirname(RG)
     if rg_dir:
         env["PATH"] = rg_dir + ":" + env.get("PATH", "")
-    r = subprocess.run([RG, "-l", "-F", "-g", "*.md", "-e", term, "books"],
-                       cwd=ROOT, capture_output=True, text=True, env=env)
-    return [l for l in r.stdout.splitlines() if l]
+    r = subprocess.run(
+        [RG, "-l", "-F", "-g", "*.md", "-e", term, "books"], cwd=ROOT, capture_output=True, text=True, env=env
+    )
+    return [line for line in r.stdout.splitlines() if line]
 
 
 def check(ok, name, detail):
@@ -73,8 +74,7 @@ def find_gold(explicit=None):
         if os.path.isfile(path):
             return path, why
     if os.path.isdir(BATCH_ROOT):
-        batches = sorted((n for n in os.listdir(BATCH_ROOT) if n.startswith("qa-检索-")),
-                         reverse=True)
+        batches = sorted((n for n in os.listdir(BATCH_ROOT) if n.startswith("qa-检索-")), reverse=True)
         for name in batches:
             path = os.path.join(BATCH_ROOT, name, "gold.tsv")
             if os.path.isfile(path):
@@ -107,16 +107,14 @@ def two_char_words():
         res = run([q, "-n", "20"])
         ms = res["ms"]
         hits = res["hits"]
-        ok = bool(hits) and len(hits) >= 10 and q in hits[0]["text"] \
-            and ms < 2000 and (time.time() - t0) < 5
+        ok = bool(hits) and len(hits) >= 10 and q in hits[0]["text"] and ms < 2000 and (time.time() - t0) < 5
         first = ("%s:%d" % (hits[0]["path"], hits[0]["line"])) if hits else "无命中"
         check(ok, "2字词 " + q, "%d 条 %.0f ms 首条 %s" % (len(hits), ms, first))
 
 
 def safe_run(args):
     """边界用例专用：坏输入不应让验收本身崩掉，崩了记 FAIL 并带回错误。"""
-    r = subprocess.run([sys.executable, QSEARCH] + args + ["--json"], cwd=ROOT,
-                       capture_output=True, text=True)
+    r = subprocess.run([sys.executable, QSEARCH, *args, "--json"], cwd=ROOT, capture_output=True, text=True)
     if r.returncode != 0:
         return None, (r.stderr or "").strip().splitlines()[-1:]
     try:
@@ -128,39 +126,55 @@ def safe_run(args):
 def edge_cases():
     # 不可索引字符（标点/假名单独成查询）不该崩，返回空结果即可
     res, err = safe_run(["！！！", "-n", "3"])
-    check(res is not None and res["hits"] == [], "纯标点查询不崩",
-          "崩：%s" % err[0] if err else "返回 %d 条" % len(res["hits"]))
+    check(
+        res is not None and res["hits"] == [],
+        "纯标点查询不崩",
+        "崩：%s" % err[0] if err else "返回 %d 条" % len(res["hits"]),
+    )
     # 全角数字折半角后应能查到（语料有 1984）
     res, err = safe_run(["１９８４", "-n", "5"])
-    check(bool(res and res["hits"]), "全角数字归一可查",
-          "崩：%s" % err[0] if err else "返回 %d 条" % len(res["hits"]))
+    check(bool(res and res["hits"]), "全角数字归一可查", "崩：%s" % err[0] if err else "返回 %d 条" % len(res["hits"]))
     # 全角逗号当分隔符：与空格分隔同口径
     comma, err1 = safe_run(["自由，平等", "-n", "5"])
     space, err2 = safe_run(["自由 平等", "-n", "5"])
-    same = (comma and space and comma["hits"] and space["hits"]
-            and [h["path"] for h in comma["hits"]] == [h["path"] for h in space["hits"]])
-    check(bool(same), "全角逗号当分隔符",
-          "逗号版 %s / 空格版 %s" % (
-              "崩" if err1 else "%d 条" % len(comma["hits"]),
-              "崩" if err2 else "%d 条" % len(space["hits"])))
+    same = (
+        comma
+        and space
+        and comma["hits"]
+        and space["hits"]
+        and [h["path"] for h in comma["hits"]] == [h["path"] for h in space["hits"]]
+    )
+    check(
+        bool(same),
+        "全角逗号当分隔符",
+        "逗号版 %s / 空格版 %s"
+        % ("崩" if err1 else "%d 条" % len(comma["hits"]), "崩" if err2 else "%d 条" % len(space["hits"])),
+    )
     # ASCII 大小写：FTS 折叠了大小写，覆盖判定也得跟上
     res, err = safe_run(["PANOPTICON", "-n", "5"])
     cov = max((h.get("coverage", 0) for h in res["hits"]), default=0) if res else 0
-    check(bool(res and res["hits"]) and cov > 0, "大写词覆盖判定",
-          "崩：%s" % err[0] if err else "%d 条，最大 coverage %d" % (len(res["hits"]), cov))
+    check(
+        bool(res and res["hits"]) and cov > 0,
+        "大写词覆盖判定",
+        "崩：%s" % err[0] if err else "%d 条，最大 coverage %d" % (len(res["hits"]), cov),
+    )
     # --pool all（0）是不设上限，不能被 or 吞成默认值
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import qsearch
+
         con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.index_db, uri=True)
         expr = '"自由"'
         # limit 放大过池深，返回条数才反映 pool 的取数深度
-        all_hits, _ = qsearch.search(con, expr, ["自由"], [], 10 ** 9, 40, False, 0)
-        low_hits, _ = qsearch.search(con, expr, ["自由"], [], 10 ** 9, 40, False, 100)
+        all_hits, _ = qsearch.search(con, expr, ["自由"], [], 10**9, 40, False, 0)
+        low_hits, _ = qsearch.search(con, expr, ["自由"], [], 10**9, 40, False, 100)
         con.close()
-        check(len(all_hits) > len(low_hits), "--pool all 不被吞",
-              "all=%d 段 vs 100=%d 段" % (len(all_hits), len(low_hits)))
-    except Exception as exc:  # noqa: BLE001
+        check(
+            len(all_hits) > len(low_hits),
+            "--pool all 不被吞",
+            "all=%d 段 vs 100=%d 段" % (len(all_hits), len(low_hits)),
+        )
+    except Exception as exc:
         check(False, "--pool all 不被吞", "异常 %s: %s" % (type(exc).__name__, exc))
 
 
@@ -208,21 +222,21 @@ def main(argv=None):
         qids = [q for q, r in gold.items() if r.get("category") == "原词"]
         missing = [q for q in qids if q + "A" not in base or q + "E" not in idx]
         if not qids:
-            check(False, "原词类不低于裸 grep",
-                  "gold 没有 category=原词 的行，这项判据跑不了；题集要覆盖原词类")
+            check(False, "原词类不低于裸 grep", "gold 没有 category=原词 的行，这项判据跑不了；题集要覆盖原词类")
         elif missing:
             check(False, "原词类不低于裸 grep", "读数缺 qid: %s" % " ".join(missing))
         else:
             for label, table, sysname in (("A 裸 grep", base, "A"), ("E FTS", idx, "E")):
                 ranks = [int(table[q + sysname]["rank"]) for q in qids]
-                print("     原词 %s recall@10 %.2f" % (
-                    label, sum(1 for x in ranks if x <= 10) / len(ranks)))
+                print("     原词 %s recall@10 %.2f" % (label, sum(1 for x in ranks if x <= 10) / len(ranks)))
             a = [int(base[q + "A"]["rank"]) for q in qids]
             e = [int(idx[q + "E"]["rank"]) for q in qids]
-            check(sum(1 for x in e if x <= 10) >= sum(1 for x in a if x <= 10),
-                  "原词类不低于裸 grep", "E %d/%d vs A %d/%d 进前 10" % (
-                      sum(1 for x in e if x <= 10), len(qids),
-                      sum(1 for x in a if x <= 10), len(qids)))
+            check(
+                sum(1 for x in e if x <= 10) >= sum(1 for x in a if x <= 10),
+                "原词类不低于裸 grep",
+                "E %d/%d vs A %d/%d 进前 10"
+                % (sum(1 for x in e if x <= 10), len(qids), sum(1 for x in a if x <= 10), len(qids)),
+            )
 
     print("汇总 PASS %d / FAIL %d" % (passes, len(fails)))
     if fails:

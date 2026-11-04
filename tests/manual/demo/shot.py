@@ -17,8 +17,10 @@
 
 不装任何包，不改演示页；只写 --out 指定的图。
 """
+
 import argparse
 import base64
+import contextlib
 import json
 import os
 import select
@@ -38,20 +40,22 @@ DEFAULT_URL = "http://127.0.0.1:8765/classic"
 QUESTION = "《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球"
 
 
-class WS(object):
+class WS:
     """够用就行的 WebSocket 客户端：握手、发文本帧、收帧。"""
 
     def __init__(self, url, timeout=30):
         assert url.startswith("ws://")
-        rest = url[len("ws://"):]
+        rest = url[len("ws://") :]
         hostport, path = rest.split("/", 1)
         path = "/" + path
         host, port = hostport.split(":")
         self.sock = socket.create_connection((host, int(port)), timeout=timeout)
         key = base64.b64encode(os.urandom(16)).decode()
-        req = ("GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\n"
-               "Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\n"
-               "Sec-WebSocket-Version: 13\r\n\r\n" % (path, hostport, key))
+        req = (
+            "GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\n"
+            "Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n" % (path, hostport, key)
+        )
         self.sock.sendall(req.encode())
         buf = b""
         while b"\r\n\r\n" not in buf:
@@ -105,13 +109,11 @@ class WS(object):
         return payload.decode("utf-8", "replace")
 
     def close(self):
-        try:
+        with contextlib.suppress(OSError):
             self.sock.close()
-        except OSError:
-            pass
 
 
-class CDP(object):
+class CDP:
     def __init__(self, ws):
         self.ws = ws
         self.n = 0
@@ -142,7 +144,7 @@ class CDP(object):
                 break
             try:
                 msg = json.loads(self.ws.recv())
-            except (socket.timeout, OSError, RuntimeError):
+            except (TimeoutError, OSError, RuntimeError):
                 break
             self.events.append(msg)
 
@@ -183,10 +185,19 @@ def page_ws(port, timeout=30):
 
 def launch(width, height, url, port):
     profile = tempfile.mkdtemp(prefix="shot-profile-")
-    cmd = [CHROME, "--headless=new", "--disable-gpu", "--no-sandbox",
-           "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
-           "--remote-debugging-port=%d" % port, "--user-data-dir=" + profile,
-           "--window-size=%d,%d" % (width, height), "about:blank"]
+    cmd = [
+        CHROME,
+        "--headless=new",
+        "--disable-gpu",
+        "--no-sandbox",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--hide-scrollbars",
+        "--remote-debugging-port=%d" % port,
+        "--user-data-dir=" + profile,
+        "--window-size=%d,%d" % (width, height),
+        "about:blank",
+    ]
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     ws_url = page_ws(port)
     if not ws_url:
@@ -196,10 +207,16 @@ def launch(width, height, url, port):
 
 
 def eval_js(cdp, expr, await_promise=False, timeout=40):
-    res = cdp.call("Runtime.evaluate", {
-        "expression": expr, "awaitPromise": await_promise,
-        "returnByValue": True, "userGesture": True,
-    }, timeout=timeout)
+    res = cdp.call(
+        "Runtime.evaluate",
+        {
+            "expression": expr,
+            "awaitPromise": await_promise,
+            "returnByValue": True,
+            "userGesture": True,
+        },
+        timeout=timeout,
+    )
     if res.get("exceptionDetails"):
         raise RuntimeError(str(res["exceptionDetails"])[:400])
     return (res.get("result") or {}).get("value")
@@ -260,8 +277,7 @@ def main(argv=None):
     ap.add_argument("--width", type=int, default=1440)
     ap.add_argument("--height", type=int, default=900)
     ap.add_argument("--out", default="")
-    ap.add_argument("--scroll", default="stage4",
-                    choices=("none", "stage3", "stage4", "hit", "hit-center"))
+    ap.add_argument("--scroll", default="stage4", choices=("none", "stage3", "stage4", "hit", "hit-center"))
     ap.add_argument("--click-cite", action="store_true")
     ap.add_argument("--click-all", action="store_true")
     ap.add_argument("--port", type=int, default=9333)
@@ -271,7 +287,7 @@ def main(argv=None):
     url = a.url
     if not url:
         url = DEFAULT_URL + "?q=" + urllib.parse.quote(a.question) + "&instant=1&top=1"
-    proc, profile, ws_url = launch(a.width, a.height, url, a.port)
+    proc, _profile, ws_url = launch(a.width, a.height, url, a.port)
     errors, notes = [], []
     all_fail = False
     try:
@@ -279,43 +295,60 @@ def main(argv=None):
         cdp.call("Runtime.enable")
         cdp.call("Log.enable")
         cdp.call("Page.enable")
-        cdp.call("Emulation.setDeviceMetricsOverride",
-                 {"width": a.width, "height": a.height, "deviceScaleFactor": 1,
-                  "mobile": a.width < 600})
+        cdp.call(
+            "Emulation.setDeviceMetricsOverride",
+            {"width": a.width, "height": a.height, "deviceScaleFactor": 1, "mobile": a.width < 600},
+        )
         cdp.call("Page.navigate", {"url": url})
         time.sleep(0.8)
         ready = eval_js(cdp, WAIT_READY, await_promise=True, timeout=45)
-        notes.append("answer ready=%s cites=%s wait=%s ms"
-                     % (ready.get("done"), ready.get("cites"), ready.get("ms")))
+        notes.append("answer ready=%s cites=%s wait=%s ms" % (ready.get("done"), ready.get("cites"), ready.get("ms")))
         if a.click_all:
             multi = eval_js(cdp, WAIT_ALL, await_promise=True, timeout=140)
-            all_fail = not (multi.get("button") and multi.get("loading")
-                            and multi.get("done") and multi.get("multi")
-                            and (multi.get("books") or 0) >= 2
-                            and (multi.get("selected") or 0) >= (multi.get("cards") or 0))
-            notes.append("select-all: button=%s cards=%s selected=%s loading=%s done=%s "
-                         "multi=%s books=%s wait=%s ms"
-                         % (multi.get("button"), multi.get("cards"), multi.get("selected"),
-                            multi.get("loading"), multi.get("done"), multi.get("multi"),
-                            multi.get("books"), multi.get("ms")))
+            all_fail = not (
+                multi.get("button")
+                and multi.get("loading")
+                and multi.get("done")
+                and multi.get("multi")
+                and (multi.get("books") or 0) >= 2
+                and (multi.get("selected") or 0) >= (multi.get("cards") or 0)
+            )
+            notes.append(
+                "select-all: button=%s cards=%s selected=%s loading=%s done=%s "
+                "multi=%s books=%s wait=%s ms"
+                % (
+                    multi.get("button"),
+                    multi.get("cards"),
+                    multi.get("selected"),
+                    multi.get("loading"),
+                    multi.get("done"),
+                    multi.get("multi"),
+                    multi.get("books"),
+                    multi.get("ms"),
+                )
+            )
             notes.append("SELECT ALL " + ("FAIL" if all_fail else "PASS"))
         if a.scroll == "stage3":
-            eval_js(cdp, "document.querySelector('[data-stage=\"3\"]').scrollIntoView({block:'start'});"
-                         "true")
+            eval_js(cdp, "document.querySelector('[data-stage=\"3\"]').scrollIntoView({block:'start'});true")
         elif a.scroll == "stage4":
-            eval_js(cdp, "document.querySelector('[data-stage=\"4\"]').scrollIntoView({block:'start'});"
-                         "true")
+            eval_js(cdp, "document.querySelector('[data-stage=\"4\"]').scrollIntoView({block:'start'});true")
         elif a.scroll == "hit":
-            eval_js(cdp, "const el=document.querySelector('.hit-para');"
-                         "if (el) el.scrollIntoView({block:'start'}); true")
+            eval_js(
+                cdp, "const el=document.querySelector('.hit-para');if (el) el.scrollIntoView({block:'start'}); true"
+            )
         elif a.scroll == "hit-center":
-            eval_js(cdp, "const el=document.querySelector('.hit-para');"
-                         "if (el) el.scrollIntoView({block:'center'}); true")
+            eval_js(
+                cdp, "const el=document.querySelector('.hit-para');if (el) el.scrollIntoView({block:'center'}); true"
+            )
         time.sleep(0.4)
-        notes.append("overflow=%s (scrollWidth %s vs %s)"
-                     % (eval_js(cdp, "document.documentElement.scrollWidth > window.innerWidth"),
-                        eval_js(cdp, "document.documentElement.scrollWidth"),
-                        eval_js(cdp, "window.innerWidth")))
+        notes.append(
+            "overflow=%s (scrollWidth %s vs %s)"
+            % (
+                eval_js(cdp, "document.documentElement.scrollWidth > window.innerWidth"),
+                eval_js(cdp, "document.documentElement.scrollWidth"),
+                eval_js(cdp, "window.innerWidth"),
+            )
+        )
         if a.click_cite:
             before = eval_js(cdp, "document.querySelector('.result-foot code').textContent")
             eval_js(cdp, "document.querySelector('.cite').click(); true")
@@ -323,12 +356,13 @@ def main(argv=None):
             after = eval_js(cdp, "document.querySelector('.result-foot code').textContent")
             active = eval_js(cdp, "!!document.querySelector('.cite.active')")
             answer_kept = eval_js(cdp, "!!document.querySelector('.answer-card .answer-text')")
-            notes.append("cite click: %s -> %s active=%s answer_kept=%s"
-                         % (before, after, active, answer_kept))
+            notes.append("cite click: %s -> %s active=%s answer_kept=%s" % (before, after, active, answer_kept))
         if a.out:
-            shot = cdp.call("Page.captureScreenshot",
-                            {"format": "png", "fromSurface": True,
-                             "captureBeyondViewport": False}, timeout=60)
+            shot = cdp.call(
+                "Page.captureScreenshot",
+                {"format": "png", "fromSurface": True, "captureBeyondViewport": False},
+                timeout=60,
+            )
             data = base64.b64decode(shot["data"])
             out = a.out if os.path.isabs(a.out) else os.path.join(os.path.dirname(HERE), a.out)
             out = os.path.abspath(out)

@@ -7,11 +7,17 @@
 
 索引只读 库/。重建用内容表 para 存原文，FTS 用 external content 只存索引。
 """
-import argparse, os, sqlite3, sys, time
+
+import argparse
+import os
+import sqlite3
+import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import L, PATHS, ROOT  # noqa: E402
+from lib_common import PATHS, ROOT, L
+
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 from defpass import paragraphs
@@ -21,8 +27,7 @@ CONCEPTS = PATHS.concepts
 CORPUS = PATHS.books
 SNAP = os.path.join(ROOT, "工作区", "中间态", "index-expand-snapshot.db")
 os.makedirs(os.path.dirname(SNAP), exist_ok=True)
-EXPAND_COLS = ("rowid", "path", "kind", "tok", "text", "model", "prompt_hash",
-               "tokens_in", "tokens_out", "built_at")
+EXPAND_COLS = ("rowid", "path", "kind", "tok", "text", "model", "prompt_hash", "tokens_in", "tokens_out", "built_at")
 EXPAND_SQL = "(%s) VALUES(%s)" % (",".join(EXPAND_COLS), ",".join("?" * len(EXPAND_COLS)))
 
 SCHEMA = """
@@ -55,7 +60,7 @@ def chapters(limit_books=0):
 def read_concepts():
     out = []
     for r in L.concept_rows():
-        out.append((r["key"], [r["key"]] + L.split_aliases(r["aliases"])))
+        out.append((r["key"], [r["key"], *L.split_aliases(r["aliases"])]))
     return out
 
 
@@ -75,9 +80,10 @@ def snapshot_expand(db, snap=SNAP):
     if os.path.exists(snap):
         os.remove(snap)
     import build_expand  # 同一份 DDL，避免两处漂移
+
     dst = sqlite3.connect(snap)
     dst.executescript(build_expand.SCHEMA)
-    cur = src.execute("SELECT %s FROM expand" % ",".join(EXPAND_COLS))
+    cur = src.execute("SELECT %s FROM expand" % ",".join(EXPAND_COLS))  # noqa: S608 列名来自模块常量 EXPAND_COLS
     while True:
         rows = cur.fetchmany(2000)
         if not rows:
@@ -94,9 +100,10 @@ def restore_expand(con, snap=SNAP):
     if not os.path.exists(snap):
         return 0
     import build_expand
+
     con.executescript(build_expand.SCHEMA)
     src = sqlite3.connect("file:%s?mode=ro" % snap, uri=True)
-    cur = src.execute("SELECT %s FROM expand" % ",".join(EXPAND_COLS))
+    cur = src.execute("SELECT %s FROM expand" % ",".join(EXPAND_COLS))  # noqa: S608 列名来自模块常量 EXPAND_COLS
     n = 0
     dropped = 0
     while True:
@@ -131,10 +138,13 @@ def build(db, limit_books=0, keep=False):
     if os.path.exists(building):
         os.remove(building)
     con = sqlite3.connect(building)
-    con.executescript("PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; "
-                      "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-2000000;" + SCHEMA)
+    con.executescript(
+        "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; "
+        "PRAGMA temp_store=MEMORY; PRAGMA cache_size=-2000000;" + SCHEMA
+    )
     # expand 表即使没有扩展行也要建，否则新库上 book_score/book_query 会查不到表
     import build_expand
+
     con.executescript(build_expand.SCHEMA)
     t0 = time.time()
     books = chapters(limit_books)
@@ -144,12 +154,10 @@ def build(db, limit_books=0, keep=False):
     for book, paths in books:
         for path in paths:
             rel = os.path.relpath(path, ROOT)
-            rows = [(start, text, cjk.index_text(text))
-                    for start, text in paragraphs(path)]
+            rows = [(start, text, cjk.index_text(text)) for start, text in paragraphs(path)]
             if not any(tok for _, _, tok in rows):
                 # 正文全是假名或符号时没有可索引 token，保留 front matter，章节不从索引里消失
-                rows = [(start, text, cjk.index_text(text))
-                        for start, text in paragraphs(path, keep_front_matter=True)]
+                rows = [(start, text, cjk.index_text(text)) for start, text in paragraphs(path, keep_front_matter=True)]
             for start, text, tok in rows:
                 if not tok:
                     continue
@@ -157,16 +165,16 @@ def build(db, limit_books=0, keep=False):
             done += 1
             npages += 1
         if len(batch) >= 4000:
-            con.executemany("INSERT INTO para(path,book,line,chars,tok,text) "
-                            "VALUES(?,?,?,?,?,?)", batch)
+            con.executemany("INSERT INTO para(path,book,line,chars,tok,text) VALUES(?,?,?,?,?,?)", batch)
             batch.clear()
         if done % 10000 < len(paths):
-            print("  %d/%d 章 %d 段 %.0fs" % (done, nfiles,
-                  con.execute("SELECT count(*) FROM para").fetchone()[0], time.time() - t0),
-                  file=sys.stderr)
+            print(
+                "  %d/%d 章 %d 段 %.0fs"
+                % (done, nfiles, con.execute("SELECT count(*) FROM para").fetchone()[0], time.time() - t0),
+                file=sys.stderr,
+            )
     if batch:
-        con.executemany("INSERT INTO para(path,book,line,chars,tok,text) "
-                        "VALUES(?,?,?,?,?,?)", batch)
+        con.executemany("INSERT INTO para(path,book,line,chars,tok,text) VALUES(?,?,?,?,?,?)", batch)
     npara = con.execute("SELECT count(*) FROM para").fetchone()[0]
     nchars = con.execute("SELECT sum(chars) FROM para").fetchone()[0] or 0
     print("建 FTS 索引 %d 段 / %d 字" % (npara, nchars), file=sys.stderr)
@@ -175,26 +183,29 @@ def build(db, limit_books=0, keep=False):
     if had_expand:
         # expand 与倒排无关，重建后原样回灌，不丢 LLM 产物
         restore_expand(con)
-    con.executemany("INSERT OR REPLACE INTO meta VALUES(?,?)", [
-        ("built_at", time.strftime("%Y-%m-%dT%H:%M:%S%z")),
-        ("chapters", str(nfiles)), ("books", str(len(books))),
-        ("paras", str(npara)), ("chars", str(nchars)),
-        ("seconds", "%.0f" % (time.time() - t0)),
-    ])
+    con.executemany(
+        "INSERT OR REPLACE INTO meta VALUES(?,?)",
+        [
+            ("built_at", time.strftime("%Y-%m-%dT%H:%M:%S%z")),
+            ("chapters", str(nfiles)),
+            ("books", str(len(books))),
+            ("paras", str(npara)),
+            ("chars", str(nchars)),
+            ("seconds", "%.0f" % (time.time() - t0)),
+        ],
+    )
     con.commit()
     if building != db:
-        os.replace(building, db)   # 建完才换，崩溃留不下半截 index.db
-    print("index.db %.2f GB  %d 段  %.0fs" % (
-        os.path.getsize(db) / 1e9, npara, time.time() - t0))
+        os.replace(building, db)  # 建完才换，崩溃留不下半截 index.db
+    print("index.db %.2f GB  %d 段  %.0fs" % (os.path.getsize(db) / 1e9, npara, time.time() - t0))
     return con
 
 
 def build_concepts(con):
-    con.execute("DELETE FROM book_concept")   # 全量重算，概念表删键后不留孤儿
+    con.execute("DELETE FROM book_concept")  # 全量重算，概念表删键后不留孤儿
     t0 = time.time()
     concepts = read_concepts()
-    book_chars = dict(con.execute(
-        "SELECT book, sum(chars) FROM para GROUP BY book").fetchall())
+    book_chars = dict(con.execute("SELECT book, sum(chars) FROM para GROUP BY book").fetchall())
     per = {}
     for key, aliases in concepts:
         hits = {}
@@ -203,8 +214,10 @@ def build_concepts(con):
             if not expr:
                 continue
             for book, n in con.execute(
-                    "SELECT p.book, count(*) FROM para_fts f JOIN para p ON p.id=f.rowid "
-                    "WHERE para_fts MATCH ? GROUP BY p.book", (expr,)):
+                "SELECT p.book, count(*) FROM para_fts f JOIN para p ON p.id=f.rowid "
+                "WHERE para_fts MATCH ? GROUP BY p.book",
+                (expr,),
+            ):
                 hits[book] = hits.get(book, 0) + n
         for book, n in hits.items():
             per[(book, key)] = n
@@ -229,10 +242,7 @@ def main():
     if not (a.rebuild or a.concepts or not os.path.exists(a.db)):
         ap.error("要 --rebuild 或 --concepts")
     fresh = a.rebuild or not os.path.exists(a.db)
-    if fresh:
-        con = build(a.db, a.limit_books)
-    else:
-        con = sqlite3.connect(a.db)
+    con = build(a.db, a.limit_books) if fresh else sqlite3.connect(a.db)
     if fresh or a.concepts:
         build_concepts(con)
 

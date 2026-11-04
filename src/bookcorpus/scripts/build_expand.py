@@ -8,13 +8,26 @@
 产物：目录/检索/expand/<uid>.md 与 index.db 的 expand 表 + expand_fts。
 只读 库/，只写 目录/检索/。
 """
-import argparse, hashlib, json, os, re, sqlite3, sys, threading, time, uuid
-import urllib.request, urllib.error
+
+import argparse
+import hashlib
+import json
+import os
+import pathlib
+import re
+import sqlite3
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import PATHS, ROOT
+
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 
@@ -32,8 +45,7 @@ OPENCODE_URL = "https://opencode.ai/inference/go/v1/chat/completions"
 OPENCODE_MODEL = "deepseek-v4.1-flash"
 OPENCODE_UA = "opencode/1.18.16"
 OPENCODE_SESSION = "ses_" + uuid.uuid4().hex[:24]
-PROVIDERS = {"commandcode": (API, MODEL), "mimo": (MIMO_URL, MIMO_MODEL),
-             "opencode": (OPENCODE_URL, OPENCODE_MODEL)}
+PROVIDERS = {"commandcode": (API, MODEL), "mimo": (MIMO_URL, MIMO_MODEL), "opencode": (OPENCODE_URL, OPENCODE_MODEL)}
 MIMO_REJECT = "high risk"
 
 SYS = "你是图书索引员。只输出结果，不加解释。"
@@ -84,23 +96,21 @@ def batch_tpl(args):
 
 def prompt_hash(args):
     tpl = batch_tpl(args) if args.kind == "prefix" else QUERY_PROMPT
-    key = "%s|%s|%s|%s|%s|%s" % (tpl, args.kind, args.batch, args.chars, args.effort,
-                                PROVIDERS[args.provider][1])
+    key = "%s|%s|%s|%s|%s|%s" % (tpl, args.kind, args.batch, args.chars, args.effort, PROVIDERS[args.provider][1])
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
 def md_files(uid, book_rel):
     base = os.path.join(ROOT, "books", book_rel, "md")
-    return [os.path.join(base, f) for f in sorted(os.listdir(base))
-            if f.endswith(".md") and f != "README.md"]
+    return [os.path.join(base, f) for f in sorted(os.listdir(base)) if f.endswith(".md") and f != "README.md"]
 
 
 def body(path, chars):
-    t = open(path, encoding="utf-8", errors="ignore").read()
+    t = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore")
     if t.startswith("---"):
         i = t.find("\n---", 3)
         if i > 0:
-            t = t[i + 4:]
+            t = t[i + 4 :]
     t = re.sub(r"!\[\]\([^)]*\)", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
     return t[:chars]
@@ -111,18 +121,18 @@ def is_stub(path):
 
     这种章硬生成只会编造（实测动物农场纯图章生出整段假剧情梗概），跳过不调模型。
     别用 body() 判：它先合并换行，标题会和正文并成一行被误杀。"""
-    t = open(path, encoding="utf-8", errors="ignore").read()
+    t = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore")
     if t.startswith("---"):
         i = t.find("\n---", 3)
         if i > 0:
-            t = t[i + 4:]
+            t = t[i + 4 :]
     t = re.sub(r"!\[\]\([^)]*\)", " ", t)
-    t = "\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#") and l.strip())
+    t = "\n".join(line for line in t.splitlines() if not line.lstrip().startswith("#") and line.strip())
     return len(t.strip()) < 30
 
 
 def title_of(path):
-    head = open(path, encoding="utf-8", errors="ignore").read(400)
+    head = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore")[:400]
     m = re.search(r"^title:\s*\"?(.+?)\"?\s*$", head, re.M)
     if m:
         return m.group(1)
@@ -132,15 +142,18 @@ def title_of(path):
     return os.path.basename(path)
 
 
-class ContentRejected(Exception):
+class ContentRejectedError(Exception):
     pass
 
 
 def _chat_call(url, model, key, prompt, max_out, timeout, ua=None, session=None):
     """OpenAI 兼容的 /chat/completions。mimo 与 opencode-go 同形，只差 base URL、模型与 key。"""
-    body = {"model": model,
-            "messages": [{"role": "user", "content": SYS + "\n\n" + prompt}],
-            "max_tokens": max_out, "stream": False}
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": SYS + "\n\n" + prompt}],
+        "max_tokens": max_out,
+        "stream": False,
+    }
     if "xiaomimimo" in url:
         body["temperature"] = 0.3
     headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
@@ -148,29 +161,30 @@ def _chat_call(url, model, key, prompt, max_out, timeout, ua=None, session=None)
         headers["User-Agent"] = ua
     if session:
         headers["x-opencode-session"] = session
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    req = urllib.request.Request(  # noqa: S310 URL 来自模块内 https 常量
+        url, data=json.dumps(body).encode(), headers=headers
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 端点来自模块内 https 常量，urlopen 不接外部输入
         d = json.load(r)
     msg = (d.get("choices") or [{}])[0].get("message") or {}
     txt = msg.get("content") or ""
     u = d.get("usage") or {}
     if MIMO_REJECT in txt:
-        raise ContentRejected(txt[:80])
-    return txt, {"input_tokens": u.get("prompt_tokens", 0),
-                 "output_tokens": u.get("completion_tokens", 0)}
+        raise ContentRejectedError(txt[:80])
+    return txt, {"input_tokens": u.get("prompt_tokens", 0), "output_tokens": u.get("completion_tokens", 0)}
 
 
 def _mimo_call(prompt, max_out, timeout):
-    return _chat_call(MIMO_URL, MIMO_MODEL, open(MIMO_KEY).read().strip(),
-                      prompt, max_out, timeout)
+    return _chat_call(
+        MIMO_URL, MIMO_MODEL, pathlib.Path(MIMO_KEY).read_text(encoding="utf-8").strip(), prompt, max_out, timeout
+    )
 
 
 def _opencode_call(prompt, max_out, timeout):
     """opencode-go 要求每请求带 x-opencode-session，否则 400 MissingSessionID。
     一个进程一个会话 id：服务端靠它把同会话请求路由到同一上游。"""
-    key = json.load(open(AUTH))["opencode-go"]["key"]
-    return _chat_call(OPENCODE_URL, OPENCODE_MODEL, key, prompt, max_out, timeout,
-                      OPENCODE_UA, OPENCODE_SESSION)
+    key = json.loads(pathlib.Path(AUTH).read_text(encoding="utf-8"))["opencode-go"]["key"]
+    return _chat_call(OPENCODE_URL, OPENCODE_MODEL, key, prompt, max_out, timeout, OPENCODE_UA, OPENCODE_SESSION)
 
 
 def call(prompt, args, timeout=300, tries=3):
@@ -181,32 +195,45 @@ def call(prompt, args, timeout=300, tries=3):
         for i in range(tries):
             try:
                 return fn(prompt, args.max_out, timeout)
-            except ContentRejected:
+            except ContentRejectedError:
                 raise
             except (urllib.error.URLError, OSError, ValueError) as exc:
                 last = exc
                 if i + 1 < tries:
                     time.sleep(5 * (i + 1) ** 2)
         raise RuntimeError("%s 连续失败 %d 次: %s" % (args.provider, tries, last))
-    key = json.load(open(AUTH))["commandcode"]["key"]
-    body_obj = {"model": model,
-                "input": [{"role": "user", "content": [{"type": "input_text",
-                          "text": SYS + "\n\n" + prompt}]}],
-                "max_output_tokens": args.max_out,
-                "reasoning": {"effort": args.effort},
-                "store": False}
-    req = urllib.request.Request(url, data=json.dumps(body_obj).encode(),
-        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
-                 "x-command-code-version": "1.14.0", "x-cli-environment": "production",
-                 "x-project-slug": "books", "User-Agent": "cli"})
+    key = json.loads(pathlib.Path(AUTH).read_text(encoding="utf-8"))["commandcode"]["key"]
+    body_obj = {
+        "model": model,
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": SYS + "\n\n" + prompt}]}],
+        "max_output_tokens": args.max_out,
+        "reasoning": {"effort": args.effort},
+        "store": False,
+    }
+    req = urllib.request.Request(  # noqa: S310 URL 来自模块内 https 常量
+        url,
+        data=json.dumps(body_obj).encode(),
+        headers={
+            "Authorization": "Bearer " + key,
+            "Content-Type": "application/json",
+            "x-command-code-version": "1.14.0",
+            "x-cli-environment": "production",
+            "x-project-slug": "books",
+            "User-Agent": "cli",
+        },
+    )
     last = None
     for i in range(tries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 端点来自模块内 https 常量，urlopen 不接外部输入
                 d = json.load(r)
-            txt = "".join(c.get("text", "") for o in d.get("output", [])
-                          if o.get("type") == "message"
-                          for c in o.get("content", []) if c.get("type") == "output_text")
+            txt = "".join(
+                c.get("text", "")
+                for o in d.get("output", [])
+                if o.get("type") == "message"
+                for c in o.get("content", [])
+                if c.get("type") == "output_text"
+            )
             return txt, d.get("usage", {})
         except (urllib.error.URLError, OSError, ValueError) as exc:
             last = exc
@@ -245,7 +272,7 @@ def parse(reply, paths, by_name=False):
         used.add(idx)
         got[paths[idx]] = txt
     free = [p for i, p in enumerate(paths) if i not in used]
-    for p, txt in zip(free, pending):
+    for p, txt in zip(free, pending, strict=False):
         got[p] = txt
     return got
 
@@ -258,21 +285,23 @@ def build_prompt(chunk, args, texts=None):
     for i, p in enumerate(chunk, 1):
         txt = (texts or {}).get(p) or body(p, args.chars)
         key = os.path.basename(p) if args.provider == "mimo" else "%d." % i
-        blocks.append("%s 书名：《%s》\n章标题：%s\n正文节选：%s" % (
-            key, os.path.basename(os.path.dirname(os.path.dirname(p))),
-            title_of(p), txt))
+        blocks.append(
+            "%s 书名：《%s》\n章标题：%s\n正文节选：%s"
+            % (key, os.path.basename(os.path.dirname(os.path.dirname(p))), title_of(p), txt)
+        )
     return batch_tpl(args).format(n=len(chunk), blocks="\n\n".join(blocks))
 
 
 def try_once(chunk, args, texts=None):
     reply, usage = call(build_prompt(chunk, args, texts), args)
-    got = (_parse_queries(reply, chunk) if args.kind == "queries"
-           else parse(reply, chunk, by_name=args.provider == "mimo"))
+    got = (
+        _parse_queries(reply, chunk) if args.kind == "queries" else parse(reply, chunk, by_name=args.provider == "mimo")
+    )
     return got, int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))
 
 
 def _parse_queries(reply, chunk):
-    got = " ".join(l.strip() for l in reply.splitlines() if l.strip())
+    got = " ".join(line.strip() for line in reply.splitlines() if line.strip())
     if len(re.findall(r"(?:^|\s)\d+[\.、]", got)) < 3:
         return {}
     return {chunk[0]: got}
@@ -297,8 +326,7 @@ def expand_chunk(chunk, args, texts=None, depth=0, tally=None):
         tin += ti
         tout += to
     except Exception as exc:
-        tag = "内容过滤" if isinstance(exc, ContentRejected) else \
-            re.split(r"[:\n]", str(exc))[-1].strip()[:40]
+        tag = "内容过滤" if isinstance(exc, ContentRejectedError) else re.split(r"[:\n]", str(exc))[-1].strip()[:40]
         if len(chunk) > 1:
             mid = len(chunk) // 2
             tally.append("批拆半(%d章)" % len(chunk))
@@ -317,7 +345,7 @@ def expand_chunk(chunk, args, texts=None, depth=0, tally=None):
                     try:
                         r, ti, to = try_once([p], args, {p: half})
                     except Exception:
-                        continue
+                        r = None
                     if r:
                         got.update(r)
                         tin += ti
@@ -347,7 +375,7 @@ def expand_book(uid, book_rel, paths, args, phash, lock=None, fails=None, sink=N
     step = 1 if args.kind == "queries" else args.batch
     tally = []
     for start in range(0, len(paths), step):
-        chunk = paths[start:start + step]
+        chunk = paths[start : start + step]
         got, ti, to = expand_chunk(chunk, args, None, 0, tally)
         out.update(got)
         tin += ti
@@ -356,8 +384,7 @@ def expand_book(uid, book_rel, paths, args, phash, lock=None, fails=None, sink=N
             sink(uid, book_rel, got, ti, to)
         lost = [p for p in chunk if p not in got]
         if lost:
-            print("丢失 %s %d 章: %s" % (uid, len(lost), os.path.basename(lost[0])),
-                  file=sys.stderr)
+            print("丢失 %s %d 章: %s" % (uid, len(lost), os.path.basename(lost[0])), file=sys.stderr)
             if lock and fails is not None:
                 with lock:
                     fails.extend(["最后仍缺章"] * len(lost))
@@ -376,18 +403,23 @@ def write_md(uid, book_rel, got):
     old = {}
     if os.path.isfile(path):
         cur = None
-        for line in open(path, encoding="utf-8"):
-            if line.startswith("## "):
-                cur = line[3:].strip()
-                old[cur] = []
-            elif cur and line.strip():
-                old[cur].append(line.rstrip())
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("## "):
+                    cur = line[3:].strip()
+                    old[cur] = []
+                elif cur and line.strip():
+                    old[cur].append(line.rstrip())
     base = os.path.join(ROOT, "books", book_rel, "md")
     for p, txt in got.items():
         old[os.path.relpath(p, base)] = [txt]
-    lines = ["# 文档扩展账 %s" % uid, "",
-             "书：`books/%s`" % book_rel,
-             "这些是索引文本，不是原文。引用一律回章节 md 取行号。", ""]
+    lines = [
+        "# 文档扩展账 %s" % uid,
+        "",
+        "书：`books/%s`" % book_rel,
+        "这些是索引文本，不是原文。引用一律回章节 md 取行号。",
+        "",
+    ]
     for name in sorted(old):
         lines += ["## %s" % name, ""] + old[name] + [""]
     tmp = path + ".tmp"
@@ -411,23 +443,37 @@ def main():
     ap.add_argument("--effort", default="low")
     ap.add_argument("--max-out", type=int, default=8000)
     ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--provider", default="commandcode", choices=list(PROVIDERS),
-                    help="commandcode=deepseek-v4.1-flash（无过滤）；mimo=mimo-v2.6-flash（有内容过滤）")
+    ap.add_argument(
+        "--provider",
+        default="commandcode",
+        choices=list(PROVIDERS),
+        help="commandcode=deepseek-v4.1-flash（无过滤）；mimo=mimo-v2.6-flash（有内容过滤）",
+    )
     ap.add_argument("--kind", default="prefix", choices=["prefix", "queries"])
     ap.add_argument("--force", action="store_true")
-    ap.add_argument("--regen-stale", action="store_true",
-                    help="把 prompt_hash 不同的旧行也重排；默认只补完全没行的章")
-    ap.add_argument("--only-file", default="",
-                    help="只扩展这个清单里的章节。每行一个，路径（books/…）放最后一列，可带 tab 前缀列；# 开头与空行忽略")
-    ap.add_argument("--exclude-file", default="",
-                    help="排除清单：一行一个 uid（# 开头与空行忽略）。被排的书整本跳过，已生成的行不动")
+    ap.add_argument("--regen-stale", action="store_true", help="把 prompt_hash 不同的旧行也重排；默认只补完全没行的章")
+    ap.add_argument(
+        "--only-file",
+        default="",
+        help="只扩展这个清单里的章节。每行一个，路径（books/…）放最后一列，可带 tab 前缀列；# 开头与空行忽略",
+    )
+    ap.add_argument(
+        "--exclude-file",
+        default="",
+        help="排除清单：一行一个 uid（# 开头与空行忽略）。被排的书整本跳过，已生成的行不动",
+    )
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--rebuild-md", action="store_true",
-                    help="不调模型，只按库里的 expand 表重写 build/检索/expand/*.md 账文件")
-    ap.add_argument("--reindex-fts", action="store_true",
-                    help="不调模型，从 expand 表整体重建 expand_fts 索引（修索引漂移，幂等）")
-    ap.add_argument("--prune-stub", action="store_true",
-                    help="不调模型，备份后删掉空正文章（图片页/标题页）的 expand 行，再重建 expand_fts")
+    ap.add_argument(
+        "--rebuild-md", action="store_true", help="不调模型，只按库里的 expand 表重写 build/检索/expand/*.md 账文件"
+    )
+    ap.add_argument(
+        "--reindex-fts", action="store_true", help="不调模型，从 expand 表整体重建 expand_fts 索引（修索引漂移，幂等）"
+    )
+    ap.add_argument(
+        "--prune-stub",
+        action="store_true",
+        help="不调模型，备份后删掉空正文章（图片页/标题页）的 expand 行，再重建 expand_fts",
+    )
     a = ap.parse_args()
 
     if a.prune_stub:
@@ -435,7 +481,7 @@ def main():
         con.executescript(SCHEMA)
         lib = sqlite3.connect("file:%s?mode=ro" % LIBDB, uri=True)
         dump = os.path.join(ROOT, "工作区", "批次", "qa-检索-2026-10-19", "expand-stub-rows.jsonl")
-        cols = "path,kind,tok,text,model,prompt_hash,tokens_in,tokens_out,built_at".split(",")
+        cols = ["path", "kind", "tok", "text", "model", "prompt_hash", "tokens_in", "tokens_out", "built_at"]
         n = 0
         with open(dump, "a", encoding="utf-8") as fh:
             for uid, rel in lib.execute("SELECT uid, path FROM book ORDER BY uid"):
@@ -447,9 +493,9 @@ def main():
                     if not is_stub(p):
                         continue
                     rel_p = os.path.relpath(p, ROOT)
-                    for row in con.execute("SELECT %s FROM expand WHERE path=?" % ",".join(cols),
-                                           (rel_p,)):
-                        fh.write(json.dumps(dict(zip(cols, row)), ensure_ascii=False) + "\n")
+                    sql = "SELECT %s FROM expand WHERE path=?" % ",".join(cols)  # noqa: S608 列名来自常量 cols
+                    for row in con.execute(sql, (rel_p,)):
+                        fh.write(json.dumps(dict(zip(cols, row, strict=False)), ensure_ascii=False) + "\n")
                         n += 1
                     con.execute("DELETE FROM expand WHERE path=?", (rel_p,))
         con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
@@ -470,11 +516,9 @@ def main():
     phash = prompt_hash(a)
     # 进度按章记，不按提示词版本记：改参数不该把已经花过额度的章判成没做。
     # 要重生成旧版本的行，显式 --regen-stale；要全部重做，用 --force。
-    done = {r[0] for r in con.execute(
-        "SELECT path FROM expand WHERE kind=?", (a.kind,))}
+    done = {r[0] for r in con.execute("SELECT path FROM expand WHERE kind=?", (a.kind,))}
     if a.regen_stale:
-        done = {r[0] for r in con.execute(
-            "SELECT path FROM expand WHERE kind=? AND prompt_hash=?", (a.kind, phash))}
+        done = {r[0] for r in con.execute("SELECT path FROM expand WHERE kind=? AND prompt_hash=?", (a.kind, phash))}
     lib = sqlite3.connect("file:%s?mode=ro" % LIBDB, uri=True)
     books = lib.execute("SELECT uid, path FROM book ORDER BY uid").fetchall()
     if a.books:
@@ -485,8 +529,8 @@ def main():
     elif not (a.all or a.only_file or a.rebuild_md):
         ap.error("要 --pilot N / --books / --all / --only-file / --rebuild-md")
     if a.exclude_file:
-        drop = {ln.strip() for ln in open(a.exclude_file, encoding="utf-8")
-                if ln.strip() and not ln.lstrip().startswith("#")}
+        with open(a.exclude_file, encoding="utf-8") as fh:
+            drop = {ln.strip() for ln in fh if ln.strip() and not ln.lstrip().startswith("#")}
         before = len(books)
         books = [(u, p) for u, p in books if u not in drop]
         print("排除清单 %d 条，跳过书 %d 本" % (len(drop), before - len(books)), file=sys.stderr)
@@ -503,20 +547,19 @@ def main():
             uid = uids.get(rel)
             if not uid:
                 continue
-            write_md(uid, rel, {p: t for p, t in chs.values()})
+            write_md(uid, rel, dict(chs.values()))
             n += len(chs)
         print("重写账文件 %d 本 %d 章" % (len(bybook), n))
         return
     only = set()
     if a.only_file:
-        only = {ln.rsplit("\t", 1)[-1].strip()
-                for ln in open(a.only_file, encoding="utf-8")
-                if ln.strip() and not ln.lstrip().startswith("#")}
+        with open(a.only_file, encoding="utf-8") as fh:
+            only = {ln.rsplit("\t", 1)[-1].strip() for ln in fh if ln.strip() and not ln.lstrip().startswith("#")}
         only = {p for p in only if p.startswith("books/")}
     jobs = []
     for uid, rel in books:
         try:
-            paths = [p for p in md_files(uid, rel)]
+            paths = list(md_files(uid, rel))
         except FileNotFoundError:
             continue
         todo = [p for p in paths if a.force or os.path.relpath(p, ROOT) not in done]
@@ -531,69 +574,87 @@ def main():
         sched = {os.path.relpath(p, ROOT) for _, _, ts in jobs for p in ts}
         unsel = only - sched
         if unsel:
-            print("only-file %d 条未排上（已扩展过、路径不存在或不在书集里）: %s" % (
-                len(unsel), "; ".join(sorted(unsel)[:3])), file=sys.stderr)
+            print(
+                "only-file %d 条未排上（已扩展过、路径不存在或不在书集里）: %s"
+                % (len(unsel), "; ".join(sorted(unsel)[:3])),
+                file=sys.stderr,
+            )
     nch = sum(len(j[2]) for j in jobs)
-    print("%s：任务 %d 个 / 待扩展章 %d 个 / %d 线程" % (a.kind, len(jobs), nch, a.workers),
-          file=sys.stderr)
+    print("%s：任务 %d 个 / 待扩展章 %d 个 / %d 线程" % (a.kind, len(jobs), nch, a.workers), file=sys.stderr)
     if a.dry_run:
         return
     t0 = time.time()
     token_in = token_out = 0
     lock = threading.Lock()
-    FAILS = []
+    fails = []
+
     def sink(uid, rel, got, tin, tout):
         """一块落一次库。账文件（.md）整本跑完再写，缺了用 --rebuild-md 补。"""
         nonlocal token_in, token_out
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
-        rows = [(os.path.relpath(p, ROOT), a.kind, cjk.index_text(t), t,
-                 PROVIDERS[a.provider][1], phash,
-                 tin // max(1, len(got)), tout // max(1, len(got)), now)
-                for p, t in got.items()]
+        rows = [
+            (
+                os.path.relpath(p, ROOT),
+                a.kind,
+                cjk.index_text(t),
+                t,
+                PROVIDERS[a.provider][1],
+                phash,
+                tin // max(1, len(got)),
+                tout // max(1, len(got)),
+                now,
+            )
+            for p, t in got.items()
+        ]
         keys = [(r[0], a.kind) for r in rows]
         with lock:
             token_in += tin
             token_out += tout
             for rel, kind in keys:
                 # external content 表不能直接 DELETE，走 FTS5 的 'delete' 命令
-                con.execute("INSERT INTO expand_fts(expand_fts, rowid, tok) "
-                            "SELECT 'delete', rowid, tok FROM expand "
-                            "WHERE path=? AND kind=?", (rel, kind))
+                con.execute(
+                    "INSERT INTO expand_fts(expand_fts, rowid, tok) "
+                    "SELECT 'delete', rowid, tok FROM expand "
+                    "WHERE path=? AND kind=?",
+                    (rel, kind),
+                )
             con.executemany("INSERT OR REPLACE INTO expand VALUES(?,?,?,?,?,?,?,?,?)", rows)
             con.executemany(
-                "INSERT INTO expand_fts(rowid, tok) SELECT rowid, tok FROM expand "
-                "WHERE path=? AND kind=?", keys)
+                "INSERT INTO expand_fts(rowid, tok) SELECT rowid, tok FROM expand WHERE path=? AND kind=?", keys
+            )
             con.commit()
 
     with ThreadPoolExecutor(max_workers=a.workers) as pool:
-        futs = {pool.submit(expand_book, uid, rel, todo, a, phash, lock, FAILS, sink):
-                (uid, rel) for uid, rel, todo in jobs}
-        finished = 0
-        for fut in as_completed(futs):
+        futs = {
+            pool.submit(expand_book, uid, rel, todo, a, phash, lock, fails, sink): (uid, rel) for uid, rel, todo in jobs
+        }
+        for finished, fut in enumerate(as_completed(futs), 1):
             uid, rel = futs[fut]
-            got, tin, tout = fut.result()
-            finished += 1
+            got, _tin, _tout = fut.result()
             with lock:
                 write_md(uid, rel, got)
-                now_n = con.execute("SELECT count(*) FROM expand WHERE kind=?",
-                                    (a.kind,)).fetchone()[0]
-                print("  %d/%d 本  %d 章  in %d out %d  %.0fs" % (
-                    finished, len(jobs), now_n, token_in, token_out,
-                    time.time() - t0), file=sys.stderr)
+                now_n = con.execute("SELECT count(*) FROM expand WHERE kind=?", (a.kind,)).fetchone()[0]
+                print(
+                    "  %d/%d 本  %d 章  in %d out %d  %.0fs"
+                    % (finished, len(jobs), now_n, token_in, token_out, time.time() - t0),
+                    file=sys.stderr,
+                )
     n = con.execute("SELECT count(*) FROM expand WHERE kind=?", (a.kind,)).fetchone()[0]
-    print("expand 表 %d 章  in %d tok  out %d tok  %.0fs" % (
-        n, token_in, token_out, time.time() - t0))
-    if FAILS:
+    print("expand 表 %d 章  in %d tok  out %d tok  %.0fs" % (n, token_in, token_out, time.time() - t0))
+    if fails:
         tally = {}
-        for f in FAILS:
+        for f in fails:
             tally[f] = tally.get(f, 0) + 1
-        print("失败 %d 块，按原因: %s" % (len(FAILS),
-              ", ".join("%s×%d" % kv for kv in sorted(tally.items(), key=lambda x: -x[1]))),
-              file=sys.stderr)
-    log("expand kind=%s provider=%s jobs=%d chapters=%d in=%d out=%d secs=%.0f phash=%s "
-        "effort=%s batch=%d chars=%d" % (
-            a.kind, a.provider, len(jobs), nch, token_in, token_out, time.time() - t0, phash,
-            a.effort, a.batch, a.chars))
+        print(
+            "失败 %d 块，按原因: %s"
+            % (len(fails), ", ".join("%s×%d" % kv for kv in sorted(tally.items(), key=lambda x: -x[1]))),
+            file=sys.stderr,
+        )
+    log(
+        "expand kind=%s provider=%s jobs=%d chapters=%d in=%d out=%d secs=%.0f phash=%s "
+        "effort=%s batch=%d chars=%d"
+        % (a.kind, a.provider, len(jobs), nch, token_in, token_out, time.time() - t0, phash, a.effort, a.batch, a.chars)
+    )
 
 
 if __name__ == "__main__":

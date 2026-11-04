@@ -10,11 +10,15 @@
   mix = 0.7*最好段 + 0.3*段落均值（qsearch --book-score 的现行默认）
 pool 固定 medium（2000 段），只变书级打分。
 """
-import os, sqlite3, sys
+
+import os
+import sqlite3
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT, PATHS  # noqa: E402
+from lib_common import PATHS
+
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 import qsearch
@@ -40,7 +44,7 @@ EXPECT = {
 
 def books_meta(lib):
     out = {}
-    for uid, path in lib.execute("SELECT uid, path FROM book"):
+    for _uid, path in lib.execute("SELECT uid, path FROM book"):
         p = path.split("/")
         out[path] = (p[0] if p else "", p[1] if len(p) > 1 else "")
     return out
@@ -49,15 +53,14 @@ def books_meta(lib):
 def rank(con, key, mode, pool=2000, n=40):
     groups, exclude = qsearch.load_concept(key)
     expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
-    hits, ms = qsearch.search(con, expr, groups, exclude, 10 ** 6, 40, False, pool)
+    hits, ms = qsearch.search(con, expr, groups, exclude, 10**6, 40, False, pool)
     agg = {}
     for r in hits:
         b = agg.setdefault(r["book"], {"n": 0, "sum": 0.0, "best": 0.0})
         b["n"] += 1
         b["sum"] += r["score"]
         b["best"] = max(b["best"], r["score"])
-    f = (lambda b: b["sum"]) if mode == "sum" else \
-        (lambda b: 0.7 * b["best"] + 0.3 * b["sum"] / max(1, b["n"]))
+    f = (lambda b: b["sum"]) if mode == "sum" else (lambda b: 0.7 * b["best"] + 0.3 * b["sum"] / max(1, b["n"]))
     order = sorted(agg.items(), key=lambda kv: (-f(kv[1]), kv[0]))
     return [b for b, _ in order[:n]], len(agg), ms
 
@@ -85,24 +88,22 @@ def main():
     lib = sqlite3.connect("file:%s?mode=ro" % LIBDB, uri=True)
     meta = books_meta(lib)
     have = [r[0] for r in lib.execute("SELECT title FROM book")]
-    missing = sorted({w for ws in EXPECT.values() for w in ws
-                      if not any(w in t for t in have)})
+    missing = sorted({w for ws in EXPECT.values() for w in ws if not any(w in t for t in have)})
     if missing:
         print("未入库的正解（不计入）：%s" % "、".join(missing))
     want = {k: [w for w in ws if any(w in t for t in have)] for k, ws in EXPECT.items()}
     want = {k: ws for k, ws in want.items() if ws}
     tally = {m: {"hit": 0, "mrr": 0.0, "noise10": 0, "social10": 0} for m in ("sum", "mix")}
-    print("%-9s %-5s %-6s %-6s %-6s %s" % ("概念", "方案", "正解最好名次", "噪音@10",
-                                           "社科@10", "名次明细"))
+    print("%-9s %-5s %-6s %-6s %-6s %s" % ("概念", "方案", "正解最好名次", "噪音@10", "社科@10", "名次明细"))
     for key, wants in want.items():
         line = {}
         for mode in ("sum", "mix"):
-            order, nbook, ms = rank(con, key, mode)
+            order, _nbook, _ms = rank(con, key, mode)
             found = {}
             for bk in order:
                 p = pos_of(bk, order, wants)
                 if p is not None:
-                    nm = [w for w in wants if w in bk.split("/")[-1]][0]
+                    nm = next(w for w in wants if w in bk.split("/")[-1])
                     found.setdefault(nm, p)
             best = min(found.values()) if found else 99
             noise = sum(1 for b in order[:10] if genre(meta, b) == "noise")
@@ -114,19 +115,24 @@ def main():
             line[mode] = (best, noise, social, found)
         for mode in ("sum", "mix"):
             best, noise, social, found = line[mode]
-            print("%-9s %-5s %-10s %-8d %-8d %s"
-                  % (key, mode, ("%d" % best) if best < 99 else "未进前40", noise, social,
-                     ", ".join("%s@%d" % kv for kv in sorted(found.items(),
-                                                              key=lambda x: x[1])) or "-"))
+            print(
+                "%-9s %-5s %-10s %-8d %-8d %s"
+                % (
+                    key,
+                    mode,
+                    ("%d" % best) if best < 99 else "未进前40",
+                    noise,
+                    social,
+                    ", ".join("%s@%d" % kv for kv in sorted(found.items(), key=lambda x: x[1])) or "-",
+                )
+            )
         print()
     print("=" * 74)
-    print("%-6s %8s %8s %10s %10s" % ("方案", "正解进20", "MRR", "噪音@10合计",
-                                      "社科@10合计"))
+    print("%-6s %8s %8s %10s %10s" % ("方案", "正解进20", "MRR", "噪音@10合计", "社科@10合计"))
     n = len(want)
     for mode in ("sum", "mix"):
         t = tally[mode]
-        print("%-6s %6d/%-2d %8.3f %10d %10d"
-              % (mode, t["hit"], n, t["mrr"] / n, t["noise10"], t["social10"]))
+        print("%-6s %6d/%-2d %8.3f %10d %10d" % (mode, t["hit"], n, t["mrr"] / n, t["noise10"], t["social10"]))
 
 
 if __name__ == "__main__":

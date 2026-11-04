@@ -14,6 +14,7 @@
   - 头部耗时 - 回答耗时 <= 2000 ms（剩下的只能是读原文那点事）
   - 流程轨第 5 项与头部一致
 """
+
 import argparse
 import base64
 import json
@@ -27,7 +28,7 @@ import urllib.parse
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import shot  # noqa: E402
+import shot
 
 QUESTION = "礼治社会靠什么维持秩序"
 MS_TOKEN = re.compile(r"(\d+(?:\.\d+)?)\s*(ms|s)(?=[ ·]|$)")
@@ -120,11 +121,17 @@ def main(argv=None):
         head_ms = parse_ms(head_text)
         rail_ms = parse_ms(rail_text)
         answer_ms = parse_ms(answer.get("meta"))
-        print("[回答] meta=%r -> %.1f ms（等了 %.1f s，done=%s error=%s）"
-              % (answer.get("meta"), answer_ms or 0, (answer.get("wait") or 0) / 1000.0,
-                 answer.get("done"), answer.get("error")))
-        print("[阶段] 头部 %s -> %s ms；流程轨 %s -> %s ms"
-              % (head_text, head_ms, rail_text, rail_ms))
+        print(
+            "[回答] meta=%r -> %.1f ms（等了 %.1f s，done=%s error=%s）"
+            % (
+                answer.get("meta"),
+                answer_ms or 0,
+                (answer.get("wait") or 0) / 1000.0,
+                answer.get("done"),
+                answer.get("error"),
+            )
+        )
+        print("[阶段] 头部 %s -> %s ms；流程轨 %s -> %s ms" % (head_text, head_ms, rail_text, rail_ms))
 
         def check(name, ok, detail=""):
             print("[%s] %s%s" % ("过" if ok else "败", name, (" · " + detail) if detail else ""))
@@ -132,24 +139,29 @@ def main(argv=None):
                 fails.append(name)
 
         check("回答卡落地", bool(answer.get("done")) and not answer.get("error"))
-        check("这次跑到模型（回答 >= 1 秒）", (answer_ms or 0) >= 1000,
-              "%.1f ms" % (answer_ms or 0))
-        check("头部含回答耗时", head_ms is not None and answer_ms is not None
-              and head_ms >= answer_ms,
-              "头部 %s ms vs 回答 %s ms" % (head_ms, answer_ms))
-        check("头部只比回答多读原文那点", head_ms is not None and answer_ms is not None
-              and 0 <= head_ms - answer_ms <= 2000,
-              "差 %.1f ms" % ((head_ms or 0) - (answer_ms or 0)))
-        check("流程轨与头部一致", rail_ms is not None and head_ms is not None
-              and abs(rail_ms - head_ms) < 0.51,
-              "%s vs %s" % (rail_text, head_text))
+        check("这次跑到模型（回答 >= 1 秒）", (answer_ms or 0) >= 1000, "%.1f ms" % (answer_ms or 0))
+        check(
+            "头部含回答耗时",
+            head_ms is not None and answer_ms is not None and head_ms >= answer_ms,
+            "头部 %s ms vs 回答 %s ms" % (head_ms, answer_ms),
+        )
+        check(
+            "头部只比回答多读原文那点",
+            head_ms is not None and answer_ms is not None and 0 <= head_ms - answer_ms <= 2000,
+            "差 %.1f ms" % ((head_ms or 0) - (answer_ms or 0)),
+        )
+        check(
+            "流程轨与头部一致",
+            rail_ms is not None and head_ms is not None and abs(rail_ms - head_ms) < 0.51,
+            "%s vs %s" % (rail_text, head_text),
+        )
         errs = cdp.errors()
         check("控制台无报错", not errs, "; ".join(errs)[:300])
     finally:
         try:
             if ws:
                 ws.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110 收尾关 ws，关失败也不影响判分
             pass
         proc.kill()
         shutil.rmtree(profile, ignore_errors=True)

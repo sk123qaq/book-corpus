@@ -16,6 +16,7 @@ TypeSafe。后端 typesafe 保留原来的 /systemone 两阶段接口，--stage 
 
 --merge 以人账为准：已有行一个字段都不动，只有 --add-new 才在末尾追加新 uid。
 """
+
 import argparse
 import json
 import os
@@ -26,11 +27,11 @@ import time
 import urllib.error
 import urllib.request
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor  # noqa: F401
+from concurrent.futures import ThreadPoolExecutor  # noqa: F401 子模块从这里再导出，本文件不直接用
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
-import classify_model as CM  # noqa: E402
+import classify_model as CM
+import lib_common as L
 
 API = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-latest"
@@ -40,8 +41,18 @@ UNCERTAIN = CM.UNCERTAIN
 NO_SUB = CM.NO_SUB
 TAXONOMY = CM.TAXONOMY
 TOP_RUBRIC = CM.TOP_RUBRIC
-PREFILL_EXTRA = ["预填依据", "依据最终", "一级TypeSafe", "二级TypeSafe",
-                 "一级置信", "二级置信", "一级模型", "二级模型", "模型置信", "模型依据"]
+PREFILL_EXTRA = [
+    "预填依据",
+    "依据最终",
+    "一级TypeSafe",
+    "二级TypeSafe",
+    "一级置信",
+    "二级置信",
+    "一级模型",
+    "二级模型",
+    "模型置信",
+    "模型依据",
+]
 
 
 def api_key():
@@ -52,46 +63,57 @@ def api_key():
                 if m:
                     return m.group(1)
     except FileNotFoundError:
-        raise SystemExit("找不到 %s；旧 TypeSafe 后端需要 TYPESAFE_API_KEY 或 TYPESAFE_ENV" % ENV)
+        raise SystemExit("找不到 %s；旧 TypeSafe 后端需要 TYPESAFE_API_KEY 或 TYPESAFE_ENV" % ENV) from None
     raise SystemExit("找不到 TYPESAFE_API_KEY")
 
 
 def ask(state, questions, key, timeout=90):
-    body = json.dumps({"state": state, "model": MODEL, "questions": questions},
-                      ensure_ascii=False).encode()
-    req = urllib.request.Request(API, data=body, headers={
-        "Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    body = json.dumps({"state": state, "model": MODEL, "questions": questions}, ensure_ascii=False).encode()
+    req = urllib.request.Request(
+        API, data=body, headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}
+    )
     last = None
     for attempt in range(4):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 端点来自模块内 https 常量，urlopen 不接外部输入
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             last = "HTTP %s %s" % (e.code, e.read()[:200].decode(errors="replace"))
             if e.code in (429, 500, 502, 503, 504):
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
                 continue
-            raise RuntimeError(last)
-        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(last) from e
+        except Exception as e:
             last = "%s: %s" % (type(e).__name__, e)
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
     raise RuntimeError(last)
 
 
 def book_state(rows):
-    return [{"书名": r["正式书名"], "作者": r["作者"], "系列": r["系列"], "卷": r["卷序"],
-             "来源目录": r["src_path"].split("/")[0],
-             "奖项": (r["备注"] or "").replace("奖项:", ""),
-             "原始文件名": os.path.basename(r["src_path"]),
-             "已有md章节数": r["md_chapters"] or ""} for r in rows]
+    return [
+        {
+            "书名": r["正式书名"],
+            "作者": r["作者"],
+            "系列": r["系列"],
+            "卷": r["卷序"],
+            "来源目录": r["src_path"].split("/")[0],
+            "奖项": (r["备注"] or "").replace("奖项:", ""),
+            "原始文件名": os.path.basename(r["src_path"]),
+            "已有md章节数": r["md_chapters"] or "",
+        }
+        for r in rows
+    ]
 
 
 def run_stage1(batch_rows, key):
     questions = {}
     for i, _ in enumerate(batch_rows):
-        questions["q%d" % i] = {"type": "choice",
-                                "instructions": "第 %d 本书属于哪一个一级学科。依据书名、作者、系列、来源目录与奖项判断，忽略文件名里的宣传语。" % (i + 1),
-                                "criteria": {**TOP_RUBRIC, UNCERTAIN: "信息不足或横跨多类，无法判断"}}
+        questions["q%d" % i] = {
+            "type": "choice",
+            "instructions": "第 %d 本书属于哪一个一级学科。"
+            "依据书名、作者、系列、来源目录与奖项判断，忽略文件名里的宣传语。" % (i + 1),
+            "criteria": {**TOP_RUBRIC, UNCERTAIN: "信息不足或横跨多类，无法判断"},
+        }
     return ask(book_state(batch_rows), questions, key)
 
 
@@ -99,27 +121,30 @@ def run_stage2(batch_rows, key, level1):
     questions = {}
     for i, _ in enumerate(batch_rows):
         subs = TAXONOMY.get(level1[i]) or []
-        crit = {s: None for s in subs}
+        crit = dict.fromkeys(subs)
         crit[NO_SUB] = "只分到一级即可，二级里没有合适的"
         crit[UNCERTAIN] = "信息不足，无法判断二级"
-        questions["q%d" % i] = {"type": "choice",
-                                "instructions": "第 %d 本书在「%s」下面属于哪个二级分类。" % (i + 1, level1[i]),
-                                "criteria": crit}
+        questions["q%d" % i] = {
+            "type": "choice",
+            "instructions": "第 %d 本书在「%s」下面属于哪个二级分类。" % (i + 1, level1[i]),
+            "criteria": crit,
+        }
     return ask(book_state(batch_rows), questions, key)
 
 
 def load_cache(path):
     got = {}
     if os.path.isfile(path):
-        for line in open(path, encoding="utf-8"):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            got[(rec["uid"], rec["stage"])] = rec
+        with open(path, encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                got[(rec["uid"], rec["stage"])] = rec
     return got
 
 
@@ -151,17 +176,24 @@ def verdict(recs, backend):
         if not m1:
             return None
         conf = float(m1.get("confidence") or 0)
-        return {"level1": m1.get("level1") or "", "level2": m1.get("level2") or "",
-                "conf1": conf, "conf2": conf, "reason": m1.get("reason") or ""}
+        return {
+            "level1": m1.get("level1") or "",
+            "level2": m1.get("level2") or "",
+            "conf1": conf,
+            "conf2": conf,
+            "reason": m1.get("reason") or "",
+        }
     r1, r2 = recs.get(1), recs.get(2)
     if not r1:
         return None
     l2 = (r2.get("choice") or "") if r2 else ""
-    return {"level1": r1.get("choice") or "",
-            "level2": "" if l2 in (UNCERTAIN, NO_SUB) else l2,
-            "conf1": float(r1.get("confidence") or 0),
-            "conf2": float(r2.get("confidence") or 0) if r2 else 0.0,
-            "reason": ""}
+    return {
+        "level1": r1.get("choice") or "",
+        "level2": "" if l2 in (UNCERTAIN, NO_SUB) else l2,
+        "conf1": float(r1.get("confidence") or 0),
+        "conf2": float(r2.get("confidence") or 0) if r2 else 0.0,
+        "reason": "",
+    }
 
 
 def annotate(rows, cache, backend, threshold):
@@ -220,9 +252,17 @@ def merge_ledger(rows, ledger_old, add_new=False):
         if not add_new or l1 in ("", UNCERTAIN):
             ignored.append(uid)
             continue
-        ledger.append({"uid": uid, "一级": l1, "二级": l2, "作者层": "0", "保留": "keep",
-                       "正式书名": r.get("正式书名") or "",
-                       "备注": "auto:classify；待复核"})
+        ledger.append(
+            {
+                "uid": uid,
+                "一级": l1,
+                "二级": l2,
+                "作者层": "0",
+                "保留": "keep",
+                "正式书名": r.get("正式书名") or "",
+                "备注": "auto:classify；待复核",
+            }
+        )
         added.append(uid)
     return ledger, ignored, added
 
@@ -233,14 +273,13 @@ def run_typesafe(rows, args, cache, cache_path):
         want = set(args.uids.split(","))
         todo = [r for r in todo if r["uid"] in want]
     if args.stage == 2 and not args.include_other:
-        todo = [r for r in todo if
-                (cache.get((r["uid"], 1), {}).get("choice", r["一级"])) not in (UNCERTAIN, "其他")]
+        todo = [r for r in todo if (cache.get((r["uid"], 1), {}).get("choice", r["一级"])) not in (UNCERTAIN, "其他")]
     if args.limit:
         random.Random(args.seed).shuffle(todo)
-        todo = todo[:args.limit]
+        todo = todo[: args.limit]
     print("typesafe stage %d 待处理 %d 条" % (args.stage, len(todo)))
     key = api_key()
-    batches = [todo[i:i + args.batch] for i in range(0, len(todo), args.batch)]
+    batches = [todo[i : i + args.batch] for i in range(0, len(todo), args.batch)]
     done = 0
     for b in batches:
         if args.stage == 1:
@@ -252,22 +291,35 @@ def run_typesafe(rows, args, cache, cache_path):
         out = []
         for i, r in enumerate(b):
             a = resp["answers"].get("q%d" % i) or {}
-            out.append({"uid": r["uid"], "stage": args.stage, "backend": "typesafe",
-                        "model": MODEL, "prompt_version": TS_PROMPT_VERSION,
-                        "choice": a.get("choice", ""),
-                        "confidence": a.get("confidence", 0.0),
-                        "probabilities": a.get("probabilities", {}),
-                        "level1": level1[i] if args.stage == 2 else "",
-                        "title": r["正式书名"]})
+            out.append(
+                {
+                    "uid": r["uid"],
+                    "stage": args.stage,
+                    "backend": "typesafe",
+                    "model": MODEL,
+                    "prompt_version": TS_PROMPT_VERSION,
+                    "choice": a.get("choice", ""),
+                    "confidence": a.get("confidence", 0.0),
+                    "probabilities": a.get("probabilities", {}),
+                    "level1": level1[i] if args.stage == 2 else "",
+                    "title": r["正式书名"],
+                }
+            )
         append_cache(out, cache_path)
         for o in out:
             cache[(o["uid"], o["stage"])] = o
         done += len(b)
-        print("  已处理 %d/%d（本批 %s，用量 in %s out %s）"
-              % (done, len(todo), resp.get("model"),
-                 resp.get("usage", {}).get("input_tokens"),
-                 resp.get("usage", {}).get("output_tokens")),
-              flush=True)
+        print(
+            "  已处理 %d/%d（本批 %s，用量 in %s out %s）"
+            % (
+                done,
+                len(todo),
+                resp.get("model"),
+                resp.get("usage", {}).get("input_tokens"),
+                resp.get("usage", {}).get("output_tokens"),
+            ),
+            flush=True,
+        )
     return cache
 
 
@@ -278,24 +330,33 @@ def run_model(rows, args, cache, cache_path):
         todo = [r for r in todo if r["uid"] in want]
     if args.limit:
         random.Random(args.seed).shuffle(todo)
-        todo = todo[:args.limit]
+        todo = todo[: args.limit]
     print("model 待处理 %d 条（模型 %s，一次给两级）" % (len(todo), args.model))
     size = max(1, args.batch)
     failed = 0
     for i in range(0, len(todo), size):
-        b = todo[i:i + size]
+        b = todo[i : i + size]
         try:
-            got = CM.classify([r["正式书名"] for r in b], [r.get("作者", "") for r in b],
-                              args.model, args.timeout)
+            got = CM.classify([r["正式书名"] for r in b], [r.get("作者", "") for r in b], args.model, args.timeout)
         except CM.ClassifyError as exc:
             failed += 1
             print("  分类失败（%s）：%s" % (",".join(r["uid"] for r in b), exc), file=sys.stderr)
             continue
-        out = [{"uid": r["uid"], "stage": "model", "backend": "model", "model": args.model,
-                "prompt_version": CM.PROMPT_VERSION, "level1": g["level1"],
-                "level2": g["level2"], "confidence": g["confidence"],
-                "reason": g["reason"], "title": r["正式书名"]}
-               for r, g in zip(b, got)]
+        out = [
+            {
+                "uid": r["uid"],
+                "stage": "model",
+                "backend": "model",
+                "model": args.model,
+                "prompt_version": CM.PROMPT_VERSION,
+                "level1": g["level1"],
+                "level2": g["level2"],
+                "confidence": g["confidence"],
+                "reason": g["reason"],
+                "title": r["正式书名"],
+            }
+            for r, g in zip(b, got, strict=False)
+        ]
         append_cache(out, cache_path)
         for o in out:
             cache[(o["uid"], "model")] = o
@@ -318,8 +379,7 @@ def main():
     ap.add_argument("--seed", type=int, default=20261018)
     ap.add_argument("--timeout", type=int, default=CM.TIMEOUT, help="model 后端单次调用上限秒")
     ap.add_argument("--merge", action="store_true")
-    ap.add_argument("--add-new", action="store_true",
-                    help="把清单里人账没有的 uid 追加进人账（默认跳过）")
+    ap.add_argument("--add-new", action="store_true", help="把清单里人账没有的 uid 追加进人账（默认跳过）")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--threshold", type=float, default=0.45)
     ap.add_argument("--refresh", action="store_true", help="忽略缓存重问")
@@ -358,8 +418,7 @@ def main():
             print("[%s] 有缓存 %d 条，过阈值 %d 条" % (be, len([r for r in rows if r["uid"] in per]), hit))
         stats = annotate(rows, cache, args.backend, args.threshold)
         print("[%s] 一级分布: %s" % (args.backend, dict(stats["level1"].most_common())))
-        print("其中系列表直接定的 %d 条，%s 后端达阈值的 %d 条"
-              % (stats["series"], args.backend, stats["model"]))
+        print("其中系列表直接定的 %d 条，%s 后端达阈值的 %d 条" % (stats["series"], args.backend, stats["model"]))
         print("进入 其他 或二级缺失的记录 %d 条" % len(stats["low"]))
         by_conf = Counter()
         for uid in {r["uid"] for r in rows}:
@@ -374,12 +433,14 @@ def main():
             ledger_old = L.categories(root=args.root)
             ledger, ignored, added = merge_ledger(rows, ledger_old, args.add_new)
             if added:
-                L.category_put_many(
-                    [r for r in ledger if r.get("uid") in set(added)], "classify",
-                    root=args.root)
-            print("已写 分类预填.csv；人账 %d 行%s"
-                  % (len(ledger_old) + len(added),
-                     "，新增 %d 本" % len(added) if added else "，一个字段没动（加 --add-new 才追加）"))
+                L.category_put_many([r for r in ledger if r.get("uid") in set(added)], "classify", root=args.root)
+            print(
+                "已写 分类预填.csv；人账 %d 行%s"
+                % (
+                    len(ledger_old) + len(added),
+                    "，新增 %d 本" % len(added) if added else "，一个字段没动（加 --add-new 才追加）",
+                )
+            )
             if added:
                 print("  新增 uid: " + " ".join(added[:10]))
             if ignored:

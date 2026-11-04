@@ -13,17 +13,18 @@ PDF 侧字数按整页算，不扣卷首/卷尾页，md 侧又去掉了 front ma
 用法:
   python3 pdf_audit_volume.py books/<uid>/source/x.pdf -o out/B0517 [--min-ratio 0.95] [--min-anchors 0.90]
 """
+
 import argparse
 import glob
 import os
+import pathlib
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from split_md_batch import COUNT_RE  # noqa: E402
-import pdf_text_to_md as T  # noqa: E402
-
-import pymupdf as fitz  # noqa: E402
+import pdf_text_to_md as T
+import pymupdf as fitz
+from split_md_batch import COUNT_RE
 
 WS_RE = re.compile(r"\s")
 SKIP_CHARS, WINDOW, WINDOWS, MIN_PAGE_CHARS, MAX_MISS_PAGES = 10, 20, 3, 40, 10
@@ -35,9 +36,9 @@ def md_body(md_dir):
     for path in sorted(glob.glob(os.path.join(md_dir, "*.md"))):
         if os.path.basename(path) == "README.md":
             continue
-        text = open(path, encoding="utf-8").read()
+        text = pathlib.Path(path).read_text(encoding="utf-8")
         end = text.find("\n---", 3) if text.startswith("---\n") else -1
-        parts.append(text[end + 4:] if end >= 0 else text)
+        parts.append(text[end + 4 :] if end >= 0 else text)
     return "\n".join(parts), len(parts)
 
 
@@ -57,7 +58,7 @@ def windows(text):
         a = SKIP_CHARS + k * WINDOW
         if a + WINDOW > len(idx):
             break
-        out.append(WS_RE.sub("", text[idx[a]:idx[a + WINDOW - 1] + 1]))
+        out.append(WS_RE.sub("", text[idx[a] : idx[a + WINDOW - 1] + 1]))
     return out
 
 
@@ -101,14 +102,16 @@ def main():
     print("source : %s" % a.pdf)
     print("outdir : %s" % a.out)
     print()
-    print("%9s / %9s  %5.2f%%  %4d md" % (format(md_chars, ","), format(pdf_chars, ","),
-                                          ratio * 100, n_md))
-    print("锚点 : %d/%d 窗命中 %.2f%%（%d 页有锚点，%d 页全落空）"
-          % (hits, total, anchors * 100, pages_with_anchor, len(miss)))
+    print("%9s / %9s  %5.2f%%  %4d md" % (format(md_chars, ","), format(pdf_chars, ","), ratio * 100, n_md))
+    print(
+        "锚点 : %d/%d 窗命中 %.2f%%（%d 页有锚点，%d 页全落空）"
+        % (hits, total, anchors * 100, pages_with_anchor, len(miss))
+    )
     print("全落空 : %s" % ("、".join("第 %d 页" % p for p in miss[:MAX_MISS_PAGES]) if miss else "无"))
     ok = ratio >= a.min_ratio and anchors >= a.min_anchors
-    print("判据 : 字数比 ≥%.0f%% 且锚点 ≥%.0f%% -> %s"
-          % (a.min_ratio * 100, a.min_anchors * 100, "过" if ok else "不过"))
+    print(
+        "判据 : 字数比 ≥%.0f%% 且锚点 ≥%.0f%% -> %s" % (a.min_ratio * 100, a.min_anchors * 100, "过" if ok else "不过")
+    )
     return 0 if ok else 1
 
 

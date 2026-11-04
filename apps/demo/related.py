@@ -8,6 +8,8 @@
 {"related": bool, "reason": str, "against": [int], "ms": float,
  "source": "model"|"cache"|"fallback", "thinking": str}
 """
+
+import contextlib
 import hashlib
 import json
 import os
@@ -22,6 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 CACHE_DIR = os.path.join(HERE, "缓存", "related")
 try:  # 项目配的模型；没装包时退回写死的那一套
     from bookcorpus import pimodel
+
     _CFG = pimodel.load(ROOT)
     MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
 except ImportError:
@@ -33,14 +36,14 @@ WINDOW = 3
 REASON_CHARS = 40
 STOP = set("的是了和与在什么怎么为什么")
 MIN_OVERLAP = 3
-PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files",
-      "--no-skills", "--no-extensions"]
+PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files", "--no-skills", "--no-extensions"]
 
 
 def pi_flags(level):
     if pimodel:
         return pimodel.model_flags(_CFG["values"], level)
     return ["--thinking", level, "--model", MODEL]
+
 
 PROMPT = """判断「新问题」是不是在接着「上一轮」问，只回一行 JSON。
 
@@ -89,9 +92,13 @@ def _clean_previous(previous):
             continue
         if n <= 0:
             continue
-        rows.append({"n": n,
-                     "question": str(item.get("question") or "").strip(),
-                     "answer": str(item.get("answer") or "").strip()})
+        rows.append(
+            {
+                "n": n,
+                "question": str(item.get("question") or "").strip(),
+                "answer": str(item.get("answer") or "").strip(),
+            }
+        )
     rows.sort(key=lambda r: r["n"])
     return rows[-WINDOW:]
 
@@ -99,30 +106,30 @@ def _clean_previous(previous):
 def _turns_block(previous):
     """上一轮写给模型看全，更早的两轮压成一行，只作参考。"""
     prev = previous[-1]
-    blocks = ["上一轮（第 %d 问）：\n问题：%s\n回答：%s"
-              % (prev["n"], prev["question"], prev["answer"] or "（未完成）")]
+    blocks = [
+        "上一轮（第 %d 问）：\n问题：%s\n回答：%s" % (prev["n"], prev["question"], prev["answer"] or "（未完成）")
+    ]
     older = previous[:-1]
     if older:
-        blocks.append("更早的轮次（参考，不是判定对象）：\n" + "\n".join(
-            "第 %d 问：%s / 答：%s" % (t["n"], t["question"], t["answer"][:300])
-            for t in older))
+        blocks.append(
+            "更早的轮次（参考，不是判定对象）：\n"
+            + "\n".join("第 %d 问：%s / 答：%s" % (t["n"], t["question"], t["answer"][:300]) for t in older)
+        )
     return "\n\n".join(blocks) + "\n"
 
 
 def _cache_path(question, previous):
-    payload = {"q": question,
-               "prev": [[t["n"], t["question"], t["answer"]] for t in previous],
-               "v": PROMPT_VERSION}
+    payload = {"q": question, "prev": [[t["n"], t["question"], t["answer"]] for t in previous], "v": PROMPT_VERSION}
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    return os.path.join(CACHE_DIR, hashlib.sha1(raw.encode("utf-8")).hexdigest() + ".json")
+    return os.path.join(CACHE_DIR, hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest() + ".json")
 
 
 def _call(prompt, thinking):
     """调 pi 判一次。返回 (stdout, error)；失败时 stdout 为 None。"""
     try:
-        res = subprocess.run(PI + pi_flags(thinking) + [prompt],
-                             capture_output=True, text=True,
-                             timeout=PI_TIMEOUT, cwd=ROOT)
+        res = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+            PI + pi_flags(thinking) + [prompt], capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT
+        )
     except subprocess.TimeoutExpired:
         return None, "判定超时（%d 秒）" % PI_TIMEOUT
     except OSError as exc:
@@ -161,7 +168,7 @@ def parse_reply(raw):
                 depth -= 1
                 if depth == 0:
                     try:
-                        obj = json.loads(text[start:i + 1])
+                        obj = json.loads(text[start : i + 1])
                     except ValueError:
                         obj = None
                     if isinstance(obj, dict) and isinstance(obj.get("related"), bool):
@@ -175,7 +182,7 @@ def _grams(text):
     """去掉非字词字符与停用字后，取所有二字组。"""
     body = re.sub(r"[\W_]+", "", str(text or ""))
     body = "".join(ch for ch in body if ch not in STOP)
-    return {body[i:i + 2] for i in range(len(body) - 1)}
+    return {body[i : i + 2] for i in range(len(body) - 1)}
 
 
 def _fallback(question, previous):
@@ -204,8 +211,14 @@ def check(question, previous, use_cache=True, thinking="low"):
     thinking = str(thinking or "low").strip().lower() or "low"
     previous = _clean_previous(previous)
     if not previous:
-        return {"related": False, "reason": "没有上一轮", "against": [],
-                "ms": _ms(t0), "source": "fallback", "thinking": thinking}
+        return {
+            "related": False,
+            "reason": "没有上一轮",
+            "against": [],
+            "ms": _ms(t0),
+            "source": "fallback",
+            "thinking": thinking,
+        }
 
     cache_path = _cache_path(question, previous)
     if use_cache and os.path.exists(cache_path):
@@ -215,26 +228,29 @@ def check(question, previous, use_cache=True, thinking="low"):
         except (OSError, ValueError):
             cached = None
         if isinstance(cached, dict) and isinstance(cached.get("related"), bool):
-            return {"related": cached["related"],
-                    "reason": _clip(cached.get("reason")),
-                    "against": [int(n) for n in cached.get("against") or []
-                                if isinstance(n, int)],
-                    "ms": _ms(t0), "source": "cache", "thinking": thinking}
+            return {
+                "related": cached["related"],
+                "reason": _clip(cached.get("reason")),
+                "against": [int(n) for n in cached.get("against") or [] if isinstance(n, int)],
+                "ms": _ms(t0),
+                "source": "cache",
+                "thinking": thinking,
+            }
 
     prompt = PROMPT.format(turns=_turns_block(previous), question=question)
     raw, _error = _call(prompt, thinking)
     reply = parse_reply(raw) if raw else None
     if reply is not None:
-        out = {"related": reply["related"],
-               "reason": _clip(reply.get("reason")) or ("相关" if reply["related"] else "无关"),
-               "against": [t["n"] for t in previous],
-               "ms": _ms(t0), "source": "model", "thinking": thinking}
-        try:
-            _write_json(cache_path, dict(out, question=question,
-                                         prev=[t["n"] for t in previous],
-                                         at=_now()))
-        except OSError:
-            pass
+        out = {
+            "related": reply["related"],
+            "reason": _clip(reply.get("reason")) or ("相关" if reply["related"] else "无关"),
+            "against": [t["n"] for t in previous],
+            "ms": _ms(t0),
+            "source": "model",
+            "thinking": thinking,
+        }
+        with contextlib.suppress(OSError):
+            _write_json(cache_path, dict(out, question=question, prev=[t["n"] for t in previous], at=_now()))
         return out
 
     out = _fallback(question, previous)
@@ -244,18 +260,17 @@ def check(question, previous, use_cache=True, thinking="low"):
 
 def main(argv=None):
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
-    ap.add_argument("--prev", action="append", default=[],
-                    help="上一轮，格式 n:问题，可重复")
+    ap.add_argument("--prev", action="append", default=[], help="上一轮，格式 n:问题，可重复")
     ap.add_argument("--no-cache", action="store_true")
     args = ap.parse_args(argv)
     previous = []
     for item in args.prev:
         n, _, text = item.partition(":")
         previous.append({"n": int(n or 0), "question": text, "answer": ""})
-    print(json.dumps(check(args.question, previous, use_cache=not args.no_cache),
-                     ensure_ascii=False, indent=1))
+    print(json.dumps(check(args.question, previous, use_cache=not args.no_cache), ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":

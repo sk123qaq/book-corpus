@@ -9,20 +9,35 @@
 
 用法: python3 redo_compare.py [--batch 旧md重拆-2026-10-18]
 """
+
 import argparse
 import collections
 import hashlib
 import os
 import re
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
-from audit_old_md import Epub, md_text_of, page_anchors  # noqa: E402
+import lib_common as L
+from audit_old_md import Epub, md_text_of, page_anchors
 
-COLS = ["uid", "title", "format", "stage", "pages", "anchors", "old_hits", "new_hits",
-        "old_cover", "new_cover", "delta", "fs_identical", "verdict"]
+COLS = [
+    "uid",
+    "title",
+    "format",
+    "stage",
+    "pages",
+    "anchors",
+    "old_hits",
+    "new_hits",
+    "old_cover",
+    "new_cover",
+    "delta",
+    "fs_identical",
+    "verdict",
+]
 
 
 def dir_sig(folder):
@@ -51,36 +66,66 @@ def main():
     a = ap.parse_args()
     batch = os.path.join(L.WORK, "批次", a.batch)
     with open(os.path.join(batch, "worklist.tsv"), encoding="utf-8") as fh:
-        wl = [l.rstrip("\n").split("\t") for l in fh]
+        wl = [line.rstrip("\n").split("\t") for line in fh]
     cols = wl[0]
     rows = []
     for line_no, r in enumerate(wl[1:], 2):
         if len(r) != len(cols):
-            print("  跳过 worklist 第 %d 行：%d 列，表头 %d 列"
-                  % (line_no, len(r), len(cols)))
+            print("  跳过 worklist 第 %d 行：%d 列，表头 %d 列" % (line_no, len(r), len(cols)))
             continue
-        rows.append(dict(zip(cols, r)))
+        rows.append(dict(zip(cols, r, strict=False)))
 
     out_rows, details = [], []
     for row in rows:
         old_dir = L.PATHS.md(row["uid"])
         new_dir = os.path.join(batch, "out", row["uid"])
-        rec = {"uid": row["uid"], "title": row["title"], "format": row["format"],
-               "stage": "yes" if os.path.isdir(new_dir) else "missing"}
+        rec = {
+            "uid": row["uid"],
+            "title": row["title"],
+            "format": row["format"],
+            "stage": "yes" if os.path.isdir(new_dir) else "missing",
+        }
         if not os.path.isdir(new_dir):
-            rec.update(pages=0, anchors=0, old_hits=0, new_hits=0, old_cover=0.0,
-                       new_cover=0.0, delta=0, fs_identical="", verdict="no-stage")
+            rec.update(
+                pages=0,
+                anchors=0,
+                old_hits=0,
+                new_hits=0,
+                old_cover=0.0,
+                new_cover=0.0,
+                delta=0,
+                fs_identical="",
+                verdict="no-stage",
+            )
             out_rows.append(rec)
             continue
         epub_path = source_epub(row, batch)
         if epub_path is None:
-            rec.update(pages=0, anchors=0, old_hits=0, new_hits=0, old_cover=0.0,
-                       new_cover=0.0, delta=0, fs_identical="", verdict="no-source")
+            rec.update(
+                pages=0,
+                anchors=0,
+                old_hits=0,
+                new_hits=0,
+                old_cover=0.0,
+                new_cover=0.0,
+                delta=0,
+                fs_identical="",
+                verdict="no-source",
+            )
             out_rows.append(rec)
             continue
         if not os.path.isdir(old_dir):
-            rec.update(pages=0, anchors=0, old_hits=0, new_hits=0, old_cover=0.0,
-                       new_cover=0.0, delta=0, fs_identical="", verdict="no-old")
+            rec.update(
+                pages=0,
+                anchors=0,
+                old_hits=0,
+                new_hits=0,
+                old_cover=0.0,
+                new_cover=0.0,
+                delta=0,
+                fs_identical="",
+                verdict="no-old",
+            )
             out_rows.append(rec)
             continue
         _tot, old_cjk, _f = md_text_of(old_dir)
@@ -103,17 +148,31 @@ def main():
             new_hits += hn
             if ho != hn:
                 miss = [x for x in a_list if (x in old_cjk) != (x in new_cjk)]
-                details.append({"uid": row["uid"], "doc": doc, "cjk": len(cjk),
-                                "old_hits": ho, "new_hits": hn,
-                                "head": cjk[:24], "n_diff": len(miss),
-                                "diff_sample": " | ".join(m[:20] for m in miss[:3])})
+                details.append(
+                    {
+                        "uid": row["uid"],
+                        "doc": doc,
+                        "cjk": len(cjk),
+                        "old_hits": ho,
+                        "new_hits": hn,
+                        "head": cjk[:24],
+                        "n_diff": len(miss),
+                        "diff_sample": " | ".join(m[:20] for m in miss[:3]),
+                    }
+                )
         sig_old = dir_sig(old_dir)
         sig_new = dir_sig(new_dir)
         same = "yes" if sig_old == sig_new else "no"
-        rec.update(pages=pages, anchors=anchors, old_hits=old_hits, new_hits=new_hits,
-                   old_cover=old_hits / anchors if anchors else 1.0,
-                   new_cover=new_hits / anchors if anchors else 1.0,
-                   delta=new_hits - old_hits, fs_identical=same)
+        rec.update(
+            pages=pages,
+            anchors=anchors,
+            old_hits=old_hits,
+            new_hits=new_hits,
+            old_cover=old_hits / anchors if anchors else 1.0,
+            new_cover=new_hits / anchors if anchors else 1.0,
+            delta=new_hits - old_hits,
+            fs_identical=same,
+        )
         if new_hits < old_hits:
             rec["verdict"] = "drop"
         elif new_hits > old_hits:
@@ -138,9 +197,10 @@ def main():
     with open(det + ".tmp", "w", encoding="utf-8") as fh:
         fh.write("uid\tdoc\tcjk\told_hits\tnew_hits\tn_diff\thead\tdiff_sample\n")
         for d in details:
-            vals = [str(d[k]).replace("\t", " ").replace("\n", " ") for k in
-                    ("uid", "doc", "cjk", "old_hits", "new_hits", "n_diff",
-                     "head", "diff_sample")]
+            vals = [
+                str(d[k]).replace("\t", " ").replace("\n", " ")
+                for k in ("uid", "doc", "cjk", "old_hits", "new_hits", "n_diff", "head", "diff_sample")
+            ]
             fh.write("\t".join(vals) + "\n")
     os.replace(det + ".tmp", det)
     print("结果 %s / 明细 %s" % (os.path.relpath(tsv, L.ROOT), os.path.relpath(det, L.ROOT)))
@@ -151,10 +211,18 @@ def main():
             continue
         print("\n%s %d 本" % (v, len(sel)))
         for r in sel:
-            print("  %-6s %-38.38s 页%4d 旧 %6.1f%% 新 %6.1f%% Δ%+d %s" % (
-                r["uid"], r["title"], r["pages"], r["old_cover"] * 100,
-                r["new_cover"] * 100, r["delta"],
-                "" if r["fs_identical"] == "yes" else "(文件不同)"))
+            print(
+                "  %-6s %-38.38s 页%4d 旧 %6.1f%% 新 %6.1f%% Δ%+d %s"
+                % (
+                    r["uid"],
+                    r["title"],
+                    r["pages"],
+                    r["old_cover"] * 100,
+                    r["new_cover"] * 100,
+                    r["delta"],
+                    "" if r["fs_identical"] == "yes" else "(文件不同)",
+                )
+            )
     return 0
 
 

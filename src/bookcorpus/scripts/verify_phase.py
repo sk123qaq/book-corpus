@@ -12,6 +12,7 @@
 迁移库的源文件 inode 基线、奖项下载批次对盘、旧路径对照表，都是作者迁移
 一次性的输入，不在这个门槛里；对照表只剩 remap.py 的显式 --map 参数。
 """
+
 import argparse
 import hashlib
 import os
@@ -20,7 +21,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 FAIL = []
 PASSED = []
@@ -44,15 +45,16 @@ def box1():
         fail("打不开 build/library.db（先 book-corpus library）：%s" % exc)
         return
     try:
-        orphan = con.execute("SELECT count(*) FROM book_award ba LEFT JOIN award a "
-                             "ON a.name=ba.award WHERE a.name IS NULL").fetchone()[0]
+        orphan = con.execute(
+            "SELECT count(*) FROM book_award ba LEFT JOIN award a ON a.name=ba.award WHERE a.name IS NULL"
+        ).fetchone()[0]
         if orphan:
             fail("book_award 有 %d 条对不上 award" % orphan)
         else:
-            ok("book_award %d 条全部落在 award 表里" % con.execute(
-                "SELECT count(*) FROM book_award").fetchone()[0])
-        uid_bad = con.execute("SELECT count(*) FROM book_award ba LEFT JOIN book b "
-                              "ON b.uid=ba.uid WHERE b.uid IS NULL").fetchone()[0]
+            ok("book_award %d 条全部落在 award 表里" % con.execute("SELECT count(*) FROM book_award").fetchone()[0])
+        uid_bad = con.execute(
+            "SELECT count(*) FROM book_award ba LEFT JOIN book b ON b.uid=ba.uid WHERE b.uid IS NULL"
+        ).fetchone()[0]
         if uid_bad:
             fail("book_award 有 %d 条对不上书" % uid_bad)
         else:
@@ -74,8 +76,7 @@ def box2():
     if tops != want:
         fail("顶层目录 %s != %s" % (tops, want))
     elif harness:
-        ok("顶层内容目录只剩 books/ collections/ tables/ build/ 工作区/，另有工具目录 %s"
-           % ", ".join(harness))
+        ok("顶层内容目录只剩 books/ collections/ tables/ build/ 工作区/，另有工具目录 %s" % ", ".join(harness))
     else:
         ok("顶层只剩 books/ collections/ tables/ build/ 工作区/")
     books = L.iter_book_json()
@@ -91,8 +92,9 @@ def box2():
             checked += 1
             name = src.get("file", "")
             owner = src.get("collection") or uid
-            p = os.path.join(L.COLLECTIONS if owner.startswith("C") else L.BOOKS,
-                             owner, "source", os.path.basename(name))
+            p = os.path.join(
+                L.COLLECTIONS if owner.startswith("C") else L.BOOKS, owner, "source", os.path.basename(name)
+            )
             if not os.path.exists(p):
                 missing.append((uid, name))
     if missing:
@@ -111,17 +113,16 @@ def box2():
 def db_dump():
     con = sqlite3.connect("file:" + L.PATHS.library_db + "?mode=ro", uri=True)
     lines = []
-    for row in con.execute("SELECT uid,title,subject1,subject2,path,path_state,retention,"
-                           "series,volume,container,html_pages FROM book ORDER BY uid"):
+    for row in con.execute(
+        "SELECT uid,title,subject1,subject2,path,path_state,retention,"
+        "series,volume,container,html_pages FROM book ORDER BY uid"
+    ):
         lines.append("B\t" + "\t".join(str(x) for x in row))
-    for row in con.execute("SELECT uid,file,format,bytes,sha256,primary_src FROM source "
-                           "ORDER BY uid,file"):
+    for row in con.execute("SELECT uid,file,format,bytes,sha256,primary_src FROM source ORDER BY uid,file"):
         lines.append("S\t" + "\t".join(str(x) for x in row))
-    for row in con.execute("SELECT uid,kind,status,method,chapters,bytes FROM derived "
-                           "ORDER BY uid,kind"):
+    for row in con.execute("SELECT uid,kind,status,method,chapters,bytes FROM derived ORDER BY uid,kind"):
         lines.append("D\t" + "\t".join(str(x) for x in row))
-    for row in con.execute("SELECT uid,award,year,edition,result FROM book_award "
-                           "ORDER BY uid,award"):
+    for row in con.execute("SELECT uid,award,year,edition,result FROM book_award ORDER BY uid,award"):
         lines.append("A\t" + "\t".join(str(x) for x in row))
     con.close()
     return "\n".join(lines)
@@ -131,15 +132,14 @@ def box3():
     print("箱子 3 · 从零重建一致")
     before = db_dump()
     h1 = hashlib.sha256(before.encode()).hexdigest()
-    out = subprocess.run([sys.executable, os.path.join(L.SCRIPTS, "build_library.py")],
-                         capture_output=True, text=True)
+    out = subprocess.run([sys.executable, os.path.join(L.SCRIPTS, "build_library.py")], capture_output=True, text=True)
     if out.returncode != 0:
         fail("重建失败: " + out.stderr[-300:])
         return
     after = db_dump()
     h2 = hashlib.sha256(after.encode()).hexdigest()
     if h1 != h2:
-        for i, (a, b) in enumerate(zip(before.splitlines(), after.splitlines())):
+        for i, (a, b) in enumerate(zip(before.splitlines(), after.splitlines(), strict=False)):
             if a != b:
                 fail("重建后第 %d 行不同:\n    前 %s\n    后 %s" % (i, a[:120], b[:120]))
                 break
@@ -151,12 +151,16 @@ def box3():
 
 
 def _qsearch_hits(word):
-    out = subprocess.run([sys.executable, os.path.join(L.SCRIPTS, "qsearch.py"), word,
-                          "-n", "3", "--json"], capture_output=True, text=True)
+    out = subprocess.run(
+        [sys.executable, os.path.join(L.SCRIPTS, "qsearch.py"), word, "-n", "3", "--json"],
+        capture_output=True,
+        text=True,
+    )
     if out.returncode != 0:
         return None, out.stderr[-200:]
     try:
         import json
+
         body = json.loads(out.stdout)
     except ValueError:
         return None, "输出不是 JSON: " + out.stdout[:120]
@@ -175,17 +179,17 @@ def box4():
         npara = con.execute("SELECT count(*) FROM para").fetchone()[0]
         nchap = con.execute("SELECT count(DISTINCT path) FROM para").fetchone()[0]
         if int(meta.get("paras", -1)) == npara and int(meta.get("chapters", -1)) == nchap:
-            ok("index.db %d 段 / %d 章，meta 一致（%.2f GB）" % (
-                npara, nchap, os.path.getsize(db) / 1e9))
+            ok("index.db %d 段 / %d 章，meta 一致（%.2f GB）" % (npara, nchap, os.path.getsize(db) / 1e9))
         else:
-            fail("meta 与表不一致: paras %s/%d chapters %s/%d" % (
-                meta.get("paras"), npara, meta.get("chapters"), nchap))
-        outside = con.execute("SELECT count(*) FROM para WHERE path NOT LIKE 'books/%'"
-                             ).fetchone()[0]
+            fail(
+                "meta 与表不一致: paras %s/%d chapters %s/%d" % (meta.get("paras"), npara, meta.get("chapters"), nchap)
+            )
+        outside = con.execute("SELECT count(*) FROM para WHERE path NOT LIKE 'books/%'").fetchone()[0]
         if outside:
             fail("倒排里有 %d 段不在 books/ 下" % outside)
-        gone = [p for (p,) in con.execute("SELECT DISTINCT path FROM para")
-                if not os.path.isfile(os.path.join(L.ROOT, p))]
+        gone = [
+            p for (p,) in con.execute("SELECT DISTINCT path FROM para") if not os.path.isfile(os.path.join(L.ROOT, p))
+        ]
         if gone:
             fail("倒排指向 %d 个不存在的文件，例：%s" % (len(gone), gone[:3]))
         else:
@@ -197,8 +201,7 @@ def box4():
         else:
             ok("概念表 %d 条，键不重复" % len(rows))
         known = set(keys)
-        bc = con.execute("SELECT key, count(*) FROM book_concept GROUP BY key"
-                         ).fetchall()
+        bc = con.execute("SELECT key, count(*) FROM book_concept GROUP BY key").fetchall()
         stray = [c for c, _ in bc if c not in known]
         if stray:
             fail("概念剖面里有 %d 个键不在概念表：%s" % (len(stray), stray[:3]))

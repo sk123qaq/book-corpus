@@ -27,7 +27,7 @@ rerank = ["torch>=2.2", "transformers>=4.40"]
 book-corpus = "bookcorpus.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.17", "pre-commit>=3"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bookcorpus"]
@@ -35,3 +35,53 @@ packages = ["src/bookcorpus"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+# ---- Ruff：静态检查 + 格式化 ----
+# 跑法：uv run ruff check --fix .  /  uv run ruff format .
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests", "apps"]
+exclude = [".git", ".venv", "__pycache__", "books", "build", "dist", "工作区", "apps/demo/缓存", ".agents"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "PT", "RUF", "S"]
+# RUF001-003：中文正文的引号、破折号、省略号都是全角标点，这三条对中文语料全是误报。
+# S311：random 只用于抽样与重排，不涉及密码学。
+# N812：本仓惯例是把共享模块缩写导入（import lib_common as L / import layout as LY），
+#       这类小写缩写是仓库既定风格，不是笔误。
+ignore = ["RUF001", "RUF002", "RUF003", "S311", "N812"]
+# PTH/UP031 是存量 4000+ 处的增量治理决定：老代码先不追（os.path 拼接、% 格式化），
+# 新代码由 pre-commit 严格档卡住，不让新违规进来。
+extend-ignore = ["PTH", "UP031"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bookcorpus"]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试：assert 就是断言手段，pytest.raises 宽泛匹配与硬编码假 token 是常规写法；E402 见下。
+#     S603/S607/S310/S103：验收与手工脚本要起本地 http 服务、`sys.executable`/`bash` 起进程、
+#     给临时目录 0o755，跑的都是仓库自己的脚本与 127.0.0.1 端点。
+"tests/**" = ["S101", "PT011", "S105", "S106", "E402", "S603", "S607", "S310", "S103"]
+# 包内脚本是命令行工具：sys.path 调整后才 import（E402）、自带断言与 subprocess 调外部命令。
+"src/bookcorpus/**" = ["E402", "S101", "S603", "S607"]
+# 应用入口同样先改 sys.path 再 import。
+"apps/**" = ["E402"]
+# 仓库脚本：起子进程跑 ruff 自己，argv 由脚本构造。
+"tools/**" = ["S603", "S607"]
+# N806：server.py 里 `LC = self._ledger_mod()` 与顶部的 `import lib_common as LC` 是同一套大写别名，
+# 和 N812 是同一个仓库惯例。
+"apps/ops/server.py" = ["N806"]
+# E501：提示词/测试脚本是成段中文，硬折行会改变发给模型的文本与生成的脚本内容。
+"apps/demo/answer.py" = ["E501"]
+"apps/demo/trace.py" = ["E501"]
+"tests/acceptance/ops/check_ops.py" = ["E501"]
+# 设计文档配图脚本：dict(col=...) 描述节点比字面量更好读，长中文行无法折，assert 是自检。
+"docs/design/**" = ["C408", "E501", "S101"]
+# 包的 __init__ 只做对外导出，不做 F401 判断。
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

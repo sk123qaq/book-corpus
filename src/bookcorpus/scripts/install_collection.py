@@ -11,11 +11,13 @@ split_md_batch.py 只按单本书跑，合集（一个源文件拆多本）没�
         --map 工作区/批次/旧md重拆-2026-10-18/collections/渡边淳一.json \
         --split-out 工作区/批次/旧md重拆-2026-10-18/collections/渡边淳一/out
 """
+
 import argparse
 import datetime
 import hashlib
 import json
 import os
+import pathlib
 import re
 import shutil
 import sqlite3
@@ -23,7 +25,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 COUNT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]|[A-Za-z0-9]")
 
@@ -54,7 +56,7 @@ def main():
     batch = os.path.join(L.WORK, "批次", a.batch)
     map_path = os.path.join(root, a.map_path) if not os.path.isabs(a.map_path) else a.map_path
     split_out = os.path.join(root, a.split_out) if not os.path.isabs(a.split_out) else a.split_out
-    spec = json.load(open(map_path, encoding="utf-8"))
+    spec = json.loads(pathlib.Path(map_path).read_text(encoding="utf-8"))
     con = sqlite3.connect("file:%s?mode=ro" % L.PATHS.library_db, uri=True)
     con.row_factory = sqlite3.Row
     os.makedirs(os.path.join(batch, "out"), exist_ok=True)
@@ -72,13 +74,14 @@ def main():
             """SELECT b.path AS path, b.title AS title, s.file AS src, s.sha256 AS sha256,
                       s.format AS format
                FROM book b JOIN source s ON s.uid=b.uid AND s.primary_src=1
-               WHERE b.uid=?""", (uid,)).fetchone()
+               WHERE b.uid=?""",
+            (uid,),
+        ).fetchone()
         if r is None:
             sys.exit("uid not found in DB: %s" % uid)
         dest = os.path.join(root, "books", r["uid"], "md")
         man_old = L.read_md_manifest(dest)
-        if (not a.force and man_old.get("batch") == a.batch
-                and man_old.get("map") == map_rel):
+        if not a.force and man_old.get("batch") == a.batch and man_old.get("map") == map_rel:
             print("skip %s: 已是本批次同一 map 的产物" % uid)
             continue
         prev = None
@@ -99,27 +102,34 @@ def main():
         chars = 0
         for fn in sorted(os.listdir(dest)):
             if fn.endswith(".md"):
-                chars += len(COUNT_RE.findall(open(os.path.join(dest, fn),
-                                                   encoding="utf-8").read()))
+                chars += len(COUNT_RE.findall(pathlib.Path(os.path.join(dest, fn)).read_text(encoding="utf-8")))
         images = 0
         img_dir = os.path.join(dest, "images")
         if os.path.isdir(img_dir):
-            images = len([n for n in os.listdir(img_dir)
-                          if os.path.isfile(os.path.join(img_dir, n))])
+            images = len([n for n in os.listdir(img_dir) if os.path.isfile(os.path.join(img_dir, n))])
         manifest = {
-            "uid": uid, "method": "split_collection", "tool": "split_collection.py",
-            "tool_version": tool_version(), "batch": a.batch,
-            "source": r["src"], "source_sha256": r["sha256"], "source_format": r["format"],
-            "map": map_rel, "collection": spec.get("collection", ""),
-            "chapters": chapters, "bytes": nbytes, "chars": chars, "images": images,
-            "generated_at": now(), "verified": False,
-            "accepted": "",   # 本脚本不做验收；验证走 collection_coverage.py / redo_compare.py
+            "uid": uid,
+            "method": "split_collection",
+            "tool": "split_collection.py",
+            "tool_version": tool_version(),
+            "batch": a.batch,
+            "source": r["src"],
+            "source_sha256": r["sha256"],
+            "source_format": r["format"],
+            "map": map_rel,
+            "collection": spec.get("collection", ""),
+            "chapters": chapters,
+            "bytes": nbytes,
+            "chars": chars,
+            "images": images,
+            "generated_at": now(),
+            "verified": False,
+            "accepted": "",  # 本脚本不做验收；验证走 collection_coverage.py / redo_compare.py
         }
         with open(os.path.join(dest, ".manifest.json") + ".tmp", "w", encoding="utf-8") as fh:
             json.dump(manifest, fh, ensure_ascii=False, indent=1)
             fh.write("\n")
-        os.replace(os.path.join(dest, ".manifest.json") + ".tmp",
-                   os.path.join(dest, ".manifest.json"))
+        os.replace(os.path.join(dest, ".manifest.json") + ".tmp", os.path.join(dest, ".manifest.json"))
         print("installed %s %s  章 %d 字 %d 图 %d" % (uid, r["title"], chapters, chars, images))
     return 0
 

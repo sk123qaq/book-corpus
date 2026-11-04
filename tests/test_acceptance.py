@@ -34,15 +34,16 @@ def pdf_python():
     candidates = []
     if os.environ.get("BOOKS_PDF_PY"):
         candidates.append(os.environ["BOOKS_PDF_PY"])
-    candidates += [str(INSTANCE / "工作区" / ".venv-pdf" / "bin" / "python"),
-                   str(Path.home() / "teleocr" / ".venv" / "bin" / "python"),
-                   sys.executable]
+    candidates += [
+        str(INSTANCE / "工作区" / ".venv-pdf" / "bin" / "python"),
+        str(Path.home() / "teleocr" / ".venv" / "bin" / "python"),
+        sys.executable,
+    ]
     for path in candidates:
         if not os.path.isfile(path):
             continue
         try:
-            ok = subprocess.run([path, "-c", "import pymupdf"],
-                                capture_output=True, timeout=30).returncode == 0
+            ok = subprocess.run([path, "-c", "import pymupdf"], capture_output=True, timeout=30).returncode == 0
         except (OSError, subprocess.SubprocessError):
             ok = False
         if ok:
@@ -60,7 +61,7 @@ def acceptance_env():
     return env
 
 
-@pytest.mark.parametrize("script,timeout", OFFLINE, ids=[p.name for p, _ in OFFLINE])
+@pytest.mark.parametrize(("script", "timeout"), OFFLINE, ids=[p.name for p, _ in OFFLINE])
 def test_offline_acceptance(script, timeout):
     if not script.is_file():
         pytest.skip("缺验收脚本 %s" % script)
@@ -72,9 +73,14 @@ def test_offline_acceptance(script, timeout):
             pytest.skip("实例里没有 B0210 的章节，跳过演示离线验收")
     if script.name == "test_pdf.py" and not pdf_python():
         pytest.skip("没有带 pymupdf 的解释器；设 BOOKS_PDF_PY 后重跑")
-    proc = subprocess.run([sys.executable, str(script)], cwd=str(REPO),
-                          env=acceptance_env(), capture_output=True, text=True,
-                          timeout=timeout)
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=str(REPO),
+        env=acceptance_env(),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
     if proc.returncode != 0:
         tail = (proc.stdout + "\n" + proc.stderr)[-4000:]
         pytest.fail("%s 退出码 %d\n%s" % (script.name, proc.returncode, tail))

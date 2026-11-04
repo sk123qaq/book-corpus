@@ -13,6 +13,7 @@
 
 库以只读模式打开（file:...?mode=ro），查询语句不会写库。
 """
+
 import argparse
 import json
 import os
@@ -20,7 +21,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 
 def unique_names(names):
@@ -49,13 +50,13 @@ def main():
     try:
         cur = con.execute(sql)
     except sqlite3.Error as e:
-        raise SystemExit("SQL 错误: %s" % e)
+        raise SystemExit("SQL 错误: %s" % e) from None
     names = [d[0] for d in (cur.description or [])]
     rows = cur.fetchall()
     con.close()
     if args.json:
         keys = unique_names(names)
-        print(json.dumps([dict(zip(keys, r)) for r in rows], ensure_ascii=False, indent=1))
+        print(json.dumps([dict(zip(keys, r, strict=False)) for r in rows], ensure_ascii=False, indent=1))
         return
     if args.header:
         print(args.sep.join(names))

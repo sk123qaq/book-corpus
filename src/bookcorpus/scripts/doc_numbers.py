@@ -11,6 +11,7 @@
 块由 <!-- numbers:start --> 与 <!-- numbers:end --> 夹住，只换夹住的那几行，块外一字不动。
 取数只读：library.db 以 mode=ro 打开，md 本数看 books/<uid>/md 是不是目录，视图数 build/views 下的软链。
 """
+
 import argparse
 import csv
 import datetime
@@ -22,7 +23,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import ROOT  # noqa: E402
+from lib_common import ROOT
+
 DOC = "AGENTS.md"
 START = "<!-- numbers:start -->"
 END = "<!-- numbers:end -->"
@@ -39,7 +41,7 @@ class DocError(Exception):
 
 
 def num(value):
-    return "{:,}".format(int(value))
+    return f"{int(value):,}"
 
 
 def collect(root=ROOT, as_of=None):
@@ -51,10 +53,10 @@ def collect(root=ROOT, as_of=None):
         paths = [r[0] for r in con.execute("SELECT path FROM book")]
         awards = con.execute("SELECT count(*) FROM book_award").fetchone()[0]
         award_names = con.execute("SELECT count(*) FROM award").fetchone()[0]
-        pending = {k: 0 for k in PENDING_KEYS + (OTHER,)}
+        pending = dict.fromkeys((*PENDING_KEYS, OTHER), 0)
         for fmt, n in con.execute(
-                "SELECT coalesce(nullif(lower(format), ''), ?), count(*) "
-                "FROM v_pending_md GROUP BY 1", (OTHER,)):
+            "SELECT coalesce(nullif(lower(format), ''), ?), count(*) FROM v_pending_md GROUP BY 1", (OTHER,)
+        ):
             pending[fmt if fmt in PENDING_KEYS else OTHER] += n
     finally:
         con.close()
@@ -105,8 +107,7 @@ def archive_uids(root):
 
     ja, gallery = set(), set()
     try:
-        batches = sorted(n for n in os.listdir(batch)
-                         if os.path.isdir(os.path.join(batch, n)))
+        batches = sorted(n for n in os.listdir(batch) if os.path.isdir(os.path.join(batch, n)))
     except OSError:
         batches = []
     for name in batches:
@@ -139,14 +140,26 @@ def render(counts):
     archive_note = ""
     if archive_n:
         archive_note = "；存档 %s：图册 %s、非中英文 %s，政策不转不删" % (
-            num(archive_n), num(a.get("gallery", 0)), num(a.get("ja", 0)))
-    line = ("As of %s：%s 本书，%s 本有 md，%s 本待拆章（%s%s）；%s 条奖项记录，"
-            "视图 %s 条软链（奖项 %s、主题 %s）；坑账 %s 类。") % (
-        counts["as_of"], num(counts["books"]), num(counts["md"]),
-        num(counts["pending_total"]), "、".join(parts), archive_note,
+            num(archive_n),
+            num(a.get("gallery", 0)),
+            num(a.get("ja", 0)),
+        )
+    line = (
+        "As of %s：%s 本书，%s 本有 md，%s 本待拆章（%s%s）；%s 条奖项记录，"
+        "视图 %s 条软链（奖项 %s、主题 %s）；坑账 %s 类。"
+    ) % (
+        counts["as_of"],
+        num(counts["books"]),
+        num(counts["md"]),
+        num(counts["pending_total"]),
+        "、".join(parts),
+        archive_note,
         num(counts["awards"]),
-        num(counts["view_total"]), num(view["奖项"]), num(view["主题"]),
-        num(counts["pitfall_classes"]))
+        num(counts["view_total"]),
+        num(view["奖项"]),
+        num(view["主题"]),
+        num(counts["pitfall_classes"]),
+    )
     return "%s\n%s\n%s" % (START, line, END)
 
 
@@ -164,14 +177,14 @@ def sync(text, block):
     """把 block 放进 text，返回 (新全文, 动作)。有块就换，没有块就插在「## 现状」之后。"""
     m = BLOCK_RE.search(text)
     if m:
-        return text[:m.start()] + block + text[m.end():], "replaced"
+        return text[: m.start()] + block + text[m.end() :], "replaced"
     if START in text or END in text:
         raise DocError("只有一个标记，块的范围判不出来")
     lines = text.splitlines(True)
     for i, line in enumerate(lines):
         if line.startswith(HEADING):
             head = line if line.endswith("\n") else line + "\n"
-            return "".join(lines[:i] + [head, "\n" + block + "\n"] + lines[i + 1:]), "inserted"
+            return "".join([*lines[:i], head, "\n" + block + "\n", *lines[i + 1 :]]), "inserted"
     raise DocError("没有 numbers 块，也没有「%s」标题" % HEADING)
 
 

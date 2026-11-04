@@ -7,8 +7,7 @@ import sqlite3
 
 from conftest import run_cli, write_book, write_ledger
 
-STUB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acceptance",
-                    "fixtures", "pi_stub.py")
+STUB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acceptance", "fixtures", "pi_stub.py")
 
 
 def _sha(path):
@@ -22,12 +21,16 @@ def _set_source(root, uid, data, fmt):
     src = bdir / "source" / name
     src.write_bytes(data)
     doc = json.loads((bdir / "book.json").read_text(encoding="utf-8"))
-    doc["sources"][0].update({
-        "file": "source/" + name, "format": fmt, "bytes": len(data),
-        "sha256": hashlib.sha256(data).hexdigest(), "primary_src": 1,
-    })
-    (bdir / "book.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1),
-                                    encoding="utf-8")
+    doc["sources"][0].update(
+        {
+            "file": "source/" + name,
+            "format": fmt,
+            "bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "primary_src": 1,
+        }
+    )
+    (bdir / "book.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     return hashlib.sha256(data).hexdigest()
 
 
@@ -40,8 +43,7 @@ def _scan(root):
 def _apply(root, items):
     plan = root / "plan.json"
     plan.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
-    return run_cli("--root", root, "run", "ingest", "apply", str(plan),
-                   "--apply", "--no-rebuild")
+    return run_cli("--root", root, "run", "ingest", "apply", str(plan), "--apply", "--no-rebuild")
 
 
 def _inbox(root, name, data):
@@ -82,8 +84,7 @@ def test_replace_writes_retention_and_marks_old_md(workspace):
     old = _set_source(workspace, "B0003", b"old-txt", "txt")
     md = workspace / "books" / "B0003" / "md"
     md.mkdir(exist_ok=True)
-    (md / ".manifest.json").write_text(
-        json.dumps({"uid": "B0003", "method": "test"}), encoding="utf-8")
+    (md / ".manifest.json").write_text(json.dumps({"uid": "B0003", "method": "test"}), encoding="utf-8")
 
     new = _inbox(workspace, "丙书.epub", b"new-epub" * 10)
     new_sha = _sha(new)
@@ -158,20 +159,18 @@ def test_fuzzy_title_is_review_not_delete(workspace):
 
 def test_old_plan_and_path_escape_are_refused(workspace):
     inbox = _inbox(workspace, "x.epub", b"x" * 10)
-    old = [{"plan_version": 1, "file": "x.epub", "action": "delete", "title": "x",
-            "sha256": _sha(inbox), "bytes": 10}]
+    old = [{"plan_version": 1, "file": "x.epub", "action": "delete", "title": "x", "sha256": _sha(inbox), "bytes": 10}]
     plan = workspace / "plan.json"
     plan.write_text(json.dumps(old), encoding="utf-8")
-    r = run_cli("--root", workspace, "run", "ingest", "apply", str(plan),
-                "--apply", "--no-rebuild")
+    r = run_cli("--root", workspace, "run", "ingest", "apply", str(plan), "--apply", "--no-rebuild")
     assert r.returncode == 2
     assert "旧清单" in r.stderr
 
-    bad = [{"plan_version": 2, "file": "../x.epub", "action": "delete", "title": "x",
-            "sha256": _sha(inbox), "bytes": 10}]
+    bad = [
+        {"plan_version": 2, "file": "../x.epub", "action": "delete", "title": "x", "sha256": _sha(inbox), "bytes": 10}
+    ]
     plan.write_text(json.dumps(bad), encoding="utf-8")
-    r = run_cli("--root", workspace, "run", "ingest", "apply", str(plan),
-                "--apply", "--no-rebuild")
+    r = run_cli("--root", workspace, "run", "ingest", "apply", str(plan), "--apply", "--no-rebuild")
     assert r.returncode == 1
     assert "文件名" in r.stderr
     assert inbox.is_file()
@@ -187,8 +186,7 @@ def test_add_keeps_retention_and_rerun_skips(workspace):
 
     r = _apply(workspace, items)
     assert r.returncode == 0, r.stdout + r.stderr
-    doc = json.loads((workspace / "books" / row["uid"] / "book.json")
-                     .read_text(encoding="utf-8"))
+    doc = json.loads((workspace / "books" / row["uid"] / "book.json").read_text(encoding="utf-8"))
     assert doc["retention"] == "review"
     con = sqlite3.connect(str(workspace / "tables" / "ledger.db"))
     got = con.execute("SELECT 保留 FROM 分类 WHERE uid=?", (row["uid"],)).fetchone()
@@ -209,21 +207,29 @@ def test_scan_cache_honours_given_path(workspace):
     _inbox(workspace, "己书.epub", b"ji" * 30)
     job = workspace / "工作区" / "运维" / "jobs" / "scan-cache"
     plan, cache = job / "plan.json", job / "classify.json"
-    payload = json.dumps([{"level1": "文学", "level2": "类型小说",
-                           "confidence": 0.93, "reason": "测试"}],
-                         ensure_ascii=False)
+    payload = json.dumps(
+        [{"level1": "文学", "level2": "类型小说", "confidence": 0.93, "reason": "测试"}], ensure_ascii=False
+    )
 
-    r = run_cli("--root", workspace, "run", "ingest", "scan", "--json",
-                "--out", str(plan), "--cache", str(cache),
-                env={"PI_BIN": STUB, "PI_STUB_JSON": payload})
+    r = run_cli(
+        "--root",
+        workspace,
+        "run",
+        "ingest",
+        "scan",
+        "--json",
+        "--out",
+        str(plan),
+        "--cache",
+        str(cache),
+        env={"PI_BIN": STUB, "PI_STUB_JSON": payload},
+    )
     assert r.returncode == 0, r.stdout + r.stderr
     assert plan.is_file(), r.stdout + r.stderr
     assert cache.is_file(), r.stdout + r.stderr
-    assert json.loads(cache.read_text(encoding="utf-8")), cache.read_text(
-        encoding="utf-8")
+    assert json.loads(cache.read_text(encoding="utf-8")), cache.read_text(encoding="utf-8")
 
-    row = next(i for i in json.loads(plan.read_text(encoding="utf-8"))
-               if i["file"] == "己书.epub")
+    row = next(i for i in json.loads(plan.read_text(encoding="utf-8")) if i["file"] == "己书.epub")
     assert row["action"] == "add"
     assert row["subjects"] == ["文学", "类型小说"], row
     shared = workspace / "工作区" / "批次" / "ingest" / "classify.json"
@@ -245,6 +251,5 @@ def test_empty_category_falls_back_to_other(workspace):
     got = con.execute("SELECT 一级 FROM 分类 WHERE uid=?", (row["uid"],)).fetchone()
     con.close()
     assert got == ("其他",)
-    doc = json.loads((workspace / "books" / row["uid"] / "book.json")
-                     .read_text(encoding="utf-8"))
+    doc = json.loads((workspace / "books" / row["uid"] / "book.json").read_text(encoding="utf-8"))
     assert doc["subjects"] == ["其他"]

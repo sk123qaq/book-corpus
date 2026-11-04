@@ -24,6 +24,7 @@
 只读 build/检索/index.db 与 books/**.md；只写 缓存/answers/。
 不跑 B4、不写 expand、不重建索引；pi 只开 book_grep 与 read，证据全部由服务端给。
 """
+
 import bisect
 import concurrent.futures
 import hashlib
@@ -36,9 +37,11 @@ import sys
 import threading
 import time
 
+
 def _package_scripts():
     try:
         from bookcorpus.paths import scripts_dir
+
         return scripts_dir()
     except ImportError:
         return os.path.join(os.path.dirname(os.path.dirname(HERE)), "src", "bookcorpus", "scripts")
@@ -50,13 +53,16 @@ for _p in (SCRIPTS, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import book_expand  # noqa: E402
-import book_readme  # noqa: E402
-import defpass  # noqa: E402
-import lib_fts_cjk as cjk  # noqa: E402
-import lib_common as L  # noqa: E402
-import qsearch  # noqa: E402
-from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinking  # noqa: E402
+import contextlib
+
+import book_expand
+import book_readme
+import defpass
+import lib_common as L
+import lib_fts_cjk as cjk
+import qsearch
+from thinking import DEFAULT as DEFAULT_THINKING
+from thinking import normalize as normalize_thinking
 
 ROOT = L.ROOT
 
@@ -67,12 +73,16 @@ CACHE_DIR = os.path.join(HERE, "缓存", "answers")
 SKILL = os.path.join(L.skill_dir("book-corpus-qa"), "SKILL.md")
 try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
     from bookcorpus import pimodel
+
     _CFG = pimodel.load(ROOT)
     DEFAULT_THINKING = normalize_thinking(pimodel.thinking(_CFG["values"]), DEFAULT_THINKING)
 except ImportError:
     pimodel, _CFG = None, None
-MODEL = os.environ.get("ANSWER_MODEL") or (
-    pimodel.ref(_CFG["values"]) if pimodel else "") or "opencode-go/deepseek-v4.1-flash"
+MODEL = (
+    os.environ.get("ANSWER_MODEL")
+    or (pimodel.ref(_CFG["values"]) if pimodel else "")
+    or "opencode-go/deepseek-v4.1-flash"
+)
 PI_TIMEOUT = 240
 PROMPT_VERSION = "answer-v13"
 PROMPT_VERSION_MULTI = "answer-v19-multi"
@@ -92,10 +102,13 @@ ROLE_SUPPLEMENT = (
     "那本书已经在前一部分答过：不要提它、不要引用它，也不要重复它已经说过的判断。\n\n"
 )
 
-JSON_REMIND = ("\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，"
-               "不要解释，字符串里的双引号写成 \\\"。")
-ANSWER_REMIND = ("\n\n上一次没有给出正文。这次只输出一个 JSON 对象，"
-                 "answer 里用 ## 小标题分成至少两节，分歧用 ## 分歧，缺口用 ## 缺口。")
+JSON_REMIND = (
+    '\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，不要解释，字符串里的双引号写成 \\"。'
+)
+ANSWER_REMIND = (
+    "\n\n上一次没有给出正文。这次只输出一个 JSON 对象，"
+    "answer 里用 ## 小标题分成至少两节，分歧用 ## 分歧，缺口用 ## 缺口。"
+)
 
 QSEARCH_LIMIT = 100
 DEFPASS_TOP = 4
@@ -133,8 +146,20 @@ def pi_cmd(thinking):
         head, flags = pimodel.pi_head(), pimodel.model_flags(_CFG["values"], thinking)
     else:
         head, flags = ["pi"], ["--model", MODEL, "--thinking", thinking]
-    return head + ["-p", "--no-session", "--no-context-files", "--skill", SKILL,
-                   "-e", EXT, "--tools", "book_grep,read"] + flags
+    return [
+        *head,
+        "-p",
+        "--no-session",
+        "--no-context-files",
+        "--skill",
+        SKILL,
+        "-e",
+        EXT,
+        "--tools",
+        "book_grep,read",
+        *flags,
+    ]
+
 
 PROMPT = """你是书库问答的回答阶段。依据这一本书的原文回答，用自然、通顺的中文。
 
@@ -216,6 +241,7 @@ MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本�
 
 # ---- 小工具 ---------------------------------------------------------
 
+
 def _rel(path):
     """统一成 books/<uid>/... 形式的相对路径（正斜杠）。"""
     raw = str(path or "").strip().replace("\\", "/")
@@ -265,11 +291,25 @@ def _write_json(path, value):
 
 
 def _ok(**kwargs):
-    out = {"ok": True, "cached": False, "ms": 0.0, "model": MODEL,
-           "thinking": DEFAULT_THINKING, "answer": "",
-           "lead": "", "sections": [], "dissent": "", "gap": "",
-           "citations": [], "passages": [], "confidence": "low",
-           "not_found": False, "error": "", "mode": "single", "sources": []}
+    out = {
+        "ok": True,
+        "cached": False,
+        "ms": 0.0,
+        "model": MODEL,
+        "thinking": DEFAULT_THINKING,
+        "answer": "",
+        "lead": "",
+        "sections": [],
+        "dissent": "",
+        "gap": "",
+        "citations": [],
+        "passages": [],
+        "confidence": "low",
+        "not_found": False,
+        "error": "",
+        "mode": "single",
+        "sources": [],
+    }
     out.update(kwargs)
     return out
 
@@ -279,8 +319,10 @@ def _ms(t0):
 
 
 def _passages(windows):
-    return [{"path": w["path"], "start": w["start"], "end": w["end"],
-             "chars": w["chars"], "title": w["title"]} for w in windows]
+    return [
+        {"path": w["path"], "start": w["start"], "end": w["end"], "chars": w["chars"], "title": w["title"]}
+        for w in windows
+    ]
 
 
 def _err(message, **kwargs):
@@ -290,31 +332,39 @@ def _err(message, **kwargs):
     return out
 
 
-def cache_key(question, book, path, line, terms, groups=None,
-              thinking=DEFAULT_THINKING, history="", version=None):
-    payload = {"q": question, "book": book, "path": path, "line": int(line),
-               "terms": sorted({str(t) for t in terms if str(t).strip()}),
-               "groups": groups or [],
-               "v": version or PROMPT_VERSION, "model": MODEL, "thinking": thinking}
+def cache_key(question, book, path, line, terms, groups=None, thinking=DEFAULT_THINKING, history="", version=None):
+    payload = {
+        "q": question,
+        "book": book,
+        "path": path,
+        "line": int(line),
+        "terms": sorted({str(t) for t in terms if str(t).strip()}),
+        "groups": groups or [],
+        "v": version or PROMPT_VERSION,
+        "model": MODEL,
+        "thinking": thinking,
+    }
     if history:
-        payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
+        payload["h"] = hashlib.sha1(history.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
-def multi_cache_key(question, sources, terms, groups=None,
-                    thinking=DEFAULT_THINKING, history="", version=None):
+def multi_cache_key(question, sources, terms, groups=None, thinking=DEFAULT_THINKING, history="", version=None):
     """多书回答的键：书单顺序也算输入，换掉一本书就不再命中。"""
-    payload = {"q": question,
-               "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
-               "terms": sorted({str(t) for t in terms if str(t).strip()}),
-               "groups": groups or [],
-               "v": version or PROMPT_VERSION_MULTI, "model": MODEL,
-               "thinking": thinking}
+    payload = {
+        "q": question,
+        "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
+        "terms": sorted({str(t) for t in terms if str(t).strip()}),
+        "groups": groups or [],
+        "v": version or PROMPT_VERSION_MULTI,
+        "model": MODEL,
+        "thinking": thinking,
+    }
     if history:
-        payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
+        payload["h"] = hashlib.sha1(history.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _normalize_sources(sources):
@@ -338,9 +388,7 @@ def _normalize_sources(sources):
             line = first
         title = item.get("title")
         seen.add(rel)
-        out.append({"book": book,
-                    "title": title.strip() if isinstance(title, str) else "",
-                    "path": rel, "line": line})
+        out.append({"book": book, "title": title.strip() if isinstance(title, str) else "", "path": rel, "line": line})
         if len(out) >= MAX_SOURCES:
             break
     return out
@@ -366,6 +414,7 @@ def _read_cached(cache_path, t0, thinking=DEFAULT_THINKING):
 
 
 # ---- 证据窗口 -------------------------------------------------------
+
 
 def _chapter_titles(book):
     try:
@@ -408,7 +457,7 @@ def _group_lists(groups, terms):
 def _cand_window(lines, line, span=12):
     a = max(1, int(line) - span)
     b = min(len(lines), int(line) + span)
-    return "\n".join(lines[a - 1:b])
+    return "\n".join(lines[a - 1 : b])
 
 
 def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
@@ -438,10 +487,16 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
         if cur is None or float(h.get("score") or 0) > float(cur.get("score") or 0):
             by_path[p] = h
     chapters = sorted(by_path.values(), key=lambda h: -float(h.get("score") or 0))[:MAX_CHAPTERS]
-    chapter_rows = [{"path": h["path"], "line": int(h.get("line") or 1),
-                     "score": float(h.get("score") or 0),
-                     "coverage": h.get("coverage"),
-                     "title": _title_for(titles, h["path"])} for h in chapters]
+    chapter_rows = [
+        {
+            "path": h["path"],
+            "line": int(h.get("line") or 1),
+            "score": float(h.get("score") or 0),
+            "coverage": h.get("coverage"),
+            "title": _title_for(titles, h["path"]),
+        }
+        for h in chapters
+    ]
 
     # 组覆盖二遍：只在前 100 个同书候选上打分，避免全库扫描把 README 和无关章冲上来
     lines_cache = {}
@@ -468,15 +523,15 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
         if key in seen:
             continue
         seen.add(key)
-        def_hits.append({"path": h["path"], "line": ln, "score": h.get("score"),
-                         "coverage": cov, "group_score": gs})
+        def_hits.append({"path": h["path"], "line": ln, "score": h.get("score"), "coverage": cov, "group_score": gs})
         if len(def_hits) >= DEFPASS_TOP:
             break
 
     picked, used = [current], {(path, int(line))}
-    for item in def_hits + [{"path": h["path"], "line": int(h.get("line") or 1),
-                             "score": h.get("score"), "coverage": h.get("coverage")}
-                            for h in chapters]:
+    for item in def_hits + [
+        {"path": h["path"], "line": int(h.get("line") or 1), "score": h.get("score"), "coverage": h.get("coverage")}
+        for h in chapters
+    ]:
         key = (item["path"], item["line"])
         if key in used:
             continue
@@ -512,7 +567,7 @@ def _window_text(lines, pref, start, end, mid, cap):
             a += 1
         else:
             b -= 1
-    text = "\n".join(lines[a - 1:b])
+    text = "\n".join(lines[a - 1 : b])
     if len(text) > cap:
         text = text[:cap]
     if a > 1:
@@ -526,8 +581,7 @@ def _window_text(lines, pref, start, end, mid, cap):
     return a, b, text
 
 
-def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS,
-                  window_chars=WINDOW_CHARS, max_windows=MAX_WINDOWS):
+def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS, window_chars=WINDOW_CHARS, max_windows=MAX_WINDOWS):
     """按段取 make_packet 窗口，同文件重叠就合并；titles、status 按书分。
 
     chosen 每项要带 book、path、line；单书就是一个 book 的映射。
@@ -546,8 +600,9 @@ def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS,
             continue
         title = _title_for(titles.get(book) or {}, path)
         meta[path] = (book, title)
-        packet = book_expand.make_packet(book, path, title, lines, p["line"], 2,
-                                         window_chars, status.get(book, "missing"))
+        packet = book_expand.make_packet(
+            book, path, title, lines, p["line"], 2, window_chars, status.get(book, "missing")
+        )
         if path not in per_path:
             per_path[path] = []
             order.append(path)
@@ -571,13 +626,23 @@ def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS,
         if remaining < floor:
             break
         cap = min(window_chars, remaining)
-        start, end, text = _window_text(cache[item["path"]], prefix[item["path"]],
-                                        item["start"], item["end"], item["mid"], cap)
+        start, end, text = _window_text(
+            cache[item["path"]], prefix[item["path"]], item["start"], item["end"], item["mid"], cap
+        )
         if not text.strip():
             continue
         book, title = meta[item["path"]]
-        windows.append({"path": item["path"], "book": book, "title": title,
-                        "start": start, "end": end, "chars": len(text), "text": text})
+        windows.append(
+            {
+                "path": item["path"],
+                "book": book,
+                "title": title,
+                "start": start,
+                "end": end,
+                "chars": len(text),
+                "text": text,
+            }
+        )
         used += len(text)
     return windows
 
@@ -592,24 +657,26 @@ def _role_head(role, focus_title=""):
     return ""
 
 
-def build_prompt(question, book, windows, chapters, history="", role="",
-                 focus_title=""):
-    blocks = ["%s:%d-%d\n%s" % (w["path"], w["start"], w["end"], w["text"])
-              for w in windows]
+def build_prompt(question, book, windows, chapters, history="", role="", focus_title=""):
+    blocks = ["%s:%d-%d\n%s" % (w["path"], w["start"], w["end"], w["text"]) for w in windows]
     rows = []
     for i, c in enumerate(chapters, 1):
         cov = "-" if c.get("coverage") is None else "%.2f" % float(c["coverage"])
-        rows.append("%d. %s:%d 《%s》 score=%.2f cov=%s"
-                    % (i, c["path"], c["line"], c["title"], c["score"], cov))
+        rows.append("%d. %s:%d 《%s》 score=%.2f cov=%s" % (i, c["path"], c["line"], c["title"], c["score"], cov))
     history = (history.strip() + "\n") if history.strip() else ""
     head = _role_head(role, focus_title)
     limit = PROMPT_MAX + (HISTORY_CHARS_SINGLE if history else 0) + len(head)
 
     def render(blocks):
         return head + PROMPT.format(
-            question=question, book=book, md="books/%s/md" % book,
-            history=history, n=len(rows), chapters="\n".join(rows),
-            evidence="\n\n".join(blocks))
+            question=question,
+            book=book,
+            md="books/%s/md" % book,
+            history=history,
+            n=len(rows),
+            chapters="\n".join(rows),
+            evidence="\n\n".join(blocks),
+        )
 
     prompt = render(blocks)
     while len(prompt) > limit and len(blocks) > 1:
@@ -643,18 +710,17 @@ def _coverage(terms):
             expr = cjk.query_expr(term)
             if not expr:
                 continue
-            count = con.execute(
-                "SELECT count(*) FROM para_fts WHERE para_fts MATCH ?",
-                (expr,)).fetchone()[0]
+            count = con.execute("SELECT count(*) FROM para_fts WHERE para_fts MATCH ?", (expr,)).fetchone()[0]
             nbooks = con.execute(
-                "SELECT count(DISTINCT p.book) FROM para_fts f JOIN para p ON p.id=f.rowid "
-                "WHERE para_fts MATCH ?", (expr,)).fetchone()[0]
+                "SELECT count(DISTINCT p.book) FROM para_fts f JOIN para p ON p.id=f.rowid WHERE para_fts MATCH ?",
+                (expr,),
+            ).fetchone()[0]
             rows = con.execute(
                 "SELECT p.book, count(*) c FROM para_fts f JOIN para p ON p.id=f.rowid "
                 "WHERE para_fts MATCH ? GROUP BY p.book ORDER BY c DESC LIMIT 2",
-                (expr,)).fetchall()
-            stats.append({"term": term, "count": count, "nbooks": nbooks,
-                          "books": [(b, c) for b, c in rows]})
+                (expr,),
+            ).fetchall()
+            stats.append({"term": term, "count": count, "nbooks": nbooks, "books": [(b, c) for b, c in rows]})
     except sqlite3.Error:
         return ""
     finally:
@@ -673,8 +739,7 @@ def _coverage(terms):
             for s in picked:
                 for b, _c in s["books"]:
                     if b not in titles:
-                        row = bcon.execute(
-                            "SELECT title FROM book WHERE path = ?", (b,)).fetchone()
+                        row = bcon.execute("SELECT title FROM book WHERE path = ?", (b,)).fetchone()
                         titles[b] = row[0] if row else b.rsplit("/", 1)[-1]
         finally:
             bcon.close()
@@ -690,13 +755,12 @@ def _coverage(terms):
         if len(books) == 1:
             book_part = "《%s》" % label(books[0][0])
         elif len(books) >= 2:
-            book_part = "《%s》%d，《%s》%d" % (
-                label(books[0][0]), books[0][1], label(books[1][0]), books[1][1])
+            book_part = "《%s》%d，《%s》%d" % (label(books[0][0]), books[0][1], label(books[1][0]), books[1][1])
         else:
             book_part = ""
-        lines.append("- 「%s」%d 段 / %d 本%s"
-                     % (s["term"], s["count"], s["nbooks"],
-                        ("：" + book_part) if book_part else ""))
+        lines.append(
+            "- 「%s」%d 段 / %d 本%s" % (s["term"], s["count"], s["nbooks"], ("：" + book_part) if book_part else "")
+        )
     return "\n".join(lines)
 
 
@@ -707,10 +771,16 @@ def multi_windows(plans):
     per_book = []
     for plan in plans:
         book = plan["source"]["book"]
-        per_book.append(build_windows(plan["chosen"], {book: plan["titles"]},
-                                      {book: plan["status"]}, total_chars=quota,
-                                      window_chars=max(200, quota // MULTI_WINDOWS_PER_BOOK),
-                                      max_windows=MULTI_WINDOWS_PER_BOOK))
+        per_book.append(
+            build_windows(
+                plan["chosen"],
+                {book: plan["titles"]},
+                {book: plan["status"]},
+                total_chars=quota,
+                window_chars=max(200, quota // MULTI_WINDOWS_PER_BOOK),
+                max_windows=MULTI_WINDOWS_PER_BOOK,
+            )
+        )
     out = []
     for i in range(max([len(ws) for ws in per_book] or [0])):
         out.extend(ws[i] for ws in per_book if i < len(ws))
@@ -727,8 +797,7 @@ def _drop_last_window(windows, rank):
     return False
 
 
-def build_multi_prompt(question, plans, windows, coverage="", history="", role="",
-                       focus_title=""):
+def build_multi_prompt(question, plans, windows, coverage="", history="", role="", focus_title=""):
     """一次提示词装下所有书：库级覆盖 + 书名行 + 每书 4 章地图 + 按书分组的窗口。"""
     rank = {p["source"]["book"]: i for i, p in enumerate(plans)}
     labels = {p["source"]["book"]: _book_label(p["source"]) for p in plans}
@@ -748,28 +817,34 @@ def build_multi_prompt(question, plans, windows, coverage="", history="", role="
             rows = ["《%s》 md=%s" % (labels[book], md)]
             for i, c in enumerate(plan["chapters"], 1):
                 cov = "-" if c.get("coverage") is None else "%.2f" % float(c["coverage"])
-                rows.append("%d. %s:%d 《%s》 score=%.2f cov=%s"
-                            % (i, c["path"], c["line"], c["title"], c["score"], cov))
+                rows.append(
+                    "%d. %s:%d 《%s》 score=%.2f cov=%s" % (i, c["path"], c["line"], c["title"], c["score"], cov)
+                )
             chapter_blocks.append("\n".join(rows))
-        blocks = ["《%s》 %s:%d-%d\n%s" % (labels.get(w["book"], ""), w["path"],
-                                          w["start"], w["end"], w["text"])
-                  for w in keep]
-        empty = [labels[p["source"]["book"]] for p in plans
-                 if not any(w["book"] == p["source"]["book"] for w in keep)]
+        blocks = [
+            "《%s》 %s:%d-%d\n%s" % (labels.get(w["book"], ""), w["path"], w["start"], w["end"], w["text"])
+            for w in keep
+        ]
+        empty = [labels[p["source"]["book"]] for p in plans if not any(w["book"] == p["source"]["book"] for w in keep)]
         nowindow = ""
         if empty:
-            nowindow = ("无相关原文窗口的书：《%s》（这些书在回答里要写明没有相关原文）"
-                        % "》《".join(empty))
+            nowindow = "无相关原文窗口的书：《%s》（这些书在回答里要写明没有相关原文）" % "》《".join(empty)
         prompt = head + MULTI_PROMPT.format(
-            question=question, coverage=coverage, n=len(plans), history=history,
+            question=question,
+            coverage=coverage,
+            n=len(plans),
+            history=history,
             books="\n".join(book_rows),
-            chapters="\n\n".join(chapter_blocks), evidence="\n\n".join(blocks),
-            nowindow=nowindow)
+            chapters="\n\n".join(chapter_blocks),
+            evidence="\n\n".join(blocks),
+            nowindow=nowindow,
+        )
         if len(prompt) <= limit or not _drop_last_window(keep, rank):
             return prompt
 
 
 # ---- 调模型 ---------------------------------------------------------
+
 
 def call_pi(prompt, book, books=None, thinking=DEFAULT_THINKING):
     """返回 (raw_text, error)。失败时 raw_text 为 None。"""
@@ -778,9 +853,14 @@ def call_pi(prompt, book, books=None, thinking=DEFAULT_THINKING):
     env["BOOK_MD"] = roots[0]
     env["BOOK_MDS"] = json.dumps(roots, ensure_ascii=False)
     try:
-        res = subprocess.run(pi_cmd(normalize_thinking(thinking)) + [prompt],
-                             capture_output=True, text=True,
-                             timeout=PI_TIMEOUT, cwd=ROOT, env=env)
+        res = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+            [*pi_cmd(normalize_thinking(thinking)), prompt],
+            capture_output=True,
+            text=True,
+            timeout=PI_TIMEOUT,
+            cwd=ROOT,
+            env=env,
+        )
     except subprocess.TimeoutExpired:
         return None, "回答超时（%d 秒）" % PI_TIMEOUT
     except OSError as exc:
@@ -825,12 +905,12 @@ def parse_reply(raw):
                 depth -= 1
                 if depth == 0:
                     try:
-                        obj = json.loads(text[start:i + 1])
+                        obj = json.loads(text[start : i + 1])
                     except ValueError:
                         obj = None
                     if isinstance(obj, dict) and any(
-                            k in obj for k in ("answer", "lead", "sections",
-                                               "citations", "confidence", "not_found")):
+                        k in obj for k in ("answer", "lead", "sections", "citations", "confidence", "not_found")
+                    ):
                         return obj
                     break
         start = text.find("{", start + 1)
@@ -854,9 +934,11 @@ def _request_reply(prompt, book, books=None, thinking=DEFAULT_THINKING, accept=N
             return reply, raw, ""
         error = "模型没有返回 JSON" if reply is None else "模型没有给出答案结构"
         # server.log 里要能看出这次答案多等了一轮，以及坏在哪
-        print("回答重问（%s）：%s" % ("解析失败" if reply is None else "没有正文",
-                                " ".join(raw.split())[:120]),
-              file=sys.stderr, flush=True)
+        print(
+            "回答重问（%s）：%s" % ("解析失败" if reply is None else "没有正文", " ".join(raw.split())[:120]),
+            file=sys.stderr,
+            flush=True,
+        )
         ask = prompt + (JSON_REMIND if reply is None else ANSWER_REMIND)
     return None, raw, error
 
@@ -939,14 +1021,15 @@ def _shape_answer(reply):
 
 # ---- 回查引文 -------------------------------------------------------
 
-class _ChapterIndex(object):
+
+class _ChapterIndex:
     """按去空白文本回查：先逐行，再整章（跨行引文），行号以文件为准。"""
 
     def __init__(self, rel):
         self.rel = rel
         with open(os.path.join(ROOT, rel), encoding="utf-8", errors="replace") as fh:
             self.lines = fh.read().splitlines()
-        self.norm_lines = [_norm(l) for l in self.lines]
+        self.norm_lines = [_norm(raw_line) for raw_line in self.lines]
         self.offsets, self.full = [], []
         pos = 0
         for nl in self.norm_lines:
@@ -1020,8 +1103,7 @@ def verify_citations(cites, windows, hit_path="", hit_line=0, sources=None):
             continue
         seen.add(key)
         title = next((w["title"] for w in windows if w["path"] == rel), "")
-        out.append({"path": rel, "line": line, "quote": quote.strip(),
-                    "chapter": title, "verified": True})
+        out.append({"path": rel, "line": line, "quote": quote.strip(), "chapter": title, "verified": True})
     out.sort(key=lambda c: (c["path"] != hit_path, abs(c["line"] - hit_line)))
     return out[:MAX_CITATIONS], dropped
 
@@ -1060,11 +1142,17 @@ def _verify_multi(cites, windows, sources):
         if key in seen:
             continue
         seen.add(key)
-        by_book.setdefault(book, []).append({
-            "path": rel, "line": line, "quote": quote.strip(),
-            "chapter": chapter_of.get(rel, ""), "verified": True,
-            "book": book, "book_title": _book_label(scope[book]),
-        })
+        by_book.setdefault(book, []).append(
+            {
+                "path": rel,
+                "line": line,
+                "quote": quote.strip(),
+                "chapter": chapter_of.get(rel, ""),
+                "verified": True,
+                "book": book,
+                "book_title": _book_label(scope[book]),
+            }
+        )
     for book, items in by_book.items():
         seed = int(scope[book].get("line") or 1)
         items.sort(key=lambda c: abs(c["line"] - seed))
@@ -1085,9 +1173,20 @@ def _verify_multi(cites, windows, sources):
 
 # ---- 主流程 ---------------------------------------------------------
 
-def answer_question(question, book, path, line=1, terms=None, groups=None,
-                    use_cache=True, sources=None, thinking=DEFAULT_THINKING,
-                    history="", focus=None):
+
+def answer_question(
+    question,
+    book,
+    path,
+    line=1,
+    terms=None,
+    groups=None,
+    use_cache=True,
+    sources=None,
+    thinking=DEFAULT_THINKING,
+    history="",
+    focus=None,
+):
     """返回 Answer dict（结构见 ANSWER-BRIEF.md 的「数据形状」）。
 
     use_cache=False 即前端「重新检索」：跳过答案缓存并重新调模型，本次结果照样回写。
@@ -1108,29 +1207,53 @@ def answer_question(question, book, path, line=1, terms=None, groups=None,
         hit = _focus_source(named, scope, book, path, line)
         if hit is None:
             # 点名的书没落盘就明说，不拿检索第一名的书代答
-            return _err("点名的书没有可用原文（locked 或没有读到 md 路径），不拿别的书代答",
-                        ms=_ms(t0), thinking=thinking, focus=_focus_note(named))
+            return _err(
+                "点名的书没有可用原文（locked 或没有读到 md 路径），不拿别的书代答",
+                ms=_ms(t0),
+                thinking=thinking,
+                focus=_focus_note(named),
+            )
         note = _focus_note(named, hit)
         rest = [s for s in scope if s["book"] != hit["book"]]
         if not rest:
-            out = _answer_single(question, hit["book"], hit["path"], hit["line"],
-                                 terms, groups, use_cache, t0, thinking, history,
-                                 PROMPT_VERSION_ANCHOR_PRIMARY, "primary",
-                                 note["title"])
+            out = _answer_single(
+                question,
+                hit["book"],
+                hit["path"],
+                hit["line"],
+                terms,
+                groups,
+                use_cache,
+                t0,
+                thinking,
+                history,
+                PROMPT_VERSION_ANCHOR_PRIMARY,
+                "primary",
+                note["title"],
+            )
             out["focus"] = note
             return out
-        return _answer_anchored(question, named, hit, rest, terms, groups, use_cache,
-                                t0, thinking, history)
+        return _answer_anchored(question, named, hit, rest, terms, groups, use_cache, t0, thinking, history)
     if len(scope) >= 2:
-        return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking,
-                             history)
-    return _answer_single(question, book, path, line, terms, groups, use_cache, t0,
-                          thinking, history)
+        return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking, history)
+    return _answer_single(question, book, path, line, terms, groups, use_cache, t0, thinking, history)
 
 
-def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
-                   thinking=DEFAULT_THINKING, history="", version=None, role="",
-                   focus_title=""):
+def _answer_single(
+    question,
+    book,
+    path,
+    line,
+    terms,
+    groups,
+    use_cache,
+    t0,
+    thinking=DEFAULT_THINKING,
+    history="",
+    version=None,
+    role="",
+    focus_title="",
+):
     rel = _rel(path)
     if not _inside_library(rel):
         return _err("path 不在 books/ 下或不是 .md", ms=_ms(t0), thinking=thinking)
@@ -1143,8 +1266,7 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     if line < first:
         line = first
 
-    key = cache_key(question, book, rel, line, terms, groups, thinking, history,
-                    version)
+    key = cache_key(question, book, rel, line, terms, groups, thinking, history, version)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
         cached = _read_cached(cache_path, t0, thinking)
@@ -1166,12 +1288,10 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     prompt = build_prompt(question, book, windows, chapters, history, role, focus_title)
     reply, raw, error = _request_reply(prompt, book, thinking=thinking)
     if raw is None:
-        return _err(error, passages=_passages(windows), ms=_ms(t0),
-                    thinking=thinking)
+        return _err(error, passages=_passages(windows), ms=_ms(t0), thinking=thinking)
     if reply is None:
         head = " ".join((raw or "").split())[:200]
-        return _err("%s：%s" % (error, head), passages=_passages(windows),
-                    ms=_ms(t0), thinking=thinking)
+        return _err("%s：%s" % (error, head), passages=_passages(windows), ms=_ms(t0), thinking=thinking)
 
     lead, sections, dissent, gap, answer = _shape_answer(reply)
     not_found = bool(reply.get("not_found")) or not answer
@@ -1191,20 +1311,38 @@ def _answer_single(question, book, path, line, terms, groups, use_cache, t0,
     if not answer:
         answer = "未找到原文依据"
 
-    out = _ok(answer=answer, citations=citations, passages=_passages(windows),
-              confidence=confidence, not_found=not_found, error=error, ms=_ms(t0),
-              lead=lead, sections=sections, dissent=dissent, gap=gap,
-              thinking=thinking)
-    try:
+    out = _ok(
+        answer=answer,
+        citations=citations,
+        passages=_passages(windows),
+        confidence=confidence,
+        not_found=not_found,
+        error=error,
+        ms=_ms(t0),
+        lead=lead,
+        sections=sections,
+        dissent=dissent,
+        gap=gap,
+        thinking=thinking,
+    )
+    with contextlib.suppress(OSError):
         _write_json(cache_path, out)
-    except OSError:
-        pass
     return out
 
 
-def _answer_multi(question, sources, terms, groups, use_cache, t0,
-                  thinking=DEFAULT_THINKING, history="", version=None, role="",
-                  focus_title=""):
+def _answer_multi(
+    question,
+    sources,
+    terms,
+    groups,
+    use_cache,
+    t0,
+    thinking=DEFAULT_THINKING,
+    history="",
+    version=None,
+    role="",
+    focus_title="",
+):
     """多书：每本取三段，一次提示词逐书回答，引文按书归并。"""
     key = multi_cache_key(question, sources, terms, groups, thinking, history, version)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
@@ -1218,8 +1356,9 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
     try:
         for src in sources:
             titles, status = _chapter_titles(src["book"])
-            picked, chapters = pick_passages(con, src["book"], src["path"], src["line"],
-                                             terms, groups, MULTI_QSEARCH_LIMIT)
+            picked, chapters = pick_passages(
+                con, src["book"], src["path"], src["line"], terms, groups, MULTI_QSEARCH_LIMIT
+            )
             # 命中行本身就是首个正文行（line==1）也是合法命中，照样进证据窗；
             # 以前 > 1 会把用户点中的那段丢掉
             chosen = [picked[0]] if picked else []
@@ -1227,9 +1366,15 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
                 if len(chosen) >= MULTI_WINDOWS_PER_BOOK:
                     break
                 chosen.append(item)
-            plans.append({"source": src, "titles": titles, "status": status,
-                          "chosen": [dict(item, book=src["book"]) for item in chosen],
-                          "chapters": chapters[:MULTI_CHAPTERS]})
+            plans.append(
+                {
+                    "source": src,
+                    "titles": titles,
+                    "status": status,
+                    "chosen": [dict(item, book=src["book"]) for item in chosen],
+                    "chapters": chapters[:MULTI_CHAPTERS],
+                }
+            )
     finally:
         con.close()
 
@@ -1237,24 +1382,26 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
     if not windows:
         return _err("没有取到原文窗口", passages=[], ms=_ms(t0), thinking=thinking)
     coverage = _coverage(terms)
-    prompt = build_multi_prompt(question, plans, windows, coverage, history, role,
-                                focus_title)
+    prompt = build_multi_prompt(question, plans, windows, coverage, history, role, focus_title)
     # 模型给了 JSON 但没有任何正文时重问，别当成「库里没有」。
     reply, raw, error = _request_reply(
-        prompt, sources[0]["book"], [s["book"] for s in sources], thinking,
-        accept=lambda reply: bool(reply.get("not_found")) or bool(_shape_answer(reply)[4]))
+        prompt,
+        sources[0]["book"],
+        [s["book"] for s in sources],
+        thinking,
+        accept=lambda reply: bool(reply.get("not_found")) or bool(_shape_answer(reply)[4]),
+    )
     if raw is None:
-        return _err(error, passages=_passages(windows), ms=_ms(t0),
-                    thinking=thinking)
+        return _err(error, passages=_passages(windows), ms=_ms(t0), thinking=thinking)
     if reply is None:
         head = " ".join((raw or "").split())[:200]
-        return _err("%s：%s" % (error or "模型没有返回 JSON", head),
-                    passages=_passages(windows), ms=_ms(t0), thinking=thinking)
+        return _err(
+            "%s：%s" % (error or "模型没有返回 JSON", head), passages=_passages(windows), ms=_ms(t0), thinking=thinking
+        )
 
     lead, sections, dissent, gap, answer = _shape_answer(reply)
     not_found = bool(reply.get("not_found")) or not answer
-    citations, _dropped = verify_citations(reply.get("citations"), windows,
-                                           sources=sources)
+    citations, _dropped = verify_citations(reply.get("citations"), windows, sources=sources)
     confidence = reply.get("confidence")
     if confidence not in ("high", "medium", "low"):
         confidence = "medium"
@@ -1276,22 +1423,38 @@ def _answer_multi(question, sources, terms, groups, use_cache, t0,
     counts = {}
     for c in citations:
         counts[c["book"]] = counts.get(c["book"], 0) + 1
-    out = _ok(answer=answer, lead=lead, sections=sections, dissent=dissent, gap=gap,
-              citations=citations, passages=_passages(windows),
-              confidence=confidence, not_found=not_found, error=error, ms=_ms(t0),
-              thinking=thinking)
+    out = _ok(
+        answer=answer,
+        lead=lead,
+        sections=sections,
+        dissent=dissent,
+        gap=gap,
+        citations=citations,
+        passages=_passages(windows),
+        confidence=confidence,
+        not_found=not_found,
+        error=error,
+        ms=_ms(t0),
+        thinking=thinking,
+    )
     out["mode"] = "multi"
-    out["sources"] = [{"book": s["book"], "title": _book_label(s), "path": s["path"],
-                       "line": s["line"], "citations": counts.get(s["book"], 0)}
-                      for s in sources]
-    try:
+    out["sources"] = [
+        {
+            "book": s["book"],
+            "title": _book_label(s),
+            "path": s["path"],
+            "line": s["line"],
+            "citations": counts.get(s["book"], 0),
+        }
+        for s in sources
+    ]
+    with contextlib.suppress(OSError):
         _write_json(cache_path, out)
-    except OSError:
-        pass
     return out
 
 
 # ---- 点名书（anchored） --------------------------------------------
+
 
 def _normalize_focus(focus):
     """请求里的 focus 只认 status/book/title/best_path/best_line，其余丢掉。"""
@@ -1306,9 +1469,13 @@ def _normalize_focus(focus):
         best_line = max(1, int(focus.get("best_line") or 1))
     except (TypeError, ValueError):
         best_line = 1
-    return {"status": text("status", 20), "book": text("book", 40),
-            "title": text("title"), "best_path": text("best_path", 500),
-            "best_line": best_line}
+    return {
+        "status": text("status", 20),
+        "book": text("book", 40),
+        "title": text("title"),
+        "best_path": text("best_path", 500),
+        "best_line": best_line,
+    }
 
 
 def _focus_source(focus, scope, book="", path="", line=1):
@@ -1318,8 +1485,7 @@ def _focus_source(focus, scope, book="", path="", line=1):
         return hit
     tries = []
     if focus["best_path"]:
-        tries.append({"path": focus["best_path"], "line": focus["best_line"],
-                      "title": focus["title"]})
+        tries.append({"path": focus["best_path"], "line": focus["best_line"], "title": focus["title"]})
     if path and str(book or "").strip() == focus["book"]:
         tries.append({"path": path, "line": line, "title": focus["title"]})
     for item in tries:
@@ -1331,26 +1497,30 @@ def _focus_source(focus, scope, book="", path="", line=1):
 
 
 def _focus_note(focus, src=None):
-    return {"book": focus["book"],
-            "title": focus["title"] or (src or {}).get("title") or focus["book"],
-            "status": "exact"}
+    return {
+        "book": focus["book"],
+        "title": focus["title"] or (src or {}).get("title") or focus["book"],
+        "status": "exact",
+    }
 
 
-def anchored_cache_key(question, focus, sources, terms, groups=None,
-                       thinking=DEFAULT_THINKING, history=""):
+def anchored_cache_key(question, focus, sources, terms, groups=None, thinking=DEFAULT_THINKING, history=""):
     """锚定回答的整份缓存键：点名书、书单顺序、两部分版本都在里面。"""
-    payload = {"q": question,
-               "focus": [focus.get("book"), focus.get("title")],
-               "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
-               "terms": sorted({str(t) for t in terms if str(t).strip()}),
-               "groups": groups or [],
-               "v": PROMPT_VERSION_ANCHORED,
-               "pv": [PROMPT_VERSION_ANCHOR_PRIMARY, PROMPT_VERSION_ANCHOR_SUPPLEMENT],
-               "model": MODEL, "thinking": thinking}
+    payload = {
+        "q": question,
+        "focus": [focus.get("book"), focus.get("title")],
+        "sources": [[s["book"], s["path"], int(s["line"])] for s in sources],
+        "terms": sorted({str(t) for t in terms if str(t).strip()}),
+        "groups": groups or [],
+        "v": PROMPT_VERSION_ANCHORED,
+        "pv": [PROMPT_VERSION_ANCHOR_PRIMARY, PROMPT_VERSION_ANCHOR_SUPPLEMENT],
+        "model": MODEL,
+        "thinking": thinking,
+    }
     if history:
-        payload["h"] = hashlib.sha1(history.encode("utf-8")).hexdigest()[:16]
+        payload["h"] = hashlib.sha1(history.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _part_citations(result, allowed, forbid="", labels=None):
@@ -1382,19 +1552,20 @@ def _answer_part(kind, title, result, citations, dropped=0):
     if dropped:
         note = "引文跨书（已丢弃 %d 条）" % dropped
         error = (error + "；" + note) if error else note
-    return {"kind": kind, "title": title,
-            "lead": result.get("lead") or "",
-            "sections": [s for s in (result.get("sections") or [])
-                         if isinstance(s, dict)],
-            "dissent": result.get("dissent") or "",
-            "gap": result.get("gap") or "",
-            "citations": citations,
-            "not_found": bool(result.get("not_found")),
-            "error": error}
+    return {
+        "kind": kind,
+        "title": title,
+        "lead": result.get("lead") or "",
+        "sections": [s for s in (result.get("sections") or []) if isinstance(s, dict)],
+        "dissent": result.get("dissent") or "",
+        "gap": result.get("gap") or "",
+        "citations": citations,
+        "not_found": bool(result.get("not_found")),
+        "error": error,
+    }
 
 
-def _answer_anchored(question, focus, focus_src, supplements, terms, groups,
-                     use_cache, t0, thinking, history):
+def _answer_anchored(question, focus, focus_src, supplements, terms, groups, use_cache, t0, thinking, history):
     """前一半只答点名书，后一半只答其他书；两部分并行，各自回查。
 
     前一半失败不拿别的书顶替：整份报错，带上已经算好的补充部分。补充失败只降置信、
@@ -1405,8 +1576,7 @@ def _answer_anchored(question, focus, focus_src, supplements, terms, groups,
     allowed_focus = {focus_src["book"]}
     allowed_rest = {s["book"] for s in supplements}
 
-    key = anchored_cache_key(question, note, [focus_src] + supplements, terms, groups,
-                             thinking, history)
+    key = anchored_cache_key(question, note, [focus_src, *supplements], terms, groups, thinking, history)
     cache_path = os.path.join(CACHE_DIR, key + ".json")
     if use_cache:
         cached = _read_cached(cache_path, t0, thinking)
@@ -1416,63 +1586,94 @@ def _answer_anchored(question, focus, focus_src, supplements, terms, groups,
     one_rest = supplements[0] if len(supplements) == 1 else None
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         primary_done = pool.submit(
-            _answer_single, question, focus_src["book"], focus_src["path"],
-            focus_src["line"], terms, groups, use_cache, t0, thinking, history,
-            PROMPT_VERSION_ANCHOR_PRIMARY, "primary", title)
+            _answer_single,
+            question,
+            focus_src["book"],
+            focus_src["path"],
+            focus_src["line"],
+            terms,
+            groups,
+            use_cache,
+            t0,
+            thinking,
+            history,
+            PROMPT_VERSION_ANCHOR_PRIMARY,
+            "primary",
+            title,
+        )
         if one_rest is not None:
             supplement_done = pool.submit(
-                _answer_single, question, one_rest["book"], one_rest["path"],
-                one_rest["line"], terms, groups, use_cache, t0, thinking, history,
-                PROMPT_VERSION_ANCHOR_SUPPLEMENT, "supplement", title)
+                _answer_single,
+                question,
+                one_rest["book"],
+                one_rest["path"],
+                one_rest["line"],
+                terms,
+                groups,
+                use_cache,
+                t0,
+                thinking,
+                history,
+                PROMPT_VERSION_ANCHOR_SUPPLEMENT,
+                "supplement",
+                title,
+            )
         else:
             supplement_done = pool.submit(
-                _answer_multi, question, list(supplements), terms, groups, use_cache,
-                t0, thinking, history, PROMPT_VERSION_ANCHOR_SUPPLEMENT,
-                "supplement", title)
+                _answer_multi,
+                question,
+                list(supplements),
+                terms,
+                groups,
+                use_cache,
+                t0,
+                thinking,
+                history,
+                PROMPT_VERSION_ANCHOR_SUPPLEMENT,
+                "supplement",
+                title,
+            )
         try:
             primary = primary_done.result()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             primary = _err("点名的书没有答出（%s）" % exc.__class__.__name__)
         try:
             supplement = supplement_done.result()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             supplement = _err("补充没有答出（%s）" % exc.__class__.__name__)
 
     rest_labels = {s["book"]: _book_label(s) for s in supplements}
-    primary_cites, primary_dropped = _part_citations(
-        primary, allowed_focus, labels={focus_src["book"]: title})
-    primary_part = _answer_part("primary", title, primary, primary_cites,
-                                primary_dropped)
+    primary_cites, primary_dropped = _part_citations(primary, allowed_focus, labels={focus_src["book"]: title})
+    primary_part = _answer_part("primary", title, primary, primary_cites, primary_dropped)
     if not primary.get("ok") or not (primary.get("answer") or "").strip():
         parts = []
         if supplement.get("ok") and (supplement.get("answer") or "").strip():
-            cites, dropped = _part_citations(supplement, allowed_rest,
-                                             focus_src["book"], labels=rest_labels)
-            parts.append(_answer_part("supplement", "其他书的补充", supplement, cites,
-                                      dropped))
-        return _err("点名的书没有答出：%s" % (primary.get("error") or "没有正文"),
-                    ms=_ms(t0), thinking=thinking, focus=note, parts=parts,
-                    supplement_error=supplement.get("error") or "")
+            cites, dropped = _part_citations(supplement, allowed_rest, focus_src["book"], labels=rest_labels)
+            parts.append(_answer_part("supplement", "其他书的补充", supplement, cites, dropped))
+        return _err(
+            "点名的书没有答出：%s" % (primary.get("error") or "没有正文"),
+            ms=_ms(t0),
+            thinking=thinking,
+            focus=note,
+            parts=parts,
+            supplement_error=supplement.get("error") or "",
+        )
 
     supplement_part, supplement_error = None, ""
     if supplement.get("ok") and (supplement.get("answer") or "").strip():
-        cites, dropped = _part_citations(supplement, allowed_rest, focus_src["book"],
-                                         labels=rest_labels)
-        supplement_part = _answer_part("supplement", "其他书的补充", supplement, cites,
-                                       dropped)
+        cites, dropped = _part_citations(supplement, allowed_rest, focus_src["book"], labels=rest_labels)
+        supplement_part = _answer_part("supplement", "其他书的补充", supplement, cites, dropped)
     else:
         supplement_error = supplement.get("error") or "补充书没有答出"
 
     parts = [primary_part] + ([supplement_part] if supplement_part else [])
-    citations = (primary_cites + (supplement_part["citations"]
-                                  if supplement_part else []))[:MAX_CITATIONS_MULTI]
+    citations = (primary_cites + (supplement_part["citations"] if supplement_part else []))[:MAX_CITATIONS_MULTI]
     answer = primary.get("answer") or "未找到原文依据"
     sections = list(primary_part["sections"])
     passages = list(primary.get("passages") or [])
     if supplement_part is not None:
         answer = answer + "\n\n## 其他书的补充\n\n" + (supplement.get("answer") or "")
-        sections.append({"heading": "其他书的补充",
-                         "body": supplement.get("answer") or ""})
+        sections.append({"heading": "其他书的补充", "body": supplement.get("answer") or ""})
         passages.extend(supplement.get("passages") or [])
 
     confidence = primary.get("confidence")
@@ -1480,41 +1681,60 @@ def _answer_anchored(question, focus, focus_src, supplements, terms, groups,
         confidence = "medium"
     if supplement_error and confidence == "high":
         confidence = "medium"
-    not_found = primary_part["not_found"] and (supplement_part["not_found"]
-                                               if supplement_part else True)
+    not_found = primary_part["not_found"] and (supplement_part["not_found"] if supplement_part else True)
     errors = [e for e in (primary_part["error"], supplement_error) if e]
 
     counts = {}
     for cite in citations:
         counts[cite["book"]] = counts.get(cite["book"], 0) + 1
-    sources = [{"book": focus_src["book"], "title": title,
-                "path": focus_src["path"], "line": focus_src["line"],
-                "citations": counts.get(focus_src["book"], 0)}]
+    sources = [
+        {
+            "book": focus_src["book"],
+            "title": title,
+            "path": focus_src["path"],
+            "line": focus_src["line"],
+            "citations": counts.get(focus_src["book"], 0),
+        }
+    ]
     for src in supplements:
-        sources.append({"book": src["book"], "title": _book_label(src),
-                        "path": src["path"], "line": src["line"],
-                        "citations": counts.get(src["book"], 0)})
+        sources.append(
+            {
+                "book": src["book"],
+                "title": _book_label(src),
+                "path": src["path"],
+                "line": src["line"],
+                "citations": counts.get(src["book"], 0),
+            }
+        )
 
-    out = _ok(answer=answer, lead=primary_part["lead"], sections=sections,
-              dissent=primary_part["dissent"], gap=primary_part["gap"],
-              citations=citations, passages=passages, confidence=confidence,
-              not_found=not_found, error="；".join(errors), ms=_ms(t0),
-              thinking=thinking)
+    out = _ok(
+        answer=answer,
+        lead=primary_part["lead"],
+        sections=sections,
+        dissent=primary_part["dissent"],
+        gap=primary_part["gap"],
+        citations=citations,
+        passages=passages,
+        confidence=confidence,
+        not_found=not_found,
+        error="；".join(errors),
+        ms=_ms(t0),
+        thinking=thinking,
+    )
     out["mode"] = "anchored"
     out["focus"] = note
     out["parts"] = parts
     out["sources"] = sources
     out["supplement_error"] = supplement_error
     if not supplement_error:
-        try:
+        with contextlib.suppress(OSError):
             _write_json(cache_path, out)
-        except OSError:
-            pass
     return out
 
 
 def main(argv=None):
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
     ap.add_argument("--book", default="")
@@ -1525,8 +1745,9 @@ def main(argv=None):
     ap.add_argument("--no-cache", action="store_true")
     args = ap.parse_args(argv)
     terms = [t for t in re.split(r"[\s,，]+", args.terms) if t]
-    out = answer_question(args.question, args.book, args.path, args.line, terms,
-                          use_cache=not args.no_cache, thinking=args.thinking)
+    out = answer_question(
+        args.question, args.book, args.path, args.line, terms, use_cache=not args.no_cache, thinking=args.thinking
+    )
     print(json.dumps(out, ensure_ascii=False, indent=1))
 
 

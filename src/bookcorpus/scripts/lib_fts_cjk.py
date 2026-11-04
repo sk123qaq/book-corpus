@@ -4,6 +4,7 @@
 索引侧：中文连续串切成重叠二元组，单字串保留单字；ASCII 词原样小写。
 查询侧：1 字走前缀，2 字走单 token，3 字以上走相邻二元组 phrase。
 """
+
 import re
 import unicodedata
 
@@ -30,7 +31,7 @@ def tokens(text):
             if len(run) == 1:
                 out.append(run)
             else:
-                out.extend(run[i:i + 2] for i in range(len(run) - 1))
+                out.extend(run[i : i + 2] for i in range(len(run) - 1))
         else:
             out.append(run.lower())
     return out
@@ -55,7 +56,7 @@ def query_expr(q):
             elif len(run) == 2:
                 parts.append(_quote(run))
             else:
-                parts.append('"%s"' % " ".join(run[i:i + 2] for i in range(len(run) - 1)))
+                parts.append('"%s"' % " ".join(run[i : i + 2] for i in range(len(run) - 1)))
         else:
             parts.append(_quote(run.lower()))
     if not parts:
@@ -65,12 +66,12 @@ def query_expr(q):
 
 def selftest():
     cases = {
-        "自由": ['自由'],
-        "内卷": ['内卷'],
-        "清华": ['清华'],
-        "自由自在": ['自由', '由自', '自在'],
-        "1984 自由": ['1984', '自由'],
-        "㐀㐁㐂": ['㐀㐁', '㐁㐂'],
+        "自由": ["自由"],
+        "内卷": ["内卷"],
+        "清华": ["清华"],
+        "自由自在": ["自由", "由自", "自在"],
+        "1984 自由": ["1984", "自由"],
+        "㐀㐁㐂": ["㐀㐁", "㐁㐂"],
     }
     for text, want in cases.items():
         got = tokens(text)

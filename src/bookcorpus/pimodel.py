@@ -133,8 +133,12 @@ def run(values, prompt, timeout=90, extra=(), level=None):
     text = (proc.stdout or "").strip()
     if proc.returncode != 0:
         error = (proc.stderr or proc.stdout or "").strip().splitlines()
-        return {"ok": False, "ms": _ms(began), "argv": cmd,
-                "error": error[-1][:300] if error else "pi 退出 %d" % proc.returncode}
+        return {
+            "ok": False,
+            "ms": _ms(began),
+            "argv": cmd,
+            "error": error[-1][:300] if error else "pi 退出 %d" % proc.returncode,
+        }
     return {"ok": True, "ms": _ms(began), "text": text, "argv": cmd}
 
 
@@ -165,7 +169,7 @@ def save(root, changes):
             continue
         lines.append("%s = %s" % (key, _toml(value)))
     if not lines:
-        lines = ['schema = 2']
+        lines = ["schema = 2"]
     lines.append("")
     lines.append("[model]")
     for field in FIELDS:
@@ -223,8 +227,7 @@ def setup_pi(values):
 def known_models(limit=4000):
     """pi 认得的模型，一行一个；pi 不在或超时就返回空表。"""
     try:
-        proc = subprocess.run(pi_head() + ["--list-models"], capture_output=True,
-                              text=True, timeout=20)
+        proc = subprocess.run([*pi_head(), "--list-models"], capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.TimeoutExpired):
         return []
     return [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()][:limit]

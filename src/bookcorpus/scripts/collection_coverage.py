@@ -8,17 +8,20 @@
   python3 collection_coverage.py --src <合集.epub> \
       --old <旧md目录1> <旧md目录2> ... --new <新md目录1> <新md目录2> ...
 """
+
 import argparse
 import json
 import os
+import pathlib
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 sys.path.insert(0, os.path.join(L.skill_dir("ebook-to-md"), "scripts"))
-from audit_volume import Epub  # noqa: E402
-from audit_old_md import page_anchors  # noqa: E402
+from audit_old_md import page_anchors
+from audit_volume import Epub
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 
@@ -30,12 +33,12 @@ def md_cjk(dirs):
             for name in sorted(files):
                 if not name.endswith(".md") or name == "README.md":
                     continue
-                text = open(os.path.join(root, name), encoding="utf-8").read()
+                text = pathlib.Path(os.path.join(root, name)).read_text(encoding="utf-8")
                 if text.startswith("---"):
                     end = text.find("\n---", 3)
                     if end != -1:
                         nl = text.find("\n", end + 1)
-                        text = text[nl + 1:] if nl != -1 else ""
+                        text = text[nl + 1 :] if nl != -1 else ""
                 parts.append("".join(CJK_RE.findall(text)))
     return "".join(parts)
 
@@ -66,27 +69,36 @@ def main():
         total += len(anchors)
         old_hits += ho
         new_hits += hn
-        pages.append({"doc": doc, "anchors": len(anchors), "cjk": len(text),
-                      "old_hits": ho, "new_hits": hn})
+        pages.append({"doc": doc, "anchors": len(anchors), "cjk": len(text), "old_hits": ho, "new_hits": hn})
         if a.details:
-            print("  %-28s cjk=%6d old %2d/%d new %2d/%d"
-                  % (doc[-28:], len(text), ho, len(anchors), hn, len(anchors)))
+            print("  %-28s cjk=%6d old %2d/%d new %2d/%d" % (doc[-28:], len(text), ho, len(anchors), hn, len(anchors)))
     if not total:
         print("源书锚点为空，无法算覆盖率")
         return 1
-    print("old %d/%d = %.1f%%   new %d/%d = %.1f%%"
-          % (old_hits, total, 100 * old_hits / total, new_hits, total,
-             100 * new_hits / total))
+    print(
+        "old %d/%d = %.1f%%   new %d/%d = %.1f%%"
+        % (old_hits, total, 100 * old_hits / total, new_hits, total, 100 * new_hits / total)
+    )
     print("old CJK %d  new CJK %d" % (len(old), len(new)))
     if a.out:
         tmp = a.out + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump({"src": os.path.abspath(a.src), "total": total,
-                       "old_hits": old_hits, "new_hits": new_hits,
-                       "old_ratio": round(old_hits / total, 4),
-                       "new_ratio": round(new_hits / total, 4),
-                       "old_cjk": len(old), "new_cjk": len(new), "pages": pages},
-                      fh, ensure_ascii=False, indent=1)
+            json.dump(
+                {
+                    "src": os.path.abspath(a.src),
+                    "total": total,
+                    "old_hits": old_hits,
+                    "new_hits": new_hits,
+                    "old_ratio": round(old_hits / total, 4),
+                    "new_ratio": round(new_hits / total, 4),
+                    "old_cjk": len(old),
+                    "new_cjk": len(new),
+                    "pages": pages,
+                },
+                fh,
+                ensure_ascii=False,
+                indent=1,
+            )
             fh.write("\n")
         os.replace(tmp, a.out)
     return 0

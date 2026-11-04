@@ -12,9 +12,21 @@ def test_ingest_add_lands_in_uid_directory(workspace):
     inbox.mkdir(parents=True, exist_ok=True)
     src = inbox / "新书.epub"
     src.write_bytes(b"x" * 100)
-    r = run_cli("--root", workspace, "run", "ingest", "add", str(src),
-                "--subjects", "文学/严肃文学小说", "--title", "新书",
-                "--apply", "--no-rebuild", "--no-classify")
+    r = run_cli(
+        "--root",
+        workspace,
+        "run",
+        "ingest",
+        "add",
+        str(src),
+        "--subjects",
+        "文学/严肃文学小说",
+        "--title",
+        "新书",
+        "--apply",
+        "--no-rebuild",
+        "--no-classify",
+    )
     assert r.returncode == 0, r.stdout + r.stderr
     doc_path = workspace / "books" / "B0004" / "book.json"
     assert doc_path.is_file()
@@ -49,13 +61,12 @@ def test_views_point_into_books(workspace):
     assert r.returncode == 0, r.stdout + r.stderr
     award = workspace / "build" / "views" / "奖项" / "测试奖"
     links = [p for p in award.iterdir() if p.is_symlink()]
-    assert links and all(p.resolve().is_dir() for p in links)
-    assert all(os.path.realpath(p).startswith(str((workspace / "books").resolve()))
-               for p in links)
+    assert links
+    assert all(p.resolve().is_dir() for p in links)
+    assert all(os.path.realpath(p).startswith(str((workspace / "books").resolve())) for p in links)
 
     topics = workspace / "build" / "views" / "主题"
     assert topics.is_dir()
     all_links = [p for p in topics.rglob("*") if p.is_symlink()]
     assert all_links, "概念视图没有产出软链"
-    assert all(os.path.realpath(p).startswith(str((workspace / "books").resolve()))
-               for p in all_links)
+    assert all(os.path.realpath(p).startswith(str((workspace / "books").resolve())) for p in all_links)

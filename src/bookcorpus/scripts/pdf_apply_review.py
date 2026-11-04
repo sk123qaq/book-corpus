@@ -20,23 +20,25 @@ route 是人工复核的结果，模型是参考。四列数据来自复核 JSON
   python3 pdf_apply_review.py --batch 工作区/批次/pdf-ocr-ops-<日期> \
       --triage <源分诊表.csv> --out-dir <新批次目录>
 """
+
 import argparse
 import csv
 import json
 import os
+import pathlib
 import sys
 from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
+
 ROOT = L.ROOT
 SKIP_SUBJECT2 = {"设定集与美术集", "图册与写真", "漫画与画集"}
 VERDICT_ROUTE = {"文字书": "OCR", "混合": "OCR", "图片书": "不转-记图册", "读不出": "人工确认"}
 HUMAN_ROUTES = {"OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓"}
 MODEL_COLS = ["model_route", "model_confidence", "model_reason", "model_at"]
-SKIP_COLS = ["uid", "title", "subject1", "subject2", "pages", "mb", "image_share",
-             "why", "verdict", "route_metric"]
+SKIP_COLS = ["uid", "title", "subject1", "subject2", "pages", "mb", "image_share", "why", "verdict", "route_metric"]
 REASON_MAX = 200
 
 
@@ -58,7 +60,7 @@ def load_verdicts(*dirs):
             if not name.endswith(".json"):
                 continue
             try:
-                v = json.load(open(os.path.join(d, name), encoding="utf-8"))
+                v = json.loads(pathlib.Path(os.path.join(d, name)).read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 bad += 1
                 continue
@@ -72,16 +74,18 @@ def model_cols(verdict):
     m = verdict.get("model") or {}
     reason = " ".join(str(m.get("reason") or "").split())[:REASON_MAX]
     conf = m.get("confidence")
-    return {"model_route": m.get("route") or "",
-            "model_confidence": "" if conf is None else conf,
-            "model_reason": reason,
-            "model_at": m.get("at") or ""}
+    return {
+        "model_route": m.get("route") or "",
+        "model_confidence": "" if conf is None else conf,
+        "model_reason": reason,
+        "model_at": m.get("at") or "",
+    }
 
 
 def load_jsonl(path):
     if not os.path.exists(path):
         return {}
-    return {r["uid"]: r for r in (json.loads(l) for l in open(path, encoding="utf-8"))}
+    return {r["uid"]: r for r in (json.loads(line) for line in open(path, encoding="utf-8"))}
 
 
 def text_share(uid, census, probes):
@@ -101,16 +105,20 @@ def main():
     ap.add_argument("--batch", help="普查批次目录；默认工作区/批次 下最近一个 pdf-普查-*，没有就用今天")
     ap.add_argument("--triage", help="输入分诊表，默认 <批次>/triage.csv，其次 <批次>/triage_final.csv")
     ap.add_argument("--out-dir", dest="out_dir", help="写账目录，默认批次目录")
-    ap.add_argument("--review", action="append",
-                    help="复核 JSON 目录，可多次给；默认 <批次>/review 与 <批次>/review_pic")
+    ap.add_argument(
+        "--review", action="append", help="复核 JSON 目录，可多次给；默认 <批次>/review 与 <批次>/review_pic"
+    )
     ap.add_argument("--per-day", type=int, default=20000)
     a = ap.parse_args()
     bp = os.path.join(ROOT, a.batch or L.batch_dir("pdf-普查-", root=ROOT, create=True))
     out_dir = os.path.abspath(a.out_dir) if a.out_dir else bp
     triage = a.triage or next(
-        (p for p in (os.path.join(bp, "triage.csv"), os.path.join(bp, "triage_final.csv"))
-         if os.path.exists(p)), "")
-    rows = list(csv.DictReader(open(triage, encoding="utf-8"))) if triage else []
+        (p for p in (os.path.join(bp, "triage.csv"), os.path.join(bp, "triage_final.csv")) if os.path.exists(p)), ""
+    )
+    rows = []
+    if triage:
+        with open(triage, encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh))
     if not rows:
         sys.exit("分诊表没有数据行: %s" % (triage or "<批次>/triage.csv 不存在"))
     review_dirs = a.review or [os.path.join(bp, "review"), os.path.join(bp, "review_pic")]
@@ -118,9 +126,10 @@ def main():
     # 分诊表在别的批次时（ops 新批次指着普查表），census 与探针也跟着分诊表走
     data_dir = os.path.dirname(os.path.abspath(triage)) if a.triage else bp
     census = load_jsonl(os.path.join(data_dir, "census.jsonl"))
-    probes = [load_jsonl(os.path.join(data_dir, f)) for f in
-              ("scan_probe_pic15.jsonl", "scan_probe2.jsonl", "scan_probe_enc.jsonl",
-               "scan.jsonl")]
+    probes = [
+        load_jsonl(os.path.join(data_dir, f))
+        for f in ("scan_probe_pic15.jsonl", "scan_probe2.jsonl", "scan_probe_enc.jsonl", "scan.jsonl")
+    ]
 
     skip = []
     for r in rows:
@@ -146,11 +155,20 @@ def main():
             if human == "不转-记图册":
                 label = ("复核判为%s" % r["verdict"]) if r["verdict"] else "人工确认不转"
                 why = "；".join(x for x in (label, why_human) if x)
-                skip.append({"uid": uid, "title": r["title"], "subject1": r["subject1"],
-                             "subject2": r["subject2"], "pages": r["pages"], "mb": r["mb"],
-                             "image_share": r["image_share"],
-                             "why": why,
-                             "verdict": r["verdict"], "route_metric": r["route_metric"]})
+                skip.append(
+                    {
+                        "uid": uid,
+                        "title": r["title"],
+                        "subject1": r["subject1"],
+                        "subject2": r["subject2"],
+                        "pages": r["pages"],
+                        "mb": r["mb"],
+                        "image_share": r["image_share"],
+                        "why": why,
+                        "verdict": r["verdict"],
+                        "route_metric": r["route_metric"],
+                    }
+                )
             continue
 
         why = None
@@ -174,10 +192,20 @@ def main():
             ev = (v.get("evidence") or "").strip()[:60]
             parts = [r["note"], "不转：%s" % why] + (["复核：%s" % ev] if ev else [])
             r["note"] = "；".join(p for p in parts if p).strip("；")
-            skip.append({"uid": uid, "title": r["title"], "subject1": r["subject1"],
-                         "subject2": r["subject2"], "pages": r["pages"], "mb": r["mb"],
-                         "image_share": r["image_share"], "why": why,
-                         "verdict": r["verdict"], "route_metric": r["route_metric"]})
+            skip.append(
+                {
+                    "uid": uid,
+                    "title": r["title"],
+                    "subject1": r["subject1"],
+                    "subject2": r["subject2"],
+                    "pages": r["pages"],
+                    "mb": r["mb"],
+                    "image_share": r["image_share"],
+                    "why": why,
+                    "verdict": r["verdict"],
+                    "route_metric": r["route_metric"],
+                }
+            )
             continue
         if v.get("verdict") in VERDICT_ROUTE and r["route"] != "OCR":
             r["route"] = VERDICT_ROUTE[v["verdict"]]
@@ -209,17 +237,16 @@ def main():
     pages = sum(num_pages(r["pages"]) for r in ocr)
     print("\nOCR 队列 %d 本 %d 页 = %.1f 天（%d 页/天）" % (len(ocr), pages, pages / a.per_day, a.per_day))
     small = [r for r in ocr if num_pages(r["pages"]) <= 300]
-    print("其中 ≤300 页的 %d 本 %d 页 = %.1f 天"
-          % (len(small), sum(num_pages(r["pages"]) for r in small),
-             sum(num_pages(r["pages"]) for r in small) / a.per_day))
+    print(
+        "其中 ≤300 页的 %d 本 %d 页 = %.1f 天"
+        % (len(small), sum(num_pages(r["pages"]) for r in small), sum(num_pages(r["pages"]) for r in small) / a.per_day)
+    )
     print("\n不转 %d 本，按原因：" % len(skip))
     for k, v in Counter(s["why"] for s in skip).most_common():
         g = [s for s in skip if s["why"] == k]
-        print("  %-24s %3d 本 %6d 页" % (k.replace("图片占比", "图占比"), v,
-                                       sum(num_pages(s["pages"]) for s in g)))
+        print("  %-24s %3d 本 %6d 页" % (k.replace("图片占比", "图占比"), v, sum(num_pages(s["pages"]) for s in g)))
     print("\nCSV: %s\n不转清单: %s" % (os.path.relpath(out, ROOT), os.path.relpath(sl, ROOT)))
-    agree = sum(1 for r in rows if r["model_route"]
-                and r["model_route"] == r["route"])
+    agree = sum(1 for r in rows if r["model_route"] and r["model_route"] == r["route"])
     judged = sum(1 for r in rows if r["model_route"])
     print("模型建议 %d 本，与人工 route 一致 %d 本" % (judged, agree))
     print("坏复核 JSON %d 个（已跳过）" % bad_verdicts)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "src" / "bookcorpus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 
 def _tables(root):

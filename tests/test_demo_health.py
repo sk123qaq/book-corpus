@@ -25,7 +25,10 @@ def test_health_degrades_on_empty_workspace(tmp_path):
     env = dict(os.environ, BOOKS_ROOT=str(root), PYTHONDONTWRITEBYTECODE="1")
     proc = subprocess.Popen(
         [sys.executable, str(REPO / "apps" / "demo" / "server.py"), "--port", str(port)],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     try:
         for _ in range(100):
             try:

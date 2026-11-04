@@ -6,6 +6,7 @@
 主题排序直接用 qsearch 的书级聚合，跟用户查到的顺序一致。奖项从 library.db 的
 book_award 取。软链树是派生物，整目录删掉能重建。
 """
+
 import argparse
 import os
 import shutil
@@ -14,9 +15,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
-import lib_fts_cjk as cjk  # noqa: E402
-import qsearch  # noqa: E402
+import lib_common as L
+import lib_fts_cjk as cjk
+import qsearch
 
 PATHS = L.PATHS
 
@@ -91,10 +92,13 @@ def build_topics(limit):
     try:
         con = _connect_ro(PATHS.index_db)
         titles = title_map()
-        keys = [r[0] for r in con.execute(
-            "SELECT key FROM book_concept GROUP BY key ORDER BY key")]
-        index = ["# 主题视图", "", "指向 `books/<uid>/` 的软链，随时可删可重建。排序与 "
-                 "`book-corpus search --concept <键> --book` 一致。", ""]
+        keys = [r[0] for r in con.execute("SELECT key FROM book_concept GROUP BY key ORDER BY key")]
+        index = [
+            "# 主题视图",
+            "",
+            "指向 `books/<uid>/` 的软链，随时可删可重建。排序与 `book-corpus search --concept <键> --book` 一致。",
+            "",
+        ]
         for key in keys:
             groups, exclude = qsearch.load_concept(key)
             expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
@@ -105,9 +109,12 @@ def build_topics(limit):
             d = os.path.join(out, key)
             os.makedirs(d)
             used = set()
-            lines = ["# %s" % key, "",
-                     "按书级聚合分数排序，最多 %d 本。软链指向书目录；引用的段落回原文核。"
-                     % limit, ""]
+            lines = [
+                "# %s" % key,
+                "",
+                "按书级聚合分数排序，最多 %d 本。软链指向书目录；引用的段落回原文核。" % limit,
+                "",
+            ]
             for b in books:
                 uid = b["book"]
                 name = link_name(uid, titles.get(uid, ""), used)
@@ -115,8 +122,9 @@ def build_topics(limit):
                 os.symlink(target, os.path.join(d, name))
                 total += 1
                 best = b["best"]
-                lines.append("- [[%s]] `%.2f` %d 段  %s:%d" % (
-                    name, b["score"], b["paras"], best["path"], best["line"]))
+                lines.append(
+                    "- [[%s]] `%.2f` %d 段  %s:%d" % (name, b["score"], b["paras"], best["path"], best["line"])
+                )
                 lines.append("  " + " ".join(best["text"].split())[:140])
             lines += ["", "共 %d 本。" % len(books), ""]
             with open(os.path.join(d, "README.md"), "w", encoding="utf-8") as f:
@@ -142,10 +150,13 @@ def build_awards():
     total = 0
     try:
         con = _connect_ro(PATHS.library_db)
-        rows = list(con.execute(
-            "SELECT ba.award, ba.uid, b.title, coalesce(ba.year, ''), coalesce(ba.result, '') "
-            "FROM book_award ba JOIN book b ON b.uid = ba.uid "
-            "ORDER BY ba.award, b.title"))
+        rows = list(
+            con.execute(
+                "SELECT ba.award, ba.uid, b.title, coalesce(ba.year, ''), coalesce(ba.result, '') "
+                "FROM book_award ba JOIN book b ON b.uid = ba.uid "
+                "ORDER BY ba.award, b.title"
+            )
+        )
         con.close()
         con = None
         groups = {}

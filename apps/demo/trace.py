@@ -6,6 +6,7 @@
 fresh=True 跳过切词缓存，前端「重新检索」走这条路。
 不跑 B4：book_cards.run 的 expand 固定为 {}。
 """
+
 import csv
 import hashlib
 import json
@@ -17,9 +18,11 @@ import sys
 import time
 import unicodedata
 
+
 def _package_scripts():
     try:
         from bookcorpus.paths import scripts_dir
+
         return scripts_dir()
     except ImportError:
         return os.path.join(os.path.dirname(os.path.dirname(HERE)), "src", "bookcorpus", "scripts")
@@ -31,12 +34,13 @@ for _p in (SCRIPTS, HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import book_cards  # noqa: E402
-import book_query  # noqa: E402
-import book_score  # noqa: E402
-import book_title  # noqa: E402
-import lib_common as L  # noqa: E402
-from thinking import DEFAULT as DEFAULT_THINKING, normalize as normalize_thinking  # noqa: E402
+import book_cards
+import book_query
+import book_score
+import book_title
+import lib_common as L
+from thinking import DEFAULT as DEFAULT_THINKING
+from thinking import normalize as normalize_thinking
 
 ROOT = L.ROOT
 
@@ -49,10 +53,18 @@ ACTIONS = os.path.join(ROOT, "tables", "概念表-动作词.tsv")
 
 try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
     from bookcorpus import pimodel
+
     _CFG = pimodel.load(ROOT)
     MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
-    PI = pimodel.pi_head() + ["-p", "--no-tools", "--no-session", "--no-context-files",
-                              "--no-skills", "--no-extensions"]
+    PI = [
+        *pimodel.pi_head(),
+        "-p",
+        "--no-tools",
+        "--no-session",
+        "--no-context-files",
+        "--no-skills",
+        "--no-extensions",
+    ]
     DEFAULT_THINKING = normalize_thinking(pimodel.thinking(_CFG["values"]), DEFAULT_THINKING)
 
     def pi_flags(level):
@@ -60,11 +72,12 @@ try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
 except ImportError:
     pimodel, _CFG = None, None
     MODEL = "opencode-go/deepseek-v4.1-flash"
-    PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files",
-          "--no-skills", "--no-extensions"]
+    PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files", "--no-skills", "--no-extensions"]
 
     def pi_flags(level):
         return ["--thinking", level, "--model", MODEL]
+
+
 PI_TIMEOUT = 90
 MAX_TERMS = 6
 TERM_VERSION = "terms-v3"
@@ -110,6 +123,7 @@ def load_actions():
 
 # ---- 切词 -----------------------------------------------------------
 
+
 def _prompt(question):
     concepts = load_concepts()
     actions = load_actions()
@@ -117,7 +131,7 @@ def _prompt(question):
     return (
         "你是书库全文检索的切词器。把问题拆成 2 到 6 个用于检索的中文词，并给出 3 到 5 组同义说法。\n"
         "规则：\n"
-        "- 只回 JSON，形如 {\"terms\":[\"词1\",\"词2\"],\"groups\":[{\"name\":\"组名\",\"variants\":[\"说法1\",\"说法2\"]}]}，不要解释、不要代码块。\n"
+        '- 只回 JSON，形如 {"terms":["词1","词2"],"groups":[{"name":"组名","variants":["说法1","说法2"]}]}，不要解释、不要代码块。\n'
         "- terms 必须是单个词，不能带空格；优先名词与概念，用书里可能原样出现的词；疑问词、介词、连词不要。\n"
         "- groups 用于第二遍组覆盖检索：覆盖人物、事件、动作、身份；每组 2 到 6 个同义、近义、书里可能用的说法；不要只重复 terms。\n"
         "- 这些是动作词，不要放进 terms：%s\n"
@@ -146,7 +160,7 @@ def _parse_extract(stdout):
     if start < 0 or end <= start:
         return [], []
     try:
-        data = json.loads(raw[start:end + 1])
+        data = json.loads(raw[start : end + 1])
     except ValueError:
         return [], []
     if not isinstance(data, dict):
@@ -180,7 +194,7 @@ def _fallback_terms(question):
     concepts = load_concepts()
     found = []
     for key, aliases in concepts.items():
-        for cand in [key] + aliases:
+        for cand in [key, *aliases]:
             if len(cand) >= 2 and cand in question and cand not in found:
                 found.append(cand)
                 break
@@ -192,7 +206,7 @@ def _fallback_terms(question):
 
 def _cache_path(question, thinking):
     raw = "\n".join((TERM_VERSION, thinking, question.strip()))
-    key = hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    key = hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
     return os.path.join(CACHE_DIR, key + ".json")
 
 
@@ -221,39 +235,60 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
             terms = [t for t in data.get("terms", []) if isinstance(t, str) and t]
             groups = data.get("groups") or []
             if terms and groups:
-                return {"terms": terms[:MAX_TERMS], "groups": groups,
-                        "source": "cache", "thinking": thinking,
-                        "ms": round((time.time() - t0) * 1000, 1), "model": MODEL}
+                return {
+                    "terms": terms[:MAX_TERMS],
+                    "groups": groups,
+                    "source": "cache",
+                    "thinking": thinking,
+                    "ms": round((time.time() - t0) * 1000, 1),
+                    "model": MODEL,
+                }
         except (OSError, ValueError):
             pass
 
     t0 = time.time()
     note = ""
     try:
-        res = subprocess.run(PI + pi_flags(thinking) + [_prompt(question)],
-                             capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT)
+        res = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
+            PI + pi_flags(thinking) + [_prompt(question)], capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT
+        )
         terms, groups = _parse_extract(res.stdout) if res.returncode == 0 else ([], [])
         # 只缓存读侧认的形态（terms 且 groups），否则这份缓存永远命中不了
         if len(terms) >= 2 and groups:
             ms = round((time.time() - t0) * 1000, 1)
-            _write_json(path, {"question": question, "terms": terms, "groups": groups,
-                               "source": "model", "model": MODEL, "thinking": thinking,
-                               "ms": ms,
-                               "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
-            return {"terms": terms, "groups": groups, "source": "model",
-                    "thinking": thinking, "ms": ms, "model": MODEL}
-        note = ("模型没给出可用的词组" if res.returncode == 0
-                else "模型返回不可用（rc=%d）" % res.returncode)
+            _write_json(
+                path,
+                {
+                    "question": question,
+                    "terms": terms,
+                    "groups": groups,
+                    "source": "model",
+                    "model": MODEL,
+                    "thinking": thinking,
+                    "ms": ms,
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                },
+            )
+            return {"terms": terms, "groups": groups, "source": "model", "thinking": thinking, "ms": ms, "model": MODEL}
+        note = "模型没给出可用的词组" if res.returncode == 0 else "模型返回不可用（rc=%d）" % res.returncode
     except (OSError, subprocess.SubprocessError) as exc:
         note = "切词调用失败：%s" % exc.__class__.__name__
     ms = round((time.time() - t0) * 1000, 1)
     terms = _fallback_terms(question)
     groups = [{"name": t, "variants": [t]} for t in terms]
-    return {"terms": terms, "groups": groups, "source": "degraded",
-            "thinking": thinking, "ms": ms, "model": MODEL, "note": note}
+    return {
+        "terms": terms,
+        "groups": groups,
+        "source": "degraded",
+        "thinking": thinking,
+        "ms": ms,
+        "model": MODEL,
+        "note": note,
+    }
 
 
 # ---- 原文 -----------------------------------------------------------
+
 
 def safe_md_path(path):
     """把请求里的路径解析成 books/ 下的真实 .md 路径；不合法抛 ValueError。"""
@@ -385,8 +420,8 @@ def read_chapter(path, line=1, chars=STAGE_CHARS, before=STAGE_BEFORE):
         if used_after >= chars:
             break
     if not blocks and not pre_text:
-        tail = [l for l in lines if l.strip()][-12:]
-        blocks = [_clean_line(l) for l in tail if _clean_line(l)]
+        tail = [ln for ln in lines if ln.strip()][-12:]
+        blocks = [_clean_line(ln) for ln in tail if _clean_line(ln)]
         blocks = blocks[-1:] if blocks else []
     after_text = "\n".join(b for b in blocks if b)
 
@@ -398,14 +433,26 @@ def read_chapter(path, line=1, chars=STAGE_CHARS, before=STAGE_BEFORE):
     body = "\n".join(parts)
     book_root = real.split(os.sep + "md" + os.sep)[0]
     has_html = os.path.isfile(os.path.join(book_root, "html", "index.html"))
-    return {"path": path, "title": title, "text": body, "html": has_html,
-            "line": start, "hit_line": start, "hit_start": hit_start,
-            "hit_end": hit_end, "hit_text": hit_text, "before": before,
-            "before_chars": len(pre_text), "total_lines": total_lines,
-            "window_chars": len(body), "ms": round((time.time() - t0) * 1000, 1)}
+    return {
+        "path": path,
+        "title": title,
+        "text": body,
+        "html": has_html,
+        "line": start,
+        "hit_line": start,
+        "hit_start": hit_start,
+        "hit_end": hit_end,
+        "hit_text": hit_text,
+        "before": before,
+        "before_chars": len(pre_text),
+        "total_lines": total_lines,
+        "window_chars": len(body),
+        "ms": round((time.time() - t0) * 1000, 1),
+    }
 
 
 # ---- trace ----------------------------------------------------------
+
 
 def _norm(text):
     return re.sub(r"\s+", "", text or "")
@@ -437,8 +484,7 @@ def meta(refresh=False):
     now = time.time()
     if not refresh and _META_CACHE["value"] and now - _META_CACHE["at"] < 60:
         return _META_CACHE["value"]
-    out = {"books": 0, "paras": 0, "chapters": 0, "index_built_at": "",
-           "library": "missing", "index": "missing"}
+    out = {"books": 0, "paras": 0, "chapters": 0, "index_built_at": "", "library": "missing", "index": "missing"}
     if os.path.exists(LIB_DB):
         lib = _ro(LIB_DB)
         try:
@@ -484,7 +530,7 @@ def _pick_rows(rows, limit, book):
     if book and book not in [_row_book(r) for r in out]:
         extra = next((r for r in rows if _row_book(r) == book), None)
         if extra is not None:
-            out = (out[:limit - 1] + [extra]) if limit > 1 else [extra]
+            out = ([*out[: limit - 1], extra]) if limit > 1 else [extra]
     return out
 
 
@@ -496,19 +542,36 @@ def _focus_pick(plan, focus):
             continue
         sel = entry.get("selected") or []
         if sel:
-            return {"book": book, "title": entry["title"],
-                    "chapter": sel[0]["chapter_title"],
-                    "path": sel[0]["chapter_path"], "line": sel[0]["line"],
-                    "card": 0, "pinned": True}
+            return {
+                "book": book,
+                "title": entry["title"],
+                "chapter": sel[0]["chapter_title"],
+                "path": sel[0]["chapter_path"],
+                "line": sel[0]["line"],
+                "card": 0,
+                "pinned": True,
+            }
     for r in plan["ranking"]:
         if r["book"] == book and r.get("best_path"):
-            return {"book": book, "title": r["title"],
-                    "chapter": chapter_title("", r["best_path"]),
-                    "path": r["best_path"], "line": r["best_line"],
-                    "card": 0, "pinned": True}
-    return {"book": book, "title": focus.get("title") or "", "chapter": "",
-            "path": "", "line": 0, "card": 0, "pinned": True,
-            "focus_empty": True}
+            return {
+                "book": book,
+                "title": r["title"],
+                "chapter": chapter_title("", r["best_path"]),
+                "path": r["best_path"],
+                "line": r["best_line"],
+                "card": 0,
+                "pinned": True,
+            }
+    return {
+        "book": book,
+        "title": focus.get("title") or "",
+        "chapter": "",
+        "path": "",
+        "line": 0,
+        "card": 0,
+        "pinned": True,
+        "focus_empty": True,
+    }
 
 
 def _pick_default(plan, cardset, select, focus=None):
@@ -520,21 +583,37 @@ def _pick_default(plan, cardset, select, focus=None):
     if cards:
         idx = select - 1 if 1 <= select <= len(cards) else 0
         c = cards[idx]
-        return {"book": c["book"], "title": c["title"], "chapter": c["best_chapter_title"],
-                "path": c["best_chapter"], "line": c.get("line", 1), "card": idx + 1}
+        return {
+            "book": c["book"],
+            "title": c["title"],
+            "chapter": c["best_chapter_title"],
+            "path": c["best_chapter"],
+            "line": c.get("line", 1),
+            "card": idx + 1,
+        }
     if nxt:
         idx = select - 1 if 1 <= select <= len(nxt) else 0
         b = nxt[idx]
         sel = b.get("selected") or []
         if sel:
-            return {"book": b["book"], "title": b["title"],
-                    "chapter": sel[0]["chapter_title"], "path": sel[0]["chapter_path"],
-                    "line": sel[0]["line"], "card": 0}
+            return {
+                "book": b["book"],
+                "title": b["title"],
+                "chapter": sel[0]["chapter_title"],
+                "path": sel[0]["chapter_path"],
+                "line": sel[0]["line"],
+                "card": 0,
+            }
     if plan["ranking"]:
         r = plan["ranking"][0]
-        return {"book": r["book"], "title": r["title"],
-                "chapter": chapter_title("", r["best_path"]),
-                "path": r["best_path"], "line": r["best_line"], "card": 0}
+        return {
+            "book": r["book"],
+            "title": r["title"],
+            "chapter": chapter_title("", r["best_path"]),
+            "path": r["best_path"],
+            "line": r["best_line"],
+            "card": 0,
+        }
     return None
 
 
@@ -551,23 +630,30 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
         books = book_cards.load_books()
         book_meta = book_score.load_meta()
         hints = book_cards.query_hints(question, books, book_cards.load_concepts())
-        focus = book_title.resolve_title(question, books, book_meta,
-                                         hint=hints.get("title", ""))
+        focus = book_title.resolve_title(question, books, book_meta, hint=hints.get("title", ""))
         t_plan = time.time()
         plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus)
         plan_ms = plan.ms
-        cardset = book_cards.run(question, terms=plan.terms or terms, question=question,
-                                 expand={}, feedback=None, con=con, focus=focus)
+        cardset = book_cards.run(
+            question, terms=plan.terms or terms, question=question, expand={}, feedback=None, con=con, focus=focus
+        )
         cards_ms = cardset.ms
 
         card_dicts = []
-        for i, c in enumerate(cardset.cards, 1):
+        for _i, c in enumerate(cardset.cards, 1):
             row = {
-                "book": c.book, "rank": c.rank, "title": c.title, "type": c.type,
-                "chapters": c.chapters, "best_chapter": c.best_chapter,
-                "best_chapter_title": c.best_chapter_title, "snippet": c.snippet,
-                "matched_groups": list(c.matched_groups), "score": c.score,
-                "reason": c.reason, "readme_status": c.readme_status,
+                "book": c.book,
+                "rank": c.rank,
+                "title": c.title,
+                "type": c.type,
+                "chapters": c.chapters,
+                "best_chapter": c.best_chapter,
+                "best_chapter_title": c.best_chapter_title,
+                "snippet": c.snippet,
+                "matched_groups": list(c.matched_groups),
+                "score": c.score,
+                "reason": c.reason,
+                "readme_status": c.readme_status,
                 "line": resolve_line(c.best_chapter, c.snippet),
             }
             card_dicts.append(row)
@@ -583,35 +669,61 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
             "ms": plan_ms,
             "scheme": "best_support",
             "rounds": [
-                {"n": r.n, "kind": r.kind, "terms": list(r.terms),
-                 "groups": list(r.groups), "hits": r.hits, "top1": r.top1,
-                 "top1_score": r.top1_score, "top2_score": r.top2_score,
-                 "margin": r.margin, "cover_paras": r.cover_paras,
-                 "A": r.A, "B": r.B, "C": r.C, "stop": r.stop, "ms": r.ms,
-                 "skipped": r.skipped}
+                {
+                    "n": r.n,
+                    "kind": r.kind,
+                    "terms": list(r.terms),
+                    "groups": list(r.groups),
+                    "hits": r.hits,
+                    "top1": r.top1,
+                    "top1_score": r.top1_score,
+                    "top2_score": r.top2_score,
+                    "margin": r.margin,
+                    "cover_paras": r.cover_paras,
+                    "A": r.A,
+                    "B": r.B,
+                    "C": r.C,
+                    "stop": r.stop,
+                    "ms": r.ms,
+                    "skipped": r.skipped,
+                }
                 for r in plan.rounds
             ],
             "ranking": [
-                {"book": b.book, "title": b.title, "type": b.type,
-                 "chapters": b.chapters, "score": round(b.score, 4),
-                 "coverage": round(b.coverage, 4), "groups": list(b.groups),
-                 "total_groups": b.total_groups,
-                 "best_path": b.best_path, "best_line": b.best_line,
-                 "best_text": " ".join((b.best_text or "").split())[:300],
-                 "support": b.support, "pinned": b.pinned}
+                {
+                    "book": b.book,
+                    "title": b.title,
+                    "type": b.type,
+                    "chapters": b.chapters,
+                    "score": round(b.score, 4),
+                    "coverage": round(b.coverage, 4),
+                    "groups": list(b.groups),
+                    "total_groups": b.total_groups,
+                    "best_path": b.best_path,
+                    "best_line": b.best_line,
+                    "best_text": " ".join((b.best_text or "").split())[:300],
+                    "support": b.support,
+                    "pinned": b.pinned,
+                }
                 for b in _pick_rows(plan.ranking, 8, focus.get("book"))
             ],
             "chapters": [
-                {"book": c["book"], "title": c["title"],
-                 "book_score": c["book_score"],
-                 "pinned": bool(c.get("pinned")),
-                 "selected": [
-                     {"chapter_path": s["chapter_path"],
-                      "chapter_title": s["chapter_title"],
-                      "line": s["line"], "score": s["score"],
-                      "snippet": s.get("snippet", "")}
-                     for s in c["selected"]
-                 ]}
+                {
+                    "book": c["book"],
+                    "title": c["title"],
+                    "book_score": c["book_score"],
+                    "pinned": bool(c.get("pinned")),
+                    "selected": [
+                        {
+                            "chapter_path": s["chapter_path"],
+                            "chapter_title": s["chapter_title"],
+                            "line": s["line"],
+                            "score": s["score"],
+                            "snippet": s.get("snippet", ""),
+                        }
+                        for s in c["selected"]
+                    ],
+                }
                 for c in _pick_rows(plan.chapters, 3, focus.get("book"))
             ],
         }
@@ -631,13 +743,20 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
         t_res = time.time()
         result = None
         if pick and pick.pop("focus_empty", False):
-            result = {"book": pick["book"], "book_title": pick["title"],
-                      "chapter": "", "path": "", "line": 0, "text": "",
-                      "focus_empty": True}
+            result = {
+                "book": pick["book"],
+                "book_title": pick["title"],
+                "chapter": "",
+                "path": "",
+                "line": 0,
+                "text": "",
+                "focus_empty": True,
+            }
         elif pick:
             result = read_chapter(pick["path"], pick["line"], STAGE_CHARS)
-            result.update({"book": pick["book"], "book_title": pick["title"],
-                           "chapter": pick["chapter"], "card": pick["card"]})
+            result.update(
+                {"book": pick["book"], "book_title": pick["title"], "chapter": pick["chapter"], "card": pick["card"]}
+            )
         result_ms = round((time.time() - t_res) * 1000, 1)
 
         rounds_ms = round(sum(r.ms for r in plan.rounds), 1)
@@ -648,7 +767,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
             "cards": cards_ms,
             "result": result_ms,
         }
-        trace = {
+        return {
             "question": question,
             "thinking": thinking,
             "extract": understand,
@@ -660,13 +779,13 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
             "meta": meta(),
             "total_ms": round((time.time() - t_plan) * 1000 + understand["ms"], 1),
         }
-        return trace
     finally:
         con.close()
 
 
 def main(argv=None):
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
     ap.add_argument("--select", type=int, default=0)

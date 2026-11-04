@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """概念表展开：键 → 同义词组 + 排除正则。defpass 用它；qsearch 自己解析一遍概念表（见 qsearch.load_concept）。
 
-  concept_expand.py --key 自由
-  concept_expand.py --audit          # 每概念语料命中文件数、零命中的别名
+concept_expand.py --key 自由
+concept_expand.py --audit          # 每概念语料命中文件数、零命中的别名
 """
-import argparse, csv, os, subprocess, sys
+
+import argparse
+import os
+import subprocess
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 RG = L.RG
 
@@ -16,8 +20,7 @@ RG = L.RG
 def load():
     out = {}
     for r in L.concept_rows():
-        out[r["key"]] = {"aliases": L.split_aliases(r["aliases"]),
-                         "exclude": L.split_exclude(r.get("exclude", ""))}
+        out[r["key"]] = {"aliases": L.split_aliases(r["aliases"]), "exclude": L.split_exclude(r.get("exclude", ""))}
     return out
 
 
@@ -39,7 +42,7 @@ def count_files(terms):
     if rg_dir:
         env["PATH"] = rg_dir + ":" + env.get("PATH", "")
     r = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    return len([l for l in r.stdout.splitlines() if l])
+    return len([line for line in r.stdout.splitlines() if line])
 
 
 def main():

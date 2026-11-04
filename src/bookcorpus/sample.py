@@ -40,8 +40,7 @@ def load_books(root):
 
 def _count(root, uid):
     md = os.path.join(root, "books", uid, "md")
-    files = sorted(f for f in os.listdir(md)
-                   if f.endswith(".md") and f != "README.md") if os.path.isdir(md) else []
+    files = sorted(f for f in os.listdir(md) if f.endswith(".md") and f != "README.md") if os.path.isdir(md) else []
     chars = 0
     for name in files:
         with open(os.path.join(md, name), encoding="utf-8") as fh:
@@ -66,14 +65,43 @@ def install(root):
 
     src = os.path.join("source", NAME + ".txt")
     notes = "%s；公有领域底本 Project Gutenberg #27166；重建用 book-corpus sample" % MARK
-    L.write_json_atomic(os.path.join(dest, "book.json"), L.book_doc(
-        uid, TITLE, "", AUTHOR, SUBJECTS, None, None, None, "keep", notes,
-        [{"file": src, "format": "txt",
-          "bytes": os.path.getsize(os.path.join(dest, src)),
-          "sha256": L.sha256_file(os.path.join(dest, src)), "primary_src": 1}], []))
+    L.write_json_atomic(
+        os.path.join(dest, "book.json"),
+        L.book_doc(
+            uid,
+            TITLE,
+            "",
+            AUTHOR,
+            SUBJECTS,
+            None,
+            None,
+            None,
+            "keep",
+            notes,
+            [
+                {
+                    "file": src,
+                    "format": "txt",
+                    "bytes": os.path.getsize(os.path.join(dest, src)),
+                    "sha256": L.sha256_file(os.path.join(dest, src)),
+                    "primary_src": 1,
+                }
+            ],
+            [],
+        ),
+    )
 
-    L.category_put({"uid": uid, "一级": SUBJECTS[0], "二级": SUBJECTS[1], "作者层": "0",
-                    "保留": "keep", "正式书名": TITLE,
-                    "备注": "sample:待复核 %s" % time.strftime("%Y-%m-%d")}, root=root)
+    L.category_put(
+        {
+            "uid": uid,
+            "一级": SUBJECTS[0],
+            "二级": SUBJECTS[1],
+            "作者层": "0",
+            "保留": "keep",
+            "正式书名": TITLE,
+            "备注": "sample:待复核 %s" % time.strftime("%Y-%m-%d"),
+        },
+        root=root,
+    )
     chapters, chars = _count(root, uid)
     return uid, chapters, chars

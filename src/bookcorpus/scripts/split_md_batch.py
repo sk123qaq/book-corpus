@@ -22,6 +22,7 @@ verify 与 audit 都过才进库，没过留在暂存区待人看。
   python3 split_md_batch.py --batch split-ops-20261024T2200 --uids B0001,B0002
   python3 split_md_batch.py --batch md拆分-2026-10-18 --report --report-json
 """
+
 import argparse
 import collections
 import concurrent.futures as futures
@@ -29,6 +30,7 @@ import datetime
 import hashlib
 import json
 import os
+import pathlib
 import re
 import shutil
 import sqlite3
@@ -38,19 +40,22 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import lib_common as L
 
 SKILL = os.path.join(L.skill_dir("ebook-to-md"), "scripts")
 SKILL_DOC = os.path.join(os.path.dirname(SKILL), "SKILL.md")
 CONVERT = os.path.join(SKILL, "ebook_to_md.py")
 try:
     from bookcorpus import pimodel
+
     _CFG = pimodel.load(L.ROOT)
 except ImportError:  # 单独跑脚本时包里没有 bookcorpus
     pimodel, _CFG = None, None
-FIX_MODEL = (os.environ.get("MD_FIX_MODEL")
-             or (pimodel.ref(_CFG["values"]) if pimodel else "")
-             or "opencode-go/deepseek-v4.1-flash")
+FIX_MODEL = (
+    os.environ.get("MD_FIX_MODEL")
+    or (pimodel.ref(_CFG["values"]) if pimodel else "")
+    or "opencode-go/deepseek-v4.1-flash"
+)
 PI = os.environ.get("PI_BIN") or shutil.which("pi") or "pi"
 FIX_THINKING = pimodel.thinking(_CFG["values"]) if pimodel else ""
 FIX_PROMPT = """修一本书的拆章产物，目标：verify_output.py 与 audit_volume.py 都过。
@@ -75,14 +80,20 @@ FORMATS = ("epub", "mobi", "azw3", "azw")
 WORKLIST_COLS = ["uid", "format", "sha256", "path", "title", "src"]
 # 每本书的终态词表。True 表示这件事不用人再管；页面词表由 check_ops 对齐这张表。
 STATUS = {
-    "landed": True, "replaced": True, "accepted": True,
-    "skipped-has-md": True, "staged-green": True,
-    "staged": False, "staged-review": False, "no-stage": False,
-    "split-failed": False, "convert-failed": False, "error": False,
+    "landed": True,
+    "replaced": True,
+    "accepted": True,
+    "skipped-has-md": True,
+    "staged-green": True,
+    "staged": False,
+    "staged-review": False,
+    "no-stage": False,
+    "split-failed": False,
+    "convert-failed": False,
+    "error": False,
 }
 DONE_STATUS = tuple(name for name, done in STATUS.items() if done)
-READING_KEYS = ("verify_rc", "audit_rc", "audit_ratio", "chapters", "chars",
-                "images", "problems")
+READING_KEYS = ("verify_rc", "audit_rc", "audit_ratio", "chapters", "chars", "images", "problems")
 TIMEOUT = 900
 COUNT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]|[A-Za-z0-9]")
 
@@ -110,7 +121,7 @@ def now():
 def read_worklist(path):
     with open(path, encoding="utf-8") as fh:
         cols = fh.readline().rstrip("\n").split("\t")
-        return [dict(zip(cols, line.rstrip("\n").split("\t"))) for line in fh]
+        return [dict(zip(cols, line.rstrip("\n").split("\t"), strict=False)) for line in fh]
 
 
 def write_worklist(path, rows):
@@ -128,7 +139,9 @@ def pending_ebooks(con):
            FROM book b JOIN source s ON s.uid=b.uid AND s.primary_src=1
            WHERE s.format IN (?,?,?,?) AND b.uid IN (SELECT uid FROM v_pending_md)
              AND b.path_state='active'
-           ORDER BY CAST(SUBSTR(b.uid,2) AS INTEGER)""", FORMATS).fetchall()
+           ORDER BY CAST(SUBSTR(b.uid,2) AS INTEGER)""",
+        FORMATS,
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -175,8 +188,9 @@ def fix_provenance(folder, temp_name, original_name):
         p = os.path.join(folder, name)
         with open(p, encoding="utf-8") as fh:
             text = fh.read()
-        new = re.sub(r'(?m)^(source:\s*")' + re.escape(temp_name) + r'"',
-                     lambda m: m.group(1) + original_name + '"', text)
+        new = re.sub(
+            r'(?m)^(source:\s*")' + re.escape(temp_name) + r'"', lambda m: m.group(1) + original_name + '"', text
+        )
         new = new.replace("- 来源：`%s`" % temp_name, "- 来源：`%s`" % original_name)
         if new != text:
             with open(p + ".tmp", "w", encoding="utf-8") as fh:
@@ -214,7 +228,9 @@ def lookup_rows(con, uids):
             """SELECT b.uid AS uid, s.format AS format, s.sha256 AS sha256,
                       b.path AS path, b.title AS title, s.file AS src
                FROM book b JOIN source s ON s.uid=b.uid AND s.primary_src=1
-               WHERE b.uid=? AND s.format IN (?,?,?,?)""", (uid, *FORMATS)).fetchone()
+               WHERE b.uid=? AND s.format IN (?,?,?,?)""",
+            (uid, *FORMATS),
+        ).fetchone()
         if r:
             rows.append(dict(r))
     return rows
@@ -233,26 +249,48 @@ def land(ctx, stage, dest, result):
 
 def agent_fix(ctx, row, target, vout, aout):
     report = os.path.join(ctx["logs"], row["uid"] + ".fix.md")
-    prompt = FIX_PROMPT.format(uid=row["uid"], title=row["title"], src=row.get("src", ""),
-                               target=os.path.relpath(target, L.ROOT),
-                               batch=ctx["batch_name"], v=vout[-1500:], a=aout[-800:],
-                               report=os.path.relpath(report, L.ROOT),
-                               skill_doc=SKILL_DOC)
+    prompt = FIX_PROMPT.format(
+        uid=row["uid"],
+        title=row["title"],
+        src=row.get("src", ""),
+        target=os.path.relpath(target, L.ROOT),
+        batch=ctx["batch_name"],
+        v=vout[-1500:],
+        a=aout[-800:],
+        report=os.path.relpath(report, L.ROOT),
+        skill_doc=SKILL_DOC,
+    )
     t0 = time.time()
     try:
         thinking = ["--thinking", FIX_THINKING] if FIX_THINKING else []
-        r = subprocess.run([PI, "-p", "--approve"] + thinking
-                           + ["--model", ctx["fix_model"],
-                              "--session-dir", ctx["fix_sessions"], prompt],
-                           cwd=L.ROOT, capture_output=True, text=True,
-                           timeout=ctx["fix_timeout"])
+        r = subprocess.run(
+            [
+                PI,
+                "-p",
+                "--approve",
+                *thinking,
+                "--model",
+                ctx["fix_model"],
+                "--session-dir",
+                ctx["fix_sessions"],
+                prompt,
+            ],
+            cwd=L.ROOT,
+            capture_output=True,
+            text=True,
+            timeout=ctx["fix_timeout"],
+        )
         rc, out = r.returncode, (r.stdout or "") + (r.stderr or "")
     except subprocess.TimeoutExpired as exc:
         rc, out = 124, str(exc)
     with open(report, "a", encoding="utf-8") as fh:
         fh.write("\n## agent-fix %s rc=%d\n%s\n" % (now(), rc, out[-4000:]))
-    return {"rc": rc, "ms": int((time.time() - t0) * 1000),
-            "report": os.path.relpath(report, L.ROOT), "tail": out.strip()[-300:]}
+    return {
+        "rc": rc,
+        "ms": int((time.time() - t0) * 1000),
+        "report": os.path.relpath(report, L.ROOT),
+        "tail": out.strip()[-300:],
+    }
 
 
 def previous_readings(stage, log_path):
@@ -281,8 +319,7 @@ def recheck_audit_source(row, ctx, uid):
     """
     if row["format"] == "epub":
         return os.path.join(L.ROOT, row["src"]), ""
-    for cand in (os.path.join(ctx["batch"], "prepared", uid + ".epub"),
-                 os.path.join(ctx["tmp"], uid, "book.epub")):
+    for cand in (os.path.join(ctx["batch"], "prepared", uid + ".epub"), os.path.join(ctx["tmp"], uid, "book.epub")):
         if os.path.isfile(cand):
             return cand, ""
     out = os.path.join(ctx["tmp"], uid, "book.epub")
@@ -339,24 +376,24 @@ def recheck(row, ctx, result):
         "source_sha256": old.get("source_sha256") or row["sha256"],
         "source_format": old.get("source_format") or row["format"],
         "accepted": old.get("accepted") or "",
-        "chapters": chapters, "bytes": nbytes,
-        "images": v.get("images"), "chars": v.get("chars"),
+        "chapters": chapters,
+        "bytes": nbytes,
+        "images": v.get("images"),
+        "chars": v.get("chars"),
         "audit_chars": a["raw"] if a else old.get("audit_chars"),
         "audit_ratio": a["ratio"] if a else old.get("audit_ratio"),
-        "generated_at": now(), "verified": rc == 0 and rc2 == 0,
+        "generated_at": now(),
+        "verified": rc == 0 and rc2 == 0,
     }
-    with open(os.path.join(stage, ".manifest.json") + ".tmp", "w",
-              encoding="utf-8") as fh:
+    with open(os.path.join(stage, ".manifest.json") + ".tmp", "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
-    os.replace(os.path.join(stage, ".manifest.json") + ".tmp",
-               os.path.join(stage, ".manifest.json"))
+    os.replace(os.path.join(stage, ".manifest.json") + ".tmp", os.path.join(stage, ".manifest.json"))
     commands.append("write .manifest.json")
 
     keep_prev(os.path.join(ctx["logs"], uid + ".log"), ctx["stamp"])
     with open(os.path.join(ctx["logs"], uid + ".log"), "w", encoding="utf-8") as fh:
-        fh.write("\n".join("$ " + c for c in commands) + "\n\n---- verify ----\n" + vout
-                 + "\n---- audit ----\n" + aout)
+        fh.write("\n".join("$ " + c for c in commands) + "\n\n---- verify ----\n" + vout + "\n---- audit ----\n" + aout)
 
     if manifest["verified"]:
         result["status"] = "staged-green"
@@ -364,8 +401,7 @@ def recheck(row, ctx, result):
             land(ctx, stage, dest, result)
     else:
         result["status"] = "staged-review"
-        note = "复核 verify rc=%s audit rc=%s" % (
-            rc, "未跑" if rc2 is None else rc2)
+        note = "复核 verify rc=%s audit rc=%s" % (rc, "未跑" if rc2 is None else rc2)
         if not audited:
             note += "；" + result["note"]
         result["note"] = note
@@ -377,8 +413,13 @@ def run_one(row, ctx):
     dest = L.Layout(L.ROOT).md(row["uid"])
     stage = os.path.join(ctx["out"], uid)
     work = os.path.join(ctx["tmp"], uid)
-    result = {"uid": uid, "title": row["title"], "format": row["format"],
-              "dest": os.path.relpath(dest, L.ROOT), "at": now()}
+    result = {
+        "uid": uid,
+        "title": row["title"],
+        "format": row["format"],
+        "dest": os.path.relpath(dest, L.ROOT),
+        "at": now(),
+    }
     if os.path.isdir(dest) and not ctx["replace"]:
         result["status"] = "skipped-has-md"
         return result
@@ -390,9 +431,11 @@ def run_one(row, ctx):
             land(ctx, stage, dest, result)
             result["note"] = "暂存区已有过检产物，直接进库"
         else:
-            result.update(status="staged", note="暂存区已有产物，本次没重拆；读数是上次留下的",
-                          **previous_readings(stage,
-                                              os.path.join(ctx["logs"], uid + ".json")))
+            result.update(
+                status="staged",
+                note="暂存区已有产物，本次没重拆；读数是上次留下的",
+                **previous_readings(stage, os.path.join(ctx["logs"], uid + ".json")),
+            )
         return result
 
     if os.path.isdir(work):
@@ -413,15 +456,14 @@ def run_one(row, ctx):
             with open(os.path.join(ctx["logs"], uid + ".log"), "w", encoding="utf-8") as fh:
                 fh.write("$ ebook-convert %s book.epub\n%s\n" % (row["src"], out))
             if rc != 0 or not os.path.isfile(audited):
-                result.update(status="convert-failed", note="calibre rc=%d" % rc,
-                              tail=log_tail(out))
+                result.update(status="convert-failed", note="calibre rc=%d" % rc, tail=log_tail(out))
                 return result
 
     target = os.path.join(work, "out")
     override = os.path.join(ctx["batch"], "overrides", uid + ".json")
     tool, extra, accept = CONVERT, [], None
     if os.path.isfile(override):
-        spec = json.load(open(override, encoding="utf-8"))
+        spec = json.loads(pathlib.Path(override).read_text(encoding="utf-8"))
         if isinstance(spec, dict):
             tool = os.path.join(SKILL, spec.get("tool") or os.path.basename(CONVERT))
             extra = spec.get("args") or []
@@ -433,9 +475,10 @@ def run_one(row, ctx):
     cmd += [str(x) for x in extra]
     commands = []
     rc, out = sh(cmd, L.ROOT)
-    commands.append("%s %s -o out --title %r %s"
-                    % (os.path.basename(tool), os.path.relpath(audited, L.ROOT),
-                       row["title"], " ".join(str(x) for x in extra)))
+    commands.append(
+        "%s %s -o out --title %r %s"
+        % (os.path.basename(tool), os.path.relpath(audited, L.ROOT), row["title"], " ".join(str(x) for x in extra))
+    )
     if rc != 0 or not os.path.isdir(target):
         result.update(status="split-failed", note="ebook_to_md rc=%d" % rc, tail=log_tail(out))
         return result
@@ -443,8 +486,7 @@ def run_one(row, ctx):
     # override 指定了别的脚本时，tool_version 跟着实际跑的脚本走
     tool_sha = tool_version(tool) if os.path.isfile(tool) else ctx["tool_version"]
     if audited != src:
-        result["provenance_fixed"] = fix_provenance(
-            target, os.path.basename(audited), os.path.basename(src))
+        result["provenance_fixed"] = fix_provenance(target, os.path.basename(audited), os.path.basename(src))
 
     rc, vout = sh([sys.executable, VERIFY, target], L.ROOT)
     commands.append("verify_output.py out")
@@ -479,26 +521,33 @@ def run_one(row, ctx):
 
     chapters, nbytes = L.count_md_dir(target)
     manifest = {
-        "uid": uid, "method": "ebook-to-md", "tool_version": tool_sha,
-        "tool": os.path.basename(tool), "batch": ctx["batch_name"],
-        "source": row["src"], "source_sha256": row["sha256"],
-        "source_format": row["format"], "chapters": chapters, "bytes": nbytes,
-        "images": v.get("images"), "chars": v.get("chars"),
-        "audit_chars": (a or {}).get("raw"), "audit_ratio": (a or {}).get("ratio"),
-        "generated_at": now(), "verified": rc == 0 and rc2 == 0,
+        "uid": uid,
+        "method": "ebook-to-md",
+        "tool_version": tool_sha,
+        "tool": os.path.basename(tool),
+        "batch": ctx["batch_name"],
+        "source": row["src"],
+        "source_sha256": row["sha256"],
+        "source_format": row["format"],
+        "chapters": chapters,
+        "bytes": nbytes,
+        "images": v.get("images"),
+        "chars": v.get("chars"),
+        "audit_chars": (a or {}).get("raw"),
+        "audit_ratio": (a or {}).get("ratio"),
+        "generated_at": now(),
+        "verified": rc == 0 and rc2 == 0,
         "accepted": accept or "",
     }
     with open(os.path.join(target, ".manifest.json") + ".tmp", "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
-    os.replace(os.path.join(target, ".manifest.json") + ".tmp",
-               os.path.join(target, ".manifest.json"))
+    os.replace(os.path.join(target, ".manifest.json") + ".tmp", os.path.join(target, ".manifest.json"))
     commands.append("write .manifest.json")
 
     keep_prev(os.path.join(ctx["logs"], uid + ".log"), ctx["stamp"])
     with open(os.path.join(ctx["logs"], uid + ".log"), "w", encoding="utf-8") as fh:
-        fh.write("\n".join("$ " + c for c in commands) + "\n\n---- verify ----\n" + vout
-                 + "\n---- audit ----\n" + aout)
+        fh.write("\n".join("$ " + c for c in commands) + "\n\n---- verify ----\n" + vout + "\n---- audit ----\n" + aout)
     os.makedirs(ctx["out"], exist_ok=True)
     if os.path.isdir(stage):
         shutil.rmtree(stage)  # --force 重拆时换掉旧暂存产物
@@ -552,9 +601,13 @@ def report(ctx, results):
         print("\n待查 %d 本" % len(bad))
         for r in bad:
             print("  %-6s %-40.40s %s" % (r["uid"], r["title"], r.get("note", "")))
-    low = [r for r in results if r.get("audit_ratio") is not None
-           and (r.get("raw_chars") or 0) >= 100
-           and (r["audit_ratio"] < 0.88 or r["audit_ratio"] > 1.15)]
+    low = [
+        r
+        for r in results
+        if r.get("audit_ratio") is not None
+        and (r.get("raw_chars") or 0) >= 100
+        and (r["audit_ratio"] < 0.88 or r["audit_ratio"] > 1.15)
+    ]
     accepted = [r for r in low if r.get("accepted")]
     low = [r for r in low if not r.get("accepted")]
     if accepted:
@@ -568,9 +621,22 @@ def report(ctx, results):
 
 
 def book_summary(r):
-    d = {k: r[k] for k in ("uid", "title", "status", "dest", "previous", "note",
-                           "verify_rc", "audit_rc", "audit_ratio", "chapters")
-         if k in r}
+    d = {
+        k: r[k]
+        for k in (
+            "uid",
+            "title",
+            "status",
+            "dest",
+            "previous",
+            "note",
+            "verify_rc",
+            "audit_rc",
+            "audit_ratio",
+            "chapters",
+        )
+        if k in r
+    }
     d["fix"] = len(r.get("fix") or [])
     return d
 
@@ -581,8 +647,7 @@ def summary(ctx, results):
     return {
         "batch": ctx["batch_name"],
         "status_counts": dict(sorted(counts.items())),
-        "books": sorted((book_summary(r) for r in results),
-                        key=lambda b: b.get("uid", "")),
+        "books": sorted((book_summary(r) for r in results), key=lambda b: b.get("uid", "")),
         "pending_review": [r["uid"] for r in results if r["status"] not in DONE_STATUS],
     }
 
@@ -594,16 +659,17 @@ def main():
     ap.add_argument("--only", help="只跑这些 uid，逗号分隔")
     ap.add_argument("--uids", help="新批次的 uid 清单，逗号分隔；只在 worklist.tsv 不存在时写入")
     ap.add_argument("--limit", type=int, help="最多跑几本（调试用）")
-    ap.add_argument("--no-land", action="store_true", dest="noland",
-                    help="只做暂存，不进 books/")
+    ap.add_argument("--no-land", action="store_true", dest="noland", help="只做暂存，不进 books/")
     ap.add_argument("--force", action="store_true", help="忽略暂存区已有产物，重拆")
-    ap.add_argument("--recheck", action="store_true",
-                    help="不重拆，只复核暂存区已有产物")
-    ap.add_argument("--replace", action="store_true",
-                    help="目标 md 已存在时也重拆并替换，旧版本改名留在批次区")
+    ap.add_argument("--recheck", action="store_true", help="不重拆，只复核暂存区已有产物")
+    ap.add_argument("--replace", action="store_true", help="目标 md 已存在时也重拆并替换，旧版本改名留在批次区")
     ap.add_argument("--report", action="store_true", help="只读 logs/ 出统计，不干活")
-    ap.add_argument("--report-json", action="store_true", dest="report_json",
-                    help="stdout 最后一行给 JSON，含 batch、status_counts、books、pending_review")
+    ap.add_argument(
+        "--report-json",
+        action="store_true",
+        dest="report_json",
+        help="stdout 最后一行给 JSON，含 batch、status_counts、books、pending_review",
+    )
     ap.add_argument("--no-agent-fix", action="store_true", help="检查不过时不叫 pi 修复")
     ap.add_argument("--agent-fix-cap", type=int, default=2, help="每本最多修几次")
     ap.add_argument("--agent-fix-total", type=int, default=0, help="整批最多修几次，0 表示不限")
@@ -611,21 +677,32 @@ def main():
     ap.add_argument("--agent-model", default=FIX_MODEL)
     a = ap.parse_args()
     if not shutil.which(CALIBRE):
-        print("提示：缺 %s，mobi/azw3/azw 会转换失败；epub 不受影响。装 Calibre 后重跑。"
-              % CALIBRE, file=sys.stderr)
+        print("提示：缺 %s，mobi/azw3/azw 会转换失败；epub 不受影响。装 Calibre 后重跑。" % CALIBRE, file=sys.stderr)
     if a.recheck and a.force:
         ap.error("--recheck 与 --force 不能同时用")
 
     batch_path = os.path.join(L.WORK, "批次", a.batch)
-    ctx = {"batch": batch_path, "batch_name": a.batch, "out": os.path.join(batch_path, "out"),
-           "tmp": os.path.join(batch_path, "tmp"), "logs": os.path.join(batch_path, "logs"),
-           "land": not a.noland, "force": a.force, "replace": a.replace,
-           "recheck": a.recheck,
-           "fix": not a.no_agent_fix, "fix_cap": a.agent_fix_cap,
-           "fix_total": a.agent_fix_total, "fix_timeout": a.agent_fix_timeout,
-           "fix_model": a.agent_model, "fix_used": [0], "fix_lock": threading.Lock(),
-           "fix_sessions": os.path.join(batch_path, "fix-sessions"),
-           "stamp": now().replace(":", "").replace("+", "-"), "tool_version": tool_version()}
+    ctx = {
+        "batch": batch_path,
+        "batch_name": a.batch,
+        "out": os.path.join(batch_path, "out"),
+        "tmp": os.path.join(batch_path, "tmp"),
+        "logs": os.path.join(batch_path, "logs"),
+        "land": not a.noland,
+        "force": a.force,
+        "replace": a.replace,
+        "recheck": a.recheck,
+        "fix": not a.no_agent_fix,
+        "fix_cap": a.agent_fix_cap,
+        "fix_total": a.agent_fix_total,
+        "fix_timeout": a.agent_fix_timeout,
+        "fix_model": a.agent_model,
+        "fix_used": [0],
+        "fix_lock": threading.Lock(),
+        "fix_sessions": os.path.join(batch_path, "fix-sessions"),
+        "stamp": now().replace(":", "").replace("+", "-"),
+        "tool_version": tool_version(),
+    }
 
     con = sqlite3.connect("file:%s?mode=ro" % L.Layout(L.ROOT).library_db, uri=True)
     con.row_factory = sqlite3.Row
@@ -635,7 +712,7 @@ def main():
         log_files = sorted(os.listdir(ctx["logs"])) if os.path.isdir(ctx["logs"]) else []
         for uid in log_files:
             if uid.endswith(".json"):
-                results.append(json.load(open(os.path.join(ctx["logs"], uid), encoding="utf-8")))
+                results.append(json.loads(pathlib.Path(os.path.join(ctx["logs"], uid)).read_text(encoding="utf-8")))
         report(ctx, with_accept(ctx, results))
         if a.report_json:
             print(json.dumps(summary(ctx, results), ensure_ascii=False))
@@ -666,8 +743,7 @@ def main():
             sys.exit("找不到源文件: " + ", ".join(still))
     if a.limit:
         rows = rows[: a.limit]
-    print("批次 %s，待拆 %d 本，%d 并发，%s" %
-          (a.batch, len(rows), a.workers, "入库" if ctx["land"] else "只暂存"))
+    print("批次 %s，待拆 %d 本，%d 并发，%s" % (a.batch, len(rows), a.workers, "入库" if ctx["land"] else "只暂存"))
 
     results, done = [], 0
     with futures.ThreadPoolExecutor(max_workers=a.workers) as pool:
@@ -677,16 +753,30 @@ def main():
             try:
                 res = job.result()
             except Exception as exc:  # 单本炸了不拖住整批
-                res = {"uid": r["uid"], "title": r["title"], "format": r["format"],
-                       "dest": "books/%s/md" % r["uid"], "at": now(),
-                       "status": "error", "note": "%s: %s" % (type(exc).__name__, exc)}
+                res = {
+                    "uid": r["uid"],
+                    "title": r["title"],
+                    "format": r["format"],
+                    "dest": "books/%s/md" % r["uid"],
+                    "at": now(),
+                    "status": "error",
+                    "note": "%s: %s" % (type(exc).__name__, exc),
+                }
             write_result(ctx, res)
             results.append(res)
             done += 1
-            print("[%d/%d] %s %-6s %-42.42s %s" %
-                  (done, len(rows), res["uid"], res["status"], res["title"],
-                   "%.1f%%" % (res["audit_ratio"] * 100) if res.get("audit_ratio") else ""),
-                  flush=True)
+            print(
+                "[%d/%d] %s %-6s %-42.42s %s"
+                % (
+                    done,
+                    len(rows),
+                    res["uid"],
+                    res["status"],
+                    res["title"],
+                    "%.1f%%" % (res["audit_ratio"] * 100) if res.get("audit_ratio") else "",
+                ),
+                flush=True,
+            )
     report(ctx, results)
     if a.report_json:
         print(json.dumps(summary(ctx, results), ensure_ascii=False))

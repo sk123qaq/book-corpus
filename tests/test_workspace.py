@@ -3,8 +3,7 @@ from pathlib import Path
 
 from conftest import run_cli
 
-TEMPLATES = (Path(__file__).resolve().parents[1]
-             / "src" / "bookcorpus" / "templates" / "tables")
+TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "bookcorpus" / "templates" / "tables"
 
 
 def test_init_creates_layout(tmp_path):
@@ -54,7 +53,8 @@ def test_root_found_by_walking_up(workspace):
 def test_list_marks_aliases():
     r = run_cli("list")
     assert r.returncode == 0
-    assert "qsearch" in r.stdout and "search" in r.stdout
+    assert "qsearch" in r.stdout
+    assert "search" in r.stdout
 
 
 def test_init_ships_full_concept_tables(tmp_path):
@@ -63,5 +63,4 @@ def test_init_ships_full_concept_tables(tmp_path):
     for name in ("概念表.tsv", "概念表-broad.tsv", "概念表-动作词.tsv"):
         expected = len((TEMPLATES / name).read_text(encoding="utf-8-sig").splitlines()) - 1
         lines = (root / "tables" / name).read_text(encoding="utf-8-sig").splitlines()
-        assert len(lines) - 1 == expected, "%s 只有 %d 行，模板 %d 行" % (
-            name, len(lines) - 1, expected)
+        assert len(lines) - 1 == expected, "%s 只有 %d 行，模板 %d 行" % (name, len(lines) - 1, expected)

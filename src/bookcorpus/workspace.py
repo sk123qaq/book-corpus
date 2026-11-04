@@ -29,8 +29,8 @@ def resolve(explicit=None):
     if root is None:
         raise SystemExit(
             "找不到工作区。用 book-corpus init <目录> 建一个，"
-            "或传 --root，或设 BOOKS_ROOT。当前目录 %s 往上都没有 %s。"
-            % (os.getcwd(), MANIFEST))
+            "或传 --root，或设 BOOKS_ROOT。当前目录 %s 往上都没有 %s。" % (os.getcwd(), MANIFEST)
+        )
     return root
 
 
@@ -68,6 +68,7 @@ def init_ledger(target):
     """init 就把人账建成库；建不了不拦，doctor 会报「读的是 CSV 种子」。"""
     try:
         from .scripts import lib_common as LC
+
         return LC.ledger_init(target)
     except (OSError, sqlite3.Error, ImportError):
         return False
@@ -96,6 +97,7 @@ def check(root, version="0.1.0"):
 
     try:
         from .scripts import lib_common as LC
+
         n = LC.categories_count(root=str(root))
         if not LC.ledger_exists(str(root)):
             add("warn", "人账", "无 tables/ledger.db，读的是 分类表.csv 种子；跑 book-corpus init --force 建库")
@@ -106,6 +108,7 @@ def check(root, version="0.1.0"):
 
     try:
         from .scripts import lib_common as LC
+
         n = len(LC.concept_rows(root=str(root)))
         add("ok" if n else "warn", "概念表", "ledger.db 概念 %d 条" % n)
     except (OSError, sqlite3.Error) as exc:
@@ -113,8 +116,7 @@ def check(root, version="0.1.0"):
 
     books = 0
     for dirpath, dirnames, filenames in os.walk(paths.books):
-        dirnames[:] = [d for d in dirnames
-                       if not (dirpath == paths.books and d in L.RESERVED)]
+        dirnames[:] = [d for d in dirnames if not (dirpath == paths.books and d in L.RESERVED)]
         if "book.json" in filenames:
             books += 1
     add("ok" if books else "warn", "书", "%d 本有 book.json" % books)
@@ -132,8 +134,7 @@ def check(root, version="0.1.0"):
             con = sqlite3.connect("file:%s?mode=ro" % paths.library_db, uri=True)
             n = con.execute("select count(*) from book").fetchone()[0]
             con.close()
-            add("ok" if n == books else "warn", "书目库",
-                "book 表 %d 行，磁盘 %d 本" % (n, books))
+            add("ok" if n == books else "warn", "书目库", "book 表 %d 行，磁盘 %d 本" % (n, books))
         except sqlite3.Error as exc:
             add("fail", "书目库", "%s" % exc)
 
@@ -144,9 +145,17 @@ def check(root, version="0.1.0"):
             con = sqlite3.connect("file:%s?mode=ro" % paths.index_db, uri=True)
             meta = dict(con.execute("select key, value from meta"))
             con.close()
-            add("ok", "检索索引", "段 %s 章 %s 书 %s，建于 %s" % (
-                meta.get("paras", "?"), meta.get("chapters", "?"),
-                meta.get("books", "?"), meta.get("built_at", "?")))
+            add(
+                "ok",
+                "检索索引",
+                "段 %s 章 %s 书 %s，建于 %s"
+                % (
+                    meta.get("paras", "?"),
+                    meta.get("chapters", "?"),
+                    meta.get("books", "?"),
+                    meta.get("built_at", "?"),
+                ),
+            )
         except sqlite3.Error as exc:
             add("fail", "检索索引", "%s" % exc)
 

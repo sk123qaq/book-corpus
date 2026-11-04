@@ -6,6 +6,7 @@
 
 只读 build/检索/index.db、build/library.db 与 books/**.md；不写书、账、脚本。
 """
+
 import argparse
 import copy
 import json
@@ -20,11 +21,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import answer as answerer  # noqa: E402
-import export_session  # noqa: E402
-import related  # noqa: E402
-import session  # noqa: E402
-import trace as tracer  # noqa: E402
+import contextlib
+import trace as tracer
+
+import answer as answerer
+import export_session
+import related
+import session
 
 WEB = os.path.join(HERE, "web")
 MAX_BODY = 16 * 1024
@@ -50,8 +53,9 @@ def answer_job_key(sid, n, run_token):
 
 
 def _purge_answer_jobs(at):
-    for key in [k for k, job in ANSWER_JOBS.items()
-                if job["event"].is_set() and job["expires"] and job["expires"] <= at]:
+    for key in [
+        k for k, job in ANSWER_JOBS.items() if job["event"].is_set() and job["expires"] and job["expires"] <= at
+    ]:
         ANSWER_JOBS.pop(key, None)
 
 
@@ -68,8 +72,7 @@ def claim_answer_job(key, attempt=0, fresh=False):
             # 用户点了「重试回答」：旧任务只留给还拿着它引用的等待者，
             # 这次重新调模型，不能把上一次的错误或结果当成这一次的回答。
             ANSWER_JOBS.pop(key, None)
-        job = {"event": threading.Event(), "result": None, "error": None,
-               "attempt": attempt, "expires": 0.0}
+        job = {"event": threading.Event(), "result": None, "error": None, "attempt": attempt, "expires": 0.0}
         ANSWER_JOBS[key] = job
         return job, True
 
@@ -113,10 +116,12 @@ def _clean_anchor(value):
         return None
     title = value.get("title")
     quote = value.get("quote")
-    return {"path": os.path.relpath(real, tracer.ROOT).replace(os.sep, "/"),
-            "line": line,
-            "title": title.strip() if isinstance(title, str) else "",
-            "quote": quote.strip() if isinstance(quote, str) else ""}
+    return {
+        "path": os.path.relpath(real, tracer.ROOT).replace(os.sep, "/"),
+        "line": line,
+        "title": title.strip() if isinstance(title, str) else "",
+        "quote": quote.strip() if isinstance(quote, str) else "",
+    }
 
 
 def _clean_focus(value):
@@ -135,9 +140,13 @@ def _clean_focus(value):
         best_line = max(1, int(value.get("best_line") or 1))
     except (TypeError, ValueError):
         best_line = 1
-    out = {"status": text(value, "status", 20), "book": text(value, "book", 40),
-           "title": text(value, "title"), "best_path": text(value, "best_path", 500),
-           "best_line": best_line}
+    out = {
+        "status": text(value, "status", 20),
+        "book": text(value, "book", 40),
+        "title": text(value, "title"),
+        "best_path": text(value, "best_path", 500),
+        "best_line": best_line,
+    }
     candidates = []
     rows = value.get("candidates")
     for item in rows if isinstance(rows, list) else []:
@@ -150,8 +159,7 @@ def _clean_focus(value):
             line = max(1, int(item.get("line") or 1))
         except (TypeError, ValueError):
             line = 1
-        candidates.append({"book": book, "title": text(item, "title"),
-                           "path": text(item, "path", 500), "line": line})
+        candidates.append({"book": book, "title": text(item, "title"), "path": text(item, "path", 500), "line": line})
     if candidates:
         out["candidates"] = candidates
     if not (out["status"] or out["book"]):
@@ -183,8 +191,7 @@ def _previous(sess, n):
             trace = turn.get("trace") if isinstance(turn.get("trace"), dict) else {}
             result = trace.get("result") if isinstance(trace.get("result"), dict) else {}
             body = result.get("text") or ""
-        rows.append({"n": turn["n"], "question": turn.get("question") or "",
-                     "answer": str(body or "")})
+        rows.append({"n": turn["n"], "question": turn.get("question") or "", "answer": str(body or "")})
     return rows[-3:]
 
 
@@ -218,9 +225,13 @@ def _previous_source(sess, n):
         return None
     src = rows[0]
     book = str(src.get("book") or "")
-    return {"book": book, "book_title": _book_title(prev, book),
-            "title": src.get("title") or "", "path": src.get("path"),
-            "line": src.get("line")}
+    return {
+        "book": book,
+        "book_title": _book_title(prev, book),
+        "title": src.get("title") or "",
+        "path": src.get("path"),
+        "line": src.get("line"),
+    }
 
 
 def _pin_rows(prev, book):
@@ -244,8 +255,7 @@ def _pin_followup(data, sess, n, rel, anchor):
     这一问已经点名了新的书（focus exact/ambiguous，或带了 query_title）时不钉：
     钉回旧书会和点名冲突。"""
     focus = data.get("focus")
-    if isinstance(focus, dict) and (
-            focus.get("status") in ("exact", "ambiguous") or focus.get("query_title")):
+    if isinstance(focus, dict) and (focus.get("status") in ("exact", "ambiguous") or focus.get("query_title")):
         return data
     if not (isinstance(rel, dict) and rel.get("related")) or anchor:
         return data
@@ -254,8 +264,7 @@ def _pin_followup(data, sess, n, rel, anchor):
         return data
     result = data.get("result") if isinstance(data.get("result"), dict) else {}
     try:
-        same = (result.get("path") == src["path"]
-                and int(result.get("line") or 0) == src["line"])
+        same = result.get("path") == src["path"] and int(result.get("line") or 0) == src["line"]
     except (TypeError, ValueError):
         same = False
     if same:
@@ -264,9 +273,12 @@ def _pin_followup(data, sess, n, rel, anchor):
         window = tracer.read_chapter(src["path"], src["line"], tracer.STAGE_CHARS)
     except (ValueError, OSError):
         return data
-    info = {"book": src["book"], "book_title": src["book_title"],
-            "chapter": src["title"] or result.get("title") or result.get("chapter") or "",
-            "card": 0}
+    info = {
+        "book": src["book"],
+        "book_title": src["book_title"],
+        "chapter": src["title"] or result.get("title") or result.get("chapter") or "",
+        "card": 0,
+    }
     data["result"] = dict(window, **info)
     prev = _prev_turn(sess, n)
     rank_seed, chapter_seed = _pin_rows(prev, src["book"]) if prev else (None, None)
@@ -275,26 +287,34 @@ def _pin_followup(data, sess, n, rel, anchor):
         for key, seed in (("ranking", rank_seed), ("chapters", chapter_seed)):
             rows = plan.get(key)
             rows = rows if isinstance(rows, list) else []
-            hit = [r for r in rows
-                   if isinstance(r, dict) and r.get("book") == src["book"]]
-            rest = [r for r in rows
-                    if not (isinstance(r, dict) and r.get("book") == src["book"])]
+            hit = [r for r in rows if isinstance(r, dict) and r.get("book") == src["book"]]
+            rest = [r for r in rows if not (isinstance(r, dict) and r.get("book") == src["book"])]
             if not hit:
                 if seed is None:
                     if key == "ranking":
-                        seed = {"book": src["book"],
-                                "title": src["book_title"] or src["book"]}
+                        seed = {"book": src["book"], "title": src["book_title"] or src["book"]}
                     else:
-                        seed = {"book": src["book"],
-                                "title": src["book_title"] or src["book"],
-                                "selected": [{"chapter_path": src["path"],
-                                              "chapter_title": src["title"],
-                                              "line": src["line"], "score": 0}]}
+                        seed = {
+                            "book": src["book"],
+                            "title": src["book_title"] or src["book"],
+                            "selected": [
+                                {
+                                    "chapter_path": src["path"],
+                                    "chapter_title": src["title"],
+                                    "line": src["line"],
+                                    "score": 0,
+                                }
+                            ],
+                        }
                 seed = dict(seed, pinned=True)
                 hit = [seed]
             plan[key] = hit + rest
-    data["pin"] = {"book": src["book"], "path": src["path"], "line": src["line"],
-                   "from_turn": prev.get("n") if prev else None}
+    data["pin"] = {
+        "book": src["book"],
+        "path": src["path"],
+        "line": src["line"],
+        "from_turn": prev.get("n") if prev else None,
+    }
     return data
 
 
@@ -327,13 +347,24 @@ def _write_turn(sess, n, question, data, rel, anchor):
     每个 turn 带一个新的 run_token：旧回答任务即使晚到也认不上这个 token。
     """
     turns = sess.setdefault("turns", [])
-    turn = {"n": n, "question": question, "thinking": data.get("thinking") or "",
-            "at": session.now(), "related": rel, "anchor": anchor,
-            "trace": data, "answer": None, "context": None,
-            "run_token": session.new_run_token(), "answer_state": "pending",
-            "answer_error": "", "answer_started_at": None,
-            "answer_finished_at": None, "answer_attempt": 0,
-            "answer_owner": ""}
+    turn = {
+        "n": n,
+        "question": question,
+        "thinking": data.get("thinking") or "",
+        "at": session.now(),
+        "related": rel,
+        "anchor": anchor,
+        "trace": data,
+        "answer": None,
+        "context": None,
+        "run_token": session.new_run_token(),
+        "answer_state": "pending",
+        "answer_error": "",
+        "answer_started_at": None,
+        "answer_finished_at": None,
+        "answer_attempt": 0,
+        "answer_owner": "",
+    }
     index = next((i for i, t in enumerate(turns) if t.get("n") == n), -1)
     if index >= 0:
         turns[index:] = [turn]
@@ -380,10 +411,8 @@ class Handler(BaseHTTPRequestHandler):
         for key, val in (extra or {}).items():
             self.send_header(key, val)
         self.end_headers()
-        try:
+        with contextlib.suppress(BrokenPipeError, ConnectionResetError):
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
 
     def send_json(self, code, value):
         self.send(code, value)
@@ -436,7 +465,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.fail(404, "unknown api")
             else:
                 self.fail(404, "not found")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             traceback.print_exc()
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
 
@@ -471,13 +500,12 @@ class Handler(BaseHTTPRequestHandler):
         for sid in clean:
             try:
                 outcome = session.delete(sid)
-            except OSError as exc:  # noqa: BLE001
+            except OSError as exc:
                 traceback.print_exc()
                 self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
                 return
             (deleted if outcome == "deleted" else missing).append(sid)
-        self.send_json(200, {"ok": True, "deleted": deleted, "missing": missing,
-                             "count": len(deleted)})
+        self.send_json(200, {"ok": True, "deleted": deleted, "missing": missing, "count": len(deleted)})
 
     def read_payload(self):
         try:
@@ -512,11 +540,15 @@ class Handler(BaseHTTPRequestHandler):
             select = int(select)
         except (TypeError, ValueError):
             select = 0
-        self.api_run(question, select, payload.get("thinking"),
-                     _flag(payload.get("fresh")),
-                     session_id=_session_id(payload.get("session_id")),
-                     turn=_turn_no(payload.get("turn")),
-                     anchor=_clean_anchor(payload.get("anchor")))
+        self.api_run(
+            question,
+            select,
+            payload.get("thinking"),
+            _flag(payload.get("fresh")),
+            session_id=_session_id(payload.get("session_id")),
+            turn=_turn_no(payload.get("turn")),
+            anchor=_clean_anchor(payload.get("anchor")),
+        )
 
     def handle_answer(self, payload):
         question = payload.get("question")
@@ -569,8 +601,7 @@ class Handler(BaseHTTPRequestHandler):
             if stitle is not None and not isinstance(stitle, str):
                 self.fail(400, "sources 每项的 title 必须是字符串")
                 return
-            clean.append({"path": spath.strip(), "line": sline,
-                          "title": (stitle or "").strip()})
+            clean.append({"path": spath.strip(), "line": sline, "title": (stitle or "").strip()})
         if clean:
             path, line = clean[0]["path"], clean[0]["line"]
         elif not path:
@@ -580,27 +611,35 @@ class Handler(BaseHTTPRequestHandler):
                 return
             book = book or focus["book"]
         fresh = _flag(payload.get("fresh"))
-        self.api_answer(question, book, path, line, terms, groups, clean,
-                        focus=focus, thinking=payload.get("thinking"),
-                        use_cache=not fresh, fresh=fresh,
-                        session_id=_session_id(payload.get("session_id")),
-                        turn=_turn_no(payload.get("turn")))
+        self.api_answer(
+            question,
+            book,
+            path,
+            line,
+            terms,
+            groups,
+            clean,
+            focus=focus,
+            thinking=payload.get("thinking"),
+            use_cache=not fresh,
+            fresh=fresh,
+            session_id=_session_id(payload.get("session_id")),
+            turn=_turn_no(payload.get("turn")),
+        )
 
     # ---- API -------------------------------------------------------
     def api_health(self):
         try:
             info = tracer.meta()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self.send_json(500, {"ok": False, "db": "error", "error": str(exc)})
             return
         if info["index"] != "ok":
             message = "未建索引" if info["index"] == "missing" else "索引为空"
-            self.send_json(200, {"ok": True, "db": info["index"], "degraded": True,
-                                 "message": message, "meta": info})
+            self.send_json(200, {"ok": True, "db": info["index"], "degraded": True, "message": message, "meta": info})
             return
         if info["library"] != "ok":
-            self.send_json(200, {"ok": True, "db": "missing", "degraded": True,
-                                 "message": "未建书目库", "meta": info})
+            self.send_json(200, {"ok": True, "db": "missing", "degraded": True, "message": "未建书目库", "meta": info})
             return
         self.send_json(200, {"ok": True, "db": "ok", "meta": info})
 
@@ -643,8 +682,7 @@ class Handler(BaseHTTPRequestHandler):
         body, ctype, headers = export_session.response(sess, sid, fmt)
         self.send(200, body, ctype, headers)
 
-    def api_run(self, question, select, thinking=None, fresh=False,
-                session_id="", turn=None, anchor=None):
+    def api_run(self, question, select, thinking=None, fresh=False, session_id="", turn=None, anchor=None):
         if not LOCK.acquire(timeout=120):
             self.fail(503, "服务忙，稍后重试")
             return
@@ -681,11 +719,10 @@ class Handler(BaseHTTPRequestHandler):
                     _write_turn(current, n, question, data, rel, anchor)
                     session.save(current)
                 sess = current
-            self.send_json(200, dict(data, session_id=sess["id"], turn=n,
-                                     related=rel, session=session.public(sess)))
+            self.send_json(200, dict(data, session_id=sess["id"], turn=n, related=rel, session=session.public(sess)))
         except ValueError as exc:
             self.fail(400, str(exc))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             traceback.print_exc()
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
         finally:
@@ -718,17 +755,31 @@ class Handler(BaseHTTPRequestHandler):
         info["ok"] = True
         self.send_json(200, info)
 
-    def api_answer(self, question, book, path, line, terms, groups, sources=None,
-                   focus=None, thinking=None, use_cache=True, session_id="",
-                   turn=None, fresh=False):
+    def api_answer(
+        self,
+        question,
+        book,
+        path,
+        line,
+        terms,
+        groups,
+        sources=None,
+        focus=None,
+        thinking=None,
+        use_cache=True,
+        session_id="",
+        turn=None,
+        fresh=False,
+    ):
         sid, n, rel, ctx = "", 0, None, None
         if session_id:
             sid, n, rel, ctx = self.session_context(session_id, turn, sources)
         meta = session.turn_meta(sid, n) if sid and n else None
         if meta is None:
             # 没带会话、或会话里没这一轮：老的同路无状态路径。
-            self.answer_once(question, book, path, line, terms, groups, sources,
-                             focus, thinking, use_cache, ctx, sid, n, rel)
+            self.answer_once(
+                question, book, path, line, terms, groups, sources, focus, thinking, use_cache, ctx, sid, n, rel
+            )
             return
         key = answer_job_key(sid, n, meta["run_token"])
         attempt = (meta["answer_attempt"] or 0) + 1
@@ -751,11 +802,19 @@ class Handler(BaseHTTPRequestHandler):
             publish_answer_job(job, error=(409, message))
             return
         try:
-            info = answerer.answer_question(question, book, path, line, terms,
-                                            groups=groups, sources=sources,
-                                            thinking=thinking, use_cache=use_cache,
-                                            history=ctx["text"] if ctx else "",
-                                            focus=focus)
+            info = answerer.answer_question(
+                question,
+                book,
+                path,
+                line,
+                terms,
+                groups=groups,
+                sources=sources,
+                thinking=thinking,
+                use_cache=use_cache,
+                history=ctx["text"] if ctx else "",
+                focus=focus,
+            )
             _fill_citations(info)
             if not session.finish_answer(sid, n, attempt, info, ctx, token=token):
                 # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
@@ -763,48 +822,64 @@ class Handler(BaseHTTPRequestHandler):
                 publish_answer_job(job, error=(409, message))
                 self.fail(409, message)
                 return
-            body = dict(info, session_id=sid, turn=n, related=rel,
-                        history=self.history_brief(ctx), run_token=token,
-                        answer_state=session.answer_state_for(info))
+            body = dict(
+                info,
+                session_id=sid,
+                turn=n,
+                related=rel,
+                history=self.history_brief(ctx),
+                run_token=token,
+                answer_state=session.answer_state_for(info),
+            )
             publish_answer_job(job, result=body)
             self.send_json(200, body)
         except ValueError as exc:
             session.fail_answer(sid, n, attempt, str(exc), token=token)
             publish_answer_job(job, error=(400, str(exc)))
             self.fail(400, str(exc))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             traceback.print_exc()
             message = "%s: %s" % (exc.__class__.__name__, exc)
             session.fail_answer(sid, n, attempt, message, token=token)
             publish_answer_job(job, error=(500, message))
             self.fail(500, message)
 
-    def answer_once(self, question, book, path, line, terms, groups, sources,
-                    focus, thinking, use_cache, ctx, sid, n, rel):
+    def answer_once(
+        self, question, book, path, line, terms, groups, sources, focus, thinking, use_cache, ctx, sid, n, rel
+    ):
         """不带会话状态的回答：照旧调一次模型并把结果发回去。"""
         try:
-            info = answerer.answer_question(question, book, path, line, terms,
-                                            groups=groups, sources=sources,
-                                            thinking=thinking, use_cache=use_cache,
-                                            history=ctx["text"] if ctx else "",
-                                            focus=focus)
+            info = answerer.answer_question(
+                question,
+                book,
+                path,
+                line,
+                terms,
+                groups=groups,
+                sources=sources,
+                thinking=thinking,
+                use_cache=use_cache,
+                history=ctx["text"] if ctx else "",
+                focus=focus,
+            )
             _fill_citations(info)
-            self.send_json(200, dict(info, session_id=sid, turn=n, related=rel,
-                                     history=self.history_brief(ctx)))
+            self.send_json(200, dict(info, session_id=sid, turn=n, related=rel, history=self.history_brief(ctx)))
         except ValueError as exc:
             self.fail(400, str(exc))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             traceback.print_exc()
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
 
     @staticmethod
     def history_brief(ctx):
-        return {"used": bool(ctx),
-                "prev": ctx["prev"] if ctx else 0,
-                "chars": ctx["chars"] if ctx else 0,
-                "budget": ctx["budget"] if ctx else 0,
-                "chapters": len(ctx["chapters"]) if ctx else 0,
-                "paragraphs": len(ctx["paragraphs"]) if ctx else 0}
+        return {
+            "used": bool(ctx),
+            "prev": ctx["prev"] if ctx else 0,
+            "chars": ctx["chars"] if ctx else 0,
+            "budget": ctx["budget"] if ctx else 0,
+            "chapters": len(ctx["chapters"]) if ctx else 0,
+            "paragraphs": len(ctx["paragraphs"]) if ctx else 0,
+        }
 
     def session_context(self, session_id, turn, sources):
         """定位这一问，related 为真时拼上一轮上下文。会话找不到就当没带。"""
@@ -820,10 +895,8 @@ class Handler(BaseHTTPRequestHandler):
             rel = current.get("related")
             if not (isinstance(rel, dict) and rel.get("related")):
                 return sess["id"], n, rel, None
-            budget = (session.HISTORY_CHARS_MULTI if len(sources or []) >= 2
-                      else session.HISTORY_CHARS_SINGLE)
-            ctx = session.build_context([t for t in turns if t.get("n", 0) < n],
-                                        budget, anchor=current.get("anchor"))
+            budget = session.HISTORY_CHARS_MULTI if len(sources or []) >= 2 else session.HISTORY_CHARS_SINGLE
+            ctx = session.build_context([t for t in turns if t.get("n", 0) < n], budget, anchor=current.get("anchor"))
             return sess["id"], n, rel, ctx
 
     def store_answer(self, sid, n, info, ctx):
@@ -831,8 +904,7 @@ class Handler(BaseHTTPRequestHandler):
         meta = session.turn_meta(sid, n)
         if not meta:
             return
-        session.finish_answer(sid, n, meta["answer_attempt"], info, ctx,
-                              token=meta["run_token"])
+        session.finish_answer(sid, n, meta["answer_attempt"], info, ctx, token=meta["run_token"])
 
 
 def main(argv=None):
@@ -842,9 +914,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     try:
         count = session.recover_interrupted()
-        print("启动恢复：%d 轮上次未完成的回答已标为 interrupted" % count,
-              flush=True)
-    except Exception:  # noqa: BLE001
+        print("启动恢复：%d 轮上次未完成的回答已标为 interrupted" % count, flush=True)
+    except Exception:
         traceback.print_exc()
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     httpd.daemon_threads = True

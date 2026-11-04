@@ -7,6 +7,7 @@
 离线跑，不调模型：call_pi 换成一个按提示词角色分流的假函数。假函数从提示词里的
 证据窗口路径读一行真实原文当引文，所以回查、分书、排序都是真跑的，只有模型是假的。
 """
+
 import json
 import os
 import re
@@ -23,7 +24,7 @@ os.environ.setdefault("BOOKS_ROOT", INSTANCE)
 if DEMO not in sys.path:
     sys.path.insert(0, DEMO)
 
-import answer  # noqa: E402
+import answer
 
 FOCUS = "B0019"
 FOCUS_TITLE = "万历十五年"
@@ -50,12 +51,11 @@ SKIP_RE = re.compile(r"^(\s*#|\s*!\[|\s*---|\s*[a-z_]+:)")
 def _quote(path, start, end):
     """从提示词给出的窗口里挑一行真实原文当引文。"""
     try:
-        with open(os.path.join(answer.ROOT, path), encoding="utf-8",
-                  errors="replace") as fh:
+        with open(os.path.join(answer.ROOT, path), encoding="utf-8", errors="replace") as fh:
             lines = fh.read().splitlines()
     except OSError:
         return ""
-    for line in lines[max(0, start - 1):max(0, end)]:
+    for line in lines[max(0, start - 1) : max(0, end)]:
         text = line.strip()
         if len(answer._norm(text)) < 8 or SKIP_RE.match(text):
             continue
@@ -82,14 +82,18 @@ def _reply(prompt):
         cites.append({"path": path, "line": int(start), "quote": quote})
         if len(cites) >= 2:
             break
-    text = ("补充的判断\\n\\n## 其他书的说法\\n补充正文两句"
-            if supplement else "前半的判断\\n\\n## 点名书的说法\\n前半正文两句")
-    return json.dumps({"answer": text.replace("\\n", "\n"), "citations": cites,
-                       "confidence": "high", "not_found": False},
-                      ensure_ascii=False)
+    text = (
+        "补充的判断\\n\\n## 其他书的说法\\n补充正文两句"
+        if supplement
+        else "前半的判断\\n\\n## 点名书的说法\\n前半正文两句"
+    )
+    return json.dumps(
+        {"answer": text.replace("\\n", "\n"), "citations": cites, "confidence": "high", "not_found": False},
+        ensure_ascii=False,
+    )
 
 
-class Fake(object):
+class Fake:
     """线程安全的假模型：按提示词里的角色说明决定返回哪一部分。"""
 
     def __init__(self, fail_supplement=False):
@@ -111,27 +115,27 @@ class Fake(object):
 
 
 def _sources():
-    return [{"book": FOCUS, "title": FOCUS_TITLE, "path": FOCUS_PATH, "line": FOCUS_LINE},
-            {"book": OTHER, "title": OTHER_TITLE, "path": OTHER_PATH, "line": OTHER_LINE}]
+    return [
+        {"book": FOCUS, "title": FOCUS_TITLE, "path": FOCUS_PATH, "line": FOCUS_LINE},
+        {"book": OTHER, "title": OTHER_TITLE, "path": OTHER_PATH, "line": OTHER_LINE},
+    ]
 
 
 def _focus():
-    return {"status": "exact", "book": FOCUS, "title": FOCUS_TITLE,
-            "best_path": FOCUS_PATH, "best_line": FOCUS_LINE}
+    return {"status": "exact", "book": FOCUS, "title": FOCUS_TITLE, "best_path": FOCUS_PATH, "best_line": FOCUS_LINE}
 
 
 @pytest.fixture(autouse=True)
 def _isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(answer, "CACHE_DIR", str(tmp_path / "answers"))
-    yield
+    return
 
 
-def _ask(fake, monkeypatch, sources, focus, path=FOCUS_PATH, line=FOCUS_LINE,
-         use_cache=True):
+def _ask(fake, monkeypatch, sources, focus, path=FOCUS_PATH, line=FOCUS_LINE, use_cache=True):
     monkeypatch.setattr(answer, "call_pi", fake)
-    return answer.answer_question(QUESTION, FOCUS, path, line, list(TERMS),
-                                  sources=sources, focus=focus,
-                                  use_cache=use_cache, thinking="high")
+    return answer.answer_question(
+        QUESTION, FOCUS, path, line, list(TERMS), sources=sources, focus=focus, use_cache=use_cache, thinking="high"
+    )
 
 
 def test_two_parts_primary_first(monkeypatch):
@@ -144,8 +148,9 @@ def test_two_parts_primary_first(monkeypatch):
     assert out["parts"][0]["title"] == FOCUS_TITLE
     assert out["parts"][0]["citations"], "前半没有引文，分书断言就没意义"
     assert all(c["book"] == FOCUS for c in out["parts"][0]["citations"])
-    assert all(c.get("book_title") == FOCUS_TITLE
-               for c in out["parts"][0]["citations"]), "主书引文缺书名会显示《B0019》"
+    assert all(c.get("book_title") == FOCUS_TITLE for c in out["parts"][0]["citations"]), (
+        "主书引文缺书名会显示《B0019》"
+    )
     assert all(c["book"] != FOCUS for c in out["parts"][1]["citations"])
     assert all(c.get("book_title") for c in out["parts"][1]["citations"])
     assert out["citations"][0]["book"] == FOCUS
@@ -158,8 +163,7 @@ def test_two_parts_primary_first(monkeypatch):
     # 两个角色各跑一次提示词，前半带 primary 说明、后半带 supplement 说明
     assert fake.calls() == 2
     assert any("第一部分" in p for p in fake.prompts)
-    assert any(p.startswith(answer.ROLE_SUPPLEMENT.format(title=FOCUS_TITLE)[:20])
-               for p in fake.prompts)
+    assert any(p.startswith(answer.ROLE_SUPPLEMENT.format(title=FOCUS_TITLE)[:20]) for p in fake.prompts)
 
 
 def test_only_focus_source_is_single(monkeypatch):
@@ -179,13 +183,12 @@ def test_only_focus_source_is_single(monkeypatch):
 
 def test_missing_focus_source_does_not_fall_back(monkeypatch):
     fake = Fake()
-    out = _ask(fake, monkeypatch, _sources(),
-               {"status": "exact", "book": "B9999", "title": "不存在的书"},
-               path="")
+    out = _ask(fake, monkeypatch, _sources(), {"status": "exact", "book": "B9999", "title": "不存在的书"}, path="")
 
     assert out["ok"] is False
     error = out["error"] or ""
-    assert "原文" in error and "locked" in error
+    assert "原文" in error
+    assert "locked" in error
     assert out["focus"]["book"] == "B9999"
     # 没拿检索第一名的书代答：一次模型都没调，也没有别的书进 sources
     assert fake.calls() == 0
@@ -194,8 +197,7 @@ def test_missing_focus_source_does_not_fall_back(monkeypatch):
 
 def test_two_supplements_go_through_multi(monkeypatch):
     fake = Fake()
-    sources = _sources() + [{"book": THIRD, "title": THIRD_TITLE,
-                             "path": THIRD_PATH, "line": THIRD_LINE}]
+    sources = [*_sources(), {"book": THIRD, "title": THIRD_TITLE, "path": THIRD_PATH, "line": THIRD_LINE}]
     out = _ask(fake, monkeypatch, sources, _focus())
 
     assert out["mode"] == "anchored"
@@ -205,7 +207,9 @@ def test_two_supplements_go_through_multi(monkeypatch):
     # 两本及以上的补充走多书提示词，一次带上全部补充书，点名书不在里面
     supp = [p for p in fake.prompts if "第二部分" in p]
     assert len(supp) == 1
-    assert OTHER in supp[0] and THIRD in supp[0] and FOCUS not in supp[0]
+    assert OTHER in supp[0]
+    assert THIRD in supp[0]
+    assert FOCUS not in supp[0]
 
 
 def test_supplement_failure_keeps_primary(monkeypatch):
@@ -233,20 +237,28 @@ def test_followup_with_new_focus_does_not_pin_previous():
     """追问换了点名书：不钉回上一轮，也不把上一轮的点名抄过来。"""
     import server
 
-    prev = {"n": 1, "question": "万历十五年怎么讲张居正",
-            "trace": {"result": {"book": FOCUS, "book_title": FOCUS_TITLE,
-                                 "path": FOCUS_PATH, "line": FOCUS_LINE,
-                                 "title": "第三章世间已无张居正"},
-                      "plan": {"ranking": [{"book": FOCUS, "title": FOCUS_TITLE}],
-                               "chapters": []},
-                      "focus": {"book": FOCUS, "title": FOCUS_TITLE,
-                                "status": "exact"}},
-            "answer": None}
+    prev = {
+        "n": 1,
+        "question": "万历十五年怎么讲张居正",
+        "trace": {
+            "result": {
+                "book": FOCUS,
+                "book_title": FOCUS_TITLE,
+                "path": FOCUS_PATH,
+                "line": FOCUS_LINE,
+                "title": "第三章世间已无张居正",
+            },
+            "plan": {"ranking": [{"book": FOCUS, "title": FOCUS_TITLE}], "chapters": []},
+            "focus": {"book": FOCUS, "title": FOCUS_TITLE, "status": "exact"},
+        },
+        "answer": None,
+    }
     sess = {"turns": [prev]}
     rel = {"related": True, "reason": "追问"}
-    data = {"focus": {"book": OTHER, "title": OTHER_TITLE, "status": "exact"},
-            "result": {"book": OTHER, "book_title": OTHER_TITLE,
-                       "path": OTHER_PATH, "line": OTHER_LINE, "title": "第一回"}}
+    data = {
+        "focus": {"book": OTHER, "title": OTHER_TITLE, "status": "exact"},
+        "result": {"book": OTHER, "book_title": OTHER_TITLE, "path": OTHER_PATH, "line": OTHER_LINE, "title": "第一回"},
+    }
 
     server._pin_followup(data, sess, 2, rel, None)
     assert "pin" not in data
@@ -255,8 +267,9 @@ def test_followup_with_new_focus_does_not_pin_previous():
     assert data["focus"] == {"book": OTHER, "title": OTHER_TITLE, "status": "exact"}
 
     # 没点名的一侧照旧：钉回上一轮的书，并把上一轮的点名抄成 inherited
-    data2 = {"result": {"book": OTHER, "book_title": OTHER_TITLE,
-                        "path": OTHER_PATH, "line": OTHER_LINE, "title": "第一回"}}
+    data2 = {
+        "result": {"book": OTHER, "book_title": OTHER_TITLE, "path": OTHER_PATH, "line": OTHER_LINE, "title": "第一回"}
+    }
     server._pin_followup(data2, sess, 2, rel, None)
     assert data2["pin"]["book"] == FOCUS
     server._inherit_focus(data2, sess, 2, rel)
@@ -268,20 +281,31 @@ def test_followup_ambiguous_or_missing_does_not_pin_previous():
     """当前问点名了歧义/不存在的书：不钉回上一轮，也不继承上一轮的 exact。"""
     import server
 
-    prev = {"n": 1, "trace": {"result": {"book": FOCUS, "book_title": FOCUS_TITLE,
-                                         "path": FOCUS_PATH, "line": FOCUS_LINE},
-                              "plan": {"ranking": [{"book": FOCUS, "title": FOCUS_TITLE}],
-                                       "chapters": []},
-                              "focus": {"book": FOCUS, "title": FOCUS_TITLE,
-                                        "status": "exact", "query_title": FOCUS_TITLE}},
-            "answer": None}
+    prev = {
+        "n": 1,
+        "trace": {
+            "result": {"book": FOCUS, "book_title": FOCUS_TITLE, "path": FOCUS_PATH, "line": FOCUS_LINE},
+            "plan": {"ranking": [{"book": FOCUS, "title": FOCUS_TITLE}], "chapters": []},
+            "focus": {"book": FOCUS, "title": FOCUS_TITLE, "status": "exact", "query_title": FOCUS_TITLE},
+        },
+        "answer": None,
+    }
     sess = {"turns": [prev]}
     rel = {"related": True}
-    for focus in ({"status": "ambiguous", "query_title": "同名书", "candidates": []},
-                  {"status": "missing", "query_title": "不存在的书", "candidates": []}):
-        data = {"focus": dict(focus),
-                "result": {"book": OTHER, "book_title": OTHER_TITLE,
-                           "path": OTHER_PATH, "line": OTHER_LINE, "title": "第一回"}}
+    for focus in (
+        {"status": "ambiguous", "query_title": "同名书", "candidates": []},
+        {"status": "missing", "query_title": "不存在的书", "candidates": []},
+    ):
+        data = {
+            "focus": dict(focus),
+            "result": {
+                "book": OTHER,
+                "book_title": OTHER_TITLE,
+                "path": OTHER_PATH,
+                "line": OTHER_LINE,
+                "title": "第一回",
+            },
+        }
         server._pin_followup(data, sess, 2, rel, None)
         server._inherit_focus(data, sess, 2, rel)
         assert "pin" not in data

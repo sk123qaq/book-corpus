@@ -13,30 +13,35 @@ add 行的学科预填走 classify_model.classify，一次调用回一级与二�
 opencode-go/deepseek-v4.1-flash；缓存默认 工作区/批次/ingest/classify.json，可用
 --cache 指到别处，按 sha256 存，旧条目没有 model 与 prompt_version 也能读。
 """
+
 import argparse
 import errno
 import hashlib
 import json
 import os
+import pathlib
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import lib_common as L  # noqa: E402
-import classify_model as CM  # noqa: E402
+import classify_model as CM
+import lib_common as L
 
 ROOT = L.ROOT
+
+
 def journal_path(root):
     return os.path.join(root, "工作区", "批次", "ingest", "journal.tsv")
 
 
 def lock_path(root):
     return os.path.join(root, "tables", ".ingest.lock")
+
+
 FORMATS = {"epub": 3, "mobi": 2, "azw3": 2, "pdf": 1, "txt": 0, "djvu": 0}
 
 
@@ -62,7 +67,7 @@ def strip_tail_paren(stem):
         elif c in ("(", "（"):
             depth -= 1
             if depth == 0:
-                return stem[:i].rstrip(), stem[i + 1:end].strip()
+                return stem[:i].rstrip(), stem[i + 1 : end].strip()
     return stem, None
 
 
@@ -92,25 +97,32 @@ def library_index(root):
     可能停在分类功能上线之前。账表读不到时才退回 book.json。
     """
     lib = os.path.join(root, "books")
-    ledger = {r["uid"]: [str(x).strip() for x in (r.get("一级"), r.get("二级"))
-                          if str(x or "").strip()]
-              for r in L.categories(root=root)}
+    ledger = {
+        r["uid"]: [str(x).strip() for x in (r.get("一级"), r.get("二级")) if str(x or "").strip()]
+        for r in L.categories(root=root)
+    }
     books, shas, sha_uid = [], set(), {}
     for dirpath, dirnames, filenames in os.walk(lib):
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if "book.json" not in filenames:
             continue
-        doc = json.load(open(os.path.join(dirpath, "book.json"), encoding="utf-8"))
+        doc = json.loads(pathlib.Path(os.path.join(dirpath, "book.json")).read_text(encoding="utf-8"))
         uid = doc.get("uid", "")
         subjects = ledger.get(uid) or [str(x).strip() for x in (doc.get("subjects") or [])]
         srcs = [x for x in (doc.get("sources") or []) if x.get("file")]
         primary = next((x for x in srcs if x.get("primary_src")), srcs[0] if srcs else {})
-        books.append({"uid": uid, "title": doc.get("title", ""),
-                      "author": doc.get("author", ""),
-                      "subjects": [s for s in subjects if s],
-                      "path": os.path.relpath(dirpath, lib),
-                      "format": (primary.get("format") or "").lower(),
-                      "primary": primary, "sources": srcs})
+        books.append(
+            {
+                "uid": uid,
+                "title": doc.get("title", ""),
+                "author": doc.get("author", ""),
+                "subjects": [s for s in subjects if s],
+                "path": os.path.relpath(dirpath, lib),
+                "format": (primary.get("format") or "").lower(),
+                "primary": primary,
+                "sources": srcs,
+            }
+        )
         for x in srcs:
             sha = x.get("sha256")
             if sha:
@@ -126,8 +138,7 @@ def match(title, books):
     exact = [b for b in books if norm(b["title"]) == t]
     if exact:
         return exact
-    return [b for b in books
-            if len(norm(b["title"])) >= 4 and (norm(b["title"]) in t or t in norm(b["title"]))]
+    return [b for b in books if len(norm(b["title"])) >= 4 and (norm(b["title"]) in t or t in norm(b["title"]))]
 
 
 def next_uid(rows):
@@ -157,9 +168,13 @@ def _shared_subjects(bs):
 
 
 def _target(item, b):
-    item.update(uid=b["uid"], target=b["uid"], target_title=b["title"],
-                target_author=b.get("author", ""),
-                target_subjects=norm_subjects(b.get("subjects")))
+    item.update(
+        uid=b["uid"],
+        target=b["uid"],
+        target_title=b["title"],
+        target_author=b.get("author", ""),
+        target_subjects=norm_subjects(b.get("subjects")),
+    )
 
 
 def plan_for(path, books, sha_uid, seen, ret, batch_titles):
@@ -172,24 +187,42 @@ def plan_for(path, books, sha_uid, seen, ret, batch_titles):
     sha = sha256_file(path)
     title, author = parse_name(base)
     fmt = os.path.splitext(base)[1].lstrip(".").lower()
-    item = {"plan_version": 2, "file": base, "path": path, "sha256": sha,
-            "bytes": os.path.getsize(path), "format": fmt,
-            "title": title, "author": author, "uid": "", "target": "",
-            "target_title": "", "target_author": "", "target_subjects": [],
-            "subjects": [], "retention": "keep", "action": "",
-            "status": "", "note": ""}
+    item = {
+        "plan_version": 2,
+        "file": base,
+        "path": path,
+        "sha256": sha,
+        "bytes": os.path.getsize(path),
+        "format": fmt,
+        "title": title,
+        "author": author,
+        "uid": "",
+        "target": "",
+        "target_title": "",
+        "target_author": "",
+        "target_subjects": [],
+        "subjects": [],
+        "retention": "keep",
+        "action": "",
+        "status": "",
+        "note": "",
+    }
     old_uid = sha_uid.get(sha)
     if old_uid:
         b = next((x for x in books if x["uid"] == old_uid), None)
         if b:
             _target(item, b)
-        item.update(action="delete", status="in_library", uid=old_uid, target=old_uid,
-                    target_subjects=item["target_subjects"] or ["其他"],
-                    note="库里已有同一文件：%s" % old_uid)
+        item.update(
+            action="delete",
+            status="in_library",
+            uid=old_uid,
+            target=old_uid,
+            target_subjects=item["target_subjects"] or ["其他"],
+            note="库里已有同一文件：%s" % old_uid,
+        )
         return item
     if sha in seen:
-        item.update(action="delete", status="batch_dup", target_subjects=["其他"],
-                    note="本批重复：%s" % seen[sha])
+        item.update(action="delete", status="batch_dup", target_subjects=["其他"], note="本批重复：%s" % seen[sha])
         return item
     hits = match(title, books)
     exact = [b for b in hits if norm(b["title"]) == norm(title)]
@@ -203,45 +236,55 @@ def plan_for(path, books, sha_uid, seen, ret, batch_titles):
         new_rank, old_rank = source_rank(fmt), source_rank(old_fmt)
         known_old = old_fmt in FORMATS
         if old_sha == sha:
-            item.update(action="delete", status="in_library",
-                        note="库里已有同一文件：%s" % b["uid"])
+            item.update(action="delete", status="in_library", note="库里已有同一文件：%s" % b["uid"])
         elif known_old and new_rank > old_rank:
-            item.update(action="replace", status="replace",
-                        note="换源：%s → %s；旧源保留，正文需重拆"
-                             % (old.get("file") or old_fmt, base))
+            item.update(
+                action="replace",
+                status="replace",
+                note="换源：%s → %s；旧源保留，正文需重拆" % (old.get("file") or old_fmt, base),
+            )
         elif known_old:
-            item.update(action="review",
-                        status="same_format" if new_rank == old_rank else "weaker",
-                        note="库里已有 %s，现有源 %s；确认换源还是删除"
-                             % (b["uid"], old.get("file") or old_fmt))
+            item.update(
+                action="review",
+                status="same_format" if new_rank == old_rank else "weaker",
+                note="库里已有 %s，现有源 %s；确认换源还是删除" % (b["uid"], old.get("file") or old_fmt),
+            )
         else:
-            item.update(action="review", status="weaker",
-                        note="库里已有 %s，没有可比的主源；确认换源还是删除" % b["uid"])
+            item.update(
+                action="review", status="weaker", note="库里已有 %s，没有可比的主源；确认换源还是删除" % b["uid"]
+            )
         return item
     if len(exact) > 1:
-        item.update(action="review", status="candidates",
-                    target=",".join(b["uid"] for b in exact),
-                    target_subjects=_shared_subjects(exact) or ["其他"],
-                    note="同名候选：%s；选一本换源或删除"
-                         % "、".join("%s %s" % (b["uid"], b["title"]) for b in exact[:4]))
+        item.update(
+            action="review",
+            status="candidates",
+            target=",".join(b["uid"] for b in exact),
+            target_subjects=_shared_subjects(exact) or ["其他"],
+            note="同名候选：%s；选一本换源或删除" % "、".join("%s %s" % (b["uid"], b["title"]) for b in exact[:4]),
+        )
         return item
     if hits:
-        item.update(action="review", status="fuzzy",
-                    target=",".join(x["uid"] for x in hits),
-                    target_subjects=_shared_subjects(hits) or ["其他"],
-                    note="疑似同名《%s》；确认是同一本就换源，不是就新增"
-                         % "、".join(x["title"] for x in hits[:3]))
+        item.update(
+            action="review",
+            status="fuzzy",
+            target=",".join(x["uid"] for x in hits),
+            target_subjects=_shared_subjects(hits) or ["其他"],
+            note="疑似同名《%s》；确认是同一本就换源，不是就新增" % "、".join(x["title"] for x in hits[:3]),
+        )
         if len(hits) == 1:
             _target(item, hits[0])
             item["retention"] = ret.get(hits[0]["uid"], "keep")
         return item
     key = norm(title)
     if key and key in batch_titles:
-        item.update(action="review", status="fuzzy", target_subjects=["其他"],
-                    note="本批已有同名：%s；确认是否同一本" % batch_titles[key])
+        item.update(
+            action="review",
+            status="fuzzy",
+            target_subjects=["其他"],
+            note="本批已有同名：%s；确认是否同一本" % batch_titles[key],
+        )
         return item
-    item.update(action="add", status="new", subjects=["其他"],
-                note="新书，分类未定，暂放其他")
+    item.update(action="add", status="new", subjects=["其他"], note="新书，分类未定，暂放其他")
     return item
 
 
@@ -284,7 +327,7 @@ CLASSIFY_TIMEOUT = CM.TIMEOUT
 def load_class_cache(path):
     if not os.path.exists(path):
         return {}
-    return json.load(open(path, encoding="utf-8"))
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
 
 
 def _call_classifier(titles, authors):
@@ -328,10 +371,10 @@ def classify_adds(items, cache_path, enabled=True):
     if todo and enabled:
         try:
             got = _call_classifier([i["title"] for i in todo], [i["author"] for i in todo])
-            for it, rec in zip(todo, got):
-                cache[it["sha256"]] = dict(rec, at=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                            model=CLASSIFY_MODEL,
-                                            prompt_version=CM.PROMPT_VERSION)
+            for it, rec in zip(todo, got, strict=False):
+                cache[it["sha256"]] = dict(
+                    rec, at=time.strftime("%Y-%m-%dT%H:%M:%S"), model=CLASSIFY_MODEL, prompt_version=CM.PROMPT_VERSION
+                )
             parent = os.path.dirname(cache_path)
             if parent:
                 os.makedirs(parent, exist_ok=True)
@@ -339,8 +382,11 @@ def classify_adds(items, cache_path, enabled=True):
         except (SystemExit, Exception) as exc:
             msg = (str(exc) or type(exc).__name__)[:90]
             print("分类失败：%s" % msg, file=sys.stderr)
-            print("  没配模型时会这样：book-corpus model 看当前配置，README「模型与账号」配一次；"
-                  "不配也能入库，学科之后用 book-corpus run classify_books 补。", file=sys.stderr)
+            print(
+                "  没配模型时会这样：book-corpus model 看当前配置，README「模型与账号」配一次；"
+                "不配也能入库，学科之后用 book-corpus run classify_books 补。",
+                file=sys.stderr,
+            )
             for it in todo:
                 it["subjects"] = ["其他"]
                 it["note"] = "分类失败：%s；暂放其他" % msg
@@ -365,11 +411,16 @@ def journal(root, rows):
         if new:
             fh.write("ts\taction\tuid\tfile\tsha256\tbytes\tnote\n")
         for r in rows:
-            vals = (time.strftime("%Y-%m-%dT%H:%M:%S%z"), r["action"], r.get("uid", ""),
-                    r.get("file", ""), r.get("sha256", ""), r.get("bytes", ""),
-                    r.get("note", ""))
-            fh.write("\t".join(str(x).replace("\t", " ").replace("\n", " ")
-                              for x in vals) + "\n")
+            vals = (
+                time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                r["action"],
+                r.get("uid", ""),
+                r.get("file", ""),
+                r.get("sha256", ""),
+                r.get("bytes", ""),
+                r.get("note", ""),
+            )
+            fh.write("\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in vals) + "\n")
 
 
 def take_lock(root):
@@ -377,7 +428,7 @@ def take_lock(root):
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        raise SystemExit("已有 ingest 在跑，锁文件 %s 存在" % path)
+        raise SystemExit("已有 ingest 在跑，锁文件 %s 存在" % path) from None
     os.write(fd, str(os.getpid()).encode())
     os.close(fd)
 
@@ -393,20 +444,18 @@ def find_by_uid(root, uid):
     for dirpath, dirnames, filenames in os.walk(lib):
         dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         if "book.json" in filenames:
-            doc = json.load(open(os.path.join(dirpath, "book.json"), encoding="utf-8"))
+            doc = json.loads(pathlib.Path(os.path.join(dirpath, "book.json")).read_text(encoding="utf-8"))
             if doc.get("uid") == uid:
                 return os.path.relpath(dirpath, lib), doc
     return None, None
 
 
 def book_json(uid, title, author, subjects, sources, notes, retention="keep"):
-    return L.book_doc(uid, title, "", author, subjects, None, None, None,
-                      retention, notes, sources, [])
+    return L.book_doc(uid, title, "", author, subjects, None, None, None, retention, notes, sources, [])
 
 
 def trash_dir(root):
-    return os.path.join(root, "工作区", "批次",
-                        "收件箱删除-" + time.strftime("%Y-%m-%d"))
+    return os.path.join(root, "工作区", "批次", "收件箱删除-" + time.strftime("%Y-%m-%d"))
 
 
 def free_path(path):
@@ -434,10 +483,12 @@ def _trash_readme(root):
     if os.path.exists(path):
         return
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write("# 收件箱删除\n\n"
-                 "这里是从 `books/_收件箱/` 删除的文件，书库里的书没有动。\n\n"
-                 "要找回：把文件移回 `books/_收件箱/`，再到「入库」页重新扫描；\n"
-                 "确认不要：整个日期目录删掉即可。\n")
+        fh.write(
+            "# 收件箱删除\n\n"
+            "这里是从 `books/_收件箱/` 删除的文件，书库里的书没有动。\n\n"
+            "要找回：把文件移回 `books/_收件箱/`，再到「入库」页重新扫描；\n"
+            "确认不要：整个日期目录删掉即可。\n"
+        )
 
 
 def _delete(root, it, src):
@@ -450,16 +501,24 @@ def _delete(root, it, src):
         os.replace(src, dest)
     except OSError as exc:
         if exc.errno == errno.EXDEV:
-            raise SystemExit("收件箱与回收站不在同一磁盘，先手动移: " + src)
+            raise SystemExit("收件箱与回收站不在同一磁盘，先手动移: " + src) from None
         raise
     _trash_readme(root)
     reason = str(it.get("note") or it.get("status") or "删除")
     reason = reason.replace("\t", " ").replace("\n", " ")
-    _manifest(root, (time.strftime("%Y-%m-%dT%H:%M:%S%z"), it["file"], sha,
-                     os.path.getsize(dest), reason, it.get("uid", ""),
-                     os.path.relpath(dest, root)))
-    return dict(it, action="delete", sha256=sha,
-                note="已移入回收站 %s" % os.path.relpath(dest, root))
+    _manifest(
+        root,
+        (
+            time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            it["file"],
+            sha,
+            os.path.getsize(dest),
+            reason,
+            it.get("uid", ""),
+            os.path.relpath(dest, root),
+        ),
+    )
+    return dict(it, action="delete", sha256=sha, note="已移入回收站 %s" % os.path.relpath(dest, root))
 
 
 def _add(root, it, src):
@@ -485,19 +544,34 @@ def _add(root, it, src):
     target = free_path(os.path.join(dest, "source", it["file"]))
     shutil.move(src, target)
     name = os.path.basename(target)
-    sources = [{"file": "source/" + name, "format": it["format"],
-                "bytes": os.path.getsize(target), "sha256": it["sha256"],
-                "primary_src": 1}]
+    sources = [
+        {
+            "file": "source/" + name,
+            "format": it["format"],
+            "bytes": os.path.getsize(target),
+            "sha256": it["sha256"],
+            "primary_src": 1,
+        }
+    ]
     day = time.strftime("%Y-%m-%d")
-    L.write_json_atomic(os.path.join(dest, "book.json"),
-                        book_json(uid, title, it.get("author", ""), subj, sources,
-                                  "ingest:%s" % day, ret))
-    L.category_put({"uid": uid, "一级": subj[0],
-                    "二级": subj[1] if len(subj) > 1 else "",
-                    "作者层": "0", "保留": ret, "正式书名": title,
-                    "备注": "ingest:%s；待复核" % day}, "ingest", root=root)
-    return dict(it, action="add", uid=uid,
-                note="已入库 %s（保留 %s）" % (uid, ret))
+    L.write_json_atomic(
+        os.path.join(dest, "book.json"),
+        book_json(uid, title, it.get("author", ""), subj, sources, "ingest:%s" % day, ret),
+    )
+    L.category_put(
+        {
+            "uid": uid,
+            "一级": subj[0],
+            "二级": subj[1] if len(subj) > 1 else "",
+            "作者层": "0",
+            "保留": ret,
+            "正式书名": title,
+            "备注": "ingest:%s；待复核" % day,
+        },
+        "ingest",
+        root=root,
+    )
+    return dict(it, action="add", uid=uid, note="已入库 %s（保留 %s）" % (uid, ret))
 
 
 def _replace(root, it, src):
@@ -529,9 +603,16 @@ def _replace(root, it, src):
         sources.append(dict(s, primary_src=0))
     if old is None and sources:
         old = dict(sources[0])
-    sources.insert(0, {"file": "source/" + name, "format": it["format"],
-                       "bytes": os.path.getsize(target), "sha256": it["sha256"],
-                       "primary_src": 1})
+    sources.insert(
+        0,
+        {
+            "file": "source/" + name,
+            "format": it["format"],
+            "bytes": os.path.getsize(target),
+            "sha256": it["sha256"],
+            "primary_src": 1,
+        },
+    )
     day = time.strftime("%Y-%m-%d")
     doc["sources"] = sources
     doc["retention"] = want
@@ -545,11 +626,19 @@ def _replace(root, it, src):
         row["二级"] = subj[1] if len(subj) > 1 else ""
         L.category_put(row, "ingest", root=root)
     else:
-        L.category_put({"uid": uid, "一级": subj[0],
-                        "二级": subj[1] if len(subj) > 1 else "",
-                        "作者层": "0", "保留": want,
-                        "正式书名": doc.get("title", ""),
-                        "备注": "ingest:%s；替换源" % day}, "ingest", root=root)
+        L.category_put(
+            {
+                "uid": uid,
+                "一级": subj[0],
+                "二级": subj[1] if len(subj) > 1 else "",
+                "作者层": "0",
+                "保留": want,
+                "正式书名": doc.get("title", ""),
+                "备注": "ingest:%s；替换源" % day,
+            },
+            "ingest",
+            root=root,
+        )
     md_dir = os.path.join(root, L.md_rel(uid))
     man = L.read_md_manifest(md_dir) if os.path.isdir(md_dir) else {}
     marked = False
@@ -626,14 +715,11 @@ def main():
     ap.add_argument("--uid")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--out")
-    ap.add_argument("--cache",
-                    help="分类缓存路径，默认 <root>/工作区/批次/ingest/classify.json")
+    ap.add_argument("--cache", help="分类缓存路径，默认 <root>/工作区/批次/ingest/classify.json")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--no-rebuild", action="store_true")
-    ap.add_argument("--no-classify", action="store_true",
-                    help="跳过 deepseek 分类预填")
-    ap.add_argument("--retention", choices=("keep", "review", "drop"),
-                    help="新增/换源后的书库去留；不填则沿用账表现值")
+    ap.add_argument("--no-classify", action="store_true", help="跳过 deepseek 分类预填")
+    ap.add_argument("--retention", choices=("keep", "review", "drop"), help="新增/换源后的书库去留；不填则沿用账表现值")
     a = ap.parse_args()
 
     if a.cmd == "uid":
@@ -655,7 +741,7 @@ def main():
         return 0
 
     if a.cmd == "apply":
-        items = json.load(open(a.arg, encoding="utf-8"))
+        items = json.loads(pathlib.Path(a.arg).read_text(encoding="utf-8"))
         if not isinstance(items, list):
             print("计划不是数组：" + a.arg, file=sys.stderr)
             return 2
@@ -664,15 +750,26 @@ def main():
             return 2
     else:
         base = os.path.basename(a.arg)
-        it = {"plan_version": 2, "file": base, "path": a.arg,
-              "sha256": sha256_file(a.arg), "bytes": os.path.getsize(a.arg),
-              "format": os.path.splitext(base)[1].lstrip(".").lower(),
-              "title": a.title or parse_name(base)[0], "author": a.author,
-              "uid": a.uid or "", "target": "",
-              "target_title": "", "target_author": "", "target_subjects": [],
-              "subjects": (a.subjects or "").split("/") if a.subjects else [],
-              "retention": a.retention or "", "action": a.cmd,
-              "status": "new" if a.cmd == "add" else "replace", "note": ""}
+        it = {
+            "plan_version": 2,
+            "file": base,
+            "path": a.arg,
+            "sha256": sha256_file(a.arg),
+            "bytes": os.path.getsize(a.arg),
+            "format": os.path.splitext(base)[1].lstrip(".").lower(),
+            "title": a.title or parse_name(base)[0],
+            "author": a.author,
+            "uid": a.uid or "",
+            "target": "",
+            "target_title": "",
+            "target_author": "",
+            "target_subjects": [],
+            "subjects": (a.subjects or "").split("/") if a.subjects else [],
+            "retention": a.retention or "",
+            "action": a.cmd,
+            "status": "new" if a.cmd == "add" else "replace",
+            "note": "",
+        }
         items = [it]
 
     review = [i for i in items if i.get("action") == "review"]

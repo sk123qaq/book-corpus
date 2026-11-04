@@ -9,20 +9,22 @@
   python3 build_library.py                 # 全量重建
   python3 build_library.py --emit-json     # 顺便给每本书写 book.json
 """
+
 import argparse
 import json
 import os
-import re
 import sqlite3
 import sys
 import time
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lib_common as L  # noqa: E402
+import contextlib
+
+import lib_common as L
 
 DB = L.PATHS.library_db
-BUILD_DB = DB + ".building"   # 先建在这里，全部写完再 os.replace 换掉活的库
+BUILD_DB = DB + ".building"  # 先建在这里，全部写完再 os.replace 换掉活的库
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -128,8 +130,8 @@ def finalize(con, t0, emit_json):
         pass
     con.close()
     _remove_sidecars(BUILD_DB)
-    os.replace(BUILD_DB, DB)                  # 只有走到这里旧库才被替换
-    stats["db_bytes"] = os.path.getsize(DB)   # close 之后才 checkpoint 完
+    os.replace(BUILD_DB, DB)  # 只有走到这里旧库才被替换
+    stats["db_bytes"] = os.path.getsize(DB)  # close 之后才 checkpoint 完
     if emit_json:
         # book.json 是投影，按已落地的库写，别让失败路径写出比库新的投影
         con = sqlite3.connect(DB)
@@ -152,8 +154,9 @@ def award_roster():
     """奖项名单：只在 工作区/批次 里找带下载表的批次，新库没有就空着。"""
     base = os.path.join(L.WORK, "批次")
     try:
-        batches = sorted(n for n in os.listdir(base)
-                         if n.startswith("奖项下载-") and os.path.isdir(os.path.join(base, n)))
+        batches = sorted(
+            n for n in os.listdir(base) if n.startswith("奖项下载-") and os.path.isdir(os.path.join(base, n))
+        )
     except OSError:
         batches = []
     for name in reversed(batches):
@@ -173,18 +176,15 @@ def build_from_library(books, emit_json=False):
         if not os.path.isdir(L.BOOKS):
             raise SystemExit("books/ 不在，拒绝用空库替换 library.db")
         if ledger:
-            raise SystemExit("人账还有 %d 行但 books/ 里没有书，拒绝清空 library.db"
-                             % len(ledger))
+            raise SystemExit("人账还有 %d 行但 books/ 里没有书，拒绝清空 library.db" % len(ledger))
     t0 = time.time()
     con = fresh_db()
     try:
         return _build_rows(con, books, ledger, t0, emit_json)
     except BaseException:
         # 任何一步失败（含 SystemExit 校验）都清掉临时库，活的 library.db 原样保留
-        try:
+        with contextlib.suppress(sqlite3.Error):
             con.close()
-        except sqlite3.Error:
-            pass
         _remove_db_files(BUILD_DB)
         raise
 
@@ -202,55 +202,96 @@ def _build_rows(con, books, ledger, t0, emit_json):
             raise SystemExit("目录不存在: " + bdir)
         md_dir, html_dir = os.path.join(bdir, "md"), os.path.join(bdir, "html")
         sources = [s for s in (doc.get("sources") or []) if s.get("file")]
-        html_pages = (len([f for f in os.listdir(html_dir)
-                           if f.endswith(".html") and f != "index.html"])
-                      if os.path.isdir(html_dir) else 0)
+        html_pages = (
+            len([f for f in os.listdir(html_dir) if f.endswith(".html") and f != "index.html"])
+            if os.path.isdir(html_dir)
+            else 0
+        )
         awards = [a for a in (doc.get("awards") or []) if a.get("award")]
-        con.execute("""INSERT INTO book(uid,title,title_from_file,author,subject1,subject2,path,
+        con.execute(
+            """INSERT INTO book(uid,title,title_from_file,author,subject1,subject2,path,
                        path_state,series,volume,container,html_pages,retention,notes)
                        VALUES(?,?,?,?,?,?,?,'active',?,?,?,?,?,?)""",
-                    (uid, led["正式书名"], doc.get("title_from_file", ""), doc.get("author", ""),
-                     led["一级"], led["二级"], uid, doc.get("series") or "",
-                     doc.get("volume") or "",
-                     doc.get("container") or "", html_pages, led["保留"] or "keep", led["备注"]))
+            (
+                uid,
+                led["正式书名"],
+                doc.get("title_from_file", ""),
+                doc.get("author", ""),
+                led["一级"],
+                led["二级"],
+                uid,
+                doc.get("series") or "",
+                doc.get("volume") or "",
+                doc.get("container") or "",
+                html_pages,
+                led["保留"] or "keep",
+                led["备注"],
+            ),
+        )
         for i, s in enumerate(sources):
             owner = s.get("collection") or uid
-            con.execute("""INSERT INTO source(uid,file,format,bytes,sha256,origin,batch,primary_src)
+            con.execute(
+                """INSERT INTO source(uid,file,format,bytes,sha256,origin,batch,primary_src)
                            VALUES(?,?,?,?,?,'zlib',?,?)""",
-                        (uid, L.source_rel(owner, os.path.basename(s["file"])),
-                         s.get("format", ""), int(s.get("bytes") or 0), s.get("sha256", ""),
-                         "导入", 1 if i == 0 else 0))
+                (
+                    uid,
+                    L.source_rel(owner, os.path.basename(s["file"])),
+                    s.get("format", ""),
+                    int(s.get("bytes") or 0),
+                    s.get("sha256", ""),
+                    "导入",
+                    1 if i == 0 else 0,
+                ),
+            )
         for a in awards:
-            con.execute("INSERT INTO book_award(uid,award,year,edition,result) VALUES(?,?,?,?,?)",
-                        (uid, a["award"], a.get("year", ""), a.get("edition", ""), a.get("result", "")))
+            con.execute(
+                "INSERT INTO book_award(uid,award,year,edition,result) VALUES(?,?,?,?,?)",
+                (uid, a["award"], a.get("year", ""), a.get("edition", ""), a.get("result", "")),
+            )
             awards_books[a["award"]].add(uid)
         if os.path.isdir(md_dir):
             man = L.read_md_manifest(md_dir)
             chapters, bytes_ = L.count_md_dir(md_dir)
             method = man.get("method") or "ebook-to-md"
             primary = man.get("source_sha256") or (sources[0].get("sha256", "") if sources else "")
-            manifest = (L.store_path(L.md_rel(uid), ".manifest.json")
-                        if os.path.isfile(os.path.join(md_dir, ".manifest.json")) else "")
-            con.execute("""INSERT OR REPLACE INTO derived(uid,kind,status,method,tool_version,
+            manifest = (
+                L.store_path(L.md_rel(uid), ".manifest.json")
+                if os.path.isfile(os.path.join(md_dir, ".manifest.json"))
+                else ""
+            )
+            con.execute(
+                """INSERT OR REPLACE INTO derived(uid,kind,status,method,tool_version,
                            source_sha256,chapters,bytes,generated_at,manifest)
                            VALUES(?,'md','done',?,?,?,?,?,?,?)""",
-                        (uid, method, str(man.get("tool_version") or ""), primary, chapters, bytes_,
-                         str(man.get("generated_at") or ""), manifest))
-            con.execute("INSERT INTO job(uid,kind,status,actor,batch,tool,source_sha256,evidence)"
-                        " VALUES(?,'md','done',?,'导入',?,?,?)",
-                        (uid, method, method, primary,
-                         manifest or L.md_rel(uid)))
+                (
+                    uid,
+                    method,
+                    str(man.get("tool_version") or ""),
+                    primary,
+                    chapters,
+                    bytes_,
+                    str(man.get("generated_at") or ""),
+                    manifest,
+                ),
+            )
+            con.execute(
+                "INSERT INTO job(uid,kind,status,actor,batch,tool,source_sha256,evidence)"
+                " VALUES(?,'md','done',?,'导入',?,?,?)",
+                (uid, method, method, primary, manifest or L.md_rel(uid)),
+            )
         if os.path.isdir(html_dir):
-            con.execute("""INSERT OR REPLACE INTO derived(uid,kind,status,method,chapters,bytes)
+            con.execute(
+                """INSERT OR REPLACE INTO derived(uid,kind,status,method,chapters,bytes)
                            VALUES(?,'html','done','chapter-html-versions',?,0)""",
-                        (uid, html_pages))
+                (uid, html_pages),
+            )
     missing = sorted(set(ledger) - seen_uids)
     if missing:
-        raise SystemExit("人账有 %d 本在库里找不到 book.json，先查清楚再建库: %s"
-                         % (len(missing), " ".join(missing[:10])))
+        raise SystemExit(
+            "人账有 %d 本在库里找不到 book.json，先查清楚再建库: %s" % (len(missing), " ".join(missing[:10]))
+        )
     for name in sorted(set(award_roster()) | set(awards_books)):
-        con.execute("INSERT OR REPLACE INTO award(name,books) VALUES(?,?)",
-                    (name, len(awards_books.get(name, ()))))
+        con.execute("INSERT OR REPLACE INTO award(name,books) VALUES(?,?)", (name, len(awards_books.get(name, ()))))
     con.commit()
     return finalize(con, t0, emit_json)
 
@@ -264,23 +305,33 @@ def emit_book_json(con):
         if not os.path.isdir(dest):
             continue
         srcs = []
-        for s in con.execute(
-                "SELECT file,format,bytes,sha256,primary_src FROM source WHERE uid=?", (b["uid"],)):
+        for s in con.execute("SELECT file,format,bytes,sha256,primary_src FROM source WHERE uid=?", (b["uid"],)):
             parts = (s["file"] or "").split("/")
             shared = len(parts) == 4 and parts[0] == "collections"
-            entry = {"format": s["format"], "bytes": s["bytes"],
-                     "sha256": s["sha256"], "primary_src": s["primary_src"]}
+            entry = {"format": s["format"], "bytes": s["bytes"], "sha256": s["sha256"], "primary_src": s["primary_src"]}
             if shared:
                 entry["collection"] = parts[1]
                 entry["file"] = parts[3]
             else:
                 entry["file"] = "source/" + parts[-1]
             srcs.append(entry)
-        awards = [dict(a) for a in con.execute(
-            "SELECT award,year,edition,result FROM book_award WHERE uid=?", (b["uid"],))]
-        doc = L.book_doc(b["uid"], b["title"], b["title_from_file"], b["author"],
-                         [b["subject1"], b["subject2"]], b["series"], b["volume"],
-                         b["container"], b["retention"], b["notes"], srcs, awards)
+        awards = [
+            dict(a) for a in con.execute("SELECT award,year,edition,result FROM book_award WHERE uid=?", (b["uid"],))
+        ]
+        doc = L.book_doc(
+            b["uid"],
+            b["title"],
+            b["title_from_file"],
+            b["author"],
+            [b["subject1"], b["subject2"]],
+            b["series"],
+            b["volume"],
+            b["container"],
+            b["retention"],
+            b["notes"],
+            srcs,
+            awards,
+        )
         L.write_json_atomic(os.path.join(dest, "book.json"), doc)
         written += 1
     return written

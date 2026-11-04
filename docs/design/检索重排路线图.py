@@ -202,20 +202,16 @@ def rect(out, x, y, w, h, fill="card", stroke="line", rx=10, sw=1.5):
 def chip(out, x, y, label, status):
     color = PALETTE[status]
     w = 12 * len(label) + 30
-    out.append(f'<rect x="{x}" y="{y}" width="{w}" height="34" rx="17" '
-               f'fill="{color}" opacity="0.14"/>')
+    out.append(f'<rect x="{x}" y="{y}" width="{w}" height="34" rx="17" fill="{color}" opacity="0.14"/>')
     out.append(f'<circle cx="{x + 17}" cy="{y + 17}" r="5" fill="{color}"/>')
-    out.append(f'<text x="{x + 30}" y="{y + 23}" font-size="16" '
-               f'fill="{color}" font-weight="bold">{esc(label)}</text>')
+    out.append(f'<text x="{x + 30}" y="{y + 23}" font-size="16" fill="{color}" font-weight="bold">{esc(label)}</text>')
     return w
 
 
 def arrow(out, x1, y1, x2, y2, tone="muted"):
     color = PALETTE[tone]
-    out.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" '
-               f'stroke-width="2.5"/>')
-    out.append(f'<polygon points="{x2},{y2} {x2 - 8},{y2 - 11} {x2 + 8},{y2 - 11}" '
-               f'fill="{color}"/>')
+    out.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="2.5"/>')
+    out.append(f'<polygon points="{x2},{y2} {x2 - 8},{y2 - 11} {x2 + 8},{y2 - 11}" fill="{color}"/>')
 
 
 def draw_header(out):
@@ -231,8 +227,7 @@ def draw_stages(out):
         text(out, LX + 24, y + 40, stage["title"], 22, "ink", "bold")
         chip(out, LX + 200, y + 18, stage["chip"], stage["status"])
         for i, method in enumerate(stage["methods"]):
-            out.append(f'<circle cx="{LX + 31}" cy="{y + 72 + i * 30}" r="3.5" '
-                       f'fill="{PALETTE["muted"]}"/>')
+            out.append(f'<circle cx="{LX + 31}" cy="{y + 72 + i * 30}" r="3.5" fill="{PALETTE["muted"]}"/>')
             text(out, LX + 44, y + 78 + i * 30, method, 16, "ink")
         text(out, LX + 44, y + 132, stage["gate"], 16, stage["status"], "bold")
         if y > STAGE_Y0:
@@ -250,15 +245,18 @@ def draw_bars(out):
     for i, row in enumerate(RIGHT["bars"]):
         yy = CY + i * BAR_ROW
         text(out, RX + 200, yy + 22, row["label"], 15, "ink", anchor="end")
-        out.append(f'<rect x="{CX}" y="{yy + 4}" width="{max(row["value"] * scale, 2)}" '
-                   f'height="24" rx="5" fill="{PALETTE[row["tone"]]}"/>')
-        text(out, CX + row["value"] * scale + 10, yy + 22, f'{row["value"]:.3f}',
-             15, row["tone"], "bold")
+        out.append(
+            f'<rect x="{CX}" y="{yy + 4}" width="{max(row["value"] * scale, 2)}" '
+            f'height="24" rx="5" fill="{PALETTE[row["tone"]]}"/>'
+        )
+        text(out, CX + row["value"] * scale + 10, yy + 22, f"{row['value']:.3f}", 15, row["tone"], "bold")
     for th in RIGHT["thresholds"]:
         xx = CX + th["value"] * scale
-        out.append(f'<line x1="{xx}" y1="{CY - 14}" x2="{xx}" y2="{CY + 430}" '
-                   f'stroke="{PALETTE["muted"]}" stroke-width="1" '
-                   f'stroke-dasharray="4 4" opacity="0.5"/>')
+        out.append(
+            f'<line x1="{xx}" y1="{CY - 14}" x2="{xx}" y2="{CY + 430}" '
+            f'stroke="{PALETTE["muted"]}" stroke-width="1" '
+            f'stroke-dasharray="4 4" opacity="0.5"/>'
+        )
         text(out, xx + 4, CY - 16, th["label"], 13, "muted")
     text(out, RX + 24, CY + 456, RIGHT["caption"], 15, "muted")
 
@@ -268,8 +266,7 @@ def draw_verdict(out):
     rect(out, RX, VY, RW, VERDICT_H, fill="note_bg", stroke="note_line")
     text(out, RX + 24, VY + 40, v["title"], 21, "ink", "bold")
     for i, bullet in enumerate(v["bullets"]):
-        out.append(f'<circle cx="{RX + 32}" cy="{VY + 78 + i * 34}" r="3.5" '
-                   f'fill="{PALETTE["in_progress"]}"/>')
+        out.append(f'<circle cx="{RX + 32}" cy="{VY + 78 + i * 34}" r="3.5" fill="{PALETTE["in_progress"]}"/>')
         text(out, RX + 46, VY + 84 + i * 34, bullet, 16, "ink")
     text(out, RX + 24, VY + 288, v["conclusion"], 16, "in_progress", "bold")
 
@@ -279,8 +276,7 @@ def draw_steps(out):
     for i, step in enumerate(BOTTOM["steps"]):
         x = LX + i * (STEP_W + STEP_GAP)
         rect(out, x, BY + 6, STEP_W, 160)
-        out.append(f'<circle cx="{x + 34}" cy="{BY + 44}" r="18" '
-                   f'fill="{PALETTE[step["status"]]}" opacity="0.16"/>')
+        out.append(f'<circle cx="{x + 34}" cy="{BY + 44}" r="18" fill="{PALETTE[step["status"]]}" opacity="0.16"/>')
         text(out, x + 34, BY + 51, step["num"], 20, step["status"], "bold", anchor="middle")
         text(out, x + 64, BY + 51, step["title"], 19, "ink", "bold")
         text(out, x + 24, BY + 88, step["how"], 15, "ink")
@@ -291,9 +287,11 @@ def draw_steps(out):
 
 
 def render_svg():
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
-           f'width="{W}" height="{H}" font-family="{esc(FONT)}">',
-           f'<rect width="{W}" height="{H}" fill="{PALETTE["bg"]}"/>']
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
+        f'width="{W}" height="{H}" font-family="{esc(FONT)}">',
+        f'<rect width="{W}" height="{H}" fill="{PALETTE["bg"]}"/>',
+    ]
     draw_header(out)
     draw_stages(out)
     draw_bars(out)

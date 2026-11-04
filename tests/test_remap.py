@@ -12,7 +12,9 @@ def make_db(path, rows=()):
     con.executescript(build_expand.SCHEMA)
     con.executemany(
         "INSERT INTO expand(path,kind,tok,text,model,prompt_hash,tokens_in,tokens_out,built_at)"
-        " VALUES(?,?,?,?,?,?,?,?,?)", rows)
+        " VALUES(?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
     con.commit()
     con.close()
 

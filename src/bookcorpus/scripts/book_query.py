@@ -30,8 +30,8 @@
 
 只读 目录/检索/index.db 与 目录/library.db。
 """
+
 import argparse
-import csv
 import json
 import os
 import sqlite3
@@ -41,21 +41,21 @@ from dataclasses import asdict, dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import L, ROOT, PATHS  # noqa: E402
+from lib_common import PATHS, L
+
 sys.path.insert(0, HERE)
-import book_readme  # noqa: E402
-import book_score  # noqa: E402
-import lib_fts_cjk as cjk  # noqa: E402
-import qsearch  # noqa: E402
+import book_readme
+import book_score
+import lib_fts_cjk as cjk
+import qsearch
 
 ACTIONS = PATHS.concepts_action
 CONCEPTS = PATHS.concepts
 BROAD = PATHS.concepts_broad
 MAX_ROUNDS = 5
-MARGIN = 0.10          # 判据 B 的 10%
+MARGIN = 0.10  # 判据 B 的 10%
 # B6 验收后的默认值。qsearch --book 仍是 mix 旧口径，不在这里。
-DEFAULTS = {"book_score": "best_support", "cards": True,
-            "expand_on_demand": False, "max_rounds": MAX_ROUNDS}
+DEFAULTS = {"book_score": "best_support", "cards": True, "expand_on_demand": False, "max_rounds": MAX_ROUNDS}
 MIN_CHARS = 40
 POOL = 2000
 
@@ -186,16 +186,29 @@ def hit_rounds(hits, ranking, groups, margin=MARGIN, exclude=()):
         seen.update(cov)
     top2 = ranking[1].score if len(ranking) > 1 else 0.0
     m = (top1.score - top2) / top1.score if top1.score > 0 else 0.0
-    A = len(seen) == len(groups) and part >= 2
-    C = full >= 3
-    B = m >= margin
-    return A, B, C, full
+    ok_a = len(seen) == len(groups) and part >= 2
+    ok_c = full >= 3
+    ok_b = m >= margin
+    return ok_a, ok_b, ok_c, full
 
 
 class Planner:
-    def __init__(self, con, meta=None, expand=None, actions=None, concepts=None,
-                 broad=None, scheme="best_support", pool=POOL, min_chars=MIN_CHARS,
-                 search_fn=None, df_fn=None, limit=10, exclude=None):
+    def __init__(
+        self,
+        con,
+        meta=None,
+        expand=None,
+        actions=None,
+        concepts=None,
+        broad=None,
+        scheme="best_support",
+        pool=POOL,
+        min_chars=MIN_CHARS,
+        search_fn=None,
+        df_fn=None,
+        limit=10,
+        exclude=None,
+    ):
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
         self.expand = book_score.load_expand(con) if expand is None else expand
@@ -223,8 +236,7 @@ class Planner:
             hits, ms = self._search_fn(list(key))
         else:
             expr = " OR ".join("(%s)" % cjk.query_expr(t) for t in key if cjk.query_expr(t))
-            hits, ms = qsearch.search(self.con, expr, list(key), self.exclude, 2000,
-                                      self.min_chars, False, self.pool)
+            hits, ms = qsearch.search(self.con, expr, list(key), self.exclude, 2000, self.min_chars, False, self.pool)
         self.fetches += 1
         self._hits[key] = (hits, ms)
         return hits, ms
@@ -240,11 +252,11 @@ class Planner:
             if not expr:
                 val = (0, 0)
             else:
-                para = self.con.execute(
-                    "SELECT count(*) FROM para_fts WHERE para_fts MATCH ?", (expr,)).fetchone()[0]
+                para = self.con.execute("SELECT count(*) FROM para_fts WHERE para_fts MATCH ?", (expr,)).fetchone()[0]
                 books = self.con.execute(
-                    "SELECT count(DISTINCT p.book) FROM para_fts f JOIN para p ON p.id=f.rowid "
-                    "WHERE para_fts MATCH ?", (expr,)).fetchone()[0]
+                    "SELECT count(DISTINCT p.book) FROM para_fts f JOIN para p ON p.id=f.rowid WHERE para_fts MATCH ?",
+                    (expr,),
+                ).fetchone()[0]
                 val = (books, para)
         self._df[term] = val
         return val
@@ -256,17 +268,28 @@ class Planner:
 
     def _one(self, n, kind, query_terms, groups):
         hits, ms = self.search(query_terms)
-        ranking = book_score.rank(hits, query_terms, self.scheme, self.exclude,
-                                  self.meta, self.expand)
-        A, B, C, cover = hit_rounds(hits, ranking, groups, exclude=self.exclude)
+        ranking = book_score.rank(hits, query_terms, self.scheme, self.exclude, self.meta, self.expand)
+        ok_a, ok_b, ok_c, cover = hit_rounds(hits, ranking, groups, exclude=self.exclude)
         top1 = ranking[0] if ranking else None
         return Round(
-            n=n, kind=kind, terms=list(query_terms), groups=list(groups), hits=len(hits),
-            top1=top1.book if top1 else "", top1_score=round(top1.score, 4) if top1 else 0.0,
+            n=n,
+            kind=kind,
+            terms=list(query_terms),
+            groups=list(groups),
+            hits=len(hits),
+            top1=top1.book if top1 else "",
+            top1_score=round(top1.score, 4) if top1 else 0.0,
             top2_score=round(ranking[1].score, 4) if len(ranking) > 1 else 0.0,
             margin=round((top1.score - ranking[1].score) / top1.score, 4)
-            if top1 and top1.score and len(ranking) > 1 else 0.0,
-            cover_paras=cover, A=A, B=B, C=C, stop=bool(A and (B or C)), ms=round(ms, 1))
+            if top1 and top1.score and len(ranking) > 1
+            else 0.0,
+            cover_paras=cover,
+            A=ok_a,
+            B=ok_b,
+            C=ok_c,
+            stop=bool(ok_a and (ok_b or ok_c)),
+            ms=round(ms, 1),
+        )
 
     # ---- 换词 -------------------------------------------------------
     def term_sets(self, terms, nouns, allow_broad):
@@ -293,8 +316,16 @@ class Planner:
             groups = [t for t in nouns if t in rest] or rest
             yield "drop-generic", rest, groups
 
-    def plan(self, terms, broad=False, max_rounds=MAX_ROUNDS, chapters=True,
-             chapter_selector="score", max_chapters=3, focus=None):
+    def plan(
+        self,
+        terms,
+        broad=False,
+        max_rounds=MAX_ROUNDS,
+        chapters=True,
+        chapter_selector="score",
+        max_chapters=3,
+        focus=None,
+    ):
         t0 = time.time()
         terms = dedup(terms)
         nouns = split_terms(terms, self.actions)
@@ -327,10 +358,21 @@ class Planner:
         if not res.rounds:
             res.quality = ()
             if focus:
-                pin_focus(res, focus, terms, None, terms, limit=self.limit,
-                          chapters=chapters, max_chapters=max_chapters,
-                          toc_fn=self.toc, scheme=self.scheme,
-                          exclude=self.exclude, meta=self.meta, expand=self.expand)
+                pin_focus(
+                    res,
+                    focus,
+                    terms,
+                    None,
+                    terms,
+                    limit=self.limit,
+                    chapters=chapters,
+                    max_chapters=max_chapters,
+                    toc_fn=self.toc,
+                    scheme=self.scheme,
+                    exclude=self.exclude,
+                    meta=self.meta,
+                    expand=self.expand,
+                )
             res.ms = round((time.time() - t0) * 1000, 1)
             return res
         best = res.rounds[0]
@@ -339,26 +381,36 @@ class Planner:
                 best = r
         res.best_round = best.n
         res.quality = quality(best)
-        res.ranking = book_score.rank(self.search(best.terms)[0], best.terms,
-                                      self.scheme, self.exclude, self.meta, self.expand)
+        res.ranking = book_score.rank(
+            self.search(best.terms)[0], best.terms, self.scheme, self.exclude, self.meta, self.expand
+        )
         hits = None
         if chapters:
-            hits, _ = self.search(terms)          # 选章永远用全词集
-            for b in res.ranking[:self.limit]:
+            hits, _ = self.search(terms)  # 选章永远用全词集
+            for b in res.ranking[: self.limit]:
                 toc, status = self.toc(b.book)
-                rows = select_chapters(hits, b.book, terms, toc, max_chapters,
-                                       chapter_selector)
+                rows = select_chapters(hits, b.book, terms, toc, max_chapters, chapter_selector)
                 for r in rows:
                     r["readme_status"] = status
-                res.chapters.append({"book": b.book, "title": b.title,
-                                     "book_score": round(b.score, 4), "selected": rows})
+                res.chapters.append(
+                    {"book": b.book, "title": b.title, "book_score": round(b.score, 4), "selected": rows}
+                )
         if focus:
-            pin_focus(res, focus, terms,
-                      hits if hits is not None else self.search(best.terms)[0],
-                      best.terms, limit=self.limit, chapters=chapters,
-                      max_chapters=max_chapters, toc_fn=self.toc,
-                      scheme=self.scheme, exclude=self.exclude, meta=self.meta,
-                      expand=self.expand)
+            pin_focus(
+                res,
+                focus,
+                terms,
+                hits if hits is not None else self.search(best.terms)[0],
+                best.terms,
+                limit=self.limit,
+                chapters=chapters,
+                max_chapters=max_chapters,
+                toc_fn=self.toc,
+                scheme=self.scheme,
+                exclude=self.exclude,
+                meta=self.meta,
+                expand=self.expand,
+            )
         res.fetches = self.fetches
         res.ms = round((time.time() - t0) * 1000, 1)
         return res
@@ -371,8 +423,7 @@ def chapter_order(hits, book):
         if r["book"] != book:
             continue
         cur = best.get(r["path"])
-        if cur is None or (-r["score"], r["path"], r["line"]) < \
-                (-cur["score"], cur["path"], cur["line"]):
+        if cur is None or (-r["score"], r["path"], r["line"]) < (-cur["score"], cur["path"], cur["line"]):
             best[r["path"]] = r
     return sorted(best.values(), key=lambda r: (-r["score"], r["path"], r["line"]))
 
@@ -380,16 +431,28 @@ def chapter_order(hits, book):
 def select_chapters(hits, book, terms, toc=None, max_chapters=3, selector="score"):
     if selector == "readme" and toc:
         rows = book_readme.select(hits, terms, terms, toc, max_chapters, 0.0)
-        return [{"chapter_path": r["chapter_path"], "chapter_title": r["chapter_title"],
-                 "line": r["line"], "score": r["score"], "snippet": r["snippet"]}
-                for r in rows]
+        return [
+            {
+                "chapter_path": r["chapter_path"],
+                "chapter_title": r["chapter_title"],
+                "line": r["line"],
+                "score": r["score"],
+                "snippet": r["snippet"],
+            }
+            for r in rows
+        ]
     titles = {e["path"]: e["title"] for e in (toc or [])}
     rows = []
     for r in chapter_order(hits, book)[:max_chapters]:
-        rows.append({"chapter_path": r["path"],
-                     "chapter_title": titles.get(r["path"]) or os.path.basename(r["path"]),
-                     "line": r["line"], "score": r["score"],
-                     "snippet": " ".join(r["text"].split())[:150]})
+        rows.append(
+            {
+                "chapter_path": r["path"],
+                "chapter_title": titles.get(r["path"]) or os.path.basename(r["path"]),
+                "line": r["line"],
+                "score": r["score"],
+                "snippet": " ".join(r["text"].split())[:150],
+            }
+        )
     return rows
 
 
@@ -402,11 +465,26 @@ def focus_score(book, focus, rows, groups, scheme, exclude, meta, expand):
             return ranked[0]
     m = (meta or {}).get(book)
     return book_score.BookScore(
-        book=book, title=(getattr(m, "title", "") or focus.get("title") or book),
-        type=book_score.genre(meta, book), chapters=int(getattr(m, "chapters", 0) or 0),
-        best=0.0, best_path="", best_line=0, best_text="", support=0, topk=0.0,
-        coverage=0.0, score=0.0, groups=[], has_prefix=False, has_queries=False,
-        scores=[], hits=0, mean=0.0, total_groups=len(groups or []))
+        book=book,
+        title=(getattr(m, "title", "") or focus.get("title") or book),
+        type=book_score.genre(meta, book),
+        chapters=int(getattr(m, "chapters", 0) or 0),
+        best=0.0,
+        best_path="",
+        best_line=0,
+        best_text="",
+        support=0,
+        topk=0.0,
+        coverage=0.0,
+        score=0.0,
+        groups=[],
+        has_prefix=False,
+        has_queries=False,
+        scores=[],
+        hits=0,
+        mean=0.0,
+        total_groups=len(groups or []),
+    )
 
 
 def focus_rows(hits, book, terms, toc, max_chapters):
@@ -419,9 +497,21 @@ def focus_rows(hits, book, terms, toc, max_chapters):
     return kept or rows
 
 
-def pin_focus(plan, focus, terms, hits, best_terms, limit=10, chapters=True,
-              max_chapters=3, toc_fn=None, scheme="best_support", exclude=(),
-              meta=None, expand=None):
+def pin_focus(
+    plan,
+    focus,
+    terms,
+    hits,
+    best_terms,
+    limit=10,
+    chapters=True,
+    max_chapters=3,
+    toc_fn=None,
+    scheme="best_support",
+    exclude=(),
+    meta=None,
+    expand=None,
+):
     """精确书名钉到 ranking[0] 与 chapters[0]，回写 focus 的首章定位。"""
     if not focus or focus.get("status") != "exact" or not focus.get("book"):
         return plan
@@ -429,8 +519,7 @@ def pin_focus(plan, focus, terms, hits, best_terms, limit=10, chapters=True,
     focus_hits = [r for r in (hits or []) if r["book"] == book]
     pinned = next((b for b in plan.ranking if b.book == book), None)
     if pinned is None:
-        pinned = focus_score(book, focus, focus_hits or hits, terms, scheme, exclude,
-                             meta, expand)
+        pinned = focus_score(book, focus, focus_hits or hits, terms, scheme, exclude, meta, expand)
     pinned.pinned = True
     plan.ranking = ([pinned] + [b for b in plan.ranking if b.book != book])[:limit]
     if chapters:
@@ -438,8 +527,13 @@ def pin_focus(plan, focus, terms, hits, best_terms, limit=10, chapters=True,
         rows = focus_rows(focus_hits, book, terms, toc, max_chapters)
         for r in rows:
             r["readme_status"] = status
-        entry = {"book": book, "title": pinned.title,
-                 "book_score": round(pinned.score, 4), "selected": rows, "pinned": True}
+        entry = {
+            "book": book,
+            "title": pinned.title,
+            "book_score": round(pinned.score, 4),
+            "selected": rows,
+            "pinned": True,
+        }
         plan.chapters = ([entry] + [c for c in plan.chapters if c["book"] != book])[:limit]
     if plan.chapters and plan.chapters[0]["book"] == book and plan.chapters[0]["selected"]:
         top = plan.chapters[0]["selected"][0]
@@ -449,15 +543,25 @@ def pin_focus(plan, focus, terms, hits, best_terms, limit=10, chapters=True,
     return plan
 
 
-def run(terms, con=None, broad=False, scheme="best_support", limit=10, max_chapters=3,
-        chapter_selector="score", planner=None, focus=None):
+def run(
+    terms,
+    con=None,
+    broad=False,
+    scheme="best_support",
+    limit=10,
+    max_chapters=3,
+    chapter_selector="score",
+    planner=None,
+    focus=None,
+):
     own = con is None
     if con is None:
         con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
     try:
         p = planner or Planner(con, scheme=scheme, limit=limit)
-        return p.plan(terms, broad=broad, chapters=True, chapter_selector=chapter_selector,
-                      max_chapters=max_chapters, focus=focus)
+        return p.plan(
+            terms, broad=broad, chapters=True, chapter_selector=chapter_selector, max_chapters=max_chapters, focus=focus
+        )
     finally:
         if own:
             con.close()
@@ -469,19 +573,27 @@ def main(argv=None):
     ap.add_argument("--concept")
     ap.add_argument("-n", "--limit", type=int, default=5)
     ap.add_argument("--max-chapters", type=int, default=3)
-    ap.add_argument("--book-score", default=DEFAULTS["book_score"],
-                    choices=list(book_score.SCHEMES),
-                    help="书级打分（默认 %s）" % DEFAULTS["book_score"])
+    ap.add_argument(
+        "--book-score",
+        default=DEFAULTS["book_score"],
+        choices=list(book_score.SCHEMES),
+        help="书级打分（默认 %s）" % DEFAULTS["book_score"],
+    )
     ap.add_argument("--question", help="自然语言问句，用于书卡触发判断")
-    ap.add_argument("--cards", dest="cards", action="store_true",
-                    default=DEFAULTS["cards"], help="首轮后弹书卡（默认开）")
+    ap.add_argument(
+        "--cards", dest="cards", action="store_true", default=DEFAULTS["cards"], help="首轮后弹书卡（默认开）"
+    )
     ap.add_argument("--no-cards", dest="cards", action="store_false", help="关闭书卡")
-    ap.add_argument("--expand-on-demand", action="store_true",
-                    default=DEFAULTS["expand_on_demand"],
-                    help="选中后跑 B4 按需扩展（默认关，会调模型）")
+    ap.add_argument(
+        "--expand-on-demand",
+        action="store_true",
+        default=DEFAULTS["expand_on_demand"],
+        help="选中后跑 B4 按需扩展（默认关，会调模型）",
+    )
     ap.add_argument("--broad", action="store_true", help="第 4 轮加宽词组（默认不给）")
-    ap.add_argument("--max-rounds", type=int, default=DEFAULTS["max_rounds"],
-                    help="最多几轮（默认 %d）" % DEFAULTS["max_rounds"])
+    ap.add_argument(
+        "--max-rounds", type=int, default=DEFAULTS["max_rounds"], help="最多几轮（默认 %d）" % DEFAULTS["max_rounds"]
+    )
     ap.add_argument("--chapter-selector", default="score", choices=["score", "readme"])
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--explain", action="store_true")
@@ -497,12 +609,14 @@ def main(argv=None):
     con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
     p = Planner(con, scheme=a.book_score, limit=a.limit, exclude=exclude)
     question = a.question or " ".join(terms)
-    res = p.plan(terms, broad=a.broad, max_rounds=a.max_rounds,
-                 chapter_selector=a.chapter_selector, max_chapters=a.max_chapters)
+    res = p.plan(
+        terms, broad=a.broad, max_rounds=a.max_rounds, chapter_selector=a.chapter_selector, max_chapters=a.max_chapters
+    )
     cardset = None
     if a.cards:
         import book_cards
-        cardset, hits, nouns, ranking = book_cards.cards_for(p, terms, question, 6)
+
+        cardset, _hits, _nouns, _ranking = book_cards.cards_for(p, terms, question, 6)
         if cardset.trigger:
             # 2026-10-23 操作人定：书卡展开六张卡（不再只展开前三本）。
             keep = {c.book for c in cardset.cards}
@@ -516,6 +630,7 @@ def main(argv=None):
             res.chapters.sort(key=lambda b: order.get(b["book"], 99))
     if a.expand_on_demand and res.chapters:
         import book_cards
+
         res.model_calls = book_cards.expand_selected(question, res.chapters[:3], None)
     if a.json:
         payload = asdict(res)
@@ -523,30 +638,51 @@ def main(argv=None):
             payload["cards"] = asdict(cardset)
         print(json.dumps(payload, ensure_ascii=False, indent=1, default=str))
         return 0
-    print("%s  名词=%s  动作=%s  %s  第 %d 轮  %.0f ms  %d 次查询"
-          % (res.query, ",".join(res.nouns), ",".join(res.action_dropped) or "-",
-             res.stop, res.best_round, res.ms, res.fetches), file=sys.stderr)
+    print(
+        "%s  名词=%s  动作=%s  %s  第 %d 轮  %.0f ms  %d 次查询"
+        % (
+            res.query,
+            ",".join(res.nouns),
+            ",".join(res.action_dropped) or "-",
+            res.stop,
+            res.best_round,
+            res.ms,
+            res.fetches,
+        ),
+        file=sys.stderr,
+    )
     if cardset is not None:
         if cardset.trigger:
-            print("书卡：%d 张，原因 %s" % (len(cardset.cards),
-                                            ",".join(cardset.reasons)), file=sys.stderr)
+            print("书卡：%d 张，原因 %s" % (len(cardset.cards), ",".join(cardset.reasons)), file=sys.stderr)
             for i, c in enumerate(cardset.cards, 1):
-                print("%d. %-40s %-8s %5d章  [%s]" % (i, c.title, c.type, c.chapters,
-                                                      c.best_chapter_title))
+                print("%d. %-40s %-8s %5d章  [%s]" % (i, c.title, c.type, c.chapters, c.best_chapter_title))
                 print("   %s" % c.reason)
                 print("   %s" % c.snippet)
         else:
             print("不弹卡：书名/作者/原句提示", file=sys.stderr)
     if a.explain:
         for r in res.rounds:
-            print("  R%d %-12s A=%d B=%d C=%d stop=%d top1=%s %.2f margin=%.2f cover=%d %s"
-                  % (r.n, r.kind, r.A, r.B, r.C, r.stop, r.top1, r.top1_score, r.margin,
-                     r.cover_paras, ",".join(r.terms)), file=sys.stderr)
+            print(
+                "  R%d %-12s A=%d B=%d C=%d stop=%d top1=%s %.2f margin=%.2f cover=%d %s"
+                % (
+                    r.n,
+                    r.kind,
+                    r.A,
+                    r.B,
+                    r.C,
+                    r.stop,
+                    r.top1,
+                    r.top1_score,
+                    r.margin,
+                    r.cover_paras,
+                    ",".join(r.terms),
+                ),
+                file=sys.stderr,
+            )
     for i, b in enumerate(res.chapters, 1):
         print("%2d %-46s %.2f" % (i, b["book"], b.get("book_score", 0.0)))
         for r in b["selected"]:
-            print("   [%s] %s:%d  %.2f" % (r["chapter_title"], r["chapter_path"],
-                                           r["line"], r["score"]))
+            print("   [%s] %s:%d  %.2f" % (r["chapter_title"], r["chapter_path"], r["line"], r["score"]))
             if a.explain:
                 print("      " + r["snippet"])
     return 0

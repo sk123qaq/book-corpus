@@ -3,17 +3,25 @@
 
   concept_route.py "打工的人为什么被换掉"            # 只打印路由结果
   concept_route.py "打工的人为什么被换掉" -n 10      # 路由 + 段落检索
-  concept_route.py --json "..." 
+  concept_route.py --json "..."
 
 为什么需要它：`qsearch --auto-concept` 做的是字符串包含，用户问句里没有概念表的词时返回 None
 （60 题 gold 只认出 10 题）。这一步改成让模型从概念表的键里挑 3 个，代价一次调用。
 缓存落 目录/检索/route_cache/<sha1>.json。
 """
-import argparse, hashlib, json, os, re, sqlite3, sys
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sqlite3
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import L, PATHS, ROOT  # noqa: E402
+from lib_common import PATHS, L
+
 sys.path.insert(0, HERE)
 import build_expand
 import lib_fts_cjk as cjk
@@ -90,7 +98,7 @@ def compact_table(rows):
 NONE = "无"
 
 # 提示词内容指纹进缓存键：改 PROMPT 后旧缓存自然失效
-PROMPT_VERSION = hashlib.sha1(PROMPT.encode()).hexdigest()[:8]
+PROMPT_VERSION = hashlib.sha1(PROMPT.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def route(q, rows=None, effort="low", max_out=12000, timeout=180, tag="", db=DB):
@@ -102,8 +110,10 @@ def route(q, rows=None, effort="low", max_out=12000, timeout=180, tag="", db=DB)
     rows, skipped = drop_dead(rows, db)
     keys = [r["key"] for r in rows]
     os.makedirs(CACHE, exist_ok=True)
-    h = hashlib.sha1((tag + "|v3|" + PROMPT_VERSION + "|" + effort + "|"
-                      + table_fingerprint() + "|" + q).encode()).hexdigest()[:16]
+    h = hashlib.sha1(
+        (tag + "|v3|" + PROMPT_VERSION + "|" + effort + "|" + table_fingerprint() + "|" + q).encode(),
+        usedforsecurity=False,
+    ).hexdigest()[:16]
     p = os.path.join(CACHE, h + ".json")
     if os.path.isfile(p):
         try:
@@ -115,8 +125,7 @@ def route(q, rows=None, effort="low", max_out=12000, timeout=180, tag="", db=DB)
     picked, txt = [], ""
     for cap in (max_out, max_out * 2):
         ns = argparse.Namespace(effort=effort, max_out=cap, provider="commandcode")
-        txt, usage = build_expand.call(PROMPT.format(table=compact_table(rows), q=q), ns,
-                                       timeout=timeout)
+        txt, usage = build_expand.call(PROMPT.format(table=compact_table(rows), q=q), ns, timeout=timeout)
         for line in txt.splitlines():
             line = re.sub(r"^\s*[\d.、)\-]+\s*", "", line).strip()
             if line == NONE:
@@ -130,8 +139,7 @@ def route(q, rows=None, effort="low", max_out=12000, timeout=180, tag="", db=DB)
     if not picked and NONE not in txt:
         raise RuntimeError("路由回包既没有合法键也没有「%s」（%d 字）" % (NONE, len(txt)))
     with open(p + ".tmp", "w", encoding="utf-8") as fh:
-        json.dump({"q": q, "picked": picked, "skipped": skipped, "usage": usage}, fh,
-                  ensure_ascii=False, indent=1)
+        json.dump({"q": q, "picked": picked, "skipped": skipped, "usage": usage}, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
     os.replace(p + ".tmp", p)
     return picked
@@ -168,16 +176,15 @@ def main():
     if not keys:
         print("%s → 无合适概念键，请改用段落档" % a.query, file=sys.stderr)
         if a.json:
-            print(json.dumps({"query": a.query, "keys": [], "ms": 0.0, "hits": []},
-                             ensure_ascii=False, indent=1))
+            print(json.dumps({"query": a.query, "keys": [], "ms": 0.0, "hits": []}, ensure_ascii=False, indent=1))
         return
     hits, ms = search_keys(con, keys, a.limit)
     if a.json:
-        print(json.dumps({"query": a.query, "keys": keys, "ms": round(ms, 1),
-                          "hits": hits}, ensure_ascii=False, indent=1))
+        print(
+            json.dumps({"query": a.query, "keys": keys, "ms": round(ms, 1), "hits": hits}, ensure_ascii=False, indent=1)
+        )
         return
-    print("%s → %s  %d 条  %.0f ms" % (a.query, " / ".join(keys), len(hits), ms),
-          file=sys.stderr)
+    print("%s → %s  %d 条  %.0f ms" % (a.query, " / ".join(keys), len(hits), ms), file=sys.stderr)
     for i, r in enumerate(hits, 1):
         print("%2d %-66s:%d  %.2f" % (i, r["path"], r["line"], r["score"]))
         print("   " + re.sub(r"\s+", " ", r["text"])[:150])

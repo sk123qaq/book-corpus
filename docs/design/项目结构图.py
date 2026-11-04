@@ -20,86 +20,172 @@ PAD = 18
 BAR = dict(x=40, y=1200, w=1580, h=130)
 
 TONES = {
-    "amber":  ("#fffbeb", "#b45309", "#92400e"),
-    "blue":   ("#eff6ff", "#1d4ed8", "#1e3a8a"),
-    "teal":   ("#ecfeff", "#0e7490", "#155e75"),
+    "amber": ("#fffbeb", "#b45309", "#92400e"),
+    "blue": ("#eff6ff", "#1d4ed8", "#1e3a8a"),
+    "teal": ("#ecfeff", "#0e7490", "#155e75"),
     "violet": ("#f5f3ff", "#6d28d9", "#4c1d95"),
-    "slate":  ("#f8fafc", "#475569", "#1e293b"),
-    "red":    ("#fef2f2", "#b91c1c", "#7f1d1d"),
+    "slate": ("#f8fafc", "#475569", "#1e293b"),
+    "red": ("#fef2f2", "#b91c1c", "#7f1d1d"),
 }
 
 NODES = {
-    "L1": dict(col=1, y=60, tone="slate", title="新书源文件",
-               lines=["epub、mobi、azw3、pdf、txt、djvu",
-                      "落盘之后由人账决定它去哪"]),
-    "L2": dict(col=1, y=200, tone="slate", title="库/_收件箱/",
-               lines=["新书先落这里，再从人账开一条",
-                      "ingest.py 还没实现，入库靠手工加行"]),
-    "L5": dict(col=1, y=344, tone="slate", title="src/bookcorpus/scripts/", badge="46 个 py",
-               lines=["每个动作都是可重跑脚本，不手改产物",
-                      "一个账本一个写者：人写人账，脚本写产物"]),
-    "L4": dict(col=1, y=556, tone="slate", title="../books.snapshot-2026-10-18",
-               badge="47916 文件",
-               lines=["L0 硬链接快照，与库里的文件共享 inode",
-                      "所以库内文件走 tmp 加 os.replace",
-                      "截断式原地写会同时改掉快照"]),
-    "L3": dict(col=1, y=760, tone="slate", title="工作区/批次/", badge="8 个批次",
-               lines=["8 个批次的目录约定不统一",
-                      "齐全的只有 旧md重拆 与 pdf-ocr：worklist、logs、out、",
-                      "overrides 四样都在",
-                      "普查只留 census.jsonl，检索批次只留 logs/"]),
-
-    "S1": dict(col=2, y=100, tone="amber", title="目录/分类表.csv", badge="1694 行",
-               lines=["人账。一行一本书：uid、一级、二级、作者层、",
-                      "保留、正式书名、备注",
-                      "分类、书名、保留策略只在这里改"]),
-    "S2": dict(col=2, y=262, tone="amber", title="build_library.py --emit-json",
-               lines=["读人账，重建 library.db，同步每本 book.json",
-                      "conflicts=0 且 books 等于人账行数才算过"]),
-    "S3": dict(col=2, y=402, tone="blue", title="目录/library.db", badge="6 表 6 视图",
-               lines=["book、source、derived、job、award、book_award",
-                      "派生表记 chapters、bytes、method",
-                      "v_pending_md 视图：315 本还缺 md",
-                      "产物，可重建；查询用 lq.py 只读打开",
-                      "同目录：对照表.csv 路径映射、系列/ 卷序 21 份"]),
-    "S4": dict(col=2, y=600, tone="blue", title="库/ 内容区", badge="1694 本",
-               lines=["唯一权威内容。路径按 一级/二级/作者层/系列 排",
-                      "多数是一级/二级/书名 1170 本，带作者层 230 本",
-                      "盘上层深：两层 149、三层 1193、四层 234、五层 118",
-                      "每本 book.json，329 本的源文件在合集目录里",
-                      "可选 md/ 与 html/，md/ 只认这个位置",
-                      "11 个一级分类，另加一个 _收件箱"]),
-    "S5": dict(col=2, y=810, tone="teal", title="转换器（source/ 到 md/）",
-               badge="1379 已拆 315 待拆",
-               lines=["产出章节 md、README 目录、images/",
-                      "1376 本有 README，938 本有 images/",
-                      "ebook-to-md 1140、paddle-ocr 174、pdf-text 55",
-                      "split_collection 7、mineru-ocr 3",
-                      "待拆的 pdf 里 193 本在排期，其余暂缓或不转"]),
-
-    "R1": dict(col=3, y=402, tone="violet", title="目录/书目总表.csv 与 .xlsx",
-               lines=["gen_book_catalog.py 从 DB 导出",
-                      "含 md 状态、主源文件、路径",
-                      "末行报未匹配条数，要求 0"]),
-    "R2": dict(col=3, y=536, tone="violet", title="视图/奖项/", badge="10 奖项 1010 链",
-               lines=["奖项降为字段，目录树由软链现搭",
-                      "随时可删可重建"]),
-    "R3": dict(col=3, y=680, tone="violet", title="阅读版 html", badge="2 本",
-               lines=["build_index.py 出每本 html/index.html",
-                      "加目录/阅读版索引.html"]),
-    "R4": dict(col=3, y=824, tone="violet", title="目录/检索/index.db", badge="约 5.5 GiB，在涨",
-               lines=["段落倒排 FTS5 bigram、概念剖面、章级扩展",
-                      "切分与查询共用 lib_fts_cjk.py",
-                      "概念表在这里参与检索",
-                      "改检索脚本前先看目录/检索/踩坑记录.md",
-                      "build_expand.py 从 13:19 跑到现在，体积在涨"]),
-    "R5": dict(col=3, y=1030, tone="violet", title="视图/主题/", badge="124 概念 1025 链",
-               lines=["qsearch --book 的排序，build_topic_views.py 建链",
-                      "124 个概念目录，1025 条软链，外加一份 README",
-                      "概念表：达克效应、人工智能对齐 还没有书"]),
+    "L1": dict(
+        col=1,
+        y=60,
+        tone="slate",
+        title="新书源文件",
+        lines=["epub、mobi、azw3、pdf、txt、djvu", "落盘之后由人账决定它去哪"],
+    ),
+    "L2": dict(
+        col=1,
+        y=200,
+        tone="slate",
+        title="库/_收件箱/",
+        lines=["新书先落这里，再从人账开一条", "ingest.py 还没实现，入库靠手工加行"],
+    ),
+    "L5": dict(
+        col=1,
+        y=344,
+        tone="slate",
+        title="src/bookcorpus/scripts/",
+        badge="46 个 py",
+        lines=["每个动作都是可重跑脚本，不手改产物", "一个账本一个写者：人写人账，脚本写产物"],
+    ),
+    "L4": dict(
+        col=1,
+        y=556,
+        tone="slate",
+        title="../books.snapshot-2026-10-18",
+        badge="47916 文件",
+        lines=[
+            "L0 硬链接快照，与库里的文件共享 inode",
+            "所以库内文件走 tmp 加 os.replace",
+            "截断式原地写会同时改掉快照",
+        ],
+    ),
+    "L3": dict(
+        col=1,
+        y=760,
+        tone="slate",
+        title="工作区/批次/",
+        badge="8 个批次",
+        lines=[
+            "8 个批次的目录约定不统一",
+            "齐全的只有 旧md重拆 与 pdf-ocr：worklist、logs、out、",
+            "overrides 四样都在",
+            "普查只留 census.jsonl，检索批次只留 logs/",
+        ],
+    ),
+    "S1": dict(
+        col=2,
+        y=100,
+        tone="amber",
+        title="目录/分类表.csv",
+        badge="1694 行",
+        lines=["人账。一行一本书：uid、一级、二级、作者层、", "保留、正式书名、备注", "分类、书名、保留策略只在这里改"],
+    ),
+    "S2": dict(
+        col=2,
+        y=262,
+        tone="amber",
+        title="build_library.py --emit-json",
+        lines=["读人账，重建 library.db，同步每本 book.json", "conflicts=0 且 books 等于人账行数才算过"],
+    ),
+    "S3": dict(
+        col=2,
+        y=402,
+        tone="blue",
+        title="目录/library.db",
+        badge="6 表 6 视图",
+        lines=[
+            "book、source、derived、job、award、book_award",
+            "派生表记 chapters、bytes、method",
+            "v_pending_md 视图：315 本还缺 md",
+            "产物，可重建；查询用 lq.py 只读打开",
+            "同目录：对照表.csv 路径映射、系列/ 卷序 21 份",
+        ],
+    ),
+    "S4": dict(
+        col=2,
+        y=600,
+        tone="blue",
+        title="库/ 内容区",
+        badge="1694 本",
+        lines=[
+            "唯一权威内容。路径按 一级/二级/作者层/系列 排",
+            "多数是一级/二级/书名 1170 本，带作者层 230 本",
+            "盘上层深：两层 149、三层 1193、四层 234、五层 118",
+            "每本 book.json，329 本的源文件在合集目录里",
+            "可选 md/ 与 html/，md/ 只认这个位置",
+            "11 个一级分类，另加一个 _收件箱",
+        ],
+    ),
+    "S5": dict(
+        col=2,
+        y=810,
+        tone="teal",
+        title="转换器（source/ 到 md/）",
+        badge="1379 已拆 315 待拆",
+        lines=[
+            "产出章节 md、README 目录、images/",
+            "1376 本有 README，938 本有 images/",
+            "ebook-to-md 1140、paddle-ocr 174、pdf-text 55",
+            "split_collection 7、mineru-ocr 3",
+            "待拆的 pdf 里 193 本在排期，其余暂缓或不转",
+        ],
+    ),
+    "R1": dict(
+        col=3,
+        y=402,
+        tone="violet",
+        title="目录/书目总表.csv 与 .xlsx",
+        lines=["gen_book_catalog.py 从 DB 导出", "含 md 状态、主源文件、路径", "末行报未匹配条数，要求 0"],
+    ),
+    "R2": dict(
+        col=3,
+        y=536,
+        tone="violet",
+        title="视图/奖项/",
+        badge="10 奖项 1010 链",
+        lines=["奖项降为字段，目录树由软链现搭", "随时可删可重建"],
+    ),
+    "R3": dict(
+        col=3,
+        y=680,
+        tone="violet",
+        title="阅读版 html",
+        badge="2 本",
+        lines=["build_index.py 出每本 html/index.html", "加目录/阅读版索引.html"],
+    ),
+    "R4": dict(
+        col=3,
+        y=824,
+        tone="violet",
+        title="目录/检索/index.db",
+        badge="约 5.5 GiB，在涨",
+        lines=[
+            "段落倒排 FTS5 bigram、概念剖面、章级扩展",
+            "切分与查询共用 lib_fts_cjk.py",
+            "概念表在这里参与检索",
+            "改检索脚本前先看目录/检索/踩坑记录.md",
+            "build_expand.py 从 13:19 跑到现在，体积在涨",
+        ],
+    ),
+    "R5": dict(
+        col=3,
+        y=1030,
+        tone="violet",
+        title="视图/主题/",
+        badge="124 概念 1025 链",
+        lines=[
+            "qsearch --book 的排序，build_topic_views.py 建链",
+            "124 个概念目录，1025 条软链，外加一份 README",
+            "概念表：达克效应、人工智能对齐 还没有书",
+        ],
+    ),
 }
 
-for k, n in NODES.items():
+for _k, n in NODES.items():
     n["x"] = COLS[n["col"]]
     n["h"] = 16 + 24 + len(n["lines"]) * 20 + 14
     n["y2"] = n["y"] + n["h"]
@@ -132,20 +218,31 @@ EDGES = [
     ([(E["S3"]["x"] + CW, 500), (1080, 500), (1080, 583), (E["R2"]["x"], 583)], "奖项记录", 1088, 575, False),
     ([(E["S4"]["x"] + CW, 620), (1110, 620), (1110, 727), (E["R3"]["x"], 727)], "", 0, 0, False),
     ([(E["S4"]["x"] + CW, 690), (1080, 690), (1080, 891), (E["R4"]["x"], 891)], "", 0, 0, False),
-    ([(cx(E["R4"]), E["R4"]["y2"]), (cx(E["R5"]), E["R5"]["y"])],
-     "qsearch 与 build_topic_views.py", cx(E["R4"]) + 10, 992, False),
-    ([(cx(E["S5"]), E["S5"]["y2"]), (cx(E["S5"]), BAR["y"])], "每次改完之后，按改了什么挑一条跑", cx(E["S5"]) + 12, 1188, True),
+    (
+        [(cx(E["R4"]), E["R4"]["y2"]), (cx(E["R5"]), E["R5"]["y"])],
+        "qsearch 与 build_topic_views.py",
+        cx(E["R4"]) + 10,
+        992,
+        False,
+    ),
+    (
+        [(cx(E["S5"]), E["S5"]["y2"]), (cx(E["S5"]), BAR["y"])],
+        "每次改完之后，按改了什么挑一条跑",
+        cx(E["S5"]) + 12,
+        1188,
+        True,
+    ),
 ]
 
 out = [
     f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg" '
     'font-family="Noto Sans CJK SC, Source Han Sans SC, PingFang SC, Microsoft YaHei, sans-serif">',
-    '<defs>'
+    "<defs>"
     '<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" '
     'orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>'
     '<marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" '
     'orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>'
-    '</defs>',
+    "</defs>",
     f'<rect width="{W}" height="{H}" fill="#ffffff"/>',
 ]
 
@@ -155,8 +252,10 @@ for col, label in ((1, "源文件、机账、回滚副本"), (2, "人账、索�
 for pts, label, lx, ly, dashed in EDGES:
     d = "M" + " L".join(f"{x:.0f},{y:.0f}" for x, y in pts)
     dash = 'stroke-dasharray="6 4" ' if dashed else ""
-    out.append(f'<path d="{d}" fill="none" stroke="{"#94a3b8" if dashed else "#334155"}" '
-               f'stroke-width="1.6" {dash}marker-end="url(#{"ahd" if dashed else "ah"})"/>')
+    out.append(
+        f'<path d="{d}" fill="none" stroke="{"#94a3b8" if dashed else "#334155"}" '
+        f'stroke-width="1.6" {dash}marker-end="url(#{"ahd" if dashed else "ah"})"/>'
+    )
     if label:
         assert estimate(label, 11.5) <= 210, label
         out.append(f'<text x="{lx:.0f}" y="{ly:.0f}" font-size="11.5" fill="#475569">{esc(label)}</text>')
@@ -164,12 +263,17 @@ for pts, label, lx, ly, dashed in EDGES:
 for key, n in NODES.items():
     bg, stroke, ink = TONES[n["tone"]]
     x, y, h = n["x"], n["y"], n["h"]
-    out.append(f'<rect x="{x}" y="{y}" width="{CW}" height="{h}" rx="8" fill="{bg}" '
-               f'stroke="{stroke}" stroke-width="1.8"/>')
-    out.append(f'<text x="{x + PAD}" y="{y + 30}" font-size="15" font-weight="700" fill="{ink}">{esc(n["title"])}</text>')
+    out.append(
+        f'<rect x="{x}" y="{y}" width="{CW}" height="{h}" rx="8" fill="{bg}" stroke="{stroke}" stroke-width="1.8"/>'
+    )
+    out.append(
+        f'<text x="{x + PAD}" y="{y + 30}" font-size="15" font-weight="700" fill="{ink}">{esc(n["title"])}</text>'
+    )
     if n.get("badge"):
-        out.append(f'<text x="{x + CW - PAD}" y="{y + 30}" font-size="12" fill="{stroke}" '
-                   f'text-anchor="end">{esc(n["badge"])}</text>')
+        out.append(
+            f'<text x="{x + CW - PAD}" y="{y + 30}" font-size="12" fill="{stroke}" '
+            f'text-anchor="end">{esc(n["badge"])}</text>'
+        )
     ty = y + 52
     for line in n["lines"]:
         assert estimate(line, 11.5) <= CW - 2 * PAD, (key, line, estimate(line, 11.5))
@@ -177,8 +281,12 @@ for key, n in NODES.items():
         ty += 20
 
 bx, by, bw, bh = BAR["x"], BAR["y"], BAR["w"], BAR["h"]
-out.append(f'<rect x="{bx}" y="{by}" width="{bw}" height="{bh}" rx="8" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.8"/>')
-out.append(f'<text x="{bx + PAD}" y="{by + 30}" font-size="15" font-weight="700" fill="#7f1d1d">改完跑什么（门槛）</text>')
+out.append(
+    f'<rect x="{bx}" y="{by}" width="{bw}" height="{bh}" rx="8" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.8"/>'
+)
+out.append(
+    f'<text x="{bx + PAD}" y="{by + 30}" font-size="15" font-weight="700" fill="#7f1d1d">改完跑什么（门槛）</text>'
+)
 checks = [
     "人账动过：build_library.py --emit-json，conflicts=0 且 books 等于人账行数",
     "结构与 html 动过：verify_phase.py，末行全过",
@@ -186,8 +294,10 @@ checks = [
     "检索层动过：check_p1.py 失败 0 项，verify_phase.py --box 6 全过",
 ]
 for i, line in enumerate(checks):
-    out.append(f'<text x="{bx + PAD + (i % 2) * 780}" y="{by + 60 + (i // 2) * 26}" '
-               f'font-size="11.5" fill="#334155">{esc(line)}</text>')
+    out.append(
+        f'<text x="{bx + PAD + (i % 2) * 780}" y="{by + 60 + (i // 2) * 26}" '
+        f'font-size="11.5" fill="#334155">{esc(line)}</text>'
+    )
 
 out.append("</svg>")
 svg = "\n".join(out)

@@ -10,7 +10,9 @@ FAIL 表示有孤儿行、断链或对不上的账；WARN 表示批次在跑时�
 退出码：有 FAIL 为 1，否则 0。--json 不改判定，只换输出。
 「== 文档 ==」一节只 WARN：AGENTS.md 的数字块与现库不一致就提示 doc_numbers.py --write。
 """
+
 import argparse
+import contextlib
 import json
 import os
 import sqlite3
@@ -18,7 +20,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import L, ROOT, PATHS  # noqa: E402
+from lib_common import PATHS, ROOT, L
+
 CORPUS = PATHS.books
 CAT = PATHS.tables
 LIBDB = PATHS.library_db
@@ -81,10 +84,10 @@ def walk_md(books):
         if os.path.basename(dirpath) != "md":
             continue
         parent = os.path.dirname(dirpath)
-        try:
-            with open(os.path.join(parent, "book.json"), encoding="utf-8") as fh:
-                uid = json.load(fh)["uid"]
-        except Exception:
+        uid = None
+        with contextlib.suppress(Exception), open(os.path.join(parent, "book.json"), encoding="utf-8") as fh:
+            uid = json.load(fh)["uid"]
+        if uid is None:
             continue
         chapters = [f for f in filenames if f.endswith(".md") and f != "README.md"]
         md[uid] = (dirpath, chapters)
@@ -95,6 +98,7 @@ def use_root(root):
     global ROOT, CORPUS, CAT, LIBDB, INDEX, VIEWS
     ROOT = os.path.abspath(root)
     from lib_common import Layout
+
     paths = Layout(ROOT)
     CORPUS = paths.books
     CAT = paths.tables
@@ -107,6 +111,7 @@ def docs():
     try:
         sys.path.insert(0, HERE)
         import doc_numbers
+
         path = os.path.join(ROOT, doc_numbers.DOC)
         if not os.path.isfile(path):
             return
@@ -118,11 +123,9 @@ def docs():
         warn("数字块取数失败: %s" % exc)
         return
     if got is None:
-        warn("%s 没有数字块；doc_numbers.py --write 可补（现库 as_of %s）" % (
-            doc_numbers.DOC, counts["as_of"]))
+        warn("%s 没有数字块；doc_numbers.py --write 可补（现库 as_of %s）" % (doc_numbers.DOC, counts["as_of"]))
     elif not doc_numbers.same_numbers(got, block):
-        warn("%s 的数字块过期（现库 as_of %s）；doc_numbers.py --write 重写" % (
-            doc_numbers.DOC, counts["as_of"]))
+        warn("%s 的数字块过期（现库 as_of %s）；doc_numbers.py --write 重写" % (doc_numbers.DOC, counts["as_of"]))
     else:
         ok("%s 的数字块与现库一致（as_of %s）" % (doc_numbers.DOC, counts["as_of"]))
 
@@ -132,8 +135,7 @@ def report(args):
     if args.json:
         print(json.dumps({"fail": FAIL, "warn": WARN, "ok": OK}, ensure_ascii=False))
     elif not FAIL:
-        print("FAIL 0 项 / WARN %d 项%s" % (
-            len(WARN), "（--strict 把 WARN 判失败）" if args.strict and WARN else ""))
+        print("FAIL 0 项 / WARN %d 项%s" % (len(WARN), "（--strict 把 WARN 判失败）" if args.strict and WARN else ""))
     else:
         print("FAIL %d 项 / WARN %d 项" % (len(FAIL), len(WARN)))
     if FAIL:
@@ -168,42 +170,55 @@ def main():
     for label, got in (("分类表", set(csv_uids)), ("book.json", set(books))):
         say("      %s %d" % (label, len(got)))
     if set(csv_uids) != set(books):
-        bad("分类表与 book.json 差集: 人账多 %d [%s], 盘上多 %d [%s]" % (
-            len(set(csv_uids) - set(books)), sample(set(csv_uids) - set(books)),
-            len(set(books) - set(csv_uids)), sample(set(books) - set(csv_uids))))
+        bad(
+            "分类表与 book.json 差集: 人账多 %d [%s], 盘上多 %d [%s]"
+            % (
+                len(set(csv_uids) - set(books)),
+                sample(set(csv_uids) - set(books)),
+                len(set(books) - set(csv_uids)),
+                sample(set(books) - set(csv_uids)),
+            )
+        )
     else:
         ok("分类表与 book.json 一一对应（%d 本）" % len(books))
 
     lib = sqlite3.connect("file:%s?mode=ro" % LIBDB, uri=True)
     db_books = {r[0] for r in lib.execute("SELECT uid FROM book")}
     if set(books) != db_books:
-        bad("book.json 与 library.db 差集: 盘上多 %d [%s], DB 多 %d [%s]" % (
-            len(set(books) - db_books), sample(set(books) - db_books),
-            len(db_books - set(books)), sample(db_books - set(books))))
+        bad(
+            "book.json 与 library.db 差集: 盘上多 %d [%s], DB 多 %d [%s]"
+            % (
+                len(set(books) - db_books),
+                sample(set(books) - db_books),
+                len(db_books - set(books)),
+                sample(db_books - set(books)),
+            )
+        )
     else:
         ok("book.json 与 library.db 一一对应（%d 本）" % len(db_books))
-    missing_src = [(u, f) for u, f, p in
-                   lib.execute("SELECT uid, file, primary_src FROM source")
-                   if p and not os.path.exists(os.path.join(ROOT, f))]
+    missing_src = [
+        (u, f)
+        for u, f, p in lib.execute("SELECT uid, file, primary_src FROM source")
+        if p and not os.path.exists(os.path.join(ROOT, f))
+    ]
     if missing_src:
         bad("主源文件缺失 %d: %s" % (len(missing_src), sample(u for u, _ in missing_src)))
     else:
-        ok("主源文件全部存在（%d 个）" % lib.execute(
-            "SELECT count(*) FROM source WHERE primary_src=1").fetchone()[0])
+        ok("主源文件全部存在（%d 个）" % lib.execute("SELECT count(*) FROM source WHERE primary_src=1").fetchone()[0])
 
     say("\n== md ==")
     md = walk_md(books)
-    derived = {u: (s, c) for u, s, c in
-               lib.execute("SELECT uid, status, chapters FROM derived WHERE kind='md'")}
+    derived = {u: (s, c) for u, s, c in lib.execute("SELECT uid, status, chapters FROM derived WHERE kind='md'")}
     empty = [u for u, (_, ch) in md.items() if not ch]
     no_readme = [u for u, (d, _) in md.items() if not os.path.isfile(os.path.join(d, "README.md"))]
     done = {u for u, (s, _) in derived.items() if s == "done"}
     if set(md) == done:
         ok("md 目录与 derived(md, done) 一一对应（%d 本）" % len(md))
     else:
-        bad("md 目录与 derived 差集: 盘上多 %d [%s], DB 多 %d [%s]" % (
-            len(set(md) - done), sample(set(md) - done),
-            len(done) - len(set(md)), sample(done - set(md))))
+        bad(
+            "md 目录与 derived 差集: 盘上多 %d [%s], DB 多 %d [%s]"
+            % (len(set(md) - done), sample(set(md) - done), len(done) - len(set(md)), sample(done - set(md)))
+        )
     chapters = sum(len(ch) for _, ch in md.values())
     derived_ch = sum(c or 0 for s, c in derived.values())
     if chapters != derived_ch:
@@ -231,16 +246,17 @@ def main():
         para_books = {r[0] for r in idx.execute("SELECT DISTINCT book FROM para")}
         para_paths = {r[0] for r in idx.execute("SELECT DISTINCT path FROM para")}
         para_missing = [p for p in para_paths if not os.path.exists(os.path.join(ROOT, p))]
-        book_missing = [b for b in para_books
-                        if not os.path.isdir(os.path.join(CORPUS, b))]
+        book_missing = [b for b in para_books if not os.path.isdir(os.path.join(CORPUS, b))]
         if para_missing or book_missing:
-            bad("倒排里有不存在的路径: 章 %d [%s], 书 %d [%s]" % (
-                len(para_missing), sample(para_missing),
-                len(book_missing), sample(book_missing)))
+            bad(
+                "倒排里有不存在的路径: 章 %d [%s], 书 %d [%s]"
+                % (len(para_missing), sample(para_missing), len(book_missing), sample(book_missing))
+            )
         else:
-            ok("倒排 %d 段 / %d 章 / %d 本，路径全部存在" % (
-                idx.execute("SELECT count(*) FROM para").fetchone()[0],
-                len(para_paths), len(para_books)))
+            ok(
+                "倒排 %d 段 / %d 章 / %d 本，路径全部存在"
+                % (idx.execute("SELECT count(*) FROM para").fetchone()[0], len(para_paths), len(para_books))
+            )
         behind = []
         indexable = sum(1 for _, ch in md.values() if ch)
         if len(para_books) != indexable:
@@ -248,8 +264,7 @@ def main():
         if len(para_paths) != chapters:
             behind.append("章 %d/%d" % (len(para_paths), chapters))
         if behind:
-            warn("index.db 落后库（built_at %s）: %s" % (
-                meta.get("built_at", "?"), ", ".join(behind)))
+            warn("index.db 落后库（built_at %s）: %s" % (meta.get("built_at", "?"), ", ".join(behind)))
         else:
             ok("index.db 与库的书写数、章节数一致")
         n_expand = idx.execute("SELECT count(*) FROM expand").fetchone()[0]
@@ -275,13 +290,16 @@ def main():
             if args.deep:
                 sys.path.insert(0, HERE)
                 import build_expand
+
                 stub = sum(1 for p in missing_ch if build_expand.is_stub(os.path.join(ROOT, p)))
             note = "" if args.deep else "；--deep 才区分"
             if n_expand == 0:
                 say("  未启用扩写（可选阶段，不影响检索）：%d 章待扩%s" % (len(missing_ch), note))
             else:
-                warn("expand 未覆盖 %d 章（空正文章 %d，待扩 %d）%s" % (
-                    len(missing_ch), stub, len(missing_ch) - stub, note))
+                warn(
+                    "expand 未覆盖 %d 章（空正文章 %d，待扩 %d）%s"
+                    % (len(missing_ch), stub, len(missing_ch) - stub, note)
+                )
 
     say("\n== 视图 ==")
     links = broken = 0

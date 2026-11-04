@@ -15,12 +15,21 @@ import os
 import shutil
 import sqlite3
 
-from .scripts import lib_common as L
 from .scripts import layout as LY
+from .scripts import lib_common as L
 
-TABLE_MEMBERS = ("分类表.csv", "概念表.tsv", "概念表-broad.tsv", "概念表-动作词.tsv",
-                 "书目录清单.csv", "对照表.csv", "搬迁计划.csv", "标注样本.csv",
-                 "源文件清单.csv", "系列")
+TABLE_MEMBERS = (
+    "分类表.csv",
+    "概念表.tsv",
+    "概念表-broad.tsv",
+    "概念表-动作词.tsv",
+    "书目录清单.csv",
+    "对照表.csv",
+    "搬迁计划.csv",
+    "标注样本.csv",
+    "源文件清单.csv",
+    "系列",
+)
 BUILD_MEMBERS = ("library.db", "检索", "阅读版索引.html", "书目总表.csv", "书目总表.xlsx")
 MAP_NAME = "对照表-0002.csv"
 MAP_COLS = ["序号", "阶段", "uid", "类别", "旧路径", "新路径", "备注"]
@@ -98,8 +107,13 @@ def plan(root, dest):
     owner = {}
     for n, dirpath in enumerate(shares, 1):
         cuid = "C%04d" % n
-        item = Item("合集", dirpath, os.path.join(dest, "collections", cuid, "source"), uid=cuid,
-                    note=os.path.relpath(dirpath, lib))
+        item = Item(
+            "合集",
+            dirpath,
+            os.path.join(dest, "collections", cuid, "source"),
+            uid=cuid,
+            note=os.path.relpath(dirpath, lib),
+        )
         items.append(item)
         owner[dirpath] = cuid
 
@@ -213,9 +227,17 @@ def write_map(items, out, root, dest):
         w = L.csv.writer(f)
         w.writerow(MAP_COLS)
         for n, item in enumerate(items, 1):
-            w.writerow([n, 3, item.uid, item.kind,
-                        os.path.relpath(item.src, root), os.path.relpath(item.dst, dest),
-                        item.note or "阶段 3 0002"])
+            w.writerow(
+                [
+                    n,
+                    3,
+                    item.uid,
+                    item.kind,
+                    os.path.relpath(item.src, root),
+                    os.path.relpath(item.dst, dest),
+                    item.note or "阶段 3 0002",
+                ]
+            )
     return path
 
 
@@ -231,15 +253,22 @@ def run(root, dest, mode, apply_it, out, version):
     items, owner, problems = plan(root, dest)
     lines = []
     books = [i for i in items if i.kind == "书"]
-    lines.append("书 %d 本，合集 %d 个，保留目录 %d 个，表 %d 项，产物 %d 项"
-                 % (len(books), len(owner), len([i for i in items if i.kind == "保留"]),
-                    len([i for i in items if i.kind == "表"]),
-                    len([i for i in items if i.kind in ("产物", "视图")])))
+    lines.append(
+        "书 %d 本，合集 %d 个，保留目录 %d 个，表 %d 项，产物 %d 项"
+        % (
+            len(books),
+            len(owner),
+            len([i for i in items if i.kind == "保留"]),
+            len([i for i in items if i.kind == "表"]),
+            len([i for i in items if i.kind in ("产物", "视图")]),
+        )
+    )
     lines.append("方式 %s，%s" % (mode, "落盘" if apply_it else "只打印不落盘"))
     for item in items:
-        lines.append("%-8s %-10s %s -> %s"
-                     % (item.kind, item.label, os.path.relpath(item.src, root),
-                        os.path.relpath(item.dst, dest)))
+        lines.append(
+            "%-8s %-10s %s -> %s"
+            % (item.kind, item.label, os.path.relpath(item.src, root), os.path.relpath(item.dst, dest))
+        )
     if problems:
         for problem in problems:
             lines.append("对账不过：%s" % problem)
