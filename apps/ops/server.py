@@ -2023,6 +2023,42 @@ class App:
             n = LC.categories_delete(uids, root=self.env.root)
         return {"ok": True, "deleted": n}
 
+    def ledger_rows_confirm(self, payload):
+        """同意一批分类：只把备注里的「待复核」换成「分类确认 日期」，别的不动。
+
+        「待复核」是 ingest、分类预填、样例导入写进备注的自由文本，没有字段，
+        所以复核动作就是在原句上改这一个词——来源日期、图册不转之类的尾巴都留着。
+        """
+        LC = self._ledger_mod()
+        uids = [str(u).strip() for u in (payload.get("uids") or []) if str(u).strip()]
+        if not uids:
+            raise ValueError("uids 为空")
+        bad = [u for u in uids if not re.match(r"^B\d{4}$", u)]
+        if bad:
+            raise ValueError("这些不是 uid：%s" % "、".join(bad))
+        today = time.strftime("%Y-%m-%d")
+        done, skipped, rows = [], [], []
+        with ledger_lock(self.env):
+            known = {r["uid"]: r for r in LC.categories(root=self.env.root, create=False)}
+            for uid in uids:
+                old = known.get(uid)
+                if old is None:
+                    skipped.append(uid)
+                    continue
+                note = str(old.get("备注") or "")
+                if "待复核" not in note:
+                    skipped.append(uid)
+                    continue
+                clean = {k: old.get(k) for k in ("uid", "一级", "二级", "作者层", "保留", "正式书名")}
+                # 样例导入写的是「待复核 2026-11-03」，连那个日期一起吃掉，
+                # 不然会留下两个日期
+                clean["备注"] = re.sub(r"待复核(\s+\d{4}-\d{2}-\d{2})?", "分类确认 " + today, note, count=1)
+                rows.append(clean)
+                done.append(uid)
+            if rows:
+                LC.category_put_many(rows, updated_by="ops", root=self.env.root)
+        return {"ok": True, "confirmed": len(done), "uids": done, "skipped": skipped}
+
     def ledger_concept_put(self, payload):
         LC = self._ledger_mod()
         which = payload.get("which") or "main"
@@ -2235,6 +2271,26 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send(200, body, ctype)
 
+    def static_page(self, name):
+        """页面 HTML 里的 app.js / style.css 带上答案指纹。
+
+        浏览器对 no-store 也会走内存缓存（刷新、后退都能拿到旧字节），
+        改完前端就地刷新常看到旧页面。给资源地址挂一个随文件 mtime 变的
+        ?v=，改一次换一次 URL，旧字节就再也命不中了。
+        """
+        try:
+            with open(os.path.join(WEB_DIR, name), "rb") as fh:
+                body = fh.read().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            self.fail(404, "静态文件缺失：" + name)
+            return
+        stamp = 0
+        for asset in ("app.js", "style.css", name):
+            # 少哪个文件都不至于打不开页面，指纹按剩下的算
+            with suppress(OSError):
+                stamp = max(stamp, int(os.stat(os.path.join(WEB_DIR, asset)).st_mtime))
+        self.send(200, body.replace("__V__", str(stamp)), "text/html; charset=utf-8")
+
     def local_ok(self):
         host = self.headers.get("Host") or ""
         origin = self.headers.get("Origin")
@@ -2271,7 +2327,7 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         try:
             if route in ("/", "/index.html"):
-                self.static("index.html", "text/html; charset=utf-8")
+                self.static_page("index.html")
             elif route == "/app.js":
                 self.static("app.js", "application/javascript; charset=utf-8")
             elif route == "/style.css":
@@ -2497,6 +2553,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/search/start": lambda: self.send_json(200, self.app.search_start()),
                 "/api/ledger/row": lambda: self.send_json(200, self.app.ledger_row_put(payload)),
                 "/api/ledger/rows/delete": lambda: self.send_json(200, self.app.ledger_rows_delete(payload)),
+                "/api/ledger/rows/confirm": lambda: self.send_json(200, self.app.ledger_rows_confirm(payload)),
                 "/api/ledger/concept": lambda: self.send_json(200, self.app.ledger_concept_put(payload)),
                 "/api/ledger/concept/delete": lambda: self.send_json(200, self.app.ledger_concept_delete(payload)),
             }.get(route)
@@ -3364,6 +3421,7 @@ WRITE_ROUTES = (
     "/api/delete/apply",
     "/api/ledger/row",
     "/api/ledger/rows/delete",
+    "/api/ledger/rows/confirm",
     "/api/ledger/concept",
     "/api/ledger/concept/delete",
 )

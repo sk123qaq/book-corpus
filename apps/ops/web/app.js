@@ -82,7 +82,9 @@ const EBOOK = /^(epub|mobi|azw3|azw)$/;
 const S = {
   ledger: null,
   ledgerQ: '',
+  ledgerPendingOnly: false,
   ledgerEdit: null,
+  ledgerPick: new Set(),
   tab: 'overview',
   payload: null, status: {}, health: null,
   jobs: [], pending: [], inbox: [], pdf: null,
@@ -1449,8 +1451,15 @@ const LEDGER_CONCEPT_FIELDS = {
   action: [['term', '词', ''], ['kind', ' 类型（动作/事件…）', ''], ['note', '说明', '']],
 };
 
+const LEDGER_PENDING = '待复核';
+
+function ledgerPending(row) {
+  return String((row && row.备注) || '').includes(LEDGER_PENDING);
+}
+
 function ledgerRowFiltered() {
-  const rows = (S.ledger && S.ledger.ledger) || [];
+  let rows = (S.ledger && S.ledger.ledger) || [];
+  if (S.ledgerPendingOnly) rows = rows.filter(ledgerPending);
   const q = (S.ledgerQ || '').trim().toLowerCase();
   if (!q) return rows;
   return rows.filter((r) => [r.uid, r.正式书名, r.一级, r.二级, r.备注]
@@ -1461,6 +1470,7 @@ function ledgerRowHtml(row) {
   const editing = S.ledgerEdit && S.ledgerEdit.type === 'row' && S.ledgerEdit.uid === row.uid;
   if (!editing) {
     return `<tr>
+      <td><input type="checkbox" data-act="ledger-pick" value="${esc(row.uid)}"${S.ledgerPick.has(row.uid) ? ' checked' : ''}></td>
       <td class="num">${esc(row.uid)}</td>
       <td>${esc(row.一级)}</td>
       <td>${esc(row.二级)}</td>
@@ -1468,7 +1478,8 @@ function ledgerRowHtml(row) {
       <td>${esc(RETENTION_WORD[row.保留] || row.保留)}</td>
       <td class="wrap">${esc(row.正式书名)}</td>
       <td class="wrap small">${esc(row.备注)}</td>
-      <td class="nowrap"><button class="btn sm" data-act="ledger-row-edit" data-uid="${esc(row.uid)}">改</button>
+      <td class="nowrap">${ledgerPending(row)
+    ? `<button class="btn sm primary" data-write data-act="ledger-row-confirm" data-uid="${esc(row.uid)}">同意</button> ` : ''}<button class="btn sm" data-act="ledger-row-edit" data-uid="${esc(row.uid)}">改</button>
         <button class="btn sm miss" data-write data-act="ledger-row-delete" data-uid="${esc(row.uid)}">移出</button></td>
     </tr>`;
   }
@@ -1481,6 +1492,7 @@ function ledgerRowHtml(row) {
     return `<input id="led-f-${esc(name)}" value="${esc(v)}"${name === 'uid' ? ' readonly' : ''}>`;
   };
   return `<tr class="editing">
+    <td></td>
     <td>${f('uid')}</td><td>${f('一级')}</td><td>${f('二级')}</td>
     <td>${f('作者层')}</td><td>${f('保留')}</td>
     <td>${f('正式书名')}</td><td class="wrap">${f('备注')}</td>
@@ -1523,6 +1535,9 @@ function viewLedger() {
     return `<div class="list"><p>账表还没加载。</p></div>`;
   }
   const rows = ledgerRowFiltered();
+  const pendingRows = rows.filter(ledgerPending);
+  const picked = pendingRows.filter((r) => S.ledgerPick.has(r.uid)).length;
+  const allPicked = pendingRows.length > 0 && picked === pendingRows.length;
   const shown = rows.length !== L.ledger.length
     ? `<p class="hint">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '';
   const pick = (list, which) => {
@@ -1554,13 +1569,17 @@ function viewLedger() {
         <div class="card-head"><h2>分类表（${num(L.ledger.length)} 行 · ${esc(L.ledger_db || 'tables/ledger.db')}）</h2>
           <span class="row tight">
             <input id="ledger-q" value="${esc(S.ledgerQ || '')}" placeholder="编号 / 书名 / 分类 / 备注">
+            <label class="check"><input type="checkbox" data-act="ledger-pending-only"${S.ledgerPendingOnly ? ' checked' : ''}> 只看待复核</label>
+            <label class="check"><input type="checkbox" data-act="ledger-pick-all"${allPicked ? ' checked' : ''}${pendingRows.length ? '' : ' disabled'}> 全选待复核</label>
+            <button class="btn sm primary" data-write data-act="ledger-confirm-pick"${picked ? '' : ' disabled'}>同意选中 ${num(picked)} 本</button>
             <button class="btn sm" data-act="ledger-load">刷新</button></span></div>
         ${shown}
         <div class="tw"><table class="ledger-table">
-          <thead><tr><th>编号</th><th>一级</th><th>二级</th><th>作者层</th><th>保留</th><th>正式书名</th><th>备注</th><th style="width:140px"></th></tr></thead>
-          <tbody>${rows.map(ledgerRowHtml).join('')}</tbody>
+          <thead><tr><th style="width:28px"></th><th>编号</th><th>一级</th><th>二级</th><th>作者层</th><th>保留</th><th>正式书名</th><th>备注</th><th style="width:170px"></th></tr></thead>
+          <tbody>${rows.length ? rows.map(ledgerRowHtml).join('')
+    : `<tr><td colspan="9" class="hint">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的行。'}</td></tr>`}</tbody>
         </table></div>
-        <p class="hint">编号行是入库给的，加书走「新书导入」；这里改的是已有行——顺序、保留与分类。改完人账，去「维护」跑一次收尾，书目库与总表才会跟上。</p>
+        <p class="hint">编号行是入库给的，加书走「新书导入」；这里改的是已有行——顺序、保留与分类。改完人账，去「维护」跑一次收尾，书目库与总表才会跟上。备注里带「待复核」的行多一个「同意」：点了把这三个字改成「分类确认 日期」，其余照旧；表头「只看待复核」一勾，已确认的行就不在表里了。</p>
       </div>
       ${pick(L.concepts || [], 'main')}
       ${pick(L.broad || [], 'broad')}
@@ -2050,6 +2069,35 @@ async function runMaintain(steps) {
 }
 
 // ---- 动作 ---------------------------------------------------------
+function paintLedgerPick() {
+  const rows = ledgerRowFiltered().filter(ledgerPending);
+  const picked = rows.filter((r) => S.ledgerPick.has(r.uid)).length;
+  const btn = document.querySelector('[data-act="ledger-confirm-pick"]');
+  if (btn) {
+    btn.textContent = '同意选中 ' + num(picked) + ' 本';
+    btn.disabled = !picked;
+  }
+  const all = document.querySelector('[data-act="ledger-pick-all"]');
+  if (all) all.checked = rows.length > 0 && picked === rows.length;
+}
+
+async function confirmLedgerRows(uids) {
+  setBusy(true);
+  try {
+    const body = await post('/api/ledger/rows/confirm', { uids: uids });
+    const n = body.confirmed || 0;
+    const skipped = (body.skipped || []).length;
+    uids.forEach((uid) => S.ledgerPick.delete(uid));
+    await loadLedger();
+    render();
+    toast(n
+      ? '同意了 ' + n + ' 行' + (skipped ? '，跳过 ' + skipped + ' 行（没有「待复核」或已不在账上）' : '')
+      : '这些行没有「待复核」，没改');
+  } finally {
+    setBusy(false);
+  }
+}
+
 const actions = {
   // ---- 账表 ----
   async 'ledger-load'() {
@@ -2084,6 +2132,36 @@ const actions = {
     } finally {
       setBusy(false);
     }
+  },
+
+  async 'ledger-pick'(el) {
+    if (el.checked) S.ledgerPick.add(el.value);
+    else S.ledgerPick.delete(el.value);
+    paintLedgerPick();
+  },
+
+  async 'ledger-pending-only'(el) {
+    S.ledgerPendingOnly = !!el.checked;
+    render();
+  },
+
+  async 'ledger-pick-all'(el) {
+    const rows = ledgerRowFiltered().filter(ledgerPending);
+    if (el.checked) rows.forEach((r) => S.ledgerPick.add(r.uid));
+    else rows.forEach((r) => S.ledgerPick.delete(r.uid));
+    render();
+  },
+
+  async 'ledger-row-confirm'(el) {
+    await confirmLedgerRows([el.dataset.uid]);
+  },
+
+  async 'ledger-confirm-pick'() {
+    const uids = ledgerRowFiltered()
+      .filter((r) => S.ledgerPick.has(r.uid) && ledgerPending(r))
+      .map((r) => r.uid);
+    if (!uids.length) { toast('先勾选待复核的行', true); return; }
+    await confirmLedgerRows(uids);
   },
 
   async 'ledger-row-delete'(el) {
