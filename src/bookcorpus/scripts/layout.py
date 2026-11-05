@@ -15,6 +15,7 @@ SCHEMA = 2
 MANIFEST = "books.toml"
 INBOX = "_收件箱"
 COLD = "_冷宫"
+DAILY = "日课"
 RESERVED = (INBOX, COLD)
 LEDGER_COLS = ["uid", "一级", "二级", "作者层", "保留", "正式书名", "备注"]
 
@@ -27,6 +28,7 @@ INIT_DIRS = (
     os.path.join("build", "检索"),
     os.path.join("build", "views"),
     os.path.join("工作区", "批次"),
+    DAILY,
 )
 
 
@@ -77,6 +79,10 @@ class Layout:
     @property
     def work(self):
         return os.path.join(self.root, "工作区")
+
+    @property
+    def daily(self):
+        return os.path.join(self.root, DAILY)
 
     @property
     def ledger(self):

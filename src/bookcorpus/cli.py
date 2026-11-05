@@ -28,6 +28,7 @@ ALIASES = {
     "status": "ops_status",
     "numbers": "doc_numbers",
     "stats": "corpus_stats",
+    "daily": "daily",
 }
 
 HELP = """book-corpus <命令> [参数...]
@@ -40,6 +41,8 @@ HELP = """book-corpus <命令> [参数...]
   venv [--check]          建/补 工作区/.venv-pdf 与 工作区/.venv-docs；--check 只导入一遍依赖
   model [set|setup-pi|check]
                           看/改这个工作区用哪个 pi 模型、思考等级、端点和 key
+  daily [--date D] [--book UID] [--chapter N] [--dry-run] [--force]
+                          写一期日课到 日课/YYYY-MM-DD.json；install-timer 装定时器
   list                    列出脚本与别名
 
 迁移

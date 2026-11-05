@@ -10,7 +10,7 @@
 - 查原文：段落级倒排检索，支持概念同义词组，返回 `books/<uid>/md/章节.md:行号`。
 - 问书：`book-corpus query` 定位书与章。要成段回答并带逐字引文，用 `book-corpus-qa` 技能或演示页。
 - 管书：入库、分类、拆章、出 HTML 阅读版、PDF 转 Markdown、删书与冷宫。
-- 看库：本地操作台（8770）与检索演示页（8765），默认只绑 `127.0.0.1`。
+- 看库：本地操作台（8770）、检索演示页（8765）与日课页（8772），默认只绑 `127.0.0.1`。
 
 ## 实例结构
 
@@ -33,6 +33,7 @@
 | `build/书目总表.csv` | 从 DB 导出的书目，产物 |
 | `build/阅读版索引.html` | 有阅读版 HTML 的书的总索引，产物 |
 | `工作区/` | 批次账、缓存与运行时状态；运行时可重建，不进工具仓 |
+| `日课/` | 每日一期的 JSON 与日志；页面只读，生成走 `book-corpus daily` |
 
 `book.json` 只记源元数据（uid、书名、学科、sources、awards）。目录名就是 uid，`book.json` 不再存路径。md 与 html 状态在 `library.db` 的 `derived` 表里，由 `build_library.py` 按磁盘生成，不写回 `book.json`。
 
@@ -44,6 +45,7 @@
 |---|---|
 | `apps/ops/` | 统一操作台服务与 web，127.0.0.1:8770 |
 | `apps/demo/` | 检索流程演示页与回答实现，127.0.0.1:8765 |
+| `apps/daily/` | 每日一章的只读阅读页，127.0.0.1:8772 |
 | `src/bookcorpus/` | 命令行包；`scripts/` 是全部可复跑脚本 |
 | `tests/acceptance/` | 离线验收，由 pytest 收集 |
 | `tests/manual/` | 需要 Chrome、真实模型或真实会话的手工验收，清单见其 README |
@@ -311,16 +313,17 @@ book-corpus query 关键词 关键词 --no-cards
 
 要成段回答并带引文，用 `book-corpus-qa` 技能，或起演示页。
 
-### 起两个本地页面
+### 起三个本地页面
 
 在工具仓里跑，认实例根：
 
 ```bash
 BOOKS_ROOT=<实例根> python3 apps/demo/server.py   # http://127.0.0.1:8765
 python3 apps/ops/server.py --root <实例根>        # http://127.0.0.1:8770
+python3 apps/daily/server.py --root <实例根>      # http://127.0.0.1:8772
 ```
 
-`<实例根>` 是有 `books.toml` 的那层；演示页从 `BOOKS_ROOT` 认根，操作台用 `--root`。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。
+`<实例根>` 是有 `books.toml` 的那层；演示页从 `BOOKS_ROOT` 认根，操作台与日课页用 `--root`。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。
 
 ### 重建产物
 

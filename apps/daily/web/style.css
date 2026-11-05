@@ -1,0 +1,502 @@
+:root {
+  --paper: #f6f3ec;
+  --card: #fffdf8;
+  --ink: #1d1c1a;
+  --muted: #6f6a60;
+  --line: #d9d2c4;
+  --red: #a63d2f;
+  --red-soft: #f0e2dc;
+  --serif: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  --sans: "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html, body { overflow-x: hidden; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 报头 -------------------------------------------------------- */
+.masthead {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 26px 24px 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 13px;
+  font-family: var(--serif);
+  font-size: 17px;
+  letter-spacing: .26em;
+}
+
+.brand-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  align-self: center;
+  flex: none;
+}
+
+.brand-sub {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: var(--muted);
+}
+
+.issue-no {
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.day-note,
+.feed-note {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 10px 24px 0;
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.day-note::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  vertical-align: 2px;
+}
+
+.feed-note { padding-top: 6px; }
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 26px 24px 80px;
+}
+
+/* ---- 纸面 -------------------------------------------------------- */
+.paper {
+  position: relative;
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  background: var(--card);
+  border: 1px solid var(--line);
+  padding: 48px 52px 38px 0;
+}
+
+.paper.is-in { animation: paper-in .26s ease-out both; }
+
+@keyframes paper-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.margin {
+  padding: 4px 30px 0 34px;
+  border-right: 1px solid var(--line);
+}
+
+.date-block { display: block; }
+
+.month {
+  display: block;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: .16em;
+  color: var(--muted);
+}
+
+.day {
+  display: block;
+  margin: 2px 0 4px;
+  font-family: var(--serif);
+  font-size: 48px;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+}
+
+.weekday {
+  display: block;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: var(--muted);
+}
+
+.chapter-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 34px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+
+.chapter-rule {
+  display: block;
+  width: 2px;
+  height: 26px;
+  background: var(--red);
+}
+
+.text {
+  min-width: 0;
+  padding-left: 34px;
+}
+
+.kicker {
+  margin: 0 0 12px;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+
+h1 {
+  max-width: 20em;
+  margin: 0 0 30px;
+  font-family: var(--serif);
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: .01em;
+  text-wrap: balance;
+}
+
+.body p {
+  margin: 0 0 1.1em;
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.95;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+.body p:last-child { margin-bottom: 0; }
+
+.quote {
+  margin: 34px 0 0;
+  padding: 4px 0 4px 20px;
+  border-left: 2px solid var(--red);
+}
+
+.quote p {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.8;
+}
+
+.quote-meta {
+  margin-top: 9px;
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+
+.why {
+  margin-top: 38px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.why h2 {
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  color: var(--muted);
+}
+
+.why p {
+  max-width: 36em;
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.colophon {
+  margin-top: 32px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.colophon p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---- 前几期 ------------------------------------------------------ */
+.past {
+  margin-top: 28px;
+}
+
+.past h2 {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  color: var(--muted);
+}
+
+.past-list {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.past-row {
+  display: grid;
+  grid-template-columns: 58px 48px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  padding: 13px 4px 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.past-date {
+  position: relative;
+  padding-left: 14px;
+  font-size: 12px;
+  letter-spacing: .02em;
+  color: var(--muted);
+}
+
+.past-row.is-current .past-date { color: var(--ink); }
+
+.past-row.is-current .past-date::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  transform: translateY(-50%);
+}
+
+.past-kind {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.past-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.past-book {
+  flex: 0 0 122px;
+  overflow: hidden;
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.past-title {
+  min-width: 0;
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+  transition: transform .18s ease, color .18s ease;
+}
+
+.past-row:hover .past-title,
+.past-row:focus-visible .past-title {
+  color: var(--ink);
+  transform: translateX(3px);
+}
+
+.past-row:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+
+/* ---- 空状态 ------------------------------------------------------ */
+.paper.is-empty {
+  display: block;
+  padding: 64px 52px 56px;
+}
+
+.empty-state {
+  max-width: 34em;
+  padding: 6px 0 10px;
+}
+
+.empty-title {
+  margin: 0 0 12px;
+  font-family: var(--serif);
+  font-size: 30px;
+  line-height: 1.3;
+}
+
+.empty-hint {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---- 窄屏：页边折到正文上方 -------------------------------------- */
+@media (max-width: 899px) {
+  .masthead {
+    padding: 20px 18px 14px;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    font-size: 16px;
+    letter-spacing: .2em;
+    gap: 10px;
+  }
+
+  .day-note,
+  .feed-note {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  main {
+    padding: 18px 12px 56px;
+  }
+
+  .paper {
+    grid-template-columns: 1fr;
+    padding: 24px 22px 26px;
+  }
+
+  .margin {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding: 0 0 15px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+
+  .date-block {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .month,
+  .weekday {
+    display: inline;
+  }
+
+  .day {
+    display: inline;
+    margin: 0;
+    font-size: 34px;
+    line-height: 1;
+  }
+
+  .chapter-mark {
+    margin: 0 0 0 auto;
+  }
+
+  .chapter-rule { height: 18px; }
+
+  .text { padding-left: 0; }
+
+  h1 { margin-bottom: 24px; }
+
+  .body p { font-size: 17.5px; }
+
+  .quote { margin-top: 28px; }
+
+  .past-row {
+    grid-template-columns: 54px 42px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .past-head { display: block; }
+
+  .past-book {
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .paper.is-empty {
+    padding: 40px 24px 44px;
+  }
+}
+
+@media (max-width: 520px) {
+  .issue-no { font-size: 11px; }
+
+  .brand-sub { display: none; }
+
+  .past-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+
+  .past-book { flex: 0 0 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper.is-in { animation: none; }
+
+  .past-title { transition: none; }
+
+  html { scroll-behavior: auto; }
+}

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>书库日课</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span>书库日课</span>
+      <span class="brand-sub">每日一章</span>
+    </div>
+    <div class="issue-no mono" id="issue-no"></div>
+  </header>
+
+  <p class="day-note" id="day-note" hidden>今天还没有取章</p>
+  <p class="feed-note" id="feed-note" hidden></p>
+
+  <main>
+    <article class="paper" id="paper" aria-busy="true" aria-live="polite">
+      <div class="margin" id="margin">
+        <div class="date-block">
+          <span class="month" id="month"></span>
+          <span class="day" id="day"></span>
+          <span class="weekday" id="weekday"></span>
+        </div>
+        <div class="chapter-mark">
+          <span class="chapter-rule" aria-hidden="true"></span>
+          <span id="chapter-label"></span>
+        </div>
+      </div>
+
+      <div class="text" id="text">
+        <p class="kicker" id="kicker"></p>
+        <h1 id="headline"></h1>
+        <div class="body" id="body"></div>
+
+        <blockquote class="quote" id="quote">
+          <p id="quote-text"></p>
+          <footer class="quote-meta mono" id="quote-meta"></footer>
+        </blockquote>
+
+        <section class="why">
+          <h2>为什么是这一章</h2>
+          <p id="why-text"></p>
+        </section>
+
+        <footer class="colophon">
+          <p class="mono" id="colophon"></p>
+        </footer>
+      </div>
+
+      <div class="empty-state" id="empty-state" hidden>
+        <p class="empty-title" id="empty-title"></p>
+        <p class="empty-hint" id="empty-hint"></p>
+      </div>
+    </article>
+
+    <section class="past" id="past" aria-labelledby="past-title" hidden>
+      <h2 id="past-title">目录</h2>
+      <div class="past-list" id="past-list"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
