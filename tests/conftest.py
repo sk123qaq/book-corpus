@@ -126,3 +126,36 @@ def workspace(tmp_path):
     rows.append(("B0003", "写作与编剧", "丙书", "无正文"))
     write_ledger(root, rows)
     return root
+
+
+@pytest.fixture
+def reading_root(tmp_path, monkeypatch):
+    """8771 四读测试实例：两本可读、一本只有书目、叠加层留空。"""
+    root = tmp_path / "reading-instance"
+    root.mkdir()
+    (root / "books.toml").write_text("schema = 2\n", encoding="utf-8")
+    write_book(
+        root,
+        "B0001",
+        "文学",
+        "甲书",
+        [
+            "第一段写一个人走进屋子，看见桌上有一盏灯，灯下压着一封没有署名的信。",
+            "第二段写他坐下，听见窗外的雨声，忽然想起许多年前的一个下午。",
+        ],
+    )
+    write_book(
+        root,
+        "B0002",
+        "人文社科",
+        "乙书",
+        ["礼治秩序与法治不同，礼治靠传统与教化，法治靠国家权力与成文规则。"],
+    )
+    write_book(root, "B0003", "写作与编剧", "丙书", None, fmt="txt")
+    payload_path = root / "books" / "B0001" / "book.json"
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    payload["author"] = "z-library.sk, 1lib.sk, 鲁迅"
+    payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+    monkeypatch.setenv("READING_OVERLAY", str(tmp_path / "no-overlay"))
+    monkeypatch.setenv("READING_ANNOTATE", "0")
+    return root

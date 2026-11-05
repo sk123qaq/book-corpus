@@ -1,0 +1,69 @@
+/* Cold-paper alternative. Warm is the default in tokens.css.
+   The class lives on <html> so it can be applied before first paint. */
+html.cold{
+  --paper:#E2E6E6;
+  --paper-2:#D6DDDD;
+  --paper-3:#C8D1D1;
+  --ink:#131A1F;
+  --ink-2:#45545C;
+  --ink-3:#74848C;
+  --rule:#C4CECF;
+  --rule-strong:#A6B4B6;
+  --pine:#18344F;
+  --oxblood:#63343D;
+  --ochre:#7A6338;
+  --indigo:#2B5C84;
+  --moss:#3A5348;
+  --cinnabar:#7A3E46;
+  --cinnabar-soft:#A8737A;
+  --note-bg:#DEE8EE;
+  --tier-skim:#74848C;
+  --tier-standard:#18344F;
+  --tier-deep:#2B5C84;
+  --tier-research:#63343D;
+  --shadow-spine:8px 12px 28px rgba(19,26,31,.18);
+}
+
+html.cold body:not(.night){
+  background:
+    radial-gradient(1200px 600px at 12% -10%,rgba(255,255,255,.78),transparent 60%),
+    linear-gradient(180deg,#EEF1F1 0%,var(--paper) 38%,#D7DEDE 100%);
+}
+html.cold body:not(.night) .topbar{background:rgba(226,230,230,.92)}
+html.cold body:not(.night) .search{background:rgba(255,255,255,.6)}
+html.cold body:not(.night) .spine{color:#EFF2F3;filter:saturate(.58) hue-rotate(8deg)}
+html.cold body:not(.night) .cover{filter:saturate(.62)}
+html.cold body:not(.night) .spine::after{background:linear-gradient(90deg,#D8DEDE,#C1C9C9)}
+html.cold body:not(.night) .shelf-line{background:linear-gradient(180deg,#232A2E,#0F1417)}
+html.cold body:not(.night) .reading-card{border-color:#C8D0D0;background:#EEF1F1}
+html.cold body:not(.night) .rc-progress{background:#D2D9D9}
+html.cold body:not(.night) .ticket,
+html.cold body:not(.night) .ch-row[aria-current="true"],
+html.cold body:not(.night) .preview,
+html.cold body:not(.night) .job-inline,
+html.cold body:not(.night) .queue,
+html.cold body:not(.night) .rec-item{background:#EEF1F1}
+html.cold body:not(.night) .ch-row:hover{background:rgba(255,255,255,.55)}
+html.cold body:not(.night) .job-strip:hover,
+html.cold body:not(.night) .directory a:hover{background:rgba(31,59,87,.045)}
+html.cold body:not(.night) .tier-opt.checked{background:rgba(24,52,79,.055)}
+html.cold body:not(.night) .cmp tr.current td{background:#EEF1F1}
+html.cold body:not(.night) .cmp tr:hover td{background:rgba(255,255,255,.55)}
+
+/* theme button: one control, two labels; short label on narrow screens */
+.theme-btn{width:auto;min-width:34px;height:32px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px;font:10px/1 var(--sans);letter-spacing:.06em;color:var(--ink-2);border:1px solid var(--rule)}
+.theme-btn:hover{border-color:var(--rule-strong);color:var(--ink)}
+.theme-btn .when-cold{display:none}
+html.cold .theme-btn .when-warm{display:none}
+html.cold .theme-btn .when-cold{display:inline}
+.theme-btn .short{display:none}
+@media(max-width:760px){
+  .theme-btn{padding:0 6px}
+  .theme-btn .full{display:none}
+  .theme-btn .short{display:inline}
+}
+/* reader keeps the icon-tool rhythm; theme is a mode, not a pressed tool */
+.reader .theme-btn{border-color:transparent;padding:7px 7px;min-width:0;height:auto}
+.reader .theme-btn:hover{border-color:var(--rule-strong)}
+.reader .theme-btn[aria-pressed="true"]{background:transparent;color:var(--ink-2);border-color:transparent}
+.reader .theme-btn[aria-pressed="true"]:hover{border-color:var(--rule-strong)}

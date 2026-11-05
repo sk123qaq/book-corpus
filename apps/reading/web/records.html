@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
+<title>四读 · 生成记录</title>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/pages.css">
+<link rel="stylesheet" href="/assets/theme.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <label class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
+    <span class="kbd">/</span>
+  </label>
+  <nav class="nav">
+    <a href="/">书架</a>
+    <a href="/catalog">书目</a>
+    <a href="/records" aria-current="page">记录</a>
+  </nav>
+  <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
+    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
+  </button>
+  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/></svg>
+  </button>
+</header>
+
+<main class="page">
+  <div class="page-head">
+    <div class="eyebrow">工单 · 本机 · 工作区/阅读</div>
+    <h1>生成记录</h1>
+    <p class="lede">每一次出片都留账：跑在哪个阶段、哪几档通过、产物落在哪里。任务只在本机队列里跑，不联网。</p>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <section id="queue"></section>
+
+  <section class="recs">
+    <div class="section-head">
+      <div><div class="eyebrow">账本</div><h2>最近工单</h2></div>
+      <div class="rec-tabs" id="tabs"></div>
+    </div>
+    <div id="records"><div class="empty">正在读账…</div></div>
+  </section>
+
+  <section class="recs">
+    <div class="section-head">
+      <div><div class="eyebrow">磁盘产物</div><h2>本机读本</h2></div>
+      <span class="lbl" id="pack-count"></span>
+    </div>
+    <div id="packs"></div>
+    <p class="note-line">产物位于 <code>工作区/阅读/&lt;uid&gt;/ch/&lt;n&gt;/</code>，可随时删掉重生成；原文与书架 html 不动。</p>
+  </section>
+</main>
+
+<script src="/assets/app.js"></script>
+<script src="/assets/common.js"></script>
+<script src="/assets/theme.js"></script>
+<script>
+const TIER_KEYS = ['skim', 'standard', 'deep', 'research'];
+const RUNNING = ['queued', 'chunking', 'annotating', 'validating', 'projecting', 'rendering'];
+const TABS = [
+  { key: 'all', name: '全部', match: () => true },
+  { key: 'running', name: '运行中', match: (job) => RUNNING.includes(job.state) },
+  { key: 'done', name: '完成', match: (job) => job.state === 'done' || job.state === 'partial' },
+  { key: 'failed', name: '失败', match: (job) => job.state === 'failed' || job.state === 'cancelled' }
+];
+let data = { jobs: [], packs: [] };
+let filter = 'all';
+let openId = null;
+let timer = null;
+
+RD.ready(async () => {
+  RD.night();
+  await load();
+  focusJob();
+  timer = setInterval(async () => {
+    if (document.hidden) return;
+    if (!data.jobs.some((job) => RUNNING.includes(job.state))) return;
+    await load(true);
+  }, 1800);
+});
+
+async function load(quiet) {
+  try {
+    data = await RD.api('/api/records');
+  } catch (err) {
+    if (!quiet) RD.fail(RD.mount('records'), err.message);
+    return;
+  }
+  render();
+}
+
+function focusJob() {
+  const id = new URLSearchParams(location.search).get('job');
+  if (!id) return;
+  const job = (data.jobs || []).find((item) => item.id === id);
+  if (!job) {
+    RD.toast('工单不在当前记录中', true);
+    return;
+  }
+  const running = RUNNING.includes(job.state);
+  if (!running) {
+    filter = 'all';
+    openId = id;
+    render();
+  }
+  const node = document.getElementById((running ? 'queue-' : 'job-') + id);
+  if (!node) return;
+  node.classList.add('focus');
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => node.classList.remove('focus'), 2600);
+}
+
+function render() {
+  const jobs = data.jobs || [];  const packs = data.packs || [];
+  const running = jobs.filter((job) => RUNNING.includes(job.state));
+  const done = jobs.filter((job) => job.state === 'done' || job.state === 'partial');
+  const failed = jobs.filter((job) => job.state === 'failed' || job.state === 'cancelled');
+  RD.mount('stats').innerHTML =
+    '<span><b>' + RD.fmt(done.length) + '</b>完成</span>' +
+    '<span><b>' + RD.fmt(running.length) + '</b>运行中</span>' +
+    '<span><b>' + RD.fmt(failed.length) + '</b>失败 / 取消</span>' +
+    '<span><b>' + RD.fmt(packs.length) + '</b>章读本</span>' +
+    '<span><b>' + RD.fmt(jobs.length) + '</b>历史工单</span>';
+  renderQueue(running);
+  renderTabs(running);
+  renderJobs(jobs);
+  renderPacks(packs);
+}
+
+function renderQueue(running) {
+  const mount = RD.mount('queue');
+  if (!running.length) {
+    mount.innerHTML = '<div class="queue idle"><div class="eyebrow">队列</div><h2>队列空闲</h2>' +
+      '<p>当前没有生成任务。去书架打开一章，选档出片。</p><a class="btn btn-ghost" href="/">回书架 →</a></div>';
+    return;
+  }
+  const active = running.filter((job) => job.state !== 'queued').length;
+  const queued = running.length - active;
+  const queueText = ' · 本机队列 · 最多 4 个并行（' + Math.min(active, 4) + '/4 运行' +
+    (queued ? ' · ' + queued + ' 排队' : '') + '）';
+  mount.innerHTML = '<div class="queue-stack">' + running.map((job) =>
+    '<div class="queue" id="queue-' + RD.esc(job.id) + '"><div class="queue-copy"><div class="eyebrow">' +
+      (job.state === 'queued' ? '排队中' : '正在运行 · ' + RD.esc(currentStep(job))) + '</div><h2>' +
+      RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
+      RD.esc(RD.statusName[job.state] || job.state) + '</h2>' +
+      '<p>' + (job.tiers || []).map((t) => RD.tierNames[t] || t).join(' / ') + queueText + '</p>' +
+      RD.jobSteps(job) + '</div><div class="side"><div class="pct">' + RD.fmt(job.progress || 0) + '%</div>' +
+      '<div class="bar"><i style="width:' + Number(job.progress || 0) + '%"></i></div>' +
+      '<button class="cancel" data-cancel="' + RD.esc(job.id) + '">取消任务</button></div></div>'
+  ).join('') + '</div>';
+  bindActions(mount);
+}
+
+function renderTabs(running) {
+  const counts = { all: data.jobs.length, running: running.length, done: data.jobs.filter((j) => j.state === 'done' || j.state === 'partial').length, failed: data.jobs.filter((j) => j.state === 'failed' || j.state === 'cancelled').length };
+  RD.mount('tabs').innerHTML = TABS.map((tab) =>
+    '<button data-filter="' + tab.key + '" aria-pressed="' + (filter === tab.key) + '">' + tab.name +
+    '<span class="count">' + RD.fmt(counts[tab.key]) + '</span></button>'
+  ).join('') + '<span class="sp"></span><span class="lbl" id="shown"></span>';
+  RD.mount('tabs').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-filter]');
+    if (!button) return;
+    filter = button.dataset.filter;
+    openId = null;
+    renderTabs(running);
+    renderJobs(data.jobs || []);
+  });
+}
+
+function renderJobs(jobs) {
+  const tab = TABS.find((item) => item.key === filter) || TABS[0];
+  const visible = jobs.filter(tab.match);
+  const shown = RD.mount('shown');
+  if (shown) shown.textContent = '显示 ' + visible.length + ' / ' + jobs.length + ' 条';
+  if (!visible.length) {
+    RD.mount('records').innerHTML = '<div class="empty"><b>这一类还没有工单</b><p>换一个筛选，或者去书架生成第一版读本。</p></div>';
+    return;
+  }
+  RD.mount('records').innerHTML = visible.map((job) => '<div class="rec-item" id="job-' + RD.esc(job.id) + '" data-job="' + RD.esc(job.id) + '">' +
+    '<button class="rec-row' + (openId === job.id ? ' open' : '') + '" data-open="' + RD.esc(job.id) + '">' +
+      '<span class="rec-id">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + '<br>' + RD.esc(shortTime(job.updated_at)) + '</span>' +
+      '<span class="rec-t">第 ' + String(job.n).replace(/^0/, '') + ' 章 · ' + (job.tiers || []).map((t) => RD.tierNames[t] || t).join(' / ') +
+        '<small>' + RD.esc(job.id) + ' · ' + RD.esc(jobSubtitle(job)) + '</small></span>' +
+      '<span class="rec-tiers">' + (job.tiers || []).map((t) => '<span>' + (RD.tierNames[t] || t) + '</span>').join('') + '</span>' +
+      '<span class="rec-time">' + RD.esc(shortTime(job.created_at)) + '</span>' +
+      '<span class="rec-cost">' + RD.fmt(job.progress || 0) + '%</span>' +
+      '<span class="rec-state ' + stateClass(job.state) + '">' + RD.esc(RD.statusName[job.state] || job.state) + '</span>' +
+      '<span class="rec-go">⌄</span></button>' +
+    detail(job, openId === job.id) + '</div>').join('');
+  bindActions(RD.mount('records'));
+}
+
+function detail(job, open) {
+  const tiers = job.tiers || [];
+  const outs = tiers.map((tier) =>
+    '<a href="' + RD.readerHref(job.uid, job.n, tier) + '">读 ' + (RD.tierNames[tier] || tier) + '本</a>' +
+    '<a href="/api/export/' + encodeURIComponent(job.uid) + '/' + encodeURIComponent(job.n) + '/' + encodeURIComponent(tier) + '" download>导出 ' + (RD.tierNames[tier] || tier) + '</a>'
+  ).join('');
+  const running = RUNNING.includes(job.state);
+  return '<div class="rec-detail' + (open ? ' open' : '') + '">' +
+    RD.jobSteps(job) +
+    '<div class="gate">' + (job.pack_id ? '产物 <b>' + RD.esc(job.pack_id) + '</b> · ' : '') +
+      '状态 <b>' + RD.esc(RD.statusName[job.state] || job.status || job.state) + '</b>' +
+      (job.error ? ' · <b>' + RD.esc(job.error) + '</b>' : '') +
+      ' · 更新于 ' + RD.esc(job.updated_at || '—') + '</div>' +
+    '<div class="rec-actions">' +
+      (running ? '<button data-cancel="' + RD.esc(job.id) + '">取消任务</button>' : '<button data-retry="' + RD.esc(job.id) + '">重跑</button>') +
+      '<button data-log="' + RD.esc(job.id) + '">看原始账</button>' +
+      '<a href="' + RD.bookHref(job.uid) + '">回书目</a>' +
+      '<a href="' + RD.chapterHref(job.uid, job.n) + '">开工单</a>' +
+    '</div>' +
+    '<div class="outs">' + outs + '</div></div>';
+}
+
+function renderPacks(packs) {
+  RD.mount('pack-count').textContent = packs.length + ' 章有产物';
+  if (!packs.length) {
+    RD.mount('packs').innerHTML = '<div class="empty"><b>还没有读本产物</b><p>生成后的 chapter.html、四档导出与 manifest 都会出现在这里。</p></div>';
+    return;
+  }
+  RD.mount('packs').innerHTML = packs.map((pack) =>
+    '<div class="rec-item"><div class="rec-row">' +
+      '<span class="rec-id">' + RD.esc(pack.uid) + '-' + RD.esc(pack.n) + '</span>' +
+      '<span class="rec-t">' + RD.esc(pack.uid) + ' 第 ' + String(pack.n).replace(/^0/, '') + ' 章' +
+        '<small>' + RD.esc(pack.generated_at || '') + (pack.draft ? ' · 确定性草稿' : '') + '</small></span>' +
+      '<span class="rec-tiers">' + (pack.tiers || []).map((t) => '<span>' + (RD.tierNames[t] || t) + '</span>').join('') + '</span>' +
+      '<span class="rec-time">' + RD.esc(shortTime(pack.generated_at)) + '</span>' +
+      '<span class="rec-cost">' + RD.esc(pack.status || '') + '</span>' +
+      '<span class="rec-state ' + (pack.draft ? 'draft' : 'done') + '">' + (pack.draft ? '草稿' : '已出片') + '</span><span class="rec-go"></span></div>' +
+    '<div class="rec-detail open"><div class="outs">' + (pack.tiers || []).map((tier) =>
+      '<a href="' + RD.readerHref(pack.uid, pack.n, tier) + '">读 ' + (RD.tierNames[tier] || tier) + '本</a>' +
+      '<a href="/api/export/' + encodeURIComponent(pack.uid) + '/' + encodeURIComponent(pack.n) + '/' + encodeURIComponent(tier) + '" download>导出</a>'
+    ).join('') + '<a href="' + RD.chapterHref(pack.uid, pack.n) + '">回工单</a></div></div></div>'
+  ).join('');
+}
+
+function bindActions(scope) {
+  if (!scope) return;
+  scope.querySelectorAll('[data-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+      openId = openId === button.dataset.open ? null : button.dataset.open;
+      renderJobs(data.jobs || []);
+    });
+  });
+  scope.querySelectorAll('[data-cancel]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const job = (data.jobs || []).find((item) => item.id === button.dataset.cancel);
+      const before = job ? { ...job } : null;
+      button.disabled = true;
+      button.textContent = '取消中…';
+      if (job) {
+        Object.assign(job, { state: 'cancelled', error: '已取消', updated_at: new Date().toISOString() });
+        render();
+      }
+      try {
+        await RD.api('/api/jobs/' + encodeURIComponent(button.dataset.cancel) + '/cancel', { method: 'POST' });
+        RD.toast('已取消');
+        load(true);
+      } catch (err) {
+        if (job && before) Object.assign(job, before);
+        render();
+        RD.toast(err.message, true);
+      }
+    });
+  });
+  scope.querySelectorAll('[data-retry]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const job = (data.jobs || []).find((item) => item.id === button.dataset.retry);
+      if (!job) return;
+      button.disabled = true;
+      button.textContent = '提交中…';
+      const post = (rebuild) => RD.api('/api/jobs', { method: 'POST', body: {
+        uid: job.uid, n: Number(job.n), tiers: job.tiers, model: job.model, effort: job.effort,
+        overwrite: true, rebuild: Boolean(rebuild),
+      } });
+      try {
+        let fresh;
+        try {
+          fresh = await post(false);
+        } catch (err) {
+          if (err.code !== 'rebuild_required') throw err;
+          const labels = (err.payload.tiers || job.tiers || []).map((key) => RD.tierNames[key] || key).join('、');
+          if (!window.confirm('未勾选档位将被移除：' + labels + '（' + (err.payload.reason || '原文或生成模式已变化') +
+              '），整包重建为所选档位。确定吗？')) throw err;
+          fresh = await post(true);
+        }
+        data.jobs = [fresh].concat(data.jobs.filter((item) => item.id !== fresh.id));
+        openId = fresh.id;
+        render();
+        RD.toast('已重新排队 · ' + fresh.id);
+        load(true);
+      } catch (err) {
+        if (err.code === 'job_active') {
+          data.jobs = (err.conflicts || []).concat(data.jobs);
+          render();
+        }
+        RD.toast(err.message, true);
+        button.disabled = false;
+        button.textContent = '重跑';
+      }
+    });
+  });
+  scope.querySelectorAll('[data-log]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const job = (data.jobs || []).find((item) => item.id === button.dataset.log);
+      if (!job) return;
+      let node = document.getElementById('raw-log');
+      if (!node) {
+        node = document.createElement('pre');
+        node.id = 'raw-log';
+        node.className = 'raw-log';
+        document.body.appendChild(node);
+      }
+      node.textContent = JSON.stringify(job, null, 2);
+      node.classList.add('show');
+      node.onclick = () => node.classList.remove('show');
+    });
+  });
+}
+
+function jobSubtitle(job) {
+  if (job.state === 'cancelled') return '已取消';
+  if (job.error) {
+    const text = String(job.error).replace(/\s+/g, ' ').trim();
+    return '失败 · ' + (text.length > 42 ? text.slice(0, 42) + '…' : text);
+  }
+  return currentStep(job);
+}
+
+function currentStep(job) {
+  const steps = job.steps || [];
+  const running = steps.find((step) => step.status === 'run');
+  if (running) return '第 ' + (steps.indexOf(running) + 1) + '/5 步 · ' + running.name;
+  if (RUNNING.includes(job.state)) return '排队中';
+  return '第 5/5 步 · 渲染';
+}
+
+function stateClass(state) {
+  if (state === 'done' || state === 'partial') return 'done';
+  if (state === 'failed') return 'fail';
+  if (state === 'cancelled') return 'cancel';
+  return 'run';
+}
+
+function shortTime(value) {
+  const text = String(value || '');
+  return text.length >= 16 ? text.slice(5, 16).replace('T', ' ') : text;
+}
+</script>
+</body>
+</html>

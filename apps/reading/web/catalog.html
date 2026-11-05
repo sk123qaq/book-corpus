@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
+<title>四读 · 书目与搜索</title>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/pages.css">
+<link rel="stylesheet" href="/assets/theme.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <label class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
+    <span class="kbd">/</span>
+  </label>
+  <nav class="nav">
+    <a href="/">书架</a>
+    <a href="/catalog" aria-current="page">书目</a>
+    <a href="/records">记录</a>
+  </nav>
+  <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
+    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
+  </button>
+  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/></svg>
+  </button>
+</header>
+
+<main class="page">
+  <section class="page-head">
+    <div class="eyebrow" id="eyebrow">书目 · 本地实例</div>
+    <h1>找一本书</h1>
+    <p class="lede">书名、作者、分类、章名都能搜。有正文的书可以翻开、选章、生成读本；只有书目信息的书先留在索引里。</p>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <div class="search-big">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+    <input id="q" type="search" placeholder="搜《阿Q正传》、鲁迅、文学、第二章…" autocomplete="off" aria-label="搜索书目与章名">
+    <span class="hint">按 / 聚焦 · Esc 清空</span>
+  </div>
+
+  <div class="chips" id="chips" role="group" aria-label="筛选"></div>
+  <div id="results"><div class="empty">正在翻书目…</div></div>
+  <p class="note-line" id="note">搜索范围：书名、作者、分类、章名。段落级全文检索不在本期。</p>
+</main>
+
+<script src="/assets/app.js"></script>
+<script src="/assets/common.js"></script>
+<script src="/assets/theme.js"></script>
+<script>
+let subject = '';
+let timer = null;
+let catalog = null;
+
+RD.ready(async () => {
+  RD.night();
+  const qEl = RD.mount('q');
+  const initial = new URLSearchParams(location.search).get('q') || '';
+  qEl.value = initial;
+  if (RD.mount('top-q')) RD.mount('top-q').value = initial;
+
+  try {
+    catalog = await RD.api('/api/catalog');
+    RD.mount('eyebrow').textContent = '书目 · ' + RD.fmt(catalog.total) + ' 本 · 其中 ' + RD.fmt(catalog.readable_count) + ' 本有正文';
+    RD.mount('stats').innerHTML =
+      '<span><b>' + RD.fmt(catalog.readable_count) + '</b> 本可读</span>' +
+      '<span><b>' + RD.fmt((catalog.readable || []).reduce((sum, b) => sum + b.chapters, 0)) + '</b> 章原文</span>' +
+      '<span><b>' + RD.fmt(catalog.total) + '</b> 条书目</span>';
+    renderChips(catalog.subjects || []);
+    await search();
+  } catch (err) {
+    RD.fail(RD.mount('results'), err.message);
+  }
+
+  qEl.addEventListener('input', () => {
+    if (RD.mount('top-q')) RD.mount('top-q').value = qEl.value;
+    clearTimeout(timer);
+    timer = setTimeout(search, 180);
+  });
+  qEl.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      qEl.value = '';
+      subject = '';
+      syncChips('all');
+      search();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === '/' && document.activeElement !== qEl && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
+      event.preventDefault();
+      qEl.focus();
+      qEl.select();
+    }
+  });
+});
+
+function renderChips(subjects) {
+  const items = [
+    { key: 'all', label: '全部' },
+    { key: 'readable', label: '有正文' },
+    { key: 'generated', label: '已出片' },
+    ...subjects.map((item) => ({ key: item.name, label: item.name + ' ' + item.count }))
+  ];
+  RD.mount('chips').innerHTML = items.map((item, i) =>
+    '<button data-filter="' + RD.esc(item.key) + '" aria-pressed="' + (i === 0) + '">' + RD.esc(item.label) + '</button>'
+  ).join('');
+  RD.mount('chips').addEventListener('click', (event) => {
+    const btn = event.target.closest('button');
+    if (!btn) return;
+    const key = btn.dataset.filter;
+    if (key === 'readable' || key === 'generated' || key === 'all') {
+      subject = key === 'all' ? '' : key;
+    } else {
+      subject = key;
+    }
+    syncChips(key);
+    search();
+  });
+}
+
+function syncChips(key) {
+  document.querySelectorAll('#chips button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.filter === key));
+  });
+}
+
+async function search() {
+  const q = RD.mount('q').value.trim();
+  const url = new URL(location.href);
+  if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+  history.replaceState(null, '', url);
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  let data;
+  try {
+    data = await RD.api('/api/catalog' + (params.toString() ? '?' + params : ''));
+  } catch (err) {
+    RD.fail(RD.mount('results'), err.message);
+    return;
+  }
+  let books = data.books || [];
+  let meta = data.metadata || [];
+  if (subject === 'readable') books = books.filter((b) => b.readable);
+  else if (subject === 'generated') books = books.filter((b) => b.packs > 0);
+  else if (subject) {
+    books = books.filter((b) => (b.subjects || []).includes(subject));
+    meta = meta.filter((b) => (b.subjects || []).includes(subject));
+  } else if (!q) {
+    books = books.filter((b) => b.readable);
+  }
+  renderResults({ q, data, books, meta });
+}
+
+function renderResults({ q, data, books, meta }) {
+  const rows = [];
+  if (books.length) {
+    rows.push(group('书', q ? '按书名 / 作者 / 分类匹配' : '有正文，可进选章与生成', books.map((book) => bookRow(book, q))));
+  }
+  if (q && (data.chapters || []).length) {
+    rows.push(group('章', '章名匹配 · ' + data.chapters.length + ' 条', data.chapters.map((chapter) => chapterRow(chapter, q))));
+  }
+  if (q && (data.authors || []).length) {
+    rows.push(group('作者', '点作者继续查', data.authors.map((author) =>
+      '<button class="res-row" data-kind="author" data-value="' + RD.esc(author.name) + '"><i class="res-dot" style="--cloth:#B9B09C"></i>' +
+      '<span class="res-t">' + RD.hl(author.name, q) + '</span><span class="res-m">' + RD.fmt(author.count) + ' 本</span><span class="res-go">→</span></button>'
+    )));
+  }
+  if (q && (data.subjects || []).length) {
+    rows.push(group('分类', '点分类筛选', data.subjects.map((item) =>
+      '<button class="res-row" data-kind="subject" data-value="' + RD.esc(item.name) + '"><i class="res-dot" style="--cloth:#B9B09C"></i>' +
+      '<span class="res-t">' + RD.hl(item.name, q) + '</span><span class="res-m">' + RD.fmt(item.count) + ' 本</span><span class="res-go">→</span></button>'
+    )));
+  }
+  if (meta.length) {
+    rows.push(group('仅有书目', '元数据层，未导入正文', meta.map((book) => metaRow(book, q))));
+  }
+  RD.mount('results').innerHTML = rows.length ? rows.join('') :
+    '<div class="empty"><b>' + (q ? '没有找到“' + RD.esc(q) + '”' : '这里还没有书') + '</b>' +
+    (q ? '试试书名、作者、分类，或只搜一个字。' : '换一个分类，或清空筛选。') + '</div>';
+  RD.mount('note').textContent = q
+    ? '搜索范围：书名、作者、分类、章名。段落级全文检索不在本期。'
+    : RD.fmt(data.readable_count) + ' 本有正文；书目层共 ' + RD.fmt(data.total) + ' 条，导入正文后才会出现在书架上。';
+  bindRows();
+}
+
+function bookRow(book, q) {
+  const charsLabel = book.chars >= 10000 ? RD.wan(book.chars) + ' 万字' : RD.fmt(book.chars) + ' 字';
+  const sub = [book.author_display, (book.subjects || []).join(' · '), RD.fmt(book.chapters) + ' 章', charsLabel].join(' · ');
+  const metaText = book.packs ? book.packs + ' 章已出片' : '未生成';
+  return '<a class="res-row" href="' + RD.bookHref(book.uid) + '"><i class="res-dot" style="--cloth:' + RD.esc(book.color || '#1E3A36') + '"></i>' +
+    '<span class="res-t">' + RD.hl(book.title_short || book.title, q) + '<small>' + RD.esc(sub) + '</small></span>' +
+    '<span class="res-m">' + RD.esc(metaText) + '</span><span class="res-go">→</span></a>';
+}
+
+function chapterRow(chapter, q) {
+  return '<a class="res-row" href="' + RD.chapterHref(chapter.uid, chapter.n) + '"><i class="res-dot" style="--cloth:#1E3A36"></i>' +
+    '<span class="res-t">' + RD.hl(chapter.title, q) + '<small>' + RD.esc(chapter.book_title) + ' · 第 ' +
+    String(chapter.n).replace(/^0/, '') + ' 章 · ' + RD.fmt(chapter.chars) + ' 字</small></span>' +
+    '<span class="res-m">' + RD.fmt(Math.max(1, Math.round(chapter.chars / 500))) + ' 分钟</span><span class="res-go">→</span></a>';
+}
+
+function metaRow(book, q) {
+  return '<div class="res-row" aria-disabled="true"><i class="res-dot" style="--cloth:#B9B09C"></i>' +
+    '<span class="res-t">' + RD.hl(book.title_short || book.title, q) + '<small>' + RD.esc(book.author || '作者待校') +
+    ' · ' + RD.esc((book.subjects || []).join(' · ') || '未分类') + ' · 仅有书目</small></span>' +
+    '<span class="res-m">书目</span><span class="res-go">·</span></div>';
+}
+
+function group(title, sub, rows) {
+  return '<section class="group"><div class="group-head"><h2>' + RD.esc(title) +
+    (sub ? '<small>' + RD.esc(sub) + '</small>' : '') + '</h2><span class="more">' + rows.length + ' 条</span></div>' +
+    rows.join('') + '</section>';
+}
+
+function bindRows() {
+  RD.mount('results').querySelectorAll('button.res-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      if (row.dataset.kind === 'author') {
+        RD.mount('q').value = row.dataset.value;
+        subject = '';
+        syncChips('all');
+        search();
+      } else if (row.dataset.kind === 'subject') {
+        RD.mount('q').value = '';
+        subject = row.dataset.value;
+        syncChips(subject);
+        search();
+      }
+    });
+  });
+}
+</script>
+</body>
+</html>

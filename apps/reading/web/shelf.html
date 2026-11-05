@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
+<title>四读 · 书架</title>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/pages.css">
+<link rel="stylesheet" href="/assets/theme.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <label class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
+    <span class="kbd">/</span>
+  </label>
+  <nav class="nav">
+    <a href="/" aria-current="page">书架</a>
+    <a href="/catalog">书目</a>
+    <a href="/records">记录</a>
+  </nav>
+  <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
+    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
+  </button>
+  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/></svg>
+  </button>
+</header>
+
+<main class="page">
+  <section class="hero">
+    <div class="eyebrow" id="eyebrow">私人书库 · 本地实例</div>
+    <h1>今天，读多深？</h1>
+    <p class="lede">从书架上选一章，裁成速览、标准、深读、研究四种读本。原文一字不改，讲解只做旁批。</p>
+    <div class="meta" id="hero-meta"></div>
+  </section>
+
+  <div id="job-strip"></div>
+
+  <div class="shelf-head">
+    <div>
+      <div class="eyebrow" style="color:var(--ink-3)">可读 · 有正文</div>
+      <div class="hint" style="margin-top:6px">点击书脊翻开；高度按章数排，厚度按字数。</div>
+      <div class="shelf-mobile-hint">← 左右滑动，还有书 →</div>
+    </div>
+    <div class="view-toggle" role="group" aria-label="视图">
+      <button aria-pressed="true">书墙</button>
+      <button aria-pressed="false">目录</button>
+    </div>
+  </div>
+
+  <div class="shelf-wrap" id="shelf-wrap">
+    <div class="shelf" id="shelf" aria-label="可读的书"></div>
+    <div class="shelf-line"></div>
+    <div class="shelf-foot" id="shelf-foot"></div>
+  </div>
+
+  <div class="directory" id="directory" hidden></div>
+
+  <section class="catalog">
+    <div class="section-head">
+      <h2>全部书目</h2>
+      <span class="count" id="cat-count">…</span>
+    </div>
+    <div class="filters" role="group" aria-label="筛选" id="filters"></div>
+    <table class="table">
+      <thead><tr><th>书名</th><th>作者</th><th class="hide-m">分类</th><th class="hide-m">章</th><th>状态</th></tr></thead>
+      <tbody id="cat-body"><tr><td colspan="5" class="empty">正在读账…</td></tr></tbody>
+    </table>
+    <p class="note" id="cat-note">只有有正文的书能进选章与生成；其余是书目层，导入正文后才上书墙。</p>
+  </section>
+</main>
+
+<script src="/assets/app.js"></script>
+<script src="/assets/common.js"></script>
+<script src="/assets/theme.js"></script>
+<script>
+RD.ready(async () => {
+  RD.night();
+  const shelfMount = RD.mount('shelf');
+  try {
+    const [shelf, catalog] = await Promise.all([RD.api('/api/shelf'), RD.api('/api/catalog')]);
+    const books = shelf.books || [];
+    const stats = shelf.stats || {};
+    RD.mount('eyebrow').textContent = '私人书库 · ' + RD.fmt(catalog.total) + ' 本';
+    RD.mount('hero-meta').innerHTML =
+      '<span><b>' + RD.fmt(stats.readable) + '</b> 本可读</span>' +
+      '<span><b>' + RD.fmt(stats.chapters) + '</b> 章原文</span>' +
+      '<span><b>' + RD.wan(stats.chars) + '</b> 万字</span>' +
+      '<span><b>4</b> 档读法</span>';
+
+    renderJobStrip(shelf.jobs || []);
+    renderShelf(books, shelf.recent || []);
+    renderDirectory(books);
+    renderCatalog(books, catalog, 'all');
+
+    RD.mount('shelf-foot').innerHTML =
+      '<span>' + RD.fmt(books.length) + ' 本有正文 · 共 ' + RD.fmt(stats.chapters) + ' 章 · 约 ' +
+      RD.wan(stats.chars) + ' 万字</span><a href="/catalog">全部书目 ' + RD.fmt(catalog.total) + ' 本 →</a>';
+
+    document.querySelectorAll('.view-toggle button').forEach((b, i) => b.addEventListener('click', () => {
+      document.querySelectorAll('.view-toggle button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+      b.setAttribute('aria-pressed', 'true');
+      RD.mount('shelf-wrap').hidden = i === 1;
+      RD.mount('directory').hidden = i === 0;
+    }));
+
+    const subjects = [...new Set(books.flatMap((b) => b.subjects || []))];
+    renderFilters(['全部', '有正文', '已出片', ...subjects]);
+    RD.mount('filters').addEventListener('click', (event) => {
+      const btn = event.target.closest('button');
+      if (!btn) return;
+      document.querySelectorAll('#filters button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      renderCatalog(books, catalog, btn.dataset.filter || 'all');
+    });
+  } catch (err) {
+    RD.fail(shelfMount, err.message);
+  }
+});
+
+function renderJobStrip(jobs) {
+  const mount = RD.mount('job-strip');
+  const job = jobs[0];
+  if (!job) {
+    mount.innerHTML = '<a class="job-strip" href="/records"><span class="js-k">工单</span>' +
+      '<span class="js-t">暂无生成任务 · 从任一章开工</span><span class="js-p">—</span>' +
+      '<span class="js-s">0 / 0</span><span class="js-go">记录 →</span></a>';
+    return;
+  }
+  mount.innerHTML = '<a class="job-strip" href="/records"><span class="js-k">工单</span>' +
+    '<span class="js-t">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
+    (job.tiers || []).map((t) => RD.tierNames[t] || t).join(' / ') + '</span>' +
+    '<span class="js-p">' + RD.fmt(job.progress) + '%</span>' +
+    '<span class="js-s">' + RD.esc(RD.statusName[job.state] || job.state) + '</span>' +
+    '<span class="js-go">查看 →</span></a>';
+}
+
+function spineHeight(book) {
+  return Math.max(205, Math.min(358, 190 + Number(book.chapters || 0) * 2.4));
+}
+
+function spineWidth(book) {
+  return Math.max(64, Math.min(138, 58 + Number(book.chars || 0) / 26000));
+}
+
+function renderShelf(books, recent) {
+  const mount = RD.mount('shelf');
+  mount.innerHTML = books.map((book) => {
+    const dots = [0, 1, 2, 3].map((i) => '<i class="' + (book.packs > 0 && i < Math.min(4, book.packs) ? 'on' : '') + '"></i>').join('');
+    return '<a class="spine" href="' + RD.bookHref(book.uid) + '" style="--cloth:' + RD.esc(book.color || '#1E3A36') +
+      ';--h:' + spineHeight(book).toFixed(0) + 'px;--w:' + spineWidth(book).toFixed(0) + 'px" ' +
+      'aria-label="' + RD.esc(book.title) + '，' + RD.esc(book.author_display) + '，' + RD.fmt(book.chapters) + ' 章">' +
+      '<span class="n">' + String(book.chapters).padStart(2, '0') + ' 章</span>' +
+      '<span class="t">' + RD.esc(book.title_short || book.title) + '</span>' +
+      '<span class="a">' + RD.esc(book.author_display) + '</span>' +
+      (book.packs ? '<span class="stamp" title="已出片 ' + RD.fmt(book.packs) + ' 章 · 四档"></span>' : '') +
+      '<span class="edge" aria-hidden="true">' + dots + '</span></a>';
+  }).join('') + (recent.length ? readingCard(recent[0]) : '');
+}
+
+function readingCard(item) {
+  return '<a class="reading-card" href="' + RD.readerHref(item.uid, item.n, item.tier || 'standard') + '">' +
+    '<span class="rc-eyebrow">继续阅读</span><span class="rc-book">' + RD.esc(item.uid) + ' · 第 ' +
+    String(item.n).replace(/^0/, '') + ' 章</span>' +
+    '<span class="rc-title">' + RD.esc(item.title) + '</span>' +
+    '<span class="rc-progress"><i style="width:' + Math.round(Number(item.progress || 0) * 100) + '%"></i></span>' +
+    '<span class="rc-foot"><span>' + RD.esc(RD.tierNames[item.tier] || '标准') + '本 · ' +
+    Math.round(Number(item.progress || 0) * 100) + '%</span><span>接着读 →</span></span></a>';
+}
+
+function renderDirectory(books) {
+  RD.mount('directory').innerHTML = books.map((book) =>
+    '<a href="' + RD.bookHref(book.uid) + '"><b>' + RD.esc(book.title_short || book.title) + '</b>' +
+    '<span>' + RD.esc(book.author_display) + ' · ' + RD.fmt(book.chapters) + ' 章 · ' +
+    (book.packs ? '已出片 ' + RD.fmt(book.packs) + ' 章' : '未出片') + '</span>' +
+    '<em>' + String(book.chapters).padStart(2, '0') + '</em></a>'
+  ).join('');
+}
+
+function renderFilters(items) {
+  RD.mount('filters').innerHTML = items.map((name, i) =>
+    '<button data-filter="' + RD.esc(i === 0 ? 'all' : name) + '" aria-pressed="' + (i === 0) + '">' + RD.esc(name) + '</button>'
+  ).join('');
+}
+
+function renderCatalog(books, catalog, filter) {
+  let rows = books.slice();
+  if (filter === '已出片') rows = rows.filter((b) => b.packs > 0);
+  else if (filter && filter !== 'all' && filter !== '有正文') rows = rows.filter((b) => (b.subjects || []).includes(filter));
+  RD.mount('cat-count').textContent = '显示 ' + rows.length + ' / ' + RD.fmt(catalog.total);
+  RD.mount('cat-body').innerHTML = rows.length ? rows.map((book) =>
+    '<tr><td><span class="dot" style="background:' + RD.esc(book.color || '#1E3A36') + '"></span>' +
+    '<a class="title title-link" href="' + RD.bookHref(book.uid) + '">' + RD.esc(book.title_short || book.title) +
+    '<small>' + RD.esc(book.title) + '</small></a></td>' +
+    '<td class="author">' + RD.esc(book.author_display) + '</td>' +
+    '<td class="subject hide-m">' + RD.esc((book.subjects || []).join(' / ')) + '</td>' +
+    '<td class="num hide-m">' + RD.fmt(book.chapters) + '</td>' +
+    '<td><span class="badge read">可读</span>' + (book.packs ? ' <span class="badge pack">已出片 ' + RD.fmt(book.packs) + '</span>' : '') + '</td></tr>'
+  ).join('') : '<tr><td colspan="5" class="empty">这个筛选下没有书。</td></tr>';
+  RD.mount('cat-note').textContent = RD.fmt(catalog.readable_count) + ' 本有正文，可进入选章与生成；' +
+    RD.fmt(catalog.total) + ' 本是书目层。导入正文后才会出现在书墙上。';
+}
+</script>
+</body>
+</html>
