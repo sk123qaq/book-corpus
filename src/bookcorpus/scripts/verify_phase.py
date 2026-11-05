@@ -68,7 +68,7 @@ def box1():
 def box2():
     print("箱子 2 · 顶层结构与 book.json")
     tops = sorted(n for n in os.listdir(L.ROOT) if os.path.isdir(os.path.join(L.ROOT, n)))
-    want = sorted(["books", "collections", "tables", "build", "工作区"])
+    want = sorted(["books", "collections", "tables", "build", "工作区", "日课"])
     # .pi 是 pi 的项目配置目录、.git 是版本库、.agents 是随仓库提交的技能，
     # 都算工具账，不是库内容；archive 是数据仓的决策与演示存档
     harness = [n for n in tops if n in (".pi", ".git", ".agents", "archive")]
@@ -76,9 +76,9 @@ def box2():
     if tops != want:
         fail("顶层目录 %s != %s" % (tops, want))
     elif harness:
-        ok("顶层内容目录只剩 books/ collections/ tables/ build/ 工作区/，另有工具目录 %s" % ", ".join(harness))
+        ok("顶层内容目录只剩 books/ collections/ tables/ build/ 工作区/ 日课/，另有工具目录 %s" % ", ".join(harness))
     else:
-        ok("顶层只剩 books/ collections/ tables/ build/ 工作区/")
+        ok("顶层只剩 books/ collections/ tables/ build/ 工作区/ 日课/")
     books = L.iter_book_json()
     ledger_n = L.categories_count()
     if len(books) != ledger_n:
