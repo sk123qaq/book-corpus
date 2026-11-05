@@ -32,7 +32,8 @@ BLOCK_RE = re.compile(re.escape(START) + r".*?" + re.escape(END), re.S)
 DATE_RE = re.compile(r"As of \S+?：")
 HEADING = "## 现状"
 ACTION_TEXT = {"replaced": "换", "inserted": "补上"}
-PENDING_KEYS = ("pdf", "txt", "djvu")
+# 待拆章（含待转 md）的格式分组，顺序固定；口径随 lib_common.DOC_FORMATS 走
+PENDING_KEYS = ("pdf", "txt", "md", "docx", "xlsx", "xls", "pptx")
 OTHER = "other"
 
 
@@ -131,9 +132,11 @@ def pitfall(root):
 
 def render(counts):
     pending = counts["pending"]
-    parts = ["%s %s" % (num(pending.get(k, 0)), k) for k in PENDING_KEYS]
+    parts = ["%s %s" % (num(pending.get(k, 0)), k) for k in PENDING_KEYS if pending.get(k)]
     if pending.get(OTHER):
         parts.append("%s %s" % (num(pending[OTHER]), OTHER))
+    if not parts:
+        parts = ["无"]
     view = counts["view"]
     a = counts.get("archive") or {}
     archive_n = int(a.get("ja", 0)) + int(a.get("gallery", 0))

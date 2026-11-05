@@ -29,6 +29,7 @@ const KIND_WORD = {
   'import.scan': '识别新书', 'import.apply': '入库', 'split.run': '拆章',
   'split.inspect': '查看问题',
   'pdf.triage': 'PDF 分诊', 'pdf.confirm': '确认处理方式', 'pdf.run': 'PDF 转写',
+  'docs.run': '文档转 md',
   maintain: '收尾', 'delete.dry-run': '删书预览', 'delete.apply': '删书',
 };
 const STEP_WORD = { pending: '等待', ok: '通过', fail: '失败', running: '在跑', unknown: '退出码未知' };
@@ -92,7 +93,8 @@ const S = {
   batch: null, splitBooks: [],
   review: null, reviewJob: null,
   retireHits: [], retireDrop: [], retireQuery: '', preview: null,
-  logJob: null, logDetail: null, follow: true, importDone: null,
+  logJob: null, logDetail: null, follow: true, importDone: null, importDocsJob: '',
+  docs: null, docsNone: false, docsOpen: false, docsSig: '',
   logOpenId: null, logScroll: 0, logStick: true, logRowsHtml: '',
   logStepsFp: '', logCmdFp: '',
   overviewHtml: '',
@@ -685,9 +687,11 @@ function dropCard() {
         <path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
       </svg>
       <div class="drop-title">拖文件到这里，或点击选择</div>
-      <div class="drop-sub">EPUB、MOBI、AZW3、PDF、TXT、DJVU，单个文件不超过 2 GB</div>
+      <div class="drop-sub">EPUB、MOBI、AZW3、AZW、PDF、TXT、MD、DOCX、XLSX、XLS、PPTX，单个文件不超过 2 GB</div>
+      <div class="drop-sub">不收 .doc / .ppt / .csv / .djvu（转不出可用的 md）</div>
     </div>
-    <input type="file" id="up-file" class="visually-hidden" multiple>
+    <input type="file" id="up-file" class="visually-hidden" multiple
+      accept=".epub,.pdf,.mobi,.azw3,.azw,.txt,.md,.docx,.xlsx,.xls,.pptx">
     <div class="uploading" id="up-box" hidden>
       <div class="progress"><i id="up-bar"></i></div>
       <p class="hint" id="up-note"></p>
@@ -699,11 +703,12 @@ function viewImport() {
   const inbox = S.inbox || [];
   const plan = S.plan;
   const bad = plan ? planBlockers(plan) : [];
-  return `<h1>新书导入</h1>
+  const html = `<h1>新书导入</h1>
     <p class="lead">收件箱里的文件先核对，再决定哪本进书库、哪本换源、哪本删掉。</p>
-    ${S.importDone ? `<div class="banner"><span>已入库，接下来按格式去拆章或分诊。</span>
+    ${S.importDone ? `<div class="banner"><span>已入库，接下来按格式去拆章或分诊。${S.importDocsJob ? '已自动接转文档 md。' : ''}</span>
       <button class="btn sm" data-act="goto" data-tab="split">去拆章</button>
-      <button class="btn sm" data-act="goto" data-tab="pdf">去分诊 PDF</button></div>` : ''}
+      <button class="btn sm" data-act="goto" data-tab="pdf">去分诊 PDF</button>
+      ${S.importDocsJob ? '<button class="btn sm" data-act="docs-goto">看转 md 进度</button>' : ''}</div>` : ''}
     ${S.legacyPlan ? `<div class="banner bad"><span>这份清单是旧版（冲突/跳过），按钮对不上，不能直接入库。重新生成一份再核对。</span>
       <button class="btn sm" data-write data-act="import-scan">重新生成</button></div>` : ''}
     <div class="grid c2 section">
@@ -717,7 +722,11 @@ function viewImport() {
           <button class="btn sm${plan && !bad.length ? ' primary' : ''}" data-write data-act="import-apply" ${plan && !bad.length ? '' : 'disabled'}>确认入库</button>
         </span></div>
       ${plan ? planTable(plan) : '<p class="empty">收件箱里有书时，点「生成入库清单」。</p>'}
-    </div>`;
+    </div>
+    <div class="section" data-live="docs" id="docs-slot">${docsCard()}</div>`;
+  // 刚整页画过，让 2.5 秒的重绘别白写一遍
+  S.docsSig = docsSig();
+  return html;
 }
 
 function planTable(plan) {
@@ -746,6 +755,221 @@ function planTable(plan) {
     <tbody>${plan.map(planRow).join('')}</tbody></table></div>
     <p class="hint">「长期保留」说的是这本书在书库里长期怎么处理：选「不留」也照常入库，之后在删书页顶部的「不留的书」里处理。</p>
     <p class="hint">删除只把收件箱文件移进回收站，书库里的书和正文都不动。</p>`;
+}
+
+// ---- 文档转 md ---------------------------------------------------
+// docx/xlsx/xls/pptx/txt 在入库后自动转成 md，md 原样复制。report.json 只有跑完才有，
+// 跑的过程中只有 progress.json（每本更新一次）。
+const DOC_FMT = /^(txt|md|docx|xlsx|xls|pptx)$/i;
+const DOCS_STATE = {
+  queued: ['排队', 'half'], running: ['转换中', 'half'],
+  succeeded: ['完成', 'ok'], failed: ['失败', 'miss'],
+  cancelled: ['已停', 'miss'], orphaned: ['失联', 'miss'],
+};
+const DOCS_ITEM = {
+  done: ['完成', 'ok'], skipped: ['跳过', 'half'], failed: ['失败', 'miss'],
+};
+const DOCS_REASON_WORD = {
+  'too-large': '文件太大', 'timeout': '转换超时',
+  'convert-error': '转换出错', 'empty-output': '转出来是空的',
+  'source-missing': '源文件不见了', 'source-changed': '源文件改过，要重转',
+  'venv-missing': '转换环境没装好', 'unsupported': '格式不支持',
+};
+const DOCS_KEY = 'bookcorpus.docs-job';
+const DOCS_DEAD = new Set();   // 存下的任务已经不在了：别再反复试同一个 id
+
+function docsJobCached() {
+  try { return sessionStorage.getItem(DOCS_KEY) || ''; } catch (err) { return ''; }
+}
+
+function docsJobRemember(id) {
+  try {
+    if (id) sessionStorage.setItem(DOCS_KEY, id);
+    else sessionStorage.removeItem(DOCS_KEY);
+  } catch (err) {
+    /* 隐私模式不给存：这次会话就靠任务列表里最近一条 */
+  }
+}
+
+// 库里还有多少 doc 格式没转 md：没有 docs 任务时，这张卡靠它决定露不露面
+function docsBackfill() {
+  return (S.pending || []).filter((row) => DOC_FMT.test(String(row.format || ''))).length;
+}
+
+function docsTitle(uid, items) {
+  const hit = (items || []).find((it) => it.uid === uid);
+  if (hit && hit.title) return hit.title;
+  const row = (S.pending || []).find((r) => r.uid === uid);
+  return (row && row.title) || '';
+}
+
+function docsReason(item) {
+  const code = String(item.reason || '');
+  const word = DOCS_REASON_WORD[code] || code;
+  const error = String(item.error || '');
+  if (!word) return error || '—';
+  return error ? word + '：' + error : word;
+}
+
+async function loadDocs() {
+  // 有缓存就按缓存取；没有就让服务端挑「最近一次真转过书的」，别拿补转 0 本的空任务顶掉明细
+  const target = docsJobCached();
+  if (!target && S.docsNone) return;   // 已确认没有 docs 任务，别每 2.5 秒打一次 404
+  try {
+    const body = await api('/api/docs/report' + (target ? '?job_id=' + encodeURIComponent(target) : ''));
+    S.docs = body;
+    S.docsNone = false;
+    if (body && body.job_id) docsJobRemember(body.job_id);
+  } catch (err) {
+    S.docs = null;
+    if (target) {
+      // 存下的任务已经不在了：丢掉缓存，下一跳按任务列表或最近一次再来
+      DOCS_DEAD.add(target);
+      docsJobRemember('');
+      return;
+    }
+    S.docsNone = true;
+  }
+}
+
+function docsJobSet(id) {
+  docsJobRemember(id);
+  DOCS_DEAD.delete(String(id || ''));
+  S.docsNone = false;
+  S.docs = null;
+  S.docsOpen = false;
+}
+
+// 局部重绘用的指纹：数据没变就不碰 DOM，不抢焦点
+function docsSig() {
+  const body = S.docs || {};
+  const rep = body.report || null;
+  const job = body.job_id ? (S.jobs || []).find((row) => row.id === body.job_id) : null;
+  return JSON.stringify([
+    body.job_id || '', body.state || '', body.progress || null,
+    rep ? [rep.summary || {}, rep.scope || {}, rep.items || []] : null,
+    docsBackfill(), job ? job.summary || '' : '', S.docsOpen,
+  ]);
+}
+
+function paintDocs() {
+  const slot = document.querySelector('[data-live="docs"]');
+  if (!slot) return;
+  const sig = docsSig();
+  if (sig === S.docsSig) return;
+  S.docsSig = sig;
+  slot.innerHTML = docsCard();
+}
+
+function docsCard() {
+  const body = S.docs;
+  const pending = docsBackfill();
+  if (!body && !pending) return '';   // 没任务也没待补转：整卡不出现
+  const rep = (body && body.report) || null;
+  const sum = (rep && rep.summary) || {};
+  const scope = (rep && rep.scope) || {};
+  const prog = (body && body.progress) || {};
+  const items = (rep && Array.isArray(rep.items)) ? rep.items : [];
+  const state = (body && body.state) || '';
+  const stateWord = body ? (DOCS_STATE[state] || ['—', 'half']) : ['待补转', 'half'];
+  const job = (body && body.job_id) ? (S.jobs || []).find((row) => row.id === body.job_id) : null;
+  const running = state === 'queued' || state === 'running';
+  const total = Number(sum.total || prog.total || 0);
+  const finished = rep
+    ? ['done', 'skipped', 'failed'].reduce((n, key) => n + (Number(sum[key]) || 0), 0)
+    : Number(prog.done || 0);
+  const share = total ? Math.min(100, Math.round(finished / total * 100)) : 0;
+  const current = String(prog.current || '');
+  const failed = items.filter((it) => it.status === 'failed');
+  const nfail = Number(sum.failed) || 0;
+  const nskip = Number(sum.skipped) || 0;
+  const nnew = Number(scope.new) || 0;
+  const nback = Number(scope.backfill) || 0;
+
+  const bits = ['本次新书 ' + num(nnew)];
+  if (nback) bits.push('库内补转 ' + num(nback));
+  bits.push('跳过 ' + num(nskip), '失败 ' + num(nfail));
+
+  const bar = total
+    ? `<div class="progress-label"><span>${esc(stateWord[0])} ${num(finished)} / ${num(total)} 本</span>
+        <span>${share}%</span></div>
+      <div class="progress"><i style="width:${share}%"></i></div>`
+    : (running ? '<p class="hint">已排队，等前面的任务结束就开始。</p>' : '');
+  const now = current
+    ? `<p class="hint">正在转 <span class="mono">${esc(current)}</span>${docsTitle(current, items) ? ' · ' + esc(docsTitle(current, items)) : ''}</p>`
+    : '';
+  const scopeLine = rep
+    ? `<p class="hint">${esc(bits.join(' · '))}</p>`
+    : (pending ? `<p class="hint">库里还有 ${num(pending)} 本 doc 格式没转 md。</p>` : '');
+  const badBanner = state === 'failed' && !rep
+    ? `<div class="banner bad"><span>转换没过：${esc(summaryText(job && job.summary) || '看任务日志')}</span>
+        <button class="btn sm" data-act="goto" data-tab="logs">看日志</button></div>`
+    : '';
+  const failTable = failed.length ? `<div class="tw"><table>
+      <thead><tr><th>编号</th><th>书名</th><th>格式</th><th>原因</th><th></th></tr></thead>
+      <tbody>${failed.map((it) => `<tr>
+        <td class="mono">${esc(it.uid)}</td>
+        <td class="wrap">${esc(it.title || docsTitle(it.uid, items) || '—')}</td>
+        <td>${esc(it.format || '')}</td>
+        <td class="wrap small">${esc(docsReason(it))}</td>
+        <td><button class="btn sm" data-write data-act="docs-retry" data-uid="${esc(it.uid)}">重试</button></td>
+      </tr>`).join('')}</tbody></table></div>` : '';
+  const rows = items.length ? `<details class="adv" data-docs="items"${S.docsOpen ? ' open' : ''}>
+      <summary>逐本明细（${num(items.length)} 本）</summary>
+      <div class="tw"><table>
+        <thead><tr><th>编号</th><th>书名</th><th>格式</th><th>状态</th>
+          <th class="num">耗时</th><th class="num">字数</th><th>说明</th></tr></thead>
+        <tbody>${items.map((it) => {
+          const st = DOCS_ITEM[it.status] || [it.status || '—', 'half'];
+          const why = it.status === 'failed' ? docsReason(it) : (it.md ? 'md 已落地' : '');
+          return `<tr>
+            <td class="mono">${esc(it.uid)}</td>
+            <td class="wrap">${esc(it.title || '—')}</td>
+            <td>${esc(it.format || '')}</td>
+            <td><span class="pill ${st[1]}">${esc(st[0])}</span></td>
+            <td class="num">${it.elapsed_ms ? (Number(it.elapsed_ms) / 1000).toFixed(1) + ' 秒' : '—'}</td>
+            <td class="num">${it.chars ? num(it.chars) : '—'}</td>
+            <td class="wrap small">${esc(why)}</td>
+          </tr>`;
+        }).join('')}</tbody></table></div>
+    </details>` : '';
+
+  return `<div class="card" id="docs-card">
+    <div class="card-head"><h2>文档转 md <span class="pill ${stateWord[1]}">${esc(stateWord[0])}</span></h2>
+      <span class="row tight">
+        ${body && body.job_id ? `<span class="hint mono">${esc(body.job_id)}</span>` : ''}
+        <button class="btn sm" data-act="docs-refresh">刷新</button>
+      </span></div>
+    <p class="hint">TXT / DOCX / XLSX / XLS / PPTX 入库后转成 md，源文件是 md 的原样复制。</p>
+    ${badBanner}
+    ${bar}
+    ${now}
+    ${scopeLine}
+    ${failTable}
+    ${rows}
+    <div class="toolbar">
+      <button class="btn" data-write data-act="docs-backfill">补转库里遗漏的</button>
+      <span class="hint">把书库里 doc 格式还没转 md 的书整体补一遍，已经转好的不动。</span>
+    </div>
+  </div>`;
+}
+
+async function submitDocs(payload, note) {
+  try {
+    const body = await post('/api/docs/run', payload || {});
+    docsJobSet(body.job_id);
+    toast(note || ('已排队：' + body.job_id));
+    await loadDocs();
+    await loadJobs();
+    paintDocs();
+    watchJob(body.job_id, afterJob).then(async (detail) => {
+      await loadDocs();
+      paintDocs();
+      if (detail && detail.job) toast(jobNote(detail.job), jobBad(detail.job));
+    }).catch(() => {});
+  } catch (err) {
+    toast(err.message, true);   // 409「有写任务在跑」原样给出来
+  }
 }
 
 // ---- 电子书 -------------------------------------------------------
@@ -1933,6 +2157,7 @@ async function refreshTab() {
   } else if (S.tab === 'import') {
     S.inbox = (await api('/api/inbox')).items || [];
     await loadLatestPlan();
+    await loadDocs();
   } else if (S.tab === 'split') {
     await Promise.all([loadStatus(), loadJobs(), loadPending()]);
     await loadSplitBooks();
@@ -2314,6 +2539,7 @@ const actions = {
       + dels + ' 个收件箱文件（' + fmtBytes(bytes) + '，移到回收站，可恢复）。\n\n'
       + '只动收件箱里的文件和书库记录，不会删书库里的书。';
     if (!window.confirm(msg)) return;
+    S.importDocsJob = '';
     setBusy(true);
     try {
       await post('/api/import/plan', { job_id: S.planJob, items: S.plan });
@@ -2328,6 +2554,11 @@ const actions = {
         S.plan = null;
         S.planJob = null;
         S.legacyPlan = false;
+        // 入库任务跑完会自动接一个 docs.run：切到它，卡片上直接看进度
+        if (detail.docs_job) {
+          S.importDocsJob = String(detail.docs_job);
+          docsJobSet(S.importDocsJob);
+        }
       } else {
         toast(summaryText(detail && detail.job.summary) || '入库没过，看日志', true);
       }
@@ -2339,6 +2570,31 @@ const actions = {
     } finally {
       setBusy(false);
     }
+  },
+
+  async 'docs-refresh'() {
+    S.docsNone = false;
+    await loadDocs();
+    await loadJobs();
+    paintDocs();
+  },
+
+  async 'docs-retry'(el) {
+    const uid = String((el && el.dataset && el.dataset.uid) || '').trim();
+    if (!uid) {
+      toast('缺书号，重试不了', true);
+      return;
+    }
+    await submitDocs({ uids: [uid] }, '已单独重排：' + uid);
+  },
+
+  async 'docs-backfill'() {
+    await submitDocs({}, '开始补转库里遗漏的 doc 格式');
+  },
+
+  async 'docs-goto'() {
+    const card = document.querySelector('#docs-card');
+    if (card) card.scrollIntoView({ block: 'start', behavior: 'smooth' });
   },
 
   async 'split-all'(el) {
@@ -2901,6 +3157,12 @@ document.addEventListener('change', (ev) => {
   if (ev.target && ev.target.id === 'up-file') uploadFiles(ev.target.files);
 });
 
+// <details> 的展开状态记在 S.docsOpen：局部重绘不能把用户展开的明细收回去
+document.addEventListener('toggle', (ev) => {
+  const el = ev.target;
+  if (el && el.dataset && el.dataset.docs === 'items') S.docsOpen = !!el.open;
+}, true);
+
 function uploadFiles(files) {
   const list = Array.from(files || []);
   const input = $('#up-file');
@@ -2912,16 +3174,21 @@ function uploadFiles(files) {
   if (box) box.hidden = false;
   if (bar) bar.style.width = '0';
   const setBar = (share) => { if (bar) bar.style.width = Math.max(0, Math.min(100, share)) + '%'; };
+  const bad = [];   // 没上传成功的：服务端的中文原因攒起来最后一起看
   let index = 0;
   const next = () => {
     if (index >= list.length) {
       setBar(100);
-      if (note) note.textContent = '上传完成，收件箱里可以看到。';
+      if (note) {
+        note.textContent = bad.length
+          ? (bad.length + ' 个没上传成功：' + bad.join('；'))
+          : '上传完成，收件箱里可以看到。';
+      }
       setTimeout(() => {
         if (bar) bar.style.width = '0';
         if (box) box.hidden = true;
         if (note) note.textContent = '';
-      }, 1800);
+      }, bad.length ? 6000 : 1800);
       api('/api/inbox').then((body) => {
         S.inbox = body.items || [];
         render();
@@ -2947,11 +3214,17 @@ function uploadFiles(files) {
       if (xhr.status === 200 && body.ok) {
         toast('已放进收件箱：' + body.name);
       } else {
-        toast(body.error || ('上传失败 HTTP ' + xhr.status), true);
+        const why = body.error || ('上传失败 HTTP ' + xhr.status);
+        bad.push(file.name + '：' + why);
+        toast(why, true);
       }
       next();
     };
-    xhr.onerror = () => { toast('上传断了', true); next(); };
+    xhr.onerror = () => {
+      bad.push(file.name + '：上传断了');
+      toast('上传断了', true);
+      next();
+    };
     xhr.send(file);
   };
   next();
@@ -2996,6 +3269,11 @@ async function boot() {
           toast(ok ? (made ? num(made) + ' 本出了建议，去清单确认'
             : '分诊跑完了，但没有模型建议') : '分诊没过，去日志看', !ok || !made);
         }
+      }
+      if (S.tab === 'import') {
+        // docs 卡片：跑着就 2.5 秒刷一次；没任务时 loadDocs 自己会短路，不会每跳打 404
+        await loadDocs();
+        paintDocs();
       }
       if (S.tab === 'overview') {
         // 只在内容真变了才写：无条件写会把焦点、选区、滚动位置每 2.5 秒清一次

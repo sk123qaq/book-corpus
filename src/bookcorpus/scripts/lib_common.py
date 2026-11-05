@@ -71,7 +71,13 @@ def skill_dir(name):
     return local
 
 
-EXT = {".epub", ".pdf", ".mobi", ".azw3", ".azw", ".txt", ".djvu"}
+# 收件箱 / 上传 / 导入共用的后缀白名单：单一来源，别处不要再抄一份
+ACCEPT_EXTS = frozenset({".epub", ".pdf", ".mobi", ".azw3", ".azw", ".txt", ".md", ".docx", ".xlsx", ".xls", ".pptx"})
+# 明确不接受：老 Office 二进制、表格、DjVu（转不出可用 md）
+REJECT_EXTS = frozenset({".doc", ".ppt", ".csv", ".djvu"})
+# 能直接/经 markitdown 转成 md 的源格式
+DOC_FORMATS = frozenset({"txt", "md", "docx", "xlsx", "xls", "pptx"})
+EXT = set(ACCEPT_EXTS)
 CONTENT_POOLS = [
     "原书",
     "原书pdf",

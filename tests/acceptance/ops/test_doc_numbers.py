@@ -3,7 +3,7 @@
 
   python3 tests/acceptance/ops/test_doc_numbers.py     # 末行 ALL PASS
 
-fixture 六本书：两本有 md，四本待拆章（pdf/txt/djvu/azw3 各一），奖项记录两条、奖项名一个，
+fixture 六本书：两本有 md，四本待拆章（pdf/txt/docx/azw3 各一），奖项记录两条、奖项名一个，
 视图软链三条（奖项两条、主题一条）。全部读写都在 tempfile 里，真 AGENTS.md 只记指纹不写。
 """
 
@@ -70,14 +70,14 @@ BOOKS = [
     ("B0002", "乙书", "文学/乙书", "epub", 2),
     ("B0003", "丙书", "人文社科/丙书", "pdf", 0),
     ("B0004", "丁书", "人文社科/丁书", "txt", 0),
-    ("B0005", "戊书", "其他/戊书", "djvu", 0),
+    ("B0005", "戊书", "其他/戊书", "docx", 0),
     ("B0006", "己书", "其他/己书", "azw3", 0),
 ]
 MD_BOOKS = [b for b in BOOKS if b[4]]
 
 STALE_BLOCK = (
     "<!-- numbers:start -->\n"
-    "As of 2026-10-24：1,693 本书，1,571 本有 md，122 本待拆章（115 pdf、5 txt、2 djvu）；"
+    "As of 2026-10-24：1,693 本书，1,571 本有 md，122 本待拆章（115 pdf、5 txt、2 docx）；"
     "1,009 条奖项记录，视图 1,009 条软链；坑账 6 类。\n"
     "<!-- numbers:end -->"
 )
@@ -86,7 +86,7 @@ SPEC_COUNTS = {
     "books": 1779,
     "md": 1647,
     "pending_total": 132,
-    "pending": {"pdf": 125, "txt": 5, "djvu": 2, "other": 0},
+    "pending": {"pdf": 125, "txt": 5, "docx": 2, "other": 0},
     "awards": 1009,
     "award_names": 10,
     "view_total": 2066,
@@ -96,7 +96,7 @@ SPEC_COUNTS = {
 }
 SPEC_BLOCK = (
     "<!-- numbers:start -->\n"
-    "As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf、5 txt、2 djvu）；"
+    "As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf、5 txt、2 docx）；"
     "1,009 条奖项记录，视图 2,066 条软链（奖项 1,009、主题 1,057）；坑账 7 类。\n"
     "<!-- numbers:end -->"
 )
@@ -228,15 +228,15 @@ def unit_checks():
         "千位分隔符落在每个四位数上",
         all(s in doc_numbers.render(SPEC_COUNTS) for s in ("1,779", "1,647", "1,009", "2,066", "1,057")),
     )
-    shuffled = dict(SPEC_COUNTS, pending={"djvu": 2, "txt": 5, "other": 0, "pdf": 125})
+    shuffled = dict(SPEC_COUNTS, pending={"docx": 2, "txt": 5, "other": 0, "pdf": 125})
     check(
-        "待拆章分组顺序固定为 pdf、txt、djvu（与入参键序无关）",
+        "待拆章分组顺序固定为 pdf、txt、docx（与入参键序无关）",
         doc_numbers.render(shuffled) == SPEC_BLOCK,
         doc_numbers.render(shuffled),
     )
-    other = dict(SPEC_COUNTS, pending_total=135, pending={"pdf": 125, "txt": 5, "djvu": 2, "other": 3})
+    other = dict(SPEC_COUNTS, pending_total=135, pending={"pdf": 125, "txt": 5, "docx": 2, "other": 3})
     line = doc_numbers.render(other).splitlines()[1]
-    check("other 非零时排在 djvu 之后", "（125 pdf、5 txt、2 djvu、3 other）" in line, line)
+    check("other 非零时排在 docx 之后", "（125 pdf、5 txt、2 docx、3 other）" in line, line)
     check("有 other 时不给 0 other", "0 other" not in doc_numbers.render(SPEC_COUNTS))
     check(
         "标点全角、日期取 as_of",
@@ -287,8 +287,8 @@ def fixture_checks(root):
     check("books 6", counts["books"] == 6, counts["books"])
     check("md 2 本（看 books/<uid>/md 是不是目录）", counts["md"] == 2, counts["md"])
     check(
-        "待拆章 pdf/txt/djvu/other 各 1",
-        counts["pending"] == {"pdf": 1, "txt": 1, "djvu": 1, "other": 1},
+        "待拆章 pdf/txt/docx/other 各 1",
+        {k: v for k, v in counts["pending"].items() if v} == {"pdf": 1, "txt": 1, "docx": 1, "other": 1},
         counts["pending"],
     )
     check("待拆章合计 4", counts["pending_total"] == 4, counts["pending_total"])
@@ -303,7 +303,7 @@ def fixture_checks(root):
     check("显式 as_of 覆盖今天", doc_numbers.collect(root, as_of="2026-10-26")["as_of"] == "2026-10-26")
     check(
         "fixture 渲染出的那一行",
-        "As of %s：6 本书，2 本有 md，4 本待拆章（1 pdf、1 txt、1 djvu、1 other）" % datetime.date.today().isoformat()
+        "As of %s：6 本书，2 本有 md，4 本待拆章（1 pdf、1 txt、1 docx、1 other）" % datetime.date.today().isoformat()
         in doc_numbers.render(counts),
         doc_numbers.render(counts),
     )

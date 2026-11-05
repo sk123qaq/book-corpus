@@ -63,6 +63,7 @@
 | Git | 必需 | 版本管理 |
 | ripgrep | 检索与验收需要 | 全文定位。`rg` 放到 PATH，或用 `BOOKS_RG` 指定 |
 | Calibre 的 `ebook-convert` | 拆 epub、mobi、azw3 必需 | 先转 EPUB 再拆章 |
+| markitdown（装在 `工作区/.venv-docs`） | docx/xlsx/xls/pptx 转 md 必需 | `init`/`venv` 自动装，不污染主环境 |
 | poppler 的 `pdfinfo`、`pdfimages`、`pdftoppm` | PDF 普查与扫描件探针必需 | 页数、图片清单、抽页渲染 |
 | `pi` CLI | 模型功能必需 | 分类、拆章修复、问答通过它调模型 |
 | headless Chrome | 可选 | 操作台截图验收，`CHROME_BIN` 可换路径 |
@@ -113,7 +114,7 @@ book-corpus --version
 book-corpus init ~/书库            # 建一个空工作区
 ```
 
-`init` 顺带建 `工作区/.venv-pdf` 并装 PDF 依赖。第一次要联网：uv 按需下载一个 CPython 和六个包，网慢时六七分钟；装过一次之后重跑是十秒级。离线时加 `--no-pdf-venv`，之后跑 `book-corpus venv` 补。
+`init` 顺带建 `工作区/.venv-pdf` 与 `工作区/.venv-docs` 并装依赖。第一次要联网：uv 按需下载解释器与包，网慢时六七分钟；装过一次之后重跑是十秒级。离线时加 `--no-pdf-venv`（两个环境都跳过），之后跑 `book-corpus venv` 补。
 
 改代码时走项目环境：
 
@@ -255,7 +256,9 @@ book-corpus library
 
 `scan` 只读，出计划。`apply` 默认也只打印，加 `--apply` 才写盘。
 
-入库只把源和 `book.json` 放进库，还没有 md。要能检索，先拆章：
+入库只把源和 `book.json` 放进库，还没有 md。收件箱收 `epub`、`mobi`、`azw3`、`azw`、`pdf`、`txt`、`md`、`docx`、`xlsx`、`xls`、`pptx`；`.doc`、`.ppt`、`.djvu`、`.csv` 等其他格式不列入库清单。
+
+`txt`/`docx`/`xlsx`/`xls`/`pptx`/`md` 入库后，操作台的「新书导入」页会自动接一个 `docs.run`：每本整本转成 `md/<书名>.md`，不分章，配 `README.md`、`images/` 与 `.manifest.json`；源文件是 md 的原样复制。`epub`/`mobi` 等仍走拆章，PDF 走 PDF 管线：
 
 ```bash
 book-corpus run split_md_batch --batch <批次名> --uids <uid>

@@ -38,6 +38,7 @@ def run_cli(*args, cwd=None, env=None):
     full_env.pop("BOOKS_ROOT", None)
     # 测试里不建 工作区/.venv-pdf：要 20 秒、要联网。单独测这条路的用例自己开。
     full_env.setdefault("BOOKS_NO_PDF_VENV", "1")
+    full_env.setdefault("BOOKS_NO_DOCS_VENV", "1")
     if env:
         full_env.update(env)
     return subprocess.run(

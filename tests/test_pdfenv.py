@@ -22,10 +22,12 @@ def test_requirements_txt_matches_pdf_venv_packages():
 
 
 def test_init_creates_pdf_venv_unless_disabled(tmp_path, monkeypatch):
-    from bookcorpus import pdfenv, workspace
+    from bookcorpus import docenv, pdfenv, workspace
 
     calls = []
     monkeypatch.setattr(pdfenv, "create", lambda root, **kw: (calls.append(root), (True, "ok"))[1])
+    # init 现在顺手建 docs 环境；这里只要 PDF 那条路，别真去联网装 markitdown
+    monkeypatch.setattr(docenv, "create", lambda root, **kw: (True, "ok"))
     monkeypatch.delenv("BOOKS_NO_PDF_VENV", raising=False)
     workspace.init(str(tmp_path / "on"), pdf_venv=True)
     assert calls == [str(tmp_path / "on")]

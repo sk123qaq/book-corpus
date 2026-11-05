@@ -1,0 +1,6 @@
+# Word / Excel / PPT 转 Markdown 用的包，装在 工作区/.venv-docs。
+# 用法：工作区/.venv-docs/bin/pip install -r requirements-docs.txt
+# 与 src/bookcorpus/docenv.py 的 REQUIREMENTS 一致（tests/test_docenv.py 查漂移）。
+
+# 0.1.9 上验证过；新版换过 API 与输出结构，先别跨版本
+markitdown[docx,xlsx,xls,pptx]==0.1.9

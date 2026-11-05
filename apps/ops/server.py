@@ -45,6 +45,16 @@ def _package_scripts():
         return os.path.join(os.path.dirname(os.path.dirname(CODE_DIR)), "src", "bookcorpus", "scripts")
 
 
+def lib_common_module():
+    """scripts/ 下的单一来源常量（ACCEPT_EXTS / DOC_FORMATS）从这里取，别在服务里再抄一份。"""
+    scripts = _package_scripts()
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import lib_common as LC
+
+    return LC
+
+
 STATES = ("queued", "running", "awaiting_review", "succeeded", "failed", "cancelled", "orphaned")
 DONE_STATES = ("succeeded", "failed", "cancelled", "orphaned")
 READ_SLOTS = 2
@@ -619,6 +629,33 @@ def gate_pdf(ctx):
     return "succeeded", summary
 
 
+def gate_docs(ctx):
+    """docs.run：只看 report.json。单本失败已经记在 items 里，这里只负责把人叫过来。"""
+    bad = ctx.failed()
+    if bad:
+        return "failed", "失败步：%s" % "、".join("%s(rc=%s)" % (n, rc) for n, rc in bad)
+    report = ctx.artifact("report.json")
+    if not isinstance(report, dict):
+        return "failed", "没有 report.json，判不了转 md 结果"
+    summary = report.get("summary") or {}
+    try:
+        total = int(summary.get("total") or 0)
+        done = int(summary.get("done") or 0)
+        failed = int(summary.get("failed") or 0)
+        skipped = int(summary.get("skipped") or 0)
+    except (TypeError, ValueError):
+        return "failed", "report.json 的 summary 读不出来"
+    detail = "完成 %d/%d，失败 %d" % (done, total, failed)
+    if skipped:
+        detail += "，跳过 %d" % skipped
+    if failed:
+        uids = [str(it.get("uid") or "?") for it in (report.get("items") or []) if it.get("status") == "failed"]
+        if uids:
+            detail += "（%s）" % "、".join(uids[:6])
+        return "failed", detail
+    return "succeeded", detail
+
+
 def gate_triage(ctx):
     bad = ctx.failed()
     if bad:
@@ -748,6 +785,7 @@ KINDS = {
     "pdf.triage": {"label": "PDF 分诊", "readonly": True, "gate": gate_triage},
     "pdf.confirm": {"label": "分诊确认", "readonly": False, "gate": gate_rc},
     "pdf.run": {"label": "PDF 转 md", "readonly": False, "gate": gate_pdf},
+    "docs.run": {"label": "文档转 md", "readonly": False, "gate": gate_docs},
     "maintain": {"label": "维护收尾", "readonly": False, "gate": gate_maintain},
     "delete.dry-run": {"label": "删书预览", "readonly": True, "gate": gate_dryrun},
     "delete.apply": {"label": "删书应用", "readonly": False, "gate": gate_rc},
@@ -777,6 +815,27 @@ def rebuild_commands(env):
     return [
         make_cmd(env, "build_library", "build_library.py", ["--emit-json"]),
         make_cmd(env, "gen_book_catalog", "gen_book_catalog.py", []),
+    ]
+
+
+DOCS_SCRIPT = "docs_to_md.py"
+
+
+def docs_commands(env, job_dir, applied="", only=""):
+    """docs.run 固定四步：plan → convert → build_library --emit-json → gen_book_catalog。
+
+    convert 单本失败只记 report.json 且返回 0，所以后面两步照样跑到，门槛只看
+    report.json 里的失败计数（gate_docs）。
+    """
+    plan_args = ["plan", "--job-dir", job_dir]
+    if applied:
+        plan_args += ["--applied", applied]
+    if only:
+        plan_args += ["--only", only]
+    return [
+        make_cmd(env, "docs plan", DOCS_SCRIPT, plan_args, accepts_root=True),
+        make_cmd(env, "docs convert", DOCS_SCRIPT, ["convert", "--job-dir", job_dir], accepts_root=True),
+        *rebuild_commands(env),
     ]
 
 
@@ -1107,8 +1166,43 @@ class Runner:
             job_id, state=state, ended=now_iso(), summary=summary, exit_code=(rcs[-1][1] if rcs else None)
         )
         self._log(job_id, "\n---- 判定 %s：%s ----\n" % (state, summary))
+        if job["kind"] == "import.apply" and state == "succeeded":
+            self._chain_docs(job_id)
         if job["kind"] == "maintain" and state in ("succeeded", "awaiting_review"):
             threading.Thread(target=self._refresh_audit, args=(job_id,), daemon=True).start()
+
+    def _chain_docs(self, job_id):
+        """导入入库成功后自动接一轮文档转 md。docs-seed.json 已在就不重发（幂等）。"""
+        base = self.env.job_dir(job_id)
+        seed = os.path.join(base, "docs-seed.json")
+        if os.path.exists(seed):
+            prev = read_json(seed, {}) or {}
+            self._log(job_id, "\n[docs] 已派过文档转 md（%s），不重复提交\n" % prev.get("docs_job"))
+            return
+        applied = read_json(os.path.join(base, "applied.json"))
+        rows = applied.get("applied") if isinstance(applied, dict) else None
+        doc_formats = lib_common_module().DOC_FORMATS
+        hits = [
+            r
+            for r in (rows or [])
+            if isinstance(r, dict)
+            and str(r.get("action") or "") in ("add", "replace")
+            and str(r.get("format") or "").lower() in doc_formats
+        ]
+        if not hits:
+            return
+        applied_path = os.path.join(base, "applied.json")
+        try:
+            new_id = self.submit(
+                "docs.run",
+                "文档转 md %d 本" % len(hits),
+                lambda jid: docs_commands(self.env, self.env.job_dir(jid), applied=applied_path),
+            )
+        except Exception as exc:
+            self._log(job_id, "\n[docs] 接转提交失败：%s: %s\n" % (type(exc).__name__, exc))
+            return
+        write_json_atomic(seed, {"docs_job": new_id})
+        self._log(job_id, "\n[docs] %d 本 doc 格式自动接转：job %s\n" % (len(hits), new_id))
 
     def _refresh_audit(self, job_id):
         """收尾跑完就重写体检缓存。页面关着也照样刷新，下次打开不再显示跑之前的读数。"""
@@ -1399,10 +1493,18 @@ class App:
 
     def inbox(self):
         out = []
+        accept = lib_common_module().ACCEPT_EXTS
         if os.path.isdir(self.env.inbox):
             for name in sorted(os.listdir(self.env.inbox)):
                 path = os.path.join(self.env.inbox, name)
                 if not os.path.isfile(path) or name.startswith(".") or name.endswith(".part"):
+                    continue
+                if os.path.splitext(name)[1].lower() not in accept:
+                    # 收件箱里本来就躺着的旧文件（.doc/.djvu/说明文档）不列出来，
+                    # 否则页面上会给一个点了必错的“入库”按钮
+                    continue
+                if name.lower() in ("readme.md", "readme.txt"):
+                    # 与 ingest scan 的跳过规则一致：说明文件不是书
                     continue
                 st = os.stat(path)
                 out.append(
@@ -2355,6 +2457,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "batch": batch, "books": self.app.split_books(batch)})
             elif route == "/api/pdf/queue":
                 self.send_json(200, dict(self.app.pdf_queue(), ok=True))
+            elif route == "/api/docs/report":
+                self.api_docs_report(query)
             elif route == "/api/pdf/books":
                 books = self.app.pdf_books_index()
                 counts = dict.fromkeys(PDF_DISPOSITIONS, 0)
@@ -2425,14 +2529,34 @@ class Handler(BaseHTTPRequestHandler):
             "commands": read_json(os.path.join(self.app.env.job_dir(job_id), "commands.json")) or [],
             "files": self.job_files(job_id),
         }
+        if (job or {}).get("kind") == "import.apply":
+            seed = read_json(os.path.join(self.app.env.job_dir(job_id), "docs-seed.json")) or {}
+            payload["docs_job"] = seed.get("docs_job")
         self.send_json(200, payload)
 
     def job_files(self, job_id):
         out = {}
-        for name in ("plan.json", "result.json", "review.json", "dry-run.json", "report.json", "commands.json"):
+        names = (
+            "plan.json",
+            "result.json",
+            "review.json",
+            "dry-run.json",
+            "report.json",
+            "commands.json",
+            "worklist.json",
+            "progress.json",
+            "applied.json",
+            "docs-seed.json",
+        )
+        for name in names:
             path = os.path.join(self.app.env.job_dir(job_id), name)
             if os.path.exists(path):
                 out[name] = self.app.env.rel(path)
+        books = os.path.join(self.app.env.job_dir(job_id), "books")
+        if os.path.isdir(books):
+            for name in sorted(os.listdir(books)):
+                if re.match(r"^B\d{4}\.json$", name):
+                    out["books/" + name] = self.app.env.rel(os.path.join(books, name))
         return out
 
     def api_job_log(self, job_id, query):
@@ -2546,6 +2670,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/pdf/settle": lambda: self.api_pdf_settle(payload),
                 "/api/pdf/confirm": lambda: self.api_pdf_confirm(payload),
                 "/api/pdf/run": lambda: self.api_pdf_run(payload),
+                "/api/docs/run": lambda: self.api_docs_run(payload),
                 "/api/maintain": lambda: self.api_maintain(payload),
                 "/api/delete/dry-run": lambda: self.api_delete_dry(payload),
                 "/api/delete/apply": lambda: self.api_delete_apply(payload),
@@ -2607,6 +2732,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         if ".." in name:
             self.fail(400, "文件名不能含 ..")
+            return
+        ext = os.path.splitext(name)[1].lower()
+        accept = lib_common_module().ACCEPT_EXTS
+        if ext not in accept:
+            self.fail(400, "不收 .%s：只收 %s" % (ext.lstrip(".") or "无后缀", "、".join(sorted(accept))))
             return
         os.makedirs(self.app.env.inbox, exist_ok=True)
         target = os.path.join(self.app.env.inbox, name)
@@ -2790,15 +2920,73 @@ class Handler(BaseHTTPRequestHandler):
                 self.fail(400, "收件箱里没有这个文件：%s" % (item.get("file") or ""))
                 return
         write_json_atomic(plan, items)
-        commands = [make_cmd(self.app.env, "ingest apply", "ingest.py", ["apply", plan, "--apply"], accepts_root=True)]
-        commands += rebuild_commands(self.app.env)
+        env = self.app.env
+
+        def _commands(job_id):
+            # --result 写在这次 job 自己的目录下：后面接的 docs.run 靠它认新书
+            result = os.path.join(env.job_dir(job_id), "applied.json")
+            first = make_cmd(
+                env,
+                "ingest apply",
+                "ingest.py",
+                ["apply", plan, "--apply", "--result", result],
+                accepts_root=True,
+            )
+            return [first, *rebuild_commands(env)]
+
         job_id = self.app.runner.submit(
             "import.apply",
             "导入入库 %s" % os.path.basename(os.path.dirname(plan)),
-            commands,
+            _commands,
             plan_hash=plan_file_hash(plan),
         )
         self.send_json(200, {"ok": True, "job_id": job_id})
+
+    def api_docs_run(self, payload):
+        uids = uid_list(payload.get("uids"))
+        only = ",".join(uids)
+        env = self.app.env
+        title = "文档转 md %d 本" % len(uids) if uids else "文档转 md"
+        job_id = self.app.runner.submit(
+            "docs.run",
+            title,
+            lambda jid: docs_commands(env, env.job_dir(jid), only=only),
+        )
+        self.send_json(200, {"ok": True, "job_id": job_id})
+
+    def api_docs_report(self, query):
+        job_id = (query.get("job_id") or [""])[0].strip()
+        if not job_id:
+            rows = [row for row in self.app.store.list(limit=200) if row.get("kind") == "docs.run"]
+            if not rows:
+                self.fail(404, "还没跑过文档转 md")
+                return
+            # 默认取「最近一次真转过书的」：手动补转零本也会留一条空任务，
+            # 不能让它把上一次转换的明细顶掉。
+            job_id = rows[0]["id"]
+            for row in rows:
+                rep = read_json(os.path.join(self.app.env.job_dir(row["id"]), "report.json")) or {}
+                if int((rep.get("summary") or {}).get("total") or 0) > 0:
+                    job_id = row["id"]
+                    break
+        job = self.app.store.get(job_id)
+        if not job:
+            self.fail(404, "没有这个任务")
+            return
+        if job.get("kind") != "docs.run":
+            self.fail(400, "%s 不是文档转 md 任务" % job_id)
+            return
+        base = self.app.env.job_dir(job_id)
+        self.send_json(
+            200,
+            {
+                "ok": True,
+                "job_id": job_id,
+                "state": job.get("state"),
+                "progress": read_json(os.path.join(base, "progress.json")),
+                "report": read_json(os.path.join(base, "report.json")),
+            },
+        )
 
     def api_split_run(self, payload):
         uids = uid_list(payload.get("uids"))
@@ -3417,6 +3605,7 @@ WRITE_ROUTES = (
     "/api/pdf/settle",
     "/api/pdf/confirm",
     "/api/pdf/run",
+    "/api/docs/run",
     "/api/maintain",
     "/api/delete/apply",
     "/api/ledger/row",

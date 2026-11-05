@@ -87,6 +87,8 @@ POST /api/pdf/triage-batch         {uids?}：不给就分诊所有未分诊的�
 POST /api/pdf/settle               {items:[{uid, route}]}：改处置，只写台账不出正文
 POST /api/pdf/confirm              {uid, route, reason, model}
 POST /api/pdf/run                  {uids, limit, workers, force}
+POST /api/docs/run                  {uids?}：不给就补转全库；docx/xlsx/xls/pptx/txt → md
+GET  /api/docs/report[?job_id=]     最近一次 docs.run 的 progress 与 report（没跑过 404）
 POST /api/maintain                 {steps:[...]}
 POST /api/delete/dry-run           {uid, reason}
 POST /api/delete/apply             {uid, reason, plan_hash, confirm_uid}
@@ -117,6 +119,13 @@ GET  /api/pdf/books
 标题 `批量分诊 N 本`，每本一步，输出落 `jobs/<id>/<uid>/`，终态 `awaiting_review`，摘要写本数与建议数。
 不给 `uids` 时只分诊还没出建议的书（已有建议的跳过，模型不重复烧）。
 页面不再用单本分诊面板，`/api/pdf/triage` 与 `/api/pdf/confirm` 留着给验收与命令行。
+
+`POST /api/docs/run` 是写任务（进写锁），不给 `uids` 就是全库补转：扫书库里所有 doc 格式的书，
+`docx/xlsx/xls/pptx/txt` 转成 md，源文件已经是 md 的原样复制，已有最新 md 的跳过。
+`import.apply` 成功后自动接一个 `docs.run`，它的任务 id 在 `GET /api/jobs/<id>` 的 `docs_job` 字段；
+前端导入页据此把「文档转 md」卡片切到这个任务。`GET /api/docs/report` 不给 `job_id` 取最近一次
+`docs.run`，没跑过 404；返回 `{ok, job_id, state, progress:{phase, done, total, current, updated_at},
+report:{summary:{total, done, skipped, failed}, scope:{new, backfill}, items:[...]}}`，`report` 只有跑完才有。
 
 文件白名单：`工作区/运维/jobs/<id>/` 下的日志与缩略图，`目录/书目总表.xlsx`、`目录/书目总表.csv`、`目录/分类预填.csv`。其它 404。
 
@@ -267,6 +276,7 @@ PDF 页是三块：四格状态带（可转 / 未分诊 / 存档·图册 / 存�
 `fcntl.flock(LOCK_EX)`；只读任务用 `工作区/运维/.reader.lock` 的 `fcntl.flock(LOCK_SH)`，只写自己的 `jobs/<id>/`。
 
 上传裸 body，上限 2 GB，写 `库/_收件箱/<name>.part` 后 `os.replace`。文件名去路径。
+只收 `.epub .pdf .mobi .azw3 .azw .txt .md .docx .xlsx .xls .pptx`，其余格式 400 + 中文原因。
 
 `check_ops.py` 用随机端口与临时根，测 `/api/status`、任务生命周期、文件白名单、路径穿越拒绝、stub 导入与分诊解析；PDF 段另测批量分诊的步数与输出目录、建议与出建议的任务、改处置与按建议确认的 400 与写盘结果、今天额度。末行 `ALL PASS`。
 

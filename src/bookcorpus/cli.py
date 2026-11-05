@@ -9,7 +9,7 @@ import sqlite3
 import subprocess
 import sys
 
-from . import __version__, pdfenv, workspace
+from . import __version__, docenv, pdfenv, workspace
 
 # 不在这里 import lib_common：它 import 时就按 cwd 定根，先 import 会让
 # run_script 设的 BOOKS_ROOT 失效。只算路径，脚本自己 import。
@@ -34,10 +34,10 @@ HELP = """book-corpus <命令> [参数...]
 
 工作区
   init <目录> [--force] [--no-pdf-venv]
-                          建一个空工作区；顺手建 工作区/.venv-pdf 并装 PDF 依赖
+                          建一个空工作区；顺手建 工作区/.venv-pdf/.venv-docs 并装依赖
   sample                  装内置样书《阿Q正传》，空库马上能检索
   doctor [--json]         体检工作区
-  venv [--check]          建/补 工作区/.venv-pdf；--check 只导入一遍依赖
+  venv [--check]          建/补 工作区/.venv-pdf 与 工作区/.venv-docs；--check 只导入一遍依赖
   model [set|setup-pi|check]
                           看/改这个工作区用哪个 pi 模型、思考等级、端点和 key
   list                    列出脚本与别名
@@ -110,12 +110,16 @@ def _init_build(root):
 def cmd_init(target, force, pdf_venv):
     path = workspace.init(target, __version__, force, pdf_venv)
     print("工作区建好：%s" % path)
-    ok, detail = pdfenv.versions(path)
-    if ok:
-        print("PDF 环境：%s" % detail)
-    else:
-        print("PDF 环境没建好：%s" % detail)
-        print("  重试：book-corpus venv --root %s" % path)
+    for label, mod, retry in (
+        ("PDF 环境", pdfenv, "book-corpus venv --root %s" % path),
+        ("docs 环境", docenv, "book-corpus venv --root %s" % path),
+    ):
+        ok, detail = mod.versions(path)
+        if ok:
+            print("%s：%s" % (label, detail))
+        else:
+            print("%s没建好：%s" % (label, detail))
+            print("  重试：%s" % retry)
     print(
         "概念表带通用概念（tables/ledger.db 的 概念 表，改表用操作台或直接改库），"
         "按自己的语料增删；--concept 只认表里的键。"
@@ -292,14 +296,19 @@ def cmd_sample(root):
 
 
 def cmd_venv(root, check):
-    if check:
-        ok, detail = pdfenv.versions(root)
-    else:
-        ok, detail = pdfenv.create(root)
-        if ok:
-            ok, detail = pdfenv.versions(root)
-    print(("PDF 环境：%s" % detail) if ok else ("PDF 环境不可用：%s" % detail))
-    return 0 if ok else 1
+    """PDF 与 docs 两个环境一起建/查；任一坏掉就返回 1。"""
+    bad = 0
+    for label, mod in (("PDF 环境", pdfenv), ("docs 环境", docenv)):
+        if check:
+            ok, detail = mod.versions(root)
+        else:
+            ok, detail = mod.create(root)
+            if ok:
+                ok, detail = mod.versions(root)
+        print(("%s：%s" % (label, detail)) if ok else ("%s不可用：%s" % (label, detail)))
+        if not ok:
+            bad += 1
+    return 1 if bad else 0
 
 
 def cmd_doctor(root, as_json):

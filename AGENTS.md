@@ -68,7 +68,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 |---|---|
 | `lib_common.py` | 共享工具。路径常量、书名与作者清洗、`book_relpath`、md 目录计数。`ROOT` 由脚本位置推导，`BOOKS_ROOT` 可覆盖；`skill_dir()` 先找仓库 `.agents/skills/`，再找 `~/.agents/skills/` |
 | `build_library.py` | 重建 `build/library.db`（读 `books/**/book.json`）。`--emit-json` 同时同步每本书的 `book.json` |
-| `ingest.py` | 收件箱入库：`scan` 出计划（sha256 去重、书名匹配、add/replace/conflict，add 调 pi 的 deepseek-v4.1-flash 预填 subjects 与置信度），`apply` 落文件、写 `book.json` 与人账行、记 journal，再重建 DB。`--root` 可指到临时目录做测试，`--no-classify` 跳过分类 |
+| `ingest.py` | 收件箱入库：`scan` 出计划（sha256 去重、书名匹配、add/replace/conflict，add 调 pi 的 deepseek-v4.1-flash 预填 subjects 与置信度），`apply` 落文件、写 `book.json` 与人账行、记 journal，再重建 DB。收件箱只收 azw/azw3/docx/epub/md/mobi/pdf/pptx/txt/xls/xlsx 十一种，其余跳过；`apply --result` 可以额外写一份机器可读的 applied.json（操作台接转 md 用）。`--root` 可指到临时目录做测试，`--no-classify` 跳过分类 |
 | `lq.py` | 只读查询 DB。`lq.py [-H] "SELECT ..."`，字段用制表符分隔 |
 | `gen_book_catalog.py` | 出 `build/书目总表.xlsx` 与 `.csv`，并核对每条记录能落到磁盘。有未匹配时只报错，不覆盖旧目录 |
 | `build_index.py` | 重建每本书的 `html/index.html` 与 `build/阅读版索引.html` |
@@ -95,7 +95,8 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `pdf_triage.py` / `pdf_apply_review.py` | 按指标分诊并并人人眼复核结论，出 `triage.csv`/`triage_final.csv` 与 `skip_list.tsv` |
 | `pdf_text_to_md.py` | 文本层 PDF → crate（自带可用目录的按目录切章，其余单文件），`--structure auto\|single\|chapters` |
 | `pdf_audit_volume.py` | 文本层路线的 PDF 侧审计：字数比 + 逐页锚点覆盖率 |
-| `pdf_ocr_to_md.py` | 逐页 md → crate 的拼装器（`--structure single\|chapters`，默认 single）。README/manifest 生成器被 `pdf_text_to_md.py` 复用 |
+| `pdf_ocr_to_md.py` | 逐页 md → crate 的拼装器（`--structure single\|chapters`，默认 single）。README/manifest 生成器被 `pdf_text_to_md.py` 与 `docs_to_md.py` 复用 |
+| `docs_to_md.py` | doc 类来源 → 整本 md（不分章）：`plan` 从 `v_pending_md` 与 `applied.json` 出清单，`convert` 逐本落地 README + 单 md + manifest（txt 补 H1、md 原样复制、docx/xlsx/xls/pptx 走 `工作区/.venv-docs` 的 markitdown），写到临时目录、备份旧 md 后原子 rename；单本失败只记 `report.json`，不阻断整批 |
 | `paddleocr_pilot.py` | PaddleOCR-VL 单段流水线：切片、提交、轮询、下载、`--job` 续跑。token 在 `~/.config/PaddleOCR/api_key` |
 | `pdf_md_batch.py` | PDF 批次驱动（`--route ocr\|text`）：切片、提交/续跑、合并、拼装、体检、原子落地、logs、report。失败分 `quota/queue-full/transport/fatal/other` 五类。Paddle 读出 0 字而纸面有字迹的页自动交 MinerU 补投一次，读不出就按跳过受理（账 `skipped-pages.tsv`）。MinerU 没跑（CLI 缺/额度封顶/切片超限）不算跳过受理，可疑页留人工复核 |
 | `eval_retrieval.py` | 四档检索基线：A `grep -rlF`、B `rg -l -F`、C `defpass --concept`、D 近义词组 grep。出 `eval-baseline.tsv` 与 `eval-summary.tsv`（recall@10/@20、MRR、无原词进前 20） |

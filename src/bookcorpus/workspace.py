@@ -6,7 +6,7 @@ import sqlite3
 import sys
 import tomllib
 
-from . import pdfenv
+from . import docenv, pdfenv
 from .scripts import layout as L
 
 SCHEMA = L.SCHEMA
@@ -61,6 +61,8 @@ def init(target, tool_version="0.1.0", force=False, pdf_venv=True):
     init_ledger(target)
     if pdf_venv and not pdfenv.disabled():
         _ok, _detail = pdfenv.create(target)
+    if pdf_venv and not docenv.disabled():
+        _ok, _detail = docenv.create(target)
     return target
 
 
@@ -163,6 +165,11 @@ def check(root, version="0.1.0"):
         add("ok", "PDF 环境", "工作区/.venv-pdf 就绪")
     else:
         add("warn", "PDF 环境", "无 工作区/.venv-pdf，跑 book-corpus venv")
+
+    if os.path.exists(docenv.python(root)):
+        add("ok", "文档环境", "工作区/.venv-docs 就绪")
+    else:
+        add("warn", "文档环境", "无 工作区/.venv-docs，跑 book-corpus venv")
 
     add("ok", "工具", "book-corpus %s，Python %s" % (version, sys.version.split()[0]))
     return rows

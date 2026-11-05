@@ -22,6 +22,7 @@ import os
 import pathlib
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -42,7 +43,20 @@ def lock_path(root):
     return os.path.join(root, "tables", ".ingest.lock")
 
 
-FORMATS = {"epub": 3, "mobi": 2, "azw3": 2, "pdf": 1, "txt": 0, "djvu": 0}
+# 源格式优先级：同书多源时数字大的当主源。白名单之外的一律不接（见 lib_common.ACCEPT_EXTS）
+FORMATS = {
+    "epub": 3,
+    "mobi": 2,
+    "azw3": 2,
+    "azw": 2,
+    "pdf": 1,
+    "docx": 1,
+    "xlsx": 1,
+    "xls": 1,
+    "pptx": 1,
+    "md": 1,
+    "txt": 0,
+}
 
 
 def sha256_file(path):
@@ -207,6 +221,16 @@ def plan_for(path, books, sha_uid, seen, ret, batch_titles):
         "status": "",
         "note": "",
     }
+    if fmt not in FORMATS:
+        # source_rank 对未知格式静默回 0，会一路混进 replace；这里先拦住落人工
+        item.update(
+            action="review",
+            status="unknown-format",
+            subjects=["其他"],
+            target_subjects=["其他"],
+            note="格式未纳入来源表：%s；确认换源还是删除" % (fmt or "无后缀"),
+        )
+        return item
     old_uid = sha_uid.get(sha)
     if old_uid:
         b = next((x for x in books if x["uid"] == old_uid), None)
@@ -297,11 +321,18 @@ def scan(root):
     base = int(next_uid(rows)[1:])
     out, seen, batch_titles = [], {}, {}
     n = 0
+    skipped_readme, rejected = 0, {}
     for name in sorted(os.listdir(inbox)):
         p = os.path.join(inbox, name)
         if not os.path.isfile(p) or name.startswith("."):
             continue
         if name.lower() in ("readme.md", "readme.txt"):
+            skipped_readme += 1
+            continue
+        ext = os.path.splitext(name)[1].lower()
+        if ext not in L.ACCEPT_EXTS:
+            # 白名单之外不静默收：.doc/.ppt/.csv/.djvu 之类只计数，留给人工处理
+            rejected[ext or "无后缀"] = rejected.get(ext or "无后缀", 0) + 1
             continue
         item = plan_for(p, books, sha_uid, seen, ret, batch_titles)
         seen.setdefault(item["sha256"], name)
@@ -312,6 +343,15 @@ def scan(root):
             item["uid"] = "B%04d" % (base + n)
             n += 1
         out.append(item)
+    if skipped_readme:
+        print("跳过说明文件 %d 个（readme.md/readme.txt）" % skipped_readme, file=sys.stderr)
+    if rejected:
+        detail = "、".join("%s %d" % (k, v) for k, v in sorted(rejected.items()))
+        print(
+            "跳过不支持的格式 %d 个（%s）；只收 %s"
+            % (sum(rejected.values()), detail, " ".join(sorted(x.lstrip(".") for x in L.ACCEPT_EXTS))),
+            file=sys.stderr,
+        )
     return out
 
 
@@ -682,6 +722,45 @@ def apply_one(root, it, shas):
     return _replace(root, it, src)
 
 
+def db_conflicts(root):
+    """build/library.db 的路径冲突条数；库不在就当 0（--no-rebuild 时是旧读数）。"""
+    path = os.path.join(root, "build", "library.db")
+    if not os.path.isfile(path):
+        return 0
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+        try:
+            return int(con.execute("SELECT count(*) FROM v_path_conflict").fetchone()[0])
+        finally:
+            con.close()
+    except (sqlite3.Error, OSError, TypeError, IndexError, ValueError):
+        return 0
+
+
+def write_result(path, root, done, failed):
+    """apply 的机器可读结果；操作台靠它接 docs.run，uid 只信这里。"""
+    doc = {
+        "version": 1,
+        "conflicts": db_conflicts(root),
+        "applied": [
+            {
+                "uid": r.get("uid") or "",
+                "file": r.get("file") or "",
+                "format": (r.get("format") or "").lower(),
+                "action": r.get("action") or "",
+            }
+            for r in done
+            if r.get("action") in ("add", "replace", "delete")
+        ],
+        "failed": [{"file": f, "error": msg} for f, msg in failed],
+    }
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    L.write_json_atomic(path, doc)
+    return doc
+
+
 def journal_keys(root):
     path = journal_path(root)
     keys = set()
@@ -719,6 +798,7 @@ def main():
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--no-rebuild", action="store_true")
     ap.add_argument("--no-classify", action="store_true", help="跳过 deepseek 分类预填")
+    ap.add_argument("--result", help="apply 结果 JSON 路径（操作台传 job 的 applied.json）")
     ap.add_argument("--retention", choices=("keep", "review", "drop"), help="新增/换源后的书库去留；不填则沿用账表现值")
     a = ap.parse_args()
 
@@ -842,6 +922,8 @@ def main():
         print("\n%d 行失败，修好后可重跑（已处理的行会跳过）。" % len(failed), file=sys.stderr)
     if done and any(r["action"] in ("add", "replace") for r in done) and not a.no_rebuild:
         print(rebuild())
+    if a.result:
+        write_result(a.result, a.root, done, failed)
     return 1 if failed else 0
 
 
