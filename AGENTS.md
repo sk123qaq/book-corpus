@@ -55,6 +55,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `.agents/skills/` | 随仓库提交的 pi 技能：`book-corpus-qa`、`ebook-to-md`、`chapter-html-versions`、`mineru`、`typesafe-ai` |
 | `apps/ops/` | 统一操作台服务、web 与运维文档，127.0.0.1:8770；验收在 `tests/acceptance/ops/` 与 `tests/manual/ops/` |
 | `apps/demo/` | 检索流程演示页、回答与会话实现，127.0.0.1:8765；验收在 `tests/acceptance/demo/` 与 `tests/manual/demo/` |
+| `apps/home/` | 统一入口首页，127.0.0.1:8773；服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点击时按需代起四个页面服务，验收在 `tests/test_home_*.py` |
 | `docs/design/` | 权威方案、决策记录与流程图 |
 | `docs/briefs/` | 已完成任务书，标注完成日期 |
 | `工作区/批次/` | 只在实例与数据仓；工具仓不再保留 |
