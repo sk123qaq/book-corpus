@@ -17,7 +17,9 @@ BODY_MIN_CHARS = 500
 BODY_STEM_PREFIX = "前置页"
 AUTHOR_NOISE_RE = re.compile(r"(?:z-library(?:\.sk)?|1lib\.sk|z-lib\.sk)", re.I)
 CLOTHES = ("#1E3A36", "#2C4056", "#6B2B2B", "#A87A3E", "#4A5839", "#3F4E5A", "#5A3E2B", "#2F4F4F")
-DEFAULT_OVERLAY = "~/Work/book-corpus-data"
+# 叠加层默认关闭：Work/book-corpus-data 暂不作为本项目的数据源。
+# 需要时由调用方显式传 overlay_root，不读环境变量。
+DEFAULT_OVERLAY = ""
 
 
 def _nkey(text):
@@ -67,7 +69,7 @@ class Library:
         self.layout = Layout(found)
         self.root = self.layout.root
         if overlay_root is None:
-            overlay_root = os.environ.get("READING_OVERLAY") or os.path.expanduser(DEFAULT_OVERLAY)
+            overlay_root = DEFAULT_OVERLAY
         self.overlay_root = overlay_root
         self._books = None
         self._chapters = {}
@@ -302,7 +304,10 @@ class Library:
     def _load_overlay(self):
         if self._overlay is not None:
             return self._overlay
-        books_dir = os.path.join(self.overlay_root or "", "books")
+        if not self.overlay_root:
+            self._overlay = []
+            return self._overlay
+        books_dir = os.path.join(self.overlay_root, "books")
         records = []
         if os.path.isdir(books_dir):
             for path in sorted(glob.glob(os.path.join(books_dir, "*", "book.json"))):

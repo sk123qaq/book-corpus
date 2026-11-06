@@ -62,7 +62,6 @@ def test_overview_uses_library_and_daily(reading_root):
     library = Library(str(reading_root))
     data, page = _render(library, reading_root, _issue())
 
-    assert data["total_books"] == 2
     assert data["readable_books"] == 2
     assert data["chapters"] == 3
     assert data["chars"] > 0
@@ -71,8 +70,8 @@ def test_overview_uses_library_and_daily(reading_root):
     assert data["weekday"] == "星期五"
 
     assert "{{" not in page
-    assert "2 本在架" in page
     assert "2 本可读" in page
+    assert "本在架" not in page
     assert "1 期" in page
     assert "灯下的一封信" in page
     assert "第 001 期" in page

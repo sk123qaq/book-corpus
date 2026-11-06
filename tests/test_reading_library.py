@@ -53,3 +53,25 @@ def test_catalog_search_and_metadata_overlay(tmp_path):
     data = lib.catalog("丁")
     assert [record["key"] for record in data["metadata"]] == ["meta:M0009"]
     assert lib.subjects()[0]["name"] in ("人文社科", "文学")
+
+
+def test_library_ignores_work_overlay_by_default(tmp_path, monkeypatch):
+    from conftest import write_book
+
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "books.toml").write_text("schema = 2\n", encoding="utf-8")
+    write_book(root, "B0001", "文学", "甲书", ["正文一。"])
+    overlay = tmp_path / "overlay"
+    for uid in ("M0001", "M0002"):
+        target = overlay / "books" / uid
+        target.mkdir(parents=True)
+        (target / "book.json").write_text(
+            json.dumps({"uid": uid, "title": uid, "author": "某人", "subjects": ["文学"]}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    monkeypatch.setenv("READING_OVERLAY", str(overlay))
+    lib = Library(root)
+    data = lib.catalog()
+    assert data["total"] == 1
+    assert data["metadata"] == []

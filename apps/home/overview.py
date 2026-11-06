@@ -66,9 +66,7 @@ def build_overview(library, root, now=None, feed=None) -> dict[str, Any]:
         raise TypeError("now 必须是 date、datetime 或 None。")
 
     books = library.books()
-    catalog = library.catalog()
-    total = _count(catalog.get("total") or len(books))
-    readable = _count(catalog.get("readable_count") if "readable_count" in catalog else len(books))
+    readable = _count(len(books))
     chapters = sum(_count(book.get("chapters")) for book in books)
     chars = sum(_count(book.get("chars")) for book in books)
 
@@ -87,7 +85,6 @@ def build_overview(library, root, now=None, feed=None) -> dict[str, Any]:
         "today": today.strftime("%Y.%m.%d"),
         "today_iso": today.isoformat(),
         "weekday": WEEKDAYS[today.weekday()],
-        "total_books": total,
         "readable_books": readable,
         "chapters": chapters,
         "chars": chars,
@@ -175,7 +172,6 @@ def render_page(template: str, overview: dict[str, Any], urls=None) -> str:
     values = {
         "TODAY": _text(today_display),
         "WEEKDAY": _text(overview.get("weekday") or ""),
-        "TOTAL_BOOKS": f"{_count(overview.get('total_books')):,}",
         "READABLE": f"{_count(overview.get('readable_books')):,}",
         "ISSUE_COUNT": f"{_count(overview.get('issue_count')):,}",
         "SEARCH_URL": _url(merged["search"]),

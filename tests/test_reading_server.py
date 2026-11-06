@@ -61,7 +61,6 @@ def slow_server(reading_root):
 def _start_server(reading_root, extra_env=None):
     port = _free_port()
     env = dict(os.environ)
-    env["READING_OVERLAY"] = str(reading_root.parent / "no-overlay")
     env.update(extra_env or {})
     proc = subprocess.Popen(
         [

@@ -130,7 +130,7 @@ def workspace(tmp_path):
 
 @pytest.fixture
 def reading_root(tmp_path, monkeypatch):
-    """8771 四读测试实例：两本可读、一本只有书目、叠加层留空。"""
+    """8771 四读测试实例：两本可读、一本只有书目，不启用叠加层。"""
     root = tmp_path / "reading-instance"
     root.mkdir()
     (root / "books.toml").write_text("schema = 2\n", encoding="utf-8")
@@ -156,6 +156,5 @@ def reading_root(tmp_path, monkeypatch):
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
     payload["author"] = "z-library.sk, 1lib.sk, 鲁迅"
     payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
-    monkeypatch.setenv("READING_OVERLAY", str(tmp_path / "no-overlay"))
     monkeypatch.setenv("READING_ANNOTATE", "0")
     return root

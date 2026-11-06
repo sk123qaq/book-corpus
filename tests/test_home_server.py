@@ -60,7 +60,6 @@ def _get(base: str, path: str = "/"):
 def _start_server(root: Path, extra_args=()):
     port = _free_port()
     env = dict(os.environ)
-    env["READING_OVERLAY"] = str(root / "no-overlay")
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -137,8 +136,8 @@ def test_home_renders_real_data(home_server):
     assert headers["Cache-Control"] == "no-store"
     assert headers["X-Content-Type-Options"] == "nosniff"
     assert "<title>书库 · 今天读哪一页</title>" in body
-    assert "2 本在架" in body
     assert "2 本可读" in body
+    assert "本在架" not in body
     assert "1 期" in body
     assert "灯下的一封信" in body
     assert "第 001 期" in body
