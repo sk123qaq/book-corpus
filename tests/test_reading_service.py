@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from bookcorpus.reading.render import render_chapter
-from bookcorpus.reading.service import ReadingService, audit_pack, source_texts
+from bookcorpus.reading.service import ReadingService, _coverage_problems, audit_pack, source_texts
 from bookcorpus.reading.tiers import project
 
 RUNNING = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
@@ -542,3 +542,10 @@ def test_preserved_tier_without_old_model_falls_back_to_unknown(reading_root, mo
     second = _manifest(reading_root)
     assert second["tiers"]["standard"]["model"] == "unknown"
     assert second["tiers"]["deep"]["model"] == "m-new"
+
+
+def test_g3_tolerates_two_point_coverage_gap():
+    projections = {"deep": {"stats": {"c_char": 0.78, "c_block": 0.80}}}
+    assert _coverage_problems(projections) == []
+    projections["deep"]["stats"]["c_char"] = 0.77
+    assert _coverage_problems(projections) == ["deep C字=0.77"]

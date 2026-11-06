@@ -12,6 +12,7 @@
   3. 居中：CSS 中必须存在「max-width + margin auto」的容器规则
            —— 防的是"宽屏下正文全部贴左边"这个真实 bug
   4. 图片：HTML 里引用的本地图片文件必须存在
+  5. 版式：复用 src/bookcorpus/reading/quality.py（导入失败则跳过）
 
 另给 INFO（不判 FAIL）：图表密度（figure/svg/table/details 数 ÷ 正文字数）。
 
@@ -22,6 +23,14 @@ import os
 import re
 import sys
 from html.parser import HTMLParser
+
+_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+try:
+    from bookcorpus.reading.quality import check_html
+except ImportError:  # 技能目录可单独拷走，缺仓库 src 时降级而不是崩
+    check_html = None
 
 SKIP = {"style", "script"}
 
@@ -157,9 +166,20 @@ def check(path, src, cover, min_kb):
     print("== %s" % path)
     for lvl, k, d in res:
         print("   %-4s %-10s %s" % (lvl, k, d))
+    quality_fails = 0
+    if check_html is None:
+        print("   NOTE 未加载 bookcorpus.reading.quality，跳过版式检查")
+    else:
+        for item in check_html(raw):
+            if item["level"] == "fail":
+                quality_fails += 1
+                print("   FAIL [%s] %s" % (item["key"], item["detail"]))
+            elif item["level"] == "warn":
+                print("   WARN [%s] %s" % (item["key"], item["detail"]))
     fails = [r for r in res if r[0] == "FAIL"]
-    print("   RESULT: %s\n" % ("FAIL (%d)" % len(fails) if fails else "PASS"))
-    return not fails
+    total = len(fails) + quality_fails
+    print("   RESULT: %s\n" % ("FAIL (%d)" % total if total else "PASS"))
+    return not total
 
 
 def main():

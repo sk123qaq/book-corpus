@@ -20,7 +20,7 @@ DEFAULT_EFFORT = "high"
 EFFORTS = ("high", "medium", "low")
 TIMEOUT = 240
 MAX_TOKENS = 16384
-PROMPT_VERSION = "phase1-v4"
+PROMPT_VERSION = "phase1-v5"
 SYSTEM_PROMPT = """你是中文书稿的结构编辑。只输出一个 JSON 对象，不要 markdown 代码围栏，不要解释。
 输入是一章中**有文字的块**（id/kind/text），空脚注块已省略。为每块给出 role、priority、spine、deps；
 可选给出 supports。再给 4–6 条 cards。规则：
@@ -34,7 +34,9 @@ SYSTEM_PROMPT = """你是中文书稿的结构编辑。只输出一个 JSON 对�
 - supports 必须放在顶层数组，每项是 {"from":"支撑块 id","to":"被支撑的 claim/conclusion id"}；
   不要把 supports 放进 blocks 条目。
 - 不要输出 note、rationale、tier_blocks；档位由确定性投影器选块。
+- image 块可选 caption：一句话写这张图说明什么、为什么值得看，≤40 字，不写「如图/下图」，不复述 alt。
 JSON 顶层：{"schema":1,"blocks":[...],"supports":[...],"cards":[...]}。
+image 块的条目形如 {"id":"B07","role":"evidence","priority":2,"spine":false,"deps":[],"caption":"一句话图注"}。
 """
 
 
@@ -162,7 +164,7 @@ class ModelClient:
                 messages.append(
                     {
                         "role": "user",
-                        "content": "上面的 JSON 不符合 schema：%s。只重发修正后的完整 JSON，不要解释。" % exc,
+                        "content": "上面的 JSON 未通过校验：%s。只重发修正后的完整 JSON，不要解释。" % exc,
                     }
                 )
         raise ValueError("模型标注解析失败：%s" % last_error)

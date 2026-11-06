@@ -1,6 +1,12 @@
 """Markdown 源文解析的边界：front matter、标题、空行、图片与脚注。"""
 
-from bookcorpus.reading.mdparse import chapter_title, han_count, non_space_count, parse_markdown
+from bookcorpus.reading.mdparse import (
+    chapter_title,
+    han_count,
+    image_size,
+    non_space_count,
+    parse_markdown,
+)
 
 
 def test_front_matter_h1_and_block_kinds():
@@ -67,3 +73,19 @@ def test_counts_and_title_fallback():
     assert han_count("甲a乙") == 2
     assert non_space_count("甲 a\n乙") == 3
     assert chapter_title(raw, "备用") == "无 front matter"
+
+
+def test_image_size_reads_svg_and_encoded_names(tmp_path):
+    svg = tmp_path / "图 1.svg"
+    svg.write_text('<svg width="120" height="80"></svg>', encoding="utf-8")
+    assert image_size(str(svg)) == (120, 80)
+    parsed = parse_markdown("# 标题\n\n![](图%201.svg)\n", base_dir=str(tmp_path))
+    assert parsed["blocks"][0]["width"] == 120
+    assert parsed["blocks"][0]["height"] == 80
+
+
+def test_image_size_skips_jpeg_fill_bytes(tmp_path):
+    data = b"\xff\xd8\xff\xff\xc0\x00\x11\x08\x00\x50\x00\x78" + b"\x00" * 9
+    path = tmp_path / "a.jpg"
+    path.write_bytes(data)
+    assert image_size(str(path)) == (120, 80)

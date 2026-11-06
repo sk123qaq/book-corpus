@@ -156,3 +156,25 @@ def test_draft_without_annotation_keeps_everything_for_all_tiers():
         assert out["stats"]["e"] == 0.0
         assert out["stats"]["notes"] == 0
         assert out["stats"]["minutes"] >= 1
+
+
+def _band_blocks():
+    blocks = [{"id": "B%02d" % index, "kind": "paragraph", "text": "某" * 200, "chars": 200} for index in range(1, 40)]
+    blocks.append({"id": "B40", "kind": "paragraph", "text": "某" * 2500, "chars": 2500})
+    return blocks
+
+
+def test_project_repairs_band_after_trimming_large_block():
+    blocks = _band_blocks()
+    annotation = validate_annotation(
+        {
+            "blocks": [{"id": block["id"], "role": "context", "priority": 3} for block in blocks],
+            "supports": [],
+            "cards": [],
+        },
+        blocks,
+    )
+    out = project(blocks, annotation, "deep")
+    spec = TIER_SPECS["deep"]
+    assert spec["c_min"] <= out["stats"]["c_char"] <= spec["c_max"]
+    assert "B40" in [block["id"] for block in out["blocks"]]

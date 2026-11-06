@@ -5,7 +5,10 @@
 图片 ``images/note.png`` 是脚注图标，不渲染大图；其余图片保留相对路径。
 """
 
+import os
 import re
+import struct
+from urllib.parse import unquote
 
 HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
@@ -81,7 +84,115 @@ def _image_kind(rel):
     return "footnote" if rel.rsplit("/", 1)[-1].lower() == "note.png" else "image"
 
 
-def _emit_inline(blocks, text):
+def _jpeg_size(data):
+    """JPEG 的 SOF 段给画布尺寸，EXIF/ICC 段按长度跳过。"""
+    pos = 2
+    size = len(data)
+    while pos + 4 <= size:
+        if data[pos] != 0xFF:
+            pos += 1
+            continue
+        marker = data[pos + 1]
+        if marker == 0xFF:
+            pos += 1
+            continue
+        if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+            pos += 2
+            continue
+        if marker == 0xDA:
+            return None
+        seg_len = int.from_bytes(data[pos + 2 : pos + 4], "big")
+        if seg_len < 2:
+            return None
+        if 0xC0 <= marker <= 0xC2:
+            if pos + 9 > size:
+                return None
+            height = int.from_bytes(data[pos + 5 : pos + 7], "big")
+            width = int.from_bytes(data[pos + 7 : pos + 9], "big")
+            return (width, height)
+        pos += 2 + seg_len
+    return None
+
+
+def _svg_size(data):
+    text = data.decode("utf-8", "ignore")
+    match = re.search(r"<svg\b[^>]*>", text, re.I)
+    if not match:
+        return None
+    tag = match.group(0)
+
+    def dim(name):
+        found = re.search(r'\b%s\s*=\s*"([\d.]+)(?:px)?"' % name, tag, re.I)
+        return float(found.group(1)) if found else None
+
+    width, height = dim("width"), dim("height")
+    if width and height:
+        return (round(width), round(height))
+    box = re.search(r'\bviewBox\s*=\s*"([^"]+)"', tag, re.I)
+    if box:
+        parts = box.group(1).replace(",", " ").split()
+        if len(parts) == 4:
+            try:
+                width, height = float(parts[2]), float(parts[3])
+            except ValueError:
+                return None
+            if width > 0 and height > 0:
+                return (round(width), round(height))
+    return None
+
+
+def image_size(path):
+    """读图片头拿像素尺寸。读不出返回 ``None``，不抛异常。"""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read()
+    except OSError:
+        return None
+    try:
+        if head.startswith(b"\x89PNG\r\n\x1a\n") and len(head) >= 24:
+            return struct.unpack(">II", head[16:24])
+        if head[:6] in (b"GIF87a", b"GIF89a") and len(head) >= 10:
+            return struct.unpack("<HH", head[6:10])
+        if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+            fourcc = head[12:16]
+            if fourcc == b"VP8X" and len(head) >= 30:
+                return (
+                    int.from_bytes(head[24:27], "little") + 1,
+                    int.from_bytes(head[27:30], "little") + 1,
+                )
+            if fourcc == b"VP8 " and len(head) >= 30:
+                return (
+                    int.from_bytes(head[26:28], "little") & 0x3FFF,
+                    int.from_bytes(head[28:30], "little") & 0x3FFF,
+                )
+            if fourcc == b"VP8L" and len(head) >= 25:
+                bits = int.from_bytes(head[21:25], "little")
+                return (1 + (bits & 0x3FFF), 1 + ((bits >> 14) & 0x3FFF))
+            return None
+        if head[:2] == b"\xff\xd8":
+            return _jpeg_size(head)
+        if b"<svg" in head[:1024].lower():
+            return _svg_size(head)
+    except (struct.error, IndexError):
+        return None
+    return None
+
+
+def _image_extra(rel, base_dir):
+    if not base_dir:
+        return {}
+    root = os.path.normpath(base_dir)
+    path = os.path.normpath(os.path.join(root, unquote(rel)))
+    prefix = root if root.endswith(os.sep) else root + os.sep
+    if not path.startswith(prefix):
+        return {}
+    size = image_size(path)
+    if not size:
+        return {}
+    return {"width": size[0], "height": size[1]}
+
+
+def _emit_inline(blocks, text, base_dir=None):
     """段落里可能夹着图片；图片单独成块，其余文字保住顺序。"""
     pos = 0
     for match in IMAGE_RE.finditer(text):
@@ -93,14 +204,14 @@ def _emit_inline(blocks, text):
         if kind == "footnote":
             _append(blocks, "footnote", alt, rel=rel)
         else:
-            _append(blocks, "image", alt, rel=rel)
+            _append(blocks, "image", alt, rel=rel, **_image_extra(rel, base_dir))
         pos = match.end()
     tail = text[pos:]
     if tail.strip():
         _append(blocks, "paragraph", tail)
 
 
-def _parse_chunk(blocks, chunk):
+def _parse_chunk(blocks, chunk, base_dir=None):
     lines = [line for line in chunk.split("\n") if line.strip()]
     if not lines:
         return
@@ -128,13 +239,15 @@ def _parse_chunk(blocks, chunk):
     only = IMAGE_RE.fullmatch(chunk.strip())
     if only:
         alt, rel = only.group(1), only.group(2)
-        _append(blocks, _image_kind(rel), alt, rel=rel)
+        kind = _image_kind(rel)
+        extra = _image_extra(rel, base_dir) if kind == "image" else {}
+        _append(blocks, kind, alt, rel=rel, **extra)
         return
 
-    _emit_inline(blocks, " ".join(line.strip() for line in lines))
+    _emit_inline(blocks, " ".join(line.strip() for line in lines), base_dir)
 
 
-def parse_markdown(raw, stem="", meta=None):
+def parse_markdown(raw, stem="", meta=None, base_dir=None):
     """解析一章。返回 ``dict``：title/blocks/body_han/body_chars/meta``。"""
     parsed_meta, body = strip_front_matter(raw)
     merged = dict(parsed_meta)
@@ -144,7 +257,7 @@ def parse_markdown(raw, stem="", meta=None):
     blocks = []
     for chunk in re.split(r"\n[ \t]*\n", rest):
         if chunk.strip():
-            _parse_chunk(blocks, chunk)
+            _parse_chunk(blocks, chunk, base_dir)
     title = (merged.get("title") or h1 or stem or "").strip()
     body_han = sum(block["chars"] for block in blocks)
     body_chars = sum(non_space_count(block["text"]) for block in blocks)

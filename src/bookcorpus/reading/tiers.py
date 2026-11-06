@@ -111,6 +111,7 @@ def validate_annotation(annotation, blocks):
                 "spine": bool(entry.get("spine", False)),
                 "deps": deps,
                 "note": str(entry.get("note", "")),
+                "caption": str(entry.get("caption") or "").strip()[:80],
             }
         )
 
@@ -244,7 +245,8 @@ def validate_annotation(annotation, blocks):
             if quote_block not in by_id:
                 raise ValueError("%s 引文块不存在：%r" % (cid, quote_block))
             if not quote_text or quote_text not in by_id[quote_block]["text"]:
-                raise ValueError("%s 引文不在 %s 原文中" % (cid, quote_block))
+                shown = quote_text[:24] + ("…" if len(quote_text) > 24 else "")
+                raise ValueError("%s 引文不在 %s 原文中：%s" % (cid, quote_block, shown or "（空）"))
             # 引文必须逐字来自原文；短于 8 字时才要求落在句边界，避免把
             # 模型合理的短语引文（如“把安禄山、史思明并称‘二圣’”）判死。
             if len(quote_text) < 8 and not _sentence_boundary(by_id[quote_block]["text"], quote_text):
@@ -363,6 +365,69 @@ def _counts(blocks, selected, body_han, total_content):
     }
 
 
+def _band_ok(stats, spec):
+    """覆盖率是否落在档位带内（与 G3 的判定一致）。"""
+    return (
+        spec["c_min"] - 1e-9 <= stats["c_char"] <= spec["c_max"] + 1e-9
+        and spec["b_min"] - 1e-9 <= stats["c_block"] <= spec["b_max"] + 1e-9
+    )
+
+
+def _repair_band(blocks, entries, selected, protected, by_id, body_han, total_content, spec):
+    """低于下限时用一次换入换出把覆盖率拉回带内。
+
+    裁剪按优先级整块移除，遇到大块会一步跨过下限（例如 0.78）。这里换入
+    一块未选中的块，再按优先级从低到高移出可让位的块，只要结果落在带内
+    就采用；换不进去时保持原样，由 G3 如实报告。
+    """
+    current = _counts(blocks, selected, body_han, total_content)
+    if current["c_char"] >= spec["c_min"] and current["c_block"] >= spec["b_min"]:
+        return selected
+    index = {block["id"]: position for position, block in enumerate(blocks)}
+    candidates = [
+        entry
+        for entry in entries
+        if entry["id"] not in selected
+        and by_id[entry["id"]]["kind"] in CONTENT_KINDS
+        and all(dep in selected for dep in entry.get("deps", []))
+    ]
+    candidates.sort(key=lambda entry: (entry["priority"], by_id[entry["id"]]["chars"], index[entry["id"]]))
+    for entry in candidates:
+        trial = set(selected)
+        trial.add(entry["id"])
+        changed = True
+        while changed:
+            changed = False
+            for item in entries:
+                if item["id"] not in trial:
+                    continue
+                for dep in item.get("deps", []):
+                    if dep not in trial:
+                        trial.add(dep)
+                        changed = True
+        while True:
+            stats = _counts(blocks, trial, body_han, total_content)
+            if stats["c_char"] <= spec["c_max"] and stats["c_block"] <= spec["b_max"]:
+                break
+            required = {dep for item in entries if item["id"] in trial for dep in item.get("deps", [])}
+            removable = [
+                item
+                for item in entries
+                if item["id"] in trial
+                and item["id"] != entry["id"]
+                and item["id"] not in protected
+                and item["id"] not in required
+                and by_id[item["id"]]["kind"] in CONTENT_KINDS
+            ]
+            if not removable:
+                break
+            removable.sort(key=lambda item: (item["priority"], index[item["id"]]))
+            trial.discard(removable[-1]["id"])
+        if _band_ok(_counts(blocks, trial, body_han, total_content), spec):
+            return trial
+    return selected
+
+
 def draft_annotation(blocks):
     """无模型时的确定性标注：长段与讲解触发块为脊，其余上下文。"""
     return {
@@ -375,7 +440,7 @@ def draft_annotation(blocks):
 
 
 def project(blocks, annotation, tier, draft=False):
-    """投影一档。返回 ``{blocks, cards, stats, draft}``；blocks 保持源序。"""
+    """投影一档。返回 ``{blocks, cards, stats, captions, draft}``；blocks 保持源序。"""
     if tier not in TIER_SPECS:
         raise ValueError("未知档位：%s" % tier)
     spec = TIER_SPECS[tier]
@@ -389,7 +454,14 @@ def project(blocks, annotation, tier, draft=False):
         stats["notes"] = 0
         stats["minutes"] = max(1, round(stats["chars"] / spec["wpm"]))
         stats.pop("selected", None)
-        return {"tier": tier, "blocks": list(blocks), "cards": [], "stats": stats, "draft": True}
+        return {
+            "tier": tier,
+            "blocks": list(blocks),
+            "cards": [],
+            "stats": stats,
+            "captions": {},
+            "draft": True,
+        }
     entries = annotation.get("blocks") or _draft_entries(blocks, annotation.get("cards", []))
     entry_map = {entry["id"]: entry for entry in entries}
     for block in blocks:
@@ -546,6 +618,7 @@ def project(blocks, annotation, tier, draft=False):
         removable.sort(key=lambda entry: (entry["priority"], blocks.index(by_id[entry["id"]])))
         selected.discard(removable[-1]["id"])
 
+    selected = _repair_band(blocks, entries, selected, protected, by_id, body_han, total_content, spec)
     stats = _counts(blocks, selected, body_han, total_content)
 
     kept_cards = []
@@ -567,4 +640,11 @@ def project(blocks, annotation, tier, draft=False):
 
     kept_ids = {block["id"] for block in blocks if block["id"] in selected}
     kept_blocks = [block for block in blocks if block["id"] in kept_ids]
-    return {"tier": tier, "blocks": kept_blocks, "cards": kept_cards, "stats": stats, "draft": bool(draft)}
+    return {
+        "tier": tier,
+        "blocks": kept_blocks,
+        "cards": kept_cards,
+        "stats": stats,
+        "captions": {entry["id"]: entry["caption"] for entry in entries if entry.get("caption")},
+        "draft": bool(draft),
+    }

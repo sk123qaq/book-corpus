@@ -231,10 +231,10 @@ class Library:
                 chunks.append(fh.read())
         raw_bytes = b"\0".join(chunks)
         raw = chunks[0].decode("utf-8", "replace")
-        parsed = parse_markdown(raw, chapter["stem"])
+        parsed = parse_markdown(raw, chapter["stem"], base_dir=os.path.dirname(paths[0]))
         if len(chunks) > 1:
             body_raw = chunks[1].decode("utf-8", "replace")
-            body = parse_markdown(body_raw, chapter.get("body_stem", "body"))
+            body = parse_markdown(body_raw, chapter.get("body_stem", "body"), base_dir=os.path.dirname(paths[1]))
             blocks = list(parsed.get("blocks") or []) + list(body.get("blocks") or [])
             for block_index, block in enumerate(blocks, 1):
                 block["id"] = f"B{block_index:02d}"

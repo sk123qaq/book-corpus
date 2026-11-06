@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from .tiers import TIER_ORDER, TIER_SPECS
 
-RENDER_VERSION = 1
+RENDER_VERSION = 2
 
 TIER_META = {
     "skim": ("速览", "40–55% · E≤10%"),
@@ -22,8 +22,8 @@ TIER_META = {
 }
 
 READER_CSS = """
-:root{--paper:#F3F0E7;--paper-2:#EAE5D8;--paper-3:#DED7C7;--ink:#181817;--ink-2:#55544E;--ink-3:#8A877C;
---rule:#D2CBBB;--rule-strong:#B9B09C;--pine:#1E3A36;--oxblood:#6B2B2B;--ochre:#A87A3E;--indigo:#2C4056;
+:root{--paper:#F3F0E7;--paper-2:#EAE5D8;--paper-3:#DED7C7;--ink:#181817;--ink-2:#55544E;--ink-3:#69665C;
+--rule:#D2CBBB;--rule-strong:#B9B09C;--pine:#1E3A36;--oxblood:#6B2B2B;--ochre:#7C5A2E;--indigo:#2C4056;
 --moss:#4A5839;--cinnabar:#A8442F;--note-bg:#F0F2F0;--note-rule:#C9D2CC;
 --serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",serif;
 --sans:"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif}
@@ -67,13 +67,13 @@ background:var(--paper-2);font-family:var(--sans);font-size:12px;line-height:1.7
 .flow-row{display:grid;grid-template-columns:minmax(0,680px) 250px;gap:40px;align-items:start}
 .flow-row .block{min-width:0}
 .flow-row .margin{min-width:0}
-.src{font-size:17.5px;line-height:2.02;text-indent:2em;margin:0 0 1.1em;letter-spacing:.01em}
+.src{font-size:17.5px;line-height:1.9;text-indent:2em;margin:0;letter-spacing:.01em}
 .src.lst{text-indent:0;padding-left:1.4em;border-left:2px solid var(--rule)}
 blockquote.src{text-indent:2em;margin:1.4em 0 1.4em;padding:2px 0 2px 20px;border-left:3px solid var(--rule-strong);color:var(--ink-2)}
 .sec{font-size:21px;line-height:1.6;margin:2.6em 0 1.1em;padding-left:14px;border-left:4px solid var(--pine);font-weight:600}
 .fig{margin:1.8em 0;text-align:center}
 .fig img{max-width:100%;height:auto;border:1px solid var(--rule);background:var(--paper-2)}
-.fig figcaption{font-family:var(--sans);font-size:11px;color:var(--ink-3);margin-top:7px;text-indent:0}
+.fig figcaption{font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--ink-3);margin:7px auto 0;max-width:40em;text-indent:0}
 .fn{font-family:var(--sans);font-size:12px;color:var(--ink-3);text-indent:0;margin:-.6em 0 1.2em}
 .note{background:var(--note-bg);border-top:1px solid var(--note-rule);padding:12px 13px 13px;margin:0 0 1.6em;
 font-size:13px;line-height:1.75;text-indent:0;box-shadow:0 1px 0 var(--rule)}
@@ -86,7 +86,7 @@ font-size:13px;line-height:1.75;text-indent:0;box-shadow:0 1px 0 var(--rule)}
 .read-foot a,.read-foot span{font-family:var(--sans);font-size:12px;color:var(--ink-2);text-decoration:none;max-width:46%}
 .read-foot a:hover{color:var(--pine)}
 .read-foot .dim{color:var(--ink-3)}
-.colophon{margin-top:38px;padding-top:16px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:10.5px;
+.colophon{margin-top:38px;padding-top:16px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:11px;
 line-height:1.9;color:var(--ink-3);letter-spacing:.03em}
 .foreedge{position:fixed;left:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:3px;padding:6px 4px;z-index:20}
 .foreedge i{display:block;width:9px;height:2px;background:var(--rule);cursor:pointer;transition:width .15s}
@@ -107,10 +107,10 @@ font-family:var(--sans);font-size:12px;padding:8px 14px;opacity:0;pointer-events
 .cmp-close{margin-top:16px;font-family:var(--sans);font-size:11px;border:1px solid var(--rule-strong);padding:7px 12px}
 body.only-source [data-origin="added"]{display:none!important}
 body.only-source .flow-row{grid-template-columns:minmax(0,680px)}
-body.big .src{font-size:20px;line-height:2.1}
+body.big .src{font-size:20px;line-height:1.8}
 body.big .read-head h1{font-size:38px}
-body.night{--paper:#E2E6E6;--paper-2:#D3DADA;--paper-3:#C3CCCC;--ink:#131A1F;--ink-2:#3C4A52;--ink-3:#68767C;
---rule:#B7C1C1;--rule-strong:#93A1A1;--pine:#18344F;--oxblood:#4E2A33;--ochre:#7C5A2E;--indigo:#2B5C84;
+body.night{--paper:#E2E6E6;--paper-2:#D3DADA;--paper-3:#C3CCCC;--ink:#131A1F;--ink-2:#3C4A52;--ink-3:#4F5C63;
+--rule:#B7C1C1;--rule-strong:#93A1A1;--pine:#18344F;--oxblood:#4E2A33;--ochre:#6B4E28;--indigo:#2B5C84;
 --moss:#3C4A36;--cinnabar:#2B5C84;--note-bg:#DCE3E3;--note-rule:#AEBABA}
 body.night .foreedge i.kept{background:var(--indigo)}
 body.night .tier-tab[aria-selected="true"]{border-bottom-color:var(--indigo)}
@@ -119,7 +119,7 @@ body.night .tier-tab[aria-selected="true"] b{color:var(--indigo)}
 @media(max-width:980px){.flow-row{grid-template-columns:minmax(0,1fr)}.flow-row .margin{padding-left:0}
 .note{margin-top:-.6em;margin-bottom:1.6em}.tierbar{justify-content:flex-start;overflow-x:auto;gap:8px}
 .tier-tab{padding:10px 12px 8px;white-space:nowrap}.tier-note{display:none}}
-@media(max-width:720px){.read{padding:30px 16px 56px}.read-head h1{font-size:26px}.src{font-size:16.5px;line-height:1.95}
+@media(max-width:720px){.read{padding:30px 16px 56px}.read-head h1{font-size:26px}.src{font-size:16.5px;line-height:1.85}
 .reader-top{padding:0 10px;gap:6px}.reader-top .book{display:none}
 .reader-top .tool{margin-left:auto;gap:0;min-width:0;overflow-x:auto;scrollbar-width:none}
 .reader-top .tool button,.reader-top .tool a{padding:6px 5px;font-size:11px;white-space:nowrap}
@@ -131,7 +131,7 @@ body.night .tier-tab[aria-selected="true"] b{color:var(--indigo)}
 .read-foot{flex-direction:column}.read-foot a,.read-foot span{max-width:100%}
 .draft-banner{margin:0 0 22px;font-size:11px;padding:10px 12px}}
 @media print{.reader-top,.tierbar,.foreedge,.progress,.toast,.cmp-overlay,.read-foot{display:none!important}
-.read{padding:0}.note{break-inside:avoid}.src{font-size:12pt;line-height:1.8}}
+.read{padding:0}.note{break-inside:avoid}.src{font-size:12pt;line-height:1.7}}
 body.export .reader-top,body.export .tierbar,body.export .foreedge,body.export .progress{display:none}
 body.export .read{padding-top:30px}
 """
@@ -233,7 +233,7 @@ def _tiers_attr(tier_list):
     return " ".join(tier for tier in TIER_ORDER if tier in tier_list)
 
 
-def _block_element(block, tiers, resolver):
+def _block_element(block, tiers, resolver, captions=None):
     text = html.escape(block["text"])
     kind = block["kind"]
     attrs = 'data-origin="source" data-src="%s" data-block="%s" data-kind="%s" data-tiers="%s"' % (
@@ -248,8 +248,20 @@ def _block_element(block, tiers, resolver):
     if kind == "image":
         src = resolver(block.get("rel", "")) if resolver else ""
         alt = html.escape(block.get("text", ""))
-        img = '<img src="%s" alt="%s" loading="lazy">' % (html.escape(src, quote=True), alt)
-        return '<figure class="fig" %s>%s<figcaption>%s</figcaption></figure>' % (attrs, img, alt)
+        caption = (captions or {}).get(block["id"])
+        source = "model" if caption else "alt"
+        size = ""
+        width, height = block.get("width"), block.get("height")
+        if width and height:
+            size = ' width="%d" height="%d"' % (int(width), int(height))
+        img = '<img src="%s" alt="%s"%s loading="lazy">' % (html.escape(src, quote=True), alt, size)
+        label = html.escape(caption or block.get("text", ""))
+        return '<figure class="fig" %s data-caption-src="%s">%s<figcaption>%s</figcaption></figure>' % (
+            attrs,
+            source,
+            img,
+            label,
+        )
     if kind == "footnote":
         if not block["text"]:
             return '<span class="fn" %s></span>' % attrs
@@ -345,6 +357,10 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
         else ""
     )
     initial = "standard" if "standard" in projections else next(iter(projections))
+    captions = {}
+    for projection in projections.values():
+        for block_id, caption in (projection.get("captions") or {}).items():
+            captions.setdefault(block_id, caption)
     rows = []
     for block in blocks:
         tiers = {tier for tier, projection in projections.items() if block in projection["blocks"]}
@@ -352,7 +368,7 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
             tiers = set(projections) if tiers else set()
         if not tiers:
             continue
-        element = _block_element(block, tiers, resolver)
+        element = _block_element(block, tiers, resolver, captions)
         notes = []
         for record in cards.get(block["id"], {}).values():
             if standalone and not record["tiers"].intersection(projections):
