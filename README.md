@@ -10,7 +10,7 @@
 - 查原文：段落级倒排检索，支持概念同义词组，返回 `books/<uid>/md/章节.md:行号`。
 - 问书：`book-corpus query` 定位书与章。要成段回答并带逐字引文，用 `book-corpus-qa` 技能或演示页。
 - 管书：入库、分类、拆章、出 HTML 阅读版、PDF 转 Markdown、删书与冷宫。
-- 看库：统一入口（8773）、操作台（8770）、检索演示页（8765）、四读（8771）与日课页（8772），默认只绑 `127.0.0.1`。
+- 看库：项目默认只启动统一入口（8773）；四读（8771）、操作台（8770）、检索演示页（8765）与日课页（8772）按需启动，全部只绑 `127.0.0.1`。
 
 ## 实例结构
 
@@ -43,11 +43,11 @@
 
 | 路径 | 内容 |
 |---|---|
-| `apps/ops/` | 统一操作台服务与 web，127.0.0.1:8770 |
-| `apps/demo/` | 检索流程演示页与回答实现，127.0.0.1:8765 |
-| `apps/reading/` | 四读书架、书目、正文与记录，127.0.0.1:8771 |
-| `apps/daily/` | 每日一章的只读阅读页，127.0.0.1:8772 |
-| `apps/home/` | 统一入口首页，服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点入口按需代起四个服务，127.0.0.1:8773 |
+| `apps/ops/` | 统一操作台服务与 web，按需启动，127.0.0.1:8770 |
+| `apps/demo/` | 检索流程演示页与回答实现，按需启动，127.0.0.1:8765 |
+| `apps/reading/` | 四读书架、书目、正文与记录，按需启动，127.0.0.1:8771 |
+| `apps/daily/` | 每日一章的只读阅读页，按需启动，127.0.0.1:8772 |
+| `apps/home/` | 统一入口首页，默认启动项，服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点入口按需代起四个服务，127.0.0.1:8773 |
 | `src/bookcorpus/` | 命令行包；`scripts/` 是全部可复跑脚本 |
 | `tests/acceptance/` | 离线验收，由 pytest 收集 |
 | `tests/manual/` | 需要 Chrome、真实模型或真实会话的手工验收，清单见其 README |
@@ -315,19 +315,26 @@ book-corpus query 关键词 关键词 --no-cards
 
 要成段回答并带引文，用 `book-corpus-qa` 技能，或起演示页。
 
-### 起五个本地页面
+### 启动（默认只起统一入口）
 
-在工具仓里跑，认实例根：
+在工具仓里跑。默认只启动入口页一个进程：
+
+```bash
+python3 apps/home/server.py --root <实例根>       # http://127.0.0.1:8773
+```
+
+`<实例根>` 是有 `books.toml` 的那层。
+
+其他页面按需再起，不随默认启动：
 
 ```bash
 BOOKS_ROOT=<实例根> python3 apps/demo/server.py   # http://127.0.0.1:8765
 python3 apps/ops/server.py --root <实例根>        # http://127.0.0.1:8770
 python3 apps/reading/server.py --root <实例根>    # http://127.0.0.1:8771
 python3 apps/daily/server.py --root <实例根>      # http://127.0.0.1:8772
-python3 apps/home/server.py --root <实例根>       # http://127.0.0.1:8773
 ```
 
-`<实例根>` 是有 `books.toml` 的那层；演示页从 `BOOKS_ROOT` 认根，其余页面用 `--root`。首页读 `books.toml`、`books/` 与 `日课/`；点入口时如果对应服务没起，会代起并等端口就绪，已经在跑就直接跳转。页脚的「管理」也走同一条路，进入 8770。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。
+演示页从 `BOOKS_ROOT` 认根，其余页面用 `--root`。首页读 `books.toml`、`books/` 与 `日课/`；点入口时如果对应服务没起，会代起并等端口就绪，已经在跑就直接跳转。页脚的「管理」也走同一条路，进入 8770。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。
 
 ### 重建产物
 

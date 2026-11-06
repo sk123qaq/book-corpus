@@ -53,9 +53,10 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `src/bookcorpus/` | 包与脚本。入口 `book-corpus`，`book-corpus list` 列全部 |
 | `docs/检索/` | 检索层方案、口径与踩坑账。工具仓文档，不在工作区 |
 | `.agents/skills/` | 随仓库提交的 pi 技能：`book-corpus-qa`、`ebook-to-md`、`chapter-html-versions`、`mineru`、`typesafe-ai` |
-| `apps/ops/` | 统一操作台服务、web 与运维文档，127.0.0.1:8770；验收在 `tests/acceptance/ops/` 与 `tests/manual/ops/` |
-| `apps/demo/` | 检索流程演示页、回答与会话实现，127.0.0.1:8765；验收在 `tests/acceptance/demo/` 与 `tests/manual/demo/` |
-| `apps/home/` | 统一入口首页，127.0.0.1:8773；服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点击时按需代起四个页面服务，验收在 `tests/test_home_*.py` |
+| `apps/ops/` | 统一操作台服务、web 与运维文档，按需启动，127.0.0.1:8770；验收在 `tests/acceptance/ops/` 与 `tests/manual/ops/` |
+| `apps/demo/` | 检索流程演示页、回答与会话实现，按需启动，127.0.0.1:8765；验收在 `tests/acceptance/demo/` 与 `tests/manual/demo/` |
+| `apps/reading/` | 四读书架、书目、正文与记录，按需启动，127.0.0.1:8771；验收在 `tests/test_reading_*.py` |
+| `apps/home/` | 统一入口首页，项目默认只启动这一项，127.0.0.1:8773；服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点击时按需代起四个页面服务，验收在 `tests/test_home_*.py` |
 | `docs/design/` | 权威方案、决策记录与流程图 |
 | `docs/briefs/` | 已完成任务书，标注完成日期 |
 | `工作区/批次/` | 只在实例与数据仓；工具仓不再保留 |
