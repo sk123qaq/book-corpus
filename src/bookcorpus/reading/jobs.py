@@ -7,6 +7,10 @@ import time
 import uuid
 
 STEPS = ("切块", "标注", "校验", "组档", "渲染")
+STEPS_BY_KIND = {
+    "reading": STEPS,
+    "edition": ("解析", "编辑", "校验", "渲染", "入库"),
+}
 ACTIVE_STATES = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
 STAGE_TO_STEP = {
     "queued": (0, 0),
@@ -14,6 +18,7 @@ STAGE_TO_STEP = {
     "annotating": (1, 40),
     "validating": (2, 60),
     "projecting": (3, 75),
+    "editorial": (4, 85),
     "rendering": (4, 90),
     "done": (5, 100),
     "partial": (5, 100),
@@ -84,10 +89,11 @@ class JobQueue:
 
     # ---- 状态 ---------------------------------------------------------
     @staticmethod
-    def _steps_for(state):
+    def _steps_for(state, kind="reading"):
         index, _ = STAGE_TO_STEP.get(state, (0, 0))
+        labels = STEPS_BY_KIND.get(kind, STEPS)
         steps = []
-        for i, label in enumerate(STEPS):
+        for i, label in enumerate(labels):
             if state == "cancelled":
                 status = "pending"
             elif state in ("done", "partial", "failed") or i < index:
@@ -110,7 +116,7 @@ class JobQueue:
                 return dict(job)
             job.update(changes)
             job["updated_at"] = _now()
-            job["steps"] = self._steps_for(job["state"])
+            job["steps"] = self._steps_for(job["state"], job.get("kind"))
             _index, progress = STAGE_TO_STEP.get(job["state"], (0, 0))
             job["stage"] = job["state"]
             if "progress" not in changes:
@@ -126,12 +132,13 @@ class JobQueue:
             return self._update(job_id, state=state)
 
     # ---- 队列 ---------------------------------------------------------
-    def submit(self, uid, n, tiers, model=None, effort=None, overwrite=False, rebuild=False):
+    def submit(self, uid, n, tiers, model=None, effort=None, overwrite=False, rebuild=False, kind="reading"):
         tiers = [tier for tier in ("skim", "standard", "deep", "research") if tier in set(tiers or ["standard"])]
         if not tiers:
             tiers = ["standard"]
         job = {
             "id": "r-" + uuid.uuid4().hex[:10],
+            "kind": kind,
             "uid": uid,
             "n": "%02d" % int(n),
             "tiers": tiers,
@@ -142,7 +149,7 @@ class JobQueue:
             "state": "queued",
             "stage": "queued",
             "progress": 0,
-            "steps": self._steps_for("queued"),
+            "steps": self._steps_for("queued", kind),
             "error": None,
             "created_at": _now(),
             "updated_at": _now(),

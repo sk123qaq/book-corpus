@@ -12,10 +12,16 @@ from urllib.parse import unquote
 
 HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+INLINE_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+INLINE_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+HR_RE = re.compile(r"^(?:-{3,}|\*{3,}|_{3,})$")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 QUOTE_RE = re.compile(r"^>\s?(.*)$")
 LIST_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s+(.*)$")
 FOOTNOTE_RE = re.compile(r"^\[\^([^\]]+)\]:\s*(.*)$")
+CODE_FENCE_RE = re.compile(r"^```(\S*)\s*$")
+TABLE_ROW_RE = re.compile(r"^\|.*\|\s*$")
+TABLE_ALIGN_RE = re.compile(r":?-{1,}:?")
 FRONT_MATTER_LIMIT = 60
 
 
@@ -69,6 +75,8 @@ def _take_h1(body):
 def _clean_inline(text):
     """只清行内强调标记，保留正文用字。"""
     text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = INLINE_IMAGE_RE.sub("", text)
+    text = INLINE_LINK_RE.sub(r"\1", text)
     text = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"\1", text)
     return re.sub(r"`([^`]+)`", r"\1", text)
 
@@ -78,6 +86,37 @@ def _append(blocks, kind, text, **extra):
     block = {"id": "B%02d" % (len(blocks) + 1), "kind": kind, "text": text, "chars": han_count(text)}
     block.update(extra)
     blocks.append(block)
+
+
+def _append_raw(blocks, kind, text, **extra):
+    """不经行内清理的块：代码、表格单元格等原文保留文本。"""
+    block = {"id": "B%02d" % (len(blocks) + 1), "kind": kind, "text": text, "chars": han_count(text)}
+    block.update(extra)
+    blocks.append(block)
+
+
+def _table_row(line):
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _table_align_row(cells):
+    return bool(cells) and all(TABLE_ALIGN_RE.fullmatch(cell or "") for cell in cells)
+
+
+def _append_table(blocks, lines):
+    grid = [_table_row(line) for line in lines]
+    head, align, rows = [], [], grid
+    if len(grid) >= 2 and _table_align_row(grid[1]):
+        head = grid[0]
+        align = grid[1]
+        rows = grid[2:]
+    flat = [cell for row in ([head] if head else []) + rows for cell in row if cell]
+    extra = {"rows": rows}
+    if head:
+        extra["head"] = head
+    if align:
+        extra["align"] = align
+    _append_raw(blocks, "table", " ".join(flat), **extra)
 
 
 def _image_kind(rel):
@@ -215,6 +254,8 @@ def _parse_chunk(blocks, chunk, base_dir=None):
     lines = [line for line in chunk.split("\n") if line.strip()]
     if not lines:
         return
+    if all(HR_RE.match(line.strip()) for line in lines):
+        return
 
     heading = HEADING_RE.match(lines[0].strip())
     if heading and len(lines) == 1:
@@ -228,12 +269,23 @@ def _parse_chunk(blocks, chunk, base_dir=None):
 
     if all(QUOTE_RE.match(line.strip()) for line in lines):
         text = " ".join((QUOTE_RE.match(line.strip()).group(1) or "").strip() for line in lines)
-        _append(blocks, "quote", text)
+        if text.startswith("`") and text.endswith("`") and "`" not in text[1:-1]:
+            _append_raw(blocks, "code", text[1:-1].strip())
+        else:
+            _append(blocks, "quote", text)
         return
 
     if all(LIST_RE.match(line.strip()) for line in lines):
-        items = [LIST_RE.match(line.strip()).group(1).strip() for line in lines]
-        _append(blocks, "list", " ".join(items))
+        items = [
+            _clean_inline(LIST_RE.match(line.strip()).group(1).strip()).replace("**", "").lstrip("*").strip()
+            for line in lines
+        ]
+        _append(blocks, "list", " ".join(items), items=items)
+        return
+
+    rows = [line for line in lines if TABLE_ROW_RE.match(line)]
+    if len(rows) == len(lines):
+        _append_table(blocks, lines)
         return
 
     only = IMAGE_RE.fullmatch(chunk.strip())
@@ -247,22 +299,95 @@ def _parse_chunk(blocks, chunk, base_dir=None):
     _emit_inline(blocks, " ".join(line.strip() for line in lines), base_dir)
 
 
+def _segments(body=""):
+    """把正文切成 ("md", 文本) 与 ("code",  (lang, 文本)) 段，保序。
+
+    代码块内的空行不切块；围栏行本身不进 text。
+    """
+    lines = body.split("\n")
+    segs, buf = [], []
+    i = 0
+    while i < len(lines):
+        fence = CODE_FENCE_RE.match(lines[i].strip())
+        if fence:
+            if buf:
+                segs.append(("md", "\n".join(buf)))
+                buf = []
+            i += 1
+            code = []
+            while i < len(lines) and not lines[i].strip().startswith("```"):
+                code.append(lines[i])
+                i += 1
+            i += 1
+            segs.append(("code", (fence.group(1), "\n".join(code).strip("\n"))))
+        else:
+            buf.append(lines[i])
+            i += 1
+    if buf:
+        segs.append(("md", "\n".join(buf)))
+    return segs
+
+
+def _sections(blocks):
+    """按 H1/H2 分结：返回 [{id,title,start,end}]，end 为排他下标。
+
+    首个 H2 之前的块是没有标题的首结；通篇无小标题时只有一个结。
+    """
+    marks = [i for i, b in enumerate(blocks) if b["kind"] == "heading" and b.get("level", 6) <= 2]
+    if not marks:
+        return [{"id": "S01", "title": "", "start": 0, "end": len(blocks)}]
+    sections = []
+    if marks[0] > 0:
+        sections.append({"id": "S%02d" % (len(sections) + 1), "title": "", "start": 0, "end": marks[0]})
+    for j, i in enumerate(marks):
+        end = marks[j + 1] if j + 1 < len(marks) else len(blocks)
+        sections.append({"id": "S%02d" % (len(sections) + 1), "title": blocks[i]["text"], "start": i, "end": end})
+    return sections
+
+
+def _attach_orphan_footnotes(blocks):
+    """把正文末尾的注释列表回填到空的 footnote 块。
+
+    有些书的脚注不是 `[^1]: ...` 定义，而是在章末用列表集中列出；
+    解析器会先得到若干空 footnote 块。若末尾列表条目数与空脚注数
+    完全一致，就按顺序回填并移除该列表。
+    """
+    orphans = [block for block in blocks if block["kind"] == "footnote" and not block["text"].strip()]
+    if not orphans or not blocks or blocks[-1]["kind"] != "list":
+        return
+    items = blocks[-1].get("items") or []
+    if len(items) != len(orphans):
+        return
+    for block, text in zip(orphans, items, strict=True):
+        block["text"] = text
+        block["chars"] = han_count(text)
+    blocks.pop()
+
+
 def parse_markdown(raw, stem="", meta=None, base_dir=None):
-    """解析一章。返回 ``dict``：title/blocks/body_han/body_chars/meta``。"""
+    """解析一章。返回 ``dict``：title/blocks/sections/body_han/body_chars/meta``。"""
     parsed_meta, body = strip_front_matter(raw)
     merged = dict(parsed_meta)
     if meta:
         merged.update(meta)
     h1, rest = _take_h1(body)
     blocks = []
-    for chunk in re.split(r"\n[ \t]*\n", rest):
-        if chunk.strip():
-            _parse_chunk(blocks, chunk, base_dir)
+    for seg_kind, seg in _segments(rest):
+        if seg_kind == "code":
+            lang, text = seg
+            extra = {} if not lang else {"lang": lang}
+            _append_raw(blocks, "code", text, **extra)
+        else:
+            for chunk in re.split(r"\n[ \t]*\n", seg):
+                if chunk.strip():
+                    _parse_chunk(blocks, chunk, base_dir)
+    _attach_orphan_footnotes(blocks)
     title = (merged.get("title") or h1 or stem or "").strip()
     body_han = sum(block["chars"] for block in blocks)
     body_chars = sum(non_space_count(block["text"]) for block in blocks)
     return {
         "title": title,
+        "sections": _sections(blocks),
         "meta": merged,
         "blocks": blocks,
         "body_han": body_han,

@@ -95,6 +95,21 @@ def test_validate_annotation_rejects_cycle_and_bad_quote():
         validate_annotation(bad, _blocks())
 
 
+def test_validate_annotation_infers_missing_quote_block():
+    annotation = _annotation()
+    annotation["cards"][0]["quotes"] = [{"text": TEXT}]
+    out = validate_annotation(annotation, _blocks())
+    assert out["cards"][0]["quotes"][0] == {"block": "B01", "text": TEXT}
+
+
+def test_validate_annotation_drops_filename_caption():
+    blocks = [*_blocks(), {"id": "B05", "kind": "image", "text": "", "rel": "images/zst.png", "chars": 0}]
+    annotation = _annotation()
+    annotation["blocks"].append({"id": "B05", "role": "context", "priority": 3, "caption": "zst.png"})
+    out = validate_annotation(annotation, blocks)
+    assert out["blocks"][-1]["caption"] == ""
+
+
 def test_project_skims_cap_drops_lowest_priority_first():
     annotation = _annotation()
     annotation["tier_blocks"] = {"standard": ["B01", "B02", "B03", "B04"]}
@@ -178,3 +193,17 @@ def test_project_repairs_band_after_trimming_large_block():
     spec = TIER_SPECS["deep"]
     assert spec["c_min"] <= out["stats"]["c_char"] <= spec["c_max"]
     assert "B40" in [block["id"] for block in out["blocks"]]
+
+
+def test_project_keeps_figure_marked_as_context():
+    blocks = [
+        *_blocks(),
+        {"id": "B05", "kind": "image", "text": "", "chars": 0, "rel": "images/x.jpg", "width": 10, "height": 10},
+    ]
+    annotation = _annotation()
+    annotation["blocks"].append({"id": "B05", "role": "context", "priority": 3, "deps": []})
+    annotation = validate_annotation(annotation, blocks)
+    out = project(blocks, annotation, "standard")
+    ids = [block["id"] for block in out["blocks"]]
+    assert "B05" in ids
+    assert out["stats"]["c_block"] <= TIER_SPECS["standard"]["b_max"]

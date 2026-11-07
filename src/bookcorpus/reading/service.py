@@ -10,6 +10,10 @@ import time
 from html.parser import HTMLParser
 from typing import ClassVar
 
+from .agent_standard import generate_standard_html, render_agent_page
+from .edition import audit_edition, build_brief, decide_template, generate_content, render_edition, validate_content
+from .editorial import EditorialError, audit_editorial, validate_editorial
+from .editorial_gen import generate_editorial
 from .jobs import JobQueue
 from .library import Library
 from .model import ModelClient, prompt_sha256
@@ -232,7 +236,7 @@ def _coverage_problems(projections):
     return problems
 
 
-def audit_pack(blocks, projections, html_text, annotation, drafts):
+def audit_pack(blocks, projections, html_text, annotation, drafts, editorial=None):
     gates = []
     quality = check_html(html_text)
 
@@ -389,6 +393,22 @@ def audit_pack(blocks, projections, html_text, annotation, drafts):
         }
     )
 
+    if editorial is not None:
+        try:
+            editorial_problems = audit_editorial(editorial, blocks, projections)
+        except EditorialError as exc:
+            editorial_problems = [str(exc)]
+        gates.append(
+            {
+                "id": "G9",
+                "name": "编辑层",
+                "status": "pass" if not editorial_problems else "fail",
+                "detail": "节拍、图版、结论与原文和档位对齐"
+                if not editorial_problems
+                else "；".join(editorial_problems[:8]),
+            }
+        )
+
     if any(gate["status"] == "fail" for gate in gates if gate["id"] == "G1"):
         status = "failed"
     elif drafts:
@@ -407,6 +427,7 @@ class ReadingService:
         if annotate is None:
             annotate = os.environ.get("READING_ANNOTATE", "1") != "0"
         self.annotate = bool(annotate)
+        self.figures = os.environ.get("READING_EDITORIAL", "1") != "0"
         self.client = client or ModelClient()
         self.queue = JobQueue(self.library.layout.work, self._run_job, max_workers=4)
         self._submit_lock = threading.Lock()
@@ -607,8 +628,11 @@ class ReadingService:
             ]
         )
         audit = self.store.audit(uid, n) or {}
+        edition = self.store.edition(uid, n)
+        book_view = self._book_view(book)
+        fit = decide_template(build_brief(book_view, raw, raw["blocks"]))
         return {
-            "book": self._book_view(book),
+            "book": book_view,
             "chapter": _chapter_api(chapter, state["tiers"] if state else {}, state),
             "jobs": self.queue.active_for(uid, n),
             "blocks": raw["blocks"],
@@ -617,7 +641,221 @@ class ReadingService:
             "preview_blocks": preview,
             "pack": _pack_meta(state),
             "gates": audit.get("gates", []),
+            "edition": ({"exists": True, "url": "/reader/%s/%02d/edition" % (uid, n)} if edition else None),
+            "edition_fit": {
+                "ok": fit["template"] is not None,
+                "score": fit["score"],
+                "reason": fit["reason"],
+            },
         }
+
+    def editorial(self, uid, n):
+        return self.store.editorial(uid, n)
+
+    def save_editorial(self, uid, n, payload):
+        raw = self.library.read_chapter(uid, n)
+        if not raw:
+            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
+        clean = validate_editorial(payload, raw["blocks"], uid=uid, n=n)
+        self.store.save_editorial(uid, n, clean)
+        return clean
+
+    def _editorial_with_meta(self, book, chapter, blocks, annotation, *, model=None, effort=None, allowed_ids=None):
+        complete = getattr(self.client, "complete_json", None)
+        if not callable(complete):
+            raise RuntimeError("当前模型客户端不支持图表编辑")
+        return generate_editorial(
+            self.client,
+            book,
+            chapter,
+            blocks,
+            annotation,
+            model=model,
+            effort=effort,
+            allowed_ids=allowed_ids,
+        )
+
+    def generate_editorial(self, uid, n, *, model=None, effort=None, save=True, allowed_ids=None):
+        raw = self.library.read_chapter(uid, n)
+        if not raw:
+            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
+        annotation = self.store.annotation(uid, n)
+        if not annotation:
+            raise RuntimeError("该章还没有标注，无法生成图表；请先生成读本")
+        annotation = validate_annotation(annotation, raw["blocks"])
+        book = self._book_view(self.library.book(uid))
+        if allowed_ids is None:
+            editorial_tiers = {
+                tier: project(raw["blocks"], annotation, tier) for tier in ("standard", "deep", "research")
+            }
+            allowed_ids = set.intersection(
+                *[{block["id"] for block in projection["blocks"]} for projection in editorial_tiers.values()]
+            )
+        editorial, meta = self._editorial_with_meta(
+            book,
+            _chapter_api(raw),
+            raw["blocks"],
+            annotation,
+            model=model,
+            effort=effort,
+            allowed_ids=allowed_ids,
+        )
+        if save:
+            editorial = self.store.save_editorial(uid, n, editorial)
+        return {"editorial": editorial, "meta": meta}
+
+    def generate_agent_standard(self, uid, n, *, model=None, effort=None):
+        raw = self.library.read_chapter(uid, n)
+        if not raw:
+            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
+        blocks = raw["blocks"]
+        book = self._book_view(self.library.book(uid))
+        chapter = _chapter_api(raw)
+        image_data = {}
+        for block in blocks:
+            if block.get("kind") != "image" or not block.get("rel"):
+                continue
+            path = os.path.join(self.library.layout.md(uid), block["rel"])
+            if os.path.exists(path):
+                image_data[block["id"]] = image_data_uri(path)
+        fragment, meta = generate_standard_html(
+            self.client,
+            book,
+            chapter,
+            blocks,
+            model=model,
+            effort=effort,
+            image_data=image_data,
+        )
+        present = [block["id"] for block in blocks if ('data-block="%s"' % block["id"]) in fragment]
+        chars = sum(len(block.get("text") or "") for block in blocks if block["id"] in present)
+        stats = {
+            "chars": chars,
+            "plates": fragment.count('class="plate-row"'),
+            "minutes": max(1, round(chars / 420)),
+            "blocks": len(present),
+            "total_blocks": len(blocks),
+        }
+        page = render_agent_page(book, chapter, fragment, stats=stats)
+        path = os.path.join(self.store.pack_dir(uid, n), "agent-standard.html")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(page)
+        os.replace(tmp, path)
+        return {
+            "url": "/reader/%s/%02d/agent" % (uid, n),
+            "path": path,
+            "stats": stats,
+            "meta": meta,
+        }
+
+    # ---- 视觉读本 -----------------------------------------------------
+    def edition(self, uid, n):
+        return self.store.edition(uid, n)
+
+    def _edition_parts(self, uid, n):
+        raw = self.library.read_chapter(uid, n)
+        if not raw:
+            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
+        book = self._book_view(self.library.book(uid))
+        blocks = raw["blocks"]
+        return raw, book, blocks
+
+    def _edition_render(self, book, raw, blocks, content):
+        chapter = _chapter_api(raw)
+        brief = build_brief(book, raw, blocks)
+        decision = decide_template(brief)
+        html_text = render_edition(book, chapter, blocks, content)
+        audit = audit_edition(blocks, html_text, content)
+        return brief, decision, html_text, audit
+
+    def save_edition(self, uid, n, payload):
+        raw, book, blocks = self._edition_parts(uid, n)
+        content = validate_content(payload, blocks)
+        brief, decision, html_text, audit = self._edition_render(book, raw, blocks, content)
+        if audit["errors"]:
+            raise ValueError("视觉读本门禁未通过：%s" % "；".join(audit["errors"][:4]))
+        self.store.save_edition(uid, n, content, html_text, audit, brief.as_dict())
+        return {
+            "content": content,
+            "audit": audit,
+            "brief": brief.as_dict(),
+            "decision": decision,
+            "url": "/reader/%s/%02d/edition" % (uid, n),
+        }
+
+    def generate_edition(self, uid, n, *, model=None, effort="low", save=True):
+        raw, book, blocks = self._edition_parts(uid, n)
+        brief = build_brief(book, raw, blocks)
+        decision = decide_template(brief)
+        if decision["template"] is None:
+            return {"status": "fallback", "brief": brief.as_dict(), "decision": decision}
+        content, usage, warnings = generate_content(
+            self.client, book, _chapter_api(raw), blocks, model=model, effort=effort
+        )
+        _brief, _decision, html_text, audit = self._edition_render(book, raw, blocks, content)
+        if audit["errors"]:
+            raise ValueError("视觉读本门禁未通过：%s" % "；".join(audit["errors"][:4]))
+        if save:
+            self.store.save_edition(uid, n, content, html_text, audit, brief.as_dict())
+        return {
+            "status": "ok",
+            "url": "/reader/%s/%02d/edition" % (uid, n),
+            "brief": brief.as_dict(),
+            "decision": decision,
+            "audit": audit,
+            "usage": usage,
+            "warnings": warnings,
+        }
+
+    def _run_edition_job(self, job_id, job):
+        uid, n = job["uid"], int(job["n"])
+        if self.queue.cancelled(job_id):
+            raise RuntimeError("任务已取消")
+        self._set_stage(job_id, "chunking")
+        raw, book, blocks = self._edition_parts(uid, n)
+        brief = build_brief(book, raw, blocks)
+        decision = decide_template(brief)
+        if decision["template"] is None:
+            raise RuntimeError("不适合视觉读本：%s" % decision["reason"])
+        self._set_stage(job_id, "annotating")
+        content, usage, warnings = generate_content(
+            self.client, book, _chapter_api(raw), blocks, model=job.get("model"), effort=job.get("effort") or "low"
+        )
+        self._set_stage(job_id, "validating")
+        _brief, _decision, html_text, audit = self._edition_render(book, raw, blocks, content)
+        if audit["errors"]:
+            raise RuntimeError("视觉读本门禁未通过：%s" % "；".join(audit["errors"][:4]))
+        self._set_stage(job_id, "rendering")
+        self.store.save_edition(uid, n, content, html_text, audit, brief.as_dict())
+        return {
+            "status": "done",
+            "pack_id": "%s/%02d" % (uid, n),
+            "url": "/reader/%s/%02d/edition" % (uid, n),
+            "usage": usage,
+            "warnings": warnings,
+            "audit": audit,
+        }
+
+    def submit_edition(self, uid, n, *, model=None, effort="low", overwrite=False):
+        if not self.library.book(uid) or not self.library.chapter(uid, n):
+            raise FileNotFoundError("找不到章节 %s/%s" % (uid, n))
+        with self._submit_lock:
+            conflicts = self.queue.conflicts(uid, n)
+            if conflicts:
+                raise JobConflictError(conflicts)
+            if self.store.edition(uid, n) and not overwrite:
+                raise PackExistsError(["edition"])
+            return self.queue.submit(
+                uid,
+                n,
+                ["standard"],
+                model=model,
+                effort=effort,
+                overwrite=overwrite,
+                kind="edition",
+            )
 
     def records(self):
         return {"jobs": self.queue.list(100), "packs": self._records_packs()}
@@ -668,6 +906,8 @@ class ReadingService:
         }
 
     def _run_job(self, job_id, job):
+        if job.get("kind") == "edition":
+            return self._run_edition_job(job_id, job)
         uid, n = job["uid"], int(job["n"])
         tiers = job.get("tiers") or ["standard"]
         requested = [tier for tier in TIER_ORDER if tier in set(tiers)]
@@ -682,11 +922,14 @@ class ReadingService:
         blocks = raw["blocks"]
         book = self._book_view(self.library.book(uid))
 
+        # 有编辑层的章节，标注是编辑层的一部分；重新跑模型会改变档位选块，
+        # 让图版锚点漂移。此时只接受与原文一致的旧标注。
+        editorial = self.store.editorial(uid, n)
         annotation = None
         draft = False
         budget_estimate = None
         model_meta = None
-        if self.annotate:
+        if self.annotate and editorial is None:
             budget_estimate = _estimate_budget(blocks)
             if budget_estimate["tokens_est"] > MAX_BUDGET_TOKENS or budget_estimate["usd_est"] > MAX_BUDGET_USD:
                 raise RuntimeError(
@@ -725,6 +968,8 @@ class ReadingService:
                 except ValueError:
                     annotation = None
             draft = annotation is None
+        if editorial is not None and annotation is None:
+            raise RuntimeError("该章有编辑层，但标注缺失或与原文不一致；请先删除 editorial.json 再重新标注")
 
         # 只生成用户勾选的档位；已有包中未勾选的档位原样保留。
         # 只有源文未变、草稿状态一致且旧标注可用时才做增量保留，避免混入不同源文/模型的内容。
@@ -761,6 +1006,31 @@ class ReadingService:
                 projections[tier] = project(blocks, old_annotation, tier, draft=draft)
         if self.queue.cancelled(job_id):
             raise RuntimeError("任务已取消")
+
+        editorial_meta = None
+        editorial_error = None
+        if editorial is None and self.annotate and self.figures:
+            editable = [tier for tier in ("standard", "deep", "research") if tier in projections]
+            allowed_ids = (
+                set.intersection(*[{block["id"] for block in projections[tier]["blocks"]} for tier in editable])
+                if editable
+                else None
+            )
+            self._set_stage(job_id, "editorial")
+            try:
+                editorial, editorial_meta = self._editorial_with_meta(
+                    book,
+                    _chapter_api(raw),
+                    blocks,
+                    annotation,
+                    model=job.get("model"),
+                    effort=job.get("effort"),
+                    allowed_ids=allowed_ids,
+                )
+                editorial = self.store.save_editorial(uid, n, editorial)
+            except Exception as exc:  # 图表生成失败时仍发布无图读本，原因写进 manifest
+                editorial = None
+                editorial_error = str(exc)
 
         # 渲染前先定稿模型/时间/版本，读本页脚与导出的出处信息才能落到真实值。
         prompt = prompt_sha256() if annotation else DRAFT_PROMPT
@@ -816,11 +1086,13 @@ class ReadingService:
 
         self._set_stage(job_id, "rendering")
 
+        editorial = self.store.editorial(uid, n)
+
         def resolver(rel):
             return asset_url(uid, rel)
 
-        chapter_html = render_chapter(book, chapter, blocks, projections, resolver=resolver)
-        audit = audit_pack(blocks, projections, chapter_html, annotation, draft)
+        chapter_html = render_chapter(book, chapter, blocks, projections, resolver=resolver, editorial=editorial)
+        audit = audit_pack(blocks, projections, chapter_html, annotation, draft, editorial=editorial)
         exports = {}
         for tier, projection in projections.items():
             exports[tier] = render_export(
@@ -829,6 +1101,7 @@ class ReadingService:
                 blocks,
                 projection,
                 resolver=lambda rel: _export_asset(self.library.layout, uid, rel),
+                editorial=editorial,
             )
         cache_material = "%s|%s|%s|%s|%s|%s" % (
             raw["source_sha256"],
@@ -862,6 +1135,10 @@ class ReadingService:
             "cache_key": cache_key,
             "draft": draft,
             "status": audit["status"],
+            "editorial": editorial is not None,
+            "editorial_generated": editorial_meta is not None,
+            "editorial_model": (editorial_meta or {}).get("model"),
+            "editorial_error": editorial_error,
             "requested_tiers": requested,
             "preserved_tiers": preserved,
             "tiers": {
@@ -886,7 +1163,7 @@ class ReadingService:
             existing_tiers = set((existing or {}).get("tiers") or {})
             if existing_tiers.intersection(requested):
                 raise RuntimeError("所选档位已有读本，未覆盖；如需覆盖请重新生成")
-        self.store.save(uid, n, manifest, annotation, audit, chapter_html, exports)
+        self.store.save(uid, n, manifest, annotation, audit, chapter_html, exports, editorial=editorial)
         self._invalidate_packs()
         return {"status": audit["status"], "pack_id": manifest["pack_id"]}
 

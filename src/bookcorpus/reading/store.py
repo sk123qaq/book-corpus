@@ -43,6 +43,14 @@ class Store:
         except (OSError, json.JSONDecodeError):
             return None
 
+    def editorial(self, uid, n):
+        path = os.path.join(self.pack_dir(uid, n), "editorial.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return None
+
     def audit(self, uid, n):
         path = os.path.join(self.pack_dir(uid, n), "audit.json")
         try:
@@ -50,6 +58,48 @@ class Store:
                 return json.load(fh)
         except (OSError, json.JSONDecodeError):
             return None
+
+    def save_editorial(self, uid, n, editorial):
+        path = os.path.join(self.pack_dir(uid, n), "editorial.json")
+        self._write(path, json.dumps(editorial, ensure_ascii=False, indent=1))
+        return editorial
+
+    def edition_dir(self, uid, n):
+        return os.path.join(self.pack_dir(uid, n), "edition")
+
+    def edition(self, uid, n):
+        path = os.path.join(self.edition_dir(uid, n), "content.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return None
+
+    def save_edition(self, uid, n, content, html_text, audit, brief):
+        """edition 子目录整体替换；失败保留旧的视觉读本。"""
+        base = self.pack_dir(uid, n)
+        target = os.path.join(base, "edition")
+        os.makedirs(base, exist_ok=True)
+        stage = tempfile.mkdtemp(prefix=".edition-", dir=base)
+        backup = os.path.join(base, ".edition-bak-" + uuid.uuid4().hex[:8])
+        try:
+            self._write(os.path.join(stage, "content.json"), json.dumps(content, ensure_ascii=False, indent=1))
+            self._write(os.path.join(stage, "index.html"), html_text)
+            self._write(os.path.join(stage, "audit.json"), json.dumps(audit, ensure_ascii=False, indent=1))
+            self._write(os.path.join(stage, "brief.json"), json.dumps(brief, ensure_ascii=False, indent=1))
+            if os.path.isdir(backup):
+                shutil.rmtree(backup)
+            if os.path.exists(target):
+                os.replace(target, backup)
+            os.replace(stage, target)
+            if os.path.isdir(backup):
+                shutil.rmtree(backup)
+        except Exception:
+            if not os.path.exists(target) and os.path.exists(backup):
+                os.replace(backup, target)
+            shutil.rmtree(stage, ignore_errors=True)
+            raise
+        return content
 
     def chapter_html_path(self, uid, n):
         return os.path.join(self.pack_dir(uid, n), "chapter.html")
@@ -92,7 +142,7 @@ class Store:
                 fh.write(data)
         os.replace(tmp, path)
 
-    def save(self, uid, n, manifest, annotation, audit, chapter_html, exports):
+    def save(self, uid, n, manifest, annotation, audit, chapter_html, exports, editorial=None):
         """先写 staging，再目录级替换；manifest 最后写。失败保留旧包。"""
         base = self.pack_dir(uid, n)
         parent = os.path.dirname(base)
@@ -105,10 +155,21 @@ class Store:
                 self._write(
                     os.path.join(stage, "annotation.json"), json.dumps(annotation, ensure_ascii=False, indent=1)
                 )
+            if editorial is not None:
+                self._write(os.path.join(stage, "editorial.json"), json.dumps(editorial, ensure_ascii=False, indent=1))
+            elif os.path.exists(os.path.join(base, "editorial.json")):
+                shutil.copy2(os.path.join(base, "editorial.json"), os.path.join(stage, "editorial.json"))
             if audit is not None:
                 self._write(os.path.join(stage, "audit.json"), json.dumps(audit, ensure_ascii=False, indent=1))
             for tier, html in exports.items():
                 self._write(os.path.join(stage, "export", "%s.html" % tier), html)
+            # 四读重生成不能带走视觉读本与 Agent 标准档。
+            for name in ("edition", "agent-standard.html"):
+                source = os.path.join(base, name)
+                if os.path.isdir(source):
+                    shutil.copytree(source, os.path.join(stage, name))
+                elif os.path.isfile(source):
+                    shutil.copy2(source, os.path.join(stage, name))
             self._write(os.path.join(stage, "chapter.html"), chapter_html)
             self._write(os.path.join(stage, "manifest.json"), json.dumps(manifest, ensure_ascii=False, indent=1))
             if os.path.isdir(backup):

@@ -28,16 +28,44 @@ SYSTEM_PROMPT = """你是中文书稿的结构编辑。只输出一个 JSON 对�
 - priority 是 1..3，1 最重要。
 - spine 只给真正的骨架块；deps 只能引用已有块 id，且不要把所有块串成一条链。
 - cards 是讲解层，每项必须含 id、trigger、text、citations、quotes；
-  trigger 必须是某块 id，citations 非空，quotes 的 text 必须逐字来自所引块；
+  trigger 必须是某块 id，citations 非空。quotes 必须是对象数组，每项显式写
+  {"block":"B03","text":"原文逐字片段"}，block 不能省略、不能为 null；
   quotes 可以是完整句，也可以是 8 字以上的原文短语，不要改写或拼接。
 - 不要改写原文，不要合并块。
 - supports 必须放在顶层数组，每项是 {"from":"支撑块 id","to":"被支撑的 claim/conclusion id"}；
   不要把 supports 放进 blocks 条目。
 - 不要输出 note、rationale、tier_blocks；档位由确定性投影器选块。
-- image 块可选 caption：一句话写这张图说明什么、为什么值得看，≤40 字，不写「如图/下图」，不复述 alt。
+- 输入里也会给出 image 块，带 rel 和 hint（紧跟其后的图题）。
+  每张 image 块都必须给 caption：一句话写这张图说明什么、为什么值得看，≤40 字；
+  不写「如图/下图」，不复述 hint。
 JSON 顶层：{"schema":1,"blocks":[...],"supports":[...],"cards":[...]}。
 image 块的条目形如 {"id":"B07","role":"evidence","priority":2,"spine":false,"deps":[],"caption":"一句话图注"}。
 """
+
+
+def _payload_blocks(blocks):
+    """Send text blocks plus figures. The hint is the next heading."""
+    out = []
+    for index, block in enumerate(blocks):
+        if block["kind"] == "image":
+            hint = ""
+            for neighbor in blocks[index + 1 : index + 3]:
+                if neighbor["kind"] == "heading" and (neighbor.get("text") or "").strip():
+                    hint = neighbor["text"].strip()
+                    break
+            out.append(
+                {
+                    "id": block["id"],
+                    "kind": "image",
+                    "text": "",
+                    "rel": block.get("rel", ""),
+                    "hint": hint,
+                }
+            )
+            continue
+        if (block.get("text") or "").strip():
+            out.append({"id": block["id"], "kind": block["kind"], "text": block["text"]})
+    return out
 
 
 class ModelProviderError(RuntimeError):
@@ -101,11 +129,7 @@ class ModelClient:
             raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
         if not requested_model:
             raise ValueError("模型名不能为空")
-        payload_blocks = [
-            {"id": block["id"], "kind": block["kind"], "text": block["text"]}
-            for block in blocks
-            if (block.get("text") or "").strip()
-        ]
+        payload_blocks = _payload_blocks(blocks)
         user = json.dumps(
             {
                 "book": book.get("title", ""),
@@ -145,6 +169,17 @@ class ModelClient:
         self.last_fallback = fallback
         return annotation, meta
 
+    def complete_json(self, messages, *, model=None, effort=None):
+        """单次 JSON 补全，供图表编辑等第二遍调用；不做业务校验。"""
+        if not self.available():
+            raise RuntimeError("模型未配置：缺少 opencode-go key")
+        requested_model = (model or self.model).strip()
+        effort = (effort or self.effort).strip().lower()
+        if effort not in EFFORTS:
+            raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+        content, usage = self._request(requested_model, effort, messages)
+        return _loads_content(content), usage
+
     def _annotate_once(self, messages, blocks, book, chapter, model, effort):
         last_error = None
         usage_total = {}
@@ -169,18 +204,27 @@ class ModelClient:
                 )
         raise ValueError("模型标注解析失败：%s" % last_error)
 
-    def _request(self, model, effort, messages):
-        body = json.dumps(
-            {
-                "model": model,
-                "messages": messages,
-                "reasoning_effort": effort,
-                "max_tokens": MAX_TOKENS,
-                "temperature": 0.2,
-                "response_format": {"type": "json_object"},
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
+    def complete(self, messages, *, model=None, effort=None, json_mode=False):
+        """单次文本补全；``json_mode`` 仅用于需要 JSON 对象的调用。"""
+        if not self.available():
+            raise RuntimeError("模型未配置：缺少 opencode-go key")
+        requested_model = (model or self.model).strip()
+        effort = (effort or self.effort).strip().lower()
+        if effort not in EFFORTS:
+            raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+        return self._request(requested_model, effort, messages, json_mode=json_mode)
+
+    def _request(self, model, effort, messages, *, json_mode=True):
+        payload = {
+            "model": model,
+            "messages": messages,
+            "reasoning_effort": effort,
+            "max_tokens": MAX_TOKENS,
+            "temperature": 0.2,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = urllib.request.Request(  # noqa: S310 - endpoint is the fixed HTTPS API or operator override
             self.endpoint,
             data=body,

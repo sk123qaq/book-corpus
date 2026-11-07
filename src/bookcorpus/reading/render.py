@@ -11,6 +11,15 @@ import json
 from urllib.parse import quote
 
 from .tiers import TIER_ORDER, TIER_SPECS
+from .visuals import (
+    PLATE_KINDS,
+    VISUAL_CSS,
+    VISUAL_JS,
+    render_beat,
+    render_spine,
+    render_takeaways,
+    render_visual,
+)
 
 RENDER_VERSION = 2
 
@@ -64,7 +73,7 @@ padding:0 22px;background:color-mix(in srgb,var(--paper) 96%,transparent);border
 background:var(--paper-2);font-family:var(--sans);font-size:12px;line-height:1.7;color:var(--ink-2)}
 .draft-banner b{font-size:10px;letter-spacing:.16em;color:var(--ochre);white-space:nowrap}
 .flow{display:flex;flex-direction:column}
-.flow-row{display:grid;grid-template-columns:minmax(0,680px) 250px;gap:40px;align-items:start}
+.flow-row{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:40px;align-items:start}
 .flow-row .block{min-width:0}
 .flow-row .margin{min-width:0}
 .src{font-size:17.5px;line-height:1.9;text-indent:2em;margin:0;letter-spacing:.01em}
@@ -74,6 +83,10 @@ blockquote.src{text-indent:2em;margin:1.4em 0 1.4em;padding:2px 0 2px 20px;borde
 .fig{margin:1.8em 0;text-align:center}
 .fig img{max-width:100%;height:auto;border:1px solid var(--rule);background:var(--paper-2)}
 .fig figcaption{font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--ink-3);margin:7px auto 0;max-width:40em;text-indent:0}
+.fig .fig-kicker{display:block;font-size:11px;letter-spacing:.16em;color:var(--cinnabar);margin-bottom:4px}
+.fig .fig-cap{display:block}
+body:not(.only-source) .fig-title{display:none}
+body.only-source figcaption{display:none}
 .fn{font-family:var(--sans);font-size:12px;color:var(--ink-3);text-indent:0;margin:-.6em 0 1.2em}
 .note{background:var(--note-bg);border-top:1px solid var(--note-rule);padding:12px 13px 13px;margin:0 0 1.6em;
 font-size:13px;line-height:1.75;text-indent:0;box-shadow:0 1px 0 var(--rule)}
@@ -107,6 +120,7 @@ font-family:var(--sans);font-size:12px;padding:8px 14px;opacity:0;pointer-events
 .cmp-close{margin-top:16px;font-family:var(--sans);font-size:11px;border:1px solid var(--rule-strong);padding:7px 12px}
 body.only-source [data-origin="added"]{display:none!important}
 body.only-source .flow-row{grid-template-columns:minmax(0,680px)}
+body.only-source .stat-notes{display:none}
 body.big .src{font-size:20px;line-height:1.8}
 body.big .read-head h1{font-size:38px}
 body.night{--paper:#E2E6E6;--paper-2:#D3DADA;--paper-3:#C3CCCC;--ink:#131A1F;--ink-2:#3C4A52;--ink-3:#4F5C63;
@@ -155,7 +169,7 @@ function setTier(tier, push) {
   const s = STATS[tier]; if (s) {
     const line = $('#live-stats');
     if (line) line.innerHTML = '原文 <b>' + Math.round(s.c_block * 100) + '%</b> · 约 <b>' + fmt(s.chars) +
-      '</b> 字 · 讲解 <b>' + s.notes + '</b> 条 · <b>' + s.minutes + '</b> 分钟';
+      '</b> 字<span class="stat-notes"> · 讲解 <b>' + s.notes + '</b> 条</span> · <b>' + s.minutes + '</b> 分钟';
     const pct = Math.max(0, Math.min(100, Math.round(s.c_block * 100)));
     const bar = $('#scope-bar'); if (bar) bar.style.width = pct + '%';
     // 页脚出处按档位切：增量包可能混多个模型/时间。
@@ -233,7 +247,7 @@ def _tiers_attr(tier_list):
     return " ".join(tier for tier in TIER_ORDER if tier in tier_list)
 
 
-def _block_element(block, tiers, resolver, captions=None):
+def _block_element(block, tiers, resolver, captions=None, figure_titles=None, extra_class=""):
     text = html.escape(block["text"])
     kind = block["kind"]
     attrs = 'data-origin="source" data-src="%s" data-block="%s" data-kind="%s" data-tiers="%s"' % (
@@ -244,18 +258,28 @@ def _block_element(block, tiers, resolver, captions=None):
     )
     if kind == "heading":
         level = min(6, max(2, int(block.get("level", 2))))
-        return '<h%d class="sec" id="%s" %s>%s</h%d>' % (level, block["id"], attrs, text, level)
+        klass = "sec" + (" " + extra_class if extra_class else "")
+        return '<h%d class="%s" id="%s" %s>%s</h%d>' % (level, klass, block["id"], attrs, text, level)
     if kind == "image":
         src = resolver(block.get("rel", "")) if resolver else ""
-        alt = html.escape(block.get("text", ""))
         caption = (captions or {}).get(block["id"])
+        alt = html.escape(block.get("text") or "")
         source = "model" if caption else "alt"
         size = ""
         width, height = block.get("width"), block.get("height")
         if width and height:
             size = ' width="%d" height="%d"' % (int(width), int(height))
         img = '<img src="%s" alt="%s"%s loading="lazy">' % (html.escape(src, quote=True), alt, size)
-        label = html.escape(caption or block.get("text", ""))
+        title = (figure_titles or {}).get(block["id"], "")
+        if caption and title:
+            label = '<span class="fig-kicker">%s</span><span class="fig-cap">%s</span>' % (
+                html.escape(title),
+                html.escape(caption),
+            )
+        elif caption:
+            label = '<span class="fig-cap">%s</span>' % html.escape(caption)
+        else:
+            label = html.escape(block.get("text", ""))
         return '<figure class="fig" %s data-caption-src="%s">%s<figcaption>%s</figcaption></figure>' % (
             attrs,
             source,
@@ -270,10 +294,26 @@ def _block_element(block, tiers, resolver, captions=None):
         return '<blockquote class="src" %s>%s</blockquote>' % (attrs, text)
     if kind == "list":
         return '<p class="src lst" %s>%s</p>' % (attrs, text)
+    if kind == "table":
+        head = block.get("head") or []
+        rows = block.get("rows") or []
+        if head:
+            cells = "".join("<th>%s</th>" % html.escape(cell) for cell in head)
+            thead = "<thead><tr>%s</tr></thead>" % cells
+        else:
+            thead = ""
+            rows = (rows or []) + [block.get("head") or []]
+        body_rows = "".join(
+            "<tr>%s</tr>" % "".join("<td>%s</td>" % html.escape(cell) for cell in row) for row in rows if row
+        )
+        return '<table class="src tbl" %s>%s<tbody>%s</tbody></table>' % (attrs, thead, body_rows)
+    if kind == "code":
+        lang_attr = ' data-lang="%s"' % html.escape(str(block.get("lang") or ""), quote=True)
+        return '<pre class="src code" %s%s><code>%s</code></pre>' % (attrs, lang_attr, text)
     return '<p class="src" %s>%s</p>' % (attrs, text)
 
 
-def _card_element(card, tiers):
+def _card_element(card, tiers, tag=None):
     quotes = "".join(
         '<q data-src="%s">%s</q>' % (html.escape(quote_item["block"]), html.escape(quote_item["text"]))
         for quote_item in card.get("quotes", [])
@@ -282,8 +322,16 @@ def _card_element(card, tiers):
     title = "<h4>%s</h4>" % html.escape(card["title"]) if card.get("title") else ""
     return (
         '<aside class="note" data-origin="added" data-trigger="%s" data-tiers="%s">'
-        '<span class="tag">讲解 · 模型补充</span>%s<p>%s</p>%s<span class="cite">依据 %s</span></aside>'
-        % (html.escape(card["trigger"]), _tiers_attr(tiers), title, html.escape(card["text"]), quotes, cites)
+        '<span class="tag">%s</span>%s<p>%s</p>%s<span class="cite">依据 %s</span></aside>'
+        % (
+            html.escape(card["trigger"]),
+            _tiers_attr(tiers),
+            html.escape(tag or "讲解 · 模型补充"),
+            title,
+            html.escape(card["text"]),
+            quotes,
+            cites,
+        )
     )
 
 
@@ -347,8 +395,9 @@ def _tabs(projections, initial):
     return "".join(buttons)
 
 
-def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone=False):
+def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone=False, editorial=None):
     chapter = {**chapter, "n": int(chapter.get("n") or 0)}
+    editorial = editorial or None
     draft = bool(chapter.get("draft"))
     draft_banner = (
         '<div class="draft-banner" role="status"><b>草稿</b>'
@@ -361,6 +410,40 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
     for projection in projections.values():
         for block_id, caption in (projection.get("captions") or {}).items():
             captions.setdefault(block_id, caption)
+
+    active_tier = next(iter(projections)) if standalone else None
+    figure_titles = {}
+    figure_title_ids = set()
+    for index, block in enumerate(blocks):
+        if block["kind"] != "image" or index + 1 >= len(blocks):
+            continue
+        following = blocks[index + 1]
+        if following["kind"] == "heading" and following["text"].strip().startswith(("图", "表")):
+            figure_titles[block["id"]] = following["text"].strip()
+            figure_title_ids.add(following["id"])
+    beats = list((editorial or {}).get("beats") or [])
+    visuals = list((editorial or {}).get("visuals") or [])
+    takeaways = list((editorial or {}).get("takeaways") or [])
+    takeaways_tiers = list((editorial or {}).get("takeaways_tiers") or ())
+    if active_tier:
+        beats = [beat for beat in beats if active_tier in beat["tiers"]]
+        visuals = [visual for visual in visuals if active_tier in visual["tiers"]]
+        if active_tier not in takeaways_tiers:
+            takeaways = []
+
+    beats_by_block = {}
+    for index, beat in enumerate(beats, 1):
+        beats_by_block.setdefault(beat["before_block"], []).append((index, beat))
+    visuals_by_block = {}
+    plate_no = 0
+    for visual in visuals:
+        if visual["kind"] in PLATE_KINDS:
+            plate_no += 1
+        visuals_by_block.setdefault(visual["after_block"], []).append(
+            (visual, plate_no if visual["kind"] in PLATE_KINDS else None)
+        )
+    note_tags = (editorial or {}).get("note_tags") or {}
+
     rows = []
     for block in blocks:
         tiers = {tier for tier, projection in projections.items() if block in projection["blocks"]}
@@ -368,21 +451,47 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
             tiers = set(projections) if tiers else set()
         if not tiers:
             continue
-        element = _block_element(block, tiers, resolver, captions)
+        element = _block_element(
+            block,
+            tiers,
+            resolver,
+            captions,
+            figure_titles,
+            "fig-title" if block["id"] in figure_title_ids else "",
+        )
+        inside = "".join(
+            render_visual(visual, plate_no=plate)
+            for visual, plate in visuals_by_block.get(block["id"], [])
+            if visual["placement"] == "inside"
+        )
+        before = "".join(
+            render_visual(visual, plate_no=plate)
+            for visual, plate in visuals_by_block.get(block["id"], [])
+            if visual["placement"] == "before"
+        )
+        after = "".join(
+            render_visual(visual, plate_no=plate)
+            for visual, plate in visuals_by_block.get(block["id"], [])
+            if visual["placement"] == "after"
+        )
         notes = []
         for record in cards.get(block["id"], {}).values():
             if standalone and not record["tiers"].intersection(projections):
                 continue
-            notes.append(_card_element(record["card"], record["tiers"]))
+            notes.append(_card_element(record["card"], record["tiers"], tag=note_tags.get(block["id"])))
+        beat_html = "".join(render_beat(beat, index, len(beats)) for index, beat in beats_by_block.get(block["id"], []))
         rows.append(
-            '<div class="flow-row" data-block="%s"><div class="block">%s</div><div class="margin">%s</div></div>'
-            % (block["id"], element, "".join(notes))
+            beat_html
+            + before
+            + '<div class="flow-row" data-block="%s"><div class="block">%s</div><div class="margin">%s</div></div>'
+            % (block["id"], element + inside, "".join(notes))
+            + after
         )
 
     if standalone:
         tier = next(iter(projections))
         s = projections[tier]["stats"]
-        head_stats = "原文 %d%% · %s 字 · 讲解 %d 条 · %d 分钟" % (
+        head_stats = '原文 %d%% · %s 字<span class="stat-notes"> · 讲解 %d 条</span> · %d 分钟' % (
             round(s["c_block"] * 100),
             format(s["chars"], ","),
             s["notes"],
@@ -398,6 +507,7 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
             '<header class="reader-top"><a class="back" href="/chapter/%s/%s">← 工单</a>'
             '<div class="book"><span>%s</span><b>%s</b></div>'
             '<div class="tool"><a href="/book/%s">目录</a>'
+            "<!--EDITION_LINK-->"
             '<button id="only-btn" aria-pressed="false">只看原文</button>'
             '<button id="big-btn" aria-pressed="false">大字</button>'
             '<button id="night-btn">夜读</button>'
@@ -445,17 +555,33 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
     )
     next_link = '<a href="/reader/%s/%s">下一章 →</a>' % (book["uid"], chapter["n"] + 1)
 
+    spine = render_spine(beats) if beats else ""
+    takeaways_html = (
+        render_takeaways(
+            takeaways,
+            title=(editorial or {}).get("takeaways_title", ""),
+            note=(editorial or {}).get("takeaways_note", ""),
+            tiers=takeaways_tiers,
+        )
+        if takeaways
+        else ""
+    )
+    style_css = READER_CSS + ("\n" + VISUAL_CSS if editorial else "")
+
     stats_payload = _stats_json(projections, chapter)
-    script = ""
+    script_body = ""
     if not standalone:
-        script = "<script>%s</script>" % (
+        script_body = (
             READER_JS.replace(
                 "__TIERS__", json.dumps([{"key": t, "label": TIER_META[t][0]} for t in TIER_ORDER], ensure_ascii=False)
             )
             .replace("__STATS__", json.dumps(stats_payload, ensure_ascii=False))
             .replace("__TICKS__", str(len(blocks)))
             .replace("__INITIAL__", json.dumps(initial))
-        ).replace("</", "<\\/")
+        )
+    if editorial:
+        script_body = (script_body + "\n" + VISUAL_JS).strip()
+    script = "<script>%s</script>" % script_body.replace("</", "<\\/") if script_body else ""
 
     tier_meta = chapter.get("tiers") or {}
     shown_tier = next(iter(projections)) if standalone else initial
@@ -477,29 +603,30 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
         )
     )
 
-    body_class = "reader export" if standalone else "reader"
+    body_class = ("reader export" if standalone else "reader") + (" has-editorial" if editorial else "")
     return (
         '<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>%s · %s · 四读</title><style>%s</style></head>"
         '<body class="%s" data-tier="%s">%s<main class="read"><header class="read-head">'
-        '<p class="eyebrow">%s · 第 %s 章 · %s</p><h1>%s</h1><div class="read-stats">%s</div></header>%s'
+        '<p class="eyebrow">%s · %s</p><h1>%s</h1><div class="read-stats">%s</div>%s</header>%s'
         '<div class="flow">%s</div>'
-        '<footer class="read-foot">%s%s</footer>%s</main>%s%s%s%s</body></html>'
+        '%s<footer class="read-foot">%s%s</footer>%s</main>%s%s%s%s</body></html>'
         % (
             html.escape(book["title_short"]),
             html.escape(chapter["title"]),
-            READER_CSS,
+            style_css,
             body_class,
             initial,
             chrome_top,
             html.escape(book["title_short"]),
-            chapter["n"],
             html.escape(book["author"] or "作者待校"),
             html.escape(chapter["title"]),
             head_stats,
+            spine,
             draft_banner,
             "".join(rows),
+            takeaways_html,
             prev_link,
             next_link,
             colophon,
@@ -511,17 +638,19 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
     )
 
 
-def render_chapter(book, chapter, blocks, projections, *, resolver=None):
+def render_chapter(book, chapter, blocks, projections, *, resolver=None, editorial=None):
     """读本单页：四档 tab、只看原文、对照、页边刻度与记录。"""
     cards = _cards_by_trigger(projections)
-    return _reader_body(book, chapter, blocks, projections, cards, resolver, standalone=False)
+    return _reader_body(book, chapter, blocks, projections, cards, resolver, standalone=False, editorial=editorial)
 
 
-def render_export(book, chapter, blocks, projection, *, resolver=None):
+def render_export(book, chapter, blocks, projection, *, resolver=None, editorial=None):
     """导出页：一档、无工具条、图片已内嵌。"""
     tier = projection["tier"]
     cards = _cards_by_trigger({tier: projection})
-    return _reader_body(book, chapter, blocks, {tier: projection}, cards, resolver, standalone=True)
+    return _reader_body(
+        book, chapter, blocks, {tier: projection}, cards, resolver, standalone=True, editorial=editorial
+    )
 
 
 def image_data_uri(path):

@@ -3,6 +3,8 @@
 投影是确定性的、可重放的。输入只有源块与标注（人工或模型），没有模型调用。
 """
 
+import re
+
 from .mdparse import han_count
 
 ROLES = {"spine", "claim", "conclusion", "evidence", "context", "transition", "card"}
@@ -50,7 +52,7 @@ TIER_SPECS = {
 }
 TIER_ORDER = ("skim", "standard", "deep", "research")
 OPTIONAL_CLAIM_TIER = {"standard": 1, "deep": 2, "research": 3}
-CONTENT_KINDS = {"paragraph", "quote", "list", "image"}
+CONTENT_KINDS = {"paragraph", "quote", "list", "image", "table", "code"}
 
 
 def _sentence_boundary(text, quote):
@@ -103,6 +105,17 @@ def validate_annotation(annotation, blocks):
                 raise ValueError("%s 依赖不存在的块：%r" % (block_id, dep))
             if dep == block_id:
                 raise ValueError("%s 依赖自身" % block_id)
+        caption = str(entry.get("caption") or "").strip()[:80]
+        source_block = by_id[block_id]
+        if source_block.get("kind") == "image" and caption:
+            rel = str(source_block.get("rel") or "")
+            stem = rel.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+            if (
+                caption == str(source_block.get("text") or "").strip()
+                or caption in (rel, stem)
+                or re.search(r"\.(png|jpe?g|webp|gif|svg)$", caption, re.I)
+            ):
+                caption = ""
         entries.append(
             {
                 "id": block_id,
@@ -111,7 +124,7 @@ def validate_annotation(annotation, blocks):
                 "spine": bool(entry.get("spine", False)),
                 "deps": deps,
                 "note": str(entry.get("note", "")),
-                "caption": str(entry.get("caption") or "").strip()[:80],
+                "caption": caption,
             }
         )
 
@@ -240,6 +253,10 @@ def validate_annotation(annotation, blocks):
                 or quote.get("source")
             )
             quote_text = str(quote.get("text") or quote.get("quote") or "").strip()
+            if not isinstance(quote_block, str) and quote_text:
+                matches = [citation for citation in citations if quote_text in by_id[citation]["text"]]
+                if len(matches) == 1:
+                    quote_block = matches[0]
             if not isinstance(quote_block, str):
                 raise ValueError("%s 的 quote.block 必须是块 id 字符串，得到 %r" % (cid, quote_block))
             if quote_block not in by_id:
@@ -479,7 +496,10 @@ def project(blocks, annotation, tier, draft=False):
     override = (annotation.get("tier_blocks") or {}).get(tier)
 
     headings = {block["id"] for block in blocks if block["kind"] == "heading"}
-    protected = {entry["id"] for entry in entries if entry["spine"]} | headings
+    # 插图不是可删的“语境”。有 rel 的图片块在各档都保留；
+    # 超限时让低优先级段落让位，而不是把图丢掉。
+    figures = {block["id"] for block in blocks if block["kind"] == "image" and block.get("rel")}
+    protected = {entry["id"] for entry in entries if entry["spine"]} | headings | figures
 
     if override:
         selected = set(override) | headings
@@ -490,6 +510,7 @@ def project(blocks, annotation, tier, draft=False):
         selected = {block["id"] for block in content if entry_map.get(block["id"], {}).get("spine")}
         _closure(selected, entry_map)
         selected |= headings
+        selected |= figures
 
         supports = annotation.get("supports", [])
         claims = [entry for entry in entries if entry["role"] in ("claim", "conclusion")]

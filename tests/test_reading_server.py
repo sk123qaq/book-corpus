@@ -330,3 +330,67 @@ def test_cancel_running_job_returns_cancelled_immediately(slow_server):
     code, body = _post_error(slow_server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["deep"]})
     assert code == 409
     assert body["code"] == "job_active"
+
+
+def test_editorial_api_roundtrip(server, reading_root):
+    status, job = _post(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
+    assert status == 202
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        _, body, _ = _get(server, "/api/jobs/" + job["id"])
+        current = json.loads(body)
+        if current["state"] not in ACTIVE_STATES:
+            break
+        time.sleep(0.05)
+    assert current["state"] == "done", current
+
+    _, body, _ = _get(server, "/api/chapter/B0001/01")
+    chapter = json.loads(body)
+    blocks = chapter["blocks"]
+    payload = {
+        "schema": 1,
+        "uid": "B0001",
+        "n": 1,
+        "beats": [
+            {
+                "id": "beat-1",
+                "title": "一个人走进屋子",
+                "question": "这封信是谁留下的？",
+                "before_block": blocks[0]["id"],
+                "tiers": ["standard"],
+            }
+        ],
+        "visuals": [
+            {
+                "id": "steps-1",
+                "kind": "steps",
+                "title": "两段之间的一个动作",
+                "after_block": blocks[0]["id"],
+                "placement": "after",
+                "tiers": ["standard"],
+                "data": {
+                    "steps": [{"label": "进门", "detail": "看见桌上的灯"}, {"label": "坐下", "detail": "听见雨声"}],
+                    "result": {"label": "想起", "detail": "许多年前的一个下午"},
+                },
+                "claims": [{"block": blocks[0]["id"], "quote": "第一段写一个人走进屋子"}],
+            }
+        ],
+        "takeaways": [
+            {"text": "一封信把现在和过去接上。", "sources": [blocks[0]["id"]]},
+        ],
+    }
+    status, saved = _post(server, "/api/editorial/B0001/01", payload)
+    assert status == 200
+    assert saved["uid"] == "B0001"
+    assert saved["beats"][0]["id"] == "beat-1"
+
+    status, body, _ = _get(server, "/api/editorial/B0001/01")
+    assert status == 200
+    assert json.loads(body)["visuals"][0]["kind"] == "steps"
+    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
+    assert (pack / "editorial.json").is_file()
+
+    payload["visuals"][0]["after_block"] = "nope"
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        _post(server, "/api/editorial/B0001/01", payload)
+    assert exc.value.code == 400

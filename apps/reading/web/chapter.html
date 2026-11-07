@@ -95,6 +95,7 @@ function render() {
       '<div class="chap-actions">' +
         (generated.length ? generated.map((t) => '<a class="btn btn-primary" href="' + RD.readerHref(book.uid, chapter.n, t.key) + '">读 ' + RD.esc(t.name) + '本 →</a>').join('') :
           '<a class="btn btn-ghost" href="#ticket">先出一版读本</a>') +
+        (data.edition ? '<a class="btn btn-primary" href="' + RD.esc(data.edition.url) + '">视觉读本 →</a>' : '') +
         (standardPack ? '<a class="btn btn-ghost" href="' + RD.readerHref(book.uid, chapter.n, 'standard') + '">打开默认读本</a>' : '') +
         (prev ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, prev) + '">← 上一章</a>' : '') +
         (next ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, next) + '">下一章 →</a>' : '') +
@@ -126,6 +127,7 @@ function render() {
 
 function ticketHtml() {
   const chapter = data.chapter;
+  const fit = data.edition_fit || { ok: true, reason: '' };
   const running = (data.jobs || []).filter((job) =>
     RD.activeStates.includes(job.state) || job.state === 'cancelled'
   );
@@ -141,6 +143,8 @@ function ticketHtml() {
       RD.esc(RD.jobHint(job)) + ' · ' + RD.esc(job.id)
     ).join('；') + '</p>' : '') +
     '<button class="btn btn-primary" id="generate">生成读本 →</button>' +
+    '<button class="btn btn-ghost" id="generate-edition"' + (fit.ok ? '' : ' disabled title="' + RD.esc(fit.reason) + '"') + '>生成视觉读本（模型约 30–60 秒）</button>' +
+    (fit.ok ? '' : '<p class="fine edition-fit">本章不宜视觉读本：' + RD.esc(fit.reason) + '</p>') +
     '<div id="job-mount"></div>' +
     '<p class="fine">' + (draft ? '当前是草稿：四档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
       '原文逐字保留；讲解只做旁批，可一键隐藏。原文不重写、不合并。') + '</p>';
@@ -216,6 +220,7 @@ function bindTicket() {
     updateEstimate();
   });
   RD.mount('generate').addEventListener('click', generate);
+  RD.mount('generate-edition').addEventListener('click', generateEdition);
   RD.bindModelSettings();
   updateEstimate();
 }
@@ -298,6 +303,29 @@ async function postJob(keys, overwrite, rebuild) {
     uid: data.book.uid, n: data.chapter.n, tiers: keys, model: settings.model, effort: settings.effort,
     overwrite: Boolean(overwrite), rebuild: Boolean(rebuild),
   } });
+}
+
+async function generateEdition() {
+  if (!window.confirm('生成视觉读本会调用模型，约 30–60 秒，并用当前原文重建这一章的版式。继续吗？')) return;
+  const button = RD.mount('generate-edition');
+  button.disabled = true;
+  button.textContent = '正在提交…';
+  try {
+    const settings = RD.modelSettings();
+    const job = await RD.api('/api/edition/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
+      method: 'POST',
+      body: { model: settings.model, effort: settings.effort, overwrite: Boolean(data.edition) },
+    });
+    location.href = RD.recordsJobHref(job.id);
+  } catch (err) {
+    button.disabled = false;
+    button.textContent = '生成视觉读本（模型约 30–60 秒）';
+    if (err.code === 'job_active') {
+      RD.toast('这一章已有任务在跑，先去生成记录看进度', true);
+    } else {
+      RD.toast(err.message, true);
+    }
+  }
 }
 
 async function generate() {

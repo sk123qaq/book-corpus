@@ -336,6 +336,19 @@ python3 apps/daily/server.py --root <实例根>      # http://127.0.0.1:8772
 
 演示页从 `BOOKS_ROOT` 认根，其余页面用 `--root`。首页读 `books.toml`、`books/` 与 `日课/`；点入口时如果对应服务没起，会代起并等端口就绪，已经在跑就直接跳转。页脚的「管理」也走同一条路，进入 8770。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。
 
+### 出视觉读本
+
+四读是逐段读本；视觉读本是同一章的第二形态——xerox 复印稿风格的单页，含 hero、概览卡、图版、图表和 takeaways，正文仍逐字取自原文。章节工单里的「生成视觉读本」会调用模型，约 30–60 秒；文学、短章、超长章与图册会自动退回四读。
+
+```bash
+uv run --frozen python - <<'PY'
+from bookcorpus.reading.service import ReadingService
+ReadingService('/home/colaqaq/书库').generate_edition('B0003', 6, effort='low')
+PY
+```
+
+判决、字段、门禁与产物结构见 [docs/视觉读本.md](docs/视觉读本.md)。
+
 ### 重建产物
 
 ```bash
@@ -357,6 +370,8 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 `migrate` 读 v1 的 `库/`、`目录/`、`视图/`，落成 v2。`remap` 按对照表改写 `expand` 路径并重建 FTS；默认只打印。
 
 ## 改完跑什么
+
+视觉读本相关：`uv run --frozen pytest -q tests/test_reading_edition.py`。
 
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
@@ -403,6 +418,7 @@ MIT，见 `LICENSE`。
 ## 更多文档
 
 - `AGENTS.md`：作者本机实例的运行手册，含批次账与脚本表。新克隆的仓库没有那些批次数据。
+- `docs/视觉读本.md`：视觉读本的判决、流水线、接口与产物；改 edition 前先看。
 - `docs/design/设计方案-书目结构.md`：权威方案，L0 到 L5 门槛与目标结构。
 - `CONTRIBUTING.md`：改代码、跑测试与提交的约定。
 - `docs/检索/README.md`：检索层方案与实测基线。

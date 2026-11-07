@@ -18,6 +18,7 @@ if SRC not in sys.path:
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from bookcorpus.reading.editorial import EditorialError
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.service import (
     JobConflictError,
@@ -42,6 +43,8 @@ ROUTES = [
     (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)/cancel$"), "cancel"),
     (re.compile(r"^/api/export/([A-Za-z0-9_-]+)/(\d+)/([a-z]+)$"), "export"),
     (re.compile(r"^/api/asset$"), "asset"),
+    (re.compile(r"^/api/editorial/([A-Za-z0-9_-]+)/(\d+)$"), "editorial"),
+    (re.compile(r"^/api/edition/([A-Za-z0-9_-]+)/(\d+)$"), "edition"),
 ]
 
 
@@ -149,6 +152,44 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         self._json(200, job)
                     return
+                if name == "editorial":
+                    try:
+                        clean = self.service.save_editorial(match.group(1), int(match.group(2)), self._body())
+                    except EditorialError as exc:
+                        self._json(400, {"error": str(exc)})
+                    except (FileNotFoundError, ValueError) as exc:
+                        self._json(400, {"error": str(exc)})
+                    else:
+                        self._json(200, clean)
+                    return
+                if name == "edition":
+                    try:
+                        data = self._body()
+                        model = str(data.get("model") or DEFAULT_MODEL).strip()
+                        effort = str(data.get("effort") or "low").strip().lower()
+                        overwrite = data.get("overwrite", False)
+                        if not isinstance(overwrite, bool):
+                            raise ValueError("overwrite 必须是布尔值")
+                        if not model or len(model) > 80:
+                            raise ValueError("模型名非法")
+                        if effort not in EFFORTS:
+                            raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+                        job = self.service.submit_edition(
+                            match.group(1), int(match.group(2)), model=model, effort=effort, overwrite=overwrite
+                        )
+                    except JobConflictError as exc:
+                        self._json(
+                            409, {"error": "该章已有任务在排队或运行", "code": "job_active", "conflicts": exc.conflicts}
+                        )
+                    except PackExistsError:
+                        self._json(409, {"error": "这一章已有视觉读本", "code": "edition_exists"})
+                    except FileNotFoundError:
+                        self._json(404, {"error": "找不到章节"})
+                    except (TypeError, ValueError) as exc:
+                        self._json(400, {"error": str(exc)})
+                    else:
+                        self._json(202, job)
+                    return
                 self._json(405, {"error": "该路由不支持 POST"})
                 return
             self._error(404, "没有这个接口")
@@ -175,6 +216,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._redirect("/chapter/%s/%02d" % (match.group(1), target), head)
                 return
             self._serve_page("chapter.html", head)
+            return
+        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/agent$", path)
+        if match:
+            self._serve_agent_reader(match.group(1), int(match.group(2)), head)
+            return
+        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/edition$", path)
+        if match:
+            self._serve_edition(match.group(1), int(match.group(2)), head)
             return
         match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)$", path)
         if match:
@@ -224,6 +273,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._serve_export(match.group(1), int(match.group(2)), match.group(3), head)
             elif name == "asset":
                 self._serve_asset_query(query, head)
+            elif name == "editorial":
+                data = self.service.editorial(match.group(1), int(match.group(2)))
+                if data is None:
+                    self._json(404, {"error": "还没有编辑层"}, head)
+                else:
+                    self._json(200, data, head)
             else:
                 self._json(405, {"error": "该路由不支持 GET"}, head)
             return
@@ -317,6 +372,22 @@ class Handler(BaseHTTPRequestHandler):
             body = fh.read()
         self._send(200, body, ctype, head)
 
+    def _serve_agent_reader(self, uid, n, head=False):
+        path = os.path.join(self.service.store.pack_dir(uid, n), "agent-standard.html")
+        if not os.path.exists(path):
+            self._error(404, "这一章还没有 Agent 标准档")
+            return
+        with open(path, encoding="utf-8") as fh:
+            self._send(200, fh.read(), "text/html; charset=utf-8", head)
+
+    def _serve_edition(self, uid, n, head=False):
+        path = os.path.join(self.service.store.edition_dir(uid, n), "index.html")
+        if not os.path.exists(path):
+            self._error(404, "这一章还没有视觉读本")
+            return
+        with open(path, encoding="utf-8") as fh:
+            self._send(200, fh.read(), "text/html; charset=utf-8", head)
+
     def _serve_reader(self, uid, n, head=False):
         path = self.service.store.chapter_html_path(uid, n)
         if not os.path.isfile(path):
@@ -324,6 +395,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         with open(path, "rb") as fh:
             body = fh.read()
+        if body and self.service.store.edition(uid, n) is not None:
+            text = body.decode("utf-8")
+            link = '<a class="edition-link" href="/reader/%s/%d/edition">视觉读本</a>' % (uid, n)
+            if "<!--EDITION_LINK-->" in text:
+                text = text.replace("<!--EDITION_LINK-->", link)
+            elif "edition-link" not in text:
+                text = text.replace("</div></header>", link + "</div></header>", 1)
+            body = text.encode("utf-8")
+        else:
+            body = body.replace(b"<!--EDITION_LINK-->", b"")
         self._send(200, body, "text/html; charset=utf-8", head)
 
     def _serve_export(self, uid, n, tier, head=False):
@@ -336,6 +417,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         with open(path, "rb") as fh:
             body = fh.read()
+        if body and self.service.store.edition(uid, n) is not None:
+            text = body.decode("utf-8")
+            link = '<a class="edition-link" href="/reader/%s/%d/edition">视觉读本</a>' % (uid, n)
+            if "<!--EDITION_LINK-->" in text:
+                text = text.replace("<!--EDITION_LINK-->", link)
+            elif "edition-link" not in text:
+                text = text.replace("</div></header>", link + "</div></header>", 1)
+            body = text.encode("utf-8")
+        else:
+            body = body.replace(b"<!--EDITION_LINK-->", b"")
         self._send(200, body, "text/html; charset=utf-8", head)
 
     def _serve_asset_query(self, query, head=False):

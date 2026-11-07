@@ -3,6 +3,7 @@
 import struct
 
 from bookcorpus.reading.mdparse import parse_markdown
+from bookcorpus.reading.model import _payload_blocks
 from bookcorpus.reading.quality import LIMITS, check_html
 from bookcorpus.reading.render import render_chapter
 from bookcorpus.reading.service import ReadingService, audit_pack
@@ -194,7 +195,7 @@ def test_render_marks_model_caption(reading_root):
     chapter = {"n": "01", "title": raw["title"], "source_sha256": raw["source_sha256"], "tiers": {}}
     html = render_chapter(book, chapter, blocks, {"research": projection}, resolver=lambda rel: rel)
     assert 'data-caption-src="model"' in html
-    assert "<figcaption>%s</figcaption>" % caption in html
+    assert '<span class="fig-cap">%s</span>' % caption in html
     assert 'width="120"' in html
     assert 'height="80"' in html
 
@@ -276,3 +277,17 @@ def test_g7_fails_on_missing_size(reading_root):
     gate = next(gate for gate in audit["gates"] if gate["id"] == "G7")
     assert gate["status"] == "fail"
     assert "width/height" in gate["detail"]
+
+
+def test_payload_sends_images_with_figure_hint():
+    blocks = [
+        {"id": "B01", "kind": "paragraph", "text": "正文"},
+        {"id": "B02", "kind": "paragraph", "text": ""},
+        {"id": "B03", "kind": "image", "text": "", "rel": "img/x.png"},
+        {"id": "B04", "kind": "heading", "level": 3, "text": "图1 示意"},
+    ]
+    payload = _payload_blocks(blocks)
+    assert [item["id"] for item in payload] == ["B01", "B03", "B04"]
+    assert payload[1]["kind"] == "image"
+    assert payload[1]["rel"] == "img/x.png"
+    assert payload[1]["hint"] == "图1 示意"
