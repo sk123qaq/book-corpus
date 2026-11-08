@@ -200,6 +200,10 @@ class Store:
     def depth_cache_dir(self, uid, n):
         return os.path.join(self.pack_dir(uid, n), "depth", "cache")
 
+    def depth_path(self, uid, n, name):
+        """depth 目录内某个文件的绝对路径；分段校验同名读取口一致。"""
+        return self._depth_path(os.path.join(self.pack_dir(uid, n), "depth"), name)
+
     def depth_json(self, uid, n, name):
         path = self._depth_path(os.path.join(self.pack_dir(uid, n), "depth"), name)
         try:
@@ -231,6 +235,10 @@ class Store:
         if state.get("status") == "model":
             return dict(base, status="model")
         if state.get("status") == "ready":
+            # ready 必须以可服务的页面为准；旧版 --skip-render 留下的
+            # ready 状态没有 chapter.html，按 model 处理而不是给 404。
+            if not os.path.isfile(self.depth_path(uid, n, "chapter.html")):
+                return dict(base, status="model")
             return dict(base, status="ready")
         return dict(base, status="stale")
 

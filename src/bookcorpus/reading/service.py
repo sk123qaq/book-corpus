@@ -657,6 +657,9 @@ class ReadingService:
             if depth_state["status"] in ("model", "ready"):
                 data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
                 data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
+            if depth_state["status"] == "ready":
+                data["depth"]["skim"] = self.store.depth_json(uid, n, "layers/skim.json")
+                data["depth"]["html"] = "/reader/%s/%d/depth" % (uid, n)
         return data
 
     def editorial(self, uid, n):

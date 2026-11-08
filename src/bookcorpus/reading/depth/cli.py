@@ -13,10 +13,13 @@ from pathlib import Path
 
 from ..library import Library
 from ..model import ModelClient
+from ..render import asset_url
 from ..store import Store
 from .disposition import TIER_ORDER, audit_conservation, plan_all_dispositions
 from .model import DepthModelError, generate_chapter_model
+from .render import render_depth_chapter
 from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
+from .skim import audit_skim, generate_skim, validate_skim
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,9 @@ def _parser():
         item.add_argument("--file", help="chapter_model 或 ledger 的 JSON 路径")
         item.add_argument("--model")
         item.add_argument("--effort")
+        if name == "generate":
+            item.add_argument("--no-skim", action="store_true", help="只生成章节模型与账，不编译速览")
+            item.add_argument("--skip-render", action="store_true", help="生成速览但不写 chapter.html")
         if name in ("report", "validate"):
             item.add_argument("--gold", help="带 core_units 的验收 JSON；用于核对核心单元")
     return parser
@@ -100,7 +106,7 @@ def _chapter_context(library, context):
     return library.book(context.uid) or {"uid": context.uid}, chapter
 
 
-def _state_text(model, raw, meta, uid, n):
+def _state_text(model, raw, meta, uid, n, *, status="model", skim=None, generated_at=None):
     model_text = json.dumps(model, ensure_ascii=False, indent=1)
     state = {
         "schema": 1,
@@ -109,11 +115,15 @@ def _state_text(model, raw, meta, uid, n):
         "source_sha256": raw.get("source_sha256"),
         "chapter_model_sha": hashlib.sha256(model_text.encode("utf-8")).hexdigest(),
         "prompt_version": model.get("prompt_version", PROMPT_VERSION),
-        # phase 1 只产出结构模型与守恒账；层生成完成前不能标 ready。
-        "status": "model",
-        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "status": status,
+        "generated_at": generated_at or datetime.now(UTC).isoformat(timespec="seconds"),
         "model": meta,
     }
+    if skim is not None:
+        skim_text = json.dumps(skim, ensure_ascii=False, indent=1)
+        state["layers_sha"] = hashlib.sha256(skim_text.encode("utf-8")).hexdigest()
+        state["skim_prompt_version"] = skim.get("prompt_version")
+        state["skim_supported"] = bool(skim.get("supported"))
     if meta.get("cache_key"):
         state["cache_key"] = meta["cache_key"]
     if meta.get("layers_sha"):
@@ -155,17 +165,86 @@ def _generate(args):
     if gate["status"] != "pass":
         print(gate["detail"], file=sys.stderr)
         return 1
-    model_text, state_text = _state_text(model, context.raw, meta, context.uid, context.n)
+    generated_at = datetime.now(UTC).isoformat(timespec="seconds")
+    model_text = json.dumps(model, ensure_ascii=False, indent=1)
+    if args.no_skim:
+        _, state_text = _state_text(
+            model, context.raw, meta, context.uid, context.n, status="model", generated_at=generated_at
+        )
+        files = {
+            "chapter_model.json": model_text,
+            "ledger.json": json.dumps(ledger, ensure_ascii=False, indent=1),
+            "state.json": state_text,
+        }
+        context.store.save_depth(context.uid, context.n, files)
+        print(
+            json.dumps(
+                {
+                    "status": "model",
+                    "uid": context.uid,
+                    "n": context.n,
+                    "units": len(model.get("units", [])),
+                    "sections": len(model.get("sections", [])),
+                    "gate": gate["status"],
+                    "cache_key": meta.get("cache_key"),
+                    "cache_hit": bool(meta.get("cache_hit")),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    skim = generate_skim(
+        ModelClient(),
+        book,
+        chapter,
+        model,
+        blocks,
+        model=args.model,
+        effort=args.effort,
+    )
+    skim = validate_skim(skim, model, blocks)
+    skim_audit = audit_skim(skim, model, blocks)
+    if skim_audit["errors"]:
+        print("速览审计未通过：" + "；".join(skim_audit["errors"]), file=sys.stderr)
+        return 1
+    for warning in skim_audit["warnings"]:
+        print(f"速览警告：{warning}", file=sys.stderr)
+    skim_text = json.dumps(skim, ensure_ascii=False, indent=1)
     files = {
         "chapter_model.json": model_text,
         "ledger.json": json.dumps(ledger, ensure_ascii=False, indent=1),
-        "state.json": state_text,
+        "layers/skim.json": skim_text,
     }
+    if not args.skip_render:
+        files["chapter.html"] = render_depth_chapter(
+            book,
+            chapter,
+            blocks,
+            model,
+            ledger,
+            skim,
+            resolver=lambda rel: asset_url(context.uid, rel),
+            generated_at=generated_at,
+        )
+    status = "model" if args.skip_render else "ready"
+    state_text = _state_text(
+        model,
+        context.raw,
+        meta,
+        context.uid,
+        context.n,
+        status=status,
+        skim=skim,
+        generated_at=generated_at,
+    )[1]
+    files["state.json"] = state_text
     context.store.save_depth(context.uid, context.n, files)
+    stats = skim_audit["stats"] or {}
     print(
         json.dumps(
             {
-                "status": "model",
+                "status": status,
                 "uid": context.uid,
                 "n": context.n,
                 "units": len(model.get("units", [])),
@@ -173,6 +252,11 @@ def _generate(args):
                 "gate": gate["status"],
                 "cache_key": meta.get("cache_key"),
                 "cache_hit": bool(meta.get("cache_hit")),
+                "skim_supported": bool(skim.get("supported")),
+                "skim_ratio": stats.get("ratio"),
+                "skim_core_claim_coverage": stats.get("core_claim_coverage"),
+                "skim_detail_count": stats.get("detail_count"),
+                "html": "chapter.html" in files,
             },
             ensure_ascii=False,
         )
@@ -244,11 +328,34 @@ def _resolve_report(args, context):
     return model, ledger
 
 
+def _skim_summary(context, model, blocks):
+    skim = context.store.depth_json(context.uid, context.n, "layers/skim.json")
+    if skim is None:
+        return None
+    try:
+        audit = audit_skim(skim, model, blocks)
+    except (TypeError, ValueError) as exc:
+        return {"supported": bool(isinstance(skim, dict) and skim.get("supported")), "errors": [str(exc)]}
+    stats = audit["stats"] or {}
+    return {
+        "supported": stats.get("supported"),
+        "ratio": stats.get("ratio"),
+        "core_claim_coverage": stats.get("core_claim_coverage"),
+        "detail_count": stats.get("detail_count"),
+        "detail_index": stats.get("detail_count"),
+        "claims": stats.get("claims"),
+        "errors": audit["errors"],
+        "warnings": audit["warnings"],
+        "gates": audit["gates"],
+    }
+
+
 def _report(args):
     context = _context(args)
     model, ledger = _resolve_report(args, context)
+    blocks = context.raw.get("blocks") or []
     expected_core = _load_gold(args.gold) if args.gold else None
-    gate = audit_conservation(model, ledger, context.raw.get("blocks") or [], expected_core=expected_core)
+    gate = audit_conservation(model, ledger, blocks, expected_core=expected_core)
     tiers = ledger.get("tiers") if isinstance(ledger, dict) else None
     if not isinstance(tiers, dict):
         raise ValueError("ledger 缺少 tiers")
@@ -267,7 +374,12 @@ def _report(args):
         "gate_detail": gate["detail"],
         "problems": gate["problems"],
         "core_limitation": gate.get("limitation", ""),
+        "skim": _skim_summary(context, model, blocks),
     }
+    skim = summary["skim"] or {}
+    summary["skim_ratio"] = skim.get("ratio")
+    summary["skim_core_claim_coverage"] = skim.get("core_claim_coverage")
+    summary["skim_detail_count"] = skim.get("detail_count")
     for tier in TIER_ORDER:
         account = tiers.get(tier) or {}
         summary["tiers"][tier] = {

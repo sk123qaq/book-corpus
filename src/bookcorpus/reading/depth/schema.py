@@ -289,6 +289,25 @@ def _fold(entry, index, block_map):
     return {"block": block_id, "summary": summary, "reason": reason}
 
 
+def _skim_hint(value):
+    """可选的速览提示：模型可主动判定本章不适合编译。"""
+    value = _object(value, "skim")
+    if "supported" not in value:
+        _fail("skim 缺少 supported")
+    supported = value.get("supported")
+    if not isinstance(supported, bool):
+        _fail("skim.supported 必须是布尔值")
+    reason = value.get("reason", "")
+    if reason is None:
+        reason = ""
+    _text(reason, "skim.reason", allow_empty=supported)
+    if not supported and not reason.strip():
+        _fail("skim.supported=false 时必须给 reason")
+    item = copy.deepcopy(value)
+    item.update({"supported": supported, "reason": reason})
+    return item
+
+
 def validate_chapter_model(payload, blocks, *, uid=None, n=None, source_sha256=None):
     """校验章节模型并返回规范化副本；不修改 ``payload``。"""
     payload = _object(payload, "chapter_model")
@@ -396,6 +415,8 @@ def validate_chapter_model(payload, blocks, *, uid=None, n=None, source_sha256=N
         _fail(f"prompt_version 必须是 {PROMPT_VERSION}")
 
     result = copy.deepcopy(payload)
+    if "skim" in payload:
+        result["skim"] = _skim_hint(payload["skim"])
     result.update(
         {
             "schema": SCHEMA_VERSION,

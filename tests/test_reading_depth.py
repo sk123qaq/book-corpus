@@ -9,18 +9,25 @@ from pathlib import Path
 import pytest
 
 from bookcorpus.reading.depth import (
+    SKIM_PROMPT_VERSION,
     SYSTEM_PROMPT,
     ChapterModelError,
     DepthModelError,
+    SkimError,
     audit_conservation,
+    audit_skim,
     generate_chapter_model,
+    generate_skim,
     plan_dispositions,
+    render_depth_chapter,
     validate_chapter_model,
+    validate_skim,
 )
 from bookcorpus.reading.depth import cli as depth_cli
 from bookcorpus.reading.depth.cli import _state_text
 from bookcorpus.reading.depth.cli import main as depth_main
 from bookcorpus.reading.depth.disposition import plan_all_dispositions
+from bookcorpus.reading.depth.skim import unsupported_skim
 from bookcorpus.reading.mdparse import parse_markdown
 from bookcorpus.reading.service import ReadingService
 from bookcorpus.reading.store import Store
@@ -92,6 +99,66 @@ def _tier_map(ledger):
         tier: {unit_id: entry["disposition"] for unit_id, entry in account["units"].items()}
         for tier, account in ledger["tiers"].items()
     }
+
+
+def _long_skim_fixture():
+    blocks = [
+        {"id": "B01", "kind": "heading", "text": "第一节", "level": 2},
+        {"id": "B02", "kind": "paragraph", "text": "源" * 1200},
+    ]
+    model = {
+        "schema": 1,
+        "uid": "B0003",
+        "n": 6,
+        "sections": [{"id": "S01", "title": "第一节", "unit_ids": ["U01", "U02", "U03", "U04"]}],
+        "units": [
+            {"id": "U01", "importance": "core", "source_blocks": ["B02"]},
+            {"id": "U02", "importance": "support", "source_blocks": ["B02"]},
+            {"id": "U03", "importance": "support", "source_blocks": ["B02"]},
+            {"id": "U04", "importance": "support", "source_blocks": ["B02"]},
+        ],
+        "core_units": ["U01"],
+    }
+    skim = {
+        "schema": 1,
+        "prompt_version": SKIM_PROMPT_VERSION,
+        "supported": True,
+        "reason": "",
+        "sections": [
+            {
+                "id": "S01",
+                "lead": "本节交代核心命题与三项支撑材料，并标出适用边界。",
+                "claims": [
+                    {
+                        "text": "核心命题说明理论在哪些条件下成立，先看前提再看结论，避免把局部经验当成普遍规律。",
+                        "units": ["U01", "U02"],
+                        "anchor": "B02",
+                    },
+                    {
+                        "text": "第一项支撑材料给出一个正例，说明条件满足时判断标准如何落到具体选择上。",
+                        "units": ["U03"],
+                        "anchor": "B02",
+                    },
+                    {
+                        "text": "第二项支撑材料给出一个反例，说明条件缺失时同一判断标准会导向相反结论。",
+                        "units": ["U04"],
+                        "anchor": "B02",
+                    },
+                    {
+                        "text": (
+                            "第三项支撑材料把正例与反例并置，提示读者注意边界而不是记住口号，"
+                            "也不要把单一案例当成全部证据。"
+                        ),
+                        "units": ["U01"],
+                        "anchor": "B02",
+                    },
+                ],
+                "turn": "代价是例外情形会被压缩，读者需要回原文核对，先检查前提是否仍然成立。",
+            }
+        ],
+        "detail_index": [],
+    }
+    return blocks, model, skim
 
 
 @pytest.fixture
@@ -358,6 +425,7 @@ def test_save_without_depth_keeps_existing_depth_and_cache(tmp_path):
         {
             "chapter_model.json": {"label": "old"},
             "ledger.json": {"label": "old"},
+            "chapter.html": "<html>old depth</html>",
             "notes/a.txt": "keep",
             "state.json": {"status": "ready", "source_sha256": "sha"},
         },
@@ -409,6 +477,7 @@ def test_save_depth_failure_keeps_old_depth(tmp_path):
     uid, n = "B0009", 1
     old = {
         "chapter_model.json": {"label": "old"},
+        "chapter.html": "<html>old depth</html>",
         "state.json": {"status": "ready", "source_sha256": "sha"},
     }
     store.save_depth(uid, n, old)
@@ -448,6 +517,47 @@ def test_service_depth_missing_and_model_pack(reading_root):
     data = service.chapter("B0001", 1)
     assert data["depth"] == {"state": "model", "model": {"label": "model"}, "ledger": {"label": "ledger"}}
     assert set(data) == PACK_KEYS | {"depth"}
+
+
+def test_service_depth_ready_pack_exposes_skim_and_html(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=True)
+    raw = service.library.read_chapter("B0001", 1)
+    skim = {"schema": 1, "prompt_version": SKIM_PROMPT_VERSION, "supported": False, "reason": "短章"}
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {"label": "model"},
+            "ledger.json": {"label": "ledger"},
+            "layers/skim.json": skim,
+            "chapter.html": "<html>compiled</html>",
+            "state.json": {"status": "ready", "source_sha256": raw["source_sha256"]},
+        },
+    )
+    data = service.chapter("B0001", 1)
+    assert data["depth"] == {
+        "state": "ready",
+        "model": {"label": "model"},
+        "ledger": {"label": "ledger"},
+        "skim": skim,
+        "html": "/reader/B0001/1/depth",
+    }
+
+
+def test_service_depth_stale_hides_layers(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=True)
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {"label": "old-model"},
+            "ledger.json": {"label": "old-ledger"},
+            "layers/skim.json": {"supported": False, "reason": "旧"},
+            "chapter.html": "<html>old</html>",
+            "state.json": {"status": "ready", "source_sha256": "outdated"},
+        },
+    )
+    assert service.chapter("B0001", 1)["depth"] == {"state": "stale"}
 
 
 def test_service_default_depth_is_off(reading_root, monkeypatch):
@@ -767,7 +877,178 @@ def test_generate_cache_hit_avoids_second_model_call(tmp_path):
     assert second_model == first_model
 
 
-def test_cli_generate_status_model_and_cache(depth_root, monkeypatch, capsys):
+def test_skim_validate_and_audit_counts():
+    blocks, model, payload = _long_skim_fixture()
+    skim = validate_skim(payload, model, blocks)
+    report = audit_skim(skim, model, blocks)
+    assert report["errors"] == []
+    assert report["gates"]["G11"]["status"] == "pass"
+    assert report["gates"]["G14"]["status"] == "pass"
+    assert report["stats"]["sections"] == 1
+    assert report["stats"]["claims"] == 4
+    assert report["stats"]["detail_count"] == 0
+    assert report["stats"]["core_total"] == 1
+    assert report["stats"]["core_covered"] == 1
+    assert report["stats"]["core_claim_coverage"] == 1.0
+    assert report["stats"]["units_in_claims"] == 4
+    assert report["stats"]["units_covered"] == 4
+    assert report["stats"]["ratio_ok"] is True
+
+
+def test_skim_unsupported_requires_reason_and_empty_body():
+    with pytest.raises(SkimError, match="reason"):
+        validate_skim(unsupported_skim(""), {"sections": [], "units": []}, [])
+    payload = unsupported_skim("太短")
+    payload["sections"] = [{"id": "S01", "lead": "多余", "claims": []}]
+    with pytest.raises(SkimError, match="sections"):
+        validate_skim(payload, {"sections": [], "units": []}, [])
+
+
+def test_skim_rejects_missing_core_and_bad_anchor():
+    blocks, model, payload = _long_skim_fixture()
+    missing_core = copy.deepcopy(payload)
+    claim_units = [["U02"], ["U03"], ["U04"], ["U02", "U03"]]
+    for claim, units in zip(missing_core["sections"][0]["claims"], claim_units, strict=True):
+        claim["units"] = units
+    with pytest.raises(SkimError, match="core"):
+        validate_skim(missing_core, model, blocks)
+
+    bad_anchor = copy.deepcopy(payload)
+    bad_anchor["sections"][0]["claims"][0]["anchor"] = "B99"
+    with pytest.raises(SkimError, match="anchor"):
+        validate_skim(bad_anchor, model, blocks)
+
+
+def test_schema_keeps_optional_skim_hint_and_rejects_bad_reason():
+    blocks, sha = _parsed()
+    payload = _gold(sha)
+    payload["skim"] = {"supported": False, "reason": "纯叙事章，没有可陈述的命题链。"}
+    model = validate_chapter_model(payload, blocks, uid="B0003", n=6, source_sha256=sha)
+    assert model["skim"] == {"supported": False, "reason": "纯叙事章，没有可陈述的命题链。"}
+
+    payload["skim"] = {"supported": False, "reason": ""}
+    with pytest.raises(ChapterModelError, match="reason"):
+        validate_chapter_model(payload, blocks, uid="B0003", n=6, source_sha256=sha)
+
+
+def test_skim_rejects_uncovered_unit_and_number_not_in_source():
+    blocks, model, payload = _long_skim_fixture()
+    uncovered = copy.deepcopy(payload)
+    uncovered["sections"][0]["claims"][2]["units"] = ["U02"]
+    uncovered["sections"][0]["claims"][3]["units"] = ["U01"]
+    with pytest.raises(SkimError, match="既不在 claim 也不在 detail_index"):
+        validate_skim(uncovered, model, blocks)
+
+    number = copy.deepcopy(payload)
+    number["sections"][0]["claims"][0]["text"] += " 12345"
+    with pytest.raises(SkimError, match="数字不在源文"):
+        validate_skim(number, model, blocks)
+
+
+def test_skim_rejects_banned_phrase_ratio_and_forged_quote():
+    blocks, model, payload = _long_skim_fixture()
+    banned = copy.deepcopy(payload)
+    banned["sections"][0]["claims"][0]["text"] += "值得注意的是"
+    with pytest.raises(SkimError, match="导读腔"):
+        validate_skim(banned, model, blocks)
+
+    thin = copy.deepcopy(payload)
+    for claim in thin["sections"][0]["claims"]:
+        claim["text"] = "短"
+    with pytest.raises(SkimError, match="15%"):
+        validate_skim(thin, model, blocks)
+
+    forged = copy.deepcopy(payload)
+    forged["detail_index"] = [{"label": "细节", "unit": "U01", "anchor": "B02", "quote": "原文没有这句"}]
+    with pytest.raises(SkimError, match="quote"):
+        validate_skim(forged, model, blocks)
+
+
+def test_generate_skim_short_chapter_is_unsupported_without_model_call():
+    model, blocks = _valid()
+    client = FakeClient([])
+    skim = generate_skim(
+        client,
+        {"uid": "B0003"},
+        {"uid": "B0003", "n": 6},
+        model,
+        blocks,
+        model="fake-model",
+        effort="low",
+    )
+    assert client.calls == []
+    assert skim["supported"] is False
+    assert skim["reason"]
+    assert skim["sections"] == []
+    assert skim["detail_index"] == []
+
+
+def test_generate_skim_retries_once_after_validation_error():
+    blocks, model, payload = _long_skim_fixture()
+    bad = copy.deepcopy(payload)
+    bad["sections"][0]["claims"] = bad["sections"][0]["claims"][:1]
+    client = FakeClient([bad, payload])
+    skim = generate_skim(
+        client,
+        {"uid": "B0003"},
+        {"uid": "B0003", "n": 6},
+        model,
+        blocks,
+        model="fake-model",
+        effort="low",
+    )
+    assert len(client.calls) == 2
+    assert skim["supported"] is True
+
+
+def test_render_depth_chapter_keeps_all_source_blocks_in_order():
+    blocks, model, payload = _long_skim_fixture()
+    blocks = [
+        *blocks,
+        {"id": "B03", "kind": "quote", "text": "一句引文"},
+        {"id": "B04", "kind": "list", "text": "列表内容"},
+        {"id": "B05", "kind": "table", "text": "", "head": ["列"], "rows": [["值"]]},
+    ]
+    skim = validate_skim(payload, model, blocks)
+    markup = render_depth_chapter(
+        {"uid": "B0003", "title": "书名", "author": "作者"},
+        {"n": 6, "title": "第6章"},
+        blocks,
+        model,
+        {},
+        skim,
+    )
+    assert markup.index('data-body="compiled"') < markup.index('data-body="source"')
+    positions = [markup.index(f'data-block="{block["id"]}"') for block in blocks]
+    assert positions == sorted(positions)
+    assert 'href="#B02"' in markup
+    assert 'data-skim-anchor="B02"' in markup
+    assert "编译版 · 核心命题 1/1 · 细节 0 条" in markup
+    for tab in ("速览", "标准", "深读", "研究"):
+        assert tab in markup
+    assert "深读/研究层将在后续生成" in markup
+    assert "@media print" in markup
+
+
+def test_render_depth_chapter_unsupported_has_no_claims_but_keeps_source():
+    blocks, model, _payload = _long_skim_fixture()
+    markup = render_depth_chapter(
+        {"uid": "B0003", "title": "书名", "author": "作者"},
+        {"n": 6, "title": "第6章"},
+        blocks,
+        model,
+        {},
+        unsupported_skim("这一章太短，适合读原文。"),
+    )
+    assert "本章更适合按原文阅读" in markup
+    assert "这一章太短，适合读原文。" in markup
+    assert "读标准档" in markup
+    assert 'class="skim-claims"' not in markup
+    for block in blocks:
+        assert f'data-block="{block["id"]}"' in markup
+
+
+def test_cli_generate_status_ready_with_skim_and_render(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
     fake = FakeClient([_chunk_payload(blocks)])
     monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
@@ -788,13 +1069,127 @@ def test_cli_generate_status_model_and_cache(depth_root, monkeypatch, capsys):
     )
     assert code == 0
     output = json.loads(capsys.readouterr().out)
-    assert output["status"] == "model"
+    assert output["status"] == "ready"
+    assert output["skim_supported"] is False
+    assert output["html"] is True
+    store = Store(Layout(depth_root))
+    assert store.depth_state("B0003", 6)["status"] == "ready"
+    state = json.loads((Path(store.pack_dir("B0003", 6)) / "depth" / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "ready"
+    assert state["cache_key"] == output["cache_key"]
+    assert state["skim_supported"] is False
+    assert Path(store.depth_cache_dir("B0003", 6), f"{output['cache_key']}.json").exists()
+    skim = store.depth_json("B0003", 6, "layers/skim.json")
+    assert skim["supported"] is False
+    assert skim["reason"]
+    html = Path(store.depth_path("B0003", 6, "chapter.html")).read_text(encoding="utf-8")
+    assert "本章更适合按原文阅读" in html
+    assert (
+        depth_main(
+            [
+                "report",
+                "--root",
+                str(depth_root),
+                "--uid",
+                "B0003",
+                "--n",
+                "6",
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["skim"]["supported"] is False
+    assert report["skim_detail_count"] == 0
+    assert report["skim"]["gates"]["G11"]["status"] == "pass"
+
+
+def test_cli_generate_no_skim_keeps_model_state(depth_root, monkeypatch, capsys):
+    blocks, _ = _parsed()
+    fake = FakeClient([_chunk_payload(blocks)])
+    monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
+    code = depth_main(
+        [
+            "generate",
+            "--root",
+            str(depth_root),
+            "--uid",
+            "B0003",
+            "--n",
+            "6",
+            "--model",
+            "fake-model",
+            "--effort",
+            "low",
+            "--no-skim",
+        ]
+    )
+    assert code == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "model"
     store = Store(Layout(depth_root))
     assert store.depth_state("B0003", 6)["status"] == "model"
-    state = json.loads((Path(store.pack_dir("B0003", 6)) / "depth" / "state.json").read_text(encoding="utf-8"))
-    assert state["status"] == "model"
-    assert state["cache_key"] == output["cache_key"]
-    assert Path(store.depth_cache_dir("B0003", 6), f"{output['cache_key']}.json").exists()
+    assert store.depth_json("B0003", 6, "layers/skim.json") is None
+    assert not Path(store.depth_path("B0003", 6, "chapter.html")).exists()
+
+
+def test_cli_generate_skip_render_is_not_ready(depth_root, monkeypatch, capsys):
+    blocks, _ = _parsed()
+    fake = FakeClient([_chunk_payload(blocks)])
+    monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
+    code = depth_main(
+        [
+            "generate",
+            "--root",
+            str(depth_root),
+            "--uid",
+            "B0003",
+            "--n",
+            "6",
+            "--model",
+            "fake-model",
+            "--effort",
+            "low",
+            "--skip-render",
+        ]
+    )
+    assert code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "model"
+    assert output["html"] is False
+    store = Store(Layout(depth_root))
+    assert store.depth_state("B0003", 6)["status"] == "model"
+    assert not Path(store.depth_path("B0003", 6, "chapter.html")).exists()
+
+
+def test_depth_state_ready_without_html_is_model(tmp_path):
+    store = Store(Layout(tmp_path))
+    store.save_depth(
+        "B0001",
+        1,
+        {
+            "state.json": {"status": "ready", "source_sha256": "sha"},
+        },
+    )
+    assert store.depth_state("B0001", 1, "sha")["status"] == "model"
+
+
+def test_cli_state_ready_records_skim_layers_sha():
+    blocks, model, payload = _long_skim_fixture()
+    skim = validate_skim(payload, model, blocks)
+    _, state_text = _state_text(
+        model,
+        {"source_sha256": "sha"},
+        {},
+        "B0003",
+        6,
+        status="ready",
+        skim=skim,
+    )
+    state = json.loads(state_text)
+    assert state["status"] == "ready"
+    assert state["skim_prompt_version"] == SKIM_PROMPT_VERSION
+    assert state["skim_supported"] is True
+    assert len(state["layers_sha"]) == 64
 
 
 def test_prompt_has_shape_guidance():

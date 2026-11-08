@@ -221,6 +221,10 @@ class Handler(BaseHTTPRequestHandler):
         if match:
             self._serve_agent_reader(match.group(1), int(match.group(2)), head)
             return
+        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/depth$", path)
+        if match:
+            self._serve_depth(match.group(1), int(match.group(2)), head)
+            return
         match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/edition$", path)
         if match:
             self._serve_edition(match.group(1), int(match.group(2)), head)
@@ -376,6 +380,22 @@ class Handler(BaseHTTPRequestHandler):
         path = os.path.join(self.service.store.pack_dir(uid, n), "agent-standard.html")
         if not os.path.exists(path):
             self._error(404, "这一章还没有 Agent 标准档")
+            return
+        with open(path, encoding="utf-8") as fh:
+            self._send(200, fh.read(), "text/html; charset=utf-8", head)
+
+    def _serve_depth(self, uid, n, head=False):
+        if not self.service.depth:
+            self._error(404, "这一章还没有深读模式", api=False, head=head)
+            return
+        raw = self.service.library.read_chapter(uid, n)
+        if raw is None:
+            self._error(404, "这一章不存在", api=False, head=head)
+            return
+        state = self.service.store.depth_state(uid, n, raw.get("source_sha256"))
+        path = self.service.store.depth_path(uid, n, "chapter.html")
+        if state.get("status") != "ready" or not os.path.isfile(path):
+            self._error(404, "这一章还没有编译版", api=False, head=head)
             return
         with open(path, encoding="utf-8") as fh:
             self._send(200, fh.read(), "text/html; charset=utf-8", head)

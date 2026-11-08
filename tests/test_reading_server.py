@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from bookcorpus.reading.service import ReadingService
+
 REPO = Path(__file__).resolve().parents[1]
 
 ACTIVE_STATES = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
@@ -45,7 +47,7 @@ def slow_server(reading_root):
             reading_root,
             {
                 "READING_ANNOTATE": "1",
-                "READING_MODEL_URL": "http://127.0.0.1:%d/v1/chat/completions" % hang.getsockname()[1],
+                "READING_MODEL_URL": f"http://127.0.0.1:{hang.getsockname()[1]}/v1/chat/completions",
                 "READING_MODEL_TIMEOUT": "30",
                 "OPENCODE_GO_API_KEY": "test-key",
             },
@@ -77,11 +79,11 @@ def _start_server(reading_root, extra_env=None):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    base = "http://127.0.0.1:%d" % port
+    base = f"http://127.0.0.1:{port}"
     deadline = time.time() + 15
     while time.time() < deadline:
         if proc.poll() is not None:
-            raise AssertionError("server exited: %s" % proc.stderr.read().decode("utf-8", "replace"))
+            raise AssertionError(f"server exited: {proc.stderr.read().decode('utf-8', 'replace')}")
         try:
             with urllib.request.urlopen(base + "/api/shelf", timeout=1) as response:
                 if response.status == 200:
@@ -112,9 +114,9 @@ def _wait_job_state(base, job_id, target, timeout=15):
         if current["state"] == target:
             return current
         if current["state"] not in ACTIVE_STATES:
-            raise AssertionError("job left active before %s: %s" % (target, current))
+            raise AssertionError(f"job left active before {target}: {current}")
         time.sleep(0.01)
-    raise AssertionError("job never reached %s: %s" % (target, current))
+    raise AssertionError(f"job never reached {target}: {current}")
 
 
 def _get(base, path):
@@ -394,3 +396,37 @@ def test_editorial_api_roundtrip(server, reading_root):
     with pytest.raises(urllib.error.HTTPError) as exc:
         _post(server, "/api/editorial/B0001/01", payload)
     assert exc.value.code == 400
+
+
+def test_depth_route_is_404_when_flag_off(reading_root):
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "0"})
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _get(base, "/reader/B0001/1/depth")
+        assert exc.value.code == 404
+    finally:
+        _stop_server(proc)
+
+
+def test_depth_route_serves_ready_chapter_and_404s_missing(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=False)
+    raw = service.library.read_chapter("B0001", 1)
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter.html": "<!doctype html><html><body>编译版</body></html>",
+            "state.json": {"status": "ready", "source_sha256": raw["source_sha256"]},
+        },
+    )
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
+    try:
+        status, body, headers = _get(base, "/reader/B0001/1/depth")
+        assert status == 200
+        assert "编译版" in body
+        assert headers.get_content_type() == "text/html"
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _get(base, "/reader/B0001/2/depth")
+        assert exc.value.code == 404
+    finally:
+        _stop_server(proc)
