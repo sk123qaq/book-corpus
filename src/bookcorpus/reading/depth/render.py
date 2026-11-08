@@ -8,6 +8,8 @@
 import html
 
 from ..render import READER_CSS, _block_element
+from .diagrams import render_figure
+from .standard import build_standard
 
 DEPTH_RENDER_VERSION = 1
 
@@ -59,7 +61,46 @@ font-family:var(--sans);font-size:12px;line-height:1.8;color:var(--ink-2)}
 body.only-source [data-origin="added"]{display:none!important}
 html.depth-js section[data-body][hidden]{display:none}
 .flow-row[id]{scroll-margin-top:84px}
+.section-lead{margin:30px 0 18px;padding:2px 0 2px 14px;border-left:4px solid var(--pine);
+font-size:17px;line-height:1.8;color:var(--ink-2)}
+.term-note,.concept-note{margin:10px 0 22px;padding:11px 15px;border:1px solid var(--rule);
+background:var(--paper-2);font-family:var(--sans);font-size:13px;line-height:1.8;color:var(--ink-2)}
+.term-note b{display:inline-block;margin-right:8px;color:var(--cinnabar);letter-spacing:.04em}
+.concept-note .note-tag{display:inline-block;margin-right:8px;padding:1px 6px;border:1px solid var(--rule-strong);
+font-size:10px;letter-spacing:.12em;color:var(--ochre)}
+.fold{margin:16px 0;border:1px solid var(--rule);background:var(--paper-2)}
+.fold summary{padding:9px 14px;font-family:var(--sans);font-size:12px;letter-spacing:.04em;
+color:var(--ink-2);cursor:pointer}
+.fold[open] summary{border-bottom:1px solid var(--rule)}
+.fold .flow-row{margin:0;padding:2px 14px 10px}
+.depth-figure{margin:26px 0 30px;padding:16px 18px;border:1px solid var(--rule-strong);
+background:var(--paper-2);break-inside:avoid;overflow-x:auto}
+.depth-figure figcaption{margin:0 0 12px;padding-bottom:9px;border-bottom:1px solid var(--rule)}
+.depth-figure figcaption b{display:block;font-size:16px;line-height:1.6;color:var(--ink)}
+.depth-figure figcaption span{display:block;margin-top:3px;font-family:var(--sans);font-size:11px;color:var(--ink-3)}
+.fig-nodes{margin:0;padding-left:22px;font-size:15px;line-height:2}
+.fig-nodes a{color:var(--pine);border-bottom:1px dotted var(--pine)}
+.fig-edges{margin:10px 0 0;font-family:var(--sans);font-size:11px;line-height:1.9;color:var(--ink-3)}
+.fig-table{overflow-x:auto}
+.fig-table table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.7}
+.fig-table th,.fig-table td{padding:6px 9px;border:1px solid var(--rule);text-align:left;vertical-align:top}
+.fig-table th{background:var(--paper);font-family:var(--sans);font-size:12px}
+.fig-bars{margin:0}
+.fig-bar{display:grid;grid-template-columns:minmax(5em,28%) 1fr auto;align-items:center;gap:9px;margin:0 0 8px;
+font-family:var(--sans);font-size:12px}
+.fig-bar-track{display:block;height:10px;background:var(--paper);border:1px solid var(--rule)}
+.fig-bar-fill{display:block;height:100%;background:var(--pine)}
+.fig-bar-value{min-width:3em;text-align:right;color:var(--ink-2)}
+.fig-fallback{margin:0 0 10px;font-size:14px;line-height:1.8;color:var(--ochre)}
+.fig-units{margin:0;padding-left:22px;font-size:14px;line-height:1.9}
+.fig-units a{color:var(--pine);border-bottom:1px dotted var(--pine)}
+@media (max-width:640px){.depth-figure{margin-left:-8px;margin-right:-8px;padding:12px}
+.fig-bar{grid-template-columns:minmax(4em,34%) 1fr auto}}
 @media print{.reader-top,.tierbar,.skim-actions{display:none!important}
+section[data-body=source]{display:block!important}
+.fold{break-inside:auto}.fold summary{display:none}
+.fold > :not(summary){display:block!important}
+.depth-figure{overflow:visible;break-inside:avoid}
 .depth-panel + .depth-panel{margin-top:0;padding-top:0;border-top:0}
 .skim-anchor{border:0}.skim-index{display:block}.skim-index summary{display:none}}
 .flash{animation:depth-flash 900ms ease-out}
@@ -241,6 +282,119 @@ def _source_row(block, resolver):
     return f'<div class="flow-row" data-block="{html.escape(block_id, quote=True)}"{row_id}>{element}</div>'
 
 
+def _section_units(model):
+    """节 -> 单元；优先模型 section.unit_ids，缺时按 unit.section 反查。"""
+    sections = model.get("sections") or []
+    units = {unit.get("id"): unit for unit in model.get("units") or [] if unit.get("id")}
+    result = {}
+    for section in sections:
+        unit_ids = list(section.get("unit_ids") or [])
+        if not unit_ids:
+            section_id = section.get("id")
+            unit_ids = [unit_id for unit_id, unit in units.items() if unit.get("section") == section_id]
+        result[section.get("id")] = unit_ids
+    return result
+
+
+def _section_first_blocks(model, blocks):
+    """每节最早出现的原文块，用于把节导语和节图插在节首。"""
+    order = {block.get("id"): index for index, block in enumerate(blocks)}
+    units = {unit.get("id"): unit for unit in model.get("units") or [] if unit.get("id")}
+    first = {}
+    for section_id, unit_ids in _section_units(model).items():
+        indexes = []
+        for unit_id in unit_ids:
+            for block_id in (units.get(unit_id) or {}).get("source_blocks") or []:
+                if block_id in order:
+                    indexes.append(order[block_id])
+        if indexes:
+            first[section_id] = blocks[min(indexes)].get("id")
+    return first
+
+
+def _figure_sections(figures, model):
+    """图 -> 节；只收全部单元落在同一节的图。"""
+    units = {unit.get("id"): unit for unit in model.get("units") or [] if unit.get("id")}
+    sections = {}
+    for section_id, unit_ids in _section_units(model).items():
+        for unit_id in unit_ids:
+            sections.setdefault(unit_id, section_id)
+    for unit_id, unit in units.items():
+        if unit.get("section"):
+            sections.setdefault(unit_id, unit.get("section"))
+    result = []
+    for figure in figures:
+        found = {sections.get(unit_id) for unit_id in figure.get("units") or []}
+        found.discard(None)
+        result.append((figure, found.pop() if len(found) == 1 else None))
+    return result
+
+
+def _added(html_text, kind, **attrs):
+    extra = "".join(f' {key.replace("_", "-")}="{html.escape(str(value), quote=True)}"' for key, value in attrs.items())
+    return f'<{kind} data-origin="added"{extra}>{html_text}</{kind}>'
+
+
+def _term_note(term):
+    inner = f"<b>{html.escape(term.get('term') or '')}</b>{html.escape(term.get('definition') or '')}"
+    return _added(inner, "aside", **{"class": "term-note", "data_term": term.get("term") or ""})
+
+
+def _concept_note(note):
+    inner = (
+        f'<span class="note-tag">{html.escape(note.get("origin") or "editor")}</span>'
+        f"{html.escape(note.get('text') or '')}"
+    )
+    return _added(inner, "aside", **{"class": "concept-note", "data_block": note.get("block") or ""})
+
+
+def _standard_rows(model, blocks, standard, resolver):
+    """逐块输出原文，并在固定位置叠加标准档注解。"""
+    figures = [figure for figure in standard.get("figures") or [] if isinstance(figure, dict)]
+    chapter_figure = figures[0] if figures else None
+    section_figures = _figure_sections(figures[1:], model)
+    first_blocks = _section_first_blocks(model, blocks)
+    leads = {row.get("id"): row.get("lead") for row in standard.get("sections") or []}
+    terms = {}
+    for term in standard.get("terms") or []:
+        terms.setdefault(term.get("source_block"), []).append(term)
+    notes = {}
+    for note in standard.get("notes") or []:
+        notes.setdefault(note.get("block"), []).append(note)
+    folds = {row.get("block"): row for row in standard.get("folds") or []}
+    at_section = {}
+    for section_id, block_id in first_blocks.items():
+        at_section.setdefault(block_id, []).append(section_id)
+
+    parts = []
+    if chapter_figure is not None:
+        parts.append(render_figure(chapter_figure, model, blocks))
+    for block in blocks:
+        block_id = block.get("id") or ""
+        for section_id in at_section.get(block_id, []):
+            lead = leads.get(section_id)
+            if lead:
+                parts.append(_added(html.escape(lead), "p", **{"class": "section-lead", "data_section": section_id}))
+            for figure, figure_section in section_figures:
+                if figure_section == section_id:
+                    parts.append(render_figure(figure, model, blocks))
+        row = _source_row(block, resolver)
+        fold = folds.get(block_id)
+        if fold is not None:
+            summary = html.escape(fold.get("summary") or "展开")
+            parts.append(
+                f'<details class="fold" data-block="{html.escape(block_id, quote=True)}" open>'
+                f'<summary data-origin="added">{summary}</summary>{row}</details>'
+            )
+        else:
+            parts.append(row)
+        for term in terms.get(block_id, []):
+            parts.append(_term_note(term))
+        for note in notes.get(block_id, []):
+            parts.append(_concept_note(note))
+    return "".join(parts)
+
+
 def _tab_buttons():
     specs = (
         ("skim", "速览", "编译 · 5–8 分钟"),
@@ -258,16 +412,20 @@ def _tab_buttons():
     return "".join(buttons)
 
 
-def render_depth_chapter(book, chapter, blocks, model, ledger, skim, *, resolver=None, generated_at=None):
-    """渲染一页两树：编译速览 + 全部原文块。"""
+def render_depth_chapter(
+    book, chapter, blocks, model, ledger, skim, *, resolver=None, generated_at=None, standard=None
+):
+    """渲染一页两树：编译速览 + 全部原文块；标准档叠加注解层。"""
     del ledger  # 处置账已落在 skim/核心计数里，这里只需要模型与速览。
+    if standard is None:
+        standard = build_standard(model, blocks)
     title = html.escape(book.get("title_short") or book.get("title") or "")
     author = html.escape(book.get("author") or "作者待校")
     chapter_title = html.escape(chapter.get("title") or chapter.get("stem") or "")
     uid = html.escape(book.get("uid") or "")
     n = int(chapter.get("n") or 0)
     compiled = _compiled_body(skim, model)
-    source_rows = "".join(_source_row(block, resolver) for block in blocks)
+    source_rows = _standard_rows(model, blocks, standard, resolver)
     generated = html.escape(generated_at or chapter.get("generated_at") or "")
     prompt_version = html.escape((model or {}).get("prompt_version") or "")
     tabs = _tab_buttons()

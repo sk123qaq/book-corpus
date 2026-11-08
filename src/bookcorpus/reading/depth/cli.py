@@ -20,6 +20,7 @@ from .model import DepthModelError, generate_chapter_model
 from .render import render_depth_chapter
 from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
 from .skim import audit_skim, generate_skim, validate_skim
+from .standard import build_standard
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,9 @@ def _parser():
         if name == "generate":
             item.add_argument("--no-skim", action="store_true", help="只生成章节模型与账，不编译速览")
             item.add_argument("--skip-render", action="store_true", help="生成速览但不写 chapter.html")
+            item.add_argument(
+                "--no-standard", action="store_true", help="不写 layers/standard.json（页面仍用确定性标准层）"
+            )
         if name in ("report", "validate"):
             item.add_argument("--gold", help="带 core_units 的验收 JSON；用于核对核心单元")
     return parser
@@ -106,7 +110,7 @@ def _chapter_context(library, context):
     return library.book(context.uid) or {"uid": context.uid}, chapter
 
 
-def _state_text(model, raw, meta, uid, n, *, status="model", skim=None, generated_at=None):
+def _state_text(model, raw, meta, uid, n, *, status="model", skim=None, standard=None, generated_at=None):
     model_text = json.dumps(model, ensure_ascii=False, indent=1)
     state = {
         "schema": 1,
@@ -124,6 +128,10 @@ def _state_text(model, raw, meta, uid, n, *, status="model", skim=None, generate
         state["layers_sha"] = hashlib.sha256(skim_text.encode("utf-8")).hexdigest()
         state["skim_prompt_version"] = skim.get("prompt_version")
         state["skim_supported"] = bool(skim.get("supported"))
+    if standard is not None:
+        standard_text = json.dumps(standard, ensure_ascii=False, indent=1)
+        state["standard_sha"] = hashlib.sha256(standard_text.encode("utf-8")).hexdigest()
+        state["standard_prompt_version"] = standard.get("prompt_version")
     if meta.get("cache_key"):
         state["cache_key"] = meta["cache_key"]
     if meta.get("layers_sha"):
@@ -211,11 +219,14 @@ def _generate(args):
     for warning in skim_audit["warnings"]:
         print(f"速览警告：{warning}", file=sys.stderr)
     skim_text = json.dumps(skim, ensure_ascii=False, indent=1)
+    standard = build_standard(model, blocks)
     files = {
         "chapter_model.json": model_text,
         "ledger.json": json.dumps(ledger, ensure_ascii=False, indent=1),
         "layers/skim.json": skim_text,
     }
+    if not args.no_standard:
+        files["layers/standard.json"] = json.dumps(standard, ensure_ascii=False, indent=1)
     if not args.skip_render:
         files["chapter.html"] = render_depth_chapter(
             book,
@@ -226,6 +237,7 @@ def _generate(args):
             skim,
             resolver=lambda rel: asset_url(context.uid, rel),
             generated_at=generated_at,
+            standard=standard,
         )
     status = "model" if args.skip_render else "ready"
     state_text = _state_text(
@@ -236,6 +248,7 @@ def _generate(args):
         context.n,
         status=status,
         skim=skim,
+        standard=standard,
         generated_at=generated_at,
     )[1]
     files["state.json"] = state_text
@@ -256,6 +269,9 @@ def _generate(args):
                 "skim_ratio": stats.get("ratio"),
                 "skim_core_claim_coverage": stats.get("core_claim_coverage"),
                 "skim_detail_count": stats.get("detail_count"),
+                "standard_notes": len(standard.get("notes") or []),
+                "figures": len(standard.get("figures") or []),
+                "g12": standard["audit"]["status"],
                 "html": "chapter.html" in files,
             },
             ensure_ascii=False,

@@ -26,8 +26,10 @@ from bookcorpus.reading.depth import (
 from bookcorpus.reading.depth import cli as depth_cli
 from bookcorpus.reading.depth.cli import _state_text
 from bookcorpus.reading.depth.cli import main as depth_main
+from bookcorpus.reading.depth.diagrams import audit_figures
 from bookcorpus.reading.depth.disposition import plan_all_dispositions
 from bookcorpus.reading.depth.skim import unsupported_skim
+from bookcorpus.reading.depth.standard import STANDARD_PROMPT_VERSION, build_standard
 from bookcorpus.reading.mdparse import parse_markdown
 from bookcorpus.reading.service import ReadingService
 from bookcorpus.reading.store import Store
@@ -1357,3 +1359,304 @@ def test_gold_core_coverage_uses_expected_core():
         assert report["core_coverage"] == 1.0, stem
         assert report["hard_info_coverage"] == 1.0, stem
         assert report["limitation"] == "", stem
+
+
+def _standard_model():
+    blocks = [
+        {"id": "B01", "kind": "heading", "text": "第一节", "level": 2},
+        {"id": "B02", "kind": "paragraph", "text": "复利是把利息计入本金。"},
+        {"id": "B03", "kind": "heading", "text": "第二节", "level": 2},
+        {"id": "B04", "kind": "list", "text": "清单", "items": [f"条目{i}" for i in range(1, 11)]},
+    ]
+    model = {
+        "sections": [
+            {"id": "S01", "title": "第一节", "lead": "先看定义。", "unit_ids": ["U01"]},
+            {"id": "S02", "title": "第二节", "lead": "再看清单。", "unit_ids": ["U02"]},
+        ],
+        "units": [
+            {"id": "U01", "source_blocks": ["B02"]},
+            {"id": "U02", "source_blocks": ["B04"]},
+        ],
+        "terms": [],
+        "figures": [],
+        "folds": [],
+    }
+    return blocks, model
+
+
+def test_standard_build_adds_chapter_map_and_auto_fold():
+    blocks, model = _standard_model()
+    model["standard_notes"] = [{"block": "B02", "text": "复利在原文中的背景。", "origin": "source"}]
+    standard = build_standard(model, blocks)
+    assert standard["notes"] == [
+        {"block": "B02", "text": "复利在原文中的背景。", "origin": "source", "tag": "background"}
+    ]
+    assert standard["prompt_version"] == STANDARD_PROMPT_VERSION
+    assert [section["lead"] for section in standard["sections"]] == ["先看定义。", "再看清单。"]
+    assert len(standard["figures"]) == 1
+    chapter = standard["figures"][0]
+    assert chapter["id"] == "F00"
+    assert chapter["family"] == "tree"
+    assert chapter["origin"] == "derived"
+    assert [node["id"] for node in chapter["data"]["nodes"]] == ["S01", "S02"]
+    assert chapter["data"]["edges"] == [{"from": "S01", "to": "S02"}]
+    assert len(standard["folds"]) == 1
+    assert "10" in standard["folds"][0]["summary"]
+    assert standard["audit"]["status"] == "pass"
+
+
+def test_standard_terms_deduped_and_first_block():
+    blocks = [
+        {"id": "B01", "kind": "paragraph", "text": "复利是利息滚入本金。"},
+        {"id": "B02", "kind": "paragraph", "text": "复利之下，边际递减。"},
+    ]
+    model = {
+        "sections": [{"id": "S01", "title": "第一节", "unit_ids": ["U01"]}],
+        "units": [{"id": "U01", "source_blocks": ["B01", "B02"]}],
+        "terms": [
+            {"term": "复利", "definition": "利息滚入本金。", "source_block": "B02", "quote": "复利"},
+            {"term": "复利", "definition": "重复计息。", "source_block": "B01", "quote": "复利"},
+            {"term": "边际", "definition": "新增一单位带来的变化。", "source_block": "B02", "quote": "边际"},
+        ],
+        "figures": [],
+        "folds": [],
+    }
+    standard = build_standard(model, blocks)
+    assert [term["term"] for term in standard["terms"]] == ["复利", "边际"]
+    assert standard["terms"][0]["source_block"] == "B01"
+
+
+def test_standard_rejects_bad_lead_note_and_fold_kind():
+    blocks, model = _standard_model()
+    model["sections"][0]["lead"] = "长" * 81
+    model["standard_notes"] = [
+        {"block": "B02", "text": "注" * 121, "origin": "editor"},
+        {"block": "B99", "text": "出处不存在", "origin": "source"},
+    ]
+    model["folds"] = [{"block": "B02", "summary": "段落不折", "reason": "测试"}]
+    standard = build_standard(model, blocks)
+    assert standard["sections"] == [{"id": "S02", "lead": "再看清单。"}]
+    assert standard["notes"] == []
+    assert standard["folds"] == [{"block": "B04", "summary": "完整清单 · 10 条", "reason": "长清单折叠"}]
+    assert standard["audit"]["warnings"]
+    assert standard["audit"]["status"] == "warn"
+
+
+def test_render_standard_includes_lead_term_fold_figure():
+    blocks = [
+        {"id": "B01", "kind": "paragraph", "text": "复利是把利息计入本金。"},
+        {"id": "B02", "kind": "list", "text": "清单", "items": [f"条目{i}" for i in range(1, 11)]},
+    ]
+    model = {
+        "sections": [{"id": "S01", "title": "第一节", "lead": "先看定义，再看清单。", "unit_ids": ["U01", "U02"]}],
+        "units": [
+            {"id": "U01", "source_blocks": ["B01"]},
+            {"id": "U02", "source_blocks": ["B02"]},
+        ],
+        "terms": [{"term": "复利", "definition": "利息滚入本金。", "source_block": "B01", "quote": "复利"}],
+        "figures": [],
+        "folds": [],
+    }
+    standard = build_standard(model, blocks)
+    markup = render_depth_chapter(
+        {"uid": "B0003", "title": "书名", "author": "作者"},
+        {"n": 6, "title": "第6章"},
+        blocks,
+        model,
+        {},
+        unsupported_skim("短章。"),
+        standard=standard,
+    )
+    for block in blocks:
+        assert f'data-block="{block["id"]}"' in markup
+    assert '<details class="fold" data-block="B02" open>' in markup
+    assert "完整清单 · 10 条" in markup
+    assert markup.count('<aside data-origin="added" class="term-note" data-term="复利">') == 1
+    assert "先看定义，再看清单。" in markup
+    assert "本章结构" in markup
+    assert 'data-origin="added"' in markup
+    assert 'body.only-source [data-origin="added"]{display:none!important}' in markup
+    assert "item.open = true" in markup
+
+
+def test_audit_figures_rejects_number_not_in_source():
+    blocks = [{"id": "B01", "kind": "paragraph", "text": "全年增长。"}]
+    model = {"units": [{"id": "U01", "source_blocks": ["B01"]}]}
+    figure = {
+        "id": "F01",
+        "family": "quantity",
+        "question": "增长多少",
+        "units": ["U01"],
+        "origin": "derived",
+        "caption": "增长 42%",
+        "reading_note": "看条形。",
+        "data": {"items": [{"label": "全年", "value": 42}]},
+        "fallback": "",
+    }
+    report = audit_figures([figure], model, blocks)
+    assert report["status"] == "fail"
+    assert any("42" in error for error in report["errors"])
+    blocks[0]["text"] = "全年增长 42%。"
+    report = audit_figures([figure], model, blocks)
+    assert report["status"] == "pass"
+    figure["caption"] = "增长 43%"
+    report = audit_figures([figure], model, blocks)
+    assert report["status"] == "fail"
+
+
+def test_standard_drops_external_figure():
+    blocks = [{"id": "B01", "kind": "paragraph", "text": "原文。"}]
+    model = {
+        "sections": [{"id": "S01", "title": "第一节", "lead": "看原文。", "unit_ids": ["U01"]}],
+        "units": [{"id": "U01", "source_blocks": ["B01"]}],
+        "terms": [],
+        "figures": [
+            {
+                "id": "F01",
+                "family": "network",
+                "question": "外部背景",
+                "units": ["U01"],
+                "origin": "external",
+                "caption": "书外图",
+                "reading_note": "看节点。",
+                "data": {"nodes": [{"id": "N1", "label": "外部", "block": "B01"}]},
+                "fallback": "",
+            }
+        ],
+        "folds": [],
+    }
+    standard = build_standard(model, blocks)
+    assert [figure["id"] for figure in standard["figures"]] == ["F00"]
+    assert any("F01" in warning and "书外" in warning for warning in standard["audit"]["warnings"])
+
+
+def test_standard_drops_figure_with_number_not_in_source():
+    blocks = [
+        {"id": "B01", "kind": "paragraph", "text": "全年增长。"},
+        {"id": "B02", "kind": "paragraph", "text": "利润增加。"},
+    ]
+    model = {
+        "sections": [
+            {"id": "S01", "title": "第一节", "lead": "看增长。", "unit_ids": ["U01"]},
+            {"id": "S02", "title": "第二节", "lead": "看利润。", "unit_ids": ["U02"]},
+        ],
+        "units": [
+            {"id": "U01", "source_blocks": ["B01"]},
+            {"id": "U02", "source_blocks": ["B02"]},
+        ],
+        "terms": [],
+        "figures": [
+            {
+                "id": "F01",
+                "family": "quantity",
+                "question": "增长多少",
+                "units": ["U01"],
+                "origin": "derived",
+                "caption": "增长 42%",
+                "reading_note": "看条形。",
+                "data": {"items": [{"label": "全年", "value": 42}]},
+                "fallback": "",
+            }
+        ],
+        "folds": [],
+    }
+    standard = build_standard(model, blocks)
+    assert [figure["id"] for figure in standard["figures"]] == ["F00"]
+    assert standard["audit"]["errors"] == []
+    assert any("F01" in warning for warning in standard["audit"]["warnings"])
+
+
+def test_cli_state_ready_includes_standard_layer(depth_root, monkeypatch, capsys):
+    blocks, _ = _parsed()
+    fake = FakeClient([_chunk_payload(blocks)])
+    monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
+    code = depth_main(
+        [
+            "generate",
+            "--root",
+            str(depth_root),
+            "--uid",
+            "B0003",
+            "--n",
+            "6",
+            "--model",
+            "fake-model",
+            "--effort",
+            "low",
+        ]
+    )
+    assert code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "ready"
+    assert output["standard_notes"] == 0
+    assert output["figures"] >= 1
+    assert output["g12"] in ("pass", "warn")
+    store = Store(Layout(depth_root))
+    layer = store.depth_json("B0003", 6, "layers/standard.json")
+    assert layer["prompt_version"] == STANDARD_PROMPT_VERSION
+    assert layer["figures"]
+    state = json.loads((Path(store.pack_dir("B0003", 6)) / "depth" / "state.json").read_text(encoding="utf-8"))
+    assert len(state["standard_sha"]) == 64
+    assert state["standard_prompt_version"] == STANDARD_PROMPT_VERSION
+    html = Path(store.depth_path("B0003", 6, "chapter.html")).read_text(encoding="utf-8")
+    assert "本章结构" in html
+    assert 'data-origin="added"' in html
+
+
+def test_cli_skip_render_writes_standard_layer(depth_root, monkeypatch, capsys):
+    blocks, _ = _parsed()
+    fake = FakeClient([_chunk_payload(blocks)])
+    monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
+    code = depth_main(
+        [
+            "generate",
+            "--root",
+            str(depth_root),
+            "--uid",
+            "B0003",
+            "--n",
+            "6",
+            "--model",
+            "fake-model",
+            "--effort",
+            "low",
+            "--skip-render",
+        ]
+    )
+    assert code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "model"
+    store = Store(Layout(depth_root))
+    assert store.depth_state("B0003", 6)["status"] == "model"
+    assert store.depth_json("B0003", 6, "layers/standard.json")["prompt_version"] == STANDARD_PROMPT_VERSION
+    assert not Path(store.depth_path("B0003", 6, "chapter.html")).exists()
+
+
+def test_cli_no_standard_skips_layer_but_page_annotated(depth_root, monkeypatch, capsys):
+    blocks, _ = _parsed()
+    fake = FakeClient([_chunk_payload(blocks)])
+    monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
+    code = depth_main(
+        [
+            "generate",
+            "--root",
+            str(depth_root),
+            "--uid",
+            "B0003",
+            "--n",
+            "6",
+            "--model",
+            "fake-model",
+            "--effort",
+            "low",
+            "--no-standard",
+        ]
+    )
+    assert code == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "ready"
+    store = Store(Layout(depth_root))
+    assert store.depth_json("B0003", 6, "layers/standard.json") is None
+    state = json.loads((Path(store.pack_dir("B0003", 6)) / "depth" / "state.json").read_text(encoding="utf-8"))
+    assert state["standard_prompt_version"] == STANDARD_PROMPT_VERSION
+    html = Path(store.depth_path("B0003", 6, "chapter.html")).read_text(encoding="utf-8")
+    assert "本章结构" in html
