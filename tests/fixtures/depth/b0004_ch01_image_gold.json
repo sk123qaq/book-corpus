@@ -1,0 +1,154 @@
+{
+  "_comment": "真实来源：B0004 第1章《从0到1》第12、206、281-291行节选。B01 为无图注封面图；B03/B04 与 B05/B06 分别为图1-1、图1-2 的图片块与图注块。",
+  "schema": 1,
+  "uid": "B0004",
+  "n": 1,
+  "source_sha256": "4860bb077e19a98761723d42fdb2d0295aac1c35de7f953b6118a9ad5d1e7db9",
+  "prompt_version": "chapter-model-v1",
+  "core_units": [
+    "U01"
+  ],
+  "tiers": {
+    "skim": {
+      "U01": "condensed",
+      "U02": "condensed",
+      "U03": "indexed"
+    },
+    "standard": {
+      "U01": "verbatim",
+      "U02": "verbatim",
+      "U03": "verbatim"
+    },
+    "deep": {
+      "U01": "verbatim",
+      "U02": "verbatim",
+      "U03": "verbatim"
+    },
+    "research": {
+      "U01": "verbatim",
+      "U02": "verbatim",
+      "U03": "verbatim"
+    }
+  },
+  "units": [
+    {
+      "id": "U01",
+      "kind": "claim",
+      "section": "S01",
+      "source_blocks": [
+        "B02"
+      ],
+      "quotes": [
+        {
+          "block": "B02",
+          "text": "即便对整个商业社会而言，这样的模式也开辟了非零和游戏的疆域，着眼创造新价值，把市场的饼做大，这才是最终商业社会乃至人类社会的救赎之道。而与之相对，从1到n只是复制，创造不了新价值，甚至可能沦为遍地抄袭的山寨模式。"
+        }
+      ],
+      "summary": "从0到1创造新价值、把市场的饼做大；从1到n只是复制，可能沦为山寨。",
+      "importance": "core",
+      "hard_info": false,
+      "relations": []
+    },
+    {
+      "id": "U02",
+      "kind": "definition",
+      "section": "S02",
+      "source_blocks": [
+        "B03",
+        "B04"
+      ],
+      "quotes": [
+        {
+          "block": "B04",
+          "text": "图1–1两种进步"
+        }
+      ],
+      "summary": "图1–1两种进步。",
+      "importance": "support",
+      "hard_info": true,
+      "hard_info_note": "图1–1两种进步",
+      "relations": []
+    },
+    {
+      "id": "U03",
+      "kind": "context",
+      "section": "S03",
+      "source_blocks": [
+        "B05",
+        "B06"
+      ],
+      "quotes": [
+        {
+          "block": "B06",
+          "text": "图1–2科技与全球化"
+        }
+      ],
+      "summary": "图1–2科技与全球化。",
+      "importance": "support",
+      "hard_info": false,
+      "relations": []
+    }
+  ],
+  "sections": [
+    {
+      "id": "S01",
+      "title": "从0到1与从1到n",
+      "unit_ids": [
+        "U01"
+      ],
+      "lead": "从0到1创造新价值，从1到n只是复制。"
+    },
+    {
+      "id": "S02",
+      "title": "两种进步",
+      "unit_ids": [
+        "U02"
+      ],
+      "lead": "图1–1标出两种进步。"
+    },
+    {
+      "id": "S03",
+      "title": "科技与全球化",
+      "unit_ids": [
+        "U03"
+      ],
+      "lead": "图1–2标出科技与全球化的关系。"
+    }
+  ],
+  "terms": [],
+  "figures": [
+    {
+      "id": "F01",
+      "family": "matrix",
+      "question": "图1–1把进步分成哪两种？",
+      "units": [
+        "U02"
+      ],
+      "origin": "source",
+      "caption": "图1–1两种进步",
+      "reading_note": "",
+      "data": {},
+      "fallback": ""
+    },
+    {
+      "id": "F02",
+      "family": "network",
+      "question": "图1–2把科技与全球化放在什么关系里？",
+      "units": [
+        "U03"
+      ],
+      "origin": "source",
+      "caption": "图1–2科技与全球化",
+      "reading_note": "",
+      "data": {},
+      "fallback": ""
+    }
+  ],
+  "non_semantic": [
+    {
+      "block": "B01",
+      "reason": "decorative"
+    }
+  ],
+  "folds": []
+}

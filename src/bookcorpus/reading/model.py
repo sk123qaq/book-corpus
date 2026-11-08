@@ -17,9 +17,9 @@ ENDPOINT = "https://opencode.ai/inference/go/v1/chat/completions"
 DEFAULT_MODEL = "deepseek-v4.1-flash"
 FALLBACK_MODEL = "glm-5.3-flash"
 DEFAULT_EFFORT = "high"
-EFFORTS = ("high", "medium", "low")
+EFFORTS = ("max", "high", "medium", "low")
 TIMEOUT = 240
-MAX_TOKENS = 16384
+MAX_TOKENS = 32768
 PROMPT_VERSION = "phase1-v5"
 SYSTEM_PROMPT = """你是中文书稿的结构编辑。只输出一个 JSON 对象，不要 markdown 代码围栏，不要解释。
 输入是一章中**有文字的块**（id/kind/text），空脚注块已省略。为每块给出 role、priority、spine、deps；

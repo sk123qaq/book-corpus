@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from bookcorpus.reading.depth import (
+    SYSTEM_PROMPT,
     ChapterModelError,
     DepthModelError,
     audit_conservation,
@@ -72,6 +73,25 @@ def _valid(sha=None):
 
 def _unit(model, unit_id):
     return next(unit for unit in model["units"] if unit["id"] == unit_id)
+
+
+def _load_gold_fixture(stem, uid, n):
+    raw = (FIXTURES / f"{stem}.md").read_bytes()
+    blocks = parse_markdown(raw.decode("utf-8"), stem=stem)["blocks"]
+    fixture = json.loads((FIXTURES / f"{stem}_gold.json").read_text(encoding="utf-8"))
+    sha = hashlib.sha256(raw).hexdigest()
+    assert fixture["source_sha256"] == sha
+    tiers = fixture.pop("tiers")
+    model = validate_chapter_model(fixture, blocks, uid=uid, n=n, source_sha256=sha)
+    ledger = plan_all_dispositions(model, blocks)
+    return model, blocks, ledger, tiers
+
+
+def _tier_map(ledger):
+    return {
+        tier: {unit_id: entry["disposition"] for unit_id, entry in account["units"].items()}
+        for tier, account in ledger["tiers"].items()
+    }
 
 
 @pytest.fixture
@@ -274,6 +294,15 @@ def test_g10_fails_when_condensed_summary_drops_hard_info():
     gate = audit_conservation(model, ledger, blocks)
     assert gate["status"] == "fail"
     assert any("硬信息" in problem for problem in gate["problems"])
+
+
+def test_g10_condensed_allows_terminal_punctuation_difference():
+    model, blocks = _valid()
+    ledger = plan_all_dispositions(model, blocks)
+    summary = ledger["tiers"]["skim"]["units"]["U01"]["summary"]
+    assert summary.endswith("。")
+    ledger["tiers"]["skim"]["units"]["U01"]["summary"] = summary[:-1]
+    assert audit_conservation(model, ledger, blocks)["status"] == "pass"
 
 
 def test_g10_fails_when_duplicate_canonical_is_also_omitted():
@@ -766,3 +795,170 @@ def test_cli_generate_status_model_and_cache(depth_root, monkeypatch, capsys):
     assert state["status"] == "model"
     assert state["cache_key"] == output["cache_key"]
     assert Path(store.depth_cache_dir("B0003", 6), f"{output['cache_key']}.json").exists()
+
+
+def test_prompt_has_shape_guidance():
+    for phrase in (
+        "叙事章节按场景与转折分节",
+        "setup→turn→consequence",
+        "表格是一个 block",
+        "每个有意义的行/列组",
+        "不要丢行",
+        "装饰图",
+        "reason 写 decorative",
+        "source_blocks 同时包含图片块和图注块",
+        "不得声称图或图注里没有的数字",
+        "宁可少而连贯",
+    ):
+        assert phrase in SYSTEM_PROMPT
+
+
+def test_narrative_gold_validates_without_h2_sections():
+    model, blocks, ledger, tiers = _load_gold_fixture("b0001_ch04_narrative", "B0001", 4)
+    assert [section["title"] for section in model["sections"]] == ["舂米夜", "跪下", "挨打"]
+    assert not [block for block in blocks if block["kind"] == "heading"]
+    assert model["core_units"] == ["U03", "U06"]
+    assert _tier_map(ledger) == tiers
+    report = audit_conservation(model, ledger, blocks, expected_core=model["core_units"])
+    assert report["status"] == "pass"
+    assert report["core_coverage"] == 1.0
+
+
+def test_table_gold_preserves_all_rows():
+    model, blocks, ledger, tiers = _load_gold_fixture("b0004_ch04_table", "B0004", 4)
+    assert [section["title"] for section in model["sections"]] == ["多数人影响下的决定", "培养勇气"]
+    for unit_id in ("U02", "U07", "U08", "U13"):
+        assert _unit(model, unit_id)["hard_info"] is True
+    for unit_id in ("U03", "U04", "U05", "U06", "U09", "U10", "U11", "U12"):
+        assert _unit(model, unit_id)["importance"] == "core"
+        assert _unit(model, unit_id)["hard_info"] is False
+        assert _tier_map(ledger)["skim"][unit_id] == "condensed"
+
+    row_group_ids = {"U03", "U04", "U05", "U06", "U08", "U09", "U10", "U11", "U12"}
+    assert row_group_ids <= {unit["id"] for unit in model["units"]}
+    assert len(row_group_ids) == 9
+
+    table_units = [unit for unit in model["units"] if set(unit["source_blocks"]) & {"B02", "B05"}]
+    assert len(table_units) == 10
+    cells = [
+        "结果证明你是对的",
+        "结果证明你是错的",
+        "你的意见和多数人相左",
+        "没有人会记得是你做出的决定，但公司受益。",
+        "所有人都记得你做的这个决定，你会因此而被降级，被冷落，甚至被解聘。",
+        "你的意见和多数人一致",
+        "所有提出过建议的人都会记得这个决定，公司受益。",
+        "你因此承受的指责会降到最低，但公司受损失。",
+        "普通人的借口",
+        "CEO的借口",
+        "智者千虑，必有一失。",
+        "这是生死攸关的决定。",
+        "我所有的朋友都想这样做。",
+        "大家都不赞同我的做法，我不能违背民意。",
+        "那些厉害的人都是这样做的。",
+        "业内的行规就是这样，我不知道它违法。",
+        "它不够完美，所以我放弃竞争。",
+        "我们从未生产出符合市场预期的产品，因此我就没指望它们能卖得出去。",
+    ]
+    for cell in cells:
+        assert any(cell in quote["text"] for unit in table_units for quote in unit["quotes"]), cell
+    assert model["non_semantic"] == [{"block": "B04", "reason": "小节标题"}]
+    assert _tier_map(ledger) == tiers
+    report = audit_conservation(model, ledger, blocks, expected_core=model["core_units"])
+    assert report["status"] == "pass"
+
+
+def test_image_gold_separates_semantic_and_decorative():
+    model, blocks, ledger, tiers = _load_gold_fixture("b0004_ch01_image", "B0004", 1)
+    assert [section["title"] for section in model["sections"]] == [
+        "从0到1与从1到n",
+        "两种进步",
+        "科技与全球化",
+    ]
+    first = _unit(model, "U02")
+    assert first["source_blocks"] == ["B03", "B04"]
+    assert first["quotes"] == [{"block": "B04", "text": "图1–1两种进步"}]
+    assert first["importance"] == "support"
+    assert _unit(model, "U01")["importance"] == "core"
+    second = _unit(model, "U03")
+    assert second["source_blocks"] == ["B05", "B06"]
+    assert second["quotes"] == [{"block": "B06", "text": "图1–2科技与全球化"}]
+
+    figures = {figure["id"]: figure for figure in model["figures"]}
+    assert figures["F01"]["origin"] == "source"
+    assert figures["F01"]["units"] == ["U02"]
+    assert figures["F01"]["caption"] == "图1–1两种进步"
+    assert figures["F02"]["origin"] == "source"
+    assert figures["F02"]["units"] == ["U03"]
+    assert figures["F02"]["caption"] == "图1–2科技与全球化"
+    assert model["non_semantic"] == [{"block": "B01", "reason": "decorative"}]
+    assert not [unit for unit in model["units"] if "B01" in unit["source_blocks"]]
+    assert _tier_map(ledger) == tiers
+    report = audit_conservation(model, ledger, blocks, expected_core=model["core_units"])
+    assert report["status"] == "pass"
+
+
+@pytest.mark.parametrize(
+    ("stem", "uid", "n"),
+    [
+        ("b0001_ch04_narrative", "B0001", 4),
+        ("b0004_ch04_table", "B0004", 4),
+        ("b0004_ch01_image", "B0004", 1),
+    ],
+)
+def test_shaped_gold_payload_generates_through_model_path(stem, uid, n):
+    raw = (FIXTURES / f"{stem}.md").read_bytes()
+    blocks = parse_markdown(raw.decode("utf-8"), stem=stem)["blocks"]
+    gold = json.loads((FIXTURES / f"{stem}_gold.json").read_text(encoding="utf-8"))
+    payload = {key: value for key, value in gold.items() if key not in {"tiers", "core_units"}}
+    client = FakeClient([payload])
+    model, meta = generate_chapter_model(
+        client,
+        {"uid": uid},
+        {"uid": uid, "n": n, "source_sha256": hashlib.sha256(raw).hexdigest()},
+        blocks,
+        model="fake-model",
+        effort="low",
+    )
+    assert meta["chunks"] == 1
+
+    section_global = {section["id"]: f"S{index + 1:02d}" for index, section in enumerate(gold["sections"])}
+    counters = {}
+    core_ids = []
+    for unit in gold["units"]:
+        section = unit["section"]
+        counters[section] = counters.get(section, 0) + 1
+        if unit["id"] in gold["core_units"]:
+            core_ids.append(f"{section_global[section]}-U{counters[section]:02d}")
+    ledger = plan_all_dispositions(model, blocks)
+    report = audit_conservation(model, ledger, blocks, expected_core=core_ids)
+    assert report["status"] == "pass", (stem, report["problems"])
+
+
+def test_existing_argumentative_gold_still_passes():
+    blocks, sha = _parsed()
+    fixture = _gold_fixture(sha)
+    tiers = fixture.pop("tiers")
+    model = validate_chapter_model(fixture, blocks, uid="B0003", n=6, source_sha256=sha)
+    ledger = plan_all_dispositions(model, blocks)
+    assert len(model["sections"]) == 1
+    assert model["core_units"] == ["U01"]
+    assert _tier_map(ledger) == tiers
+    report = audit_conservation(model, ledger, blocks, expected_core=model["core_units"])
+    assert report["status"] == "pass"
+
+
+def test_gold_core_coverage_uses_expected_core():
+    cases = [
+        ("b0003_ch06", "B0003", 6),
+        ("b0001_ch04_narrative", "B0001", 4),
+        ("b0004_ch04_table", "B0004", 4),
+        ("b0004_ch01_image", "B0004", 1),
+    ]
+    for stem, uid, n in cases:
+        model, blocks, ledger, _tiers = _load_gold_fixture(stem, uid, n)
+        report = audit_conservation(model, ledger, blocks, expected_core=model["core_units"])
+        assert report["status"] == "pass", (stem, report["problems"])
+        assert report["core_coverage"] == 1.0, stem
+        assert report["hard_info_coverage"] == 1.0, stem
+        assert report["limitation"] == "", stem

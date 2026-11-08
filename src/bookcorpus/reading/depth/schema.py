@@ -169,7 +169,7 @@ def _unit(unit, index, block_map, unit_ids, section_of):
             _fail(f"{prefix} 是 core，不能标 duplicate_of")
     relations = [
         _relation(relation, relation_index, unit_ids, prefix)
-        for relation_index, relation in enumerate(_list(unit.get("relations"), prefix + ".relations"))
+        for relation_index, relation in enumerate(_list(unit.get("relations") or [], prefix + ".relations"))
     ]
     item = copy.deepcopy(unit)
     item.update(

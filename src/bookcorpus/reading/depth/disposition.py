@@ -8,11 +8,18 @@
 不传时只能按当前模型自查，删掉的单元不可见——这是本函数的已知局限。
 """
 
+import unicodedata
+
 from bookcorpus.reading.textnorm import normalize_verbatim, normalize_ws
 
 TIER_ORDER = ("skim", "standard", "deep", "research")
 
 _DISPOSITION_RANK = {"verbatim": 3, "condensed": 2, "indexed": 1, "omitted": 0}
+
+
+def _norm_claim(text):
+    """删掉标点和空白，只比硬事实的字词。"""
+    return "".join(ch for ch in normalize_ws(text) if not unicodedata.category(ch).startswith("P"))
 
 
 def _is_hard(unit):
@@ -267,8 +274,8 @@ def _verbatim_ok(unit, block_map):
 
 
 def _condensed_ok(unit, entry):
-    summary = entry.get("summary", "")
-    return all(normalize_ws(text) in normalize_ws(summary) for text in _hard_texts(unit))
+    summary = _norm_claim(entry.get("summary", ""))
+    return all(_norm_claim(text) in summary for text in _hard_texts(unit))
 
 
 def _expected_core_ids(model, expected_core):

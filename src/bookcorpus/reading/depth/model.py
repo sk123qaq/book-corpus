@@ -17,19 +17,24 @@ SYSTEM_PROMPT = "\n".join(
         "你是书库的结构编辑。请把给定的一章正文拆成可核查的命题单元，只输出一个 JSON 对象。",
         "",
         "硬约束：",
-        "1. 只能引用本次 user 消息给出的 block id。quote.text 必须是该 block.text 的逐字子串，不能跨块拼接，不能改写。",
+        '1. quotes 是数组，每项写成 {"block":"B01","text":"逐字原文"}；'
+        "block 必须是本次 user 消息给出的 block id，text 必须是该 block.text 的逐字子串，"
+        "不能跨块拼接，不能改写。",
         "2. 每个正文块必须被某个 unit 的 source_blocks 覆盖，或者进入 non_semantic。"
         "non_semantic 必须写 reason，不能和 unit 的 source_blocks 重叠。",
         "3. sections[].unit_ids 必须不重不漏地覆盖全部 unit；unit.section 可以省略，写出时必须等于所属 section id。",
         "4. unit.kind 只能是 definition/claim/conclusion/condition/risk/example/evidence/context/transition。",
         "5. unit.importance 只能是 core/support/detail。definition、判断、条件、风险、例外、结论、数字、"
-        "图题、被引证据标 hard_info=true。hard_info 必须是布尔值；需要点名硬事实时，再给 "
-        "hard_info_note，写一条必须逐字保留的原文，且该文本必须能在该 unit 的 quotes 里找到。",
-        "6. relations 只能是 supports/contrasts/causes/exemplifies/qualifies，to 必须指向本块另一个 unit。"
-        "duplicate_of 指向本块另一个 unit，且该 unit 自己不能再是 duplicate；duplicate 不能是 core。",
+        "图题、被引证据标 hard_info=true。hard_info 必须是布尔值；hard_info=true 时必须给 hard_info_note，"
+        "写一条短而不可替代的原文事实（数字、名字、定义、结论），且该文本必须能在该 unit 的 quotes 里找到。"
+        "summary 必须包含 hard_info_note 的原文短语；不要把整段叙述塞进 hard_info。",
+        "6. 每个 unit 必须有 relations 数组，可为空；relations 只能是 supports/contrasts/causes/exemplifies/qualifies，"
+        "to 必须指向本块另一个 unit。duplicate_of 指向本块另一个 unit，"
+        "且该 unit 自己不能再是 duplicate；duplicate 不能是 core。",
         "7. 不要输出 tiers。档位由后续确定性计划器生成。",
         "8. 顶层必须有 schema、uid、n、source_sha256、prompt_version、units、sections、terms、figures、"
-        "non_semantic、folds。字段可以多，不能少。sections 用 unit_ids，不用 units。",
+        "non_semantic、folds。schema 写 1，prompt_version 固定写 chapter-model-v1。"
+        "字段可以多，不能少。sections 用 unit_ids，不用 units。",
         "9. term 字段为 term、definition、source_block、quote；quote 必须是 source_block 的逐字子串。"
         "figure 字段为 id、family、question、units、origin、caption、reading_note、data、fallback；"
         "family 只能是 argument/matrix/tree/flow/timeline/network/quantity，"
@@ -37,6 +42,23 @@ SYSTEM_PROMPT = "\n".join(
         "10. 本块内的 id 用局部编号即可，例如 S01、U01、F01；user 消息给了 id_prefix 时，"
         "所有局部 id 都加这个前缀。合并器会改成全局编号。"
         "关系、duplicate_of、section.unit_ids、figure.units 都要使用同一套局部编号。",
+        "11. 叙事章节按场景与转折分节，不按 H2 分节；原文没有 H2 时不要为了分节造标题。"
+        "一个 unit 可以跨连续段落，只要它们属于同一场景节拍；保留 setup→turn→consequence 的因果/转折链。"
+        "section.title 命名节拍（例如“跪下”“挨打”），不要照抄原文 heading。",
+        "12. 表格是一个 block，但必须拆成多个 unit：表头（这张表在比较什么）、每个有意义的行/列组、"
+        "结论行、读法。source_blocks 写表格 block id；quotes 必须是某个单元格文本的逐字子串，整行文本也可以。"
+        "表头或结论行承载表格主张时 hard_info=true；普通数据行必须 importance=core，"
+        "skim 用 condensed 保留，只有纯装饰或重复行才可 detail。合并或空白单元格归到最近的非空行/列；"
+        "只有逐字表格子串才能写进 hard_info_note，"
+        "否则把归属写进 summary。不要丢行，也不要把整张表压成一个 unit。",
+        "13. 装饰图（封面、花纹、无图注且无相邻标题）放进 non_semantic，reason 写 decorative，"
+        "不建 unit，不算硬信息。有语义的图/图表（有图注、相邻标题或承载论证）建 unit，"
+        "source_blocks 同时包含图片块和图注块；quotes 用图注文本，图注为空时用 alt 文本；"
+        "figure 的 origin=source、units=[unit_id]，并写 caption。"
+        "语义图承载这一节的结构主张时，对应 unit 的 importance 设为 core；只作辅助证据时用 support。"
+        "装饰图不得进入 unit 或 figure；不得声称图或图注里没有的数字。",
+        "14. 宁可少而连贯，不要一句一个 unit；不要编造 section 标题、引文、数字或合并单元格归属。"
+        "hard_info 必须是布尔值；hard_info_note 只放逐字原文短语。",
         "",
         "输出只包含 JSON，不要 markdown 围栏，不要解释。",
     ]
@@ -435,8 +457,8 @@ def generate_chapter_model(
     """
     if not isinstance(chunk_chars, int) or chunk_chars <= 0:
         raise ValueError("chunk_chars 必须是正整数")
-    if effort is not None and effort not in ("high", "medium", "low"):
-        raise ValueError("effort 必须是 high、medium 或 low")
+    if effort is not None and effort not in ("max", "high", "medium", "low"):
+        raise ValueError("effort 必须是 max、high、medium 或 low")
     chapter_view = chapter if isinstance(chapter, dict) else {}
     requested_model = model or getattr(client, "model", None) or DEFAULT_MODEL
     requested_effort = effort or getattr(client, "effort", None) or DEFAULT_EFFORT
