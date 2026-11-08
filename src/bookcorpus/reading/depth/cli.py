@@ -1,0 +1,313 @@
+"""结构模型命令行：generate、validate、dispose、report。
+
+只写 ``depth/`` 目录，不碰旧根目录的 chapter.html、annotation.json 与 export。
+"""
+
+import argparse
+import hashlib
+import json
+import sys
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+
+from ..library import Library
+from ..model import ModelClient
+from ..store import Store
+from .disposition import TIER_ORDER, audit_conservation, plan_all_dispositions
+from .model import DepthModelError, generate_chapter_model
+from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
+
+
+@dataclass(frozen=True)
+class ChapterContext:
+    uid: str
+    n: int
+    store: Store
+    raw: dict
+
+
+def _parser():
+    parser = argparse.ArgumentParser(prog="python -m bookcorpus.reading.depth.cli")
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name in ("generate", "validate", "dispose", "report"):
+        item = sub.add_parser(name)
+        item.add_argument("--root", help="实例根目录；默认从当前目录向上找 books.toml")
+        item.add_argument("--uid", required=True)
+        item.add_argument("--n", type=int, required=True)
+        item.add_argument("--file", help="chapter_model 或 ledger 的 JSON 路径")
+        item.add_argument("--model")
+        item.add_argument("--effort")
+        if name in ("report", "validate"):
+            item.add_argument("--gold", help="带 core_units 的验收 JSON；用于核对核心单元")
+    return parser
+
+
+def _load_json(path):
+    with Path(path).open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _context(args):
+    library = Library(args.root)
+    raw = library.read_chapter(args.uid, args.n)
+    if raw is None:
+        raise FileNotFoundError(f"找不到章节 {args.uid}/{args.n:02d}")
+    return ChapterContext(args.uid, args.n, Store(library.layout), raw)
+
+
+def _strip_gold_expectations(payload):
+    if not isinstance(payload, dict) or "core_units" not in payload or "tiers" not in payload:
+        return payload
+    model = dict(payload)
+    model.pop("tiers", None)
+    model.pop("core_units", None)
+    return model
+
+
+def _validate_payload(payload, context):
+    return validate_chapter_model(
+        _strip_gold_expectations(payload),
+        context.raw.get("blocks") or [],
+        uid=context.uid,
+        n=context.n,
+        source_sha256=context.raw.get("source_sha256"),
+    )
+
+
+def _load_model(args, context):
+    if args.file:
+        payload = _load_json(args.file)
+        if isinstance(payload, dict) and "tiers" in payload and "core_units" not in payload:
+            raise ValueError("--file 是 ledger；请直接给 chapter_model 或省略 --file 读 depth/")
+        return _validate_payload(payload, context)
+    payload = context.store.depth_json(context.uid, context.n, "chapter_model.json")
+    if payload is None:
+        raise FileNotFoundError("depth/chapter_model.json 不存在，也没有给 --file")
+    return _validate_payload(payload, context)
+
+
+def _chapter_context(library, context):
+    raw = context.raw
+    chapter = {
+        "uid": context.uid,
+        "n": context.n,
+        "title": raw.get("title") or raw.get("stem") or "",
+        "source_sha256": raw.get("source_sha256"),
+        "stem": raw.get("stem"),
+        "ordinal": raw.get("ordinal"),
+    }
+    return library.book(context.uid) or {"uid": context.uid}, chapter
+
+
+def _state_text(model, raw, meta, uid, n):
+    model_text = json.dumps(model, ensure_ascii=False, indent=1)
+    state = {
+        "schema": 1,
+        "uid": uid,
+        "n": n,
+        "source_sha256": raw.get("source_sha256"),
+        "chapter_model_sha": hashlib.sha256(model_text.encode("utf-8")).hexdigest(),
+        "prompt_version": model.get("prompt_version", PROMPT_VERSION),
+        # phase 1 只产出结构模型与守恒账；层生成完成前不能标 ready。
+        "status": "model",
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "model": meta,
+    }
+    if meta.get("cache_key"):
+        state["cache_key"] = meta["cache_key"]
+    if meta.get("layers_sha"):
+        state["layers_sha"] = meta["layers_sha"]
+    return model_text, json.dumps(state, ensure_ascii=False, indent=1)
+
+
+def _load_gold(path):
+    payload = _load_json(path)
+    if isinstance(payload, list):
+        core = payload
+    elif isinstance(payload, dict):
+        core = payload.get("core_units") or payload.get("core_unit_ids") or payload.get("core")
+    else:
+        core = None
+    if not isinstance(core, list):
+        raise ValueError("--gold 必须是核心单元 ID 数组，或含 core_units 的对象")
+    return [str(item) for item in core]
+
+
+def _generate(args):
+    if args.file:
+        raise ValueError("generate 不接受 --file")
+    context = _context(args)
+    library = Library(args.root)
+    book, chapter = _chapter_context(library, context)
+    blocks = context.raw.get("blocks") or []
+    model, meta = generate_chapter_model(
+        ModelClient(),
+        book,
+        chapter,
+        blocks,
+        model=args.model,
+        effort=args.effort,
+        cache_dir=context.store.depth_cache_dir(context.uid, context.n),
+    )
+    ledger = plan_all_dispositions(model, blocks)
+    gate = audit_conservation(model, ledger, blocks)
+    if gate["status"] != "pass":
+        print(gate["detail"], file=sys.stderr)
+        return 1
+    model_text, state_text = _state_text(model, context.raw, meta, context.uid, context.n)
+    files = {
+        "chapter_model.json": model_text,
+        "ledger.json": json.dumps(ledger, ensure_ascii=False, indent=1),
+        "state.json": state_text,
+    }
+    context.store.save_depth(context.uid, context.n, files)
+    print(
+        json.dumps(
+            {
+                "status": "model",
+                "uid": context.uid,
+                "n": context.n,
+                "units": len(model.get("units", [])),
+                "sections": len(model.get("sections", [])),
+                "gate": gate["status"],
+                "cache_key": meta.get("cache_key"),
+                "cache_hit": bool(meta.get("cache_hit")),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def _validate(args):
+    context = _context(args)
+    model = _load_model(args, context)
+    expected_core = _load_gold(args.gold) if args.gold else []
+    present = {unit["id"] for unit in model.get("units", [])}
+    missing = [unit_id for unit_id in expected_core if unit_id not in present]
+    if missing:
+        print(
+            json.dumps(
+                {"status": "error", "uid": model.get("uid"), "n": model.get("n"), "missing_core": missing},
+                ensure_ascii=False,
+            )
+        )
+        return 1
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "uid": model.get("uid"),
+                "n": model.get("n"),
+                "units": len(model.get("units", [])),
+                "sections": len(model.get("sections", [])),
+                "core_total": len(expected_core),
+                "core_present": len(expected_core) - len(missing),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def _dispose(args):
+    context = _context(args)
+    model = _load_model(args, context)
+    blocks = context.raw.get("blocks") or []
+    ledger = plan_all_dispositions(model, blocks)
+    gate = audit_conservation(model, ledger, blocks)
+    print(json.dumps({"ledger": ledger, "gate": gate}, ensure_ascii=False, indent=1))
+    return 0 if gate["status"] == "pass" else 1
+
+
+def _resolve_report(args, context):
+    blocks = context.raw.get("blocks") or []
+    if args.file:
+        payload = _load_json(args.file)
+        if isinstance(payload, dict) and "tiers" in payload and "core_units" not in payload:
+            ledger = payload
+            stored = context.store.depth_json(context.uid, context.n, "chapter_model.json")
+            if stored is None:
+                raise FileNotFoundError("report --file 是 ledger，但 depth/chapter_model.json 不存在")
+            model = _validate_payload(stored, context)
+            return model, ledger
+        model = _validate_payload(payload, context)
+        return model, plan_all_dispositions(model, blocks)
+    stored_model = context.store.depth_json(context.uid, context.n, "chapter_model.json")
+    if stored_model is None:
+        raise FileNotFoundError("depth/chapter_model.json 不存在")
+    model = _validate_payload(stored_model, context)
+    ledger = context.store.depth_json(context.uid, context.n, "ledger.json")
+    if ledger is None:
+        ledger = plan_all_dispositions(model, blocks)
+    return model, ledger
+
+
+def _report(args):
+    context = _context(args)
+    model, ledger = _resolve_report(args, context)
+    expected_core = _load_gold(args.gold) if args.gold else None
+    gate = audit_conservation(model, ledger, context.raw.get("blocks") or [], expected_core=expected_core)
+    tiers = ledger.get("tiers") if isinstance(ledger, dict) else None
+    if not isinstance(tiers, dict):
+        raise ValueError("ledger 缺少 tiers")
+    summary = {
+        "uid": ledger.get("uid"),
+        "n": ledger.get("n"),
+        "tiers": {},
+        "warnings": ledger.get("warnings", []),
+        "core_total": gate["core_total"],
+        "core_covered": gate["core_covered"],
+        "core_coverage": gate["core_coverage"],
+        "hard_info_total": gate["hard_info_total"],
+        "hard_info_covered": gate["hard_info_covered"],
+        "hard_info_coverage": gate["hard_info_coverage"],
+        "gate": gate["status"],
+        "gate_detail": gate["detail"],
+        "problems": gate["problems"],
+        "core_limitation": gate.get("limitation", ""),
+    }
+    for tier in TIER_ORDER:
+        account = tiers.get(tier) or {}
+        summary["tiers"][tier] = {
+            "units": (account.get("counts") or {}).get("units", 0),
+            "counts": account.get("counts", {}),
+            "core_total": account.get("core_total", 0),
+            "core_covered": account.get("core_covered", 0),
+            "core_coverage": account.get("core_coverage", 0.0),
+            "hard_info_total": account.get("hard_info_total", 0),
+            "hard_info_covered": account.get("hard_info_covered", 0),
+            "hard_info_coverage": account.get("hard_info_coverage", 0.0),
+            "unmapped_blocks": account.get("unmapped_blocks", 0),
+            "unmapped_block_ids": account.get("unmapped_block_ids", []),
+            "omitted_duplicates": account.get("omitted_duplicates", 0),
+            "folds_total": account.get("folds_total", 0),
+        }
+    print(json.dumps(summary, ensure_ascii=False, indent=1))
+    return 0 if gate["status"] == "pass" else 1
+
+
+def _dispatch(args):
+    if args.command == "generate":
+        return _generate(args)
+    if args.command == "validate":
+        return _validate(args)
+    if args.command == "dispose":
+        return _dispose(args)
+    if args.command == "report":
+        return _report(args)
+    raise ValueError(f"未知命令：{args.command}")
+
+
+def main(argv=None):
+    args = _parser().parse_args(argv)
+    try:
+        return _dispatch(args)
+    except (ChapterModelError, DepthModelError, ValueError, FileNotFoundError, RuntimeError, OSError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

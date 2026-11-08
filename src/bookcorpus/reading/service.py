@@ -421,13 +421,16 @@ def audit_pack(blocks, projections, html_text, annotation, drafts, editorial=Non
 
 
 class ReadingService:
-    def __init__(self, root=None, annotate=None, client=None):
+    def __init__(self, root=None, annotate=None, client=None, depth=None):
         self.library = Library(root)
         self.store = Store(self.library.layout)
         if annotate is None:
             annotate = os.environ.get("READING_ANNOTATE", "1") != "0"
         self.annotate = bool(annotate)
         self.figures = os.environ.get("READING_EDITORIAL", "1") != "0"
+        if depth is None:
+            depth = os.environ.get("READING_DEPTH", "0") != "0"
+        self.depth = bool(depth)
         self.client = client or ModelClient()
         self.queue = JobQueue(self.library.layout.work, self._run_job, max_workers=4)
         self._submit_lock = threading.Lock()
@@ -631,7 +634,7 @@ class ReadingService:
         edition = self.store.edition(uid, n)
         book_view = self._book_view(book)
         fit = decide_template(build_brief(book_view, raw, raw["blocks"]))
-        return {
+        data = {
             "book": book_view,
             "chapter": _chapter_api(chapter, state["tiers"] if state else {}, state),
             "jobs": self.queue.active_for(uid, n),
@@ -648,6 +651,13 @@ class ReadingService:
                 "reason": fit["reason"],
             },
         }
+        if self.depth:
+            depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"))
+            data["depth"] = {"state": depth_state["status"]}
+            if depth_state["status"] in ("model", "ready"):
+                data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
+                data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
+        return data
 
     def editorial(self, uid, n):
         return self.store.editorial(uid, n)

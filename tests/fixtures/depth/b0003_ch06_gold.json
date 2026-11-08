@@ -1,0 +1,153 @@
+{
+ "_comment": "真实来源：B0003 第4章《前景理论和价值函数》第18-34行节选。节选内 B01 为 H2；B02/B03/B04 对应原书全章 B06/B12/B19，文本逐字一致。",
+ "schema": 1,
+ "uid": "B0003",
+ "n": 6,
+ "source_sha256": "1177bfca5bd53ce626b1c1712dbcc43b96b9793a0126fce7760dd59bacdc8242",
+ "prompt_version": "chapter-model-v1",
+ "core_units": [
+  "U01"
+ ],
+ "tiers": {
+  "skim": {
+   "U01": "condensed",
+   "U02": "condensed",
+   "U03": "indexed",
+   "U04": "omitted"
+  },
+  "standard": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim"
+  },
+  "deep": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim"
+  },
+  "research": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim"
+  }
+ },
+ "units": [
+  {
+   "id": "U01",
+   "kind": "claim",
+   "section": "S01",
+   "source_blocks": [
+    "B02"
+   ],
+   "quotes": [
+    {
+     "block": "B02",
+     "text": "组织原则包含两种理论：规范性理论和描述性理论。规范性理论会告诉你思考某一问题的正确方式。这里的“正确”一词并非指道德层面的正确，而是指逻辑层面的一致性，正如经济推理（有时被称为“理性选择理论”）中最优化模型所规定的那样，本书中使用“规范性”一词时指的就是这个意思。例如，勾股定理就是一个规范性理论，它规定了已知直角三角形的两条边的边长时，如何计算另一条边的边长的方法。如果你使用其他公式，就会算错。"
+    }
+   ],
+   "summary": "规范性理论会告诉你思考某一问题的正确方式。勾股定理是例子。",
+   "importance": "core",
+   "hard_info": true,
+   "hard_info_note": "规范性理论会告诉你思考某一问题的正确方式。",
+   "relations": []
+  },
+  {
+   "id": "U02",
+   "kind": "evidence",
+   "section": "S01",
+   "source_blocks": [
+    "B03"
+   ],
+   "quotes": [
+    {
+     "block": "B03",
+     "text": "假设我们只考虑一条铁轨，在这个直角三角形中，底边为1英里，斜边为1英里1英寸，那么高是多少？换句话说，铁轨升高了多少？"
+    }
+   ],
+   "summary": "铁轨题给出底边为1英里，斜边为1英里1英寸。",
+   "importance": "support",
+   "hard_info": true,
+   "hard_info_note": "底边为1英里，斜边为1英里1英寸",
+   "relations": [
+    {
+     "type": "supports",
+     "to": "U01"
+    }
+   ]
+  },
+  {
+   "id": "U03",
+   "kind": "context",
+   "section": "S01",
+   "source_blocks": [
+    "B04"
+   ],
+   "quotes": [
+    {
+     "block": "B04",
+     "text": "大多数人认为，既然铁轨延展了1英寸，那么它应该隆起差不多的高度，比如两三英寸。"
+    }
+   ],
+   "summary": "多数人凭直觉会把隆起高度估成两三英寸。",
+   "importance": "detail",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "contrasts",
+     "to": "U01"
+    }
+   ]
+  },
+  {
+   "id": "U04",
+   "kind": "claim",
+   "section": "S01",
+   "source_blocks": [
+    "B03"
+   ],
+   "quotes": [
+    {
+     "block": "B03",
+     "text": "底边为1英里，斜边为1英里1英寸"
+    }
+   ],
+   "summary": "底边与斜边的已知长度。",
+   "importance": "detail",
+   "hard_info": false,
+   "relations": [],
+   "duplicate_of": "U02"
+  }
+ ],
+ "sections": [
+  {
+   "id": "S01",
+   "title": "规范性理论和描述性理论",
+   "unit_ids": [
+    "U01",
+    "U02",
+    "U03",
+    "U04"
+   ],
+   "lead": "两种理论的分野与一道铁轨题。"
+  }
+ ],
+ "terms": [
+  {
+   "term": "规范性理论",
+   "definition": "告诉你思考某一问题的正确方式的理论",
+   "source_block": "B02",
+   "quote": "规范性理论会告诉你思考某一问题的正确方式。"
+  }
+ ],
+ "figures": [],
+ "non_semantic": [
+  {
+   "block": "B01",
+   "reason": "节标题"
+  }
+ ],
+ "folds": []
+}
