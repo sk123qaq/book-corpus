@@ -6,8 +6,10 @@
 """
 
 import html
+from datetime import UTC, datetime, timedelta
 
 from ..render import READER_CSS, _block_element
+from .citations import STALE_DAYS
 from .diagrams import render_figure
 from .standard import build_standard
 
@@ -32,6 +34,12 @@ VERDICT_LABELS = {
     "changed": "条件改变",
     "caution": "需谨慎",
     "verify": "需核验",
+}
+CITE_STATUS_LABELS = {
+    "partial": "部分核验",
+    "unverified": "未核验",
+    "not_found": "未找到来源",
+    "fetch_failed": "抓取失败",
 }
 
 DEPTH_CSS = """
@@ -109,6 +117,19 @@ font-family:var(--sans);font-size:12px;letter-spacing:.12em;color:var(--ink-3)}
 .research-query code{font-size:12px;color:var(--pine)}
 .research-queries{margin:0;padding-left:21px;font-size:13px;line-height:1.9}
 .research-citation{display:block;margin-top:4px;font-size:11px;color:var(--ink-3)}
+.cite-ref{margin-left:2px;font-family:var(--sans);font-size:10px;line-height:1}
+.cite-ref a{color:var(--cinnabar);border-bottom:1px dotted var(--cinnabar)}
+.cite-status{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--rule-strong);
+font-family:var(--sans);font-size:10px;color:var(--ink-3);white-space:nowrap}
+.citation-list{margin:22px 0 0;padding-top:14px;border-top:1px solid var(--rule)}
+.citation-list h4{margin:0 0 9px;font-family:var(--sans);font-size:12px;letter-spacing:.12em;color:var(--ink-3)}
+.citation-list ol{margin:0;padding-left:22px}
+.citation-list li{margin:0 0 10px;font-size:13px;line-height:1.8}
+.citation-list li a{color:var(--pine);border-bottom:1px dotted var(--pine)}
+.cite-meta{display:block;margin-top:2px;font-family:var(--sans);font-size:11px;color:var(--ink-3)}
+.cite-stale{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--ochre);
+font-family:var(--sans);font-size:10px;color:var(--ochre);white-space:nowrap}
+.citation-list q{display:block;margin-top:4px;font-size:12px;color:var(--ink-2)}
 body.only-source [data-origin="added"]{display:none!important}
 html.depth-js [data-depth-tiers]{display:none!important}
 html.depth-js body[data-depth-tab="deep"] [data-depth-tiers~="deep"],
@@ -470,10 +491,79 @@ def _deep_chain(chain, model, blocks):
     return f'<div class="deep-chain" data-origin="added" data-depth-tiers="deep">{inner}</div>'
 
 
-def _research_panel(research, model, blocks):
+def _citation_stale(citation):
+    try:
+        accessed = datetime.fromisoformat(str(citation.get("accessed_at") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if accessed.tzinfo is None:
+        accessed = accessed.replace(tzinfo=UTC)
+    return datetime.now(UTC) - accessed > timedelta(days=STALE_DAYS)
+
+
+def _citation_claim_markup(row, claims, citation_by_id):
+    claim = claims.get(str(row.get("id") or "")) or {}
+    status = claim.get("status") or ""
+    if status == "verified":
+        refs = []
+        for index, citation_id in enumerate(claim.get("citation_ids") or [], start=1):
+            if str(citation_id) not in citation_by_id:
+                continue
+            escaped_id = html.escape(str(citation_id), quote=True)
+            refs.append(
+                f'<sup class="cite-ref"><a href="#cite-{escaped_id}" '
+                f'id="cite-ref-{html.escape(str(row.get("id") or ""), quote=True)}-{index}">[{index}]</a></sup>'
+            )
+        return "".join(refs)
+    label = CITE_STATUS_LABELS.get(status)
+    if not label:
+        return ""
+    return f'<span class="cite-status" data-status="{html.escape(status, quote=True)}">{label}</span>'
+
+
+def _citation_list(citations):
+    if not isinstance(citations, dict):
+        return ""
+    items = citations.get("citations") or []
+    if not items:
+        return ""
+    parts = ['<section class="citation-list"><h4>引用来源</h4><ol>']
+    for citation in items:
+        if not isinstance(citation, dict):
+            continue
+        citation_id = html.escape(str(citation.get("id") or ""), quote=True)
+        url = html.escape(str(citation.get("url") or ""), quote=True)
+        title = str(citation.get("title") or citation.get("url") or "")
+        domain = str(citation.get("source_domain") or "")
+        accessed = str(citation.get("accessed_at") or "")
+        stale = '<span class="cite-stale">超过 180 天</span>' if _citation_stale(citation) else ""
+        parts.append(
+            f'<li id="cite-{citation_id}"><a href="{url}" rel="noreferrer">{html.escape(title)}</a>'
+            f'<span class="cite-meta">{html.escape(domain)} · {html.escape(accessed)}</span>'
+            f"{stale}<q>{html.escape(str(citation.get('quote') or ''))}</q></li>"
+        )
+    parts.append("</ol></section>")
+    return "".join(parts)
+
+
+def _research_panel(research, model, blocks, citations=None):
     if not isinstance(research, dict):
         return ""
-    searched = bool(research.get("searched"))
+    citation_claims = {}
+    citation_by_id = {}
+    if isinstance(citations, dict):
+        citation_claims = {
+            str(claim.get("claim_id") or claim.get("id")): claim
+            for claim in citations.get("claims") or []
+            if isinstance(claim, dict) and (claim.get("claim_id") or claim.get("id"))
+        }
+        citation_by_id = {
+            str(citation.get("id")): citation
+            for citation in citations.get("citations") or []
+            if isinstance(citation, dict) and citation.get("id")
+        }
+    searched = bool((citations or {}).get("searched") if isinstance(citations, dict) else False)
+    searched = searched or bool(research.get("searched"))
     badge = "研究议程 · 已检索" if searched else "研究议程 · 未检索"
     unit_map = {unit.get("id"): unit for unit in model.get("units") or [] if unit.get("id")}
     block_map = {block.get("id"): block for block in blocks or [] if block.get("id")}
@@ -495,8 +585,9 @@ def _research_panel(research, model, blocks):
             verdict = row.get("verdict") or ""
             verdict_text = VERDICT_LABELS.get(verdict, verdict)
             anchors = _anchor_links(row.get("units"), row.get("blocks"), unit_map, block_map)
+            claim_markup = _citation_claim_markup(row, citation_claims, citation_by_id)
             parts.append(
-                f"<tr><td>{html.escape(row.get('claim') or '')}</td>"
+                f"<tr><td>{html.escape(row.get('claim') or '')}{claim_markup}</td>"
                 f'<td><span class="research-verdict">{html.escape(verdict_text)}</span></td>'
                 f"<td>{html.escape(row.get('change') or '')}</td>"
                 f"<td>{html.escape(row.get('needed') or '')}</td><td>{anchors}</td></tr>"
@@ -516,7 +607,7 @@ def _research_panel(research, model, blocks):
             for note in group:
                 certainty = "已核验" if note.get("certainty") == "verified" else "未核验"
                 anchors = _anchor_links(note.get("related_units"), note.get("blocks"), unit_map, block_map)
-                citations = "".join(
+                note_citations = "".join(
                     f'<span class="research-citation">'
                     f"{html.escape(citation.get('quote') or citation.get('url') or '')}</span>"
                     for citation in note.get("citations") or []
@@ -524,7 +615,7 @@ def _research_panel(research, model, blocks):
                 )
                 parts.append(
                     f'<div class="research-note"><p>{html.escape(note.get("text") or "")}</p>'
-                    f'<div class="research-meta"><span>{certainty}</span>{anchors}</div>{citations}</div>'
+                    f'<div class="research-meta"><span>{certainty}</span>{anchors}</div>{note_citations}</div>'
                 )
         parts.append("</div>")
     questions = research.get("questions") or []
@@ -539,6 +630,7 @@ def _research_panel(research, model, blocks):
                 f'<div class="research-meta">{anchors}</div></li>'
             )
         parts.append("</ol></div>")
+    parts.append(_citation_list(citations))
     queries = list(dict.fromkeys(q.get("query") for q in questions if q.get("query")))
     if queries:
         parts.append('<div class="research-queries"><h4>建议查询</h4><ul>')
@@ -642,6 +734,7 @@ def render_depth_chapter(
     standard=None,
     deep=None,
     research=None,
+    citations=None,
 ):
     """渲染一页两树：编译速览 + 全部原文块；标准/深读/研究各叠加自己的层。"""
     del ledger  # 处置账已落在 skim/核心计数里，这里只需要模型与速览。
@@ -654,7 +747,7 @@ def render_depth_chapter(
     n = int(chapter.get("n") or 0)
     compiled = _compiled_body(skim, model)
     source_rows = _standard_rows(model, blocks, standard, resolver, deep=deep)
-    research_panel = _research_panel(research, model, blocks)
+    research_panel = _research_panel(research, model, blocks, citations=citations)
     generated = html.escape(generated_at or chapter.get("generated_at") or "")
     prompt_version = html.escape((model or {}).get("prompt_version") or "")
     tabs = _tab_buttons()

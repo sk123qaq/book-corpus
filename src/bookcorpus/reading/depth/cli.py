@@ -15,6 +15,16 @@ from ..library import Library
 from ..model import ModelClient
 from ..render import asset_url
 from ..store import Store
+from .citations import (
+    FetchError,
+    HttpPageFetcher,
+    SearchError,
+    audit_citations,
+    build_citations,
+    fetcher_from_env,
+    load_dotenv,
+    provider_from_env,
+)
 from .deep import DeepError, audit_deep, generate_deep, validate_deep
 from .disposition import TIER_ORDER, audit_conservation, plan_all_dispositions
 from .model import DepthModelError, generate_chapter_model
@@ -52,6 +62,7 @@ def _parser():
             )
             item.add_argument("--no-deep", action="store_true", help="不生成 layers/deep.json 与深读注解")
             item.add_argument("--no-research", action="store_true", help="不生成 layers/research.json 与研究议程")
+            item.add_argument("--no-citations", action="store_true", help="不检索、不核验引用")
         if name in ("report", "validate"):
             item.add_argument("--gold", help="带 core_units 的验收 JSON；用于核对核心单元")
     return parser
@@ -115,7 +126,19 @@ def _chapter_context(library, context):
 
 
 def _state_text(
-    model, raw, meta, uid, n, *, status="model", skim=None, standard=None, deep=None, research=None, generated_at=None
+    model,
+    raw,
+    meta,
+    uid,
+    n,
+    *,
+    status="model",
+    skim=None,
+    standard=None,
+    deep=None,
+    research=None,
+    citations=None,
+    generated_at=None,
 ):
     model_text = json.dumps(model, ensure_ascii=False, indent=1)
     state = {
@@ -146,6 +169,10 @@ def _state_text(
         research_text = json.dumps(research, ensure_ascii=False, indent=1)
         state["research_sha"] = hashlib.sha256(research_text.encode("utf-8")).hexdigest()
         state["research_prompt_version"] = research.get("prompt_version")
+    if citations is not None:
+        citations_text = json.dumps(citations, ensure_ascii=False, indent=1)
+        state["citations_sha"] = hashlib.sha256(citations_text.encode("utf-8")).hexdigest()
+        state["citations_prompt_version"] = citations.get("prompt_version")
     if meta.get("cache_key"):
         state["cache_key"] = meta["cache_key"]
     if meta.get("layers_sha"):
@@ -272,6 +299,23 @@ def _generate(args):
             return 1
         for warning in research_audit["warnings"]:
             print(f"研究警告：{warning}", file=sys.stderr)
+    citations = None
+    citations_audit = None
+    if research is not None and not args.no_citations:
+        try:
+            provider = provider_from_env()
+            fetcher = HttpPageFetcher() if provider.name == "none" else fetcher_from_env()
+            citations = build_citations(ModelClient(), research, provider=provider, fetcher=fetcher)
+            citations_audit = audit_citations(citations, research)
+            if citations_audit["errors"]:
+                print("引用审计未通过：" + "；".join(citations_audit["errors"]), file=sys.stderr)
+                return 1
+            for warning in citations_audit["warnings"]:
+                print(f"引用警告：{warning}", file=sys.stderr)
+        except (SearchError, FetchError) as exc:
+            print(f"检索失败，保留研究议程：{exc}", file=sys.stderr)
+            citations = None
+            citations_audit = None
     files = {
         "chapter_model.json": model_text,
         "ledger.json": json.dumps(ledger, ensure_ascii=False, indent=1),
@@ -283,6 +327,8 @@ def _generate(args):
         files["layers/deep.json"] = json.dumps(deep, ensure_ascii=False, indent=1)
     if research is not None:
         files["layers/research.json"] = json.dumps(research, ensure_ascii=False, indent=1)
+    if citations is not None:
+        files["citations.json"] = json.dumps(citations, ensure_ascii=False, indent=1)
     if not args.skip_render:
         files["chapter.html"] = render_depth_chapter(
             book,
@@ -296,6 +342,7 @@ def _generate(args):
             standard=standard,
             deep=deep,
             research=research,
+            citations=citations,
         )
     status = "model" if args.skip_render else "ready"
     state_text = _state_text(
@@ -309,6 +356,7 @@ def _generate(args):
         standard=standard,
         deep=deep,
         research=research,
+        citations=citations,
         generated_at=generated_at,
     )[1]
     files["state.json"] = state_text
@@ -338,6 +386,13 @@ def _generate(args):
                 "research_questions": len(research.get("questions") or []) if research else 0,
                 "deep_audit": deep_audit["status"] if deep_audit else None,
                 "research_audit": research_audit["status"] if research_audit else None,
+                "citations_verified": (
+                    sum(1 for claim in citations.get("claims") or [] if claim.get("status") == "verified")
+                    if citations
+                    else 0
+                ),
+                "citations_total": len(citations.get("citations") or []) if citations else 0,
+                "citations_g13": citations_audit["status"] if citations_audit else None,
                 "html": "chapter.html" in files,
             },
             ensure_ascii=False,
@@ -495,6 +550,7 @@ def _dispatch(args):
 
 
 def main(argv=None):
+    load_dotenv()
     args = _parser().parse_args(argv)
     try:
         return _dispatch(args)

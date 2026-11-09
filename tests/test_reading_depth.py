@@ -1285,6 +1285,15 @@ def test_cli_generate_status_ready_with_skim_and_render(depth_root, monkeypatch,
     assert output["research_questions"] == 3
     assert output["deep_audit"] == "pass"
     assert output["research_audit"] == "pass"
+    assert output["citations_verified"] == 0
+    assert output["citations_total"] == 0
+    assert output["citations_g13"] == "pass"
+    citations = store.depth_json("B0003", 6, "citations.json")
+    assert citations is not None
+    assert citations["searched"] is False
+    assert citations["provider"] == "none"
+    assert citations["claims"]
+    assert all(claim["status"] == "not_searched" for claim in citations["claims"])
     deep = store.depth_json("B0003", 6, "layers/deep.json")
     research = store.depth_json("B0003", 6, "layers/research.json")
     assert deep["prompt_version"] == DEEP_PROMPT_VERSION
