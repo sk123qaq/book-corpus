@@ -181,7 +181,7 @@ def _depth_estimate(blocks):
     }
 
 
-def _chapter_api(chapter, tiers=None, state=None):
+def _chapter_api(chapter, tiers=None, state=None, path=None, fallback_reason=None):
     data = dict(chapter)
     data["n"] = "%02d" % int(chapter["n"])
     data["minutes"] = max(1, round(chapter.get("chars", 0) / TIER_SPECS["standard"]["wpm"]))
@@ -189,6 +189,8 @@ def _chapter_api(chapter, tiers=None, state=None):
     pack = _pack_meta(state)
     data["pack"] = pack
     data["draft"] = bool(pack and pack["draft"])
+    data["path"] = path or "none"
+    data["fallback_reason"] = fallback_reason
     return data
 
 
@@ -495,8 +497,9 @@ class ReadingService:
         self.annotate = bool(annotate)
         self.figures = os.environ.get("READING_EDITORIAL", "1") != "0"
         if depth is None:
-            depth = os.environ.get("READING_DEPTH", "0") != "0"
+            depth = os.environ.get("READING_DEPTH", "1") != "0"
         self.depth = bool(depth)
+        self.agent_standard = os.environ.get("READING_AGENT_STANDARD", "0") != "0"
         self.client = client or ModelClient()
         self.queue = JobQueue(self.library.layout.work, self._run_job, max_workers=4)
         self._submit_lock = threading.Lock()
@@ -637,10 +640,25 @@ class ReadingService:
         for chapter in self.library.chapters(uid):
             state = self._chapter_states(uid, chapter["n"])
             tiers = state["tiers"] if state else {}
-            item = _chapter_api(chapter, tiers, state)
+            path, reason = self._chapter_path(uid, chapter["n"], state)
+            item = _chapter_api(chapter, tiers, state, path=path, fallback_reason=reason)
             item["jobs"] = self.queue.active_for(uid, chapter["n"])
             chapters.append(item)
         return {"book": view, "chapters": chapters}
+
+    def _chapter_path(self, uid, n, state=None, source_sha=None):
+        """章节实际走哪条渲染路径；只读磁盘，不触发模型。"""
+        depth_state = self.store.depth_state(uid, n, source_sha)
+        has_artifact = any(
+            Path(self.store.depth_path(uid, n, name)).is_file()
+            for name in ("chapter.html", "chapter_model.json", "ledger.json")
+        )
+        if has_artifact or depth_state.get("status") in ("ready", "model"):
+            return "depth", None
+        manifest = (state or {}).get("manifest") or self.store.manifest(uid, n)
+        if manifest:
+            return "legacy", "旧包按旧路径打开"
+        return "none", "尚未生成"
 
     def chapter(self, uid, n):
         book = self.library.book(uid)
@@ -700,9 +718,18 @@ class ReadingService:
         edition = self.store.edition(uid, n)
         book_view = self._book_view(book)
         fit = decide_template(build_brief(book_view, raw, raw["blocks"]))
+        path, fallback_reason = self._chapter_path(uid, n, state, raw.get("source_sha256"))
         data = {
             "book": book_view,
-            "chapter": _chapter_api(chapter, state["tiers"] if state else {}, state),
+            "chapter": _chapter_api(
+                chapter,
+                state["tiers"] if state else {},
+                state,
+                path=path,
+                fallback_reason=fallback_reason,
+            ),
+            "path": path,
+            "fallback_reason": fallback_reason,
             "jobs": self.queue.active_for(uid, n),
             "blocks": raw["blocks"],
             "tiers": tiers,
@@ -948,6 +975,8 @@ class ReadingService:
         return {"editorial": editorial, "meta": meta}
 
     def generate_agent_standard(self, uid, n, *, model=None, effort=None):
+        if not self.agent_standard:
+            raise ValueError("实验性标准 HTML 已退役；请使用标准注解页")
         raw = self.library.read_chapter(uid, n)
         if not raw:
             raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
@@ -1386,6 +1415,7 @@ class ReadingService:
                 "chapter_model_sha": chapter_model_sha,
                 "prompt_version": model.get("prompt_version") or state.get("prompt_version") or "",
                 "status": status,
+                "path": "depth",
                 "updated_at": now,
                 "model": model_meta if model_meta is not None else state.get("model"),
                 "layer_sha": layer_sha,

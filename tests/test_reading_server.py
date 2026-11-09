@@ -63,6 +63,9 @@ def slow_server(reading_root):
 def _start_server(reading_root, extra_env=None):
     port = _free_port()
     env = dict(os.environ)
+    # 现有用例按旧路径断言；默认切换只由专门的用例显式打开。
+    env["READING_DEPTH"] = "0"
+    env["READING_AGENT_STANDARD"] = "0"
     env.update(extra_env or {})
     proc = subprocess.Popen(
         [
@@ -399,6 +402,63 @@ def test_editorial_api_roundtrip(server, reading_root):
     assert exc.value.code == 400
 
 
+def test_reading_server_new_chapter_uses_depth_job(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=False)
+    raw = service.library.read_chapter("B0002", 1)
+    pack = Path(reading_root) / "工作区" / "阅读" / "B0002" / "ch" / "01"
+    pack.mkdir(parents=True, exist_ok=True)
+    (pack / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "uid": "B0002",
+                "n": 1,
+                "tiers": {},
+                "draft": True,
+                "source_sha256": raw["source_sha256"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
+    try:
+        status, job = _post(base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
+        assert status == 202
+        assert job["kind"] == "depth"
+        assert job["layers"] == ["model", "skim", "standard", "deep", "research", "citations"]
+        assert job["tiers"] == []
+
+        status, old = _post(base, "/api/jobs", {"uid": "B0002", "n": 1, "tiers": ["standard"]})
+        assert status == 202
+        assert old["kind"] == "reading"
+    finally:
+        _stop_server(proc)
+
+
+def test_reading_server_agent_reader_retired(reading_root):
+    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
+    pack.mkdir(parents=True, exist_ok=True)
+    (pack / "agent-standard.html").write_text("<!doctype html><html><body>旧标准档</body></html>", encoding="utf-8")
+
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_AGENT_STANDARD": "0"})
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _get(base, "/reader/B0001/1/agent")
+        assert exc.value.code == 404
+        assert "退役" in exc.value.read().decode("utf-8")
+    finally:
+        _stop_server(proc)
+
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_AGENT_STANDARD": "1"})
+    try:
+        status, body, _headers = _get(base, "/reader/B0001/1/agent")
+        assert status == 200
+        assert "旧标准档" in body
+    finally:
+        _stop_server(proc)
+
+
 def test_depth_route_is_404_when_flag_off(reading_root):
     proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "0"})
     try:
@@ -433,26 +493,30 @@ def test_depth_route_serves_ready_chapter_and_404s_missing(reading_root):
         _stop_server(proc)
 
 
-def test_post_depth_returns_202_job_and_validates_payload(server):
-    status, job = _post(
-        server,
-        "/api/depth/B0001/1",
-        {"layers": ["skim"], "model": "fake-model", "effort": "max"},
-    )
-    assert status == 202
-    assert job["kind"] == "depth"
-    assert job["tiers"] == []
-    assert job["layers"] == ["model", "skim"]
-    assert job["model"] == "fake-model"
-    assert job["effort"] == "max"
+def test_post_depth_returns_202_job_and_validates_payload(reading_root):
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
+    try:
+        status, job = _post(
+            base,
+            "/api/depth/B0001/1",
+            {"layers": ["skim"], "model": "fake-model", "effort": "max"},
+        )
+        assert status == 202
+        assert job["kind"] == "depth"
+        assert job["tiers"] == []
+        assert job["layers"] == ["model", "skim"]
+        assert job["model"] == "fake-model"
+        assert job["effort"] == "max"
 
-    for payload in (
-        {"layers": []},
-        {"layers": ["unknown"]},
-        {"layers": ["citations"]},
-        {"layers": ["skim"], "rebuild_model": "yes"},
-        {"layers": ["skim"], "effort": "nope"},
-        {"layers": ["skim"], "model": "x" * 81},
-    ):
-        code, body = _post_error(server, "/api/depth/B0001/1", payload)
-        assert code == 400, body
+        for payload in (
+            {"layers": []},
+            {"layers": ["unknown"]},
+            {"layers": ["citations"]},
+            {"layers": ["skim"], "rebuild_model": "yes"},
+            {"layers": ["skim"], "effort": "nope"},
+            {"layers": ["skim"], "model": "x" * 81},
+        ):
+            code, body = _post_error(base, "/api/depth/B0001/1", payload)
+            assert code == 400, body
+    finally:
+        _stop_server(proc)

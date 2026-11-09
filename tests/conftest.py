@@ -11,6 +11,8 @@ def _isolate_user_dotenv(tmp_path, monkeypatch):
     """Never let the test suite read a developer's real ~/.config file."""
     monkeypatch.setenv("BOOK_CORPUS_ENV", str(tmp_path / "missing.env"))
     for key in (
+        "READING_DEPTH",
+        "READING_AGENT_STANDARD",
         "READING_SEARCH_PROVIDER",
         "READING_FETCH_PROVIDER",
         "READING_SEARCH_ENDPOINT",

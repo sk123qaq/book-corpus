@@ -33,6 +33,7 @@ from bookcorpus.reading.depth import (
     validate_research,
     validate_skim,
 )
+from bookcorpus.reading.depth import audit as depth_audit
 from bookcorpus.reading.depth import cli as depth_cli
 from bookcorpus.reading.depth.cli import _state_text
 from bookcorpus.reading.depth.cli import main as depth_main
@@ -60,6 +61,8 @@ PACK_KEYS = {
     "gates",
     "edition",
     "edition_fit",
+    "path",
+    "fallback_reason",
 }
 
 
@@ -681,11 +684,13 @@ def test_save_depth_failure_keeps_old_depth(tmp_path):
     assert store.depth_json(uid, n, "chapter_model.json") == {"label": "old"}
 
 
-def test_service_flag_off_has_exactly_the_old_keys(reading_root):
+def test_service_flag_off_keeps_old_keys_plus_path(reading_root):
     service = ReadingService(root=reading_root, annotate=False, depth=False)
     data = service.chapter("B0001", 1)
     assert set(data) == PACK_KEYS
     assert "depth" not in data
+    assert data["path"] == "none"
+    assert data["fallback_reason"] == "尚未生成"
 
 
 def _layer_statuses(depth):
@@ -1143,11 +1148,14 @@ def test_depth_job_citations_is_not_staled_by_model_hash(depth_root):
     assert status["state"] == "ready"
 
 
-def test_service_default_depth_is_off(reading_root, monkeypatch):
+def test_reading_service_depth_default_on(reading_root, monkeypatch):
     monkeypatch.delenv("READING_DEPTH", raising=False)
     service = ReadingService(root=reading_root, annotate=False)
-    assert service.depth is False
-    assert "depth" not in service.chapter("B0001", 1)
+    assert service.depth is True
+    assert "depth" in service.chapter("B0001", 1)
+    monkeypatch.setenv("READING_DEPTH", "0")
+    assert ReadingService(root=reading_root, annotate=False).depth is False
+    assert ReadingService(root=reading_root, annotate=False, depth=False).depth is False
 
 
 def test_cli_state_is_model_not_ready_and_records_cache_key():
@@ -2547,3 +2555,103 @@ def test_cli_no_deep_no_research_skips_layers(depth_root, monkeypatch, capsys):
     assert "深读/研究层将在后续生成" in html
     assert 'data-depth-tiers="deep"' not in html
     assert 'data-depth-tiers="research"' not in html
+
+
+def _write_legacy_manifest(root, uid, n, source_sha):
+    pack = Path(root) / "工作区" / "阅读" / uid / "ch" / f"{n:02d}"
+    pack.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema": 1,
+        "uid": uid,
+        "n": n,
+        "tiers": {},
+        "draft": True,
+        "source_sha256": source_sha,
+    }
+    (pack / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    (pack / "chapter.html").write_text(
+        "<!doctype html><html><head><style>body{font-size:16px;line-height:1.7}</style></head>"
+        "<body><p>旧路径</p></body></html>",
+        encoding="utf-8",
+    )
+    return pack
+
+
+def test_chapter_payload_path_depth_legacy_none(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=False)
+    raw = service.library.read_chapter("B0001", 1)
+    _write_legacy_manifest(reading_root, "B0001", 1, raw["source_sha256"])
+
+    legacy = service.chapter("B0001", 1)
+    assert legacy["path"] == "legacy"
+    assert legacy["fallback_reason"] == "旧包按旧路径打开"
+
+    missing = service.chapter("B0001", 2)
+    assert missing["path"] == "none"
+    assert missing["fallback_reason"] == "尚未生成"
+
+    raw2 = service.library.read_chapter("B0002", 1)
+    service.store.save_depth(
+        "B0002",
+        1,
+        {
+            "chapter_model.json": {"schema": 1},
+            "ledger.json": {"schema": 1},
+            "chapter.html": "<!doctype html><html><body>深读</body></html>",
+            "state.json": {"status": "ready", "source_sha256": raw2["source_sha256"], "path": "depth"},
+        },
+    )
+    depth = service.chapter("B0002", 1)
+    assert depth["path"] == "depth"
+    assert depth["fallback_reason"] is None
+    assert depth["chapter"]["path"] == "depth"
+
+
+def test_audit_cli_passes_depth_fixture(depth_root, capsys):
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    files, blocks, ledger, model, _deep, _research, _raw = _ready_depth(depth_root)
+    markup = render_depth_chapter(
+        service.library.book("B0003"),
+        service.library.chapter("B0003", 6),
+        blocks,
+        model,
+        ledger,
+        files["layers/skim.json"],
+    )
+    files["chapter.html"] = markup
+    files["state.json"]["path"] = "depth"
+    service.store.save_depth("B0003", 6, files)
+    for uid in ("B0001", "B0002"):
+        shutil.rmtree(depth_root / "books" / uid)
+
+    assert depth_audit.main(["--root", str(depth_root), "--limit", "1"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["sampled"] == 1
+    assert report["counts"] == {"depth": 1, "legacy": 0, "missing": 0}
+    assert report["pass"] is True
+    item = report["chapters"][0]
+    assert item["path"] == "depth"
+    assert item["ready"] is True
+    assert [gate["id"] for gate in item["gates"]] == ["G10", "G1", "G5", "G8"]
+    assert all(gate["status"] == "pass" for gate in item["gates"])
+
+
+def test_audit_cli_classifies_and_fails_missing(reading_root, capsys):
+    service = ReadingService(root=reading_root, annotate=False, depth=False)
+    raw = service.library.read_chapter("B0001", 1)
+    _write_legacy_manifest(reading_root, "B0001", 1, raw["source_sha256"])
+
+    assert depth_audit.main(["--root", str(reading_root), "--limit", "2"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["sampled"] == 2
+    assert report["counts"] == {"depth": 0, "legacy": 1, "missing": 1}
+    assert report["pass"] is False
+
+    legacy, missing = report["chapters"]
+    assert legacy["path"] == "legacy"
+    assert legacy["fallback_reason"] == "旧包按旧路径打开"
+    assert [gate["id"] for gate in legacy["gates"]] == ["G1", "G5", "G8"]
+    assert missing["path"] == "missing"
+    assert missing["ready"] is False
+    assert missing["fallback_reason"] == "尚未生成；默认路径不回退到旧渲染"
+    assert missing["gates"] == []

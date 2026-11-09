@@ -115,6 +115,10 @@ a.title-link:hover .title { color: var(--cinnabar); }
 .ch-row .ch-state.draft { color: var(--ochre); }
 .draft-badge { display:inline-block; padding:1px 5px; border:1px solid var(--ochre); color:var(--ochre);
   font: 9px/1.45 var(--sans); letter-spacing:.12em; vertical-align:1px; }
+.path-badge { display:inline-block; padding:1px 5px; border:1px solid var(--rule-strong); color:var(--ink-3);
+  font: 9px/1.45 var(--sans); letter-spacing:.12em; vertical-align:1px; }
+.path-badge-depth { border-color:var(--pine); color:var(--pine); }
+.path-badge-legacy { border-color:var(--ink-3); color:var(--ink-3); }
 .ch-row .ch-go { color: var(--ink-3); }
 .ch-row .ch-go:hover { color: var(--cinnabar); }
 .ch-row .tier-sq { display: flex; gap: 3px; justify-content: flex-end; }

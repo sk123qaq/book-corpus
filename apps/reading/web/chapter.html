@@ -88,6 +88,9 @@ function render() {
   const preview = new Set(data.preview_blocks || []);
   const standardBlocks = new Set(data.standard_blocks || []);
   draft = !!(data.pack && data.pack.draft);
+  const path = data.path === 'depth' ? 'depth' : data.path === 'legacy' ? 'legacy' : 'none';
+  const pathLabel = path === 'depth' ? '深度路径' : path === 'legacy' ? '旧路径' : '未生成';
+  const pathReason = data.fallback_reason ? ' title="' + RD.esc(data.fallback_reason) + '"' : '';
   const generated = tiers.filter((t) => t.exists);
   const standardPack = generated.some((t) => t.key === 'standard');
   document.title = '四读 · ' + chapter.title;
@@ -101,6 +104,7 @@ function render() {
       '<h1>' + RD.esc(chapter.title) + '</h1>' +
       '<p class="chap-meta">' + RD.fmt(chapter.chars) + ' 字 · ' + RD.fmt(blocks.length) + ' 个原文块 · 标准本约 ' +
         RD.fmt(chapter.minutes) + ' 分钟 · ' + RD.esc(chapter.file) +
+        ' · <span class="path-badge path-badge-' + path + '"' + pathReason + '>' + pathLabel + '</span>' +
         (draft ? ' · <span class="draft-badge">草稿</span>' : '') + '</p>' +
       '<div class="chap-actions">' +
         (generated.length ? generated.map((t) => '<a class="btn btn-primary" href="' + RD.readerHref(book.uid, chapter.n, t.key) + '">读 ' + RD.esc(t.name) + '本 →</a>').join('') :
