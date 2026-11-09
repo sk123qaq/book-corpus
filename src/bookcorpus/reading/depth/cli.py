@@ -15,9 +15,11 @@ from ..library import Library
 from ..model import ModelClient
 from ..render import asset_url
 from ..store import Store
+from .deep import DeepError, audit_deep, generate_deep, validate_deep
 from .disposition import TIER_ORDER, audit_conservation, plan_all_dispositions
 from .model import DepthModelError, generate_chapter_model
 from .render import render_depth_chapter
+from .research import ResearchError, audit_research, generate_research, validate_research
 from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
 from .skim import audit_skim, generate_skim, validate_skim
 from .standard import build_standard
@@ -48,6 +50,8 @@ def _parser():
             item.add_argument(
                 "--no-standard", action="store_true", help="不写 layers/standard.json（页面仍用确定性标准层）"
             )
+            item.add_argument("--no-deep", action="store_true", help="不生成 layers/deep.json 与深读注解")
+            item.add_argument("--no-research", action="store_true", help="不生成 layers/research.json 与研究议程")
         if name in ("report", "validate"):
             item.add_argument("--gold", help="带 core_units 的验收 JSON；用于核对核心单元")
     return parser
@@ -110,7 +114,9 @@ def _chapter_context(library, context):
     return library.book(context.uid) or {"uid": context.uid}, chapter
 
 
-def _state_text(model, raw, meta, uid, n, *, status="model", skim=None, standard=None, generated_at=None):
+def _state_text(
+    model, raw, meta, uid, n, *, status="model", skim=None, standard=None, deep=None, research=None, generated_at=None
+):
     model_text = json.dumps(model, ensure_ascii=False, indent=1)
     state = {
         "schema": 1,
@@ -132,6 +138,14 @@ def _state_text(model, raw, meta, uid, n, *, status="model", skim=None, standard
         standard_text = json.dumps(standard, ensure_ascii=False, indent=1)
         state["standard_sha"] = hashlib.sha256(standard_text.encode("utf-8")).hexdigest()
         state["standard_prompt_version"] = standard.get("prompt_version")
+    if deep is not None:
+        deep_text = json.dumps(deep, ensure_ascii=False, indent=1)
+        state["deep_sha"] = hashlib.sha256(deep_text.encode("utf-8")).hexdigest()
+        state["deep_prompt_version"] = deep.get("prompt_version")
+    if research is not None:
+        research_text = json.dumps(research, ensure_ascii=False, indent=1)
+        state["research_sha"] = hashlib.sha256(research_text.encode("utf-8")).hexdigest()
+        state["research_prompt_version"] = research.get("prompt_version")
     if meta.get("cache_key"):
         state["cache_key"] = meta["cache_key"]
     if meta.get("layers_sha"):
@@ -220,6 +234,44 @@ def _generate(args):
         print(f"速览警告：{warning}", file=sys.stderr)
     skim_text = json.dumps(skim, ensure_ascii=False, indent=1)
     standard = build_standard(model, blocks)
+    deep = None
+    deep_audit = None
+    if not args.no_deep:
+        deep, _deep_meta = generate_deep(
+            ModelClient(),
+            book,
+            chapter,
+            model,
+            blocks,
+            model=args.model,
+            effort=args.effort,
+        )
+        deep = validate_deep(deep, model, blocks)
+        deep_audit = audit_deep(deep, model, blocks)
+        if deep_audit["errors"]:
+            print("深读审计未通过：" + "；".join(deep_audit["errors"]), file=sys.stderr)
+            return 1
+        for warning in deep_audit["warnings"]:
+            print(f"深读警告：{warning}", file=sys.stderr)
+    research = None
+    research_audit = None
+    if not args.no_research:
+        research, _research_meta = generate_research(
+            ModelClient(),
+            book,
+            chapter,
+            model,
+            blocks,
+            model=args.model,
+            effort=args.effort,
+        )
+        research = validate_research(research, model, blocks)
+        research_audit = audit_research(research, model, blocks)
+        if research_audit["errors"]:
+            print("研究审计未通过：" + "；".join(research_audit["errors"]), file=sys.stderr)
+            return 1
+        for warning in research_audit["warnings"]:
+            print(f"研究警告：{warning}", file=sys.stderr)
     files = {
         "chapter_model.json": model_text,
         "ledger.json": json.dumps(ledger, ensure_ascii=False, indent=1),
@@ -227,6 +279,10 @@ def _generate(args):
     }
     if not args.no_standard:
         files["layers/standard.json"] = json.dumps(standard, ensure_ascii=False, indent=1)
+    if deep is not None:
+        files["layers/deep.json"] = json.dumps(deep, ensure_ascii=False, indent=1)
+    if research is not None:
+        files["layers/research.json"] = json.dumps(research, ensure_ascii=False, indent=1)
     if not args.skip_render:
         files["chapter.html"] = render_depth_chapter(
             book,
@@ -238,6 +294,8 @@ def _generate(args):
             resolver=lambda rel: asset_url(context.uid, rel),
             generated_at=generated_at,
             standard=standard,
+            deep=deep,
+            research=research,
         )
     status = "model" if args.skip_render else "ready"
     state_text = _state_text(
@@ -249,6 +307,8 @@ def _generate(args):
         status=status,
         skim=skim,
         standard=standard,
+        deep=deep,
+        research=research,
         generated_at=generated_at,
     )[1]
     files["state.json"] = state_text
@@ -272,6 +332,12 @@ def _generate(args):
                 "standard_notes": len(standard.get("notes") or []),
                 "figures": len(standard.get("figures") or []),
                 "g12": standard["audit"]["status"],
+                "deep_notes": len(deep.get("notes") or []) if deep else 0,
+                "deep_chains": len(deep.get("chains") or []) if deep else 0,
+                "research_matrix": len(research.get("matrix") or []) if research else 0,
+                "research_questions": len(research.get("questions") or []) if research else 0,
+                "deep_audit": deep_audit["status"] if deep_audit else None,
+                "research_audit": research_audit["status"] if research_audit else None,
                 "html": "chapter.html" in files,
             },
             ensure_ascii=False,
@@ -432,7 +498,16 @@ def main(argv=None):
     args = _parser().parse_args(argv)
     try:
         return _dispatch(args)
-    except (ChapterModelError, DepthModelError, ValueError, FileNotFoundError, RuntimeError, OSError) as exc:
+    except (
+        ChapterModelError,
+        DeepError,
+        DepthModelError,
+        ResearchError,
+        ValueError,
+        FileNotFoundError,
+        RuntimeError,
+        OSError,
+    ) as exc:
         print(str(exc), file=sys.stderr)
         return 2
 

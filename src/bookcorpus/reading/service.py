@@ -659,6 +659,12 @@ class ReadingService:
                 data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
             if depth_state["status"] == "ready":
                 data["depth"]["skim"] = self.store.depth_json(uid, n, "layers/skim.json")
+                deep = self.store.depth_json(uid, n, "layers/deep.json")
+                research = self.store.depth_json(uid, n, "layers/research.json")
+                if deep is not None:
+                    data["depth"]["deep"] = deep
+                if research is not None:
+                    data["depth"]["research"] = research
                 data["depth"]["html"] = "/reader/%s/%d/depth" % (uid, n)
         return data
 

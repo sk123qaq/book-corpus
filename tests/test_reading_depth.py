@@ -9,18 +9,28 @@ from pathlib import Path
 import pytest
 
 from bookcorpus.reading.depth import (
+    DEEP_PROMPT_VERSION,
+    RESEARCH_PROMPT_VERSION,
     SKIM_PROMPT_VERSION,
     SYSTEM_PROMPT,
     ChapterModelError,
+    DeepError,
     DepthModelError,
+    ResearchError,
     SkimError,
     audit_conservation,
+    audit_deep,
+    audit_research,
     audit_skim,
     generate_chapter_model,
+    generate_deep,
+    generate_research,
     generate_skim,
     plan_dispositions,
     render_depth_chapter,
     validate_chapter_model,
+    validate_deep,
+    validate_research,
     validate_skim,
 )
 from bookcorpus.reading.depth import cli as depth_cli
@@ -78,6 +88,181 @@ def _valid(sha=None):
         sha = actual
     model = validate_chapter_model(_gold(sha), blocks, uid="B0003", n=6, source_sha256=sha)
     return model, blocks
+
+
+def _deep_payload(blocks, units=None):
+    ids = [block["id"] for block in blocks if block["kind"] != "heading"]
+    units = units or ["S01-U01", "S01-U02", "S01-U03"]
+    text = (
+        "这条深读注解说明该段论证成立所依赖的前提与边界，并指出可能的反例，"
+        "供读者回到同一份逐字原文核对；深读层只叠加解释，不复制任何原文句子，"
+        "也不引入本章之外的史实来支撑结论。"
+    )
+    return {
+        "schema": 1,
+        "prompt_version": DEEP_PROMPT_VERSION,
+        "notes": [
+            {
+                "id": "N01",
+                "type": "assumption",
+                "section": "S01",
+                "units": [units[0]],
+                "blocks": [ids[0]],
+                "text": text,
+                "origin": "editor",
+                "source_scope": "本章",
+            },
+            {
+                "id": "N02",
+                "type": "boundary",
+                "section": "S01",
+                "units": [units[1]],
+                "blocks": [ids[1]],
+                "text": text.replace("前提", "边界"),
+                "origin": "editor",
+                "source_scope": "本章",
+            },
+        ],
+        "chains": [
+            {
+                "id": "C01",
+                "family": "argument",
+                "section": "S01",
+                "question": "这段论证如何成立？",
+                "units": [units[0], units[1]],
+                "origin": "derived",
+                "caption": "论证链",
+                "reading_note": "沿箭头读。",
+                "data": {
+                    "nodes": [
+                        {"id": "n1", "label": "前提", "unit": units[0], "block": ids[0]},
+                        {"id": "n2", "label": "结论", "unit": units[1], "block": ids[1]},
+                    ],
+                    "edges": [{"from": "n1", "to": "n2", "label": "推出"}],
+                },
+                "fallback": "按原文顺序读。",
+            }
+        ],
+    }
+
+
+def _research_payload(blocks, units=None):
+    ids = [block["id"] for block in blocks if block["kind"] != "heading"]
+    units = units or ["S01-U01", "S01-U02", "S01-U03"]
+    notes = [
+        {
+            "id": "N01",
+            "type": "context",
+            "section": "S01",
+            "related_units": [units[0]],
+            "blocks": [ids[0]],
+            "text": "本章的区分要放回当时的法学争论中理解，才能看清它回应的问题。",
+            "origin": "model",
+            "certainty": "unverified",
+            "citations": [],
+        },
+        {
+            "id": "N02",
+            "type": "later",
+            "section": "S01",
+            "related_units": [units[1]],
+            "blocks": [ids[1]],
+            "text": "后续研究可能继续追问这一区分在具体裁判中如何操作。",
+            "origin": "model",
+            "certainty": "unverified",
+            "citations": [],
+        },
+        {
+            "id": "N03",
+            "type": "open",
+            "section": "S01",
+            "related_units": [units[0]],
+            "blocks": [ids[0]],
+            "text": "还需要查证这一区分与相邻学科同类争论的异同。",
+            "origin": "model",
+            "certainty": "unverified",
+            "citations": [],
+        },
+    ]
+    matrix = [
+        {
+            "id": "M01",
+            "claim": "规范性理论可以与描述性理论分开处理",
+            "verdict": "still",
+            "change": "若研究对象换成实际裁判行为，这个判断需要重新表述",
+            "needed": "补读同一作者关于方法论的章节",
+            "units": [units[0]],
+            "blocks": [ids[0]],
+        },
+        {
+            "id": "M02",
+            "claim": "描述性理论只记录实际做法",
+            "verdict": "changed",
+            "change": "原文同时承认描述性理论会反过来塑造做法",
+            "needed": "核对原文对这一反作用的限定",
+            "units": [units[1]],
+            "blocks": [ids[1]],
+        },
+        {
+            "id": "M03",
+            "claim": "两种理论共享同一套评价标准",
+            "verdict": "caution",
+            "change": "原文把评价标准留在规范一侧",
+            "needed": "区分描述与评价的层次",
+            "units": [units[0]],
+            "blocks": [ids[0]],
+        },
+        {
+            "id": "M04",
+            "claim": "这一区分可以直接移用到其他法域",
+            "verdict": "verify",
+            "change": "移用前要先确认制度语境",
+            "needed": "查证其他法域的方法论讨论",
+            "units": [units[2]],
+            "blocks": [ids[2]],
+        },
+        {
+            "id": "M05",
+            "claim": "本章的结论依赖一个未明说的前提",
+            "verdict": "still",
+            "change": "前提一旦松动，结论范围就要缩小",
+            "needed": "回到原文定位这个前提",
+            "units": [units[1]],
+            "blocks": [ids[1]],
+        },
+    ]
+    questions = [
+        {
+            "id": "Q01",
+            "text": "这一区分在原文中依靠哪些未明说的前提？",
+            "why": "定位论证负担",
+            "query": "规范性理论 描述性理论 前提",
+            "units": [units[0]],
+        },
+        {
+            "id": "Q02",
+            "text": "描述性理论如何反过来影响实际裁判？",
+            "why": "检验反作用机制",
+            "query": "描述性理论 裁判 反作用",
+            "units": [units[1]],
+        },
+        {
+            "id": "Q03",
+            "text": "这一区分的适用边界在哪里？",
+            "why": "防止过度推广",
+            "query": "规范性理论 描述性理论 边界",
+            "units": [units[2]],
+        },
+    ]
+    return {
+        "schema": 1,
+        "prompt_version": RESEARCH_PROMPT_VERSION,
+        "searched": False,
+        "provider": "none",
+        "notes": notes,
+        "matrix": matrix,
+        "questions": questions,
+    }
 
 
 def _unit(model, unit_id):
@@ -525,6 +710,8 @@ def test_service_depth_ready_pack_exposes_skim_and_html(reading_root):
     service = ReadingService(root=reading_root, annotate=False, depth=True)
     raw = service.library.read_chapter("B0001", 1)
     skim = {"schema": 1, "prompt_version": SKIM_PROMPT_VERSION, "supported": False, "reason": "短章"}
+    deep = {"schema": 1, "prompt_version": DEEP_PROMPT_VERSION, "notes": [{"id": "N01"}]}
+    research = {"schema": 1, "prompt_version": RESEARCH_PROMPT_VERSION, "searched": False}
     service.store.save_depth(
         "B0001",
         1,
@@ -532,6 +719,8 @@ def test_service_depth_ready_pack_exposes_skim_and_html(reading_root):
             "chapter_model.json": {"label": "model"},
             "ledger.json": {"label": "ledger"},
             "layers/skim.json": skim,
+            "layers/deep.json": deep,
+            "layers/research.json": research,
             "chapter.html": "<html>compiled</html>",
             "state.json": {"status": "ready", "source_sha256": raw["source_sha256"]},
         },
@@ -542,6 +731,8 @@ def test_service_depth_ready_pack_exposes_skim_and_html(reading_root):
         "model": {"label": "model"},
         "ledger": {"label": "ledger"},
         "skim": skim,
+        "deep": deep,
+        "research": research,
         "html": "/reader/B0001/1/depth",
     }
 
@@ -1052,7 +1243,7 @@ def test_render_depth_chapter_unsupported_has_no_claims_but_keeps_source():
 
 def test_cli_generate_status_ready_with_skim_and_render(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
-    fake = FakeClient([_chunk_payload(blocks)])
+    fake = FakeClient([_chunk_payload(blocks), _deep_payload(blocks), _research_payload(blocks)])
     monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
     code = depth_main(
         [
@@ -1086,6 +1277,24 @@ def test_cli_generate_status_ready_with_skim_and_render(depth_root, monkeypatch,
     assert skim["reason"]
     html = Path(store.depth_path("B0003", 6, "chapter.html")).read_text(encoding="utf-8")
     assert "本章更适合按原文阅读" in html
+    assert 'data-depth-tiers="deep"' in html
+    assert 'data-depth-tiers="research"' in html
+    assert output["deep_notes"] == 2
+    assert output["deep_chains"] == 1
+    assert output["research_matrix"] == 5
+    assert output["research_questions"] == 3
+    assert output["deep_audit"] == "pass"
+    assert output["research_audit"] == "pass"
+    deep = store.depth_json("B0003", 6, "layers/deep.json")
+    research = store.depth_json("B0003", 6, "layers/research.json")
+    assert deep["prompt_version"] == DEEP_PROMPT_VERSION
+    assert research["prompt_version"] == RESEARCH_PROMPT_VERSION
+    assert state["deep_sha"]
+    assert len(state["deep_sha"]) == 64
+    assert state["deep_prompt_version"] == DEEP_PROMPT_VERSION
+    assert state["research_sha"]
+    assert len(state["research_sha"]) == 64
+    assert state["research_prompt_version"] == RESEARCH_PROMPT_VERSION
     assert (
         depth_main(
             [
@@ -1108,7 +1317,7 @@ def test_cli_generate_status_ready_with_skim_and_render(depth_root, monkeypatch,
 
 def test_cli_generate_no_skim_keeps_model_state(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
-    fake = FakeClient([_chunk_payload(blocks)])
+    fake = FakeClient([_chunk_payload(blocks), _deep_payload(blocks), _research_payload(blocks)])
     monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
     code = depth_main(
         [
@@ -1136,7 +1345,7 @@ def test_cli_generate_no_skim_keeps_model_state(depth_root, monkeypatch, capsys)
 
 def test_cli_generate_skip_render_is_not_ready(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
-    fake = FakeClient([_chunk_payload(blocks)])
+    fake = FakeClient([_chunk_payload(blocks), _deep_payload(blocks), _research_payload(blocks)])
     monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
     code = depth_main(
         [
@@ -1568,7 +1777,7 @@ def test_standard_drops_figure_with_number_not_in_source():
 
 def test_cli_state_ready_includes_standard_layer(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
-    fake = FakeClient([_chunk_payload(blocks)])
+    fake = FakeClient([_chunk_payload(blocks), _deep_payload(blocks), _research_payload(blocks)])
     monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
     code = depth_main(
         [
@@ -1605,7 +1814,7 @@ def test_cli_state_ready_includes_standard_layer(depth_root, monkeypatch, capsys
 
 def test_cli_skip_render_writes_standard_layer(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
-    fake = FakeClient([_chunk_payload(blocks)])
+    fake = FakeClient([_chunk_payload(blocks), _deep_payload(blocks), _research_payload(blocks)])
     monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
     code = depth_main(
         [
@@ -1634,7 +1843,7 @@ def test_cli_skip_render_writes_standard_layer(depth_root, monkeypatch, capsys):
 
 def test_cli_no_standard_skips_layer_but_page_annotated(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
-    fake = FakeClient([_chunk_payload(blocks)])
+    fake = FakeClient([_chunk_payload(blocks), _deep_payload(blocks), _research_payload(blocks)])
     monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
     code = depth_main(
         [
@@ -1660,3 +1869,282 @@ def test_cli_no_standard_skips_layer_but_page_annotated(depth_root, monkeypatch,
     assert state["standard_prompt_version"] == STANDARD_PROMPT_VERSION
     html = Path(store.depth_path("B0003", 6, "chapter.html")).read_text(encoding="utf-8")
     assert "本章结构" in html
+
+
+def _deep_ready():
+    model, blocks = _valid()
+    units = [unit["id"] for unit in model["units"]][:3]
+    return model, blocks, _deep_payload(blocks, units)
+
+
+def _research_ready():
+    model, blocks = _valid()
+    units = [unit["id"] for unit in model["units"]][:3]
+    return model, blocks, _research_payload(blocks, units)
+
+
+def test_deep_layer_validates_and_audits():
+    model, blocks, payload = _deep_ready()
+    clean = validate_deep(payload, model, blocks)
+    assert [note["id"] for note in clean["notes"]] == ["N01", "N02"]
+    assert clean["chains"][0]["data"]["edges"] == [{"from": "n1", "to": "n2", "label": "推出"}]
+    report = audit_deep(clean, model, blocks)
+    assert report["status"] == "pass", report
+
+
+def test_deep_rejects_bad_note_fields_and_external_scope():
+    cases = [
+        ("type", "unknown", "type 非法"),
+        ("origin", "external", "origin 非法"),
+        ("source_scope", "书外材料", "source_scope"),
+        ("section", "S99", "section 不在本章章节模型里"),
+    ]
+    for field, value, match in cases:
+        model, blocks, payload = _deep_ready()
+        payload["notes"][0][field] = value
+        with pytest.raises(DeepError, match=match):
+            validate_deep(payload, model, blocks)
+
+
+def test_deep_rejects_note_without_anchor():
+    model, blocks, payload = _deep_ready()
+    payload["notes"][0]["units"] = []
+    payload["notes"][0]["blocks"] = []
+    with pytest.raises(DeepError, match="锚点"):
+        validate_deep(payload, model, blocks)
+
+
+def test_deep_rejects_forged_quote():
+    model, blocks, payload = _deep_ready()
+    payload["notes"][0]["quote"] = "伪造的原文。"
+    with pytest.raises(DeepError, match="逐字"):
+        validate_deep(payload, model, blocks)
+
+
+def test_deep_rejects_verified_claim_in_no_provider_layer():
+    model, blocks, payload = _deep_ready()
+    payload["notes"][0]["text"] += "已核验。"
+    with pytest.raises(DeepError, match="已核验"):
+        validate_deep(payload, model, blocks)
+
+
+def test_deep_rejects_more_than_three_notes_per_section():
+    model, blocks, payload = _deep_ready()
+    note = copy.deepcopy(payload["notes"][0])
+    extra = []
+    for index in (3, 4):
+        copy_note = copy.deepcopy(note)
+        copy_note["id"] = f"N{index:02d}"
+        extra.append(copy_note)
+    payload["notes"].extend(extra)
+    with pytest.raises(DeepError, match="超过 3 条"):
+        validate_deep(payload, model, blocks)
+
+
+def test_deep_rejects_unknown_chain_edge():
+    model, blocks, payload = _deep_ready()
+    payload["chains"][0]["data"]["edges"] = [{"from": "n1", "to": "n99", "label": "推出"}]
+    with pytest.raises(DeepError, match="n99"):
+        validate_deep(payload, model, blocks)
+
+
+def test_deep_chain_allows_empty_edges_with_text_fallback():
+    model, blocks, payload = _deep_ready()
+    payload["chains"][0]["data"]["edges"] = []
+    clean = validate_deep(payload, model, blocks)
+    markup = render_depth_chapter(
+        {"uid": "B0003", "title": "书名", "author": "作者"},
+        {"n": 6, "title": "第6章"},
+        blocks,
+        model,
+        {},
+        unsupported_skim("短章。"),
+        deep=clean,
+    )
+    assert "按原文顺序读。" in markup
+    assert 'class="fig-edges"' not in markup
+
+
+def test_research_agenda_validates_without_provider():
+    model, blocks, payload = _research_ready()
+    clean = validate_research(payload, model, blocks)
+    assert clean["searched"] is False
+    assert clean["provider"] == "none"
+    assert all(note["origin"] == "model" for note in clean["notes"])
+    assert all(note["certainty"] == "unverified" for note in clean["notes"])
+    assert all(note["citations"] == [] for note in clean["notes"])
+    assert audit_research(clean, model, blocks)["status"] == "pass"
+
+
+def test_research_rejects_layer_counts():
+    model, blocks, payload = _research_ready()
+    payload["notes"] = payload["notes"][:2]
+    with pytest.raises(ResearchError, match="3–10"):
+        validate_research(payload, model, blocks)
+    model, blocks, payload = _research_ready()
+    payload["matrix"] = payload["matrix"][:4]
+    with pytest.raises(ResearchError, match="5–10"):
+        validate_research(payload, model, blocks)
+    model, blocks, payload = _research_ready()
+    payload["questions"] = payload["questions"][:2]
+    with pytest.raises(ResearchError, match="3–6"):
+        validate_research(payload, model, blocks)
+
+
+def test_research_rejects_external_or_verified_without_provider():
+    model, blocks, payload = _research_ready()
+    note = payload["notes"][0]
+    note["origin"] = "external"
+    note["certainty"] = "verified"
+    note["citations"] = [{"url": "https://example.com"}]
+    with pytest.raises(ResearchError) as excinfo:
+        validate_research(payload, model, blocks)
+    message = str(excinfo.value)
+    assert "origin" in message
+    assert "certainty" in message
+    assert "citations" in message
+
+
+def test_research_rejects_current_numbers_and_verified_language():
+    model, blocks, payload = _research_ready()
+    payload["notes"][0]["text"] += "2024 年修法，已核验。"
+    with pytest.raises(ResearchError) as excinfo:
+        validate_research(payload, model, blocks)
+    message = str(excinfo.value)
+    assert "当前外部数字" in message
+    assert "已核验" in message
+
+
+def test_research_allows_source_numbers_without_provider():
+    model, blocks, payload = _research_ready()
+    blocks[0]["text"] += " 2024 年"
+    payload["notes"][0]["text"] += "原文提到 2024 年，这里只复述原文。"
+    clean = validate_research(payload, model, blocks)
+    assert "2024 年" in clean["notes"][0]["text"]
+
+
+def test_research_rejects_generic_question():
+    model, blocks, payload = _research_ready()
+    payload["questions"][0]["text"] = "值得思考"
+    with pytest.raises(ResearchError, match="太空泛"):
+        validate_research(payload, model, blocks)
+
+
+def test_research_matrix_row_requires_anchor():
+    model, blocks, payload = _research_ready()
+    payload["matrix"][0]["units"] = []
+    payload["matrix"][0]["blocks"] = []
+    with pytest.raises(ResearchError, match="锚点"):
+        validate_research(payload, model, blocks)
+
+
+def test_generate_deep_retries_bad_payload():
+    model, blocks, payload = _deep_ready()
+    bad = copy.deepcopy(payload)
+    bad["notes"][0]["origin"] = "external"
+    client = FakeClient([bad, payload])
+    clean, meta = generate_deep(
+        client,
+        {"uid": "B0003", "title": "书名"},
+        {"n": 6, "title": "第6章"},
+        model,
+        blocks,
+    )
+    assert len(client.calls) == 2
+    assert "未通过深读校验" in client.calls[1][-1]["content"]
+    assert clean["prompt_version"] == DEEP_PROMPT_VERSION
+    assert meta["prompt_version"] == DEEP_PROMPT_VERSION
+
+
+def test_generate_research_retries_bad_payload():
+    model, blocks, payload = _research_ready()
+    bad = copy.deepcopy(payload)
+    bad["notes"][0]["certainty"] = "verified"
+    client = FakeClient([bad, payload])
+    clean, meta = generate_research(
+        client,
+        {"uid": "B0003", "title": "书名"},
+        {"n": 6, "title": "第6章"},
+        model,
+        blocks,
+    )
+    assert len(client.calls) == 2
+    assert "未通过研究校验" in client.calls[1][-1]["content"]
+    assert clean["prompt_version"] == RESEARCH_PROMPT_VERSION
+    assert meta["prompt_version"] == RESEARCH_PROMPT_VERSION
+
+
+def test_render_deep_and_research_are_added_without_duplicating_source():
+    model, blocks, deep_payload = _deep_ready()
+    _, _, research_payload = _research_ready()
+    deep = validate_deep(deep_payload, model, blocks)
+    research = validate_research(research_payload, model, blocks)
+    markup = render_depth_chapter(
+        {"uid": "B0003", "title": "书名", "author": "作者"},
+        {"n": 6, "title": "第6章"},
+        blocks,
+        model,
+        plan_all_dispositions(model, blocks),
+        unsupported_skim("短章。"),
+        deep=deep,
+        research=research,
+    )
+    assert 'data-depth-tiers="deep"' in markup
+    assert 'data-depth-tiers="research"' in markup
+    for block in blocks:
+        if block["kind"] != "heading":
+            assert markup.count(f'data-src="{block["id"]}"') == 1
+    for label in ("逐字原文", "逐字 · 论证注", "逐字 · 研究议程"):
+        assert label in markup
+    assert markup.count(deep["notes"][0]["text"]) == 1
+    assert markup.index('<section class="research-dossier"') < markup.index('<div class="flow">')
+    panel = markup.split('<section class="research-dossier"', 1)[1].split("</section>", 1)[0]
+    assert "http" not in panel
+    assert "研究议程 · 未检索" in panel
+    assert "论证链" in markup
+    assert "html.depth-js [data-depth-tiers]{display:none!important}" in markup
+    assert (
+        'html.depth-js body[data-depth-tab="deep"] [data-depth-tiers~="deep"],\n'
+        'html.depth-js body[data-depth-tab="research"] [data-depth-tiers~="research"]{display:block!important}'
+    ) in markup
+
+
+def test_cli_no_deep_no_research_skips_layers(depth_root, monkeypatch, capsys):
+    blocks, _ = _parsed()
+    fake = FakeClient([_chunk_payload(blocks)])
+    monkeypatch.setattr(depth_cli, "ModelClient", lambda: fake)
+    code = depth_main(
+        [
+            "generate",
+            "--root",
+            str(depth_root),
+            "--uid",
+            "B0003",
+            "--n",
+            "6",
+            "--model",
+            "fake-model",
+            "--effort",
+            "low",
+            "--no-deep",
+            "--no-research",
+        ]
+    )
+    assert code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["deep_notes"] == 0
+    assert output["deep_chains"] == 0
+    assert output["research_matrix"] == 0
+    assert output["research_questions"] == 0
+    assert output["deep_audit"] is None
+    assert output["research_audit"] is None
+    store = Store(Layout(depth_root))
+    assert store.depth_json("B0003", 6, "layers/deep.json") is None
+    assert store.depth_json("B0003", 6, "layers/research.json") is None
+    state = json.loads((Path(store.pack_dir("B0003", 6)) / "depth" / "state.json").read_text(encoding="utf-8"))
+    assert "deep_sha" not in state
+    assert "research_sha" not in state
+    html = Path(store.depth_path("B0003", 6, "chapter.html")).read_text(encoding="utf-8")
+    assert "深读/研究层将在后续生成" in html
+    assert 'data-depth-tiers="deep"' not in html
+    assert 'data-depth-tiers="research"' not in html
