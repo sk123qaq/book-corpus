@@ -41,7 +41,7 @@ from bookcorpus.reading.depth.disposition import plan_all_dispositions
 from bookcorpus.reading.depth.skim import unsupported_skim
 from bookcorpus.reading.depth.standard import STANDARD_PROMPT_VERSION, build_standard
 from bookcorpus.reading.mdparse import parse_markdown
-from bookcorpus.reading.service import ReadingService
+from bookcorpus.reading.service import DEPTH_LAYERS, JobConflictError, ReadingService
 from bookcorpus.reading.store import Store
 from bookcorpus.scripts.layout import Layout
 
@@ -688,9 +688,17 @@ def test_service_flag_off_has_exactly_the_old_keys(reading_root):
     assert "depth" not in data
 
 
+def _layer_statuses(depth):
+    return {key: value["status"] for key, value in depth["layers"].items()}
+
+
 def test_service_depth_missing_and_model_pack(reading_root):
     service = ReadingService(root=reading_root, annotate=False, depth=True)
-    assert service.chapter("B0001", 1)["depth"] == {"state": "missing"}
+    depth = service.chapter("B0001", 1)["depth"]
+    assert depth["state"] == "missing"
+    assert depth["jobs"] == []
+    assert set(depth["layers"]) == set(DEPTH_LAYERS)
+    assert set(_layer_statuses(depth).values()) == {"missing"}
     raw = service.library.read_chapter("B0001", 1)
     service.store.save_depth(
         "B0001",
@@ -702,7 +710,13 @@ def test_service_depth_missing_and_model_pack(reading_root):
         },
     )
     data = service.chapter("B0001", 1)
-    assert data["depth"] == {"state": "model", "model": {"label": "model"}, "ledger": {"label": "ledger"}}
+    depth = data["depth"]
+    assert depth["state"] == "model"
+    assert depth["model"] == {"label": "model"}
+    assert depth["ledger"] == {"label": "ledger"}
+    assert depth["layers"]["model"]["status"] == "ready"
+    assert depth["layers"]["skim"]["status"] == "missing"
+    assert depth["jobs"] == []
     assert set(data) == PACK_KEYS | {"depth"}
 
 
@@ -726,15 +740,22 @@ def test_service_depth_ready_pack_exposes_skim_and_html(reading_root):
         },
     )
     data = service.chapter("B0001", 1)
-    assert data["depth"] == {
-        "state": "ready",
-        "model": {"label": "model"},
-        "ledger": {"label": "ledger"},
-        "skim": skim,
-        "deep": deep,
-        "research": research,
-        "html": "/reader/B0001/1/depth",
-    }
+    depth = data["depth"]
+    assert depth["state"] == "ready"
+    assert depth["model"] == {"label": "model"}
+    assert depth["ledger"] == {"label": "ledger"}
+    assert depth["skim"] == skim
+    assert depth["deep"] == deep
+    assert depth["research"] == research
+    assert depth["html"] == "/reader/B0001/1/depth"
+    statuses = _layer_statuses(depth)
+    assert statuses["model"] == "ready"
+    assert statuses["skim"] == "ready"
+    assert statuses["standard"] == "missing"
+    assert statuses["deep"] == "ready"
+    assert statuses["research"] == "ready"
+    assert statuses["citations"] == "missing"
+    assert depth["jobs"] == []
 
 
 def test_service_depth_stale_hides_layers(reading_root):
@@ -750,7 +771,376 @@ def test_service_depth_stale_hides_layers(reading_root):
             "state.json": {"status": "ready", "source_sha256": "outdated"},
         },
     )
-    assert service.chapter("B0001", 1)["depth"] == {"state": "stale"}
+    depth = service.chapter("B0001", 1)["depth"]
+    assert depth["state"] == "stale"
+    assert depth["layers"]["model"]["status"] == "stale"
+    assert depth["layers"]["skim"]["status"] == "stale"
+    assert depth["layers"]["standard"]["status"] == "missing"
+    assert "html" not in depth
+
+
+class _FakeQueue:
+    def __init__(self, jobs=None, active=None, conflicts=None):
+        self.jobs = jobs or []
+        self.active = active or []
+        self.blocking = conflicts or []
+        self.submitted = []
+
+    def list(self, limit=50):
+        return self.jobs[:limit]
+
+    def active_for(self, uid=None, n=None):
+        if uid is None:
+            return self.active
+        return [item for item in self.active if item.get("uid") == uid and int(item.get("n")) == int(n)]
+
+    def conflicts(self, uid, n):
+        return self.blocking
+
+    def submit(self, uid, n, tiers, **kwargs):
+        job = {"uid": uid, "n": "%02d" % int(n), "tiers": tiers, **kwargs}
+        self.submitted.append(job)
+        return job
+
+
+def _ready_depth(depth_root, *, status="ready"):
+    _, blocks, ledger, _ = _load_gold_fixture("b0003_ch06", "B0003", 6)
+    raw = ReadingService(root=depth_root, annotate=False, depth=True).library.read_chapter("B0003", 6)
+    model = _valid(raw["source_sha256"])[0]
+    ledger = plan_all_dispositions(model, blocks)
+    deep = _deep_payload(blocks)
+    research = _research_payload(blocks)
+    files = {
+        "chapter_model.json": model,
+        "ledger.json": ledger,
+        "layers/skim.json": unsupported_skim("这一章太短，适合读原文。"),
+        "layers/standard.json": {"schema": 1, "units": []},
+        "layers/deep.json": deep,
+        "layers/research.json": research,
+        "citations.json": {"schema": 1, "searched": False, "citations": []},
+        "chapter.html": "<html>old depth</html>",
+        "state.json": {
+            "status": status,
+            "source_sha256": raw["source_sha256"],
+            "chapter_model_sha": "model-sha",
+            "research_sha": "research-sha",
+            "layer_model_sha": {
+                "skim": "model-sha",
+                "standard": "model-sha",
+                "deep": "model-sha",
+                "research": "model-sha",
+            },
+            "layer_input_sha": {"citations": "research-sha"},
+            "layer_usage": {"deep": {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500}},
+            "layer_updated_at": {"deep": "2026-11-09T00:00:00"},
+            "updated_at": "2026-11-09T00:00:00",
+        },
+    }
+    return files, blocks, ledger, model, deep, research, raw
+
+
+def test_depth_status_ready_layers_usage_and_estimates(depth_root):
+    files, *_ = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    status = service.depth_status("B0003", 6)
+    assert status["state"] == "ready"
+    assert set(status["layers"]) == set(DEPTH_LAYERS)
+    assert set(_layer_statuses(status).values()) == {"ready"}
+    deep = status["layers"]["deep"]
+    assert deep["usage"]["total_tokens"] == 1500
+    assert deep["tokens"] == 1500
+    assert deep["usd"] == 0.002
+    assert deep["updated_at"] == "2026-11-09T00:00:00"
+    model_estimate = status["layers"]["model"]["estimate"]
+    assert model_estimate["tokens"] > 0
+    assert status["layers"]["deep"]["estimate"]["tokens"] == round(model_estimate["tokens"] * 0.6)
+    assert status["layers"]["standard"]["estimate"] == {"tokens": 0, "usd": 0.0}
+    assert status["layers"]["citations"]["estimate"] == {"tokens": 0, "usd": 0.0}
+
+
+def test_depth_status_source_change_marks_present_layers_stale(depth_root):
+    files, *_ = _ready_depth(depth_root)
+    files["state.json"]["source_sha256"] = "outdated"
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    status = service.depth_status("B0003", 6)
+    assert status["state"] == "stale"
+    assert status["layers"]["model"]["status"] == "stale"
+    assert status["layers"]["skim"]["status"] == "stale"
+    assert status["layers"]["citations"]["status"] == "stale"
+
+
+def test_depth_status_running_and_failed_layers(depth_root):
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    failed = {
+        "id": "r-failed",
+        "uid": "B0003",
+        "n": "06",
+        "kind": "depth",
+        "layers": ["research"],
+        "state": "failed",
+        "error": "模型超时",
+        "updated": "2026-11-09T01:00:00",
+    }
+    active = {
+        "id": "r-active",
+        "uid": "B0003",
+        "n": "06",
+        "kind": "depth",
+        "layers": ["skim"],
+        "state": "annotating",
+        "updated": "2026-11-09T02:00:00",
+    }
+    service.queue = _FakeQueue(jobs=[failed], active=[active])
+    status = service.depth_status("B0003", 6)
+    assert status["layers"]["skim"]["status"] == "running"
+    assert status["layers"]["research"]["status"] == "failed"
+    assert status["layers"]["research"]["error"] == "模型超时"
+    assert [job["id"] for job in status["jobs"]] == ["r-failed"]
+
+
+def test_submit_depth_rejects_citations_when_research_stale(depth_root):
+    files, *_ = _ready_depth(depth_root)
+    files["state.json"]["chapter_model_sha"] = "new-model-sha"
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    with pytest.raises(ValueError, match="研究层已过期"):
+        service.submit_depth("B0003", 6, ["citations"])
+    with pytest.raises(ValueError, match="同时重建研究层"):
+        service.submit_depth("B0003", 6, ["model", "citations"])
+
+
+def test_depth_status_model_hash_change_stales_old_layers(depth_root):
+    files, *_ = _ready_depth(depth_root)
+    files["state.json"]["chapter_model_sha"] = "new-model-sha"
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    status = service.depth_status("B0003", 6)
+    assert status["state"] == "stale"
+    assert status["layers"]["model"]["status"] == "ready"
+    for layer in ("skim", "standard", "deep", "research"):
+        assert status["layers"][layer]["status"] == "stale"
+    assert status["layers"]["citations"]["status"] == "stale"
+
+
+def test_submit_depth_adds_model_and_requires_research_for_citations(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=True)
+    fake = _FakeQueue()
+    service.queue = fake
+    job = service.submit_depth("B0001", 1, ["skim"], model="fake-model", effort="max")
+    assert job["kind"] == "depth"
+    assert job["tiers"] == []
+    assert job["layers"] == ["model", "skim"]
+    assert job["model"] == "fake-model"
+    with pytest.raises(ValueError, match="研究层"):
+        service.submit_depth("B0001", 1, ["citations"])
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {},
+            "layers/research.json": {"searched": False},
+            "state.json": {
+                "status": "model",
+                "source_sha256": service.library.read_chapter("B0001", 1)["source_sha256"],
+            },
+        },
+    )
+    job = service.submit_depth("B0001", 1, ["citations"])
+    assert job["layers"] == ["citations"]
+    job = service.submit_depth("B0001", 1, ["deep"], rebuild_model=True)
+    assert job["layers"] == ["model", "deep"]
+    assert job["rebuild"] is True
+    assert service.submit_depth("B0001", 1, ["research", "citations"])["layers"] == [
+        "research",
+        "citations",
+    ]
+
+
+def test_submit_depth_reports_active_conflict(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=True)
+    service.queue = _FakeQueue(conflicts=[{"id": "r-running"}])
+    with pytest.raises(JobConflictError):
+        service.submit_depth("B0001", 1, ["skim"])
+
+
+def test_depth_job_only_model_writes_no_html_and_keeps_editorial(depth_root):
+    _, blocks = _valid()
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    editorial = {"uid": "B0003", "n": 6, "beats": [], "visuals": [], "takeaways": []}
+    service.store.save_editorial("B0003", 6, editorial)
+    service.client = FakeClient([_chunk_payload(blocks)])
+    result = service._run_depth_job(
+        "r-depth-model",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["model"],
+            "model": "fake-model",
+            "effort": "low",
+            "rebuild": True,
+        },
+    )
+    assert result["status"] == "model"
+    assert result["pack_id"] == "B0003/ch/06"
+    assert service.store.depth_json("B0003", 6, "chapter_model.json") is not None
+    assert service.store.depth_json("B0003", 6, "layers/skim.json") is None
+    assert not Path(service.store.depth_path("B0003", 6, "chapter.html")).exists()
+    assert service.store.editorial("B0003", 6) == editorial
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["status"] == "model"
+    assert state["chapter_model_sha"] == state["layer_sha"]["model"]
+    assert "skim" not in state["layer_sha"]
+
+
+def test_depth_job_only_skim_preserves_deep_research_and_editorial(depth_root):
+    files, _blocks, _ledger, _model, deep, research, _raw = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    editorial = {"uid": "B0003", "n": 6, "beats": [], "visuals": [], "takeaways": []}
+    service.store.save_editorial("B0003", 6, editorial)
+    service.client = FakeClient([])
+    result = service._run_depth_job(
+        "r-depth-skim",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["skim"],
+            "model": "fake-model",
+            "effort": "low",
+            "rebuild": False,
+        },
+    )
+    assert result["status"] == "ready"
+    assert service.store.depth_json("B0003", 6, "layers/deep.json") == deep
+    assert service.store.depth_json("B0003", 6, "layers/research.json") == research
+    assert service.store.editorial("B0003", 6) == editorial
+    html = Path(service.store.depth_path("B0003", 6, "chapter.html"))
+    assert html.is_file()
+    assert html.read_text(encoding="utf-8") != "<html>old depth</html>"
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["layer_model_sha"]["skim"] == state["chapter_model_sha"]
+    assert "deep" in state["layer_sha"]
+
+
+def test_depth_job_only_citations_reuses_research_and_preserves_layers(depth_root, monkeypatch):
+    files, _blocks, _ledger, _model, deep, research, _raw = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    editorial = {"uid": "B0003", "n": 6, "beats": [], "visuals": [], "takeaways": []}
+    service.store.save_editorial("B0003", 6, editorial)
+    standard = service.store.depth_json("B0003", 6, "layers/standard.json")
+    monkeypatch.setenv("READING_SEARCH_PROVIDER", "none")
+    service.client = FakeClient([])
+    result = service._run_depth_job(
+        "r-depth-citations",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["citations"],
+            "model": "fake-model",
+            "effort": "low",
+            "rebuild": False,
+        },
+    )
+    assert result["status"] == "ready"
+    assert service.store.depth_json("B0003", 6, "layers/deep.json") == deep
+    assert service.store.depth_json("B0003", 6, "layers/research.json") == research
+    assert service.store.depth_json("B0003", 6, "layers/standard.json") == standard
+    assert service.store.editorial("B0003", 6) == editorial
+    citations = service.store.depth_json("B0003", 6, "citations.json")
+    assert citations["searched"] is False
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["layer_input_sha"]["citations"] == state["research_sha"]
+
+
+def test_depth_job_model_rebuild_stales_old_layers(depth_root):
+    files, blocks, *_ = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    editorial = {"uid": "B0003", "n": 6, "beats": [], "visuals": [], "takeaways": []}
+    service.store.save_editorial("B0003", 6, editorial)
+    service.client = FakeClient([_chunk_payload(blocks)])
+    result = service._run_depth_job(
+        "r-depth-rebuild",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["model"],
+            "model": "fake-model",
+            "effort": "low",
+            "rebuild": True,
+        },
+    )
+    assert result["status"] == "model"
+    assert not Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+    status = service.depth_status("B0003", 6)
+    assert status["layers"]["model"]["status"] == "ready"
+    for layer in ("skim", "standard", "deep", "research"):
+        assert status["layers"][layer]["status"] == "stale"
+    assert status["layers"]["citations"]["status"] == "stale"
+    assert service.store.editorial("B0003", 6) == editorial
+    result = service._run_depth_job(
+        "r-depth-standard",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["standard"],
+            "model": "fake-model",
+            "effort": "low",
+        },
+    )
+    assert result["status"] == "model"
+    assert not Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+
+
+def test_depth_job_standard_only_rerenders_ready_page(depth_root):
+    files, *_ = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True, client=FakeClient([]))
+    service.store.save_depth("B0003", 6, files)
+    html_path = Path(service.store.depth_path("B0003", 6, "chapter.html"))
+    html_path.write_text("old", encoding="utf-8")
+    result = service._run_depth_job(
+        "r-depth-standard-only",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["standard"],
+            "model": "fake-model",
+            "effort": "low",
+        },
+    )
+    assert result["status"] == "ready"
+    assert html_path.read_text(encoding="utf-8") != "old"
+    assert service.depth_status("B0003", 6)["layers"]["standard"]["status"] == "ready"
+
+
+def test_depth_job_citations_is_not_staled_by_model_hash(depth_root):
+    files, *_ = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True, client=FakeClient([]))
+    service.store.save_depth("B0003", 6, files)
+    result = service._run_depth_job(
+        "r-depth-citations",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["citations"],
+            "model": "fake-model",
+            "effort": "low",
+        },
+    )
+    assert result["status"] == "ready"
+    status = service.depth_status("B0003", 6)
+    assert status["layers"]["citations"]["status"] == "ready"
+    assert status["state"] == "ready"
 
 
 def test_service_default_depth_is_off(reading_root, monkeypatch):

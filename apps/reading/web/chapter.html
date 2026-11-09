@@ -44,9 +44,12 @@ const PARTS = location.pathname.split('/').filter(Boolean);
 const UID = decodeURIComponent(PARTS[1] || '');
 const N = PARTS[2] || '';
 const TIER_KEYS = ['skim', 'standard', 'deep', 'research'];
+const DEPTH_KEYS = ['model', 'skim', 'standard', 'deep', 'research', 'citations'];
 let data = null;
 let draft = false;
 let selected = new Set(['standard']);
+let depthSelected = null;
+let depthBusy = false;
 const pending = new Set();
 let pendingBusy = false;
 const polling = new Set();
@@ -64,6 +67,13 @@ async function load() {
     return;
   }
   data.jobs = data.jobs || [];
+  if (data.depth) {
+    const layers = data.depth.layers || {};
+    depthSelected = new Set(DEPTH_KEYS.filter((key) => (layers[key] || {}).status !== 'ready'));
+  } else {
+    depthSelected = null;
+  }
+  depthBusy = false;
   pending.clear();
   pendingBusy = false;
   render();
@@ -111,6 +121,7 @@ function render() {
         '<div class="pack-list" id="packs"></div>' +
         '<div class="section-title"><h2>门槛</h2><span class="lbl">最近一次生成</span></div>' +
         '<div class="gate-list" id="gates"></div>' +
+        '<div id="depth-root">' + depthPanelHtml() + '</div>' +
       '</section>' +
       '<aside class="ticket" id="ticket">' + ticketHtml() + '</aside>' +
     '</div>' +
@@ -138,10 +149,12 @@ function ticketHtml() {
     '<div class="tier-list" id="tier-list">' + TIER_KEYS.map(tierOption).join('') + '</div>' +
     RD.modelSettingsHtml() +
     '<div class="ticket-est"><span id="ticket-est"></span><span>本地队列 · 最多 4 个并行</span></div>' +
-    (running.length ? '<p class="fine job-live">进行中：' + running.map((job) =>
-      RD.esc(RD.tierNames[(job.tiers || [])[0]] || (job.tiers || []).join('/')) + ' · ' +
-      RD.esc(RD.jobHint(job)) + ' · ' + RD.esc(job.id)
-    ).join('；') + '</p>' : '') +
+    (running.length ? '<p class="fine job-live">进行中：' + running.map((job) => {
+      const name = job.kind === 'depth'
+        ? (job.layers || []).map((layer) => RD.depthNames[layer] || layer).join('/')
+        : (job.tiers || []).map((tier) => RD.tierNames[tier] || tier).join('/');
+      return RD.esc(name || '—') + ' · ' + RD.esc(RD.jobHint(job)) + ' · ' + RD.esc(job.id);
+    }).join('；') + '</p>' : '') +
     '<button class="btn btn-primary" id="generate">生成读本 →</button>' +
     '<button class="btn btn-ghost" id="generate-edition"' + (fit.ok ? '' : ' disabled title="' + RD.esc(fit.reason) + '"') + '>生成视觉读本（模型约 30–60 秒）</button>' +
     (fit.ok ? '' : '<p class="fine edition-fit">本章不宜视觉读本：' + RD.esc(fit.reason) + '</p>') +
@@ -209,6 +222,120 @@ function renderGates() {
     '<div class="gate-row ' + (gate.status === 'fail' ? 'fail' : gate.status === 'warn' ? 'warn' : '') + '">' +
     '<b>' + RD.esc(gate.id) + '</b><span>' + RD.esc(gate.name) + ' · ' + RD.esc(gate.detail) + '</span></div>'
   ).join('') : '<div class="gate-row"><b>—</b><span>还没有生成记录；出片后写入 G1 / G3 / G4 / G6。</span></div>';
+}
+
+function depthStatusName(status) {
+  return { missing: '未生成', running: '生成中', ready: '可用', stale: '过期', failed: '失败' }[status] || status;
+}
+
+function depthRow(key) {
+  const info = ((data.depth || {}).layers || {})[key] || {};
+  const status = info.status || 'missing';
+  const running = status === 'running';
+  const disabled = running || depthBusy;
+  const estimate = info.estimate || {};
+  const actual = info.usage
+    ? RD.fmt(info.tokens) + ' tokens · $' + Number(info.usd || 0).toFixed(4)
+    : status === 'ready' ? '实际 无调用' : '实际 —';
+  return '<div class="depth-row depth-' + RD.esc(status) + '" data-depth-row="' + RD.esc(key) + '">' +
+    '<label class="depth-check"><input type="checkbox" data-depth-layer="' + RD.esc(key) + '"' +
+      (depthSelected && depthSelected.has(key) ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+      '<span>' + RD.esc(RD.depthNames[key]) + '</span></label>' +
+    '<span class="depth-pill ' + RD.esc(status) + '">' + RD.esc(depthStatusName(status)) + '</span>' +
+    '<span class="depth-meta">估算 ' + RD.fmt(estimate.tokens || 0) + ' tokens / $' +
+      Number(estimate.usd || 0).toFixed(4) + ' · ' + actual + '</span>' +
+    (info.error ? '<span class="depth-error">' + RD.esc(info.error) + '</span>' : '') +
+    '<button class="btn btn-ghost depth-one" type="button" data-depth-one="' + RD.esc(key) + '"' +
+      (disabled ? ' disabled' : '') + '>' + (status === 'failed' ? '重试' : '只生成此层') + '</button>' +
+    '</div>';
+}
+
+function depthPanelHtml() {
+  if (!data.depth) return '';
+  const layers = data.depth.layers || {};
+  const stale = data.depth.state === 'stale';
+  const running = depthBusy || DEPTH_KEYS.some((key) => (layers[key] || {}).status === 'running');
+  return '<div class="section-title"><h2>深度生产</h2><span class="lbl">逐层生成 · 可单独重跑</span></div>' +
+    '<div class="depth-panel" id="depth-panel">' +
+      (stale ? '<p class="depth-warning">源文已变更，旧层已过期</p>' : '') +
+      DEPTH_KEYS.map(depthRow).join('') +
+      '<div class="depth-actions">' +
+        '<button class="btn btn-primary" id="depth-generate" type="button"' + (running ? ' disabled' : '') + '>生成所选层</button>' +
+        '<button class="btn btn-ghost" id="depth-rebuild-model" type="button"' + (running ? ' disabled' : '') + '>只重建结构模型</button>' +
+        '<button class="btn btn-ghost" id="depth-citations" type="button"' + (running ? ' disabled' : '') + '>只补研究引用</button>' +
+      '</div>' +
+      '<div id="depth-jobs"></div>' +
+    '</div>';
+}
+
+function refreshDepthPanel() {
+  const root = RD.mount('depth-root');
+  if (root) root.innerHTML = depthPanelHtml();
+}
+
+function bindDepth() {
+  const root = RD.mount('depth-root');
+  if (!root) return;
+  root.addEventListener('change', (event) => {
+    const input = event.target.closest('input[data-depth-layer]');
+    if (!input || !depthSelected) return;
+    if (input.checked) depthSelected.add(input.value); else depthSelected.delete(input.value);
+  });
+  root.addEventListener('click', (event) => {
+    const one = event.target.closest('[data-depth-one]');
+    if (one) {
+      const key = one.getAttribute('data-depth-one');
+      submitDepth([key], key === 'model');
+      return;
+    }
+    if (event.target.closest('#depth-generate')) {
+      submitDepth(DEPTH_KEYS.filter((key) => depthSelected && depthSelected.has(key)), false);
+    } else if (event.target.closest('#depth-rebuild-model')) {
+      submitDepth(['model'], true);
+    } else if (event.target.closest('#depth-citations')) {
+      submitDepth(['citations'], false);
+    }
+  });
+}
+
+async function submitDepth(layers, rebuildModel) {
+  if (depthBusy || !data.depth) return;
+  if (!layers.length) {
+    RD.toast('至少选一层', true);
+    return;
+  }
+  depthBusy = true;
+  refreshDepthPanel();
+  const mount = RD.mount('depth-jobs');
+  try {
+    const settings = RD.modelSettings();
+    const job = await RD.api('/api/depth/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
+      method: 'POST',
+      body: {
+        layers,
+        model: settings.model,
+        effort: settings.effort,
+        rebuild_model: Boolean(rebuildModel),
+      },
+    });
+    if (mount) {
+      const slot = document.createElement('div');
+      slot.setAttribute('data-depth-job', job.id);
+      mount.appendChild(slot);
+      mount.classList.add('open');
+      RD.pollJob(job.id, slot, async (finished) => {
+        depthBusy = false;
+        RD.toast(finished.state === 'failed' ? (finished.error || '深度生成失败') :
+          '深度层已生成 · ' + RD.statusName[finished.state], finished.state === 'failed');
+        await load();
+      });
+    }
+  } catch (err) {
+    depthBusy = false;
+    refreshDepthPanel();
+    if (err.code === 'job_active') RD.toast('该章已有任务在跑，先去生成记录看进度', true);
+    else RD.toast(err.message, true);
+  }
 }
 
 function bindTicket() {
@@ -404,7 +531,7 @@ async function generate() {
   }
 }
 
-function bind() {}
+function bind() { bindDepth(); }
 </script>
 </body>
 </html>

@@ -43,6 +43,7 @@ ROUTES = [
     (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)/cancel$"), "cancel"),
     (re.compile(r"^/api/export/([A-Za-z0-9_-]+)/(\d+)/([a-z]+)$"), "export"),
     (re.compile(r"^/api/asset$"), "asset"),
+    (re.compile(r"^/api/depth/([A-Za-z0-9_-]+)/(\d+)$"), "depth"),
     (re.compile(r"^/api/editorial/([A-Za-z0-9_-]+)/(\d+)$"), "editorial"),
     (re.compile(r"^/api/edition/([A-Za-z0-9_-]+)/(\d+)$"), "edition"),
 ]
@@ -144,6 +145,9 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 if name == "jobs":
                     self._post_job()
+                    return
+                if name == "depth":
+                    self._post_depth(match.group(1), int(match.group(2)))
                     return
                 if name == "cancel":
                     job = self.service.queue.cancel(match.group(1))
@@ -351,6 +355,43 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
             return
         self._json(202, job)
+
+    def _post_depth(self, uid, n):
+        try:
+            data = self._body()
+            layers = data.get("layers")
+            model = str(data.get("model") or DEFAULT_MODEL).strip()
+            effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
+            rebuild_model = data.get("rebuild_model", False)
+            if not UID_RE.match(uid):
+                raise ValueError("uid 非法")
+            if not isinstance(layers, list) or not layers or not all(isinstance(item, str) for item in layers):
+                raise ValueError("layers 必须是非空字符串数组")
+            if not isinstance(rebuild_model, bool):
+                raise ValueError("rebuild_model 必须是布尔值")
+            if not model or len(model) > 80:
+                raise ValueError("模型名非法")
+            if effort not in EFFORTS:
+                raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+            job = self.service.submit_depth(
+                uid,
+                n,
+                layers,
+                model=model,
+                effort=effort,
+                rebuild_model=rebuild_model,
+            )
+        except FileNotFoundError:
+            self._json(404, {"error": "找不到章节"})
+        except JobConflictError as exc:
+            self._json(
+                409,
+                {"error": "该章已有任务在排队或运行", "code": "job_active", "conflicts": exc.conflicts},
+            )
+        except (TypeError, ValueError) as exc:
+            self._json(400, {"error": str(exc)})
+        else:
+            self._json(202, job)
 
     # ---- 静态与产物 ---------------------------------------------------
     def _serve_page(self, name, head=False):

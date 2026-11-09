@@ -146,6 +146,7 @@ def test_pages_and_api_are_real_data(server):
         status, body, _ = _get(server, path)
         assert status == 200, path
         assert "四读" in body, path
+    assert "深度生产" in body
     status, body, _ = _get(server, "/api/book/B0001")
     assert len(json.loads(body)["chapters"]) == 2
     status, body, _ = _get(server, "/api/chapter/B0001/01")
@@ -430,3 +431,28 @@ def test_depth_route_serves_ready_chapter_and_404s_missing(reading_root):
         assert exc.value.code == 404
     finally:
         _stop_server(proc)
+
+
+def test_post_depth_returns_202_job_and_validates_payload(server):
+    status, job = _post(
+        server,
+        "/api/depth/B0001/1",
+        {"layers": ["skim"], "model": "fake-model", "effort": "max"},
+    )
+    assert status == 202
+    assert job["kind"] == "depth"
+    assert job["tiers"] == []
+    assert job["layers"] == ["model", "skim"]
+    assert job["model"] == "fake-model"
+    assert job["effort"] == "max"
+
+    for payload in (
+        {"layers": []},
+        {"layers": ["unknown"]},
+        {"layers": ["citations"]},
+        {"layers": ["skim"], "rebuild_model": "yes"},
+        {"layers": ["skim"], "effort": "nope"},
+        {"layers": ["skim"], "model": "x" * 81},
+    ):
+        code, body = _post_error(server, "/api/depth/B0001/1", payload)
+        assert code == 400, body

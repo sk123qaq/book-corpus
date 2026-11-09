@@ -75,6 +75,7 @@
   };
 
   RD.tierNames = { skim: '速览', standard: '标准', deep: '深读', research: '研究' };
+  RD.depthNames = { model: '结构模型', skim: '速览', standard: '标准', deep: '深读', research: '研究', citations: '引用' };
   RD.modelDefaults = { model: 'deepseek-v4.1-flash', effort: 'high' };
   RD.modelOptions = ['deepseek-v4.1-flash', 'glm-5.3-flash'];
   RD.modelSettings = () => {
@@ -84,12 +85,12 @@
       model = localStorage.getItem('reading-model') || model;
       effort = localStorage.getItem('reading-effort') || effort;
     } catch (e) {}
-    if (!['high', 'medium', 'low'].includes(effort)) effort = RD.modelDefaults.effort;
+    if (!['max', 'high', 'medium', 'low'].includes(effort)) effort = RD.modelDefaults.effort;
     return { model: String(model || RD.modelDefaults.model).trim(), effort };
   };
   RD.modelSettingsHtml = () => {
     const settings = RD.modelSettings();
-    const efforts = ['high', 'medium', 'low'].map((value) =>
+    const efforts = ['max', 'high', 'medium', 'low'].map((value) =>
       '<option value="' + value + '"' + (settings.effort === value ? ' selected' : '') + '>' + value + '</option>'
     ).join('');
     const options = RD.modelOptions.map((value) => '<option value="' + RD.esc(value) + '"></option>').join('');
@@ -149,11 +150,14 @@
   RD.jobCard = (job) => {
     const state = job.state || 'queued';
     const bad = state === 'failed';
+    const names = job.kind === 'depth'
+      ? (job.layers || []).map((layer) => RD.depthNames[layer] || layer)
+      : (job.tiers || []).map((tier) => RD.tierNames[tier] || tier);
     return '<div class="job-inline open" data-job="' + RD.esc(job.id) + '">' +
       '<div class="job-head"><span class="eyebrow">工单 ' + RD.esc(job.id) + '</span>' +
       '<span class="job-state ' + (bad ? 'bad' : '') + '">' + RD.esc(RD.statusName[state] || state) + '</span></div>' +
       '<div class="job-title">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
-      (job.tiers || []).map((t) => RD.tierNames[t] || t).join(' / ') + '</div>' +
+      names.join(' / ') + '</div>' +
       RD.jobSteps(job) +
       '<div class="job-progress"><i style="width:' + Number(job.progress || 0) + '%"></i></div>' +
       (job.error ? '<p class="job-error">' + RD.esc(job.error) + '</p>' : '') +

@@ -7,9 +7,11 @@ import time
 import uuid
 
 STEPS = ("切块", "标注", "校验", "组档", "渲染")
+DEPTH_STEPS = ("结构", "速览", "标准", "深读", "研究", "引用", "渲染")
 STEPS_BY_KIND = {
     "reading": STEPS,
     "edition": ("解析", "编辑", "校验", "渲染", "入库"),
+    "depth": DEPTH_STEPS,
 }
 ACTIVE_STATES = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
 STAGE_TO_STEP = {
@@ -132,10 +134,27 @@ class JobQueue:
             return self._update(job_id, state=state)
 
     # ---- 队列 ---------------------------------------------------------
-    def submit(self, uid, n, tiers, model=None, effort=None, overwrite=False, rebuild=False, kind="reading"):
-        tiers = [tier for tier in ("skim", "standard", "deep", "research") if tier in set(tiers or ["standard"])]
-        if not tiers:
-            tiers = ["standard"]
+    def submit(
+        self,
+        uid,
+        n,
+        tiers,
+        model=None,
+        effort=None,
+        overwrite=False,
+        rebuild=False,
+        kind="reading",
+        layers=None,
+    ):
+        job_layers = None
+        if kind == "depth":
+            # 深度层按显式 layers 生产，不复用四档的“空即 standard”约定。
+            tiers = []
+            job_layers = list(layers or [])
+        else:
+            tiers = [tier for tier in ("skim", "standard", "deep", "research") if tier in set(tiers or ["standard"])]
+            if not tiers:
+                tiers = ["standard"]
         job = {
             "id": "r-" + uuid.uuid4().hex[:10],
             "kind": kind,
@@ -155,6 +174,8 @@ class JobQueue:
             "updated_at": _now(),
             "pack_id": None,
         }
+        if kind == "depth":
+            job["layers"] = job_layers
         with self._lock:
             self._jobs[job["id"]] = job
             self._order.append(job["id"])

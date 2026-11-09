@@ -8,9 +8,26 @@ import re
 import threading
 import time
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import ClassVar
 
 from .agent_standard import generate_standard_html, render_agent_page
+from .depth.citations import (
+    FetchError,
+    HttpPageFetcher,
+    SearchError,
+    audit_citations,
+    build_citations,
+    fetcher_from_env,
+    provider_from_env,
+)
+from .depth.deep import audit_deep, generate_deep, validate_deep
+from .depth.disposition import audit_conservation, plan_all_dispositions
+from .depth.model import generate_chapter_model
+from .depth.render import render_depth_chapter
+from .depth.research import audit_research, generate_research, validate_research
+from .depth.skim import audit_skim, generate_skim, validate_skim
+from .depth.standard import build_standard
 from .edition import audit_edition, build_brief, decide_template, generate_content, render_edition, validate_content
 from .editorial import EditorialError, audit_editorial, validate_editorial
 from .editorial_gen import generate_editorial
@@ -33,6 +50,15 @@ MAX_BUDGET_TOKENS = 500_000
 MAX_BUDGET_USD = 1.0
 USD_PER_MTOK_IN = 1.0
 USD_PER_MTOK_OUT = 2.0
+DEPTH_LAYERS = ("model", "skim", "standard", "deep", "research", "citations")
+DEPTH_FILES = {
+    "model": "chapter_model.json",
+    "skim": "layers/skim.json",
+    "standard": "layers/standard.json",
+    "deep": "layers/deep.json",
+    "research": "layers/research.json",
+    "citations": "citations.json",
+}
 
 
 class JobConflictError(RuntimeError):
@@ -113,6 +139,46 @@ def _usage_cost(usage):
     total = int(usage.get("total_tokens") or 0) or prompt + completion
     usd = prompt / 1_000_000 * USD_PER_MTOK_IN + completion / 1_000_000 * USD_PER_MTOK_OUT
     return total, usd
+
+
+def _depth_sha(payload):
+    """深度层哈希：排序键、无空白，同一对象在任意进程里得到同一串。"""
+    text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _depth_estimate(blocks):
+    """每层保守用量估算；只用 source 块，调用前后稳定。"""
+    model_budget = _estimate_budget(blocks or [])
+    input_tokens = model_budget["input_tokens_est"]
+    output_tokens = model_budget["output_tokens_est"]
+    model_tokens = input_tokens + output_tokens
+    model_usd = model_budget["usd_est"]
+
+    def scaled(token_ratio, usd_ratio):
+        return {
+            "tokens": max(0, round(model_tokens * token_ratio)),
+            "usd": max(0.0, round(model_usd * usd_ratio, 4)),
+        }
+
+    return {
+        "model": {"tokens": model_tokens, "usd": model_usd},
+        "skim": {
+            "tokens": max(0, round(input_tokens * 0.5 + output_tokens * 0.2)),
+            "usd": max(
+                0.0,
+                round(
+                    input_tokens * 0.5 / 1_000_000 * USD_PER_MTOK_IN
+                    + output_tokens * 0.2 / 1_000_000 * USD_PER_MTOK_OUT,
+                    4,
+                ),
+            ),
+        },
+        "standard": {"tokens": 0, "usd": 0.0},
+        "deep": scaled(0.6, 0.6),
+        "research": scaled(0.6, 0.6),
+        "citations": {"tokens": 0, "usd": 0.0},
+    }
 
 
 def _chapter_api(chapter, tiers=None, state=None):
@@ -669,10 +735,165 @@ class ReadingService:
                 if citations is not None:
                     data["depth"]["citations"] = citations
                 data["depth"]["html"] = "/reader/%s/%d/depth" % (uid, n)
+            status = self.depth_status(uid, n)
+            data["depth"]["layers"] = status["layers"]
+            data["depth"]["jobs"] = status["jobs"]
         return data
+
+    def _depth_jobs(self, uid, n):
+        listed = getattr(self.queue, "list", None)
+        if not callable(listed):
+            return []
+        jobs = []
+        for job in listed(200):
+            if job.get("kind") != "depth" or job.get("uid") != uid:
+                continue
+            try:
+                if int(job.get("n")) != int(n):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            jobs.append(job)
+        return jobs
+
+    def depth_status(self, uid, n):
+        """磁盘上的深度层账：状态、用量与估算；不触发任何模型调用。"""
+        raw = self.library.read_chapter(uid, n) or {}
+        blocks = raw.get("blocks") or []
+        source_sha = raw.get("source_sha256")
+        state_info = self.store.depth_state(uid, n, source_sha)
+        state = state_info.get("state")
+        state = state if isinstance(state, dict) else None
+        estimates = _depth_estimate(blocks)
+        jobs = self._depth_jobs(uid, n)
+        active = []
+        for job in self.queue.active_for(uid, n):
+            if job.get("kind") == "depth":
+                active.append(job)
+        failed_by_layer = {}
+        for job in jobs:
+            if job.get("state") != "failed":
+                continue
+            for layer in job.get("layers") or []:
+                failed_by_layer.setdefault(layer, job)
+
+        layer_model_sha = state.get("layer_model_sha") if state else None
+        layer_input_sha = state.get("layer_input_sha") if state else None
+        chapter_model_sha = state.get("chapter_model_sha") if state else None
+        research_sha = state.get("research_sha") if state else None
+        layer_usage = state.get("layer_usage") if state else None
+        layer_usage = layer_usage if isinstance(layer_usage, dict) else {}
+        layer_updated_at = state.get("layer_updated_at") if state else None
+        layer_updated_at = layer_updated_at if isinstance(layer_updated_at, dict) else {}
+        source_stale = bool(state and source_sha and state.get("source_sha256") != source_sha)
+        base_updated = (state or {}).get("updated_at") or (state or {}).get("generated_at")
+
+        layers = {}
+        for layer in DEPTH_LAYERS:
+            path = self.store.depth_path(uid, n, DEPTH_FILES[layer])
+            exists = Path(path).is_file()
+            active_job = next((job for job in active if layer in (job.get("layers") or [])), None)
+            failed_job = failed_by_layer.get(layer)
+            status = "missing"
+            if exists and state is not None:
+                status = "ready"
+            if state is not None and exists:
+                if source_stale:
+                    status = "stale"
+                if (
+                    layer not in ("model", "citations")
+                    and isinstance(layer_model_sha, dict)
+                    and layer in layer_model_sha
+                    and layer_model_sha.get(layer) != chapter_model_sha
+                ):
+                    status = "stale"
+                if (
+                    layer == "citations"
+                    and isinstance(layer_input_sha, dict)
+                    and "citations" in layer_input_sha
+                    and layer_input_sha.get("citations") != research_sha
+                ):
+                    status = "stale"
+                if layer == "citations" and layers.get("research", {}).get("status") != "ready":
+                    status = "stale"
+            if active_job is not None:
+                status = "running"
+            elif failed_job is not None and not exists:
+                status = "failed"
+
+            usage = layer_usage.get(layer)
+            usage = usage if isinstance(usage, dict) and usage else None
+            tokens, usd = _usage_cost(usage) if usage else (0, 0.0)
+            updated_at = layer_updated_at.get(layer)
+            if not updated_at:
+                if active_job is not None:
+                    updated_at = active_job.get("updated") or active_job.get("created")
+                elif failed_job is not None and status == "failed":
+                    updated_at = failed_job.get("updated") or failed_job.get("created")
+                elif exists:
+                    updated_at = base_updated
+            layers[layer] = {
+                "status": status,
+                "updated_at": updated_at,
+                "usage": usage,
+                "tokens": int(tokens),
+                "usd": float(usd),
+                "error": (failed_job.get("error") if failed_job is not None and status == "failed" else None),
+                "estimate": estimates[layer],
+            }
+        top_status = state_info.get("status") or "missing"
+        if top_status == "ready" and any(info["status"] == "stale" for info in layers.values()):
+            top_status = "stale"
+        return {
+            "state": top_status,
+            "source_sha256": source_sha,
+            "updated_at": base_updated,
+            "layers": layers,
+            "jobs": jobs[:20],
+        }
 
     def editorial(self, uid, n):
         return self.store.editorial(uid, n)
+
+    def submit_depth(self, uid, n, layers, model=None, effort=None, rebuild_model=False):
+        """提交一层或多层深度生产；每层独立，未勾选的层原样保留。"""
+        if not self.library.book(uid) or not self.library.chapter(uid, n):
+            raise FileNotFoundError(f"找不到章节 {uid}/{n}")
+        if not isinstance(layers, (list, tuple)) or not layers:
+            raise ValueError("至少选择一个深度层")
+        unknown = [layer for layer in layers if layer not in DEPTH_LAYERS]
+        if unknown:
+            raise ValueError(f"未知深度层：{', '.join(str(layer) for layer in unknown)}")
+        requested = [layer for layer in DEPTH_LAYERS if layer in set(layers)]
+        raw = self.library.read_chapter(uid, n) or {}
+        depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"))
+        if depth_state.get("status") == "stale" and "model" not in requested:
+            requested.insert(0, "model")
+        model_file = self.store.depth_path(uid, n, DEPTH_FILES["model"])
+        if "model" not in requested and (rebuild_model or not Path(model_file).is_file()):
+            requested.insert(0, "model")
+        if "citations" in requested and "research" not in requested:
+            research_file = self.store.depth_path(uid, n, DEPTH_FILES["research"])
+            if not Path(research_file).is_file():
+                raise ValueError("生成引用前需要已有研究层，或同时生成研究层")
+            if self.depth_status(uid, n)["layers"]["research"]["status"] != "ready":
+                raise ValueError("研究层已过期或未完成；请同时重建研究层后再补引用")
+        if "model" in requested and "citations" in requested and "research" not in requested:
+            raise ValueError("重建结构模型后研究层会过期；生成引用时需同时重建研究层")
+        with self._submit_lock:
+            conflicts = self.queue.conflicts(uid, n)
+            if conflicts:
+                raise JobConflictError(conflicts)
+            return self.queue.submit(
+                uid,
+                n,
+                [],
+                model=model,
+                effort=effort,
+                kind="depth",
+                layers=requested,
+                rebuild=bool(rebuild_model),
+            )
 
     def save_editorial(self, uid, n, payload):
         raw = self.library.read_chapter(uid, n)
@@ -927,9 +1148,267 @@ class ReadingService:
             "fallback": bool(getattr(self.client, "last_fallback", False)),
         }
 
+    def _run_depth_job(self, job_id, job):
+        uid, n = job["uid"], int(job["n"])
+        requested = [layer for layer in DEPTH_LAYERS if layer in set(job.get("layers") or [])]
+        if not requested:
+            raise ValueError("至少选择一个深度层")
+        if self.queue.cancelled(job_id):
+            raise RuntimeError("任务已取消")
+        self._set_stage(job_id, "chunking")
+        raw = self.library.read_chapter(uid, n)
+        if not raw:
+            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
+        blocks = raw["blocks"]
+        book = self.library.book(uid) or {"uid": uid}
+        chapter = {
+            "uid": uid,
+            "n": n,
+            "title": raw.get("title") or raw.get("stem") or "",
+            "source_sha256": raw.get("source_sha256"),
+            "stem": raw.get("stem"),
+            "ordinal": raw.get("ordinal"),
+        }
+        state = self.store.depth_json(uid, n, "state.json")
+        state = dict(state) if isinstance(state, dict) else {}
+        source_changed = bool(
+            state and raw.get("source_sha256") and state.get("source_sha256") != raw.get("source_sha256")
+        )
+        existing = {}
+        for layer, name in DEPTH_FILES.items():
+            existing[layer] = self.store.depth_json(uid, n, name)
+        files = {}
+        for name in [*list(DEPTH_FILES.values()), "ledger.json"]:
+            path = self.store.depth_path(uid, n, name)
+            if Path(path).is_file():
+                with open(path, encoding="utf-8") as fh:
+                    files[name] = fh.read()
+        layer_sha = dict(state.get("layer_sha") or {})
+        for layer, payload in existing.items():
+            if payload is not None and layer not in layer_sha:
+                layer_sha[layer] = _depth_sha(payload)
+        layer_model_sha = dict(state.get("layer_model_sha") or {})
+        layer_input_sha = dict(state.get("layer_input_sha") or {})
+        layer_usage = dict(state.get("layer_usage") or {})
+        layer_updated_at = dict(state.get("layer_updated_at") or {})
+        now = _now()
+
+        model = existing.get("model")
+        ledger = existing.get("ledger")
+        model_meta = state.get("model")
+        regenerated = False
+        if "model" in requested:
+            self._set_stage(job_id, "annotating")
+            model, model_meta = generate_chapter_model(
+                self.client or ModelClient(),
+                book,
+                chapter,
+                blocks,
+                model=job.get("model"),
+                effort=job.get("effort"),
+                cache_dir=self.store.depth_cache_dir(uid, n),
+            )
+            ledger = plan_all_dispositions(model, blocks)
+            gate = audit_conservation(model, ledger, blocks)
+            if gate.get("status") != "pass":
+                raise RuntimeError(f"结构账审计未通过：{gate.get('detail')}")
+            files[DEPTH_FILES["model"]] = json.dumps(model, ensure_ascii=False, indent=1)
+            files["ledger.json"] = json.dumps(ledger, ensure_ascii=False, indent=1)
+            layer_sha["model"] = _depth_sha(model)
+            layer_updated_at["model"] = now
+            usage = (model_meta or {}).get("usage") if isinstance(model_meta, dict) else None
+            if isinstance(usage, dict) and usage:
+                layer_usage["model"] = usage
+            else:
+                layer_usage.pop("model", None)
+            regenerated = True
+        if model is None:
+            raise RuntimeError("缺少章节结构模型；请先勾选结构模型生成")
+        if ledger is None:
+            ledger = plan_all_dispositions(model, blocks)
+            files["ledger.json"] = json.dumps(ledger, ensure_ascii=False, indent=1)
+        if "model" in requested and "model" not in layer_sha:
+            layer_sha["model"] = _depth_sha(model)
+        chapter_model_sha = _depth_sha(model) if regenerated else (state.get("chapter_model_sha") or _depth_sha(model))
+        if regenerated:
+            for layer in DEPTH_LAYERS:
+                if layer not in ("model", "citations") and layer not in requested:
+                    layer_model_sha[layer] = "__stale__"
+
+        skim = existing.get("skim")
+        if "skim" in requested:
+            self._set_stage(job_id, "annotating")
+            skim = generate_skim(
+                self.client or ModelClient(),
+                book,
+                chapter,
+                model,
+                blocks,
+                model=job.get("model"),
+                effort=job.get("effort"),
+            )
+            self._set_stage(job_id, "validating")
+            skim = validate_skim(skim, model, blocks)
+            audit = audit_skim(skim, model, blocks)
+            if audit.get("errors"):
+                raise RuntimeError(f"速览审计未通过：{'；'.join(audit['errors'])}")
+            files[DEPTH_FILES["skim"]] = json.dumps(skim, ensure_ascii=False, indent=1)
+            layer_sha["skim"] = _depth_sha(skim)
+            layer_model_sha["skim"] = chapter_model_sha
+            layer_usage.pop("skim", None)
+            layer_updated_at["skim"] = now
+
+        standard = existing.get("standard")
+        if "standard" in requested:
+            self._set_stage(job_id, "projecting")
+            standard = build_standard(model, blocks)
+            files[DEPTH_FILES["standard"]] = json.dumps(standard, ensure_ascii=False, indent=1)
+            layer_sha["standard"] = _depth_sha(standard)
+            layer_model_sha["standard"] = chapter_model_sha
+            layer_usage.pop("standard", None)
+            layer_updated_at["standard"] = now
+
+        deep = existing.get("deep")
+        if "deep" in requested:
+            self._set_stage(job_id, "annotating")
+            deep, deep_meta = generate_deep(
+                self.client or ModelClient(),
+                book,
+                chapter,
+                model,
+                blocks,
+                model=job.get("model"),
+                effort=job.get("effort"),
+            )
+            self._set_stage(job_id, "validating")
+            deep = validate_deep(deep, model, blocks)
+            audit = audit_deep(deep, model, blocks)
+            if audit.get("errors"):
+                raise RuntimeError(f"深读审计未通过：{'；'.join(audit['errors'])}")
+            files[DEPTH_FILES["deep"]] = json.dumps(deep, ensure_ascii=False, indent=1)
+            layer_sha["deep"] = _depth_sha(deep)
+            layer_model_sha["deep"] = chapter_model_sha
+            layer_updated_at["deep"] = now
+            usage = (deep_meta or {}).get("usage") if isinstance(deep_meta, dict) else None
+            if isinstance(usage, dict) and usage:
+                layer_usage["deep"] = usage
+            else:
+                layer_usage.pop("deep", None)
+
+        research = existing.get("research")
+        if "research" in requested:
+            self._set_stage(job_id, "annotating")
+            research, research_meta = generate_research(
+                self.client or ModelClient(),
+                book,
+                chapter,
+                model,
+                blocks,
+                model=job.get("model"),
+                effort=job.get("effort"),
+            )
+            self._set_stage(job_id, "validating")
+            research = validate_research(research, model, blocks)
+            audit = audit_research(research, model, blocks)
+            if audit.get("errors"):
+                raise RuntimeError(f"研究审计未通过：{'；'.join(audit['errors'])}")
+            files[DEPTH_FILES["research"]] = json.dumps(research, ensure_ascii=False, indent=1)
+            layer_sha["research"] = _depth_sha(research)
+            layer_model_sha["research"] = chapter_model_sha
+            layer_updated_at["research"] = now
+            usage = (research_meta or {}).get("usage") if isinstance(research_meta, dict) else None
+            if isinstance(usage, dict) and usage:
+                layer_usage["research"] = usage
+            else:
+                layer_usage.pop("research", None)
+
+        research_sha = (
+            _depth_sha(research)
+            if "research" in requested and research is not None
+            else state.get("research_sha") or (_depth_sha(research) if research is not None else None)
+        )
+        citations = existing.get("citations")
+        if "citations" in requested:
+            if research is None:
+                raise RuntimeError("生成引用前需要研究层")
+            provider = provider_from_env()
+            fetcher = HttpPageFetcher() if provider.name == "none" else fetcher_from_env()
+            try:
+                citations = build_citations(
+                    self.client or ModelClient(),
+                    research,
+                    provider=provider,
+                    fetcher=fetcher,
+                )
+            except (SearchError, FetchError) as exc:
+                raise RuntimeError(f"检索失败：{exc}") from exc
+            self._set_stage(job_id, "validating")
+            audit = audit_citations(citations, research)
+            if audit.get("errors"):
+                raise RuntimeError(f"引用审计未通过：{'；'.join(audit['errors'])}")
+            files[DEPTH_FILES["citations"]] = json.dumps(citations, ensure_ascii=False, indent=1)
+            layer_sha["citations"] = _depth_sha(citations)
+            layer_input_sha["citations"] = research_sha
+            layer_model_sha.pop("citations", None)
+            layer_usage.pop("citations", None)
+            layer_updated_at["citations"] = now
+
+        html_written = False
+        skim_fresh = skim is not None and layer_model_sha.get("skim") == chapter_model_sha
+        html_layers = {"skim", "standard", "deep", "research", "citations"}
+        need_render = skim_fresh and bool(html_layers & set(requested))
+        if need_render:
+            self._set_stage(job_id, "rendering")
+            files["chapter.html"] = render_depth_chapter(
+                book,
+                chapter,
+                blocks,
+                model,
+                ledger,
+                skim,
+                resolver=lambda rel: asset_url(uid, rel),
+                generated_at=now,
+                standard=standard,
+                deep=deep,
+                research=research,
+                citations=citations,
+            )
+            html_written = True
+        status = "ready" if skim is not None and html_written else "model"
+        state.update(
+            {
+                "schema": state.get("schema", 1),
+                "uid": uid,
+                "n": n,
+                "source_sha256": (
+                    raw.get("source_sha256") if regenerated or not source_changed else state.get("source_sha256")
+                ),
+                "chapter_model_sha": chapter_model_sha,
+                "prompt_version": model.get("prompt_version") or state.get("prompt_version") or "",
+                "status": status,
+                "updated_at": now,
+                "model": model_meta if model_meta is not None else state.get("model"),
+                "layer_sha": layer_sha,
+                "layer_model_sha": layer_model_sha,
+                "layer_input_sha": layer_input_sha,
+                "layer_usage": layer_usage,
+                "layer_updated_at": layer_updated_at,
+            }
+        )
+        state.setdefault("generated_at", now)
+        if regenerated and isinstance(model_meta, dict) and model_meta.get("cache_key"):
+            state["cache_key"] = model_meta["cache_key"]
+        if research_sha is not None:
+            state["research_sha"] = research_sha
+        files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
+        self.store.save_depth(uid, n, files)
+        return {"status": status, "pack_id": f"{uid}/ch/{n:02d}"}
+
     def _run_job(self, job_id, job):
         if job.get("kind") == "edition":
             return self._run_edition_job(job_id, job)
+        if job.get("kind") == "depth":
+            return self._run_depth_job(job_id, job)
         uid, n = job["uid"], int(job["n"])
         tiers = job.get("tiers") or ["standard"]
         requested = [tier for tier in TIER_ORDER if tier in set(tiers)]

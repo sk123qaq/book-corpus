@@ -159,3 +159,20 @@ def test_cancelled_running_job_keeps_blocking_chapter_until_runner_returns(tmp_p
     finally:
         release.set()
         queue.shutdown()
+
+
+def test_depth_job_keeps_layers_and_does_not_force_a_tier(tmp_path):
+    def runner(_job_id, _job):
+        return {"status": "done"}
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["model", "skim"])
+        assert job["kind"] == "depth"
+        assert job["tiers"] == []
+        assert job["layers"] == ["model", "skim"]
+        assert [step["name"] for step in job["steps"]] == ["结构", "速览", "标准", "深读", "研究", "引用", "渲染"]
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "done")
+        assert queue.get(job["id"])["layers"] == ["model", "skim"]
+    finally:
+        queue.shutdown()
