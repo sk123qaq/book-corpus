@@ -411,7 +411,6 @@ def audit_pack(blocks, projections, html_text, annotation, drafts, editorial=Non
                 "line-height",
                 "paragraph-marker",
                 "external-resource",
-                "paragraph-length",
                 "heading-gap",
             },
             "对比度、字号、行长、行高、分段均在范围内",

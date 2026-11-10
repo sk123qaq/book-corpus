@@ -29,7 +29,6 @@ QUALITY_KEYS = {
     "line-height",
     "paragraph-marker",
     "external-resource",
-    "paragraph-length",
     "heading-gap",
 }
 SECTION_RE = re.compile(r"<section\b[^>]*>|</section\s*>", re.I)

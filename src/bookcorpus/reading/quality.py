@@ -16,7 +16,6 @@ LIMITS = {
     "caption_measure": (14.0, 40.0),
     "line_height": (1.5, 2.0),
     "contrast": 4.5,
-    "paragraph_chars": 420,
     "chars_per_figure": 1200,
     "heading_gap_chars": 1600,
 }
@@ -444,17 +443,6 @@ def _figure_findings(figures):
 
 def _rhythm_findings(scan):
     out = []
-    limit = LIMITS["paragraph_chars"]
-    for index, text in enumerate(scan.paragraphs, 1):
-        chars = han_count(text)
-        if chars > limit:
-            out.append(
-                {
-                    "level": "warn",
-                    "key": "paragraph-length",
-                    "detail": "第 %d 段 %d 字，超过 %d" % (index, chars, limit),
-                }
-            )
     total = sum(han_count(text) for text in scan.paragraphs)
     figures = len(scan.figures)
     if figures:

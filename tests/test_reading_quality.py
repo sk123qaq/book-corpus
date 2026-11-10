@@ -239,22 +239,15 @@ def test_h4_resets_heading_gap():
     assert "warn" not in _levels(check_html(doc), "heading-gap")
 
 
-def test_blockquote_counts_as_paragraph():
-    doc = '<blockquote class="src">' + "字" * 500 + "</blockquote>"
-    assert "warn" in _levels(check_html(doc), "paragraph-length")
+def test_long_paragraph_is_not_a_finding():
+    doc = '<p class="src">' + "字" * 900 + "</p>"
+    assert "paragraph-length" not in {finding["key"] for finding in check_html(doc)}
 
 
 def test_bare_image_is_checked():
     findings = check_html('<img src="a.png">')
     assert "warn" in _levels(findings, "figure-caption")
     assert "fail" in _levels(findings, "image-size")
-
-
-def test_paragraph_boundary():
-    at_limit = '<p class="src">' + "字" * 420 + "</p>"
-    over = '<p class="src">' + "字" * 421 + "</p>"
-    assert "warn" not in _levels(check_html(at_limit), "paragraph-length")
-    assert "warn" in _levels(check_html(over), "paragraph-length")
 
 
 def test_limits_are_pinned():
@@ -265,7 +258,6 @@ def test_limits_are_pinned():
     assert LIMITS["caption_measure"] == (14.0, 40.0)
     assert LIMITS["line_height"] == (1.5, 2.0)
     assert LIMITS["contrast"] == 4.5
-    assert LIMITS["paragraph_chars"] == 420
     assert LIMITS["chars_per_figure"] == 1200
     assert LIMITS["heading_gap_chars"] == 1600
 

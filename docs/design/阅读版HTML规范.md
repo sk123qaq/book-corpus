@@ -84,7 +84,7 @@ alt 用来说明图的内容，不是文件名。`^[\w\-. ]+\.(png|jpe?g|gif|web
 
 ### 节奏
 
-单段超过 420 汉字记 warn。正文汉字总数除以图数超过 1200 记 warn，无图不报。
+正文汉字总数除以图数超过 1200 记 warn，无图不报。
 相邻两个 `h2.sec` 到 `h6.sec` 之间超过 1600 汉字记 warn。
 
 ### 统计
@@ -110,7 +110,6 @@ ID 只在本文件内用于引用。级别为 fail 的项计入退出码，warn 
 | C2 | 图片尺寸 | `img` 有 width 与 height | fail | 防加载跳动 | `image-size` |
 | C3 | alt 文本 | 不是文件名 | fail | W3C alt 决策树 | `alt` |
 | C4 | 图注文字 | 不以图/表/如图/下图/上图/Figure/Table 开头，且不少于 8 字 | warn | PLOS 与 Urban 图表规范 | `caption-text` |
-| R1 | 段落长度 | 不超过 420 汉字 | warn | 长文可读性经验值 | `paragraph-length` |
 | R2 | 图文密度 | 每图至少 1200 汉字 | warn | 图表节奏 | `figure-density` |
 | R3 | 标题间隔 | 相邻 h2 到 h6 之间不超过 1600 汉字 | warn | 章节节奏 | `heading-gap` |
 | S1 | 统计 | 段落、图、字数、分钟 | info | 无 | `stats` |
@@ -121,7 +120,7 @@ ID 只在本文件内用于引用。级别为 fail 的项计入退出码，warn 
    不读文件、不联网、不写盘，返回按固定顺序排列的 `{level, key, detail}` 列表。
 2. `src/bookcorpus/reading/service.py` 的 `audit_pack` 在开头调用一次，把结果折成两个 gate。
    G5「版式」收 `contrast`、`font-size`、`measure`、`line-height`、`paragraph-marker`、
-   `external-resource`、`paragraph-length`、`heading-gap`，G7「图文」收 `figure-caption`、
+   `external-resource`、`heading-gap`，G7「图文」收 `figure-caption`、
    `alt`、`image-size`、`caption-text`、`figure-density`。
 3. `.agents/skills/chapter-html-versions/scripts/verify_lite.py` 把仓库 `src` 加进
    `sys.path` 后导入同一模块，输出 `FAIL [key] detail` 与 `WARN [key] detail`，
