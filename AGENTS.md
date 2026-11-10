@@ -171,3 +171,17 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
 | 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |
 | 书级默认值或书卡 | `python3 ~/文档/book-corpus-data/工作区/批次/qa-检索-2026-10-22-书级融合/probe_b6.py --lanes --gate --perf` | 末行 `ALL PASS`；gate 证据为 `drop`，默认卡是产品决定 |
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `sk123qaq/book-corpus` via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/`. See `docs/agents/domain.md`.
