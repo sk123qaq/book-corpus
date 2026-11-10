@@ -268,10 +268,23 @@ class Store:
                 fh.write(data)
         os.replace(tmp, path)
 
-    def save(self, uid, n, manifest, annotation, audit, chapter_html, exports, editorial=None, depth=None):
+    def save(
+        self,
+        uid,
+        n,
+        manifest,
+        annotation,
+        audit,
+        chapter_html,
+        exports,
+        editorial=None,
+        depth=None,
+        drop_editorial=False,
+    ):
         """先写 staging，再目录级替换；manifest 最后写。失败保留旧包。
 
         ``depth=None`` 原样带走旧 depth/；传入字典时整体替换 depth/。
+        ``drop_editorial=True`` 时不带走旧 editorial.json（标注重做后旧编辑层已失效）。
         """
         base = self.pack_dir(uid, n)
         parent = os.path.dirname(base)
@@ -305,7 +318,11 @@ class Store:
                 )
             if editorial is not None and "editorial.json" not in preserved:
                 self._write(os.path.join(stage, "editorial.json"), json.dumps(editorial, ensure_ascii=False, indent=1))
-            elif "editorial.json" not in preserved and os.path.exists(os.path.join(base, "editorial.json")):
+            elif (
+                not drop_editorial
+                and "editorial.json" not in preserved
+                and os.path.exists(os.path.join(base, "editorial.json"))
+            ):
                 shutil.copy2(os.path.join(base, "editorial.json"), os.path.join(stage, "editorial.json"))
             if audit is not None and "audit.json" not in preserved:
                 self._write(os.path.join(stage, "audit.json"), json.dumps(audit, ensure_ascii=False, indent=1))

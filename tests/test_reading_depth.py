@@ -1504,6 +1504,49 @@ def test_generate_cache_hit_avoids_second_model_call(tmp_path):
     assert second_model == first_model
 
 
+def test_generate_cache_refresh_forces_new_model_call(tmp_path):
+    blocks, sha = _parsed()
+    chapter = {"uid": "B0003", "n": 6, "title": "第六章", "source_sha256": sha}
+    cache_dir = tmp_path / "cache"
+    first = FakeClient([_chunk_payload(blocks)])
+    generate_chapter_model(
+        first,
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=cache_dir,
+    )
+    refreshed = FakeClient([_chunk_payload(blocks)])
+    _model, meta = generate_chapter_model(
+        refreshed,
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=cache_dir,
+        refresh=True,
+    )
+    assert len(refreshed.calls) == 1
+    assert meta["cache_hit"] is False
+    assert meta["refreshed"] is True
+    # 强制重建后把新结果写回缓存：下一次普通调用依旧命中，不会重复花钱。
+    again = FakeClient([])
+    _again_model, again_meta = generate_chapter_model(
+        again,
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=cache_dir,
+    )
+    assert again.calls == []
+    assert again_meta["cache_hit"] is True
+
+
 def test_skim_validate_and_audit_counts():
     blocks, model, payload = _long_skim_fixture()
     skim = validate_skim(payload, model, blocks)

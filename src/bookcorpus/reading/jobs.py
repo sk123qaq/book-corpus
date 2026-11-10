@@ -126,6 +126,10 @@ class JobQueue:
             self._save()
             return dict(job)
 
+    def note(self, job_id, **fields):
+        """给运行中的任务补记事实（如标注是复用还是重做），不改阶段。"""
+        return self._update(job_id, **fields)
+
     def set_stage(self, job_id, state):
         with self._lock:
             job = self._jobs.get(job_id)
@@ -145,6 +149,7 @@ class JobQueue:
         rebuild=False,
         kind="reading",
         layers=None,
+        force_annotation=False,
     ):
         job_layers = None
         if kind == "depth":
@@ -165,6 +170,7 @@ class JobQueue:
             "effort": effort,
             "overwrite": bool(overwrite),
             "rebuild": bool(rebuild),
+            "force_annotation": bool(force_annotation),
             "state": "queued",
             "stage": "queued",
             "progress": 0,

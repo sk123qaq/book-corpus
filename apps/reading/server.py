@@ -304,10 +304,13 @@ class Handler(BaseHTTPRequestHandler):
             effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
             overwrite = data.get("overwrite", False)
             rebuild = data.get("rebuild", False)
+            force_annotation = data.get("force_annotation", False)
             if not isinstance(overwrite, bool):
                 raise ValueError("overwrite 必须是布尔值")
             if not isinstance(rebuild, bool):
                 raise ValueError("rebuild 必须是布尔值")
+            if not isinstance(force_annotation, bool):
+                raise ValueError("force_annotation 必须是布尔值")
             if not UID_RE.match(uid):
                 raise ValueError("uid 非法")
             if not isinstance(tiers, list) or not all(isinstance(item, str) for item in tiers):
@@ -339,7 +342,14 @@ class Handler(BaseHTTPRequestHandler):
                     )
             if job is None:
                 job = self.service.submit(
-                    uid, n, tiers, model=model, effort=effort, overwrite=overwrite, rebuild=rebuild
+                    uid,
+                    n,
+                    tiers,
+                    model=model,
+                    effort=effort,
+                    overwrite=overwrite,
+                    rebuild=rebuild,
+                    force_annotation=force_annotation,
                 )
         except FileNotFoundError:
             self._json(404, {"error": "找不到章节"})

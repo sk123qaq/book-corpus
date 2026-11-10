@@ -64,6 +64,7 @@
 <script src="/assets/theme.js"></script>
 <script>
 const TIER_KEYS = ['skim', 'standard', 'deep', 'research'];
+const LAYER_NAMES = { model: '结构', skim: '速览', standard: '标准', deep: '深读', research: '研究', citations: '引用' };
 const RUNNING = ['queued', 'chunking', 'annotating', 'validating', 'projecting', 'rendering'];
 const TABS = [
   { key: 'all', name: '全部', match: () => true },
@@ -151,7 +152,7 @@ function renderQueue(running) {
       (job.state === 'queued' ? '排队中' : '正在运行 · ' + RD.esc(currentStep(job))) + '</div><h2>' +
       RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
       RD.esc(RD.statusName[job.state] || job.state) + '</h2>' +
-      '<p>' + (job.tiers || []).map((t) => RD.tierNames[t] || t).join(' / ') + queueText + '</p>' +
+      '<p>' + jobKeys(job).map(keyName).join(' / ') + queueText + '</p>' +
       RD.jobSteps(job) + '</div><div class="side"><div class="pct">' + RD.fmt(job.progress || 0) + '%</div>' +
       '<div class="bar"><i style="width:' + Number(job.progress || 0) + '%"></i></div>' +
       '<button class="cancel" data-cancel="' + RD.esc(job.id) + '">取消任务</button></div></div>'
@@ -187,9 +188,9 @@ function renderJobs(jobs) {
   RD.mount('records').innerHTML = visible.map((job) => '<div class="rec-item" id="job-' + RD.esc(job.id) + '" data-job="' + RD.esc(job.id) + '">' +
     '<button class="rec-row' + (openId === job.id ? ' open' : '') + '" data-open="' + RD.esc(job.id) + '">' +
       '<span class="rec-id">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + '<br>' + RD.esc(shortTime(job.updated_at)) + '</span>' +
-      '<span class="rec-t">第 ' + String(job.n).replace(/^0/, '') + ' 章 · ' + (job.tiers || []).map((t) => RD.tierNames[t] || t).join(' / ') +
+      '<span class="rec-t">第 ' + String(job.n).replace(/^0/, '') + ' 章 · ' + jobKeys(job).map(keyName).join(' / ') +
         '<small>' + RD.esc(job.id) + ' · ' + RD.esc(jobSubtitle(job)) + '</small></span>' +
-      '<span class="rec-tiers">' + (job.tiers || []).map((t) => '<span>' + (RD.tierNames[t] || t) + '</span>').join('') + '</span>' +
+      '<span class="rec-tiers">' + jobKeys(job).map((t) => '<span>' + keyName(t) + '</span>').join('') + '</span>' +
       '<span class="rec-time">' + RD.esc(shortTime(job.created_at)) + '</span>' +
       '<span class="rec-cost">' + RD.fmt(job.progress || 0) + '%</span>' +
       '<span class="rec-state ' + stateClass(job.state) + '">' + RD.esc(RD.statusName[job.state] || job.state) + '</span>' +
@@ -200,20 +201,31 @@ function renderJobs(jobs) {
 
 function detail(job, open) {
   const tiers = job.tiers || [];
-  const outs = tiers.map((tier) =>
-    '<a href="' + RD.readerHref(job.uid, job.n, tier) + '">读 ' + (RD.tierNames[tier] || tier) + '本</a>' +
-    '<a href="/api/export/' + encodeURIComponent(job.uid) + '/' + encodeURIComponent(job.n) + '/' + encodeURIComponent(tier) + '" download>导出 ' + (RD.tierNames[tier] || tier) + '</a>'
-  ).join('');
+  const depth = job.kind === 'depth';
+  const outs = depth
+    ? '<a href="' + RD.readerHref(job.uid, job.n, 'skim', 'depth') + '">读深读本</a>'
+    : tiers.map((tier) =>
+      '<a href="' + RD.readerHref(job.uid, job.n, tier) + '">读 ' + (RD.tierNames[tier] || tier) + '本</a>' +
+      '<a href="/api/export/' + encodeURIComponent(job.uid) + '/' + encodeURIComponent(job.n) + '/' + encodeURIComponent(tier) + '" download>导出 ' + (RD.tierNames[tier] || tier) + '</a>'
+    ).join('');
   const running = RUNNING.includes(job.state);
+  const id = RD.esc(job.id);
+  const actions = running
+    ? '<button data-cancel="' + id + '">取消任务</button>'
+    : depth
+      ? '<button data-depth-retry="' + id + '" data-rebuild="0">重跑所选层</button>' +
+        '<button data-depth-retry="' + id + '" data-rebuild="1">重建结构模型</button>'
+      : '<button data-retry="' + id + '">重渲染</button>' +
+        '<button data-retry="' + id + '" data-force-annotation="1">重新标注</button>';
   return '<div class="rec-detail' + (open ? ' open' : '') + '">' +
     RD.jobSteps(job) +
     '<div class="gate">' + (job.pack_id ? '产物 <b>' + RD.esc(job.pack_id) + '</b> · ' : '') +
       '状态 <b>' + RD.esc(RD.statusName[job.state] || job.status || job.state) + '</b>' +
       (job.error ? ' · <b>' + RD.esc(job.error) + '</b>' : '') +
+      (job.annotation_source === 'cache' ? ' · 标注 <b>复用</b>（未调用模型，只重渲染）' : '') +
       ' · 更新于 ' + RD.esc(job.updated_at || '—') + '</div>' +
-    '<div class="rec-actions">' +
-      (running ? '<button data-cancel="' + RD.esc(job.id) + '">取消任务</button>' : '<button data-retry="' + RD.esc(job.id) + '">重跑</button>') +
-      '<button data-log="' + RD.esc(job.id) + '">看原始账</button>' +
+    '<div class="rec-actions">' + actions +
+      '<button data-log="' + id + '">看原始账</button>' +
       '<a href="' + RD.bookHref(job.uid) + '">回书目</a>' +
       '<a href="' + RD.chapterHref(job.uid, job.n) + '">开工单</a>' +
     '</div>' +
@@ -275,11 +287,15 @@ function bindActions(scope) {
     button.addEventListener('click', async () => {
       const job = (data.jobs || []).find((item) => item.id === button.dataset.retry);
       if (!job) return;
+      const force = button.dataset.forceAnnotation === '1';
+      const label = force ? '重新标注' : '重渲染';
+      if (force && !window.confirm('重新标注会调用模型重做标注与编辑层（约 2 分钟、消耗 token），' +
+          '图版锚点会重算、门禁可能再次不通过。确定吗？')) return;
       button.disabled = true;
       button.textContent = '提交中…';
       const post = (rebuild) => RD.api('/api/jobs', { method: 'POST', body: {
         uid: job.uid, n: Number(job.n), tiers: job.tiers, model: job.model, effort: job.effort,
-        overwrite: true, rebuild: Boolean(rebuild),
+        overwrite: true, rebuild: Boolean(rebuild), force_annotation: force,
       } });
       try {
         let fresh;
@@ -304,7 +320,40 @@ function bindActions(scope) {
         }
         RD.toast(err.message, true);
         button.disabled = false;
-        button.textContent = '重跑';
+        button.textContent = label;
+      }
+    });
+  });
+  scope.querySelectorAll('[data-depth-retry]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const job = (data.jobs || []).find((item) => item.id === button.dataset.depthRetry);
+      if (!job) return;
+      const rebuild = button.dataset.rebuild === '1';
+      const label = rebuild ? '重建结构模型' : '重跑所选层';
+      if (rebuild && !window.confirm('重建结构模型会跳过缓存、重新调用模型；研究层与引用随之过期，' +
+          '会一并重做。确定吗？')) return;
+      const layers = (job.layers && job.layers.length ? job.layers : Object.keys(LAYER_NAMES)).slice();
+      if (rebuild && layers.includes('citations') && !layers.includes('research')) layers.push('research');
+      button.disabled = true;
+      button.textContent = '提交中…';
+      try {
+        const fresh = await RD.api('/api/depth/' + encodeURIComponent(job.uid) + '/' + encodeURIComponent(job.n), {
+          method: 'POST',
+          body: { layers, model: job.model, effort: job.effort, rebuild_model: rebuild },
+        });
+        data.jobs = [fresh].concat(data.jobs.filter((item) => item.id !== fresh.id));
+        openId = fresh.id;
+        render();
+        RD.toast('已重新排队 · ' + fresh.id);
+        load(true);
+      } catch (err) {
+        if (err.code === 'job_active') {
+          data.jobs = (err.conflicts || []).concat(data.jobs);
+          render();
+        }
+        RD.toast(err.message, true);
+        button.disabled = false;
+        button.textContent = label;
       }
     });
   });
@@ -326,6 +375,14 @@ function bindActions(scope) {
   });
 }
 
+function jobKeys(job) {
+  return job.kind === 'depth' ? (job.layers || []) : (job.tiers || []);
+}
+
+function keyName(key) {
+  return (RD.tierNames || {})[key] || LAYER_NAMES[key] || key;
+}
+
 function jobSubtitle(job) {
   if (job.state === 'cancelled') return '已取消';
   if (job.error) {
@@ -338,9 +395,10 @@ function jobSubtitle(job) {
 function currentStep(job) {
   const steps = job.steps || [];
   const running = steps.find((step) => step.status === 'run');
-  if (running) return '第 ' + (steps.indexOf(running) + 1) + '/5 步 · ' + running.name;
+  if (running) return '第 ' + (steps.indexOf(running) + 1) + '/' + steps.length + ' 步 · ' + running.name;
   if (RUNNING.includes(job.state)) return '排队中';
-  return '第 5/5 步 · 渲染';
+  const total = steps.length || 5;
+  return '第 ' + total + '/' + total + ' 步 · 渲染';
 }
 
 function stateClass(state) {

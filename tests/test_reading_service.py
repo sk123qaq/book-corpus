@@ -441,6 +441,121 @@ def test_actual_usage_over_budget_fails_without_publishing(reading_root):
     assert not (Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01" / "manifest.json").exists()
 
 
+def _pack_file(root, name, uid="B0001", n="01"):
+    return Path(root) / "工作区" / "阅读" / uid / "ch" / n / name
+
+
+class _AnnotatingClient:
+    """记录标注调用次数，返回最小合法标注与空编辑层。"""
+
+    model = "fake"
+    effort = "high"
+
+    def __init__(self):
+        self.calls = []
+
+    def available(self):
+        return True
+
+    def annotate_with_meta(self, book, chapter, blocks, model=None, effort=None):
+        self.calls.append(book["uid"])
+        return _fake_annotation(blocks), {
+            "requested_model": model or self.model,
+            "model": self.model,
+            "effort": effort or self.effort,
+            "usage": {"prompt_tokens": 10, "completion_tokens": 1},
+            "fallback": False,
+        }
+
+    def complete_json(self, messages, *, model=None, effort=None):
+        payload = {
+            "schema": 1,
+            "uid": "B0001",
+            "n": 1,
+            "beats": [],
+            "visuals": [],
+            "takeaways": [],
+            "note_tags": {},
+        }
+        return payload, {"total_tokens": 5}
+
+
+class _NoEditorialClient(_AnnotatingClient):
+    def complete_json(self, messages, *, model=None, effort=None):
+        raise RuntimeError("图表模型不可用")
+
+
+def test_rerun_reuses_annotation_unless_forced(reading_root, monkeypatch):
+    import bookcorpus.reading.service as service_module
+
+    client = _AnnotatingClient()
+    service = ReadingService(str(reading_root))
+    service.annotate = True
+    service.figures = True
+    service.client = client
+    monkeypatch.setattr(service_module, "audit_pack", lambda *args, **kwargs: {"status": "ok", "gates": []})
+
+    first = _wait(service, service.submit("B0001", 1, ["standard"])["id"])
+    assert first["state"] == "done"
+    assert first["annotation_source"] == "model"
+    assert client.calls == ["B0001"]
+    assert _pack_file(reading_root, "editorial.json").exists()
+
+    # 有编辑层时重跑只复用标注：不调模型，账上写明 cache。
+    reused = _wait(service, service.submit("B0001", 1, ["standard"], overwrite=True)["id"])
+    assert reused["state"] == "done"
+    assert reused["annotation_source"] == "cache"
+    assert client.calls == ["B0001"]
+    assert _manifest(reading_root, "B0001", "01")["budget_estimate"] is None
+
+    # 显式重新标注：真调模型，并重写标注。
+    forced = _wait(
+        service,
+        service.submit("B0001", 1, ["standard"], overwrite=True, force_annotation=True)["id"],
+    )
+    assert forced["state"] == "done"
+    assert forced["annotation_source"] == "model"
+    assert client.calls == ["B0001", "B0001"]
+    assert _manifest(reading_root, "B0001", "01")["budget_estimate"] is not None
+
+    # 图表模型关闭时无法重建编辑层：新标注与旧图版锚点已对不上，只能删掉旧 editorial.json。
+    service.figures = False
+    dropped = _wait(
+        service,
+        service.submit("B0001", 1, ["standard"], overwrite=True, force_annotation=True)["id"],
+    )
+    assert dropped["state"] == "done"
+    assert dropped["annotation_source"] == "model"
+    assert client.calls == ["B0001", "B0001", "B0001"]
+    assert not _pack_file(reading_root, "editorial.json").exists()
+    assert _manifest(reading_root, "B0001", "01")["editorial_generated"] is False
+
+
+def test_force_annotation_fails_loudly_when_editorial_cannot_rebuild(reading_root, monkeypatch):
+    import bookcorpus.reading.service as service_module
+
+    service = ReadingService(str(reading_root))
+    service.annotate = True
+    service.figures = True
+    service.client = _AnnotatingClient()
+    monkeypatch.setattr(service_module, "audit_pack", lambda *args, **kwargs: {"status": "ok", "gates": []})
+    assert _wait(service, service.submit("B0001", 1, ["standard"])["id"])["state"] == "done"
+    before = _manifest(reading_root, "B0001", "01")
+    assert _pack_file(reading_root, "editorial.json").exists()
+
+    service.client = _NoEditorialClient()
+    failed = _wait(
+        service,
+        service.submit("B0001", 1, ["standard"], overwrite=True, force_annotation=True)["id"],
+    )
+    assert failed["state"] == "failed"
+    assert "重建编辑层失败" in failed["error"]
+    # 整包未换：旧标注和旧编辑层还在原处，可重试。
+    after = _manifest(reading_root, "B0001", "01")
+    assert after["generated_at"] == before["generated_at"]
+    assert _pack_file(reading_root, "editorial.json").exists()
+
+
 def test_tier_states_use_each_tier_generated_at(reading_root):
     service = ReadingService(str(reading_root))
     manifest = {

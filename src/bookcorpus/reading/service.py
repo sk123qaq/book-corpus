@@ -1315,6 +1315,7 @@ class ReadingService:
                 model=job.get("model"),
                 effort=job.get("effort"),
                 cache_dir=self.store.depth_cache_dir(uid, n),
+                refresh=bool(job.get("rebuild")),
             )
             ledger = plan_all_dispositions(model, blocks)
             gate = audit_conservation(model, ledger, blocks)
@@ -1536,7 +1537,15 @@ class ReadingService:
         # 有编辑层的章节，标注是编辑层的一部分；重新跑模型会改变档位选块，
         # 让图版锚点漂移。此时只接受与原文一致的旧标注。
         editorial = self.store.editorial(uid, n)
+        force_annotation = bool(job.get("force_annotation"))
+        if force_annotation:
+            # 显式重新标注：编辑层（图版锚点、旁批）挂在标注上，必须跟着重建；
+            # 否则新标注换了选块，旧锚点会指向已不存在的块。
+            if not self.annotate:
+                raise RuntimeError("标注模型已关闭（READING_ANNOTATE=0），无法重新标注")
+            editorial = None
         annotation = None
+        annotation_source = "cache"
         draft = False
         budget_estimate = None
         model_meta = None
@@ -1554,6 +1563,7 @@ class ReadingService:
                 model=job.get("model"),
                 effort=job.get("effort"),
             )
+            annotation_source = "model"
             self._set_stage(job_id, "validating")
             # 校验失败直接让任务失败；旧包保留，不发布半成品。
             annotation = validate_annotation(annotation, blocks)
@@ -1579,6 +1589,8 @@ class ReadingService:
                 except ValueError:
                     annotation = None
             draft = annotation is None
+        # 账上写清楚这次是重做标注还是复用旧标注：复用只需渲染，秒级完成。
+        self.queue.note(job_id, annotation_source=annotation_source)
         if editorial is not None and annotation is None:
             raise RuntimeError("该章有编辑层，但标注缺失或与原文不一致；请先删除 editorial.json 再重新标注")
 
@@ -1640,6 +1652,9 @@ class ReadingService:
                 )
                 editorial = self.store.save_editorial(uid, n, editorial)
             except Exception as exc:  # 图表生成失败时仍发布无图读本，原因写进 manifest
+                if force_annotation:
+                    # 新标注换了选块，旧编辑层的锚点已经对不上；宁可整包失败，也不能留下漂移的图版。
+                    raise RuntimeError("重新标注后重建编辑层失败，旧包未改动：%s" % exc) from exc
                 editorial = None
                 editorial_error = str(exc)
 
@@ -1697,7 +1712,9 @@ class ReadingService:
 
         self._set_stage(job_id, "rendering")
 
-        editorial = self.store.editorial(uid, n)
+        # 重新标注时只能用这次的内存结果：盘上的 editorial.json 还是旧标注的锚点。
+        if not force_annotation:
+            editorial = self.store.editorial(uid, n)
 
         def resolver(rel):
             return asset_url(uid, rel)
@@ -1774,11 +1791,22 @@ class ReadingService:
             existing_tiers = set((existing or {}).get("tiers") or {})
             if existing_tiers.intersection(requested):
                 raise RuntimeError("所选档位已有读本，未覆盖；如需覆盖请重新生成")
-        self.store.save(uid, n, manifest, annotation, audit, chapter_html, exports, editorial=editorial)
+        self.store.save(
+            uid,
+            n,
+            manifest,
+            annotation,
+            audit,
+            chapter_html,
+            exports,
+            editorial=editorial,
+            # 重新标注后没能重建编辑层（如图表模型关闭）：旧文件必须删，不能留给下一次重跑误用。
+            drop_editorial=bool(force_annotation and editorial is None),
+        )
         self._invalidate_packs()
         return {"status": audit["status"], "pack_id": manifest["pack_id"]}
 
-    def submit(self, uid, n, tiers, model=None, effort=None, overwrite=False, rebuild=False):
+    def submit(self, uid, n, tiers, model=None, effort=None, overwrite=False, rebuild=False, force_annotation=False):
         if not self.library.book(uid) or not self.library.chapter(uid, n):
             raise FileNotFoundError("找不到章节 %s/%s" % (uid, n))
         requested = [tier for tier in TIER_ORDER if tier in set(tiers or [])]
@@ -1801,7 +1829,14 @@ class ReadingService:
             if existing and not overwrite and not rebuild:
                 raise PackExistsError(existing)
             return self.queue.submit(
-                uid, n, requested, model=model, effort=effort, overwrite=overwrite, rebuild=rebuild
+                uid,
+                n,
+                requested,
+                model=model,
+                effort=effort,
+                overwrite=overwrite,
+                rebuild=rebuild,
+                force_annotation=force_annotation,
             )
 
 

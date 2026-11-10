@@ -449,10 +449,12 @@ def generate_chapter_model(
     effort=None,
     chunk_chars=18000,
     cache_dir=None,
+    refresh=False,
 ):
     """生成并校验 chapter_model，返回 ``(model, meta)``；不写任何文件。
 
-    传入 ``cache_dir`` 时按 source、prompt、模型与 effort 的哈希读写缓存。
+    传入 ``cache_dir`` 时按 source、prompt、模型与 effort 的哈希读写缓存；
+    ``refresh=True`` 跳过读取、强制重新调用模型，并把结果回写缓存。
     失败抛异常，不生成合成兜底，也不返回部分结果。
     """
     if not isinstance(chunk_chars, int) or chunk_chars <= 0:
@@ -469,7 +471,9 @@ def generate_chapter_model(
     if cache_dir is not None and source_sha256:
         key = cache_key(source_sha256, prompt_sha, requested_model, requested_effort)
         cache_path = Path(cache_dir) / f"{key}.json"
-        cached = _read_cache(cache_path, source_sha256, prompt_sha, requested_model, requested_effort)
+        cached = (
+            None if refresh else _read_cache(cache_path, source_sha256, prompt_sha, requested_model, requested_effort)
+        )
         if cached is not None:
             cached_model, cached_meta = cached
             try:
@@ -552,6 +556,7 @@ def generate_chapter_model(
         "chunks": len(plans),
         "cache_key": key,
         "cache_hit": False,
+        "refreshed": bool(refresh),
     }
     if cache_path is not None:
         _write_cache(
