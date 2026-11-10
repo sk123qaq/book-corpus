@@ -11,6 +11,12 @@ SEG="$BUILD/seg"
 OUT="$HERE/.."
 FONT="$(fc-match -f '%{file}' 'Noto Serif CJK SC:style=Bold')"
 
+# 中间产物（.build/）不入库，重跑时先补录一遍，避免拿着空目录切片。
+if [ ! -f "$BUILD/marks.json" ]; then
+  echo "没有录屏痕迹（$BUILD/marks.json），先录一遍"
+  node "$HERE/record_demo.js"
+fi
+
 rm -rf "$SEG"; mkdir -p "$SEG"
 
 read -r SEND ANSWER ELAPSED ASK_WALL <<<"$(python3 - "$BUILD/marks.json" <<'PY'
