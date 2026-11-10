@@ -24,6 +24,9 @@ def _isolate_user_dotenv(tmp_path, monkeypatch):
         "PI_WEB_SEARCH_CONFIG",
     ):
         monkeypatch.delenv(key, raising=False)
+    # 预检只判断“有没有配”，不发请求。给一套假凭据，让测试机/CI 与开发机行为一致；
+    # 需要验证“缺配置”的用例自己删环境变量。
+    monkeypatch.setenv("OPENCODE_GO_API_KEY", "test-key")
 
 
 # 这些脚本由 test_acceptance.py 以子进程入口跑，不让 pytest 二次收集。

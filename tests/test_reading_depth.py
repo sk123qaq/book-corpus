@@ -37,6 +37,16 @@ from bookcorpus.reading.depth import audit as depth_audit
 from bookcorpus.reading.depth import cli as depth_cli
 from bookcorpus.reading.depth.cli import _state_text
 from bookcorpus.reading.depth.cli import main as depth_main
+
+
+@pytest.fixture(autouse=True)
+def _skip_preflight(monkeypatch):
+    """这一组测分层与落盘；配置预检由 tests/test_preflight.py 单独测。"""
+    from bookcorpus import preflight
+
+    monkeypatch.setattr(preflight, "require", lambda *args, **kwargs: None)
+
+
 from bookcorpus.reading.depth.diagrams import audit_figures
 from bookcorpus.reading.depth.disposition import plan_all_dispositions
 from bookcorpus.reading.depth.skim import unsupported_skim

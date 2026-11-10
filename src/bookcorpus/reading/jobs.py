@@ -150,6 +150,7 @@ class JobQueue:
         kind="reading",
         layers=None,
         force_annotation=False,
+        allow_unverified=False,
     ):
         job_layers = None
         if kind == "depth":
@@ -171,6 +172,7 @@ class JobQueue:
             "overwrite": bool(overwrite),
             "rebuild": bool(rebuild),
             "force_annotation": bool(force_annotation),
+            "allow_unverified": bool(allow_unverified),
             "state": "queued",
             "stage": "queued",
             "progress": 0,

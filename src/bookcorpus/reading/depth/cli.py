@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ... import preflight
 from ..library import Library
 from ..model import ModelClient
 from ..render import asset_url
@@ -64,6 +65,11 @@ def _parser():
             item.add_argument("--no-deep", action="store_true", help="不生成 layers/deep.json 与深读注解")
             item.add_argument("--no-research", action="store_true", help="不生成 layers/research.json 与研究议程")
             item.add_argument("--no-citations", action="store_true", help="不检索、不核验引用")
+            item.add_argument(
+                "--allow-unverified",
+                action="store_true",
+                help="没有检索 provider 时仍生成研究层（记为未检索议程）；引用层仍需真检索",
+            )
         if name in ("report", "validate"):
             item.add_argument("--gold", help="带 core_units 的验收 JSON；用于核对核心单元")
     return parser
@@ -208,6 +214,19 @@ def _usage_usd(usage):
 def _generate(args):
     if args.file:
         raise ValueError("generate 不接受 --file")
+    preflight.require(["reading.model"])
+    if getattr(args, "allow_unverified", False) and not args.no_citations and preflight.missing(["reading.search"]):
+        print("--allow-unverified：本次不生成引用层（引用必须真检索）。", file=sys.stderr)
+        args.no_citations = True
+    if not args.no_research or not args.no_citations:
+        needed = ["reading.search"]
+        if not args.no_citations:
+            needed.append("reading.fetch")
+        preflight.require(
+            needed,
+            allow_unverified=bool(getattr(args, "allow_unverified", False)),
+            note="研究层会记成未检索议程（searched=false）；引用层不会生成。",
+        )
     started = time.monotonic()
     context = _context(args)
     client = ModelClient()

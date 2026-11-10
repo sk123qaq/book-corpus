@@ -408,6 +408,16 @@ def main():
     a = ap.parse_args()
     if a.chunk_pages > B.MINERU_MAX_PAGES:
         sys.exit("--chunk-pages 不能超过 %d" % B.MINERU_MAX_PAGES)
+    if not a.dry_run:
+        try:
+            from bookcorpus import preflight
+        except ImportError:
+            preflight = None
+        if preflight is not None:
+            try:
+                preflight.require(["ocr.mineru"])
+            except preflight.MissingConfigError as exc:
+                sys.exit(exc.render())
 
     bdir = batch_dir(a.batch)
     row = load_row(bdir, a.uid)

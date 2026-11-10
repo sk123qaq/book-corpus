@@ -9,11 +9,14 @@ import sqlite3
 import subprocess
 import sys
 
-from . import __version__, docenv, pdfenv, workspace
+from . import __version__, docenv, envfile, pdfenv, preflight, workspace
 
 # 不在这里 import lib_common：它 import 时就按 cwd 定根，先 import 会让
 # run_script 设的 BOOKS_ROOT 失效。只算路径，脚本自己 import。
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts")
+
+#: 跑之前就要有模型配置的脚本；宁可先报缺，也不要跑到一半再失败。
+MODEL_SCRIPTS = frozenset({"ingest", "classify_books", "classify_model", "daily", "split_md_batch", "ops_pdf_triage"})
 
 ALIASES = {
     "ingest": "ingest",
@@ -69,6 +72,8 @@ def script_path(name):
 
 def run_script(name, argv, root):
     path = script_path(name)
+    if os.path.splitext(os.path.basename(path))[0] in MODEL_SCRIPTS:
+        preflight.require(["books.model"], root)
     os.environ["BOOKS_ROOT"] = root
     if SCRIPTS_DIR not in sys.path:
         sys.path.insert(0, SCRIPTS_DIR)
@@ -316,12 +321,24 @@ def cmd_venv(root, check):
 
 def cmd_doctor(root, as_json):
     rows = workspace.check(root, __version__)
+    config = []
+    for status in preflight.check_all(root):
+        level = "ok" if status.state == preflight.OK else "warn"
+        detail = status.detail
+        if status.missing:
+            detail += "；" + " ".join(part.strip() for part in status.fix.splitlines())
+        config.append((level, "配置·" + status.label, detail))
     if as_json:
-        print(json.dumps([{"level": lv, "label": lb, "detail": d} for lv, lb, d in rows], ensure_ascii=False, indent=2))
+        all_rows = rows + config
+        payload = [{"level": lv, "label": lb, "detail": d} for lv, lb, d in all_rows]
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        width = max(len(lb) for _lv, lb, _d in rows)
         for level, label, detail in rows:
-            print("%-5s %-*s %s" % (level, width, label, detail))
+            print("%-5s %-*s %s" % (level, max(len(lb) for _lv, lb, _d in rows), label, detail))
+        if config:
+            print("")
+            for level, label, detail in config:
+                print("%-5s %-*s %s" % (level, max(len(lb) for _lv, lb, _d in config), label, detail))
     return 1 if any(lv == "fail" for lv, _lb, _d in rows) else 0
 
 
@@ -408,6 +425,7 @@ def cmd_list():
 
 
 def main(argv=None):
+    envfile.load()
     argv = list(sys.argv[1:] if argv is None else argv)
     explicit_root, argv = split_root(argv)
     if not argv or argv[0] in ("-h", "--help"):

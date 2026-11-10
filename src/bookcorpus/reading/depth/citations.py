@@ -25,6 +25,7 @@ from typing import Any, Protocol
 
 from bs4 import BeautifulSoup
 
+from ... import envfile
 from ..model import ModelProviderError
 from ..textnorm import collapse_ws, normalize_ws
 
@@ -60,64 +61,16 @@ CLAIM_STATUSES = (
 )
 
 
-def _parse_dotenv(text: str) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[7:].lstrip()
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-            quote = value[0]
-            value = value[1:-1]
-            if quote == '"':
-                value = value.replace("\\n", "\n").replace('\\"', '"')
-        if key:
-            values[key] = value
-    return values
-
-
 def dotenv_path(path: str | Path | None = None) -> Path | None:
-    """Find the first readable environment file.
+    """第一个可读的环境文件；查找顺序见 :mod:`bookcorpus.envfile`。"""
 
-    Precedence: explicit path, ``BOOK_CORPUS_ENV``, ``./.env``, then the
-    user-level ``~/.config/book-corpus/.env``. An explicit path (argument or
-    ``BOOK_CORPUS_ENV``) is authoritative: if it does not exist, no fallback
-    is used. This keeps tests and isolated runs from reading a real user file.
-    """
-
-    if path:
-        target = Path(path).expanduser()
-        return target if target.is_file() else None
-    explicit = (os.environ.get(DOTENV_ENV) or "").strip()
-    if explicit:
-        target = Path(explicit).expanduser()
-        return target if target.is_file() else None
-    for candidate in (Path.cwd() / ".env", Path.home() / ".config" / "book-corpus" / ".env"):
-        if candidate.is_file():
-            return candidate
-    return None
+    return envfile.path(path)
 
 
 def load_dotenv(path: str | Path | None = None) -> Path | None:
-    """Load key=value pairs without overriding the real environment."""
+    """读入环境文件，不覆盖真实环境变量。"""
 
-    target = dotenv_path(path)
-    if target is None:
-        return None
-    try:
-        text = target.read_text(encoding="utf-8-sig")
-    except OSError:
-        return None
-    for key, value in _parse_dotenv(text).items():
-        os.environ.setdefault(key, value)
-    return target
+    return envfile.load(path)
 
 
 STATUS_LABELS = {
@@ -610,6 +563,96 @@ def fetcher_from_env() -> PageFetcher:
     if not api_key:
         raise SearchError("firecrawl 抓页缺少 API key；设置 FIRECRAWL_API_KEY 或在 pi 的 web-search.json 中配置")
     return FirecrawlPageFetcher(_firecrawl_scrape_endpoint(config), api_key)
+
+
+def search_config_status() -> dict[str, Any]:
+    """当前检索配置能否真正联网；预检与 doctor 用它给提示。
+
+    返回 ``provider`` / ``ok`` / ``origin`` / ``detail``。这里只判断可用性，
+    不发请求，也不抛异常。
+    """
+
+    kind = (os.environ.get(SEARCH_PROVIDER_ENV) or "").strip().lower()
+    origin = "环境变量" if kind else ""
+    config = None
+    if not kind:
+        config = _pi_web_search_config()
+        kind = str(config.get("searchProvider") or "none").strip().lower()
+        if kind != "none":
+            origin = "pi 的 web-search.json"
+    if kind == "none":
+        return {
+            "provider": "none",
+            "ok": False,
+            "origin": "",
+            "detail": "未设置 READING_SEARCH_PROVIDER，pi 的 web-search.json 里也没有 searchProvider",
+        }
+    config = config if config is not None else _pi_web_search_config()
+    if kind == "http":
+        endpoint = (os.environ.get(SEARCH_ENDPOINT_ENV) or "").strip()
+        return {
+            "provider": "http",
+            "ok": bool(endpoint),
+            "origin": origin or "环境变量或 .env",
+            "detail": endpoint or "缺少 READING_SEARCH_ENDPOINT",
+        }
+    if kind == "auto":
+        found = (
+            candidate
+            for candidate in ("tavily", "brave", "serper", "firecrawl")
+            if _api_key(candidate, config, generic=False)
+        )
+        chosen = next(found, "none")
+        return {
+            "provider": "auto",
+            "ok": chosen != "none",
+            "origin": origin or "环境变量或 .env",
+            "detail": ("auto 选中 " + chosen) if chosen != "none" else "auto 没找到可用的 key",
+        }
+    if kind not in ("tavily", "brave", "serper", "firecrawl"):
+        return {
+            "provider": kind,
+            "ok": False,
+            "origin": origin or "环境变量或 .env",
+            "detail": f"未知检索提供方：{kind}",
+        }
+    api_key = _api_key(kind, config)
+    return {
+        "provider": kind,
+        "ok": bool(api_key),
+        "origin": origin or "环境变量或 .env",
+        "detail": f"{kind} 已有 key" if api_key else f"{kind} 缺少 API key",
+    }
+
+
+def fetch_config_status() -> dict[str, Any]:
+    """当前抓页配置能否真正抓；返回字段同 :func:`search_config_status`。"""
+
+    kind = (os.environ.get(FETCH_PROVIDER_ENV) or "").strip().lower()
+    origin = "环境变量" if kind else ""
+    config = None
+    if not kind:
+        config = _pi_web_search_config()
+        kind = str(config.get("fetchProvider") or "http").strip().lower()
+        if kind:
+            origin = "pi 的 web-search.json"
+    if kind in ("http", "", "none"):
+        return {"provider": "http", "ok": True, "origin": origin or "内置默认", "detail": "内置 HTTP 抓页，不需要 key"}
+    if kind != "firecrawl":
+        return {
+            "provider": kind,
+            "ok": False,
+            "origin": origin or "环境变量或 .env",
+            "detail": f"未知抓页提供方：{kind}",
+        }
+    config = config if config is not None else _pi_web_search_config()
+    api_key = _api_key("firecrawl", config)
+    return {
+        "provider": "firecrawl",
+        "ok": bool(api_key),
+        "origin": origin or "环境变量或 .env",
+        "detail": "firecrawl 已有 key" if api_key else "firecrawl 缺少 API key",
+    }
 
 
 def _utc_now(now: datetime | None = None) -> datetime:

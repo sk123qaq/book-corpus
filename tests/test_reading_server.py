@@ -37,6 +37,39 @@ def server(reading_root):
 
 
 @pytest.fixture
+def no_key_server(reading_root):
+    """没有任何模型凭据：预检必须在排队前给出 400，而不是让任务跑一半才炸。"""
+    home = reading_root.parent / "bare-home"
+    home.mkdir(exist_ok=True)
+    proc, base = _start_server(
+        reading_root,
+        {"READING_ANNOTATE": "1", "OPENCODE_GO_API_KEY": "", "HOME": str(home)},
+    )
+    try:
+        yield base
+    finally:
+        _stop_server(proc)
+
+
+@pytest.fixture
+def unsearchable_server(reading_root):
+    proc, base = _start_server(
+        reading_root,
+        {
+            "READING_DEPTH": "1",
+            "READING_ANNOTATE": "0",
+            "OPENCODE_GO_API_KEY": "test-key",
+            "READING_SEARCH_PROVIDER": "none",
+            "PI_WEB_SEARCH_CONFIG": str(reading_root.parent / "no-web-search.json"),
+        },
+    )
+    try:
+        yield base
+    finally:
+        _stop_server(proc)
+
+
+@pytest.fixture
 def slow_server(reading_root):
     """模型端只接连接不回响应：任务确定地停在 annotating，方便观察冲突与取消。"""
     hang = socket.socket()
@@ -200,6 +233,37 @@ def test_job_poll_and_generated_reader(server, reading_root):
     records = json.loads(records)
     assert any(item["id"] == job["id"] for item in records["jobs"])
     assert records["packs"][0]["uid"] == "B0001"
+
+
+def test_missing_model_key_returns_400_before_queueing(no_key_server):
+    status, body = _post_error(
+        no_key_server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["skim"], "overwrite": True}
+    )
+    assert status == 400
+    assert body["code"] == "missing_config"
+    assert body["degradable"] is False
+    assert [item["key"] for item in body["missing"]] == ["reading.model"]
+    assert body["missing"][0]["fix"]
+
+
+def test_edition_without_model_key_returns_400_with_fix(no_key_server):
+    status, body = _post_error(no_key_server, "/api/edition/B0001/1", {"model": "fake", "effort": "high"})
+    assert status == 400
+    assert body["code"] == "missing_config"
+    assert body["missing"][0]["key"] == "reading.model"
+    assert "OPENCODE_GO_API_KEY" in body["missing"][0]["fix"]
+
+
+def test_missing_search_provider_returns_degradable_payload(unsearchable_server):
+    status, body = _post_error(
+        unsearchable_server,
+        "/api/depth/B0001/1",
+        {"layers": ["research"], "model": "fake", "effort": "high"},
+    )
+    assert status == 400
+    assert body["code"] == "missing_config"
+    assert body["degradable"] is True
+    assert [item["key"] for item in body["missing"]] == ["reading.search"]
 
 
 def test_post_validates_payload_and_host(server):
@@ -423,10 +487,13 @@ def test_reading_server_new_chapter_uses_depth_job(reading_root):
     )
     proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
     try:
-        status, job = _post(base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
+        status, job = _post(
+            base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"], "allow_unverified": True}
+        )
         assert status == 202
         assert job["kind"] == "depth"
-        assert job["layers"] == ["model", "skim", "standard", "deep", "research", "citations"]
+        # 没有检索 provider 时确认降级：研究层照出，引用层整层不出。
+        assert job["layers"] == ["model", "skim", "standard", "deep", "research"]
         assert job["tiers"] == []
 
         status, old = _post(base, "/api/jobs", {"uid": "B0002", "n": 1, "tiers": ["standard"]})

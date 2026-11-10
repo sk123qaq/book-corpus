@@ -19,6 +19,8 @@ if SRC not in sys.path:
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from bookcorpus import envfile, preflight
+from bookcorpus.preflight import MissingConfigError
 from bookcorpus.reading.editorial import EditorialError
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.service import (
@@ -191,6 +193,8 @@ class Handler(BaseHTTPRequestHandler):
                         self._json(409, {"error": "这一章已有视觉读本", "code": "edition_exists"})
                     except FileNotFoundError:
                         self._json(404, {"error": "找不到章节"})
+                    except MissingConfigError as exc:
+                        self._json(400, exc.as_payload())
                     except (TypeError, ValueError) as exc:
                         self._json(400, {"error": str(exc)})
                     else:
@@ -305,12 +309,15 @@ class Handler(BaseHTTPRequestHandler):
             overwrite = data.get("overwrite", False)
             rebuild = data.get("rebuild", False)
             force_annotation = data.get("force_annotation", False)
+            allow_unverified = data.get("allow_unverified", False)
             if not isinstance(overwrite, bool):
                 raise ValueError("overwrite 必须是布尔值")
             if not isinstance(rebuild, bool):
                 raise ValueError("rebuild 必须是布尔值")
             if not isinstance(force_annotation, bool):
                 raise ValueError("force_annotation 必须是布尔值")
+            if not isinstance(allow_unverified, bool):
+                raise ValueError("allow_unverified 必须是布尔值")
             if not UID_RE.match(uid):
                 raise ValueError("uid 非法")
             if not isinstance(tiers, list) or not all(isinstance(item, str) for item in tiers):
@@ -339,6 +346,7 @@ class Handler(BaseHTTPRequestHandler):
                         list(DEPTH_LAYERS),
                         model=model,
                         effort=effort,
+                        allow_unverified=allow_unverified,
                     )
             if job is None:
                 job = self.service.submit(
@@ -388,6 +396,9 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError) as exc:
             self._json(400, {"error": str(exc)})
             return
+        except MissingConfigError as exc:
+            self._json(400, exc.as_payload())
+            return
         self._json(202, job)
 
     def _post_depth(self, uid, n):
@@ -400,12 +411,15 @@ class Handler(BaseHTTPRequestHandler):
             model = str(data.get("model") or DEFAULT_MODEL).strip()
             effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
             rebuild_model = data.get("rebuild_model", False)
+            allow_unverified = data.get("allow_unverified", False)
             if not UID_RE.match(uid):
                 raise ValueError("uid 非法")
             if not isinstance(layers, list) or not layers or not all(isinstance(item, str) for item in layers):
                 raise ValueError("layers 必须是非空字符串数组")
             if not isinstance(rebuild_model, bool):
                 raise ValueError("rebuild_model 必须是布尔值")
+            if not isinstance(allow_unverified, bool):
+                raise ValueError("allow_unverified 必须是布尔值")
             if not model or len(model) > 80:
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
@@ -417,6 +431,7 @@ class Handler(BaseHTTPRequestHandler):
                 model=model,
                 effort=effort,
                 rebuild_model=rebuild_model,
+                allow_unverified=allow_unverified,
             )
         except FileNotFoundError:
             self._json(404, {"error": "找不到章节"})
@@ -427,6 +442,8 @@ class Handler(BaseHTTPRequestHandler):
             )
         except (TypeError, ValueError) as exc:
             self._json(400, {"error": str(exc)})
+        except MissingConfigError as exc:
+            self._json(400, exc.as_payload())
         else:
             self._json(202, job)
 
@@ -559,6 +576,8 @@ h1{font-size:28px;margin:0 0 12px}a{color:#1E3A36}
 
 
 def main(argv=None):
+    # 仓库根的 .env 是主配置；先读它，下面解析默认值时才看得到。
+    envfile.load()
     parser = argparse.ArgumentParser(description="8771 四读 本地服务")
     parser.add_argument("--root", default=os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库"))
     parser.add_argument("--port", type=int, default=8771)
@@ -583,6 +602,9 @@ def main(argv=None):
     Handler.quiet = args.quiet
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print("四读 8771 · root=%s · http://127.0.0.1:%d/" % (service.library.root, args.port), flush=True)
+    warning = preflight.summary(service.library.root)
+    if warning:
+        print("配置提示：" + warning + "；book-corpus doctor 看全部", file=sys.stderr, flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

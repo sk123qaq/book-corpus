@@ -387,6 +387,82 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 
 `tests/acceptance/` 的 8 个离线入口（`check_ops`、`test_status`、`test_classify`、`test_doc_numbers`、`test_split`、`test_retire`、`test_pdf`、`test_answer_retry`）由 pytest 收集；需要 Chrome、真实模型或真实会话的 `check_demo`、`check_session*`、`check_result_ms`、`shot_ops`、`repro-*` 在 `tests/manual/`，清单与跑法见 `tests/manual/README.md`。
 
+## 配置与密钥
+
+所有 key、端点和开关都写在仓库根的 `.env`（已被 git 忽略）。先复制模板，再按需填：
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+真实环境变量永远优先；配置文件只读第一个存在的：仓库根 `.env` > 当前目录 `.env` > `~/.config/book-corpus/.env`。
+`BOOK_CORPUS_ENV=/path/to/file` 可以整个换成另一个文件（指了就不回退）。
+改完 `.env` 要重启对应服务（8771 四读、8773 首页）才会读到。
+
+### 缺配置会怎样
+
+提交任务前按场景预检，缺了直接报「缺少配置：…」，写清缺哪个变量、当前值是什么、该写在哪。
+唯一允许确认后降级的是研究层：没配检索 provider 时，页面会问一次「按未检索议程继续？」，
+同意后研究层记为 `searched=false`；引用层（citations）始终要求真能检索。
+
+看全部能力的当前状态：
+
+```bash
+book-corpus doctor
+```
+
+脚本（`ingest`、分类、拆章修复、问答归纳、`mineru_book.py` 等）请走 `book-corpus run <name>`：
+它会先读 `.env`、按场景预检，再启动。直接 `python src/bookcorpus/scripts/xxx.py` 绕过这一步。
+
+| 能力 | 什么时候要 | 变量 / 文件 | 缺了会怎样 |
+|---|---|---|---|
+| 四读·标注/结构模型 | 标注章节、生成或重建深读结构层 | `OPENCODE_GO_API_KEY`，或 pi 已登录 `opencode-go`（`~/.pi/agent/auth.json`） | 拒绝提交，提示配 key |
+| 四读·检索 provider | 研究层、引用层 | `READING_SEARCH_PROVIDER` + `TAVILY_API_KEY` / `BRAVE_API_KEY` / `SERPER_API_KEY` / `FIRECRAWL_API_KEY` 之一；或 `=http` + `READING_SEARCH_ENDPOINT` | 研究层需确认后降级；引用层拒绝提交 |
+| 四读·抓页 | 引用层抓网页原文 | `READING_FETCH_PROVIDER`（默认 `http`，不需要 key）；`firecrawl` 需要 `FIRECRAWL_API_KEY` | 选了 firecrawl 却没 key 时拒绝提交 |
+| 书库·模型 | `ingest`、分类、拆章修复、问答归纳 | 工作区 `books.toml` 的 `[model]` + 可执行的 `pi` | 脚本启动前报缺 |
+| MinerU | PDF 读不出字、OCR 兜底 | `MINERU_API_KEY`，或 `~/.config/mineru/api_key` | `doctor` 标缺；OCR 任务自己也会报 |
+| PaddleOCR | 扫描件逐页 OCR | `~/.config/PaddleOCR/api_key` | 跑之前报缺 |
+| MiMo | `build_expand.py --provider mimo` | `~/.config/mimo/api_key` | 跑之前报缺 |
+| pi 账号 | `build_expand.py` 用 commandcode / opencode | `~/.pi/agent/auth.json` 里有对应登录 | 跑之前报缺 |
+
+### 四读的模型 key
+
+```bash
+# .env
+OPENCODE_GO_API_KEY=sk-...
+```
+
+不填也行，只要 pi 里 `/login` 选过 `opencode-go`——项目会读 `~/.pi/agent/auth.json`。
+`READING_MODEL_NAME`、`READING_MODEL_URL`、`READING_MODEL_EFFORT`、`READING_MODEL_TIMEOUT`、
+`READING_MODEL_MAX_TOKENS` 可以覆盖默认模型与端点。
+
+### 检索 provider
+
+```bash
+# .env：auto 会挑第一个有 key 的
+READING_SEARCH_PROVIDER=auto
+FIRECRAWL_API_KEY=fc-...
+# 或者
+TAVILY_API_KEY=tvly-...
+```
+
+也可以不写 `.env`，沿用 pi 的 `~/.pi/agent/web-search.json`（它里面的 `searchProvider` 与
+`tavilyApiKey` / `braveApiKey` / `serperApiKey` / `firecrawlApiKey` 仍然认）。
+项目自己的 `.env` 优先，便于按仓库隔离。抓页默认走内置 HTTP；要 firecrawl 正文提取就设
+`READING_FETCH_PROVIDER=firecrawl` 并配上 `FIRECRAWL_API_KEY`。
+
+### OCR 与扩展生成的 key
+
+这两个脚本只读文件，不读 `.env`（历史行为，保持不变）：
+
+```bash
+printf '%s' '<token>' > ~/.config/PaddleOCR/api_key
+printf '%s' '<key>'   > ~/.config/mimo/api_key
+```
+
+MinerU 两种写法都认：`MINERU_API_KEY`（可以放 `.env`）或 `~/.config/mineru/api_key`。
+
 ## 路径与配置
 
 - `BOOKS_ROOT`：工作区根（有 `books.toml` 的那层），默认从当前目录向上找。

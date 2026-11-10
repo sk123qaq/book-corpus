@@ -336,25 +336,39 @@ function bindActions(scope) {
       if (rebuild && layers.includes('citations') && !layers.includes('research')) layers.push('research');
       button.disabled = true;
       button.textContent = '提交中…';
-      try {
-        const fresh = await RD.api('/api/depth/' + encodeURIComponent(job.uid) + '/' + encodeURIComponent(job.n), {
-          method: 'POST',
-          body: { layers, model: job.model, effort: job.effort, rebuild_model: rebuild },
-        });
-        data.jobs = [fresh].concat(data.jobs.filter((item) => item.id !== fresh.id));
-        openId = fresh.id;
-        render();
-        RD.toast('已重新排队 · ' + fresh.id);
-        load(true);
-      } catch (err) {
-        if (err.code === 'job_active') {
-          data.jobs = (err.conflicts || []).concat(data.jobs);
+      const send = async (allowUnverified) => {
+        try {
+          const fresh = await RD.api('/api/depth/' + encodeURIComponent(job.uid) + '/' + encodeURIComponent(job.n), {
+            method: 'POST',
+            body: {
+              layers,
+              model: job.model,
+              effort: job.effort,
+              rebuild_model: rebuild,
+              allow_unverified: Boolean(allowUnverified),
+            },
+          });
+          data.jobs = [fresh].concat(data.jobs.filter((item) => item.id !== fresh.id));
+          openId = fresh.id;
           render();
+          RD.toast('已重新排队 · ' + fresh.id);
+          load(true);
+        } catch (err) {
+          if (err.code === 'missing_config' && err.payload && err.payload.degradable && !allowUnverified &&
+              window.confirm(err.payload.error + '\n\n' + (err.payload.missing[0] ? err.payload.missing[0].fix : '') +
+                '\n\n先按「未检索议程」继续？')) {
+            return send(true);
+          }
+          if (err.code === 'job_active') {
+            data.jobs = (err.conflicts || []).concat(data.jobs);
+            render();
+          }
+          RD.toast(err.message, true);
+          button.disabled = false;
+          button.textContent = label;
         }
-        RD.toast(err.message, true);
-        button.disabled = false;
-        button.textContent = label;
-      }
+      };
+      send(false);
     });
   });
   scope.querySelectorAll('[data-log]').forEach((button) => {

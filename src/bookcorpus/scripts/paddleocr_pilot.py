@@ -27,6 +27,12 @@ ROOT = L.ROOT
 
 
 def token():
+    try:
+        from bookcorpus import preflight
+    except ImportError:  # 直接跑脚本时
+        preflight = None
+    if preflight is not None:
+        preflight.require(["ocr.paddleocr"])
     with open(KEY_PATH, encoding="utf-8") as fh:
         return fh.read().strip()
 

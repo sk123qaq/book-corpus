@@ -11,6 +11,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import ClassVar
 
+from .. import preflight
 from .agent_standard import generate_standard_html, render_agent_page
 from .depth.citations import (
     FetchError,
@@ -961,8 +962,12 @@ class ReadingService:
     def editorial(self, uid, n):
         return self.store.editorial(uid, n)
 
-    def submit_depth(self, uid, n, layers, model=None, effort=None, rebuild_model=False):
-        """提交一层或多层深度生产；每层独立，未勾选的层原样保留。"""
+    def submit_depth(self, uid, n, layers, model=None, effort=None, rebuild_model=False, allow_unverified=False):
+        """提交一层或多层深度生产；每层独立，未勾选的层原样保留。
+
+        ``allow_unverified`` 只影响研究层：没有检索 provider 时，确认后可以跑
+        未检索议程。引用层要求真去检索，不吃这个开关。
+        """
         if not self.library.book(uid) or not self.library.chapter(uid, n):
             raise FileNotFoundError(f"找不到章节 {uid}/{n}")
         if not isinstance(layers, (list, tuple)) or not layers:
@@ -986,6 +991,25 @@ class ReadingService:
                 raise ValueError("研究层已过期或未完成；请同时重建研究层后再补引用")
         if "model" in requested and "citations" in requested and "research" not in requested:
             raise ValueError("重建结构模型后研究层会过期；生成引用时需同时重建研究层")
+        if allow_unverified and "citations" in requested and preflight.missing(["reading.search"]):
+            # 用户已确认按未检索议程跑：引用层没有真检索就只能整层不出，
+            # 否则会写出“未核验”的引用冒充引用。
+            requested.remove("citations")
+            if not requested:
+                raise ValueError(
+                    "引用层需要真检索；缺检索 provider 时请连同研究层一起生成未检索议程，或配好 provider 后再补引用"
+                )
+        needed = ["reading.model"] if "model" in requested else []
+        if "research" in requested or "citations" in requested:
+            needed.append("reading.search")
+        if "citations" in requested:
+            needed.append("reading.fetch")
+        if needed:
+            preflight.require(
+                needed,
+                allow_unverified=bool(allow_unverified) and "citations" not in requested,
+                note="研究层会记成未检索议程（searched=false）；引用层不会生成。",
+            )
         with self._submit_lock:
             conflicts = self.queue.conflicts(uid, n)
             if conflicts:
@@ -999,6 +1023,7 @@ class ReadingService:
                 kind="depth",
                 layers=requested,
                 rebuild=bool(rebuild_model),
+                allow_unverified=bool(allow_unverified),
             )
 
     def save_editorial(self, uid, n, payload):
@@ -1198,6 +1223,7 @@ class ReadingService:
                 raise JobConflictError(conflicts)
             if self.store.edition(uid, n) and not overwrite:
                 raise PackExistsError(["edition"])
+            preflight.require(["reading.model"], note="图版编辑层要用模型生成。")
             return self.queue.submit(
                 uid,
                 n,
@@ -1306,6 +1332,7 @@ class ReadingService:
         model_meta = state.get("model")
         regenerated = False
         if "model" in requested:
+            preflight.require(["reading.model"], note="深读结构层要用模型生成。")
             self._set_stage(job_id, "annotating")
             model, model_meta = generate_chapter_model(
                 self.client or ModelClient(),
@@ -1550,6 +1577,7 @@ class ReadingService:
         budget_estimate = None
         model_meta = None
         if self.annotate and editorial is None:
+            preflight.require(["reading.model"], note="本次任务要重新标注（重跑线上只重渲染的任务不受影响）。")
             budget_estimate = _estimate_budget(blocks)
             if budget_estimate["tokens_est"] > MAX_BUDGET_TOKENS or budget_estimate["usd_est"] > MAX_BUDGET_USD:
                 raise RuntimeError(
@@ -1633,6 +1661,7 @@ class ReadingService:
         editorial_meta = None
         editorial_error = None
         if editorial is None and self.annotate and self.figures:
+            preflight.require(["reading.model"], note="编辑层（图版与旁批）要用模型生成。")
             editable = [tier for tier in ("standard", "deep", "research") if tier in projections]
             allowed_ids = (
                 set.intersection(*[{block["id"] for block in projections[tier]["blocks"]} for tier in editable])
@@ -1828,6 +1857,13 @@ class ReadingService:
             existing = [tier for tier in requested if (state or {}).get("tiers", {}).get(tier, {}).get("exists")]
             if existing and not overwrite and not rebuild:
                 raise PackExistsError(existing)
+            manifest = (state or {}).get("manifest") or {}
+            needs_model = self.annotate and (force_annotation or not manifest or self.store.editorial(uid, n) is None)
+            if needs_model:
+                preflight.require(
+                    ["reading.model"],
+                    note="这次提交要调标注/编辑模型；只想重渲染已有包时不要勾“重新标注”。",
+                )
             return self.queue.submit(
                 uid,
                 n,

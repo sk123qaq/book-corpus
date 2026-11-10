@@ -311,36 +311,48 @@ async function submitDepth(layers, rebuildModel) {
   depthBusy = true;
   refreshDepthPanel();
   const mount = RD.mount('depth-jobs');
-  try {
-    const settings = RD.modelSettings();
-    const job = await RD.api('/api/depth/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
-      method: 'POST',
-      body: {
-        layers,
-        model: settings.model,
-        effort: settings.effort,
-        rebuild_model: Boolean(rebuildModel),
-      },
-    });
-    if (mount) {
-      const slot = document.createElement('div');
-      slot.setAttribute('data-depth-job', job.id);
-      mount.appendChild(slot);
-      mount.classList.add('open');
-      RD.pollJob(job.id, slot, async (finished) => {
-        depthBusy = false;
-        RD.toast(finished.state === 'failed' ? (finished.error || '深度生成失败') :
-          '深度层已生成 · ' + RD.statusName[finished.state], finished.state === 'failed');
-        await load();
+  const send = async (allowUnverified) => {
+    try {
+      const settings = RD.modelSettings();
+      const job = await RD.api('/api/depth/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
+        method: 'POST',
+        body: {
+          layers,
+          model: settings.model,
+          effort: settings.effort,
+          rebuild_model: Boolean(rebuildModel),
+          allow_unverified: Boolean(allowUnverified),
+        },
       });
+      if (mount) {
+        const slot = document.createElement('div');
+        slot.setAttribute('data-depth-job', job.id);
+        mount.appendChild(slot);
+        mount.classList.add('open');
+        RD.pollJob(job.id, slot, async (finished) => {
+          depthBusy = false;
+          RD.toast(finished.state === 'failed' ? (finished.error || '深度生成失败') :
+            '深度层已生成 · ' + RD.statusName[finished.state], finished.state === 'failed');
+          await load();
+        });
+      }
+    } catch (err) {
+      depthBusy = false;
+      refreshDepthPanel();
+      if (err.code === 'job_active') {
+        RD.toast('该章已有任务在跑，先去生成记录看进度', true);
+      } else if (err.code === 'missing_config' && err.payload && err.payload.degradable && !allowUnverified &&
+          window.confirm(err.payload.error + '\n\n' + (err.payload.missing[0] ? err.payload.missing[0].fix : '') +
+            '\n\n先按「未检索议程」继续？')) {
+        return send(true);
+      } else {
+        RD.toast(err.message, true);
+      }
     }
-  } catch (err) {
-    depthBusy = false;
-    refreshDepthPanel();
-    if (err.code === 'job_active') RD.toast('该章已有任务在跑，先去生成记录看进度', true);
-    else RD.toast(err.message, true);
-  }
+  };
+  return send(false);
 }
+
 
 function bindTicket() {
   RD.mount('tier-list').addEventListener('change', (event) => {
@@ -428,11 +440,11 @@ function watchJob(job, onDone) {
   });
 }
 
-async function postJob(keys, overwrite, rebuild) {
+async function postJob(keys, overwrite, rebuild, allowUnverified) {
   const settings = RD.modelSettings();
   return RD.api('/api/jobs', { method: 'POST', body: {
     uid: data.book.uid, n: data.chapter.n, tiers: keys, model: settings.model, effort: settings.effort,
-    overwrite: Boolean(overwrite), rebuild: Boolean(rebuild),
+    overwrite: Boolean(overwrite), rebuild: Boolean(rebuild), allow_unverified: Boolean(allowUnverified),
   } });
 }
 
@@ -501,6 +513,10 @@ async function generate() {
         if (!window.confirm('未勾选档位将被移除：' + labels + '（' + (err.payload.reason || '原文或生成模式已变化') +
             '），整包重建为所选档位。确定吗？')) throw err;
         job = await postJob(keys, true, true);
+      } else if (err.code === 'missing_config' && err.payload && err.payload.degradable) {
+        const fix = err.payload.missing && err.payload.missing[0] ? err.payload.missing[0].fix : '';
+        if (!window.confirm(err.payload.error + '\n\n' + fix + '\n\n先按「未检索议程」继续？')) throw err;
+        job = await postJob(keys, overwrite, rebuild, true);
       } else {
         throw err;
       }

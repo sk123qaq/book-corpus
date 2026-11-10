@@ -475,6 +475,12 @@ def main():
         help="不调模型，备份后删掉空正文章（图片页/标题页）的 expand 行，再重建 expand_fts",
     )
     a = ap.parse_args()
+    try:
+        from bookcorpus import preflight
+    except ImportError:  # 直接跑脚本、包不在 sys.path 时退回脚本自己的报错
+        preflight = None
+    if preflight is not None:
+        preflight.require(["expand.mimo"] if a.provider == "mimo" else ["expand.pi"])
 
     if a.prune_stub:
         con = sqlite3.connect(DB)
