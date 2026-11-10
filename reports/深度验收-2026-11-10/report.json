@@ -1,0 +1,2576 @@
+{
+ "generated_at": "2026-11-10T03:29:16+00:00",
+ "root": "/home/colaqaq/书库",
+ "model": "deepseek-v4.1-flash",
+ "effort": "max",
+ "workers": 4,
+ "total": 20,
+ "ok": 20,
+ "failed": 0,
+ "elapsed_s": 4115.4,
+ "usage": {
+  "prompt_tokens": 679138,
+  "completion_tokens": 1401240,
+  "total_tokens": 2080378,
+  "prompt_tokens_details": {
+   "cached_tokens": 49280,
+   "audio_tokens": 0,
+   "cache_creation_input_tokens": 0,
+   "cache_write_tokens": 0
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 1137533,
+   "accepted_prediction_tokens": 0,
+   "audio_tokens": 0,
+   "rejected_prediction_tokens": 0
+  },
+  "cost": 0,
+  "opencode": {
+   "billing_source": "go",
+   "list_cost": 1.87074106,
+   "allowance": 1.1224446400000003,
+   "tokens": {
+    "input": 629858,
+    "output": 1401240,
+    "reasoning": 1137533,
+    "cache_read": 49280,
+    "cache_write_5m": 0,
+    "cache_write_1h": 0
+   }
+  },
+  "prompt_cache_hit_tokens": 512,
+  "prompt_cache_miss_tokens": 59890
+ },
+ "usd": 1.870742,
+ "chapters": [
+  {
+   "uid": "B0001",
+   "n": 1,
+   "chapter": "B0001/01",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 450.3,
+   "usage": {
+    "prompt_tokens": 19482,
+    "completion_tokens": 46765,
+    "total_tokens": 66247,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 37946
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.06196259999999999,
+     "allowance": 0.03717756,
+     "tokens": {
+      "input": 19482,
+      "output": 46765,
+      "reasoning": 37946,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.061963,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 1,
+    "units": 11,
+    "sections": 6,
+    "gate": "pass",
+    "cache_key": "78f2ee644de1273148bf9a758ba5f3cf5a96dfbd9b8e573e61cc1e2b7b599e9a",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2193,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 11,
+    "deep_chains": 4,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 19482,
+     "completion_tokens": 46765,
+     "total_tokens": 66247,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 37946
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.06196259999999999,
+      "allowance": 0.03717756,
+      "tokens": {
+       "input": 19482,
+       "output": 46765,
+       "reasoning": 37946,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.061963,
+    "elapsed_s": 450.0
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M03 状态为 unverified\n引用警告：M05 状态为 unverified\n引用警告：M06 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 450.3,
+     "usage": {
+      "prompt_tokens": 19482,
+      "completion_tokens": 46765,
+      "total_tokens": 66247,
+      "prompt_tokens_details": {
+       "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 37946
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.06196259999999999,
+       "allowance": 0.03717756,
+       "tokens": {
+        "input": 19482,
+        "output": 46765,
+        "reasoning": 37946,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.061963,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 2,
+   "chapter": "B0001/02",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 670.6,
+   "usage": {
+    "prompt_tokens": 21282,
+    "completion_tokens": 62800,
+    "total_tokens": 84082,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 53690
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.0817446,
+     "allowance": 0.04904676,
+     "tokens": {
+      "input": 21282,
+      "output": 62800,
+      "reasoning": 53690,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.081745,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 2,
+    "units": 9,
+    "sections": 7,
+    "gate": "pass",
+    "cache_key": "877e8aa8655b20d225481d73d7b65c9cfe51674e23a521478c1ce62c7193cf4c",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2442,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 9,
+    "deep_chains": 7,
+    "research_matrix": 7,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 21282,
+     "completion_tokens": 62800,
+     "total_tokens": 84082,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 53690
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.0817446,
+      "allowance": 0.04904676,
+      "tokens": {
+       "input": 21282,
+       "output": 62800,
+       "reasoning": 53690,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.081745,
+    "elapsed_s": 670.3
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M04 状态为 unverified\n引用警告：M05 状态为 unverified\n引用警告：M07 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 670.6,
+     "usage": {
+      "prompt_tokens": 21282,
+      "completion_tokens": 62800,
+      "total_tokens": 84082,
+      "prompt_tokens_details": {
+       "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 53690
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.0817446,
+       "allowance": 0.04904676,
+       "tokens": {
+        "input": 21282,
+        "output": 62800,
+        "reasoning": 53690,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.081745,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 3,
+   "chapter": "B0001/03",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 686.3,
+   "usage": {
+    "prompt_tokens": 22721,
+    "completion_tokens": 65824,
+    "total_tokens": 88545,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 54583
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.08580510000000001,
+     "allowance": 0.05148306,
+     "tokens": {
+      "input": 22721,
+      "output": 65824,
+      "reasoning": 54583,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.085805,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 3,
+    "units": 14,
+    "sections": 5,
+    "gate": "pass",
+    "cache_key": "b64dd0206c98fc8c30ebe30324715907b83997221f25e4b1178a66f1e8ecae40",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.236,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 5,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 22721,
+     "completion_tokens": 65824,
+     "total_tokens": 88545,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 54583
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.08580510000000001,
+      "allowance": 0.05148306,
+      "tokens": {
+       "input": 22721,
+       "output": 65824,
+       "reasoning": 54583,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.085805,
+    "elapsed_s": 686.0
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M02 状态为 unverified\n引用警告：M04 状态为 not_found\n引用警告：M08 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 686.3,
+     "usage": {
+      "prompt_tokens": 22721,
+      "completion_tokens": 65824,
+      "total_tokens": 88545,
+      "prompt_tokens_details": {
+       "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 54583
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.08580510000000001,
+       "allowance": 0.05148306,
+       "tokens": {
+        "input": 22721,
+        "output": 65824,
+        "reasoning": 54583,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.085805,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 4,
+   "chapter": "B0001/04",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 888.3,
+   "usage": {
+    "prompt_tokens": 39656,
+    "completion_tokens": 80239,
+    "total_tokens": 119895,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 63359
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.10818359999999999,
+     "allowance": 0.06491016,
+     "tokens": {
+      "input": 39656,
+      "output": 80239,
+      "reasoning": 63359,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.108184,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 4,
+    "units": 18,
+    "sections": 6,
+    "gate": "pass",
+    "cache_key": "5c156f204362e14fa8a307b9e52eaacfb1a055cb78ec4e45352f5e97461525d5",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2241,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 3,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 6,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 39656,
+     "completion_tokens": 80239,
+     "total_tokens": 119895,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 63359
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.10818359999999999,
+      "allowance": 0.06491016,
+      "tokens": {
+       "input": 39656,
+       "output": 80239,
+       "reasoning": 63359,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.108184,
+    "elapsed_s": 888.0
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M01 状态为 unverified\n引用警告：M02 状态为 unverified\n引用警告：M05 状态为 unverified\n引用警告：M06 状态为 unverified\n引用警告：M07 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 888.3,
+     "usage": {
+      "prompt_tokens": 39656,
+      "completion_tokens": 80239,
+      "total_tokens": 119895,
+      "prompt_tokens_details": {
+       "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 63359
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.10818359999999999,
+       "allowance": 0.06491016,
+       "tokens": {
+        "input": 39656,
+        "output": 80239,
+        "reasoning": 63359,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.108184,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 5,
+   "chapter": "B0001/05",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 541.5,
+   "usage": {
+    "prompt_tokens": 30255,
+    "completion_tokens": 71615,
+    "total_tokens": 101870,
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 0,
+     "cache_creation_input_tokens": 0,
+     "cache_write_tokens": 0
+    },
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": 0,
+     "audio_tokens": 0,
+     "reasoning_tokens": 60125,
+     "rejected_prediction_tokens": 0
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.0950145,
+     "allowance": 0.0570087,
+     "tokens": {
+      "input": 30255,
+      "output": 71615,
+      "reasoning": 60125,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.095015,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 5,
+    "units": 16,
+    "sections": 6,
+    "gate": "pass",
+    "cache_key": "43509417d887bb0fc13bfa98bb657027c219ff0dee719bc3a71cc9e57f113ee2",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2208,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 5,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 4,
+    "research_matrix": 9,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 30255,
+     "completion_tokens": 71615,
+     "total_tokens": 101870,
+     "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_write_tokens": 0
+     },
+     "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 60125,
+      "rejected_prediction_tokens": 0
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.0950145,
+      "allowance": 0.0570087,
+      "tokens": {
+       "input": 30255,
+       "output": 71615,
+       "reasoning": 60125,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.095015,
+    "elapsed_s": 541.0
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M02 状态为 unverified\n引用警告：M04 状态为 unverified\n引用警告：M06 状态为 unverified\n引用警告：M07 状态为 unverified\n引用警告：M09 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 541.5,
+     "usage": {
+      "prompt_tokens": 30255,
+      "completion_tokens": 71615,
+      "total_tokens": 101870,
+      "prompt_tokens_details": {
+       "audio_tokens": 0,
+       "cached_tokens": 0,
+       "cache_creation_input_tokens": 0,
+       "cache_write_tokens": 0
+      },
+      "completion_tokens_details": {
+       "accepted_prediction_tokens": 0,
+       "audio_tokens": 0,
+       "reasoning_tokens": 60125,
+       "rejected_prediction_tokens": 0
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.0950145,
+       "allowance": 0.0570087,
+       "tokens": {
+        "input": 30255,
+        "output": 71615,
+        "reasoning": 60125,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.095015,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 6,
+   "chapter": "B0001/06",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 670.9,
+   "usage": {
+    "prompt_tokens": 25670,
+    "completion_tokens": 71425,
+    "total_tokens": 97095,
+    "prompt_tokens_details": {
+     "cached_tokens": 5248
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 59808
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.09186809000000001,
+     "allowance": 0.05512085,
+     "tokens": {
+      "input": 20422,
+      "output": 71425,
+      "reasoning": 59808,
+      "cache_read": 5248,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.091868,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 6,
+    "units": 18,
+    "sections": 5,
+    "gate": "pass",
+    "cache_key": "5faab3e0fd292c7d297cb2b8c1861bb66073f20cb8e9f5bddb34764da2391d88",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2333,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 5,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 5,
+    "research_matrix": 8,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 25670,
+     "completion_tokens": 71425,
+     "total_tokens": 97095,
+     "prompt_tokens_details": {
+      "cached_tokens": 5248
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 59808
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.09186809000000001,
+      "allowance": 0.05512085,
+      "tokens": {
+       "input": 20422,
+       "output": 71425,
+       "reasoning": 59808,
+       "cache_read": 5248,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.091868,
+    "elapsed_s": 670.6
+   },
+   "error": null,
+   "stderr": "引用警告：M05 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 670.9,
+     "usage": {
+      "prompt_tokens": 25670,
+      "completion_tokens": 71425,
+      "total_tokens": 97095,
+      "prompt_tokens_details": {
+       "cached_tokens": 5248
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 59808
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.09186809000000001,
+       "allowance": 0.05512085,
+       "tokens": {
+        "input": 20422,
+        "output": 71425,
+        "reasoning": 59808,
+        "cache_read": 5248,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.091868,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 7,
+   "chapter": "B0001/07",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 761.8,
+   "usage": {
+    "prompt_tokens": 30883,
+    "completion_tokens": 71854,
+    "total_tokens": 102737,
+    "prompt_tokens_details": {
+     "cached_tokens": 1024
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 59532
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.09518863999999999,
+     "allowance": 0.057113189999999994,
+     "tokens": {
+      "input": 29859,
+      "output": 71854,
+      "reasoning": 59532,
+      "cache_read": 1024,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.095189,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 7,
+    "units": 20,
+    "sections": 5,
+    "gate": "pass",
+    "cache_key": "41f497fc5595516801714dfd89d97a28809ae0db17acafdd3189cf6c07f91df1",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2025,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 8,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 5,
+    "research_matrix": 10,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 30883,
+     "completion_tokens": 71854,
+     "total_tokens": 102737,
+     "prompt_tokens_details": {
+      "cached_tokens": 1024
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 59532
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.09518863999999999,
+      "allowance": 0.057113189999999994,
+      "tokens": {
+       "input": 29859,
+       "output": 71854,
+       "reasoning": 59532,
+       "cache_read": 1024,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.095189,
+    "elapsed_s": 761.5
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M01 状态为 fetch_failed\n引用警告：M02 状态为 not_found\n引用警告：M04 状态为 unverified\n引用警告：M06 状态为 unverified\n引用警告：M07 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 761.8,
+     "usage": {
+      "prompt_tokens": 30883,
+      "completion_tokens": 71854,
+      "total_tokens": 102737,
+      "prompt_tokens_details": {
+       "cached_tokens": 1024
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 59532
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.09518863999999999,
+       "allowance": 0.057113189999999994,
+       "tokens": {
+        "input": 29859,
+        "output": 71854,
+        "reasoning": 59532,
+        "cache_read": 1024,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.095189,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 8,
+   "chapter": "B0001/08",
+   "ok": true,
+   "attempts": 2,
+   "elapsed_s": 946.9,
+   "usage": {
+    "prompt_tokens": 24325,
+    "completion_tokens": 61725,
+    "total_tokens": 86050,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 51461
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.0813675,
+     "allowance": 0.0488205,
+     "tokens": {
+      "input": 24325,
+      "output": 61725,
+      "reasoning": 51461,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.081367,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 8,
+    "units": 14,
+    "sections": 5,
+    "gate": "pass",
+    "cache_key": "d2577670a38180455a699b1a2e11c6a9929d21b4450c5c5b4d67520ffc1668da",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2311,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 5,
+    "research_matrix": 8,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 24325,
+     "completion_tokens": 61725,
+     "total_tokens": 86050,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 51461
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.0813675,
+      "allowance": 0.0488205,
+      "tokens": {
+       "input": 24325,
+       "output": 61725,
+       "reasoning": 51461,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.081367,
+    "elapsed_s": 725.0
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M02 状态为 fetch_failed\n引用警告：M05 状态为 unverified\n引用警告：M07 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [],
+   "attempts_detail_note": "合并报告未保留失败尝试的明细与用量"
+  },
+  {
+   "uid": "B0001",
+   "n": 9,
+   "chapter": "B0001/09",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 976.7,
+   "usage": {
+    "prompt_tokens": 31979,
+    "completion_tokens": 78788,
+    "total_tokens": 110767,
+    "prompt_tokens_details": {
+     "cached_tokens": 5760
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 64200
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.10244586,
+     "allowance": 0.061467520000000005,
+     "tokens": {
+      "input": 26219,
+      "output": 78788,
+      "reasoning": 64200,
+      "cache_read": 5760,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.102446,
+   "payload": {
+    "status": "ready",
+    "uid": "B0001",
+    "n": 9,
+    "units": 21,
+    "sections": 9,
+    "gate": "pass",
+    "cache_key": "f073d0480435155b633e9165f66fbd006ac08aa4864235d9fb45819fa50a3152",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2317,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 2,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 4,
+    "research_matrix": 8,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 31979,
+     "completion_tokens": 78788,
+     "total_tokens": 110767,
+     "prompt_tokens_details": {
+      "cached_tokens": 5760
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 64200
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.10244586,
+      "allowance": 0.061467520000000005,
+      "tokens": {
+       "input": 26219,
+       "output": 78788,
+       "reasoning": 64200,
+       "cache_read": 5760,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.102446,
+    "elapsed_s": 976.4
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M01 状态为 unverified\n引用警告：M02 状态为 unverified\n引用警告：M04 状态为 unverified\n引用警告：M06 状态为 unverified\n引用警告：M08 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 976.7,
+     "usage": {
+      "prompt_tokens": 31979,
+      "completion_tokens": 78788,
+      "total_tokens": 110767,
+      "prompt_tokens_details": {
+       "cached_tokens": 5760
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 64200
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.10244586,
+       "allowance": 0.061467520000000005,
+       "tokens": {
+        "input": 26219,
+        "output": 78788,
+        "reasoning": 64200,
+        "cache_read": 5760,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.102446,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 1,
+   "chapter": "B0002/01",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 398.5,
+   "usage": {
+    "prompt_tokens": 50346,
+    "completion_tokens": 66853,
+    "total_tokens": 117199,
+    "prompt_cache_hit_tokens": 512,
+    "prompt_cache_miss_tokens": 35066,
+    "prompt_tokens_details": {
+     "cached_tokens": 512
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 54698
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.09517687000000001,
+     "allowance": 0.057106119999999996,
+     "tokens": {
+      "input": 49834,
+      "output": 66853,
+      "reasoning": 54698,
+      "cache_read": 512,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.095177,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 1,
+    "units": 27,
+    "sections": 6,
+    "gate": "pass",
+    "cache_key": "8269ebad26c83e6b0d2a37705103a1ac2d54e0031a8e2861c0c39490b86e0abd",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.1827,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 2,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 4,
+    "research_matrix": 8,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 50346,
+     "completion_tokens": 66853,
+     "total_tokens": 117199,
+     "prompt_cache_hit_tokens": 512,
+     "prompt_cache_miss_tokens": 35066,
+     "prompt_tokens_details": {
+      "cached_tokens": 512
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 54698
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.09517687000000001,
+      "allowance": 0.057106119999999996,
+      "tokens": {
+       "input": 49834,
+       "output": 66853,
+       "reasoning": 54698,
+       "cache_read": 512,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.095177,
+    "elapsed_s": 398.2
+   },
+   "error": null,
+   "stderr": "引用警告：M04 状态为 not_found\n引用警告：M06 状态为 not_found\n引用警告：M07 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 398.5,
+     "usage": {
+      "prompt_tokens": 50346,
+      "completion_tokens": 66853,
+      "total_tokens": 117199,
+      "prompt_cache_hit_tokens": 512,
+      "prompt_cache_miss_tokens": 35066,
+      "prompt_tokens_details": {
+       "cached_tokens": 512
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 54698
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.09517687000000001,
+       "allowance": 0.057106119999999996,
+       "tokens": {
+        "input": 49834,
+        "output": 66853,
+        "reasoning": 54698,
+        "cache_read": 512,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.095177,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 2,
+   "chapter": "B0002/02",
+   "ok": true,
+   "attempts": 2,
+   "elapsed_s": 938.9,
+   "usage": {
+    "prompt_tokens": 38260,
+    "completion_tokens": 95416,
+    "total_tokens": 133676,
+    "prompt_tokens_details": {
+     "cached_tokens": 5120
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 76762
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.12447192000000001,
+     "allowance": 0.07468314999999999,
+     "tokens": {
+      "input": 33140,
+      "output": 95416,
+      "reasoning": 76762,
+      "cache_read": 5120,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.124472,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 2,
+    "units": 23,
+    "sections": 8,
+    "gate": "pass",
+    "cache_key": "a032e31f7625fe20aeeab630552601146982b4e30fe39e75018c83c080a20250",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2016,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 2,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 6,
+    "research_matrix": 8,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 38260,
+     "completion_tokens": 95416,
+     "total_tokens": 133676,
+     "prompt_tokens_details": {
+      "cached_tokens": 5120
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 76762
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.12447192000000001,
+      "allowance": 0.07468314999999999,
+      "tokens": {
+       "input": 33140,
+       "output": 95416,
+       "reasoning": 76762,
+       "cache_read": 5120,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.124472,
+    "elapsed_s": 792.1
+   },
+   "error": null,
+   "stderr": "引用警告：M01 状态为 fetch_failed\n引用警告：M02 状态为 not_found\n引用警告：M03 状态为 not_found\n引用警告：M05 状态为 not_found\n引用警告：M06 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [],
+   "attempts_detail_note": "合并报告未保留失败尝试的明细与用量"
+  },
+  {
+   "uid": "B0002",
+   "n": 3,
+   "chapter": "B0002/03",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 723.8,
+   "usage": {
+    "prompt_tokens": 36028,
+    "completion_tokens": 63572,
+    "total_tokens": 99600,
+    "prompt_tokens_details": {
+     "cached_tokens": 9984
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 49098
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.0841595,
+     "allowance": 0.0504957,
+     "tokens": {
+      "input": 26044,
+      "output": 63572,
+      "reasoning": 49098,
+      "cache_read": 9984,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.084159,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 3,
+    "units": 13,
+    "sections": 8,
+    "gate": "pass",
+    "cache_key": "6f8ebfc32ccea00a52adf2a1ac878a0768c01c7346d08f8f800bb14fc2c75a3e",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.1827,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 11,
+    "deep_chains": 8,
+    "research_matrix": 9,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 36028,
+     "completion_tokens": 63572,
+     "total_tokens": 99600,
+     "prompt_tokens_details": {
+      "cached_tokens": 9984
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 49098
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.0841595,
+      "allowance": 0.0504957,
+      "tokens": {
+       "input": 26044,
+       "output": 63572,
+       "reasoning": 49098,
+       "cache_read": 9984,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.084159,
+    "elapsed_s": 723.4
+   },
+   "error": null,
+   "stderr": "引用警告：M02 状态为 not_found\n引用警告：M04 状态为 not_found\n引用警告：M07 状态为 not_found\n引用警告：M08 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 723.8,
+     "usage": {
+      "prompt_tokens": 36028,
+      "completion_tokens": 63572,
+      "total_tokens": 99600,
+      "prompt_tokens_details": {
+       "cached_tokens": 9984
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 49098
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.0841595,
+       "allowance": 0.0504957,
+       "tokens": {
+        "input": 26044,
+        "output": 63572,
+        "reasoning": 49098,
+        "cache_read": 9984,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.084159,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 4,
+   "chapter": "B0002/04",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 337.9,
+   "usage": {
+    "prompt_tokens": 40648,
+    "completion_tokens": 60499,
+    "total_tokens": 101147,
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 0,
+     "cache_creation_input_tokens": 0,
+     "cache_write_tokens": 0
+    },
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": 0,
+     "audio_tokens": 0,
+     "reasoning_tokens": 45762,
+     "rejected_prediction_tokens": 0
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.0847932,
+     "allowance": 0.05087592,
+     "tokens": {
+      "input": 40648,
+      "output": 60499,
+      "reasoning": 45762,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.084793,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 4,
+    "units": 25,
+    "sections": 7,
+    "gate": "pass",
+    "cache_key": "4a8bfa1e9d3f31a2c2996fd835f97e83fce6f5bafb5310cae97f615e79a5acfe",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2051,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 6,
+    "research_matrix": 8,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 40648,
+     "completion_tokens": 60499,
+     "total_tokens": 101147,
+     "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_write_tokens": 0
+     },
+     "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 45762,
+      "rejected_prediction_tokens": 0
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.0847932,
+      "allowance": 0.05087592,
+      "tokens": {
+       "input": 40648,
+       "output": 60499,
+       "reasoning": 45762,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.084793,
+    "elapsed_s": 337.6
+   },
+   "error": null,
+   "stderr": "/home/colaqaq/Work/book-corpus-depth-9/src/bookcorpus/reading/depth/citations.py:361: MarkupResemblesLocatorWarning: The input passed in on this line looks more like a URL than HTML or XML.\n\nIf you meant to use Beautiful Soup to parse the web page found at a certain URL, then something has gone wrong. You should use an Python package like 'requests' to fetch the content behind the URL. Once you have the content as a string, you can feed that string into Beautiful Soup.\n\nHowever, if you want to parse some data that happens to look like a URL, then nothing has gone wrong: you are using Beautiful Soup correctly, and this warning is spurious and can be filtered. To make this warning go away, run this code before calling the BeautifulSoup constructor:\n\n    from bs4 import MarkupResemblesLocatorWarning\n    import warnings\n\n    warnings.filterwarnings(\"ignore\", category=MarkupResemblesLocatorWarning)\n    \n  return BeautifulSoup(str(value or \"\"), \"html.parser\").get_text(\" \", strip=True)\n引用警告：M02 状态为 unverified\n引用警告：M03 状态为 unverified\n引用警告：M07 状态为 unverified",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 337.9,
+     "usage": {
+      "prompt_tokens": 40648,
+      "completion_tokens": 60499,
+      "total_tokens": 101147,
+      "prompt_tokens_details": {
+       "audio_tokens": 0,
+       "cached_tokens": 0,
+       "cache_creation_input_tokens": 0,
+       "cache_write_tokens": 0
+      },
+      "completion_tokens_details": {
+       "accepted_prediction_tokens": 0,
+       "audio_tokens": 0,
+       "reasoning_tokens": 45762,
+       "rejected_prediction_tokens": 0
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.0847932,
+       "allowance": 0.05087592,
+       "tokens": {
+        "input": 40648,
+        "output": 60499,
+        "reasoning": 45762,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.084793,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 5,
+   "chapter": "B0002/05",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 651.4,
+   "usage": {
+    "prompt_tokens": 44252,
+    "completion_tokens": 58743,
+    "total_tokens": 102995,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 47416
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.0837672,
+     "allowance": 0.05026032000000001,
+     "tokens": {
+      "input": 44252,
+      "output": 58743,
+      "reasoning": 47416,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.083767,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 5,
+    "units": 26,
+    "sections": 9,
+    "gate": "pass",
+    "cache_key": "7e2eac880fc76e7016055357eb54b76ab527cdbd63ac4761c7230d1baa6e824e",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.1578,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 11,
+    "deep_chains": 4,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 44252,
+     "completion_tokens": 58743,
+     "total_tokens": 102995,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 47416
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.0837672,
+      "allowance": 0.05026032000000001,
+      "tokens": {
+       "input": 44252,
+       "output": 58743,
+       "reasoning": 47416,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.083767,
+    "elapsed_s": 651.1
+   },
+   "error": null,
+   "stderr": "引用警告：M01 状态为 not_found\n引用警告：M02 状态为 not_found\n引用警告：M03 状态为 not_found\n引用警告：M04 状态为 not_found\n引用警告：M05 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 651.4,
+     "usage": {
+      "prompt_tokens": 44252,
+      "completion_tokens": 58743,
+      "total_tokens": 102995,
+      "prompt_tokens_details": {
+       "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 47416
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.0837672,
+       "allowance": 0.05026032000000001,
+       "tokens": {
+        "input": 44252,
+        "output": 58743,
+        "reasoning": 47416,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.083767,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 6,
+   "chapter": "B0002/06",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 543.2,
+   "usage": {
+    "prompt_tokens": 24447,
+    "completion_tokens": 68831,
+    "total_tokens": 93278,
+    "prompt_tokens_details": {
+     "audio_tokens": 0,
+     "cached_tokens": 5504,
+     "cache_creation_input_tokens": 0,
+     "cache_write_tokens": 0
+    },
+    "completion_tokens_details": {
+     "accepted_prediction_tokens": 0,
+     "audio_tokens": 0,
+     "reasoning_tokens": 57417,
+     "rejected_prediction_tokens": 0
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.08831312,
+     "allowance": 0.05298787,
+     "tokens": {
+      "input": 18943,
+      "output": 68831,
+      "reasoning": 57417,
+      "cache_read": 5504,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.088313,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 6,
+    "units": 10,
+    "sections": 4,
+    "gate": "pass",
+    "cache_key": "836d72c6b42f22f8519afd592496c98d19b96fcb452ccc97897c9271ddc78102",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2137,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 11,
+    "deep_chains": 4,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 24447,
+     "completion_tokens": 68831,
+     "total_tokens": 93278,
+     "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 5504,
+      "cache_creation_input_tokens": 0,
+      "cache_write_tokens": 0
+     },
+     "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 57417,
+      "rejected_prediction_tokens": 0
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.08831312,
+      "allowance": 0.05298787,
+      "tokens": {
+       "input": 18943,
+       "output": 68831,
+       "reasoning": 57417,
+       "cache_read": 5504,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.088313,
+    "elapsed_s": 542.8
+   },
+   "error": null,
+   "stderr": "引用警告：M01 状态为 not_found\n引用警告：M02 状态为 not_found\n引用警告：M04 状态为 not_found\n引用警告：M06 状态为 not_found\n引用警告：M08 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 543.2,
+     "usage": {
+      "prompt_tokens": 24447,
+      "completion_tokens": 68831,
+      "total_tokens": 93278,
+      "prompt_tokens_details": {
+       "audio_tokens": 0,
+       "cached_tokens": 5504,
+       "cache_creation_input_tokens": 0,
+       "cache_write_tokens": 0
+      },
+      "completion_tokens_details": {
+       "accepted_prediction_tokens": 0,
+       "audio_tokens": 0,
+       "reasoning_tokens": 57417,
+       "rejected_prediction_tokens": 0
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.08831312,
+       "allowance": 0.05298787,
+       "tokens": {
+        "input": 18943,
+        "output": 68831,
+        "reasoning": 57417,
+        "cache_read": 5504,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.088313,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 7,
+   "chapter": "B0002/07",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 823.7,
+   "usage": {
+    "prompt_tokens": 41125,
+    "completion_tokens": 97706,
+    "total_tokens": 138831,
+    "prompt_tokens_details": {
+     "cached_tokens": 6016
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 80545
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.127816,
+     "allowance": 0.07668960000000001,
+     "tokens": {
+      "input": 35109,
+      "output": 97706,
+      "reasoning": 80545,
+      "cache_read": 6016,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.127816,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 7,
+    "units": 25,
+    "sections": 7,
+    "gate": "pass",
+    "cache_key": "a147ecb4de8d974f9441e0de2d6ca208640d4ab5e5cf7418fc81e235b4e0a931",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.1927,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 3,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 7,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 41125,
+     "completion_tokens": 97706,
+     "total_tokens": 138831,
+     "prompt_tokens_details": {
+      "cached_tokens": 6016
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 80545
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.127816,
+      "allowance": 0.07668960000000001,
+      "tokens": {
+       "input": 35109,
+       "output": 97706,
+       "reasoning": 80545,
+       "cache_read": 6016,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.127816,
+    "elapsed_s": 823.4
+   },
+   "error": null,
+   "stderr": "引用警告：M01 状态为 not_found\n引用警告：M02 状态为 not_found\n引用警告：M04 状态为 not_found\n引用警告：M05 状态为 not_found\n引用警告：M07 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 823.7,
+     "usage": {
+      "prompt_tokens": 41125,
+      "completion_tokens": 97706,
+      "total_tokens": 138831,
+      "prompt_tokens_details": {
+       "cached_tokens": 6016
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 80545
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.127816,
+       "allowance": 0.07668960000000001,
+       "tokens": {
+        "input": 35109,
+        "output": 97706,
+        "reasoning": 80545,
+        "cache_read": 6016,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.127816,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 8,
+   "chapter": "B0002/08",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 710.1,
+   "usage": {
+    "prompt_tokens": 51564,
+    "completion_tokens": 85616,
+    "total_tokens": 137180,
+    "prompt_tokens_details": {
+     "cached_tokens": 9216
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 66528
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.11549888999999999,
+     "allowance": 0.06929933999999999,
+     "tokens": {
+      "input": 42348,
+      "output": 85616,
+      "reasoning": 66528,
+      "cache_read": 9216,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.115499,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 8,
+    "units": 21,
+    "sections": 9,
+    "gate": "pass",
+    "cache_key": "faa092bf7da152cc3f0337645a91dc2d55114f7b9dd7f7f9edcb08c7361c0b03",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2263,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 4,
+    "research_matrix": 9,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 51564,
+     "completion_tokens": 85616,
+     "total_tokens": 137180,
+     "prompt_tokens_details": {
+      "cached_tokens": 9216
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 66528
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.11549888999999999,
+      "allowance": 0.06929933999999999,
+      "tokens": {
+       "input": 42348,
+       "output": 85616,
+       "reasoning": 66528,
+       "cache_read": 9216,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.115499,
+    "elapsed_s": 709.8
+   },
+   "error": null,
+   "stderr": "引用警告：M03 状态为 not_found\n引用警告：M05 状态为 not_found\n引用警告：M06 状态为 not_found\n引用警告：M08 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 710.1,
+     "usage": {
+      "prompt_tokens": 51564,
+      "completion_tokens": 85616,
+      "total_tokens": 137180,
+      "prompt_tokens_details": {
+       "cached_tokens": 9216
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 66528
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.11549888999999999,
+       "allowance": 0.06929933999999999,
+       "tokens": {
+        "input": 42348,
+        "output": 85616,
+        "reasoning": 66528,
+        "cache_read": 9216,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.115499,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 9,
+   "chapter": "B0002/09",
+   "ok": true,
+   "attempts": 2,
+   "elapsed_s": 934.9,
+   "usage": {
+    "prompt_tokens": 37759,
+    "completion_tokens": 59867,
+    "total_tokens": 97626,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 47911
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.0831681,
+     "allowance": 0.04990086,
+     "tokens": {
+      "input": 37759,
+      "output": 59867,
+      "reasoning": 47911,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.083168,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 9,
+    "units": 21,
+    "sections": 8,
+    "gate": "pass",
+    "cache_key": "aa5da4a75ae13e385fbbc60c6d57fc9808242b3757e99a3069cd969515abbfd4",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.1726,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 5,
+    "research_matrix": 9,
+    "research_questions": 6,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 37759,
+     "completion_tokens": 59867,
+     "total_tokens": 97626,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 47911
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.0831681,
+      "allowance": 0.04990086,
+      "tokens": {
+       "input": 37759,
+       "output": 59867,
+       "reasoning": 47911,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.083168,
+    "elapsed_s": 500.8
+   },
+   "error": null,
+   "stderr": "引用警告：M01 状态为 not_found\n引用警告：M03 状态为 not_found\n引用警告：M05 状态为 not_found\n引用警告：M07 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [],
+   "attempts_detail_note": "合并报告未保留失败尝试的明细与用量"
+  },
+  {
+   "uid": "B0002",
+   "n": 10,
+   "chapter": "B0002/10",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 448.0,
+   "usage": {
+    "prompt_tokens": 32460,
+    "completion_tokens": 52000,
+    "total_tokens": 84460,
+    "prompt_tokens_details": {
+     "cached_tokens": 896
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 38722
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.07187457,
+     "allowance": 0.04312474,
+     "tokens": {
+      "input": 31564,
+      "output": 52000,
+      "reasoning": 38722,
+      "cache_read": 896,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.071875,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 10,
+    "units": 18,
+    "sections": 6,
+    "gate": "pass",
+    "cache_key": "a0f233ba2b9907109381df15cd5690641c0ac74904aab3d2ffcbd01d385987e2",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2124,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 0,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 5,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 32460,
+     "completion_tokens": 52000,
+     "total_tokens": 84460,
+     "prompt_tokens_details": {
+      "cached_tokens": 896
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 38722
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.07187457,
+      "allowance": 0.04312474,
+      "tokens": {
+       "input": 31564,
+       "output": 52000,
+       "reasoning": 38722,
+       "cache_read": 896,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.071875,
+    "elapsed_s": 447.6
+   },
+   "error": null,
+   "stderr": "引用警告：M01 状态为 not_found\n引用警告：M02 状态为 not_found\n引用警告：M03 状态为 not_found\n引用警告：M04 状态为 not_found\n引用警告：M05 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 448.0,
+     "usage": {
+      "prompt_tokens": 32460,
+      "completion_tokens": 52000,
+      "total_tokens": 84460,
+      "prompt_tokens_details": {
+       "cached_tokens": 896
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 38722
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.07187457,
+       "allowance": 0.04312474,
+       "tokens": {
+        "input": 31564,
+        "output": 52000,
+        "reasoning": 38722,
+        "cache_read": 896,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.071875,
+     "missing_artifacts": []
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 11,
+   "chapter": "B0002/11",
+   "ok": true,
+   "attempts": 1,
+   "elapsed_s": 441.8,
+   "usage": {
+    "prompt_tokens": 35996,
+    "completion_tokens": 81102,
+    "total_tokens": 117098,
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 24824,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 67970
+    },
+    "cost": 0,
+    "opencode": {
+     "billing_source": "go",
+     "list_cost": 0.1081212,
+     "allowance": 0.06487272,
+     "tokens": {
+      "input": 35996,
+      "output": 81102,
+      "reasoning": 67970,
+      "cache_read": 0,
+      "cache_write_5m": 0,
+      "cache_write_1h": 0
+     }
+    }
+   },
+   "usd": 0.108121,
+   "payload": {
+    "status": "ready",
+    "uid": "B0002",
+    "n": 11,
+    "units": 26,
+    "sections": 7,
+    "gate": "pass",
+    "cache_key": "4cf861e576b9c6422bb0c73d0aeac63d88610a73fece7b01ed96134ce06f75f0",
+    "cache_hit": false,
+    "skim_supported": true,
+    "skim_ratio": 0.2224,
+    "skim_core_claim_coverage": 1.0,
+    "skim_detail_count": 3,
+    "standard_notes": 0,
+    "figures": 1,
+    "g12": "pass",
+    "deep_notes": 12,
+    "deep_chains": 7,
+    "research_matrix": 8,
+    "research_questions": 5,
+    "deep_audit": "pass",
+    "research_audit": "pass",
+    "citations_verified": 0,
+    "citations_total": 0,
+    "citations_g13": "warn",
+    "html": true,
+    "usage": {
+     "prompt_tokens": 35996,
+     "completion_tokens": 81102,
+     "total_tokens": 117098,
+     "prompt_cache_hit_tokens": 0,
+     "prompt_cache_miss_tokens": 24824,
+     "prompt_tokens_details": {
+      "cached_tokens": 0
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 67970
+     },
+     "cost": 0,
+     "opencode": {
+      "billing_source": "go",
+      "list_cost": 0.1081212,
+      "allowance": 0.06487272,
+      "tokens": {
+       "input": 35996,
+       "output": 81102,
+       "reasoning": 67970,
+       "cache_read": 0,
+       "cache_write_5m": 0,
+       "cache_write_1h": 0
+      }
+     }
+    },
+    "usd": 0.108121,
+    "elapsed_s": 441.4
+   },
+   "error": null,
+   "stderr": "引用警告：M02 状态为 not_found\n引用警告：M03 状态为 not_found\n引用警告：M04 状态为 not_found\n引用警告：M06 状态为 not_found",
+   "missing_artifacts": [],
+   "failed_layer": null,
+   "usage_missing_attempts": 0,
+   "citations_provider": "firecrawl",
+   "attempts_detail": [
+    {
+     "ok": true,
+     "elapsed_s": 441.8,
+     "usage": {
+      "prompt_tokens": 35996,
+      "completion_tokens": 81102,
+      "total_tokens": 117098,
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 24824,
+      "prompt_tokens_details": {
+       "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+       "reasoning_tokens": 67970
+      },
+      "cost": 0,
+      "opencode": {
+       "billing_source": "go",
+       "list_cost": 0.1081212,
+       "allowance": 0.06487272,
+       "tokens": {
+        "input": 35996,
+        "output": 81102,
+        "reasoning": 67970,
+        "cache_read": 0,
+        "cache_write_5m": 0,
+        "cache_write_1h": 0
+       }
+      }
+     },
+     "usd": 0.108121,
+     "missing_artifacts": []
+    }
+   ]
+  }
+ ],
+ "notes": [
+  "B0002/01 首次两次尝试因模型输出被 max_tokens 截断失败；补跑时以 READING_MODEL_MAX_TOKENS=65536、effort=max 重新生成成功。",
+  "B0001/08、B0002/02、B0002/09 各有一次失败后重试成功；原报告只保留最后一次 stderr，runner 现已记录每次尝试的层与错误。",
+  "B0002/01 首轮两次 max_tokens 截断后以 65536 补跑成功；重试章的失败尝试用量未计入合计。",
+  "本报告由首轮全量运行、B0002/01 补跑与人工合并生成，不是单次 runner 产物；重试章的 attempts_detail 仅保留说明，citations_provider 由各章 depth/citations.json 回溯填写；验收以同目录 audit.json 为准。",
+  "特别说明：Firecrawl 提供方已配置且有查询命中，但 20 章均未取得可逐字支持的来源，citations 为 0/0；G13 仅 warn，验收门禁不含 G13。"
+ ],
+ "citations": {
+  "total": 0,
+  "verified": 0,
+  "providers": [
+   "firecrawl"
+  ]
+ },
+ "partial": false,
+ "report_source": "merged"
+}

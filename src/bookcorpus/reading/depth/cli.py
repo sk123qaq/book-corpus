@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import sys
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -193,15 +194,28 @@ def _load_gold(path):
     return [str(item) for item in core]
 
 
+def _usage_usd(usage):
+    opencode = usage.get("opencode") if isinstance(usage, dict) else None
+    if isinstance(opencode, dict):
+        cost = opencode.get("list_cost")
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            return round(float(cost), 6)
+    prompt = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+    completion = usage.get("completion_tokens") or usage.get("output_tokens") or 0
+    return round(prompt / 1_000_000 * 1.0 + completion / 1_000_000 * 2.0, 6)
+
+
 def _generate(args):
     if args.file:
         raise ValueError("generate 不接受 --file")
+    started = time.monotonic()
     context = _context(args)
+    client = ModelClient()
     library = Library(args.root)
     book, chapter = _chapter_context(library, context)
     blocks = context.raw.get("blocks") or []
     model, meta = generate_chapter_model(
-        ModelClient(),
+        client,
         book,
         chapter,
         blocks,
@@ -226,6 +240,7 @@ def _generate(args):
             "state.json": state_text,
         }
         context.store.save_depth(context.uid, context.n, files)
+        usage = getattr(client, "total_usage", {}) or {}
         print(
             json.dumps(
                 {
@@ -237,6 +252,9 @@ def _generate(args):
                     "gate": gate["status"],
                     "cache_key": meta.get("cache_key"),
                     "cache_hit": bool(meta.get("cache_hit")),
+                    "usage": usage,
+                    "usd": _usage_usd(usage),
+                    "elapsed_s": round(time.monotonic() - started, 1),
                 },
                 ensure_ascii=False,
             )
@@ -244,7 +262,7 @@ def _generate(args):
         return 0
 
     skim = generate_skim(
-        ModelClient(),
+        client,
         book,
         chapter,
         model,
@@ -265,7 +283,7 @@ def _generate(args):
     deep_audit = None
     if not args.no_deep:
         deep, _deep_meta = generate_deep(
-            ModelClient(),
+            client,
             book,
             chapter,
             model,
@@ -284,7 +302,7 @@ def _generate(args):
     research_audit = None
     if not args.no_research:
         research, _research_meta = generate_research(
-            ModelClient(),
+            client,
             book,
             chapter,
             model,
@@ -301,11 +319,14 @@ def _generate(args):
             print(f"研究警告：{warning}", file=sys.stderr)
     citations = None
     citations_audit = None
+    citations_error = None
+    citations_provider = None
     if research is not None and not args.no_citations:
         try:
             provider = provider_from_env()
+            citations_provider = provider.name
             fetcher = HttpPageFetcher() if provider.name == "none" else fetcher_from_env()
-            citations = build_citations(ModelClient(), research, provider=provider, fetcher=fetcher)
+            citations = build_citations(client, research, provider=provider, fetcher=fetcher)
             citations_audit = audit_citations(citations, research)
             if citations_audit["errors"]:
                 print("引用审计未通过：" + "；".join(citations_audit["errors"]), file=sys.stderr)
@@ -316,6 +337,7 @@ def _generate(args):
             print(f"检索失败，保留研究议程：{exc}", file=sys.stderr)
             citations = None
             citations_audit = None
+            citations_error = str(exc)
     files = {
         "chapter_model.json": model_text,
         "ledger.json": json.dumps(ledger, ensure_ascii=False, indent=1),
@@ -362,6 +384,7 @@ def _generate(args):
     files["state.json"] = state_text
     context.store.save_depth(context.uid, context.n, files)
     stats = skim_audit["stats"] or {}
+    usage = getattr(client, "total_usage", {}) or {}
     print(
         json.dumps(
             {
@@ -393,7 +416,13 @@ def _generate(args):
                 ),
                 "citations_total": len(citations.get("citations") or []) if citations else 0,
                 "citations_g13": citations_audit["status"] if citations_audit else None,
+                "citations_error": citations_error,
+                "citations_provider": citations_provider,
+                "citations_skipped": bool(args.no_citations or research is None),
                 "html": "chapter.html" in files,
+                "usage": usage,
+                "usd": _usage_usd(usage),
+                "elapsed_s": round(time.monotonic() - started, 1),
             },
             ensure_ascii=False,
         )

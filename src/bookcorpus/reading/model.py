@@ -10,6 +10,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
+from pathlib import Path
 
 from .tiers import TIER_ORDER, validate_annotation
 
@@ -80,9 +81,9 @@ def _api_key():
     key = os.environ.get("OPENCODE_GO_API_KEY")
     if key:
         return key.strip()
-    path = os.path.expanduser("~/.pi/agent/auth.json")
+    path = Path("~/.pi/agent/auth.json").expanduser()
     try:
-        with open(path, encoding="utf-8") as fh:
+        with path.open(encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, json.JSONDecodeError):
         return ""
@@ -95,17 +96,27 @@ def _api_key():
 
 
 class ModelClient:
-    def __init__(self, endpoint=None, model=None, effort=None, timeout=None, key=None):
+    def __init__(
+        self,
+        endpoint=None,
+        model=None,
+        effort=None,
+        timeout=None,
+        key=None,
+        max_tokens=None,
+    ):
         self.endpoint = endpoint or os.environ.get("READING_MODEL_URL") or ENDPOINT
         self.model = model or os.environ.get("READING_MODEL_NAME") or DEFAULT_MODEL
         self.effort = (effort or os.environ.get("READING_MODEL_EFFORT") or DEFAULT_EFFORT).lower()
         self.timeout = int(timeout or os.environ.get("READING_MODEL_TIMEOUT") or TIMEOUT)
+        self.max_tokens = int(max_tokens or os.environ.get("READING_MODEL_MAX_TOKENS") or MAX_TOKENS)
         self.key = key if key is not None else _api_key()
         self.session = uuid.uuid4().hex
         self.last_model = self.model
         self.last_effort = self.effort
         self.last_usage = {}
         self.last_fallback = False
+        self.total_usage = {}
 
     def available(self):
         return bool(self.key)
@@ -126,7 +137,7 @@ class ModelClient:
         requested_model = (model or self.model).strip()
         effort = (effort or self.effort).strip().lower()
         if effort not in EFFORTS:
-            raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+            raise ValueError(f"reasoning_effort 只能是 {'/'.join(EFFORTS)}")
         if not requested_model:
             raise ValueError("模型名不能为空")
         payload_blocks = _payload_blocks(blocks)
@@ -155,7 +166,7 @@ class ModelClient:
             try:
                 annotation, usage = self._annotate_once(messages, blocks, book, chapter, FALLBACK_MODEL, effort)
             except Exception as fallback_exc:
-                raise RuntimeError("主模型失败：%s；备用模型也失败：%s" % (exc, fallback_exc)) from fallback_exc
+                raise RuntimeError(f"主模型失败：{exc}；备用模型也失败：{fallback_exc}") from fallback_exc
         meta = {
             "requested_model": requested_model,
             "model": actual_model,
@@ -176,7 +187,7 @@ class ModelClient:
         requested_model = (model or self.model).strip()
         effort = (effort or self.effort).strip().lower()
         if effort not in EFFORTS:
-            raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+            raise ValueError(f"reasoning_effort 只能是 {'/'.join(EFFORTS)}")
         content, usage = self._request(requested_model, effort, messages)
         return _loads_content(content), usage
 
@@ -185,7 +196,7 @@ class ModelClient:
         usage_total = {}
         for _attempt in range(2):
             content, usage = self._request(model, effort, messages)
-            usage_total = _merge_usage(usage_total, usage)
+            usage_total = merge_usage(usage_total, usage)
             try:
                 annotation = _loads_content(content)
                 annotation.setdefault("uid", book.get("uid"))
@@ -199,10 +210,10 @@ class ModelClient:
                 messages.append(
                     {
                         "role": "user",
-                        "content": "上面的 JSON 未通过校验：%s。只重发修正后的完整 JSON，不要解释。" % exc,
+                        "content": f"上面的 JSON 未通过校验：{exc}。只重发修正后的完整 JSON，不要解释。",
                     }
                 )
-        raise ValueError("模型标注解析失败：%s" % last_error)
+        raise ValueError(f"模型标注解析失败：{last_error}")
 
     def complete(self, messages, *, model=None, effort=None, json_mode=False):
         """单次文本补全；``json_mode`` 仅用于需要 JSON 对象的调用。"""
@@ -211,7 +222,7 @@ class ModelClient:
         requested_model = (model or self.model).strip()
         effort = (effort or self.effort).strip().lower()
         if effort not in EFFORTS:
-            raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+            raise ValueError(f"reasoning_effort 只能是 {'/'.join(EFFORTS)}")
         return self._request(requested_model, effort, messages, json_mode=json_mode)
 
     def _request(self, model, effort, messages, *, json_mode=True):
@@ -219,7 +230,7 @@ class ModelClient:
             "model": model,
             "messages": messages,
             "reasoning_effort": effort,
-            "max_tokens": MAX_TOKENS,
+            "max_tokens": self.max_tokens,
             "temperature": 0.2,
         }
         if json_mode:
@@ -247,28 +258,35 @@ class ModelClient:
                 data = json.loads(response.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")[:400]
-            raise ModelProviderError("模型 HTTP %s：%s" % (exc.code, detail)) from exc
+            raise ModelProviderError(f"模型 HTTP {exc.code}：{detail}") from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise ModelProviderError("模型调用失败：%s" % exc) from exc
+            raise ModelProviderError(f"模型调用失败：{exc}") from exc
         try:
             choice = data["choices"][0]
             content = choice["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise ModelProviderError("模型返回缺 choices[0].message.content：%s" % exc) from exc
+            raise ModelProviderError(f"模型返回缺 choices[0].message.content：{exc}") from exc
         if choice.get("finish_reason") == "length":
             raise ModelProviderError("模型输出被 max_tokens 截断，请重试或降低档位数量")
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        self.total_usage = merge_usage(self.total_usage, usage)
         return content, usage
 
 
-def _merge_usage(total, usage):
+def merge_usage(total, usage):
     merged = dict(total or {})
     for key, value in (usage or {}).items():
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if isinstance(value, dict):
+            current = merged.get(key)
+            merged[key] = merge_usage(current if isinstance(current, dict) else {}, value)
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
             merged[key] = merged.get(key, 0) + value
         elif key not in merged:
             merged[key] = value
     return merged
+
+
+_merge_usage = merge_usage  # 兼容旧调用名
 
 
 def _loads_content(content):

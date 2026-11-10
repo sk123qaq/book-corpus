@@ -803,7 +803,7 @@ class _FakeQueue:
         return self.blocking
 
     def submit(self, uid, n, tiers, **kwargs):
-        job = {"uid": uid, "n": "%02d" % int(n), "tiers": tiers, **kwargs}
+        job = {"uid": uid, "n": f"{int(n):02d}", "tiers": tiers, **kwargs}
         self.submitted.append(job)
         return job
 
@@ -2655,3 +2655,30 @@ def test_audit_cli_classifies_and_fails_missing(reading_root, capsys):
     assert missing["ready"] is False
     assert missing["fallback_reason"] == "尚未生成；默认路径不回退到旧渲染"
     assert missing["gates"] == []
+
+
+def test_merge_usage_sums_nested_provider_cost():
+    from bookcorpus.reading.model import merge_usage
+
+    merged = merge_usage(
+        {"prompt_tokens": 1, "opencode": {"list_cost": 0.5, "billing_source": "go"}},
+        {"prompt_tokens": 2, "opencode": {"list_cost": 0.25, "allowance": 1}},
+    )
+    assert merged == {
+        "prompt_tokens": 3,
+        "opencode": {"list_cost": 0.75, "billing_source": "go", "allowance": 1},
+    }
+
+
+def test_usage_usd_prefers_provider_list_cost():
+    assert depth_cli._usage_usd({"opencode": {"list_cost": 0.125}}) == 0.125
+    assert depth_cli._usage_usd({"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000}) == 3.0
+
+
+def test_model_client_max_tokens_env(monkeypatch):
+    from bookcorpus.reading.model import ModelClient
+
+    monkeypatch.setenv("READING_MODEL_MAX_TOKENS", "65536")
+    assert ModelClient(key="k").max_tokens == 65536
+    monkeypatch.delenv("READING_MODEL_MAX_TOKENS")
+    assert ModelClient(key="k").max_tokens == 32768
