@@ -221,13 +221,26 @@ def _han_only(text):
 
 
 def _coverage_problems(projections):
-    """G3 的覆盖率判定；容差留给整块取舍的粒度。"""
+    """G3 的字数判定；容差留给整块取舍的粒度。字数带是各档的长度契约，越界即拦。"""
     problems = []
     for tier, projection in projections.items():
         stats = projection["stats"]
         spec = TIER_SPECS[tier]
         if stats["c_char"] < spec["c_min"] - COVERAGE_TOLERANCE or stats["c_char"] > spec["c_max"] + COVERAGE_TOLERANCE:
             problems.append("%s C字=%.2f" % (tier, stats["c_char"]))
+    return problems
+
+
+def _block_band_problems(projections):
+    """G3 的块覆盖判定，只作诊断。
+
+    对话密集的章节里，块数以 2–16 字的台词块为主；要凑进块带只能把这些
+    孤立台词塞进速览，凑够了反而更伤内容。块覆盖如实报告，不拦发布。
+    """
+    problems = []
+    for tier, projection in projections.items():
+        stats = projection["stats"]
+        spec = TIER_SPECS[tier]
         if (
             stats["c_block"] < spec["b_min"] - COVERAGE_TOLERANCE
             or stats["c_block"] > spec["b_max"] + COVERAGE_TOLERANCE
@@ -302,12 +315,19 @@ def audit_pack(blocks, projections, html_text, annotation, drafts, editorial=Non
             }
         )
         problems = _coverage_problems(projections)
+        block_notes = [note + "（仅诊断）" for note in _block_band_problems(projections)]
+        if problems:
+            g3_status = "fail"
+        elif block_notes:
+            g3_status = "warn"
+        else:
+            g3_status = "pass"
         gates.append(
             {
                 "id": "G3",
                 "name": "覆盖率",
-                "status": "pass" if not problems else "fail",
-                "detail": "所选档位在范围内" if not problems else "；".join(problems),
+                "status": g3_status,
+                "detail": "；".join(problems + block_notes) or "所选档位在范围内",
             }
         )
 

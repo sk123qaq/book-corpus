@@ -121,6 +121,52 @@ def test_project_skims_cap_drops_lowest_priority_first():
     assert out["stats"]["c_char"] <= TIER_SPECS["standard"]["c_max"]
 
 
+def test_validate_annotation_caps_spine_closure_below_skim_ceiling():
+    blocks = [{"id": "B%02d" % index, "kind": "paragraph", "text": TEXT, "chars": 100} for index in range(1, 21)]
+    annotation = {
+        "blocks": [
+            {
+                "id": block["id"],
+                "role": "spine",
+                "priority": 1,
+                "spine": True,
+                "deps": ["B%02d" % (index - 1)] if index > 1 else [],
+            }
+            for index, block in enumerate(blocks, start=1)
+        ],
+        "supports": [],
+        "cards": [],
+    }
+    out = validate_annotation(annotation, blocks)
+    kept = {entry["id"] for entry in out["blocks"] if entry["spine"]}
+    closed = set(kept)
+    entry_map = {entry["id"]: entry for entry in out["blocks"]}
+    for node in list(closed):
+        closed.update(entry_map[node]["deps"])
+    body = sum(block["chars"] for block in blocks)
+    assert sum(1 for block in blocks if block["id"] in closed) * 100 <= TIER_SPECS["skim"]["c_max"] * body
+    assert len(kept) >= 2
+
+
+def test_spine_conclusions_survive_closure_cap():
+    blocks = [{"id": "B%02d" % index, "kind": "paragraph", "text": TEXT, "chars": 100} for index in range(1, 9)]
+    annotation = {
+        "blocks": [
+            {
+                "id": block["id"],
+                "role": "conclusion" if block["id"] == "B08" else "evidence",
+                "priority": 1,
+                "spine": True,
+            }
+            for block in blocks
+        ],
+        "supports": [],
+        "cards": [],
+    }
+    out = validate_annotation(annotation, blocks)
+    assert any(entry["spine"] and entry["role"] == "conclusion" for entry in out["blocks"])
+
+
 def test_project_skim_respects_cap_and_budget():
     annotation = validate_annotation(_annotation(), _blocks())
     out = project(_blocks(), annotation, "skim")

@@ -145,6 +145,28 @@ def validate_annotation(annotation, blocks):
             if entry["id"] not in keep:
                 entry["spine"] = False
 
+    # 只按个数封顶还不够：spine 的 deps 会一起被拉进速览，真正压不下去的
+    # 是「spine + 一层 deps」的闭包字数。这里按「先降最不重要的、再降最大
+    # 的」把闭包压到速览上限以内，剩下的内容交给填充去补。
+    body_han = sum(block["chars"] for block in blocks)
+    if body_han:
+        skim_cap = TIER_SPECS["skim"]["c_max"] * body_han
+        char_of = {block["id"]: block["chars"] for block in blocks}
+        entry_map = {entry["id"]: entry for entry in entries}
+
+        def _spine_closure_chars():
+            keep = {entry["id"] for entry in entries if entry["spine"]}
+            _closure(keep, entry_map)
+            return sum(char_of.get(block_id, 0) for block_id in keep)
+
+        for _ in range(len(entries)):
+            spine_now = [entry for entry in entries if entry["spine"]]
+            demotable = [entry for entry in spine_now if entry["role"] != "conclusion"]
+            if len(spine_now) <= 2 or not demotable or _spine_closure_chars() <= skim_cap:
+                break
+            demotable.sort(key=lambda entry: (-entry["priority"], -char_of.get(entry["id"], 0)))
+            demotable[0]["spine"] = False
+
     # deps 只描述骨架的前置关系；非骨架块的证据关系由 supports 表达。
     # 模型经常把整章写成一条 deps 链，保留这些边会让速览档无法取舍。
     for entry in entries:
@@ -401,6 +423,19 @@ def _repair_band(blocks, entries, selected, protected, by_id, body_han, total_co
     if current["c_char"] >= spec["c_min"] and current["c_block"] >= spec["b_min"]:
         return selected
     index = {block["id"]: position for position, block in enumerate(blocks)}
+    required_now = {dep for item in entries if item["id"] in selected for dep in item.get("deps", [])}
+    trim_pool = [
+        item
+        for item in entries
+        if item["id"] in selected
+        and item["id"] not in protected
+        and item["id"] not in required_now
+        and by_id[item["id"]]["kind"] in CONTENT_KINDS
+    ]
+    if current["c_char"] > spec["c_max"] and not trim_pool:
+        # 已选的全是骨架、依赖和插图：换入任何块都只会再把上限顶出去，
+        # 逐个候选试一遍纯属空转。
+        return selected
     candidates = [
         entry
         for entry in entries

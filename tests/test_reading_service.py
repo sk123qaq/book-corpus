@@ -6,7 +6,13 @@ import time
 from pathlib import Path
 
 from bookcorpus.reading.render import render_chapter
-from bookcorpus.reading.service import ReadingService, _coverage_problems, audit_pack, source_texts
+from bookcorpus.reading.service import (
+    ReadingService,
+    _block_band_problems,
+    _coverage_problems,
+    audit_pack,
+    source_texts,
+)
 from bookcorpus.reading.tiers import project
 
 RUNNING = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
@@ -549,3 +555,11 @@ def test_g3_tolerates_two_point_coverage_gap():
     assert _coverage_problems(projections) == []
     projections["deep"]["stats"]["c_char"] = 0.77
     assert _coverage_problems(projections) == ["deep C字=0.77"]
+
+
+def test_block_band_gap_is_diagnostic_only():
+    projections = {"skim": {"stats": {"c_char": 0.52, "c_block": 0.18}}}
+    assert _coverage_problems(projections) == []
+    assert _block_band_problems(projections) == ["skim C块=0.18"]
+    projections["skim"]["stats"]["c_char"] = 0.73
+    assert _coverage_problems(projections) == ["skim C字=0.73"]
