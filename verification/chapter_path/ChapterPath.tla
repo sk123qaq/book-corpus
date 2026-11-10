@@ -3,7 +3,7 @@
 \* answer questions about it:
 \*
 \*   service.py:708  ReadingService._chapter_path   -> the badge path
-\*                   (delegates to store.py:244 chapter_route)
+\*                   (delegates to store.py:245 chapter_route)
 \*   server.py:458   ReadingServer._serve_depth     -> 200 or 404
 \*   audit.py:201    _audit_chapter                 -> the audit report path
 \*
