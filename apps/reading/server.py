@@ -456,14 +456,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, fh.read(), "text/html; charset=utf-8", head)
 
     def _serve_depth(self, uid, n, head=False):
-        # 回滚只关生产与新章默认，不藏已有产物。
+        # 只端出与当前源文一致的页面；模型重建或源文改动后的旧页都不端。
         raw = self.service.library.read_chapter(uid, n)
         if raw is None:
             self._error(404, "这一章不存在", api=False, head=head)
             return
-        state = self.service.store.depth_state(uid, n, raw.get("source_sha256"))
+        route = self.service.store.chapter_route(uid, n, raw.get("source_sha256"))[0]
         path = self.service.store.depth_path(uid, n, "chapter.html")
-        if state.get("status") != "ready" or not os.path.isfile(path):
+        if route != "depth" or not os.path.isfile(path):
             self._error(404, "这一章还没有编译版", api=False, head=head)
             return
         with open(path, encoding="utf-8") as fh:

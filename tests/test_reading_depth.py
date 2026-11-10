@@ -725,6 +725,42 @@ def test_service_depth_missing_and_model_pack(reading_root):
     assert set(data) == PACK_KEYS | {"depth"}
 
 
+def test_chapter_route_only_claims_depth_when_page_is_servable(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=True)
+    raw = service.library.read_chapter("B0001", 1)
+    sha = raw["source_sha256"]
+    assert service.store.chapter_route("B0001", 1, sha) == ("none", "尚未生成")
+
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {"label": "model"},
+            "ledger.json": {"label": "ledger"},
+            "state.json": {"status": "model", "source_sha256": sha},
+        },
+    )
+    assert service.store.chapter_route("B0001", 1, sha) == ("none", "结构模型已建，深度页未出")
+    assert service.chapter("B0001", 1)["path"] == "none"
+
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter.html": "<html>compiled</html>",
+            "state.json": {"status": "ready", "source_sha256": sha},
+        },
+    )
+    assert service.store.chapter_route("B0001", 1, sha) == ("depth", None)
+    assert service.chapter("B0001", 1)["path"] == "depth"
+    assert service.store.chapter_route("B0001", 1, "outdated") == ("none", "源文已改，深度页过期")
+
+    pack = Path(service.store.pack_dir("B0002", 1))
+    pack.mkdir(parents=True, exist_ok=True)
+    (pack / "manifest.json").write_text(json.dumps({"uid": "B0002", "n": 1}), encoding="utf-8")
+    assert service.store.chapter_route("B0002", 1, "whatever") == ("legacy", "旧包按旧路径打开")
+
+
 def test_service_depth_ready_pack_exposes_skim_and_html(reading_root):
     service = ReadingService(root=reading_root, annotate=False, depth=True)
     raw = service.library.read_chapter("B0001", 1)
@@ -2653,7 +2689,7 @@ def test_audit_cli_classifies_and_fails_missing(reading_root, capsys):
     assert [gate["id"] for gate in legacy["gates"]] == ["G1", "G5", "G8"]
     assert missing["path"] == "missing"
     assert missing["ready"] is False
-    assert missing["fallback_reason"] == "尚未生成；默认路径不回退到旧渲染"
+    assert missing["fallback_reason"] == "尚未生成"
     assert missing["gates"] == []
 
 

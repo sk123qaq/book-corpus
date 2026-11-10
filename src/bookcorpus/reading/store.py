@@ -242,6 +242,21 @@ class Store:
             return dict(base, status="ready")
         return dict(base, status="stale")
 
+    def chapter_route(self, uid, n, source_sha=None, manifest=None):
+        """这一章能从哪条路径打开；只报真能打开的那条，细节放进 reason。"""
+        status = self.depth_state(uid, n, source_sha).get("status")
+        if status == "ready":
+            return "depth", None
+        if manifest is None:
+            manifest = self.manifest(uid, n)
+        if manifest:
+            return "legacy", "旧包按旧路径打开"
+        if status == "model":
+            return "none", "结构模型已建，深度页未出"
+        if status == "stale":
+            return "none", "源文已改，深度页过期"
+        return "none", "尚未生成"
+
     def _write(self, path, data, mode="w"):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + ".tmp"

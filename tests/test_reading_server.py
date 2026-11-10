@@ -493,6 +493,29 @@ def test_depth_route_serves_ready_chapter_and_404s_missing(reading_root):
         _stop_server(proc)
 
 
+def test_depth_route_404s_model_state_even_with_old_html(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=False)
+    raw = service.library.read_chapter("B0001", 1)
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {"label": "model"},
+            "chapter.html": "<!doctype html><html><body>旧编译版</body></html>",
+            "state.json": {"status": "model", "source_sha256": raw["source_sha256"]},
+        },
+    )
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _get(base, "/reader/B0001/1/depth")
+        assert exc.value.code == 404
+        _status, body, _headers = _get(base, "/api/chapter/B0001/1")
+        assert json.loads(body)["path"] == "none"
+    finally:
+        _stop_server(proc)
+
+
 def test_post_depth_returns_202_job_and_validates_payload(reading_root):
     proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
     try:

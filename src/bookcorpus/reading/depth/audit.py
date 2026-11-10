@@ -207,21 +207,15 @@ def _audit_chapter(library, store, uid, n):
     depth_state = store.depth_state(uid, n, source_sha)
     depth_html_path = store.depth_path(uid, n, "chapter.html")
     depth_ready = depth_state.get("status") == "ready" and Path(depth_html_path).is_file()
-    html_text = _read(depth_html_path)
     manifest = store.manifest(uid, n)
+    path, fallback_reason = store.chapter_route(uid, n, source_sha, manifest)
 
-    if depth_state.get("status") in ("ready", "model") and Path(depth_html_path).is_file():
-        path = "depth"
-        fallback_reason = None
-        gates = _depth_gates(store, uid, n, blocks, html_text)
-    elif manifest:
-        path = "legacy"
-        fallback_reason = "旧包按旧路径打开"
-        html_text = _read(store.chapter_html_path(uid, n))
-        gates = _legacy_gates(store, uid, n, blocks, html_text)
+    if path == "depth":
+        gates = _depth_gates(store, uid, n, blocks, _read(depth_html_path))
+    elif path == "legacy":
+        gates = _legacy_gates(store, uid, n, blocks, _read(store.chapter_html_path(uid, n)))
     else:
         path = "missing"
-        fallback_reason = "尚未生成；默认路径不回退到旧渲染"
         gates = []
 
     ready = path == "depth" and depth_ready and all(gate["status"] == "pass" for gate in gates)

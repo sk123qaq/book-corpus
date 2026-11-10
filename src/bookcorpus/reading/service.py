@@ -706,18 +706,8 @@ class ReadingService:
         }
 
     def _chapter_path(self, uid, n, state=None, source_sha=None):
-        """章节实际走哪条渲染路径；只读磁盘，不触发模型。"""
-        depth_state = self.store.depth_state(uid, n, source_sha)
-        has_artifact = any(
-            Path(self.store.depth_path(uid, n, name)).is_file()
-            for name in ("chapter.html", "chapter_model.json", "ledger.json")
-        )
-        if has_artifact or depth_state.get("status") in ("ready", "model"):
-            return "depth", None
-        manifest = (state or {}).get("manifest") or self.store.manifest(uid, n)
-        if manifest:
-            return "legacy", "旧包按旧路径打开"
-        return "none", "尚未生成"
+        """章节能从哪条路径打开；只读磁盘，不触发模型。"""
+        return self.store.chapter_route(uid, n, source_sha, (state or {}).get("manifest"))
 
     def chapter(self, uid, n):
         book = self.library.book(uid)
