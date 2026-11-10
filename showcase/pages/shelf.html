@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>四读 · 书架</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/pages.css">
+<link rel="stylesheet" href="assets/theme.css">
+<style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head>
+<body>
+<header class="topbar">
+  <a class="brand" href="shelf.html"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <label class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
+    <span class="kbd">/</span>
+  </label>
+  <nav class="nav">
+    <a href="shelf.html" aria-current="page">书架</a>
+    <a href="catalog.html">书目</a>
+    <a href="#" data-dead="「/records」">记录</a>
+  </nav>
+  <button class="icon-btn theme-btn" data-theme-toggle="" aria-label="切换冷纸版" title="当前暖纸版，点击切换冷纸" aria-pressed="false">
+    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
+  </button>
+  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读" aria-pressed="false">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"></path></svg>
+  </button>
+</header>
+
+<main class="page">
+  <section class="hero">
+    <div class="eyebrow" id="eyebrow">私人书库 · 15 本</div>
+    <h1>今天，读多深？</h1>
+    <p class="lede">从书架上选一章，裁成速览、标准、深读、研究四种读本。原文一字不改，讲解只做旁批。</p>
+    <div class="meta" id="hero-meta"><span><b>15</b> 本可读</span><span><b>1,973</b> 章原文</span><span><b>629</b> 万字</span><span><b>4</b> 档读法</span></div>
+  </section>
+
+  <div id="job-strip"><a class="job-strip" href="#" data-dead="「/records」"><span class="js-k">工单</span><span class="js-t">暂无生成任务 · 从任一章开工</span><span class="js-p">—</span><span class="js-s">0 / 0</span><span class="js-go">记录 →</span></a></div>
+
+  <div class="shelf-head">
+    <div>
+      <div class="eyebrow" style="color:var(--ink-3)">可读 · 有正文</div>
+      <div class="hint" style="margin-top:6px">点击书脊翻开；高度按章数排，厚度按字数。</div>
+      <div class="shelf-mobile-hint">← 左右滑动，还有书 →</div>
+    </div>
+    <div class="view-toggle" role="group" aria-label="视图">
+      <button aria-pressed="true">书墙</button>
+      <button aria-pressed="false">目录</button>
+    </div>
+  </div>
+
+  <div class="shelf-wrap" id="shelf-wrap">
+    <div class="shelf" id="shelf" aria-label="可读的书"><a class="spine" href="book-B0001.html" style="--cloth:#A87A3E;--h:212px;--w:64px" aria-label="阿Q正传，鲁迅，9 章"><span class="n">09 章</span><span class="t">阿Q正传</span><span class="a">鲁迅</span><span class="stamp" title="已出片 8 章 · 四档"></span><span class="edge" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></a><a class="spine" href="#" data-dead="「/book/B0002」" style="--cloth:#4A5839;--h:248px;--w:64px" aria-label="1984，作者待校，24 章"><span class="n">24 章</span><span class="t">1984</span><span class="a">作者待校</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B0003」" style="--cloth:#3F4E5A;--h:293px;--w:67px" aria-label="“错误”的行为  行为经济学的形成 = Misbehaving The Making of Behavioral Economics，[美] 理查德・塞勒 (Richard H. Thaler) 著 王晋 译，43 章"><span class="n">43 章</span><span class="t">“错误”的行为 行为经济学的形成</span><span class="a">[美] 理查德・塞勒 (Richard H. Thaler) 著 王晋 译</span><span class="stamp" title="已出片 5 章 · 四档"></span><span class="edge" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></a><a class="spine" href="#" data-dead="「/book/B0004」" style="--cloth:#5A3E2B;--h:221px;--w:96px" aria-label="《创业维艰》+《从0到1》+《支付战争》，作者待校，13 章"><span class="n">13 章</span><span class="t">《创业维艰》+《从0到1》+《支付战争》</span><span class="a">作者待校</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B0005」" style="--cloth:#2F4F4F;--h:276px;--w:73px" aria-label="安史之乱  历史、宣传与神话，作者待校，36 章"><span class="n">36 章</span><span class="t">安史之乱 历史、宣传与神话</span><span class="a">作者待校</span><span class="stamp" title="已出片 3 章 · 四档"></span><span class="edge" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B0020」" style="--cloth:#4A5839;--h:358px;--w:64px" aria-label="万物静默如谜：辛波斯卡诗选，维斯拉瓦·辛波斯卡，90 章"><span class="n">90 章</span><span class="t">万物静默如谜：辛波斯卡诗选</span><span class="a">维斯拉瓦·辛波斯卡</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B0627」" style="--cloth:#2C4056;--h:358px;--w:64px" aria-label="Worlds of Amano，Yoshitaka Amano，161 章"><span class="n">161 章</span><span class="t">Worlds of Amano</span><span class="a">Yoshitaka Amano</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B0646」" style="--cloth:#6B2B2B;--h:212px;--w:64px" aria-label="穆夏画集：少女的诗篇，[捷克] 阿尔丰斯·穆夏，9 章"><span class="n">09 章</span><span class="t">穆夏画集：少女的诗篇</span><span class="a">[捷克] 阿尔丰斯·穆夏</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B0667」" style="--cloth:#3F4E5A;--h:358px;--w:64px" aria-label="三维游戏引擎设计与实现，耿卫东，114 章"><span class="n">114 章</span><span class="t">三维游戏引擎设计与实现</span><span class="a">耿卫东</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B1523」" style="--cloth:#3F4E5A;--h:212px;--w:64px" aria-label="病隙碎笔，史铁生，9 章"><span class="n">09 章</span><span class="t">病隙碎笔</span><span class="a">史铁生</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B1782」" style="--cloth:#4A5839;--h:358px;--w:78px" aria-label="Python数据分析与数据化运营，宋天龙，360 章"><span class="n">360 章</span><span class="t">Python数据分析与数据化运营</span><span class="a">宋天龙</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B1825」" style="--cloth:#6B2B2B;--h:358px;--w:138px" aria-label="台湾《传记文学》珍藏系列（全15册），王映霞 等，739 章"><span class="n">739 章</span><span class="t">台湾《传记文学》珍藏系列（全15册）</span><span class="a">王映霞 等</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B1865」" style="--cloth:#5A3E2B;--h:269px;--w:67px" aria-label="我看见的世界，[美] 李飞飞，33 章"><span class="n">33 章</span><span class="t">我看见的世界</span><span class="a">[美] 李飞飞</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B1877」" style="--cloth:#2C4056;--h:358px;--w:64px" aria-label="数据分析实战，【美】托马兹·卓巴斯（Tomasz Drabas），98 章"><span class="n">98 章</span><span class="t">数据分析实战</span><span class="a">【美】托马兹·卓巴斯（Tomasz Drabas）</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="spine" href="#" data-dead="「/book/B1896」" style="--cloth:#6B2B2B;--h:358px;--w:64px" aria-label="深入浅出数据分析，迈克尔·米尔顿(Michael Milton)，235 章"><span class="n">235 章</span><span class="t">深入浅出数据分析</span><span class="a">迈克尔·米尔顿(Michael Milton)</span><span class="edge" aria-hidden="true"><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span></a><a class="reading-card" href="reader-B0001-08.html"><span class="rc-eyebrow">继续阅读</span><span class="rc-book">B0001 · 第 8 章</span><span class="rc-title">第八章 不准革命</span><span class="rc-progress"><i style="width:0%"></i></span><span class="rc-foot"><span>标准本 · 0%</span><span>接着读 →</span></span></a></div>
+    <div class="shelf-line"></div>
+    <div class="shelf-foot" id="shelf-foot"><span>15 本有正文 · 共 1,973 章 · 约 629 万字</span><a href="catalog.html">全部书目 15 本 →</a></div>
+  </div>
+
+  <div class="directory" id="directory" hidden=""><a href="book-B0001.html"><b>阿Q正传</b><span>鲁迅 · 9 章 · 已出片 8 章</span><em>09</em></a><a href="#" data-dead="「/book/B0002」"><b>1984</b><span>作者待校 · 24 章 · 未出片</span><em>24</em></a><a href="#" data-dead="「/book/B0003」"><b>“错误”的行为 行为经济学的形成</b><span>[美] 理查德・塞勒 (Richard H. Thaler) 著 王晋 译 · 43 章 · 已出片 5 章</span><em>43</em></a><a href="#" data-dead="「/book/B0004」"><b>《创业维艰》+《从0到1》+《支付战争》</b><span>作者待校 · 13 章 · 未出片</span><em>13</em></a><a href="#" data-dead="「/book/B0005」"><b>安史之乱 历史、宣传与神话</b><span>作者待校 · 36 章 · 已出片 3 章</span><em>36</em></a><a href="#" data-dead="「/book/B0020」"><b>万物静默如谜：辛波斯卡诗选</b><span>维斯拉瓦·辛波斯卡 · 90 章 · 未出片</span><em>90</em></a><a href="#" data-dead="「/book/B0627」"><b>Worlds of Amano</b><span>Yoshitaka Amano · 161 章 · 未出片</span><em>161</em></a><a href="#" data-dead="「/book/B0646」"><b>穆夏画集：少女的诗篇</b><span>[捷克] 阿尔丰斯·穆夏 · 9 章 · 未出片</span><em>09</em></a><a href="#" data-dead="「/book/B0667」"><b>三维游戏引擎设计与实现</b><span>耿卫东 · 114 章 · 未出片</span><em>114</em></a><a href="#" data-dead="「/book/B1523」"><b>病隙碎笔</b><span>史铁生 · 9 章 · 未出片</span><em>09</em></a><a href="#" data-dead="「/book/B1782」"><b>Python数据分析与数据化运营</b><span>宋天龙 · 360 章 · 未出片</span><em>360</em></a><a href="#" data-dead="「/book/B1825」"><b>台湾《传记文学》珍藏系列（全15册）</b><span>王映霞 等 · 739 章 · 未出片</span><em>739</em></a><a href="#" data-dead="「/book/B1865」"><b>我看见的世界</b><span>[美] 李飞飞 · 33 章 · 未出片</span><em>33</em></a><a href="#" data-dead="「/book/B1877」"><b>数据分析实战</b><span>【美】托马兹·卓巴斯（Tomasz Drabas） · 98 章 · 未出片</span><em>98</em></a><a href="#" data-dead="「/book/B1896」"><b>深入浅出数据分析</b><span>迈克尔·米尔顿(Michael Milton) · 235 章 · 未出片</span><em>235</em></a></div>
+
+  <section class="catalog">
+    <div class="section-head">
+      <h2>全部书目</h2>
+      <span class="count" id="cat-count">显示 15 / 15</span>
+    </div>
+    <div class="filters" role="group" aria-label="筛选" id="filters"><button data-filter="all" aria-pressed="true">全部</button><button data-filter="有正文" aria-pressed="false">有正文</button><button data-filter="已出片" aria-pressed="false">已出片</button><button data-filter="文学" aria-pressed="false">文学</button><button data-filter="严肃文学小说" aria-pressed="false">严肃文学小说</button><button data-filter="人文社科" aria-pressed="false">人文社科</button><button data-filter="社会与经济" aria-pressed="false">社会与经济</button><button data-filter="商业与管理" aria-pressed="false">商业与管理</button><button data-filter="创新与创业" aria-pressed="false">创新与创业</button><button data-filter="历史" aria-pressed="false">历史</button><button data-filter="诗歌" aria-pressed="false">诗歌</button><button data-filter="艺术与图像" aria-pressed="false">艺术与图像</button><button data-filter="绘画与概念设计" aria-pressed="false">绘画与概念设计</button><button data-filter="游戏" aria-pressed="false">游戏</button><button data-filter="开发与工程" aria-pressed="false">开发与工程</button><button data-filter="散文随笔" aria-pressed="false">散文随笔</button><button data-filter="科学技术" aria-pressed="false">科学技术</button><button data-filter="计算机与技术" aria-pressed="false">计算机与技术</button></div>
+    <table class="table">
+      <thead><tr><th>书名</th><th>作者</th><th class="hide-m">分类</th><th class="hide-m">章</th><th>状态</th></tr></thead>
+      <tbody id="cat-body"><tr><td><span class="dot" style="background:#A87A3E"></span><a class="title title-link" href="book-B0001.html">阿Q正传<small>阿Q正传</small></a></td><td class="author">鲁迅</td><td class="subject hide-m">文学 / 严肃文学小说</td><td class="num hide-m">9</td><td><span class="badge read">可读</span> <span class="badge pack">已出片 8</span></td></tr><tr><td><span class="dot" style="background:#4A5839"></span><a class="title title-link" href="#" data-dead="「/book/B0002」">1984<small>1984</small></a></td><td class="author">作者待校</td><td class="subject hide-m">文学 / 严肃文学小说</td><td class="num hide-m">24</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#3F4E5A"></span><a class="title title-link" href="#" data-dead="「/book/B0003」">“错误”的行为 行为经济学的形成<small>“错误”的行为  行为经济学的形成 = Misbehaving The Making of Behavioral Economics</small></a></td><td class="author">[美] 理查德・塞勒 (Richard H. Thaler) 著 王晋 译</td><td class="subject hide-m">人文社科 / 社会与经济</td><td class="num hide-m">43</td><td><span class="badge read">可读</span> <span class="badge pack">已出片 5</span></td></tr><tr><td><span class="dot" style="background:#5A3E2B"></span><a class="title title-link" href="#" data-dead="「/book/B0004」">《创业维艰》+《从0到1》+《支付战争》<small>《创业维艰》+《从0到1》+《支付战争》</small></a></td><td class="author">作者待校</td><td class="subject hide-m">商业与管理 / 创新与创业</td><td class="num hide-m">13</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#2F4F4F"></span><a class="title title-link" href="#" data-dead="「/book/B0005」">安史之乱 历史、宣传与神话<small>安史之乱  历史、宣传与神话</small></a></td><td class="author">作者待校</td><td class="subject hide-m">人文社科 / 历史</td><td class="num hide-m">36</td><td><span class="badge read">可读</span> <span class="badge pack">已出片 3</span></td></tr><tr><td><span class="dot" style="background:#4A5839"></span><a class="title title-link" href="#" data-dead="「/book/B0020」">万物静默如谜：辛波斯卡诗选<small>万物静默如谜：辛波斯卡诗选</small></a></td><td class="author">维斯拉瓦·辛波斯卡</td><td class="subject hide-m">文学 / 诗歌</td><td class="num hide-m">90</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#2C4056"></span><a class="title title-link" href="#" data-dead="「/book/B0627」">Worlds of Amano<small>Worlds of Amano</small></a></td><td class="author">Yoshitaka Amano</td><td class="subject hide-m">艺术与图像 / 绘画与概念设计</td><td class="num hide-m">161</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#6B2B2B"></span><a class="title title-link" href="#" data-dead="「/book/B0646」">穆夏画集：少女的诗篇<small>穆夏画集：少女的诗篇</small></a></td><td class="author">[捷克] 阿尔丰斯·穆夏</td><td class="subject hide-m">艺术与图像 / 绘画与概念设计</td><td class="num hide-m">9</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#3F4E5A"></span><a class="title title-link" href="#" data-dead="「/book/B0667」">三维游戏引擎设计与实现<small>三维游戏引擎设计与实现</small></a></td><td class="author">耿卫东</td><td class="subject hide-m">游戏 / 开发与工程</td><td class="num hide-m">114</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#3F4E5A"></span><a class="title title-link" href="#" data-dead="「/book/B1523」">病隙碎笔<small>病隙碎笔</small></a></td><td class="author">史铁生</td><td class="subject hide-m">文学 / 散文随笔</td><td class="num hide-m">9</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#4A5839"></span><a class="title title-link" href="#" data-dead="「/book/B1782」">Python数据分析与数据化运营<small>Python数据分析与数据化运营</small></a></td><td class="author">宋天龙</td><td class="subject hide-m">科学技术 / 计算机与技术</td><td class="num hide-m">360</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#6B2B2B"></span><a class="title title-link" href="#" data-dead="「/book/B1825」">台湾《传记文学》珍藏系列（全15册）<small>台湾《传记文学》珍藏系列（全15册）</small></a></td><td class="author">王映霞 等</td><td class="subject hide-m">人文社科 / 历史</td><td class="num hide-m">739</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#5A3E2B"></span><a class="title title-link" href="#" data-dead="「/book/B1865」">我看见的世界<small>我看见的世界</small></a></td><td class="author">[美] 李飞飞</td><td class="subject hide-m">人文社科 / 历史</td><td class="num hide-m">33</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#2C4056"></span><a class="title title-link" href="#" data-dead="「/book/B1877」">数据分析实战<small>数据分析实战</small></a></td><td class="author">【美】托马兹·卓巴斯（Tomasz Drabas）</td><td class="subject hide-m">科学技术 / 计算机与技术</td><td class="num hide-m">98</td><td><span class="badge read">可读</span></td></tr><tr><td><span class="dot" style="background:#6B2B2B"></span><a class="title title-link" href="#" data-dead="「/book/B1896」">深入浅出数据分析<small>深入浅出数据分析</small></a></td><td class="author">迈克尔·米尔顿(Michael Milton)</td><td class="subject hide-m">科学技术 / 计算机与技术</td><td class="num hide-m">235</td><td><span class="badge read">可读</span></td></tr></tbody>
+    </table>
+    <p class="note" id="cat-note">15 本有正文，可进入选章与生成；15 本是书目层。导入正文后才会出现在书墙上。</p>
+  </section>
+</main>
+
+
+
+
+
+
+
+<script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

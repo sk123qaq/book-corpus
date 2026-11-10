@@ -71,3 +71,6 @@ __pycache__/
 
 # ---- 验收报告的证据图片 ----
 !/reports/**/*.png
+# 静态样例要带封面与截图
+!/showcase/poster.jpg
+!/showcase/shots/*.png

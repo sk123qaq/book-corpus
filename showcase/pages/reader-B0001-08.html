@@ -1,0 +1,230 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>阿Q正传 · 第八章 不准革命 · 四读</title><style>
+:root{--paper:#F3F0E7;--paper-2:#EAE5D8;--paper-3:#DED7C7;--ink:#181817;--ink-2:#55544E;--ink-3:#69665C;
+--rule:#D2CBBB;--rule-strong:#B9B09C;--pine:#1E3A36;--oxblood:#6B2B2B;--ochre:#7C5A2E;--indigo:#2C4056;
+--moss:#4A5839;--cinnabar:#A8442F;--note-bg:#F0F2F0;--note-rule:#C9D2CC;
+--serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",serif;
+--sans:"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16px}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.reader-top{position:sticky;top:0;z-index:30;height:56px;display:flex;align-items:center;gap:20px;padding:0 22px;
+background:color-mix(in srgb,var(--paper) 94%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.reader-top .back{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-decoration:none;color:var(--ink-2)}
+.reader-top .book{display:flex;align-items:baseline;gap:10px;min-width:0}
+.reader-top .book span{font-family:var(--sans);font-size:12px;color:var(--ink-3);white-space:nowrap}
+.reader-top .book b{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reader-top .tool{margin-left:auto;display:flex;align-items:center;gap:6px}
+.reader-top .tool button,.reader-top .tool a{font-family:var(--sans);font-size:12px;padding:6px 9px;border:1px solid transparent;text-decoration:none;color:var(--ink-2)}
+.reader-top .tool button:hover,.reader-top .tool a:hover{border-color:var(--rule-strong);color:var(--ink)}
+.reader-top .tool button[aria-pressed="true"]{border-color:var(--pine);color:var(--pine)}
+.progress{position:sticky;top:56px;height:2px;background:transparent;z-index:31}
+.progress i{display:block;height:2px;width:0;background:var(--cinnabar)}
+.tierbar{position:sticky;top:58px;z-index:29;display:flex;align-items:stretch;justify-content:center;gap:26px;
+padding:0 22px;background:color-mix(in srgb,var(--paper) 96%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.tier-tabs{display:flex;align-items:stretch}
+.tier-tab{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 18px 10px;border-bottom:2px solid transparent}
+.tier-tab b{font-family:var(--sans);font-size:13px;letter-spacing:.06em}
+.tier-tab small{font-family:var(--sans);font-size:10px;color:var(--ink-3)}
+.tier-tab[aria-selected="true"]{border-bottom-color:var(--pine)}
+.tier-tab[aria-selected="true"] b{color:var(--pine)}
+.tier-tab[disabled]{opacity:.35;cursor:not-allowed}
+.tier-note{display:flex;align-items:center;font-family:var(--sans);font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+.read{max-width:1000px;margin:0 auto;padding:44px 26px 72px}
+.read-head{border-bottom:1px solid var(--rule);padding-bottom:28px;margin-bottom:34px}
+.eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.16em;color:var(--ink-3);margin:0 0 12px}
+.read-head h1{font-size:34px;line-height:1.35;margin:0 0 18px;font-weight:600;letter-spacing:.02em}
+.read-stats{display:flex;flex-wrap:wrap;gap:18px;font-family:var(--sans);font-size:12px;color:var(--ink-2)}
+.read-stats b{font-weight:600;color:var(--ink)}
+.draft-banner{display:flex;align-items:baseline;gap:8px;margin:0 0 28px;padding:10px 14px;border-left:3px solid var(--ochre);
+background:var(--paper-2);font-family:var(--sans);font-size:12px;line-height:1.7;color:var(--ink-2)}
+.draft-banner b{font-size:10px;letter-spacing:.16em;color:var(--ochre);white-space:nowrap}
+.flow{display:flex;flex-direction:column}
+.flow-row{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:40px;align-items:start}
+.flow-row .block{min-width:0}
+.flow-row .margin{min-width:0}
+.src{font-size:17.5px;line-height:1.9;text-indent:2em;margin:0;letter-spacing:.01em}
+.src.lst{text-indent:0;padding-left:1.4em;border-left:2px solid var(--rule)}
+blockquote.src{text-indent:2em;margin:1.4em 0 1.4em;padding:2px 0 2px 20px;border-left:3px solid var(--rule-strong);color:var(--ink-2)}
+.sec{font-size:21px;line-height:1.6;margin:2.6em 0 1.1em;padding-left:14px;border-left:4px solid var(--pine);font-weight:600}
+.fig{margin:1.8em 0;text-align:center}
+.fig img{max-width:100%;height:auto;border:1px solid var(--rule);background:var(--paper-2)}
+.fig figcaption{font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--ink-3);margin:7px auto 0;max-width:40em;text-indent:0}
+.fig .fig-kicker{display:block;font-size:11px;letter-spacing:.16em;color:var(--cinnabar);margin-bottom:4px}
+.fig .fig-cap{display:block}
+body:not(.only-source) .fig-title{display:none}
+body.only-source figcaption{display:none}
+.fn{font-family:var(--sans);font-size:12px;color:var(--ink-3);text-indent:0;margin:-.6em 0 1.2em}
+.note{background:var(--note-bg);border-top:1px solid var(--note-rule);padding:12px 13px 13px;margin:0 0 1.6em;
+font-size:13px;line-height:1.75;text-indent:0;box-shadow:0 1px 0 var(--rule)}
+.note .tag{display:block;font-family:var(--sans);font-size:9.5px;letter-spacing:.14em;color:var(--pine);margin-bottom:6px}
+.note h4{font-size:13.5px;margin:0 0 6px;line-height:1.5}
+.note p{margin:0 0 .6em;text-indent:0}
+.note q{display:block;quotes:"「" "」";color:var(--ink-2);font-size:12.5px;border-left:2px solid var(--rule-strong);padding-left:8px;margin:.5em 0}
+.note .cite{font-family:var(--sans);font-size:9.5px;color:var(--ink-3);letter-spacing:.06em}
+.read-foot{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--rule);margin-top:52px;padding-top:22px}
+.read-foot a,.read-foot span{font-family:var(--sans);font-size:12px;color:var(--ink-2);text-decoration:none;max-width:46%}
+.read-foot a:hover{color:var(--pine)}
+.read-foot .dim{color:var(--ink-3)}
+.colophon{margin-top:38px;padding-top:16px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:11px;
+line-height:1.9;color:var(--ink-3);letter-spacing:.03em}
+.foreedge{position:fixed;left:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:3px;padding:6px 4px;z-index:20}
+.foreedge i{display:block;width:9px;height:2px;background:var(--rule);cursor:pointer;transition:width .15s}
+.foreedge i.kept{background:var(--pine)}
+.foreedge i:hover{width:18px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:var(--ink);color:var(--paper);
+font-family:var(--sans);font-size:12px;padding:8px 14px;opacity:0;pointer-events:none;transition:.2s;z-index:60}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.cmp-overlay{position:fixed;inset:0;background:rgba(24,24,23,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px}
+.cmp-overlay[hidden]{display:none}
+.cmp{background:var(--paper);border:1px solid var(--rule-strong);max-width:660px;width:100%;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.cmp h3{margin:0 0 4px;font-size:18px}
+.cmp p{font-family:var(--sans);font-size:11px;color:var(--ink-3);margin:0 0 16px}
+.cmp table{width:100%;border-collapse:collapse;font-family:var(--sans);font-size:12px}
+.cmp th,.cmp td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule)}
+.cmp th{font-weight:600;color:var(--ink-2);font-size:10px;letter-spacing:.08em}
+.cmp tr.current td{background:var(--paper-2);color:var(--pine);font-weight:600}
+.cmp-close{margin-top:16px;font-family:var(--sans);font-size:11px;border:1px solid var(--rule-strong);padding:7px 12px}
+body.only-source [data-origin="added"]{display:none!important}
+body.only-source .flow-row{grid-template-columns:minmax(0,680px)}
+body.only-source .stat-notes{display:none}
+body.big .src{font-size:20px;line-height:1.8}
+body.big .read-head h1{font-size:38px}
+body.night{--paper:#E2E6E6;--paper-2:#D3DADA;--paper-3:#C3CCCC;--ink:#131A1F;--ink-2:#3C4A52;--ink-3:#4F5C63;
+--rule:#B7C1C1;--rule-strong:#93A1A1;--pine:#18344F;--oxblood:#4E2A33;--ochre:#6B4E28;--indigo:#2B5C84;
+--moss:#3C4A36;--cinnabar:#2B5C84;--note-bg:#DCE3E3;--note-rule:#AEBABA}
+body.night .foreedge i.kept{background:var(--indigo)}
+body.night .tier-tab[aria-selected="true"]{border-bottom-color:var(--indigo)}
+body.night .tier-tab[aria-selected="true"] b{color:var(--indigo)}
+@media(max-width:1100px){.foreedge{display:none}}
+@media(max-width:980px){.flow-row{grid-template-columns:minmax(0,1fr)}.flow-row .margin{padding-left:0}
+.note{margin-top:-.6em;margin-bottom:1.6em}.tierbar{justify-content:flex-start;overflow-x:auto;gap:8px}
+.tier-tab{padding:10px 12px 8px;white-space:nowrap}.tier-note{display:none}}
+@media(max-width:720px){.read{padding:30px 16px 56px}.read-head h1{font-size:26px}.src{font-size:16.5px;line-height:1.85}
+.reader-top{padding:0 10px;gap:6px}.reader-top .book{display:none}
+.reader-top .tool{margin-left:auto;gap:0;min-width:0;overflow-x:auto;scrollbar-width:none}
+.reader-top .tool button,.reader-top .tool a{padding:6px 5px;font-size:11px;white-space:nowrap}
+.tierbar{padding:6px 10px;justify-content:stretch;overflow:visible;display:block}
+.tier-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:100%}
+.tier-tab{padding:8px 8px 7px;border:1px solid var(--rule);border-bottom-width:2px}
+.tier-tab b{font-size:12px}.tier-tab small{font-size:9.5px}
+.tier-note{display:none}.read-stats{gap:10px}
+.read-foot{flex-direction:column}.read-foot a,.read-foot span{max-width:100%}
+.draft-banner{margin:0 0 22px;font-size:11px;padding:10px 12px}}
+@media print{.reader-top,.tierbar,.foreedge,.progress,.toast,.cmp-overlay,.read-foot{display:none!important}
+.read{padding:0}.note{break-inside:avoid}.src{font-size:12pt;line-height:1.7}}
+body.export .reader-top,body.export .tierbar,body.export .foreedge,body.export .progress{display:none}
+body.export .read{padding-top:30px}
+</style><style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head><body class="reader" data-tier="standard"><header class="reader-top"><a class="back" href="#" data-dead="「/chapter/B0001/8」">← 工单</a><div class="book"><span>阿Q正传</span><b>第八章 不准革命</b></div><div class="tool"><a href="book-B0001.html">目录</a><button id="only-btn" aria-pressed="false">只看原文</button><button id="big-btn" aria-pressed="false">大字</button><button id="night-btn">夜读</button><button id="cmp-btn">对照</button></div></header><div class="progress" id="progress"><i style="width: 0%;"></i></div><nav class="tierbar"><div class="tier-tabs"><button class="tier-tab" data-tier-tab="skim" aria-selected="false"><b>速览</b><small>40–55% · E≤10%</small></button><button class="tier-tab" data-tier-tab="standard" aria-selected="true"><b>标准</b><small>60–75% · E≤25%</small></button><button class="tier-tab" data-tier-tab="deep" aria-selected="false"><b>深读</b><small>80–90% · E≤40%</small></button><button class="tier-tab" data-tier-tab="research" aria-selected="false"><b>研究</b><small>90–100% · E≤50%</small></button></div><div class="tier-note">同一章，已生成档位 · 数字键切换</div></nav><main class="read"><header class="read-head"><p class="eyebrow">阿Q正传 · 鲁迅</p><h1>第八章 不准革命</h1><div class="read-stats"><span id="live-stats">原文 <b>61%</b> · 约 <b>1,598</b> 字<span class="stat-notes"> · 讲解 <b>6</b> 条</span> · <b>4</b> 分钟</span></div></header><div class="flow"><div class="flow-row" data-block="B01"><div class="block"><p class="src" data-origin="source" data-src="B01" data-block="B01" data-kind="paragraph" data-tiers="skim standard deep research">未庄的人心日见其安静了。据传来的消息，知道革命党虽然进了城，倒还没有什么大异样。知县大老爷还是原官，不过改称了什么，而且举人老爷也做了什么——这些名目，未庄人都说不明白——官，带兵的也还是先前的老把总。只有一件可怕的事是另有几个不好的革命党夹在里面捣乱，第二天便动手剪辫子，听说那邻村的航船七斤便着了道儿，弄得不像人样子了。但这却还不算大恐怖，因为未庄人本来少上城，即使偶有想进城的，也就立刻变了计，踫不着这危险。阿Q本也想进城去寻他的老朋友，一得这消息，也只得作罢了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B02"><div class="block"><p class="src" data-origin="source" data-src="B02" data-block="B02" data-kind="paragraph" data-tiers="skim standard deep research">但未庄也不能说是无改革。几天之后，将辫子盘在顶上的逐渐增加起来了，早经说过，最先自然是茂才公，其次便是赵司晨和赵白眼，后来是阿Q。倘在夏天，大家将辫子盘在头顶上或者打一个结，本不算什么稀奇事，但现在是暮秋，所以这“秋行夏令”的情形，在盘辫家不能不说是万分的英断，而在未庄也不能说无关于改革了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B02" data-tiers="skim standard deep research"><span class="tag">讲解 · 模型补充</span><p>「盘辫」被未庄当作革命的全部内容：暮秋时节把辫子盘上头顶，便算「万分的英断」。鲁迅用这个细节讽刺革命只停留在发式层面——城里的政权换汤不换药，乡下的「改革」只剩一个发髻。</p><q data-src="B02">这“秋行夏令”的情形，在盘辫家不能不说是万分的英断</q><q data-src="B02">在未庄也不能说无关于改革了</q><span class="cite">依据 B02</span></aside></div></div><div class="flow-row" data-block="B03"><div class="block"><p class="src" data-origin="source" data-src="B03" data-block="B03" data-kind="paragraph" data-tiers="skim standard deep research">赵司晨脑后空荡荡的走来，看见的人大嚷说，“豁，革命党来了！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B04"><div class="block"><p class="src" data-origin="source" data-src="B04" data-block="B04" data-kind="paragraph" data-tiers="standard deep research">阿Q听到了很羡慕。他虽然早知道秀才盘辫的大新闻，但总没有想到自己可以照样做，现在看见赵司晨也如此，才有了学样的意思，定下实行的决心。他用一支竹筷将辫子盘在头顶上，迟疑多时，这才放胆的走去。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B05"><div class="block"><p class="src" data-origin="source" data-src="B05" data-block="B05" data-kind="paragraph" data-tiers="standard deep research">他在街上走，人也看他，然而不说什么话，阿Q当初很不快，后来便很不平。他近来很容易闹脾气了；其实他的生活，倒也并不比造反之前反艰难，人见他也客气，店铺也不说要现钱。而阿Q总觉得自己太失意：既然革了命，不应该只是这样的。况且有一回看见小D，愈使他气破肚皮了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B06"><div class="block"><p class="src" data-origin="source" data-src="B06" data-block="B06" data-kind="paragraph" data-tiers="standard deep research">小D也将辫子盘在头顶上了，而且也居然用一支竹筷。阿Q万料不到他也敢这样做，自己也决不准他这样做！小D是什么东西呢？他很想即刻揪住他，拗断他的竹筷，放下他的辫子，并且批他几个嘴巴，聊且惩罚他忘了生辰八字，也敢来做革命党的罪。但他终于饶放了，单是怒目而视的吐一口唾沫道“呸！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B07"><div class="block"><p class="src" data-origin="source" data-src="B07" data-block="B07" data-kind="paragraph" data-tiers="skim standard deep research">这几日里，进城去的只有一个假洋鬼子。赵秀才本也想靠着寄存箱子的渊源，亲身去拜访举人老爷的，但因为有剪辫的危险，所以也中止了。他写了一封“黄伞格”的信，托假洋鬼子带上城，而且托他给自己绍介绍介，去进自由党。假洋鬼子回来时，向秀才讨还了四块洋钱，秀才便有一块银桃子挂在大襟上了；未庄人都惊服，说这是柿油党的顶子，抵得一个翰林；赵太爷因此也骤然大阔，远过于他儿子初隽秀才的时候，所以目空一切，见了阿Q，也就很有些不放在眼里了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B07" data-tiers="skim standard deep research"><span class="tag">讲解 · 模型补充</span><p>「自由党」在未庄人口中讹成「柿油党」，银桃子被当作「抵得一个翰林」的顶子。一音之转，写尽乡下人对新政治的隔膜：他们理解的仍是功名顶戴那一套，只是换了挂件。秀才花四块洋钱买来的，正是这层旧式理解的「新」外壳。</p><q data-src="B07">说这是柿油党的顶子，抵得一个翰林</q><q data-src="B07">赵太爷因此也骤然大阔，远过于他儿子初隽秀才的时候</q><span class="cite">依据 B07</span></aside></div></div><div class="flow-row" data-block="B08"><div class="block"><p class="src" data-origin="source" data-src="B08" data-block="B08" data-kind="paragraph" data-tiers="skim standard deep research">阿Q正在不平，又时时刻刻感着冷落，一听得这银桃子的传说，他立即悟出自己之所以冷落的原因了：要革命，单说投降，是不行的；盘上辫子，也不行的；第一着仍然要和革命党去结识。他生平所知道的革命党只有两个，城里的一个早已“嚓”</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B08" data-tiers="standard deep research"><span class="tag">讲解 · 模型补充</span><p>阿Q的「革命知识」少得可怜：生平所知的革命党只有两个，一个早已被杀，只剩假洋鬼子。这句交代为后文「不准革命」埋下结构性伏笔——革命的门径被垄断在假洋鬼子一人手里，阿Q的投路注定只有一处，也注定碰壁。</p><q data-src="B08">他生平所知道的革命党只有两个</q><q data-src="B09">现在只剩了一个假洋鬼子</q><span class="cite">依据 B08 · B09</span></aside></div></div><div class="flow-row" data-block="B09"><div class="block"><p class="src" data-origin="source" data-src="B09" data-block="B09" data-kind="paragraph" data-tiers="standard deep research">的杀掉了，现在只剩了一个假洋鬼子。他除却赶紧去和假洋鬼子商量之外，再没有别的道路了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B10"><div class="block"><p class="src" data-origin="source" data-src="B10" data-block="B10" data-kind="paragraph" data-tiers="deep research" hidden="">钱府的大门正开着，阿Q便怯怯的 进去。他一到里面，很吃了惊，只见假洋鬼子正站在院子的中央，一身乌黑的大约是洋衣，身上也挂着一块银桃子，手里是阿Q曾经领教过的棍子，已经留到一尺多长的辫子都拆开了披在肩背上，蓬头散发的像一个刘海仙。对面挺直的站着赵白眼和三个闲人，正在必恭必敬的听说话。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B11"><div class="block"><p class="src" data-origin="source" data-src="B11" data-block="B11" data-kind="paragraph" data-tiers="standard deep research">阿Q轻轻的走近了，站在赵白眼的背后，心里想招呼，却不知道怎么说才好：叫他假洋鬼子固然是不行的了，洋人也不妥，革命党也不妥，或者就应该叫洋先生了罢。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B12"><div class="block"><p class="src" data-origin="source" data-src="B12" data-block="B12" data-kind="paragraph" data-tiers="skim standard deep research">洋先生却没有见他，因为白着眼楮讲得正起劲：“我是性急的，所以我们见面，我总是说：洪哥！我们动手罢！他却总说道No！——这是洋话，你们不懂的。否则早已成功了。然而这正是他做事小心的地方。他再三再四的请我上湖北，我还没有肯。谁愿意在这小县城里做事情。……”</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B12" data-tiers="standard deep research"><span class="tag">讲解 · 模型补充</span><p>假洋鬼子的自吹自擂全靠一句洋话「No」撑场面，还补一句「这是洋话，你们不懂的」。他吹嘘与「洪哥」的交情、推辞湖北的邀请，句句无法验证——这正是他能在未庄称霸的语言资本：听不懂，便只好惊服。</p><q data-src="B12">他却总说道No！——这是洋话，你们不懂的</q><q data-src="B12">他再三再四的请我上湖北，我还没有肯</q><span class="cite">依据 B12</span></aside></div></div><div class="flow-row" data-block="B13"><div class="block"><p class="src" data-origin="source" data-src="B13" data-block="B13" data-kind="paragraph" data-tiers="research" hidden="">“唔，……这个……”阿Q候他略停，终于用十二分的勇气开口了，但不知道因为什么，又并不叫他洋先生。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B14"><div class="block"><p class="src" data-origin="source" data-src="B14" data-block="B14" data-kind="paragraph" data-tiers="deep research" hidden="">听着说话的四个人都吃惊的回顾他。洋先生也才看见：“什么？”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B15"><div class="block"><p class="src" data-origin="source" data-src="B15" data-block="B15" data-kind="paragraph" data-tiers="skim standard deep research">“我……”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B16"><div class="block"><p class="src" data-origin="source" data-src="B16" data-block="B16" data-kind="paragraph" data-tiers="standard deep research">“出去！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B17"><div class="block"><p class="src" data-origin="source" data-src="B17" data-block="B17" data-kind="paragraph" data-tiers="standard deep research">“我要投……”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B18"><div class="block"><p class="src" data-origin="source" data-src="B18" data-block="B18" data-kind="paragraph" data-tiers="skim standard deep research">“滚出去！”洋先生扬起哭丧棒来了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B19"><div class="block"><p class="src" data-origin="source" data-src="B19" data-block="B19" data-kind="paragraph" data-tiers="research" hidden="">赵白眼和闲人们便都吆喝道：“先生叫你滚出去，你还不听么！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B20"><div class="block"><p class="src" data-origin="source" data-src="B20" data-block="B20" data-kind="paragraph" data-tiers="skim standard deep research">阿Q将手向头上一遮，不自觉的逃出门外；洋先生倒也没有追。他快跑了六十多步，这才慢慢的走，于是心里便涌起了忧愁：洋先生不准他革命，他再没有别的路；从此决不能望有白盔白甲的人来叫他，他所有的抱负，志向，希望，前程，全被一笔勾销了。至于闲人们传扬开去，给小D王胡等辈笑话，倒是还在其次的事。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B20" data-tiers="standard deep research"><span class="tag">讲解 · 模型补充</span><p>「不准革命」是全章题眼：洋先生一声「滚出去」，勾销的不只是入伙机会，而是阿Q「所有的抱负，志向，希望，前程」。被排斥者连造反的资格都没有——鲁迅点出辛亥革命把底层排除在外的根本缺陷。</p><q data-src="B20">他所有的抱负，志向，希望，前程，全被一笔勾销了</q><q data-src="B20">洋先生不准他革命，他再没有别的路</q><span class="cite">依据 B20 · B21</span></aside></div></div><div class="flow-row" data-block="B21"><div class="block"><p class="src" data-origin="source" data-src="B21" data-block="B21" data-kind="paragraph" data-tiers="deep research" hidden="">他似乎从来没有经验过这样的无聊。他对于自己的盘辫子，仿佛也觉得无意味，要侮蔑；为报仇起见，很想立刻放下辫子来，但也没有竟放。他游到夜间，赊了两碗酒，喝下肚去，渐渐的高兴起来了，思想里才又出现白盔白甲的碎片。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B22"><div class="block"><p class="src" data-origin="source" data-src="B22" data-block="B22" data-kind="paragraph" data-tiers="deep research" hidden="">有一天，他照例的混到夜深，待酒店要关门，才踱回土谷祠去。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B23"><div class="block"><p class="src" data-origin="source" data-src="B23" data-block="B23" data-kind="paragraph" data-tiers="deep research" hidden="">拍，吧……！</p></div><div class="margin"></div></div><div class="flow-row" data-block="B24"><div class="block"><p class="src" data-origin="source" data-src="B24" data-block="B24" data-kind="paragraph" data-tiers="deep research" hidden="">他忽而听得一种异样的声音，又不是爆竹。阿Q本来是爱看热闹，爱管闲事的，便在暗中直寻过去。似乎前面有些脚步声；他正听，猛然间一个人从对面逃来了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B25"><div class="block"><p class="src" data-origin="source" data-src="B25" data-block="B25" data-kind="paragraph" data-tiers="research" hidden="">阿Q一看见，便赶紧翻身跟着逃。那人转弯，阿Q也转弯，那人站住了，阿Q也站住。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B26"><div class="block"><p class="src" data-origin="source" data-src="B26" data-block="B26" data-kind="paragraph" data-tiers="research" hidden="">他看后面并无什么，看那人便是小D。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B27"><div class="block"><p class="src" data-origin="source" data-src="B27" data-block="B27" data-kind="paragraph" data-tiers="research" hidden="">“什么？”阿Q不平起来了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B28"><div class="block"><p class="src" data-origin="source" data-src="B28" data-block="B28" data-kind="paragraph" data-tiers="skim standard deep research">“赵……赵家遭抢了！”小D气喘吁吁的说。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B29"><div class="block"><p class="src" data-origin="source" data-src="B29" data-block="B29" data-kind="paragraph" data-tiers="skim standard deep research">阿Q的心怦怦的跳了。小D说了便走；阿Q却逃而又停的两三回。但他究竟是做过“这路生意”，格外胆大，于是 出路角，仔细的听，似乎有些嚷嚷，又仔细的看，似乎许多白盔白甲的人，络绎的将箱子抬出了，器具抬出了，秀才娘子的宁式床也抬出了，但是不分明，他还想上前，两只脚却没有动。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B30"><div class="block"><p class="src" data-origin="source" data-src="B30" data-block="B30" data-kind="paragraph" data-tiers="research" hidden="">这一夜没有月，未庄在黑暗里很寂静，寂静到像羲皇时候一般太平。阿Q站着看到自己发烦，也似乎还是先前一样，在那里来来往往的搬，箱子抬出了，器具抬出了，秀才娘子的宁式床也抬出了，……抬得他自己有些不信他的眼楮了。但他决计不再上前，却回到自己的祠里去了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B31"><div class="block"><p class="src" data-origin="source" data-src="B31" data-block="B31" data-kind="paragraph" data-tiers="skim standard deep research">土谷祠里更漆黑；他关好大门，摸进自己的屋子里。他躺了好一会，这才定了神，而且发出关于自己的思想来：白盔白甲的人明明到了，并不来打招呼，搬了许多好东西，又没有自己的份，——这全是假洋鬼子可恶，不准我造反，否则，这次何至于没有我的份呢？阿Q越想越气，终于禁不住满心痛恨起来，毒毒的点一点头：“不准我造反，只准你造反？妈妈的假洋鬼子，——好，你造反！造反是杀头的罪名呵，我总要告一状，看你抓进县里去杀头，——满门抄斩，——嚓！嚓！”</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B31" data-tiers="standard deep research"><span class="tag">讲解 · 模型补充</span><p>被拒之门外的阿Q，报复幻想从「造反」滑向「告状」：盼着假洋鬼子「抓进县里去杀头」「满门抄斩」。他恨的不是革命不彻底，而是革命没带上自己——这一心理转折，为末章他被当作抢犯抓捕枪毙埋下直接引线。</p><q data-src="B31">不准我造反，只准你造反？妈妈的假洋鬼子</q><q data-src="B31">造反是杀头的罪名呵，我总要告一状</q><q data-src="B29">秀才娘子的宁式床也抬出了</q><span class="cite">依据 B31 · B29</span></aside></div></div></div><footer class="read-foot"><a href="#" data-dead="「/reader/B0001/7」">← 上一章</a><a href="#" data-dead="「/reader/B0001/9」">下一章 →</a></footer><div class="colophon">源文件 08_第八章不准革命.md · SHA-256 d943b9aee0120839…<br>生成 <span id="colophon-time">2026-11-10T10:04:18</span> · 生成器 phase1-1 · 模型 <span id="colophon-model">glm-5.3-flash</span> · 渲染 v2 · 原文逐字保留，块 31</div></main><div class="foreedge" aria-hidden="true"><i data-block="B01" class="kept" title="B01"></i><i data-block="B02" class="kept" title="B02"></i><i data-block="B03" class="kept" title="B03"></i><i data-block="B04" class="kept" title="B04"></i><i data-block="B05" class="kept" title="B05"></i><i data-block="B06" class="kept" title="B06"></i><i data-block="B07" class="kept" title="B07"></i><i data-block="B08" class="kept" title="B08"></i><i data-block="B09" class="kept" title="B09"></i><i data-block="B10" class="" title="B10"></i><i data-block="B11" class="kept" title="B11"></i><i data-block="B12" class="kept" title="B12"></i><i data-block="B13" class="" title="B13"></i><i data-block="B14" class="" title="B14"></i><i data-block="B15" class="kept" title="B15"></i><i data-block="B16" class="kept" title="B16"></i><i data-block="B17" class="kept" title="B17"></i><i data-block="B18" class="kept" title="B18"></i><i data-block="B19" class="" title="B19"></i><i data-block="B20" class="kept" title="B20"></i><i data-block="B21" class="" title="B21"></i><i data-block="B22" class="" title="B22"></i><i data-block="B23" class="" title="B23"></i><i data-block="B24" class="" title="B24"></i><i data-block="B25" class="" title="B25"></i><i data-block="B26" class="" title="B26"></i><i data-block="B27" class="" title="B27"></i><i data-block="B28" class="kept" title="B28"></i><i data-block="B29" class="kept" title="B29"></i><i data-block="B30" class="" title="B30"></i><i data-block="B31" class="kept" title="B31"></i></div><div class="cmp-overlay" id="cmp-overlay" hidden=""><div class="cmp" role="dialog" aria-modal="true" aria-label="档位对照"><h3>档位对照</h3><p>同一章源文，已生成档位对照。浏览 600 字/分 · 标准 500 · 深读 350 · 研读 300。</p><table><thead><tr><th>档</th><th>块覆盖</th><th>字数覆盖</th><th>讲解</th><th>正文字数</th><th>用时</th></tr></thead><tbody><tr data-tier-row="skim"><td>速览</td><td>39%</td><td>55%</td><td>2</td><td>1,180 字</td><td>2 分</td></tr><tr data-tier-row="standard" class="current"><td>标准</td><td>61%</td><td>74%</td><td>6</td><td>1,598 字</td><td>4 分</td></tr><tr data-tier-row="deep"><td>深读</td><td>81%</td><td>90%</td><td>6</td><td>1,927 字</td><td>7 分</td></tr><tr data-tier-row="research"><td>研究</td><td>100%</td><td>100%</td><td>6</td><td>2,146 字</td><td>9 分</td></tr></tbody></table><button class="cmp-close" data-cmp-close="">关闭</button></div></div><div class="toast" id="toast"></div><script>
+const TIERS = [{"key": "skim", "label": "速览"}, {"key": "standard", "label": "标准"}, {"key": "deep", "label": "深读"}, {"key": "research", "label": "研究"}];
+const STATS = {"skim": {"c_block": 0.3871, "c_char": 0.5499, "chars": 1180, "e": 0.0741, "notes": 2, "minutes": 2, "label": "速览", "model": "glm-5.3-flash", "generated_at": "2026-11-10T10:04:18"}, "standard": {"c_block": 0.6129, "c_char": 0.7446, "chars": 1598, "e": 0.2199, "notes": 6, "minutes": 4, "label": "标准", "model": "glm-5.3-flash", "generated_at": "2026-11-10T10:04:18"}, "deep": {"c_block": 0.8065, "c_char": 0.8979, "chars": 1927, "e": 0.2199, "notes": 6, "minutes": 7, "label": "深读", "model": "glm-5.3-flash", "generated_at": "2026-11-10T10:04:18"}, "research": {"c_block": 1.0, "c_char": 1.0, "chars": 2146, "e": 0.2199, "notes": 6, "minutes": 9, "label": "研究", "model": "glm-5.3-flash", "generated_at": "2026-11-10T10:04:18"}};
+const TICK_COUNT = 31;
+const state = {tier: "standard", only: false, big: false};
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+function toast(msg) { const el = $('#toast'); if (!el) return; el.textContent = msg; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1600); }
+function fmt(n) { return Number(n || 0).toLocaleString('zh-CN'); }
+function setTier(tier, push) {
+  if (!TIERS.some(t => t.key === tier)) tier = 'standard';
+  state.tier = tier;
+  document.body.dataset.tier = tier;
+  $$('[data-tiers]').forEach(el => { el.hidden = !el.dataset.tiers.split(' ').includes(tier); });
+  $$('[data-tier-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tierTab === tier)));
+  const s = STATS[tier]; if (s) {
+    const line = $('#live-stats');
+    if (line) line.innerHTML = '原文 <b>' + Math.round(s.c_block * 100) + '%<\/b> · 约 <b>' + fmt(s.chars) +
+      '<\/b> 字<span class="stat-notes"> · 讲解 <b>' + s.notes + '<\/b> 条<\/span> · <b>' + s.minutes + '<\/b> 分钟';
+    const pct = Math.max(0, Math.min(100, Math.round(s.c_block * 100)));
+    const bar = $('#scope-bar'); if (bar) bar.style.width = pct + '%';
+    // 页脚出处按档位切：增量包可能混多个模型/时间。
+    const at = $('#colophon-time'); if (at) at.textContent = s.generated_at || '';
+    const md = $('#colophon-model'); if (md) md.textContent = s.model || '';
+  }
+  updateTicks(); updateCompare();
+  if (push) {
+    const url = new URL(location.href); url.searchParams.set('tier', tier); history.replaceState(null, '', url);
+  }
+}
+function updateTicks() {
+  $$('.foreedge i').forEach(tick => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"] [data-origin="source"]');
+    tick.classList.toggle('kept', !!row && !row.hidden);
+  });
+}
+function updateCompare() {
+  $$('.cmp tr[data-tier-row]').forEach(tr => tr.classList.toggle('current', tr.dataset.tierRow === state.tier));
+}
+function setOnly(on) { state.only = on; document.body.classList.toggle('only-source', on);
+  const b = $('#only-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setBig(on) { state.big = on; document.body.classList.toggle('big', on);
+  const b = $('#big-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setNight(on) { document.body.classList.toggle('night', on);
+  try { localStorage.setItem('reading-theme', on ? 'cold' : 'warm'); } catch (e) {}
+  const b = $('#night-btn'); if (b) b.textContent = on ? '暖纸' : '夜读'; }
+function themeLinks() {
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  if (theme === 'warm') return;
+  $$('a[href]').forEach(a => { const href = a.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.includes('theme=')) a.setAttribute('href', href + (href.includes('?') ? '&' : '?') + 'theme=' + theme); });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const url = new URL(location.href);
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  setNight(theme === 'cold');
+  setTier(url.searchParams.get('tier') || "standard", false);
+  themeLinks();
+  $$('[data-tier-tab]').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.disabled) return; setTier(btn.dataset.tierTab, true);
+  }));
+  const only = $('#only-btn'); if (only) only.addEventListener('click', () => setOnly(!state.only));
+  const big = $('#big-btn'); if (big) big.addEventListener('click', () => setBig(!state.big));
+  const night = $('#night-btn'); if (night) night.addEventListener('click', () => setNight(!document.body.classList.contains('night')));
+  const cmp = $('#cmp-overlay'); const open = $('#cmp-btn');
+  if (open && cmp) {
+    open.addEventListener('click', () => { cmp.hidden = false; updateCompare(); });
+    $$('[data-cmp-close]', cmp).forEach(el => el.addEventListener('click', () => { cmp.hidden = true; }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cmp.hidden = true; });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input,textarea')) return;
+    if (e.key >= '1' && e.key <= '4') { const t = TIERS[Number(e.key) - 1]; if (t) setTier(t.key, true); }
+  });
+  $$('.foreedge i').forEach(tick => tick.addEventListener('click', () => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"]');
+    if (!row) return;
+    const src = row.querySelector('[data-origin="source"]');
+    if (src && src.hidden) { toast('本档未收这一段，按 4 切到研读可见'); return; }
+    row.scrollIntoView({behavior: 'smooth', block: 'center'}); row.classList.add('flash');
+    setTimeout(() => row.classList.remove('flash'), 900);
+  }));
+  const bar = $('#progress i');
+  if (bar) {
+    const update = () => { const h = document.documentElement; const max = h.scrollHeight - h.clientHeight;
+      bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%'; };
+    document.addEventListener('scroll', update, {passive: true}); update();
+  }
+});
+</script><script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

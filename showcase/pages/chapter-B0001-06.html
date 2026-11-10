@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>四读 · 第六章 从中兴到末路</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/pages.css">
+<link rel="stylesheet" href="assets/theme.css">
+<style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head>
+<body>
+<header class="topbar">
+  <a class="brand" href="shelf.html"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <label class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
+    <span class="kbd">/</span>
+  </label>
+  <nav class="nav">
+    <a href="shelf.html">书架</a>
+    <a href="catalog.html">书目</a>
+    <a href="#" data-dead="「/records」">记录</a>
+  </nav>
+  <button class="icon-btn theme-btn" data-theme-toggle="" aria-label="切换冷纸版" title="当前暖纸版，点击切换冷纸" aria-pressed="false">
+    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
+  </button>
+  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读" aria-pressed="false">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"></path></svg>
+  </button>
+</header>
+
+<main class="page">
+  <div class="crumb" id="crumb"><a href="shelf.html">书架</a><i>/</i><a href="book-B0001.html">阿Q正传</a><i>/</i><span>第 6 章</span></div>
+  <div id="chapter-root"><section class="chap-head"><div class="eyebrow">B0001 · 阿Q正传</div><h1>第六章 从中兴到末路</h1><p class="chap-meta">2,665 字 · 35 个原文块 · 标准本约 5 分钟 · 06_第六章从中兴到末路.md</p><div class="chap-actions"><a class="btn btn-ghost" href="#ticket">先出一版读本</a><a class="btn btn-ghost" href="chapter-B0001-05.html">← 上一章</a><a class="btn btn-ghost" href="chapter-B0001-07.html">下一章 →</a></div></section><div class="work"><section><div class="section-title"><h2>原文切块</h2><span class="lbl">只读 · 逐字保留</span></div><p class="hint">共 35 块。色块标出标准本保留的块；下方只预览前 8 块，全文见读本。</p><div class="cutbar"><div class="cutbar-head"><span class="lbl">35 块</span><span><b>0</b> 块进标准本</span></div><div class="ticks" id="ticks"><i class="cut" title="B01 · paragraph"></i><i class="cut" title="B02 · paragraph"></i><i class="cut" title="B03 · paragraph"></i><i class="cut" title="B04 · paragraph"></i><i class="cut" title="B05 · paragraph"></i><i class="cut" title="B06 · paragraph"></i><i class="cut" title="B07 · paragraph"></i><i class="cut" title="B08 · paragraph"></i><i class="cut" title="B09 · paragraph"></i><i class="cut" title="B10 · paragraph"></i><i class="cut" title="B11 · paragraph"></i><i class="cut" title="B12 · paragraph"></i><i class="cut" title="B13 · paragraph"></i><i class="cut" title="B14 · paragraph"></i><i class="cut" title="B15 · paragraph"></i><i class="cut" title="B16 · paragraph"></i><i class="cut" title="B17 · paragraph"></i><i class="cut" title="B18 · paragraph"></i><i class="cut" title="B19 · paragraph"></i><i class="cut" title="B20 · paragraph"></i><i class="cut" title="B21 · paragraph"></i><i class="cut" title="B22 · paragraph"></i><i class="cut" title="B23 · paragraph"></i><i class="cut" title="B24 · paragraph"></i><i class="cut" title="B25 · paragraph"></i><i class="cut" title="B26 · paragraph"></i><i class="cut" title="B27 · paragraph"></i><i class="cut" title="B28 · paragraph"></i><i class="cut" title="B29 · paragraph"></i><i class="cut" title="B30 · paragraph"></i><i class="cut" title="B31 · paragraph"></i><i class="cut" title="B32 · paragraph"></i><i class="cut" title="B33 · paragraph"></i><i class="cut" title="B34 · paragraph"></i><i class="cut" title="B35 · paragraph"></i></div></div><div class="preview" id="preview"><div class="preview-head"><span class="lbl">标准本前段 · 8 块</span><span class="tag">原文</span></div><div class="blk" data-kind="paragraph" data-block="B01"><span class="blk-n">B01</span><p>在未庄再看见阿Q出现的时候，是刚过了这年的中秋。人们都惊异，说是阿Q回来了，于是又回上去想道，他先前那里去了呢？阿Q前几回的上城，大抵早就兴高采烈的对人说，但这一次却并不，所以也没有一个人留心到。他或者也曾告诉过管土谷祠的老头子，然而未庄老例，只有赵太爷钱太爷和秀才大爷上城才算一件事。假洋鬼子尚且不足数，何况是阿Q：因此老头子也就不替他宣传，而未庄的社会上也就无从知道了。</p></div><div class="blk" data-kind="paragraph" data-block="B02"><span class="blk-n">B02</span><p>但阿Q这回的回来，却与先前大不同，确乎很值得惊异。天色将黑，他睡眼蒙胧的在酒店门前出现了，他走近柜台，从腰间伸出手来，满把是银的和铜的，在柜上一扔说，“现钱！打酒来！”穿的是新夹袄，看去腰间还挂着一个大搭连，沉钿钿的将裤带坠成了很弯很弯的弧线。未庄老例，看见略有些醒目的人物，是与其慢也宁敬的，现在虽然明知道是阿Q，但因为和破夹袄的阿Q有些两样了，古人云，“士别三日便当刮目相待” ，所以堂倌，掌柜，酒客，路人，便自然显出一种凝而且敬的形态来。掌柜既先之以点头，又继之以谈话：“豁，阿Q，你回来了！”</p></div><div class="blk" data-kind="paragraph" data-block="B03"><span class="blk-n">B03</span><p>“回来了。”</p></div><div class="blk" data-kind="paragraph" data-block="B04"><span class="blk-n">B04</span><p>“发财发财，你是——在……”</p></div><div class="blk" data-kind="paragraph" data-block="B05"><span class="blk-n">B05</span><p>“上城去了！”</p></div><div class="blk" data-kind="paragraph" data-block="B06"><span class="blk-n">B06</span><p>这一件新闻，第二天便传遍了全未庄。人人都愿意知道现钱和新夹袄的阿Q的中兴史，所以在酒店里，茶馆里，庙檐下，便渐渐的探听出来了。这结果，是阿Q得了新敬畏。</p></div><div class="blk" data-kind="paragraph" data-block="B07"><span class="blk-n">B07</span><p>据阿Q说，他是在举人老爷家里帮忙。这一节，听的人都肃然了。这老爷本姓白，但因为合城里只有他一个举人，所以不必再冠姓，说起举人来就是他。这也不独在未庄是如此，便是一百里方圆之内也都如此，人们几乎多以为他的姓名就叫举人老爷的了。在这人的府上帮忙，那当然是可敬的。但据阿Q又说，他却不高兴再帮忙了，因为这举人老爷实在太“妈妈的”了。这一节，听的人都叹息而且快意，因为阿Q本不配在举人老爷家里帮忙，而不帮忙是可惜的。</p></div><div class="blk" data-kind="paragraph" data-block="B08"><span class="blk-n">B08</span><p>据阿Q说，他的回来，似乎也由于不满意城里人，这就在他们将长凳称为条凳，而且煎鱼用葱丝，加以最近观察所得的缺点，是女人的走路也扭得不很好。然而也偶有大可佩服的地方，即如未庄的乡下人不过打三十二张的竹牌 ，只有假洋鬼子能够叉“麻酱”，城里却连小乌龟子都叉得精熟的。什么假洋鬼子，只要放在城里的十几岁的小乌龟子的手里，也就立刻是“小鬼见阎王”。这一节，听的人都赧然了。</p></div><div class="preview-foot"><span>只显示前 8 块，全文见读本</span></div></div><div class="section-title"><h2>四档状态</h2><span class="lbl">存在于 工作区/阅读</span></div><div class="pack-list" id="packs"><div class="pack-item"><span class="nm"><b>尚未出片</b></span><span class="pending">选档后生成</span></div></div><div class="section-title"><h2>门槛</h2><span class="lbl">最近一次生成</span></div><div class="gate-list" id="gates"><div class="gate-row"><b>—</b><span>还没有生成记录；出片后写入 G1 / G3 / G4 / G6。</span></div></div></section><aside class="ticket" id="ticket"><div class="ticket-top"><span class="eyebrow">读本工单</span><span class="ticket-id">#B0001-06</span></div><h3>第六章 从中兴到末路</h3><p class="ticket-meta">2,665 字 · 原文约 5 分钟</p><div class="tier-list" id="tier-list"><label class="tier-opt"><input type="checkbox" value="skim"><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-skim)"></span><span class="tier-copy"><b>速览</b><small>C 40–55% · E ≤10% · 600 字/分</small></span><span class="tier-time">≈4 分钟<small>未生成</small></span></label><label class="tier-opt checked"><input type="checkbox" value="standard" checked=""><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-standard)"></span><span class="tier-copy"><b>标准</b><small>C 60–75% · E ≤25% · 500 字/分</small></span><span class="tier-time">≈5 分钟<small>未生成</small></span></label><label class="tier-opt"><input type="checkbox" value="deep"><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-deep)"></span><span class="tier-copy"><b>深读</b><small>C 80–90% · E ≤40% · 350 字/分</small></span><span class="tier-time">≈8 分钟<small>未生成</small></span></label><label class="tier-opt"><input type="checkbox" value="research"><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-research)"></span><span class="tier-copy"><b>研究</b><small>C 90–100% · E ≤50% · 300 字/分</small></span><span class="tier-time">≈9 分钟<small>未生成</small></span></label></div><div class="model-row"><label class="model-field"><span>模型</span><input id="model-input" list="model-options" value="deepseek-v4.1-flash" spellcheck="false" autocomplete="off"></label><label class="model-field effort"><span>推理</span><select id="effort-select"><option value="high" selected="">high</option><option value="medium">medium</option><option value="low">low</option></select></label><datalist id="model-options"><option value="deepseek-v4.1-flash"></option><option value="glm-5.3-flash"></option></datalist></div><p class="model-note">默认 deepseek-v4.1-flash · high；可改，按本次工单生效。</p><div class="ticket-est"><span id="ticket-est">将新增：标准 · 2,665 字</span><span>本地队列 · 最多 4 个并行</span></div><button class="btn btn-primary" id="generate">生成 1 档读本 →</button><button class="btn btn-ghost" id="generate-edition" disabled="" title="文学类章节是连续叙事，xerox 是论证型工作论文版式，硬套会把小说读成案例；应等杂志/初版模板">生成视觉读本（模型约 30–60 秒）</button><p class="fine edition-fit">本章不宜视觉读本：文学类章节是连续叙事，xerox 是论证型工作论文版式，硬套会把小说读成案例；应等杂志/初版模板</p><div id="job-mount"></div><p class="fine">原文逐字保留；讲解只做旁批，可一键隐藏。原文不重写、不合并。</p></aside></div><div class="pager"><span><a href="chapter-B0001-05.html">← 05</a></span><a href="book-B0001.html">返回章目</a><span><a href="chapter-B0001-07.html">07 →</a></span></div></div>
+</main>
+
+
+
+
+
+
+
+<script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

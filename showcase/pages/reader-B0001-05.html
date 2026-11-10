@@ -1,0 +1,474 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>阿Q正传 · 第五章 生计问题 · 四读</title><style>
+:root{--paper:#F3F0E7;--paper-2:#EAE5D8;--paper-3:#DED7C7;--ink:#181817;--ink-2:#55544E;--ink-3:#69665C;
+--rule:#D2CBBB;--rule-strong:#B9B09C;--pine:#1E3A36;--oxblood:#6B2B2B;--ochre:#7C5A2E;--indigo:#2C4056;
+--moss:#4A5839;--cinnabar:#A8442F;--note-bg:#F0F2F0;--note-rule:#C9D2CC;
+--serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",serif;
+--sans:"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16px}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.reader-top{position:sticky;top:0;z-index:30;height:56px;display:flex;align-items:center;gap:20px;padding:0 22px;
+background:color-mix(in srgb,var(--paper) 94%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.reader-top .back{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-decoration:none;color:var(--ink-2)}
+.reader-top .book{display:flex;align-items:baseline;gap:10px;min-width:0}
+.reader-top .book span{font-family:var(--sans);font-size:12px;color:var(--ink-3);white-space:nowrap}
+.reader-top .book b{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reader-top .tool{margin-left:auto;display:flex;align-items:center;gap:6px}
+.reader-top .tool button,.reader-top .tool a{font-family:var(--sans);font-size:12px;padding:6px 9px;border:1px solid transparent;text-decoration:none;color:var(--ink-2)}
+.reader-top .tool button:hover,.reader-top .tool a:hover{border-color:var(--rule-strong);color:var(--ink)}
+.reader-top .tool button[aria-pressed="true"]{border-color:var(--pine);color:var(--pine)}
+.progress{position:sticky;top:56px;height:2px;background:transparent;z-index:31}
+.progress i{display:block;height:2px;width:0;background:var(--cinnabar)}
+.tierbar{position:sticky;top:58px;z-index:29;display:flex;align-items:stretch;justify-content:center;gap:26px;
+padding:0 22px;background:color-mix(in srgb,var(--paper) 96%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.tier-tabs{display:flex;align-items:stretch}
+.tier-tab{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 18px 10px;border-bottom:2px solid transparent}
+.tier-tab b{font-family:var(--sans);font-size:13px;letter-spacing:.06em}
+.tier-tab small{font-family:var(--sans);font-size:10px;color:var(--ink-3)}
+.tier-tab[aria-selected="true"]{border-bottom-color:var(--pine)}
+.tier-tab[aria-selected="true"] b{color:var(--pine)}
+.tier-tab[disabled]{opacity:.35;cursor:not-allowed}
+.tier-note{display:flex;align-items:center;font-family:var(--sans);font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+.read{max-width:1000px;margin:0 auto;padding:44px 26px 72px}
+.read-head{border-bottom:1px solid var(--rule);padding-bottom:28px;margin-bottom:34px}
+.eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.16em;color:var(--ink-3);margin:0 0 12px}
+.read-head h1{font-size:34px;line-height:1.35;margin:0 0 18px;font-weight:600;letter-spacing:.02em}
+.read-stats{display:flex;flex-wrap:wrap;gap:18px;font-family:var(--sans);font-size:12px;color:var(--ink-2)}
+.read-stats b{font-weight:600;color:var(--ink)}
+.draft-banner{display:flex;align-items:baseline;gap:8px;margin:0 0 28px;padding:10px 14px;border-left:3px solid var(--ochre);
+background:var(--paper-2);font-family:var(--sans);font-size:12px;line-height:1.7;color:var(--ink-2)}
+.draft-banner b{font-size:10px;letter-spacing:.16em;color:var(--ochre);white-space:nowrap}
+.flow{display:flex;flex-direction:column}
+.flow-row{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:40px;align-items:start}
+.flow-row .block{min-width:0}
+.flow-row .margin{min-width:0}
+.src{font-size:17.5px;line-height:1.9;text-indent:2em;margin:0;letter-spacing:.01em}
+.src.lst{text-indent:0;padding-left:1.4em;border-left:2px solid var(--rule)}
+blockquote.src{text-indent:2em;margin:1.4em 0 1.4em;padding:2px 0 2px 20px;border-left:3px solid var(--rule-strong);color:var(--ink-2)}
+.sec{font-size:21px;line-height:1.6;margin:2.6em 0 1.1em;padding-left:14px;border-left:4px solid var(--pine);font-weight:600}
+.fig{margin:1.8em 0;text-align:center}
+.fig img{max-width:100%;height:auto;border:1px solid var(--rule);background:var(--paper-2)}
+.fig figcaption{font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--ink-3);margin:7px auto 0;max-width:40em;text-indent:0}
+.fig .fig-kicker{display:block;font-size:11px;letter-spacing:.16em;color:var(--cinnabar);margin-bottom:4px}
+.fig .fig-cap{display:block}
+body:not(.only-source) .fig-title{display:none}
+body.only-source figcaption{display:none}
+.fn{font-family:var(--sans);font-size:12px;color:var(--ink-3);text-indent:0;margin:-.6em 0 1.2em}
+.note{background:var(--note-bg);border-top:1px solid var(--note-rule);padding:12px 13px 13px;margin:0 0 1.6em;
+font-size:13px;line-height:1.75;text-indent:0;box-shadow:0 1px 0 var(--rule)}
+.note .tag{display:block;font-family:var(--sans);font-size:9.5px;letter-spacing:.14em;color:var(--pine);margin-bottom:6px}
+.note h4{font-size:13.5px;margin:0 0 6px;line-height:1.5}
+.note p{margin:0 0 .6em;text-indent:0}
+.note q{display:block;quotes:"「" "」";color:var(--ink-2);font-size:12.5px;border-left:2px solid var(--rule-strong);padding-left:8px;margin:.5em 0}
+.note .cite{font-family:var(--sans);font-size:9.5px;color:var(--ink-3);letter-spacing:.06em}
+.read-foot{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--rule);margin-top:52px;padding-top:22px}
+.read-foot a,.read-foot span{font-family:var(--sans);font-size:12px;color:var(--ink-2);text-decoration:none;max-width:46%}
+.read-foot a:hover{color:var(--pine)}
+.read-foot .dim{color:var(--ink-3)}
+.colophon{margin-top:38px;padding-top:16px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:11px;
+line-height:1.9;color:var(--ink-3);letter-spacing:.03em}
+.foreedge{position:fixed;left:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:3px;padding:6px 4px;z-index:20}
+.foreedge i{display:block;width:9px;height:2px;background:var(--rule);cursor:pointer;transition:width .15s}
+.foreedge i.kept{background:var(--pine)}
+.foreedge i:hover{width:18px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:var(--ink);color:var(--paper);
+font-family:var(--sans);font-size:12px;padding:8px 14px;opacity:0;pointer-events:none;transition:.2s;z-index:60}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.cmp-overlay{position:fixed;inset:0;background:rgba(24,24,23,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px}
+.cmp-overlay[hidden]{display:none}
+.cmp{background:var(--paper);border:1px solid var(--rule-strong);max-width:660px;width:100%;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.cmp h3{margin:0 0 4px;font-size:18px}
+.cmp p{font-family:var(--sans);font-size:11px;color:var(--ink-3);margin:0 0 16px}
+.cmp table{width:100%;border-collapse:collapse;font-family:var(--sans);font-size:12px}
+.cmp th,.cmp td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule)}
+.cmp th{font-weight:600;color:var(--ink-2);font-size:10px;letter-spacing:.08em}
+.cmp tr.current td{background:var(--paper-2);color:var(--pine);font-weight:600}
+.cmp-close{margin-top:16px;font-family:var(--sans);font-size:11px;border:1px solid var(--rule-strong);padding:7px 12px}
+body.only-source [data-origin="added"]{display:none!important}
+body.only-source .flow-row{grid-template-columns:minmax(0,680px)}
+body.only-source .stat-notes{display:none}
+body.big .src{font-size:20px;line-height:1.8}
+body.big .read-head h1{font-size:38px}
+body.night{--paper:#E2E6E6;--paper-2:#D3DADA;--paper-3:#C3CCCC;--ink:#131A1F;--ink-2:#3C4A52;--ink-3:#4F5C63;
+--rule:#B7C1C1;--rule-strong:#93A1A1;--pine:#18344F;--oxblood:#4E2A33;--ochre:#6B4E28;--indigo:#2B5C84;
+--moss:#3C4A36;--cinnabar:#2B5C84;--note-bg:#DCE3E3;--note-rule:#AEBABA}
+body.night .foreedge i.kept{background:var(--indigo)}
+body.night .tier-tab[aria-selected="true"]{border-bottom-color:var(--indigo)}
+body.night .tier-tab[aria-selected="true"] b{color:var(--indigo)}
+@media(max-width:1100px){.foreedge{display:none}}
+@media(max-width:980px){.flow-row{grid-template-columns:minmax(0,1fr)}.flow-row .margin{padding-left:0}
+.note{margin-top:-.6em;margin-bottom:1.6em}.tierbar{justify-content:flex-start;overflow-x:auto;gap:8px}
+.tier-tab{padding:10px 12px 8px;white-space:nowrap}.tier-note{display:none}}
+@media(max-width:720px){.read{padding:30px 16px 56px}.read-head h1{font-size:26px}.src{font-size:16.5px;line-height:1.85}
+.reader-top{padding:0 10px;gap:6px}.reader-top .book{display:none}
+.reader-top .tool{margin-left:auto;gap:0;min-width:0;overflow-x:auto;scrollbar-width:none}
+.reader-top .tool button,.reader-top .tool a{padding:6px 5px;font-size:11px;white-space:nowrap}
+.tierbar{padding:6px 10px;justify-content:stretch;overflow:visible;display:block}
+.tier-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:100%}
+.tier-tab{padding:8px 8px 7px;border:1px solid var(--rule);border-bottom-width:2px}
+.tier-tab b{font-size:12px}.tier-tab small{font-size:9.5px}
+.tier-note{display:none}.read-stats{gap:10px}
+.read-foot{flex-direction:column}.read-foot a,.read-foot span{max-width:100%}
+.draft-banner{margin:0 0 22px;font-size:11px;padding:10px 12px}}
+@media print{.reader-top,.tierbar,.foreedge,.progress,.toast,.cmp-overlay,.read-foot{display:none!important}
+.read{padding:0}.note{break-inside:avoid}.src{font-size:12pt;line-height:1.7}}
+body.export .reader-top,body.export .tierbar,body.export .foreedge,body.export .progress{display:none}
+body.export .read{padding-top:30px}
+
+
+:root{--plate:#F8F5EC;--plate-2:#EFE9DA;--rail:#C9C0AE}
+body.night{--plate:#DDE4E4;--plate-2:#D2DADA;--rail:#AEBABA}
+[hidden]{display:none!important}
+body.has-editorial .flow-row .block > .src{margin-bottom:1.05em}
+body.has-editorial .flow-row .block > .src:last-child{margin-bottom:0}
+body.has-editorial .flow-row .block > blockquote.src{margin-top:1.3em;margin-bottom:1.5em}
+body.only-source.has-editorial .flow-row .block > .src{margin-bottom:0}
+body.only-source.has-editorial .flow-row .block > blockquote.src{margin-top:1.3em;margin-bottom:1.5em}
+body.has-editorial .foreedge{display:none!important}
+
+.spine{display:flex;flex-wrap:wrap;gap:4px 0;margin-top:17px;font-family:var(--sans);font-size:11px;line-height:1.7;color:var(--ink-3)}
+.spine:not(:has(a:not([hidden]))){display:none}
+.spine a{display:inline-flex;align-items:baseline;gap:5px;text-decoration:none;color:inherit;padding:2px 11px 2px 0;margin-right:11px;border-right:1px solid var(--rule)}
+.spine a:last-child{border-right:0;margin-right:0;padding-right:0}
+.spine a:hover{color:var(--pine)}
+.spine b{font-weight:600;color:var(--cinnabar);letter-spacing:.04em}
+
+.beat{max-width:680px;margin:3.2em 0 1.4em;padding-top:1.2em;border-top:1px solid var(--rule-strong);scroll-margin-top:132px}
+.beat:first-child{margin-top:0;padding-top:0;border-top:0}
+.beat-no{display:inline-block;font-family:var(--sans);font-size:10px;letter-spacing:.2em;color:var(--cinnabar);margin-bottom:2px}
+.beat h3{font-size:23px;line-height:1.45;margin:.28em 0 .3em;font-weight:600;letter-spacing:.01em}
+.beat-q{font-family:var(--sans);font-size:13px;line-height:1.75;color:var(--ink-2);margin:0}
+
+.plate-row{max-width:948px;margin:3.4em 0 3.8em;padding:26px 30px 22px;background:var(--plate);border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-strong);scroll-margin-top:120px}
+.plate-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px}
+.plate-no{font-family:var(--sans);font-size:10px;letter-spacing:.2em;color:var(--cinnabar);white-space:nowrap}
+.plate-head h3{font-size:21px;line-height:1.4;margin:0;font-weight:600}
+.plate-cap{font-family:var(--sans);font-size:12px;line-height:1.85;color:var(--ink-2);margin:18px 0 0;max-width:66em}
+.plate-cap .cite,.method-note .cite{display:block;margin-top:3px;font-size:10px;letter-spacing:.04em;color:var(--ink-3)}
+
+.two-lives{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.life{padding:20px 26px 16px;display:flex;flex-direction:column;align-items:center}
+.life+.life{border-left:1px solid var(--rule)}
+.life-mark{height:132px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.one-dot{width:58px;height:58px;border-radius:50%;background:var(--cinnabar);box-shadow:0 0 0 12px color-mix(in srgb,var(--cinnabar) 10%,transparent),0 0 0 24px color-mix(in srgb,var(--cinnabar) 5%,transparent)}
+.dots{display:grid;grid-template-columns:repeat(20,6px);gap:5px;justify-content:center;align-content:center}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--pine);opacity:.55}
+.life-label{font-family:var(--sans);font-size:10px;letter-spacing:.12em;color:var(--ink-3);text-align:center}
+.life-label b{display:block;font-family:var(--serif);font-size:17px;letter-spacing:.01em;color:var(--ink);margin-bottom:3px}
+.life p{font-size:13px;line-height:1.8;color:var(--ink-2);text-align:center;margin:9px 0 0;max-width:22em}
+.life-facts{margin-top:10px;font-family:var(--sans);font-size:10px;letter-spacing:.04em;color:var(--cinnabar);border-top:1px solid var(--rule);padding-top:7px;text-align:center;width:100%}
+.life.statistical .life-facts{color:var(--pine)}
+
+.ratio{display:flex;flex-direction:column;gap:18px;padding:8px 0 2px}
+.ratio-row{display:grid;grid-template-columns:200px 110px minmax(0,1fr);align-items:center;gap:18px}
+.ratio-label b{display:block;font-size:16px;font-weight:600;line-height:1.4}
+.ratio-label span{display:block;font-family:var(--sans);font-size:10px;color:var(--ink-3);margin-top:2px}
+.ratio-value{font-family:var(--sans);font-size:25px;line-height:1;letter-spacing:-.02em;color:var(--ochre);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ratio-bar{height:24px;background:var(--plate-2);position:relative;border:1px solid var(--rule)}
+.ratio-bar i{display:block;height:100%;background:var(--ochre);min-width:3px}
+.ratio-row.wtp .ratio-bar i{background:var(--cinnabar)}
+.ratio-row.wtp .ratio-value{color:var(--cinnabar)}
+.ratio-gap{display:flex;align-items:baseline;gap:12px;margin-left:346px;padding-left:14px;border-left:1px solid var(--cinnabar)}
+.ratio-gap b{font-family:var(--sans);font-size:30px;line-height:1;color:var(--cinnabar);letter-spacing:-.03em}
+.ratio-gap span{font-family:var(--sans);font-size:11px;line-height:1.6;color:var(--ink-2)}
+.scale-row.accent .ratio-bar i{background:var(--cinnabar)}
+.scale-row.accent .ratio-value{color:var(--cinnabar)}
+.scale-row.muted .ratio-bar i{background:var(--ink-3)}
+.scale-row.muted .ratio-value{color:var(--ink-3)}
+.scale-row.pine .ratio-bar i{background:var(--pine)}
+.scale-row.pine .ratio-value{color:var(--pine)}
+.scale-note{font-family:var(--sans);font-size:10px;line-height:1.7;color:var(--ink-3);margin:2px 0 0 346px;padding-left:14px}
+
+.curve{max-width:680px;padding:4px 0 0}
+.curve svg{display:block;width:100%;height:auto;overflow:visible}
+.curve-axis{stroke:var(--rule-strong);stroke-width:1;fill:none}
+.curve-grid{stroke:var(--rule);stroke-width:1;stroke-dasharray:2 4}
+.curve-line{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.curve-line.ochre{stroke:var(--ochre)}
+.curve-line.cinnabar{stroke:var(--cinnabar)}
+.curve-line.pine{stroke:var(--pine)}
+.curve-line.indigo{stroke:var(--indigo)}
+.curve-label{font-family:var(--sans);font-size:11px;fill:var(--ink-3)}
+.curve-note{font-family:var(--sans);font-size:10px;line-height:1.7;color:var(--ink-3);margin:6px 0 0}
+.curve-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-family:var(--sans);font-size:10px;color:var(--ink-2)}
+.curve-legend i{display:inline-block;width:16px;height:2px;margin-right:5px;vertical-align:middle}
+.curve-annot{font-family:var(--sans);font-size:10px;fill:var(--ink-2)}
+
+.ledger-wrap{overflow-x:auto}
+.ledger{width:100%;border-collapse:collapse;font-family:var(--sans);font-size:12px;margin-top:2px;min-width:560px}
+.ledger th,.ledger td{padding:11px 10px;border-bottom:1px solid var(--rule);vertical-align:baseline}
+.ledger thead th{font-size:9px;letter-spacing:.12em;color:var(--ink-3);font-weight:500;text-align:right;border-bottom:1px solid var(--rule-strong)}
+.ledger thead th:first-child{text-align:left}
+.ledger tbody th{text-align:left;font-family:var(--serif);font-size:14px;font-weight:500;line-height:1.5}
+.ledger td{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2);white-space:nowrap}
+.ledger td.yes{color:var(--pine);font-weight:600}
+.ledger td.no{color:var(--cinnabar)}
+.ledger tr.chosen{background:color-mix(in srgb,var(--ochre) 7%,transparent)}
+.ledger .price-note{font-family:var(--sans);font-size:10px;color:var(--ink-3);letter-spacing:.03em;margin:0 0 10px}
+.ledger-mobile{display:none}
+.ledger-card{border:1px solid var(--rule);padding:10px 12px;background:var(--paper)}
+.ledger-card.chosen{border-color:var(--ochre);background:color-mix(in srgb,var(--ochre) 7%,transparent)}
+.ledger-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:1px solid var(--rule);padding-bottom:6px;margin-bottom:5px}
+.ledger-card-head b{font-family:var(--serif);font-size:14px;font-weight:500;line-height:1.5}
+.ledger-card-head span{font-family:var(--sans);font-size:10px;font-weight:600;white-space:nowrap}
+.ledger-card-head .yes{color:var(--pine)}
+.ledger-card-head .no{color:var(--cinnabar)}
+.ledger-card-row{display:flex;justify-content:space-between;font-family:var(--sans);font-size:11px;color:var(--ink-2);line-height:1.75}
+.ledger-card-row b{font-variant-numeric:tabular-nums;color:var(--ink)}
+
+.method{max-width:680px;margin:2.8em 0 0;padding:18px 22px 16px;background:var(--paper-2);border-left:3px solid var(--ochre);scroll-margin-top:120px}
+.method .tag,.predict .tag,.framing .tag{font-family:var(--sans);font-size:9px;letter-spacing:.16em}
+.method .tag{color:var(--ochre)}
+.steps{display:flex;align-items:stretch;gap:0;margin-top:12px}
+.steps>div{flex:1;min-width:0;padding:0 12px;border-left:1px solid var(--rule)}
+.steps>div:first-child{border-left:0;padding-left:0}
+.steps b{display:block;font-family:var(--sans);font-size:13px;line-height:1.5;color:var(--ink)}
+.steps span{display:block;font-family:var(--sans);font-size:10px;line-height:1.6;color:var(--ink-3);margin-top:3px}
+.steps i{font-style:normal;align-self:center;color:var(--ochre);font-family:var(--sans);font-size:16px;padding:0 2px}
+.steps .result b{font-size:23px;letter-spacing:-.02em;color:var(--ochre);font-variant-numeric:tabular-nums}
+.method-note{font-family:var(--sans);font-size:11px;line-height:1.8;color:var(--ink-2);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--rule)}
+
+.predict{max-width:680px;margin:2.6em 0;padding:20px 22px 18px;border:1px solid var(--rule-strong);border-top:3px solid var(--cinnabar);scroll-margin-top:120px}
+.predict .tag{color:var(--cinnabar)}
+.predict p{font-size:15.5px;line-height:1.85;margin:9px 0 14px}
+.choices{display:flex;flex-wrap:wrap;gap:8px}
+.choices button{font-family:var(--sans);font-size:12px;padding:7px 14px;border:1px solid var(--rule-strong);background:transparent;transition:.15s}
+.choices button:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
+.choices button.on{background:var(--cinnabar);border-color:var(--cinnabar);color:var(--paper)}
+.predict-result{font-family:var(--sans);font-size:11px;line-height:1.7;color:var(--ink-2);margin:12px 0 0;min-height:1.4em}
+
+.framing{max-width:680px;margin:2.6em 0 0;padding:20px 22px 18px;background:var(--plate);border:1px solid var(--rule);border-top:2px solid var(--pine);scroll-margin-top:120px}
+.framing-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.framing .tag{color:var(--pine)}
+.seg{display:inline-flex;border:1px solid var(--rule-strong)}
+.seg button{font-family:var(--sans);font-size:11px;padding:5px 11px;color:var(--ink-2)}
+.seg button.on{background:var(--pine);color:var(--paper)}
+.framing-stage{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.framing-cell{padding:12px 14px;background:var(--paper);border:1px solid var(--rule);transition:.2s}
+.framing-cell span{display:block;font-family:var(--sans);font-size:9px;letter-spacing:.08em;color:var(--ink-3)}
+.framing-cell b{display:block;font-family:var(--sans);font-size:23px;line-height:1.3;font-variant-numeric:tabular-nums;color:var(--ochre);margin-top:2px}
+.framing-cell.base b{color:var(--ink-2)}
+.framing-cell .delta{display:block;font-family:var(--sans);font-size:10px;letter-spacing:.03em;color:var(--ink-3);margin-top:2px}
+.framing-cell.hot{border-color:var(--cinnabar);box-shadow:inset 0 0 0 1px var(--cinnabar)}
+.framing-cell.hot b{color:var(--cinnabar)}
+.framing-cell.hot .delta{color:var(--cinnabar)}
+.framing-copy{font-family:var(--sans);font-size:11px;line-height:1.8;color:var(--ink-2);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--rule)}
+
+.takeaways{max-width:948px;margin:3.6em 0 2.2em;padding:28px 32px 24px;background:var(--pine);color:var(--paper);scroll-margin-top:120px}
+.takeaways .tag{font-family:var(--sans);font-size:9px;letter-spacing:.18em;color:color-mix(in srgb,var(--paper) 65%,transparent)}
+.takeaways h3{font-size:22px;line-height:1.4;margin:6px 0 16px;color:var(--paper);font-weight:600}
+.takeaways ol{margin:0;padding:0;list-style:none;counter-reset:take}
+.takeaways li{counter-increment:take;position:relative;padding-left:38px;font-size:14px;line-height:1.85;margin-bottom:12px;color:color-mix(in srgb,var(--paper) 88%,transparent)}
+.takeaways li:before{content:"0" counter(take);position:absolute;left:0;top:0;font-family:var(--sans);font-size:11px;letter-spacing:.08em;color:var(--ochre)}
+.takeaways li:last-child{margin-bottom:0}
+.takeaways .next{margin:18px 0 0;padding-top:14px;border-top:1px solid color-mix(in srgb,var(--paper) 18%,transparent);font-family:var(--sans);font-size:11px;line-height:1.8;color:color-mix(in srgb,var(--paper) 65%,transparent)}
+
+@media(max-width:820px){
+  .plate-row{padding:20px 18px;margin:2.8em 0}
+  .two-lives{grid-template-columns:1fr}
+  .life+.life{border-left:0;border-top:1px solid var(--rule)}
+  .ratio-row{grid-template-columns:1fr;gap:6px}
+  .ratio-value{text-align:left}
+  .ratio-gap{margin-left:0}
+  .scale-note{margin-left:0;padding-left:0}
+  .curve{max-width:100%}
+  .steps{flex-direction:column;gap:8px}
+  .steps>div{border-left:0;padding:0}
+  .steps i{display:none}
+  .ledger-wrap{display:none}
+  .ledger-mobile{display:flex;flex-direction:column;gap:8px}
+  .framing-stage{grid-template-columns:1fr 1fr;gap:8px}
+  .framing-cell{padding:10px 10px}
+  .framing-cell.base{display:none}
+  .framing-cell b{font-size:21px}
+  .framing-cell span{font-size:9px}
+  .framing-cell .delta{font-size:10px}
+  .framing-head{gap:8px}
+  .spine{font-size:10px}
+  .beat{margin-top:2.6em}
+  .beat h3{font-size:21px}
+  .plate-head{flex-wrap:wrap;gap:4px 12px}
+  .takeaways{padding:22px 20px 20px;margin:3em 0 1.8em}
+  .takeaways h3{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){
+  .framing-cell,.choices button{transition:none}
+}
+</style><style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head><body class="reader has-editorial" data-tier="standard"><header class="reader-top"><a class="back" href="#" data-dead="「/chapter/B0001/5」">← 工单</a><div class="book"><span>阿Q正传</span><b>第五章 生计问题</b></div><div class="tool"><a href="book-B0001.html">目录</a><button id="only-btn" aria-pressed="false">只看原文</button><button id="big-btn" aria-pressed="false">大字</button><button id="night-btn">夜读</button><button id="cmp-btn">对照</button></div></header><div class="progress" id="progress"><i style="width: 0%;"></i></div><nav class="tierbar"><div class="tier-tabs"><button class="tier-tab" data-tier-tab="skim" aria-selected="false"><b>速览</b><small>40–55% · E≤10%</small></button><button class="tier-tab" data-tier-tab="standard" aria-selected="true"><b>标准</b><small>60–75% · E≤25%</small></button><button class="tier-tab" data-tier-tab="deep" aria-selected="false"><b>深读</b><small>80–90% · E≤40%</small></button><button class="tier-tab" data-tier-tab="research" aria-selected="false"><b>研究</b><small>90–100% · E≤50%</small></button></div><div class="tier-note">同一章，已生成档位 · 数字键切换</div></nav><main class="read"><header class="read-head"><p class="eyebrow">阿Q正传 · 鲁迅</p><h1>第五章 生计问题</h1><div class="read-stats"><span id="live-stats">原文 <b>61%</b> · 约 <b>1,378</b> 字<span class="stat-notes"> · 讲解 <b>5</b> 条</span> · <b>3</b> 分钟</span></div><nav class="spine" data-origin="added" aria-label="章节节拍"><a href="#beat-beat-1" data-tiers="standard deep research"><b>01</b>三件古怪，一件要命</a><a href="#beat-beat-2" data-tiers="standard deep research"><b>02</b>饭碗被小D顶去</a><a href="#beat-beat-3" data-tiers="standard deep research"><b>03</b>龙虎斗为何势均力敌</a><a href="#beat-beat-4" data-tiers="standard deep research"><b>04</b>卖无可卖，出门求食</a><a href="#beat-beat-5" data-tiers="standard deep research"><b>05</b>三个萝卜与进城的决定</a></nav></header><div class="flow"><div class="flow-row" data-block="B01"><div class="block"><p class="src" data-origin="source" data-src="B01" data-block="B01" data-kind="paragraph" data-tiers="skim standard deep research">阿Q礼毕之后，仍旧回到土谷祠，太阳下去了，渐渐觉得世上有些古怪。他仔细一想，终于省悟过来：其原因盖在自己的赤膊。他记得破夹袄还在，便披在身上，躺倒了，待张开眼楮，原来太阳又已经照在西墙上头了。他坐起身，一面说道，“妈妈的……”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B02"><div class="block"><p class="src" data-origin="source" data-src="B02" data-block="B02" data-kind="paragraph" data-tiers="skim standard deep research">他起来之后，也仍旧在街上逛，虽然不比赤膊之有切肤之痛，却又渐渐的觉得世上有些古怪了。仿佛从这一天起，未庄的女人们忽然都怕了羞，伊们一见阿Q走来，便个个躲进门里去。甚而至于将近五十岁的邹七嫂，也跟着别人乱钻，而且将十一的女儿都叫进去了。阿Q很以为奇，而且想：“这些东西忽然都学起小姐模样来了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B03"><div class="block"><p class="src" data-origin="source" data-src="B03" data-block="B03" data-kind="paragraph" data-tiers="standard deep research">这娼妇们……”</p></div><div class="margin"></div></div><div class="beat" id="beat-beat-1" data-origin="added" data-tiers="standard deep research"><span class="beat-no">01 / 05</span><h3>三件古怪，一件要命</h3><p class="beat-q">酒店不赊、老头催走、无人雇工，哪一件真正逼人？</p></div><div class="flow-row" data-block="B04"><div class="block"><p class="src" data-origin="source" data-src="B04" data-block="B04" data-kind="paragraph" data-tiers="skim standard deep research">但他更觉得世上有些古怪，却是许多日以后的事。其一，酒店不肯赊欠了；其二，管土谷祠的老头子说些废话，似乎叫他走；其三，他虽然记不清多少日，但确乎有许多日，没有一个人来叫他做短工。酒店不赊，熬着也罢了；老头子催他走，噜甦一通也就算了；只是没有人来叫他做短工，却使阿Q肚子饿：这委实是一件非常“妈妈的”的事情。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B04" data-tiers="skim standard deep research"><span class="tag">结构 · 三事非并列</span><p>三件“古怪”并非并列：赊欠可熬，逐客可忍，唯有无人雇工直接变成肚子饿。叙事把社会排斥换算成生理痛感。</p><q data-src="B04">其一，酒店不肯赊欠了</q><q data-src="B04">只是没有人来叫他做短工，却使阿Q肚子饿</q><span class="cite">依据 B04</span></aside></div></div><div class="method" id="v-three-oddities" data-origin="added" data-tiers="standard deep research" data-visual="steps"><span class="tag">方法 · 三步</span><div class="steps"><div><b>酒店不赊</b><span>熬着也罢了</span></div><i>+</i><div><b>老头催走</b><span>噜甦一通也就算了</span></div><i>+</i><div><b>无人雇工</b><span>许多日没人来叫短工</span></div><i>→</i><div class="result"><b>肚子饿</b><span>只有这一件直接变成生理痛感</span></div></div><p class="method-note">三件“古怪”并非并列：前两件可熬可忍，第三件断掉活计，直接变成饥饿。<span class="cite">依据 B04</span></p></div><div class="flow-row" data-block="B05"><div class="block"><p class="src" data-origin="source" data-src="B05" data-block="B05" data-kind="paragraph" data-tiers="skim standard deep research">阿Q忍不下去了，他只好到老主顾的家里去探问，——但独不许踏进赵府的门槛，——然而情形也异样：一定走出一个男人来，现了十分烦厌的相貌，像回复乞丐一般的摇手道：“没有没有！你出去！”</p></div><div class="margin"></div></div><div class="beat" id="beat-beat-2" data-origin="added" data-tiers="standard deep research"><span class="beat-no">02 / 05</span><h3>饭碗被小D顶去</h3><p class="beat-q">阿Q眼里不如王胡的小D，为何能顶掉他的饭碗？</p></div><div class="flow-row" data-block="B06"><div class="block"><p class="src" data-origin="source" data-src="B06" data-block="B06" data-kind="paragraph" data-tiers="skim standard deep research">阿Q愈觉得稀奇了。他想，这些人家向来少不了要帮忙，不至于现在忽然都无事，这总该有些蹊跷在里面了。他留心打听，才知道他们有事都去叫小Don 。这小D，是一个穷小子，又瘦又乏，在阿Q的眼楮里，位置是在王胡之下的，谁料这小子竟谋了他的饭碗去。所以阿Q这一气，更与平常不同，当气愤愤的走着的时候，忽然将手一扬，唱道：“我手执钢鞭将你打！ ……”</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B06" data-tiers="skim standard deep research"><span class="tag">概念 · 可替代底层</span><p>阿Q的自我排序里小D在王胡之下，而正是这个“不足齿数”的人顶掉了他的活计。他的社会位置低到可被更弱者替换。</p><q data-src="B06">谁料这小子竟谋了他的饭碗去</q><q data-src="B06">这小D，是一个穷小子，又瘦又乏</q><span class="cite">依据 B06 · B10</span></aside></div></div><div class="flow-row" data-block="B07"><div class="block"><p class="src" data-origin="source" data-src="B07" data-block="B07" data-kind="paragraph" data-tiers="standard deep research">几天之后，他竟在钱府的照壁前遇见了小D。“仇人相见分外眼明”，阿Q便迎上去，小D也站住了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B08"><div class="block"><p class="src" data-origin="source" data-src="B08" data-block="B08" data-kind="paragraph" data-tiers="deep research" hidden="">“畜生！”阿Q怒目而视的说，嘴角上飞出唾沫来。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B09"><div class="block"><p class="src" data-origin="source" data-src="B09" data-block="B09" data-kind="paragraph" data-tiers="research" hidden="">“我是虫豸，好么？……”小D说。</p></div><div class="margin"></div></div><div class="beat" id="beat-beat-3" data-origin="added" data-tiers="standard deep research"><span class="beat-no">03 / 05</span><h3>龙虎斗为何势均力敌</h3><p class="beat-q">先前不足齿数的小D，为什么能和饿着的阿Q打平？</p></div><div class="predict" id="v-fight-prediction" data-origin="added" data-tiers="standard deep research" data-visual="prediction" data-reveal="势均力敌，打平：两人互拔辫子，弯腰映在粉墙上，最后同时松手退开。"><span class="tag">读前猜一猜</span><p>阿Q扑上去拔小D的辫子，这场架会怎样收场？</p><div class="choices"><button type="button" data-guess="阿Q轻松取胜" aria-pressed="false">阿Q轻松取胜</button><button type="button" data-guess="小D取胜" aria-pressed="false">小D取胜</button><button type="button" data-guess="势均力敌，打平" aria-pressed="false">势均力敌，打平</button><button type="button" data-guess="被看客劝开" aria-pressed="false">被看客劝开</button></div><p class="predict-result" data-result="" aria-live="polite">先选一个。答案就在下面两段。</p></div><div class="flow-row" data-block="B10"><div class="block"><p class="src" data-origin="source" data-src="B10" data-block="B10" data-kind="paragraph" data-tiers="standard deep research">这谦逊反使阿Q更加愤怒起来，但他手里没有钢鞭，于是只得扑上去，伸手去拔小D的辫子。小D一手护住了自己的辫根，一手也来拔阿Q的辫子，阿Q便也将空着的一只手护住了自己的辫根。从先前的阿Q看来，，小D本来是不足齿数的，但他近来挨了饿，又瘦又乏已经不下于小D，所以便成了势均力敌的现象，四只手拔着两颗头，都弯了腰，在钱家粉墙上映出一个蓝色的虹形，至于半点钟之久了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B10" data-tiers="standard deep research"><span class="tag">概念 · 饥饿拉平</span><p>“龙虎斗”打成平手，不是本事相当，而是饥饿把阿Q拉低到小D的水准。身体的虚弱成了社会地位的可视化。</p><q data-src="B10">但他近来挨了饿，又瘦又乏已经不下于小D</q><q data-src="B10">四只手拔着两颗头，都弯了腰</q><span class="cite">依据 B10</span></aside></div></div><div class="flow-row" data-block="B11"><div class="block"><p class="src" data-origin="source" data-src="B11" data-block="B11" data-kind="paragraph" data-tiers="deep research" hidden="">“好了，好了！”看的人们说，大约是解劝的。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B12"><div class="block"><p class="src" data-origin="source" data-src="B12" data-block="B12" data-kind="paragraph" data-tiers="standard deep research">“好，好！”看的人们说，不知道是解劝，是颂扬，还是煽动。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B12" data-tiers="standard deep research"><span class="tag">叙述 · 看客空洞</span><p>看客的“好，好！”不作判断，只作围观。叙述者拒绝说明这是劝架、称赞还是挑唆，围观者的空洞由此暴露。</p><q data-src="B12">不知道是解劝，是颂扬，还是煽动</q><q data-src="B11">大约是解劝的</q><span class="cite">依据 B12 · B11</span></aside></div></div><div class="flow-row" data-block="B13"><div class="block"><p class="src" data-origin="source" data-src="B13" data-block="B13" data-kind="paragraph" data-tiers="skim standard deep research">然而他们都不听。阿Q进三步，小D便退三步，都站着；小D进三步，阿Q便退三步，又都站着。大约半点钟，——未庄少有自鸣钟，所以很难说，或者二十分，——他们的头发里便都冒烟，额上便都流汗，阿Q的手放松了，在同一瞬间，小D的手也正放松了，同时直起，同时退开，都挤出人丛去。</p></div><div class="margin"></div></div><div class="plate-row" id="v-time-scale" data-origin="added" data-tiers="standard deep research" data-visual="scale"><div class="plate-head"><span class="plate-no">图版 01</span><h3>半点钟，还是二十分</h3></div><div class="ratio scale"><div class="ratio-row scale-row muted"><div class="ratio-label"><b>先说</b></div><div class="ratio-value">半点钟</div><div class="ratio-bar"><i style="width:100.00%"></i></div></div><div class="ratio-row scale-row accent"><div class="ratio-label"><b>又说</b></div><div class="ratio-value">二十分</div><div class="ratio-bar"><i style="width:66.67%"></i></div></div><div class="ratio-gap"><b>×1.5</b><span>同一场架，叙述者给出两个约数</span></div><p class="scale-note">未庄少有自鸣钟，时长只能约摸。</p></div><p class="plate-cap">叙述者连打斗持续多久都不确定，约数本身透出未庄的时间感。<span class="cite">依据 B13</span></p></div><div class="flow-row" data-block="B14"><div class="block"><p class="src" data-origin="source" data-src="B14" data-block="B14" data-kind="paragraph" data-tiers="deep research" hidden="">“记着罢，妈妈的……”阿Q回过头去说。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B15"><div class="block"><p class="src" data-origin="source" data-src="B15" data-block="B15" data-kind="paragraph" data-tiers="deep research" hidden="">“妈妈的，记着罢……”小D也回过头来说。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B16"><div class="block"><p class="src" data-origin="source" data-src="B16" data-block="B16" data-kind="paragraph" data-tiers="skim standard deep research">这一场“龙虎斗”似乎并无胜败，也不知道看的人可满足，都没有发什么议论，而阿Q却仍然没有人来叫他做短工。</p></div><div class="margin"></div></div><div class="beat" id="beat-beat-4" data-origin="added" data-tiers="standard deep research"><span class="beat-no">04 / 05</span><h3>卖无可卖，出门求食</h3><p class="beat-q">棉被、毡帽、布衫、棉袄都没了，阿Q还能卖什么？</p></div><div class="flow-row" data-block="B17"><div class="block"><p class="src" data-origin="source" data-src="B17" data-block="B17" data-kind="paragraph" data-tiers="skim standard deep research">有一日很温和，微风拂拂的颇有些夏意了，阿Q却觉得寒冷起来，但这还可担当，第一倒是肚子饿。棉被，毡帽，布衫，早已没有了，其次就卖了棉袄；现在有裤子，却万不可脱的；有破夹袄，又除了送人做鞋底之外，决定卖不出钱。他早想在路上拾得一注钱，但至今还没有见；他想在自己的破屋里忽然寻到一注钱，慌张的四顾，但屋内是空虚而且了然。于是他决计出门求食去了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B18"><div class="block"><p class="src" data-origin="source" data-src="B18" data-block="B18" data-kind="paragraph" data-tiers="deep research" hidden="">他在路上走着要“求食”，看见熟识的酒店，看见熟识的馒头，但他都走过了，不但没有暂停，而且并不想要。他所求的不是这类东西了；他求的是什么东西，他自己不知道。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B18" data-tiers="deep research" hidden=""><span class="tag">讲解 · 模型补充</span><p>饥饿使欲望失去对象：走过熟悉的酒店馒头却并不想要。这一句把“求食”从觅食写成一种说不清的匮乏。</p><q data-src="B18">他所求的不是这类东西了</q><q data-src="B18">他求的是什么东西，他自己不知道</q><span class="cite">依据 B18 · B17</span></aside></div></div><div class="flow-row" data-block="B19"><div class="block"><p class="src" data-origin="source" data-src="B19" data-block="B19" data-kind="paragraph" data-tiers="standard deep research">未庄本不是大村镇，不多时便走尽了。村外多是水田，满眼是新秧的嫩绿，夹着几个圆形的活动的黑点，便是耕田的农夫。阿Q并不赏鉴这田家乐，却只是走，因为他直觉的知道这与他的“求食”之道是很辽远的。但他终于走到静修庵的墙外了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B20"><div class="block"><p class="src" data-origin="source" data-src="B20" data-block="B20" data-kind="paragraph" data-tiers="deep research" hidden="">庵周围也是水田，粉墙突出在新绿里，后面的低土墙里是菜园。阿Q迟疑了一会，四面一看，并没有人。他便爬上这矮墙去，扯着何首乌藤，但泥土仍然簌簌的掉，阿Q的脚也索索的抖；终于攀着桑树枝，跳到里面了。里面真是郁郁葱葱，但似乎并没有黄酒馒头，以及此外可吃的之类。靠西墙是竹丛，下面许多笋，只可惜都是并未煮熟的，还有油菜早经结子，芥菜已将开花，小白菜也很老了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B21"><div class="block"><p class="src" data-origin="source" data-src="B21" data-block="B21" data-kind="paragraph" data-tiers="research" hidden="">阿Q仿佛文童落第似的觉得很冤屈，他慢慢走近园门去，忽而非常惊喜了，这分明是一畦老萝卜。他于是蹲下便拔，而门口突然伸出一个很圆的头来，又即缩回去了，这分明是小尼姑。小尼姑之流是阿Q本来视若草芥的，但世事须“退一步想”，所以他便赶紧拔起四个萝卜，拧下青叶，兜在大襟里。然而老尼姑已经出来了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B22"><div class="block"><p class="src" data-origin="source" data-src="B22" data-block="B22" data-kind="paragraph" data-tiers="research" hidden="">“阿弥陀佛，阿Q，你怎么跳进园里来偷萝卜！……阿呀，罪过呵，阿唷，阿弥陀佛！……”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B23"><div class="block"><p class="src" data-origin="source" data-src="B23" data-block="B23" data-kind="paragraph" data-tiers="research" hidden="">“我什么时候跳进你的园里来偷萝卜？”阿Q且看且走的说。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B24"><div class="block"><p class="src" data-origin="source" data-src="B24" data-block="B24" data-kind="paragraph" data-tiers="research" hidden="">“现在……这不是？”老尼姑指着他的衣兜。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B25"><div class="block"><p class="src" data-origin="source" data-src="B25" data-block="B25" data-kind="paragraph" data-tiers="skim standard deep research">“这是你的？你能叫得他答应你么？你……”</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B25" data-tiers="skim standard deep research"><span class="tag">概念 · 精神胜利</span><p>被当场捉住仍要狡辩“你能叫得他答应你么”，这是阿Q式精神胜利的最后支点：事实清楚，嘴上不认。</p><q data-src="B25">这是你的？你能叫得他答应你么？</q><q data-src="B24">现在……这不是？</q><span class="cite">依据 B25 · B24</span></aside></div></div><div class="flow-row" data-block="B26"><div class="block"><p class="src" data-origin="source" data-src="B26" data-block="B26" data-kind="paragraph" data-tiers="standard deep research">阿Q没有说完话，拔步便跑；追来的是一匹很肥大的黑狗。这本来在前门的，不知怎的到后园来了。黑狗哼而且追，已经要咬着阿Q的腿，幸而从衣兜里落下一个萝卜来，那狗给一吓，略略一停，阿Q已经爬上桑树，跨到土墙，连人和萝卜都滚出墙外面了。只剩着黑狗还在对着桑树嗥，老尼姑念着佛。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B27"><div class="block"><p class="src" data-origin="source" data-src="B27" data-block="B27" data-kind="paragraph" data-tiers="skim standard deep research">阿Q怕尼姑又放出黑狗来，拾起萝卜便走，沿路又捡了几块小石头，但黑狗却并不再现。阿Q于是抛了石块，一面走一面吃，而且想道，这里也没有什么东西寻，不如进城去……</p></div><div class="margin"></div></div><div class="beat" id="beat-beat-5" data-origin="added" data-tiers="standard deep research"><span class="beat-no">05 / 05</span><h3>三个萝卜与进城的决定</h3><p class="beat-q">求食走到静修庵，为什么最后指向城里？</p></div><div class="flow-row" data-block="B28"><div class="block"><p class="src" data-origin="source" data-src="B28" data-block="B28" data-kind="paragraph" data-tiers="skim standard deep research">待三个萝卜吃完时，他已经打定了进城的主意了。</p></div><div class="margin"></div></div></div><div class="takeaways" id="takeaways" data-origin="added" data-tiers="standard deep research"><span class="tag">带走三件事</span><h3>生计如何变成饿与走</h3><ol><li data-sources="B04">三件“古怪”中，酒店不赊与老头催走都可熬可忍，无人雇工才直接转成肚子饿。</li><li data-sources="B06 B10">小D在阿Q的排序里低于王胡，却顶掉了他的短工；饥饿又让阿Q在打架时降到与小D势均力敌。</li><li data-sources="B17 B27 B28">卖完棉袄、卖不掉破夹袄之后，阿Q从静修庵的萝卜走到被狗追，最后把求食的方向定在城里。</li></ol><p class="next">沿着三件“古怪”、饭碗被顶、龙虎斗与求食路线，标出社会排斥落到身体上的那几步。</p></div><footer class="read-foot"><a href="#" data-dead="「/reader/B0001/4」">← 上一章</a><a href="#" data-dead="「/reader/B0001/6」">下一章 →</a></footer><div class="colophon">源文件 05_第五章生计问题.md · SHA-256 0d45a025fdb5c87b…<br>生成 <span id="colophon-time">2026-11-10T09:54:59</span> · 生成器 phase1-1 · 模型 <span id="colophon-model">deepseek-v4.1-flash</span> · 渲染 v2 · 原文逐字保留，块 28</div></main><div class="foreedge" aria-hidden="true"><i data-block="B01" class="kept" title="B01"></i><i data-block="B02" class="kept" title="B02"></i><i data-block="B03" class="kept" title="B03"></i><i data-block="B04" class="kept" title="B04"></i><i data-block="B05" class="kept" title="B05"></i><i data-block="B06" class="kept" title="B06"></i><i data-block="B07" class="kept" title="B07"></i><i data-block="B08" class="" title="B08"></i><i data-block="B09" class="" title="B09"></i><i data-block="B10" class="kept" title="B10"></i><i data-block="B11" class="" title="B11"></i><i data-block="B12" class="kept" title="B12"></i><i data-block="B13" class="kept" title="B13"></i><i data-block="B14" class="" title="B14"></i><i data-block="B15" class="" title="B15"></i><i data-block="B16" class="kept" title="B16"></i><i data-block="B17" class="kept" title="B17"></i><i data-block="B18" class="" title="B18"></i><i data-block="B19" class="kept" title="B19"></i><i data-block="B20" class="" title="B20"></i><i data-block="B21" class="" title="B21"></i><i data-block="B22" class="" title="B22"></i><i data-block="B23" class="" title="B23"></i><i data-block="B24" class="" title="B24"></i><i data-block="B25" class="kept" title="B25"></i><i data-block="B26" class="kept" title="B26"></i><i data-block="B27" class="kept" title="B27"></i><i data-block="B28" class="kept" title="B28"></i></div><div class="cmp-overlay" id="cmp-overlay" hidden=""><div class="cmp" role="dialog" aria-modal="true" aria-label="档位对照"><h3>档位对照</h3><p>同一章源文，已生成档位对照。浏览 600 字/分 · 标准 500 · 深读 350 · 研读 300。</p><table><thead><tr><th>档</th><th>块覆盖</th><th>字数覆盖</th><th>讲解</th><th>正文字数</th><th>用时</th></tr></thead><tbody><tr data-tier-row="skim"><td>速览</td><td>39%</td><td>52%</td><td>3</td><td>956 字</td><td>2 分</td></tr><tr data-tier-row="standard" class="current"><td>标准</td><td>61%</td><td>75%</td><td>5</td><td>1,378 字</td><td>3 分</td></tr><tr data-tier-row="deep"><td>深读</td><td>82%</td><td>89%</td><td>6</td><td>1,652 字</td><td>5 分</td></tr><tr data-tier-row="research"><td>研究</td><td>100%</td><td>100%</td><td>6</td><td>1,848 字</td><td>7 分</td></tr></tbody></table><button class="cmp-close" data-cmp-close="">关闭</button></div></div><div class="toast" id="toast"></div><script>const TIERS = [{"key": "skim", "label": "速览"}, {"key": "standard", "label": "标准"}, {"key": "deep", "label": "深读"}, {"key": "research", "label": "研究"}];
+const STATS = {"skim": {"c_block": 0.3929, "c_char": 0.5173, "chars": 956, "e": 0.0693, "notes": 3, "minutes": 2, "label": "速览", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:54:59"}, "standard": {"c_block": 0.6071, "c_char": 0.7457, "chars": 1378, "e": 0.1131, "notes": 5, "minutes": 3, "label": "标准", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:54:59"}, "deep": {"c_block": 0.8214, "c_char": 0.8939, "chars": 1652, "e": 0.1358, "notes": 6, "minutes": 5, "label": "深读", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:54:59"}, "research": {"c_block": 1.0, "c_char": 1.0, "chars": 1848, "e": 0.1358, "notes": 6, "minutes": 7, "label": "研究", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:54:59"}};
+const TICK_COUNT = 28;
+const state = {tier: "standard", only: false, big: false};
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+function toast(msg) { const el = $('#toast'); if (!el) return; el.textContent = msg; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1600); }
+function fmt(n) { return Number(n || 0).toLocaleString('zh-CN'); }
+function setTier(tier, push) {
+  if (!TIERS.some(t => t.key === tier)) tier = 'standard';
+  state.tier = tier;
+  document.body.dataset.tier = tier;
+  $$('[data-tiers]').forEach(el => { el.hidden = !el.dataset.tiers.split(' ').includes(tier); });
+  $$('[data-tier-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tierTab === tier)));
+  const s = STATS[tier]; if (s) {
+    const line = $('#live-stats');
+    if (line) line.innerHTML = '原文 <b>' + Math.round(s.c_block * 100) + '%<\/b> · 约 <b>' + fmt(s.chars) +
+      '<\/b> 字<span class="stat-notes"> · 讲解 <b>' + s.notes + '<\/b> 条<\/span> · <b>' + s.minutes + '<\/b> 分钟';
+    const pct = Math.max(0, Math.min(100, Math.round(s.c_block * 100)));
+    const bar = $('#scope-bar'); if (bar) bar.style.width = pct + '%';
+    // 页脚出处按档位切：增量包可能混多个模型/时间。
+    const at = $('#colophon-time'); if (at) at.textContent = s.generated_at || '';
+    const md = $('#colophon-model'); if (md) md.textContent = s.model || '';
+  }
+  updateTicks(); updateCompare();
+  if (push) {
+    const url = new URL(location.href); url.searchParams.set('tier', tier); history.replaceState(null, '', url);
+  }
+}
+function updateTicks() {
+  $$('.foreedge i').forEach(tick => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"] [data-origin="source"]');
+    tick.classList.toggle('kept', !!row && !row.hidden);
+  });
+}
+function updateCompare() {
+  $$('.cmp tr[data-tier-row]').forEach(tr => tr.classList.toggle('current', tr.dataset.tierRow === state.tier));
+}
+function setOnly(on) { state.only = on; document.body.classList.toggle('only-source', on);
+  const b = $('#only-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setBig(on) { state.big = on; document.body.classList.toggle('big', on);
+  const b = $('#big-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setNight(on) { document.body.classList.toggle('night', on);
+  try { localStorage.setItem('reading-theme', on ? 'cold' : 'warm'); } catch (e) {}
+  const b = $('#night-btn'); if (b) b.textContent = on ? '暖纸' : '夜读'; }
+function themeLinks() {
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  if (theme === 'warm') return;
+  $$('a[href]').forEach(a => { const href = a.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.includes('theme=')) a.setAttribute('href', href + (href.includes('?') ? '&' : '?') + 'theme=' + theme); });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const url = new URL(location.href);
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  setNight(theme === 'cold');
+  setTier(url.searchParams.get('tier') || "standard", false);
+  themeLinks();
+  $$('[data-tier-tab]').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.disabled) return; setTier(btn.dataset.tierTab, true);
+  }));
+  const only = $('#only-btn'); if (only) only.addEventListener('click', () => setOnly(!state.only));
+  const big = $('#big-btn'); if (big) big.addEventListener('click', () => setBig(!state.big));
+  const night = $('#night-btn'); if (night) night.addEventListener('click', () => setNight(!document.body.classList.contains('night')));
+  const cmp = $('#cmp-overlay'); const open = $('#cmp-btn');
+  if (open && cmp) {
+    open.addEventListener('click', () => { cmp.hidden = false; updateCompare(); });
+    $$('[data-cmp-close]', cmp).forEach(el => el.addEventListener('click', () => { cmp.hidden = true; }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cmp.hidden = true; });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input,textarea')) return;
+    if (e.key >= '1' && e.key <= '4') { const t = TIERS[Number(e.key) - 1]; if (t) setTier(t.key, true); }
+  });
+  $$('.foreedge i').forEach(tick => tick.addEventListener('click', () => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"]');
+    if (!row) return;
+    const src = row.querySelector('[data-origin="source"]');
+    if (src && src.hidden) { toast('本档未收这一段，按 4 切到研读可见'); return; }
+    row.scrollIntoView({behavior: 'smooth', block: 'center'}); row.classList.add('flash');
+    setTimeout(() => row.classList.remove('flash'), 900);
+  }));
+  const bar = $('#progress i');
+  if (bar) {
+    const update = () => { const h = document.documentElement; const max = h.scrollHeight - h.clientHeight;
+      bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%'; };
+    document.addEventListener('scroll', update, {passive: true}); update();
+  }
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  // prediction: remember the guess, do not spoil the next paragraphs
+  document.querySelectorAll('[data-visual="prediction"]').forEach(pr => {
+    const result = pr.querySelector('[data-result]');
+    const reveal = pr.dataset.reveal || '';
+    pr.querySelectorAll('[data-guess]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pr.querySelectorAll('[data-guess]').forEach(b => {
+          b.classList.remove('on');
+          b.setAttribute('aria-pressed', 'false');
+        });
+        btn.classList.add('on');
+        btn.setAttribute('aria-pressed', 'true');
+        if (result) {
+          result.textContent = reveal.split('{guess}').join(btn.dataset.guess || '');
+        }
+      });
+    });
+  });
+
+  // framing toggle: same absolute prices, different reference point
+  document.querySelectorAll('[data-visual="framing"]').forEach(fr => {
+    const baseEl = fr.querySelector('[data-role="base"]');
+    const creditEl = fr.querySelector('[data-role="credit"]');
+    const cashEl = fr.querySelector('[data-role="cash"]');
+    const copyEl = fr.querySelector('[data-copy]');
+    const money = (n) => '$' + Number(n).toFixed(2);
+    const cents = (n) => Math.round(Number(n) * 100);
+    const base = Number(fr.dataset.base || 1);
+    const credit = Number(fr.dataset.credit || 1.03);
+    const cash = Number(fr.dataset.cash || 1);
+    const delta = cents(credit - base);
+    const set = (mode) => {
+      fr.dataset.mode = mode;
+      const surcharge = mode === 'surcharge';
+      fr.querySelectorAll('.seg button').forEach(b => {
+        const on = b.dataset.mode === mode;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      if (baseEl) {
+        baseEl.querySelector('b').textContent = money(surcharge ? base : credit);
+        baseEl.querySelector('.delta').textContent = '标价';
+      }
+      if (creditEl) {
+        creditEl.querySelector('b').textContent = money(credit);
+        creditEl.querySelector('.delta').textContent = surcharge ? '+' + delta + '¢ 附加费' : '按标价';
+        creditEl.classList.toggle('hot', surcharge);
+      }
+      if (cashEl) {
+        cashEl.querySelector('b').textContent = money(cash);
+        cashEl.querySelector('.delta').textContent = surcharge ? '按基准价' : '−' + delta + '¢ 折扣';
+        cashEl.classList.toggle('hot', !surcharge);
+      }
+      if (copyEl) {
+        copyEl.textContent = surcharge ? (fr.dataset.surchargeCopy || '') : (fr.dataset.discountCopy || '');
+      }
+    };
+    fr.querySelectorAll('.seg button').forEach(b => {
+      b.addEventListener('click', () => set(b.dataset.mode));
+    });
+    set(fr.dataset.mode || 'surcharge');
+  });
+});</script><script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

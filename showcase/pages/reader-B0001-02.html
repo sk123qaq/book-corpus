@@ -1,0 +1,222 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>阿Q正传 · 第二章 优胜记略 · 四读</title><style>
+:root{--paper:#F3F0E7;--paper-2:#EAE5D8;--paper-3:#DED7C7;--ink:#181817;--ink-2:#55544E;--ink-3:#8A877C;
+--rule:#D2CBBB;--rule-strong:#B9B09C;--pine:#1E3A36;--oxblood:#6B2B2B;--ochre:#A87A3E;--indigo:#2C4056;
+--moss:#4A5839;--cinnabar:#A8442F;--note-bg:#F0F2F0;--note-rule:#C9D2CC;
+--serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",serif;
+--sans:"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16px}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.reader-top{position:sticky;top:0;z-index:30;height:56px;display:flex;align-items:center;gap:20px;padding:0 22px;
+background:color-mix(in srgb,var(--paper) 94%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.reader-top .back{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-decoration:none;color:var(--ink-2)}
+.reader-top .book{display:flex;align-items:baseline;gap:10px;min-width:0}
+.reader-top .book span{font-family:var(--sans);font-size:12px;color:var(--ink-3);white-space:nowrap}
+.reader-top .book b{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reader-top .tool{margin-left:auto;display:flex;align-items:center;gap:6px}
+.reader-top .tool button,.reader-top .tool a{font-family:var(--sans);font-size:12px;padding:6px 9px;border:1px solid transparent;text-decoration:none;color:var(--ink-2)}
+.reader-top .tool button:hover,.reader-top .tool a:hover{border-color:var(--rule-strong);color:var(--ink)}
+.reader-top .tool button[aria-pressed="true"]{border-color:var(--pine);color:var(--pine)}
+.progress{position:sticky;top:56px;height:2px;background:transparent;z-index:31}
+.progress i{display:block;height:2px;width:0;background:var(--cinnabar)}
+.tierbar{position:sticky;top:58px;z-index:29;display:flex;align-items:stretch;justify-content:center;gap:26px;
+padding:0 22px;background:color-mix(in srgb,var(--paper) 96%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.tier-tabs{display:flex;align-items:stretch}
+.tier-tab{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 18px 10px;border-bottom:2px solid transparent}
+.tier-tab b{font-family:var(--sans);font-size:13px;letter-spacing:.06em}
+.tier-tab small{font-family:var(--sans);font-size:10px;color:var(--ink-3)}
+.tier-tab[aria-selected="true"]{border-bottom-color:var(--pine)}
+.tier-tab[aria-selected="true"] b{color:var(--pine)}
+.tier-tab[disabled]{opacity:.35;cursor:not-allowed}
+.tier-note{display:flex;align-items:center;font-family:var(--sans);font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+.read{max-width:1000px;margin:0 auto;padding:44px 26px 72px}
+.read-head{border-bottom:1px solid var(--rule);padding-bottom:28px;margin-bottom:34px}
+.eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.16em;color:var(--ink-3);margin:0 0 12px}
+.read-head h1{font-size:34px;line-height:1.35;margin:0 0 18px;font-weight:600;letter-spacing:.02em}
+.read-stats{display:flex;flex-wrap:wrap;gap:18px;font-family:var(--sans);font-size:12px;color:var(--ink-2)}
+.read-stats b{font-weight:600;color:var(--ink)}
+.draft-banner{display:flex;align-items:baseline;gap:8px;margin:0 0 28px;padding:10px 14px;border-left:3px solid var(--ochre);
+background:var(--paper-2);font-family:var(--sans);font-size:12px;line-height:1.7;color:var(--ink-2)}
+.draft-banner b{font-size:10px;letter-spacing:.16em;color:var(--ochre);white-space:nowrap}
+.flow{display:flex;flex-direction:column}
+.flow-row{display:grid;grid-template-columns:minmax(0,680px) 250px;gap:40px;align-items:start}
+.flow-row .block{min-width:0}
+.flow-row .margin{min-width:0}
+.src{font-size:17.5px;line-height:2.02;text-indent:2em;margin:0 0 1.1em;letter-spacing:.01em}
+.src.lst{text-indent:0;padding-left:1.4em;border-left:2px solid var(--rule)}
+blockquote.src{text-indent:2em;margin:1.4em 0 1.4em;padding:2px 0 2px 20px;border-left:3px solid var(--rule-strong);color:var(--ink-2)}
+.sec{font-size:21px;line-height:1.6;margin:2.6em 0 1.1em;padding-left:14px;border-left:4px solid var(--pine);font-weight:600}
+.fig{margin:1.8em 0;text-align:center}
+.fig img{max-width:100%;height:auto;border:1px solid var(--rule);background:var(--paper-2)}
+.fig figcaption{font-family:var(--sans);font-size:11px;color:var(--ink-3);margin-top:7px;text-indent:0}
+.fn{font-family:var(--sans);font-size:12px;color:var(--ink-3);text-indent:0;margin:-.6em 0 1.2em}
+.note{background:var(--note-bg);border-top:1px solid var(--note-rule);padding:12px 13px 13px;margin:0 0 1.6em;
+font-size:13px;line-height:1.75;text-indent:0;box-shadow:0 1px 0 var(--rule)}
+.note .tag{display:block;font-family:var(--sans);font-size:9.5px;letter-spacing:.14em;color:var(--pine);margin-bottom:6px}
+.note h4{font-size:13.5px;margin:0 0 6px;line-height:1.5}
+.note p{margin:0 0 .6em;text-indent:0}
+.note q{display:block;quotes:"「" "」";color:var(--ink-2);font-size:12.5px;border-left:2px solid var(--rule-strong);padding-left:8px;margin:.5em 0}
+.note .cite{font-family:var(--sans);font-size:9.5px;color:var(--ink-3);letter-spacing:.06em}
+.read-foot{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--rule);margin-top:52px;padding-top:22px}
+.read-foot a,.read-foot span{font-family:var(--sans);font-size:12px;color:var(--ink-2);text-decoration:none;max-width:46%}
+.read-foot a:hover{color:var(--pine)}
+.read-foot .dim{color:var(--ink-3)}
+.colophon{margin-top:38px;padding-top:16px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:10.5px;
+line-height:1.9;color:var(--ink-3);letter-spacing:.03em}
+.foreedge{position:fixed;left:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:3px;padding:6px 4px;z-index:20}
+.foreedge i{display:block;width:9px;height:2px;background:var(--rule);cursor:pointer;transition:width .15s}
+.foreedge i.kept{background:var(--pine)}
+.foreedge i:hover{width:18px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:var(--ink);color:var(--paper);
+font-family:var(--sans);font-size:12px;padding:8px 14px;opacity:0;pointer-events:none;transition:.2s;z-index:60}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.cmp-overlay{position:fixed;inset:0;background:rgba(24,24,23,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px}
+.cmp-overlay[hidden]{display:none}
+.cmp{background:var(--paper);border:1px solid var(--rule-strong);max-width:660px;width:100%;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.cmp h3{margin:0 0 4px;font-size:18px}
+.cmp p{font-family:var(--sans);font-size:11px;color:var(--ink-3);margin:0 0 16px}
+.cmp table{width:100%;border-collapse:collapse;font-family:var(--sans);font-size:12px}
+.cmp th,.cmp td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule)}
+.cmp th{font-weight:600;color:var(--ink-2);font-size:10px;letter-spacing:.08em}
+.cmp tr.current td{background:var(--paper-2);color:var(--pine);font-weight:600}
+.cmp-close{margin-top:16px;font-family:var(--sans);font-size:11px;border:1px solid var(--rule-strong);padding:7px 12px}
+body.only-source [data-origin="added"]{display:none!important}
+body.only-source .flow-row{grid-template-columns:minmax(0,680px)}
+body.big .src{font-size:20px;line-height:2.1}
+body.big .read-head h1{font-size:38px}
+body.night{--paper:#E2E6E6;--paper-2:#D3DADA;--paper-3:#C3CCCC;--ink:#131A1F;--ink-2:#3C4A52;--ink-3:#68767C;
+--rule:#B7C1C1;--rule-strong:#93A1A1;--pine:#18344F;--oxblood:#4E2A33;--ochre:#7C5A2E;--indigo:#2B5C84;
+--moss:#3C4A36;--cinnabar:#2B5C84;--note-bg:#DCE3E3;--note-rule:#AEBABA}
+body.night .foreedge i.kept{background:var(--indigo)}
+body.night .tier-tab[aria-selected="true"]{border-bottom-color:var(--indigo)}
+body.night .tier-tab[aria-selected="true"] b{color:var(--indigo)}
+@media(max-width:1100px){.foreedge{display:none}}
+@media(max-width:980px){.flow-row{grid-template-columns:minmax(0,1fr)}.flow-row .margin{padding-left:0}
+.note{margin-top:-.6em;margin-bottom:1.6em}.tierbar{justify-content:flex-start;overflow-x:auto;gap:8px}
+.tier-tab{padding:10px 12px 8px;white-space:nowrap}.tier-note{display:none}}
+@media(max-width:720px){.read{padding:30px 16px 56px}.read-head h1{font-size:26px}.src{font-size:16.5px;line-height:1.95}
+.reader-top{padding:0 10px;gap:6px}.reader-top .book{display:none}
+.reader-top .tool{margin-left:auto;gap:0;min-width:0;overflow-x:auto;scrollbar-width:none}
+.reader-top .tool button,.reader-top .tool a{padding:6px 5px;font-size:11px;white-space:nowrap}
+.tierbar{padding:6px 10px;justify-content:stretch;overflow:visible;display:block}
+.tier-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:100%}
+.tier-tab{padding:8px 8px 7px;border:1px solid var(--rule);border-bottom-width:2px}
+.tier-tab b{font-size:12px}.tier-tab small{font-size:9.5px}
+.tier-note{display:none}.read-stats{gap:10px}
+.read-foot{flex-direction:column}.read-foot a,.read-foot span{max-width:100%}
+.draft-banner{margin:0 0 22px;font-size:11px;padding:10px 12px}}
+@media print{.reader-top,.tierbar,.foreedge,.progress,.toast,.cmp-overlay,.read-foot{display:none!important}
+.read{padding:0}.note{break-inside:avoid}.src{font-size:12pt;line-height:1.8}}
+body.export .reader-top,body.export .tierbar,body.export .foreedge,body.export .progress{display:none}
+body.export .read{padding-top:30px}
+</style><style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head><body class="reader" data-tier="standard"><header class="reader-top"><a class="back" href="#" data-dead="「/chapter/B0001/2」">← 工单</a><div class="book"><span>阿Q正传</span><b>第二章 优胜记略</b></div><div class="tool"><a href="book-B0001.html">目录</a><button id="only-btn" aria-pressed="false">只看原文</button><button id="big-btn" aria-pressed="false">大字</button><button id="night-btn">夜读</button><button id="cmp-btn">对照</button></div></header><div class="progress" id="progress"><i style="width: 0%;"></i></div><nav class="tierbar"><div class="tier-tabs"><button class="tier-tab" data-tier-tab="skim" aria-selected="false"><b>速览</b><small>40–55% · E≤10%</small></button><button class="tier-tab" data-tier-tab="standard" aria-selected="true"><b>标准</b><small>60–75% · E≤25%</small></button><button class="tier-tab" data-tier-tab="deep" aria-selected="false"><b>深读</b><small>80–90% · E≤40%</small></button><button class="tier-tab" data-tier-tab="research" aria-selected="false"><b>研究</b><small>90–100% · E≤50%</small></button></div><div class="tier-note">同一章，四种读法 · 数字键 1–4 切换</div></nav><main class="read"><header class="read-head"><p class="eyebrow">阿Q正传 · 第 2 章 · 鲁迅</p><h1>第二章 优胜记略</h1><div class="read-stats"><span id="live-stats">原文 <b>63%</b> · 约 <b>1,312</b> 字 · 讲解 <b>5</b> 条 · <b>3</b> 分钟</span></div></header><div class="flow"><div class="flow-row" data-block="B01"><div class="block"><p class="src" data-origin="source" data-src="B01" data-block="B01" data-kind="paragraph" data-tiers="skim standard deep research">阿Q不独是姓名籍贯有些渺茫，连他先前的“行状” 也渺茫。因为未庄的人们之于阿Q，只要他帮忙，只拿他玩笑，从来没有留心他的“行状”的。而阿Q自己也不说，独有和别人口角的时候，间或瞪着眼楮道：“我们先前——比你阔的多啦！你算是什么东西！”</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B01" data-tiers="skim standard deep research"><span class="tag">讲解 · 模型补充</span><p>开篇的“先前阔”是阿Q精神胜利法的口头雏形：现实中的姓名、籍贯、行状都渺茫，他却用虚妄的过去压人。</p><q data-src="B01">我们先前——比你阔的多啦！你算是什么东西！</q><span class="cite">依据 B01</span></aside></div></div><div class="flow-row" data-block="B02"><div class="block"><p class="src" data-origin="source" data-src="B02" data-block="B02" data-kind="paragraph" data-tiers="standard deep research">阿Q没有家，住在未庄的土谷祠 里；也没有固定的职业，只给人家做短工，割麦便割麦，舂米便舂米，撑船便撑船。工作略长久时，他也或住在临时主人的家里，但一完就走了。所以，人们忙碌的时候，也还记起阿Q来，然而记起的是做工，并不是“行状”；一闲空，连阿Q都早忘却，更不必说“行状”了。只是有一回，有一个老头子颂扬说：“阿Q真能做！”这时阿Q赤着膊，懒洋洋的瘦伶仃的正在他面前，别人也摸不着这话是真心还是讥笑，然而阿Q很喜欢。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B03"><div class="block"><p class="src" data-origin="source" data-src="B03" data-block="B03" data-kind="paragraph" data-tiers="deep research" hidden="">阿Q又很自尊，所有未庄的居民，全不在他眼神里，甚而至于对于两位“文童”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B04"><div class="block"><p class="src" data-origin="source" data-src="B04" data-block="B04" data-kind="paragraph" data-tiers="standard deep research">也有以为不值一笑的神情。夫文童者，将来恐怕要变秀才者也；赵太爷钱太爷大受居民的尊敬，除有钱之外，就因为都是文童的爹爹，而阿Q在精神上独不表格外的崇奉，他想：我的儿子会阔得多啦！加以进了几回城，阿Q自然更自负，然而他又很鄙薄城里人，譬如用三尺三寸宽的木板做成的凳子，未庄人叫“长凳”，他也叫“长凳”，城里人却叫“条凳”，他想：这是错的，可笑！油煎大头鱼，未庄都加上半寸长的葱叶，城里却加上切细的葱丝，他想：这也是错的，可笑！然而未庄人真是不见世面的可笑的乡下人呵，他们没有见过城里的煎鱼！</p></div><div class="margin"></div></div><div class="flow-row" data-block="B05"><div class="block"><p class="src" data-origin="source" data-src="B05" data-block="B05" data-kind="paragraph" data-tiers="skim standard deep research">阿Q“先前阔”，见识高，而且“真能做”，本来几乎是一个“完人”了，但可惜他体质上还有一些缺点。最恼人的是在他头皮上，颇有几处不知于何时的癞疮疤。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B06"><div class="block"><p class="src" data-origin="source" data-src="B06" data-block="B06" data-kind="paragraph" data-tiers="skim standard deep research">这虽然也在他身上，而看阿Q的意思，倒也似乎以为不足贵的，因为他讳说“癞”以及一切近于“赖”的音，后来推而广之，“光”也讳，“亮”也讳，再后来，连“灯”“烛”都讳了。一犯讳，不问有心与无心，阿Q便全疤通红的发起怒来，估量了对手，口讷的他便骂，气力小的他便打；然而不知怎么一回事，总还是阿Q吃亏的时候多。于是他渐渐的变换了方针，大抵改为怒目而视了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B06" data-tiers="skim standard deep research"><span class="tag">讲解 · 模型补充</span><p>癞疮疤本是身体缺陷，阿Q却层层扩大忌讳范围，从“癞”推到“光”“亮”“灯”“烛”，显示其自尊的脆弱与防卫的荒诞。</p><q data-src="B06">一犯讳，不问有心与无心，阿Q便全疤通红的发起怒来</q><q data-src="B06">后来推而广之，“光”也讳，“亮”也讳</q><span class="cite">依据 B05 · B06</span></aside></div></div><div class="flow-row" data-block="B07"><div class="block"><p class="src" data-origin="source" data-src="B07" data-block="B07" data-kind="paragraph" data-tiers="standard deep research">谁知道阿Q采用怒目主义之后，未庄的闲人们便愈喜欢玩笑他。一见面，他们便假作吃惊的说：哙，亮起来了。”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B08"><div class="block"><p class="src" data-origin="source" data-src="B08" data-block="B08" data-kind="paragraph" data-tiers="deep research" hidden="">阿Q照例的发了怒，他怒目而视了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B09"><div class="block"><p class="src" data-origin="source" data-src="B09" data-block="B09" data-kind="paragraph" data-tiers="deep research" hidden="">“原来有保险灯在这里！”他们并不怕。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B10"><div class="block"><p class="src" data-origin="source" data-src="B10" data-block="B10" data-kind="paragraph" data-tiers="skim standard deep research">阿Q没有法，只得另外想出报复的话来：“你还不配……”这时候，又仿佛在他头上的是一种高尚的光容的癞头疮，并非平常的癞头疮了；但上文说过，阿Q是有见识的，他立刻知道和“犯忌”有点抵触，便不再往底下说。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B11"><div class="block"><p class="src" data-origin="source" data-src="B11" data-block="B11" data-kind="paragraph" data-tiers="skim standard deep research">闲人还不完，只撩他，于是终而至于打。阿Q在形式上打败了，被人揪住黄辫子，在壁上踫了四五个响头，闲人这才心满意足的得胜的走了，阿Q站了一刻，心里想，“我总算被儿子打了，现在的世界真不像样……”于是也心满意足的得胜的走了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B11" data-tiers="skim standard deep research"><span class="tag">讲解 · 模型补充</span><p>“儿子打老子”把现实中的挨打改写成伦理上的占便宜，是阿Q精神胜利法最典型的句式。</p><q data-src="B11">我总算被儿子打了，现在的世界真不像样……</q><span class="cite">依据 B11</span></aside></div></div><div class="flow-row" data-block="B12"><div class="block"><p class="src" data-origin="source" data-src="B12" data-block="B12" data-kind="paragraph" data-tiers="skim standard deep research">阿Q想在心里的，后来每每说出口来，所以凡是和阿Q玩笑的人们，几乎全知道他有这一种精神上的胜利法，此后每逢揪住他黄辫子的时候，人就先一着对他说：“阿Q，这不是儿子打老子，是人打畜生。自己说：人打畜生！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B13"><div class="block"><p class="src" data-origin="source" data-src="B13" data-block="B13" data-kind="paragraph" data-tiers="skim standard deep research">阿Q两只手都捏住了自己的辫根，歪着头，说道：“打虫豸，好不好？我是虫豸——还不放么？”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B14"><div class="block"><p class="src" data-origin="source" data-src="B14" data-block="B14" data-kind="paragraph" data-tiers="skim standard deep research">但虽然是虫豸，闲人也并不放，仍旧在就近什么地方给他踫了五六个响头，这才心满意足的得胜的走了，他以为阿Q这回可遭了瘟。然而不到十秒钟，阿Q也心满意足的得胜的走了，他觉得他是第一个能够自轻自贱的人，除了“自轻自贱”不算外，余下的就是“第一个”。状元 不也是“第一个”么？“你算是什么东西”呢！？</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B14" data-tiers="skim standard deep research"><span class="tag">讲解 · 模型补充</span><p>阿Q把“自轻自贱”也转化为“第一个”的荣耀，说明精神胜利法不仅能颠倒胜负，还能重新命名耻辱。</p><q data-src="B14">他觉得他是第一个能够自轻自贱的人</q><span class="cite">依据 B14</span></aside></div></div><div class="flow-row" data-block="B15"><div class="block"><p class="src" data-origin="source" data-src="B15" data-block="B15" data-kind="paragraph" data-tiers="deep research" hidden="">阿Q以如是等等妙法克服怨敌之后，便愉快的跑到酒店里喝几碗酒，又和别人调笑一通，口角一通，又得了胜，愉快的回到土谷祠，放倒头睡着了。假使有钱，他便去押牌宝 ，一推人蹲在地面上，阿Q即汗流满面的夹在这中间，声音他最响：“青龙四百！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B16"><div class="block"><p class="src" data-origin="source" data-src="B16" data-block="B16" data-kind="paragraph" data-tiers="research" hidden="">“咳……开……啦！”桩家揭开盒子盖，也是汗流满面的唱。“天门啦……角回啦……！人和穿堂空在那里啦……！阿Q的铜钱拿过来……！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B17"><div class="block"><p class="src" data-origin="source" data-src="B17" data-block="B17" data-kind="paragraph" data-tiers="research" hidden="">“穿堂一百——一百五十！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B18"><div class="block"><p class="src" data-origin="source" data-src="B18" data-block="B18" data-kind="paragraph" data-tiers="research" hidden="">阿Q的钱便在这样的歌吟之下，渐渐的输入别个汗流满面的人物的腰间。他终于只好挤出堆外，站在后面看，替别人着急，一直到散场，然后恋恋的回到土谷祠，第二天，肿着眼楮去工作。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B19"><div class="block"><p class="src" data-origin="source" data-src="B19" data-block="B19" data-kind="paragraph" data-tiers="standard deep research">但真所谓“塞翁失马安知非福”罢，阿Q不幸而赢了一回，他倒几乎失败了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B20"><div class="block"><p class="src" data-origin="source" data-src="B20" data-block="B20" data-kind="paragraph" data-tiers="deep research" hidden="">这是未庄赛神的晚上。这晚上照例有一台戏，戏台左近，也照例有许多的赌摊。做戏的锣鼓，在阿Q耳朵里仿佛在十里之外；他只听得桩家的歌唱了。他赢而又赢，铜钱变成角洋，角洋变成大洋，大洋又成了叠。他兴高采烈得非常：“天门两块！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B21"><div class="block"><p class="src" data-origin="source" data-src="B21" data-block="B21" data-kind="paragraph" data-tiers="research" hidden="">他不知道谁和谁为什么打起架来了。骂声打声脚步声，昏头昏脑的一大阵，他才爬起来，赌摊不见了，人们也不见了，身上有几处很似乎有些痛，似乎也挨了几拳几脚似的，几个人诧异的对他看。他如有所失的走进土谷祠，定一定神，知道他的一堆洋钱不见了。赶赛会的赌摊多不是本村人，还到那里去寻根柢呢？</p></div><div class="margin"></div></div><div class="flow-row" data-block="B22"><div class="block"><p class="src" data-origin="source" data-src="B22" data-block="B22" data-kind="paragraph" data-tiers="standard deep research">很白很亮的一堆洋钱！而且是他的——现在不见了！说是算被儿子拿去了罢，总还是忽忽不乐；说自己是虫豸罢，也还是忽忽不乐：他这回才有些感到失败的苦痛了。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B23"><div class="block"><p class="src" data-origin="source" data-src="B23" data-block="B23" data-kind="paragraph" data-tiers="skim standard deep research">但他立刻转败为胜了。他擎起右手，用力的在自己脸上连打了两个嘴巴，热剌剌的有些痛；打完之后，便心平气和起来，似乎打的是自己，被打的是别一个自己，不久也就仿佛是自己打了别个一般，——虽然还有些热剌剌，——心满意足的得胜的躺下了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B23" data-tiers="standard deep research"><span class="tag">讲解 · 模型补充</span><p>自打嘴巴而想象打的是别人，把身体上的自我惩罚分裂成“打人者”与“被打者”，从而再次获得胜利感。</p><q data-src="B23">他擎起右手，用力的在自己脸上连打了两个嘴巴</q><q data-src="B23">似乎打的是自己，被打的是别一个自己</q><span class="cite">依据 B22 · B23</span></aside></div></div><div class="flow-row" data-block="B24"><div class="block"><p class="src" data-origin="source" data-src="B24" data-block="B24" data-kind="paragraph" data-tiers="skim standard deep research">他睡着了。</p></div><div class="margin"></div></div></div><footer class="read-foot"><a href="#" data-dead="「/reader/B0001/1」">← 上一章</a><a href="#" data-dead="「/reader/B0001/3」">下一章 →</a></footer><div class="colophon">源文件 02_第二章优胜记略.md · SHA-256 50c2985b6255ee13…<br>生成  · 生成器 0.1.0 · 模型 none · 渲染 v1 · 原文逐字保留，块 24</div></main><div class="foreedge" aria-hidden="true"><i data-block="B01" class="kept" title="B01"></i><i data-block="B02" class="kept" title="B02"></i><i data-block="B03" class="" title="B03"></i><i data-block="B04" class="kept" title="B04"></i><i data-block="B05" class="kept" title="B05"></i><i data-block="B06" class="kept" title="B06"></i><i data-block="B07" class="kept" title="B07"></i><i data-block="B08" class="" title="B08"></i><i data-block="B09" class="" title="B09"></i><i data-block="B10" class="kept" title="B10"></i><i data-block="B11" class="kept" title="B11"></i><i data-block="B12" class="kept" title="B12"></i><i data-block="B13" class="kept" title="B13"></i><i data-block="B14" class="kept" title="B14"></i><i data-block="B15" class="" title="B15"></i><i data-block="B16" class="" title="B16"></i><i data-block="B17" class="" title="B17"></i><i data-block="B18" class="" title="B18"></i><i data-block="B19" class="kept" title="B19"></i><i data-block="B20" class="" title="B20"></i><i data-block="B21" class="" title="B21"></i><i data-block="B22" class="kept" title="B22"></i><i data-block="B23" class="kept" title="B23"></i><i data-block="B24" class="kept" title="B24"></i></div><div class="cmp-overlay" id="cmp-overlay" hidden=""><div class="cmp" role="dialog" aria-modal="true" aria-label="四档对照"><h3>四档对照</h3><p>同一章源文，四种取舍。浏览 600 字/分 · 标准 500 · 深读 350 · 研读 300。</p><table><thead><tr><th>档</th><th>块覆盖</th><th>字数覆盖</th><th>讲解</th><th>正文字数</th><th>用时</th></tr></thead><tbody><tr data-tier-row="skim"><td>速览</td><td>42%</td><td>44%</td><td>4</td><td>801 字</td><td>2 分</td></tr><tr data-tier-row="standard" class="current"><td>标准</td><td>62%</td><td>73%</td><td>5</td><td>1,312 字</td><td>3 分</td></tr><tr data-tier-row="deep"><td>深读</td><td>83%</td><td>86%</td><td>5</td><td>1,557 字</td><td>5 分</td></tr><tr data-tier-row="research"><td>研究</td><td>100%</td><td>100%</td><td>5</td><td>1,802 字</td><td>7 分</td></tr></tbody></table><button class="cmp-close" data-cmp-close="">关闭</button></div></div><div class="toast" id="toast"></div><script>
+const TIERS = [{"key": "skim", "label": "速览"}, {"key": "standard", "label": "标准"}, {"key": "deep", "label": "深读"}, {"key": "research", "label": "研究"}];
+const STATS = {"skim": {"c_block": 0.4167, "c_char": 0.4445, "chars": 801, "e": 0.086, "notes": 4, "minutes": 2, "label": "速览"}, "standard": {"c_block": 0.625, "c_char": 0.7281, "chars": 1312, "e": 0.1082, "notes": 5, "minutes": 3, "label": "标准"}, "deep": {"c_block": 0.8333, "c_char": 0.864, "chars": 1557, "e": 0.1082, "notes": 5, "minutes": 5, "label": "深读"}, "research": {"c_block": 1.0, "c_char": 1.0, "chars": 1802, "e": 0.1082, "notes": 5, "minutes": 7, "label": "研究"}};
+const TICK_COUNT = 24;
+const state = {tier: "standard", only: false, big: false};
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+function toast(msg) { const el = $('#toast'); if (!el) return; el.textContent = msg; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1600); }
+function fmt(n) { return Number(n || 0).toLocaleString('zh-CN'); }
+function setTier(tier, push) {
+  if (!TIERS.some(t => t.key === tier)) tier = 'standard';
+  state.tier = tier;
+  document.body.dataset.tier = tier;
+  $$('[data-tiers]').forEach(el => { el.hidden = !el.dataset.tiers.split(' ').includes(tier); });
+  $$('[data-tier-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tierTab === tier)));
+  const s = STATS[tier]; if (s) {
+    const line = $('#live-stats');
+    if (line) line.innerHTML = '原文 <b>' + Math.round(s.c_block * 100) + '%<\/b> · 约 <b>' + fmt(s.chars) +
+      '<\/b> 字 · 讲解 <b>' + s.notes + '<\/b> 条 · <b>' + s.minutes + '<\/b> 分钟';
+    const pct = Math.max(0, Math.min(100, Math.round(s.c_block * 100)));
+    const bar = $('#scope-bar'); if (bar) bar.style.width = pct + '%';
+  }
+  updateTicks(); updateCompare();
+  if (push) {
+    const url = new URL(location.href); url.searchParams.set('tier', tier); history.replaceState(null, '', url);
+  }
+}
+function updateTicks() {
+  $$('.foreedge i').forEach(tick => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"] [data-origin="source"]');
+    tick.classList.toggle('kept', !!row && !row.hidden);
+  });
+}
+function updateCompare() {
+  $$('.cmp tr[data-tier-row]').forEach(tr => tr.classList.toggle('current', tr.dataset.tierRow === state.tier));
+}
+function setOnly(on) { state.only = on; document.body.classList.toggle('only-source', on);
+  const b = $('#only-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setBig(on) { state.big = on; document.body.classList.toggle('big', on);
+  const b = $('#big-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setNight(on) { document.body.classList.toggle('night', on);
+  try { localStorage.setItem('reading-theme', on ? 'cold' : 'warm'); } catch (e) {}
+  const b = $('#night-btn'); if (b) b.textContent = on ? '暖纸' : '夜读'; }
+function themeLinks() {
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  if (theme === 'warm') return;
+  $$('a[href]').forEach(a => { const href = a.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.includes('theme=')) a.setAttribute('href', href + (href.includes('?') ? '&' : '?') + 'theme=' + theme); });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const url = new URL(location.href);
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  setNight(theme === 'cold');
+  setTier(url.searchParams.get('tier') || "standard", false);
+  themeLinks();
+  $$('[data-tier-tab]').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.disabled) return; setTier(btn.dataset.tierTab, true);
+  }));
+  const only = $('#only-btn'); if (only) only.addEventListener('click', () => setOnly(!state.only));
+  const big = $('#big-btn'); if (big) big.addEventListener('click', () => setBig(!state.big));
+  const night = $('#night-btn'); if (night) night.addEventListener('click', () => setNight(!document.body.classList.contains('night')));
+  const cmp = $('#cmp-overlay'); const open = $('#cmp-btn');
+  if (open && cmp) {
+    open.addEventListener('click', () => { cmp.hidden = false; updateCompare(); });
+    $$('[data-cmp-close]', cmp).forEach(el => el.addEventListener('click', () => { cmp.hidden = true; }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cmp.hidden = true; });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input,textarea')) return;
+    if (e.key >= '1' && e.key <= '4') { const t = TIERS[Number(e.key) - 1]; if (t) setTier(t.key, true); }
+  });
+  $$('.foreedge i').forEach(tick => tick.addEventListener('click', () => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"]');
+    if (!row) return;
+    const src = row.querySelector('[data-origin="source"]');
+    if (src && src.hidden) { toast('本档未收这一段，按 4 切到研读可见'); return; }
+    row.scrollIntoView({behavior: 'smooth', block: 'center'}); row.classList.add('flash');
+    setTimeout(() => row.classList.remove('flash'), 900);
+  }));
+  const bar = $('#progress i');
+  if (bar) {
+    const update = () => { const h = document.documentElement; const max = h.scrollHeight - h.clientHeight;
+      bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%'; };
+    document.addEventListener('scroll', update, {passive: true}); update();
+  }
+});
+</script><script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

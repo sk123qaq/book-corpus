@@ -1,0 +1,474 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>阿Q正传 · 第一章 序 · 四读</title><style>
+:root{--paper:#F3F0E7;--paper-2:#EAE5D8;--paper-3:#DED7C7;--ink:#181817;--ink-2:#55544E;--ink-3:#69665C;
+--rule:#D2CBBB;--rule-strong:#B9B09C;--pine:#1E3A36;--oxblood:#6B2B2B;--ochre:#7C5A2E;--indigo:#2C4056;
+--moss:#4A5839;--cinnabar:#A8442F;--note-bg:#F0F2F0;--note-rule:#C9D2CC;
+--serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",serif;
+--sans:"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16px}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.reader-top{position:sticky;top:0;z-index:30;height:56px;display:flex;align-items:center;gap:20px;padding:0 22px;
+background:color-mix(in srgb,var(--paper) 94%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.reader-top .back{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-decoration:none;color:var(--ink-2)}
+.reader-top .book{display:flex;align-items:baseline;gap:10px;min-width:0}
+.reader-top .book span{font-family:var(--sans);font-size:12px;color:var(--ink-3);white-space:nowrap}
+.reader-top .book b{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reader-top .tool{margin-left:auto;display:flex;align-items:center;gap:6px}
+.reader-top .tool button,.reader-top .tool a{font-family:var(--sans);font-size:12px;padding:6px 9px;border:1px solid transparent;text-decoration:none;color:var(--ink-2)}
+.reader-top .tool button:hover,.reader-top .tool a:hover{border-color:var(--rule-strong);color:var(--ink)}
+.reader-top .tool button[aria-pressed="true"]{border-color:var(--pine);color:var(--pine)}
+.progress{position:sticky;top:56px;height:2px;background:transparent;z-index:31}
+.progress i{display:block;height:2px;width:0;background:var(--cinnabar)}
+.tierbar{position:sticky;top:58px;z-index:29;display:flex;align-items:stretch;justify-content:center;gap:26px;
+padding:0 22px;background:color-mix(in srgb,var(--paper) 96%,transparent);border-bottom:1px solid var(--rule);backdrop-filter:blur(8px)}
+.tier-tabs{display:flex;align-items:stretch}
+.tier-tab{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 18px 10px;border-bottom:2px solid transparent}
+.tier-tab b{font-family:var(--sans);font-size:13px;letter-spacing:.06em}
+.tier-tab small{font-family:var(--sans);font-size:10px;color:var(--ink-3)}
+.tier-tab[aria-selected="true"]{border-bottom-color:var(--pine)}
+.tier-tab[aria-selected="true"] b{color:var(--pine)}
+.tier-tab[disabled]{opacity:.35;cursor:not-allowed}
+.tier-note{display:flex;align-items:center;font-family:var(--sans);font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+.read{max-width:1000px;margin:0 auto;padding:44px 26px 72px}
+.read-head{border-bottom:1px solid var(--rule);padding-bottom:28px;margin-bottom:34px}
+.eyebrow{font-family:var(--sans);font-size:11px;letter-spacing:.16em;color:var(--ink-3);margin:0 0 12px}
+.read-head h1{font-size:34px;line-height:1.35;margin:0 0 18px;font-weight:600;letter-spacing:.02em}
+.read-stats{display:flex;flex-wrap:wrap;gap:18px;font-family:var(--sans);font-size:12px;color:var(--ink-2)}
+.read-stats b{font-weight:600;color:var(--ink)}
+.draft-banner{display:flex;align-items:baseline;gap:8px;margin:0 0 28px;padding:10px 14px;border-left:3px solid var(--ochre);
+background:var(--paper-2);font-family:var(--sans);font-size:12px;line-height:1.7;color:var(--ink-2)}
+.draft-banner b{font-size:10px;letter-spacing:.16em;color:var(--ochre);white-space:nowrap}
+.flow{display:flex;flex-direction:column}
+.flow-row{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:40px;align-items:start}
+.flow-row .block{min-width:0}
+.flow-row .margin{min-width:0}
+.src{font-size:17.5px;line-height:1.9;text-indent:2em;margin:0;letter-spacing:.01em}
+.src.lst{text-indent:0;padding-left:1.4em;border-left:2px solid var(--rule)}
+blockquote.src{text-indent:2em;margin:1.4em 0 1.4em;padding:2px 0 2px 20px;border-left:3px solid var(--rule-strong);color:var(--ink-2)}
+.sec{font-size:21px;line-height:1.6;margin:2.6em 0 1.1em;padding-left:14px;border-left:4px solid var(--pine);font-weight:600}
+.fig{margin:1.8em 0;text-align:center}
+.fig img{max-width:100%;height:auto;border:1px solid var(--rule);background:var(--paper-2)}
+.fig figcaption{font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--ink-3);margin:7px auto 0;max-width:40em;text-indent:0}
+.fig .fig-kicker{display:block;font-size:11px;letter-spacing:.16em;color:var(--cinnabar);margin-bottom:4px}
+.fig .fig-cap{display:block}
+body:not(.only-source) .fig-title{display:none}
+body.only-source figcaption{display:none}
+.fn{font-family:var(--sans);font-size:12px;color:var(--ink-3);text-indent:0;margin:-.6em 0 1.2em}
+.note{background:var(--note-bg);border-top:1px solid var(--note-rule);padding:12px 13px 13px;margin:0 0 1.6em;
+font-size:13px;line-height:1.75;text-indent:0;box-shadow:0 1px 0 var(--rule)}
+.note .tag{display:block;font-family:var(--sans);font-size:9.5px;letter-spacing:.14em;color:var(--pine);margin-bottom:6px}
+.note h4{font-size:13.5px;margin:0 0 6px;line-height:1.5}
+.note p{margin:0 0 .6em;text-indent:0}
+.note q{display:block;quotes:"「" "」";color:var(--ink-2);font-size:12.5px;border-left:2px solid var(--rule-strong);padding-left:8px;margin:.5em 0}
+.note .cite{font-family:var(--sans);font-size:9.5px;color:var(--ink-3);letter-spacing:.06em}
+.read-foot{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--rule);margin-top:52px;padding-top:22px}
+.read-foot a,.read-foot span{font-family:var(--sans);font-size:12px;color:var(--ink-2);text-decoration:none;max-width:46%}
+.read-foot a:hover{color:var(--pine)}
+.read-foot .dim{color:var(--ink-3)}
+.colophon{margin-top:38px;padding-top:16px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:11px;
+line-height:1.9;color:var(--ink-3);letter-spacing:.03em}
+.foreedge{position:fixed;left:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:3px;padding:6px 4px;z-index:20}
+.foreedge i{display:block;width:9px;height:2px;background:var(--rule);cursor:pointer;transition:width .15s}
+.foreedge i.kept{background:var(--pine)}
+.foreedge i:hover{width:18px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:var(--ink);color:var(--paper);
+font-family:var(--sans);font-size:12px;padding:8px 14px;opacity:0;pointer-events:none;transition:.2s;z-index:60}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.cmp-overlay{position:fixed;inset:0;background:rgba(24,24,23,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px}
+.cmp-overlay[hidden]{display:none}
+.cmp{background:var(--paper);border:1px solid var(--rule-strong);max-width:660px;width:100%;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.cmp h3{margin:0 0 4px;font-size:18px}
+.cmp p{font-family:var(--sans);font-size:11px;color:var(--ink-3);margin:0 0 16px}
+.cmp table{width:100%;border-collapse:collapse;font-family:var(--sans);font-size:12px}
+.cmp th,.cmp td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule)}
+.cmp th{font-weight:600;color:var(--ink-2);font-size:10px;letter-spacing:.08em}
+.cmp tr.current td{background:var(--paper-2);color:var(--pine);font-weight:600}
+.cmp-close{margin-top:16px;font-family:var(--sans);font-size:11px;border:1px solid var(--rule-strong);padding:7px 12px}
+body.only-source [data-origin="added"]{display:none!important}
+body.only-source .flow-row{grid-template-columns:minmax(0,680px)}
+body.only-source .stat-notes{display:none}
+body.big .src{font-size:20px;line-height:1.8}
+body.big .read-head h1{font-size:38px}
+body.night{--paper:#E2E6E6;--paper-2:#D3DADA;--paper-3:#C3CCCC;--ink:#131A1F;--ink-2:#3C4A52;--ink-3:#4F5C63;
+--rule:#B7C1C1;--rule-strong:#93A1A1;--pine:#18344F;--oxblood:#4E2A33;--ochre:#6B4E28;--indigo:#2B5C84;
+--moss:#3C4A36;--cinnabar:#2B5C84;--note-bg:#DCE3E3;--note-rule:#AEBABA}
+body.night .foreedge i.kept{background:var(--indigo)}
+body.night .tier-tab[aria-selected="true"]{border-bottom-color:var(--indigo)}
+body.night .tier-tab[aria-selected="true"] b{color:var(--indigo)}
+@media(max-width:1100px){.foreedge{display:none}}
+@media(max-width:980px){.flow-row{grid-template-columns:minmax(0,1fr)}.flow-row .margin{padding-left:0}
+.note{margin-top:-.6em;margin-bottom:1.6em}.tierbar{justify-content:flex-start;overflow-x:auto;gap:8px}
+.tier-tab{padding:10px 12px 8px;white-space:nowrap}.tier-note{display:none}}
+@media(max-width:720px){.read{padding:30px 16px 56px}.read-head h1{font-size:26px}.src{font-size:16.5px;line-height:1.85}
+.reader-top{padding:0 10px;gap:6px}.reader-top .book{display:none}
+.reader-top .tool{margin-left:auto;gap:0;min-width:0;overflow-x:auto;scrollbar-width:none}
+.reader-top .tool button,.reader-top .tool a{padding:6px 5px;font-size:11px;white-space:nowrap}
+.tierbar{padding:6px 10px;justify-content:stretch;overflow:visible;display:block}
+.tier-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:100%}
+.tier-tab{padding:8px 8px 7px;border:1px solid var(--rule);border-bottom-width:2px}
+.tier-tab b{font-size:12px}.tier-tab small{font-size:9.5px}
+.tier-note{display:none}.read-stats{gap:10px}
+.read-foot{flex-direction:column}.read-foot a,.read-foot span{max-width:100%}
+.draft-banner{margin:0 0 22px;font-size:11px;padding:10px 12px}}
+@media print{.reader-top,.tierbar,.foreedge,.progress,.toast,.cmp-overlay,.read-foot{display:none!important}
+.read{padding:0}.note{break-inside:avoid}.src{font-size:12pt;line-height:1.7}}
+body.export .reader-top,body.export .tierbar,body.export .foreedge,body.export .progress{display:none}
+body.export .read{padding-top:30px}
+
+
+:root{--plate:#F8F5EC;--plate-2:#EFE9DA;--rail:#C9C0AE}
+body.night{--plate:#DDE4E4;--plate-2:#D2DADA;--rail:#AEBABA}
+[hidden]{display:none!important}
+body.has-editorial .flow-row .block > .src{margin-bottom:1.05em}
+body.has-editorial .flow-row .block > .src:last-child{margin-bottom:0}
+body.has-editorial .flow-row .block > blockquote.src{margin-top:1.3em;margin-bottom:1.5em}
+body.only-source.has-editorial .flow-row .block > .src{margin-bottom:0}
+body.only-source.has-editorial .flow-row .block > blockquote.src{margin-top:1.3em;margin-bottom:1.5em}
+body.has-editorial .foreedge{display:none!important}
+
+.spine{display:flex;flex-wrap:wrap;gap:4px 0;margin-top:17px;font-family:var(--sans);font-size:11px;line-height:1.7;color:var(--ink-3)}
+.spine:not(:has(a:not([hidden]))){display:none}
+.spine a{display:inline-flex;align-items:baseline;gap:5px;text-decoration:none;color:inherit;padding:2px 11px 2px 0;margin-right:11px;border-right:1px solid var(--rule)}
+.spine a:last-child{border-right:0;margin-right:0;padding-right:0}
+.spine a:hover{color:var(--pine)}
+.spine b{font-weight:600;color:var(--cinnabar);letter-spacing:.04em}
+
+.beat{max-width:680px;margin:3.2em 0 1.4em;padding-top:1.2em;border-top:1px solid var(--rule-strong);scroll-margin-top:132px}
+.beat:first-child{margin-top:0;padding-top:0;border-top:0}
+.beat-no{display:inline-block;font-family:var(--sans);font-size:10px;letter-spacing:.2em;color:var(--cinnabar);margin-bottom:2px}
+.beat h3{font-size:23px;line-height:1.45;margin:.28em 0 .3em;font-weight:600;letter-spacing:.01em}
+.beat-q{font-family:var(--sans);font-size:13px;line-height:1.75;color:var(--ink-2);margin:0}
+
+.plate-row{max-width:948px;margin:3.4em 0 3.8em;padding:26px 30px 22px;background:var(--plate);border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-strong);scroll-margin-top:120px}
+.plate-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px}
+.plate-no{font-family:var(--sans);font-size:10px;letter-spacing:.2em;color:var(--cinnabar);white-space:nowrap}
+.plate-head h3{font-size:21px;line-height:1.4;margin:0;font-weight:600}
+.plate-cap{font-family:var(--sans);font-size:12px;line-height:1.85;color:var(--ink-2);margin:18px 0 0;max-width:66em}
+.plate-cap .cite,.method-note .cite{display:block;margin-top:3px;font-size:10px;letter-spacing:.04em;color:var(--ink-3)}
+
+.two-lives{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.life{padding:20px 26px 16px;display:flex;flex-direction:column;align-items:center}
+.life+.life{border-left:1px solid var(--rule)}
+.life-mark{height:132px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.one-dot{width:58px;height:58px;border-radius:50%;background:var(--cinnabar);box-shadow:0 0 0 12px color-mix(in srgb,var(--cinnabar) 10%,transparent),0 0 0 24px color-mix(in srgb,var(--cinnabar) 5%,transparent)}
+.dots{display:grid;grid-template-columns:repeat(20,6px);gap:5px;justify-content:center;align-content:center}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--pine);opacity:.55}
+.life-label{font-family:var(--sans);font-size:10px;letter-spacing:.12em;color:var(--ink-3);text-align:center}
+.life-label b{display:block;font-family:var(--serif);font-size:17px;letter-spacing:.01em;color:var(--ink);margin-bottom:3px}
+.life p{font-size:13px;line-height:1.8;color:var(--ink-2);text-align:center;margin:9px 0 0;max-width:22em}
+.life-facts{margin-top:10px;font-family:var(--sans);font-size:10px;letter-spacing:.04em;color:var(--cinnabar);border-top:1px solid var(--rule);padding-top:7px;text-align:center;width:100%}
+.life.statistical .life-facts{color:var(--pine)}
+
+.ratio{display:flex;flex-direction:column;gap:18px;padding:8px 0 2px}
+.ratio-row{display:grid;grid-template-columns:200px 110px minmax(0,1fr);align-items:center;gap:18px}
+.ratio-label b{display:block;font-size:16px;font-weight:600;line-height:1.4}
+.ratio-label span{display:block;font-family:var(--sans);font-size:10px;color:var(--ink-3);margin-top:2px}
+.ratio-value{font-family:var(--sans);font-size:25px;line-height:1;letter-spacing:-.02em;color:var(--ochre);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ratio-bar{height:24px;background:var(--plate-2);position:relative;border:1px solid var(--rule)}
+.ratio-bar i{display:block;height:100%;background:var(--ochre);min-width:3px}
+.ratio-row.wtp .ratio-bar i{background:var(--cinnabar)}
+.ratio-row.wtp .ratio-value{color:var(--cinnabar)}
+.ratio-gap{display:flex;align-items:baseline;gap:12px;margin-left:346px;padding-left:14px;border-left:1px solid var(--cinnabar)}
+.ratio-gap b{font-family:var(--sans);font-size:30px;line-height:1;color:var(--cinnabar);letter-spacing:-.03em}
+.ratio-gap span{font-family:var(--sans);font-size:11px;line-height:1.6;color:var(--ink-2)}
+.scale-row.accent .ratio-bar i{background:var(--cinnabar)}
+.scale-row.accent .ratio-value{color:var(--cinnabar)}
+.scale-row.muted .ratio-bar i{background:var(--ink-3)}
+.scale-row.muted .ratio-value{color:var(--ink-3)}
+.scale-row.pine .ratio-bar i{background:var(--pine)}
+.scale-row.pine .ratio-value{color:var(--pine)}
+.scale-note{font-family:var(--sans);font-size:10px;line-height:1.7;color:var(--ink-3);margin:2px 0 0 346px;padding-left:14px}
+
+.curve{max-width:680px;padding:4px 0 0}
+.curve svg{display:block;width:100%;height:auto;overflow:visible}
+.curve-axis{stroke:var(--rule-strong);stroke-width:1;fill:none}
+.curve-grid{stroke:var(--rule);stroke-width:1;stroke-dasharray:2 4}
+.curve-line{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.curve-line.ochre{stroke:var(--ochre)}
+.curve-line.cinnabar{stroke:var(--cinnabar)}
+.curve-line.pine{stroke:var(--pine)}
+.curve-line.indigo{stroke:var(--indigo)}
+.curve-label{font-family:var(--sans);font-size:11px;fill:var(--ink-3)}
+.curve-note{font-family:var(--sans);font-size:10px;line-height:1.7;color:var(--ink-3);margin:6px 0 0}
+.curve-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-family:var(--sans);font-size:10px;color:var(--ink-2)}
+.curve-legend i{display:inline-block;width:16px;height:2px;margin-right:5px;vertical-align:middle}
+.curve-annot{font-family:var(--sans);font-size:10px;fill:var(--ink-2)}
+
+.ledger-wrap{overflow-x:auto}
+.ledger{width:100%;border-collapse:collapse;font-family:var(--sans);font-size:12px;margin-top:2px;min-width:560px}
+.ledger th,.ledger td{padding:11px 10px;border-bottom:1px solid var(--rule);vertical-align:baseline}
+.ledger thead th{font-size:9px;letter-spacing:.12em;color:var(--ink-3);font-weight:500;text-align:right;border-bottom:1px solid var(--rule-strong)}
+.ledger thead th:first-child{text-align:left}
+.ledger tbody th{text-align:left;font-family:var(--serif);font-size:14px;font-weight:500;line-height:1.5}
+.ledger td{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2);white-space:nowrap}
+.ledger td.yes{color:var(--pine);font-weight:600}
+.ledger td.no{color:var(--cinnabar)}
+.ledger tr.chosen{background:color-mix(in srgb,var(--ochre) 7%,transparent)}
+.ledger .price-note{font-family:var(--sans);font-size:10px;color:var(--ink-3);letter-spacing:.03em;margin:0 0 10px}
+.ledger-mobile{display:none}
+.ledger-card{border:1px solid var(--rule);padding:10px 12px;background:var(--paper)}
+.ledger-card.chosen{border-color:var(--ochre);background:color-mix(in srgb,var(--ochre) 7%,transparent)}
+.ledger-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:1px solid var(--rule);padding-bottom:6px;margin-bottom:5px}
+.ledger-card-head b{font-family:var(--serif);font-size:14px;font-weight:500;line-height:1.5}
+.ledger-card-head span{font-family:var(--sans);font-size:10px;font-weight:600;white-space:nowrap}
+.ledger-card-head .yes{color:var(--pine)}
+.ledger-card-head .no{color:var(--cinnabar)}
+.ledger-card-row{display:flex;justify-content:space-between;font-family:var(--sans);font-size:11px;color:var(--ink-2);line-height:1.75}
+.ledger-card-row b{font-variant-numeric:tabular-nums;color:var(--ink)}
+
+.method{max-width:680px;margin:2.8em 0 0;padding:18px 22px 16px;background:var(--paper-2);border-left:3px solid var(--ochre);scroll-margin-top:120px}
+.method .tag,.predict .tag,.framing .tag{font-family:var(--sans);font-size:9px;letter-spacing:.16em}
+.method .tag{color:var(--ochre)}
+.steps{display:flex;align-items:stretch;gap:0;margin-top:12px}
+.steps>div{flex:1;min-width:0;padding:0 12px;border-left:1px solid var(--rule)}
+.steps>div:first-child{border-left:0;padding-left:0}
+.steps b{display:block;font-family:var(--sans);font-size:13px;line-height:1.5;color:var(--ink)}
+.steps span{display:block;font-family:var(--sans);font-size:10px;line-height:1.6;color:var(--ink-3);margin-top:3px}
+.steps i{font-style:normal;align-self:center;color:var(--ochre);font-family:var(--sans);font-size:16px;padding:0 2px}
+.steps .result b{font-size:23px;letter-spacing:-.02em;color:var(--ochre);font-variant-numeric:tabular-nums}
+.method-note{font-family:var(--sans);font-size:11px;line-height:1.8;color:var(--ink-2);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--rule)}
+
+.predict{max-width:680px;margin:2.6em 0;padding:20px 22px 18px;border:1px solid var(--rule-strong);border-top:3px solid var(--cinnabar);scroll-margin-top:120px}
+.predict .tag{color:var(--cinnabar)}
+.predict p{font-size:15.5px;line-height:1.85;margin:9px 0 14px}
+.choices{display:flex;flex-wrap:wrap;gap:8px}
+.choices button{font-family:var(--sans);font-size:12px;padding:7px 14px;border:1px solid var(--rule-strong);background:transparent;transition:.15s}
+.choices button:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
+.choices button.on{background:var(--cinnabar);border-color:var(--cinnabar);color:var(--paper)}
+.predict-result{font-family:var(--sans);font-size:11px;line-height:1.7;color:var(--ink-2);margin:12px 0 0;min-height:1.4em}
+
+.framing{max-width:680px;margin:2.6em 0 0;padding:20px 22px 18px;background:var(--plate);border:1px solid var(--rule);border-top:2px solid var(--pine);scroll-margin-top:120px}
+.framing-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.framing .tag{color:var(--pine)}
+.seg{display:inline-flex;border:1px solid var(--rule-strong)}
+.seg button{font-family:var(--sans);font-size:11px;padding:5px 11px;color:var(--ink-2)}
+.seg button.on{background:var(--pine);color:var(--paper)}
+.framing-stage{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.framing-cell{padding:12px 14px;background:var(--paper);border:1px solid var(--rule);transition:.2s}
+.framing-cell span{display:block;font-family:var(--sans);font-size:9px;letter-spacing:.08em;color:var(--ink-3)}
+.framing-cell b{display:block;font-family:var(--sans);font-size:23px;line-height:1.3;font-variant-numeric:tabular-nums;color:var(--ochre);margin-top:2px}
+.framing-cell.base b{color:var(--ink-2)}
+.framing-cell .delta{display:block;font-family:var(--sans);font-size:10px;letter-spacing:.03em;color:var(--ink-3);margin-top:2px}
+.framing-cell.hot{border-color:var(--cinnabar);box-shadow:inset 0 0 0 1px var(--cinnabar)}
+.framing-cell.hot b{color:var(--cinnabar)}
+.framing-cell.hot .delta{color:var(--cinnabar)}
+.framing-copy{font-family:var(--sans);font-size:11px;line-height:1.8;color:var(--ink-2);margin:12px 0 0;padding-top:10px;border-top:1px solid var(--rule)}
+
+.takeaways{max-width:948px;margin:3.6em 0 2.2em;padding:28px 32px 24px;background:var(--pine);color:var(--paper);scroll-margin-top:120px}
+.takeaways .tag{font-family:var(--sans);font-size:9px;letter-spacing:.18em;color:color-mix(in srgb,var(--paper) 65%,transparent)}
+.takeaways h3{font-size:22px;line-height:1.4;margin:6px 0 16px;color:var(--paper);font-weight:600}
+.takeaways ol{margin:0;padding:0;list-style:none;counter-reset:take}
+.takeaways li{counter-increment:take;position:relative;padding-left:38px;font-size:14px;line-height:1.85;margin-bottom:12px;color:color-mix(in srgb,var(--paper) 88%,transparent)}
+.takeaways li:before{content:"0" counter(take);position:absolute;left:0;top:0;font-family:var(--sans);font-size:11px;letter-spacing:.08em;color:var(--ochre)}
+.takeaways li:last-child{margin-bottom:0}
+.takeaways .next{margin:18px 0 0;padding-top:14px;border-top:1px solid color-mix(in srgb,var(--paper) 18%,transparent);font-family:var(--sans);font-size:11px;line-height:1.8;color:color-mix(in srgb,var(--paper) 65%,transparent)}
+
+@media(max-width:820px){
+  .plate-row{padding:20px 18px;margin:2.8em 0}
+  .two-lives{grid-template-columns:1fr}
+  .life+.life{border-left:0;border-top:1px solid var(--rule)}
+  .ratio-row{grid-template-columns:1fr;gap:6px}
+  .ratio-value{text-align:left}
+  .ratio-gap{margin-left:0}
+  .scale-note{margin-left:0;padding-left:0}
+  .curve{max-width:100%}
+  .steps{flex-direction:column;gap:8px}
+  .steps>div{border-left:0;padding:0}
+  .steps i{display:none}
+  .ledger-wrap{display:none}
+  .ledger-mobile{display:flex;flex-direction:column;gap:8px}
+  .framing-stage{grid-template-columns:1fr 1fr;gap:8px}
+  .framing-cell{padding:10px 10px}
+  .framing-cell.base{display:none}
+  .framing-cell b{font-size:21px}
+  .framing-cell span{font-size:9px}
+  .framing-cell .delta{font-size:10px}
+  .framing-head{gap:8px}
+  .spine{font-size:10px}
+  .beat{margin-top:2.6em}
+  .beat h3{font-size:21px}
+  .plate-head{flex-wrap:wrap;gap:4px 12px}
+  .takeaways{padding:22px 20px 20px;margin:3em 0 1.8em}
+  .takeaways h3{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){
+  .framing-cell,.choices button{transition:none}
+}
+</style><style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head><body class="reader has-editorial" data-tier="standard"><header class="reader-top"><a class="back" href="#" data-dead="「/chapter/B0001/1」">← 工单</a><div class="book"><span>阿Q正传</span><b>第一章 序</b></div><div class="tool"><a href="book-B0001.html">目录</a><button id="only-btn" aria-pressed="false">只看原文</button><button id="big-btn" aria-pressed="false">大字</button><button id="night-btn">夜读</button><button id="cmp-btn">对照</button></div></header><div class="progress" id="progress"><i style="width: 0%;"></i></div><nav class="tierbar"><div class="tier-tabs"><button class="tier-tab" data-tier-tab="skim" aria-selected="false"><b>速览</b><small>40–55% · E≤10%</small></button><button class="tier-tab" data-tier-tab="standard" aria-selected="true"><b>标准</b><small>60–75% · E≤25%</small></button><button class="tier-tab" data-tier-tab="deep" aria-selected="false"><b>深读</b><small>80–90% · E≤40%</small></button><button class="tier-tab" data-tier-tab="research" aria-selected="false"><b>研究</b><small>90–100% · E≤50%</small></button></div><div class="tier-note">同一章，已生成档位 · 数字键切换</div></nav><main class="read"><header class="read-head"><p class="eyebrow">阿Q正传 · 鲁迅</p><h1>第一章 序</h1><div class="read-stats"><span id="live-stats">原文 <b>60%</b> · 约 <b>1,054</b> 字<span class="stat-notes"> · 讲解 <b>3</b> 条</span> · <b>2</b> 分钟</span></div><nav class="spine" data-origin="added" aria-label="章节节拍"><a href="#beat-beat-1" data-tiers="standard deep research"><b>01</b>立传的迟疑</a><a href="#beat-beat-2" data-tiers="standard deep research"><b>02</b>名不正，传不成</a><a href="#beat-beat-3" data-tiers="standard deep research"><b>03</b>姓赵？不配姓赵</a><a href="#beat-beat-4" data-tiers="standard deep research"><b>04</b>名写不出，籍贯定不下</a></nav></header><div class="flow"><div class="beat" id="beat-beat-1" data-origin="added" data-tiers="standard deep research"><span class="beat-no">01 / 04</span><h3>立传的迟疑</h3><p class="beat-q">给一个无名者立传，先要面对什么？</p></div><div class="flow-row" data-block="B01"><div class="block"><p class="src" data-origin="source" data-src="B01" data-block="B01" data-kind="paragraph" data-tiers="skim standard deep research">我要给阿Q做正传，已经不止一两年了。但一面要做，一面又往回想，这足见我不是一个“立言”的人，因为从来不朽之笔，须传不朽之人，于是人以文传，文以人传——究竟谁靠谁传，渐渐的不甚了然起来，而终于归接到传阿Q，仿佛思想里有鬼似的。</p></div><div class="margin"></div></div><div class="beat" id="beat-beat-2" data-origin="added" data-tiers="standard deep research"><span class="beat-no">02 / 04</span><h3>名不正，传不成</h3><p class="beat-q">传的名目这么多，为什么没有一个合用？</p></div><div class="predict" id="predict-zhuan-name" data-origin="added" data-tiers="standard deep research" data-visual="prediction" data-reveal="正传——从小说家套话“言归正传”里借来的名目。"><span class="tag">读前猜一猜</span><p>这篇传最终会挂上哪个名目？</p><div class="choices"><button type="button" data-guess="列传" aria-pressed="false">列传</button><button type="button" data-guess="外传" aria-pressed="false">外传</button><button type="button" data-guess="正传" aria-pressed="false">正传</button><button type="button" data-guess="小传" aria-pressed="false">小传</button></div><p class="predict-result" data-result="" aria-live="polite">先选一个。答案就在下面两段。</p></div><div class="flow-row" data-block="B02"><div class="block"><p class="src" data-origin="source" data-src="B02" data-block="B02" data-kind="paragraph" data-tiers="skim standard deep research">然而要做这一篇速朽的文章，才下笔，便感到万分的困难了。第一是文章的名目。孔子曰，“名不正则言不顺”。这原是应该极注意的。传的名目很繁多：列传，自传，内传，外传，别传，家传，小传……，而可惜都不合。“列传”么，这一篇并非和许多阔人排在“正史”里；“自传”么，我又并非就是阿Q。说是“外传”，“内传”在那里呢？倘用“内传”，阿Q又决不是神仙。“别传”呢，阿Q实在未曾有大总统上谕宣付国史馆立“本传”——虽说英国正史上并无“博徒列传”，而文豪迭更司也做过《博徒别传》这一部书，但文豪则可，在我辈却不可。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B02" data-tiers="skim standard deep research"><span class="tag">体例 · 传名繁多</span><p>传主的传记本该从名目、籍贯、姓氏写起，叙述者却一落笔就先被这些体例问题卡住；所谓“序”因此不是交代，而是一场关于自己有没有资格立传的自我盘问。</p><q data-src="B02">才下笔，便感到万分的困难了</q><q data-src="B02">孔子曰，“名不正则言不顺”</q><span class="cite">依据 B01 · B02 · B03</span></aside></div></div><div class="flow-row" data-block="B03"><div class="block"><p class="src" data-origin="source" data-src="B03" data-block="B03" data-kind="paragraph" data-tiers="standard deep research">其次是“家传”，则我既不知与阿Q是否同宗，也未曾受他子孙的拜托；或“小传”，则阿Q又更无别的“大传”了。总而言之，这一篇也便是“本传”，但从我的文章着想，因为文体卑下，是“引车卖浆者流”所用的话，所以不敢僭称，便从不入三教九流的小说家所谓“闲话休题言归正传”这一句套话里，取出“正传”两个字来，作为名目，即使与古人所撰《书法正传》的“正传”字面上很相混，也顾不得了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B03" data-tiers="standard deep research"><span class="tag">概念 · 正传名义</span><p>“正传”并非传统史传的任何一体，而是从小说家套话“闲话休题言归正传”里借来的字眼；取名一事本身就宣告：这不是正史，是被正史排除在外的人的传记。</p><q data-src="B03">闲话休题言归正传</q><q data-src="B03">因为文体卑下，是“引车卖浆者流”所用的话，所以不敢僭称</q><span class="cite">依据 B02 · B03</span></aside></div></div><div class="beat" id="beat-beat-3" data-origin="added" data-tiers="standard deep research"><span class="beat-no">03 / 04</span><h3>姓赵？不配姓赵</h3><p class="beat-q">阿Q到底姓什么，谁有资格说？</p></div><div class="flow-row" data-block="B04"><div class="block"><p class="src" data-origin="source" data-src="B04" data-block="B04" data-kind="paragraph" data-tiers="skim standard deep research">第二，立传的通例，开首大抵该是“某，字某，某地人也”，而我并不知道阿Q姓什么。有一回，他似乎是姓赵，但第二日便模糊了。那是赵太爷的儿子进了秀才的时候，锣声镗镗的报到村里来，阿Q正喝了两碗黄酒，便手舞足蹈的说，这于他也很光采，因为他和赵太爷原来是本家，细细的排起来他还比秀才长三辈呢。其时几个旁听人倒也肃然的有些起敬了。那知道第二天，地保便叫阿Q到赵太爷家里去；太爷一见，满脸溅朱，喝道：“阿Q，你这浑小子！你说我是你的本家么？”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B05"><div class="block"><p class="src" data-origin="source" data-src="B05" data-block="B05" data-kind="paragraph" data-tiers="standard deep research">阿Q不开口。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B06"><div class="block"><p class="src" data-origin="source" data-src="B06" data-block="B06" data-kind="paragraph" data-tiers="deep research" hidden="">赵太爷愈看愈生气了，抢进几步说：“你敢胡说！我怎么会有你这样的本家？</p></div><div class="margin"></div></div><div class="flow-row" data-block="B07"><div class="block"><p class="src" data-origin="source" data-src="B07" data-block="B07" data-kind="paragraph" data-tiers="deep research" hidden="">你姓赵么？”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B08"><div class="block"><p class="src" data-origin="source" data-src="B08" data-block="B08" data-kind="paragraph" data-tiers="deep research" hidden="">阿Q不开口，想往后退了；赵太爷跳过去，给了他一个嘴巴。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B08" data-tiers="deep research" hidden=""><span class="tag">讲解 · 模型补充</span><p>姓氏一节由一个嘴巴收束：阿Q是否姓赵并不由事实判定，而由赵太爷的权势判定。围观者的舆论随权势转向，从此再无人提起他的氏族。</p><q data-src="B09">你怎么会姓赵！——你那里配姓赵！</q><q data-src="B10">他大约未必姓赵，即使真姓赵，有赵太爷在这里，也不该如此胡说的</q><span class="cite">依据 B08 · B09 · B10</span></aside></div></div><div class="flow-row" data-block="B09"><div class="block"><p class="src" data-origin="source" data-src="B09" data-block="B09" data-kind="paragraph" data-tiers="standard deep research">“你怎么会姓赵！——你那里配姓赵！”</p></div><div class="margin"></div></div><div class="flow-row" data-block="B10"><div class="block"><p class="src" data-origin="source" data-src="B10" data-block="B10" data-kind="paragraph" data-tiers="standard deep research">阿Q并没有抗辩他确凿姓赵，只用手摸着左颊，和地保退出去了；外面又被地保训斥了一番，谢了地保二百文酒钱。知道的人都说阿Q太荒唐，自己去招打；他大约未必姓赵，即使真姓赵，有赵太爷在这里，也不该如此胡说的。此后便再没有人提起他的氏族来，所以我终于不知道阿Q究竟什么姓。</p></div><div class="margin"></div></div><div class="method" id="steps-surname" data-origin="added" data-tiers="standard deep research" data-visual="steps"><span class="tag">方法 · 三步</span><div class="steps"><div><b>自称本家</b><span>阿Q说与赵太爷本家，还比秀才长三辈</span></div><i>+</i><div><b>太爷喝斥</b><span>“你那里配姓赵！”</span></div><i>+</i><div><b>摸颊退出</b><span>不抗辩，被地保训斥，谢二百文酒钱</span></div><i>+</i><div><b>姓氏消失</b><span>此后无人再提他的氏族</span></div><i>→</i><div class="result"><b>终于不知姓</b><span>叙述者仍不知道阿Q究竟什么姓</span></div></div><p class="method-note">姓氏不是可查的事实，而是一道由赵太爷喝断的资格门槛；事件过后，连追问都停止了。<span class="cite">依据 B04 · B09 · B10</span></p></div><div class="beat" id="beat-beat-4" data-origin="added" data-tiers="standard deep research"><span class="beat-no">04 / 04</span><h3>名写不出，籍贯定不下</h3><p class="beat-q">连姓名籍贯都不确定，传记还能写吗？</p></div><div class="flow-row" data-block="B11"><div class="block"><p class="src" data-origin="source" data-src="B11" data-block="B11" data-kind="paragraph" data-tiers="skim standard deep research">第三，我又不知道阿Q的名字是怎么写的。他活着的时候，人都叫他阿Quei，死了以后，便没有一个人再叫阿Quei了，那里还会有“着之竹帛” 的事。若论“着之竹帛”，这篇文章要算第一次，所以先遇着了这第一个难关。我曾仔细想：阿Quei，阿桂还是阿贵呢？倘使他号月亭，或者在八月间做过生日，那一定是阿桂了；而他既没有号——也许有号，只是没有人知道他，——又未尝散过生日征文的帖子：写作阿桂，是武断的。又倘使他有一位老兄或令弟叫阿富，那一定是阿贵了；而他又只是一个人：写作阿贵，也没有佐证的。其余音Quei的偏僻字样，更加凑不上了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B11" data-tiers="skim standard deep research"><span class="tag">难点 · 名无佐证</span><p>名字的疑难最后靠“洋字”解决：阿Quei写作阿Q，既是无据可查的无奈，也顺手把《新青年》与注音字母的争论拉进序里，成了调侃的材料。</p><q data-src="B11">我曾仔细想：阿Quei，阿桂还是阿贵呢</q><q data-src="B12">只好用了“洋字”，照英国流行的拼法写他为阿Quei，略作阿Q</q><span class="cite">依据 B11 · B12</span></aside></div></div><div class="flow-row" data-block="B12"><div class="block"><p class="src" data-origin="source" data-src="B12" data-block="B12" data-kind="paragraph" data-tiers="research" hidden="">先前，我也曾问过赵太爷的儿子茂才 先生，谁料博雅如此公，竟也茫然，但据结论说，是因为陈独秀办了《新青年》提倡洋字 ，所以国粹沦亡，无可查考了。我的最后的手段，只有托一个同乡去查阿Q犯事的案卷，八个月之后才有回信，说案卷里并无与阿Quei的声音相近的人。我虽不知道是真没有，还是没有查，然而也再没有别的方法了。生怕注音字母还未通行，只好用了“洋字”，照英国流行的拼法写他为阿Quei，略作阿Q。这近于盲从《新青年》，自己也很抱歉，但茂才公尚且不知，我还有什么好办法呢。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B12" data-tiers="research" hidden=""><span class="tag">讲解 · 模型补充</span><p>茂才公把查不出名字归咎于陈独秀办《新青年》提倡洋字，是典型的国粹论调；叙述者引述它时并不反驳，只用“我还有什么好办法呢”轻轻收住，讽刺留在话外。</p><q data-src="B12">是因为陈独秀办了《新青年》提倡洋字</q><q data-src="B12">但茂才公尚且不知，我还有什么好办法呢</q><span class="cite">依据 B12</span></aside></div></div><div class="flow-row" data-block="B13"><div class="block"><p class="src" data-origin="source" data-src="B13" data-block="B13" data-kind="paragraph" data-tiers="skim standard deep research">第四，是阿Q的籍贯了。倘他姓赵，则据现在好称郡望的老例，可以照《郡名百家姓》 上的注解，说是“陇西天水人也”，但可惜这姓是不甚可靠的，因此籍贯也就有些决不定。他虽然多住未庄，然而也常常宿在别处，不能说是未庄人，即使说是“未庄人也”，也仍然有乖史法的。</p></div><div class="margin"></div></div><div class="flow-row" data-block="B14"><div class="block"><p class="src" data-origin="source" data-src="B14" data-block="B14" data-kind="paragraph" data-tiers="deep research" hidden="">我所聊以自慰的，是还有一个“阿”字非常正确，绝无附会假借的缺点，颇可以就正于通人。至于其余，却都非浅学所能穿凿，只希望有“历史癖与考据癖”的胡适之 先生的门人们，将来或者能够寻出许多新端绪来，但是我这《阿Q正传》到那时却又怕早经消灭了。</p></div><div class="margin"><aside class="note" data-origin="added" data-trigger="B14" data-tiers="deep research" hidden=""><span class="tag">讲解 · 模型补充</span><p>结尾把考据的希望寄托于胡适之门人，同时预判自己的文章将“早经消灭”：对学术时髦的戏谑与对速朽的自觉，一句话里同时出现。</p><q data-src="B14">将来或者能够寻出许多新端绪来</q><q data-src="B01">因为从来不朽之笔，须传不朽之人</q><span class="cite">依据 B01 · B14</span></aside></div></div><div class="flow-row" data-block="B15"><div class="block"><p class="src" data-origin="source" data-src="B15" data-block="B15" data-kind="paragraph" data-tiers="research" hidden="">以上可以算是序。</p></div><div class="margin"></div></div></div><div class="takeaways" id="takeaways" data-origin="added" data-tiers="standard deep research"><span class="tag">带走三件事</span><h3>本章读法</h3><ol><li data-sources="B01 B02 B11">“序”先写立传的资格难题：名目、姓氏、名字、籍贯都不确定，传记从体例开始就被掏空。</li><li data-sources="B03">“正传”二字从小说家套话借来，等于承认传主被正史排除在外，这不是正史列传的体例。</li><li data-sources="B04 B09 B10">姓赵事件显示姓氏不是事实问题而是资格问题：赵太爷一句“你那里配姓赵”就取消阿Q的氏族，叙述者最终只能不知道。</li></ol><p class="next">先看立传资格如何被体例问题卡住，再看“正传”名义与姓氏事件如何把传主推向无名。</p></div><footer class="read-foot"><span class="dim">← 上一章</span><a href="#" data-dead="「/reader/B0001/2」">下一章 →</a></footer><div class="colophon">源文件 01_第一章序.md · SHA-256 e7f318978d3713ac…<br>生成 <span id="colophon-time">2026-11-10T09:52:00</span> · 生成器 phase1-1 · 模型 <span id="colophon-model">deepseek-v4.1-flash</span> · 渲染 v2 · 原文逐字保留，块 15</div></main><div class="foreedge" aria-hidden="true"><i data-block="B01" class="kept" title="B01"></i><i data-block="B02" class="kept" title="B02"></i><i data-block="B03" class="kept" title="B03"></i><i data-block="B04" class="kept" title="B04"></i><i data-block="B05" class="kept" title="B05"></i><i data-block="B06" class="" title="B06"></i><i data-block="B07" class="" title="B07"></i><i data-block="B08" class="" title="B08"></i><i data-block="B09" class="kept" title="B09"></i><i data-block="B10" class="kept" title="B10"></i><i data-block="B11" class="kept" title="B11"></i><i data-block="B12" class="" title="B12"></i><i data-block="B13" class="kept" title="B13"></i><i data-block="B14" class="" title="B14"></i><i data-block="B15" class="" title="B15"></i></div><div class="cmp-overlay" id="cmp-overlay" hidden=""><div class="cmp" role="dialog" aria-modal="true" aria-label="档位对照"><h3>档位对照</h3><p>同一章源文，已生成档位对照。浏览 600 字/分 · 标准 500 · 深读 350 · 研读 300。</p><table><thead><tr><th>档</th><th>块覆盖</th><th>字数覆盖</th><th>讲解</th><th>正文字数</th><th>用时</th></tr></thead><tbody><tr data-tier-row="skim"><td>速览</td><td>33%</td><td>55%</td><td>2</td><td>776 字</td><td>1 分</td></tr><tr data-tier-row="standard" class="current"><td>标准</td><td>60%</td><td>75%</td><td>3</td><td>1,054 字</td><td>2 分</td></tr><tr data-tier-row="deep"><td>深读</td><td>87%</td><td>86%</td><td>5</td><td>1,210 字</td><td>4 分</td></tr><tr data-tier-row="research"><td>研究</td><td>100%</td><td>100%</td><td>6</td><td>1,409 字</td><td>6 分</td></tr></tbody></table><button class="cmp-close" data-cmp-close="">关闭</button></div></div><div class="toast" id="toast"></div><script>const TIERS = [{"key": "skim", "label": "速览"}, {"key": "standard", "label": "标准"}, {"key": "deep", "label": "深读"}, {"key": "research", "label": "研究"}];
+const STATS = {"skim": {"c_block": 0.3333, "c_char": 0.5507, "chars": 776, "e": 0.0809, "notes": 2, "minutes": 1, "label": "速览", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:52:00"}, "standard": {"c_block": 0.6, "c_char": 0.748, "chars": 1054, "e": 0.1249, "notes": 3, "minutes": 2, "label": "标准", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:52:00"}, "deep": {"c_block": 0.8667, "c_char": 0.8588, "chars": 1210, "e": 0.2016, "notes": 5, "minutes": 4, "label": "深读", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:52:00"}, "research": {"c_block": 1.0, "c_char": 1.0, "chars": 1409, "e": 0.2463, "notes": 6, "minutes": 6, "label": "研究", "model": "deepseek-v4.1-flash", "generated_at": "2026-11-10T09:52:00"}};
+const TICK_COUNT = 15;
+const state = {tier: "standard", only: false, big: false};
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+function toast(msg) { const el = $('#toast'); if (!el) return; el.textContent = msg; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1600); }
+function fmt(n) { return Number(n || 0).toLocaleString('zh-CN'); }
+function setTier(tier, push) {
+  if (!TIERS.some(t => t.key === tier)) tier = 'standard';
+  state.tier = tier;
+  document.body.dataset.tier = tier;
+  $$('[data-tiers]').forEach(el => { el.hidden = !el.dataset.tiers.split(' ').includes(tier); });
+  $$('[data-tier-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tierTab === tier)));
+  const s = STATS[tier]; if (s) {
+    const line = $('#live-stats');
+    if (line) line.innerHTML = '原文 <b>' + Math.round(s.c_block * 100) + '%<\/b> · 约 <b>' + fmt(s.chars) +
+      '<\/b> 字<span class="stat-notes"> · 讲解 <b>' + s.notes + '<\/b> 条<\/span> · <b>' + s.minutes + '<\/b> 分钟';
+    const pct = Math.max(0, Math.min(100, Math.round(s.c_block * 100)));
+    const bar = $('#scope-bar'); if (bar) bar.style.width = pct + '%';
+    // 页脚出处按档位切：增量包可能混多个模型/时间。
+    const at = $('#colophon-time'); if (at) at.textContent = s.generated_at || '';
+    const md = $('#colophon-model'); if (md) md.textContent = s.model || '';
+  }
+  updateTicks(); updateCompare();
+  if (push) {
+    const url = new URL(location.href); url.searchParams.set('tier', tier); history.replaceState(null, '', url);
+  }
+}
+function updateTicks() {
+  $$('.foreedge i').forEach(tick => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"] [data-origin="source"]');
+    tick.classList.toggle('kept', !!row && !row.hidden);
+  });
+}
+function updateCompare() {
+  $$('.cmp tr[data-tier-row]').forEach(tr => tr.classList.toggle('current', tr.dataset.tierRow === state.tier));
+}
+function setOnly(on) { state.only = on; document.body.classList.toggle('only-source', on);
+  const b = $('#only-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setBig(on) { state.big = on; document.body.classList.toggle('big', on);
+  const b = $('#big-btn'); if (b) b.setAttribute('aria-pressed', String(on)); }
+function setNight(on) { document.body.classList.toggle('night', on);
+  try { localStorage.setItem('reading-theme', on ? 'cold' : 'warm'); } catch (e) {}
+  const b = $('#night-btn'); if (b) b.textContent = on ? '暖纸' : '夜读'; }
+function themeLinks() {
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  if (theme === 'warm') return;
+  $$('a[href]').forEach(a => { const href = a.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.includes('theme=')) a.setAttribute('href', href + (href.includes('?') ? '&' : '?') + 'theme=' + theme); });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const url = new URL(location.href);
+  let theme = 'warm'; try { theme = localStorage.getItem('reading-theme') || 'warm'; } catch (e) {}
+  setNight(theme === 'cold');
+  setTier(url.searchParams.get('tier') || "standard", false);
+  themeLinks();
+  $$('[data-tier-tab]').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.disabled) return; setTier(btn.dataset.tierTab, true);
+  }));
+  const only = $('#only-btn'); if (only) only.addEventListener('click', () => setOnly(!state.only));
+  const big = $('#big-btn'); if (big) big.addEventListener('click', () => setBig(!state.big));
+  const night = $('#night-btn'); if (night) night.addEventListener('click', () => setNight(!document.body.classList.contains('night')));
+  const cmp = $('#cmp-overlay'); const open = $('#cmp-btn');
+  if (open && cmp) {
+    open.addEventListener('click', () => { cmp.hidden = false; updateCompare(); });
+    $$('[data-cmp-close]', cmp).forEach(el => el.addEventListener('click', () => { cmp.hidden = true; }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cmp.hidden = true; });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input,textarea')) return;
+    if (e.key >= '1' && e.key <= '4') { const t = TIERS[Number(e.key) - 1]; if (t) setTier(t.key, true); }
+  });
+  $$('.foreedge i').forEach(tick => tick.addEventListener('click', () => {
+    const row = document.querySelector('[data-block="' + tick.dataset.block + '"]');
+    if (!row) return;
+    const src = row.querySelector('[data-origin="source"]');
+    if (src && src.hidden) { toast('本档未收这一段，按 4 切到研读可见'); return; }
+    row.scrollIntoView({behavior: 'smooth', block: 'center'}); row.classList.add('flash');
+    setTimeout(() => row.classList.remove('flash'), 900);
+  }));
+  const bar = $('#progress i');
+  if (bar) {
+    const update = () => { const h = document.documentElement; const max = h.scrollHeight - h.clientHeight;
+      bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%'; };
+    document.addEventListener('scroll', update, {passive: true}); update();
+  }
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  // prediction: remember the guess, do not spoil the next paragraphs
+  document.querySelectorAll('[data-visual="prediction"]').forEach(pr => {
+    const result = pr.querySelector('[data-result]');
+    const reveal = pr.dataset.reveal || '';
+    pr.querySelectorAll('[data-guess]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pr.querySelectorAll('[data-guess]').forEach(b => {
+          b.classList.remove('on');
+          b.setAttribute('aria-pressed', 'false');
+        });
+        btn.classList.add('on');
+        btn.setAttribute('aria-pressed', 'true');
+        if (result) {
+          result.textContent = reveal.split('{guess}').join(btn.dataset.guess || '');
+        }
+      });
+    });
+  });
+
+  // framing toggle: same absolute prices, different reference point
+  document.querySelectorAll('[data-visual="framing"]').forEach(fr => {
+    const baseEl = fr.querySelector('[data-role="base"]');
+    const creditEl = fr.querySelector('[data-role="credit"]');
+    const cashEl = fr.querySelector('[data-role="cash"]');
+    const copyEl = fr.querySelector('[data-copy]');
+    const money = (n) => '$' + Number(n).toFixed(2);
+    const cents = (n) => Math.round(Number(n) * 100);
+    const base = Number(fr.dataset.base || 1);
+    const credit = Number(fr.dataset.credit || 1.03);
+    const cash = Number(fr.dataset.cash || 1);
+    const delta = cents(credit - base);
+    const set = (mode) => {
+      fr.dataset.mode = mode;
+      const surcharge = mode === 'surcharge';
+      fr.querySelectorAll('.seg button').forEach(b => {
+        const on = b.dataset.mode === mode;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      if (baseEl) {
+        baseEl.querySelector('b').textContent = money(surcharge ? base : credit);
+        baseEl.querySelector('.delta').textContent = '标价';
+      }
+      if (creditEl) {
+        creditEl.querySelector('b').textContent = money(credit);
+        creditEl.querySelector('.delta').textContent = surcharge ? '+' + delta + '¢ 附加费' : '按标价';
+        creditEl.classList.toggle('hot', surcharge);
+      }
+      if (cashEl) {
+        cashEl.querySelector('b').textContent = money(cash);
+        cashEl.querySelector('.delta').textContent = surcharge ? '按基准价' : '−' + delta + '¢ 折扣';
+        cashEl.classList.toggle('hot', !surcharge);
+      }
+      if (copyEl) {
+        copyEl.textContent = surcharge ? (fr.dataset.surchargeCopy || '') : (fr.dataset.discountCopy || '');
+      }
+    };
+    fr.querySelectorAll('.seg button').forEach(b => {
+      b.addEventListener('click', () => set(b.dataset.mode));
+    });
+    set(fr.dataset.mode || 'surcharge');
+  });
+});</script><script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

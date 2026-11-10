@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>书库 · 片头片尾</title>
+<style>
+:root{
+  --paper:#F3F0E7; --ink:#181817; --ink-2:#55544E; --ink-3:#8A877C;
+  --rule:#D2CBBB; --cinnabar:#A8442F; --serif:"Noto Serif CJK SC","Noto Serif CJK TC",serif;
+  --sans:"Noto Sans CJK SC","Noto Sans CJK TC",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:
+    radial-gradient(1200px 600px at 12% -10%,rgba(255,255,255,.6),transparent 60%),
+    linear-gradient(180deg,#F6F3EB 0%,var(--paper) 38%,#EFEBDD 100%);
+  color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+  display:grid;place-items:center;overflow:hidden;
+}
+.frame{width:1920px;height:1080px;padding:96px 120px;position:relative;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:14px;font-family:var(--serif);font-weight:900;font-size:30px;letter-spacing:.14em}
+.brand .marks{display:flex;gap:3px;align-items:flex-end;height:28px}
+.brand .marks i{display:block;width:3px;background:var(--cinnabar);height:100%}
+.brand .marks i:nth-child(2){height:70%}
+.brand .marks i:nth-child(3){height:88%}
+.brand small{font-family:var(--sans);font-weight:400;font-size:15px;letter-spacing:.18em;color:var(--ink-3);margin-left:18px}
+.top{display:flex;justify-content:space-between;align-items:center;padding-bottom:26px;border-bottom:1px solid var(--rule)}
+.mid{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:1480px}
+.eyebrow{font-size:16px;letter-spacing:.26em;color:var(--cinnabar);margin-bottom:34px}
+h1{font-family:var(--serif);font-weight:900;font-size:104px;line-height:1.24;letter-spacing:.02em}
+h1 em{font-style:normal;color:var(--cinnabar)}
+.lead{margin-top:44px;font-family:var(--serif);font-size:31px;line-height:1.9;color:var(--ink-2)}
+.rule{margin-top:64px;height:3px;width:180px;background:var(--cinnabar)}
+.stats{margin-top:76px;display:flex;gap:78px}
+.stats div{font-family:var(--serif)}
+.stats b{display:block;font-size:46px;font-weight:900;letter-spacing:.02em}
+.stats span{display:block;margin-top:10px;font-family:var(--sans);font-size:15px;letter-spacing:.16em;color:var(--ink-3)}
+.foot{display:flex;justify-content:space-between;align-items:flex-end;font-size:15px;letter-spacing:.16em;color:var(--ink-3);padding-top:26px;border-top:1px solid var(--rule)}
+.foot .r{display:flex;gap:26px}
+.center{align-items:flex-start;justify-content:center;display:flex;flex-direction:column;height:100%;gap:0}
+.center h1{font-size:96px}
+.center .lead{max-width:1180px}
+.mono{font-family:var(--serif);letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="frame" id="frame"></div>
+<script>
+const c = new URLSearchParams(location.search).get('c') || 'title';
+const brand = `<div class="brand"><span class="marks"><i></i><i></i><i></i></span>书库<small>BOOK-CORPUS</small></div>`;
+const cards = {
+  title: `
+    <div class="top">${brand}<div style="font-size:15px;letter-spacing:.18em;color:#8A877C">本地只读实例 · 15 本</div></div>
+    <div class="mid">
+      <div class="eyebrow">一 套 数 据 · 四 个 入 口</div>
+      <h1>把一整本书，<br>按<em>四种深度</em>重做一遍</h1>
+      <div class="rule"></div>
+      <div class="lead">书架 · 四读 · 日课 · 问书 —— 同一份原文，<br>四种读法、四个入口，每一页都能从原文重新生成。</div>
+      <div class="stats">
+        <div><b>15</b><span>本 书</span></div>
+        <div><b>1,973</b><span>章 原 文</span></div>
+        <div><b>629</b><span>万 字</span></div>
+        <div><b>0</b><span>个 账 号</span></div>
+      </div>
+    </div>
+    <div class="foot"><div>2026 · 11</div><div class="r"><span>Python 标准库</span><span>只绑 127.0.0.1</span></div></div>`,
+  outro: `
+    <div class="top">${brand}<div style="font-size:15px;letter-spacing:.18em;color:#8A877C">github.com/sk123qaq/book-corpus</div></div>
+    <div class="mid center">
+      <div class="eyebrow">全 部 本 地</div>
+      <h1>没有账号，<br>也没有服务器。</h1>
+      <div class="rule"></div>
+      <div class="lead">五个服务都只绑 127.0.0.1，用 Python 标准库写成；<br>没有 Docker、没有前端构建，读本存成 json，随时重放。</div>
+      <div class="stats">
+        <div><b>&lt;3s</b><span>一 次 检 索</span></div>
+        <div><b>4</b><span>种 读 法 档 位</span></div>
+        <div><b>逐 字</b><span>回 查 引 文</span></div>
+      </div>
+    </div>
+    <div class="foot"><div>静态样例 · 只含公有领域《阿Q正传》</div><div class="r"><span>2026 · 11</span></div></div>`,
+};
+document.getElementById('frame').innerHTML = cards[c] || cards.title;
+document.title = 'card:' + c;
+</script>
+</body>
+</html>

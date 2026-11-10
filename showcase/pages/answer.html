@@ -1,0 +1,532 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>会话追问 · 书库检索</title>
+<link rel="stylesheet" href="assets/session.css">
+<style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head>
+<body>
+<header class="masthead">
+  <a class="brand" href="answer.html">书库检索<span class="brand-dot"></span></a>
+  <div class="stats" id="stats" aria-label="书库规模">
+    <span><b class="mono" data-stat="books">15</b> 本</span>
+    <span><b class="mono" data-stat="paras">26,242</b> 段</span>
+    <span><b class="mono" data-stat="chapters">2,002</b> 章</span>
+  </div>
+  <nav class="nav"><a href="#" data-dead="「/classic」">完整流程 ↗</a></nav>
+</header>
+
+<main class="app">
+  <aside class="rail" aria-label="会话">
+    <div class="rail-tabs" role="tablist" aria-label="会话视图">
+      <button class="rail-tab is-on" id="tab-current" type="button" role="tab" aria-selected="true" aria-controls="panel-current">本次会话 <b id="turn-count">1</b></button>
+      <button class="rail-tab" id="tab-history" type="button" role="tab" aria-selected="false" aria-controls="panel-history">历史会话 <b id="history-count">10</b></button>
+    </div>
+    <div class="rail-panels">
+      <section class="rail-panel" id="panel-current" role="tabpanel" aria-labelledby="tab-current">
+        <p class="rail-sub" id="rail-sub">1 问 · 正在看第 1 问</p>
+        <div class="rail-scroll">
+          <div class="rail-empty" id="rail-empty" hidden="">
+            <p>还没有开始。</p>
+            <p>问一句，本次会话的线索会出现在这里。</p>
+          </div>
+          <ol class="rounds" id="rounds"><li class="round is-current" data-turn="1"><span class="no">01 · 当前</span><p class="q">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</p><div class="meta"><span class="chip">4 本</span><span class="ids"><i class="">[1]</i><i class="">[2]</i><i class="">[3]</i><i class="">[4]</i><i class="">[5]</i><i class="">[6]</i><i class="">[7]</i><i class="">[8]</i></span></div></li></ol>
+        </div>
+        <button class="rail-foot" type="button" id="new-session"><span class="plus">+</span>新会话</button>
+      </section>
+      <section class="rail-panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden="">
+        <div class="hist-search">
+          <span class="mag" aria-hidden="true">⌕</span>
+          <input id="hist-filter" type="text" autocomplete="off" placeholder="搜问题或书名" aria-label="搜索历史会话">
+        </div>
+        <div class="hist-selbar" id="hist-selbar" hidden=""></div>
+        <div class="rail-scroll hist-scroll" id="hist-list"><p class="hist-group">当前打开</p><div class="hist-item is-current"><button class="hist-row is-current" type="button" data-open-session="9a2368d81fe4"><span class="top"><span>10:23</span><span>1 问 <span class="pin">当前</span></span></span><span class="q">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</span><span class="meta">《阿Q正传》《台湾《传记文学》珍藏系列（全15册）》《病隙碎笔》</span></button><button class="hist-more-btn" type="button" data-hist-menu="9a2368d81fe4" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><p class="hist-group">今天</p><div class="hist-item"><button class="hist-row" type="button" data-open-session="d19de56d32c3"><span class="top"><span>10:18</span><span>1 问</span></span><span class="q">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</span><span class="meta">《阿Q正传》《台湾《传记文学》珍藏系列（全15册）》《病隙碎笔》</span></button><button class="hist-more-btn" type="button" data-hist-menu="d19de56d32c3" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><div class="hist-item"><button class="hist-row" type="button" data-open-session="5902c82c2f59"><span class="top"><span>10:15</span><span>1 问</span></span><span class="q">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</span><span class="meta">《阿Q正传》《台湾《传记文学》珍藏系列（全15册）》《病隙碎笔》</span></button><button class="hist-more-btn" type="button" data-hist-menu="5902c82c2f59" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><div class="hist-item"><button class="hist-row" type="button" data-open-session="9a5fab3df512"><span class="top"><span>09:45</span><span>1 问</span></span><span class="q">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</span><span class="meta">《阿Q正传》《台湾《传记文学》珍藏系列（全15册）》《病隙碎笔》</span></button><button class="hist-more-btn" type="button" data-hist-menu="9a5fab3df512" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><div class="hist-item"><button class="hist-row" type="button" data-open-session="fdafd4178c9e"><span class="top"><span>09:45</span><span>1 问</span></span><span class="q">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</span><span class="meta">《阿Q正传》《台湾《传记文学》珍藏系列（全15册）》《病隙碎笔》</span></button><button class="hist-more-btn" type="button" data-hist-menu="fdafd4178c9e" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><div class="hist-item"><button class="hist-row" type="button" data-open-session="4be7f3ab2bcf"><span class="top"><span>09:42</span><span>1 问</span></span><span class="q">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</span><span class="meta">《阿Q正传》《台湾《传记文学》珍藏系列（全15册）》《1984》<span class="hist-state is-incomplete">未回答</span></span></button><button class="hist-more-btn" type="button" data-hist-menu="4be7f3ab2bcf" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><p class="hist-group">更早</p><div class="hist-item"><button class="hist-row" type="button" data-open-session="872a8761fafc"><span class="top"><span>11-04 17:34</span><span>2 问</span></span><span class="q">安史之乱中安禄山和史思明是怎么勾结在一起的？</span><span class="meta">《安史之乱  历史、宣传与神话》《《创业维艰》+《从0到1》+《支付战争》》</span></button><button class="hist-more-btn" type="button" data-hist-menu="872a8761fafc" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><div class="hist-item"><button class="hist-row" type="button" data-open-session="0b0f0890e266"><span class="top"><span>11-04 11:19</span><span>1 问</span></span><span class="q">有谁帮助阿Q吗</span><span class="meta">《阿Q正传》</span></button><button class="hist-more-btn" type="button" data-hist-menu="0b0f0890e266" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><div class="hist-item"><button class="hist-row" type="button" data-open-session="a33262a9f52c"><span class="top"><span>11-03 15:48</span><span>1 问</span></span><span class="q">阿Q为什么挨打</span><span class="meta">《阿Q正传》<span class="hist-state is-incomplete">未回答</span></span></button><button class="hist-more-btn" type="button" data-hist-menu="a33262a9f52c" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div><div class="hist-item"><button class="hist-row" type="button" data-open-session="63e28fe4be8b"><span class="top"><span>11-03 15:48</span><span>1 问</span></span><span class="q">阿Q为什么挨打</span><span class="meta">《阿Q正传》<span class="hist-state is-incomplete">未回答</span></span></button><button class="hist-more-btn" type="button" data-hist-menu="63e28fe4be8b" aria-haspopup="menu" aria-expanded="false" aria-label="会话操作">…</button></div></div>
+        <p class="hist-note">切换只是换视图：正在跑的回答会在后台继续，可回来查看。</p>
+      </section>
+    </div>
+  </aside>
+
+  <section class="main" id="main"><div class="kicker"><span class="no">第 1 问</span><span class="chip scope">首问</span><span class="read mono">检索 0.1s · 回答 73.8s</span></div><h1 class="question">《阿Q正传》里，阿Q在未庄的「精神胜利法」具体有哪几种表现？</h1><section class="stages" id="stages" aria-label="检索进度"><div class="strip"><button class="strip-bar" type="button" aria-expanded="false"><span class="steps"><span class="step is-done"><i class="dot" aria-hidden="true"></i><span class="sn">01</span><span class="sname">理解问题</span></span><span class="step is-done"><i class="dot" aria-hidden="true"></i><span class="sn">02</span><span class="sname">词法循环</span></span><span class="step is-done"><i class="dot" aria-hidden="true"></i><span class="sn">03</span><span class="sname">打分与选章</span></span><span class="step is-done"><i class="dot" aria-hidden="true"></i><span class="sn">04</span><span class="sname">书卡</span></span><span class="step is-done"><i class="dot" aria-hidden="true"></i><span class="sn">05</span><span class="sname">结果</span></span></span><span class="strip-toggle"><span class="t-open">展开</span><span class="t-close">收起</span><span class="strip-caret" aria-hidden="true">⌄</span></span></button></div><div class="stage-stack v3"><article class="stage-row v3-row is-done" data-i="0"><button class="stage-row-head v3-head" type="button" aria-expanded="false"><span class="v3-num mono">01</span><span class="v3-name stage-name">理解问题</span><span class="v3-val">6 组词</span><span class="v3-ms mono">0.2 ms</span><span class="scaret" aria-hidden="true">⌄</span></button><div class="stage-row-body v3-body"><div class="stage-body-done"><p class="v3-lead">6 组词 · 阿Q · 精神胜利法 · 未庄</p><p class="v3-meta">6 个检索词 · 命中切词缓存</p></div><p class="stage-loading"><i class="blink-dot"></i>正在理解这句话…</p><details class="raw"><summary>原始数据</summary><pre>{
+ "terms": [
+  "阿Q",
+  "精神胜利法",
+  "未庄",
+  "阿Q正传",
+  "自尊",
+  "屈辱"
+ ],
+ "groups": [
+  {
+   "name": "人物",
+   "variants": [
+    "阿Q",
+    "赵太爷",
+    "小D",
+    "王胡",
+    "假洋鬼子",
+    "吴妈"
+   ]
+  },
+  {
+   "name": "精神胜利",
+   "variants": [
+    "精神胜利法",
+    "自我安慰",
+    "自欺欺人",
+    "自轻自贱",
+    "儿子打老子",
+    "第一个"
+   ]
+  },
+  {
+   "name": "受辱遭遇",
+   "variants": [
+    "挨打",
+    "被打",
+    "被嘲笑",
+    "受辱",
+    "吃亏",
+    "失败"
+   ]
+  },
+  {
+   "name": "身份处境",
+   "variants": [
+    "雇农",
+    "短工",
+    "底层",
+    "无名无姓",
+    "无家可归",
+    "未庄"
+   ]
+  },
+  {
+   "name": "心理防御",
+   "variants": [
+    "忘却",
+    "忌讳",
+    "怒目主义",
+    "腹诽",
+    "轻视",
+    "自负"
+   ]
+  }
+ ],
+ "source": "cache",
+ "thinking": "high",
+ "ms": 0.2,
+ "model": "opencode-go/deepseek-v4.1-flash"
+}</pre></details></div></article><article class="stage-row v3-row is-done" data-i="1"><button class="stage-row-head v3-head" type="button" aria-expanded="false"><span class="v3-num mono">02</span><span class="v3-name stage-name">词法循环</span><span class="v3-val">2 轮</span><span class="v3-ms mono">20 ms</span><span class="scaret" aria-hidden="true">⌄</span></button><div class="stage-row-body v3-body"><div class="stage-body-done"><p class="v3-lead">2 轮 · 词集用尽</p><p class="v3-meta">取第 1 轮</p><div class="v3-field"><span class="v3-k">轮次</span><span class="v3-v"><div class="stage-chips"><span class="stage-chip">名词 · 160 段 · 采用</span><span class="stage-chip">去泛词 · 127 段</span></div></span></div></div><p class="stage-loading"><i class="blink-dot"></i>正在理解这句话…</p><details class="raw"><summary>原始数据</summary><pre>{
+ "terms": [
+  "阿Q",
+  "精神胜利法",
+  "未庄",
+  "阿Q正传",
+  "自尊",
+  "屈辱"
+ ],
+ "nouns": [
+  "阿Q",
+  "精神胜利法",
+  "未庄",
+  "阿Q正传",
+  "自尊",
+  "屈辱"
+ ],
+ "rounds": [
+  {
+   "n": 1,
+   "kind": "noun",
+   "terms": [
+    "阿Q",
+    "精神胜利法",
+    "未庄",
+    "阿Q正传",
+    "自尊",
+    "屈辱"
+   ],
+   "groups": [
+    "阿Q",
+    "精神胜利法",
+    "未庄",
+    "阿Q正传",
+    "自尊",
+    "屈辱"
+   ],
+   "hits": 160,
+   "top1": "B1825",
+   "top1_score": 32.8453,
+   "top2_score": 30.6622,
+   "margin": 0.0665,
+   "cover_paras": 0,
+   "A": false,
+   "B": false,
+   "C": false,
+   "stop": false,
+   "ms": 12.4,
+   "skipped": ""
+  },
+  {
+   "n": 2,
+   "kind": "drop-generic",
+   "terms": [
+    "阿Q",
+    "精神胜利法",
+    "未庄",
+    "阿Q正传",
+    "屈辱"
+   ],
+   "groups": [
+    "阿Q",
+    "精神胜利法",
+    "未庄",
+    "阿Q正传",
+    "屈辱"
+   ],
+   "hits": 127,
+   "top1": "B1825",
+   "top1_score": 32.8353,
+   "top2_score": 31.0019,
+   "margin": 0.0558,
+   "cover_paras": 0,
+   "A": false,
+   "B": false,
+   "C": false,
+   "stop": false,
+   "ms": 8,
+   "skipped": ""
+  }
+ ],
+ "stop": "exhausted",
+ "best_round": 1,
+ "ms": 57.1
+}</pre></details></div></article><article class="stage-row v3-row is-done" data-i="2"><button class="stage-row-head v3-head" type="button" aria-expanded="false"><span class="v3-num mono">03</span><span class="v3-name stage-name">打分与选章</span><span class="v3-val">评 7 本 · 选 3 章</span><span class="v3-ms mono">37 ms</span><span class="scaret" aria-hidden="true">⌄</span></button><div class="stage-row-body v3-body"><div class="stage-body-done"><p class="v3-lead">top1 阿Q正传 · 30.66 分 · 取 3 本书的章</p><p class="v3-meta">书级打分 best_support · 分数相对第一名</p><div class="v3-field"><span class="v3-k">排序</span><span class="v3-v"><div class="stage-chips"><span class="stage-chip">1. 阿Q正传 30.66</span><span class="stage-chip">2. 台湾《传记文学》珍藏系列（全15册） 32.85</span><span class="stage-chip">3. 病隙碎笔 8.94</span></div></span></div></div><p class="stage-loading"><i class="blink-dot"></i>正在理解这句话…</p><details class="raw"><summary>原始数据</summary><pre>{
+ "scheme": "best_support",
+ "ranking": [
+  {
+   "book": "B0001",
+   "title": "阿Q正传",
+   "type": "文学",
+   "chapters": 9,
+   "score": 30.6622,
+   "coverage": 0.8333,
+   "groups": [
+    "阿Q",
+    "阿Q正传",
+    "未庄",
+    "自尊",
+    "屈辱"
+   ],
+   "total_groups": 6,
+   "best_path": "books/B0001/md/01_第一章序.md",
+   "best_line": 37,
+   "best_text": "我所聊以自慰的，是还有一个“阿”字非常正确，绝无附会假借的缺点，颇可以就……（原文不导出）",
+   "support": 2,
+   "pinned": true
+  },
+  {
+   "book": "B1825",
+   "title": "台湾《传记文学》珍藏系列（全15册）",
+   "type": "社科",
+   "chapters": 739,
+   "score": 32.8453,
+   "coverage": 0.6667,
+   "groups": [
+    "阿Q",
+    "阿Q正传",
+    "自尊",
+    "屈辱"
+   ],
+   "total_groups": 6,
+   "best_path": "books/B1825/md/059_我与鲁迅许广平夫妇.md",
+   "best_line": 10,
+   "best_text": "# 我与鲁迅许广平夫妇 王映霞 鲁迅是中国文学大师，又是伟大的革命家、思……（原文不导出）",
+   "support": 2,
+   "pinned": false
+  },
+  {
+   "book": "B1523",
+   "title": "病隙碎笔",
+   "type": "文学",
+   "chapters": 9,
+   "score": 8.9447,
+   "coverage": 0.3333,
+   "groups": [
+    "屈辱",
+    "自尊"
+   ],
+   "total_groups": 6,
+   "best_path": "books/B1523/md/09_病隙碎笔 6.md",
+   "best_line": 134,
+   "best_text": "人没有死的权利——第一，这话可以翻译成：个人没有死的权利。比如“文革”中……（原文不导出）",
+   "support": 2,
+   "pinned": false
+  },
+  {
+   "book": "B0004",
+   "title": "《创业维艰》+《从0到1》+《支付战争》",
+   "type": "商业与管理",
+   "chapters": 13,
+   "score": 8.2408,
+   "coverage": 0.3333,
+   "groups": [
+    "自尊",
+    "屈辱"
+   ],
+   "total_groups": 6,
+   "best_path": "books/B0004/md/01_从0到1.md",
+   "best_line": 559,
+   "best_text": "有时你不得不投入战斗。需要的时候，你不仅要战斗，还必须得赢，没有中间选择……（原文不导出）",
+   "support": 3,
+   "pinned": false
+  },
+  {
+   "book": "B1865",
+   "title": "我看见的世界",
+   "type": "社科",
+   "chapters": 33,
+   "score": 8.0931,
+   "coverage": 0.3333,
+   "groups": [
+    "自尊",
+    "屈辱"
+   ],
+   "total_groups": 6,
+   "best_path": "books/B1865/md/03_A Narrowing Gulf.md",
+   "best_line": 269,
+   "best_text": "高三也是我来美国的第二年。这一年，我斗志重燃，希望能在数学和物理方面证明……（原文不导出）",
+   "support": 4,
+   "pinned": false
+  },
+  {
+   "book": "B0003",
+   "title": "“错误”的行为  行为经济学的形成 = Misbehaving The Making of Behavioral Economics",
+   "type": "社科",
+   "chapters": 43,
+   "score": 7.2696,
+   "coverage": 0.1667,
+   "groups": [
+    "自尊"
+   ],
+   "total_groups": 6,
+   "best_path": "books/B0003/md/43_结语.md",
+   "best_line": 84,
+   "best_text": "如果人们会因为直言不讳或其他事情而遭到解雇，我们就不能指望所有人都愿意承……（原文不导出）",
+   "support": 1,
+   "pinned": false
+  },
+  {
+   "book": "B0005",
+   "title": "安史之乱  历史、宣传与神话",
+   "type": "社科",
+   "chapters": 65,
+   "score": 6.2685,
+   "coverage": 0.1667,
+   "groups": [
+    "屈辱"
+   ],
+   "total_groups": 6,
+   "best_path": "books/B0005/md/59_前置页 61.md",
+   "best_line": 97,
+   "best_text": "郭子仪象征性地抵抗完一阵后，吐蕃军队如入无人之境，继续直逼长安。一个月前……（原文不导出）",
+   "support": 1,
+   "pinned": false
+  }
+ ],
+ "chapters": [
+  {
+   "book": "B0001",
+   "title": "阿Q正传",
+   "book_score": 30.6622,
+   "pinned": true,
+   "selected": [
+    {
+     "chapter_path": "books/B0001/md/01_第一章序.md",
+     "chapter_title": "第一章 序",
+     "line": 37,
+     "score": 38.1054,
+     "snippet": "我所聊以自慰的，是还有一个“阿”字非常正确，绝无附会假借的缺点，颇可以就……（原文不导出）"
+    },…</pre></details></div></article><article class="stage-row v3-row is-done" data-i="3"><button class="stage-row-head v3-head" type="button" aria-expanded="false"><span class="v3-num mono">04</span><span class="v3-name stage-name">书卡</span><span class="v3-val">已锁定</span><span class="v3-ms mono">29 ms</span><span class="scaret" aria-hidden="true">⌄</span></button><div class="stage-row-body v3-body"><div class="stage-body-done"><p class="v3-lead">已锁定《阿Q正传》· 前半部分只用这本书回答</p><p class="v3-meta">其他书放到后半部分补充</p><div class="v3-field"><span class="v3-k">候选</span><span class="v3-v"><div class="stage-chips"><span class="stage-chip">主书《阿Q正传》</span></div></span></div></div><p class="stage-loading"><i class="blink-dot"></i>正在理解这句话…</p><details class="raw"><summary>原始数据</summary><pre>{
+ "trigger": false,
+ "reasons": [],
+ "hints": {
+  "title": "阿Q正传",
+  "author": "",
+  "verbatim": false,
+  "concept": false,
+  "question": true,
+  "qw": [
+   "哪",
+   "几种"
+  ],
+  "focus": {
+   "status": "exact",
+   "query_title": "阿Q正传",
+   "book": "B0001",
+   "title": "阿Q正传",
+   "author": "鲁迅",
+   "chapters": 9,
+   "matched_by": "quoted",
+   "best_path": "books/B0001/md/01_第一章序.md",
+   "best_line": 37,
+   "candidates": []
+  }
+ },
+ "cards": [],
+ "next": [
+  {
+   "book": "B0001",
+   "title": "阿Q正传",
+   "chapters": 9,
+   "book_score": 30.6622,
+   "readme_status": "ok",
+   "selected": [
+    {
+     "chapter_path": "books/B0001/md/01_第一章序.md",
+     "chapter_title": "第一章 序",
+     "line": 37,
+     "score": 38.1054
+    },
+    {
+     "chapter_path": "books/B0001/md/02_第二章优胜记略.md",
+     "chapter_title": "第二章 优胜记略",
+     "line": 15,
+     "score": 35.0396
+    },
+    {
+     "chapter_path": "books/B0001/md/09_第九章大团圆.md",
+     "chapter_title": "第九章 大团圆",
+     "line": 9,
+     "score": 27.5206
+    }
+   ]
+  }
+ ],
+ "ms": 28.7,
+ "uncertainty": {
+  "margin": -0.0712,
+  "types": 3,
+  "long10": 2,
+  "reasons": [],
+  "hints": {
+   "title": "阿Q正传",
+   "author": "",
+   "verbatim": false,
+   "concept": false,
+   "question": true,
+   "qw": [
+    "哪",
+    "几种"
+   ],
+   "focus": {
+    "status": "exact",
+    "query_title": "阿Q正传",
+    "book": "B0001",
+    "title": "阿Q正传",
+    "author": "鲁迅",
+    "chapters": 9,
+    "matched_by": "quoted",
+    "best_path": "books/B0001/md/01_第一章序.md",
+    "best_line": 37,
+    "candidates": []
+   }
+  },
+  "user_choice_unknown": true,
+  "note": "非交互模式不猜用户选择；default_selection 只是默认前三本"
+ },
+ "terms": [
+  "阿Q",
+  "精神胜利法",
+  "未庄",
+  "阿Q正传",
+  "自尊",
+  "屈辱"
+ ]
+}</pre></details></div></article><article class="stage-row v3-row is-done" data-i="4"><button class="stage-row-head v3-head" type="button" aria-expanded="false"><span class="v3-num mono">05</span><span class="v3-name stage-name">结果</span><span class="v3-val">4 本 · 跨书</span><span class="v3-ms mono">0.6 ms</span><span class="scaret" aria-hidden="true">⌄</span></button><div class="stage-row-body v3-body"><div class="stage-body-done"><p class="v3-lead">《阿Q正传》· 第一章序 · 8 条引文</p><p class="v3-meta">读窗口 0.6 ms · 回答 73.8 s</p><div class="v3-field"><span class="v3-k">命中</span><span class="v3-v"><p class="stage-quote">「第三，我又不知道阿Q的名字是怎么写的。他活着的时候，人都叫他阿Quei，死了以后，便没有一个人再叫阿Quei了，那里还会有“着之竹帛” 的事。若论“着之竹帛”，…」</p></span></div></div><p class="stage-loading"><i class="blink-dot"></i>正在理解这句话…</p><details class="raw"><summary>原始数据</summary><pre>{
+ "result": {
+  "path": "books/B0001/md/01_第一章序.md",
+  "title": "第一章 序",
+  "text": "第三，我又不知道阿Q的名字是怎么写的。他活着的时候，人都叫他阿Quei，……（原文不导出）",
+  "html": false,
+  "line": 37,
+  "hit_line": 37,
+  "hit_start": 622,
+  "hit_end": 740,
+  "hit_text": "我所聊以自慰的，是还有一个“阿”字非常正确，绝无附会假借的缺点，颇可以就……（原文不导出）",
+  "before": 700,
+  "before_chars": 621,
+  "total_lines": 39,
+  "window_chars": 749,
+  "ms": 0.4,
+  "book": "B0001",
+  "book_title": "阿Q正传",
+  "chapter": "第一章 序",
+  "card": 0
+ },
+ "answer": {
+  "ok": true,
+  "cached": false,
+  "ms": 73798.6,
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "thinking": "high",
+  "answer": "阿Q的「精神胜利法」并非只是一时的自我安慰，而是一套可以照着做的换算：把穷说成从前阔，把挨打说成儿子打老子，把失败说成「第一个」，实在转不过来就自己打自己，或者当场忘掉。\n\n用「先前」和「儿子」把眼前的低处垫高\n跟人口角时，他瞪着眼说「我们先前——比你阔的多啦」，靠的是一段谁也无从查考的过去。面对赵太爷、钱太爷这类人物，他心里想的是「我的儿子会阔得多啦」，把翻身的日期推到下一代。进了几回城，他又拿条凳、葱丝这类琐事鄙薄城里人，转头又笑未庄人没见过煎鱼，两边都占着高明。这些说法不必有证据，只要换一个时间或换一个比较对象，处境就翻了个面。\n\n挨打之后先改写打人者的身份\n被闲人揪住黄辫子碰了响头，他站一刻便想「我总算被儿子打了」，于是心满意足地得胜走了。闲人识破这套，先逼他自认「人打畜生」，他就退到「我是虫豸」，再从虫豸里翻出「第一个能够自轻自贱的人」，因为状元也是「第一个」。输的事实一点没变，变的只是名目，名目一换，胜负就调了个头；即使这套话被人预先说破，他也只需再降一级，照样能得胜。\n\n实在转不过来，就把自己拆成两半，或者把亏转给别人\n赌摊上赢来的一堆洋钱丢了，说被儿子拿去、说自己是虫豸都不能让他好过，他抬手在自己脸上打了两个嘴巴，分成「打人的自己」和「被打的别一个」，于是心平气和地躺下。挨了假洋鬼子的哭丧棒，他靠「忘却」这件祖传宝贝，走到酒店门口就高兴起来；迎面遇见小尼姑，便把一天的晦气都算在伊头上，拧了面颊就觉得报了仇，飘飘然似乎要飞。前一招把施受双方拆成两个人，后一招把账转给更弱的人。\n\n挨了赵太爷的嘴巴之后，大家反而仿佛格外尊敬他。阿Q以为这是因为自己做了赵太爷的父亲，叙述者却明说「其实也不然」：真正的原因是他挨的是「不会错」的赵太爷的打，被打也托庇有了名。阿Q的自解与旁白的判定正好相反，这里旁白的说法更硬。\n\n## 其他书的补充\n\n这几本书都没有把「精神胜利法」当成一个术语来拆解，也没有列出它的条目；真正拿它当形容词用的是《台湾《传记文学》珍藏系列（全15册）》，另外两本只是各自碰到其中一个环节。能补充的，是这种办法在其他地方被描述成的几种形态：改写评价、把忍受说成宽厚、用制度化的补偿兜住后果。\n\n它先把“输”改写成“本来如此”\n处境没有变化，先换掉的是对处境的评价：考不取功名，就说“行行出状元”；被强令剃发，就说“男降女不降”。之所以要换，是因为外部条件已经改不动，能改的只剩解释权。后果是解释一旦成立，反抗的必要性就消失了——一条独木桥被说成条条大路，忍下来的那部分也就不再被记作损失。这种改写最省力，不需要对手配合，也不需要任何外部条件变化，只在自己心里完成一次结算。\n\n再把“忍”说成“宽厚”\n第二种做法是把被动承受重新命名为主动的德性：挨了辱不以为忤，围观者“每每且为之欢笑助兴”，事后被解释成文明的宽容；另一种说法则把忍受说成天命，“你必须老老实实忍受屈辱，无权反抗”。两者的效果相同：一旦“忍”被认领为美德，屈辱就不再需要补偿，也不再被算作损失。这一步比前一步更进一步，因为它不只是自我安慰，还替施压的一方省掉了道歉和赔偿。\n\n还要一套制度化的补偿来兜住\n只靠一次自我解释撑不了多久，于是补偿被做成惯例、名目和仪式——被损害者要被配上“复身”“娶妻”“纳妾”之类的安排，“加以慰藉”。单个说法会失效，成套的说法却可以反复使用、代代沿用。与之同构的是商业上的说法：失败者“运用被普遍认可的观念来描述自己的璀璨未来”，说的不是自己的判断，而是大家都认的那套话。补偿越成套，越不需要去动造成损害的那个结构。\n\n分歧在最后一步：这种改写算保护，还是算损耗。一方把它归为天性，甚至是缓冲——自尊和荣誉会拦着人退让，肯为微不足道的理由一争到底，“这个扭曲的逻辑是人的天性”。另一方算的是代价：同一套逻辑用在商业上“却很致命”；而在个人身上，屈辱并不会因为被改写就消失，它“所造成的最大遗患就是怨恨的蔓延”，蓄积到看异己全是敌人。《台湾《传记文学》珍藏系列（全15册）》的口气是轻松的，“我们也就阿Q一下”，而《《创业维艰》+《从0到1》+《支付战争》》与《病隙碎笔》都把它记成要付账的东西。差别只在一处：改写之后，还回不回头承认损失。\n\n《病隙碎笔》只走到“忍辱—怨恨”这一环，没有讲把失败判成胜利的那一步评价改写；《《创业维艰》+《从0到1》+《支付战争》》的例子都在企业竞争里，没有落到个人日常受辱的场景；《台湾《传记文学》珍藏系列（全15册）》通篇只是把这个词当形容词用，没有展开成几种具体表现。",
+  "lead": "阿Q的「精神胜利法」并非只是一时的自我安慰，而是一套可以照着做的换算：把穷说成从前阔，把挨打说成儿子打老子，把失败说成「第一个」，实在转不过来就自己打自己，或者当场忘掉。",
+  "sections": [
+   {
+    "heading": "用「先前」和「儿子」把眼前的低处垫高",
+    "body": "跟人口角时，他瞪着眼说「我们先前——比你阔的多啦」，靠的是一段谁也无从查考的过去。面对赵太爷、钱太爷这类人物，他心里想的是「我的儿子会阔得多啦」，把翻身的日期推到下一代。进了几回城，他又拿条凳、葱丝这类琐事鄙薄城里人，转头又笑未庄人没见过煎鱼，两边都占着高明。这些说法不必有证据，只要换一个时间或换一个比较对象，处境就翻了个面。"
+   },
+   {
+    "heading": "挨打之后先改写打人者的身份",
+    "body": "被闲人揪住黄辫子碰了响头，他站一刻便想「我总算被儿子打了」，于是心满意足地得胜走了。闲人识破这套，先逼他自认「人打畜生」，他就退到「我是虫豸」，再从虫豸里翻出「第一个能够自轻自贱的人」，因为状元也是「第一个」。输的事实一点没变，变的只是名目，名目一换，胜负就调了个头；即使这套话被人预先说破，他也只需再降一级，照样能得胜。"
+   },
+   {
+    "heading": "实在转不过来，就把自己拆成两半，或者把亏转给别人",
+    "body": "赌摊上赢来的一堆洋钱丢了，说被儿子拿去、说自己是虫豸都不能让他好过，他抬手在自己脸上打了两个嘴巴，分成「打人的自己」和「被打的别一个」，于是心平气和地躺下。挨了假洋鬼子的哭丧棒，他靠「忘却」这件祖传宝贝，走到酒店门口就高兴起来；迎面遇见小尼姑，便把一天的晦气都算在伊头上，拧了面颊就觉得报了仇，飘飘然似乎要飞。前一招把施受双方拆成两个人，后一招把账转给更弱的人。"
+ …</pre></details></div></article></div></section><section class="books"><div class="books-head"><span class="t">回答用书 · 4 本</span><span class="h">已选 4/4 本</span><button class="books-all" type="button" data-books-all="1">清空</button></div><div class="books-picks"><button class="book-pick is-on is-locked" type="button" data-book-pick="B0001" data-from="1" title="《阿Q正传》· 第一章序"><span class="bp-title">《阿Q正传》</span><span class="bp-tag">指定</span></button><button class="book-pick is-on" type="button" data-book-pick="B1825" data-from="1" title="《台湾《传记文学》珍藏系列（全15册）》· 我与鲁迅许广平夫妇"><span class="bp-title">《台湾《传记文学》珍藏系列（全15册）》</span></button><button class="book-pick is-on" type="button" data-book-pick="B1523" data-from="1" title="《病隙碎笔》· 病隙碎笔 6"><span class="bp-title">《病隙碎笔》</span></button><button class="book-pick is-on" type="button" data-book-pick="B0004" data-from="1" title="《《创业维艰》+《从0到1》+《支付战争》》· 从0到1"><span class="bp-title">《《创业维艰》+《从0到1》+《支付战…》</span></button></div><div class="books-note">前半部分只用《阿Q正传》回答，其余书放到后半部分补充。 选中 2 本以上时，回答跨书，上下文预算 10,000 字。</div></section><div class="scope-row"><span class="lbl">范围</span><span class="quote">没有选依据 · 这一问不带落点框</span></div><article class="answer"><section class="answer-part"><h3>阿Q正传</h3><p class="answer-lead">阿Q的「精神胜利法」并非只是一时的自我安慰，而是一套可以照着做的换算：把穷说成从前阔，把挨打说成儿子打老子，把失败说成「第一个」，实在转不过来就自己打自己，或者当场忘掉。</p><section><h3>用「先前」和「儿子」把眼前的低处垫高</h3><p>跟人口角时，他瞪着眼说「我们先前——比你阔的多啦」，靠的是一段谁也无从查考的过去。面对赵太爷、钱太爷这类人物，他心里想的是「我的儿子会阔得多啦」，把翻身的日期推到下一代。进了几回城，他又拿条凳、葱丝这类琐事鄙薄城里人，转头又笑未庄人没见过煎鱼，两边都占着高明。这些说法不必有证据，只要换一个时间或换一个比较对象，处境就翻了个面。</p></section><section><h3>挨打之后先改写打人者的身份</h3><p>被闲人揪住黄辫子碰了响头，他站一刻便想「我总算被儿子打了」，于是心满意足地得胜走了。闲人识破这套，先逼他自认「人打畜生」，他就退到「我是虫豸」，再从虫豸里翻出「第一个能够自轻自贱的人」，因为状元也是「第一个」。输的事实一点没变，变的只是名目，名目一换，胜负就调了个头；即使这套话被人预先说破，他也只需再降一级，照样能得胜。</p></section><section><h3>实在转不过来，就把自己拆成两半，或者把亏转给别人</h3><p>赌摊上赢来的一堆洋钱丢了，说被儿子拿去、说自己是虫豸都不能让他好过，他抬手在自己脸上打了两个嘴巴，分成「打人的自己」和「被打的别一个」，于是心平气和地躺下。挨了假洋鬼子的哭丧棒，他靠「忘却」这件祖传宝贝，走到酒店门口就高兴起来；迎面遇见小尼姑，便把一天的晦气都算在伊头上，拧了面颊就觉得报了仇，飘飘然似乎要飞。前一招把施受双方拆成两个人，后一招把账转给更弱的人。</p></section><p class="answer-small">分歧 · 挨了赵太爷的嘴巴之后，大家反而仿佛格外尊敬他。阿Q以为这是因为自己做了赵太爷的父亲，叙述者却明说「其实也不然」：真正的原因是他挨的是「不会错」的赵太爷的打，被打也托庇有了名。阿Q的自解与旁白的判定正好相反，这里旁白的说法更硬。</p></section><section class="answer-part is-supplement"><h3>其他书的补充</h3><p class="answer-lead">这几本书都没有把「精神胜利法」当成一个术语来拆解，也没有列出它的条目；真正拿它当形容词用的是《台湾《传记文学》珍藏系列（全15册）》，另外两本只是各自碰到其中一个环节。能补充的，是这种办法在其他地方被描述成的几种形态：改写评价、把忍受说成宽厚、用制度化的补偿兜住后果。</p><section><h3>它先把“输”改写成“本来如此”</h3><p>处境没有变化，先换掉的是对处境的评价：考不取功名，就说“行行出状元”；被强令剃发，就说“男降女不降”。之所以要换，是因为外部条件已经改不动，能改的只剩解释权。后果是解释一旦成立，反抗的必要性就消失了——一条独木桥被说成条条大路，忍下来的那部分也就不再被记作损失。这种改写最省力，不需要对手配合，也不需要任何外部条件变化，只在自己心里完成一次结算。</p></section><section><h3>再把“忍”说成“宽厚”</h3><p>第二种做法是把被动承受重新命名为主动的德性：挨了辱不以为忤，围观者“每每且为之欢笑助兴”，事后被解释成文明的宽容；另一种说法则把忍受说成天命，“你必须老老实实忍受屈辱，无权反抗”。两者的效果相同：一旦“忍”被认领为美德，屈辱就不再需要补偿，也不再被算作损失。这一步比前一步更进一步，因为它不只是自我安慰，还替施压的一方省掉了道歉和赔偿。</p></section><section><h3>还要一套制度化的补偿来兜住</h3><p>只靠一次自我解释撑不了多久，于是补偿被做成惯例、名目和仪式——被损害者要被配上“复身”“娶妻”“纳妾”之类的安排，“加以慰藉”。单个说法会失效，成套的说法却可以反复使用、代代沿用。与之同构的是商业上的说法：失败者“运用被普遍认可的观念来描述自己的璀璨未来”，说的不是自己的判断，而是大家都认的那套话。补偿越成套，越不需要去动造成损害的那个结构。</p></section><p class="answer-small">分歧 · 分歧在最后一步：这种改写算保护，还是算损耗。一方把它归为天性，甚至是缓冲——自尊和荣誉会拦着人退让，肯为微不足道的理由一争到底，“这个扭曲的逻辑是人的天性”。另一方算的是代价：同一套逻辑用在商业上“却很致命”；而在个人身上，屈辱并不会因为被改写就消失，它“所造成的最大遗患就是怨恨的蔓延”，蓄积到看异己全是敌人。《台湾《传记文学》珍藏系列（全15册）》的口气是轻松的，“我们也就阿Q一下”，而《《创业维艰》+《从0到1》+《支付战争》》与《病隙碎笔》都把它记成要付账的东西。差别只在一处：改写之后，还回不回头承认损失。</p><p class="answer-small">没讲到的 · 《病隙碎笔》只走到“忍辱—怨恨”这一环，没有讲把失败判成胜利的那一步评价改写；《《创业维艰》+《从0到1》+《支付战争》》的例子都在企业竞争里，没有落到个人日常受辱的场景；《台湾《传记文学》珍藏系列（全15册）》通篇只是把这个词当形容词用，没有展开成几种具体表现。</p></section></article><p class="answer-meta">2 部分 · 主书《阿Q正传》 · 引 3 本书 · 置信 高 · 8 条引文已回查 · 回答 73.8s · opencode-go/deepseek-v4.1-flash · 思考 高</p><div class="turn-actions"><button class="btn turn-reanswer" type="button" data-reanswer-turn="1" title="清掉当前回答，重新检索并回答">重新回答</button></div><section class="evidences"><div class="ev-head"><span class="t">本轮依据 · 8 段</span><span class="h">点一段，右边的原文换过来，也设为下一问的落点</span></div><button class="ev" type="button" data-cite="1" data-from="1"><span class="cite">[1]</span><span><span class="ev-src">《阿Q正传》· 第二章 优胜记略</span><span class="ev-quote">他觉得他是第一个能够自轻自贱的人，除了“自轻自贱”不算外，余下的就是“第一个”。状元 不也是“第一个”么？</span></span><span class="ev-go">原文</span></button><button class="ev" type="button" data-cite="2" data-from="1"><span class="cite">[2]</span><span><span class="ev-src">《阿Q正传》· 第二章 优胜记略</span><span class="ev-quote">所以凡是和阿Q玩笑的人们，几乎全知道他有这一种精神上的胜利法</span></span><span class="ev-go">原文</span></button><button class="ev" type="button" data-cite="3" data-from="1"><span class="cite">[3]</span><span><span class="ev-src">《阿Q正传》· 第二章 优胜记略</span><span class="ev-quote">他擎起右手，用力的在自己脸上连打了两个嘴巴，热剌剌的有些痛；打完之后，便心平气和起来，似乎打的是自己，被打的是别一个自己</span></span><span class="ev-go">原文</span></button><button class="ev" type="button" data-cite="4" data-from="1"><span class="cite">[4]</span><span><span class="ev-src">《阿Q正传》· 第三章续优胜记略</span><span class="ev-quote">而且“忘却”这一件祖传的宝贝也发生了效力，他慢慢的走，将到酒店门口，早已有些高兴了。</span></span><span class="ev-go">原文</span></button><button class="ev" type="button" data-cite="5" data-from="1"><span class="cite">[5]</span><span><span class="ev-src">《阿Q正传》· 第三章续优胜记略</span><span class="ev-quote">这在阿Q，或者以为因为他是赵太爷的父亲，而其实也不然。</span></span><span class="ev-go">原文</span></button><button class="ev" type="button" data-cite="6" data-from="1"><span class="cite">[6]</span><span><span class="ev-src">《阿Q正传》· 第二章 优胜记略</span><span class="ev-quote">独有和别人口角的时候，间或瞪着眼楮道：“我们先前——比你阔的多啦！你算是什么东西！”</span></span><span class="ev-go">原文</span></button><button class="ev" type="button" data-cite="7" data-from="1"><span class="cite">[7]</span><span><span class="ev-src">《台湾《传记文学》珍藏系列（全15册）》· 一、从中原世族到朝鲜监国</span><span class="ev-quote">俗语说“行行出状元”，那是“旧中原”里的土阿Q的自宽之言也。</span></span><span class="ev-go">原文</span></button><button class="ev" type="button" data-cite="8" data-from="1"><span class="cite">[8]</span><span><span class="ev-src">《病隙碎笔》· 病隙碎笔 6</span><span class="ev-quote">你必须老老实实忍受屈辱，无权反抗，连以死抗争的权利都没有。</span></span><span class="ev-go">原文</span></button></section></section>
+
+  <div class="ask">
+    <div class="ask-hint" id="hint"><span class="off">不选依据就是整轮追问 · ⏎ 发送</span></div>
+    <div class="ask-row">
+      <div class="ask-field" id="ask-field">
+        <input class="field" id="q" type="text" maxlength="300" autocomplete="off" aria-label="接着问" placeholder="接着问，不选依据也能问">
+        <span class="caret" aria-hidden="true"></span>
+      </div>
+      <button class="btn btn-primary ask-send" type="button" id="send">追问</button>
+    </div>
+  </div>
+
+  <aside class="drawer" id="drawer">
+    <button class="drawer-toggle" type="button" id="drawer-toggle">
+      <span class="when-closed">原文</span><span class="when-open">收起</span>
+    </button>
+    <section class="panel is-shown" id="panel"><div class="drawer-head"><div class="dh-top"><span class="cite">[1]</span><span class="book">《阿Q正传》</span></div><p class="dh-sub">第二章 优胜记略</p></div><div class="drawer-body"><p class="src-label">原文</p><p class="ctx">闲人还不完，只撩他，于是终而至于打。阿Q在形式上打败了，被人揪住黄辫子，在壁上踫了四五个响头，闲人这才心满意足的得胜的走了，阿Q站了一刻，心里想，“我总算被儿子打了，现在的世界真不像样……”于是也心满意足的得胜的走了。</p><p class="ctx">阿Q想在心里的，后来每每说出口来，所以凡是和阿Q玩笑的人们，几乎全知道他有这一种精神上的胜利法，此后每逢揪住他黄辫子的时候，人就先一着对他说：“阿Q，这不是儿子打老子，是人打畜生。自己说：人打畜生！”</p><p class="ctx">阿Q两只手都捏住了自己的辫根，歪着头，说道：“打虫豸，好不好？我是虫豸——还不放么？”</p><p class="current" data-cite="1" data-from="1">但虽然是虫豸，闲人也并不放，仍旧在就近什么地方给他踫了五六个响头，这才心满意足的得胜的走了，他以为阿Q这回可遭了瘟。然而不到十秒钟，阿Q也心满意足的得胜的走了，<mark>他觉得他是第一个能够自轻自贱的人，除了“自轻自贱”不算外，余下的就是“第一个”。状元 不也是“第一个”么？</mark>“你算是什么东西”呢！？</p><p class="ctx">阿Q以如是等等妙法克服怨敌之后，便愉快的跑到酒店里喝几碗酒，又和别人调笑一通，口角一通，又得了胜，愉快的回到土谷祠，放倒头睡着了。假使有钱，他便去押牌宝 ，一推人蹲在地面上，阿Q即汗流满面的夹在这中间，声音他最响：“青龙四百！”</p><p class="ctx">“咳……开……啦！”桩家揭开盒子盖，也是汗流满面的唱。“天门啦……角回啦……！人和穿堂空在那里啦……！阿Q的铜钱拿过来……！”</p><p class="ctx">“穿堂一百——一百五十！”</p><p class="ctx">阿Q的钱便在这样的歌吟之下，渐渐的输入别个汗流满面的人物的腰间。他终于只好挤出堆外，站在后面看，替别人着急，一直到散场，然后恋恋的回到土谷祠，第二天，肿着眼楮去工作。</p><p class="ctx">但真所谓“塞翁失马安知非福”罢，阿Q不幸而赢了一回，他倒几乎失败了。</p><p class="ctx">这是未庄赛神的晚上。这晚上照例有一台戏，戏台左近，也照例有许多的赌摊。做戏的锣鼓，在阿Q耳朵里仿佛在十里之外；他只听得桩家的歌唱了。他赢而又赢，铜钱变成角洋，角洋变成大洋，大洋又成了叠。他兴高采烈得非常：“天门两块！”</p><p class="ctx">他不知道谁和谁为什么打起架来了。骂声打声脚步声，昏头昏脑的一大阵，他才爬起来，赌摊不见了，人们也不见了，身上有几处很似乎有些痛，似乎也挨了几拳几脚似的，几个人诧异的对他看。他如有所失的走进土谷祠，定一定神，知道他的一堆洋钱不见了。赶赛会的赌摊多不是本村人，还到那里去寻根柢呢？</p><p class="ctx">很白很亮的一堆洋钱！而且是他的——现在不见了！说是算被儿子拿去了罢，总还是忽忽不乐；说自己是虫豸罢，也还是忽忽不乐：他这回才有些感到失败的苦痛了。</p><p class="ctx">但他立刻转败为胜了。他擎起右手，用力的在自己脸上连打了两个嘴巴，热剌剌的有些痛；打完之后，便心平气和起来，似乎打的是自己，被打的是别一个自己，不久也就仿佛是自己打了别个一般，——虽然还有些热剌剌，——心满意足的得胜的躺下了。</p><p class="ctx">他睡着了。</p><div class="hop"><button type="button" data-step="-1" disabled="">‹ 上一条依据</button><button type="button" data-step="1">下一条依据 ›</button></div></div><div class="drawer-foot"><span class="path">books/B0001/md/02_第二章优胜记略.md</span><button class="btn" type="button" data-copy="books/B0001/md/02_第二章优胜记略.md">复制路径</button></div></section>
+  </aside>
+</main>
+
+<div class="hist-menu" id="hist-menu" role="menu" aria-label="会话操作" hidden=""></div>
+<div class="toast" id="toast" hidden=""></div>
+
+
+
+<script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

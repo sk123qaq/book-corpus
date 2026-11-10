@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>四读 · 阿Q正传</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/pages.css">
+<link rel="stylesheet" href="assets/theme.css">
+<style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head>
+<body>
+<header class="topbar">
+  <a class="brand" href="shelf.html"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <label class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
+    <span class="kbd">/</span>
+  </label>
+  <nav class="nav">
+    <a href="shelf.html">书架</a>
+    <a href="catalog.html">书目</a>
+    <a href="#" data-dead="「/records」">记录</a>
+  </nav>
+  <button class="icon-btn theme-btn" data-theme-toggle="" aria-label="切换冷纸版" title="当前暖纸版，点击切换冷纸" aria-pressed="false">
+    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
+  </button>
+  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读" aria-pressed="false">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"></path></svg>
+  </button>
+</header>
+
+<main class="page">
+  <div class="crumb" id="crumb"><a href="shelf.html">书架</a><i>/</i><a href="catalog.html">文学</a><i>/</i><span>阿Q正传</span></div>
+  <div id="book-root"><section class="book-hero"><div class="cover" style="background:#A87A3E"><span class="cv-kicker">四读 · B0001</span><span class="cv-title">阿Q正传</span><span class="cv-author">鲁迅</span><span class="cv-stamp">可读</span></div><div class="book-copy"><div class="eyebrow">文学 · 严肃文学小说</div><h1>阿Q正传</h1><p class="sub">鲁迅 · 9 章 · 四档读本工作台</p><div class="book-meta"><span><b>9</b>章</span><span><b>2.1</b>万字</span><span><b>8</b>章有读本</span><span><b>B0001</b>书目号</span></div><div class="book-subjects"><span>文学</span><span>严肃文学小说</span><span>鲁迅</span></div><div class="book-actions"><a class="btn btn-primary" href="reader-B0001-01.html">开始读 标准本 →</a><a class="btn btn-ghost" href="chapter-B0001-01.html">打开本章工单</a></div></div></section><div class="work book-work"><section><div class="section-title"><h2>章目</h2><span class="lbl">9 章 · 点行选章</span></div><div class="ch-list" id="ch-list"><div class="ch-row" data-n="01" aria-current="true"><span class="ch-n">01</span><a class="ch-title" href="chapter-B0001-01.html">第一章 序<small>01_第一章序.md · 1,719 字</small></a><span class="ch-chars">1,719 字</span><span class="ch-min">3 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-01.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="02" aria-current="false"><span class="ch-n">02</span><a class="ch-title" href="chapter-B0001-02.html">第二章 优胜记略<small>02_第二章优胜记略.md · 2,165 字</small></a><span class="ch-chars">2,165 字</span><span class="ch-min">4 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-02.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="03" aria-current="false"><span class="ch-n">03</span><a class="ch-title" href="chapter-B0001-03.html">第三章 续优胜记略<small>03_第三章续优胜记略.md · 2,154 字</small></a><span class="ch-chars">2,154 字</span><span class="ch-min">4 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-03.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="04" aria-current="false"><span class="ch-n">04</span><a class="ch-title" href="chapter-B0001-04.html">第四章 恋爱的悲剧<small>04_第四章恋爱的悲剧.md · 2,603 字</small></a><span class="ch-chars">2,603 字</span><span class="ch-min">5 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-04.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="05" aria-current="false"><span class="ch-n">05</span><a class="ch-title" href="chapter-B0001-05.html">第五章 生计问题<small>05_第五章生计问题.md · 2,217 字</small></a><span class="ch-chars">2,217 字</span><span class="ch-min">4 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-05.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="06" aria-current="false"><span class="ch-n">06</span><a class="ch-title" href="chapter-B0001-06.html">第六章 从中兴到末路<small>06_第六章从中兴到末路.md · 2,665 字</small></a><span class="ch-chars">2,665 字</span><span class="ch-min">5 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="" data-tier="skim"></i><i class="" data-tier="standard"></i><i class="" data-tier="deep"></i><i class="" data-tier="research"></i></span></span><span class="ch-state">未出片</span><a class="ch-go" href="chapter-B0001-06.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="07" aria-current="false"><span class="ch-n">07</span><a class="ch-title" href="chapter-B0001-07.html">第七章 革命<small>07_第七章革命.md · 2,402 字</small></a><span class="ch-chars">2,402 字</span><span class="ch-min">5 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-07.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="08" aria-current="false"><span class="ch-n">08</span><a class="ch-title" href="chapter-B0001-08.html">第八章 不准革命<small>08_第八章不准革命.md · 2,513 字</small></a><span class="ch-chars">2,513 字</span><span class="ch-min">5 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-08.html" aria-label="打开工单">→</a></div><div class="ch-row" data-n="09" aria-current="false"><span class="ch-n">09</span><a class="ch-title" href="chapter-B0001-09.html">第九章 大团圆<small>09_第九章大团圆.md · 2,854 字</small></a><span class="ch-chars">2,854 字</span><span class="ch-min">6 分钟</span><span class="ch-tier"><span class="tier-sq" title="四档出片状态"><i class="on" data-tier="skim"></i><i class="on" data-tier="standard"></i><i class="on" data-tier="deep"></i><i class="on" data-tier="research"></i></span></span><span class="ch-state has">有读本</span><a class="ch-go" href="chapter-B0001-09.html" aria-label="打开工单">→</a></div></div></section><aside class="ticket" id="ticket"><div class="ticket-top"><span class="eyebrow">读本工单</span><span class="ticket-id">#B0001-01</span></div><h3>第一章 序</h3><p class="ticket-meta">1,719 字 · 原文约 3 分钟 · 01_第一章序.md</p><div class="tier-list" id="tier-list"><label class="tier-opt"><input type="checkbox" value="skim"><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-skim)"></span><span class="tier-copy"><b>速览<em>已出片</em></b><small>C 40–55% · E ≤10% · 600 字/分</small></span><span class="tier-time">≈1 分钟<small>可重生成</small></span></label><label class="tier-opt checked"><input type="checkbox" value="standard" checked=""><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-standard)"></span><span class="tier-copy"><b>标准<em>已出片</em></b><small>C 60–75% · E ≤25% · 500 字/分</small></span><span class="tier-time">≈2 分钟<small>可重生成</small></span></label><label class="tier-opt"><input type="checkbox" value="deep"><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-deep)"></span><span class="tier-copy"><b>深读<em>已出片</em></b><small>C 80–90% · E ≤40% · 350 字/分</small></span><span class="tier-time">≈4 分钟<small>可重生成</small></span></label><label class="tier-opt"><input type="checkbox" value="research"><span class="box"></span><span class="tier-dot" style="--tc:var(--tier-research)"></span><span class="tier-copy"><b>研究<em>已出片</em></b><small>C 90–100% · E ≤50% · 300 字/分</small></span><span class="tier-time">≈6 分钟<small>可重生成</small></span></label></div><div class="model-row"><label class="model-field"><span>模型</span><input id="model-input" list="model-options" value="deepseek-v4.1-flash" spellcheck="false" autocomplete="off"></label><label class="model-field effort"><span>推理</span><select id="effort-select"><option value="high" selected="">high</option><option value="medium">medium</option><option value="low">low</option></select></label><datalist id="model-options"><option value="deepseek-v4.1-flash"></option><option value="glm-5.3-flash"></option></datalist></div><p class="model-note">默认 deepseek-v4.1-flash · high；可改，按本次工单生效。</p><div class="ticket-est"><span id="ticket-est">将重新生成：标准；保留：速览、深读、研究 · 1,719 字</span><span>本地队列 · 最多 4 个并行</span></div><button class="btn btn-primary" id="generate">更新 1 档读本 →</button><a class="btn btn-ghost" href="reader-B0001-01.html">打开标准本</a><div class="existing" id="existing"><div class="lbl">本章已有</div><div class="pack-row"><span>速览本</span><a href="reader-B0001-01.html">打开 →</a></div><div class="pack-row"><span>标准本</span><a href="reader-B0001-01.html">打开 →</a></div><div class="pack-row"><span>深读本</span><a href="reader-B0001-01.html">打开 →</a></div><div class="pack-row"><span>研究本</span><a href="reader-B0001-01.html">打开 →</a></div></div><div id="job-mount"></div><p class="fine">原文逐字保留；讲解层带「补」标记，可一键隐藏。模型默认开启，失败时不发布半成品。</p></aside></div></div>
+</main>
+
+
+
+
+
+
+
+<script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>

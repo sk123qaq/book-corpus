@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>四读 · 书目与搜索</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/pages.css">
+<link rel="stylesheet" href="assets/theme.css">
+<style>
+#dead-toast{position:fixed;left:50%;bottom:48px;transform:translate(-50%,12px);z-index:99;
+  padding:10px 18px;border-radius:2px;background:#211e1a;color:#f3f0e7;font-size:13px;
+  letter-spacing:.04em;opacity:0;transition:opacity .22s ease,transform .22s ease;pointer-events:none}
+#dead-toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head>
+<body>
+<header class="topbar">
+  <a class="brand" href="shelf.html"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <label class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
+    <span class="kbd">/</span>
+  </label>
+  <nav class="nav">
+    <a href="shelf.html">书架</a>
+    <a href="catalog.html" aria-current="page">书目</a>
+    <a href="#" data-dead="「/records」">记录</a>
+  </nav>
+  <button class="icon-btn theme-btn" data-theme-toggle="" aria-label="切换冷纸版" title="当前暖纸版，点击切换冷纸" aria-pressed="false">
+    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
+  </button>
+  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读" aria-pressed="false">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"></path></svg>
+  </button>
+</header>
+
+<main class="page">
+  <section class="page-head">
+    <div class="eyebrow" id="eyebrow">书目 · 15 本 · 其中 15 本有正文</div>
+    <h1>找一本书</h1>
+    <p class="lede">书名、作者、分类、章名都能搜。有正文的书可以翻开、选章、生成读本；只有书目信息的书先留在索引里。</p>
+    <div class="stats" id="stats"><span><b>15</b> 本可读</span><span><b>1,973</b> 章原文</span><span><b>15</b> 条书目</span></div>
+  </section>
+
+  <div class="search-big">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+    <input id="q" type="search" placeholder="搜《阿Q正传》、鲁迅、文学、第二章…" autocomplete="off" aria-label="搜索书目与章名">
+    <span class="hint">按 / 聚焦 · Esc 清空</span>
+  </div>
+
+  <div class="chips" id="chips" role="group" aria-label="筛选"><button data-filter="all" aria-pressed="true">全部</button><button data-filter="readable" aria-pressed="false">有正文</button><button data-filter="generated" aria-pressed="false">已出片</button></div>
+  <div id="results"><section class="group"><div class="group-head"><h2>书<small>有正文，可进选章与生成</small></h2><span class="more">15 条</span></div><a class="res-row" href="book-B0001.html"><i class="res-dot" style="--cloth:#A87A3E"></i><span class="res-t">阿Q正传<small>鲁迅 · 文学 · 严肃文学小说 · 9 章 · 2.1 万字</small></span><span class="res-m">8 章已出片</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0002」"><i class="res-dot" style="--cloth:#4A5839"></i><span class="res-t">1984<small>作者待校 · 文学 · 严肃文学小说 · 24 章 · 16.5 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0003」"><i class="res-dot" style="--cloth:#3F4E5A"></i><span class="res-t">“错误”的行为 行为经济学的形成<small>[美] 理查德・塞勒 (Richard H. Thaler) 著 王晋 译 · 人文社科 · 社会与经济 · 43 章 · 24.1 万字</small></span><span class="res-m">5 章已出片</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0004」"><i class="res-dot" style="--cloth:#5A3E2B"></i><span class="res-t">《创业维艰》+《从0到1》+《支付战争》<small>作者待校 · 商业与管理 · 创新与创业 · 13 章 · 98.1 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0005」"><i class="res-dot" style="--cloth:#2F4F4F"></i><span class="res-t">安史之乱 历史、宣传与神话<small>作者待校 · 人文社科 · 历史 · 36 章 · 39.2 万字</small></span><span class="res-m">3 章已出片</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0020」"><i class="res-dot" style="--cloth:#4A5839"></i><span class="res-t">万物静默如谜：辛波斯卡诗选<small>维斯拉瓦·辛波斯卡 · 文学 · 诗歌 · 90 章 · 3.8 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0627」"><i class="res-dot" style="--cloth:#2C4056"></i><span class="res-t">Worlds of Amano<small>Yoshitaka Amano · 艺术与图像 · 绘画与概念设计 · 161 章 · 6,419 字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0646」"><i class="res-dot" style="--cloth:#6B2B2B"></i><span class="res-t">穆夏画集：少女的诗篇<small>[捷克] 阿尔丰斯·穆夏 · 艺术与图像 · 绘画与概念设计 · 9 章 · 1.4 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B0667」"><i class="res-dot" style="--cloth:#3F4E5A"></i><span class="res-t">三维游戏引擎设计与实现<small>耿卫东 · 游戏 · 开发与工程 · 114 章 · 13.7 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B1523」"><i class="res-dot" style="--cloth:#3F4E5A"></i><span class="res-t">病隙碎笔<small>史铁生 · 文学 · 散文随笔 · 9 章 · 9.8 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B1782」"><i class="res-dot" style="--cloth:#4A5839"></i><span class="res-t">Python数据分析与数据化运营<small>宋天龙 · 科学技术 · 计算机与技术 · 360 章 · 52.5 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B1825」"><i class="res-dot" style="--cloth:#6B2B2B"></i><span class="res-t">台湾《传记文学》珍藏系列（全15册）<small>王映霞 等 · 人文社科 · 历史 · 739 章 · 320 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B1865」"><i class="res-dot" style="--cloth:#5A3E2B"></i><span class="res-t">我看见的世界<small>[美] 李飞飞 · 人文社科 · 历史 · 33 章 · 22.2 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B1877」"><i class="res-dot" style="--cloth:#2C4056"></i><span class="res-t">数据分析实战<small>【美】托马兹·卓巴斯（Tomasz Drabas） · 科学技术 · 计算机与技术 · 98 章 · 14 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a><a class="res-row" href="#" data-dead="「/book/B1896」"><i class="res-dot" style="--cloth:#6B2B2B"></i><span class="res-t">深入浅出数据分析<small>迈克尔·米尔顿(Michael Milton) · 科学技术 · 计算机与技术 · 235 章 · 10.9 万字</small></span><span class="res-m">未生成</span><span class="res-go">→</span></a></section></div>
+  <p class="note-line" id="note">15 本有正文；书目层共 15 条，导入正文后才会出现在书架上。</p>
+</main>
+
+
+
+
+
+
+
+<script>
+(function(){
+  var box = document.createElement('div');
+  box.id = 'dead-toast';
+  document.body.appendChild(box);
+  var timer = 0;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-dead]');
+    if (!a) return;
+    e.preventDefault();
+    box.textContent = '静态样例 · ' + (a.getAttribute('data-dead') || '这一页') + '没有导出';
+    box.classList.add('on');
+    clearTimeout(timer);
+    timer = setTimeout(function(){ box.classList.remove('on'); }, 2200);
+  }, true);
+})();
+</script></body></html>
