@@ -344,7 +344,8 @@ def fixture_checks(root):
         check("PASS 行进了 ok 列表", len(data["ok"]) >= 5, len(data["ok"]))
 
     human_new = run([AUDIT, "--root", root], root)
-    sections = ("== 人账 / 库 ==", "== md ==", "== 检索层 ==", "== 视图 / 对照表 ==", "== 文档 ==")
+    # 对照表 2026-11-04 退场（5319317），视图那节随之改名，不再带「对照表」。
+    sections = ("== 人账 / 库 ==", "== md ==", "== 检索层 ==", "== 视图 ==", "== 文档 ==")
     missing = [s for s in sections if s not in human_new.stdout]
     check("人读输出五节齐全", not missing, missing)
 
