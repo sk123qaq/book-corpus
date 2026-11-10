@@ -2,9 +2,10 @@
 \* A small model of one chapter's pack on disk, and of the three readers that
 \* answer questions about it:
 \*
-\*   service.py:649  ReadingService._chapter_path   -> the badge path
+\*   service.py:708  ReadingService._chapter_path   -> the badge path
+\*                   (delegates to store.py:244 chapter_route)
 \*   server.py:458   ReadingServer._serve_depth     -> 200 or 404
-\*   audit.py:202    _audit_chapter                 -> the audit report path
+\*   audit.py:201    _audit_chapter                 -> the audit report path
 \*
 \* Each action below is one call that a reviewer can find in the code:
 \*
@@ -76,10 +77,6 @@ Next ==
 
 Spec == Init /\ [][Next]_vars
 
-\* service.py:653-656: any of the three depth files counts as an artifact,
-\* no matter what state.json says.
-HasArtifact == html \/ model \/ ledger
-
 \* store.py:215-236, with depth_state(uid, n, source_sha) called:
 \*   stale wins over everything; "ready" without chapter.html is reported as
 \*   "model"; anything else is "stale".
@@ -90,21 +87,24 @@ DepthState ==
     ELSE IF html THEN "ready"
     ELSE "model"
 
-\* service.py:649-661. The first branch is the has_artifact test, including
-\* the normalized "ready without html -> model" case.
+\* store.py:244-262 chapter_route: one rule behind all three readers.
+\* "ready" is the only state that promises a page (depth_state already folds
+\* "ready without html" into "model"); a manifest is the fallback; the rest
+\* is absent, with the reason carried separately.
 ServicePath ==
-    IF HasArtifact \/ DepthState \in {"ready", "model"} THEN "depth"
+    IF DepthState = "ready" THEN "depth"
     ELSE IF legacy THEN "legacy"
     ELSE "none"
 
-\* server.py:458-472: only ready + chapter.html is served.
+\* server.py:458-478: serves the page only when the route is depth and the
+\* file is there.
 Readable == DepthState = "ready" /\ html
 
-\* audit.py:202-224: a page counts only when the normalized state is ready or
-\* model AND chapter.html exists; otherwise the manifest decides legacy, and
-\* the rest is missing.
+\* audit.py:201-228: the same chapter_route call, with "none" reported as
+\* "missing". The rule is spelled out a second time so this spec can catch
+\* the two call sites drifting apart; the code itself shares one function.
 AuditPath ==
-    IF DepthState \in {"ready", "model"} /\ html THEN "depth"
+    IF DepthState = "ready" THEN "depth"
     ELSE IF legacy THEN "legacy"
     ELSE "missing"
 
