@@ -57,6 +57,10 @@
 # ---- 技能 ----
 /.agents/skills/typesafe-ai/.env
 
+# ---- 本地密钥 ----
+/.env
+/.env.local
+
 # ---- 通用 ----
 __pycache__/
 *.py[cod]

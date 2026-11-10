@@ -1,0 +1,694 @@
+{
+ "root": "/home/colaqaq/书库",
+ "generated_at": "2026-11-10T04:02:13+00:00",
+ "limit": 20,
+ "sampled": 20,
+ "counts": {
+  "depth": 20,
+  "legacy": 0,
+  "missing": 0
+ },
+ "pass": true,
+ "chapters": [
+  {
+   "uid": "B0001",
+   "n": 1,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 6/6，硬信息 11/11，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 2,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 7/7，硬信息 9/9，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 3,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 12/12，硬信息 14/14，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 4,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 10/10，硬信息 18/18，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 5,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 7/7，硬信息 15/15，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 6,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 12/12，硬信息 17/17，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 7,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 12/12，硬信息 20/20，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 8,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 10/10，硬信息 13/13，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0001",
+   "n": 9,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 14/14，硬信息 20/20，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 1,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 19/19，硬信息 26/26，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 2,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 13/13，硬信息 21/21，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 3,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 6/6，硬信息 13/13，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 4,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 10/10，硬信息 25/25，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 5,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 10/10，硬信息 24/24，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 6,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 4/4，硬信息 10/10，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 7,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 15/15，硬信息 25/25，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 8,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 8/8，硬信息 21/21，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 9,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 10/10，硬信息 21/21，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 10,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 13/13，硬信息 18/18，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  },
+  {
+   "uid": "B0002",
+   "n": 11,
+   "path": "depth",
+   "ready": true,
+   "depth_status": "ready",
+   "fallback_reason": null,
+   "gates": [
+    {
+     "id": "G10",
+     "name": "守恒账",
+     "status": "pass",
+     "detail": "核心 7/7，硬信息 24/24，问题 0 项"
+    },
+    {
+     "id": "G1",
+     "name": "原文逐字",
+     "status": "pass",
+     "detail": "全部原文块按源序逐字命中"
+    },
+    {
+     "id": "G5",
+     "name": "版式",
+     "status": "pass",
+     "detail": "对比度、字号、行长、行高、分段均在范围内"
+    },
+    {
+     "id": "G8",
+     "name": "结构完整",
+     "status": "pass",
+     "detail": "doctype、标签闭合与嵌套正确"
+    }
+   ]
+  }
+ ]
+}

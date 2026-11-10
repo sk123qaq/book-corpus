@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup, NavigableString
 
 from .model import ModelClient
 from .render import READER_CSS
+from .textnorm import normalize_ws
 from .visuals import VISUAL_CSS
 
 MAX_ATTEMPTS = 2
@@ -56,7 +57,8 @@ class FragmentError(ValueError):
 
 
 def _norm(text: str) -> str:
-    return re.sub(r"\s+", "", text or "")
+    """兼容旧调用；统一走共享的空白归一化。"""
+    return normalize_ws(text)
 
 
 def _data_url(path: str, mime: str) -> str:
@@ -216,8 +218,8 @@ def validate_fragment(fragment: str, blocks) -> list[str]:
         elif tag.name != "p" or "src" not in classes:
             problems.append('原文块 %s 必须是 <p class="src">' % block_id)
             continue
-        actual = _norm(tag.get_text())
-        expected = _norm(block.get("text") or "")
+        actual = normalize_ws(tag.get_text())
+        expected = normalize_ws(block.get("text") or "")
         if actual != expected:
             problems.append(
                 "原文块 %s 被改写：期望「%s」，实际「%s」"
@@ -251,7 +253,7 @@ def _inject_images(fragment: str, blocks, image_data) -> str:
         alt = ""
         cap = figure.find("figcaption")
         if cap:
-            alt = _norm(cap.get_text())[:80]
+            alt = normalize_ws(cap.get_text())[:80]
         img = soup.new_tag("img")
         img["src"] = url
         img["alt"] = alt

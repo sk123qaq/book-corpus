@@ -1,0 +1,225 @@
+{
+ "_comment": "真实来源：B0001 第4章《恋爱的悲剧》第51-67行节选。节选从阿Q心里念叨吴妈起，到秀才拿竹杠站在他面前止；无 H1/H2，9 个 mdparse 段落对应 5-6 个叙事节拍。",
+ "schema": 1,
+ "uid": "B0001",
+ "n": 4,
+ "source_sha256": "0dce533dac630ae5aa212c9fffbd2dc612fbd5f9a7fd18c30100263bd87a2f58",
+ "prompt_version": "chapter-model-v1",
+ "core_units": [
+  "U03",
+  "U06"
+ ],
+ "tiers": {
+  "skim": {
+   "U01": "indexed",
+   "U02": "indexed",
+   "U03": "condensed",
+   "U04": "indexed",
+   "U05": "indexed",
+   "U06": "condensed"
+  },
+  "standard": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim",
+   "U05": "verbatim",
+   "U06": "verbatim"
+  },
+  "deep": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim",
+   "U05": "verbatim",
+   "U06": "verbatim"
+  },
+  "research": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim",
+   "U05": "verbatim",
+   "U06": "verbatim"
+  }
+ },
+ "units": [
+  {
+   "id": "U01",
+   "kind": "context",
+   "section": "S01",
+   "source_blocks": [
+    "B01"
+   ],
+   "quotes": [
+    {
+     "block": "B01",
+     "text": "“女人……吴妈……这小孤孀……”阿Q想。"
+    }
+   ],
+   "summary": "阿Q心里念叨吴妈和“这小孤孀”。",
+   "importance": "support",
+   "hard_info": false,
+   "relations": []
+  },
+  {
+   "id": "U02",
+   "kind": "context",
+   "section": "S01",
+   "source_blocks": [
+    "B02",
+    "B03",
+    "B04",
+    "B05"
+   ],
+   "quotes": [
+    {
+     "block": "B02",
+     "text": "“我们的少奶奶是八月里要生孩子了……”"
+    },
+    {
+     "block": "B03",
+     "text": "女人……”阿Q想。"
+    },
+    {
+     "block": "B04",
+     "text": "阿Q放下烟管，站了起来。"
+    },
+    {
+     "block": "B05",
+     "text": "“我们的少奶奶……”吴妈还唠叨说。"
+    }
+   ],
+   "summary": "吴妈继续唠叨少奶奶的事，阿Q放下烟管站起来。",
+   "importance": "support",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "causes",
+     "to": "U03"
+    }
+   ]
+  },
+  {
+   "id": "U03",
+   "kind": "transition",
+   "section": "S02",
+   "source_blocks": [
+    "B06"
+   ],
+   "quotes": [
+    {
+     "block": "B06",
+     "text": "“我和你困觉，我和你困觉！”阿Q忽然抢上去，对伊跪下了。"
+    }
+   ],
+   "summary": "阿Q突然抢上去跪下，喊出“我和你困觉”。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": []
+  },
+  {
+   "id": "U04",
+   "kind": "evidence",
+   "section": "S02",
+   "source_blocks": [
+    "B07",
+    "B08"
+   ],
+   "quotes": [
+    {
+     "block": "B07",
+     "text": "一刹时中很寂然。"
+    },
+    {
+     "block": "B08",
+     "text": "“阿呀！”吴妈楞了一息，突然发抖，大叫着往外跑，且跑且嚷，似乎后来带哭了。"
+    }
+   ],
+   "summary": "短暂寂静后，吴妈惊叫发抖，边跑边嚷。",
+   "importance": "support",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "supports",
+     "to": "U03"
+    }
+   ]
+  },
+  {
+   "id": "U05",
+   "kind": "context",
+   "section": "S03",
+   "source_blocks": [
+    "B09"
+   ],
+   "quotes": [
+    {
+     "block": "B09",
+     "text": "阿Q对了墙壁跪着也发楞，于是两手扶着空板凳，慢慢的站起来，仿佛觉得有些糟。他这时确也有些忐忑了，慌张的将烟管插在裤带上，就想去舂米。"
+    }
+   ],
+   "summary": "阿Q跪着发楞，起身后感到忐忑，想回去舂米。",
+   "importance": "support",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "causes",
+     "to": "U06"
+    }
+   ]
+  },
+  {
+   "id": "U06",
+   "kind": "conclusion",
+   "section": "S03",
+   "source_blocks": [
+    "B09"
+   ],
+   "quotes": [
+    {
+     "block": "B09",
+     "text": "蓬的一声，头上着了很粗的一下，他急忙回转身去，那秀才便拿了一支大竹杠站在他面前。"
+    }
+   ],
+   "summary": "蓬的一声，阿Q头上挨了一下；那秀才便拿了一支大竹杠站在他面前。",
+   "importance": "core",
+   "hard_info": true,
+   "hard_info_note": "那秀才便拿了一支大竹杠站在他面前。",
+   "relations": []
+  }
+ ],
+ "sections": [
+  {
+   "id": "S01",
+   "title": "舂米夜",
+   "unit_ids": [
+    "U01",
+    "U02"
+   ],
+   "lead": "阿Q在厨房里听吴妈唠叨。"
+  },
+  {
+   "id": "S02",
+   "title": "跪下",
+   "unit_ids": [
+    "U03",
+    "U04"
+   ],
+   "lead": "阿Q突然跪下，吴妈惊叫逃走。"
+  },
+  {
+   "id": "S03",
+   "title": "挨打",
+   "unit_ids": [
+    "U05",
+    "U06"
+   ],
+   "lead": "阿Q还没回过神，秀才已经动手。"
+  }
+ ],
+ "terms": [],
+ "figures": [],
+ "non_semantic": [],
+ "folds": []
+}

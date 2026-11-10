@@ -1,0 +1,442 @@
+{
+ "_comment": "真实来源：B0004 第4章《笨办法才最有效》第1402-1424行节选。B01/B03/B04/B06 为段落，B02/B05 为表格块；表格按表头、每个结果格/数据行、结论拆成单元。",
+ "schema": 1,
+ "uid": "B0004",
+ "n": 4,
+ "source_sha256": "0341d65eec356742c9a5911b8661eb0c480f480bf5160441fd2138d79ec87ade",
+ "prompt_version": "chapter-model-v1",
+ "core_units": [
+  "U02",
+  "U07",
+  "U08",
+  "U13",
+  "U03",
+  "U04",
+  "U05",
+  "U06",
+  "U09",
+  "U10",
+  "U11",
+  "U12"
+ ],
+ "tiers": {
+  "skim": {
+   "U01": "indexed",
+   "U02": "condensed",
+   "U03": "condensed",
+   "U04": "condensed",
+   "U05": "condensed",
+   "U06": "condensed",
+   "U07": "condensed",
+   "U08": "condensed",
+   "U09": "condensed",
+   "U10": "condensed",
+   "U11": "condensed",
+   "U12": "condensed",
+   "U13": "condensed"
+  },
+  "standard": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim",
+   "U05": "verbatim",
+   "U06": "verbatim",
+   "U07": "verbatim",
+   "U08": "verbatim",
+   "U09": "verbatim",
+   "U10": "verbatim",
+   "U11": "verbatim",
+   "U12": "verbatim",
+   "U13": "verbatim"
+  },
+  "deep": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim",
+   "U05": "verbatim",
+   "U06": "verbatim",
+   "U07": "verbatim",
+   "U08": "verbatim",
+   "U09": "verbatim",
+   "U10": "verbatim",
+   "U11": "verbatim",
+   "U12": "verbatim",
+   "U13": "verbatim"
+  },
+  "research": {
+   "U01": "verbatim",
+   "U02": "verbatim",
+   "U03": "verbatim",
+   "U04": "verbatim",
+   "U05": "verbatim",
+   "U06": "verbatim",
+   "U07": "verbatim",
+   "U08": "verbatim",
+   "U09": "verbatim",
+   "U10": "verbatim",
+   "U11": "verbatim",
+   "U12": "verbatim",
+   "U13": "verbatim"
+  }
+ },
+ "units": [
+  {
+   "id": "U01",
+   "kind": "context",
+   "section": "S01",
+   "source_blocks": [
+    "B01"
+   ],
+   "quotes": [
+    {
+     "block": "B01",
+     "text": "我们可以在企业信用模型中看到这个普遍存在的问题：与靠自己的判断力做出的决定相比，在多数人影响下做出的决定能为你带来更好的社会评价。"
+    }
+   ],
+   "summary": "企业信用模型显示：受多数人影响做出的决定，社会评价更好。",
+   "importance": "support",
+   "hard_info": false,
+   "relations": []
+  },
+  {
+   "id": "U02",
+   "kind": "definition",
+   "section": "S01",
+   "source_blocks": [
+    "B02"
+   ],
+   "quotes": [
+    {
+     "block": "B02",
+     "text": "**结果证明你是对的**"
+    },
+    {
+     "block": "B02",
+     "text": "**结果证明你是错的**"
+    }
+   ],
+   "summary": "表头：结果证明你是对的，或结果证明你是错的。",
+   "importance": "core",
+   "hard_info": true,
+   "hard_info_note": "结果证明你是对的",
+   "relations": []
+  },
+  {
+   "id": "U03",
+   "kind": "evidence",
+   "section": "S01",
+   "source_blocks": [
+    "B02"
+   ],
+   "quotes": [
+    {
+     "block": "B02",
+     "text": "你的意见和多数人相左"
+    },
+    {
+     "block": "B02",
+     "text": "没有人会记得是你做出的决定，但公司受益。"
+    }
+   ],
+   "summary": "意见与多数人相左且结果证明对：没人记得决定，公司受益。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U02"
+    }
+   ]
+  },
+  {
+   "id": "U04",
+   "kind": "evidence",
+   "section": "S01",
+   "source_blocks": [
+    "B02"
+   ],
+   "quotes": [
+    {
+     "block": "B02",
+     "text": "你的意见和多数人相左"
+    },
+    {
+     "block": "B02",
+     "text": "所有人都记得你做的这个决定，你会因此而被降级，被冷落，甚至被解聘。"
+    }
+   ],
+   "summary": "意见与多数人相左且结果证明错：所有人记得决定，决策者被降级、冷落甚至解聘。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U02"
+    }
+   ]
+  },
+  {
+   "id": "U05",
+   "kind": "evidence",
+   "section": "S01",
+   "source_blocks": [
+    "B02"
+   ],
+   "quotes": [
+    {
+     "block": "B02",
+     "text": "你的意见和多数人一致"
+    },
+    {
+     "block": "B02",
+     "text": "所有提出过建议的人都会记得这个决定，公司受益。"
+    }
+   ],
+   "summary": "意见与多数人一致且结果证明对：提建议的人记得决定，公司受益。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U02"
+    }
+   ]
+  },
+  {
+   "id": "U06",
+   "kind": "evidence",
+   "section": "S01",
+   "source_blocks": [
+    "B02"
+   ],
+   "quotes": [
+    {
+     "block": "B02",
+     "text": "你的意见和多数人一致"
+    },
+    {
+     "block": "B02",
+     "text": "你因此承受的指责会降到最低，但公司受损失。"
+    }
+   ],
+   "summary": "意见与多数人一致且结果证明错：指责最低，但公司受损失。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U02"
+    }
+   ]
+  },
+  {
+   "id": "U07",
+   "kind": "conclusion",
+   "section": "S01",
+   "source_blocks": [
+    "B03"
+   ],
+   "quotes": [
+    {
+     "block": "B03",
+     "text": "从表面上来看，如果你希望自己的决定能让公司安然无恙，那么随大流似乎是更为稳妥的做法。但是在实际操作中，多数人的看法会影响你的判断，使一个原本一目了然的选择变得难分高下。这就是为什么勇气对于CEO而言至关重要。"
+    }
+   ],
+   "summary": "随大流看似稳妥，但多数人的看法会让选择难分高下；勇气对于CEO而言至关重要。",
+   "importance": "core",
+   "hard_info": true,
+   "hard_info_note": "勇气对于CEO而言至关重要。",
+   "relations": []
+  },
+  {
+   "id": "U08",
+   "kind": "definition",
+   "section": "S02",
+   "source_blocks": [
+    "B05"
+   ],
+   "quotes": [
+    {
+     "block": "B05",
+     "text": "**普通人的借口**"
+    },
+    {
+     "block": "B05",
+     "text": "**CEO的借口**"
+    }
+   ],
+   "summary": "表头：普通人的借口与CEO的借口。",
+   "importance": "core",
+   "hard_info": true,
+   "hard_info_note": "普通人的借口",
+   "relations": []
+  },
+  {
+   "id": "U09",
+   "kind": "example",
+   "section": "S02",
+   "source_blocks": [
+    "B05"
+   ],
+   "quotes": [
+    {
+     "block": "B05",
+     "text": "智者千虑，必有一失。"
+    },
+    {
+     "block": "B05",
+     "text": "这是生死攸关的决定。"
+    }
+   ],
+   "summary": "普通人的借口：智者千虑，必有一失；CEO的借口：这是生死攸关的决定。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U08"
+    }
+   ]
+  },
+  {
+   "id": "U10",
+   "kind": "example",
+   "section": "S02",
+   "source_blocks": [
+    "B05"
+   ],
+   "quotes": [
+    {
+     "block": "B05",
+     "text": "我所有的朋友都想这样做。"
+    },
+    {
+     "block": "B05",
+     "text": "大家都不赞同我的做法，我不能违背民意。"
+    }
+   ],
+   "summary": "普通人的借口：所有朋友都想这样做；CEO的借口：大家不赞同，不能违背民意。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U08"
+    }
+   ]
+  },
+  {
+   "id": "U11",
+   "kind": "example",
+   "section": "S02",
+   "source_blocks": [
+    "B05"
+   ],
+   "quotes": [
+    {
+     "block": "B05",
+     "text": "那些厉害的人都是这样做的。"
+    },
+    {
+     "block": "B05",
+     "text": "业内的行规就是这样，我不知道它违法。"
+    }
+   ],
+   "summary": "普通人的借口：厉害的人都这样做；CEO的借口：行规如此，不知道违法。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U08"
+    }
+   ]
+  },
+  {
+   "id": "U12",
+   "kind": "example",
+   "section": "S02",
+   "source_blocks": [
+    "B05"
+   ],
+   "quotes": [
+    {
+     "block": "B05",
+     "text": "它不够完美，所以我放弃竞争。"
+    },
+    {
+     "block": "B05",
+     "text": "我们从未生产出符合市场预期的产品，因此我就没指望它们能卖得出去。"
+    }
+   ],
+   "summary": "普通人的借口：不够完美就放弃竞争；CEO的借口：产品不符合市场预期，就不指望卖出去。",
+   "importance": "core",
+   "hard_info": false,
+   "relations": [
+    {
+     "type": "exemplifies",
+     "to": "U08"
+    }
+   ]
+  },
+  {
+   "id": "U13",
+   "kind": "conclusion",
+   "section": "S02",
+   "source_blocks": [
+    "B06"
+   ],
+   "quotes": [
+    {
+     "block": "B06",
+     "text": "你每做一次艰难而正确的决定，勇气就会增加一分。相反，你每做一次轻松却错误的决定，怯懦就会多出一分。作为CEO，你的公司是勇往直前还是畏首畏尾，完全取决于你的选择。"
+    }
+   ],
+   "summary": "你每做一次艰难而正确的决定，勇气就会增加一分。轻松却错误的决定增加怯懦，公司的勇往直前取决于CEO的选择。",
+   "importance": "core",
+   "hard_info": true,
+   "hard_info_note": "你每做一次艰难而正确的决定，勇气就会增加一分。",
+   "relations": []
+  }
+ ],
+ "sections": [
+  {
+   "id": "S01",
+   "title": "多数人影响下的决定",
+   "unit_ids": [
+    "U01",
+    "U02",
+    "U03",
+    "U04",
+    "U05",
+    "U06",
+    "U07"
+   ],
+   "lead": "信用模型表把意见是否与多数人一致、结果对错分成四种处境。"
+  },
+  {
+   "id": "S02",
+   "title": "培养勇气",
+   "unit_ids": [
+    "U08",
+    "U09",
+    "U10",
+    "U11",
+    "U12",
+    "U13"
+   ],
+   "lead": "普通人和CEO都会找借口；勇气要靠一次次艰难而正确的决定积累。"
+  }
+ ],
+ "terms": [],
+ "figures": [],
+ "non_semantic": [
+  {
+   "block": "B04",
+   "reason": "小节标题"
+  }
+ ],
+ "folds": []
+}

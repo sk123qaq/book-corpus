@@ -9,6 +9,7 @@ import posixpath
 import re
 import sys
 import urllib.parse
+from pathlib import Path
 
 # 允许直接 ``python3 apps/reading/server.py``。
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from bookcorpus.reading.editorial import EditorialError
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.service import (
+    DEPTH_LAYERS,
     JobConflictError,
     PackExistsError,
     ReadingService,
@@ -43,6 +45,7 @@ ROUTES = [
     (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)/cancel$"), "cancel"),
     (re.compile(r"^/api/export/([A-Za-z0-9_-]+)/(\d+)/([a-z]+)$"), "export"),
     (re.compile(r"^/api/asset$"), "asset"),
+    (re.compile(r"^/api/depth/([A-Za-z0-9_-]+)/(\d+)$"), "depth"),
     (re.compile(r"^/api/editorial/([A-Za-z0-9_-]+)/(\d+)$"), "editorial"),
     (re.compile(r"^/api/edition/([A-Za-z0-9_-]+)/(\d+)$"), "edition"),
 ]
@@ -145,6 +148,9 @@ class Handler(BaseHTTPRequestHandler):
                 if name == "jobs":
                     self._post_job()
                     return
+                if name == "depth":
+                    self._post_depth(match.group(1), int(match.group(2)))
+                    return
                 if name == "cancel":
                     job = self.service.queue.cancel(match.group(1))
                     if not job:
@@ -220,6 +226,10 @@ class Handler(BaseHTTPRequestHandler):
         match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/agent$", path)
         if match:
             self._serve_agent_reader(match.group(1), int(match.group(2)), head)
+            return
+        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/depth$", path)
+        if match:
+            self._serve_depth(match.group(1), int(match.group(2)), head)
             return
         match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/edition$", path)
         if match:
@@ -308,7 +318,29 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
                 raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
-            job = self.service.submit(uid, n, tiers, model=model, effort=effort, overwrite=overwrite, rebuild=rebuild)
+            job = None
+            if self.service.depth and self.service.store.manifest(uid, n) is None:
+                raw = self.service.library.read_chapter(uid, n)
+                if raw is None:
+                    raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
+                depth_state = self.service.store.depth_state(uid, n, raw.get("source_sha256"))
+                has_depth_file = any(
+                    Path(self.service.store.depth_path(uid, n, name)).is_file()
+                    for name in ("chapter.html", "chapter_model.json", "ledger.json")
+                )
+                if depth_state.get("status") == "missing" and not has_depth_file:
+                    # 新章默认走深读路径；旧包与已有深度产物仍走旧 submit。
+                    job = self.service.submit_depth(
+                        uid,
+                        n,
+                        list(DEPTH_LAYERS),
+                        model=model,
+                        effort=effort,
+                    )
+            if job is None:
+                job = self.service.submit(
+                    uid, n, tiers, model=model, effort=effort, overwrite=overwrite, rebuild=rebuild
+                )
         except FileNotFoundError:
             self._json(404, {"error": "找不到章节"})
             return
@@ -348,6 +380,46 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._json(202, job)
 
+    def _post_depth(self, uid, n):
+        if not self.service.depth:
+            self._json(400, {"error": "深读模式已关闭；请按旧路径生成读本"})
+            return
+        try:
+            data = self._body()
+            layers = data.get("layers")
+            model = str(data.get("model") or DEFAULT_MODEL).strip()
+            effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
+            rebuild_model = data.get("rebuild_model", False)
+            if not UID_RE.match(uid):
+                raise ValueError("uid 非法")
+            if not isinstance(layers, list) or not layers or not all(isinstance(item, str) for item in layers):
+                raise ValueError("layers 必须是非空字符串数组")
+            if not isinstance(rebuild_model, bool):
+                raise ValueError("rebuild_model 必须是布尔值")
+            if not model or len(model) > 80:
+                raise ValueError("模型名非法")
+            if effort not in EFFORTS:
+                raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+            job = self.service.submit_depth(
+                uid,
+                n,
+                layers,
+                model=model,
+                effort=effort,
+                rebuild_model=rebuild_model,
+            )
+        except FileNotFoundError:
+            self._json(404, {"error": "找不到章节"})
+        except JobConflictError as exc:
+            self._json(
+                409,
+                {"error": "该章已有任务在排队或运行", "code": "job_active", "conflicts": exc.conflicts},
+            )
+        except (TypeError, ValueError) as exc:
+            self._json(400, {"error": str(exc)})
+        else:
+            self._json(202, job)
+
     # ---- 静态与产物 ---------------------------------------------------
     def _serve_page(self, name, head=False):
         path = os.path.join(WEB, name)
@@ -373,9 +445,26 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, body, ctype, head)
 
     def _serve_agent_reader(self, uid, n, head=False):
+        if not self.service.agent_standard:
+            self._error(404, "实验性标准 HTML 已退役；请使用标准注解页")
+            return
         path = os.path.join(self.service.store.pack_dir(uid, n), "agent-standard.html")
         if not os.path.exists(path):
             self._error(404, "这一章还没有 Agent 标准档")
+            return
+        with open(path, encoding="utf-8") as fh:
+            self._send(200, fh.read(), "text/html; charset=utf-8", head)
+
+    def _serve_depth(self, uid, n, head=False):
+        # 只端出与当前源文一致的页面；模型重建或源文改动后的旧页都不端。
+        raw = self.service.library.read_chapter(uid, n)
+        if raw is None:
+            self._error(404, "这一章不存在", api=False, head=head)
+            return
+        route = self.service.store.chapter_route(uid, n, raw.get("source_sha256"))[0]
+        path = self.service.store.depth_path(uid, n, "chapter.html")
+        if route != "depth" or not os.path.isfile(path):
+            self._error(404, "这一章还没有编译版", api=False, head=head)
             return
         with open(path, encoding="utf-8") as fh:
             self._send(200, fh.read(), "text/html; charset=utf-8", head)

@@ -96,7 +96,7 @@ function render() {
         '<div class="book-subjects">' + (book.subjects || []).map((s) => '<span>' + RD.esc(s) + '</span>').join('') +
           '<span>' + RD.esc(book.author_display) + '</span></div>' +
         '<div class="book-actions">' +
-          (firstRead ? '<a class="btn btn-primary" href="' + (firstReadsPack ? RD.readerHref(book.uid, firstRead.n, 'standard') : RD.chapterHref(book.uid, firstRead.n)) + '">' +
+          (firstRead ? '<a class="btn btn-primary" href="' + (firstReadsPack ? RD.readerHref(book.uid, firstRead.n, 'standard', firstRead.path) : RD.chapterHref(book.uid, firstRead.n)) + '">' +
             (firstReadsPack ? (firstDraft ? '查看标准本草稿 →' : '开始读 标准本 →') : '打开本章工单 →') + '</a>' : '') +
           (firstReadsPack ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, firstRead.n) + '">打开本章工单</a>' : '') +
         '</div></div></section>' +
@@ -155,7 +155,7 @@ function renderTicket() {
     ).join('；') + '</p>' : '') +
     '<button class="btn btn-primary" id="generate">' + (hasPack ? '更新读本 →' : '生成读本 →') + '</button>' +
     (standard
-      ? '<a class="btn btn-ghost" href="' + RD.readerHref(data.book.uid, chapter.n, 'standard') + '">打开标准本</a>'
+      ? '<a class="btn btn-ghost" href="' + RD.readerHref(data.book.uid, chapter.n, 'standard', chapter.path) + '">打开标准本</a>'
       : '<a class="btn btn-ghost" href="' + RD.chapterHref(data.book.uid, chapter.n) + '">打开本章工单 →</a>') +
     '<div class="existing" id="existing"></div>' +
     '<div id="job-mount"></div>' +
@@ -207,7 +207,7 @@ function renderExisting() {
   const draft = !!(current.pack && current.pack.draft);
   const rows = TIER_KEYS.filter((key) => tiers[key] && tiers[key].exists).map((key) =>
     '<div class="pack-row"><span>' + RD.tierNames[key] + '本' + (tiers[key].stale ? ' · 原文已改' : draft ? ' · 草稿' : '') + '</span>' +
-    '<a href="' + RD.readerHref(data.book.uid, current.n, key) + '">打开 →</a></div>'
+    '<a href="' + RD.readerHref(data.book.uid, current.n, key, current.path) + '">打开 →</a></div>'
   );
   RD.mount('existing').innerHTML = rows.length
     ? '<div class="lbl">本章已有</div>' + rows.join('')

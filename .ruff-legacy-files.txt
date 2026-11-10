@@ -5,12 +5,15 @@ apps/demo/server.py
 apps/demo/session.py
 apps/demo/trace.py
 apps/ops/server.py
+apps/reading/server.py
 docs/design/项目结构图.py
 src/bookcorpus/cli.py
 src/bookcorpus/migrate.py
 src/bookcorpus/paths.py
 src/bookcorpus/pdfenv.py
 src/bookcorpus/pimodel.py
+src/bookcorpus/reading/service.py
+src/bookcorpus/reading/store.py
 src/bookcorpus/remap.py
 src/bookcorpus/sample.py
 src/bookcorpus/scripts/audit_old_md.py
