@@ -107,10 +107,10 @@ function render() {
         ' · <span class="path-badge path-badge-' + path + '"' + pathReason + '>' + pathLabel + '</span>' +
         (draft ? ' · <span class="draft-badge">草稿</span>' : '') + '</p>' +
       '<div class="chap-actions">' +
-        (generated.length ? generated.map((t) => '<a class="btn btn-primary" href="' + RD.readerHref(book.uid, chapter.n, t.key) + '">读 ' + RD.esc(t.name) + '本 →</a>').join('') :
+        (generated.length ? generated.map((t) => '<a class="btn btn-primary" href="' + RD.readerHref(book.uid, chapter.n, t.key, data.path) + '">读 ' + RD.esc(t.name) + '本 →</a>').join('') :
           '<a class="btn btn-ghost" href="#ticket">先出一版读本</a>') +
         (data.edition ? '<a class="btn btn-primary" href="' + RD.esc(data.edition.url) + '">视觉读本 →</a>' : '') +
-        (standardPack ? '<a class="btn btn-ghost" href="' + RD.readerHref(book.uid, chapter.n, 'standard') + '">打开默认读本</a>' : '') +
+        (standardPack ? '<a class="btn btn-ghost" href="' + RD.readerHref(book.uid, chapter.n, 'standard', data.path) + '">打开默认读本</a>' : '') +
         (prev ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, prev) + '">← 上一章</a>' : '') +
         (next ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, next) + '">下一章 →</a>' : '') +
       '</div></section>' +
@@ -209,14 +209,14 @@ function renderPreview(blocks, preview, standardPack) {
       (block.kind === 'image' ? '[图] ' + RD.esc(block.alt || block.text || '') : RD.esc(block.text)) + '</p></div>'
     ).join('') : '<p class="empty">标准本尚未投影；生成后这里会显示保留的块。</p>') +
     '<div class="preview-foot"><span>只显示前 ' + selectedBlocks.length + ' 块，全文见读本</span>' +
-    (standardPack ? '<a href="' + RD.readerHref(data.book.uid, data.chapter.n, 'standard') + '">打开标准本 →</a>' : '') + '</div>';
+    (standardPack ? '<a href="' + RD.readerHref(data.book.uid, data.chapter.n, 'standard', data.path) + '">打开标准本 →</a>' : '') + '</div>';
 }
 
 function renderPacks(generated) {
   RD.mount('packs').innerHTML = generated.length ? generated.map((tier) =>
     '<div class="pack-item"><span class="nm"><i style="--tc:var(--tier-' + tier.key + ')"></i><b>' + RD.esc(tier.name) + '本</b></span>' +
     '<span class="meta">' + (tier.stats ? 'C ' + Math.round(tier.stats.c_char * 100) + '% · ' + RD.fmt(tier.stats.minutes) + ' 分钟' : '已生成') +
-    (tier.stale ? ' · 原文已改' : draft ? ' · 草稿' : '') + '</span><a href="' + RD.readerHref(data.book.uid, data.chapter.n, tier.key) + '">打开 →</a></div>'
+    (tier.stale ? ' · 原文已改' : draft ? ' · 草稿' : '') + '</span><a href="' + RD.readerHref(data.book.uid, data.chapter.n, tier.key, data.path) + '">打开 →</a></div>'
   ).join('') : '<div class="pack-item"><span class="nm"><b>尚未出片</b></span><span class="pending">选档后生成</span></div>';
 }
 

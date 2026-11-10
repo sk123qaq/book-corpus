@@ -11,6 +11,7 @@ src/bookcorpus/migrate.py
 src/bookcorpus/paths.py
 src/bookcorpus/pdfenv.py
 src/bookcorpus/pimodel.py
+src/bookcorpus/reading/service.py
 src/bookcorpus/remap.py
 src/bookcorpus/sample.py
 src/bookcorpus/scripts/audit_old_md.py

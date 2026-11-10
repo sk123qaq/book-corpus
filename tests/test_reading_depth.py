@@ -2682,3 +2682,39 @@ def test_model_client_max_tokens_env(monkeypatch):
     assert ModelClient(key="k").max_tokens == 65536
     monkeypatch.delenv("READING_MODEL_MAX_TOKENS")
     assert ModelClient(key="k").max_tokens == 32768
+
+
+def test_book_directory_reflects_depth_layers(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=True)
+    raw = service.library.read_chapter("B0001", 1)
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {"label": "model"},
+            "ledger.json": {"label": "ledger"},
+            "layers/skim.json": {},
+            "layers/standard.json": {},
+            "layers/deep.json": {},
+            "layers/research.json": {},
+            "chapter.html": "<html>depth</html>",
+            "state.json": {"status": "ready", "source_sha256": raw["source_sha256"]},
+        },
+    )
+    chapter = service.book("B0001")["chapters"][0]
+    assert chapter["path"] == "depth"
+    assert {key: chapter["tiers"][key]["exists"] for key in ("skim", "standard", "deep", "research")} == {
+        "skim": True,
+        "standard": True,
+        "deep": True,
+        "research": True,
+    }
+    assert chapter["pack"]["exists"] is True
+    assert service.book("B0001")["book"]["packs"] == 1
+    detail = service.chapter("B0001", 1)
+    assert {tier["key"]: tier["exists"] for tier in detail["tiers"]} == {
+        "skim": True,
+        "standard": True,
+        "deep": True,
+        "research": True,
+    }

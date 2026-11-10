@@ -181,12 +181,12 @@ def _depth_estimate(blocks):
     }
 
 
-def _chapter_api(chapter, tiers=None, state=None, path=None, fallback_reason=None):
+def _chapter_api(chapter, tiers=None, state=None, path=None, fallback_reason=None, pack=None):
     data = dict(chapter)
     data["n"] = "%02d" % int(chapter["n"])
     data["minutes"] = max(1, round(chapter.get("chars", 0) / TIER_SPECS["standard"]["wpm"]))
     data["tiers"] = tiers or {}
-    pack = _pack_meta(state)
+    pack = pack if pack is not None else _pack_meta(state)
     data["pack"] = pack
     data["draft"] = bool(pack and pack["draft"])
     data["path"] = path or "none"
@@ -507,19 +507,34 @@ class ReadingService:
     # ---- 只读投影 -----------------------------------------------------
     def _pack_count(self, uid=None):
         if self._packs is None:
-            counts = {}
+            counted = set()
             for path in glob.glob(os.path.join(self.store.base, "*", "ch", "*", "manifest.json")):
                 parts = path.split(os.sep)
                 if len(parts) < 3:
                     continue
-                uid, n = parts[-4], parts[-2]
+                key = (parts[-4], parts[-2])
                 # 标题页合并后旧章号可能已不存在，孤儿包不计入书/全站读本数。
                 try:
-                    if not self.library.chapter(uid, int(n)):
-                        continue
+                    if self.library.chapter(key[0], int(key[1])):
+                        counted.add(key)
                 except (TypeError, ValueError, FileNotFoundError):
                     continue
-                counts[uid] = counts.get(uid, 0) + 1
+            for path in glob.glob(os.path.join(self.store.base, "*", "ch", "*", "depth", "state.json")):
+                parts = path.split(os.sep)
+                if len(parts) < 5:
+                    continue
+                key = (parts[-5], parts[-3])
+                try:
+                    state = json.loads(Path(path).read_text(encoding="utf-8"))
+                    if not self.library.chapter(key[0], int(key[1])):
+                        continue
+                except (OSError, TypeError, ValueError, FileNotFoundError):
+                    continue
+                if state.get("status") == "ready" and Path(path).with_name("chapter.html").is_file():
+                    counted.add(key)
+            counts = {}
+            for key in counted:
+                counts[key[0]] = counts.get(key[0], 0) + 1
             self._packs = counts
         if uid:
             return self._packs.get(uid, 0)
@@ -563,6 +578,7 @@ class ReadingService:
         return {
             "manifest": state.get("manifest"),
             "status": state.get("status"),
+            "source_sha256": (raw or {}).get("source_sha256"),
             "tiers": tiers,
             "source_changed": state.get("source_changed"),
             "same_mode": state.get("same_mode"),
@@ -639,11 +655,55 @@ class ReadingService:
         for chapter in self.library.chapters(uid):
             state = self._chapter_states(uid, chapter["n"])
             tiers = state["tiers"] if state else {}
-            path, reason = self._chapter_path(uid, chapter["n"], state)
-            item = _chapter_api(chapter, tiers, state, path=path, fallback_reason=reason)
+            source_sha = (state or {}).get("source_sha256")
+            path, reason = self._chapter_path(uid, chapter["n"], state, source_sha)
+            depth_info = self.store.depth_state(uid, chapter["n"], source_sha)
+            pack = None
+            if path == "depth":
+                tiers = self._depth_tiers(uid, chapter["n"], depth_info)
+                pack = self._depth_pack(uid, chapter["n"], depth_info)
+            item = _chapter_api(chapter, tiers, state, path=path, fallback_reason=reason, pack=pack)
             item["jobs"] = self.queue.active_for(uid, chapter["n"])
             chapters.append(item)
         return {"book": view, "chapters": chapters}
+
+    def _depth_tiers(self, uid, n, info):
+        """把 depth 层的磁盘状态映射成书目录页用的四档状态。"""
+        state = info.get("state") or {}
+        status = info.get("status")
+        updated = state.get("layer_updated_at") or {}
+        tiers = {}
+        for key in ("skim", "standard", "deep", "research"):
+            exists = status in ("ready", "stale") and Path(self.store.depth_path(uid, n, DEPTH_FILES[key])).is_file()
+            tiers[key] = {
+                "exists": exists,
+                "stale": status == "stale",
+                "generated_at": updated.get(key) or state.get("updated_at") or state.get("generated_at"),
+                "stats": None,
+            }
+        return tiers
+
+    def _depth_pack(self, uid, n, info):
+        state = info.get("state") or {}
+        status = info.get("status")
+        if status not in ("ready", "model", "stale"):
+            return None
+        model = state.get("model") if isinstance(state.get("model"), dict) else {}
+        return {
+            "exists": True,
+            "draft": False,
+            "status": "ok" if status == "ready" else status,
+            "state": status,
+            "generated_at": state.get("generated_at") or state.get("updated_at"),
+            "source_sha256": state.get("source_sha256"),
+            "source_changed": status == "stale",
+            "preservable": status != "stale",
+            "preserve_reason": "原文已更改" if status == "stale" else None,
+            "model": model.get("model") or model.get("requested_model"),
+            "reasoning_effort": model.get("effort"),
+            "model_fallback": bool(model.get("fallback")),
+            "usage": model.get("usage"),
+        }
 
     def _chapter_path(self, uid, n, state=None, source_sha=None):
         """章节实际走哪条渲染路径；只读磁盘，不触发模型。"""
@@ -718,6 +778,16 @@ class ReadingService:
         book_view = self._book_view(book)
         fit = decide_template(build_brief(book_view, raw, raw["blocks"]))
         path, fallback_reason = self._chapter_path(uid, n, state, raw.get("source_sha256"))
+        depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"))
+        depth_pack = None
+        if path == "depth":
+            depth_tiers = self._depth_tiers(uid, n, depth_state)
+            for tier in tiers:
+                info = depth_tiers.get(tier["key"], {})
+                tier["exists"] = bool(info.get("exists"))
+                tier["stale"] = bool(info.get("stale"))
+                tier["stats"] = info.get("stats")
+            depth_pack = self._depth_pack(uid, n, depth_state)
         data = {
             "book": book_view,
             "chapter": _chapter_api(
@@ -726,6 +796,7 @@ class ReadingService:
                 state,
                 path=path,
                 fallback_reason=fallback_reason,
+                pack=depth_pack,
             ),
             "path": path,
             "fallback_reason": fallback_reason,
@@ -734,7 +805,7 @@ class ReadingService:
             "tiers": tiers,
             "standard_blocks": standard_ids,
             "preview_blocks": preview,
-            "pack": _pack_meta(state),
+            "pack": depth_pack if path == "depth" else _pack_meta(state),
             "gates": audit.get("gates", []),
             "edition": ({"exists": True, "url": "/reader/%s/%02d/edition" % (uid, n)} if edition else None),
             "edition_fit": {
@@ -744,7 +815,6 @@ class ReadingService:
             },
         }
         if self.depth:
-            depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"))
             data["depth"] = {"state": depth_state["status"]}
             if depth_state["status"] in ("model", "ready"):
                 data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
@@ -1431,6 +1501,7 @@ class ReadingService:
             state["research_sha"] = research_sha
         files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
         self.store.save_depth(uid, n, files)
+        self._invalidate_packs()
         return {"status": status, "pack_id": f"{uid}/ch/{n:02d}"}
 
     def _run_job(self, job_id, job):

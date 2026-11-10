@@ -202,8 +202,8 @@
   RD.bookHref = (uid) => '/book/' + encodeURIComponent(uid);
   RD.chapterHref = (uid, n) => '/chapter/' + encodeURIComponent(uid) + '/' + String(n).padStart(2, '0');
   RD.recordsJobHref = (jobId) => '/records?job=' + encodeURIComponent(jobId);
-  RD.readerHref = (uid, n, tier) => '/reader/' + encodeURIComponent(uid) + '/' + String(n).padStart(2, '0') +
-    (tier ? '?tier=' + encodeURIComponent(tier) : '');
+  RD.readerHref = (uid, n, tier, path) => '/reader/' + encodeURIComponent(uid) + '/' + String(n).padStart(2, '0') +
+    (path === 'depth' ? '/depth' : '') + (tier ? '?tier=' + encodeURIComponent(tier) : '');
 
   RD.night = () => {
     const KEY = 'reading-night';
