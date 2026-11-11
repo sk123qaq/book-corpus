@@ -1,6 +1,6 @@
-"""四读档位的确定性处置计划。
+"""三档阅读的确定性处置计划。
 
-模型只给结构，这里不给模型任何自由裁量：同一份 chapter_model 在四个档位下
+模型只给结构，这里不给模型任何自由裁量：同一份 chapter_model 在三个档位下
 必须得到同一套逐块处置。``skim`` 之外的档位正文逐字保留，差异留给后续标注层。
 
 守恒审计 G10 单独放在文件末尾。传 ``expected_core`` 时，核心覆盖以外部清单
@@ -12,7 +12,7 @@ import unicodedata
 
 from bookcorpus.reading.textnorm import normalize_verbatim, normalize_ws
 
-TIER_ORDER = ("skim", "standard", "deep", "research")
+TIER_ORDER = ("skim", "standard", "deep")
 
 _DISPOSITION_RANK = {"verbatim": 3, "condensed": 2, "indexed": 1, "omitted": 0}
 
@@ -52,7 +52,6 @@ _TIER_RULES = {
     "skim": _skim_disposition,
     "standard": _verbatim_disposition,
     "deep": _verbatim_disposition,
-    "research": _verbatim_disposition,
 }
 
 

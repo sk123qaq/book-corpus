@@ -1,15 +1,13 @@
 """深读页渲染：同一章两棵正文树，速览在上，原文在下。
 
-速览是编译体，标准/深读/研究三档共用逐字原文。没有 JavaScript 时两棵树
-同时可见；有 JavaScript 时按四个页签切换。所有原文块都经过旧渲染器的
+速览是编译体，标准/深读两档共用逐字原文。没有 JavaScript 时两棵树
+同时可见；有 JavaScript 时按三个页签切换。所有原文块都经过旧渲染器的
 :func:`_block_element`，本模块不改动它，也不丢块。
 """
 
 import html
-from datetime import UTC, datetime, timedelta
 
 from ..render import READER_CSS, _block_element
-from .citations import STALE_DAYS
 from .diagrams import render_figure
 from .standard import build_standard
 
@@ -22,26 +20,6 @@ DEEP_TYPE_LABELS = {
     "counter": "反例",
     "intertext": "互文",
 }
-RESEARCH_TYPE_LABELS = {
-    "context": "语境",
-    "later": "后续",
-    "critique": "批评",
-    "application": "应用",
-    "open": "开放",
-}
-VERDICT_LABELS = {
-    "still": "仍成立",
-    "changed": "条件改变",
-    "caution": "需谨慎",
-    "verify": "需核验",
-}
-CITE_STATUS_LABELS = {
-    "partial": "部分核验",
-    "unverified": "未核验",
-    "not_found": "未找到来源",
-    "fetch_failed": "抓取失败",
-}
-
 DEPTH_CSS = """
 .depth-tabs{display:flex;align-items:stretch;gap:2px}
 .depth-tab{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 18px 10px;
@@ -92,48 +70,12 @@ background:var(--paper-2);font-family:var(--sans);font-size:13px;line-height:1.8
 .argument-type{display:inline-block;margin-right:8px;padding:1px 6px;border:1px solid var(--rule-strong);
 font-size:10px;letter-spacing:.12em;color:var(--cinnabar)}
 .argument-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;font-size:11px;color:var(--ink-3)}
-.argument-meta a{color:var(--pine);border-bottom:1px dotted var(--pine)}
+.argument-meta a,.deep-anchors a{color:var(--pine);border-bottom:1px dotted var(--pine)}
 .deep-chain{margin:26px 0 30px}
 .deep-chain-fallback{margin:10px 0 0;font-size:13px;line-height:1.8;color:var(--ochre)}
-.research-dossier{margin:0 0 32px;padding:18px 20px;border:1px solid var(--rule-strong);background:var(--paper-2)}
-.research-head h3{font-size:20px;line-height:1.5;margin:0 0 8px}
-.research-head p{margin:0 0 6px;font-family:var(--sans);font-size:12px;line-height:1.8;color:var(--ink-2)}
-.research-badge{display:inline-block;margin-bottom:8px;padding:2px 8px;border:1px solid var(--cinnabar);
-font-family:var(--sans);font-size:10px;letter-spacing:.12em;color:var(--cinnabar)}
-.research-matrix{margin:18px 0 22px;overflow-x:auto}
-.research-matrix h4,.research-notes h4,.research-questions h4,.research-queries h4{margin:0 0 9px;
-font-family:var(--sans);font-size:12px;letter-spacing:.12em;color:var(--ink-3)}
-.research-matrix table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.7}
-.research-matrix th,.research-matrix td{padding:6px 8px;border:1px solid var(--rule);text-align:left;vertical-align:top}
-.research-matrix th{background:var(--paper);font-family:var(--sans);font-size:11px}
-.research-verdict{font-family:var(--sans);font-size:11px;white-space:nowrap}
-.research-note{margin:0 0 12px;padding:9px 12px;border-left:2px solid var(--rule-strong);background:var(--paper)}
-.research-note p{margin:0;font-size:14px;line-height:1.8}
-.research-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:5px;font-family:var(--sans);font-size:11px;color:var(--ink-3)}
-.research-meta a,.research-anchors a{color:var(--pine);border-bottom:1px dotted var(--pine)}
-.research-questions{margin:0;padding-left:21px;font-size:14px;line-height:1.8}
-.research-questions li{margin:0 0 12px}
-.research-why,.research-query{margin:4px 0 0;font-family:var(--sans);font-size:12px;line-height:1.7;color:var(--ink-2)}
-.research-query code{font-size:12px;color:var(--pine)}
-.research-queries{margin:0;padding-left:21px;font-size:13px;line-height:1.9}
-.research-citation{display:block;margin-top:4px;font-size:11px;color:var(--ink-3)}
-.cite-ref{margin-left:2px;font-family:var(--sans);font-size:10px;line-height:1}
-.cite-ref a{color:var(--cinnabar);border-bottom:1px dotted var(--cinnabar)}
-.cite-status{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--rule-strong);
-font-family:var(--sans);font-size:10px;color:var(--ink-3);white-space:nowrap}
-.citation-list{margin:22px 0 0;padding-top:14px;border-top:1px solid var(--rule)}
-.citation-list h4{margin:0 0 9px;font-family:var(--sans);font-size:12px;letter-spacing:.12em;color:var(--ink-3)}
-.citation-list ol{margin:0;padding-left:22px}
-.citation-list li{margin:0 0 10px;font-size:13px;line-height:1.8}
-.citation-list li a{color:var(--pine);border-bottom:1px dotted var(--pine)}
-.cite-meta{display:block;margin-top:2px;font-family:var(--sans);font-size:11px;color:var(--ink-3)}
-.cite-stale{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--ochre);
-font-family:var(--sans);font-size:10px;color:var(--ochre);white-space:nowrap}
-.citation-list q{display:block;margin-top:4px;font-size:12px;color:var(--ink-2)}
 body.only-source [data-origin="added"]{display:none!important}
 html.depth-js [data-depth-tiers]{display:none!important}
-html.depth-js body[data-depth-tab="deep"] [data-depth-tiers~="deep"],
-html.depth-js body[data-depth-tab="research"] [data-depth-tiers~="research"]{display:block!important}
+html.depth-js body[data-depth-tab="deep"] [data-depth-tiers~="deep"]{display:block!important}
 html.depth-js section[data-body][hidden]{display:none}
 .flow-row[id]{scroll-margin-top:84px}
 .section-lead{margin:30px 0 18px;padding:2px 0 2px 14px;border-left:4px solid var(--pine);
@@ -184,7 +126,7 @@ section[data-body=source]{display:block!important}
 
 DEPTH_JS = """
 document.documentElement.classList.add('depth-js');
-const DEPTH_TABS = ['skim', 'standard', 'deep', 'research'];
+const DEPTH_TABS = ['skim', 'standard', 'deep'];
 const depth$ = (s, r) => (r || document).querySelector(s);
 const depth$$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 function setDepthTab(tab) {
@@ -351,7 +293,7 @@ def _compiled_body(skim, model):
 
 
 def _source_row(block, resolver):
-    element = _block_element(block, {"standard", "deep", "research"}, resolver)
+    element = _block_element(block, {"standard", "deep"}, resolver)
     block_id = block.get("id") or ""
     row_id = f' id="{html.escape(block_id, quote=True)}"' if block.get("kind") != "heading" else ""
     return f'<div class="flow-row" data-block="{html.escape(block_id, quote=True)}"{row_id}>{element}</div>'
@@ -461,7 +403,7 @@ def _anchor_links(units, block_ids, unit_map, block_map):
         f"{html.escape(label)}</a>"
         for block_id, label in links
     )
-    return f'<span class="research-anchors">{escaped}</span>'
+    return f'<span class="deep-anchors">{escaped}</span>'
 
 
 def _deep_note(note, units, block_map, section_first):
@@ -489,155 +431,6 @@ def _deep_chain(chain, model, blocks):
         if fallback:
             inner += f'<p class="deep-chain-fallback">{html.escape(fallback)}</p>'
     return f'<div class="deep-chain" data-origin="added" data-depth-tiers="deep">{inner}</div>'
-
-
-def _citation_stale(citation):
-    try:
-        accessed = datetime.fromisoformat(str(citation.get("accessed_at") or "").replace("Z", "+00:00"))
-    except ValueError:
-        return False
-    if accessed.tzinfo is None:
-        accessed = accessed.replace(tzinfo=UTC)
-    return datetime.now(UTC) - accessed > timedelta(days=STALE_DAYS)
-
-
-def _citation_claim_markup(row, claims, citation_by_id):
-    claim = claims.get(str(row.get("id") or "")) or {}
-    status = claim.get("status") or ""
-    if status == "verified":
-        refs = []
-        for index, citation_id in enumerate(claim.get("citation_ids") or [], start=1):
-            if str(citation_id) not in citation_by_id:
-                continue
-            escaped_id = html.escape(str(citation_id), quote=True)
-            refs.append(
-                f'<sup class="cite-ref"><a href="#cite-{escaped_id}" '
-                f'id="cite-ref-{html.escape(str(row.get("id") or ""), quote=True)}-{index}">[{index}]</a></sup>'
-            )
-        return "".join(refs)
-    label = CITE_STATUS_LABELS.get(status)
-    if not label:
-        return ""
-    return f'<span class="cite-status" data-status="{html.escape(status, quote=True)}">{label}</span>'
-
-
-def _citation_list(citations):
-    if not isinstance(citations, dict):
-        return ""
-    items = citations.get("citations") or []
-    if not items:
-        return ""
-    parts = ['<section class="citation-list"><h4>引用来源</h4><ol>']
-    for citation in items:
-        if not isinstance(citation, dict):
-            continue
-        citation_id = html.escape(str(citation.get("id") or ""), quote=True)
-        url = html.escape(str(citation.get("url") or ""), quote=True)
-        title = str(citation.get("title") or citation.get("url") or "")
-        domain = str(citation.get("source_domain") or "")
-        accessed = str(citation.get("accessed_at") or "")
-        stale = '<span class="cite-stale">超过 180 天</span>' if _citation_stale(citation) else ""
-        parts.append(
-            f'<li id="cite-{citation_id}"><a href="{url}" rel="noreferrer">{html.escape(title)}</a>'
-            f'<span class="cite-meta">{html.escape(domain)} · {html.escape(accessed)}</span>'
-            f"{stale}<q>{html.escape(str(citation.get('quote') or ''))}</q></li>"
-        )
-    parts.append("</ol></section>")
-    return "".join(parts)
-
-
-def _research_panel(research, model, blocks, citations=None):
-    if not isinstance(research, dict):
-        return ""
-    citation_claims = {}
-    citation_by_id = {}
-    if isinstance(citations, dict):
-        citation_claims = {
-            str(claim.get("claim_id") or claim.get("id")): claim
-            for claim in citations.get("claims") or []
-            if isinstance(claim, dict) and (claim.get("claim_id") or claim.get("id"))
-        }
-        citation_by_id = {
-            str(citation.get("id")): citation
-            for citation in citations.get("citations") or []
-            if isinstance(citation, dict) and citation.get("id")
-        }
-    searched = bool((citations or {}).get("searched") if isinstance(citations, dict) else False)
-    searched = searched or bool(research.get("searched"))
-    badge = "研究议程 · 已检索" if searched else "研究议程 · 未检索"
-    unit_map = {unit.get("id"): unit for unit in model.get("units") or [] if unit.get("id")}
-    block_map = {block.get("id"): block for block in blocks or [] if block.get("id")}
-    parts = [
-        '<section class="research-dossier" data-origin="added" data-depth-tiers="research" aria-label="研究议程">',
-        f'<header class="research-head"><span class="research-badge">{badge}</span>'
-        "<h3>待查判断与研究问题</h3>"
-        f"<p>{'已连接检索提供方。' if searched else '未连接检索提供方，以下只是待查议程，不是核验结论。'}</p>"
-        "</header>",
-    ]
-    matrix = research.get("matrix") or []
-    if matrix:
-        parts.append(
-            '<div class="research-matrix"><h4>判断矩阵</h4><table><thead><tr>'
-            "<th>判断</th><th>状态</th><th>变化</th><th>还需要什么</th><th>锚点</th>"
-            "</tr></thead><tbody>"
-        )
-        for row in matrix:
-            verdict = row.get("verdict") or ""
-            verdict_text = VERDICT_LABELS.get(verdict, verdict)
-            anchors = _anchor_links(row.get("units"), row.get("blocks"), unit_map, block_map)
-            claim_markup = _citation_claim_markup(row, citation_claims, citation_by_id)
-            parts.append(
-                f"<tr><td>{html.escape(row.get('claim') or '')}{claim_markup}</td>"
-                f'<td><span class="research-verdict">{html.escape(verdict_text)}</span></td>'
-                f"<td>{html.escape(row.get('change') or '')}</td>"
-                f"<td>{html.escape(row.get('needed') or '')}</td><td>{anchors}</td></tr>"
-            )
-        parts.append("</tbody></table></div>")
-    notes = research.get("notes") or []
-    if notes:
-        parts.append('<div class="research-notes"><h4>议程笔记</h4>')
-        grouped = {}
-        for note in notes:
-            grouped.setdefault(note.get("type") or "open", []).append(note)
-        for type_ in ("context", "later", "critique", "application", "open"):
-            group = grouped.get(type_) or []
-            if not group:
-                continue
-            parts.append(f"<h5>{html.escape(RESEARCH_TYPE_LABELS.get(type_, type_))}</h5>")
-            for note in group:
-                certainty = "已核验" if note.get("certainty") == "verified" else "未核验"
-                anchors = _anchor_links(note.get("related_units"), note.get("blocks"), unit_map, block_map)
-                note_citations = "".join(
-                    f'<span class="research-citation">'
-                    f"{html.escape(citation.get('quote') or citation.get('url') or '')}</span>"
-                    for citation in note.get("citations") or []
-                    if isinstance(citation, dict)
-                )
-                parts.append(
-                    f'<div class="research-note"><p>{html.escape(note.get("text") or "")}</p>'
-                    f'<div class="research-meta"><span>{certainty}</span>{anchors}</div>{note_citations}</div>'
-                )
-        parts.append("</div>")
-    questions = research.get("questions") or []
-    if questions:
-        parts.append('<div class="research-questions"><h4>开放问题</h4><ol>')
-        for question in questions:
-            anchors = _anchor_links(question.get("units"), [], unit_map, block_map)
-            parts.append(
-                f"<li><b>{html.escape(question.get('text') or '')}</b>"
-                f'<p class="research-why">为什么：{html.escape(question.get("why") or "")}</p>'
-                f'<p class="research-query">查询：<code>{html.escape(question.get("query") or "")}</code></p>'
-                f'<div class="research-meta">{anchors}</div></li>'
-            )
-        parts.append("</ol></div>")
-    parts.append(_citation_list(citations))
-    queries = list(dict.fromkeys(q.get("query") for q in questions if q.get("query")))
-    if queries:
-        parts.append('<div class="research-queries"><h4>建议查询</h4><ul>')
-        parts.extend(f"<li><code>{html.escape(query)}</code></li>" for query in queries)
-        parts.append("</ul></div>")
-    parts.append("</section>")
-    return "".join(parts)
 
 
 def _standard_rows(model, blocks, standard, resolver, deep=None):
@@ -704,12 +497,12 @@ def _standard_rows(model, blocks, standard, resolver, deep=None):
     return "".join(parts)
 
 
+
 def _tab_buttons():
     specs = (
         ("skim", "速览", "编译 · 5–8 分钟"),
         ("standard", "标准", "逐字原文"),
         ("deep", "深读", "逐字 · 论证注"),
-        ("research", "研究", "逐字 · 研究议程"),
     )
     buttons = []
     for key, label, note in specs:
@@ -733,10 +526,8 @@ def render_depth_chapter(
     generated_at=None,
     standard=None,
     deep=None,
-    research=None,
-    citations=None,
 ):
-    """渲染一页两树：编译速览 + 全部原文块；标准/深读/研究各叠加自己的层。"""
+    """渲染一页两树：编译速览 + 全部原文块；标准/深读各叠加自己的层。"""
     del ledger  # 处置账已落在 skim/核心计数里，这里只需要模型与速览。
     if standard is None:
         standard = build_standard(model, blocks)
@@ -747,14 +538,13 @@ def render_depth_chapter(
     n = int(chapter.get("n") or 0)
     compiled = _compiled_body(skim, model)
     source_rows = _standard_rows(model, blocks, standard, resolver, deep=deep)
-    research_panel = _research_panel(research, model, blocks, citations=citations)
     generated = html.escape(generated_at or chapter.get("generated_at") or "")
     prompt_version = html.escape((model or {}).get("prompt_version") or "")
     tabs = _tab_buttons()
-    if deep is not None or research is not None:
-        layer_note = "标准 / 深读 / 研究三档共用逐字正文；深读与研究只叠加注解与议程，不复制原文。"
+    if deep is not None:
+        layer_note = "标准 / 深读两档共用逐字正文；深读只叠加论证注解，不复制原文。"
     else:
-        layer_note = "深读/研究层将在后续生成；当前三档共用同一份逐字原文。"
+        layer_note = "标准 / 深读两档共用同一份逐字原文；深读注解将在后续生成。"
     safe_js = DEPTH_JS.replace("</", "<\\/")
     return (
         '<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8">'
@@ -772,14 +562,14 @@ def render_depth_chapter(
         f'<nav class="tierbar" aria-label="深读档位"><div class="tier-tabs depth-tabs" role="tablist">{tabs}</div>'
         '<div class="tier-note">同一章，速览为编译版 · 标准档逐字</div></nav>'
         f'<main class="read"><header class="read-head"><p class="eyebrow">{title} · 第 {n} 章 · 深读</p>'
-        f'<h1>{chapter_title}</h1><div class="read-stats"><span>标准/深读/研究三档共用逐字原文</span>'
+        f'<h1>{chapter_title}</h1><div class="read-stats"><span>标准/深读两档共用逐字原文</span>'
         "<span>速览与原文章节锚点互通</span></div></header>"
         '<div class="depth-bodies">'
         f'<section class="depth-panel" data-body="compiled" aria-label="编译版速览">{compiled}</section>'
         '<section class="depth-panel" data-body="source" aria-label="逐字原文">'
-        '<header class="depth-head"><p class="eyebrow">原文 · 标准 / 深读 / 研究</p><h2>逐字正文</h2>'
+        '<header class="depth-head"><p class="eyebrow">原文 · 标准 / 深读</p><h2>逐字正文</h2>'
         f'<p class="depth-warn">{layer_note}</p></header>'
-        f'{research_panel}<div class="flow">{source_rows}</div></section></div>'
+        f'<div class="flow">{source_rows}</div></section></div>'
         f'<footer class="read-foot"><a href="/reader/{uid}/{max(1, n - 1)}">← 上一章</a>'
         f'<a href="/reader/{uid}/{n + 1}">下一章 →</a></footer>'
         f'<div class="colophon">{author} · {prompt_version} · 生成 {generated} · '

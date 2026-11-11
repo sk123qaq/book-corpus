@@ -71,7 +71,7 @@ def test_audit_editorial_flags_missing_anchor_in_tier(reading_root):
     payload = _payload(block["id"])
     payload["visuals"][0]["tiers"] = ["skim"]
     clean = validate_editorial(payload, raw["blocks"], uid="B0001", n=1)
-    projections = {tier: project(raw["blocks"], None, tier) for tier in ("skim", "standard", "deep", "research")}
+    projections = {tier: project(raw["blocks"], None, tier) for tier in ("skim", "standard", "deep")}
     projections["skim"] = {"blocks": [], "stats": {}}
     problems = audit_editorial(clean, raw["blocks"], projections)
     assert problems
@@ -81,7 +81,7 @@ def test_audit_editorial_flags_missing_anchor_in_tier(reading_root):
 def test_render_chapter_includes_editorial(reading_root):
     service, raw, block = _chapter(reading_root)
     blocks = raw["blocks"]
-    projections = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep", "research")}
+    projections = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep")}
     book = service._book_view(service.library.book("B0001"))
     chapter = {"n": "01", "title": raw["title"], "source_sha256": raw["source_sha256"], "tiers": {}}
     clean = validate_editorial(_payload(block["id"]), blocks, uid="B0001", n=1)
@@ -99,7 +99,7 @@ def test_render_chapter_includes_editorial(reading_root):
 def test_render_chapter_without_editorial_stays_plain(reading_root):
     service, raw, _block = _chapter(reading_root)
     blocks = raw["blocks"]
-    projections = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep", "research")}
+    projections = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep")}
     book = service._book_view(service.library.book("B0001"))
     chapter = {"n": "01", "title": raw["title"], "source_sha256": raw["source_sha256"], "tiers": {}}
     html = render_chapter(book, chapter, blocks, projections)

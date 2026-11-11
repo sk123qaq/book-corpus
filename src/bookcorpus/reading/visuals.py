@@ -634,7 +634,7 @@ def render_visual(visual: dict, *, plate_no: int | None = None) -> str:
 
 
 def render_takeaways(
-    takeaways: list[dict], *, title: str = "", note: str = "", tiers=("standard", "deep", "research")
+    takeaways: list[dict], *, title: str = "", note: str = "", tiers=("standard", "deep")
 ) -> str:
     if not takeaways:
         return ""

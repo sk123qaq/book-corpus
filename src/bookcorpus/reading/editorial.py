@@ -10,8 +10,8 @@ from __future__ import annotations
 import re
 
 EDITORIAL_SCHEMA = 1
-TIERS = ("skim", "standard", "deep", "research")
-DEFAULT_TIERS = ("standard", "deep", "research")
+TIERS = ("skim", "standard", "deep")
+DEFAULT_TIERS = ("standard", "deep")
 PLACEMENTS = ("after", "inside", "before")
 VISUAL_KINDS = ("two_lives", "ratio", "scale", "curve", "ledger", "steps", "framing", "prediction")
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")

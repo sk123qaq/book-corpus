@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
-<title>四读 · 章节工单</title>
+<title>分层读 · 章节工单</title>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/pages.css">
@@ -12,7 +12,7 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i></span>分层读</a>
   <label class="search">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
     <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
@@ -43,8 +43,8 @@
 const PARTS = location.pathname.split('/').filter(Boolean);
 const UID = decodeURIComponent(PARTS[1] || '');
 const N = PARTS[2] || '';
-const TIER_KEYS = ['skim', 'standard', 'deep', 'research'];
-const DEPTH_KEYS = ['model', 'skim', 'standard', 'deep', 'research', 'citations'];
+const TIER_KEYS = ['skim', 'standard', 'deep'];
+const DEPTH_KEYS = ['model', 'skim', 'standard', 'deep'];
 let data = null;
 let draft = false;
 let selected = new Set(['standard']);
@@ -93,7 +93,7 @@ function render() {
   const pathReason = data.fallback_reason ? ' title="' + RD.esc(data.fallback_reason) + '"' : '';
   const generated = tiers.filter((t) => t.exists);
   const standardPack = generated.some((t) => t.key === 'standard');
-  document.title = '四读 · ' + chapter.title;
+  document.title = '分层读 · ' + chapter.title;
   const prev = Number(chapter.n) > 1 ? String(Number(chapter.n) - 1).padStart(2, '0') : '';
   const next = Number(chapter.n) < book.chapters ? String(Number(chapter.n) + 1).padStart(2, '0') : '';
   RD.mount('crumb').innerHTML = '<a href="/">书架</a><i>/</i><a href="' + RD.bookHref(book.uid) + '">' +
@@ -121,7 +121,7 @@ function render() {
         '<div class="cutbar"><div class="cutbar-head"><span class="lbl">' + RD.fmt(blocks.length) + ' 块</span>' +
           '<span><b>' + RD.fmt(standardBlocks.size) + '</b> 块进标准本</span></div><div class="ticks" id="ticks"></div></div>' +
         '<div class="preview" id="preview"></div>' +
-        '<div class="section-title"><h2>四档状态</h2><span class="lbl">存在于 工作区/阅读</span></div>' +
+        '<div class="section-title"><h2>三档状态</h2><span class="lbl">存在于 工作区/阅读</span></div>' +
         '<div class="pack-list" id="packs"></div>' +
         '<div class="section-title"><h2>门槛</h2><span class="lbl">最近一次生成</span></div>' +
         '<div class="gate-list" id="gates"></div>' +
@@ -163,7 +163,7 @@ function ticketHtml() {
     '<button class="btn btn-ghost" id="generate-edition"' + (fit.ok ? '' : ' disabled title="' + RD.esc(fit.reason) + '"') + '>生成视觉读本（模型约 30–60 秒）</button>' +
     (fit.ok ? '' : '<p class="fine edition-fit">本章不宜视觉读本：' + RD.esc(fit.reason) + '</p>') +
     '<div id="job-mount"></div>' +
-    '<p class="fine">' + (draft ? '当前是草稿：四档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
+    '<p class="fine">' + (draft ? '当前是草稿：三档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
       '原文逐字保留；讲解只做旁批，可一键隐藏。原文不重写、不合并。') + '</p>';
 }
 
@@ -266,7 +266,6 @@ function depthPanelHtml() {
       '<div class="depth-actions">' +
         '<button class="btn btn-primary" id="depth-generate" type="button"' + (running ? ' disabled' : '') + '>生成所选层</button>' +
         '<button class="btn btn-ghost" id="depth-rebuild-model" type="button"' + (running ? ' disabled' : '') + '>只重建结构模型</button>' +
-        '<button class="btn btn-ghost" id="depth-citations" type="button"' + (running ? ' disabled' : '') + '>只补研究引用</button>' +
       '</div>' +
       '<div id="depth-jobs"></div>' +
     '</div>';
@@ -296,8 +295,6 @@ function bindDepth() {
       submitDepth(DEPTH_KEYS.filter((key) => depthSelected && depthSelected.has(key)), false);
     } else if (event.target.closest('#depth-rebuild-model')) {
       submitDepth(['model'], true);
-    } else if (event.target.closest('#depth-citations')) {
-      submitDepth(['citations'], false);
     }
   });
 }

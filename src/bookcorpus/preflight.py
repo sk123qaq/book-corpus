@@ -24,15 +24,14 @@ OK = "ok"
 MISSING = "missing"
 WARN = "warn"
 
-#: 这些能力缺失时可以确认后降级（研究层能退成未检索议程）。
-DEGRADABLE = frozenset({"reading.search"})
+#: 当前没有可降级的能力；保留开关给未来的显式降级路径。
+DEGRADABLE = frozenset()
 
 PI_AUTH = Path("~/.pi/agent/auth.json")
 MIMO_KEY = Path("~/.config/mimo/api_key")
 PADDLE_KEY = Path("~/.config/PaddleOCR/api_key")
 MINERU_KEY = Path("~/.config/mineru/api_key")
 
-SEARCH_KEYS = ("TAVILY_API_KEY", "BRAVE_API_KEY", "SERPER_API_KEY", "FIRECRAWL_API_KEY")
 
 
 @dataclass(frozen=True)
@@ -90,24 +89,6 @@ SPECS: dict[str, Spec] = {
         fix=(
             "在 %s 里写 OPENCODE_GO_API_KEY=...，存盘后重启 8771；或者直接在 pi 里 /login 选 opencode-go" % _env_file()
         ),
-    ),
-    "reading.search": Spec(
-        label="四读·检索 provider",
-        scenario="生成研究层（research）或引用层（citations）时",
-        needs="READING_SEARCH_PROVIDER 加上 TAVILY_/BRAVE_/SERPER_/FIRECRAWL_API_KEY 之一；"
-        "或 READING_SEARCH_PROVIDER=http 加 READING_SEARCH_ENDPOINT",
-        fix=(
-            "在 %s 里写：\n"
-            "        READING_SEARCH_PROVIDER=auto\n"
-            "        FIRECRAWL_API_KEY=fc-...（或 TAVILY_API_KEY=...）\n"
-            "        存盘后重启 8771 生效；不想配就带 allow_unverified 跑未检索议程" % _env_file()
-        ),
-    ),
-    "reading.fetch": Spec(
-        label="四读·抓页",
-        scenario="生成引用层、需要抓取网页原文时",
-        needs="READING_FETCH_PROVIDER（默认 http，不需要 key）；firecrawl 抓页需要 FIRECRAWL_API_KEY",
-        fix="在 %s 里设 READING_FETCH_PROVIDER=http（默认）或 firecrawl 并配 FIRECRAWL_API_KEY" % _env_file(),
     ),
     "ocr.mineru": Spec(
         label="MinerU OCR",
@@ -197,23 +178,6 @@ def _check_reading_model() -> Status:
     return _status("reading.model", MISSING, "没有 OPENCODE_GO_API_KEY，pi 的 auth.json 里也没有 opencode-go")
 
 
-def _check_reading_search() -> Status:
-    from .reading.depth import citations
-
-    info = citations.search_config_status()
-    if not info["ok"]:
-        return _status("reading.search", MISSING, info["detail"])
-    return _status("reading.search", OK, "%s（%s）" % (info["detail"], info["origin"]))
-
-
-def _check_reading_fetch() -> Status:
-    from .reading.depth import citations
-
-    info = citations.fetch_config_status()
-    state = OK if info["ok"] else MISSING
-    return _status("reading.fetch", state, info["detail"])
-
-
 def _check_ocr_mineru() -> Status:
     if (os.environ.get("MINERU_API_KEY") or os.environ.get("MINERU_TOKEN") or "").strip():
         return _status("ocr.mineru", OK, "MINERU_API_KEY 已设置")
@@ -247,8 +211,6 @@ def _check_expand_pi() -> Status:
 _CHECKS = {
     "books.model": _check_books_model,
     "reading.model": _check_reading_model,
-    "reading.search": _check_reading_search,
-    "reading.fetch": _check_reading_fetch,
     "ocr.mineru": _check_ocr_mineru,
     "ocr.paddleocr": _check_ocr_paddle,
     "expand.mimo": _check_expand_mimo,

@@ -1,18 +1,19 @@
 # 视觉读本 术语表（GLOSSARY）
 
 配合 `docs/视觉读本.md` 与 `docs/design/视觉读本-决策记录-2026-11-07.md` 使用。本文只定义视觉读本链路的术语；
-四读、注释层、编辑层等旧概念沿用既有文档，这里仅在易混处澄清。
+分层读、注释层、编辑层等概念沿用既有文档，这里仅在易混处澄清。
 
 ## 载体与档位
 
 **视觉读本（visual edition）**
 每章独立生成的"结构增强 HTML 页"，正文逐字保留，叠加目录、要点、图示、
 流程、回看等编辑组件。产物固定为一个目录 `pack/edition/`，入口是 `edition/index.html`，
-路由 `/reader/<uid>/<n>/edition`。不替换四读任何档位。
+路由 `/reader/<uid>/<n>/edition`。不替换分层读任何档位。
 
-**四读（four reads）**
-频道体系 `skim / standard / deep / research`，走 `tiers.py` 投影。
-视觉读本是**独立第五产物**，不是第五档：不进四读任务、不进档位勾选框。
+**分层读（tiered reading）**
+频道体系 `skim / standard / deep`，走 `tiers.py` 投影。原 `research` 档与
+`citations` 层已于 2026-11-11 退役，不再出现在 reader、工单、导出与生成链。
+视觉读本是**独立第五产物**，不是第四档：不进分层读任务、不进档位勾选框。
 
 **Agent 标准档（agent standard）**
 `agent_standard.py` 的直出 HTML 实验入口（`/reader/<uid>/<n>/agent`）。
@@ -24,8 +25,8 @@
 统一的章节解析产物：front matter + 有序块 + 正文全文。
 所有入库走 `books/<uid>/md/` 的 Markdown，由解析器成块
 （`paragraph / heading / image / quote / list / table / code / footnote`），
-块 ID沿用四读的 `B%02d` 稳定编号。视觉读本与四读共享同一解析结果，
-保证 `content.json` 的锚点与四读的锚点可互查。
+块 ID沿用分层读的 `B%02d` 稳定编号。视觉读本与分层读共享同一解析结果，
+保证 `content.json` 的锚点与分层读的锚点可互查。
 
 **结（section）**
 两个二级标题（H2，`## `）之间的连续块序列，含首个 H2 前的开头块。
@@ -36,12 +37,12 @@
 视觉读本的编辑层数据，per-chapter 存 `pack/edition/content.json`。
 只包含"叠加物"（章节要点、结引言、图示 spec、流程/对照/回看等），
 **不含正文**。渲染时正文由 SourceDocument 按 `anchor`（结或块锚点）
-插入，保证逐字与四读一致。结构沿用四读编辑层 `editorial.json` 的写法
+插入，保证逐字与分层读一致。结构沿用分层读编辑层 `editorial.json` 的写法
 （`beats / visuals / takeaways / claims`），并在其上扩展段落级结位。
 
 **图示（plate）**
 HTML/SVG 生成的示意、流程、对照、图表组件，对应 editorial 的 `kind`。
-"图 N" 标题遵循四读 `fig-kicker/fig-cap` 合并规则。
+"图 N" 标题遵循分层读 `fig-kicker/fig-cap` 合并规则。
 
 ## 生成链路
 
@@ -56,10 +57,10 @@ HTML/SVG 生成的示意、流程、对照、图表组件，对应 editorial 的
 
 **视觉任务（generation job）**
 `JobQueue` 中的 `kind=edition` 任务：brief+适配 → content 生成 →
-门禁 → 渲染 `edition/index.html`。与四读任务分列，允许并发。
+门禁 → 渲染 `edition/index.html`。与分层读任务分列，允许并发。
 
 **门禁（gates）**
-发布前检查集合：G1–G9（四读原有）+ V 系列（视觉读本）：
+发布前检查集合：G1–G9（分层读原有）+ V 系列（视觉读本）：
 - V1: 无外部资源/脚本/样式；
 - V2: 原文覆盖（每个块的文本在页面字面出现，含表格行、脚注序）；
 - V3: 结标题次序正确、折页控制条无 JS 不渲染；

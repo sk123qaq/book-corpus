@@ -7,7 +7,7 @@ import time
 import uuid
 
 STEPS = ("切块", "标注", "校验", "组档", "渲染")
-DEPTH_STEPS = ("结构", "速览", "标准", "深读", "研究", "引用", "渲染")
+DEPTH_STEPS = ("结构", "速览", "标准", "深读", "渲染")
 STEPS_BY_KIND = {
     "reading": STEPS,
     "edition": ("解析", "编辑", "校验", "渲染", "入库"),
@@ -154,11 +154,11 @@ class JobQueue:
     ):
         job_layers = None
         if kind == "depth":
-            # 深度层按显式 layers 生产，不复用四档的“空即 standard”约定。
+            # 深度层按显式 layers 生产，不复用三档的“空即 standard”约定。
             tiers = []
             job_layers = list(layers or [])
         else:
-            tiers = [tier for tier in ("skim", "standard", "deep", "research") if tier in set(tiers or ["standard"])]
+            tiers = [tier for tier in ("skim", "standard", "deep") if tier in set(tiers or ["standard"])]
             if not tiers:
                 tiers = ["standard"]
         job = {

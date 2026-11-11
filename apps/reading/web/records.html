@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
-<title>四读 · 生成记录</title>
+<title>分层读 · 生成记录</title>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/pages.css">
@@ -12,7 +12,7 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i></span>分层读</a>
   <label class="search">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
     <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
@@ -63,8 +63,8 @@
 <script src="/assets/common.js"></script>
 <script src="/assets/theme.js"></script>
 <script>
-const TIER_KEYS = ['skim', 'standard', 'deep', 'research'];
-const LAYER_NAMES = { model: '结构', skim: '速览', standard: '标准', deep: '深读', research: '研究', citations: '引用' };
+const TIER_KEYS = ['skim', 'standard', 'deep'];
+const LAYER_NAMES = { model: '结构', skim: '速览', standard: '标准', deep: '深读' };
 const RUNNING = ['queued', 'chunking', 'annotating', 'validating', 'projecting', 'rendering'];
 const TABS = [
   { key: 'all', name: '全部', match: () => true },
@@ -235,7 +235,7 @@ function detail(job, open) {
 function renderPacks(packs) {
   RD.mount('pack-count').textContent = packs.length + ' 章有产物';
   if (!packs.length) {
-    RD.mount('packs').innerHTML = '<div class="empty"><b>还没有读本产物</b><p>生成后的 chapter.html、四档导出与 manifest 都会出现在这里。</p></div>';
+    RD.mount('packs').innerHTML = '<div class="empty"><b>还没有读本产物</b><p>生成后的 chapter.html、三档导出与 manifest 都会出现在这里。</p></div>';
     return;
   }
   RD.mount('packs').innerHTML = packs.map((pack) =>
@@ -330,13 +330,11 @@ function bindActions(scope) {
       if (!job) return;
       const rebuild = button.dataset.rebuild === '1';
       const label = rebuild ? '重建结构模型' : '重跑所选层';
-      if (rebuild && !window.confirm('重建结构模型会跳过缓存、重新调用模型；研究层与引用随之过期，' +
-          '会一并重做。确定吗？')) return;
+      if (rebuild && !window.confirm('重建结构模型会跳过缓存、重新调用模型；已有的速览、标准、深读会按需重做。确定吗？')) return;
       const layers = (job.layers && job.layers.length ? job.layers : Object.keys(LAYER_NAMES)).slice();
-      if (rebuild && layers.includes('citations') && !layers.includes('research')) layers.push('research');
       button.disabled = true;
       button.textContent = '提交中…';
-      const send = async (allowUnverified) => {
+      const send = async () => {
         try {
           const fresh = await RD.api('/api/depth/' + encodeURIComponent(job.uid) + '/' + encodeURIComponent(job.n), {
             method: 'POST',
@@ -345,7 +343,6 @@ function bindActions(scope) {
               model: job.model,
               effort: job.effort,
               rebuild_model: rebuild,
-              allow_unverified: Boolean(allowUnverified),
             },
           });
           data.jobs = [fresh].concat(data.jobs.filter((item) => item.id !== fresh.id));
@@ -354,11 +351,6 @@ function bindActions(scope) {
           RD.toast('已重新排队 · ' + fresh.id);
           load(true);
         } catch (err) {
-          if (err.code === 'missing_config' && err.payload && err.payload.degradable && !allowUnverified &&
-              window.confirm(err.payload.error + '\n\n' + (err.payload.missing[0] ? err.payload.missing[0].fix : '') +
-                '\n\n先按「未检索议程」继续？')) {
-            return send(true);
-          }
           if (err.code === 'job_active') {
             data.jobs = (err.conflicts || []).concat(data.jobs);
             render();

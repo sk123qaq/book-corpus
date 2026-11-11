@@ -1,4 +1,4 @@
-"""四档规则：结构校验、依赖闭包、确定性投影、草稿回退。"""
+"""三档规则：结构校验、依赖闭包、确定性投影、草稿回退。"""
 
 import pytest
 
@@ -45,7 +45,7 @@ def _annotation():
 
 
 def test_tier_specs_match_design():
-    assert TIER_ORDER == ("skim", "standard", "deep", "research")
+    assert TIER_ORDER == ("skim", "standard", "deep")
     assert TIER_SPECS["skim"] == {
         "label": "速览",
         "c_min": 0.40,
@@ -58,7 +58,6 @@ def test_tier_specs_match_design():
     }
     assert TIER_SPECS["standard"]["c_min"] == 0.60
     assert TIER_SPECS["deep"]["c_max"] == 0.90
-    assert TIER_SPECS["research"]["c_max"] == 1.00
 
 
 def test_validate_annotation_fills_defaults():
@@ -188,13 +187,6 @@ def test_project_standard_keeps_more_than_skim():
     assert standard["stats"]["chars"] >= skim["stats"]["chars"]
     assert standard["stats"]["c_char"] <= 0.75
     assert standard["stats"]["e"] <= 0.25
-
-
-def test_project_research_keeps_all_content():
-    annotation = validate_annotation(_annotation(), _blocks())
-    out = project(_blocks(), annotation, "research")
-    assert out["stats"]["c_char"] == 1.0
-    assert [block["id"] for block in out["blocks"]] == ["B01", "B02", "B03", "B04"]
 
 
 def test_tier_blocks_override_wins():

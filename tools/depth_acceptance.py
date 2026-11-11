@@ -11,8 +11,8 @@
 长章（如 B0002/01）在 effort=max 下会超过客户端默认 32768 输出上限，runner 默认
 通过 ``READING_MODEL_MAX_TOKENS=65536`` 放宽；可用 ``--max-tokens`` 覆盖。
 
-``--no-deep/--no-research/--no-citations`` 只用于冒烟，必须同时给
-``--allow-partial``，且报告会标记 ``partial=true``，不能当作 20 章验收。
+``--no-deep`` 只用于冒烟，必须同时给 ``--allow-partial``，且报告会标记
+``partial=true``，不能当作 20 章验收。
 """
 
 import argparse
@@ -92,10 +92,6 @@ def _missing_artifacts(depth, args):
     names = list(REQUIRED_ARTIFACTS)
     if not args.no_deep:
         names.append("layers/deep.json")
-    if not args.no_research:
-        names.append("layers/research.json")
-    if not args.no_citations:
-        names.append("citations.json")
     missing = []
     for name in names:
         path = depth / name
@@ -106,26 +102,14 @@ def _missing_artifacts(depth, args):
 
 def _failed_layer(text):
     markers = (
-        ("citations", ("引用", "检索")),
         ("skim", ("速览",)),
         ("deep", ("深读",)),
-        ("research", ("研究",)),
         ("model", ("模型", "max_tokens", "守恒")),
     )
     for layer, words in markers:
         if any(word in (text or "") for word in words):
             return layer
     return None
-
-
-def _citations_unconfigured(payload, args):
-    if args.no_citations:
-        return False
-    if payload is None:
-        return False
-    if payload.get("citations_skipped"):
-        return False
-    return payload.get("citations_provider") in (None, "none")
 
 
 def _install(src, dest):
@@ -167,9 +151,8 @@ def _run_once(root, uid, n, args):
             "--effort",
             args.effort,
         ]
-        for flag in ("no_deep", "no_research", "no_citations"):
-            if getattr(args, flag):
-                cmd.append("--" + flag.replace("_", "-"))
+        if args.no_deep:
+            cmd.append("--no-deep")
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env["READING_MODEL_TIMEOUT"] = str(args.model_timeout)
@@ -188,7 +171,6 @@ def _run_once(root, uid, n, args):
         depth = _depth_dir(tmp, uid, n)
         state = _read_state(depth)
         missing = _missing_artifacts(depth, args)
-        provider_missing = _citations_unconfigured(payload, args)
         error = (completed.stderr or "").strip()[-4000:]
         if not error and completed.returncode != 0:
             error = (completed.stdout or "").strip()[-4000:]
@@ -198,12 +180,9 @@ def _run_once(root, uid, n, args):
             or payload.get("status") != "ready"
             or state is None
             or missing
-            or provider_missing
         ):
             if missing and not error:
                 error = "深度产物不完整：" + "、".join(missing)
-            if provider_missing and not error:
-                error = "未配置检索提供方（citations_provider=none）；验收要求真实 Firecrawl"
             return {
                 "ok": False,
                 "elapsed_s": elapsed,
@@ -271,7 +250,6 @@ def _run_chapter(root, uid, n, args):
         "usd": round(usd, 6),
         "usage_missing_attempts": usage_missing,
         "payload": last.get("payload"),
-        "citations_provider": (last.get("payload") or {}).get("citations_provider"),
         "error": last.get("error"),
         "failed_layer": last.get("failed_layer") if not last["ok"] else None,
         "missing_artifacts": last.get("missing_artifacts") or [],
@@ -313,7 +291,7 @@ def _write_report(out_dir, report):
         rows.append(
             f"| {chapter['chapter']} | {status} | {chapter['attempts']} | {chapter['elapsed_s']:.1f}s | "
             f"{usage.get('total_tokens', 0)} | {chapter.get('usd') or 0} | "
-            f"{payload.get('citations_total', 0)}/{payload.get('citations_verified', 0)} | {detail} |"
+            f"{detail} |"
         )
     markdown = "\n".join(
         [
@@ -327,14 +305,11 @@ def _write_report(out_dir, report):
             + (f"，{report['failed']} 章失败" if report["failed"] else ""),
             f"- 合计 tokens：{report['usage'].get('total_tokens', 0)}，"
             f"费用（provider list_cost）：${report['usd']:.4f}",
-            f"- 引用：{report.get('citations', {}).get('total', 0)} 条来源 / "
-            f"{report.get('citations', {}).get('verified', 0)} 条核验（G13 warn 不阻断）",
-            f"- 检索提供方：{', '.join(report.get('citations', {}).get('providers') or []) or '未记录'}",
             *(["- **部分档位运行（--allow-partial），不能作为验收**"] if report.get("partial") else []),
             *[f"- 备注：{note}" for note in report.get("notes") or []],
             "",
-            "| 章 | 状态 | 尝试 | 耗时 | tokens | USD | 引用(总/核验) | 说明 |",
-            "|---|---|---|---|---|---|---|---|",
+            "| 章 | 状态 | 尝试 | 耗时 | tokens | USD | 说明 |",
+            "|---|---|---|---|---|---|---|",
             *rows,
             "",
         ]
@@ -364,13 +339,11 @@ def main(argv=None):
     parser.add_argument("--resume", action="store_true", help="跳过真实根里已 ready 的章")
     parser.add_argument("--keep-temp", action="store_true")
     parser.add_argument("--no-deep", action="store_true", help="只用于冒烟：跳过深读层")
-    parser.add_argument("--no-research", action="store_true", help="只用于冒烟：跳过研究层")
-    parser.add_argument("--no-citations", action="store_true", help="只用于冒烟：跳过检索")
     parser.add_argument("--allow-partial", action="store_true", help="允许冒烟用的 --no-*；报告会标记 partial")
     args = parser.parse_args(argv)
-    partial = bool(args.no_deep or args.no_research or args.no_citations)
+    partial = bool(args.no_deep)
     if partial and not args.allow_partial:
-        parser.error("--no-deep/--no-research/--no-citations 只用于冒烟；验收请加 --allow-partial")
+        parser.error("--no-deep 只用于冒烟；验收请加 --allow-partial")
 
     root = Path(args.root).expanduser().resolve()
     if not (root / "books.toml").is_file():
@@ -404,18 +377,10 @@ def main(argv=None):
     results.sort(key=lambda item: order[(item["uid"], item["n"])])
     usage = {}
     usd = 0.0
-    citation_total = 0
-    citation_verified = 0
-    citation_providers = set()
     for result in results:
         usage = merge_usage(usage, result.get("usage") or {})
         if isinstance(result.get("usd"), (int, float)):
             usd += float(result["usd"])
-        payload = result.get("payload") or {}
-        citation_total += payload.get("citations_total") or 0
-        citation_verified += payload.get("citations_verified") or 0
-        if result.get("citations_provider"):
-            citation_providers.add(result["citations_provider"])
     report = {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "report_source": "runner",
@@ -429,11 +394,6 @@ def main(argv=None):
         "elapsed_s": round(time.monotonic() - started, 1),
         "usage": usage,
         "usd": round(usd, 6),
-        "citations": {
-            "total": citation_total,
-            "verified": citation_verified,
-            "providers": sorted(citation_providers),
-        },
         "partial": partial,
         "notes": list(args.note),
         "chapters": results,

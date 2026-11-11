@@ -57,8 +57,8 @@ def test_shelf_book_and_chapter_are_real_data(reading_root):
     chapter = service.chapter("B0001", 1)
     assert chapter["chapter"]["n"] == "01"
     assert len(chapter["blocks"]) == 1
-    assert len(chapter["tiers"]) == 4
-    assert [tier["name"] for tier in chapter["tiers"]] == ["速览", "标准", "深读", "研究"]
+    assert len(chapter["tiers"]) == 3
+    assert [tier["name"] for tier in chapter["tiers"]] == ["速览", "标准", "深读"]
     assert chapter["preview_blocks"] == ["B01"]
 
 
@@ -102,7 +102,7 @@ def test_draft_job_runs_through_local_queue_and_writes_only_work(reading_root):
 
     html = (pack / "chapter.html").read_text(encoding="utf-8")
     assert 'data-origin="source"' in html
-    assert html.count('data-tier-tab="') == 4
+    assert html.count('data-tier-tab="') == 3
     assert html.count('data-tier-tab="standard" aria-selected="true"') == 1
     assert "第一段写一个人走进屋子" in html
     assert 'data-origin="added"' in html  # 结构里保留了讲解层样式与容器
@@ -139,7 +139,7 @@ def test_incremental_generation_keeps_unselected_tiers(reading_root):
     assert chapter["tiers"][1]["exists"] is True
     assert chapter["tiers"][2]["exists"] is True
     assert chapter["tiers"][0]["exists"] is False
-    assert chapter["tiers"][3]["exists"] is False
+    assert chapter["tiers"][2]["exists"] is True
 
 
 def test_overwrite_selected_tier_keeps_other_tiers(reading_root):
@@ -172,7 +172,7 @@ def test_audit_rejects_changed_source_and_overlapping_card(reading_root):
     service = ReadingService(str(reading_root))
     raw = service.library.read_chapter("B0001", 1)
     blocks = raw["blocks"]
-    draft = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep", "research")}
+    draft = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep")}
     book = service._book_view(service.library.book("B0001"))
     chapter = {"n": "01", "title": raw["title"], "source_sha256": raw["source_sha256"], "tiers": {}}
     html = render_chapter(book, chapter, blocks, draft, resolver=lambda rel: "")
@@ -206,7 +206,7 @@ def test_render_has_notes_tier_switch_and_source_only_controls(reading_root):
     service = ReadingService(str(reading_root))
     raw = service.library.read_chapter("B0001", 1)
     blocks = raw["blocks"]
-    projections = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep", "research")}
+    projections = {tier: project(blocks, None, tier) for tier in ("skim", "standard", "deep")}
     projections["standard"]["cards"] = [
         {
             "id": "C01",
@@ -226,7 +226,7 @@ def test_render_has_notes_tier_switch_and_source_only_controls(reading_root):
     assert 'id="cmp-btn"' in html
     assert "body.only-source" in html
     assert 'data-tier-tab="skim"' in html
-    assert 'data-tier-tab="research"' in html
+    assert 'data-tier-tab="research"' not in html
     assert "第一段写一个人走进屋子" in source_texts(html)["B01"]
 
 

@@ -1,4 +1,4 @@
-/* 四读前端公共层：只读 API，数据全部来自本地服务。 */
+/* 分层读前端公共层：只读 API，数据全部来自本地服务。 */
 (function () {
   const RD = (window.RD = {});
 
@@ -74,8 +74,8 @@
     }
   };
 
-  RD.tierNames = { skim: '速览', standard: '标准', deep: '深读', research: '研究' };
-  RD.depthNames = { model: '结构模型', skim: '速览', standard: '标准', deep: '深读', research: '研究', citations: '引用' };
+  RD.tierNames = { skim: '速览', standard: '标准', deep: '深读' };
+  RD.depthNames = { model: '结构模型', skim: '速览', standard: '标准', deep: '深读' };
   RD.modelDefaults = { model: 'deepseek-v4.1-flash', effort: 'high' };
   RD.modelOptions = ['deepseek-v4.1-flash', 'glm-5.3-flash'];
   RD.modelSettings = () => {
@@ -189,8 +189,8 @@
   };
 
   RD.tierDots = (tiers) => {
-    const keys = ['skim', 'standard', 'deep', 'research'];
-    return '<span class="tier-sq" title="四档出片状态">' + keys.map((key) => {
+    const keys = ['skim', 'standard', 'deep'];
+    return '<span class="tier-sq" title="三档出片状态">' + keys.map((key) => {
       const info = (tiers && tiers[key]) || {};
       const cls = info.exists ? (info.stale ? 'stale' : 'on') : '';
       return '<i class="' + cls + '" data-tier="' + key + '"></i>';

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
-<title>四读 · 书</title>
+<title>分层读 · 书</title>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/pages.css">
@@ -12,7 +12,7 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i><i></i></span>四读</a>
+  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i></span>分层读</a>
   <label class="search">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
     <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
@@ -41,7 +41,7 @@
 <script src="/assets/theme.js"></script>
 <script>
 const UID = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
-const TIER_KEYS = ['skim', 'standard', 'deep', 'research'];
+const TIER_KEYS = ['skim', 'standard', 'deep'];
 let data = null;
 let current = null;
 let selected = new Set(['standard']);
@@ -77,18 +77,18 @@ function render() {
   RD.mount('crumb').innerHTML = '<a href="/">书架</a><i>/</i><a href="/catalog?q=' +
     encodeURIComponent((book.subjects || [])[0] || '') + '">' + RD.esc((book.subjects || [])[0] || '未分类') +
     '</a><i>/</i><span>' + RD.esc(book.title_short || book.title) + '</span>';
-  document.title = '四读 · ' + (book.title_short || book.title);
+  document.title = '分层读 · ' + (book.title_short || book.title);
 
   RD.mount('book-root').innerHTML =
     '<section class="book-hero">' +
       '<div class="cover" style="background:' + RD.esc(book.color) + '">' +
-        '<span class="cv-kicker">四读 · ' + RD.esc(book.uid) + '</span>' +
+        '<span class="cv-kicker">分层读 · ' + RD.esc(book.uid) + '</span>' +
         '<span class="cv-title">' + RD.esc(book.title_short || book.title) + '</span>' +
         '<span class="cv-author">' + RD.esc(book.author_display) + '</span>' +
         '<span class="cv-stamp">可读</span></div>' +
       '<div class="book-copy"><div class="eyebrow">' + RD.esc((book.subjects || []).join(' · ') || '未分类') + '</div>' +
         '<h1>' + RD.esc(book.title) + '</h1>' +
-        '<p class="sub">' + RD.esc(book.author_display) + ' · ' + RD.fmt(chapters.length) + ' 章 · 四档读本工作台</p>' +
+        '<p class="sub">' + RD.esc(book.author_display) + ' · ' + RD.fmt(chapters.length) + ' 章 · 三档读本工作台</p>' +
         '<div class="book-meta"><span><b>' + RD.fmt(chapters.length) + '</b>章</span>' +
           '<span><b>' + RD.wan(chars) + '</b>万字</span>' +
           '<span><b>' + RD.fmt(packs) + '</b>章有读本</span>' +
@@ -159,7 +159,7 @@ function renderTicket() {
       : '<a class="btn btn-ghost" href="' + RD.chapterHref(data.book.uid, chapter.n) + '">打开本章工单 →</a>') +
     '<div class="existing" id="existing"></div>' +
     '<div id="job-mount"></div>' +
-    '<p class="fine">' + (draft ? '当前是草稿：四档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
+    '<p class="fine">' + (draft ? '当前是草稿：三档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
       '原文逐字保留；讲解层带「补」标记，可一键隐藏。模型默认开启，失败时不发布半成品。') + '</p>';
   RD.mount('tier-list').addEventListener('change', (event) => {
     const input = event.target.closest('input[type=checkbox]');
@@ -176,13 +176,13 @@ function renderTicket() {
 
 function tierOption(key) {
   const chapter = current;
-  const spec = { skim: 'C 40–55% · E ≤10% · 600 字/分', standard: 'C 60–75% · E ≤25% · 500 字/分', deep: 'C 80–90% · E ≤40% · 350 字/分', research: 'C 90–100% · E ≤50% · 300 字/分' }[key];
+  const spec = { skim: 'C 40–55% · E ≤10% · 600 字/分', standard: 'C 60–75% · E ≤25% · 500 字/分', deep: 'C 80–90% · E ≤40% · 350 字/分' }[key];
   const info = (chapter.tiers || {})[key] || {};
   const job = RD.jobForTier(chapter.jobs, key);
   const busy = Boolean(job || pending.has(key));
   const busyText = job ? RD.jobHint(job) : '提交中';
   const draft = !!(chapter.pack && chapter.pack.draft);
-  const speed = { skim: 600, standard: 500, deep: 350, research: 300 }[key];
+  const speed = { skim: 600, standard: 500, deep: 350 }[key];
   const minutes = info.stats ? info.stats.minutes : Math.max(1, Math.round(chapter.chars / speed));
   return '<label class="tier-opt' + (selected.has(key) ? ' checked' : '') + (busy ? ' busy' : '') +
     '"><input type="checkbox" value="' + key + '"' +
@@ -211,7 +211,7 @@ function renderExisting() {
   );
   RD.mount('existing').innerHTML = rows.length
     ? '<div class="lbl">本章已有</div>' + rows.join('')
-    : '<div class="lbl">本章尚未生成</div><p class="fine" style="margin:4px 0 0">生成后会在本轮工单里看到四档进度。</p>';
+    : '<div class="lbl">本章尚未生成</div><p class="fine" style="margin:4px 0 0">生成后会在本轮工单里看到三档进度。</p>';
 }
 
 function planFor(keys) {

@@ -10,7 +10,7 @@
 - 查原文：段落级倒排检索，支持概念同义词组，返回 `books/<uid>/md/章节.md:行号`。
 - 问书：`book-corpus query` 定位书与章。要成段回答并带逐字引文，用 `book-corpus-qa` 技能或演示页。
 - 管书：入库、分类、拆章、出 HTML 阅读版、PDF 转 Markdown、删书与冷宫。
-- 看库：项目默认只启动统一入口（8773）；四读（8771）、操作台（8770）、检索演示页（8765）与日课页（8772）按需启动，全部只绑 `127.0.0.1`。
+- 看库：项目默认只启动统一入口（8773）；分层读（8771）、操作台（8770）、检索演示页（8765）与日课页（8772）按需启动，全部只绑 `127.0.0.1`。
 
 ## 实例结构
 
@@ -45,7 +45,7 @@
 |---|---|
 | `apps/ops/` | 统一操作台服务与 web，按需启动，127.0.0.1:8770 |
 | `apps/demo/` | 检索流程演示页与回答实现，按需启动，127.0.0.1:8765 |
-| `apps/reading/` | 四读书架、书目、正文与记录，按需启动，127.0.0.1:8771 |
+| `apps/reading/` | 分层读书架、书目、正文与记录，按需启动，127.0.0.1:8771 |
 | `apps/daily/` | 每日一章的只读阅读页，按需启动，127.0.0.1:8772 |
 | `apps/home/` | 统一入口首页，默认启动项，服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点入口按需代起四个服务，127.0.0.1:8773 |
 | `src/bookcorpus/` | 命令行包；`scripts/` 是全部可复跑脚本 |
@@ -339,7 +339,7 @@ python3 apps/daily/server.py --root <实例根>      # http://127.0.0.1:8772
 
 ### 出视觉读本
 
-四读是逐段读本；视觉读本是同一章的第二形态——xerox 复印稿风格的单页，含 hero、概览卡、图版、图表和 takeaways，正文仍逐字取自原文。章节工单里的「生成视觉读本」会调用模型，约 30–60 秒；文学、短章、超长章与图册会自动退回四读。
+分层读是逐段读本；视觉读本是同一章的第二形态——xerox 复印稿风格的单页，含 hero、概览卡、图版、图表和 takeaways，正文仍逐字取自原文。章节工单里的「生成视觉读本」会调用模型，约 30–60 秒；文学、短章、超长章与图册会自动退回分层读。
 
 ```bash
 uv run --frozen python - <<'PY'
@@ -399,13 +399,13 @@ chmod 600 .env
 
 真实环境变量永远优先；配置文件只读第一个存在的：仓库根 `.env` > 当前目录 `.env` > `~/.config/book-corpus/.env`。
 `BOOK_CORPUS_ENV=/path/to/file` 可以整个换成另一个文件（指了就不回退）。
-改完 `.env` 要重启对应服务（8771 四读、8773 首页）才会读到。
+改完 `.env` 要重启对应服务（8771 分层读、8773 首页）才会读到。
 
 ### 缺配置会怎样
 
 提交任务前按场景预检，缺了直接报「缺少配置：…」，写清缺哪个变量、当前值是什么、该写在哪。
-唯一允许确认后降级的是研究层：没配检索 provider 时，页面会问一次「按未检索议程继续？」，
-同意后研究层记为 `searched=false`；引用层（citations）始终要求真能检索。
+分层读现在只保留速览、标准、深读三档，生成只检查模型 key；原研究层与引用层的
+检索/抓页配置已随阶段 1 退役，不再有“确认后降级”的入口。
 
 看全部能力的当前状态：
 
@@ -418,16 +418,14 @@ book-corpus doctor
 
 | 能力 | 什么时候要 | 变量 / 文件 | 缺了会怎样 |
 |---|---|---|---|
-| 四读·标注/结构模型 | 标注章节、生成或重建深读结构层 | `OPENCODE_GO_API_KEY`，或 pi 已登录 `opencode-go`（`~/.pi/agent/auth.json`） | 拒绝提交，提示配 key |
-| 四读·检索 provider | 研究层、引用层 | `READING_SEARCH_PROVIDER` + `TAVILY_API_KEY` / `BRAVE_API_KEY` / `SERPER_API_KEY` / `FIRECRAWL_API_KEY` 之一；或 `=http` + `READING_SEARCH_ENDPOINT` | 研究层需确认后降级；引用层拒绝提交 |
-| 四读·抓页 | 引用层抓网页原文 | `READING_FETCH_PROVIDER`（默认 `http`，不需要 key）；`firecrawl` 需要 `FIRECRAWL_API_KEY` | 选了 firecrawl 却没 key 时拒绝提交 |
+| 分层读·标注/结构模型 | 标注章节、生成或重建深读结构层 | `OPENCODE_GO_API_KEY`，或 pi 已登录 `opencode-go`（`~/.pi/agent/auth.json`） | 拒绝提交，提示配 key |
 | 书库·模型 | `ingest`、分类、拆章修复、问答归纳 | 工作区 `books.toml` 的 `[model]` + 可执行的 `pi` | 脚本启动前报缺 |
 | MinerU | PDF 读不出字、OCR 兜底 | `MINERU_API_KEY`，或 `~/.config/mineru/api_key` | `doctor` 标缺；OCR 任务自己也会报 |
 | PaddleOCR | 扫描件逐页 OCR | `~/.config/PaddleOCR/api_key` | 跑之前报缺 |
 | MiMo | `build_expand.py --provider mimo` | `~/.config/mimo/api_key` | 跑之前报缺 |
 | pi 账号 | `build_expand.py` 用 commandcode / opencode | `~/.pi/agent/auth.json` 里有对应登录 | 跑之前报缺 |
 
-### 四读的模型 key
+### 分层读的模型 key
 
 ```bash
 # .env
@@ -438,20 +436,6 @@ OPENCODE_GO_API_KEY=sk-...
 `READING_MODEL_NAME`、`READING_MODEL_URL`、`READING_MODEL_EFFORT`、`READING_MODEL_TIMEOUT`、
 `READING_MODEL_MAX_TOKENS` 可以覆盖默认模型与端点。
 
-### 检索 provider
-
-```bash
-# .env：auto 会挑第一个有 key 的
-READING_SEARCH_PROVIDER=auto
-FIRECRAWL_API_KEY=fc-...
-# 或者
-TAVILY_API_KEY=tvly-...
-```
-
-也可以不写 `.env`，沿用 pi 的 `~/.pi/agent/web-search.json`（它里面的 `searchProvider` 与
-`tavilyApiKey` / `braveApiKey` / `serperApiKey` / `firecrawlApiKey` 仍然认）。
-项目自己的 `.env` 优先，便于按仓库隔离。抓页默认走内置 HTTP；要 firecrawl 正文提取就设
-`READING_FETCH_PROVIDER=firecrawl` 并配上 `FIRECRAWL_API_KEY`。
 
 ### OCR 与扩展生成的 key
 

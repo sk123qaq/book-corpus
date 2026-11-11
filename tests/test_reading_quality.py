@@ -9,7 +9,7 @@ from bookcorpus.reading.render import render_chapter
 from bookcorpus.reading.service import ReadingService, audit_pack
 from bookcorpus.reading.tiers import project, validate_annotation
 
-TIERS = ("skim", "standard", "deep", "research")
+TIERS = ("skim", "standard", "deep")
 
 PNG_1X1 = (
     b"\x89PNG\r\n\x1a\n"
@@ -190,10 +190,10 @@ def test_render_marks_model_caption(reading_root):
         "cards": [],
     }
     checked = validate_annotation(annotation, blocks)
-    projection = project(blocks, checked, "research")
+    projection = project(blocks, checked, "deep")
     book = service._book_view(service.library.book("B0001"))
     chapter = {"n": "01", "title": raw["title"], "source_sha256": raw["source_sha256"], "tiers": {}}
-    html = render_chapter(book, chapter, blocks, {"research": projection}, resolver=lambda rel: rel)
+    html = render_chapter(book, chapter, blocks, {"deep": projection}, resolver=lambda rel: rel)
     assert 'data-caption-src="model"' in html
     assert '<span class="fig-cap">%s</span>' % caption in html
     assert 'width="120"' in html

@@ -1,6 +1,6 @@
 # ruff: noqa: E501
 # CSS/HTML/JS 模板按浏览器里可读的写法保留长行，不按 Python 行宽折行。
-"""自包含读本渲染。源文块逐块落地，四档用 ``data-tiers`` 切换。
+"""自包含读本渲染。源文块逐块落地，三档用 ``data-tiers`` 切换。
 
 读本不依赖外部 CSS/JS；测试用 HTMLParser 从 ``data-origin="source"`` 抽文本，
 与源块逐块比对（G1）。导出页只含一档，图片按需内嵌。
@@ -27,7 +27,6 @@ TIER_META = {
     "skim": ("速览", "40–55% · E≤10%"),
     "standard": ("标准", "60–75% · E≤25%"),
     "deep": ("深读", "80–90% · E≤40%"),
-    "research": ("研究", "90–100% · E≤50%"),
 }
 
 READER_CSS = """
@@ -223,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.addEventListener('keydown', e => {
     if (e.target.matches('input,textarea')) return;
-    if (e.key >= '1' && e.key <= '4') { const t = TIERS[Number(e.key) - 1]; if (t) setTier(t.key, true); }
+    if (e.key >= '1' && e.key <= String(TIERS.length)) { const t = TIERS[Number(e.key) - 1]; if (t) setTier(t.key, true); }
   });
   $$('.foreedge i').forEach(tick => tick.addEventListener('click', () => {
     const row = document.querySelector('[data-block="' + tick.dataset.block + '"]');
@@ -607,7 +606,7 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
     return (
         '<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        "<title>%s · %s · 四读</title><style>%s</style></head>"
+        "<title>%s · %s · 分层读</title><style>%s</style></head>"
         '<body class="%s" data-tier="%s">%s<main class="read"><header class="read-head">'
         '<p class="eyebrow">%s · %s</p><h1>%s</h1><div class="read-stats">%s</div>%s</header>%s'
         '<div class="flow">%s</div>'
@@ -639,7 +638,7 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
 
 
 def render_chapter(book, chapter, blocks, projections, *, resolver=None, editorial=None):
-    """读本单页：四档 tab、只看原文、对照、页边刻度与记录。"""
+    """读本单页：三档 tab、只看原文、对照、页边刻度与记录。"""
     cards = _cards_by_trigger(projections)
     return _reader_body(book, chapter, blocks, projections, cards, resolver, standalone=False, editorial=editorial)
 

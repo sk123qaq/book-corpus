@@ -171,7 +171,7 @@ def test_depth_job_keeps_layers_and_does_not_force_a_tier(tmp_path):
         assert job["kind"] == "depth"
         assert job["tiers"] == []
         assert job["layers"] == ["model", "skim"]
-        assert [step["name"] for step in job["steps"]] == ["结构", "速览", "标准", "深读", "研究", "引用", "渲染"]
+        assert [step["name"] for step in job["steps"]] == ["结构", "速览", "标准", "深读", "渲染"]
         assert _wait_until(lambda: queue.get(job["id"])["state"] == "done")
         assert queue.get(job["id"])["layers"] == ["model", "skim"]
     finally:

@@ -20,7 +20,7 @@ SYSTEM_PROMPT = """你是中文书稿的图表编辑。只输出一个 JSON 对�
 
 硬规则：
 - beats：按原文顺序，每个 before_block 必须是已有块 id；title ≤ 24 字，question ≤ 48 字。
-- visuals：每个 after_block 必须是已有块 id；tiers 用 ["standard","deep","research"]。
+- visuals：每个 after_block 必须是已有块 id；tiers 用 ["standard","deep"]。
   claims 至少一条，quote 必须逐字来自该 block 的 text，不能改写、拼接或用省略号。
 - 图上的数字、倍数、金额必须来自 claims 引用的原文；display 按原文单位。
   如果原文说“50 万美元”，display 就写“$500,000”或“50 万美元”，不要混用。
@@ -62,7 +62,7 @@ SYSTEM_PROMPT = """你是中文书稿的图表编辑。只输出一个 JSON 对�
 
 版式示例（只示意字段，不要照抄内容）：
 {"id":"rail-scale","kind":"scale","title":"一英寸的缝，二十九英尺的隆起",
- "after_block":"B12","placement":"after","tiers":["standard","deep","research"],
+ "after_block":"B12","placement":"after","tiers":["standard","deep"],
  "data":{"bars":[{"label":"缝隙","display":"1 英寸","value":1,"tone":"muted"},
                  {"label":"隆起","display":"29.7 英尺","value":29.7,"tone":"accent"}],
          "factor":"×356","note":"同一条铁轨，横向与纵向的尺度差。"},
@@ -72,7 +72,7 @@ SYSTEM_PROMPT = """你是中文书稿的图表编辑。只输出一个 JSON 对�
 {"schema":1,"uid":"...","n":1,
  "takeaways_title":"...","takeaways_note":"...",
  "beats":[{"id":"beat-1","title":"...","question":"...","before_block":"B01",
-          "tiers":["standard","deep","research"]}],
+          "tiers":["standard","deep"]}],
  "visuals":[...],
  "takeaways":[{"text":"...","sources":["B01"]}],
  "note_tags":{"B01":"概念 · ..."}}

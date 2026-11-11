@@ -1,4 +1,4 @@
-/* 四读 · shared page styles for catalog / chapter ticket / records */
+/* 分层读 · shared page styles for catalog / chapter ticket / records */
 .page-head{padding:42px 0 26px;border-bottom:2px solid var(--ink)}
 .page-head .eyebrow{margin-bottom:10px}
 .page-head h1{font:900 clamp(40px,5.4vw,64px)/1.05 var(--serif);letter-spacing:.04em;margin:0 0 12px;max-width:15em}

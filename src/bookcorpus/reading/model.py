@@ -1,7 +1,7 @@
 """可选模型标注：OpenAI-compatible chat/completions。
 
 默认开启。测试可用 ``READING_ANNOTATE=0`` / ``--no-annotate`` 走离线草稿；
-真实生成失败时直接报错，不再用四档同文草稿冒充成功。
+真实生成失败时直接报错，不再用三档同文草稿冒充成功。
 """
 
 import hashlib

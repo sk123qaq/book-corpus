@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""8771 四读 本地服务。只绑 127.0.0.1，只用标准库。"""
+"""8771 分层读 本地服务。只绑 127.0.0.1，只用标准库。"""
 
 import argparse
 import json
@@ -309,20 +309,17 @@ class Handler(BaseHTTPRequestHandler):
             overwrite = data.get("overwrite", False)
             rebuild = data.get("rebuild", False)
             force_annotation = data.get("force_annotation", False)
-            allow_unverified = data.get("allow_unverified", False)
             if not isinstance(overwrite, bool):
                 raise ValueError("overwrite 必须是布尔值")
             if not isinstance(rebuild, bool):
                 raise ValueError("rebuild 必须是布尔值")
             if not isinstance(force_annotation, bool):
                 raise ValueError("force_annotation 必须是布尔值")
-            if not isinstance(allow_unverified, bool):
-                raise ValueError("allow_unverified 必须是布尔值")
             if not UID_RE.match(uid):
                 raise ValueError("uid 非法")
             if not isinstance(tiers, list) or not all(isinstance(item, str) for item in tiers):
                 raise ValueError("tiers 必须是字符串数组")
-            if any(item not in ("skim", "standard", "deep", "research") for item in tiers):
+            if any(item not in ("skim", "standard", "deep") for item in tiers):
                 raise ValueError("未知档位")
             if not model or len(model) > 80:
                 raise ValueError("模型名非法")
@@ -346,7 +343,6 @@ class Handler(BaseHTTPRequestHandler):
                         list(DEPTH_LAYERS),
                         model=model,
                         effort=effort,
-                        allow_unverified=allow_unverified,
                     )
             if job is None:
                 job = self.service.submit(
@@ -411,15 +407,12 @@ class Handler(BaseHTTPRequestHandler):
             model = str(data.get("model") or DEFAULT_MODEL).strip()
             effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
             rebuild_model = data.get("rebuild_model", False)
-            allow_unverified = data.get("allow_unverified", False)
             if not UID_RE.match(uid):
                 raise ValueError("uid 非法")
             if not isinstance(layers, list) or not layers or not all(isinstance(item, str) for item in layers):
                 raise ValueError("layers 必须是非空字符串数组")
             if not isinstance(rebuild_model, bool):
                 raise ValueError("rebuild_model 必须是布尔值")
-            if not isinstance(allow_unverified, bool):
-                raise ValueError("allow_unverified 必须是布尔值")
             if not model or len(model) > 80:
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
@@ -431,7 +424,6 @@ class Handler(BaseHTTPRequestHandler):
                 model=model,
                 effort=effort,
                 rebuild_model=rebuild_model,
-                allow_unverified=allow_unverified,
             )
         except FileNotFoundError:
             self._json(404, {"error": "找不到章节"})
@@ -484,6 +476,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _serve_depth(self, uid, n, head=False):
         # 只端出与当前源文一致的页面；模型重建或源文改动后的旧页都不端。
+        if self._retire_research_query():
+            return
         raw = self.service.library.read_chapter(uid, n)
         if raw is None:
             self._error(404, "这一章不存在", api=False, head=head)
@@ -504,7 +498,25 @@ class Handler(BaseHTTPRequestHandler):
         with open(path, encoding="utf-8") as fh:
             self._send(200, fh.read(), "text/html; charset=utf-8", head)
 
+    def _retire_research_query(self):
+        """旧书签 ?tier=research 退到深读档；返回 True 表示已发 302。"""
+        parsed = urllib.parse.urlsplit(self.path)
+        query = urllib.parse.parse_qs(parsed.query)
+        if query.get("tier") != ["research"]:
+            return False
+        query["tier"] = ["deep"]
+        location = urllib.parse.urlunsplit(
+            (parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query, doseq=True), "")
+        )
+        self.send_response(302)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return True
+
     def _serve_reader(self, uid, n, head=False):
+        if self._retire_research_query():
+            return
         path = self.service.store.chapter_html_path(uid, n)
         if not os.path.isfile(path):
             self._error(404, "这一章还没有生成读本", api=False, head=head)
@@ -524,7 +536,14 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, body, "text/html; charset=utf-8", head)
 
     def _serve_export(self, uid, n, tier, head=False):
-        if tier not in ("skim", "standard", "deep", "research"):
+        if tier == "research":
+            self._json(
+                410,
+                {"error": "legacy 研究导出已退役；深读档在 /reader/%s/%d/depth" % (uid, n)},
+                head,
+            )
+            return
+        if tier not in ("skim", "standard", "deep"):
             self._json(404, {"error": "未知档位"}, head)
             return
         path = self.service.store.export_path(uid, n, tier)
@@ -564,7 +583,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def _page_404(message):
     return """<!doctype html><html lang="zh-CN"><meta charset="utf-8">
-<title>404 · 四读</title><style>
+<title>404 · 分层读</title><style>
 body{background:#F3F0E7;color:#181817;font:16px/1.8 "Noto Serif CJK SC",serif;margin:0;
 display:grid;place-items:center;min-height:100vh}
 main{max-width:560px;padding:40px;border-top:3px solid #A8442F}
@@ -578,7 +597,7 @@ h1{font-size:28px;margin:0 0 12px}a{color:#1E3A36}
 def main(argv=None):
     # 仓库根的 .env 是主配置；先读它，下面解析默认值时才看得到。
     envfile.load()
-    parser = argparse.ArgumentParser(description="8771 四读 本地服务")
+    parser = argparse.ArgumentParser(description="8771 分层读 本地服务")
     parser.add_argument("--root", default=os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库"))
     parser.add_argument("--port", type=int, default=8771)
     group = parser.add_mutually_exclusive_group()
@@ -601,7 +620,7 @@ def main(argv=None):
     Handler.service = service
     Handler.quiet = args.quiet
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print("四读 8771 · root=%s · http://127.0.0.1:%d/" % (service.library.root, args.port), flush=True)
+    print("分层读 8771 · root=%s · http://127.0.0.1:%d/" % (service.library.root, args.port), flush=True)
     warning = preflight.summary(service.library.root)
     if warning:
         print("配置提示：" + warning + "；book-corpus doctor 看全部", file=sys.stderr, flush=True)

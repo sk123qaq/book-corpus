@@ -1,4 +1,4 @@
-"""四档规则：把源文块与标注投影成 skim/standard/deep/research。
+"""三档规则：把源文块与标注投影成 skim/standard/deep。
 
 投影是确定性的、可重放的。输入只有源块与标注（人工或模型），没有模型调用。
 """
@@ -39,19 +39,9 @@ TIER_SPECS = {
         "figures": 5,
         "wpm": 350,
     },
-    "research": {
-        "label": "研究",
-        "c_min": 0.90,
-        "c_max": 1.00,
-        "b_min": 0.90,
-        "b_max": 1.00,
-        "e_max": 0.50,
-        "figures": 7,
-        "wpm": 300,
-    },
 }
-TIER_ORDER = ("skim", "standard", "deep", "research")
-OPTIONAL_CLAIM_TIER = {"standard": 1, "deep": 2, "research": 3}
+TIER_ORDER = ("skim", "standard", "deep")
+OPTIONAL_CLAIM_TIER = {"standard": 1, "deep": 2}
 CONTENT_KINDS = {"paragraph", "quote", "list", "image", "table", "code"}
 
 
@@ -357,7 +347,7 @@ def _closure(selected, entry_map, depth=1):
     """补入有限层依赖。
 
     模型常把整章串成 ``B01 <- B02 <- ...`` 的顺序链；传递闭包会把
-    任何后段块扩成整章，四档随之失去差异。只补直接前置块，既保留
+    任何后段块扩成整章，三档随之失去差异。只补直接前置块，既保留
     局部语境，又不让一条链吞掉所有取舍。
     """
     frontier = list(selected)
@@ -539,8 +529,6 @@ def project(blocks, annotation, tier, draft=False):
     if override:
         selected = set(override) | headings
         _closure(selected, entry_map)
-    elif tier == "research":
-        selected = {block["id"] for block in content} | headings
     else:
         selected = {block["id"] for block in content if entry_map.get(block["id"], {}).get("spine")}
         _closure(selected, entry_map)
@@ -565,7 +553,7 @@ def project(blocks, annotation, tier, draft=False):
             linked = [item["from"] for item in supports if item["to"] == claim["id"]]
             if not linked:
                 continue
-            take = linked if tier in ("deep", "research") else linked[:1]
+            take = linked if tier == "deep" else linked[:1]
             for block_id in take:
                 selected.add(block_id)
                 _closure(selected, entry_map)

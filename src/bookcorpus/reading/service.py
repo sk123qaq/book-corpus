@@ -1,4 +1,4 @@
-"""编排：解析 → （可选）标注 → 校验 → 四档 → 渲染 → 门禁 → 原子落盘。"""
+"""编排：解析 → （可选）标注 → 校验 → 三档 → 渲染 → 门禁 → 原子落盘。"""
 
 import glob
 import hashlib
@@ -13,20 +13,10 @@ from typing import ClassVar
 
 from .. import preflight
 from .agent_standard import generate_standard_html, render_agent_page
-from .depth.citations import (
-    FetchError,
-    HttpPageFetcher,
-    SearchError,
-    audit_citations,
-    build_citations,
-    fetcher_from_env,
-    provider_from_env,
-)
 from .depth.deep import audit_deep, generate_deep, validate_deep
 from .depth.disposition import audit_conservation, plan_all_dispositions
 from .depth.model import generate_chapter_model
 from .depth.render import render_depth_chapter
-from .depth.research import audit_research, generate_research, validate_research
 from .depth.skim import audit_skim, generate_skim, validate_skim
 from .depth.standard import build_standard
 from .edition import audit_edition, build_brief, decide_template, generate_content, render_edition, validate_content
@@ -51,14 +41,12 @@ MAX_BUDGET_TOKENS = 500_000
 MAX_BUDGET_USD = 1.0
 USD_PER_MTOK_IN = 1.0
 USD_PER_MTOK_OUT = 2.0
-DEPTH_LAYERS = ("model", "skim", "standard", "deep", "research", "citations")
+DEPTH_LAYERS = ("model", "skim", "standard", "deep")
 DEPTH_FILES = {
     "model": "chapter_model.json",
     "skim": "layers/skim.json",
     "standard": "layers/standard.json",
     "deep": "layers/deep.json",
-    "research": "layers/research.json",
-    "citations": "citations.json",
 }
 
 
@@ -177,8 +165,6 @@ def _depth_estimate(blocks):
         },
         "standard": {"tokens": 0, "usd": 0.0},
         "deep": scaled(0.6, 0.6),
-        "research": scaled(0.6, 0.6),
-        "citations": {"tokens": 0, "usd": 0.0},
     }
 
 
@@ -689,12 +675,12 @@ class ReadingService:
         return {"book": view, "chapters": chapters}
 
     def _depth_tiers(self, uid, n, info):
-        """把 depth 层的磁盘状态映射成书目录页用的四档状态。"""
+        """把 depth 层的磁盘状态映射成书目录页用的三档状态。"""
         state = info.get("state") or {}
         status = info.get("status")
         updated = state.get("layer_updated_at") or {}
         tiers = {}
-        for key in ("skim", "standard", "deep", "research"):
+        for key in ("skim", "standard", "deep"):
             exists = status in ("ready", "stale") and Path(self.store.depth_path(uid, n, DEPTH_FILES[key])).is_file()
             tiers[key] = {
                 "exists": exists,
@@ -833,14 +819,8 @@ class ReadingService:
             if depth_state["status"] == "ready":
                 data["depth"]["skim"] = self.store.depth_json(uid, n, "layers/skim.json")
                 deep = self.store.depth_json(uid, n, "layers/deep.json")
-                research = self.store.depth_json(uid, n, "layers/research.json")
-                citations = self.store.depth_json(uid, n, "citations.json")
                 if deep is not None:
                     data["depth"]["deep"] = deep
-                if research is not None:
-                    data["depth"]["research"] = research
-                if citations is not None:
-                    data["depth"]["citations"] = citations
                 data["depth"]["html"] = "/reader/%s/%d/depth" % (uid, n)
             status = self.depth_status(uid, n)
             data["depth"]["layers"] = status["layers"]
@@ -885,9 +865,7 @@ class ReadingService:
                 failed_by_layer.setdefault(layer, job)
 
         layer_model_sha = state.get("layer_model_sha") if state else None
-        layer_input_sha = state.get("layer_input_sha") if state else None
         chapter_model_sha = state.get("chapter_model_sha") if state else None
-        research_sha = state.get("research_sha") if state else None
         layer_usage = state.get("layer_usage") if state else None
         layer_usage = layer_usage if isinstance(layer_usage, dict) else {}
         layer_updated_at = state.get("layer_updated_at") if state else None
@@ -908,20 +886,11 @@ class ReadingService:
                 if source_stale:
                     status = "stale"
                 if (
-                    layer not in ("model", "citations")
+                    layer != "model"
                     and isinstance(layer_model_sha, dict)
                     and layer in layer_model_sha
                     and layer_model_sha.get(layer) != chapter_model_sha
                 ):
-                    status = "stale"
-                if (
-                    layer == "citations"
-                    and isinstance(layer_input_sha, dict)
-                    and "citations" in layer_input_sha
-                    and layer_input_sha.get("citations") != research_sha
-                ):
-                    status = "stale"
-                if layer == "citations" and layers.get("research", {}).get("status") != "ready":
                     status = "stale"
             if active_job is not None:
                 status = "running"
@@ -962,12 +931,8 @@ class ReadingService:
     def editorial(self, uid, n):
         return self.store.editorial(uid, n)
 
-    def submit_depth(self, uid, n, layers, model=None, effort=None, rebuild_model=False, allow_unverified=False):
-        """提交一层或多层深度生产；每层独立，未勾选的层原样保留。
-
-        ``allow_unverified`` 只影响研究层：没有检索 provider 时，确认后可以跑
-        未检索议程。引用层要求真去检索，不吃这个开关。
-        """
+    def submit_depth(self, uid, n, layers, model=None, effort=None, rebuild_model=False):
+        """提交一层或多层深度生产；每层独立，未勾选的层原样保留。"""
         if not self.library.book(uid) or not self.library.chapter(uid, n):
             raise FileNotFoundError(f"找不到章节 {uid}/{n}")
         if not isinstance(layers, (list, tuple)) or not layers:
@@ -983,33 +948,8 @@ class ReadingService:
         model_file = self.store.depth_path(uid, n, DEPTH_FILES["model"])
         if "model" not in requested and (rebuild_model or not Path(model_file).is_file()):
             requested.insert(0, "model")
-        if "citations" in requested and "research" not in requested:
-            research_file = self.store.depth_path(uid, n, DEPTH_FILES["research"])
-            if not Path(research_file).is_file():
-                raise ValueError("生成引用前需要已有研究层，或同时生成研究层")
-            if self.depth_status(uid, n)["layers"]["research"]["status"] != "ready":
-                raise ValueError("研究层已过期或未完成；请同时重建研究层后再补引用")
-        if "model" in requested and "citations" in requested and "research" not in requested:
-            raise ValueError("重建结构模型后研究层会过期；生成引用时需同时重建研究层")
-        if allow_unverified and "citations" in requested and preflight.missing(["reading.search"]):
-            # 用户已确认按未检索议程跑：引用层没有真检索就只能整层不出，
-            # 否则会写出“未核验”的引用冒充引用。
-            requested.remove("citations")
-            if not requested:
-                raise ValueError(
-                    "引用层需要真检索；缺检索 provider 时请连同研究层一起生成未检索议程，或配好 provider 后再补引用"
-                )
-        needed = ["reading.model"] if "model" in requested else []
-        if "research" in requested or "citations" in requested:
-            needed.append("reading.search")
-        if "citations" in requested:
-            needed.append("reading.fetch")
-        if needed:
-            preflight.require(
-                needed,
-                allow_unverified=bool(allow_unverified) and "citations" not in requested,
-                note="研究层会记成未检索议程（searched=false）；引用层不会生成。",
-            )
+        if "model" in requested:
+            preflight.require(["reading.model"], note="深读结构层要用模型生成。")
         with self._submit_lock:
             conflicts = self.queue.conflicts(uid, n)
             if conflicts:
@@ -1023,7 +963,6 @@ class ReadingService:
                 kind="depth",
                 layers=requested,
                 rebuild=bool(rebuild_model),
-                allow_unverified=bool(allow_unverified),
             )
 
     def save_editorial(self, uid, n, payload):
@@ -1060,7 +999,7 @@ class ReadingService:
         book = self._book_view(self.library.book(uid))
         if allowed_ids is None:
             editorial_tiers = {
-                tier: project(raw["blocks"], annotation, tier) for tier in ("standard", "deep", "research")
+                tier: project(raw["blocks"], annotation, tier) for tier in ("standard", "deep")
             }
             allowed_ids = set.intersection(
                 *[{block["id"] for block in projection["blocks"]} for projection in editorial_tiers.values()]
@@ -1322,7 +1261,6 @@ class ReadingService:
             if payload is not None and layer not in layer_sha:
                 layer_sha[layer] = _depth_sha(payload)
         layer_model_sha = dict(state.get("layer_model_sha") or {})
-        layer_input_sha = dict(state.get("layer_input_sha") or {})
         layer_usage = dict(state.get("layer_usage") or {})
         layer_updated_at = dict(state.get("layer_updated_at") or {})
         now = _now()
@@ -1368,7 +1306,7 @@ class ReadingService:
         chapter_model_sha = _depth_sha(model) if regenerated else (state.get("chapter_model_sha") or _depth_sha(model))
         if regenerated:
             for layer in DEPTH_LAYERS:
-                if layer not in ("model", "citations") and layer not in requested:
+                if layer != "model" and layer not in requested:
                     layer_model_sha[layer] = "__stale__"
 
         skim = existing.get("skim")
@@ -1431,67 +1369,9 @@ class ReadingService:
             else:
                 layer_usage.pop("deep", None)
 
-        research = existing.get("research")
-        if "research" in requested:
-            self._set_stage(job_id, "annotating")
-            research, research_meta = generate_research(
-                self.client or ModelClient(),
-                book,
-                chapter,
-                model,
-                blocks,
-                model=job.get("model"),
-                effort=job.get("effort"),
-            )
-            self._set_stage(job_id, "validating")
-            research = validate_research(research, model, blocks)
-            audit = audit_research(research, model, blocks)
-            if audit.get("errors"):
-                raise RuntimeError(f"研究审计未通过：{'；'.join(audit['errors'])}")
-            files[DEPTH_FILES["research"]] = json.dumps(research, ensure_ascii=False, indent=1)
-            layer_sha["research"] = _depth_sha(research)
-            layer_model_sha["research"] = chapter_model_sha
-            layer_updated_at["research"] = now
-            usage = (research_meta or {}).get("usage") if isinstance(research_meta, dict) else None
-            if isinstance(usage, dict) and usage:
-                layer_usage["research"] = usage
-            else:
-                layer_usage.pop("research", None)
-
-        research_sha = (
-            _depth_sha(research)
-            if "research" in requested and research is not None
-            else state.get("research_sha") or (_depth_sha(research) if research is not None else None)
-        )
-        citations = existing.get("citations")
-        if "citations" in requested:
-            if research is None:
-                raise RuntimeError("生成引用前需要研究层")
-            provider = provider_from_env()
-            fetcher = HttpPageFetcher() if provider.name == "none" else fetcher_from_env()
-            try:
-                citations = build_citations(
-                    self.client or ModelClient(),
-                    research,
-                    provider=provider,
-                    fetcher=fetcher,
-                )
-            except (SearchError, FetchError) as exc:
-                raise RuntimeError(f"检索失败：{exc}") from exc
-            self._set_stage(job_id, "validating")
-            audit = audit_citations(citations, research)
-            if audit.get("errors"):
-                raise RuntimeError(f"引用审计未通过：{'；'.join(audit['errors'])}")
-            files[DEPTH_FILES["citations"]] = json.dumps(citations, ensure_ascii=False, indent=1)
-            layer_sha["citations"] = _depth_sha(citations)
-            layer_input_sha["citations"] = research_sha
-            layer_model_sha.pop("citations", None)
-            layer_usage.pop("citations", None)
-            layer_updated_at["citations"] = now
-
         html_written = False
         skim_fresh = skim is not None and layer_model_sha.get("skim") == chapter_model_sha
-        html_layers = {"skim", "standard", "deep", "research", "citations"}
+        html_layers = {"skim", "standard", "deep"}
         need_render = skim_fresh and bool(html_layers & set(requested))
         if need_render:
             self._set_stage(job_id, "rendering")
@@ -1506,8 +1386,6 @@ class ReadingService:
                 generated_at=now,
                 standard=standard,
                 deep=deep,
-                research=research,
-                citations=citations,
             )
             html_written = True
         status = "ready" if skim is not None and html_written else "model"
@@ -1527,7 +1405,6 @@ class ReadingService:
                 "model": model_meta if model_meta is not None else state.get("model"),
                 "layer_sha": layer_sha,
                 "layer_model_sha": layer_model_sha,
-                "layer_input_sha": layer_input_sha,
                 "layer_usage": layer_usage,
                 "layer_updated_at": layer_updated_at,
             }
@@ -1535,8 +1412,6 @@ class ReadingService:
         state.setdefault("generated_at", now)
         if regenerated and isinstance(model_meta, dict) and model_meta.get("cache_key"):
             state["cache_key"] = model_meta["cache_key"]
-        if research_sha is not None:
-            state["research_sha"] = research_sha
         files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
         self.store.save_depth(uid, n, files)
         self._invalidate_packs()
@@ -1662,7 +1537,7 @@ class ReadingService:
         editorial_error = None
         if editorial is None and self.annotate and self.figures:
             preflight.require(["reading.model"], note="编辑层（图版与旁批）要用模型生成。")
-            editable = [tier for tier in ("standard", "deep", "research") if tier in projections]
+            editable = [tier for tier in ("standard", "deep") if tier in projections]
             allowed_ids = (
                 set.intersection(*[{block["id"] for block in projections[tier]["blocks"]} for tier in editable])
                 if editable

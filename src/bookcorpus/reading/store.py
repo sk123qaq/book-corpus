@@ -113,7 +113,7 @@ class Store:
     def tier_states(self, uid, n, source_sha=None):
         manifest = self.manifest(uid, n)
         states = {}
-        for tier in ("skim", "standard", "deep", "research"):
+        for tier in ("skim", "standard", "deep"):
             states[tier] = {"status": "missing", "stats": None, "generated_at": None}
         if not manifest:
             return {"manifest": None, "tiers": states, "status": "missing"}
@@ -329,7 +329,7 @@ class Store:
             if "export" not in preserved:
                 for tier, html in exports.items():
                     self._write(os.path.join(stage, "export", "%s.html" % tier), html)
-            # 四读重生成不能带走视觉读本与 Agent 标准档。
+            # 分层读重生成不能带走视觉读本与 Agent 标准档。
             if "edition" not in preserved:
                 source = os.path.join(base, "edition")
                 if os.path.isdir(source):

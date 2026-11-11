@@ -340,6 +340,38 @@ def _check_chain(
     return clean_chain
 
 
+def _open_questions(payload: Any, errors: list[str]) -> list[dict[str, str]]:
+    raw = payload.get("open_questions") if isinstance(payload, dict) else None
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        errors.append("open_questions 必须是数组")
+        return []
+    if len(raw) > 3:
+        errors.append("open_questions 最多 3 条")
+    result: list[dict[str, str]] = []
+    for index, item in enumerate(raw[:3]):
+        if isinstance(item, str):
+            text, why, anchor_id = item.strip(), "", ""
+        elif isinstance(item, dict):
+            text = str(item.get("text") or "").strip()
+            why = str(item.get("why") or "").strip()
+            anchor_id = str(item.get("anchor") or "").strip()
+        else:
+            errors.append(f"open_questions[{index}] 必须是字符串或对象")
+            continue
+        if not text:
+            errors.append(f"open_questions[{index}].text 不能为空")
+            continue
+        entry = {"text": text}
+        if why:
+            entry["why"] = why
+        if anchor_id:
+            entry["anchor"] = anchor_id
+        result.append(entry)
+    return result
+
+
 def _checks(
     payload: Any,
     model: dict[str, Any],
@@ -414,11 +446,11 @@ def _checks(
         if clean is not None:
             chains.append(clean)
 
-    return (
-        {"schema": DEEP_SCHEMA_VERSION, "prompt_version": DEEP_PROMPT_VERSION, "notes": notes, "chains": chains},
-        (errors),
-        warnings,
-    )
+    clean = {"schema": DEEP_SCHEMA_VERSION, "prompt_version": DEEP_PROMPT_VERSION, "notes": notes, "chains": chains}
+    questions = _open_questions(payload, errors)
+    if questions:
+        clean["open_questions"] = questions
+    return clean, (errors), warnings
 
 
 def validate_deep(payload: Any, model: dict[str, Any], blocks: list[dict[str, Any]]) -> dict[str, Any]:

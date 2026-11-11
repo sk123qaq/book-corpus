@@ -52,24 +52,6 @@ def no_key_server(reading_root):
 
 
 @pytest.fixture
-def unsearchable_server(reading_root):
-    proc, base = _start_server(
-        reading_root,
-        {
-            "READING_DEPTH": "1",
-            "READING_ANNOTATE": "0",
-            "OPENCODE_GO_API_KEY": "test-key",
-            "READING_SEARCH_PROVIDER": "none",
-            "PI_WEB_SEARCH_CONFIG": str(reading_root.parent / "no-web-search.json"),
-        },
-    )
-    try:
-        yield base
-    finally:
-        _stop_server(proc)
-
-
-@pytest.fixture
 def slow_server(reading_root):
     """模型端只接连接不回响应：任务确定地停在 annotating，方便观察冲突与取消。"""
     hang = socket.socket()
@@ -171,6 +153,34 @@ def _post(base, path, payload):
         return response.status, json.loads(response.read().decode("utf-8"))
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _get_no_redirect(base, path):
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(base + path, timeout=5) as response:
+            return response.status, response.headers, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers, exc.read()
+
+
+def test_research_urls_retire_to_deep_and_410(server):
+    status, headers, _body = _get_no_redirect(server, "/reader/B0001/01?tier=research")
+    assert status == 302
+    assert headers["Location"].endswith("/reader/B0001/01?tier=deep")
+
+    status, headers, _body = _get_no_redirect(server, "/reader/B0001/01/depth?tier=research")
+    assert status == 302
+    assert headers["Location"].endswith("/reader/B0001/01/depth?tier=deep")
+
+    status, headers, _body = _get_no_redirect(server, "/api/export/B0001/01/research")
+    assert status == 410
+    assert "退役" in _body.decode("utf-8")
+
+
 def test_pages_and_api_are_real_data(server):
     status, body, _headers = _get(server, "/api/shelf")
     assert status == 200
@@ -181,14 +191,14 @@ def test_pages_and_api_are_real_data(server):
     for path in ("/", "/catalog", "/records", "/book/B0001", "/chapter/B0001/01"):
         status, body, _ = _get(server, path)
         assert status == 200, path
-        assert "四读" in body, path
+        assert "分层读" in body, path
     assert "深度生产" in body
     status, body, _ = _get(server, "/api/book/B0001")
     assert len(json.loads(body)["chapters"]) == 2
     status, body, _ = _get(server, "/api/chapter/B0001/01")
     chapter = json.loads(body)
     assert chapter["chapter"]["chars"] > 0
-    assert len(chapter["tiers"]) == 4
+    assert len(chapter["tiers"]) == 3
     with pytest.raises(urllib.error.HTTPError) as exc:
         _get(server, "/api/book/NOPE")
     assert exc.value.code == 404
@@ -214,7 +224,7 @@ def test_job_poll_and_generated_reader(server, reading_root):
     status, body, _ = _get(server, "/reader/B0001/01")
     assert status == 200
     assert 'data-origin="source"' in body
-    assert body.count('data-tier-tab="') == 4
+    assert body.count('data-tier-tab="') == 3
     assert "第一段写一个人走进屋子" in body
     status, body, headers = _get(server, "/api/export/B0001/01/standard")
     assert status == 200
@@ -222,7 +232,7 @@ def test_job_poll_and_generated_reader(server, reading_root):
 
     _, body, _ = _get(server, "/api/chapter/B0001/01")
     chapter = json.loads(body)
-    assert [item["exists"] for item in chapter["tiers"]] == [False, True, False, False]
+    assert [item["exists"] for item in chapter["tiers"]] == [False, True, False]
     pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
     assert not (pack / "export" / "skim.html").exists()
     with pytest.raises(urllib.error.HTTPError) as exc:
@@ -252,18 +262,6 @@ def test_edition_without_model_key_returns_400_with_fix(no_key_server):
     assert body["code"] == "missing_config"
     assert body["missing"][0]["key"] == "reading.model"
     assert "OPENCODE_GO_API_KEY" in body["missing"][0]["fix"]
-
-
-def test_missing_search_provider_returns_degradable_payload(unsearchable_server):
-    status, body = _post_error(
-        unsearchable_server,
-        "/api/depth/B0001/1",
-        {"layers": ["research"], "model": "fake", "effort": "high"},
-    )
-    assert status == 400
-    assert body["code"] == "missing_config"
-    assert body["degradable"] is True
-    assert [item["key"] for item in body["missing"]] == ["reading.search"]
 
 
 def test_post_validates_payload_and_host(server):
@@ -488,12 +486,12 @@ def test_reading_server_new_chapter_uses_depth_job(reading_root):
     proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
     try:
         status, job = _post(
-            base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"], "allow_unverified": True}
+            base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]}
         )
         assert status == 202
         assert job["kind"] == "depth"
         # 没有检索 provider 时确认降级：研究层照出，引用层整层不出。
-        assert job["layers"] == ["model", "skim", "standard", "deep", "research"]
+        assert job["layers"] == ["model", "skim", "standard", "deep"]
         assert job["tiers"] == []
 
         status, old = _post(base, "/api/jobs", {"uid": "B0002", "n": 1, "tiers": ["standard"]})
@@ -601,6 +599,7 @@ def test_post_depth_returns_202_job_and_validates_payload(reading_root):
         for payload in (
             {"layers": []},
             {"layers": ["unknown"]},
+            {"layers": ["research"]},
             {"layers": ["citations"]},
             {"layers": ["skim"], "rebuild_model": "yes"},
             {"layers": ["skim"], "effort": "nope"},
