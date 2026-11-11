@@ -120,6 +120,9 @@ MINERU_FREE_PAGES, MINERU_DAY_PAGES = 1000, 5000
 MINERU_SKIP_TYPES = ("page_number", "page_footnote", "footer", "footer_image")
 SKIP_LEDGER = "skipped-pages.tsv"
 SKIP_COLS = ["at", "uid", "page", "paddle_chars", "mineru_chars", "action", "note"]
+# 配额按「提交页数」记，不按「读出页数」记：失败/超时也消耗额度。
+MINERU_ATTEMPTS = "mineru-attempts.tsv"
+MINERU_ATTEMPT_COLS = ["at", "uid", "pages", "outcome", "rc", "reason", "note"]
 RATIO_RE = re.compile(r"([\d,]+)\s*/\s*([\d,]+)\s+([\d.]+)%\s+\d+\s+md\b")
 ANCHOR_RE = re.compile(r"锚点\s*:\s*([\d,]+)\s*/\s*([\d,]+)\s+窗命中\s+([\d.]+)%")
 GREEN = ("landed", "replaced", "accepted", "staged-green")
@@ -912,12 +915,44 @@ def pdf_checks(ctx, row, per_page, log, result):
 # 正文，所以兜底路径是：切片 → 提交 → 读回来的正文写回 merged/pages → 重拼装。仍读不出的页
 # 记进 skipped-pages.tsv 后按跳过受理，不再挂人工复核。
 def mineru_pages_today(ctx):
+    """今日已提交页数。新批次看 attempts 账；老批次没有 attempts 时回退到 skip 账。"""
+    today = now()[:10]
+    attempts = os.path.join(ctx["batch"], MINERU_ATTEMPTS)
+    if os.path.isfile(attempts):
+        with open(attempts, encoding="utf-8") as fh:
+            total = 0
+            for r in csv.DictReader(fh, delimiter="\t"):
+                if not (r.get("at") or "").startswith(today):
+                    continue
+                try:
+                    total += int(r.get("pages") or 0)
+                except ValueError:
+                    continue
+            return total
     path = os.path.join(ctx["batch"], SKIP_LEDGER)
     if not os.path.isfile(path):
         return 0
-    today = now()[:10]
     with open(path, encoding="utf-8") as fh:
         return sum(1 for r in csv.DictReader(fh, delimiter="\t") if (r.get("at") or "").startswith(today))
+
+
+def mineru_attempt(ctx, row, pages, outcome, rc=None, reason="", note=""):
+    """记一次提交。outcome 只做诊断；配额只看 pages。"""
+    path = os.path.join(ctx["batch"], MINERU_ATTEMPTS)
+    new = not os.path.isfile(path)
+    with open(path, "a", encoding="utf-8") as fh:
+        if new:
+            fh.write("\t".join(MINERU_ATTEMPT_COLS) + "\n")
+        rec = {
+            "at": now(),
+            "uid": row["uid"],
+            "pages": len(pages),
+            "outcome": outcome,
+            "rc": "" if rc is None else rc,
+            "reason": reason,
+            "note": note,
+        }
+        fh.write("\t".join(str(rec.get(c, "")) for c in MINERU_ATTEMPT_COLS) + "\n")
 
 
 def skip_rows(ctx, rows):
@@ -987,7 +1022,12 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
         result["mineru_skip_reason"] = "今日已投 %d 页，到 %d 页封顶" % (used, MINERU_DAY_PAGES)
         log.write("MinerU 兜底跳过：今日已投 %d 页，到 %d 页封顶\n" % (used, MINERU_DAY_PAGES))
         return None
-    batch = pages[:MINERU_MAX_PAGES]
+    fuel = MINERU_DAY_PAGES - used
+    batch = pages[: min(MINERU_MAX_PAGES, max(0, fuel))]
+    if not batch:
+        result["mineru_skip_reason"] = "今日已投 %d 页，到 %d 页封顶" % (used, MINERU_DAY_PAGES)
+        log.write("MinerU 兜底跳过：今日已投 %d 页，到 %d 页封顶\n" % (used, MINERU_DAY_PAGES))
+        return None
     if used + len(batch) > MINERU_FREE_PAGES:
         log.write(
             "MinerU 今日已投 %d 页，本次 %d 页会超出 %d 页最高优先级额度（降速，不影响正确性）\n"
@@ -1039,6 +1079,7 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
         p = subprocess.run(cmd, cwd=L.ROOT, capture_output=True, text=True, timeout=1800)
     except subprocess.TimeoutExpired as exc:
         tail = mineru_tail(exc.stderr, exc.stdout)
+        mineru_attempt(ctx, row, batch, "timeout", None, "超时", tail)
         log.write("MinerU 兜底失败：超时 1800 秒，%s\n" % tail)
         raise MineruError("超时", None, tail, batch) from exc
     log.write(p.stdout[-4000:] + p.stderr[-4000:])
@@ -1053,11 +1094,14 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
         ]
     tail = mineru_tail(p.stderr, p.stdout)
     if p.returncode != 0:
+        mineru_attempt(ctx, row, batch, "failed", p.returncode, "rc!=0", tail)
         log.write("MinerU 兜底失败：rc=%d，%s\n" % (p.returncode, tail))
         raise MineruError("rc!=0", p.returncode, tail, batch)
     if not hits:
+        mineru_attempt(ctx, row, batch, "failed", p.returncode, "无 content list", tail)
         log.write("MinerU 兜底失败：rc=0 但没有 content list，%s\n" % tail)
         raise MineruError("无 content list", p.returncode, tail, batch)
+    mineru_attempt(ctx, row, batch, "ok", p.returncode, "", "")
 
     blocks = json.loads(pathlib.Path(sorted(hits, key=os.path.getmtime)[-1]).read_text(encoding="utf-8"))
     run_path = os.path.join(merged, "run.json")

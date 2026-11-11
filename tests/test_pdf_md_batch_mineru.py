@@ -7,6 +7,7 @@
 - 失败说明（result note）要带 rc 与 stderr 尾部。
 """
 
+import io
 import json
 import pathlib
 import subprocess
@@ -195,6 +196,41 @@ def test_mineru_zero_chars_after_success_allows_skip(harness, monkeypatch):
     ledger = (harness.root / "batch" / "skipped-pages.tsv").read_text(encoding="utf-8")
     assert "\tskip\t" in ledger
     assert "\t0\t" in ledger
+    attempts = (harness.root / "batch" / P.MINERU_ATTEMPTS).read_text(encoding="utf-8")
+    assert "\tok\t" in attempts
+    assert P.mineru_pages_today(harness.ctx) == 1
+
+
+def test_mineru_failure_counts_against_daily_quota(harness, monkeypatch):
+    monkeypatch.setenv("FAKE_MINERU_MODE", "rc1")
+    P.run_one(harness.row, harness.ctx)
+    attempts_path = harness.root / "batch" / P.MINERU_ATTEMPTS
+    rows = list(P.csv.DictReader(attempts_path.open(encoding="utf-8"), delimiter="\t"))
+    assert len(rows) == 1, rows
+    assert rows[0]["uid"] == "B0001"
+    assert rows[0]["pages"] == "1"
+    assert rows[0]["outcome"] == "failed"
+    assert rows[0]["rc"] == "1"
+    assert P.mineru_pages_today(harness.ctx) == 1
+
+    # 失败已经吃掉当日额度：下一本在投递前就被封顶，不再产生新 attempt。
+    monkeypatch.setattr(P, "MINERU_DAY_PAGES", 1)
+    merged = str(harness.root / "work" / "B0001" / "merged")
+    result = {}
+    buf = io.StringIO()
+    out = P.mineru_rescue(
+        harness.ctx,
+        harness.row,
+        merged,
+        {"per_page": []},
+        harness.state["suspects"],
+        buf,
+        result,
+    )
+    assert out is None
+    assert "封顶" in result["mineru_skip_reason"], result
+    assert P.mineru_pages_today(harness.ctx) == 1
+    assert len(attempts_path.read_text(encoding="utf-8").splitlines()) == 2
 
 
 def test_unsubmitted_suspect_pages_block_landing(harness, monkeypatch):

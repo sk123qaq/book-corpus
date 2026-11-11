@@ -507,7 +507,7 @@ def main():
         con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
         con.commit()
         print("备份并删除 %d 行（空正文章），expand_fts 已重建，备份在 %s" % (n, dump))
-        return
+        return 0
 
     if a.reindex_fts:
         con = sqlite3.connect(DB)
@@ -515,7 +515,7 @@ def main():
         con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
         con.commit()
         print("expand_fts 重建 %d 行" % con.execute("SELECT count(*) FROM expand").fetchone()[0])
-        return
+        return 0
 
     con = sqlite3.connect(DB, check_same_thread=False)
     con.executescript(SCHEMA)
@@ -556,7 +556,7 @@ def main():
             write_md(uid, rel, dict(chs.values()))
             n += len(chs)
         print("重写账文件 %d 本 %d 章" % (len(bybook), n))
-        return
+        return 0
     only = set()
     if a.only_file:
         with open(a.only_file, encoding="utf-8") as fh:
@@ -588,7 +588,7 @@ def main():
     nch = sum(len(j[2]) for j in jobs)
     print("%s：任务 %d 个 / 待扩展章 %d 个 / %d 线程" % (a.kind, len(jobs), nch, a.workers), file=sys.stderr)
     if a.dry_run:
-        return
+        return 0
     t0 = time.time()
     token_in = token_out = 0
     lock = threading.Lock()
@@ -647,6 +647,7 @@ def main():
                 )
     n = con.execute("SELECT count(*) FROM expand WHERE kind=?", (a.kind,)).fetchone()[0]
     print("expand 表 %d 章  in %d tok  out %d tok  %.0fs" % (n, token_in, token_out, time.time() - t0))
+    rc = 0
     if fails:
         tally = {}
         for f in fails:
@@ -656,12 +657,14 @@ def main():
             % (len(fails), ", ".join("%s×%d" % kv for kv in sorted(tally.items(), key=lambda x: -x[1]))),
             file=sys.stderr,
         )
+        rc = 1
     log(
         "expand kind=%s provider=%s jobs=%d chapters=%d in=%d out=%d secs=%.0f phash=%s "
         "effort=%s batch=%d chars=%d"
         % (a.kind, a.provider, len(jobs), nch, token_in, token_out, time.time() - t0, phash, a.effort, a.batch, a.chars)
     )
+    return rc
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

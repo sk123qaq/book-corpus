@@ -1399,12 +1399,14 @@ class App:
                     "books": 0,
                     "lag_books": 0,
                     "lag_chapters": 0,
+                    "extra_books": 0,
+                    "extra_chapters": 0,
                     "db": None,
                     "ok": False,
                 },
                 "library": {"db": None, "ok": False},
                 "views": {"awards": 0, "topics": 0, "broken": 0, "ok": False},
-                "audit": {"fail": 0, "warn": 0, "items": [], "at": None, "ran": False},
+                "audit": {"fail": 0, "warn": 0, "items": [], "at": None, "ran": False, "stale": False},
                 "ocr": {"remaining_books": 0, "remaining_pages": 0, "quota": "20000/天"},
                 "jobs": {"running": 0, "awaiting_review": 0, "last": None},
                 "problems": [],
@@ -1428,7 +1430,9 @@ class App:
         missing = [
             name for name in ("library", "catalog", "index", "views") if (payload.get(name) or {}).get("ok") is False
         ]
-        audit_at = (payload.get("audit") or {}).get("at")
+        audit = payload.get("audit") or {}
+        audit_at = audit.get("at")
+        audit_stale = bool(audit.get("stale"))
         if error is not None or not complete:
             state = "unknown"
         elif problems or missing or not audit_at:
@@ -1457,7 +1461,7 @@ class App:
             "ok": error is None,
             "state": state,
             "complete": complete,
-            "stale": not audit_at,
+            "stale": not audit_at or audit_stale,
             "missing": missing,
             "source": source,
             "error": error,
@@ -1480,6 +1484,10 @@ class App:
                 blob = json.loads(r.read().decode("utf-8"))
             out["running"] = True
             out["meta"] = blob.get("meta")
+            # 进程在跑不等于索引健康：把演示侧的降级原因透出来，顶栏点只改提示，不改运行判定。
+            out["degraded"] = bool(blob.get("degraded"))
+            out["db"] = blob.get("db")
+            out["message"] = blob.get("message")
         except (urllib.error.URLError, ValueError, OSError) as exc:
             out["error"] = "%s" % getattr(exc, "reason", exc)
         return out

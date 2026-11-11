@@ -290,6 +290,8 @@ function bookCounts() {
   const st = S.status || {};
   const pending = st.pending || {};
   const lagChapters = dig(st, 'index.lag_chapters', 0);
+  const lagBooksRaw = dig(st, 'index.lag_books', 0);
+  const lagChaptersRaw = dig(st, 'index.lag_chapters', 0);
   const convertible = st.convertible || null;
   // 缺库时服务端把计数填 0，但带 ok:false：0 不能当真实读数，页面要显示「—/未知」
   const libKnown = dig(st, 'library.ok', true) !== false;
@@ -309,8 +311,10 @@ function bookCounts() {
     awards: dig(st, 'views.awards', 0),
     topics: dig(st, 'views.topics', 0),
     broken: dig(st, 'views.broken', 0),
-    lagBooks: dig(st, 'index.lag_books', 0),
-    lagChapters: lagChapters,
+    lagBooks: Math.max(0, lagBooksRaw),
+    lagChapters: Math.max(0, lagChaptersRaw),
+    indexExtra: Math.max(0, -lagBooksRaw),
+    indexExtraChapters: Math.max(0, -lagChaptersRaw),
     warn: dig(st, 'audit.warn', 0),
     fail: dig(st, 'audit.fail', 0),
     unmatched: dig(st, 'catalog.unmatched', 0),
@@ -320,7 +324,8 @@ function bookCounts() {
     indexKnown: indexKnown,
     viewsKnown: viewsKnown,
     catalogKnown: catalogKnown,
-    auditRan: !!dig(st, 'audit.at', ''),
+    auditRan: dig(st, 'audit.ran', !!dig(st, 'audit.at', '')) !== false,
+    auditStale: !!dig(st, 'audit.stale', false),
   };
 }
 
@@ -341,7 +346,12 @@ function statusIssues() {
     if (hit) rows.push({ level: hit[1].toLowerCase(), text: hit[2] });
     else rows.push({ level: 'warn', text: text });
   });
-  return { at: dig(st, 'audit.at', ''), ran: !!dig(st, 'audit.at', ''), rows: rows };
+  return {
+    at: dig(st, 'audit.at', ''),
+    ran: dig(st, 'audit.ran', !!dig(st, 'audit.at', '')) !== false,
+    stale: !!dig(st, 'audit.stale', false),
+    rows: rows,
+  };
 }
 
 function issueList(info) {
@@ -356,11 +366,15 @@ function issueList(info) {
       + '<p class="hint">点「刷新状态」重试；读数未知时不能当没有问题。</p>';
   }
   if (!info.rows.length) {
+    if (info.stale) return '<p class="hint">体检结果已过期：最近一次入库或索引更新晚于体检，重跑收尾后再判断。</p>';
     return info.at && statusState() === 'ok'
       ? '<p class="pass">体检全部通过。</p>'
       : '<p class="hint">体检没有报问题，但状态还不完整。</p>';
   }
-  return info.at ? list
+  const expired = info.at && info.stale
+    ? '<p class="hint">体检结果已过期：最近一次入库或索引更新晚于体检，重跑收尾后再判断。</p>'
+    : '';
+  return info.at ? list + expired
     : list + '<p class="hint">体检未运行：上面是从书库现状读出来的问题，还没有体检记录。</p>';
 }
 
@@ -398,7 +412,9 @@ function renderSearch() {
   const health = S.health || {};
   const dot = $('#search-dot');
   dot.className = 'dot ' + (health.running ? 'on' : 'off');
-  dot.title = health.running ? '阅读搜索在跑' : '阅读搜索未启动';
+  dot.title = health.running
+    ? (health.degraded ? '阅读搜索在跑，索引未建或为空' : '阅读搜索在跑')
+    : '阅读搜索未启动';
   $('#search-btn').textContent = '打开阅读搜索';
   $('#search-btn').title = 'http://127.0.0.1:8765/';
   $('#search-btn').hidden = !health.running;
@@ -478,6 +494,11 @@ function todoItems(c) {
       title: '还没有做过体检',
       note: '跑一次收尾，体检通过后总览才算完整。', href: '#maintain', label: '去维护',
     });
+  } else if (c.auditStale) {
+    items.push({
+      title: '体检结果已过期',
+      note: '最近一次入库或索引更新晚于体检，重跑收尾后再判断。', href: '#maintain', label: '去维护',
+    });
   }
   if (c.fail || c.broken) {
     items.push({
@@ -522,6 +543,12 @@ function todoItems(c) {
       note: '这些书的新章节还搜不到。', href: '#maintain', label: '去维护',
     });
   }
+  if (c.indexExtra) {
+    items.push({
+      title: '检索索引比书库多 ' + num(c.indexExtra) + ' 本',
+      note: '索引里可能还有已移出的书，重建索引后再看。', href: '#maintain', label: '去维护',
+    });
+  }
   if (c.warn) {
     items.push({
       title: '体检有 ' + num(c.warn) + ' 条提醒',
@@ -547,7 +574,9 @@ function heroNote(c) {
     ? '检索索引读数未知。'
     : (c.lagBooks
       ? '索引落后 ' + num(c.lagBooks) + ' 本。'
-      : (statusState() === 'ok' ? '检索索引已同步。' : '检索索引没有落后。'));
+      : (c.indexExtra
+        ? '索引比书库多 ' + num(c.indexExtra) + ' 本。'
+        : (statusState() === 'ok' ? '检索索引已同步。' : '检索索引没有落后。')));
   const head = c.libKnown
     ? num(c.books) + ' 本书，' + num(c.readable) + ' 本可读，共 ' + num(c.chapters) + ' 章。'
     : '书库计数未知（缺 build/library.db）。';
@@ -614,24 +643,26 @@ function pipeline(c) {
     },
     {
       name: '可检索', href: '#maintain',
-      state: !c.indexKnown ? 'miss' : (c.lagBooks ? 'half' : 'ok'),
-      word: !c.indexKnown ? '未知' : (c.lagBooks ? '待处理' : '正常'),
+      state: !c.indexKnown ? 'miss' : (c.lagBooks || c.indexExtra ? 'half' : 'ok'),
+      word: !c.indexKnown ? '未知' : (c.lagBooks ? '待处理' : (c.indexExtra ? '需重建' : '正常')),
       read: !c.indexKnown
         ? '索引读数未知'
-        : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本' : num(c.chapters) + ' 章已索引'),
+        : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
+          : (c.indexExtra ? '比书库多 ' + num(c.indexExtra) + ' 本' : num(c.chapters) + ' 章已索引')),
     },
     {
       // 体检记录本身没问题也不能替整个书库担保：state 非 ok 时降成「需注意」
       name: '体检', href: '#maintain',
       state: !c.auditRan ? 'miss'
-        : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half'))),
+        : (c.auditStale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half')))),
       word: !c.auditRan ? '未运行'
-        : (c.fail ? '需处理' : (c.warn ? '待处理' : (statusState() === 'ok' ? '正常' : '需注意'))),
+        : (c.auditStale ? '已过期' : (c.fail ? '需处理' : (c.warn ? '待处理' : (statusState() === 'ok' ? '正常' : '需注意')))),
       read: !c.auditRan
         ? '还没有体检记录'
-        : (c.fail ? num(c.fail) + ' 项失败'
-          : (c.warn ? num(c.warn) + ' 条提醒'
-            : (statusState() === 'ok' ? '全部通过' : '无失败项'))),
+        : (c.auditStale ? '库或索引比体检新'
+          : (c.fail ? num(c.fail) + ' 项失败'
+            : (c.warn ? num(c.warn) + ' 条提醒'
+              : (statusState() === 'ok' ? '全部通过' : '无失败项')))),
     },
   ];
   return `<div class="pipeline">${cells.map((cell) => `<a class="pipe-cell" href="${cell.href}">
@@ -1592,23 +1623,26 @@ function viewMaintain() {
     <div class="section card">
       <h2>库的状态</h2>
       <div class="strip">
-        ${stateCell('检索索引', !c.indexKnown ? 'miss' : (c.lagBooks ? 'half' : 'ok'),
-    !c.indexKnown ? '未知' : (c.lagBooks ? '需注意' : '正常'),
+        ${stateCell('检索索引', !c.indexKnown ? 'miss' : (c.lagBooks || c.indexExtra ? 'half' : 'ok'),
+    !c.indexKnown ? '未知' : (c.lagBooks ? '需注意' : (c.indexExtra ? '需重建' : '正常')),
     !c.indexKnown ? '索引缺失或读不到'
       : (c.lagBooks
         ? '落后 ' + num(c.lagBooks) + ' 本' + (c.lagChapters ? ' · ' + num(c.lagChapters) + ' 章' : '')
-        : (statusState() === 'ok' ? '与书库同步' : '没有落后')))}
+        : (c.indexExtra
+          ? '比书库多 ' + num(c.indexExtra) + ' 本' + (c.indexExtraChapters ? ' · ' + num(c.indexExtraChapters) + ' 章' : '')
+          : (statusState() === 'ok' ? '与书库同步' : '没有落后'))))}
         ${stateCell('浏览入口', !c.viewsKnown ? 'miss' : (c.broken ? 'miss' : 'ok'),
     !c.viewsKnown ? '未知' : (c.broken ? '需处理' : '正常'),
     !c.viewsKnown ? '浏览入口缺失' : (c.broken ? num(c.broken) + ' 条失效' : '奖项与主题都在'))}
         ${stateCell('体检', !info.ran ? 'miss'
-    : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half'))),
+    : (info.stale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half')))),
     !info.ran ? '未运行'
-      : (c.fail ? '需处理' : (c.warn ? '需注意' : (statusState() === 'ok' ? '正常' : '需注意'))),
+      : (info.stale ? '已过期' : (c.fail ? '需处理' : (c.warn ? '需注意' : (statusState() === 'ok' ? '正常' : '需注意')))),
     !info.ran ? '还没有体检记录'
-      : (c.fail ? num(c.fail) + ' 项失败'
-        : (c.warn ? num(c.warn) + ' 条提醒'
-          : (statusState() === 'ok' ? '全部通过' : '无失败项'))))}
+      : (info.stale ? '库或索引比体检新'
+        : (c.fail ? num(c.fail) + ' 项失败'
+          : (c.warn ? num(c.warn) + ' 条提醒'
+            : (statusState() === 'ok' ? '全部通过' : '无失败项')))))}
         ${stateCell('书目总表', !c.catalogKnown ? 'miss' : (c.unmatched ? 'half' : 'ok'),
     !c.catalogKnown ? '未知' : (c.unmatched ? '需注意' : '正常'),
     !c.catalogKnown ? '没有书目总表'

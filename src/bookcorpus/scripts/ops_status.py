@@ -260,6 +260,12 @@ def index(p, state, deep):
         except sqlite3.Error as exc:
             ok = False
             state["problems"].append("index.db 读不了: %s" % exc)
+    extra_books = max(0, -lag_books)
+    extra_chapters = max(0, -lag_chapters)
+    if ok and extra_books:
+        state["problems"].append("索引比书库多 %d 本（可能含已移出的书），需重建" % extra_books)
+    if ok and extra_chapters:
+        state["problems"].append("索引比书库多 %d 章（可能含已移出的章节），需重建" % extra_chapters)
     state["index"] = {
         "built_at": meta.get("built_at"),
         "paras": paras,
@@ -267,6 +273,8 @@ def index(p, state, deep):
         "books": index_books,
         "lag_books": lag_books,
         "lag_chapters": lag_chapters,
+        "extra_books": extra_books,
+        "extra_chapters": extra_chapters,
         "lag_exact": bool(deep),
         "db": p.indexdb if os.path.isfile(p.indexdb) else None,
         "ok": ok,
@@ -300,12 +308,25 @@ def read_cache(p, state):
     try:
         with open(p.last_audit, encoding="utf-8") as fh:
             cache = json.load(fh)
-        return cache if isinstance(cache, dict) else {}
     except OSError:
         return {}
     except ValueError as exc:
         state["problems"].append("last-audit.json 读不了: %s" % exc)
         return {}
+    if not isinstance(cache, dict):
+        state["problems"].append("last-audit.json 不是对象，已忽略")
+        return {}
+    cached_root = cache.get("root")
+    if not cached_root:
+        state["problems"].append("last-audit.json 没写 root，无法确认属于本库，已忽略")
+        return {}
+    if os.path.realpath(str(cached_root)) != os.path.realpath(p.root):
+        state["problems"].append("last-audit.json 属于另一个书库（%s），已忽略" % cached_root)
+        return {}
+    if cache.get("deep") is not True:
+        state["problems"].append("last-audit.json 不是深度体检，已忽略")
+        return {}
+    return cache
 
 
 def write_cache(p, cache):
@@ -345,17 +366,43 @@ def refresh_audit(p, state):
     return cache
 
 
-def audit(state, cache):
+def audit(p, state, cache):
     fail = list(cache.get("fail") or [])
     warn = list(cache.get("warn") or [])
     items = ["FAIL " + m for m in fail] + ["WARN " + m for m in warn]
+    at = cache.get("at")
+    stale = False
+    if at:
+        try:
+            at_ts = datetime.datetime.fromisoformat(str(at)).timestamp()
+        except (TypeError, ValueError):
+            state["problems"].append("last-audit.json 的体检时间读不了: %r" % (at,))
+            at = None
+            stale = True
+        else:
+            # 体检缓存是结构/链接检查的结果；库、索引或书目表在体检之后又变了，
+            # 旧结果就不能再担保「全部通过」。按产物 mtime 判断，不按天数过期。
+            for artifact, label in (
+                (p.libdb, "build/library.db"),
+                (p.indexdb, "build/检索/index.db"),
+                (p.catalog_csv, "build/书目总表.csv"),
+            ):
+                try:
+                    changed = os.path.getmtime(artifact)
+                except OSError:
+                    continue
+                if changed > at_ts + 1:
+                    stale = True
+                    state["problems"].append("%s 比上次体检新，体检结果已过期，需重跑 --deep" % label)
     state["audit"] = {
         "fail": len(fail),
         "warn": len(warn),
         "items": items[:AUDIT_ITEMS_CAP],
-        "at": cache.get("at"),
+        "at": at,
         # ran=False：还没有体检记录（at 为空），页面显示「未运行」并进待办。
-        "ran": bool(cache.get("at")),
+        "ran": bool(at),
+        # stale=True：体检跑过，但库/索引/书目表在那之后又变了；旧结果不能担保现在。
+        "stale": stale,
     }
     if len(items) > AUDIT_ITEMS_CAP:
         state["audit"]["items"].append("…另 %d 项" % (len(items) - AUDIT_ITEMS_CAP))
@@ -478,10 +525,12 @@ def collect(p, deep=False):
             "books": 0,
             "lag_books": 0,
             "lag_chapters": 0,
+            "extra_books": 0,
+            "extra_chapters": 0,
             "lag_exact": False,
         },
         "views": {"awards": 0, "topics": 0, "broken": 0},
-        "audit": {"fail": 0, "warn": 0, "items": [], "at": None},
+        "audit": {"fail": 0, "warn": 0, "items": [], "at": None, "ran": False, "stale": False},
         "ocr": {
             "batch": None,
             "remaining_books": 0,
@@ -505,7 +554,7 @@ def collect(p, deep=False):
     if deep:
         fresh = refresh_audit(p, state)
         cache = fresh if fresh is not None else cache
-    audit(state, cache)
+    audit(p, state, cache)
     ocr(p, state)
     jobs(p, state)
     return state
@@ -540,7 +589,13 @@ def render(state):
         ),
         "视图 奖项 %d / 主题 %d / 断链 %d"
         % (state["views"]["awards"], state["views"]["topics"], state["views"]["broken"]),
-        "审计 FAIL %d / WARN %d（%s）" % (audit_state_["fail"], audit_state_["warn"], audit_state_["at"] or "未审"),
+        "审计 FAIL %d / WARN %d（%s%s）"
+        % (
+            audit_state_["fail"],
+            audit_state_["warn"],
+            audit_state_["at"] or "未审",
+            "，已过期" if audit_state_.get("stale") else "",
+        ),
         "OCR %s 还剩 %d 本 / %d 页（额度 %s）"
         % (
             ocr_state["batch"] or "无批次",

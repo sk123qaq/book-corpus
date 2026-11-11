@@ -29,7 +29,7 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
 | `.writer.lock` | 写任务互斥与批次账读改写用的 `fcntl.flock` 文件，内容为空 |
 | `.reader.lock` | 只读任务共用锁的 `fcntl.flock` 文件，内容为空；与写任务互不阻塞 |
 | `search.log` `search.pid` | 检索演示页的子进程输出与 PID |
-| `last-audit.json` | 审计缓存，由 `ops_status.py --deep` 写，页面只读 |
+| `last-audit.json` | 审计缓存，由 `ops_status.py --deep` 写，页面只读；root 不匹配或库/索引/总表比 `at` 新时标「已过期」 |
 | `验收/check_ops.py` | 服务与任务自检，末行 `ALL PASS` |
 | `验收/shot_ops.py` | headless Chrome 截图与浏览器自检，末行 `SHOT PASS` |
 | `验收/总览-1440x900.png` `验收/总览-390x844.png` | 两个断点的截图 |

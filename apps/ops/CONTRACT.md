@@ -141,11 +141,13 @@ report:{summary:{total, done, skipped, failed}, scope:{new, backfill}, items:[..
   "pending": {"pdf": 115, "txt": 5, "djvu": 2},
   "inbox": {"files": 3, "items": []},
   "ledger": {"rows": 1693, "mtime": "..."},
-  "catalog": {"mtime": "...", "unmatched": 0},
+  "library": {"db": "...", "ok": true},
+  "catalog": {"mtime": "...", "unmatched": 0, "ok": true},
   "index": {"built_at": "...", "paras": 2593173, "chapters": 87644,
-            "books": 1693, "lag_books": 0, "lag_chapters": 0},
-  "views": {"awards": 1009, "topics": 1034, "broken": 0},
-  "audit": {"fail": 0, "warn": 3, "items": []},
+            "books": 1693, "lag_books": 0, "lag_chapters": 0,
+            "extra_books": 0, "extra_chapters": 0},
+  "views": {"awards": 1009, "topics": 1034, "broken": 0, "ok": true},
+  "audit": {"fail": 0, "warn": 3, "items": [], "at": "...", "ran": true, "stale": false},
   "ocr": {"remaining_books": 0, "remaining_pages": 0, "quota": "20000/天"},
   "jobs": {"running": 0, "awaiting_review": 0, "last": null}
 }
@@ -156,8 +158,9 @@ report:{summary:{total, done, skipped, failed}, scope:{new, backfill}, items:[..
 `GET /api/status` 在三态契约上再包一层：
 
 - `state`：`ok` 表示读数完整、没有 problems、且体检已跑；`degraded` 表示读到了，但缺核心库、有 problems，或 `audit.at` 为空；`unknown` 表示状态脚本没跑成或 payload 不完整，页面上的数字都是占位。
-- `complete`：`source` 是 `script` 或 `fixture` 时为 true；`stale`：`audit.at` 为空；`missing`：`library`/`catalog`/`index`/`views` 里 `ok:false` 的段名。
-- 各段带 `ok`，`audit` 另带 `ran`。`ok`/`error` 仍是「脚本进程有没有出错」的旧语义，旧消费者不受影响。
+- `complete`：`source` 是 `script` 或 `fixture` 时为 true；`stale`：`audit.at` 为空，或 `audit.stale` 为 true；`missing`：`library`/`catalog`/`index`/`views` 里 `ok:false` 的段名。
+- 各段带 `ok`，`audit` 另带 `ran` 与 `stale`。`ran` 表示跑过；`stale` 表示跑过但之后 `build/library.db`、`build/检索/index.db` 或 `build/书目总表.csv` 又变了，旧结果不能担保现在，`problems` 会点名。`ok`/`error` 仍是「脚本进程有没有出错」的旧语义，旧消费者不受影响。
+- `index.extra_books`/`extra_chapters` 是索引比书库多出的量；非 0 时 `problems` 记「需重建」，页面显示「比书库多 N 本」，不再显示负的「落后」。
 - 页面只在 `state:"ok"` 时使用「库是干净的」「索引已同步」「全部通过」；`degraded` 显示「状态不完整」「未运行」「未知」，`unknown` 显示「读不到」；某个段 `ok:false` 时该段计数显示 `—`，`problems` 原文作为 fail 行列出。
 
 ## 6. 脚本接口

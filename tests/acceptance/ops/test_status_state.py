@@ -11,6 +11,7 @@
 这里要的是真 ops_status.py 与真 server.py 的组合。
 """
 
+import datetime
 import json
 import os
 import re
@@ -87,6 +88,16 @@ def start(root, scripts=SCRIPTS):
         proc.kill()
         raise SystemExit("服务没打印端口：%r" % line)
     return proc, int(match.group(1))
+
+
+def read_json_file(path):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def write_json_file(path, data):
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False)
 
 
 def stop(proc):
@@ -246,7 +257,14 @@ def make_clean_root(root):
     T.write(
         os.path.join(root, "工作区", "运维", "last-audit.json"),
         json.dumps(
-            {"at": "2026-11-11T10:00:00+08:00", "root": root, "deep": True, "fail": [], "warn": [], "ok": ["结构"]},
+            {
+                "at": datetime.datetime.now().astimezone().replace(microsecond=0).isoformat(),
+                "root": root,
+                "deep": True,
+                "fail": [],
+                "warn": [],
+                "ok": ["结构"],
+            },
             ensure_ascii=False,
         ),
     )
@@ -265,6 +283,7 @@ def scenario_all_ok():
         check("missing 为空", body.get("missing") == [], body.get("missing"))
         check("problems 为空", status.get("problems") == [], status.get("problems"))
         check("audit.ran=True", (status.get("audit") or {}).get("ran") is True)
+        check("audit.stale=False", (status.get("audit") or {}).get("stale") is False, status.get("audit"))
         parts = dom(body)
         html = "".join(parts.values())
         for word in FORBIDDEN:
@@ -303,6 +322,7 @@ def scenario_partial_state():
             audit.get("ran") is True and audit.get("fail") == 0 and audit.get("warn") == 0,
             audit,
         )
+        check("audit.stale=False", audit.get("stale") is False, audit)
         parts = dom(body)
         overview, maintain = parts["overview"], parts["maintain"]
         check("总览不说「库是干净的」", "库是干净的" not in overview, overview[:300])
@@ -325,6 +345,84 @@ def scenario_partial_state():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def scenario_index_extra():
+    print("\n== 场景七：索引比书库多（旧书没清）==")
+    root = tempfile.mkdtemp(prefix="ops-state-extra-")
+    try:
+        make_clean_root(root)
+        idx = os.path.join(root, "build", "检索", "index.db")
+        con = sqlite3.connect(idx)
+        con.execute("UPDATE meta SET value='99' WHERE key='books'")
+        con.commit()
+        con.close()
+        cache_path = os.path.join(root, "工作区", "运维", "last-audit.json")
+        cache = read_json_file(cache_path)
+        cache["at"] = datetime.datetime.now().astimezone().replace(microsecond=0).isoformat()
+        write_json_file(cache_path, cache)
+
+        body = serve(root)
+        status = body.get("status") or {}
+        index = status.get("index") or {}
+        check("state=degraded", body.get("state") == "degraded", body.get("state"))
+        check("原始 lag_books 为负", (index.get("lag_books") or 0) < 0, index)
+        check("extra_books=96", index.get("extra_books") == 96, index)
+        problems = status.get("problems") or []
+        check("problems 点名索引多出书", any("索引比书库多" in str(p) for p in problems), problems)
+        parts = dom(body)
+        html = "".join(parts.values())
+        check("总览说索引比书库多", "比书库多 96 本" in parts["overview"], parts["overview"][:400])
+        check("维护条说索引比书库多", "比书库多 96 本" in parts["maintain"], parts["maintain"][:400])
+        check("待办说索引比书库多", "检索索引比书库多 96 本" in parts["overview"], parts["overview"][:500])
+        check("页面不出现负的落后", "落后 -" not in html)
+        for word in FORBIDDEN:
+            check("页面不出现「%s」" % word, word not in html)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def scenario_stale_or_foreign_cache():
+    print("\n== 场景六：体检缓存过期 / 属于别的库 ==")
+    root = tempfile.mkdtemp(prefix="ops-state-stale-")
+    try:
+        make_clean_root(root)
+        cache_path = os.path.join(root, "工作区", "运维", "last-audit.json")
+        cache = read_json_file(cache_path)
+        cache["at"] = "2000-01-01T00:00:00+08:00"
+        write_json_file(cache_path, cache)
+
+        body = serve(root)
+        status = body.get("status") or {}
+        audit = status.get("audit") or {}
+        check("过期：state=degraded", body.get("state") == "degraded", body.get("state"))
+        check("过期：stale=True", body.get("stale") is True, body.get("stale"))
+        check("过期：audit.ran=True", audit.get("ran") is True, audit)
+        check("过期：audit.stale=True", audit.get("stale") is True, audit)
+        problems = status.get("problems") or []
+        check("过期：problems 点名体检过期", any("过期" in str(p) for p in problems), problems)
+        parts = dom(body)
+        html = "".join(parts.values())
+        assert_no_success_words(html)
+        check("过期：维护条体检=已过期", "已过期" in parts["maintain"], parts["maintain"][:400])
+        check("过期：总览待办=体检结果已过期", "体检结果已过期" in parts["overview"], parts["overview"][:400])
+
+        cache["at"] = datetime.datetime.now().astimezone().replace(microsecond=0).isoformat()
+        cache["root"] = root + "-another-library"
+        write_json_file(cache_path, cache)
+        body = serve(root)
+        status = body.get("status") or {}
+        audit = status.get("audit") or {}
+        check("异库：state=degraded", body.get("state") == "degraded", body.get("state"))
+        check("异库：stale=True", body.get("stale") is True, body.get("stale"))
+        check("异库：audit.ran=False", audit.get("ran") is False, audit)
+        problems = status.get("problems") or []
+        check("异库：problems 点名另一个书库", any("另一个书库" in str(p) for p in problems), problems)
+        parts = dom(body)
+        assert_no_success_words("".join(parts.values()))
+        check("异库：维护条体检=未运行", "未运行" in parts["maintain"], parts["maintain"][:400])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main():
     if not os.path.exists(SERVER):
         raise SystemExit("缺 server.py：%s" % SERVER)
@@ -336,6 +434,8 @@ def main():
         scenario_script_missing()
         scenario_all_ok()
         scenario_partial_state()
+        scenario_index_extra()
+        scenario_stale_or_foreign_cache()
     print("")
     if FAILS:
         print("%d 项检查，失败 %d 项" % (len(FAILS), len(FAILS)))
