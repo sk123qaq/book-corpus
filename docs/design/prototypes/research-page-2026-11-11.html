@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>读后 · 东晋门阀政治 第七章（原型）</title>
+<style>
+  :root {
+    --paper: #f7f2e8;
+    --paper-deep: #efe7d8;
+    --ink: #24221e;
+    --ink-soft: #555047;
+    --ink-faint: #8a8174;
+    --rule: rgba(36, 34, 30, .14);
+    --rule-soft: rgba(36, 34, 30, .08);
+    --pine: #3d5a4c;
+    --pine-soft: rgba(61, 90, 76, .065);
+    --cinnabar: #a24b3a;
+    --ochre: #986a2f;
+    --serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", Georgia, serif;
+    --sans: "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --measure: 720px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(1100px 560px at 18% -12%, rgba(255, 255, 255, .62), transparent 62%),
+      radial-gradient(900px 520px at 106% 2%, rgba(162, 75, 58, .045), transparent 58%),
+      var(--paper);
+    font-family: var(--serif);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection { background: rgba(162, 75, 58, .17); }
+  a { color: inherit; }
+  [hidden] { display: none !important; }
+
+  .prototype-strip {
+    padding: 7px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    background: #e9dfcd;
+    color: #6d6355;
+    font: 11px/1.45 var(--sans);
+    letter-spacing: .08em;
+    text-align: center;
+  }
+  .prototype-strip strong {
+    color: var(--cinnabar);
+    font-weight: 600;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-bottom: 1px solid var(--rule-soft);
+    background: rgba(247, 242, 232, .9);
+    backdrop-filter: blur(14px);
+  }
+  .topbar-inner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 11px 28px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--ink);
+    font: 600 14px/1 var(--sans);
+    letter-spacing: .12em;
+    text-decoration: none;
+  }
+  .brand-mark {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    width: 18px;
+    height: 18px;
+  }
+  .brand-mark i { display: block; border-radius: 1px; background: var(--pine); }
+  .brand-mark i:nth-child(2) { background: var(--cinnabar); }
+  .brand-mark i:nth-child(3) { background: var(--ochre); }
+  .brand-mark i:nth-child(4) { background: var(--ink-faint); }
+  .topbar-divider { width: 1px; height: 15px; background: var(--rule); }
+  .topbar-title {
+    color: var(--ink-soft);
+    font: 12.5px/1.35 var(--sans);
+    letter-spacing: .02em;
+  }
+  .topbar-title b { color: var(--ink); font-weight: 600; }
+  .topbar-spacer { flex: 1; }
+  .topbar-link {
+    padding: 7px 10px;
+    border-radius: 999px;
+    color: var(--ink-soft);
+    font: 12px/1 var(--sans);
+    text-decoration: none;
+    transition: background .15s ease, color .15s ease;
+  }
+  .topbar-link:hover { background: rgba(36, 34, 30, .055); color: var(--ink); }
+
+  .page {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: 48px 32px 132px;
+  }
+
+  .chapter-head { margin-bottom: 40px; }
+  .eyebrow {
+    color: var(--cinnabar);
+    font: 11px/1.55 var(--sans);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+  }
+  .chapter-head h1 {
+    margin: 13px 0 14px;
+    color: var(--ink);
+    font: 600 34px/1.36 var(--serif);
+    letter-spacing: .01em;
+  }
+  .chapter-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px 0;
+    color: var(--ink-faint);
+    font: 12px/1.55 var(--sans);
+  }
+  .chapter-meta span + span::before {
+    content: "·";
+    margin: 0 9px;
+    color: var(--rule);
+  }
+
+  .chapter-body {
+    position: relative;
+    color: var(--ink);
+    font: 18.5px/1.96 var(--serif);
+    letter-spacing: .01em;
+    text-align: justify;
+    text-justify: inter-ideograph;
+  }
+  .chapter-body::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: -18px;
+    width: 1px;
+    background: linear-gradient(var(--rule-soft), rgba(36, 34, 30, .02));
+  }
+  .chapter-body p {
+    position: relative;
+    margin: 0 0 1.12em;
+    text-indent: 2em;
+    scroll-margin-top: 82px;
+  }
+  .chapter-body p:first-of-type { text-indent: 0; }
+  .chapter-body p::after {
+    content: attr(data-sec);
+    position: absolute;
+    top: .62em;
+    left: -35px;
+    color: var(--ink-faint);
+    font: 10px/1 var(--sans);
+    letter-spacing: .08em;
+  }
+  .chapter-body p:target {
+    background: linear-gradient(90deg, rgba(162, 75, 58, .075), transparent 72%);
+    box-shadow: -10px 0 0 rgba(162, 75, 58, .075);
+  }
+
+  .afterword {
+    margin-top: 62px;
+    scroll-margin-top: 78px;
+    padding-top: 30px;
+    border-top: 1px solid var(--rule);
+  }
+  .afterword-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 10px;
+  }
+  .afterword-label {
+    color: var(--ink-faint);
+    font: 11px/1.5 var(--sans);
+    letter-spacing: .18em;
+  }
+  .afterword h2 {
+    margin: 7px 0 9px;
+    color: var(--ink);
+    font: 600 25px/1.42 var(--serif);
+    letter-spacing: .01em;
+  }
+  .afterword-lede {
+    max-width: 36em;
+    margin: 0 0 28px;
+    color: var(--ink-soft);
+    font: 13.5px/1.85 var(--sans);
+  }
+  .status-chip {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    border: 1px solid var(--rule-soft);
+    border-radius: 999px;
+    background: rgba(36, 34, 30, .045);
+    color: var(--ink-soft);
+    font: 11px/1 var(--sans);
+    letter-spacing: .04em;
+    white-space: nowrap;
+    transition: color .18s ease, background .18s ease, border-color .18s ease;
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink-faint);
+    transition: background .18s ease;
+  }
+  .status-chip[data-state="S1"] {
+    border-color: rgba(152, 106, 47, .24);
+    background: rgba(152, 106, 47, .065);
+    color: var(--ochre);
+  }
+  .status-chip[data-state="S1"] .status-dot { background: var(--ochre); }
+  .status-chip[data-state="S2"] {
+    border-color: var(--rule-soft);
+    background: rgba(36, 34, 30, .04);
+    color: var(--ink-soft);
+  }
+  .status-chip[data-state="S2"] .status-dot { background: var(--ink-faint); }
+  .status-chip[data-state="S3"] {
+    border-color: rgba(61, 90, 76, .24);
+    background: var(--pine-soft);
+    color: var(--pine);
+  }
+  .status-chip[data-state="S3"] .status-dot { background: var(--pine); }
+
+  .section-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 13px;
+  }
+  .section-heading h3 {
+    margin: 0;
+    color: var(--ink);
+    font: 600 15px/1.45 var(--sans);
+    letter-spacing: .07em;
+  }
+  .section-heading .count {
+    color: var(--ink-faint);
+    font: 11px/1.4 var(--sans);
+  }
+
+  .findings { margin: 30px 0 38px; }
+  .findings-note {
+    margin: -3px 0 15px;
+    color: var(--ink-faint);
+    font: 12px/1.7 var(--sans);
+  }
+  .finding {
+    padding: 21px 0 23px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .finding:first-of-type {
+    padding-top: 4px;
+    border-top: 0;
+  }
+  .finding-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 9px;
+  }
+  .finding-chip {
+    padding: 5px 8px;
+    border: 1px solid rgba(61, 90, 76, .18);
+    border-radius: 3px;
+    background: var(--pine-soft);
+    color: var(--pine);
+    font: 10px/1 var(--sans);
+    letter-spacing: .09em;
+  }
+  .finding-index {
+    color: var(--ink-faint);
+    font: 10px/1 var(--sans);
+    letter-spacing: .1em;
+  }
+  .finding h4 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font: 600 19px/1.66 var(--serif);
+  }
+  .finding > p {
+    margin: 0 0 12px;
+    color: var(--ink-soft);
+    font: 14.5px/1.82 var(--sans);
+  }
+  .source {
+    margin: 12px 0 11px;
+    padding: 11px 14px 12px;
+    border-left: 2px solid rgba(61, 90, 76, .42);
+    background: var(--pine-soft);
+  }
+  .source-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--pine);
+    font: 10px/1 var(--sans);
+    letter-spacing: .12em;
+  }
+  .source cite {
+    display: block;
+    color: var(--ink);
+    font: 14px/1.78 var(--serif);
+    font-style: normal;
+  }
+  .source cite::before { content: "“"; }
+  .source cite::after { content: "”"; }
+  .source a {
+    display: inline-block;
+    margin-top: 7px;
+    border-bottom: 1px solid rgba(61, 90, 76, .3);
+    color: var(--pine);
+    font: 11px/1.4 var(--sans);
+    text-decoration: none;
+  }
+  .source a:hover { border-bottom-color: var(--pine); }
+  .gap {
+    margin: 0;
+    color: var(--ochre);
+    font: 12.5px/1.7 var(--sans);
+  }
+  .gap b { font-weight: 600; }
+
+  .agenda { margin-top: 34px; }
+  .agenda-item {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 0 16px;
+    padding: 22px 0 24px;
+    border-top: 1px solid var(--rule);
+  }
+  .agenda-num {
+    padding-top: 6px;
+    color: var(--cinnabar);
+    font: 600 12px/1 var(--sans);
+    letter-spacing: .08em;
+  }
+  .agenda-body { min-width: 0; }
+  .agenda-item h4 {
+    margin: 0 0 12px;
+    color: var(--ink);
+    font: 600 20px/1.62 var(--serif);
+    letter-spacing: .005em;
+  }
+  .agenda-meta {
+    display: grid;
+    gap: 9px;
+    margin: 0 0 12px;
+  }
+  .agenda-row {
+    display: grid;
+    grid-template-columns: 8.6em 1fr;
+    gap: 12px;
+    font: 14px/1.76 var(--sans);
+  }
+  .agenda-row dt { color: var(--ink-faint); white-space: nowrap; }
+  .agenda-row dd { margin: 0; color: var(--ink-soft); }
+  .agenda-foot {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--ink-faint);
+    font: 11px/1.45 var(--sans);
+  }
+  .agenda-foot a {
+    border-bottom: 1px solid rgba(61, 90, 76, .28);
+    color: var(--pine);
+    text-decoration: none;
+  }
+  .agenda-foot a:hover { border-bottom-color: var(--pine); }
+  .agenda-foot .dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--rule);
+  }
+
+  .afterword-note {
+    margin: 30px 0 0;
+    padding-top: 15px;
+    border-top: 1px solid var(--rule-soft);
+    color: var(--ink-faint);
+    font: 12px/1.75 var(--sans);
+  }
+
+  .prototype-switcher {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    max-width: calc(100vw - 24px);
+    padding: 6px;
+    overflow-x: auto;
+    border-radius: 999px;
+    background: rgba(36, 34, 30, .94);
+    box-shadow: 0 14px 38px rgba(36, 34, 30, .24), 0 2px 7px rgba(36, 34, 30, .16);
+    color: #f7f2e8;
+    font: 11px/1 var(--sans);
+    transform: translateX(-50%);
+    backdrop-filter: blur(10px);
+    scrollbar-width: none;
+  }
+  .prototype-switcher::-webkit-scrollbar { display: none; }
+  .proto-label {
+    padding: 0 8px 0 4px;
+    color: rgba(247, 242, 232, .48);
+    letter-spacing: .1em;
+    white-space: nowrap;
+  }
+  .proto-label b { color: #f7f2e8; font-weight: 600; }
+  .prototype-switcher button {
+    appearance: none;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(247, 242, 232, .72);
+    font: 11px/1 var(--sans);
+    letter-spacing: .02em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .prototype-switcher button:hover {
+    background: rgba(247, 242, 232, .1);
+    color: #fff;
+  }
+  .prototype-switcher button[aria-pressed="true"] {
+    background: #f7f2e8;
+    color: #24221e;
+  }
+  .prototype-switcher button:focus-visible {
+    outline: 2px solid #f7f2e8;
+    outline-offset: 2px;
+  }
+  .proto-hint {
+    padding: 0 7px 0 4px;
+    color: rgba(247, 242, 232, .34);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    .topbar-inner { padding: 10px 18px; gap: 10px; }
+    .topbar-title { font-size: 12px; }
+    .page { padding: 36px 22px 126px; }
+    .chapter-head h1 { font-size: 27px; }
+    .chapter-body { font-size: 17px; line-height: 1.9; }
+    .chapter-body::before,
+    .chapter-body p::after { display: none; }
+    .chapter-body p { scroll-margin-top: 74px; }
+    .afterword-head { flex-direction: column; gap: 10px; }
+    .afterword { scroll-margin-top: 68px; }
+    .afterword h2 { font-size: 22px; }
+    .agenda-item { grid-template-columns: 30px 1fr; gap: 0 10px; }
+    .agenda-item h4 { font-size: 18px; }
+    .agenda-row { grid-template-columns: 1fr; gap: 2px; }
+    .agenda-row dt { font-size: 11px; letter-spacing: .06em; white-space: normal; }
+    .source { padding: 10px 12px; }
+    .prototype-switcher { bottom: 12px; }
+    .proto-label, .proto-hint { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { transition: none !important; }
+  }
+
+  @media print {
+    .prototype-strip,
+    .topbar,
+    .prototype-switcher { display: none !important; }
+    body { background: #fff; }
+    .page { max-width: none; padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Prototype, not production. The audit matrix is deliberately absent. S0-S3 switch at the bottom. -->
+<div class="prototype-strip">
+  <strong>原型</strong> · 研究页改版 · 审计矩阵已移除 · 底部切换 S0–S3 · 数据为示意
+</div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#top" aria-label="回到页首">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      四读
+    </a>
+    <span class="topbar-divider" aria-hidden="true"></span>
+    <span class="topbar-title"><b>东晋门阀政治</b> · 第七章</span>
+    <span class="topbar-spacer"></span>
+    <a class="topbar-link" href="#afterword">读后 ↓</a>
+  </div>
+</header>
+
+<main class="page" id="top">
+
+  <header class="chapter-head">
+    <div class="eyebrow">B0042 · 东晋门阀政治</div>
+    <h1>（一）东晋初年的兵力状况</h1>
+    <div class="chapter-meta">
+      <span>田余庆</span>
+      <span>北京大学出版社</span>
+      <span>标准本约 6 分钟</span>
+    </div>
+  </header>
+
+  <article class="chapter-body">
+    <p id="s1" data-sec="1">郗鉴，高平金乡人，汉献帝时御史大夫郗虑玄孙。郗虑是经学大师郑玄的弟子。据《晋书》卷六七《郗鉴传》，郗鉴“博览经籍”，“以儒雅著”，不改郗虑家风，属于东汉以来的儒学旧族。在两晋之际，从时尚考虑，郗氏家族仕宦既不特别显达，人物又不预挥麈谈玄之流，与王、裴诸族相比较，郗氏在士族阶层中并不属于很高的门第。</p>
+
+    <p id="s2" data-sec="2">郗鉴起家，据本传说：“东海王越辟为主簿，举贤良，不行。”又据《晋书》卷五六《江统传》，东海王越于永嘉元年（307）为兖州牧，以江统为别驾，委以州事。江统应东海王越之命，举郗鉴为贤良。这就是说，郗鉴通过江统，在政治上与东海王越有过一定的关系，但是并不深固。洛阳沦陷后，郗鉴未南渡，与宗族乡党千余家保据峄山（邹山），受琅邪王司马睿委署为兖州刺史，三年众至数万。以后，郗鉴被石勒侵逼，始辗转南移，于元帝永昌元年（322）七月退保合肥，时距洛阳之陷已是十一年整了。纪瞻荐郗鉴于晋元帝，元帝征鉴为尚书，入居京都。</p>
+
+    <p id="s3" data-sec="3">关于郗鉴南来，《晋书》没有明言其规模是率部还是举家。陶弘景《真诰》卷一五《阐幽微第一》注曰：郗鉴“永昌元年率诸流民来渡江东”云云。从郗鉴南行先驻合肥，以后频繁往来于合肥、建康之间的情况看来，郗鉴率有流民是可信的。但南来流民大体上是屯驻合肥，未得过江。流民帅所率流民不得过江而至建康，这在当时是通例，不独郗鉴所部如此。所以《真诰》谓郗鉴“率诸流民来渡江东”，只不过笼统言之，并不确切。郗鉴以流民帅的身份，置流民于合肥而本人被征入朝。征诏郗鉴，这是东晋元帝表示对他寄予信任的一种姿态，当然也有羁縻而观察之的意思。郗鉴自不愿置其所统部曲于不顾，使自己丧失可恃的实力。所以他本人继续与所率流民保持联系，频繁地往还于合肥、建康之间。</p>
+
+    <p id="s4" data-sec="4">郗鉴南来之时，王敦叛乱已经开始。王敦在京都改易百官，转徙方镇，并杀戮“南北之望”的戴渊、周顗等人。但是，默许王敦兴兵抗拒刘隗、刁协的士族人物，并不支持王敦篡夺东晋政权，太原王峤、太原温峤、陈郡谢鲲等都有表示，甚至王敦从弟王彬也反对王敦。王敦只得暂还武昌，遥制朝政。明帝即位后，王敦准备再次起兵，乃移镇姑孰，屯于湖，有另立东海王冲的图谋。明帝惧王敦之逼，出郗鉴镇合肥，依其流民力量以为外援。王敦不愿郗鉴以流民为朝廷犄角，乃表请郗鉴为尚书令，郗鉴只得又返京都。这时距郗鉴南来刚过一年，但他已逐步陷入士族门户斗争的旋涡之中，成为影响东晋政局的一个颇为重要的人物。</p>
+
+    <p id="s5" data-sec="5">郗鉴重回建康，据本传说，“遂与帝谋灭敦”，这是很值得注意的一个信息。郗鉴灭王敦之谋，内容如何，史籍无征。据下年（太宁二年，324）明帝讨伐王敦时郗鉴的擘划，参以《晋书》卷七四《桓彝传》明帝将讨敦，“拜彝散骑常侍，引参密谋”之事，可知郗鉴所谋主要是用流民帅的兵力以制王敦。其时门阀士族虽不支持王敦篡夺，也还没有坚决站在朝廷一边。朝廷对王敦尚不具备明显的优势。所以明帝只能筹之于较低的士族人物郗鉴、桓彝，而郗、桓筹兵，也只能求之于门阀士族以外的流民。这是影响明、成两朝政局的一件大事，值得细细探索。</p>
+
+    <p id="s6" data-sec="6">明帝时，东晋的兵力状况是十分困难的。拥兵强藩除王敦外，还有陶侃、祖约诸人。陶侃已被王敦遣镇广州，未能参预荆、扬事态。祖约在豫州，继统祖逖军队，屯驻寿春，这支军队历来不服王敦。但是祖氏与朝廷亦不相得，用祖约豫州之师以抗王敦，是不可能的。</p>
+
+    <p id="s7" data-sec="7">除了这几处强藩以外，东晋军既寡弱，又无粮廪。《晋书》卷二六《食货志》：“元帝为晋王（建武元年，317），课督农功，诏二千石长吏以入谷多少为殿最。其非宿卫要任，皆宜赴农，使军各自佃作，即以为廪。”《晋书》卷七八《丁潭传》：“今之兵士或私有役使，而营阵不充。”这些都是王敦之乱稍前的材料。《晋书》卷六七《温峤传》温峤上军国要务七条，“议奏多纳之”。其第三条曰：“诸外州郡将兵者及都督府非临敌之军，且田且守。”刘超为射声校尉时，“军校无兵”，只能以义兴太守任上的“义随”充宿卫。孔坦则受命“募江淮流民为军”。王敦乱前乱后，朝廷军力军食艰难，既然都是如此，王敦乱中，情况应当也是这样。看来无兵可用，是东晋朝廷面临的极大困难，解决的办法只有一途，就是尽可能征发流民。</p>
+  </article>
+
+  <section class="afterword" id="afterword">
+    <div class="afterword-head">
+      <div>
+        <div class="afterword-label">读后</div>
+        <h2>这一章之后</h2>
+      </div>
+      <span class="status-chip" id="status-chip" data-state="S1" role="status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="status-text">检索未完成</span>
+      </span>
+    </div>
+
+    <p class="afterword-lede" id="status-lede" aria-live="polite">检索服务额度用尽，这次没有查成。下面是待查问题，不是结论。</p>
+
+    <section class="findings" id="findings" hidden>
+      <div class="section-heading">
+        <h3>研究结论</h3>
+        <span class="count">2 条 · 只列有来源的判断</span>
+      </div>
+      <p class="findings-note">来源限本章已经引到的原书材料；没有新增外部数字，也没有把推断写成原话。</p>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="finding-chip">已查有据</span>
+          <span class="finding-index">结论 01</span>
+        </div>
+        <h4>郗鉴与明帝所谋，主要是用流民帅的兵力以制王敦。</h4>
+        <p>不是直接记载，是旁证链：次年讨敦的擘划，加上桓彝“引参密谋”。</p>
+        <div class="source">
+          <span class="source-label">来源 · 原文已引</span>
+          <cite>明帝将讨敦，拜彝散骑常侍，引参密谋。</cite>
+          <a href="#s5">《晋书》卷七四《桓彝传》 · 回到 §5</a>
+        </div>
+        <p class="gap"><b>还差什么：</b>直接记载仍缺；这条只能算强推断。</p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="finding-chip">已查有据</span>
+          <span class="finding-index">结论 02</span>
+        </div>
+        <h4>郗鉴南来时率有流民，但流民屯合肥，本人往返，未举族过江。</h4>
+        <p>《真诰》“率诸流民来渡江东”是笼统言之；本传与合肥—建康往返支持“屯合肥、本人入朝”。</p>
+        <div class="source">
+          <span class="source-label">来源 · 原文已引</span>
+          <cite>永昌元年率诸流民来渡江东。</cite>
+          <a href="#s3">陶弘景《真诰》卷一五 · 回到 §3</a>
+        </div>
+        <p class="gap"><b>还差什么：</b>流民人数与编制仍无直接材料。</p>
+      </article>
+    </section>
+
+    <section class="agenda">
+      <div class="section-heading">
+        <h3>待查</h3>
+        <span class="count">3 个 · 本章答不了</span>
+      </div>
+
+      <article class="agenda-item">
+        <div class="agenda-num">01</div>
+        <div class="agenda-body">
+          <h4>郗鉴返京后，合肥的部曲由谁统领？</h4>
+          <dl class="agenda-meta">
+            <div class="agenda-row">
+              <dt>为什么现在答不了</dt>
+              <dd>本章只写他频繁往返，没写离开后谁掌兵、粮道归谁。</dd>
+            </div>
+            <div class="agenda-row">
+              <dt>去哪儿找</dt>
+              <dd>下一节（二）流民与流民帅；《晋书·郗鉴传》后段。</dd>
+            </div>
+          </dl>
+          <div class="agenda-foot">
+            <a href="#s4">回到 §4</a>
+            <span class="dot" aria-hidden="true"></span>
+            <span>本章没有答案</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="agenda-item">
+        <div class="agenda-num">02</div>
+        <div class="agenda-body">
+          <h4>“流民不得过江”是通例，还是郗鉴一例的权宜？</h4>
+          <dl class="agenda-meta">
+            <div class="agenda-row">
+              <dt>为什么现在答不了</dt>
+              <dd>作者说“不独郗鉴所部如此”，但本章没有展开第二个例子。</dd>
+            </div>
+            <div class="agenda-row">
+              <dt>去哪儿找</dt>
+              <dd>下一节（二）；《晋书》祖逖、苏峻、蔡豹诸传。</dd>
+            </div>
+          </dl>
+          <div class="agenda-foot">
+            <a href="#s3">回到 §3</a>
+            <span class="dot" aria-hidden="true"></span>
+            <span>本章没有答案</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="agenda-item">
+        <div class="agenda-num">03</div>
+        <div class="agenda-body">
+          <h4>平王敦之后，流民帅为什么又成了苏峻、祖约之乱的主角？</h4>
+          <dl class="agenda-meta">
+            <div class="agenda-row">
+              <dt>为什么现在答不了</dt>
+              <dd>本章把流民当兵源，没回答用完以后怎么安置。</dd>
+            </div>
+            <div class="agenda-row">
+              <dt>去哪儿找</dt>
+              <dd>下一节（三）用流民帅平王敦之乱；本书后文。</dd>
+            </div>
+          </dl>
+          <div class="agenda-foot">
+            <a href="#s7">回到 §7</a>
+            <span class="dot" aria-hidden="true"></span>
+            <span>本章没有答案</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <p class="afterword-note">这一页只列问题，不替你下结论。没有来源的判断不写。</p>
+  </section>
+
+</main>
+
+<nav class="prototype-switcher" aria-label="原型检索状态切换">
+  <span class="proto-label"><b>原型</b> 状态</span>
+  <button type="button" data-state="S0" aria-pressed="false" title="未接检索">S0 未接</button>
+  <button type="button" data-state="S1" aria-pressed="true" title="检索失败或额度用尽">S1 失败</button>
+  <button type="button" data-state="S2" aria-pressed="false" title="检索成功但没有相关来源">S2 零命中</button>
+  <button type="button" data-state="S3" aria-pressed="false" title="有已核验来源">S3 有据</button>
+  <span class="proto-hint">← →</span>
+</nav>
+
+<script>
+  (function () {
+    var states = {
+      S0: {
+        chip: "未接检索",
+        lede: "这一版没有接入检索。下面是读完本章才会出现的问题，不是结论。"
+      },
+      S1: {
+        chip: "检索未完成",
+        lede: "检索服务额度用尽，这次没有查成。下面是待查问题，不是结论。"
+      },
+      S2: {
+        chip: "查无结果",
+        lede: "检索完成，没有找到相关来源。下面是待查问题，不是结论。"
+      },
+      S3: {
+        chip: "已查有据",
+        lede: "检索完成，找到 2 条可核对的来源。下面是结论与仍待查的问题。"
+      }
+    };
+
+    var order = ["S0", "S1", "S2", "S3"];
+    var chip = document.getElementById("status-chip");
+    var chipText = document.getElementById("status-text");
+    var lede = document.getElementById("status-lede");
+    var findings = document.getElementById("findings");
+    var buttons = Array.prototype.slice.call(document.querySelectorAll(".prototype-switcher button"));
+    var current = "S1";
+
+    function normalize(value) {
+      return Object.prototype.hasOwnProperty.call(states, value) ? value : "S1";
+    }
+
+    function setState(key, updateUrl) {
+      current = normalize(key);
+      var state = states[current];
+
+      chip.setAttribute("data-state", current);
+      chipText.textContent = state.chip;
+      lede.textContent = state.lede;
+      findings.hidden = current !== "S3";
+
+      buttons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.getAttribute("data-state") === current));
+      });
+
+      if (updateUrl && window.history && window.history.replaceState) {
+        var url = new URL(window.location.href);
+        url.searchParams.set("state", current);
+        window.history.replaceState(null, "", url.toString());
+      }
+    }
+
+    buttons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        setState(button.getAttribute("data-state"), true);
+      });
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      var index = order.indexOf(current);
+      var next = event.key === "ArrowRight"
+        ? (index + 1) % order.length
+        : (index - 1 + order.length) % order.length;
+      event.preventDefault();
+      setState(order[next], true);
+    });
+
+    var initial = "S1";
+    try {
+      initial = normalize(new URL(window.location.href).searchParams.get("state"));
+    } catch (error) {
+      initial = "S1";
+    }
+    setState(initial, false);
+  })();
+</script>
+
+</body>
+</html>

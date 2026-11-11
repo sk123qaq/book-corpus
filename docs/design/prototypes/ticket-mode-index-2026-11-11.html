@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>本章读法选择器 · 三个静态变体</title>
+<style>
+  :root{--paper:#F6F1E6;--ink:#211F1B;--ink2:#5B554B;--ink3:#8C8478;--rule:#D9D0BF;--pine:#315B4A;--cinnabar:#A8442F}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.75 "Noto Serif CJK SC","Songti SC",serif}
+  main{max-width:980px;margin:0 auto;padding:64px 24px 80px}
+  .eyebrow{font:10px/1.4 "Noto Sans CJK SC",sans-serif;letter-spacing:.18em;color:var(--cinnabar);text-transform:uppercase}
+  h1{font-size:34px;line-height:1.25;margin:14px 0 8px;letter-spacing:.02em}
+  .lede{color:var(--ink2);margin:0 0 36px;max-width:720px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{border:1px solid var(--rule);background:#FBF8EF;padding:20px;display:flex;flex-direction:column;min-height:280px}
+  .card h2{font-size:20px;margin:0 0 4px}
+  .card .k{font:9px/1 "Noto Sans CJK SC",sans-serif;letter-spacing:.14em;color:var(--ink3);margin-bottom:12px}
+  .card p{font-size:13px;line-height:1.75;color:var(--ink2);margin:0 0 14px}
+  .card ul{font-size:12px;line-height:1.8;color:var(--ink2);margin:0 0 18px;padding-left:1.1em}
+  .card a{margin-top:auto;display:inline-flex;align-items:center;justify-content:center;min-height:40px;border:1px solid var(--ink);color:var(--ink);text-decoration:none;font:11px/1 "Noto Sans CJK SC",sans-serif;letter-spacing:.1em}
+  .card a:hover{background:var(--pine);border-color:var(--pine);color:#F6F1E6}
+  .note{margin-top:28px;border-top:1px solid var(--rule);padding-top:18px;font-size:13px;color:var(--ink2)}
+  .note b{color:var(--ink)}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}.card{min-height:0}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">分层读 · 读本工单</div>
+  <h1>“本章读法”选择器 · 三个静态变体</h1>
+  <p class="lede">同一份工单上下文，三种选择控件。默认都是“跟随本书（论证）”，模型建议“论证”，选别的模式会变成“本章覆写”，并可恢复跟随本书。左侧正文是占位样本，不是真实章节。</p>
+  <div class="grid">
+    <article class="card">
+      <div class="k">变体 A · 下拉</div>
+      <h2>一个下拉，最省空间</h2>
+      <p>工单里只有一行“本章读法”。选项收在 select 里，默认“跟随本书（论证）”。</p>
+      <ul><li>桌面/手机都最紧凑</li><li>四种模式不展开看不到</li><li>适合熟练用户、低频入口</li></ul>
+      <a href="ticket-mode-dropdown-2026-11-11.html">打开变体 A →</a>
+    </article>
+    <article class="card">
+      <div class="k">变体 B · 多按钮</div>
+      <h2>四种模式同屏</h2>
+      <p>“跟随本书”一行，下面 2×2 分段按钮；建议项带角标，选中填充松绿。</p>
+      <ul><li>一屏看到全部选项</li><li>手机仍可读，工单不算太长</li><li>说明句最短，适合工单密度</li></ul>
+      <a href="ticket-mode-buttons-2026-11-11.html">打开变体 B →</a>
+    </article>
+    <article class="card">
+      <div class="k">变体 C · 卡片</div>
+      <h2>每张卡带一句说明</h2>
+      <p>2×2 单选卡，每张卡解释“这类书怎么读”；建议卡带角标和勾选。</p>
+      <ul><li>桌面最好读，解释最完整</li><li>手机纵向太长，工单占满首屏</li><li>适合首次选择、需要教育的场景</li></ul>
+      <a href="ticket-mode-cards-2026-11-11.html">打开变体 C →</a>
+    </article>
+  </div>
+  <p class="note"><b>我的建议：</b>B 做主方案；把 C 的说明句压成 B 按钮下的一行小字（或 title），A 作为窄屏降级。这样“模式全可见”和“工单不臃肿”能同时成立。</p>
+</main>
+</body>
+</html>

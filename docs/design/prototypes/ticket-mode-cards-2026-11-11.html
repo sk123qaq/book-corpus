@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>读本工单 · 本章读法（卡片版） · 原型</title>
+<style>
+  :root{
+    --paper:#F6F1E6;
+    --paper-2:#EFE9DA;
+    --card:#FBF8EF;
+    --ink:#211F1B;
+    --ink-2:#55524A;
+    --ink-3:#8A8578;
+    --rule:#DAD1BE;
+    --rule-strong:#C3B8A2;
+    --cinnabar:#A8442F;
+    --pine:#315B4A;
+    --ochre:#A87A3E;
+    --indigo:#2C4056;
+    --oxblood:#6B2B2B;
+    --serif:"Noto Serif CJK SC","Noto Serif CJK TC","Songti SC","SimSun",serif;
+    --sans:"Noto Sans CJK SC","Noto Sans CJK TC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-font-smoothing:antialiased}
+  body{
+    margin:0;min-height:100vh;background:var(--paper);color:var(--ink);
+    font:15px/1.9 var(--serif);
+    background-image:radial-gradient(900px 460px at 8% -8%,rgba(255,255,255,.55),transparent 62%);
+  }
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  ::selection{background:rgba(168,68,47,.18)}
+  :focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+
+  .wrap{max-width:1200px;margin:0 auto;padding:44px clamp(18px,4vw,40px) 72px}
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:56px;align-items:start}
+
+  /* ---------- 左：章节原文 ---------- */
+  .chapter{min-width:0}
+  .eyebrow{font:600 10px/1.4 var(--sans);letter-spacing:.24em;color:var(--cinnabar);text-transform:uppercase}
+  .chapter h1{
+    font:700 clamp(24px,2.6vw,32px)/1.42 var(--serif);letter-spacing:.02em;
+    margin:12px 0 10px;text-wrap:balance;
+  }
+  .chapter-meta{
+    display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;
+    font:10px/1.6 var(--sans);letter-spacing:.06em;color:var(--ink-3);
+    padding-bottom:18px;border-bottom:1px solid var(--rule-strong);margin-bottom:4px;
+  }
+  .chapter-meta span{display:inline-flex;align-items:center;gap:8px}
+  .chapter-meta span + span::before{content:"";width:3px;height:3px;background:var(--rule-strong);display:inline-block}
+  .chapter-meta .tag{
+    color:var(--pine);border:1px solid rgba(49,91,74,.3);padding:1px 5px;letter-spacing:.1em;
+  }
+  .prose{margin-top:26px;counter-reset:p;max-width:37em}
+  .prose p{
+    font-size:16px;line-height:2.05;color:#2C2923;margin:0 0 20px;text-indent:2em;
+    position:relative;counter-increment:p;
+  }
+  .prose p::before{
+    content:counter(p,decimal-leading-zero);
+    position:absolute;left:-2.6em;top:.62em;text-indent:0;
+    font:9px/1 var(--sans);letter-spacing:.1em;color:var(--rule-strong);
+  }
+  .prose p:last-child{margin-bottom:0}
+  .prose em{font-style:normal;border-bottom:1px solid rgba(168,68,47,.4);padding-bottom:1px}
+  .chapter-foot{
+    margin-top:30px;padding-top:14px;border-top:1px solid var(--rule);
+    font:9px/1.8 var(--sans);letter-spacing:.05em;color:var(--ink-3);
+  }
+
+  /* ---------- 右：工单 ---------- */
+  .ticket-col{position:sticky;top:24px}
+  .ticket{
+    position:relative;border:1px solid var(--rule-strong);background:var(--card);
+    padding:22px;box-shadow:0 18px 40px -32px rgba(33,31,27,.55);
+  }
+  .ticket::before{content:"";display:block;height:3px;background:var(--cinnabar);margin:-22px -22px 16px}
+  .ticket-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .ticket-top .eyebrow{letter-spacing:.22em}
+  .ticket-id{font:9px/1 var(--sans);letter-spacing:.14em;color:var(--ink-3)}
+  .ticket h3{font:700 21px/1.4 var(--serif);letter-spacing:.03em;margin:9px 0 4px;text-wrap:balance}
+  .ticket-meta{font:10px/1.6 var(--sans);letter-spacing:.05em;color:var(--ink-3);margin:0 0 6px}
+
+  .block-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;border-top:1px solid var(--rule);padding-top:12px;margin-top:14px}
+  .block-head h4{font:600 10px/1 var(--sans);letter-spacing:.2em;color:var(--ink-2);margin:0}
+  .block-head span{font:8px/1.5 var(--sans);letter-spacing:.04em;color:var(--ink-3);text-align:right}
+
+  /* 跟随本书（全宽行） */
+  .follow-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0 10px;border-bottom:1px solid var(--rule)}
+  .follow-copy b{display:block;font:600 12px/1.5 var(--sans);letter-spacing:.05em;color:var(--ink)}
+  .follow-copy b .follow-tier{color:var(--pine);font-weight:600}
+  .follow-copy small{display:block;font:9px/1.5 var(--sans);letter-spacing:.03em;color:var(--ink-3);margin-top:1px}
+  .switch{
+    flex:none;position:relative;width:34px;height:18px;border:1px solid var(--rule-strong);
+    background:var(--paper-2);border-radius:9px;transition:background .18s,border-color .18s;
+  }
+  .switch::after{
+    content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;
+    background:var(--ink-3);transition:left .18s,background .18s;
+  }
+  .switch[aria-checked="true"]{background:var(--pine);border-color:var(--pine)}
+  .switch[aria-checked="true"]::after{left:18px;background:#F6F1E6}
+
+  /* 2×2 卡片 */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0}
+  .card{
+    position:relative;display:flex;flex-direction:column;gap:5px;
+    padding:10px 10px 11px;border:1px solid var(--rule);background:var(--card);
+    cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;
+  }
+  .card:hover{border-color:var(--rule-strong);background:#FFFDF5}
+  .card input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+  .card.is-on{border-color:var(--pine);box-shadow:inset 0 0 0 1px var(--pine);background:#F8FAF6}
+  .card:has(input:focus-visible){outline:2px solid var(--pine);outline-offset:2px}
+  .card-head{display:flex;align-items:center;gap:0;flex-wrap:wrap;min-height:14px}
+  .rec-dot{width:6px;height:6px;background:var(--pine);display:inline-block;margin-right:5px;flex:none}
+  .card-name{font:600 12px/1.4 var(--sans);letter-spacing:.05em;color:var(--ink);position:relative}
+  .card-badge{
+    font:8px/1 var(--sans);font-style:normal;color:var(--cinnabar);
+    border:1px solid rgba(168,68,47,.38);padding:2px 3px;margin-left:5px;transform:translateY(-.5px);
+  }
+  .card-desc{font:9px/1.6 var(--sans);letter-spacing:.02em;color:var(--ink-3)}
+  .card-check{
+    position:absolute;top:5px;right:5px;width:15px;height:15px;background:var(--pine);
+    display:grid;place-items:center;opacity:0;transform:scale(.86);transition:opacity .15s,transform .15s;
+  }
+  .card.is-on .card-check{opacity:1;transform:none}
+  .card-check::after{content:"";width:6px;height:3px;border-left:1.5px solid #F6F1E6;border-bottom:1.5px solid #F6F1E6;transform:rotate(-45deg) translateY(-1px)}
+
+  /* 覆写行 */
+  .override{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:10px 0 0;flex-wrap:wrap}
+  .override-text{font:9px/1.7 var(--sans);letter-spacing:.03em;color:var(--ink-3)}
+  .override-text[data-own="true"]{color:var(--cinnabar)}
+  .reset{
+    font:9px/1 var(--sans);letter-spacing:.03em;color:var(--cinnabar);
+    border-bottom:1px solid rgba(168,68,47,.45);padding-bottom:2px;white-space:nowrap;
+  }
+  .reset:hover{color:var(--ink);border-bottom-color:var(--ink)}
+  .reset[disabled]{color:var(--ink-3);border-bottom:1px dotted var(--rule-strong);cursor:default}
+
+  /* 模型建议 */
+  .suggest{border-top:1px dotted var(--rule);margin-top:12px;padding-top:10px}
+  .suggest-main{font:10px/1.7 var(--sans);letter-spacing:.03em;color:var(--ink-2);margin:0}
+  .suggest-main b{font-weight:600;color:var(--pine)}
+  .suggest-basis{font:9px/1.7 var(--sans);letter-spacing:.02em;color:var(--ink-3);margin:2px 0 0}
+  .suggest-basis .sep{color:var(--rule-strong);margin:0 5px}
+
+  .ticket-est{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font:9px/1.7 var(--sans);letter-spacing:.03em;color:var(--ink-3);margin:12px 0 10px;border-top:1px solid var(--rule);padding-top:10px}
+  .ticket-est .right{text-align:right;white-space:nowrap}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    min-height:44px;padding:0 16px;font:12px/1.3 var(--sans);letter-spacing:.06em;
+    border:1px solid var(--pine);background:var(--pine);color:#F6F1E6;
+    transition:background .18s,border-color .18s;
+  }
+  .btn:hover{background:var(--ink);border-color:var(--ink)}
+  .btn .arrow{font-family:var(--sans);opacity:.85}
+  .fine{font:9px/1.75 var(--sans);color:var(--ink-3);letter-spacing:.02em;margin:12px 0 0}
+  .gen-status{margin:8px 0 0;color:var(--pine)}
+  .gen-status:empty{display:none}
+
+  /* ---------- 窄屏：侧栏置顶 ---------- */
+  @media (max-width:900px){
+    .wrap{padding:28px 18px 56px}
+    .layout{grid-template-columns:1fr;gap:28px}
+    .ticket-col{order:-1;position:static}
+    .ticket{max-width:560px}
+    .prose{max-width:none}
+    .prose p::before{display:none}
+  }
+  @media (max-width:420px){
+    .cards{grid-template-columns:1fr}
+    .ticket{padding:18px}
+    .ticket::before{margin:-18px -18px 14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="layout">
+
+    <!-- 左：章节原文 -->
+    <article class="chapter">
+      <p class="eyebrow">第一卷 · 门阀与兵源</p>
+      <h1>07 （一）东晋初年的兵力状况</h1>
+      <div class="chapter-meta">
+        <span>原文 5,842 字</span>
+        <span>约 12 分钟</span>
+        <span class="tag">标准本逐字保留</span>
+      </div>
+
+      <div class="prose">
+        <p>东晋立国之初，朝廷直接掌握的兵员极为有限。南渡的侨姓士族各领部曲，州郡又另置兵簿，兵籍与民籍并行，中央能够调发的数字始终含混。所谓「中兴」，在兵册上留下的痕迹远不如在诏令中清晰。</p>
+        <p>现存《晋书》诸志与南朝地记对兵额的记载互有出入。有的以「户」折算，有的只记「兵若干人」，折算比例从未明言，因此任何总数都只能视为下限，而不能当作事实。</p>
+        <p>更麻烦的是兵籍的流动性。军户世代相承，一旦被括入军籍，便于民籍分离，婚配、田产、赋役另有一套规矩；而这些规矩在不同州镇之间的执行并不一致。</p>
+        <p>因此，讨论东晋初年的兵力，与其追问一个确数，不如追问三个边界条件：谁有权征兵、兵以何种名目存在、战事结束后兵额如何归位。<em>这三个问题决定了数字可以被怎样书写</em>。</p>
+        <p>本章先梳理建康与方镇之间的兵权分配，再以三次北伐的动员记录为例，说明「兵力」在史料中如何被夸大、被隐去，或仅仅被含混地继承下来。</p>
+        <p>读者若只记住一件事：东晋的兵力不是一笔账，而是一组不断被重新谈判的关系；每一次北伐，都是这组关系的一次结算。</p>
+      </div>
+
+      <p class="chapter-foot">原文逐字保留 · 讲解以旁批呈现 · 本页为静态原型，正文为占位示例</p>
+    </article>
+
+    <!-- 右：读本工单 -->
+    <div class="ticket-col">
+      <aside class="ticket" aria-labelledby="ticket-title">
+        <div class="ticket-top">
+          <span class="eyebrow">读本工单</span>
+          <span class="ticket-id">#B0042-07</span>
+        </div>
+        <h3 id="ticket-title">东晋初年的兵力状况</h3>
+        <p class="ticket-meta">5,842 字 · 原文约 12 分钟</p>
+
+        <div class="block-head">
+          <h4>本章读法</h4>
+          <span>覆写只作用于本章</span>
+        </div>
+
+        <!-- 跟随本书（全宽行） -->
+        <div class="follow-row">
+          <div class="follow-copy">
+            <b>跟随本书<span class="follow-tier">（论证）</span></b>
+            <small id="follow-note">本书默认读法 · 本章未覆写</small>
+          </div>
+          <button class="switch" id="follow-switch" type="button" role="switch"
+                  aria-checked="true" aria-label="跟随本书读法（论证）"></button>
+        </div>
+
+        <!-- 2×2 单选卡片 -->
+        <div class="cards" role="radiogroup" aria-label="本章读法">
+          <label class="card" data-tier="narrative" role="radio" aria-checked="false">
+            <input type="radio" name="tier" value="narrative">
+            <span class="card-head"><span class="card-name">叙事</span></span>
+            <span class="card-desc">人物、场景、时间线</span>
+            <span class="card-check" aria-hidden="true"></span>
+          </label>
+
+          <label class="card is-on" data-tier="argument" role="radio" aria-checked="true">
+            <input type="radio" name="tier" value="argument" checked>
+            <span class="card-head"><span class="rec-dot" aria-hidden="true"></span><span class="card-name">论证</span><em class="card-badge">建议</em></span>
+            <span class="card-desc">主张、证据、边界</span>
+            <span class="card-check" aria-hidden="true"></span>
+          </label>
+
+          <label class="card" data-tier="practical" role="radio" aria-checked="false">
+            <input type="radio" name="tier" value="practical">
+            <span class="card-head"><span class="card-name">实用</span></span>
+            <span class="card-desc">步骤、清单、失败模式</span>
+            <span class="card-check" aria-hidden="true"></span>
+          </label>
+
+          <label class="card" data-tier="reference" role="radio" aria-checked="false">
+            <input type="radio" name="tier" value="reference">
+            <span class="card-head"><span class="card-name">资料·图册</span></span>
+            <span class="card-desc">图版、术语、版本</span>
+            <span class="card-check" aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <!-- 覆写状态 -->
+        <div class="override">
+          <span class="override-text" id="override-text" data-own="false" aria-live="polite">本章覆写：无（沿用本书默认）</span>
+          <button class="reset" id="reset-follow" type="button" disabled>恢复跟随本书</button>
+        </div>
+
+        <!-- 模型建议 -->
+        <div class="suggest">
+          <p class="suggest-main">模型建议：<b>论证</b> · 置信度 0.82</p>
+          <p class="suggest-basis">依据：5 个主张<span class="sep">/</span>3 个条件<span class="sep">/</span>1 个反例</p>
+        </div>
+
+        <div class="ticket-est">
+          <span id="ticket-est">≈ 18 分钟 · 约 3,900 字</span>
+          <span class="right">本地队列 · 最多 4 个并行</span>
+        </div>
+
+        <button class="btn" id="generate" type="button">
+          <span id="btn-label">按本书默认（论证）生成读本</span><span class="arrow" aria-hidden="true">→</span>
+        </button>
+        <p class="fine gen-status" id="gen-status" aria-live="polite"></p>
+
+        <p class="fine">原文逐字保留；讲解只做旁批，可一键隐藏。原文不重写、不合并。</p>
+      </aside>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+
+    var BOOK_DEFAULT = "argument";
+    var TIERS = {
+      narrative: { name: "叙事", mins: 16, words: 3400 },
+      argument:  { name: "论证", mins: 18, words: 3900 },
+      practical: { name: "实用", mins: 14, words: 3000 },
+      reference: { name: "资料·图册", mins: 20, words: 4300 }
+    };
+
+    // 初始：跟随本书（论证）
+    var state = { follow: true, tier: BOOK_DEFAULT };
+
+    var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+    var inputs = Array.prototype.slice.call(document.querySelectorAll('input[name="tier"]'));
+    var followSwitch = document.getElementById("follow-switch");
+    var followNote = document.getElementById("follow-note");
+    var overrideText = document.getElementById("override-text");
+    var resetBtn = document.getElementById("reset-follow");
+    var est = document.getElementById("ticket-est");
+    var btnLabel = document.getElementById("btn-label");
+    var generate = document.getElementById("generate");
+    var genStatus = document.getElementById("gen-status");
+
+    function fmt(n) { return n.toLocaleString("zh-CN"); }
+
+    function render() {
+      var tier = TIERS[state.tier];
+      var follow = state.follow;
+
+      cards.forEach(function (card) {
+        var on = card.getAttribute("data-tier") === state.tier;
+        card.classList.toggle("is-on", on);
+        card.setAttribute("aria-checked", on ? "true" : "false");
+        var input = card.querySelector('input[name="tier"]');
+        if (input) input.checked = on;
+      });
+
+      followSwitch.setAttribute("aria-checked", follow ? "true" : "false");
+      followSwitch.setAttribute("aria-label", follow
+        ? "跟随本书读法（" + TIERS[BOOK_DEFAULT].name + "）"
+        : "不跟随本书读法，本章当前为" + tier.name);
+
+      followNote.textContent = follow
+        ? "本书默认读法 · 本章未覆写"
+        : "已关闭 · 本章按覆写生成";
+
+      overrideText.setAttribute("data-own", follow ? "false" : "true");
+      overrideText.textContent = follow
+        ? "本章覆写：无（沿用本书默认）"
+        : "本章覆写：" + tier.name + "（不跟随本书）";
+
+      resetBtn.disabled = follow;
+
+      est.textContent = "≈ " + tier.mins + " 分钟 · 约 " + fmt(tier.words) + " 字";
+
+      btnLabel.textContent = follow
+        ? "按本书默认（" + TIERS[BOOK_DEFAULT].name + "）生成读本"
+        : "按「" + tier.name + "」生成读本";
+      generate.setAttribute("aria-label", btnLabel.textContent);
+    }
+
+    inputs.forEach(function (input) {
+      input.addEventListener("change", function () {
+        var next = input.value;
+        if (!TIERS[next]) return;
+        // 跟随中改选：同样的选项不构成覆写，其它选项即离开跟随
+        if (state.follow) {
+          if (next === state.tier) return;
+          state.follow = false;
+        }
+        state.tier = next;
+        genStatus.textContent = "";
+        render();
+      });
+    });
+
+    followSwitch.addEventListener("click", function () {
+      state.follow = !state.follow;
+      if (state.follow) state.tier = BOOK_DEFAULT;
+      genStatus.textContent = "";
+      render();
+    });
+
+    resetBtn.addEventListener("click", function () {
+      if (state.follow) return;
+      state.follow = true;
+      state.tier = BOOK_DEFAULT;
+      genStatus.textContent = "";
+      render();
+    });
+
+    generate.addEventListener("click", function () {
+      genStatus.textContent = "已按「" + TIERS[state.tier].name +
+        "」加入本地队列（原型：仅示意，不会真的生成）";
+    });
+
+    render();
+  })();
+</script>
+</body>
+</html>

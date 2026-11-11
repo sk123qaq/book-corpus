@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>读本工单 · 本章读法（多按钮版）</title>
+<style>
+  :root{
+    --paper:#F6F1E6;
+    --paper-2:#FBF8EF;
+    --paper-3:#EFE8D8;
+    --ink:#211F1B;
+    --ink-2:#57534A;
+    --ink-3:#8B8578;
+    --rule:#DDD4C0;
+    --rule-strong:#C4B9A2;
+    --cinnabar:#A8442F;
+    --cinnabar-soft:#C97A63;
+    --pine:#315B4A;
+    --pine-deep:#27483B;
+    --serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC","SimSun",serif;
+    --sans:"Noto Sans CJK SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{background:var(--paper)}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  ::selection{background:rgba(168,68,47,.18)}
+  :focus-visible{outline:2px solid var(--cinnabar);outline-offset:2px}
+
+  .masthead{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 40px;
+    height:58px;
+    border-bottom:1px solid var(--rule);
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:18px;
+    letter-spacing:.18em;
+    white-space:nowrap;
+  }
+  .brand i{display:block;width:2px;background:var(--cinnabar)}
+  .brand i:nth-child(1){height:16px}
+  .brand i:nth-child(2){height:11px}
+  .brand i:nth-child(3){height:14px}
+  .brand .marks{display:flex;align-items:flex-end;gap:2px;height:16px}
+  .crumbs{display:flex;align-items:center;gap:8px;font:9px/1 var(--sans);letter-spacing:.1em;color:var(--ink-3)}
+  .crumbs .sep{color:var(--rule-strong)}
+  .crumbs .now{color:var(--ink-2)}
+  .mast-meta{margin-left:auto;font:9px/1 var(--sans);letter-spacing:.14em;color:var(--ink-3)}
+
+  .shell{
+    max-width:1200px;
+    margin:0 auto;
+    padding:34px 40px 88px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 360px;
+    gap:64px;
+    align-items:start;
+  }
+
+  /* ---------- left: original text ---------- */
+  .chapter{min-width:0}
+  .chapter-eyebrow{
+    font:9px/1 var(--sans);
+    letter-spacing:.2em;
+    color:var(--cinnabar);
+    margin-bottom:12px;
+  }
+  .chapter h1{
+    font:700 30px/1.35 var(--serif);
+    letter-spacing:.02em;
+    margin:0 0 10px;
+  }
+  .chapter h1 .chap-no{
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:.16em;
+    color:var(--cinnabar);
+    margin-right:12px;
+    vertical-align:3px;
+  }
+  .chapter-meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 14px;
+    margin:0;
+    font:10px/1.6 var(--sans);
+    letter-spacing:.05em;
+    color:var(--ink-3);
+  }
+  .chapter-meta b{font-weight:600;color:var(--ink-2)}
+  .rule{border:0;border-top:1px solid var(--ink);margin:22px 0 0}
+  .prose{padding-top:26px}
+  .prose p{
+    font:16px/2 var(--serif);
+    text-align:justify;
+    text-indent:2em;
+    margin:0 0 .9em;
+    color:var(--ink);
+  }
+  .prose p em{
+    font-style:normal;
+    text-decoration:underline;
+    text-decoration-color:rgba(168,68,47,.4);
+    text-underline-offset:4px;
+  }
+  .chapter-foot{
+    display:flex;
+    justify-content:space-between;
+    gap:14px;
+    margin-top:30px;
+    padding-top:12px;
+    border-top:1px solid var(--rule);
+    font:9.5px/1.6 var(--sans);
+    letter-spacing:.04em;
+    color:var(--ink-3);
+  }
+
+  /* ---------- right: ticket ---------- */
+  .ticket{
+    position:sticky;
+    top:26px;
+    align-self:start;
+    width:360px;
+    padding:22px;
+    border:1px solid var(--rule-strong);
+    background:var(--paper-2);
+    box-shadow:0 20px 44px -38px rgba(33,31,27,.55);
+  }
+  .ticket::before{
+    content:"";
+    display:block;
+    height:3px;
+    margin:-22px -22px 18px;
+    background:var(--cinnabar);
+  }
+  .ticket-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .ticket-eyebrow{
+    font:9px/1 var(--sans);
+    letter-spacing:.2em;
+    color:var(--cinnabar);
+  }
+  .ticket-id{
+    font:9px/1 var(--sans);
+    letter-spacing:.12em;
+    color:var(--ink-3);
+  }
+  .ticket h2{
+    font:700 19px/1.4 var(--serif);
+    letter-spacing:.03em;
+    margin:10px 0 5px;
+  }
+  .ticket-meta{
+    margin:0;
+    font:10px/1.5 var(--sans);
+    letter-spacing:.05em;
+    color:var(--ink-3);
+  }
+
+  .mode-block{
+    margin-top:17px;
+    padding-top:15px;
+    border-top:1px solid var(--rule);
+  }
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .sec-head h3{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin:0;
+    font:600 11px/1.3 var(--sans);
+    letter-spacing:.12em;
+    color:var(--ink);
+  }
+  .sec-head h3::before{
+    content:"";
+    width:5px;
+    height:5px;
+    background:var(--cinnabar);
+  }
+  .sec-note{
+    font:9px/1.3 var(--sans);
+    letter-spacing:.1em;
+    color:var(--ink-3);
+    transition:color .18s;
+  }
+  .sec-note.is-override{color:var(--cinnabar)}
+
+  .follow-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    width:100%;
+    margin-top:11px;
+    padding:11px 12px;
+    border:1px solid var(--rule-strong);
+    background:rgba(255,255,255,.42);
+    text-align:left;
+    transition:border-color .18s,background .18s;
+  }
+  .follow-row:hover{border-color:var(--ink-3)}
+  .follow-row.is-on{
+    border-color:rgba(49,91,74,.5);
+    background:rgba(49,91,74,.055);
+  }
+  .follow-copy b{
+    display:block;
+    font:600 12px/1.4 var(--sans);
+    letter-spacing:.04em;
+    color:var(--ink);
+  }
+  .follow-copy small{
+    display:block;
+    margin-top:2px;
+    font:9px/1.5 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink-3);
+  }
+  .switch{
+    position:relative;
+    flex:none;
+    width:32px;
+    height:17px;
+    border:1px solid var(--rule-strong);
+    background:rgba(255,255,255,.6);
+    transition:background .18s,border-color .18s;
+  }
+  .switch i{
+    position:absolute;
+    top:2px;
+    left:2px;
+    width:11px;
+    height:11px;
+    background:var(--ink-3);
+    transition:transform .18s,background .18s;
+  }
+  .follow-row.is-on .switch{background:var(--pine);border-color:var(--pine)}
+  .follow-row.is-on .switch i{background:var(--paper);transform:translateX(14px)}
+
+  .mode-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:7px;
+    margin-top:10px;
+  }
+  .mode-btn{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:2px;
+    min-height:56px;
+    padding:9px 10px;
+    border:1px solid var(--rule-strong);
+    background:rgba(255,255,255,.4);
+    text-align:left;
+    transition:background .18s,color .18s,border-color .18s;
+  }
+  .mode-btn:hover{border-color:var(--ink-3);background:rgba(255,255,255,.7)}
+  .mode-name{
+    display:flex;
+    align-items:center;
+    gap:5px;
+    font:600 12.5px/1.4 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink);
+  }
+  .mode-sub{
+    font:9px/1.5 var(--sans);
+    letter-spacing:.02em;
+    color:var(--ink-3);
+  }
+  .sug-dot{
+    flex:none;
+    width:5px;
+    height:5px;
+    border-radius:50%;
+    background:var(--cinnabar);
+  }
+  .sug-badge{
+    padding:2px 3px;
+    border:1px solid var(--cinnabar-soft);
+    font:8px/1 var(--sans);
+    font-weight:400;
+    letter-spacing:.06em;
+    color:var(--cinnabar);
+  }
+  .mode-grid.is-following .mode-btn{
+    border-style:dashed;
+    border-color:var(--rule);
+    background:transparent;
+    color:#6E6A5E;
+  }
+  .mode-grid.is-following .mode-btn .mode-sub{color:#857F72}
+  .mode-grid.is-following .mode-btn:hover{
+    border-color:var(--rule-strong);
+    background:rgba(255,255,255,.5);
+    color:var(--ink-2);
+  }
+  .mode-grid.is-following .mode-btn:hover .mode-sub{color:var(--ink-3)}
+  .mode-btn[aria-pressed="true"]{
+    background:var(--pine);
+    border-color:var(--pine);
+    border-style:solid;
+  }
+  .mode-btn[aria-pressed="true"] .mode-name{color:var(--paper)}
+  .mode-btn[aria-pressed="true"] .mode-sub{color:rgba(246,241,230,.78)}
+  .mode-btn[aria-pressed="true"] .sug-dot{background:#EBC3B4}
+  .mode-btn[aria-pressed="true"] .sug-badge{
+    color:var(--paper);
+    border-color:rgba(246,241,230,.45);
+  }
+  .mode-btn[aria-pressed="true"]:hover{background:var(--pine-deep);border-color:var(--pine-deep)}
+
+  .status-line{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+    min-height:21px;
+    margin-top:9px;
+    font:9.5px/1.6 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink-3);
+  }
+  .status-line[data-active="true"]{color:var(--cinnabar)}
+  .status-line[data-active="true"] .link-btn{color:var(--ink-2);border-color:var(--rule-strong)}
+  .link-btn{
+    flex:none;
+    padding:2px 0 1px;
+    border-bottom:1px solid var(--rule-strong);
+    font:10px/1.5 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink-2);
+    white-space:nowrap;
+  }
+  .link-btn:hover{color:var(--cinnabar);border-color:var(--cinnabar)}
+
+  .suggest{
+    margin-top:13px;
+    padding:9px 11px 8px;
+    border:1px solid rgba(49,91,74,.22);
+    background:rgba(49,91,74,.045);
+  }
+  .suggest-row{display:flex;align-items:center;gap:6px;min-width:0}
+  .suggest-label{
+    font:9px/1.4 var(--sans);
+    letter-spacing:.1em;
+    color:var(--pine);
+  }
+  .suggest-mode{
+    font:600 12px/1.4 var(--sans);
+    letter-spacing:.04em;
+    color:var(--ink);
+  }
+  .suggest-conf{
+    margin-left:auto;
+    font:9px/1.4 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink-3);
+    white-space:nowrap;
+  }
+  .suggest-conf b{font-weight:600;color:var(--ink-2)}
+  .suggest-basis{
+    margin:5px 0 0;
+    font:9px/1.5 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink-3);
+  }
+
+  .ticket-est{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    margin-top:14px;
+    padding-top:9px;
+    border-top:1px solid var(--rule);
+    font:9px/1.6 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink-3);
+  }
+  .ticket-est span:last-child{white-space:nowrap}
+
+  .btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    width:100%;
+    min-height:44px;
+    padding:0 14px;
+    border:1px solid var(--pine);
+    background:var(--pine);
+    color:var(--paper);
+    font:600 12px/1.35 var(--sans);
+    letter-spacing:.05em;
+    transition:background .18s,border-color .18s;
+  }
+  .btn-primary:hover{background:var(--ink);border-color:var(--ink)}
+  .btn-primary:active{transform:translateY(1px)}
+  .queue-msg{
+    min-height:15px;
+    margin:6px 0 0;
+    font:9px/1.6 var(--sans);
+    letter-spacing:.03em;
+    color:var(--pine);
+  }
+  .fine{
+    margin:11px 0 0;
+    padding-top:10px;
+    border-top:1px dotted var(--rule-strong);
+    font:9px/1.8 var(--sans);
+    letter-spacing:.03em;
+    color:var(--ink-3);
+  }
+
+  @media (max-width:1080px){
+    .shell{gap:40px;padding-left:28px;padding-right:28px}
+    .masthead{padding-left:28px;padding-right:28px}
+    .ticket{width:340px}
+  }
+  @media (max-width:900px){
+    .masthead{height:52px;padding:0 20px}
+    .mast-meta{display:none}
+    .shell{
+      grid-template-columns:minmax(0,1fr);
+      gap:26px;
+      padding:20px 20px 64px;
+    }
+    .ticket{
+      order:-1;
+      position:static;
+      width:auto;
+    }
+    .chapter h1{font-size:26px}
+    .prose p{font-size:15.5px;line-height:1.95}
+    .chapter-foot{flex-direction:column;gap:4px}
+  }
+  @media (max-width:900px) and (min-width:680px){
+    .mode-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .mode-btn{min-height:52px}
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="brand"><span class="marks" aria-hidden="true"><i></i><i></i><i></i></span>读本</div>
+  <div class="crumbs">
+    <span>中古中国政治史</span>
+    <span class="sep">/</span>
+    <span>第七章</span>
+    <span class="sep">/</span>
+    <span class="now">原文</span>
+  </div>
+  <div class="mast-meta">本地原型 · 无网络请求</div>
+</header>
+
+<div class="shell">
+  <main class="chapter">
+    <div class="chapter-eyebrow">第七章 · 江左政权</div>
+    <h1><span class="chap-no">07</span>（一）东晋初年的兵力状况</h1>
+    <p class="chapter-meta">
+      <span>中古中国政治史 · 第二章</span>
+      <span><b>4,180</b> 字</span>
+      <span>原文约 <b>14</b> 分钟</span>
+      <span>标准本保留 <b>41 / 62</b> 块</span>
+    </p>
+    <hr class="rule">
+
+    <article class="prose">
+      <p>东晋立国之初，朝廷能够直接调动的兵力十分有限。元帝司马睿移镇建康时，所倚仗的军事力量主要有三部分：琅邪王氏随其南渡的部曲，徐州、扬州一带的侨姓豪族武装，以及原属西晋的台兵残余。三者合计不过数万人，且互不统属，遇有战事，须由朝廷临时协调。</p>
+      <p>若从地理上观察，军权的分布更为清楚。上游荆州、江州控扼长江中游，方镇刺史往往兼领都督，兵额与粮饷自专；下游三吴地区以地方兵为主，战斗力有限；建康所倚为屏障的，则是屯驻京口的徐州兵与石头城的台兵。中央与方镇之间的轻重，由此已见端倪。</p>
+      <p>流民帅是这一时期最值得注意的一支力量。郗鉴、苏峻、祖逖所领部众，多由北方南迁的流民组成，名义上受朝廷节制，兵籍与给养却常常自行筹措。他们熟悉北方形势，作战能力较强；一旦与朝廷利益相左，也最容易转为割据的资本。王敦之乱与苏峻之乱，都与这种兵权结构有关。</p>
+      <p>兵户与民户的分离，是理解东晋兵力的另一条线索。世兵制下，兵家子弟世代为兵，户籍单列，身份低于编户齐民。兵户既要承担征戍，又要自备部分军资，逃亡与隐匿因此不断发生。朝廷屡次检括兵户，效果始终有限。</p>
+      <p>面对这种局面，朝廷的应对大致有两途。其一是析置侨郡侨县，把南渡流民纳入行政编制，再从中抽丁；其二是承认流民帅的既成事实，授予官职，将其部曲逐步转化为国家军队。前者以政区调整为手段，见效缓慢；后者见效快，却使方镇势力坐大。</p>
+      <p>因此，把东晋初年的兵力状况简单概括为「弱」，并不准确。更确切的说法是，中央与方镇之间维持着一种<em>脆弱的平衡</em>：朝廷在名义上握有调兵之权，实际可用的兵力却依赖地方与流民武装的配合。这种结构支撑了江左政权的立国，也埋下了此后百年内乱的根由。</p>
+    </article>
+
+    <div class="chapter-foot">
+      <span>节选 · 原文 4,180 字，此处约 620 字</span>
+      <span>原文逐字保留，未作改写</span>
+    </div>
+  </main>
+
+  <aside class="ticket" aria-label="读本工单">
+    <div class="ticket-top">
+      <span class="ticket-eyebrow">读本工单</span>
+      <span class="ticket-id">#B0042-07</span>
+    </div>
+    <h2>（一）东晋初年的兵力状况</h2>
+    <p class="ticket-meta">4,180 字 · 原文约 14 分钟</p>
+
+    <section class="mode-block" aria-labelledby="mode-heading">
+      <div class="sec-head">
+        <h3 id="mode-heading">本章读法</h3>
+        <span class="sec-note" id="sec-note">默认</span>
+      </div>
+
+      <button class="follow-row is-on" id="follow-row" type="button" aria-pressed="true">
+        <span class="follow-copy">
+          <b>跟随本书（论证）</b>
+          <small id="follow-hint">与全书路径一致</small>
+        </span>
+        <span class="switch" aria-hidden="true"><i></i></span>
+      </button>
+
+      <div class="mode-grid" id="mode-grid" role="group" aria-label="本章读法覆写">
+        <button class="mode-btn" type="button" data-mode="narrative" aria-pressed="false">
+          <span class="mode-name">叙事</span>
+          <span class="mode-sub">事件与因果</span>
+        </button>
+        <button class="mode-btn" type="button" data-mode="argument" aria-pressed="false">
+          <span class="mode-name"><i class="sug-dot" aria-hidden="true"></i>论证<span class="sug-badge">建议</span></span>
+          <span class="mode-sub">主张与条件</span>
+        </button>
+        <button class="mode-btn" type="button" data-mode="practical" aria-pressed="false">
+          <span class="mode-name">实用</span>
+          <span class="mode-sub">可操作要点</span>
+        </button>
+        <button class="mode-btn" type="button" data-mode="reference" aria-pressed="false">
+          <span class="mode-name">资料·图册</span>
+          <span class="mode-sub">人物·地名·年表</span>
+        </button>
+      </div>
+
+      <div class="status-line" id="status-line">
+        <span id="status-text" aria-live="polite">跟随本书 · 未覆写，按默认「论证」出片</span>
+        <button class="link-btn" id="restore" type="button" hidden>恢复跟随本书</button>
+      </div>
+    </section>
+
+    <div class="suggest">
+      <div class="suggest-row">
+        <i class="sug-dot" aria-hidden="true"></i>
+        <span class="suggest-label">模型建议</span>
+        <b class="suggest-mode">论证</b>
+        <span class="suggest-conf">置信度 <b>0.82</b></span>
+      </div>
+      <p class="suggest-basis">依据：5 个主张 / 3 个条件 / 1 个反例</p>
+    </div>
+
+    <div class="ticket-est">
+      <span id="est-left">预计 12 秒 · 4,180 字</span>
+      <span>本地队列 · 最多 4 个并行</span>
+    </div>
+
+    <button class="btn btn-primary" id="generate" type="button">
+      <span id="generate-label">按本书默认（论证）生成读本 →</span>
+    </button>
+    <p class="queue-msg" id="queue-msg" role="status" aria-live="polite"></p>
+
+    <p class="fine">原文逐字保留，讲解只做旁批，可一键隐藏。覆写只作用于本章，不改全书默认。</p>
+  </aside>
+</div>
+
+<script>
+  const MODES = {
+    narrative: { name: '叙事', secs: 9 },
+    argument: { name: '论证', secs: 12 },
+    practical: { name: '实用', secs: 10 },
+    reference: { name: '资料·图册', secs: 16 }
+  };
+  const BOOK_DEFAULT = 'argument';
+  const state = { follow: true, override: null };
+  const el = (id) => document.getElementById(id);
+  let queueTimer;
+
+  function activeMode() {
+    return state.follow ? BOOK_DEFAULT : state.override;
+  }
+
+  function render() {
+    const follow = state.follow;
+    const mode = activeMode();
+
+    el('follow-row').setAttribute('aria-pressed', String(follow));
+    el('follow-row').classList.toggle('is-on', follow);
+    el('follow-hint').textContent = follow ? '与全书路径一致' : '已暂停，本章单独出片';
+
+    el('mode-grid').classList.toggle('is-following', follow);
+    document.querySelectorAll('.mode-btn').forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(!follow && btn.dataset.mode === state.override));
+    });
+
+    el('sec-note').textContent = follow ? '默认' : '已覆写';
+    el('sec-note').classList.toggle('is-override', !follow);
+
+    const line = el('status-line');
+    line.dataset.active = String(!follow);
+    el('status-text').textContent = follow
+      ? '跟随本书 · 未覆写，按默认「' + MODES[BOOK_DEFAULT].name + '」出片'
+      : '本章覆写：' + MODES[state.override].name + '（不跟随本书）';
+    el('restore').hidden = follow;
+
+    el('est-left').textContent = '预计 ' + MODES[mode].secs + ' 秒 · 4,180 字';
+    el('generate-label').textContent = follow
+      ? '按本书默认（' + MODES[BOOK_DEFAULT].name + '）生成读本 →'
+      : '按「' + MODES[mode].name + '」生成读本 →';
+  }
+
+  document.querySelectorAll('.mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.follow = false;
+      state.override = btn.dataset.mode;
+      render();
+    });
+  });
+
+  el('follow-row').addEventListener('click', () => {
+    state.follow = !state.follow;
+    if (!state.follow) state.override = BOOK_DEFAULT;
+    render();
+  });
+
+  el('restore').addEventListener('click', () => {
+    state.follow = true;
+    state.override = null;
+    render();
+    el('follow-row').focus();
+  });
+
+  el('generate').addEventListener('click', () => {
+    const mode = activeMode();
+    const msg = el('queue-msg');
+    msg.textContent = '已加入本地队列 · ' + MODES[mode].name + '读本 · 预计 ' + MODES[mode].secs + ' 秒';
+    clearTimeout(queueTimer);
+    queueTimer = setTimeout(() => { msg.textContent = ''; }, 2400);
+  });
+
+  render();
+</script>
+</body>
+</html>
