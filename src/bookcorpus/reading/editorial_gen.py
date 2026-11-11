@@ -151,8 +151,11 @@ def generate_editorial(
         try:
             data = content if isinstance(content, dict) else json.loads(content)
             data["uid"] = book.get("uid")
-            data["n"] = int(chapter.get("n"))
-            clean = validate_editorial(data, blocks, uid=book.get("uid"), n=chapter.get("n"))
+            chapter_n = chapter.get("n")
+            if chapter_n is None:
+                raise EditorialError("章节缺 n，无法生成解读")
+            data["n"] = int(chapter_n)
+            clean = validate_editorial(data, blocks, uid=book.get("uid"), n=chapter_n)
             for visual in clean["visuals"]:
                 if visual["kind"] == "scale":
                     _normalize_scale(visual["data"])
@@ -204,8 +207,13 @@ def _parse_length(display: str) -> float | None:
 
 def _normalize_scale(data: dict) -> None:
     bars = data.get("bars") or []
-    values = [_parse_length(bar.get("display", "")) for bar in bars]
-    if len(values) < 2 or any(value is None for value in values):
+    values: list[float] = []
+    for bar in bars:
+        parsed = _parse_length(bar.get("display", ""))
+        if parsed is None:  # 有一个读不出长度就整张图不算，保持原样
+            return
+        values.append(parsed)
+    if len(values) < 2:
         return
     low, high = min(values), max(values)
     if low <= 0:

@@ -59,14 +59,14 @@ def decide_template(brief: Brief) -> dict:
         return {
             "template": None,
             "score": 0,
-            "reason": "正文只有 %d 字，撑不起一页视觉读本的版面" % brief.han,
+            "reason": f"正文只有 {brief.han} 字，撑不起一页视觉读本的版面",
             "fallback": "four-read",
         }
     if brief.han > MAX_HAN:
         return {
             "template": None,
             "score": 0,
-            "reason": "正文 %d 字，超过单页读本上限 %d 字，应先分节或半章处理" % (brief.han, MAX_HAN),
+            "reason": f"正文 {brief.han} 字，超过单页读本上限 {MAX_HAN} 字，应先分节或半章处理",
             "fallback": "four-read",
         }
     if brief.subject.startswith("文学"):
@@ -80,7 +80,7 @@ def decide_template(brief: Brief) -> dict:
         return {
             "template": None,
             "score": 0,
-            "reason": "图片占内容块 %.0f%%，xerox 是文字读本模板，应走图册模板" % (brief.image_ratio * 100),
+            "reason": f"图片占内容块 {brief.image_ratio * 100:.0f}%，xerox 是文字读本模板，应走图册模板",
             "fallback": "four-read",
         }
     score = 100
@@ -90,5 +90,5 @@ def decide_template(brief: Brief) -> dict:
         score -= 10
     if brief.has_table:
         score += 2
-    reason = "文字为主，块数 %d，段落结构完整，适合 xerox 的逐字正文 + 页面旁注" % brief.blocks
+    reason = f"文字为主，块数 {brief.blocks}，段落结构完整，适合 xerox 的逐字正文 + 页面旁注"
     return {"template": TEMPLATE, "score": score, "reason": reason, "fallback": "four-read"}

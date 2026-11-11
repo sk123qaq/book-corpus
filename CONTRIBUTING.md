@@ -40,17 +40,20 @@ Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库�
 uv run --frozen pytest
 uv run --frozen ruff check .
 uv run --frozen ruff format --check .
+uv run --frozen python tools/ruff_strict_new.py
+uv run --frozen mypy
 git status --short
 ```
 
-这三步也可以交给 git hook：
+这五步也可以交给 git hook：
 
 ```bash
 uv sync                       # 装上 pre-commit
 uv run pre-commit install     # 之后每次提交自动跑
 ```
 
-hook 跑三道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`。
+hook 跑四道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`。
+CI（`.github/workflows/ci.yml`）的 `lint` job 跑同一套，`test` job 在 3.11/3.12/3.13 上跑 pytest 与命令行冒烟：本地闸门过不了的，push 上去必红。
 
 ### ruff 严格档：新代码不许 os.path 拼接和 % 格式化
 
@@ -64,5 +67,13 @@ hook 跑三道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`�
 - 紧急绕过：在命令前加 `SKIP=ruff-strict` 环境变量即可只跳过严格档。
 
 单独跑严格档：`uv run python tools/ruff_strict_new.py <文件...>`（不带参数则检查全仓里所有不在清单中的文件）。
+
+### mypy：只查核心包
+
+类型检查的边界在 `pyproject.toml` 的 `[tool.mypy]`：`files = ["src/bookcorpus"]`，默认档，不追 `--strict`（严格档在这个仓库会报四千多条，绝大多数是 `Any` 传播）。
+
+- 跑法：`uv run mypy`（不带参数，按配置查 112 个源文件）。
+- `apps/`、`tools/`、`tests/` 不纳入：大量 `sys.path` 拼接与动态导入，噪音远大于收益。
+- 确有必要时写 `# type: ignore[错码]  # 中文理由`，但先想有没有真的改对类型。
 
 改了结构或脚本再跑 `book-corpus doctor` 与 `book-corpus verify`；改了检索层 `book-corpus verify --box 4`；有自己的检索题集时再跑 `book-corpus run check_p1 --gold <题集>/gold.tsv`。判据见 `README.md` 的「改完跑什么」。

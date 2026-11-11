@@ -50,7 +50,7 @@ try:
 
     _CFG = pimodel.load(L.ROOT)
 except ImportError:  # 单独跑脚本时包里没有 bookcorpus
-    pimodel, _CFG = None, None
+    pimodel, _CFG = None, None  # type: ignore[assignment]  # 单独跑脚本时没有这个包
 FIX_MODEL = (
     os.environ.get("MD_FIX_MODEL")
     or (pimodel.ref(_CFG["values"]) if pimodel else "")

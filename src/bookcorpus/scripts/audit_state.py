@@ -28,9 +28,9 @@ LIBDB = PATHS.library_db
 INDEX = PATHS.index_db
 VIEWS = PATHS.views
 
-FAIL = []
-WARN = []
-OK = []
+FAIL: list[str] = []
+WARN: list[str] = []
+OK: list[str] = []
 QUIET = False
 
 

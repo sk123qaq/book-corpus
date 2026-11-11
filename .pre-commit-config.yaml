@@ -3,11 +3,14 @@
 # 全员用同一个 gate，所以 hook 走本地 venv（uv run），不需要联网拉 hook 环境：
 #   uv sync && uv run pre-commit install
 #
-# 三道闸：
+# 四道闸：
 #   1. ruff-check   —— 全仓规则，等于 `ruff check`，自动修能修的（修过即失败，重跑即可）
 #   2. ruff-format  —— 格式化，等于 `ruff format`
 #   3. ruff-strict  —— 「新代码」严格档：不在 .ruff-legacy-files.txt 里的文件额外禁止
 #                      os.path 拼接（PTH）和 % 格式化（UP031），见 tools/ruff_strict_new.py
+#   4. mypy         —— 核心包 src/bookcorpus 的类型检查（口径见 pyproject.toml 的 [tool.mypy]）
+#
+# CI（.github/workflows/ci.yml）的 lint job 跑的就是这四道，本地不通、线上必红。
 #
 # 紧急绕过：SKIP=ruff-strict git commit -m "..."（只跳过严格档）
 
@@ -31,4 +34,12 @@ repos:
         entry: uv run python tools/ruff_strict_new.py
         language: system
         types_or: [python, pyi]
+        require_serial: true
+      # mypy 只查核心包（pyproject 里 files = ["src/bookcorpus"]），与前三个同一条口径。
+      - id: mypy
+        name: mypy (src/bookcorpus)
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        files: ^src/bookcorpus/
         require_serial: true

@@ -38,7 +38,7 @@ try:
     _CFG = pimodel.load(ROOT)
     MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
 except ImportError:  # 单独跑脚本时包里没有 bookcorpus
-    pimodel, _CFG = None, None
+    pimodel, _CFG = None, None  # type: ignore[assignment]  # 单独跑脚本时没有这个包
     MODEL = "opencode-go/deepseek-v4.1-flash"
 ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 SCAN_SAMPLE = 5

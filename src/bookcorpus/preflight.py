@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,13 +25,12 @@ MISSING = "missing"
 WARN = "warn"
 
 #: 当前没有可降级的能力；保留开关给未来的显式降级路径。
-DEGRADABLE = frozenset()
+DEGRADABLE: frozenset[str] = frozenset()
 
 PI_AUTH = Path("~/.pi/agent/auth.json")
 MIMO_KEY = Path("~/.config/mimo/api_key")
 PADDLE_KEY = Path("~/.config/PaddleOCR/api_key")
 MINERU_KEY = Path("~/.config/mineru/api_key")
-
 
 
 @dataclass(frozen=True)
@@ -208,7 +207,7 @@ def _check_expand_pi() -> Status:
     return _status("expand.pi", MISSING, "pi 的 auth.json 里没有 commandcode 或 opencode-go")
 
 
-_CHECKS = {
+_CHECKS: dict[str, Callable[..., Status]] = {
     "books.model": _check_books_model,
     "reading.model": _check_reading_model,
     "ocr.mineru": _check_ocr_mineru,

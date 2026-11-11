@@ -76,6 +76,11 @@ __pycache__/
 /.venv/
 /dist/
 
+# ---- 工具缓存（ruff / pytest / mypy）----
+/.ruff_cache/
+/.pytest_cache/
+/.mypy_cache/
+
 # ---- 验收报告的证据图片 ----
 !/reports/**/*.png
 # 静态样例要带封面与截图

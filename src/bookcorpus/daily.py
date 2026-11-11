@@ -113,13 +113,13 @@ def parse_chapter(path: Path, root: Path) -> Chapter:
     return Chapter(order=order, index=index, label=label, title=title, path=relative, file=path)
 
 
-def short_title(raw: str) -> str:
+def short_title(raw: str | None) -> str:
     text = str(raw or "").strip()
     text = re.split(r"\s*=\s*|\s{2,}", text)[0]
     return re.sub(r"\s+", " ", text).strip() or "未命名"
 
 
-def short_author(raw: str) -> str:
+def short_author(raw: str | None) -> str:
     text = str(raw or "")
     text = re.sub(r"[\[【][^\]】]*[\]】]", "", text)
     text = re.sub(r"[（(][^）)]*[）)]", "", text)

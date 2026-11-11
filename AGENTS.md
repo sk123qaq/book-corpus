@@ -167,6 +167,7 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 |---|---|---|
 | 人账 `tables/ledger.db` | `book-corpus library --emit-json` | 输出里 `conflicts=0`，`books` 等于人账行数 |
 | 任何代码 | `uv run --frozen pytest`（在工具仓） | 全部通过 |
+| 任何代码（lint 四道闸） | `uv run --frozen pre-commit run --all-files` | 四行都 `Passed`；CI 的 `lint` job 跑同一套 |
 | 结构、脚本、html | `book-corpus verify` | 末行「全过：N 项」 |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
 | 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |

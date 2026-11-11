@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import tarfile
 from datetime import UTC, datetime
@@ -17,8 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from .. import envfile
-from .render import asset_url
 from .depth.render import render_depth_chapter
+from .render import asset_url
 
 DEFAULT_ARCHIVE = "工作区/归档/research-retire-2026-11-11.tar.gz"
 DEFAULT_BATCH = "工作区/批次/2026-11-11-分层读删档"
@@ -37,7 +36,7 @@ def _atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    tmp.replace(path)
 
 
 def _atomic_json(path: Path, payload: Any) -> None:
@@ -72,10 +71,7 @@ def plan(root: str | Path, archive: str | Path | None = None, batch: str | Path 
     archive_path = Path(archive) if archive else root / DEFAULT_ARCHIVE
     batch_path = Path(batch) if batch else root / DEFAULT_BATCH
     paths = discover(root)
-    files = [
-        {"path": _rel(root, path), "size": path.stat().st_size, "sha256": _sha256(path)}
-        for path in paths
-    ]
+    files = [{"path": _rel(root, path), "size": path.stat().st_size, "sha256": _sha256(path)} for path in paths]
     packs: list[dict[str, Any]] = []
     for pack in sorted(root.glob("工作区/阅读/*/ch/*")):
         depth = pack / "depth"
@@ -241,15 +237,16 @@ def _strip_legacy_research(html_text: str) -> str:
                 text = text[: match.start(1)] + json.dumps(tiers, ensure_ascii=False) + text[match.end(1) :]
         except json.JSONDecodeError:
             pass
-    text = re.sub(r'data-tiers="([^"]*)"', lambda m: 'data-tiers="%s"' % " ".join(
-        part for part in m.group(1).split() if part != "research"
-    ), text)
+    text = re.sub(
+        r'data-tiers="([^"]*)"',
+        lambda m: 'data-tiers="' + " ".join(part for part in m.group(1).split() if part != "research") + '"',
+        text,
+    )
     text = text.replace('data-tier="research"', 'data-tier="deep"')
     text = text.replace('tier: "research"', 'tier: "deep"')
     text = text.replace('|| "research"', '|| "deep"')
     text = text.replace("e.key >= '1' && e.key <= '4'", "e.key >= '1' && e.key <= '3'")
-    text = text.replace("按 4 切到研读可见", "按 3 切到深读可见")
-    return text
+    return text.replace("按 4 切到研读可见", "按 3 切到深读可见")
 
 
 def strip_legacy_pages(root: str | Path) -> int:
@@ -265,7 +262,6 @@ def strip_legacy_pages(root: str | Path) -> int:
 
 
 def _rerender_depth_pack(root: Path, pack: Path) -> bool:
-    from .library import Library
     from .service import ReadingService
 
     uid = pack.parent.parent.name
@@ -380,7 +376,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(json.dumps(result["manifest"], ensure_ascii=False, indent=2))
     else:
-        print(json.dumps({key: value for key, value in result.items() if key != "manifest"}, ensure_ascii=False, indent=2))
+        payload = {key: value for key, value in result.items() if key != "manifest"}
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 

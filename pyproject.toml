@@ -27,7 +27,12 @@ rerank = ["torch>=2.2", "transformers>=4.40"]
 book-corpus = "bookcorpus.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.17", "pre-commit>=3"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.17",
+    "pre-commit>=3",
+    "mypy>=2.4.1",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bookcorpus"]
@@ -87,3 +92,16 @@ known-first-party = ["bookcorpus"]
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
+
+# ---- mypy：只查核心包 ----
+# 口径：src/bookcorpus 全量，默认档（不上 --strict）。严格档在这个仓库有 4000+ 条
+# 报错，绝大部分是 Any 传播，收益不抵噪音；先保证「真错」（Optional 解引用、
+# 拼错属性、参数不匹配）不进来。
+# apps/、tools/、tests/ 大量 sys.path 拼接与动态导入，类型噪音远大于收益，不纳入。
+# 跑法：uv run mypy
+[tool.mypy]
+python_version = "3.11"
+files = ["src/bookcorpus"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true

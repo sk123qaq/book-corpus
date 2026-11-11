@@ -29,8 +29,8 @@ ROOT = L.ROOT
 QSEARCH = os.path.join(HERE, "qsearch.py")
 RG = L.RG
 BATCH_ROOT = os.path.join(ROOT, "工作区", "批次")
-fails = []
-skips = []
+fails: list[str] = []
+skips: list[str] = []
 passes = 0
 
 

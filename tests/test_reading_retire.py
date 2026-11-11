@@ -28,7 +28,10 @@ def _fixture(root: Path) -> Path:
             ],
         },
     )
-    _write(depth / "layers" / "deep.json", {"schema": 1, "prompt_version": "deep-annotations-v1", "notes": [], "chains": []})
+    _write(
+        depth / "layers" / "deep.json",
+        {"schema": 1, "prompt_version": "deep-annotations-v1", "notes": [], "chains": []},
+    )
     _write(depth / "citations.json", {"schema": 1, "searched": True})
     _write(
         depth / "state.json",
@@ -54,7 +57,7 @@ def _fixture(root: Path) -> Path:
 
 
 def test_discover_only_returns_retired_files(tmp_path):
-    pack = _fixture(tmp_path)
+    _fixture(tmp_path)
     found = {path.relative_to(tmp_path).as_posix() for path in retire.discover(tmp_path)}
     assert found == {
         "工作区/阅读/B0001/ch/01/depth/layers/research.json",

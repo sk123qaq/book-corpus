@@ -10,8 +10,9 @@ from __future__ import annotations
 import html
 import json
 import re
+from typing import Any
 
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from .model import ModelClient
 from .render import READER_CSS
@@ -185,7 +186,7 @@ def validate_fragment(fragment: str, blocks) -> list[str]:
                 if str(child).strip():
                     problems.append("正文里有未标记来源的裸文本")
                 continue
-            if getattr(child, "name", None) in body_tags and not child.get("data-block"):
+            if isinstance(child, Tag) and child.name in body_tags and not child.get("data-block"):
                 problems.append("正文里有未标记来源的 <%s>" % child.name)
 
     for tag in soup.select("[data-block]"):
@@ -279,7 +280,7 @@ def generate_standard_html(
     """调用模型生成标准档片段；失败把校验错误退回模型，最多两次。"""
     messages = _messages(book, chapter, blocks, image_data)
     last_error = None
-    usage_total = {}
+    usage_total: dict[str, Any] = {}
     for attempt in range(1, MAX_ATTEMPTS + 1):
         content, usage = client.complete(messages, model=model, effort=effort, json_mode=False)
         usage_total = _merge_usage(usage_total, usage)

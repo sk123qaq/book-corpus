@@ -5,6 +5,27 @@ on:
   pull_request:
 
 jobs:
+  # 与本地 pre-commit 的三道闸同一套规则：规则检查、格式、新代码严格档。
+  # 单独一个 job：只跑一次，不用等 3 个 Python 版本。
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: 安装
+        run: uv sync --frozen
+      - name: ruff check
+        run: uv run --frozen ruff check --output-format=github .
+      - name: ruff format
+        run: uv run --frozen ruff format --check .
+      - name: ruff strict（新代码禁 os.path 拼接与 % 格式化）
+        run: uv run --frozen python tools/ruff_strict_new.py
+      - name: mypy（核心包 src/bookcorpus）
+        run: uv run --frozen mypy
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -19,9 +40,22 @@ jobs:
           enable-cache: true
       - name: 安装
         run: uv sync --frozen
+      # 跑 ingest / 分类 / 拆章修复的用例要先过 preflight 的 books.model：
+      # 判定条件只有「PATH 里有可执行的 pi（或设了 PI_BIN）」+ 工作区 books.toml。
+      # CI 里没有真 pi、也没有 provider 凭据，放一个空壳让这些用例测流程而不是测账号。
+      - name: 假的 pi
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/bin/pi"
+          chmod +x "$RUNNER_TEMP/bin/pi"
+          echo "PI_BIN=$RUNNER_TEMP/bin/pi" >> "$GITHUB_ENV"
       - name: 单元与端到端
         run: uv run --frozen pytest
       - name: 命令行冒烟
+        # 不在冒烟里建 工作区/.venv-pdf 与 .venv-docs：要联网、要几十秒，与冒烟无关。
+        env:
+          BOOKS_NO_PDF_VENV: "1"
+          BOOKS_NO_DOCS_VENV: "1"
         run: |
           uv run --frozen book-corpus --version
           uv run --frozen book-corpus list > /dev/null

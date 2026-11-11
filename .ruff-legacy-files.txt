@@ -110,3 +110,25 @@ tests/test_remap.py
 tests/test_skills.py
 tests/test_verify_phase_gate.py
 tests/test_workspace.py
+
+# 2026-11-11 补录：strict 闸门接进 CI 时，这些文件还带 PTH/UP031 存量（约 395 处，集中在 reading/）。
+# 还债方式不变：改干净一个文件，就把它从下面删掉一行。
+src/bookcorpus/preflight.py
+src/bookcorpus/reading/agent_standard.py
+src/bookcorpus/reading/edition/content.py
+src/bookcorpus/reading/edition/gate.py
+src/bookcorpus/reading/edition/generate.py
+src/bookcorpus/reading/edition/render.py
+src/bookcorpus/reading/editorial_gen.py
+src/bookcorpus/reading/jobs.py
+src/bookcorpus/reading/library.py
+src/bookcorpus/reading/mdparse.py
+src/bookcorpus/reading/profile.py
+src/bookcorpus/reading/quality.py
+src/bookcorpus/reading/render.py
+src/bookcorpus/reading/tiers.py
+tests/acceptance/ops/test_status_state.py
+tests/test_reading_mdparse.py
+tests/test_reading_quality.py
+tests/test_reading_service.py
+tests/test_reading_tiers.py

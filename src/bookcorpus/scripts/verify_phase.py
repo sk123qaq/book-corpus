@@ -23,8 +23,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_common as L
 
-FAIL = []
-PASSED = []
+FAIL: list[str] = []
+PASSED: list[str] = []
 
 
 def ok(msg):

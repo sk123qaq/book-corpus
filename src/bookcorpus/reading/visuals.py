@@ -633,9 +633,7 @@ def render_visual(visual: dict, *, plate_no: int | None = None) -> str:
     raise ValueError(f"未知图版类型：{kind}")
 
 
-def render_takeaways(
-    takeaways: list[dict], *, title: str = "", note: str = "", tiers=("standard", "deep")
-) -> str:
+def render_takeaways(takeaways: list[dict], *, title: str = "", note: str = "", tiers=("standard", "deep")) -> str:
     if not takeaways:
         return ""
     items = []
