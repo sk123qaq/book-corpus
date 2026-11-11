@@ -109,8 +109,14 @@ GET  /api/pdf/books
 `pdf.triage`，不出正文，只选了未分诊时返回 `job_id: null`。`GET /api/pdf/books` 是清单页的数据源，
 返回 `{books, counts:{convert, gallery, ja, untriaged}, today:{used, cap}, untriaged}`，只读，
 不写任何账；`books` 的行带 `disposition`/`progress`/`pages`/`why`/`last`/`recheck`，未分诊的行另带
-`suggestion:{route, confidence, reason}` 与 `suggest_job`。`GET /api/pdf/queue` 的 `batch` 另带
-`partition:{landed, failed, staged, untouched, left}`，给旧批次的一行摘要用。
+`suggestion:{route, confidence, reason}` 与 `suggest_job`。`books` 的 `partial` / `content_complete`
+只读 `books/<uid>/md/.manifest.json` 的 `skipped_unreadable_pages`：非空为 `partial`，空列表为
+`content_complete`，缺文件或字段不是列表则两者都 false。`GET /api/pdf/queue` 的 `batch` 另带
+`partition:{landed, failed, staged, untouched, partial, content_complete, left}`，给旧批次的一行摘要用；
+`partial` / `content_complete` 是 `landed` 的细分，不参与 `left` 求和。计数只认
+landed/replaced/accepted；`skipped-has-md` 如果 manifest 自己写了 `accepted`，说明那是旧批次已受理的
+OCR 产物，也一起算。manifest 的 `accepted` 以「人工核对」开头或写明「非正文」的，是人工判定的
+封底/扉页/图版/页脚例外，计 `content_complete`，不计 `partial`。
 
 `POST /api/pdf/settle` 只收 `OCR`、`本地抽文本`、`不转-记图册`、`日文暂缓`（`人工确认` 不是一个处置，回
 400）。它复用二次确认改判那一段：备一行分诊行（分诊产物 → 批次账 → DB 现造）写进当天批次的

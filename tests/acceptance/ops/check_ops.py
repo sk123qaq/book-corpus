@@ -1406,6 +1406,17 @@ def run_checks(root, ops, port, fixture):
         and part.get("left") == 2,
         str(part),
     )
+    md_dir = os.path.join(root, "books", "B9001", "md")
+    os.makedirs(md_dir, exist_ok=True)
+    with open(os.path.join(md_dir, ".manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump({"skipped_unreadable_pages": [1]}, fh)
+    code, body = get(port, "/api/pdf/queue")
+    part = ((body or {}).get("batch") or {}).get("partition") or {}
+    check(
+        "已受理但有不可读页的书单独计数",
+        part.get("partial") == 1 and part.get("content_complete") == 0,
+        str(part),
+    )
 
     # ---- 跨日的分诊表 -----------------------------------------------
     today_name = mod.TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")

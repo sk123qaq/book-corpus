@@ -165,6 +165,25 @@ def test_mineru_rc_failure_keeps_suspect_in_review(harness, monkeypatch):
     assert "quota exhausted: qps limit" in res["note"]
 
 
+def test_human_override_records_unreadable_pages(harness, monkeypatch):
+    monkeypatch.setenv("FAKE_MINERU_MODE", "rc1")
+    override = harness.root / "batch" / "overrides" / "B0001.json"
+    override.write_text(json.dumps({"accept": "人工核对：第 1 页为封底，非正文"}, ensure_ascii=False), encoding="utf-8")
+    seen = {}
+
+    def enrich(stage, ctx, row, v, doc, coverage_ok, blank, suspect, short, accept, rescued=(), skipped=()):
+        seen["skipped"] = list(skipped)
+        return {"accepted": accept}
+
+    monkeypatch.setattr(P, "enrich_manifest", enrich)
+    res = P.run_one(harness.row, harness.ctx)
+    assert res["status"] == "accepted", res
+    assert res["skipped_unreadable_pages"] == [1]
+    assert seen["skipped"] == [1]
+    assert "未读出页：1" in res["note"]
+    assert (harness.root / "books" / "B0001" / "md").is_dir()
+
+
 def test_mineru_missing_content_list_keeps_suspect_in_review(harness, monkeypatch):
     monkeypatch.setenv("FAKE_MINERU_MODE", "nocontent")
     res = P.run_one(harness.row, harness.ctx)

@@ -1235,10 +1235,13 @@ function quotaLine(batch) {
   const old = archived
     ? `${esc(day ? day[1] : batch.name)} 已封存 · ${num(batch.worklist)} 本里 ${num(part.landed)} 落地、${num(part.left)} 未落地（${num(part.failed)} 失败 / ${num(part.staged)} 待复核 / ${num(part.deferred)} 暂缓·待额度 / ${num(part.untouched)} 未开跑）`
     : '还没封存过批次。';
+  const partial = Number(part.partial) || 0;
+  const partialNote = partial
+    ? `；其中 ${num(partial)} 本有不可读页（已受理，非全书完整）` : '';
   return `<div class="toolbar" style="margin-top:10px">
     <span class="small">今天额度 <b>${num(today.used)}</b> / ${num(today.cap)} 页</span>
     <span class="spacer"></span>
-    <span class="hint">${old}</span>
+    <span class="hint">${old}${partialNote}</span>
     <button class="btn sm" data-act="pdf-detail"${archived ? '' : ' disabled'}>看明细</button>
   </div>`;
 }

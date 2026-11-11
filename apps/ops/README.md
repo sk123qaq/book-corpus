@@ -281,6 +281,10 @@ stub 分诊、最近计划的复用与失效（源文件不在就不给计划）
 - 旧批次的一行摘要读 `pdf/queue` 的 `batch.partition`：`landed` 把 landed / skipped-has-md / accepted /
   replaced 算落地，`failed` 是 api-fatal 与 failed，`staged` 是 staged-review，`untouched` 是名单减掉
   三者，`left` 是后三者之和。批次 `landed` 字段照旧不动，两个数字在 replaced 上可能差一本。
+  `partial` / `content_complete` 是 `landed` 的细分：看 manifest 的 `skipped_unreadable_pages`，非空只
+  说明 OCR 有读不出的页，不代表全书完整；两者都不参与 `left`。`skipped-has-md` 的 manifest 若写了
+  `accepted`，按旧批次已受理算进去。`accepted` 以「人工核对」开头或写明「非正文」的，是封底/扉页/
+  图版/页脚例外，计 `content_complete`，不计 `partial`。
 - 今天额度只算当天 `<批次>/logs/*.json` 里 `status != skipped-has-md` 的 `pages` 之和，不跨批次累加；
   没开过当天批次就是 0。`cap` 写死 20000。
 - 批量分诊卡里的「多少本文本层、多少本扫描件」不是普查账的读数：页数子进程顺手抽首页、中页、末页的文本，

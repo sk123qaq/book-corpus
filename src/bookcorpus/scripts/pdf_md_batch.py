@@ -1520,6 +1520,17 @@ def run_one(row, ctx):
         skip_ok = bool(skipped) and not result.get("mineru_unsubmitted_pages") and len(skipped) == len(suspect)
         auto = ("MinerU 也读不出，按跳过受理：第 %s 页" % ", ".join(str(p) for p in skipped)) if skip_ok else ""
         accept = "；".join(x for x in (human, auto) if x)
+        human_skipped = []
+        if human and suspect:
+            # 人工受理的是「可疑页仍在」的例外，不表示这些页读出来了。
+            # manifest 必须留下页号，否则 status=accepted + skipped=[] 会被下游当成内容完整。
+            human_skipped = sorted({s["page"] for s in suspect} | set(skipped))
+            result["skipped_unreadable_pages"] = human_skipped
+            log.write(
+                "人工受理，仍有 %d 个可疑页按跳过记录：%s\n"
+                % (len(human_skipped), ", ".join(str(p) for p in human_skipped))
+            )
+        manifest_skipped = human_skipped or skipped
         man = enrich_manifest(
             stage,
             ctx,
@@ -1532,7 +1543,7 @@ def run_one(row, ctx):
             short,
             accept,
             result.get("mineru_rescued") or [],
-            skipped,
+            manifest_skipped,
         )
         result["accepted"] = man["accepted"]
         fails = gate(v, doc["coverage_ok"], suspect, doc["missing_images"])
@@ -1553,7 +1564,10 @@ def run_one(row, ctx):
                 result["note"] = "目标已有 md，未入库（要 --replace 才替换）"
         elif human:
             result["status"] = "staged-green"
-            result["note"] = "已受理例外：%s（问题：%s）" % (accept, "；".join(fails))
+            note = "已受理例外：%s（问题：%s）" % (accept, "；".join(fails))
+            if human_skipped:
+                note += "；未读出页：%s" % ", ".join(str(p) for p in human_skipped)
+            result["note"] = note
             if want_land:
                 land(ctx, stage, dest, result)
                 result["status"] = "accepted"
@@ -1601,6 +1615,24 @@ def report(ctx):
     print("\n状态统计")
     for k, v in sorted(counts.items(), key=lambda x: str(x[0])):
         print("  %-18s %d" % (k, v))
+    partial = 0
+    for r in results:
+        if r.get("status") not in ("landed", "replaced", "accepted"):
+            continue
+        path = os.path.join(L.ROOT, r.get("dest") or "", ".manifest.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                man = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        skipped = man.get("skipped_unreadable_pages") if isinstance(man, dict) else None
+        accepted = str(man.get("accepted") or "").strip() if isinstance(man, dict) else ""
+        if accepted.startswith("人工核对") or "非正文" in accepted:
+            continue
+        if isinstance(skipped, list) and skipped:
+            partial += 1
+    if partial:
+        print("  其中 %d 本有不可读页（已受理，非全书完整）" % partial)
     dpath = os.path.join(ctx["batch"], DEFER_LEDGER)
     deferred = defer_uids(dpath)
     if deferred:

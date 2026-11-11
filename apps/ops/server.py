@@ -152,6 +152,7 @@ PDF_FAIL_STATUSES = frozenset(
 PDF_DEFER_STATUSES = frozenset({"deferred", "interrupted", "quota"})
 PDF_STAGED_STATUSES = frozenset({"staged-review"})
 PDF_OK_STATUSES = frozenset({"landed", "skipped-has-md", "accepted", "replaced"})
+PDF_MANIFEST_STATUSES = frozenset({"landed", "replaced", "accepted"})
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS job (
@@ -194,6 +195,55 @@ def read_json(path, default=None):
             return json.load(fh)
     except (OSError, ValueError):
         return default
+
+
+def _manual_exception(accepted):
+    """人工写明的非正文例外（封底/扉页/图版/页脚注释）。"""
+    text = str(accepted or "").strip()
+    return text.startswith("人工核对") or "非正文" in text
+
+
+def pdf_manifest_state(root, uid):
+    """已受理的 OCR manifest 是否记录过读不出的页。
+
+    只看 .manifest.json 的 skipped_unreadable_pages；缺 manifest、缺字段或字段不是
+    列表都算未知，不能当成内容完整。accepted 已人工写明「非正文」的页不是内容
+    缺口，计 content_complete，不计 partial。
+    """
+    man = read_json(os.path.join(root, "books", uid, "md", ".manifest.json"))
+    if not isinstance(man, dict) or "skipped_unreadable_pages" not in man:
+        return None
+    skipped = man.get("skipped_unreadable_pages")
+    if not isinstance(skipped, list):
+        return None
+    if skipped and not _manual_exception(man.get("accepted")):
+        return "partial"
+    return "content_complete"
+
+
+def pdf_manifest_counts(root, pairs):
+    """pairs=(uid, 最后状态)。只统计 landed/replaced/accepted。
+
+    skipped-has-md 是「批次开跑时已有 md」，不是内容判断；如果那份 md 的 manifest
+    自己写了 accepted，它仍是已受理的 OCR 产物，必须一起数，否则旧批次重跑过的
+    书会从 partial 里消失。
+    """
+    partial = complete = 0
+    for uid, status in pairs:
+        if status not in PDF_MANIFEST_STATUSES:
+            if status != "skipped-has-md":
+                continue
+            man = read_json(os.path.join(root, "books", uid, "md", ".manifest.json"))
+            if not (
+                isinstance(man, dict) and man.get("method") == "paddle-ocr" and str(man.get("accepted") or "").strip()
+            ):
+                continue
+        state = pdf_manifest_state(root, uid)
+        if state == "partial":
+            partial += 1
+        elif state == "content_complete":
+            complete += 1
+    return {"partial": partial, "content_complete": complete}
 
 
 def write_json_atomic(path, value):
@@ -1644,6 +1694,7 @@ class App:
         failed = sum(n for status, n in mine.items() if status in PDF_FAIL_STATUSES)
         deferred = sum(n for status, n in mine.items() if status in PDF_DEFER_STATUSES)
         staged = sum(n for status, n in mine.items() if status in PDF_STAGED_STATUSES)
+        manifest_counts = pdf_manifest_counts(self.env.root, [(uid, done.get(uid)) for uid in work_uids])
         # 没 log 的书才是真的没开跑：有 log 但状态不认识的不能算未开跑
         untouched = sum(1 for uid in work_uids if not done.get(uid))
         batch = {
@@ -1660,6 +1711,9 @@ class App:
                 "staged": staged,
                 "deferred": deferred,
                 "untouched": untouched,
+                # landed 的细分，不参与 left 求和：partial 的书已经落地，只是有读不出的页。
+                "partial": manifest_counts["partial"],
+                "content_complete": manifest_counts["content_complete"],
                 "left": failed + staged + deferred + untouched,
             },
             "status_counts": counts,
@@ -1844,6 +1898,7 @@ class App:
                 count = int(float(pages.get(uid) or 0)) or None
             except (TypeError, ValueError):
                 count = None
+            manifest_state = pdf_manifest_state(self.env.root, uid)
             books[uid] = {
                 "uid": uid,
                 "title": row.get("title"),
@@ -1853,6 +1908,8 @@ class App:
                 "disposition": disposition,
                 "route": route.get(uid) if disposition == "convert" else None,
                 "progress": progress,
+                "partial": manifest_state == "partial",
+                "content_complete": manifest_state == "content_complete",
                 "recheck": disposition == "gallery" and recheck_row(skipped.get(uid)),
                 "why": (skipped.get(uid) or {}).get("why") if disposition == "gallery" else None,
                 "last": last.get(uid),
