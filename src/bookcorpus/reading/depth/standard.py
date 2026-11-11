@@ -5,6 +5,8 @@
 审计警告，而不是丢字或改字。
 """
 
+import re
+
 from .diagrams import audit_figures
 from .schema import SCHEMA_VERSION
 
@@ -24,19 +26,55 @@ def _block_order(blocks):
     return {block.get("id"): index for index, block in enumerate(blocks or [])}
 
 
+def _first_sentence(text, limit=MAX_LEAD):
+    """取首个完整句（到句末标点），没有句末标点就截断；不改写。"""
+    value = str(text or "").strip()
+    if not value:
+        return ""
+    match = re.search(r"[。！？!?…]+", value)
+    if match:
+        value = value[: match.end()].strip()
+    if len(value) > limit:
+        value = value[:limit].rstrip()
+    return value
+
+
+def _section_lead(section, unit_map):
+    """优先用章节模型给的 lead；为空时回退到本节第一个 core unit 的首句。"""
+    lead = str(section.get("lead") or "").strip()
+    if lead:
+        return lead
+    unit_ids = list(section.get("unit_ids") or [])
+    for unit_id in unit_ids:
+        unit = unit_map.get(unit_id)
+        if unit and unit.get("importance") == "core":
+            text = _first_sentence(unit.get("summary") or unit.get("text") or "")
+            if text:
+                return text
+    for unit_id in unit_ids:
+        unit = unit_map.get(unit_id)
+        if unit:
+            text = _first_sentence(unit.get("summary") or unit.get("text") or "")
+            if text:
+                return text
+    return ""
+
+
 def _sections(model):
     section_rows = []
     warnings = []
+    unit_map = {unit.get("id"): unit for unit in model.get("units") or [] if unit.get("id")}
     for section in model.get("sections") or []:
         if not isinstance(section, dict):
             continue
         section_id = section.get("id") or ""
-        lead = str(section.get("lead") or "").strip()
+        lead = _section_lead(section, unit_map)
         if not lead:
+            warnings.append(f"{section_id or '节'} 没有可用的节导语")
             continue
         if len(lead) > MAX_LEAD:
-            warnings.append(f"{section_id or '节'} 的导语超过 {MAX_LEAD} 字，已略去")
-            continue
+            lead = lead[:MAX_LEAD].rstrip()
+            warnings.append(f"{section_id or '节'} 的导语超过 {MAX_LEAD} 字，已截断")
         section_rows.append({"id": section_id, "lead": lead})
     return section_rows, warnings
 

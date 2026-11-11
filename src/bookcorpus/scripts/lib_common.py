@@ -3,6 +3,7 @@
 
 import contextlib
 import csv
+import fcntl
 import hashlib
 import json
 import os
@@ -21,7 +22,8 @@ try:
         find_root,
     )
 except ImportError:
-    from layout import (
+    # mypy 不认 try/except 两路导入，把 fallback 当成重复定义。
+    from layout import (  # type: ignore[no-redef]
         RESERVED,  # noqa: F401 对外再导出，本模块自身不用
         SCHEMA,  # noqa: F401 对外再导出，本模块自身不用
         Layout,
@@ -436,6 +438,8 @@ LEDGER_HEADER = ["uid", "一级", "二级", "作者层", "保留", "正式书名
 
 LEDGER_DB = "ledger.db"
 
+READING_MODES = ("narrative", "argument", "practical", "reference")
+
 LEDGER_SCHEMA = """
 CREATE TABLE IF NOT EXISTS 分类(
   uid TEXT PRIMARY KEY,
@@ -456,6 +460,15 @@ CREATE TABLE IF NOT EXISTS 动作词(
   term TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS ledger_meta(
   key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS 读法(
+  uid TEXT NOT NULL,
+  chapter TEXT NOT NULL DEFAULT '*',
+  mode TEXT NOT NULL CHECK(mode IN ('narrative','argument','practical','reference')),
+  panels TEXT NOT NULL DEFAULT '[]',
+  source_sha256 TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(uid, chapter));
+CREATE INDEX IF NOT EXISTS 读法_uid ON 读法(uid);
 """
 
 
@@ -661,6 +674,157 @@ def categories_count(root=None, create=False):
         finally:
             con.close()
     return len(read_csv(legacy_csv(root)))
+
+
+@contextlib.contextmanager
+def reading_lock(root=None):
+    """读法人账的写锁：与操作台写任务共用 工作区/运维/.writer.lock。"""
+    root = _resolve_writable_root(root)
+    path = os.path.join(root, "工作区", "运维", ".writer.lock")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a+", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def _reading_conn(root=None):
+    root = _resolve_writable_root(root)
+    _ensure_ledger(root, create=True) or raise_systemexit_ledger()
+    con = ledger_connect("rw", root)
+    con.executescript(
+        "CREATE TABLE IF NOT EXISTS 读法("
+        "uid TEXT NOT NULL, chapter TEXT NOT NULL DEFAULT '*',"
+        "mode TEXT NOT NULL CHECK(mode IN ('narrative','argument','practical','reference')),"
+        "panels TEXT NOT NULL DEFAULT '[]', source_sha256 TEXT NOT NULL DEFAULT '',"
+        "updated_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(uid, chapter));"
+        "CREATE INDEX IF NOT EXISTS 读法_uid ON 读法(uid);"
+    )
+    return con
+
+
+def _reading_chapter(chapter):
+    text = str(chapter if chapter is not None else "*").strip()
+    if text in ("", "*"):
+        return "*"
+    try:
+        n = int(text)
+    except (TypeError, ValueError):
+        raise ValueError("读法 chapter 必须是 * 或正整数") from None
+    if n < 1:
+        raise ValueError("读法 chapter 必须是 * 或正整数")
+    return str(n)
+
+
+def _reading_row(row):
+    if row is None:
+        return None
+    item = dict(row)
+    try:
+        item["panels"] = json.loads(item.get("panels") or "[]")
+    except (TypeError, ValueError):
+        item["panels"] = []
+    if not isinstance(item["panels"], list):
+        item["panels"] = []
+    return item
+
+
+def reading_all(root=None):
+    """读法人账全部行；旧库没有表时补建空表。"""
+    con = _reading_conn(root)
+    try:
+        return [_reading_row(row) for row in con.execute("SELECT * FROM 读法 ORDER BY uid, chapter")]
+    finally:
+        con.close()
+
+
+def reading_get(uid, chapter=None, root=None):
+    """一本书的读法：书的默认行，或指定章的覆写行。"""
+    con = _reading_conn(root)
+    try:
+        if chapter is None:
+            rows = con.execute("SELECT * FROM 读法 WHERE uid=? ORDER BY chapter", (uid,)).fetchall()
+            return [_reading_row(row) for row in rows]
+        row = con.execute("SELECT * FROM 读法 WHERE uid=? AND chapter=?", (uid, _reading_chapter(chapter))).fetchone()
+        return _reading_row(row)
+    finally:
+        con.close()
+
+
+def reading_put(uid, mode, chapter="*", panels=None, source_sha256="", root=None):
+    """写一条读法。章级行必须先有书级行；整条 upsert，不碰 分类。"""
+    uid = (uid or "").strip()
+    if not uid:
+        raise ValueError("读法 uid 不能为空")
+    if mode not in READING_MODES:
+        raise ValueError("读法 mode 必须是 %s" % "/".join(READING_MODES))
+    chapter = _reading_chapter(chapter)
+    panels = panels or []
+    if not isinstance(panels, list) or not all(isinstance(item, str) for item in panels):
+        raise ValueError("读法 panels 必须是字符串数组")
+    source_sha256 = str(source_sha256).strip() if chapter != "*" and source_sha256 else ""
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    with reading_lock(root):
+        con = _reading_conn(root)
+        try:
+            if chapter != "*":
+                base = con.execute("SELECT 1 FROM 读法 WHERE uid=? AND chapter='*'", (uid,)).fetchone()
+                if base is None:
+                    raise ValueError("先设本书的默认读法，再设章级覆写")
+            con.execute(
+                "INSERT INTO 读法(uid, chapter, mode, panels, source_sha256, updated_at)"
+                " VALUES(?,?,?,?,?,?)"
+                " ON CONFLICT(uid, chapter) DO UPDATE SET mode=excluded.mode, panels=excluded.panels,"
+                " source_sha256=excluded.source_sha256, updated_at=excluded.updated_at",
+                (uid, chapter, mode, json.dumps(panels, ensure_ascii=False), source_sha256, now),
+            )
+            con.commit()
+        finally:
+            con.close()
+    return reading_get(uid, chapter, root)
+
+
+def reading_set_book(uid, mode, panels=None, root=None):
+    """写书级默认，并清掉所有章级覆写（一个事务）。"""
+    uid = (uid or "").strip()
+    if not uid:
+        raise ValueError("读法 uid 不能为空")
+    if mode not in READING_MODES:
+        raise ValueError("读法 mode 必须是 %s" % "/".join(READING_MODES))
+    panels = panels or []
+    if not isinstance(panels, list) or not all(isinstance(item, str) for item in panels):
+        raise ValueError("读法 panels 必须是字符串数组")
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    with reading_lock(root):
+        con = _reading_conn(root)
+        try:
+            con.execute("DELETE FROM 读法 WHERE uid=?", (uid,))
+            con.execute(
+                "INSERT INTO 读法(uid, chapter, mode, panels, source_sha256, updated_at) VALUES(?,? ,?,?,? ,?)",
+                (uid, "*", mode, json.dumps(panels, ensure_ascii=False), "", now),
+            )
+            con.commit()
+        finally:
+            con.close()
+    return reading_get(uid, "*", root)
+
+
+def reading_delete(uid, chapter="*", root=None):
+    """删一条读法；删书级行时连带删章级覆写。"""
+    chapter = _reading_chapter(chapter)
+    with reading_lock(root):
+        con = _reading_conn(root)
+        try:
+            if chapter == "*":
+                n = con.execute("DELETE FROM 读法 WHERE uid=?", (uid,)).rowcount
+            else:
+                n = con.execute("DELETE FROM 读法 WHERE uid=? AND chapter=?", (uid, chapter)).rowcount
+            con.commit()
+        finally:
+            con.close()
+    return n
 
 
 def _resolve_writable_root(root):

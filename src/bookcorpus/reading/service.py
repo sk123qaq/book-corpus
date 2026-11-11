@@ -12,10 +12,13 @@ from pathlib import Path
 from typing import ClassVar
 
 from .. import preflight
+from ..scripts import lib_common as L
+from . import profile
 from .agent_standard import generate_standard_html, render_agent_page
 from .depth.deep import audit_deep, generate_deep, validate_deep
 from .depth.disposition import audit_conservation, plan_all_dispositions
 from .depth.model import generate_chapter_model
+from .depth.panels import audit_panels, generate_panels, validate_panels
 from .depth.render import render_depth_chapter
 from .depth.skim import audit_skim, generate_skim, validate_skim
 from .depth.standard import build_standard
@@ -41,9 +44,10 @@ MAX_BUDGET_TOKENS = 500_000
 MAX_BUDGET_USD = 1.0
 USD_PER_MTOK_IN = 1.0
 USD_PER_MTOK_OUT = 2.0
-DEPTH_LAYERS = ("model", "skim", "standard", "deep")
+DEPTH_LAYERS = ("model", "panels", "skim", "standard", "deep")
 DEPTH_FILES = {
     "model": "chapter_model.json",
+    "panels": "layers/panels.json",
     "skim": "layers/skim.json",
     "standard": "layers/standard.json",
     "deep": "layers/deep.json",
@@ -65,6 +69,14 @@ class RebuildRequiredError(RuntimeError):
         self.tiers = list(tiers or [])
         self.reason = reason or "原文或生成模式已变化"
         super().__init__("未勾选档位无法保留：%s" % self.reason)
+
+
+class MissingProfileError(ValueError):
+    """本章所属书还没有书级读法；生成前必须由人确认，不能隐式写账。"""
+
+    def __init__(self, uid):
+        self.uid = uid
+        super().__init__("这本书还没有读法，请先确认书级默认读法")
 
 
 class PackExistsError(RuntimeError):
@@ -163,6 +175,7 @@ def _depth_estimate(blocks):
                 ),
             ),
         },
+        "panels": scaled(0.35, 0.35),
         "standard": {"tokens": 0, "usd": 0.0},
         "deep": scaled(0.6, 0.6),
     }
@@ -672,7 +685,61 @@ class ReadingService:
             item = _chapter_api(chapter, tiers, state, path=path, fallback_reason=reason, pack=pack)
             item["jobs"] = self.queue.active_for(uid, chapter["n"])
             chapters.append(item)
-        return {"book": view, "chapters": chapters}
+        return {"book": view, "chapters": chapters, "reading": self.book_reading(uid)}
+
+    def _profile_doc(self, uid):
+        doc = profile.from_rows(L.reading_get(uid, root=self.library.root))
+        if doc is None:
+            doc = profile.read_profile(uid, self.library.root)
+        return doc
+
+    def book_reading(self, uid):
+        doc = self._profile_doc(uid)
+        if not doc:
+            return {"book_mode": None, "panels": [], "chapters": {}}
+        return {"book_mode": doc.get("mode"), "panels": doc.get("panels") or [], "chapters": doc.get("chapters") or {}}
+
+    def reading(self, uid, n, raw=None):
+        raw = raw or self.library.read_chapter(uid, n) or {}
+        doc = self._profile_doc(uid)
+        suggestion = profile.suggestion_for(
+            uid, n, self.library, self.library.root, self.client if self.annotate else None
+        )
+        return profile.resolve(doc, n, raw.get("source_sha256") or "", suggestion)
+
+    def set_reading(self, uid, n, action, mode=None):
+        """工单只写读法账；follow/override/book_default 三种动作。"""
+        raw = self.library.read_chapter(uid, n)
+        if raw is None:
+            raise FileNotFoundError("找不到章节")
+        if action == "book_default":
+            clean = profile.normalize_mode(mode)
+            if not clean:
+                raise ValueError("mode 必须是 %s" % "/".join(profile.MODES))
+            L.reading_set_book(uid, clean, root=self.library.root)
+        elif action == "override":
+            clean = profile.normalize_mode(mode)
+            if not clean:
+                raise ValueError("mode 必须是 %s" % "/".join(profile.MODES))
+            if not L.reading_get(uid, "*", root=self.library.root):
+                raise MissingProfileError(uid)
+            L.reading_put(
+                uid,
+                clean,
+                chapter=str(int(n)),
+                source_sha256=raw.get("source_sha256") or "",
+                root=self.library.root,
+            )
+        elif action == "follow":
+            L.reading_delete(uid, str(int(n)), root=self.library.root)
+        else:
+            raise ValueError("action 必须是 follow/override/book_default")
+        return self.reading(uid, n, raw=raw)
+
+    def require_reading(self, uid):
+        if not L.reading_get(uid, "*", root=self.library.root):
+            raise MissingProfileError(uid)
+        return True
 
     def _depth_tiers(self, uid, n, info):
         """把 depth 层的磁盘状态映射成书目录页用的三档状态。"""
@@ -810,6 +877,7 @@ class ReadingService:
                 "score": fit["score"],
                 "reason": fit["reason"],
             },
+            "reading": self.reading(uid, n, raw=raw),
         }
         if self.depth:
             data["depth"] = {"state": depth_state["status"]}
@@ -817,6 +885,7 @@ class ReadingService:
                 data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
                 data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
             if depth_state["status"] == "ready":
+                data["depth"]["panels"] = self.store.depth_json(uid, n, "layers/panels.json")
                 data["depth"]["skim"] = self.store.depth_json(uid, n, "layers/skim.json")
                 deep = self.store.depth_json(uid, n, "layers/deep.json")
                 if deep is not None:
@@ -870,6 +939,13 @@ class ReadingService:
         layer_usage = layer_usage if isinstance(layer_usage, dict) else {}
         layer_updated_at = state.get("layer_updated_at") if state else None
         layer_updated_at = layer_updated_at if isinstance(layer_updated_at, dict) else {}
+        layer_mode = state.get("layer_mode") if state else None
+        layer_mode = layer_mode if isinstance(layer_mode, dict) else {}
+        current_mode = None
+        try:
+            current_mode = self.reading(uid, n, raw=raw).get("effective_mode")
+        except Exception:
+            current_mode = None
         source_stale = bool(state and source_sha and state.get("source_sha256") != source_sha)
         base_updated = (state or {}).get("updated_at") or (state or {}).get("generated_at")
 
@@ -890,6 +966,13 @@ class ReadingService:
                     and isinstance(layer_model_sha, dict)
                     and layer in layer_model_sha
                     and layer_model_sha.get(layer) != chapter_model_sha
+                ):
+                    status = "stale"
+                if (
+                    layer in ("panels", "skim", "deep")
+                    and current_mode
+                    and layer_mode.get(layer)
+                    and layer_mode.get(layer) != current_mode
                 ):
                     status = "stale"
             if active_job is not None:
@@ -998,9 +1081,7 @@ class ReadingService:
         annotation = validate_annotation(annotation, raw["blocks"])
         book = self._book_view(self.library.book(uid))
         if allowed_ids is None:
-            editorial_tiers = {
-                tier: project(raw["blocks"], annotation, tier) for tier in ("standard", "deep")
-            }
+            editorial_tiers = {tier: project(raw["blocks"], annotation, tier) for tier in ("standard", "deep")}
             allowed_ids = set.intersection(
                 *[{block["id"] for block in projection["blocks"]} for projection in editorial_tiers.values()]
             )
@@ -1234,6 +1315,8 @@ class ReadingService:
             raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
         blocks = raw["blocks"]
         book = self.library.book(uid) or {"uid": uid}
+        reading = self.reading(uid, n)
+        mode = reading.get("effective_mode") or "argument"
         chapter = {
             "uid": uid,
             "n": n,
@@ -1263,6 +1346,7 @@ class ReadingService:
         layer_model_sha = dict(state.get("layer_model_sha") or {})
         layer_usage = dict(state.get("layer_usage") or {})
         layer_updated_at = dict(state.get("layer_updated_at") or {})
+        layer_mode = dict(state.get("layer_mode") or {})
         now = _now()
 
         model = existing.get("model")
@@ -1272,16 +1356,31 @@ class ReadingService:
         if "model" in requested:
             preflight.require(["reading.model"], note="深读结构层要用模型生成。")
             self._set_stage(job_id, "annotating")
-            model, model_meta = generate_chapter_model(
-                self.client or ModelClient(),
-                book,
-                chapter,
-                blocks,
-                model=job.get("model"),
-                effort=job.get("effort"),
-                cache_dir=self.store.depth_cache_dir(uid, n),
-                refresh=bool(job.get("rebuild")),
-            )
+            try:
+                model, model_meta = generate_chapter_model(
+                    self.client or ModelClient(),
+                    book,
+                    chapter,
+                    blocks,
+                    model=job.get("model"),
+                    effort=job.get("effort"),
+                    cache_dir=self.store.depth_cache_dir(uid, n),
+                    refresh=bool(job.get("rebuild")),
+                )
+            except Exception as exc:
+                if "max_tokens" not in str(exc):
+                    raise
+                model, model_meta = generate_chapter_model(
+                    self.client or ModelClient(),
+                    book,
+                    chapter,
+                    blocks,
+                    model=job.get("model"),
+                    effort=job.get("effort"),
+                    chunk_chars=9000,
+                    cache_dir=self.store.depth_cache_dir(uid, n),
+                    refresh=True,
+                )
             ledger = plan_all_dispositions(model, blocks)
             gate = audit_conservation(model, ledger, blocks)
             if gate.get("status") != "pass":
@@ -1309,6 +1408,34 @@ class ReadingService:
                 if layer != "model" and layer not in requested:
                     layer_model_sha[layer] = "__stale__"
 
+        panels = existing.get("panels")
+        if "panels" in requested:
+            self._set_stage(job_id, "annotating")
+            panels, panels_meta = generate_panels(
+                self.client or ModelClient(),
+                book,
+                chapter,
+                model,
+                blocks,
+                mode=mode,
+                source_sha256=raw.get("source_sha256") or "",
+                model_name=job.get("model"),
+                effort=job.get("effort"),
+            )
+            self._set_stage(job_id, "validating")
+            panels = validate_panels(panels, model, blocks, mode=mode, source_sha256=raw.get("source_sha256") or "")
+            audit = audit_panels(panels, model, blocks, mode=mode)
+            files[DEPTH_FILES["panels"]] = json.dumps(panels, ensure_ascii=False, indent=1)
+            layer_sha["panels"] = _depth_sha(panels)
+            layer_model_sha["panels"] = chapter_model_sha
+            layer_mode["panels"] = mode
+            layer_updated_at["panels"] = now
+            usage = (panels_meta or {}).get("usage") if isinstance(panels_meta, dict) else None
+            if isinstance(usage, dict) and usage:
+                layer_usage["panels"] = usage
+            else:
+                layer_usage.pop("panels", None)
+
         skim = existing.get("skim")
         if "skim" in requested:
             self._set_stage(job_id, "annotating")
@@ -1320,15 +1447,18 @@ class ReadingService:
                 blocks,
                 model=job.get("model"),
                 effort=job.get("effort"),
+                mode=mode,
+                panels=panels,
             )
             self._set_stage(job_id, "validating")
-            skim = validate_skim(skim, model, blocks)
-            audit = audit_skim(skim, model, blocks)
+            skim = validate_skim(skim, model, blocks, mode=mode)
+            audit = audit_skim(skim, model, blocks, mode=mode)
             if audit.get("errors"):
                 raise RuntimeError(f"速览审计未通过：{'；'.join(audit['errors'])}")
             files[DEPTH_FILES["skim"]] = json.dumps(skim, ensure_ascii=False, indent=1)
             layer_sha["skim"] = _depth_sha(skim)
             layer_model_sha["skim"] = chapter_model_sha
+            layer_mode["skim"] = mode
             layer_usage.pop("skim", None)
             layer_updated_at["skim"] = now
 
@@ -1353,15 +1483,17 @@ class ReadingService:
                 blocks,
                 model=job.get("model"),
                 effort=job.get("effort"),
+                mode=mode,
             )
             self._set_stage(job_id, "validating")
-            deep = validate_deep(deep, model, blocks)
-            audit = audit_deep(deep, model, blocks)
+            deep = validate_deep(deep, model, blocks, mode=mode)
+            audit = audit_deep(deep, model, blocks, mode=mode)
             if audit.get("errors"):
                 raise RuntimeError(f"深读审计未通过：{'；'.join(audit['errors'])}")
             files[DEPTH_FILES["deep"]] = json.dumps(deep, ensure_ascii=False, indent=1)
             layer_sha["deep"] = _depth_sha(deep)
             layer_model_sha["deep"] = chapter_model_sha
+            layer_mode["deep"] = mode
             layer_updated_at["deep"] = now
             usage = (deep_meta or {}).get("usage") if isinstance(deep_meta, dict) else None
             if isinstance(usage, dict) and usage:
@@ -1371,7 +1503,7 @@ class ReadingService:
 
         html_written = False
         skim_fresh = skim is not None and layer_model_sha.get("skim") == chapter_model_sha
-        html_layers = {"skim", "standard", "deep"}
+        html_layers = {"panels", "skim", "standard", "deep"}
         need_render = skim_fresh and bool(html_layers & set(requested))
         if need_render:
             self._set_stage(job_id, "rendering")
@@ -1386,6 +1518,8 @@ class ReadingService:
                 generated_at=now,
                 standard=standard,
                 deep=deep,
+                panels=panels,
+                reading=reading,
             )
             html_written = True
         status = "ready" if skim is not None and html_written else "model"
@@ -1407,6 +1541,7 @@ class ReadingService:
                 "layer_model_sha": layer_model_sha,
                 "layer_usage": layer_usage,
                 "layer_updated_at": layer_updated_at,
+                "layer_mode": layer_mode,
             }
         )
         state.setdefault("generated_at", now)

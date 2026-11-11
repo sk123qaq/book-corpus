@@ -26,6 +26,7 @@ from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.service import (
     DEPTH_LAYERS,
     JobConflictError,
+    MissingProfileError,
     PackExistsError,
     ReadingService,
     RebuildRequiredError,
@@ -41,6 +42,7 @@ ROUTES = [
     (re.compile(r"^/api/catalog$"), "catalog"),
     (re.compile(r"^/api/book/([A-Za-z0-9_-]+)$"), "book"),
     (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)$"), "chapter"),
+    (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)/reading$"), "reading"),
     (re.compile(r"^/api/records$"), "records"),
     (re.compile(r"^/api/jobs$"), "jobs"),
     (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)$"), "job"),
@@ -135,6 +137,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._handle("POST", head=False)
 
+    def do_PUT(self):
+        self._handle("PUT", head=False)
+
     def _handle(self, method, head=False):
         if not self._guard():
             return
@@ -201,6 +206,19 @@ class Handler(BaseHTTPRequestHandler):
                         self._json(202, job)
                     return
                 self._json(405, {"error": "该路由不支持 POST"})
+                return
+            self._error(404, "没有这个接口")
+            return
+
+        if method == "PUT":
+            for pattern, name in ROUTES:
+                match = pattern.match(path)
+                if not match:
+                    continue
+                if name == "reading":
+                    self._put_reading(match.group(1), int(match.group(2)))
+                    return
+                self._json(405, {"error": "该路由不支持 PUT"})
                 return
             self._error(404, "没有这个接口")
             return
@@ -325,6 +343,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
                 raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+            if self.service.depth:
+                self.service.require_reading(uid)
             job = None
             if self.service.depth and self.service.store.manifest(uid, n) is None:
                 raw = self.service.library.read_chapter(uid, n)
@@ -389,6 +409,9 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             return
+        except MissingProfileError as exc:
+            self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
+            return
         except (TypeError, ValueError) as exc:
             self._json(400, {"error": str(exc)})
             return
@@ -417,6 +440,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
                 raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
+            self.service.require_reading(uid)
             job = self.service.submit_depth(
                 uid,
                 n,
@@ -432,12 +456,29 @@ class Handler(BaseHTTPRequestHandler):
                 409,
                 {"error": "该章已有任务在排队或运行", "code": "job_active", "conflicts": exc.conflicts},
             )
+        except MissingProfileError as exc:
+            self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
         except (TypeError, ValueError) as exc:
             self._json(400, {"error": str(exc)})
         except MissingConfigError as exc:
             self._json(400, exc.as_payload())
         else:
             self._json(202, job)
+
+    def _put_reading(self, uid, n):
+        try:
+            data = self._body()
+            action = str(data.get("action") or "").strip()
+            mode = data.get("mode")
+            result = self.service.set_reading(uid, n, action, mode)
+        except FileNotFoundError:
+            self._json(404, {"error": "找不到章节"})
+        except MissingProfileError as exc:
+            self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
+        except (TypeError, ValueError) as exc:
+            self._json(400, {"error": str(exc)})
+        else:
+            self._json(200, result)
 
     # ---- 静态与产物 ---------------------------------------------------
     def _serve_page(self, name, head=False):

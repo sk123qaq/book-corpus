@@ -15,6 +15,27 @@
 `citations` 层已于 2026-11-11 退役，不再出现在 reader、工单、导出与生成链。
 视觉读本是**独立第五产物**，不是第四档：不进分层读任务、不进档位勾选框。
 
+**读法（reading mode）**
+书级默认 + 章级覆写的 `narrative / argument / practical / reference`。读法只决定
+注解类型、面板类型与建议入口，不是档位；三个档位仍由读者按精力与兴趣自选。
+书级默认存 `tables/ledger.db` 的 `读法` 表（`chapter='*'`），`build_library.py --emit-json`
+派生 `books/<uid>/reading.json`；章级覆写必须带 `source_sha256`，源文变化后失效。
+
+**面板（panels）**
+每章一次抽取的结构层，按读法产出人物、时间线、场景节拍、论证图、证据表、步骤、
+检查清单、图版、术语等卡片。每条 item 必须落到块锚点；人名、年份、数字、图注
+必须能在原文找到。空章节允许 `panels: []` 并显示提示，不阻塞正文。
+
+**场景速览（scene skim）**
+叙事书的速览形态：`skim.json` 的 `kind` 为 `scenes`，3–10 个有效场景节拍（目标
+5–10），每个 scene 有块锚点；正文合计不超过源文 25%，不要求命题链。论证/实用/
+资料书仍走 `claims` 速览。
+
+**节导语（section lead）**
+标准档每节开头的一句摘要。生成器先读 `chapter_model.sections[].lead`，为空时确定性
+回退到该节首个 core unit 的首句（再退到首个 unit 的首句），截到 80 字；不重跑
+chapter_model。无源注的节保持 0 条标准注。
+
 **Agent 标准档（agent standard）**
 `agent_standard.py` 的直出 HTML 实验入口（`/reader/<uid>/<n>/agent`）。
 视觉读本上线后它保持实验性质，不作为正式入口，也不合并。

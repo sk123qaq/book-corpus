@@ -44,7 +44,7 @@ const PARTS = location.pathname.split('/').filter(Boolean);
 const UID = decodeURIComponent(PARTS[1] || '');
 const N = PARTS[2] || '';
 const TIER_KEYS = ['skim', 'standard', 'deep'];
-const DEPTH_KEYS = ['model', 'skim', 'standard', 'deep'];
+const DEPTH_KEYS = ['model', 'panels', 'skim', 'standard', 'deep'];
 let data = null;
 let draft = false;
 let selected = new Set(['standard']);
@@ -52,6 +52,7 @@ let depthSelected = null;
 let depthBusy = false;
 const pending = new Set();
 let pendingBusy = false;
+let modeBusy = false;
 const polling = new Set();
 
 RD.ready(async () => {
@@ -150,6 +151,7 @@ function ticketHtml() {
     RD.esc(data.book.uid) + '-' + RD.esc(chapter.n) + '</span></div>' +
     '<h3>' + RD.esc(chapter.title) + '</h3>' +
     '<p class="ticket-meta">' + RD.fmt(chapter.chars) + ' 字 · 原文约 ' + RD.fmt(chapter.minutes) + ' 分钟</p>' +
+    '<div class="mode-box" id="mode-root">' + modeSelectorHtml() + '</div>' +
     '<div class="tier-list" id="tier-list">' + TIER_KEYS.map(tierOption).join('') + '</div>' +
     RD.modelSettingsHtml() +
     '<div class="ticket-est"><span id="ticket-est"></span><span>本地队列 · 最多 4 个并行</span></div>' +
@@ -165,6 +167,122 @@ function ticketHtml() {
     '<div id="job-mount"></div>' +
     '<p class="fine">' + (draft ? '当前是草稿：三档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
       '原文逐字保留；讲解只做旁批，可一键隐藏。原文不重写、不合并。') + '</p>';
+}
+
+
+const MODE_META = {
+  narrative: { label: '叙事', desc: '人物、场景、情节与手法' },
+  argument: { label: '论证', desc: '命题、论据、推理与反驳' },
+  practical: { label: '实用', desc: '步骤、清单、决策与做法' },
+  reference: { label: '资料·图册', desc: '图版、条目、术语与版本' },
+};
+
+function modeInfo() {
+  return data.reading || {};
+}
+
+function modeLabel(mode) {
+  return (MODE_META[mode] || {}).label || mode || '未定';
+}
+
+function modeSelectorHtml() {
+  const r = modeInfo();
+  const bookMode = r.book_mode || '';
+  const override = r.chapter_override || '';
+  const effective = r.effective_mode || 'argument';
+  const suggestion = r.suggestion || {};
+  const follow = Boolean(bookMode && !override);
+  const modes = ['narrative', 'argument', 'practical', 'reference'];
+  const confirmed = suggestion.mode && suggestion.source === 'model' ? '模型建议' : '建议';
+  return '<div class="mode-head"><span class="lbl">本章读法</span>' +
+      '<span class="mode-hint">读法不改档位</span></div>' +
+    '<label class="mode-follow' + (bookMode ? '' : ' is-empty') + '">' +
+      '<input type="checkbox" id="mode-follow"' + (follow ? ' checked' : '') +
+      (bookMode && !modeBusy ? '' : ' disabled') + '>' +
+      '<span>跟随本书' + (bookMode ? '（' + RD.esc(modeLabel(bookMode)) + '）' : '（未设）') + '</span>' +
+    '</label>' +
+    '<div class="mode-grid">' + modes.map(function (mode) {
+      return '<button type="button" class="mode-btn' + (effective === mode ? ' active' : '') +
+        '" data-mode="' + mode + '"' + (modeBusy ? ' disabled' : '') + '>' +
+        '<b>' + RD.esc(MODE_META[mode].label) + '</b><small>' + RD.esc(MODE_META[mode].desc) + '</small>' +
+        (suggestion.mode === mode ? '<em class="mode-suggest-dot">' + RD.esc(confirmed) + '</em>' : '') +
+        '</button>';
+    }).join('') + '</div>' +
+    (suggestion.mode ? '<div class="mode-suggest"><b>' + RD.esc(confirmed) + '：' + RD.esc(modeLabel(suggestion.mode)) +
+      (suggestion.confidence ? ' · 置信度 ' + Number(suggestion.confidence).toFixed(2) : '') + '</b>' +
+      '<span>' + RD.esc(suggestion.reason || '') + '</span></div>' : '') +
+    (suggestion.evidence && suggestion.evidence.length ? '<div class="mode-evidence">' +
+      suggestion.evidence.map(function (item) {
+        return '<span><i>' + RD.esc(item.label) + '</i>' + RD.esc(item.value) + '</span>';
+      }).join('') + '</div>' : '') +
+    (override ? '<div class="mode-override">本章覆写：<b>' + RD.esc(modeLabel(override)) +
+      '</b><span>（不跟随本书）</span><button type="button" id="mode-reset">恢复跟随本书</button></div>' : '') +
+    (!bookMode ? '<div class="mode-warning">本书还没有默认读法；点一个模式会先设为本书默认。</div>' : '') +
+    '<div class="mode-foot">档位在下方单独选；读法只改注解与面板。</div>';
+}
+
+function refreshMode() {
+  const root = RD.mount('mode-root');
+  if (!root) return;
+  root.innerHTML = modeSelectorHtml();
+  bindMode();
+  updateEstimate();
+}
+
+async function putReading(action, mode) {
+  if (modeBusy) return;
+  modeBusy = true;
+  refreshMode();
+  try {
+    const result = await RD.api('/api/chapter/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N) + '/reading', {
+      method: 'PUT',
+      body: { action: action, mode: mode },
+    });
+    data.reading = result;
+    RD.toast('本章读法：' + modeLabel(result.effective_mode));
+  } catch (err) {
+    if (err.code === 'reading_profile_required') {
+      RD.toast('先设本书默认读法，再设章级覆写', true);
+    } else {
+      RD.toast(err.message, true);
+    }
+  } finally {
+    modeBusy = false;
+    refreshMode();
+  }
+}
+
+function bindMode() {
+  const root = RD.mount('mode-root');
+  if (!root) return;
+  root.onclick = function (event) {
+    const button = event.target.closest('[data-mode]');
+    if (button) {
+      const mode = button.getAttribute('data-mode');
+      const r = modeInfo();
+      if (!r.book_mode) {
+        putReading('book_default', mode);
+      } else if (mode === r.book_mode && !r.chapter_override) {
+        return;
+      } else if (mode === r.book_mode) {
+        putReading('follow');
+      } else if (mode === r.chapter_override) {
+        return;
+      } else {
+        putReading('override', mode);
+      }
+      return;
+    }
+    if (event.target.closest('#mode-reset')) {
+      putReading('follow');
+    }
+  };
+  root.onchange = function (event) {
+    if (event.target && event.target.id === 'mode-follow') {
+      if (event.target.checked) putReading('follow');
+      else RD.toast('选一个模式覆盖本书，或重新打开跟随', true);
+    }
+  };
 }
 
 function tierOption(key) {
@@ -352,6 +470,7 @@ async function submitDepth(layers, rebuildModel) {
 
 
 function bindTicket() {
+  bindMode();
   RD.mount('tier-list').addEventListener('change', (event) => {
     const input = event.target.closest('input[type=checkbox]');
     if (!input) return;
@@ -394,9 +513,19 @@ function updateEstimate() {
     button.textContent = pendingBusy ? '正在提交…' : active.length ? '查看进行中的工单' :
       keys.length ? '生成 ' + keys.length + ' 档读本 →' : '至少选一档';
   }
+  const mode = (data.reading || {}).effective_mode || 'argument';
+  const hasProfile = Boolean((data.reading || {}).book_mode);
+  if (button) {
+    button.disabled = keys.length === 0 || pendingBusy || !hasProfile;
+    button.title = hasProfile ? '' : '先选一个读法，设为本书默认';
+    button.textContent = hasProfile
+      ? '按「' + modeLabel(mode) + '」生成读本 →'
+      : '先选一个读法 →';
+  }
   RD.mount('ticket-est').textContent = keys.length
-    ? planText(keys, planFor(keys)) + ' · ' + RD.fmt(data.chapter.chars) + ' 字'
-    : '未选读法';
+    ? '按「' + modeLabel(mode) + '」生成 ' + keys.length + ' 档 · ' + planText(keys, planFor(keys)) +
+      ' · ' + RD.fmt(data.chapter.chars) + ' 字'
+    : '未选档位';
 }
 
 function jobSlot(job) {
@@ -441,6 +570,7 @@ async function postJob(keys, overwrite, rebuild, allowUnverified) {
   const settings = RD.modelSettings();
   return RD.api('/api/jobs', { method: 'POST', body: {
     uid: data.book.uid, n: data.chapter.n, tiers: keys, model: settings.model, effort: settings.effort,
+    mode: (data.reading || {}).effective_mode, reading_hash: JSON.stringify(data.reading || {}),
     overwrite: Boolean(overwrite), rebuild: Boolean(rebuild), allow_unverified: Boolean(allowUnverified),
   } });
 }
@@ -471,6 +601,10 @@ async function generateEdition() {
 async function generate() {
   const keys = TIER_KEYS.filter((key) => selected.has(key));
   if (!keys.length) return;
+  if (!(data.reading || {}).book_mode) {
+    RD.toast('先在右侧选一个读法，设本书默认', true);
+    return;
+  }
   if (pendingBusy) {
     RD.toast('正在提交，请稍候', true);
     return;

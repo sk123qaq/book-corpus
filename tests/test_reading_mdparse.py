@@ -94,3 +94,10 @@ def test_golden_ch04_block_ids_stable():
     ids = {block["id"] for block in parsed["blocks"]}
     anchors = {"B03", "B08", "B18", "B24", "B29"}
     assert anchors <= ids, "四读黄金锚点丢了：%s" % (anchors - ids)
+
+
+def test_bold_fragmented_heading_is_cleaned():
+    raw = "### **第****1****节****应****用****场****景**\n\n正文\n"
+    parsed = parse_markdown(raw)
+    assert parsed["blocks"][0]["kind"] == "heading"
+    assert parsed["blocks"][0]["text"] == "第1节应用场景"

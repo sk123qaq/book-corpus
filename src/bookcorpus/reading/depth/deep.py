@@ -21,40 +21,54 @@ from .diagrams import audit_figures
 from .standard import _block_map
 
 DEEP_SCHEMA_VERSION = 1
-DEEP_PROMPT_VERSION = "deep-annotations-v1"
+DEEP_PROMPT_VERSION = "deep-annotations-v2"
+DEEP_PROMPT_VERSION_V1 = "deep-annotations-v1"
 MIN_NOTE = 80
 MAX_NOTE = 200
 MAX_NOTES = 12
 MAX_NOTES_PER_SECTION = 3
-NOTE_TYPES = ("assumption", "boundary", "evidence", "counter", "intertext")
+NOTE_TYPES_BY_MODE = {
+    "argument": ("assumption", "boundary", "evidence", "counter", "intertext"),
+    "narrative": ("scene", "character", "motif", "turn", "setup_payoff"),
+    "practical": ("step", "check", "failure", "decision", "example"),
+    "reference": ("plate", "term", "version", "caption", "provenance"),
+}
+NOTE_TYPES = NOTE_TYPES_BY_MODE["argument"]
 NOTE_ORIGINS = ("editor", "source", "model")
 MAX_JSON_RETRIES = 1
 CHAPTER_RE = re.compile(r"第\s*[一二三四五六七八九十百千万零两\d]+\s*[章节]")
 
-SYSTEM_PROMPT = "\n".join(
-    [
-        "你是书库的深读编辑。给定一章的章节模型与原文块，请写论证注与论证链，只输出一个 JSON 对象。",
-        "",
-        "硬约束：",
-        "1. 顶层字段为 schema、prompt_version、notes、chains。schema 写 1，prompt_version 固定写 deep-annotations-v1。",
-        "2. notes 是 1 到 12 条论证注，每节最多 3 条。每条字段为 id、type、section、units、blocks、"
-        "quote（可选）、text、origin、source_scope。",
-        "3. type 只能是 assumption/boundary/evidence/counter/intertext。origin 只能是 editor/source/model。"
-        "source_scope 只能是「本章」或「本书 <节或章>」。",
-        "4. text 写 80 到 200 字，必须是编辑判断，不要摘抄原文，不要写书外事实，不要写「已核验」。",
-        "5. 每条注至少给一个 units 或 blocks 锚点；所有 id 必须来自本章章节模型或 blocks。"
-        "quote 可省略；写了就必须是某个被引用 block 的逐字子串。",
-        "6. intertext 注可以提到同一本书的其他章节，但 text 必须点名具体章节或小节；"
-        "不能引用本书以外的材料，也不能假装读过未给到的章节内容。",
-        "7. chains 每节最多 1 条，family 固定写 argument，origin 固定写 derived。字段为 id、family、section、"
-        "question、units、origin、caption、reading_note、data、fallback。",
-        "8. data.nodes 每项写 id、label，可选 unit、block；data.edges 每项写 from、to，可选 label。"
-        "边只能连接已有节点 id；没有可靠关系时 edges 可以是空数组，但 fallback 必须写文字说明。",
-        "9. 不要发明原文没有的数字、引文、章节名或外部资料。不要输出 markdown 围栏或解释。",
-        "",
-        "输出只包含 JSON。",
-    ]
-)
+
+def _system_prompt(mode: str) -> str:
+    types = "/".join(NOTE_TYPES_BY_MODE.get(mode, NOTE_TYPES_BY_MODE["argument"]))
+    return "\n".join(
+        [
+            "你是书库的深读编辑。给定一章的章节模型与原文块，请写深读注与论证链，只输出一个 JSON 对象。",
+            "",
+            "硬约束：",
+            "1. 顶层字段为 schema、prompt_version、mode、notes、chains。schema 写 1，"
+            f"prompt_version 固定写 {DEEP_PROMPT_VERSION}，mode 固定写 {mode}。",
+            "2. notes 是 1 到 12 条深读注，每节最多 3 条。每条字段为 id、type、section、units、blocks、"
+            "quote（可选）、text、origin、source_scope。",
+            f"3. type 只能是 {types}。origin 只能是 editor/source/model。"
+            "source_scope 只能是「本章」或「本书 <节或章>」。",
+            "4. text 写 80 到 200 字，必须是编辑判断，不要摘抄原文，不要写书外事实，不要写「已核验」。",
+            "5. 每条注至少给一个 units 或 blocks 锚点；所有 id 必须来自本章章节模型或 blocks。"
+            "quote 可省略；写了就必须是某个被引用 block 的逐字子串。",
+            "6. intertext 注可以提到同一本书的其他章节，但 text 必须点名具体章节或小节；"
+            "不能引用本书以外的材料，也不能假装读过未给到的章节内容。",
+            "7. chains 每节最多 1 条，family 固定写 argument，origin 固定写 derived。字段为 id、family、section、"
+            "question、units、origin、caption、reading_note、data、fallback。",
+            "8. data.nodes 每项写 id、label，可选 unit、block；data.edges 每项写 from、to，可选 label。"
+            "边只能连接已有节点 id；没有可靠关系时 edges 可以是空数组，但 fallback 必须写文字说明。",
+            "9. 不要发明原文没有的数字、引文、章节名或外部资料。不要输出 markdown 围栏或解释。",
+            "",
+            "输出只包含 JSON。",
+        ]
+    )
+
+
+SYSTEM_PROMPT = _system_prompt("argument")
 
 
 class DeepError(ValueError):
@@ -154,6 +168,7 @@ def _check_note(
     warnings: list[str],
     seen_ids: set[str],
     per_section: dict[str, int],
+    note_types: tuple[str, ...] = NOTE_TYPES,
 ) -> dict[str, Any] | None:
     if not isinstance(note, dict):
         errors.append(f"notes[{index}] 必须是对象")
@@ -165,7 +180,7 @@ def _check_note(
         seen_ids.add(nid)
     label = nid or f"notes[{index}]"
     type_ = note.get("type")
-    if type_ not in NOTE_TYPES:
+    if type_ not in note_types:
         errors.append(f"{label}.type 非法：{type_}")
         type_ = ""
     origin = note.get("origin")
@@ -234,6 +249,7 @@ def _check_chain(
     warnings: list[str],
     seen_ids: set[str],
     per_section: dict[str, int],
+    note_types: tuple[str, ...] = NOTE_TYPES,
 ) -> dict[str, Any] | None:
     if not isinstance(chain, dict):
         errors.append(f"chains[{index}] 必须是对象")
@@ -376,6 +392,7 @@ def _checks(
     payload: Any,
     model: dict[str, Any],
     blocks: list[dict[str, Any]],
+    mode: str = "argument",
 ) -> tuple[dict[str, Any] | None, list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -383,21 +400,29 @@ def _checks(
         return None, ["深读层顶层必须是对象"], warnings
     if payload.get("schema") != DEEP_SCHEMA_VERSION:
         errors.append(f"schema 必须是 {DEEP_SCHEMA_VERSION}")
-    if payload.get("prompt_version") != DEEP_PROMPT_VERSION:
+    accepted_prompts = (DEEP_PROMPT_VERSION, DEEP_PROMPT_VERSION_V1) if mode == "argument" else (DEEP_PROMPT_VERSION,)
+    if payload.get("prompt_version") not in accepted_prompts:
         errors.append(f"prompt_version 必须是 {DEEP_PROMPT_VERSION}")
+    if payload.get("mode") not in (None, mode):
+        errors.append(f"mode 必须是 {mode}")
 
     sections = model.get("sections") or []
     units = model.get("units") or []
-    section_map = {
-        section.get("id"): section
-        for section in sections
-        if isinstance(section, dict) and isinstance(section.get("id"), str) and section.get("id")
-    }
-    unit_map = {
-        unit.get("id"): unit
-        for unit in units
-        if isinstance(unit, dict) and isinstance(unit.get("id"), str) and unit.get("id")
-    }
+    # 键先绑成 str 再入表：mypy 不认推导式里的 isinstance 过滤，会把键当成 Any | None。
+    section_map: dict[str, dict[str, Any]] = {}
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        section_id = section.get("id")
+        if isinstance(section_id, str) and section_id:
+            section_map[section_id] = section
+    unit_map: dict[str, dict[str, Any]] = {}
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        unit_id = unit.get("id")
+        if isinstance(unit_id, str) and unit_id:
+            unit_map[unit_id] = unit
     block_map = _block_map(blocks)
 
     notes_raw = payload.get("notes")
@@ -420,6 +445,7 @@ def _checks(
             warnings,
             note_ids,
             notes_per_section,
+            NOTE_TYPES_BY_MODE.get(mode, NOTE_TYPES),
         )
         if clean is not None:
             notes.append(clean)
@@ -446,24 +472,42 @@ def _checks(
         if clean is not None:
             chains.append(clean)
 
-    clean = {"schema": DEEP_SCHEMA_VERSION, "prompt_version": DEEP_PROMPT_VERSION, "notes": notes, "chains": chains}
+    clean = {
+        "schema": DEEP_SCHEMA_VERSION,
+        "prompt_version": payload.get("prompt_version") or DEEP_PROMPT_VERSION,
+        "mode": mode,
+        "notes": notes,
+        "chains": chains,
+    }
     questions = _open_questions(payload, errors)
     if questions:
         clean["open_questions"] = questions
     return clean, (errors), warnings
 
 
-def validate_deep(payload: Any, model: dict[str, Any], blocks: list[dict[str, Any]]) -> dict[str, Any]:
+def validate_deep(
+    payload: Any,
+    model: dict[str, Any],
+    blocks: list[dict[str, Any]],
+    *,
+    mode: str = "argument",
+) -> dict[str, Any]:
     """校验深读载荷，返回规范化副本；不合法时抛 ``DeepError``。"""
-    clean, errors, _warnings = _checks(payload, model, blocks)
-    if errors:
+    clean, errors, _warnings = _checks(payload, model, blocks, mode)
+    if errors or clean is None:
         raise DeepError("；".join(errors))
     return copy.deepcopy(clean)
 
 
-def audit_deep(payload: Any, model: dict[str, Any], blocks: list[dict[str, Any]]) -> dict[str, Any]:
+def audit_deep(
+    payload: Any,
+    model: dict[str, Any],
+    blocks: list[dict[str, Any]],
+    *,
+    mode: str = "argument",
+) -> dict[str, Any]:
     """G13 审计：origin、锚点、数量、书外事实与论证链数字。"""
-    clean, errors, warnings = _checks(payload, model, blocks)
+    clean, errors, warnings = _checks(payload, model, blocks, mode)
     if clean is not None:
         for chain in clean.get("chains") or []:
             report = audit_figures([chain], model, blocks)
@@ -486,6 +530,7 @@ def _messages(
     chapter: dict[str, Any],
     model: dict[str, Any],
     blocks: list[dict[str, Any]],
+    mode: str = "argument",
 ) -> list[dict[str, str]]:
     payload = {
         "book": {
@@ -499,7 +544,7 @@ def _messages(
         "reminder": "只使用本章 blocks 与 chapter_model 的 id；notes 每条 80–200 字；chains 每节最多 1 条。",
     }
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": _system_prompt(mode)},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
 
@@ -518,9 +563,10 @@ def generate_deep(
     *,
     model: str | None = None,
     effort: str | None = None,
+    mode: str = "argument",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """生成并校验深读层；JSON 或校验失败时重试一次。"""
-    messages = _messages(book, chapter, chapter_model, blocks)
+    messages = _messages(book, chapter, chapter_model, blocks, mode)
     json_attempts = 0
     provider_retried = False
     while True:
@@ -531,9 +577,10 @@ def generate_deep(
             payload = dict(payload)
             payload.setdefault("schema", DEEP_SCHEMA_VERSION)
             payload.setdefault("prompt_version", DEEP_PROMPT_VERSION)
-            clean = validate_deep(payload, chapter_model, blocks)
+            payload.setdefault("mode", mode)
+            clean = validate_deep(payload, chapter_model, blocks, mode=mode)
             actual_model = model or getattr(client, "last_model", None) or getattr(client, "model", None)
-            return clean, {"prompt_version": DEEP_PROMPT_VERSION, "model": actual_model, "usage": usage}
+            return clean, {"prompt_version": DEEP_PROMPT_VERSION, "mode": mode, "model": actual_model, "usage": usage}
         except json.JSONDecodeError as exc:
             json_attempts += 1
             if json_attempts > MAX_JSON_RETRIES:

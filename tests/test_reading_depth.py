@@ -10,17 +10,15 @@ import pytest
 
 from bookcorpus.reading.depth import (
     DEEP_PROMPT_VERSION,
+    NOTE_TYPES_BY_MODE,
     SKIM_PROMPT_VERSION,
     SYSTEM_PROMPT,
     ChapterModelError,
-    DeepError,
     DepthModelError,
     SkimError,
     audit_conservation,
-    audit_deep,
     audit_skim,
     generate_chapter_model,
-    generate_deep,
     generate_skim,
     plan_dispositions,
     render_depth_chapter,
@@ -55,6 +53,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "depth"
 GOLD = FIXTURES / "b0003_ch06_gold.json"
 CHAPTER = FIXTURES / "b0003_ch06.md"
 PACK_KEYS = {
+    "reading",
     "book",
     "chapter",
     "jobs",
@@ -152,6 +151,46 @@ def _deep_payload(blocks, units=None):
             }
         ],
     }
+
+
+def test_skim_scene_mode_requires_scenes_without_claim_chain():
+    blocks, model, _ledger = _long_skim_fixture()
+    payload = {
+        "schema": 1,
+        "prompt_version": SKIM_PROMPT_VERSION,
+        "kind": "scenes",
+        "supported": True,
+        "reason": "",
+        "scenes": [
+            {"text": "场景甲", "anchor": "B02", "turn": "变化"},
+            {"text": "场景乙", "anchor": "B02", "turn": "变化"},
+            {"text": "场景丙", "anchor": "B02", "turn": "变化"},
+            {"text": "场景丁", "anchor": "B02", "turn": "变化"},
+            {"text": "场景戊", "anchor": "B02", "turn": "变化"},
+        ],
+    }
+    cleaned = validate_skim(payload, model, blocks, mode="narrative")
+    assert cleaned["kind"] == "scenes"
+    assert len(cleaned["scenes"]) == 5
+    payload["scenes"] = payload["scenes"][:2]
+    with pytest.raises(ValueError, match="至少需要 3"):
+        validate_skim(payload, model, blocks, mode="narrative")
+
+
+def test_deep_mode_accepts_narrative_types_and_rejects_argument_type():
+    model, blocks = _valid()
+    units = [unit["id"] for unit in model["units"]][:3]
+    payload = _deep_payload(blocks, units)
+    payload["mode"] = "narrative"
+    payload["notes"][0]["type"] = "scene"
+    payload["notes"][1]["type"] = "character"
+    cleaned = validate_deep(payload, model, blocks, mode="narrative")
+    assert cleaned["mode"] == "narrative"
+    assert {note["type"] for note in cleaned["notes"]} <= set(NOTE_TYPES_BY_MODE["narrative"])
+
+    payload["notes"][0]["type"] = "assumption"
+    with pytest.raises(ValueError, match="type 非法"):
+        validate_deep(payload, model, blocks, mode="narrative")
 
 
 def _unit(model, unit_id):
@@ -734,6 +773,14 @@ def _ready_depth(depth_root, *, status="ready"):
     files = {
         "chapter_model.json": model,
         "ledger.json": ledger,
+        "layers/panels.json": {
+            "schema": 1,
+            "prompt_version": "reading-panels-v1",
+            "mode": "argument",
+            "source_sha256": raw["source_sha256"],
+            "panels": [],
+            "warnings": [],
+        },
         "layers/skim.json": unsupported_skim("这一章太短，适合读原文。"),
         "layers/standard.json": {"schema": 1, "units": []},
         "layers/deep.json": deep,
@@ -743,6 +790,7 @@ def _ready_depth(depth_root, *, status="ready"):
             "source_sha256": raw["source_sha256"],
             "chapter_model_sha": "model-sha",
             "layer_model_sha": {
+                "panels": "model-sha",
                 "skim": "model-sha",
                 "standard": "model-sha",
                 "deep": "model-sha",
@@ -1884,7 +1932,9 @@ def test_standard_rejects_bad_lead_note_and_fold_kind():
     ]
     model["folds"] = [{"block": "B02", "summary": "段落不折", "reason": "测试"}]
     standard = build_standard(model, blocks)
-    assert standard["sections"] == [{"id": "S02", "lead": "再看清单。"}]
+    assert [section["id"] for section in standard["sections"]] == ["S01", "S02"]
+    assert len(standard["sections"][0]["lead"]) == 80
+    assert standard["sections"][1] == {"id": "S02", "lead": "再看清单。"}
     assert standard["notes"] == []
     assert standard["folds"] == [{"block": "B04", "summary": "完整清单 · 10 条", "reason": "长清单折叠"}]
     assert standard["audit"]["warnings"]

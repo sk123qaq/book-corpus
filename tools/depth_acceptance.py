@@ -174,13 +174,7 @@ def _run_once(root, uid, n, args):
         error = (completed.stderr or "").strip()[-4000:]
         if not error and completed.returncode != 0:
             error = (completed.stdout or "").strip()[-4000:]
-        if (
-            completed.returncode != 0
-            or payload is None
-            or payload.get("status") != "ready"
-            or state is None
-            or missing
-        ):
+        if completed.returncode != 0 or payload is None or payload.get("status") != "ready" or state is None or missing:
             if missing and not error:
                 error = "深度产物不完整：" + "、".join(missing)
             return {
@@ -283,7 +277,6 @@ def _write_report(out_dir, report):
     rows = []
     for chapter in report["chapters"]:
         usage = chapter.get("usage") or {}
-        payload = chapter.get("payload") or {}
         status = "ready" if chapter["ok"] else "FAILED"
         detail = (chapter.get("error") or "").splitlines()[-1][:160] if chapter.get("error") else ""
         if chapter.get("missing_artifacts"):

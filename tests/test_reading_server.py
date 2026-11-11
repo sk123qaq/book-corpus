@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from bookcorpus.reading.service import ReadingService
+from bookcorpus.scripts import lib_common as L
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -465,6 +466,8 @@ def test_editorial_api_roundtrip(server, reading_root):
 
 
 def test_reading_server_new_chapter_uses_depth_job(reading_root):
+    L.reading_set_book("B0001", "argument", root=reading_root)
+    L.reading_set_book("B0002", "argument", root=reading_root)
     service = ReadingService(root=reading_root, annotate=False, depth=False)
     raw = service.library.read_chapter("B0002", 1)
     pack = Path(reading_root) / "工作区" / "阅读" / "B0002" / "ch" / "01"
@@ -485,13 +488,11 @@ def test_reading_server_new_chapter_uses_depth_job(reading_root):
     )
     proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
     try:
-        status, job = _post(
-            base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]}
-        )
+        status, job = _post(base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
         assert status == 202
         assert job["kind"] == "depth"
         # 没有检索 provider 时确认降级：研究层照出，引用层整层不出。
-        assert job["layers"] == ["model", "skim", "standard", "deep"]
+        assert job["layers"] == ["model", "panels", "skim", "standard", "deep"]
         assert job["tiers"] == []
 
         status, old = _post(base, "/api/jobs", {"uid": "B0002", "n": 1, "tiers": ["standard"]})
@@ -582,6 +583,7 @@ def test_depth_route_404s_model_state_even_with_old_html(reading_root):
 
 
 def test_post_depth_returns_202_job_and_validates_payload(reading_root):
+    L.reading_set_book("B0001", "argument", root=reading_root)
     proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
     try:
         status, job = _post(

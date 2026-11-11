@@ -250,6 +250,11 @@ def _emit_inline(blocks, text, base_dir=None):
         _append(blocks, "paragraph", tail)
 
 
+def _heading_text(text):
+    """标题里的粗体标记是排版噪声；去掉并折叠空格。"""
+    return " ".join(text.replace("**", "").split())
+
+
 def _parse_chunk(blocks, chunk, base_dir=None):
     lines = [line for line in chunk.split("\n") if line.strip()]
     if not lines:
@@ -259,7 +264,7 @@ def _parse_chunk(blocks, chunk, base_dir=None):
 
     heading = HEADING_RE.match(lines[0].strip())
     if heading and len(lines) == 1:
-        _append(blocks, "heading", heading.group(2), level=len(heading.group(1)))
+        _append(blocks, "heading", _heading_text(heading.group(2)), level=len(heading.group(1)))
         return
 
     footnote = FOOTNOTE_RE.match(lines[0].strip())

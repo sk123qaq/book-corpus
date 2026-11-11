@@ -139,6 +139,7 @@ def finalize(con, t0, emit_json):
             stats["book_json"] = emit_book_json(con)
         finally:
             con.close()
+        stats["reading_json"] = emit_reading_json()
     return stats
 
 
@@ -335,6 +336,50 @@ def emit_book_json(con):
         L.write_json_atomic(os.path.join(dest, "book.json"), doc)
         written += 1
     return written
+
+
+def emit_reading_json():
+    """把 读法 人账派生到 books/<uid>/reading.json；没有行的书删旧文件。"""
+    rows = L.reading_all(root=L.ROOT)
+    by_uid = {}
+    for row in rows:
+        by_uid.setdefault(row["uid"], []).append(row)
+    written = 0
+    for uid, items in by_uid.items():
+        book_row = next((item for item in items if item["chapter"] == "*"), None)
+        if not book_row:
+            continue
+        dest = os.path.join(L.BOOKS, uid)
+        if not os.path.isdir(dest):
+            continue
+        chapters = {}
+        for item in items:
+            if item["chapter"] == "*":
+                continue
+            chapters[item["chapter"]] = {
+                "mode": item["mode"],
+                "panels": item.get("panels") or [],
+                "source_sha256": item.get("source_sha256") or "",
+            }
+        doc = {
+            "version": 1,
+            "generated": True,
+            "mode": book_row["mode"],
+            "panels": book_row.get("panels") or [],
+            "chapters": chapters,
+            "updated_at": max((item.get("updated_at") or "") for item in items),
+        }
+        L.write_json_atomic(os.path.join(dest, "reading.json"), doc)
+        written += 1
+    removed = 0
+    if os.path.isdir(L.BOOKS):
+        for name in os.listdir(L.BOOKS):
+            path = os.path.join(L.BOOKS, name, "reading.json")
+            if name in by_uid or not os.path.isfile(path):
+                continue
+            os.remove(path)
+            removed += 1
+    return {"written": written, "removed": removed}
 
 
 if __name__ == "__main__":

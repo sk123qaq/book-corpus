@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 from ..model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelProviderError
+from ..textnorm import normalize_verbatim
 from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
 
 SYSTEM_PROMPT = "\n".join(
@@ -18,8 +19,8 @@ SYSTEM_PROMPT = "\n".join(
         "",
         "硬约束：",
         '1. quotes 是数组，每项写成 {"block":"B01","text":"逐字原文"}；'
-        "block 必须是本次 user 消息给出的 block id，text 必须是该 block.text 的逐字子串，"
-        "不能跨块拼接，不能改写。",
+        "block 必须是本次 user 消息给出的 block id，原样使用，不要加 id_prefix；"
+        "text 必须是该 block.text 的逐字子串，不能跨块拼接，不能改写。",
         "2. 每个正文块必须被某个 unit 的 source_blocks 覆盖，或者进入 non_semantic。"
         "non_semantic 必须写 reason，不能和 unit 的 source_blocks 重叠。",
         "3. sections[].unit_ids 必须不重不漏地覆盖全部 unit；unit.section 可以省略，写出时必须等于所属 section id。",
@@ -39,8 +40,10 @@ SYSTEM_PROMPT = "\n".join(
         "figure 字段为 id、family、question、units、origin、caption、reading_note、data、fallback；"
         "family 只能是 argument/matrix/tree/flow/timeline/network/quantity，"
         "origin 只能是 source/derived/external，data 是对象，phase 1 只需给出候选结构。",
-        "10. 本块内的 id 用局部编号即可，例如 S01、U01、F01；user 消息给了 id_prefix 时，"
-        "所有局部 id 都加这个前缀。合并器会改成全局编号。"
+        "10. 本块内的 section/unit/figure id 用局部编号即可，例如 S01、U01、F01；"
+        "user 消息给了 id_prefix 时，这些局部 id 加这个前缀。block id 是最终 ID，"
+        "不加 id_prefix，quotes、source_blocks、terms、non_semantic、folds 里的 block 引用一律原样写。"
+        "合并器会改成全局编号。"
         "关系、duplicate_of、section.unit_ids、figure.units 都要使用同一套局部编号。",
         "11. 叙事章节按场景与转折分节，不按 H2 分节；原文没有 H2 时不要为了分节造标题。"
         "一个 unit 可以跨连续段落，只要它们属于同一场景节拍；保留 setup→turn→consequence 的因果/转折链。"
@@ -105,7 +108,8 @@ def _messages(book, chapter, chunk, index, total, *, prev_title=None, next_title
             "id_prefix": id_prefix,
         },
         "blocks": [_block_view(block) for block in chunk],
-        "reminder": "只使用上面 blocks 里的 id；每个块都要被 unit 覆盖或进 non_semantic；不要输出 tiers。",
+        "reminder": "blocks[].id 是最终块 ID，所有 block 引用原样使用，不要加 id_prefix；"
+        "id_prefix 只用于 section/unit/figure 的局部 id；每个块都要被 unit 覆盖或进 non_semantic；不要输出 tiers。",
     }
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -198,8 +202,175 @@ def _chunks(blocks, limit):
     return [plan["blocks"] for plan in _chunk_plans(blocks, limit)]
 
 
-def _chunk_payload(payload, chunk, chapter):
+def _normalize_block_entries(payload):
+    """Accept ``blocks`` list entries from older model outputs.
+
+    The prompt asks for one ``block`` per non_semantic/fold entry, but some
+    providers group consecutive block ids under ``blocks``.  Expanding those
+    entries preserves the model's own classification without inventing data.
+    """
     data = dict(payload)
+    for key in ("non_semantic", "folds"):
+        entries = data.get(key)
+        if not isinstance(entries, list):
+            continue
+        normalized = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                normalized.append(entry)
+                continue
+            block = entry.get("block")
+            blocks = entry.get("blocks")
+            if isinstance(block, str):
+                normalized.append(entry)
+                continue
+            ids = block if isinstance(block, list) else blocks
+            if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+                normalized.append(entry)
+                continue
+            for item in ids:
+                copy = {k: v for k, v in entry.items() if k not in ("block", "blocks")}
+                copy["block"] = item
+                normalized.append(copy)
+        data[key] = normalized
+    return data
+
+
+def _strip_chunk_prefix(value, id_prefix):
+    if not id_prefix or not isinstance(value, str):
+        return value
+    if value.startswith(id_prefix):
+        return value[len(id_prefix) :]
+    return value
+
+
+def _cover_structural_blocks(data, chunk):
+    """Put structural leftovers into non_semantic instead of failing coverage."""
+    if not chunk:
+        return
+    referenced = set()
+    for unit in data.get("units") or []:
+        if isinstance(unit, dict):
+            referenced.update(unit.get("source_blocks") or [])
+    for term in data.get("terms") or []:
+        if isinstance(term, dict) and isinstance(term.get("source_block"), str):
+            referenced.add(term["source_block"])
+    for key in ("non_semantic", "folds"):
+        for entry in data.get(key) or []:
+            if isinstance(entry, dict) and isinstance(entry.get("block"), str):
+                referenced.add(entry["block"])
+    entries = data.setdefault("non_semantic", [])
+    if not isinstance(entries, list):
+        return
+    for block in chunk:
+        if not isinstance(block, dict):
+            continue
+        block_id = block.get("id")
+        if not isinstance(block_id, str) or block_id in referenced:
+            continue
+        kind = block.get("kind")
+        text = (block.get("text") or "").strip()
+        if kind == "heading":
+            reason = "heading"
+        elif kind == "image":
+            reason = "decorative" if not text else "image"
+        elif text.startswith("图") and len(text) <= 40:
+            reason = "caption"
+        elif len(text) <= 40 and not text.endswith(("。", "！", "？", "；")):
+            reason = "heading"
+        elif len(text) <= 40:
+            reason = "transition"
+        else:
+            continue
+        entries.append({"block": block_id, "reason": reason})
+        referenced.add(block_id)
+
+
+def _normalize_chunk_refs(payload, id_prefix="", chunk=None):
+    """Normalize provider-specific chunk references before schema validation.
+
+    Multi-chunk prompts give the model an ``id_prefix`` for local section/unit
+    ids.  Some providers also put that prefix on block ids even though block ids
+    are already chapter-global.  Strip it from every block reference, then make
+    ``unit.section`` agree with the section that lists the unit.
+    """
+    data = _normalize_block_entries(payload)
+    if id_prefix:
+        for unit in data.get("units") or []:
+            if not isinstance(unit, dict):
+                continue
+            if isinstance(unit.get("source_blocks"), list):
+                unit["source_blocks"] = [_strip_chunk_prefix(item, id_prefix) for item in unit["source_blocks"]]
+            for quote in unit.get("quotes") or []:
+                if isinstance(quote, dict):
+                    quote["block"] = _strip_chunk_prefix(quote.get("block"), id_prefix)
+        for term in data.get("terms") or []:
+            if not isinstance(term, dict):
+                continue
+            for key in ("source_block", "block_id"):
+                if key in term:
+                    term[key] = _strip_chunk_prefix(term[key], id_prefix)
+        for key in ("non_semantic", "folds"):
+            for entry in data.get(key) or []:
+                if isinstance(entry, dict):
+                    entry["block"] = _strip_chunk_prefix(entry.get("block"), id_prefix)
+
+    block_map = {block.get("id"): block for block in (chunk or []) if isinstance(block, dict)}
+    for unit in data.get("units") or []:
+        if not isinstance(unit, dict):
+            continue
+        source_blocks = unit.get("source_blocks") or []
+        if not isinstance(source_blocks, list):
+            continue
+        for quote in unit.get("quotes") or []:
+            if not isinstance(quote, dict):
+                continue
+            block_id = quote.get("block")
+            text = quote.get("text")
+            if not isinstance(block_id, str) or not isinstance(text, str):
+                continue
+            cited = block_map.get(block_id)
+            if cited is not None and normalize_verbatim(text) in normalize_verbatim(cited.get("text") or ""):
+                continue
+            candidates = [
+                candidate
+                for candidate in source_blocks
+                if candidate in block_map
+                and normalize_verbatim(text) in normalize_verbatim(block_map[candidate].get("text") or "")
+            ]
+            if len(candidates) == 1:
+                quote["block"] = candidates[0]
+
+    for unit in data.get("units") or []:
+        if not isinstance(unit, dict) or unit.get("hard_info") is not True:
+            continue
+        note = unit.get("hard_info_note")
+        summary = unit.get("summary")
+        if not isinstance(note, str) or not note.strip() or not isinstance(summary, str):
+            continue
+        if normalize_verbatim(note) not in normalize_verbatim(summary):
+            unit["summary"] = f"{summary}；{note}"
+
+    _cover_structural_blocks(data, chunk)
+
+    owners = {}
+    for section in data.get("sections") or []:
+        if not isinstance(section, dict):
+            continue
+        section_id = section.get("id")
+        for unit_id in section.get("unit_ids", section.get("units")) or []:
+            owners.setdefault(unit_id, []).append(section_id)
+    for unit in data.get("units") or []:
+        if not isinstance(unit, dict):
+            continue
+        matches = owners.get(unit.get("id"), [])
+        if len(matches) == 1 and unit.get("section") != matches[0]:
+            unit["section"] = matches[0]
+    return data
+
+
+def _chunk_payload(payload, chunk, chapter, *, id_prefix=""):
+    data = _normalize_chunk_refs(payload, id_prefix=id_prefix, chunk=chunk)
     chapter_view = chapter if isinstance(chapter, dict) else {}
     data.setdefault("schema", 1)
     data.setdefault("uid", chapter_view.get("uid"))
@@ -219,7 +390,7 @@ def _chunk_payload(payload, chunk, chapter):
     )
 
 
-def _complete_json(client, messages, model, effort, *, chunk=None, chapter=None):
+def _complete_json(client, messages, model, effort, *, chunk=None, chapter=None, id_prefix=""):
     json_attempts = 0
     provider_retried = False
     while True:
@@ -229,7 +400,7 @@ def _complete_json(client, messages, model, effort, *, chunk=None, chapter=None)
             if not isinstance(payload, dict):
                 raise json.JSONDecodeError("顶层不是对象", "", 0)
             if chunk is not None:
-                payload = _chunk_payload(payload, chunk, chapter)
+                payload = _chunk_payload(payload, chunk, chapter, id_prefix=id_prefix)
             return payload, usage
         except json.JSONDecodeError as exc:
             json_attempts += 1
@@ -521,6 +692,7 @@ def generate_chapter_model(
             requested_effort,
             chunk=plan["blocks"],
             chapter=chapter,
+            id_prefix=plan["id_prefix"],
         )
         _merge_usage(usage, chunk_usage)
         actual_model = payload.pop("_model", None) or payload.get("model") or actual_model

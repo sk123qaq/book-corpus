@@ -134,44 +134,25 @@ function renderTicket() {
   }
   const chapter = current;
   chapter.jobs = chapter.jobs || [];
-  const running = chapter.jobs.filter((job) =>
-    RD.activeStates.includes(job.state) || job.state === 'cancelled'
-  );
-  const standard = !!(chapter.tiers && chapter.tiers.standard && chapter.tiers.standard.exists);
+  const r = data.reading || {};
+  const mode = r.book_mode;
   const draft = !!(chapter.pack && chapter.pack.draft);
   const hasPack = !!(chapter.pack && chapter.pack.exists);
   RD.mount('ticket').innerHTML =
-    '<div class="ticket-top"><span class="eyebrow">读本工单</span><span class="ticket-id">#' +
+    '<div class="ticket-top"><span class="eyebrow">读本工单</span><span class="ticket-id">只读 · #' +
       RD.esc(data.book.uid) + '-' + RD.esc(chapter.n) + '</span></div>' +
     '<h3>' + RD.esc(chapter.title) + '</h3>' +
     '<p class="ticket-meta">' + RD.fmt(chapter.chars) + ' 字 · 原文约 ' + RD.fmt(chapter.minutes) + ' 分钟 · ' +
       RD.esc(chapter.file) + (draft ? ' · <span class="draft-badge">草稿</span>' : '') + '</p>' +
-    '<div class="tier-list" id="tier-list">' + TIER_KEYS.map(tierOption).join('') + '</div>' +
-    RD.modelSettingsHtml() +
-    '<div class="ticket-est"><span id="ticket-est"></span><span>本地队列 · 最多 4 个并行</span></div>' +
-    (running.length ? '<p class="fine job-live">进行中：' + running.map((job) =>
-      RD.esc(RD.tierNames[(job.tiers || [])[0]] || (job.tiers || []).join('/')) + ' · ' +
-      RD.esc(RD.jobHint(job)) + ' · ' + RD.esc(job.id)
-    ).join('；') + '</p>' : '') +
-    '<button class="btn btn-primary" id="generate">' + (hasPack ? '更新读本 →' : '生成读本 →') + '</button>' +
-    (standard
-      ? '<a class="btn btn-ghost" href="' + RD.readerHref(data.book.uid, chapter.n, 'standard', chapter.path) + '">打开标准本</a>'
-      : '<a class="btn btn-ghost" href="' + RD.chapterHref(data.book.uid, chapter.n) + '">打开本章工单 →</a>') +
+    '<div class="mode-readonly">本书默认读法 <b>' + RD.esc(mode ? ({narrative:'叙事',argument:'论证',practical:'实用',reference:'资料·图册'}[mode] || mode) : '未设') +
+      '</b><br><span>章级覆写在章页设置；书页只汇总，不生成、不改读法。</span></div>' +
+    '<a class="btn btn-primary" href="' + RD.chapterHref(data.book.uid, chapter.n) + '">打开本章工单 →</a>' +
+    (hasPack ? '<a class="btn btn-ghost" href="' + RD.readerHref(data.book.uid, chapter.n, 'standard', chapter.path) + '">打开标准本</a>' : '') +
     '<div class="existing" id="existing"></div>' +
     '<div id="job-mount"></div>' +
-    '<p class="fine">' + (draft ? '当前是草稿：三档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
-      '原文逐字保留；讲解层带「补」标记，可一键隐藏。模型默认开启，失败时不发布半成品。') + '</p>';
-  RD.mount('tier-list').addEventListener('change', (event) => {
-    const input = event.target.closest('input[type=checkbox]');
-    if (!input) return;
-    if (input.checked) selected.add(input.value); else selected.delete(input.value);
-    input.closest('.tier-opt').classList.toggle('checked', input.checked);
-    updateEstimate();
-  });
-  RD.mount('generate').addEventListener('click', generate);
-  RD.bindModelSettings();
+    '<p class="fine">读法只改注解与面板，不改变正文覆盖和锚点。档位仍在章页由读者按精力选择。</p>';
   renderExisting();
-  updateEstimate();
+  showJobs(chapter.jobs);
 }
 
 function tierOption(key) {

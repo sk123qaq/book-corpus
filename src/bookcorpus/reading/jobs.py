@@ -7,7 +7,7 @@ import time
 import uuid
 
 STEPS = ("切块", "标注", "校验", "组档", "渲染")
-DEPTH_STEPS = ("结构", "速览", "标准", "深读", "渲染")
+DEPTH_STEPS = ("结构", "面板", "速览", "标准", "深读", "渲染")
 STEPS_BY_KIND = {
     "reading": STEPS,
     "edition": ("解析", "编辑", "校验", "渲染", "入库"),

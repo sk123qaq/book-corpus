@@ -151,6 +151,28 @@ class Library:
                         "full_chars": meta.get("full_chars", meta["chars"]),
                     }
                 )
+            if not chapters:
+                candidates = [
+                    name
+                    for name in os.listdir(md_dir)
+                    if name.lower().endswith(".md") and name.lower() != "readme.md" and not name.startswith(".")
+                ]
+                if len(candidates) == 1:
+                    name = candidates[0]
+                    path = os.path.join(md_dir, name)
+                    stat = os.stat(path)
+                    meta = _read_meta(path, stat.st_mtime_ns, stat.st_size)
+                    stem = os.path.splitext(name)[0]
+                    chapters.append(
+                        {
+                            "n": 1,
+                            "file": name,
+                            "stem": stem,
+                            "title": meta["title"] or stem,
+                            "chars": meta["chars"],
+                            "full_chars": meta.get("full_chars", meta["chars"]),
+                        }
+                    )
         chapters.sort(key=lambda item: (item["n"], item["file"]))
         chapters = self._merge_title_pages(chapters)
         for ordinal, chapter in enumerate(chapters, 1):

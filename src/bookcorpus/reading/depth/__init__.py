@@ -1,6 +1,6 @@
 """深读结构层：章节模型、三档处置与守恒账。"""
 
-from .deep import DEEP_PROMPT_VERSION, DeepError, audit_deep, generate_deep, validate_deep
+from .deep import DEEP_PROMPT_VERSION, NOTE_TYPES_BY_MODE, DeepError, audit_deep, generate_deep, validate_deep
 from .disposition import audit_conservation, plan_dispositions
 from .model import SYSTEM_PROMPT, DepthModelError, generate_chapter_model
 from .render import DEPTH_RENDER_VERSION, render_depth_chapter
@@ -16,6 +16,7 @@ from .skim import (
 __all__ = [
     "DEEP_PROMPT_VERSION",
     "DEPTH_RENDER_VERSION",
+    "NOTE_TYPES_BY_MODE",
     "PROMPT_VERSION",
     "SKIM_PROMPT_VERSION",
     "SYSTEM_PROMPT",

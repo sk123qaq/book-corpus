@@ -75,7 +75,7 @@
   };
 
   RD.tierNames = { skim: '速览', standard: '标准', deep: '深读' };
-  RD.depthNames = { model: '结构模型', skim: '速览', standard: '标准', deep: '深读' };
+  RD.depthNames = { model: '结构模型', panels: '面板', skim: '速览', standard: '标准', deep: '深读' };
   RD.modelDefaults = { model: 'deepseek-v4.1-flash', effort: 'high' };
   RD.modelOptions = ['deepseek-v4.1-flash', 'glm-5.3-flash'];
   RD.modelSettings = () => {

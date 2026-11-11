@@ -19,8 +19,25 @@ DEEP_TYPE_LABELS = {
     "evidence": "证据",
     "counter": "反例",
     "intertext": "互文",
+    "scene": "场景",
+    "character": "人物",
+    "motif": "母题",
+    "turn": "转折",
+    "setup_payoff": "埋伏与回收",
+    "step": "步骤",
+    "check": "检查",
+    "failure": "失败",
+    "decision": "决策",
+    "example": "例证",
+    "plate": "图版",
+    "term": "术语",
+    "version": "版本",
+    "caption": "图注",
+    "provenance": "来源",
 }
 DEPTH_CSS = """
+.mode-chip{display:inline-block;border:1px solid #2c5a44;color:#2c5a44;font:10px/1 sans-serif;
+  letter-spacing:.08em;padding:5px 7px;margin-left:14px;vertical-align:6px}
 .depth-tabs{display:flex;align-items:stretch;gap:2px}
 .depth-tab{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 18px 10px;
 border-bottom:2px solid transparent}
@@ -75,8 +92,30 @@ font-size:10px;letter-spacing:.12em;color:var(--cinnabar)}
 .deep-chain-fallback{margin:10px 0 0;font-size:13px;line-height:1.8;color:var(--ochre)}
 body.only-source [data-origin="added"]{display:none!important}
 html.depth-js [data-depth-tiers]{display:none!important}
+html.depth-js body[data-depth-tab="skim"] [data-depth-tiers~="skim"],
+html.depth-js body[data-depth-tab="standard"] [data-depth-tiers~="standard"],
 html.depth-js body[data-depth-tab="deep"] [data-depth-tiers~="deep"]{display:block!important}
 html.depth-js section[data-body][hidden]{display:none}
+.panels-block{margin:44px 0 0;border-top:1px solid var(--rule-strong);padding-top:26px}
+.panels-block h2{font-size:22px;line-height:1.5;margin:0 0 6px;font-weight:600}
+.panels-block .panels-lede{font-family:var(--sans);font-size:12px;color:var(--ink-3);margin:0 0 18px}
+.panel-card{margin:0 0 26px;padding:16px 18px;border:1px solid var(--rule);background:var(--paper-2)}
+.panel-card h3{font-size:18px;line-height:1.5;margin:0 0 1px}
+.panel-card .panel-kind{font-family:var(--sans);font-size:10px;letter-spacing:.12em;color:var(--cinnabar)}
+.panel-card p{font-size:15px;line-height:1.8;margin:8px 0}
+.panel-items{list-style:none;margin:10px 0 0;padding:0}
+.panel-items li{font-size:15px;line-height:1.8;margin:7px 0;padding-left:18px;position:relative}
+.panel-items li:before{content:"·";position:absolute;left:4px;color:var(--cinnabar)}
+.panel-items .panel-anchor{font-family:var(--sans);font-size:10px;color:var(--ink-3);margin-left:6px}
+.scene-list{list-style:none;margin:0;padding:0;counter-reset:scene}
+.scene-item{position:relative;margin:0 0 20px;padding-left:42px;font-size:17px;line-height:1.9}
+.scene-item:before{counter-increment:scene;content:counter(scene,decimal-leading-zero);position:absolute;left:0;top:.25em;
+font-family:var(--sans);font-size:11px;letter-spacing:.06em;color:var(--cinnabar)}
+.scene-turn{display:block;margin-top:7px;font-family:var(--sans);font-size:12px;line-height:1.7;color:var(--ochre)}
+.scene-anchor{font-family:var(--sans);font-size:10px;color:var(--ink-3);margin-left:7px;
+text-decoration:none;border-bottom:1px dotted var(--rule-strong)}
+.panels-empty{margin:16px 0;padding:14px 16px;border:1px solid var(--rule);background:var(--paper-2);
+font-family:var(--sans);font-size:12px;color:var(--ink-3)}
 .flow-row[id]{scroll-margin-top:84px}
 .section-lead{margin:30px 0 18px;padding:2px 0 2px 14px;border-left:4px solid var(--pine);
 font-size:17px;line-height:1.8;color:var(--ink-2)}
@@ -235,9 +274,75 @@ def _unsupported_block(skim):
     )
 
 
+def _scenes_body(skim):
+    scenes = skim.get("scenes") or []
+    if not scenes:
+        return _unsupported_block(skim)
+    parts = [
+        '<div class="skim-meta">场景速览 · ' + str(len(scenes)) + " 个节拍</div>",
+        '<div class="skim-actions"><button type="button" class="skim-source-btn" '
+        "data-skim-read-source>看原文</button></div>",
+        '<ol class="scene-list">',
+    ]
+    for scene in scenes:
+        anchor = scene.get("anchor") or ""
+        link = (
+            f'<a class="scene-anchor" href="#{html.escape(anchor, quote=True)}" '
+            f'data-skim-anchor="{html.escape(anchor, quote=True)}">原文 {html.escape(anchor)}</a>'
+            if anchor
+            else ""
+        )
+        turn = scene.get("turn") or ""
+        turn_html = f'<span class="scene-turn">{html.escape(turn)}</span>' if turn else ""
+        parts.append(f'<li class="scene-item">{html.escape(scene.get("text") or "")}{link}{turn_html}</li>')
+    parts.append("</ol>")
+    return "".join(parts)
+
+
+def _panel_items(items, limit=None):
+    parts = ['<ul class="panel-items">']
+    selected = items[:limit] if limit else items
+    for item in selected or []:
+        text = html.escape(item.get("text") or "")
+        anchors = " ".join(
+            f'<a class="panel-anchor" href="#{html.escape(block, quote=True)}">{html.escape(block)}</a>'
+            for block in item.get("blocks") or []
+        )
+        quote = item.get("quote") or ""
+        quote_html = f"<q>{html.escape(quote)}</q>" if quote else ""
+        parts.append(f"<li>{text}{quote_html}{anchors}</li>")
+    parts.append("</ul>")
+    return "".join(parts)
+
+
+def _panels_html(panels, tier):
+    panels = panels if isinstance(panels, dict) else {}
+    rows = panels.get("panels") or []
+    if not rows:
+        return (
+            f'<div class="panels-block" data-depth-tiers="{tier}">'
+            '<div class="panels-empty">本章没有足够的结构信息，面板留空。</div></div>'
+        )
+    parts = [f'<section class="panels-block" data-depth-tiers="{tier}" aria-label="本章面板">']
+    parts.append("<h2>本章面板</h2>")
+    parts.append('<p class="panels-lede">从正文抽取的结构，条目都能回到原文；不是第二份正文。</p>')
+    for panel in rows:
+        parts.append('<article class="panel-card">')
+        parts.append(f'<div class="panel-kind">{html.escape(panel.get("kind") or "")}</div>')
+        parts.append(f"<h3>{html.escape(panel.get('title') or '')}</h3>")
+        if panel.get("summary"):
+            parts.append(f"<p>{html.escape(panel['summary'])}</p>")
+        parts.append(_panel_items(panel.get("items") or [], 3 if tier == "skim" else None))
+        parts.append("</article>")
+    parts.append("</section>")
+    return "".join(parts)
+
+
 def _compiled_body(skim, model):
     if not isinstance(skim, dict) or not skim.get("supported"):
         return _unsupported_block(skim)
+    if skim.get("kind") == "scenes":
+        return _scenes_body(skim)
     sections = _skim_sections(skim)
     if not sections:
         return _unsupported_block(skim)
@@ -497,7 +602,6 @@ def _standard_rows(model, blocks, standard, resolver, deep=None):
     return "".join(parts)
 
 
-
 def _tab_buttons():
     specs = (
         ("skim", "速览", "编译 · 5–8 分钟"),
@@ -526,6 +630,8 @@ def render_depth_chapter(
     generated_at=None,
     standard=None,
     deep=None,
+    panels=None,
+    reading=None,
 ):
     """渲染一页两树：编译速览 + 全部原文块；标准/深读各叠加自己的层。"""
     del ledger  # 处置账已落在 skim/核心计数里，这里只需要模型与速览。
@@ -535,9 +641,19 @@ def render_depth_chapter(
     author = html.escape(book.get("author") or "作者待校")
     chapter_title = html.escape(chapter.get("title") or chapter.get("stem") or "")
     uid = html.escape(book.get("uid") or "")
+    mode = (reading or {}).get("effective_mode") or ""
+    mode_source = (reading or {}).get("effective_source") or ""
+    mode_label = {"narrative": "叙事", "argument": "论证", "practical": "实用", "reference": "资料·图册"}.get(mode, "")
+    mode_badge = (
+        f'<span class="mode-chip">{html.escape(mode_label)}</span>'
+        if mode_label and mode_source in ("book", "chapter")
+        else ""
+    )
     n = int(chapter.get("n") or 0)
     compiled = _compiled_body(skim, model)
     source_rows = _standard_rows(model, blocks, standard, resolver, deep=deep)
+    skim_panels = _panels_html(panels, "skim")
+    full_panels = _panels_html(panels, "standard deep")
     generated = html.escape(generated_at or chapter.get("generated_at") or "")
     prompt_version = html.escape((model or {}).get("prompt_version") or "")
     tabs = _tab_buttons()
@@ -563,13 +679,13 @@ def render_depth_chapter(
         '<div class="tier-note">同一章，速览为编译版 · 标准档逐字</div></nav>'
         f'<main class="read"><header class="read-head"><p class="eyebrow">{title} · 第 {n} 章 · 深读</p>'
         f'<h1>{chapter_title}</h1><div class="read-stats"><span>标准/深读两档共用逐字原文</span>'
-        "<span>速览与原文章节锚点互通</span></div></header>"
+        f"<span>速览与原文章节锚点互通</span>{mode_badge}</div></header>"
         '<div class="depth-bodies">'
-        f'<section class="depth-panel" data-body="compiled" aria-label="编译版速览">{compiled}</section>'
+        f'<section class="depth-panel" data-body="compiled" aria-label="编译版速览">{compiled}{skim_panels}</section>'
         '<section class="depth-panel" data-body="source" aria-label="逐字原文">'
         '<header class="depth-head"><p class="eyebrow">原文 · 标准 / 深读</p><h2>逐字正文</h2>'
         f'<p class="depth-warn">{layer_note}</p></header>'
-        f'<div class="flow">{source_rows}</div></section></div>'
+        f'<div class="flow">{source_rows}</div>{full_panels}</section></div>'
         f'<footer class="read-foot"><a href="/reader/{uid}/{max(1, n - 1)}">← 上一章</a>'
         f'<a href="/reader/{uid}/{n + 1}">下一章 →</a></footer>'
         f'<div class="colophon">{author} · {prompt_version} · 生成 {generated} · '
