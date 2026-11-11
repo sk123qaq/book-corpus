@@ -279,11 +279,23 @@ function renderNav() {
   }).join('');
 }
 
+// 三态由服务端给（ok / degraded / unknown）；老 payload 没有 state 时按 error 退化，保持兼容
+function statusState() {
+  const p = S.payload || {};
+  if (p.state === 'ok' || p.state === 'degraded' || p.state === 'unknown') return p.state;
+  return p.error ? 'unknown' : 'ok';
+}
+
 function bookCounts() {
   const st = S.status || {};
   const pending = st.pending || {};
   const lagChapters = dig(st, 'index.lag_chapters', 0);
   const convertible = st.convertible || null;
+  // 缺库时服务端把计数填 0，但带 ok:false：0 不能当真实读数，页面要显示「—/未知」
+  const libKnown = dig(st, 'library.ok', true) !== false;
+  const indexKnown = dig(st, 'index.ok', true) !== false;
+  const viewsKnown = dig(st, 'views.ok', true) !== false;
+  const catalogKnown = st.catalog ? st.catalog.unmatched != null : true;
   return {
     books: dig(st, 'books', 0),
     readable: dig(st, 'md_done', 0),
@@ -304,6 +316,11 @@ function bookCounts() {
     unmatched: dig(st, 'catalog.unmatched', 0),
     catalogAt: dig(st, 'catalog.mtime', ''),
     awaiting: dig(S.payload, 'state_counts.awaiting_review', 0),
+    libKnown: libKnown,
+    indexKnown: indexKnown,
+    viewsKnown: viewsKnown,
+    catalogKnown: catalogKnown,
+    auditRan: !!dig(st, 'audit.at', ''),
   };
 }
 
@@ -324,22 +341,27 @@ function statusIssues() {
     if (hit) rows.push({ level: hit[1].toLowerCase(), text: hit[2] });
     else rows.push({ level: 'warn', text: text });
   });
-  return { at: dig(st, 'audit.at', ''), rows: rows };
+  return { at: dig(st, 'audit.at', ''), ran: !!dig(st, 'audit.at', ''), rows: rows };
 }
 
 function issueList(info) {
-  if (!statsReadable()) return '<p class="hint">状态读不到，刷新一下试试。</p>';
-  if (!info.rows.length) {
-    return info.at
-      ? '<p class="pass">体检全部通过。</p>'
-      : '<p class="hint">还没有体检记录，跑一次收尾就会有。</p>';
-  }
-  return `<ul class="issues">${info.rows.map((row) => `<li class="issue">
+  const list = info.rows.length ? `<ul class="issues">${info.rows.map((row) => `<li class="issue">
     ${row.level === 'note' ? ''
     : `<span class="pill ${row.level === 'fail' ? 'miss' : 'half'}">${
       row.level === 'fail' ? '需处理' : '提醒'}</span>`}
     <span class="issue-text${row.level === 'note' ? ' hint' : ''}">${esc(row.text)}</span>
-  </li>`).join('')}</ul>`;
+  </li>`).join('')}</ul>` : '';
+  if (statusState() === 'unknown') {
+    return (list || '<p class="hint">状态读不到。</p>')
+      + '<p class="hint">点「刷新状态」重试；读数未知时不能当没有问题。</p>';
+  }
+  if (!info.rows.length) {
+    return info.at && statusState() === 'ok'
+      ? '<p class="pass">体检全部通过。</p>'
+      : '<p class="hint">体检没有报问题，但状态还不完整。</p>';
+  }
+  return info.at ? list
+    : list + '<p class="hint">体检未运行：上面是从书库现状读出来的问题，还没有体检记录。</p>';
 }
 
 function statsReadable() {
@@ -353,11 +375,13 @@ function ebookCount() {
 function renderStats() {
   const c = bookCounts();
   const items = [
-    ['藏书', num(c.books)],
-    ['可读', num(c.readable)],
-    ['待转', num(c.toConvert)],
+    ['藏书', c.libKnown ? num(c.books) : '—'],
+    ['可读', c.libKnown ? num(c.readable) : '—'],
+    ['待转', c.libKnown ? num(c.toConvert) : '—'],
     c.archive ? ['存档', num(c.archive.books)] : null,
-    ['索引', c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本' : '已同步'],
+    ['索引', !c.indexKnown ? '未知'
+      : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
+        : (statusState() === 'ok' ? '已同步' : '没有落后'))],
     ['收件箱', num(c.inbox)],
   ].filter(Boolean);
   let html = items.map(([label, value]) => `<span class="stat">${esc(label)}<b>${esc(value)}</b></span>`).join('');
@@ -430,6 +454,31 @@ function wireDrop() {
 // ---- 总览 ---------------------------------------------------------
 function todoItems(c) {
   const items = [];
+  if (statusState() === 'unknown') {
+    items.push({
+      title: '状态读不到，先修状态脚本',
+      note: '缺 build/library.db 或 build/检索/index.db 时，计数和体检都不可信。',
+      href: '#maintain', label: '去维护',
+    });
+  } else if (!c.libKnown || !c.indexKnown || !c.catalogKnown || !c.viewsKnown) {
+    // 四段落缺哪补哪，合成一条待办：缺库、缺索引、缺书目总表、缺浏览入口都算状态不完整
+    const lack = [];
+    if (!c.libKnown) lack.push('build/library.db');
+    if (!c.indexKnown) lack.push('检索索引');
+    if (!c.catalogKnown) lack.push('书目总表');
+    if (!c.viewsKnown) lack.push('浏览入口（奖项/主题）');
+    items.push({
+      title: '书库状态不完整',
+      note: '缺 ' + lack.join('、') + '，计数和体检都不可信。',
+      href: '#maintain', label: '去维护',
+    });
+  }
+  if (statusState() !== 'unknown' && !c.auditRan) {
+    items.push({
+      title: '还没有做过体检',
+      note: '跑一次收尾，体检通过后总览才算完整。', href: '#maintain', label: '去维护',
+    });
+  }
   if (c.fail || c.broken) {
     items.push({
       title: '有 ' + num(c.fail + c.broken) + ' 处需要处理',
@@ -483,22 +532,30 @@ function todoItems(c) {
 }
 
 function verdictText(c, todos) {
-  if (!statsReadable()) return '暂时读不到书库状态';
+  if (statusState() === 'unknown' || !statsReadable()) return '暂时读不到书库状态';
+  if (!c.libKnown || !c.indexKnown || !c.auditRan) return '状态不完整，先补齐再判断';
   if (c.fail || c.broken) return '有几处需要处理';
+  // 缺书目总表/浏览入口这类问题不在 fail/broken 里，state 非 ok 就不能说干净
+  if (statusState() !== 'ok') return '状态不完整，先补齐再判断';
   if (todos.length) return '库可用，有 ' + num(todos.length) + ' 件事待办';
   return '库是干净的';
 }
 
 function heroNote(c) {
-  if (!statsReadable()) return '刷新一下试试；读不到的原因在顶栏提示里。';
-  const tail = c.lagBooks
-    ? '索引落后 ' + num(c.lagBooks) + ' 本。'
-    : '检索索引已同步。';
-  return num(c.books) + ' 本书，' + num(c.readable) + ' 本可读，共 '
-    + num(c.chapters) + ' 章。' + tail;
+  if (statusState() === 'unknown' || !statsReadable()) return '刷新一下试试；读不到的原因在顶栏提示里。';
+  const tail = !c.indexKnown
+    ? '检索索引读数未知。'
+    : (c.lagBooks
+      ? '索引落后 ' + num(c.lagBooks) + ' 本。'
+      : (statusState() === 'ok' ? '检索索引已同步。' : '检索索引没有落后。'));
+  const head = c.libKnown
+    ? num(c.books) + ' 本书，' + num(c.readable) + ' 本可读，共 ' + num(c.chapters) + ' 章。'
+    : '书库计数未知（缺 build/library.db）。';
+  return head + tail;
 }
 
 function heroAction(c) {
+  if (statusState() === 'unknown' || !c.libKnown || !c.indexKnown) return ['去维护', '#maintain'];
   if (c.inbox) return ['导入新书', '#import'];
   if (c.awaiting) return ['查看待确认', '#logs'];
   if (c.toConvert) return ['继续出正文', ebookCount() ? '#split' : '#pdf'];
@@ -520,40 +577,61 @@ function hero(c, todos) {
 }
 
 function pipeline(c) {
+  const unknown = statusState() === 'unknown';
   const ledgerGap = Number(c.ledgerRows) - Number(c.books);
   const cells = [
     {
       name: '收书', href: '#import',
-      state: c.inbox ? 'half' : 'ok', word: c.inbox ? '待处理' : '正常',
-      read: c.inbox ? num(c.inbox) + ' 本待处理' : '收件箱是空的',
+      state: unknown ? 'miss' : (c.inbox ? 'half' : 'ok'),
+      word: unknown ? '未知' : (c.inbox ? '待处理' : '正常'),
+      read: unknown ? '状态读不到' : (c.inbox ? num(c.inbox) + ' 本待处理' : '收件箱是空的'),
     },
     {
       name: '入账', href: '#import',
-      state: ledgerGap ? 'miss' : 'ok', word: ledgerGap ? '需核对' : '正常',
-      read: ledgerGap ? '差 ' + num(Math.abs(ledgerGap)) + ' 本' : num(c.books) + ' 本已登记',
+      state: !c.libKnown ? 'miss' : (ledgerGap ? 'miss' : 'ok'),
+      word: !c.libKnown ? '未知' : (ledgerGap ? '需核对' : '正常'),
+      read: !c.libKnown
+        ? '书数未知'
+        : (ledgerGap ? '差 ' + num(Math.abs(ledgerGap)) + ' 本' : num(c.books) + ' 本已登记'),
     },
     {
       name: '上架', href: '#maintain',
-      state: c.broken ? 'miss' : 'ok', word: c.broken ? '需处理' : '正常',
-      read: c.broken
-        ? num(c.broken) + ' 条入口失效'
-        : '奖项 ' + num(c.awards) + ' · 主题 ' + num(c.topics),
+      state: !c.viewsKnown ? 'miss' : (c.broken ? 'miss' : 'ok'),
+      word: !c.viewsKnown ? '未知' : (c.broken ? '需处理' : '正常'),
+      read: !c.viewsKnown
+        ? '浏览入口缺失'
+        : (c.broken
+          ? num(c.broken) + ' 条入口失效'
+          : '奖项 ' + num(c.awards) + ' · 主题 ' + num(c.topics)),
     },
     {
       name: '出正文', href: c.toConvert ? '#pdf' : '#split',
-      state: c.toConvert ? 'half' : 'ok', word: c.toConvert ? '待处理' : '正常',
-      read: num(c.readable) + ' 本可读，' + num(c.toConvert) + ' 本待转',
+      state: !c.libKnown ? 'miss' : (c.toConvert ? 'half' : 'ok'),
+      word: !c.libKnown ? '未知' : (c.toConvert ? '待处理' : '正常'),
+      read: !c.libKnown
+        ? '计数未知'
+        : num(c.readable) + ' 本可读，' + num(c.toConvert) + ' 本待转',
     },
     {
       name: '可检索', href: '#maintain',
-      state: c.lagBooks ? 'half' : 'ok', word: c.lagBooks ? '待处理' : '正常',
-      read: c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本' : num(c.chapters) + ' 章已索引',
+      state: !c.indexKnown ? 'miss' : (c.lagBooks ? 'half' : 'ok'),
+      word: !c.indexKnown ? '未知' : (c.lagBooks ? '待处理' : '正常'),
+      read: !c.indexKnown
+        ? '索引读数未知'
+        : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本' : num(c.chapters) + ' 章已索引'),
     },
     {
+      // 体检记录本身没问题也不能替整个书库担保：state 非 ok 时降成「需注意」
       name: '体检', href: '#maintain',
-      state: c.fail ? 'miss' : (c.warn ? 'half' : 'ok'),
-      word: c.fail ? '需处理' : (c.warn ? '待处理' : '正常'),
-      read: c.fail ? num(c.fail) + ' 项失败' : (c.warn ? num(c.warn) + ' 条提醒' : '全部通过'),
+      state: !c.auditRan ? 'miss'
+        : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half'))),
+      word: !c.auditRan ? '未运行'
+        : (c.fail ? '需处理' : (c.warn ? '待处理' : (statusState() === 'ok' ? '正常' : '需注意'))),
+      read: !c.auditRan
+        ? '还没有体检记录'
+        : (c.fail ? num(c.fail) + ' 项失败'
+          : (c.warn ? num(c.warn) + ' 条提醒'
+            : (statusState() === 'ok' ? '全部通过' : '无失败项'))),
     },
   ];
   return `<div class="pipeline">${cells.map((cell) => `<a class="pipe-cell" href="${cell.href}">
@@ -564,7 +642,12 @@ function pipeline(c) {
 }
 
 function nextSteps(todos) {
-  if (!todos.length) return '<p class="empty">没有待办，书库是干净的。</p>';
+  if (statusState() === 'unknown') return '<p class="empty">状态读不到，先点「刷新状态」。</p>';
+  if (!todos.length) {
+    return statusState() === 'ok'
+      ? '<p class="empty">没有待办，书库是干净的。</p>'
+      : '<p class="empty">没有待办，但状态还不完整。</p>';
+  }
   return todos.slice(0, 4).map((item) => `<div class="rowline">
     <div class="rl-main">
       <div class="rl-title">${esc(item.title)}</div>
@@ -1509,17 +1592,27 @@ function viewMaintain() {
     <div class="section card">
       <h2>库的状态</h2>
       <div class="strip">
-        ${stateCell('检索索引', c.lagBooks ? 'half' : 'ok',
-    c.lagBooks ? '需注意' : '正常',
-    c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
-      + (c.lagChapters ? ' · ' + num(c.lagChapters) + ' 章' : '') : '与书库同步')}
-        ${stateCell('浏览入口', c.broken ? 'miss' : 'ok', c.broken ? '需处理' : '正常',
-    c.broken ? num(c.broken) + ' 条失效' : '奖项与主题都在')}
-        ${stateCell('体检', c.fail ? 'miss' : (c.warn ? 'half' : 'ok'),
-    c.fail ? '需处理' : (c.warn ? '需注意' : '正常'),
-    c.fail ? num(c.fail) + ' 项失败' : (c.warn ? num(c.warn) + ' 条提醒' : '全部通过'))}
-        ${stateCell('书目总表', c.unmatched ? 'half' : 'ok', c.unmatched ? '需注意' : '正常',
-    c.unmatched ? num(c.unmatched) + ' 条对不上文件' : '改于 ' + fmtTime(c.catalogAt).slice(5))}
+        ${stateCell('检索索引', !c.indexKnown ? 'miss' : (c.lagBooks ? 'half' : 'ok'),
+    !c.indexKnown ? '未知' : (c.lagBooks ? '需注意' : '正常'),
+    !c.indexKnown ? '索引缺失或读不到'
+      : (c.lagBooks
+        ? '落后 ' + num(c.lagBooks) + ' 本' + (c.lagChapters ? ' · ' + num(c.lagChapters) + ' 章' : '')
+        : (statusState() === 'ok' ? '与书库同步' : '没有落后')))}
+        ${stateCell('浏览入口', !c.viewsKnown ? 'miss' : (c.broken ? 'miss' : 'ok'),
+    !c.viewsKnown ? '未知' : (c.broken ? '需处理' : '正常'),
+    !c.viewsKnown ? '浏览入口缺失' : (c.broken ? num(c.broken) + ' 条失效' : '奖项与主题都在'))}
+        ${stateCell('体检', !info.ran ? 'miss'
+    : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half'))),
+    !info.ran ? '未运行'
+      : (c.fail ? '需处理' : (c.warn ? '需注意' : (statusState() === 'ok' ? '正常' : '需注意'))),
+    !info.ran ? '还没有体检记录'
+      : (c.fail ? num(c.fail) + ' 项失败'
+        : (c.warn ? num(c.warn) + ' 条提醒'
+          : (statusState() === 'ok' ? '全部通过' : '无失败项'))))}
+        ${stateCell('书目总表', !c.catalogKnown ? 'miss' : (c.unmatched ? 'half' : 'ok'),
+    !c.catalogKnown ? '未知' : (c.unmatched ? '需注意' : '正常'),
+    !c.catalogKnown ? '没有书目总表'
+      : (c.unmatched ? num(c.unmatched) + ' 条对不上文件' : '改于 ' + fmtTime(c.catalogAt).slice(5)))}
         ${stateCell('上次收尾', lastCls, lastWord, lastNote)}
       </div>
     </div>

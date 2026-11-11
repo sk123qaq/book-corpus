@@ -20,6 +20,7 @@ INSTANCE = Path(os.environ.get("BOOKS_ROOT") or (Path.home() / "文档" / "book-
 OFFLINE = [
     (OPS / "check_ops.py", 300),
     (OPS / "test_status.py", 180),
+    (OPS / "test_status_state.py", 240),
     (OPS / "test_classify.py", 180),
     (OPS / "test_doc_numbers.py", 180),
     (OPS / "test_split.py", 180),

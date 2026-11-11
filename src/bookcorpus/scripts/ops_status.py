@@ -73,26 +73,36 @@ def ro(path):
 
 
 def library(p, state):
+    # ok=False 表示读数未知：页面据此显示「未知/—」，不能把 0 当真实计数。
     if not os.path.isfile(p.libdb):
         state["problems"].append("没有 build/library.db")
+        state["library"] = {"db": None, "ok": False}
         return
-    con = ro(p.libdb)
     try:
-        state["books"] = con.execute("SELECT count(*) FROM book").fetchone()[0]
-        state["md_done"] = con.execute("SELECT count(*) FROM derived WHERE kind='md' AND status='done'").fetchone()[0]
-        state["md_chapters"] = con.execute("SELECT coalesce(sum(chapters), 0) FROM derived WHERE kind='md'").fetchone()[
-            0
-        ]
-        state["md_indexable"] = con.execute(
-            "SELECT count(*) FROM derived WHERE kind='md' AND status='done' AND coalesce(chapters, 0) > 0"
-        ).fetchone()[0]
-        counts = dict(con.execute("SELECT lower(coalesce(format, '')), count(*) FROM v_pending_md GROUP BY 1"))
-    finally:
-        con.close()
+        con = ro(p.libdb)
+        try:
+            state["books"] = con.execute("SELECT count(*) FROM book").fetchone()[0]
+            state["md_done"] = con.execute("SELECT count(*) FROM derived WHERE kind='md' AND status='done'").fetchone()[
+                0
+            ]
+            state["md_chapters"] = con.execute(
+                "SELECT coalesce(sum(chapters), 0) FROM derived WHERE kind='md'"
+            ).fetchone()[0]
+            state["md_indexable"] = con.execute(
+                "SELECT count(*) FROM derived WHERE kind='md' AND status='done' AND coalesce(chapters, 0) > 0"
+            ).fetchone()[0]
+            counts = dict(con.execute("SELECT lower(coalesce(format, '')), count(*) FROM v_pending_md GROUP BY 1"))
+        finally:
+            con.close()
+    except sqlite3.Error as exc:
+        state["problems"].append("library.db 读不了: %s" % exc)
+        state["library"] = {"db": p.libdb, "ok": False}
+        return
     pending = {k: counts.pop(k, 0) for k in PENDING_KEYS}
     pending.update(sorted(counts.items()))
     pending["total"] = sum(n for k, n in pending.items())
     state["pending"] = pending
+    state["library"] = {"db": p.libdb, "ok": True}
 
 
 def inbox(p, state):
@@ -147,12 +157,21 @@ def catalog_unmatched(p):
 
 
 def catalog(p, state):
+    # CSV 不在时不上报「未匹配 0 条」：没有总表就是状态不完整，页面要显示「未知」。
+    has_csv = os.path.isfile(p.catalog_csv)
     unmatched = None
-    try:
-        unmatched = catalog_unmatched(p)
-    except (SystemExit, sqlite3.Error, OSError) as exc:
-        state["problems"].append("书目总表未匹配算不了: %s" % exc)
-    state["catalog"] = {"mtime": mtime_of(p.catalog_csv), "unmatched": unmatched}
+    if not has_csv:
+        state["problems"].append("没有 build/书目总表.csv")
+    else:
+        try:
+            unmatched = catalog_unmatched(p)
+        except (SystemExit, sqlite3.Error, OSError) as exc:
+            state["problems"].append("书目总表未匹配算不了: %s" % exc)
+    state["catalog"] = {
+        "mtime": mtime_of(p.catalog_csv),
+        "unmatched": unmatched,
+        "ok": has_csv and unmatched is not None,
+    }
 
 
 def index_meta(con):
@@ -207,34 +226,40 @@ def index(p, state, deep):
     meta = {}
     index_books = lag_books = lag_chapters = 0
     chapters = paras = 0
-    if not os.path.isfile(p.indexdb):
+    # ok=False 表示索引读数未知（缺库或读不了），页面显示「未知」，不报「已同步」。
+    ok = os.path.isfile(p.indexdb)
+    if not ok:
         state["problems"].append("没有 build/检索/index.db")
     else:
-        con = ro(p.indexdb)
         try:
-            meta = index_meta(con)
-            if deep:
-                idx_books = set()
-                idx_chapters = set()
-                for book, path in con.execute("SELECT DISTINCT book, path FROM para"):
-                    idx_books.add(book)
-                    idx_chapters.add(path)
-                index_books = len(idx_books)
-                chapters = len(idx_chapters)
-                try:
-                    paras = int(meta["paras"])
-                except (KeyError, TypeError, ValueError):
-                    paras = con.execute("SELECT count(*) FROM para").fetchone()[0]
-                lib_books = md_book_paths(p)
-                lag_books = len(lib_books - idx_books) - len(idx_books - lib_books)
-                lib_chapters = chapter_paths(p, lib_books)
-                lag_chapters = len(lib_chapters - idx_chapters) - len(idx_chapters - lib_chapters)
-            else:
-                index_books, chapters, paras = index_counts(con, meta)
-                lag_books = state["md_indexable"] - index_books
-                lag_chapters = state["md_chapters"] - chapters
-        finally:
-            con.close()
+            con = ro(p.indexdb)
+            try:
+                meta = index_meta(con)
+                if deep:
+                    idx_books = set()
+                    idx_chapters = set()
+                    for book, path in con.execute("SELECT DISTINCT book, path FROM para"):
+                        idx_books.add(book)
+                        idx_chapters.add(path)
+                    index_books = len(idx_books)
+                    chapters = len(idx_chapters)
+                    try:
+                        paras = int(meta["paras"])
+                    except (KeyError, TypeError, ValueError):
+                        paras = con.execute("SELECT count(*) FROM para").fetchone()[0]
+                    lib_books = md_book_paths(p)
+                    lag_books = len(lib_books - idx_books) - len(idx_books - lib_books)
+                    lib_chapters = chapter_paths(p, lib_books)
+                    lag_chapters = len(lib_chapters - idx_chapters) - len(idx_chapters - lib_chapters)
+                else:
+                    index_books, chapters, paras = index_counts(con, meta)
+                    lag_books = state["md_indexable"] - index_books
+                    lag_chapters = state["md_chapters"] - chapters
+            finally:
+                con.close()
+        except sqlite3.Error as exc:
+            ok = False
+            state["problems"].append("index.db 读不了: %s" % exc)
     state["index"] = {
         "built_at": meta.get("built_at"),
         "paras": paras,
@@ -243,6 +268,8 @@ def index(p, state, deep):
         "lag_books": lag_books,
         "lag_chapters": lag_chapters,
         "lag_exact": bool(deep),
+        "db": p.indexdb if os.path.isfile(p.indexdb) else None,
+        "ok": ok,
     }
 
 
@@ -261,7 +288,12 @@ def views(p, state):
                 counts[key] += 1
                 if not os.path.exists(fp):
                     broken += 1
-    state["views"] = {"awards": counts["awards"], "topics": counts["topics"], "broken": broken}
+    state["views"] = {
+        "awards": counts["awards"],
+        "topics": counts["topics"],
+        "broken": broken,
+        "ok": os.path.isdir(p.views),
+    }
 
 
 def read_cache(p, state):
@@ -317,7 +349,14 @@ def audit(state, cache):
     fail = list(cache.get("fail") or [])
     warn = list(cache.get("warn") or [])
     items = ["FAIL " + m for m in fail] + ["WARN " + m for m in warn]
-    state["audit"] = {"fail": len(fail), "warn": len(warn), "items": items[:AUDIT_ITEMS_CAP], "at": cache.get("at")}
+    state["audit"] = {
+        "fail": len(fail),
+        "warn": len(warn),
+        "items": items[:AUDIT_ITEMS_CAP],
+        "at": cache.get("at"),
+        # ran=False：还没有体检记录（at 为空），页面显示「未运行」并进待办。
+        "ran": bool(cache.get("at")),
+    }
     if len(items) > AUDIT_ITEMS_CAP:
         state["audit"]["items"].append("…另 %d 项" % (len(items) - AUDIT_ITEMS_CAP))
 

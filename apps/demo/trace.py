@@ -480,11 +480,26 @@ def resolve_line(path, snippet):
     return 1
 
 
+def _int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def meta(refresh=False):
+    """书库规模。缺库或索引为空时计数是 None，不是 0：0 只表示真读到了 0 行。"""
     now = time.time()
     if not refresh and _META_CACHE["value"] and now - _META_CACHE["at"] < 60:
         return _META_CACHE["value"]
-    out = {"books": 0, "paras": 0, "chapters": 0, "index_built_at": "", "library": "missing", "index": "missing"}
+    out = {
+        "books": None,
+        "paras": None,
+        "chapters": None,
+        "index_built_at": "",
+        "library": "missing",
+        "index": "missing",
+    }
     if os.path.exists(LIB_DB):
         lib = _ro(LIB_DB)
         try:
@@ -496,17 +511,16 @@ def meta(refresh=False):
         con = _ro(INDEX_DB)
         try:
             vals = dict(con.execute("SELECT key,value FROM meta"))
-            for key, target in (("paras", "paras"), ("chapters", "chapters")):
-                try:
-                    out[target] = int(vals.get(key) or 0)
-                except ValueError:
-                    out[target] = 0
+            paras = _int_or_none(vals.get("paras"))
+            if paras is None:
+                paras = con.execute("SELECT count(*) FROM para").fetchone()[0]
             out["index_built_at"] = vals.get("built_at") or ""
-            if not out["paras"]:
-                out["paras"] = con.execute("SELECT count(*) FROM para").fetchone()[0]
         finally:
             con.close()
-        out["index"] = "ok" if out["paras"] else "empty"
+        if paras:
+            out["paras"] = paras
+            out["chapters"] = _int_or_none(vals.get("chapters"))
+        out["index"] = "ok" if paras else "empty"
     _META_CACHE.update(at=now, value=out)
     return out
 

@@ -618,20 +618,57 @@
   async function loadStats() {
     try {
       const data = await fetchJSON('/api/health');
-      const meta = data.meta || {};
-      state.stats = { books: meta.books, paras: meta.paras, chapters: meta.chapters };
+      state.stats = statsFromHealth(data);
     } catch (err) {
-      state.stats = null;
+      state.stats = { values: { books: null, paras: null, chapters: null }, note: '' };
     }
     renderStats();
   }
 
+  /* 计数只在对应库真的可读时才算数：缺索引／空索引的 0 是占位，不是规模。 */
+  function statsFromHealth(data) {
+    const meta = data.meta || {};
+    const indexReady = meta.index === 'ok';
+    const libraryReady = meta.library === 'ok';
+    const count = (ready, value) => (ready && typeof value === 'number' ? value : null);
+    let note = '';
+    if (!indexReady) {
+      note = meta.index === 'empty' ? '索引为空，先跑索引' : '索引未建，先跑索引';
+    } else if (!libraryReady) {
+      note = '书目库未建，先跑 book-corpus library';
+    } else if (data.degraded) {
+      note = String(data.message || '索引不可用，先跑索引');
+    }
+    return {
+      values: {
+        books: count(libraryReady, meta.books),
+        paras: count(indexReady, meta.paras),
+        chapters: count(indexReady, meta.chapters),
+      },
+      note,
+    };
+  }
+
   function renderStats() {
-    const stats = state.stats || {};
+    const stats = state.stats || { values: {}, note: '' };
     document.querySelectorAll('[data-stat]').forEach((el) => {
-      const value = stats[el.dataset.stat];
+      const value = stats.values[el.dataset.stat];
       el.textContent = typeof value === 'number' ? fmtInt(value) : '—';
     });
+    const box = $('#stats');
+    let noteEl = box ? box.querySelector('[data-stat-note]') : null;
+    if (!noteEl && box) {
+      noteEl = document.createElement('span');
+      noteEl.dataset.statNote = '';
+      noteEl.setAttribute('role', 'status');
+      noteEl.style.cssText = 'color:var(--red-ink);border-left:1px solid var(--line);'
+        + 'padding-left:10px;font-size:11px;line-height:1.4;white-space:normal;max-width:220px;';
+      box.appendChild(noteEl);
+    }
+    if (noteEl) {
+      noteEl.textContent = stats.note || '';
+      noteEl.hidden = !stats.note || window.matchMedia('(max-width: 639px)').matches;
+    }
   }
 
   /* ---- 左栏 ------------------------------------------------------ */

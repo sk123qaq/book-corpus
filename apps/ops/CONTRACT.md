@@ -153,6 +153,13 @@ report:{summary:{total, done, skipped, failed}, scope:{new, backfill}, items:[..
 
 `--root` 指向临时库时所有路径跟着换。`--deep` 额外跑审计并写 `工作区/运维/last-audit.json`。
 
+`GET /api/status` 在三态契约上再包一层：
+
+- `state`：`ok` 表示读数完整、没有 problems、且体检已跑；`degraded` 表示读到了，但缺核心库、有 problems，或 `audit.at` 为空；`unknown` 表示状态脚本没跑成或 payload 不完整，页面上的数字都是占位。
+- `complete`：`source` 是 `script` 或 `fixture` 时为 true；`stale`：`audit.at` 为空；`missing`：`library`/`catalog`/`index`/`views` 里 `ok:false` 的段名。
+- 各段带 `ok`，`audit` 另带 `ran`。`ok`/`error` 仍是「脚本进程有没有出错」的旧语义，旧消费者不受影响。
+- 页面只在 `state:"ok"` 时使用「库是干净的」「索引已同步」「全部通过」；`degraded` 显示「状态不完整」「未运行」「未知」，`unknown` 显示「读不到」；某个段 `ok:false` 时该段计数显示 `—`，`problems` 原文作为 fail 行列出。
+
 ## 6. 脚本接口
 
 ### ingest.py

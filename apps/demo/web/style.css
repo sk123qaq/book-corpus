@@ -88,6 +88,20 @@ a { color: inherit; text-decoration: none; }
   font-size: 13px;
 }
 
+.stat-note {
+  color: var(--red);
+  border-left: 1px solid var(--line);
+  padding-left: 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: normal;
+  max-width: 220px;
+}
+
+@media (max-width: 639px) {
+  .stat-note { display: none; }
+}
+
 /* ---- hero -------------------------------------------------------- */
 .hero {
   max-width: 940px;

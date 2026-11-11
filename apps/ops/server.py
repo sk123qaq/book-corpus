@@ -1391,14 +1391,50 @@ class App:
                 "pending": {"pdf": 0, "txt": 0, "djvu": 0},
                 "inbox": {"files": 0, "items": []},
                 "ledger": {"rows": 0, "mtime": None},
-                "catalog": {"mtime": None, "unmatched": 0},
-                "index": {"built_at": None, "paras": 0, "chapters": 0, "books": 0, "lag_books": 0, "lag_chapters": 0},
-                "views": {"awards": 0, "topics": 0, "broken": 0},
-                "audit": {"fail": 0, "warn": 0, "items": []},
+                "catalog": {"mtime": None, "unmatched": None, "ok": False},
+                "index": {
+                    "built_at": None,
+                    "paras": 0,
+                    "chapters": 0,
+                    "books": 0,
+                    "lag_books": 0,
+                    "lag_chapters": 0,
+                    "db": None,
+                    "ok": False,
+                },
+                "library": {"db": None, "ok": False},
+                "views": {"awards": 0, "topics": 0, "broken": 0, "ok": False},
+                "audit": {"fail": 0, "warn": 0, "items": [], "at": None, "ran": False},
                 "ocr": {"remaining_books": 0, "remaining_pages": 0, "quota": "20000/天"},
                 "jobs": {"running": 0, "awaiting_review": 0, "last": None},
+                "problems": [],
             }
             error = error or "ops_status.py 未就绪，页面显示空状态"
+        complete = source in ("script", "fixture")
+        # 三态是给页面与验收用的新字段；ok/error 保持原义，老消费者不受影响。
+        #   unknown: 状态脚本没跑成，读数是填的零
+        #   degraded: 读到了，但缺库/有问题/体检未跑
+        #   ok: 读数完整且没有问题
+        problems = payload.get("problems")
+        if problems is None:
+            problems = []
+        elif isinstance(problems, str):
+            problems = [problems]
+        elif not isinstance(problems, list):
+            problems = [str(problems)]
+        if error and error not in problems:
+            problems.append(error)
+        payload["problems"] = problems
+        missing = [
+            name for name in ("library", "catalog", "index", "views") if (payload.get(name) or {}).get("ok") is False
+        ]
+        audit_at = (payload.get("audit") or {}).get("at")
+        if error is not None or not complete:
+            state = "unknown"
+        elif problems or missing or not audit_at:
+            state = "degraded"
+        else:
+            state = "ok"
         counts = self.store.counts()
         pdf = self.pdf_books_index()
         archived = [row for row in pdf.values() if row["disposition"] in ("gallery", "ja")]
@@ -1419,6 +1455,10 @@ class App:
         snap = self.runner.snapshot()
         return {
             "ok": error is None,
+            "state": state,
+            "complete": complete,
+            "stale": not audit_at,
+            "missing": missing,
             "source": source,
             "error": error,
             "status": payload,

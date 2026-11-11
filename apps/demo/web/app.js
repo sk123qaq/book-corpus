@@ -243,17 +243,59 @@
     if (el) el.textContent = value;
   }
 
+  /* 计数只在对应库真的可读时才算数：缺索引／空索引的 0 是占位，不是规模。 */
+  function statsFromHealth(data) {
+    const meta = data.meta || {};
+    const indexReady = meta.index === 'ok';
+    const libraryReady = meta.library === 'ok';
+    const count = (ready, value) => (ready && typeof value === 'number' ? value : null);
+    let note = '';
+    if (!indexReady) {
+      note = meta.index === 'empty' ? '索引为空，先跑索引' : '索引未建，先跑索引';
+    } else if (!libraryReady) {
+      note = '书目库未建，先跑 book-corpus library';
+    } else if (data.degraded) {
+      note = String(data.message || '索引不可用，先跑索引');
+    }
+    return {
+      values: {
+        books: count(libraryReady, meta.books),
+        paras: count(indexReady, meta.paras),
+        chapters: count(indexReady, meta.chapters),
+      },
+      note,
+    };
+  }
+
+  function renderStats(stats) {
+    const box = $('#stats');
+    const values = stats.values || {};
+    ['books', 'paras', 'chapters'].forEach((key) => {
+      const value = values[key];
+      setStat(key, typeof value === 'number' ? fmtInt(value) : '—');
+    });
+    let noteEl = box ? box.querySelector('[data-stat-note]') : null;
+    if (!noteEl && box) {
+      noteEl = document.createElement('span');
+      noteEl.className = 'stat-note';
+      noteEl.dataset.statNote = '';
+      noteEl.setAttribute('role', 'status');
+      box.appendChild(noteEl);
+    }
+    if (noteEl) {
+      noteEl.textContent = stats.note || '';
+      noteEl.hidden = !stats.note;
+    }
+  }
+
   async function loadHealth() {
     try {
       const data = await fetchJSON('/api/health');
       state.health = data.meta || {};
-      setStat('books', fmtInt(state.health.books));
-      setStat('paras', fmtInt(state.health.paras));
-      setStat('chapters', fmtInt(state.health.chapters));
+      renderStats(statsFromHealth(data));
     } catch (err) {
-      setStat('books', '—');
-      setStat('paras', '—');
-      setStat('chapters', '—');
+      state.health = {};
+      renderStats({ values: { books: null, paras: null, chapters: null }, note: '' });
     }
   }
 

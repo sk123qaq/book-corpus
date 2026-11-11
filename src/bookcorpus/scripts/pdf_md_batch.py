@@ -16,8 +16,10 @@ pdf_ocr_to_md.py 拼装（--structure single）→ verify_output.py 加 PDF 侧�
 已受理的例外放 工作区/批次/<批次>/overrides/<uid>.json，内容是 {"accept": "原因"}，过检后照样入库。
 
 可疑页（OCR 一个字都没读出、纸面上却有字迹）先交 MinerU 补投一次：读出来的正文写回
-merged/pages 再重拼装，门槛自然过；MinerU 也读不出的页记进 批次/skipped-pages.tsv 后按跳过
-受理，不再挂人工复核。判据与实测见批次 说明.md 的「可疑页兜底」。
+merged/pages 再重拼装，门槛自然过；rc=0 且有 content list、确实 0 字的页记进
+批次/skipped-pages.tsv 后按跳过受理。MinerU 调用失败（rc!=0/超时/无 content list/额度/网络）
+或页数超上限没提交的可疑页留在人工复核，不按跳过受理，也不落地。判据与实测见批次
+说明.md 的「可疑页兜底」。
 
 --route text 是纯文本层那 56 本的另一条流水线：没有切片、不调接口，pdf_text_to_md.py 抽文本
 （--structure auto，PDF 自带可用目录的按目录切章，否则一个内容文件）→ verify_output.py →
@@ -943,11 +945,35 @@ def mineru_page_text(blocks, page_idx):
     return "\n\n".join((b.get("text") or "").strip() for b in sorted(picked, key=key))
 
 
+class MineruError(RuntimeError):
+    """MinerU 补投本身失败（rc!=0/超时/无 content list）：不能当成「MinerU 也读不出」。"""
+
+    def __init__(self, reason, rc=None, tail="", submitted=()):
+        self.reason = reason
+        self.rc = rc
+        self.tail = tail
+        self.submitted = list(submitted)
+        super().__init__("%s rc=%s：%s" % (reason, rc, tail))
+
+
+def mineru_tail(*streams):
+    """失败说明用：按 stderr、stdout 的次序取尾部几行，合成一行。"""
+    for stream in streams:
+        if isinstance(stream, bytes):
+            stream = stream.decode("utf-8", "replace")
+        lines = [ln.strip() for ln in (stream or "").splitlines() if ln.strip()]
+        if lines:
+            return " ".join(lines[-5:])[:400]
+    return "无输出"
+
+
 def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
     """把可疑页交 MinerU 补投，读到的正文写回 merged/pages 并更新逐页账。
 
-    返回 {页: MinerU 字数}，0 表示它也没读出来。只补单页，不动分片账：可疑页不会到
-    200 页/200 MB 这两个单文件上限。
+    返回 {页: MinerU 字数}，0 表示 rc=0、有 content list 且这一页确实没读出字。
+    没投（找不到 CLI、额度封顶、切片超限）返回 None；投了但失败（rc!=0/超时/
+    没有 content list）抛 MineruError。调用方只在拿到 rc=0 的逐页结果时才允许按
+    跳过受理，其余情况可疑页留在人工复核。只补单页，不动分片账。
     """
     pages = [s["page"] for s in suspects]
     if not pages:
@@ -1009,7 +1035,12 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
         "900",
     ]
     log.write("$ %s\n" % " ".join(cmd))
-    p = subprocess.run(cmd, cwd=L.ROOT, capture_output=True, text=True, timeout=1800)
+    try:
+        p = subprocess.run(cmd, cwd=L.ROOT, capture_output=True, text=True, timeout=1800)
+    except subprocess.TimeoutExpired as exc:
+        tail = mineru_tail(exc.stderr, exc.stdout)
+        log.write("MinerU 兜底失败：超时 1800 秒，%s\n" % tail)
+        raise MineruError("超时", None, tail, batch) from exc
     log.write(p.stdout[-4000:] + p.stderr[-4000:])
     result["commands"].append("mineru.py %s --mode precision --model vlm --ocr --lang %s" % (rel(slice_pdf), lang))
 
@@ -1020,25 +1051,13 @@ def mineru_rescue(ctx, row, merged, doc, suspects, log, result):
             for n in names
             if n.endswith("_content_list.json") and not n.endswith("_v2_content_list.json")
         ]
-    if p.returncode != 0 or not hits:
-        tail = " ".join((p.stdout or "").strip().splitlines()[-3:])[:300] or "无输出"
+    tail = mineru_tail(p.stderr, p.stdout)
+    if p.returncode != 0:
         log.write("MinerU 兜底失败：rc=%d，%s\n" % (p.returncode, tail))
-        skip_rows(
-            ctx,
-            [
-                {
-                    "at": now(),
-                    "uid": row["uid"],
-                    "page": page,
-                    "paddle_chars": 0,
-                    "mineru_chars": -1,
-                    "action": "mineru-failed",
-                    "note": tail,
-                }
-                for page in batch
-            ],
-        )
-        return dict.fromkeys(batch, -1)
+        raise MineruError("rc!=0", p.returncode, tail, batch)
+    if not hits:
+        log.write("MinerU 兜底失败：rc=0 但没有 content list，%s\n" % tail)
+        raise MineruError("无 content list", p.returncode, tail, batch)
 
     blocks = json.loads(pathlib.Path(sorted(hits, key=os.path.getmtime)[-1]).read_text(encoding="utf-8"))
     run_path = os.path.join(merged, "run.json")
@@ -1408,11 +1427,18 @@ def run_one(row, ctx):
         blank, suspect, short = pdf_checks(ctx, row, doc["per_page"], log, result)
         skipped = []
         if suspect and ctx["api"]:
-            got = mineru_rescue(ctx, row, merged, doc, suspect, log, result)
+            got = None
+            try:
+                got = mineru_rescue(ctx, row, merged, doc, suspect, log, result)
+            except MineruError as exc:
+                result["mineru_error"] = {"reason": exc.reason, "rc": exc.rc, "stderr_tail": exc.tail}
+                result["mineru_note"] = "MinerU 调用失败（%s，rc=%s）：%s" % (exc.reason, exc.rc, exc.tail)
+                log.write("MinerU 未投成功：%s；可疑页不按跳过受理\n" % result["mineru_note"])
             if got is None:
-                # 没投过就不能当「MinerU 也读不出」，可疑页仍留人工复核
-                result["mineru_not_run"] = result.get("mineru_skip_reason", "")
-                log.write("MinerU 未投：%s；可疑页不按跳过受理\n" % result["mineru_not_run"])
+                # 没投或投失败都不能当「MinerU 也读不出」，可疑页仍留人工复核
+                if "mineru_note" not in result:
+                    result["mineru_not_run"] = result.get("mineru_skip_reason", "")
+                    log.write("MinerU 未投：%s；可疑页不按跳过受理\n" % result["mineru_not_run"])
             else:
                 if any(got.get(s["page"], 0) > 0 for s in suspect):
                     if rebuild_stage(ctx, row, merged, stage, log, result) == 0:
@@ -1427,7 +1453,12 @@ def run_one(row, ctx):
                             blank, suspect, short = pdf_checks(ctx, row, doc["per_page"], log, result)
                         else:
                             result["note"] = "MinerU 补页后重新拼装仍失败，页数待查"
-                skipped = [s["page"] for s in suspect]
+                submitted = set(got)
+                skipped = [s["page"] for s in suspect if s["page"] in submitted and not got.get(s["page"], 0)]
+                unsubmitted = [s["page"] for s in suspect if s["page"] not in submitted]
+                if unsubmitted:
+                    result["mineru_unsubmitted_pages"] = unsubmitted
+                    log.write("MinerU 未提交的可疑页：%s；不按跳过受理\n" % ", ".join(str(p) for p in unsubmitted))
                 result["skipped_unreadable_pages"] = skipped
             result.update(
                 verify_rc=v["verify_rc"],
@@ -1442,7 +1473,8 @@ def run_one(row, ctx):
             spec = json.loads(pathlib.Path(override).read_text(encoding="utf-8"))
             human = (spec.get("accept") if isinstance(spec, dict) else "") or ""
             result["override"] = spec
-        auto = ("MinerU 也读不出，按跳过受理：第 %s 页" % ", ".join(str(p) for p in skipped)) if skipped else ""
+        skip_ok = bool(skipped) and not result.get("mineru_unsubmitted_pages") and len(skipped) == len(suspect)
+        auto = ("MinerU 也读不出，按跳过受理：第 %s 页" % ", ".join(str(p) for p in skipped)) if skip_ok else ""
         accept = "；".join(x for x in (human, auto) if x)
         man = enrich_manifest(
             stage,
@@ -1460,8 +1492,9 @@ def run_one(row, ctx):
         )
         result["accepted"] = man["accepted"]
         fails = gate(v, doc["coverage_ok"], suspect, doc["missing_images"])
-        if skipped:
-            # 自动跳过只免「可疑页」这一条，verify/覆盖/缺图的门槛照旧拦
+        if skip_ok:
+            # 只有每一页都在 rc=0 的结果里且确实 0 字，才免「可疑页」这一条；
+            # MinerU 失败、超上限没提交、或补页没反映到复查里的页，照旧拦落地。
             fails = [f for f in fails if not f.startswith("可疑页")]
         want_land = ctx["land"] and (not os.path.isdir(dest) or ctx["replace"])
         if not fails:
@@ -1481,7 +1514,10 @@ def run_one(row, ctx):
                 land(ctx, stage, dest, result)
                 result["status"] = "accepted"
         else:
-            result.update(status="staged-review", note="；".join(fails))
+            note = "；".join(fails)
+            if result.get("mineru_note"):
+                note = result["mineru_note"] + "；" + note
+            result.update(status="staged-review", note=note)
         log.write("门槛：%s；状态 %s\n" % ("过" if not fails else "；".join(fails), result["status"]))
         write_result(ctx, result)
         return result
