@@ -228,6 +228,7 @@ book-corpus model check
 | `chapter-html-versions` | `.agents/skills/chapter-html-versions/` | 生成可视化阅读版 HTML，附 `verify_lite.py` 校验 |
 | `mineru` | `.agents/skills/mineru/` | OCR 兜底 |
 | `typesafe-ai` | `.agents/skills/typesafe-ai/` | 旧分类后端，默认已改用模型 |
+| `verify-book-corpus` | `.agents/skills/verify-book-corpus/` | 一次性工作区起五个页面服务，验证用户可见行为并留证据 |
 
 脚本解析技能目录的顺序是：工作区 `.agents/skills/`、源码仓 `.agents/skills/`、`~/.agents/skills/`。可以用 `BOOKS_SKILLS_DIR` 指定别的根。
 

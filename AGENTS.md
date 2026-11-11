@@ -52,7 +52,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `build/阅读版索引.html` | 有阅读版 html 的书的总索引 |
 | `src/bookcorpus/` | 包与脚本。入口 `book-corpus`，`book-corpus list` 列全部 |
 | `docs/检索/` | 检索层方案、口径与踩坑账。工具仓文档，不在工作区 |
-| `.agents/skills/` | 随仓库提交的 pi 技能：`book-corpus-qa`、`ebook-to-md`、`chapter-html-versions`、`mineru`、`typesafe-ai` |
+| `.agents/skills/` | 随仓库提交的 pi 技能：`book-corpus-qa`、`ebook-to-md`、`chapter-html-versions`、`mineru`、`typesafe-ai`、`verify-book-corpus` |
 | `apps/ops/` | 统一操作台服务、web 与运维文档，按需启动，127.0.0.1:8770；验收在 `tests/acceptance/ops/` 与 `tests/manual/ops/` |
 | `apps/demo/` | 检索流程演示页、回答与会话实现，按需启动，127.0.0.1:8765；验收在 `tests/acceptance/demo/` 与 `tests/manual/demo/` |
 | `apps/reading/` | 四读与视觉读本的书架、书目、正文与记录，按需启动，127.0.0.1:8771；验收在 `tests/test_reading_*.py` |

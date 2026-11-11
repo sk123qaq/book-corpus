@@ -57,6 +57,9 @@
 # ---- 技能 ----
 /.agents/skills/typesafe-ai/.env
 
+# ---- 验证证据：.agents/skills/verify-book-corpus 的产物 ----
+/artifacts/
+
 # ---- 本地密钥 ----
 /.env
 /.env.local
