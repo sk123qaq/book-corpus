@@ -3064,7 +3064,8 @@ class Handler(BaseHTTPRequestHandler):
         if not job_id:
             rows = [row for row in self.app.store.list(limit=200) if row.get("kind") == "docs.run"]
             if not rows:
-                self.fail(404, "还没跑过文档转 md")
+                # 没跑过不是错：给 200 空包，别让页面每次开都背一条控制台 404。
+                self.send_json(200, {"ok": True, "job_id": None, "report": None, "none": True})
                 return
             # 默认取「最近一次真转过书的」：手动补转零本也会留一条空任务，
             # 不能让它把上一次转换的明细顶掉。

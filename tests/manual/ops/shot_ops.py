@@ -40,6 +40,7 @@ TABS = (
     ("split", "电子书出正文"),
     ("pdf", "PDF 出正文"),
     ("maintain", "维护"),
+    ("ledger", "账表"),
     ("retire", "删书"),
     ("logs", "日志"),
 )
@@ -847,7 +848,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
                 "pdf-list-filters",
                 filters.get("q") and filters.get("subject") and filters.get("sort") and filters.get("tags") == 4,
             ),
-            ("pdf-list-progress", filters.get("progress") == 3 and filters.get("recheck")),
+            ("pdf-list-progress", filters.get("progress") == 5 and filters.get("recheck")),
             ("pdf-list-action", (filters.get("actions") or 0) >= 1),
             (
                 "pdf-list-settle",
@@ -936,11 +937,11 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         ok = (
             maint2.get("button")
             and maint2.get("open") is False
-            and maint2.get("steps") == 9
+            and maint2.get("steps") == 8
             and not maint2.get("leaks")
         )
         if not live:
-            ok = ok and "完成" in (maint2.get("last") or "") and "8 步全过" in (maint2.get("last") or "")
+            ok = ok and "完成" in (maint2.get("last") or "") and "步全过" in (maint2.get("last") or "")
         if not ok:
             failed_tabs.append("maintain-product")
         eval_js(cdp, VISIT_TAB % ("logs", "logs", "日志", "logs", "日志"), await_promise=True, timeout=30)

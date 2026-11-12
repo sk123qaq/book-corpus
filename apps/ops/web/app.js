@@ -69,7 +69,7 @@ const PICK_PROGRESS = {
   failed: ['失败', 'miss'], deferred: ['暂缓·待额度', 'half'],
   staged: ['待确认', 'half'],
 };
-// 清单页的进度筛选只管这三档：已有正文的书不会出现在待转清单里
+// 清单页的进度筛选五档全开：已有正文的书不会出现在待转清单里
 const PICK_PROGRESS_FILTER = [['todo', '未开始'], ['running', '在跑'], ['failed', '失败'],
   ['staged', '待确认'], ['deferred', '暂缓']];
 const SOURCE_WORD = { move: '移动', hardlink: '硬链接' };
@@ -931,9 +931,15 @@ async function loadDocs() {
   if (!target && S.docsNone) return;   // 已确认没有 docs 任务，别每 2.5 秒打一次 404
   try {
     const body = await api('/api/docs/report' + (target ? '?job_id=' + encodeURIComponent(target) : ''));
-    S.docs = body;
-    S.docsNone = false;
-    if (body && body.job_id) docsJobRemember(body.job_id);
+    if (body && body.job_id) {
+      S.docs = body;
+      S.docsNone = false;
+      docsJobRemember(body.job_id);
+    } else {
+      // 服务端说「一轮都没跑过」：当没有明细，别再每 2.5 秒打一次。
+      S.docs = null;
+      S.docsNone = true;
+    }
   } catch (err) {
     S.docs = null;
     if (target) {
@@ -1661,7 +1667,7 @@ function viewMaintain() {
     <div class="section card">
       <div class="card-head"><h2>一键收尾</h2>
         <button class="btn primary" data-write data-act="maintain-run-default">开始收尾</button></div>
-      <p class="small">一次跑完这四件事：</p>
+      <p class="small">一次跑完七步，大致是这四组动作：</p>
       <ul class="next">
         <li>重建书目与总表</li>
         <li>更新检索索引</li>
@@ -1886,7 +1892,7 @@ function ledgerConceptHtml(which, row, force) {
 function viewLedger() {
   const L = S.ledger;
   if (!L) {
-    return `<div class="list"><p>账表还没加载。</p></div>`;
+    return `<h1>账表</h1><div class="list"><p>账表还没加载。</p></div>`;
   }
   const rows = ledgerRowFiltered();
   const pendingRows = rows.filter(ledgerPending);
@@ -1918,6 +1924,7 @@ function viewLedger() {
     </div>`;
   };
   return `
+    <h1>账表</h1>
     <div class="list">
       <div class="section card">
         <div class="card-head"><h2>分类表（${num(L.ledger.length)} 行 · ${esc(L.ledger_db || 'tables/ledger.db')}）</h2>
@@ -1938,7 +1945,7 @@ function viewLedger() {
       ${pick(L.concepts || [], 'main')}
       ${pick(L.broad || [], 'broad')}
       ${pick(L.actions || [], 'action')}
-      <p class="hint">词表改键或加词只影响之后跑的检索与索引；要影响已建剖面，得在「维护」里重建索引（--concepts 步骤）。</p>
+      <p class="hint">词表改键或加词只影响之后跑的检索与索引；要影响已建剖面，得在「维护」里勾上「更新检索索引」再跑一次。</p>
     </div>`;
 }
 
@@ -2003,6 +2010,10 @@ function commandsHtml(detail) {
   return `<pre class="log">${esc(command || '没有记录')}</pre>`;
 }
 
+function cancelButton(id) {
+  return `<button class="btn sm" id="job-cancel" data-act="job-cancel" data-id="${esc(id)}">停止</button>`;
+}
+
 function jobDetail() {
   const job = S.logJob;
   if (!job) return '<p class="empty">点上面表格里的「详情」，这里会显示步骤和日志。</p>';
@@ -2011,7 +2022,7 @@ function jobDetail() {
   return `<div class="card-head"><h2>${esc(summaryText(job.title))}</h2>
       <span class="row tight">
         <span class="pill" id="job-state">${esc(JOB_WORD[job.state] || job.state)}</span>
-        <button class="btn sm" id="job-cancel" data-act="job-cancel" data-id="${esc(job.id)}" style="${running ? '' : 'display:none'}">停止</button>
+        ${running ? cancelButton(job.id) : ''}
         <button class="btn sm" data-write data-act="job-rerun" data-id="${esc(job.id)}">重跑</button>
         <a class="btn sm" href="/api/file?path=${encodeURIComponent('工作区/运维/jobs/' + job.id + '/log.txt')}">下载日志</a>
       </span></div>
@@ -2064,7 +2075,11 @@ function paintJobDetail() {
   const cancel = box.querySelector('#job-cancel');
   if (cancel) {
     const running = ['queued', 'running'].indexOf(job.state) >= 0;
-    cancel.style.display = running ? '' : 'none';
+    if (!running) cancel.remove();
+  } else if (['queued', 'running'].indexOf(job.state) >= 0) {
+    // 停止只在能停的时候出现在 DOM 里：人看不见就不该留下死按钮。
+    const rerun = box.querySelector('[data-act="job-rerun"]');
+    if (rerun) rerun.insertAdjacentHTML('beforebegin', cancelButton(job.id));
   }
   const meta = box.querySelector('#job-meta');
   if (meta) {

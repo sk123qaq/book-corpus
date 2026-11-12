@@ -11,6 +11,7 @@ import argparse
 import copy
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -41,6 +42,9 @@ ANSWER_JOBS_LOCK = threading.Lock()
 ANSWER_WAIT_SECONDS = 300
 ANSWER_JOB_TTL = 60
 MAX_DELETE = 100
+# 与首页 / 日课 / 分层读 / 操作台同一道门口：只服务本机页面，别让浏览器里的
+# 其它站点借 DNS rebinding 打到本机的书库 API。
+ALLOWED_HOST = re.compile(r"(?:127\.0\.0\.1|localhost)(?::\d{1,5})?", re.IGNORECASE)
 
 
 def json_bytes(value):
@@ -420,6 +424,9 @@ class Handler(BaseHTTPRequestHandler):
     def fail(self, code, message):
         self.send_json(code, {"ok": False, "error": message})
 
+    def host_ok(self):
+        return bool(ALLOWED_HOST.fullmatch(self.headers.get("Host", "")))
+
     def serve_file(self, name, ctype):
         path = os.path.join(WEB, name)
         try:
@@ -432,6 +439,9 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- GET -------------------------------------------------------
     def do_GET(self):
+        if not self.host_ok():
+            self.fail(403, "只接受 127.0.0.1 或 localhost。")
+            return
         parsed = urlparse(self.path)
         route = unquote(parsed.path)
         try:
@@ -470,6 +480,9 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
 
     def do_POST(self):
+        if not self.host_ok():
+            self.fail(403, "只接受 127.0.0.1 或 localhost。")
+            return
         route = unquote(urlparse(self.path).path)
         if route not in ("/api/run", "/api/answer", "/api/sessions/delete"):
             self.fail(404, "unknown api")
