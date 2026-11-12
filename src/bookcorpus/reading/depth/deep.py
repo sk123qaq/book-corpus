@@ -601,6 +601,8 @@ def generate_deep(
                 {"role": "user", "content": f"上一次输出未通过深读校验：{_clip(exc)}。请修正后只输出完整 JSON。"},
             ]
         except ModelProviderError as exc:
+            if exc.retries_exhausted:
+                raise
             if provider_retried:
                 raise DeepError(f"模型提供方连续失败：{exc}") from exc
             provider_retried = True

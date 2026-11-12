@@ -4,14 +4,21 @@
 真实生成失败时直接报错，不再用三档同文草稿冒充成功。
 """
 
+import contextlib
+import errno
 import hashlib
+import http.client
 import json
 import os
-import urllib.error
-import urllib.request
+import random
+import socket
+import ssl
+import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
+from . import events
 from .tiers import TIER_ORDER, validate_annotation
 
 ENDPOINT = "https://opencode.ai/inference/go/v1/chat/completions"
@@ -19,9 +26,29 @@ DEFAULT_MODEL = "deepseek-v4.1-flash"
 FALLBACK_MODEL = "glm-5.3-flash"
 DEFAULT_EFFORT = "high"
 EFFORTS = ("max", "high", "medium", "low")
-TIMEOUT = 240
+# 等响应的上限必须长于最长合法响应。按管线真实输出量 24000 token 实测：deepseek 140 秒、
+# glm 265 秒、qwen 295 秒，即 81-172 token/秒。600 秒覆盖到 40 token/秒，还留了高峰降速的余量。
+# 总截止要装得下「一次读超时 + 一次完整重试」：600 读 + 15 连接 + 2 退避 + 600 读 = 1217，故取 1800。
+CONNECT_TIMEOUT = 15
+READ_TIMEOUT = 600
+DEADLINE = 1800
+MAX_ATTEMPTS = 4
+BACKOFF = (2.0, 8.0, 30.0)
+TIMEOUT = READ_TIMEOUT  # 旧名，外部还有引用
 MAX_TOKENS = 32768
 PROMPT_VERSION = "phase1-v5"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+# 重试的判据是「再试一次可能不同」，不是「看起来像网络问题」。
+RETRYABLE_KINDS = frozenset(
+    {
+        "transport_closed",
+        "transport_timeout",
+        "transport_reset",
+        "transport_truncated",
+        "rate_limited",
+        "http_5xx",
+    }
+)
 SYSTEM_PROMPT = """你是中文书稿的结构编辑。只输出一个 JSON 对象，不要 markdown 代码围栏，不要解释。
 输入是一章中**有文字的块**（id/kind/text），空脚注块已省略。为每块给出 role、priority、spine、deps；
 可选给出 supports。再给 4–6 条 cards。规则：
@@ -70,7 +97,191 @@ def _payload_blocks(blocks):
 
 
 class ModelProviderError(RuntimeError):
-    """网络/上游/空响应错误；可切换备用模型。"""
+    """网络/上游/空响应错误；可切换备用模型。
+
+    ``kind`` 是机器可读的分类，账本、重试与降级都按它判断，不再拿错误文本做字符串匹配。
+    """
+
+    kind = "provider"
+    retryable = False
+    # 共享重试策略已经用光；上游那层别再加一次重复尝试。
+    retries_exhausted = False
+
+    def __init__(
+        self,
+        message,
+        *,
+        kind=None,
+        retryable=None,
+        attempt=0,
+        elapsed_ms=0,
+        peer="",
+        status=None,
+    ):
+        super().__init__(message)
+        if kind:
+            self.kind = kind
+        if retryable is not None:
+            self.retryable = retryable
+        self.attempt = attempt
+        self.elapsed_ms = elapsed_ms
+        self.peer = peer
+        self.status = status
+
+
+class ModelTransportError(ModelProviderError):
+    """链路层失败：对端关连接、读超时、重置、TLS、DNS、拒绝。"""
+
+    kind = "transport_other"
+
+
+class ModelProtocolError(ModelProviderError):
+    """响应不合协议：状态行错、正文截断、不是 JSON、缺 choices。"""
+
+    kind = "protocol"
+
+
+class ModelAuthError(ModelProviderError):
+    """鉴权失败：401/403。重试没有意义。"""
+
+    kind = "auth"
+
+
+class ModelTruncatedError(ModelProviderError):
+    """输出被 max_tokens 截断。同一预算重试必然再截断。"""
+
+    kind = "truncated"
+
+
+class ModelConfigError(ModelProviderError):
+    """配置错：端点不是 http/https、缺主机名、缺 key。"""
+
+    kind = "config"
+
+
+def _elapsed_ms(started):
+    return int((time.perf_counter() - started) * 1000)
+
+
+def _parse_backoff(value):
+    if not value:
+        return BACKOFF
+    if isinstance(value, (tuple, list)):
+        return tuple(float(item) for item in value) or BACKOFF
+    try:
+        parts = tuple(float(piece) for piece in str(value).split(",") if piece.strip())
+    except ValueError:
+        return BACKOFF
+    return parts or BACKOFF
+
+
+def _split_endpoint(endpoint):
+    parts = urlsplit(endpoint)
+    if parts.scheme not in ("http", "https"):
+        raise ModelConfigError(f"模型端点只支持 http/https：{endpoint}", kind="config")
+    host = parts.hostname or ""
+    if not host:
+        raise ModelConfigError(f"模型端点缺少主机名：{endpoint}", kind="config")
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    path = parts.path or "/"
+    if parts.query:
+        path = f"{path}?{parts.query}"
+    return parts.scheme, host, port, path
+
+
+def _peer_of(sock):
+    """对端地址。这才是「谁关的」唯一可留证的字段。"""
+    if sock is None:
+        return "", ""
+    try:
+        peer = sock.getpeername()
+    except OSError:
+        return "", ""
+    if not isinstance(peer, tuple) or not peer:
+        return "", ""
+    host = str(peer[0])
+    return host, ("ipv6" if ":" in host else "ipv4")
+
+
+def _classify(exc, phase=None):
+    """把异常翻成分类。顺序即优先级：子类先于父类。"""
+    if isinstance(exc, ModelProviderError):
+        return exc.kind
+    if isinstance(exc, http.client.RemoteDisconnected):
+        return "transport_closed"
+    if isinstance(exc, http.client.IncompleteRead):
+        return "transport_truncated"
+    if isinstance(exc, TimeoutError):  # socket.timeout 自 3.10 起就是 TimeoutError
+        return "transport_timeout"
+    if isinstance(exc, ConnectionRefusedError):
+        return "transport_refused"
+    if isinstance(exc, ConnectionResetError | ConnectionAbortedError | BrokenPipeError):
+        return "transport_reset"
+    if isinstance(exc, socket.gaierror):
+        return "transport_dns"
+    if isinstance(exc, ssl.SSLError):
+        return "transport_tls"
+    if isinstance(exc, http.client.HTTPException):
+        return "protocol"
+    if isinstance(exc, OSError):
+        if exc.errno in (errno.ECONNRESET, errno.EPIPE, errno.ECONNABORTED):
+            return "transport_reset"
+        if exc.errno == errno.ETIMEDOUT:
+            return "transport_timeout"
+        if exc.errno == errno.ECONNREFUSED:
+            return "transport_refused"
+        return "transport_other"
+    return "protocol"
+
+
+def _status_kind(status):
+    if status == 429:
+        return "rate_limited"
+    if status >= 500:
+        return "http_5xx"
+    if status in (401, 403):
+        return "auth"
+    return "http_4xx"
+
+
+def _parse_retry_after(value):
+    if not value:
+        return 0.0
+    try:
+        seconds = float(str(value).strip())
+    except ValueError:
+        return 0.0
+    return max(0.0, min(seconds, 60.0))
+
+
+def _transport_error(exc, kind, attempt, elapsed_ms, meta):
+    peer = meta.get("peer") or ""
+    phase = meta.get("phase") or "?"
+    if kind == "protocol":
+        return ModelProtocolError(
+            f"模型响应不合协议（{phase}）：{exc}",
+            kind=kind,
+            attempt=attempt,
+            elapsed_ms=elapsed_ms,
+            peer=peer,
+        )
+    label = {
+        "transport_closed": "对端在返回状态行前关闭了连接",
+        "transport_timeout": "等待响应超时",
+        "transport_reset": "连接被重置",
+        "transport_refused": "连接被拒绝",
+        "transport_tls": "TLS 握手失败",
+        "transport_dns": "域名解析失败",
+        "transport_truncated": "响应正文不完整",
+    }.get(kind, "链路失败")
+    return ModelTransportError(
+        f"模型调用失败（{label}，阶段 {phase}）：{kind}：{exc}",
+        kind=kind,
+        attempt=attempt,
+        elapsed_ms=elapsed_ms,
+        peer=peer,
+        retryable=kind in RETRYABLE_KINDS,
+    )
 
 
 def prompt_sha256():
@@ -104,11 +315,23 @@ class ModelClient:
         timeout=None,
         key=None,
         max_tokens=None,
+        backoff=None,
     ):
         self.endpoint = endpoint or os.environ.get("READING_MODEL_URL") or ENDPOINT
         self.model = model or os.environ.get("READING_MODEL_NAME") or DEFAULT_MODEL
         self.effort = (effort or os.environ.get("READING_MODEL_EFFORT") or DEFAULT_EFFORT).lower()
-        self.timeout = int(timeout or os.environ.get("READING_MODEL_TIMEOUT") or TIMEOUT)
+        # timeout 参数沿用旧语义：它就是等响应的上限。
+        self.timeout = float(
+            timeout
+            or os.environ.get("READING_MODEL_READ_TIMEOUT")
+            or os.environ.get("READING_MODEL_TIMEOUT")
+            or READ_TIMEOUT
+        )
+        self.read_timeout = self.timeout
+        self.connect_timeout = float(os.environ.get("READING_MODEL_CONNECT_TIMEOUT") or CONNECT_TIMEOUT)
+        self.deadline = float(os.environ.get("READING_MODEL_DEADLINE") or DEADLINE)
+        self.attempts = max(1, int(os.environ.get("READING_MODEL_ATTEMPTS") or MAX_ATTEMPTS))
+        self.backoff = _parse_backoff(backoff if backoff is not None else os.environ.get("READING_MODEL_BACKOFF"))
         self.max_tokens = int(max_tokens or os.environ.get("READING_MODEL_MAX_TOKENS") or MAX_TOKENS)
         self.key = key if key is not None else _api_key()
         self.session = uuid.uuid4().hex
@@ -225,6 +448,53 @@ class ModelClient:
             raise ValueError(f"reasoning_effort 只能是 {'/'.join(EFFORTS)}")
         return self._request(requested_model, effort, messages, json_mode=json_mode)
 
+    def _retry_wait(self, attempt):
+        schedule = self.backoff or BACKOFF
+        base = schedule[min(attempt - 1, len(schedule) - 1)]
+        if base <= 0:
+            return 0.0
+        return base * random.uniform(0.8, 1.2)
+
+    def _post_once(self, body, headers, parsed, meta, budget):
+        """一次 HTTP 尝试。meta 在失败前先把已测得的事实填好。"""
+        scheme, host, port, path = parsed
+        started = time.perf_counter()
+        meta["phase"] = "connect"
+        if scheme == "https":
+            conn = http.client.HTTPSConnection(
+                host,
+                port,
+                timeout=self.connect_timeout,
+                context=ssl.create_default_context(),
+            )
+        else:
+            conn = http.client.HTTPConnection(host, port, timeout=self.connect_timeout)
+        try:
+            conn.connect()
+            meta["connect_ms"] = _elapsed_ms(started)
+            meta["peer"], meta["family"] = _peer_of(conn.sock)
+            if conn.sock is not None:
+                conn.sock.settimeout(max(0.001, min(self.read_timeout, budget)))
+            meta["phase"] = "send"
+            conn.request("POST", path, body=body, headers=headers)
+            meta["phase"] = "read"
+            response = conn.getresponse()
+            meta["first_byte_ms"] = _elapsed_ms(started)
+            status = response.status
+            meta["status"] = status
+            retry_after = response.getheader("Retry-After")
+            if retry_after:
+                meta["retry_after"] = retry_after
+            try:
+                raw = response.read()
+            finally:
+                response.close()
+            meta["phase"] = "done"
+            return status, raw
+        finally:
+            with contextlib.suppress(OSError):
+                conn.close()
+
     def _request(self, model, effort, messages, *, json_mode=True):
         payload = {
             "model": model,
@@ -236,41 +506,173 @@ class ModelClient:
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(  # noqa: S310 - endpoint is the fixed HTTPS API or operator override
-            self.endpoint,
-            data=body,
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + self.key,
-                "Accept": "application/json",
-                "User-Agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-                ),
-                "Origin": "https://opencode.ai",
-                "Referer": "https://opencode.ai/",
-                "x-opencode-session": self.session,
-            },
+        parsed = _split_endpoint(self.endpoint)
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + self.key,
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+            "Origin": "https://opencode.ai",
+            "Referer": "https://opencode.ai/",
+            "x-opencode-session": self.session,
+            "Connection": "close",
+        }
+        log = events.current()
+        log.emit(
+            "http_start",
+            model=model,
+            effort=effort,
+            host=parsed[1],
+            port=parsed[2],
+            max_tokens=self.max_tokens,
+            bytes_out=len(body),
+            stream=False,
         )
+        started = time.perf_counter()
+        return self._call_with_retry(body, headers, parsed, started, log)
+
+    def _call_with_retry(self, body, headers, parsed, started, log):
+        """重试策略只在这里，别处不许再写第二套。"""
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
-                data = json.loads(response.read().decode("utf-8", "replace"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", "replace")[:400]
-            raise ModelProviderError(f"模型 HTTP {exc.code}：{detail}") from exc
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise ModelProviderError(f"模型调用失败：{exc}") from exc
-        try:
-            choice = data["choices"][0]
-            content = choice["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise ModelProviderError(f"模型返回缺 choices[0].message.content：{exc}") from exc
-        if choice.get("finish_reason") == "length":
-            raise ModelProviderError("模型输出被 max_tokens 截断，请重试或降低档位数量")
-        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
-        self.total_usage = merge_usage(self.total_usage, usage)
-        return content, usage
+            return self._attempt_loop(body, headers, parsed, started, log)
+        except ModelProviderError as exc:
+            # protocol 类错误（响应体缺字段、不是 JSON）再问一次可能好，留给上层那一次；
+            # 其余分类已经在这里定案，上层不许再叠。
+            if exc.kind != "protocol":
+                exc.retries_exhausted = True
+            raise
+
+    def _attempt_loop(self, body, headers, parsed, started, log):
+        attempt = 0
+        while attempt < self.attempts:
+            remaining = self.deadline - (time.perf_counter() - started)
+            if remaining <= 0:
+                break
+            attempt += 1
+            meta = {"attempt": attempt, "phase": "connect"}
+            try:
+                status, raw = self._post_once(body, headers, parsed, meta, remaining)
+            except Exception as exc:
+                kind = _classify(exc, meta.get("phase"))
+                elapsed = _elapsed_ms(started)
+                log.emit(
+                    "http_error",
+                    attempt=attempt,
+                    phase=meta.get("phase"),
+                    error_class=exc.__class__.__name__,
+                    error_kind=kind,
+                    detail=str(exc)[:300],
+                    elapsed_ms=elapsed,
+                    peer=meta.get("peer"),
+                    family=meta.get("family"),
+                    connect_ms=meta.get("connect_ms"),
+                    first_byte_ms=meta.get("first_byte_ms"),
+                )
+                elapsed = _elapsed_ms(started)
+                if kind not in RETRYABLE_KINDS or attempt >= self.attempts:
+                    raise _transport_error(exc, kind, attempt, elapsed, meta) from exc
+                left = self.deadline - (time.perf_counter() - started)
+                if left <= 0:
+                    raise _transport_error(exc, "transport_timeout", attempt, elapsed, meta) from exc
+                wait = min(self._retry_wait(attempt), left)
+                log.emit("http_retry", attempt=attempt, error_kind=kind, wait_ms=int(wait * 1000))
+                time.sleep(wait)
+                continue
+
+            elapsed = _elapsed_ms(started)
+            log.emit(
+                "http_response",
+                attempt=attempt,
+                status=status,
+                peer=meta.get("peer"),
+                family=meta.get("family"),
+                connect_ms=meta.get("connect_ms"),
+                first_byte_ms=meta.get("first_byte_ms"),
+                total_ms=elapsed,
+                bytes_in=len(raw),
+            )
+            if status != 200:
+                kind = _status_kind(status)
+                detail = raw.decode("utf-8", "replace")[:400]
+                if kind in RETRYABLE_KINDS and attempt < self.attempts:
+                    left = self.deadline - (time.perf_counter() - started)
+                    if left > 0:
+                        wait = min(max(self._retry_wait(attempt), _parse_retry_after(meta.get("retry_after"))), left)
+                        log.emit(
+                            "http_retry",
+                            attempt=attempt,
+                            error_kind=kind,
+                            status=status,
+                            wait_ms=int(wait * 1000),
+                        )
+                        time.sleep(wait)
+                        continue
+                log.emit("call_failed", attempts=attempt, elapsed_ms=elapsed, error_kind=kind, status=status)
+                if kind == "auth":
+                    raise ModelAuthError(
+                        f"模型鉴权失败 HTTP {status}：{detail}",
+                        kind=kind,
+                        attempt=attempt,
+                        elapsed_ms=elapsed,
+                        status=status,
+                    )
+                raise ModelProviderError(
+                    f"模型 HTTP {status}：{detail}",
+                    kind=kind,
+                    retryable=kind in RETRYABLE_KINDS,
+                    attempt=attempt,
+                    elapsed_ms=elapsed,
+                    status=status,
+                )
+
+            try:
+                data = json.loads(raw.decode("utf-8", "replace"))
+            except json.JSONDecodeError as exc:
+                log.emit("call_failed", attempts=attempt, elapsed_ms=elapsed, error_kind="protocol")
+                raise ModelProtocolError(
+                    f"模型返回不是 JSON：{exc}",
+                    kind="protocol",
+                    attempt=attempt,
+                    elapsed_ms=elapsed,
+                ) from exc
+            try:
+                choice = data["choices"][0]
+                content = choice["message"]["content"]
+            except (KeyError, IndexError, TypeError) as exc:
+                log.emit("call_failed", attempts=attempt, elapsed_ms=elapsed, error_kind="protocol")
+                raise ModelProtocolError(
+                    f"模型返回缺 choices[0].message.content：{exc}",
+                    kind="protocol",
+                    attempt=attempt,
+                    elapsed_ms=elapsed,
+                ) from exc
+            if choice.get("finish_reason") == "length":
+                log.emit("call_failed", attempts=attempt, elapsed_ms=elapsed, error_kind="truncated")
+                raise ModelTruncatedError(
+                    "模型输出被 max_tokens 截断，请重试或降低档位数量",
+                    attempt=attempt,
+                    elapsed_ms=elapsed,
+                )
+            usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+            self.total_usage = merge_usage(self.total_usage, usage)
+            log.emit(
+                "call_ok",
+                attempts=attempt,
+                elapsed_ms=elapsed,
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                total_tokens=usage.get("total_tokens"),
+            )
+            return content, usage
+
+        elapsed = _elapsed_ms(started)
+        log.emit("call_failed", attempts=attempt, elapsed_ms=elapsed, error_kind="transport_timeout")
+        raise ModelTransportError(
+            f"模型调用总的截止时间已用完：{elapsed} 毫秒（上限 {int(self.deadline)} 秒）",
+            kind="transport_timeout",
+            attempt=attempt,
+            elapsed_ms=elapsed,
+        )
 
 
 def merge_usage(total, usage):

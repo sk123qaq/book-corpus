@@ -667,6 +667,8 @@ def generate_skim(
                 {"role": "user", "content": f"上一次输出未通过速览校验：{_clip(exc)}。请修正后只输出完整 JSON。"},
             ]
         except ModelProviderError as exc:
+            if exc.retries_exhausted:
+                raise
             if provider_retried:
                 raise SkimError(f"模型提供方连续失败：{exc}") from exc
             provider_retried = True

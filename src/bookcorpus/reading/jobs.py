@@ -6,6 +6,8 @@ import threading
 import time
 import uuid
 
+from . import events
+
 STEPS = ("切块", "标注", "校验", "组档", "渲染")
 DEPTH_STEPS = ("结构", "面板", "速览", "标准", "深读", "渲染")
 STEPS_BY_KIND = {
@@ -44,6 +46,7 @@ class JobQueue:
         self.work = work
         self.runner = runner
         self.path = os.path.join(work, "阅读", "jobs.json")
+        self.log_dir = os.path.join(work, "阅读", "logs")
         self.max_workers = max(1, int(max_workers or 1))
         self._lock = threading.RLock()
         self._cond = threading.Condition(self._lock)
@@ -231,7 +234,8 @@ class JobQueue:
             self._running.add(job_id)
         try:
             try:
-                result = self.runner(job_id, job)
+                with events.job_scope(self.log_dir, job_id):
+                    result = self.runner(job_id, job)
             except Exception as exc:  # 生成失败必须留可读账，不炸整个服务
                 with self._lock:
                     if self._is_cancelled_locked(job_id):
