@@ -76,7 +76,6 @@ src/bookcorpus/scripts/scan_library.py
 src/bookcorpus/scripts/split_md_batch.py
 src/bookcorpus/scripts/verify_phase.py
 src/bookcorpus/workspace.py
-tests/acceptance/demo/test_answer_anchored.py
 tests/acceptance/demo/test_answer_retry.py
 tests/acceptance/demo/test_book_focus_plan.py
 tests/acceptance/demo/test_session_state.py

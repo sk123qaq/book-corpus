@@ -80,7 +80,7 @@ except ImportError:
 
 PI_TIMEOUT = 90
 MAX_TERMS = 6
-TERM_VERSION = "terms-v3"
+TERM_VERSION = "terms-v4"
 STAGE_CHARS = 900
 STAGE_BEFORE = 700
 
@@ -189,8 +189,37 @@ def _parse_extract(stdout):
     return terms[:MAX_TERMS], groups[:5]
 
 
+FALLBACK_HEAD = re.compile(
+    r"^(?:请问|请|帮我|帮忙|麻烦|我想知道|想知道|介绍一下|介绍下|详细介绍下|详细介绍|说说|讲讲|告诉我|解释一下|解释下|分析一下|分析|查一下|查查|看看|看下|列一下|列出|能否|可以)+"
+)
+FALLBACK_TAIL = re.compile(r"(?:吗|呢|吧|啊|呀|的)+$")
+FALLBACK_SPLIT = re.compile(
+    r"(?:是怎么|怎么样|怎么|如何|为什么|为何|哪些|哪几种|哪几个|哪一个|哪个|谁|什么|多少|多久|多大|是否|有没有)"
+)
+
+
+def _strip_question(question):
+    """去掉问句的礼貌语、疑问词与句末语气词，留下可检索的实词。"""
+    text = unicodedata.normalize("NFKC", question or "")
+    text = re.sub(r"\s+", "", text)
+    text = text.strip("？?！!。.，,、；;：:")
+    text = FALLBACK_HEAD.sub("", text)
+    text = FALLBACK_TAIL.sub("", text)
+    return text.strip("，,、；;：:？?！!。.")
+
+
+def _fallback_prompt(question):
+    """第一次切词退化时再问一次，只要名词短语，不要整句。"""
+    return (
+        "把问题拆成 3 到 5 个用于书库全文检索的中文名词短语，每个短语 2 到 8 个字。\n"
+        "不要疑问词，不要整句，不要解释。只回一行 JSON：\n"
+        '{"terms":["短语1","短语2"],"groups":[{"name":"组名","variants":["说法1","说法2"]}]}\n'
+        "问题：%s" % question
+    )
+
+
 def _fallback_terms(question):
-    """概念表包含匹配；再不行整句一个词。"""
+    """概念表包含匹配；再不行去掉疑问脚手架，按问句切出 2 到 6 段。"""
     concepts = load_concepts()
     found = []
     for key, aliases in concepts.items():
@@ -201,7 +230,23 @@ def _fallback_terms(question):
     found = sorted(found, key=lambda x: (-len(x), x))[:MAX_TERMS]
     if found:
         return found
-    return [question.strip()]
+    text = _strip_question(question)
+    if not text:
+        return []
+    chunks = [part for part in FALLBACK_SPLIT.split(text) if part]
+    if len(chunks) == 1 and len(text) > 12:
+        chunks = [part for part in re.split(r"[被把对向给从]", text) if part]
+    out = []
+    for part in chunks:
+        part = part.strip("的了是在有和与及讲说写做")
+        for piece in re.split(r"[被把]", part) if len(part) > 14 else [part]:
+            piece = piece.strip("的了是在有和与及讲说写做")
+            piece = piece[:24]
+            if len(piece) >= 2 and piece not in out:
+                out.append(piece)
+    if not out:
+        out = [text[:24]]
+    return out[:MAX_TERMS]
 
 
 def _cache_path(question, thinking):
@@ -248,13 +293,26 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
 
     t0 = time.time()
     note = ""
+    terms, groups = [], []
     try:
         res = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
             PI + pi_flags(thinking) + [_prompt(question)], capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT
         )
         terms, groups = _parse_extract(res.stdout) if res.returncode == 0 else ([], [])
-        # 只缓存读侧认的形态（terms 且 groups），否则这份缓存永远命中不了
-        if len(terms) >= 2 and groups:
+        if len(terms) < 2 or not groups:
+            retry = subprocess.run(  # noqa: S603 同上
+                PI + pi_flags(thinking) + [_fallback_prompt(question)],
+                capture_output=True,
+                text=True,
+                timeout=PI_TIMEOUT,
+                cwd=ROOT,
+            )
+            more_terms, more_groups = _parse_extract(retry.stdout) if retry.returncode == 0 else ([], [])
+            if len(more_terms) >= 2 and more_groups:
+                terms, groups = more_terms, more_groups
+                note = "第一次切词不可用，已重试"
+        # 读侧认 terms 且 groups；一条词也缓存，退化结果下次不必再等模型
+        if terms and groups:
             ms = round((time.time() - t0) * 1000, 1)
             _write_json(
                 path,
@@ -269,13 +327,35 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
                     "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 },
             )
-            return {"terms": terms, "groups": groups, "source": "model", "thinking": thinking, "ms": ms, "model": MODEL}
-        note = "模型没给出可用的词组" if res.returncode == 0 else "模型返回不可用（rc=%d）" % res.returncode
+            return {
+                "terms": terms,
+                "groups": groups,
+                "source": "model",
+                "thinking": thinking,
+                "ms": ms,
+                "model": MODEL,
+                "note": note,
+            }
+        note = note or ("模型没给出可用的词组" if res.returncode == 0 else "模型返回不可用（rc=%d）" % res.returncode)
     except (OSError, subprocess.SubprocessError) as exc:
         note = "切词调用失败：%s" % exc.__class__.__name__
     ms = round((time.time() - t0) * 1000, 1)
     terms = _fallback_terms(question)
     groups = [{"name": t, "variants": [t]} for t in terms]
+    if terms and groups:
+        _write_json(
+            path,
+            {
+                "question": question,
+                "terms": terms,
+                "groups": groups,
+                "source": "degraded",
+                "model": MODEL,
+                "thinking": thinking,
+                "ms": ms,
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            },
+        )
     return {
         "terms": terms,
         "groups": groups,

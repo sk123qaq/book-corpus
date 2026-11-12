@@ -256,7 +256,7 @@ check(
     "status=%s error=%s" % (status, data.get("error")),
 )
 
-# ---- build_context：上一轮跨两本书，budget 10000 ---------------------
+# ---- build_context：上一轮跨两本书，守预算 ---------------------------
 if len(turns) >= 3:
     prev = {
         "n": 2,
@@ -275,7 +275,7 @@ if len(turns) >= 3:
     ctx = session.build_context([dict(turns[0], n=1), prev], session.HISTORY_CHARS_MULTI)
     books = {p["book"] for p in ctx["paragraphs"]}
     check(
-        "跨两本书的上下文守 10000",
+        "跨两本书的上下文守预算",
         ctx["budget"] == session.HISTORY_CHARS_MULTI and ctx["chars"] <= session.HISTORY_CHARS_MULTI,
         "budget=%s chars=%s chapters=%s paragraphs=%s"
         % (ctx["budget"], ctx["chars"], len(ctx["chapters"]), len(ctx["paragraphs"])),
@@ -286,7 +286,7 @@ if len(turns) >= 3:
         "books=%s" % sorted(b.rsplit("/", 1)[-1] for b in books),
     )
 else:
-    check("跨两本书的上下文守 10000", False, "会话不足 3 轮，造不出两本书的假会话")
+    check("跨两本书的上下文守预算", False, "会话不足 3 轮，造不出两本书的假会话")
 
 # ---- 旧页面回归 -----------------------------------------------------
 _, body = post("/api/run", {"question": Q1, "thinking": "low"})

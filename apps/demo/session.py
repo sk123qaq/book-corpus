@@ -515,6 +515,34 @@ def _prev_answer(turn):
     return str(result.get("text") or "").strip(), False
 
 
+def _prev_recap(turn):
+    """上一轮的三条要点；新答案读 recap，旧答案退回领句与小标题。"""
+    ans = turn.get("answer") if isinstance(turn.get("answer"), dict) else {}
+    items = [str(x).strip() for x in (ans.get("recap") or []) if str(x).strip()]
+    if not items:
+        lead = str(ans.get("lead") or "").strip()
+        if not lead:
+            body = str(ans.get("answer") or "").strip()
+            lead = body.split("\n", 1)[0] if body else ""
+        if lead:
+            items.append(lead)
+        for section in ans.get("sections") or []:
+            if isinstance(section, dict) and str(section.get("heading") or "").strip():
+                items.append(str(section["heading"]).strip())
+    if not items:
+        body, _done = _prev_answer(turn)
+        if body:
+            items.append(body[:EARLIER_ANSWER_CHARS])
+    out = []
+    for item in items:
+        line = " ".join(item.split())[:60]
+        if line and line not in out:
+            out.append(line)
+        if len(out) >= 3:
+            break
+    return out
+
+
 def _chapter_candidates(turn):
     """上一轮用到的章节：citations 在前，选章次之，最后由 result 兜底。"""
     rows, seen = [], set()
@@ -525,9 +553,9 @@ def _chapter_candidates(turn):
             line = max(1, int(line or 1))
         except (TypeError, ValueError):
             line = 1
-        if not path or (path, line) in seen:
+        if not path or path in seen:
             return
-        seen.add((path, line))
+        seen.add(path)
         rows.append({"book": _book_of(book, path), "title": str(title or "").strip(), "path": path, "line": line})
 
     ans = turn.get("answer")
@@ -554,7 +582,11 @@ def _chapter_candidates(turn):
 
 
 def _anchor_index(anchor, chapters):
-    """anchor 落在上一轮用到的章节里时返回下标：先认同一行，再认同一个文件。"""
+    """anchor 落在上一轮用到的章节里时返回下标：先认同一行，再认同一个文件。
+
+    只用于报告 anchor_used，不再把该章提到最前：点中的若是序、前言、版权页，
+    提到最前只会把 900 字序言塞进下一问的上下文。章节顺序仍按上一轮引文与检索结果。
+    """
     if not isinstance(anchor, dict):
         return -1
     path = _rel(anchor.get("path"))
@@ -564,11 +596,14 @@ def _anchor_index(anchor, chapters):
         line = 0
     if not path or line <= 0:
         return -1
-    for i, item in enumerate(chapters):
+    front = re.compile(r"^(推荐序|译序|序言|序一|序二|序$|前言|版权|目录|扉页|出版说明|内容简介|作者简介)")
+    order = [i for i, item in enumerate(chapters) if not front.search(str(item.get("title") or "").strip())]
+    for i in order:
+        item = chapters[i]
         if item["path"] == path and item["line"] == line:
             return i
-    for i, item in enumerate(chapters):
-        if item["path"] == path:
+    for i in order:
+        if chapters[i]["path"] == path:
             return i
     return -1
 
@@ -620,7 +655,7 @@ def _fill(chapters, budget):
 def _earlier(turns):
     rows = []
     for turn in turns[-EARLIER_TURNS:]:
-        body, _done = _prev_answer(turn)
+        body = " / ".join(_prev_recap(turn))
         rows.append(
             "第 %d 问：%s / 答：%s"
             % (
@@ -632,13 +667,10 @@ def _earlier(turns):
     return rows
 
 
-def _render(n, question, answer, finished, chapters, blocks, earlier):
+def _render(n, question, recap, chapters, blocks, earlier):
     parts = [HEAD, "第 %d 问：%s" % (n, question)]
-    if answer:
-        head = (
-            "上一轮回答（已经给过用户，不要整段重复）：" if finished else "上一轮回答未完成，下面是它停下的那段原文："
-        )
-        parts.append(head + "\n" + answer)
+    if recap:
+        parts.append("上一轮要点：\n" + "\n".join("- " + item for item in recap))
     if chapters:
         rows = []
         for c in chapters:
@@ -659,7 +691,8 @@ def _render(n, question, answer, finished, chapters, blocks, earlier):
 def build_context(turns, budget, anchor=None):
     """拼上一轮的上下文。turns 是当前问之前的全部轮次，最后一个是上一轮。
 
-    超出预算从尾部丢：更早的轮次 → 原文段落 → 章节 → 上一轮答案 → 上一轮问题。
+    只带三条要点、章节表和小段原文，不再整段搬上一轮回答。超出预算从尾部丢：
+    原文段落 → 更早的轮次 → 章节 → 要点 → 上一轮问题。
     """
     try:
         budget = max(0, int(budget or 0))
@@ -682,29 +715,25 @@ def build_context(turns, budget, anchor=None):
     prev = rows[-1]
     n = prev["n"]
     question = " ".join(str(prev.get("question") or "").split())
-    answer, finished = _prev_answer(prev)
+    recap = _prev_recap(prev)
     chapters = _chapter_candidates(prev)
     index = _anchor_index(anchor, chapters)
-    if index >= 0:
-        chapters.insert(0, chapters.pop(index))
-    paragraphs, blocks = _fill(chapters, budget)
+    reserved = 200 + sum(len(item) + 3 for item in recap) + len(chapters) * 80
+    paragraphs, blocks = _fill(chapters, max(400, budget - reserved))
     earlier = _earlier(rows[:-1])
 
     dropped = 0
-    text = _render(n, question, answer, finished, chapters, blocks, earlier)
+    text = _render(n, question, recap, chapters, blocks, earlier)
     while len(text) > budget:
-        if earlier:
-            earlier.pop()
-        elif blocks:
+        if blocks:
             blocks.pop()
             paragraphs.pop()
+        elif earlier:
+            earlier.pop()
         elif chapters:
             chapters.pop()
-        elif answer:
-            over = len(text) - budget
-            answer = answer[: max(0, len(answer) - over - 2)].rstrip() + "…"
-            if not answer.strip("…"):
-                answer = ""
+        elif recap:
+            recap.pop()
         elif question:
             over = len(text) - budget
             question = question[: max(0, len(question) - over - 2)].rstrip() + "…"
@@ -713,7 +742,7 @@ def build_context(turns, budget, anchor=None):
         else:
             break
         dropped += 1
-        text = _render(n, question, answer, finished, chapters, blocks, earlier)
+        text = _render(n, question, recap, chapters, blocks, earlier)
     if len(text) > budget:
         text = text[:budget]
 

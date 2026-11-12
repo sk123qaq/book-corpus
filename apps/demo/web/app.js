@@ -458,7 +458,7 @@
     const name = esc(focusName(focus));
     if (focus.status === 'exact') {
       return `<p class="trigger-line"><span>已锁定《${name}》</span>` +
-        '<span class="signal">前半部分只用这本书回答；其他书放在后半部分</span></p>';
+        '<span class="signal">先答这本书；其他书只补它没有的角度</span></p>';
     }
     if (focus.status === 'ambiguous') {
       if (hasCards) {
@@ -640,10 +640,10 @@
     if (a.loading) {
       const n = ((a.locator && a.locator.sources) || []).length;
       const note = anchored
-        ? '前半部分用指定书回答'
-        : (n > 1 ? '先取 ' + n + ' 本书的多段原文，再逐书归纳' : '先取同书多段原文，再归纳');
+        ? (n > 1 ? '先答点名书，其他书只补角度' : '只答点名书')
+        : (n > 1 ? '先取 ' + n + ' 本书的多段原文，再合成一个回答' : '先取同书多段原文，再归纳');
       const line = anchored
-        ? '先取指定书的原文，再取其他书补充，最长约 2 分钟…'
+        ? '先取点名书的原文，再取其他书补充，最长约 2 分钟…'
         : (n > 1
           ? `正在检索 ${n} 本书的原文并组织回答，最长约 2 分钟…`
           : '正在检索原文并组织回答，最长约 90 秒…');

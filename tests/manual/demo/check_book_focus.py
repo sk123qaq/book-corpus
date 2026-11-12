@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Live acceptance for an explicitly named book (focus) and the anchored answer.
+"""Live acceptance for an explicitly named book (focus) and one-writer multi-book answers.
 
 Usage: BOOKS_ROOT=... python tests/manual/demo/check_book_focus.py [base-url]
 The server must already be running and the data/index must contain B0019.
-This calls the model for /api/run (term extraction) and /api/answer (primary +
-supplement), so it is a manual acceptance, not part of pytest.
+This calls the model for /api/run (term extraction) and /api/answer, so it is a
+manual acceptance, not part of pytest.
 """
 
 import json
@@ -95,37 +95,12 @@ else:
     status, answer = post("/api/answer", body)
     check("answer 200", status == 200)
     parts = answer.get("parts") or []
-    check("mode anchored", answer.get("mode") == "anchored", str(answer.get("mode")))
-    check("two parts", len(parts) == 2, str([p.get("kind") for p in parts]))
-    if len(parts) >= 2:
-        primary, supplement = parts[0], parts[1]
-        check(
-            "primary kind/title",
-            primary.get("kind") == "primary" and (primary.get("title") or "").find("万历十五年") >= 0,
-            str(primary.get("title")),
-        )
-        primary_cites = primary.get("citations") or []
-        check(
-            "primary citations all focus",
-            bool(primary_cites) and all(c.get("book") == FOCUS_BOOK for c in primary_cites),
-            str([c.get("book") for c in primary_cites]),
-        )
-        check(
-            "primary citations have book_title",
-            all(c.get("book_title") == "万历十五年" for c in primary_cites),
-            str([c.get("book_title") for c in primary_cites]),
-        )
-        supplement_cites = supplement.get("citations") or []
-        check(
-            "supplement excludes focus",
-            all(c.get("book") != FOCUS_BOOK for c in supplement_cites),
-            str([c.get("book") for c in supplement_cites]),
-        )
-        check(
-            "supplement citations have book_title",
-            all(c.get("book_title") for c in supplement_cites),
-            str([c.get("book_title") for c in supplement_cites]),
-        )
+    text = answer.get("answer") or ""
+    check("mode multi", answer.get("mode") == "multi", str(answer.get("mode")))
+    check("no two-part split", not parts, str(len(parts)))
+    check("no supplement heading", "其他书的补充" not in text, text[:120])
+    check("answer within 5000 chars", 0 < len(text) <= 5000, str(len(text)))
+    check("recap is three items", len(answer.get("recap") or []) == 3, str(answer.get("recap")))
     flat = answer.get("citations") or []
     check(
         "flat citations focus first",
@@ -137,15 +112,12 @@ else:
         bool(flat) and flat[0].get("book_title") == "万历十五年",
         str([c.get("book_title") for c in flat[:4]]),
     )
-    text = answer.get("answer") or ""
-    check("answer has supplement heading", "其他书的补充" in text, text[:120])
-    check("answer no wrong-book disclaimer", "这本书不是《万历十五年》" not in text)
     check("answer lead not wrong book", "这本书不是" not in (answer.get("lead") or ""))
     if answer.get("ok"):
         status, cached = post("/api/answer", body)
         check(
             "second answer cached",
-            cached.get("cached") is True and (cached.get("mode") == "anchored"),
+            cached.get("cached") is True and cached.get("mode") == "multi",
             str(cached.get("cached")),
         )
 

@@ -385,10 +385,10 @@
       if (!primary) return [];
       return [primary].concat(focusSupplements(turn, focus)).slice(0, MAX_SOURCES);
     }
-    const anchor = sourceFromAnchor(turn.anchor);
-    if (anchor) return [anchor];
     const top = sourceFromResult((turn.trace || {}).result);
     if (top) return [top];
+    const anchor = sourceFromAnchor(turn.anchor);
+    if (anchor && (!turn.anchor.fromN || Number(turn.anchor.fromN) === turn.n - 1)) return [anchor];
     const cards = cardSources(turn);
     return cards.length ? [cards[0]] : [];
   }
@@ -416,7 +416,7 @@
       const key = sourceKey(source);
       if (!source || !key || seen.has(key)) return;
       seen.add(key);
-      rows.push({ source, role, locked: role === 'anchor' || role === 'focus' });
+      rows.push({ source, role, locked: role === 'focus' || (role === 'anchor' && !top) });
     };
     push(focus, 'focus');
     (turn.sources || []).forEach((source) => push(source, roleOf(source, anchor, top, focus)));
@@ -803,7 +803,7 @@
         : focus.status === 'ambiguous' ? '有歧义' : '没找到')
       : '';
     const focusLead = focus
-      ? (focus.status === 'exact' ? '已锁定《' + lockName + '》· 前半部分只用这本书回答'
+      ? (focus.status === 'exact' ? '已锁定《' + lockName + '》· 优先从这本书回答'
         : focus.status === 'ambiguous' ? '书名有歧义《' + lockName + '》· 按书卡候选继续'
         : '书库没有《' + lockName + '》· 按普通检索继续')
       : '';
@@ -853,7 +853,7 @@
           ? focusLead
           : (cards.trigger ? cardList.length + ' 张书卡 · 触发' : '未触发 · 直接取 top1'),
         meta: focus
-          ? (focus.status === 'exact' ? '其他书放到后半部分补充' : '')
+          ? (focus.status === 'exact' ? '其他书只补它没有的角度' : '')
           : (cards.trigger ? '不确定时，把候选递给你' : '书级第一名够稳，不弹卡'),
         field: {
           label: '候选',
@@ -1016,12 +1016,12 @@
     }).join('');
     const notes = [];
     if (focus) {
-      notes.push('前半部分只用《' + focusName(focus) + '》回答，其余书放到后半部分补充。');
+      notes.push('先答《' + focusName(focus) + '》，其他书只补它没有的角度。');
     }
     if (choices.length > MAX_SOURCES) {
       notes.push('候选超过 ' + MAX_SOURCES + ' 本，最多选 ' + MAX_SOURCES + ' 本。');
     }
-    if (chosen.length > 1) notes.push('选中 2 本以上时，回答跨书，上下文预算 10,000 字。');
+    if (chosen.length > 1) notes.push('选中 2 本以上时，回答跨书，上下文预算 3,000 字。');
     const act = !readonly && turn.answer && staleSources(turn)
       ? '<div class="books-act"><span class="books-note">当前回答按 '
         + scopeSources(turn).length + ' 本生成</span>'
@@ -1216,7 +1216,7 @@
     }).join('');
     return '<section class="evidences"><div class="ev-head">'
       + '<span class="t">本轮依据 · ' + list.length + ' 段</span>'
-      + '<span class="h">点一段，右边的原文换过来，也设为下一问的落点</span></div>'
+      + '<span class="h">点一段，右边的原文换过来，只用于下一问</span></div>'
       + rows + '</section>';
   }
 
@@ -1813,6 +1813,7 @@
       line: Number(cite.line) || 1,
       title: cite.chapter || chapterOf(cite),
       quote: cite.quote || '',
+      fromN: Number(ref.fromN) || 0,
     };
   }
 
@@ -1979,13 +1980,14 @@
     if (!text || state.busy) return;
     state.turns = state.turns.filter((t) => t.status !== 'run-error');
     const prev = lastTurn();
+    const anchor = anchorPayload();
     const turn = {
       n: prev ? prev.n + 1 : 1,
       question: text,
       thinking: THINKING_LEVEL,
       trace: null,
       related: null,
-      anchor: anchorPayload(),
+      anchor,
       answer: null,
       context: null,
       sources: [],
@@ -1998,6 +2000,10 @@
       stripOpen: true,
     };
     state.turns.push(turn);
+    if (anchor) {
+      state.selected = null;
+      state.shown = null;
+    }
     state.viewN = turn.n;
     state.rail = 'current';
     state.error = '';
@@ -2035,7 +2041,7 @@
     const choice = bookChoices(turn).find((row) => sourceKey(row.source) === key);
     if (!choice) return;
     if (choice.locked) {
-      toast(choice.role === 'focus' ? '指定书固定入选' : '落点那本固定入选，先取消落点再换');
+      toast(choice.role === 'focus' ? '指定书固定入选' : '落点只用于下一问；检索有结果时以结果为准');
       return;
     }
     const chosen = turn.sources || [];
@@ -2391,10 +2397,10 @@
         used, focus ? focusSupplements(turn, focus) : []);
       if (list.length) return focusFirstSources(turn, list);
     }
-    const anchor = sourceFromAnchor(turn.anchor);
-    if (anchor) return [anchor];
     const top = sourceFromResult((turn.trace || {}).result);
     if (top) return [top];
+    const anchor = sourceFromAnchor(turn.anchor);
+    if (anchor && (!turn.anchor.fromN || Number(turn.anchor.fromN) === turn.n - 1)) return [anchor];
     const cite = citesOf(turn).find((c) => c.verified) || citesOf(turn)[0];
     if (cite && cite.path) {
       return [{
