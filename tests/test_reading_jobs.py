@@ -321,9 +321,30 @@ def test_sidecar_write_error_keeps_the_failure_and_the_worker(tmp_path):
         failed = queue.get(job["id"])
         assert failed["error_kind"] == "quality"
         assert failed["failure_artifact"] is None
-        assert "Error" in failed["failure_artifact_error"]
+        assert failed["failure_artifact_error"].startswith("FileExistsError: ")
         second = queue.submit("B0003", 7, [], kind="depth", layers=["skim"])
         assert _wait_until(lambda: queue.get(second["id"])["state"] == "failed")
+    finally:
+        queue.shutdown()
+
+
+def test_oversized_payload_is_not_written_but_the_failure_is(tmp_path):
+    """超 200KB 的候选正文不入盘，但要留下一句「没入盘」，否则读账的人以为丢数据了。"""
+    blob = "源" * 120_000  # 约 360KB UTF-8
+
+    def runner(job_id, _job):
+        queue.set_layer(job_id, "skim")
+        raise SkimError("正文比例不够", stats={"body_han": 1}, payload={"scenes": [{"text": blob}]})
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["skim"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "failed")
+        failed = queue.get(job["id"])
+        record = json.loads((tmp_path / failed["failure_artifact"]).read_text(encoding="utf-8"))
+        assert record["raw_payload"] is None
+        assert record["payload_omitted"] is True
+        assert record["stats"] == {"body_han": 1}
     finally:
         queue.shutdown()
 

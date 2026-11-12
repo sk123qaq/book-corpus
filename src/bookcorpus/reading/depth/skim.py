@@ -690,7 +690,7 @@ def _scene_messages(book, chapter, chapter_model, blocks, panels=None):
     ]
 
 
-def _gap_message(stats, message, detail_dropped=False):
+def _gap_message(stats, message, detail_dropped=False, whole_omitted=False):
     source = stats.get("source_han") or 0
     body = stats.get("body_han") or 0
     low, high = _ratio_bounds(source)
@@ -705,15 +705,19 @@ def _gap_message(stats, message, detail_dropped=False):
         f"未通过的校验：{_clip(message)}",
         f"当前正文 {body} 汉字，目标 {low}–{high} 汉字（源文 {source} 汉字），{move}",
     ]
-    lines.append(
-        "sections、claims、units、anchor 的结构不要改，"
-        + ("detail_index 的引文也不要改。" if not detail_dropped else "detail_index 需要按源文块重建。")
-    )
-    if detail_dropped:
-        lines.append("上一份输出的 detail_index 因过长已省略，请按源文块重建，unit 归属规则不变。")
+    if whole_omitted:
+        # 整份都没回灌时，说「结构不要改」等于让模型改一份它看不到的输出。
+        lines.append("上一份输出过长，整份未能回灌；请按源文块重出一份完整 JSON，结构按系统提示重建。")
+    else:
+        lines.append(
+            "sections、claims、units、anchor 的结构不要改，"
+            + ("detail_index 的引文也不要改。" if not detail_dropped else "detail_index 需要按源文块重建。")
+        )
+        if detail_dropped:
+            lines.append("上一份输出的 detail_index 因过长已省略，请按源文块重建，unit 归属规则不变。")
     gaps = stats.get("section_gaps") or []
     if gaps:
-        lines.append("分节目标：")
+        lines.append("分节目标（仅供定位，总正文以整体区间为准）：")
         for item in gaps:
             section_source = item.get("source_han", 0)
             section_low, section_high = _ratio_bounds(section_source)
@@ -740,7 +744,8 @@ def _repair_payload_text(payload):
         return original, len(original), False, False
     reduced = copy.deepcopy(payload)
     dropped = False
-    if isinstance(reduced, dict) and reduced.pop("detail_index", None) is not None:
+    if isinstance(reduced, dict) and reduced.get("detail_index"):
+        reduced.pop("detail_index")
         dropped = True
         try:
             reduced_text = json.dumps(reduced, ensure_ascii=False)
@@ -839,7 +844,12 @@ def generate_skim(
                 ) from exc
             last_quality_error = exc
             assistant_text, payload_chars, detail_dropped, still_too_long = _repair_payload_text(exc.payload)
-            gap_text = _gap_message(exc.stats or {}, str(exc), detail_dropped=detail_dropped)
+            gap_text = _gap_message(
+                exc.stats or {},
+                str(exc),
+                detail_dropped=detail_dropped,
+                whole_omitted=assistant_text is None,
+            )
             if assistant_text is None or detail_dropped:
                 events.current().emit(
                     "skim_repair_payload_omitted",

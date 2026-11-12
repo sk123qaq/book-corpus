@@ -1859,6 +1859,26 @@ def test_skim_repair_payload_reports_dropped_even_when_still_too_long():
     assert still_too_long is True
 
 
+def test_skim_gap_message_does_not_claim_structure_is_kept_when_whole_payload_omitted():
+    """整份没回灌时，模型看不到上一稿，说「结构不要改」等于让它改看不见的东西。"""
+    stats = {"source_han": 4000, "body_han": 300}
+    gap = skim_module._gap_message(stats, "正文汉字 300 字（7.5%）越界（15%–25%）", whole_omitted=True)
+    assert "整份未能回灌" in gap
+    assert "结构不要改" not in gap
+    assert "detail_index 因过长已省略" not in gap
+
+
+def test_skim_repair_payload_keeps_empty_detail_index():
+    """空 detail_index 不是「省略」：省掉一串空列表既不省字节，也不该谎报。"""
+    payload = _scenes_payload()
+    payload["detail_index"] = []
+    payload["scenes"][0]["text"] = "源" * 70000
+    text, _chars, dropped, still_too_long = skim_module._repair_payload_text(payload)
+    assert dropped is False
+    assert text is None
+    assert still_too_long is True
+
+
 def test_skim_gap_message_asks_to_cut_when_body_is_over_max():
     """正文超上限时再叫它「扩写」，这次返修必然白费。"""
     stats = {"source_han": 10150, "body_han": 2600, "section_gaps": []}
