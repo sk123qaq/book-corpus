@@ -136,15 +136,71 @@
   RD.jobHint = (job) => {
     if (!job) return '';
     if (job.state === 'cancelled') return '已取消（收尾中）';
+    // 失败/完成/部分通过都不是「进行中」，别拼出「失败中」。
+    if (!RD.activeStates.includes(job.state)) return RD.statusName[job.state] || job.state;
     return (RD.statusName[job.state] || job.state) + '中';
   };
 
   RD.jobSteps = (job) => {
     const steps = (job && job.steps) || [];
     return '<ol class="steps">' + steps.map((step) => (
-      '<li class="step ' + (step.status === 'done' ? 'done' : step.status === 'run' ? 'run' : '') + '">' +
-      '<span class="mark">' + (step.status === "done" ? "✓" : "") + '</span><span>' + RD.esc(step.name) + '</span></li>'
+      '<li class="step ' + (step.status === 'done' ? 'done' : step.status === 'run' ? 'run' : step.status === 'failed' ? 'fail' : '') + '">' +
+      '<span class="mark">' + (step.status === 'done' ? '✓' : step.status === 'failed' ? '✗' : '') + '</span>' +
+      '<span>' + RD.esc(step.name) + '</span></li>'
     )).join('') + '</ol>';
+  };
+
+  // 「已用 2 分 17 秒」比毫秒好读，也便于核对六层各花了多久。
+  RD.elapsed = (ms) => {
+    const total = Number(ms);
+    if (!(total > 0)) return '';
+    const seconds = Math.round(total / 1000);
+    if (seconds < 60) return seconds + ' 秒';
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    if (minutes < 60) return minutes + ' 分' + (rest ? ' ' + rest + ' 秒' : '');
+    return Math.floor(minutes / 60) + ' 小时 ' + (minutes % 60) + ' 分';
+  };
+
+  // 一行摘要：第几层、用时、错误种类。失败时不用展开也能判断停在哪。
+  // 页面上不出现裸的英文类别；认不出的原样显示，方便查事件账。
+  RD.errorKindName = (kind) => ({
+    transport_closed: '对端未回状态行就断开',
+    transport_timeout: '读超时',
+    transport_reset: '连接被重置',
+    transport_truncated: '响应被截断',
+    transport_dns: '域名解析失败',
+    transport_tls: 'TLS 握手失败',
+    transport_refused: '连接被拒',
+    rate_limited: '被限流',
+    http_5xx: '服务端错误',
+    http_4xx: '请求被拒',
+    auth: '鉴权失败',
+    truncated: '输出被截断',
+    protocol: '响应不合协议',
+    config: '配置错误',
+    restart: '服务重启中断',
+    cancelled: '已取消',
+  })[kind] || kind || '';
+
+  RD.jobMeta = (job) => {
+    if (!job) return '';
+    const parts = [];
+    if (job.kind === 'depth') {
+      const order = ['model', 'panels', 'skim', 'standard', 'deep', 'render'];
+      const layer = job.failed_layer || job.layer;
+      const index = order.indexOf(layer);
+      if (index >= 0) {
+        parts.push('第 ' + (index + 1) + '/6 层' + (layer === 'render' ? '' : ' · ' + (RD.depthNames[layer] || layer)));
+      }
+      const ready = (job.layers_ready || []).length;
+      if (ready) parts.push('已落 ' + ready + '/5 层');
+    }
+    const took = RD.elapsed(job.elapsed_ms);
+    if (took) parts.push('已用 ' + took);
+    if (job.error_kind) parts.push(RD.errorKindName(job.error_kind));
+    if (job.attempts) parts.push('尝试 ' + job.attempts + ' 次');
+    return parts.join(' · ');
   };
 
   RD.jobCard = (job) => {
@@ -159,6 +215,7 @@
       '<div class="job-title">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
       names.join(' / ') + '</div>' +
       RD.jobSteps(job) +
+      (RD.jobMeta(job) ? '<div class="job-meta">' + RD.esc(RD.jobMeta(job)) + '</div>' : '') +
       '<div class="job-progress"><i style="width:' + Number(job.progress || 0) + '%"></i></div>' +
       (job.error ? '<p class="job-error">' + RD.esc(job.error) + '</p>' : '') +
       '</div>';

@@ -7,6 +7,7 @@ import time
 import uuid
 
 from . import events
+from .store import DEPTH_LAYERS
 
 STEPS = ("切块", "标注", "校验", "组档", "渲染")
 DEPTH_STEPS = ("结构", "面板", "速览", "标准", "深读", "渲染")
@@ -15,6 +16,9 @@ STEPS_BY_KIND = {
     "edition": ("解析", "编辑", "校验", "渲染", "入库"),
     "depth": DEPTH_STEPS,
 }
+# 账本要能说出「第 3/6 层 · 速览」，所以层名和步骤名得能互相翻译。
+STEP_LAYERS = {"model": "结构", "panels": "面板", "skim": "速览", "standard": "标准", "deep": "深读"}
+RENDER_STEP = "渲染"
 ACTIVE_STATES = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
 STAGE_TO_STEP = {
     "queued": (0, 0),
@@ -76,13 +80,30 @@ class JobQueue:
                     job["state"] = "failed"
                     job["stage"] = "failed"
                     job["error"] = "服务重启，任务中断"
+                    job["error_kind"] = "restart"
+                    job["failed_layer"] = job.get("layer")
                     job["updated_at"] = _now()
+                    job["steps"] = self._steps_for(
+                        "failed",
+                        job.get("kind"),
+                        layer=job.get("layer"),
+                        layers_ready=job.get("layers_ready") or (),
+                        failed_layer=job.get("failed_layer"),
+                    )
+                    job["progress"] = self._progress(
+                        "failed", job.get("kind"), job.get("layers_ready") or (), job.get("phase")
+                    )
+                    changed = True
                 elif job.get("state") == "done" and job.get("error"):
                     # 旧账：模型失败但退化为 draft 的工单曾被记成 done。
                     job["state"] = "partial"
                     job["stage"] = "partial"
                     job["status"] = "partial"
                     job["updated_at"] = _now()
+                    changed = True
+        if changed:
+            # 落一次盘：否则进程再崩，磁盘上还是那份「运行中」的旧账。
+            self._save()
 
     def _save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
@@ -94,21 +115,82 @@ class JobQueue:
 
     # ---- 状态 ---------------------------------------------------------
     @staticmethod
-    def _steps_for(state, kind="reading"):
-        index, _ = STAGE_TO_STEP.get(state, (0, 0))
+    def _steps_for(state, kind="reading", *, layer=None, layers_ready=(), failed_layer=None, phase=None):
         labels = STEPS_BY_KIND.get(kind, STEPS)
+        if kind != "depth":
+            # 失败/部分失败不能把五步全标成完成：那正是「100% + 失败」的来源。
+            index, _ = STAGE_TO_STEP.get(phase or state, (0, 0))
+            steps = []
+            for i, label in enumerate(labels):
+                if state == "done":
+                    status = "done"
+                elif state == "cancelled":
+                    status = "done" if i < index else "pending"
+                elif state == "failed":
+                    status = "failed" if i == index else ("done" if i < index else "pending")
+                elif state == "partial":
+                    status = "done" if i <= index else "pending"
+                elif i < index:
+                    status = "done"
+                elif i == index:
+                    status = "run"
+                else:
+                    status = "pending"
+                steps.append({"name": label, "status": status})
+            return steps
+        # 深度任务的步骤只能按「哪几层真的在盘上」来标，不能按阶段猜。
+        ready = {STEP_LAYERS[key] for key in layers_ready or () if key in STEP_LAYERS}
+        current = STEP_LAYERS.get(layer)
+        broken = STEP_LAYERS.get(failed_layer) if failed_layer else current
+        if failed_layer in ("render", RENDER_STEP):
+            broken = RENDER_STEP
         steps = []
-        for i, label in enumerate(labels):
-            if state == "cancelled":
-                status = "pending"
-            elif state in ("done", "partial", "failed") or i < index:
+        for label in labels:
+            if label == RENDER_STEP:
+                if broken == RENDER_STEP:
+                    status = "failed"
+                elif state == "done":
+                    status = "done"
+                elif state == "rendering":
+                    status = "run"
+                else:
+                    status = "pending"
+            elif label in ready:
                 status = "done"
-            elif i == index:
-                status = "run" if state not in ("failed",) else "failed"
+            elif state == "failed" and label == broken:
+                status = "failed"
+            elif not ready and state == "done":
+                # 旧账没有 layers_ready，不能把历史上成功的任务全标成未做。
+                status = "done"
+            elif label == current and state in ACTIVE_STATES:
+                status = "run"
             else:
                 status = "pending"
             steps.append({"name": label, "status": status})
+        if state == "failed" and not any(step["status"] == "failed" for step in steps):
+            # 没有层内失败（例如空选层、章节缺失、重启时 layer 为空）时也要指出断点，
+            # 否则页面写着失败、六行却全是未跑，读的人不知道停在哪。
+            for step in steps:
+                if step["status"] != "done":
+                    step["status"] = "failed"
+                    break
         return steps
+
+    @staticmethod
+    def _progress(state, kind="reading", layers_ready=(), phase=None):
+        if kind != "depth":
+            if state == "done":
+                return 100
+            # 表里的 failed/partial 都是 100，未完成的任务不许显示满格；
+            # 完成度按最后跑到的阶段算（phase 在任务结束时停在最后阶段）。
+            value = STAGE_TO_STEP.get(phase or state, (0, 0))[1]
+            return min(value, 99) if state in ("partial", "failed") else value
+        if state == "done":
+            return 100
+        done = len(set(layers_ready or ()) & set(DEPTH_LAYERS))
+        pct = round(done / len(DEPTH_STEPS) * 100)
+        # 未完成的任务不许显示 100%，否则记录页的「100% + 部分通过」自相矛盾。
+        return min(pct, 99) if state in ("partial", "failed") else pct
 
     def _update(self, job_id, force=False, **changes):
         with self._lock:
@@ -121,17 +203,43 @@ class JobQueue:
                 return dict(job)
             job.update(changes)
             job["updated_at"] = _now()
-            job["steps"] = self._steps_for(job["state"], job.get("kind"))
-            _index, progress = STAGE_TO_STEP.get(job["state"], (0, 0))
+            job["steps"] = self._steps_for(
+                job["state"],
+                job.get("kind"),
+                layer=job.get("layer"),
+                layers_ready=job.get("layers_ready") or (),
+                failed_layer=job.get("failed_layer"),
+                phase=job.get("phase"),
+            )
             job["stage"] = job["state"]
+            if job["state"] in ACTIVE_STATES:
+                # 失败后 state/stage 都变成 failed，phase 留着最后跑到哪一阶段。
+                job["phase"] = job["state"]
             if "progress" not in changes:
-                job["progress"] = progress
+                job["progress"] = self._progress(
+                    job["state"], job.get("kind"), job.get("layers_ready") or (), job.get("phase")
+                )
             self._save()
             return dict(job)
 
     def note(self, job_id, **fields):
         """给运行中的任务补记事实（如标注是复用还是重做），不改阶段。"""
         return self._update(job_id, **fields)
+
+    def set_layer(self, job_id, layer, layers_ready=None):
+        """记下正在跑哪一层、哪几层已经落盘，步骤表和进度都从这两个字段推。"""
+        changes = {"layer": layer}
+        if layers_ready is not None:
+            changes["layers_ready"] = sorted(set(layers_ready) & set(DEPTH_LAYERS))
+        return self._update(job_id, **changes)
+
+    def events_path(self, job_id):
+        """原始账的磁盘位置；返回值要进 JSON，所以是 str 不是 Path。"""
+        return str(events.path_for(self.log_dir, job_id))
+
+    def events(self, job_id, limit=2000):
+        """读回原始账；没有账就是空列表，不报错。"""
+        return events.read(self.log_dir, job_id, limit=limit)
 
     def set_stage(self, job_id, state):
         with self._lock:
@@ -178,15 +286,23 @@ class JobQueue:
             "allow_unverified": bool(allow_unverified),
             "state": "queued",
             "stage": "queued",
+            "phase": "queued",
             "progress": 0,
             "steps": self._steps_for("queued", kind),
             "error": None,
+            "error_kind": None,
+            "failed_layer": None,
+            "attempts": None,
+            "elapsed_ms": None,
+            "layers_ready": [],
+            "skipped": [],
             "created_at": _now(),
             "updated_at": _now(),
             "pack_id": None,
         }
         if kind == "depth":
             job["layers"] = job_layers
+            job["layer"] = None
         with self._lock:
             self._jobs[job["id"]] = job
             self._order.append(job["id"])
@@ -226,6 +342,7 @@ class JobQueue:
         return bool(job.get("cancel_requested")) or job.get("state") == "cancelled"
 
     def _run_one(self, job_id, job):
+        started = time.monotonic()
         with self._lock:
             if self._is_cancelled_locked(job_id):
                 return
@@ -240,7 +357,16 @@ class JobQueue:
                 with self._lock:
                     if self._is_cancelled_locked(job_id):
                         return
-                self._update(job_id, state="failed", progress=100, error=str(exc) or exc.__class__.__name__)
+                    current = self._jobs.get(job_id) or {}
+                    self._update(
+                        job_id,
+                        state="failed",
+                        error=str(exc) or exc.__class__.__name__,
+                        error_kind=getattr(exc, "kind", None),
+                        attempts=getattr(exc, "attempt", None),
+                        failed_layer=current.get("layer"),
+                        elapsed_ms=int((time.monotonic() - started) * 1000),
+                    )
                 return
             with self._lock:
                 cancelled = self._is_cancelled_locked(job_id)
@@ -259,8 +385,10 @@ class JobQueue:
                     "state": state,
                     "status": status,
                     "pack_id": (result or {}).get("pack_id"),
-                    "progress": 100,
                     "error": error,
+                    "skipped": (result or {}).get("skipped") or [],
+                    "layers_ready": (result or {}).get("layers_ready") or [],
+                    "elapsed_ms": int((time.monotonic() - started) * 1000),
                 }
             if cancelled and saved:
                 self.mark_saved(job_id, result)
@@ -279,13 +407,21 @@ class JobQueue:
         if error and state == "done":
             state = "partial"
             status = "partial"
+        job = self.get(job_id) or {}
+        progress = self._progress(
+            state,
+            job.get("kind"),
+            result.get("layers_ready") or job.get("layers_ready") or (),
+            job.get("phase"),
+        )
         return self._update(
             job_id,
             force=True,
             state=state,
             status=status,
             pack_id=result.get("pack_id"),
-            progress=100,
+            layers_ready=result.get("layers_ready") or job.get("layers_ready"),
+            progress=progress,
             error=error,
         )
 
@@ -350,11 +486,23 @@ class JobQueue:
             if job["state"] == "queued" and job_id in self._queue:
                 self._queue.remove(job_id)
             # 立即把状态改成 cancelled，记录页/工单页不用等后台步骤结束才反馈。
+            # 取消不是失败：已落盘的层要留着，失败层与错误类别要清掉，
+            # 否则步骤条会指着一层说它失败了，而它只是没跑完。
+            keep = list(job.get("layers_ready") or [])
             return self._update(
                 job_id,
                 state="cancelled",
                 progress=job.get("progress", 0),
                 error="已取消",
+                error_kind="cancelled",
+                failed_layer=None,
+                layers_ready=keep,
+                steps=self._steps_for(
+                    "cancelled",
+                    job.get("kind") or "reading",
+                    layers_ready=keep,
+                    phase=job.get("phase"),
+                ),
             )
 
     def cancelled(self, job_id):

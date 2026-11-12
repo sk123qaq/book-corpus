@@ -219,8 +219,10 @@ function detail(job, open) {
         '<button data-retry="' + id + '" data-force-annotation="1">重新标注</button>';
   return '<div class="rec-detail' + (open ? ' open' : '') + '">' +
     RD.jobSteps(job) +
+    (RD.jobMeta(job) ? '<div class="rec-meta">' + RD.esc(RD.jobMeta(job)) + '</div>' : '') +
     '<div class="gate">' + (job.pack_id ? '产物 <b>' + RD.esc(job.pack_id) + '</b> · ' : '') +
       '状态 <b>' + RD.esc(RD.statusName[job.state] || job.status || job.state) + '</b>' +
+      (job.error_kind ? ' · 类别 <b>' + RD.esc(job.error_kind) + '</b>' : '') +
       (job.error ? ' · <b>' + RD.esc(job.error) + '</b>' : '') +
       (job.annotation_source === 'cache' ? ' · 标注 <b>复用</b>（未调用模型，只重渲染）' : '') +
       ' · 更新于 ' + RD.esc(job.updated_at || '—') + '</div>' +
@@ -364,8 +366,9 @@ function bindActions(scope) {
     });
   });
   scope.querySelectorAll('[data-log]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const job = (data.jobs || []).find((item) => item.id === button.dataset.log);
+    button.addEventListener('click', async () => {
+      const jobId = button.dataset.log;
+      const job = (data.jobs || []).find((item) => item.id === jobId);
       if (!job) return;
       let node = document.getElementById('raw-log');
       if (!node) {
@@ -374,7 +377,19 @@ function bindActions(scope) {
         node.className = 'raw-log';
         document.body.appendChild(node);
       }
-      node.textContent = JSON.stringify(job, null, 2);
+      // 优先展示事件账（带时间戳、对端地址、各段耗时），拿不到再退回任务字段。
+      let body = JSON.stringify(job, null, 2);
+      try {
+        const res = await fetch('/api/jobs/' + encodeURIComponent(jobId) + '/events');
+        if (res.ok) {
+          const payload = await res.json();
+          const lines = (payload.events || []).map((item) => JSON.stringify(item));
+          if (lines.length) body = (payload.path ? '# ' + payload.path + '\n' : '') + lines.join('\n');
+        }
+      } catch (err) {
+        body = JSON.stringify(job, null, 2);
+      }
+      node.textContent = body;
       node.classList.add('show');
       node.onclick = () => node.classList.remove('show');
     });

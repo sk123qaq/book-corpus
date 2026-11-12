@@ -1277,7 +1277,9 @@ class ReadingService:
         return out
 
     # ---- 生成 ---------------------------------------------------------
-    def _set_stage(self, job_id, state):
+    def _set_stage(self, job_id, state, layer=None):
+        if layer:
+            self.queue.set_layer(job_id, layer)
         self.queue.set_stage(job_id, state)
 
     def _annotate_with_meta(self, book, chapter, blocks, model=None, effort=None):
@@ -1325,6 +1327,11 @@ class ReadingService:
         existing = {}
         for layer, name in DEPTH_FILES.items():
             existing[layer] = self.store.depth_json(uid, n, name)
+        # 续跑的任务从盘上已有层起步：进度条不该从 0 开始爬，与「已落 4/5 层」打架。
+        self.queue.note(
+            job_id,
+            layers_ready=self.store.depth_state(uid, n, raw.get("source_sha256")).get("layers_ready") or [],
+        )
         files = {}
         # chapter.html 也预载：整目录替换的写法下，不带上它就等于每落一次盘删一次页面。
         for name in [*list(DEPTH_FILES.values()), "ledger.json", "chapter.html"]:
@@ -1398,7 +1405,7 @@ class ReadingService:
         regenerated = False
         if "model" in requested:
             preflight.require(["reading.model"], note="深读结构层要用模型生成。")
-            self._set_stage(job_id, "annotating")
+            self._set_stage(job_id, "annotating", layer="model")
             try:
                 model, model_meta = generate_chapter_model(
                     self.client or ModelClient(),
@@ -1500,14 +1507,17 @@ class ReadingService:
                 state["cache_key"] = model_meta["cache_key"]
             files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
             self.store.save_depth_partial(uid, n, files, status)
-            events.current().emit("layer_commit", status=status, layers_ready=ready_layers())
+            committed = ready_layers()
+            # 任务账要与磁盘同步：记录页的步骤表和进度从这两个字段推。
+            self.queue.note(job_id, layers_ready=committed)
+            events.current().emit("layer_commit", status=status, layers_ready=committed)
             return status
 
         snapshot(interim_status())
 
         panels = existing.get("panels")
         if "panels" in requested:
-            self._set_stage(job_id, "annotating")
+            self._set_stage(job_id, "annotating", layer="panels")
             panels, panels_meta = generate_panels(
                 self.client or ModelClient(),
                 book,
@@ -1519,7 +1529,7 @@ class ReadingService:
                 model_name=job.get("model"),
                 effort=job.get("effort"),
             )
-            self._set_stage(job_id, "validating")
+            self._set_stage(job_id, "validating", layer="panels")
             panels = validate_panels(panels, model, blocks, mode=mode, source_sha256=raw.get("source_sha256") or "")
             audit = audit_panels(panels, model, blocks, mode=mode)
             files[DEPTH_FILES["panels"]] = json.dumps(panels, ensure_ascii=False, indent=1)
@@ -1537,7 +1547,7 @@ class ReadingService:
 
         skim = existing.get("skim")
         if "skim" in requested:
-            self._set_stage(job_id, "annotating")
+            self._set_stage(job_id, "annotating", layer="skim")
             skim = generate_skim(
                 self.client or ModelClient(),
                 book,
@@ -1549,7 +1559,7 @@ class ReadingService:
                 mode=mode,
                 panels=panels,
             )
-            self._set_stage(job_id, "validating")
+            self._set_stage(job_id, "validating", layer="skim")
             skim = validate_skim(skim, model, blocks, mode=mode)
             audit = audit_skim(skim, model, blocks, mode=mode)
             if audit.get("errors"):
@@ -1565,7 +1575,7 @@ class ReadingService:
 
         standard = existing.get("standard")
         if "standard" in requested:
-            self._set_stage(job_id, "projecting")
+            self._set_stage(job_id, "projecting", layer="standard")
             standard = build_standard(model, blocks)
             files[DEPTH_FILES["standard"]] = json.dumps(standard, ensure_ascii=False, indent=1)
             layer_sha["standard"] = _depth_sha(standard)
@@ -1577,7 +1587,7 @@ class ReadingService:
 
         deep = existing.get("deep")
         if "deep" in requested:
-            self._set_stage(job_id, "annotating")
+            self._set_stage(job_id, "annotating", layer="deep")
             deep, deep_meta = generate_deep(
                 self.client or ModelClient(),
                 book,
@@ -1588,7 +1598,7 @@ class ReadingService:
                 effort=job.get("effort"),
                 mode=mode,
             )
-            self._set_stage(job_id, "validating")
+            self._set_stage(job_id, "validating", layer="deep")
             deep = validate_deep(deep, model, blocks, mode=mode)
             audit = audit_deep(deep, model, blocks, mode=mode)
             if audit.get("errors"):
@@ -1611,7 +1621,7 @@ class ReadingService:
         html_layers = {"panels", "skim", "standard", "deep"}
         need_render = skim_fresh and bool(html_layers & (set(requested) | set(skipped)))
         if need_render:
-            self._set_stage(job_id, "rendering")
+            self._set_stage(job_id, "rendering", layer="render")
             files["chapter.html"] = render_depth_chapter(
                 book,
                 chapter,
@@ -1630,7 +1640,7 @@ class ReadingService:
         status = "ready" if skim is not None and html_written else interim_status()
         snapshot(status)
         self._invalidate_packs()
-        return {"status": status, "pack_id": f"{uid}/ch/{n:02d}", "skipped": skipped}
+        return {"status": status, "pack_id": f"{uid}/ch/{n:02d}", "skipped": skipped, "layers_ready": ready_layers()}
 
     def _run_job(self, job_id, job):
         if job.get("kind") == "edition":

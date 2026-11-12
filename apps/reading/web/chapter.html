@@ -70,7 +70,11 @@ async function load() {
   data.jobs = data.jobs || [];
   if (data.depth) {
     const layers = data.depth.layers || {};
-    depthSelected = new Set(DEPTH_KEYS.filter((key) => (layers[key] || {}).status !== 'ready'));
+    // 默认只勾「缺失 / 失败 / 过期」：已就绪的层默认保留，不白花调用。
+    depthSelected = new Set(DEPTH_KEYS.filter((key) => {
+      const status = (layers[key] || {}).status;
+      return status === 'missing' || status === 'failed' || status === 'stale';
+    }));
   } else {
     depthSelected = null;
   }
@@ -347,7 +351,7 @@ function renderGates() {
 }
 
 function depthStatusName(status) {
-  return { missing: '未生成', running: '生成中', ready: '可用', stale: '过期', failed: '失败' }[status] || status;
+  return { missing: '未生成', running: '生成中', ready: '已就绪', stale: '已过期', failed: '失败' }[status] || status;
 }
 
 function depthRow(key) {
@@ -382,11 +386,18 @@ function depthPanelHtml() {
       (stale ? '<p class="depth-warning">源文已变更，旧层已过期</p>' : '') +
       DEPTH_KEYS.map(depthRow).join('') +
       '<div class="depth-actions">' +
-        '<button class="btn btn-primary" id="depth-generate" type="button"' + (running ? ' disabled' : '') + '>生成所选层</button>' +
+        '<button class="btn btn-primary" id="depth-generate" type="button"' + (running ? ' disabled' : '') + '>' + depthGenerateLabel() + '</button>' +
         '<button class="btn btn-ghost" id="depth-rebuild-model" type="button"' + (running ? ' disabled' : '') + '>只重建结构模型</button>' +
       '</div>' +
       '<div id="depth-jobs"></div>' +
     '</div>';
+}
+
+function depthGenerateLabel() {
+  const selected = depthSelected ? depthSelected.size : DEPTH_KEYS.length;
+  const kept = DEPTH_KEYS.length - selected;
+  if (!selected) return '没有要生成的层';
+  return kept > 0 ? '生成所选层（保留 ' + kept + ' 层）' : '生成全部五层';
 }
 
 function refreshDepthPanel() {
@@ -401,6 +412,8 @@ function bindDepth() {
     const input = event.target.closest('input[data-depth-layer]');
     if (!input || !depthSelected) return;
     if (input.checked) depthSelected.add(input.value); else depthSelected.delete(input.value);
+    const button = document.getElementById('depth-generate');
+    if (button) button.textContent = depthGenerateLabel();
   });
   root.addEventListener('click', (event) => {
     const one = event.target.closest('[data-depth-one]');

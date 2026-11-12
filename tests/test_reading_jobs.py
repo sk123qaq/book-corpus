@@ -1,8 +1,10 @@
-"""任务队列：并行上限、排队、取消即时反馈。"""
+"""任务队列：并行上限、排队、取消即时反馈、失败时账要说真话。"""
 
+import json
 import threading
 import time
 
+from bookcorpus.reading import events
 from bookcorpus.reading.jobs import JobQueue
 
 
@@ -176,3 +178,198 @@ def test_depth_job_keeps_layers_and_does_not_force_a_tier(tmp_path):
         assert queue.get(job["id"])["layers"] == ["model", "skim"]
     finally:
         queue.shutdown()
+
+
+class _TransportError(RuntimeError):
+    kind = "transport_closed"
+    attempt = 4
+
+
+def test_failed_depth_job_marks_only_the_layer_that_broke(tmp_path):
+    """失败的六行里只有一行是红的；进度按真正落盘的层算，不再报 100%。"""
+
+    def runner(job_id, _job):
+        queue.set_layer(job_id, "model")
+        queue.note(job_id, layers_ready=["model"])
+        queue.set_layer(job_id, "panels")
+        queue.note(job_id, layers_ready=["model", "panels"])
+        queue.set_layer(job_id, "skim")
+        raise _TransportError("Remote end closed connection without response")
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["model", "panels", "skim"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "failed")
+        failed = queue.get(job["id"])
+        assert [step["status"] for step in failed["steps"]] == [
+            "done",
+            "done",
+            "failed",
+            "pending",
+            "pending",
+            "pending",
+        ]
+        assert failed["progress"] == 33
+        assert failed["failed_layer"] == "skim"
+        assert failed["error_kind"] == "transport_closed"
+        assert failed["attempts"] == 4
+        assert failed["elapsed_ms"] is not None
+        assert failed["elapsed_ms"] >= 0
+    finally:
+        queue.shutdown()
+
+
+def test_failed_job_keeps_a_readable_event_log(tmp_path):
+    """看原始账读的是事件账，不是任务字段。"""
+
+    def runner(_job_id, _job):
+        events.current().emit("layer_commit", status="partial", layers_ready=["model"])
+        raise _TransportError("Remote end closed connection without response")
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["model"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "failed")
+        assert queue.events_path(job["id"]).endswith(".jsonl")
+        records = queue.events(job["id"])
+        assert records
+        assert records[0]["kind"] == "layer_commit"
+        assert records[0]["layers_ready"] == ["model"]
+    finally:
+        queue.shutdown()
+
+
+def test_restart_marks_interrupted_job_with_restart_kind(tmp_path):
+    """进程被杀留下的运行态：标失败、点明第几层、进度不虚报。"""
+    path = tmp_path / "阅读" / "jobs.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(
+            [
+                {
+                    "id": "r-restart",
+                    "kind": "depth",
+                    "uid": "B0003",
+                    "n": "06",
+                    "state": "annotating",
+                    "stage": "annotating",
+                    "layer": "skim",
+                    "layers_ready": ["model"],
+                    "layers": ["model", "panels", "skim", "standard", "deep"],
+                    "tiers": [],
+                    "progress": 0,
+                    "created_at": "2026-11-12T00:00:00",
+                    "updated_at": "2026-11-12T00:00:00",
+                }
+            ],
+            fh,
+            ensure_ascii=False,
+        )
+    queue = JobQueue(str(tmp_path), lambda _job_id, _job: {"status": "done"}, max_workers=1)
+    try:
+        job = queue.get("r-restart")
+        assert job["state"] == "failed"
+        assert job["error_kind"] == "restart"
+        assert job["failed_layer"] == "skim"
+        assert job["progress"] == 17
+        assert [step["status"] for step in job["steps"]][:3] == ["done", "pending", "failed"]
+    finally:
+        queue.shutdown()
+
+
+def test_cancel_keeps_finished_layers_and_drops_the_failure(tmp_path):
+    # 取消不是失败：已落盘的层要留着，失败层与错误类别要清掉，
+    # 否则步骤条会指着一层说它失败了，而它只是没跑完。
+    started = threading.Event()
+    release = threading.Event()
+
+    def runner(job_id, job):
+        queue.set_layer(job_id, "skim")
+        queue.note(job_id, layers_ready=["model", "panels"])
+        queue.set_stage(job_id, "annotating")
+        started.set()
+        release.wait(timeout=5)
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], model="fake-model", kind="depth", layers=["model", "panels", "skim"])
+        assert started.wait(timeout=5)
+        cancelled = queue.cancel(job["id"])
+        assert cancelled["state"] == "cancelled"
+        assert cancelled["error_kind"] == "cancelled"
+        assert cancelled["failed_layer"] is None
+        assert [step["status"] for step in cancelled["steps"]] == [
+            "done",
+            "done",
+            "pending",
+            "pending",
+            "pending",
+            "pending",
+        ]
+    finally:
+        release.set()
+        queue.shutdown()
+
+
+def test_non_depth_failure_does_not_show_all_steps_done():
+    # 记录页最刺眼的一条是「状态 失败 / 100%」；五步全绿是它的另一半。
+    steps = JobQueue._steps_for("failed", "reading", phase="annotating")
+    assert [step["status"] for step in steps] == ["done", "failed", "pending", "pending", "pending"]
+    assert JobQueue._progress("failed", "reading", (), "annotating") < 100
+
+
+def test_render_failure_marks_the_render_row():
+    # 渲染层传下来的是层键 "render"，不是中文标签，两边一直对不上。
+    steps = JobQueue._steps_for(
+        "failed",
+        "depth",
+        layers_ready=["model", "panels", "skim", "standard", "deep"],
+        failed_layer="render",
+    )
+    assert steps[-1] == {"name": "渲染", "status": "failed"}
+    assert [step["status"] for step in steps[:-1]] == ["done"] * 5
+
+
+def test_failure_without_a_layer_still_points_at_a_row():
+    # 空选层、章节缺失、重启时不知道跑到哪一层：六行全未跑 + 红字失败，读的人不知道停在哪。
+    steps = JobQueue._steps_for("failed", "depth", layers_ready=["model", "panels"])
+    assert [step["status"] for step in steps] == [
+        "done",
+        "done",
+        "failed",
+        "pending",
+        "pending",
+        "pending",
+    ]
+
+
+def test_mark_saved_partial_job_does_not_report_full_progress(tmp_path):
+    def runner(job_id, job):
+        queue.set_layer(job_id, "skim")
+        queue.note(job_id, layers_ready=["model", "panels"])
+        return {"status": "partial", "pack_id": "B0003/ch/06", "layers_ready": ["model", "panels"]}
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["model", "panels", "skim"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "partial", timeout=5)
+        saved = queue.get(job["id"])
+        assert saved["state"] == "partial"
+        assert saved["progress"] < 100
+    finally:
+        queue.shutdown()
+
+
+def test_events_route_does_not_accept_path_traversal():
+    import importlib.util
+    import pathlib
+
+    path = pathlib.Path(__file__).resolve().parents[1] / "apps" / "reading" / "server.py"
+    spec = importlib.util.spec_from_file_location("reading_server_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    events_route = next(pattern for pattern, name in module.ROUTES if name == "job_events")
+    assert events_route.match("/api/jobs/r-68635efa23/events")
+    assert not events_route.match("/api/jobs/../etc/events")
+    assert not events_route.match("/api/jobs/a%2Fb/events")
+    assert not events_route.match("/api/jobs/./events")

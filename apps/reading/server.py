@@ -46,6 +46,7 @@ ROUTES = [
     (re.compile(r"^/api/records$"), "records"),
     (re.compile(r"^/api/jobs$"), "jobs"),
     (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)$"), "job"),
+    (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)/events$"), "job_events"),
     (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)/cancel$"), "cancel"),
     (re.compile(r"^/api/export/([A-Za-z0-9_-]+)/(\d+)/([a-z]+)$"), "export"),
     (re.compile(r"^/api/asset$"), "asset"),
@@ -301,6 +302,20 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(404, {"error": "任务不存在"}, head)
                 else:
                     self._json(200, job, head)
+            elif name == "job_events":
+                job_id = match.group(1)
+                if not self.service.queue.get(job_id):
+                    self._json(404, {"error": "任务不存在"}, head)
+                else:
+                    self._json(
+                        200,
+                        {
+                            "job": job_id,
+                            "path": self.service.queue.events_path(job_id),
+                            "events": self.service.queue.events(job_id),
+                        },
+                        head,
+                    )
             elif name == "export":
                 self._serve_export(match.group(1), int(match.group(2)), match.group(3), head)
             elif name == "asset":

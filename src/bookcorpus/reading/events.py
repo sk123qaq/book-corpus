@@ -23,7 +23,8 @@ def _now_iso():
 
 
 def _safe_name(text):
-    keep = "".join(ch if ch.isalnum() or ch in "-_.@" else "_" for ch in str(text))
+    # 只留字母数字、下划线与短横：任务号不该带 ``.``、``/`` 或 ``..``。
+    keep = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(text))
     return keep or "job"
 
 
@@ -56,6 +57,30 @@ class EventLog:
 
     def close(self):
         self._closed = True
+
+
+def path_for(directory, job_id):
+    """账文件位置；读接口与写接口共用同一套文件名规则。"""
+    return Path(directory) / (_safe_name(job_id) + ".jsonl")
+
+
+def read(directory, job_id, limit=2000):
+    """读回账里最后 ``limit`` 行；坏行跳过，没账返回空列表。"""
+    path = path_for(directory, job_id)
+    try:
+        with path.open(encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return []
+    out = []
+    for line in lines[-limit:]:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            out.append(record)
+    return out
 
 
 class NullLog:
