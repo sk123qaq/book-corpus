@@ -1,7 +1,7 @@
 ---
 name: verify-book-corpus
 description: >
-  用一次性工作区启动并驱动 book-corpus 的五个本地页面（8773 书库首页、8765 找一段、8771 四读、
+  用一次性工作区启动并驱动 book-corpus 的五个本地页面（8773 书库首页、8765 找一段、8771 分层读、
   8772 往期日课、8770 操作台），验证用户可见行为、留下可复核的证据，然后清理实例。
   当需要验证 book-corpus 的一个改动、复现别人报的页面问题、或按功能地图跑端到端检查时使用。
   Drive the disposable stack, never the operator's live library on 8765/8771/8772/8773.
@@ -31,7 +31,7 @@ uv run --frozen book-corpus sample --root "$ROOT"
 ```
 
 - `init` 打印「工作区建好」「书目库：空库已建好」「检索索引：空库已建好」，随后两行 venv 未建警告是 `--no-pdf-venv` 的预期结果。
-- `sample` 装内置样书：阿Q正传 `B0001`、9 章、检索索引 123 段（`sample` 自己报 22881 字，四读 `/api/shelf` 报 21362 正文字符，两处口径不同，别拿一个去验另一个）。没有它，书架、章页、检索都只能验空状态。
+- `sample` 装内置样书：阿Q正传 `B0001`、9 章、检索索引 123 段（`sample` 自己报 22881 字，分层读 `/api/shelf` 报 21362 正文字符，两处口径不同，别拿一个去验另一个）。没有它，书架、章页、检索都只能验空状态。
 
 服务按需起，端口固定用私有的一套，PID 落盘：
 
@@ -58,15 +58,15 @@ setsid python3 apps/ops/server.py --root "$ROOT" --port 18770 \
 
 | 服务 | 端口 | 就绪行 | 备注 |
 |---|---|---|---|
-| 首页 | 18773 | `书库首页 http://127.0.0.1:18773 · root=<ROOT>` | 只读 `books/` 与 `日课/`，可以最先起 |
-| 四读 | 18771 | `四读 8771 · root=<ROOT> · http://127.0.0.1:18771/` | `--no-annotate` 关模型标注，离线确定性；行里的 `8771` 是固定标签，实际端口看 URL |
+| 首页 | 18773 | `书库首页 http://127.0.0.1:18773 · root=<ROOT>` | 只读 `books/`、`日课/` 与仓库模板；`books.toml` 必需，缺了 exit 2。可以最先起 |
+| 分层读 | 18771 | `分层读 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 紧跟一行「配置提示：缺少配置：MinerU…；PaddleOCR…；MiMo…」，是云端 key 常态，不是故障。`--no-annotate` 只关标注，生成仍打模型；行里的 `8771` 是固定标签，实际端口看 URL |
 | 日课 | 18772 | `http://127.0.0.1:18772` | 单行输出，没有别的就绪信号 |
 | 找一段 | 18765 | `书库检索演示：http://127.0.0.1:18765` | 不接 `--root`，只认 `BOOKS_ROOT`；迎宾前可能多一行 `启动恢复：…` |
 | 操作台 | 18770 | `统一操作台：http://127.0.0.1:18770  root=<ROOT>` | `--port 0` 会打印实际端口 |
 
-- 四读要读 `build/library.db`，必须在 `sample` 之后起。
+- 分层读要读 `build/library.db`，必须在 `sample` 之后起。
 - 日课要验「有内容」时，先按 [features/daily-lessons.md](features/daily-lessons.md) 手写一期 `$ROOT/日课/<date>.json`；`book-corpus daily --dry-run` 只打印提示词、不落盘。
-- 首页若用默认地址起（不带 `--*-url`），点卡片会拉起目标服务，拉起命令带首页自己的 `--root`；唯一能安全验这条的是 8770，因为 8765/8771/8772 被操作员占着。
+- 首页若用默认地址起（不带 `--*-url`），点卡片会拉起目标服务，拉起命令带首页自己的 `--root`。唯一能安全验这条的是 8770：它空着。8765 若空着，`/go/search` 会在 8765 起一个本轮实例——验跳转时只读 302，别跟随。
 - 拆服务时就别并行起：同一工作区只能有一个写者（`.writer.lock`）。
 
 收尾见 Cleanup；中途放弃也要走一遍。
@@ -81,9 +81,9 @@ curl -s http://127.0.0.1:18765/api/health
 ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 ```
 
-- `doctor` 逐行 `ok`/`warn`。只允许 PDF 环境、文档环境两条 `warn`；别的 `warn` 先解释再继续。
+- `doctor` 逐行 `ok`/`warn`。允许的 `warn` 只有两类：环境类（`PDF 环境`、`文档环境`）与云端 key 缺失（`配置·MinerU OCR`、`配置·PaddleOCR 云端 OCR`、`配置·MiMo 扩展生成`）。落在工作区、清单、账、库上的 `warn` 才是问题，先解释再继续。
 - 演示页健康必须 `{"ok": true, "db": "ok", ...}` 且 `meta.books` 为 `1`、`meta.paras` 为 `123`。答 `db: missing` 说明没设 `BOOKS_ROOT`，进程落到了 cwd。
-- 端口清单里每个监听者的命令行必须带 `--root $ROOT` 或 `BOOKS_ROOT=$ROOT`；不属于本轮的监听者停：可能是上一轮没清干净。不要按 PID 比：`uv run --frozen python` 起的四读，监听的是它派生的子进程，不是 `run/reading.pid` 里那个包装进程。
+- 端口清单里每个监听者的命令行必须带 `--root $ROOT` 或 `BOOKS_ROOT=$ROOT`；不属于本轮的监听者停：可能是上一轮没清干净。不要按 PID 比：`uv run --frozen python` 起的服务，监听的是它派生的子进程，不是 `run/*.pid` 里那个包装进程。
 - 页面根路径回 403 说明 Host 头不是 `127.0.0.1`/`localhost`，不是服务坏了。
 
 值得驱动 = 工作区根对上 `$ROOT` **且** 就绪行对上端口 **且** 健康检查 `db: ok`。三条里有一条不成立，就不要往里写数据。
@@ -92,18 +92,18 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 
 三种驱动方式，按功能文件里写的用，不要自创：
 
-- **curl** 验页面骨架与接口契约：取 HTML 断言稳定标记，取 JSON 断言字段。`features/library-home.md`、`features/daily-lessons.md`、`features/four-reads.md` 走这条。
+- **curl** 验页面骨架与接口契约：取 HTML 断言稳定标记，取 JSON 断言字段。`features/library-home.md`、`features/daily-lessons.md`、`features/layered-reads.md` 走这条。
 - **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py tests/test_depth_acceptance.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`、`tests/acceptance/ops/check_ops.py`。
-- **headless Chrome + CDP** 只用于点击、键盘、截图，脚本是仓库自带的，没有 Playwright：
+- **headless Chrome + CDP** 只用于点击、键盘、截图，脚本是仓库自带的，没有 Playwright。先设 `CHROME_BIN`（本机 `/usr/bin/chromium`），默认名 `google-chrome-stable` 在这台机器上不存在：
   - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`。
-  - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，末行 `ALL PASS`；它依赖既有会话，空工作区会报找不到会话。
-  - `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py`，自己起临时根；1440 断点出图，390 断点当前 `SHOT FAIL`（已知红，见 features/README.md）。
+  - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，末行 `ALL PASS`；它依赖既有会话，临时根上也能命中（会话库共享）。
+  - `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py`，自己起临时根；两个断点现在都 `SHOT FAIL`（已知红，见 features/README.md），截图照样出。
 
 硬规则：
 
 - 每个功能文件里的命令逐字复制，不改引号与参数。
 - 页面动作和接口断言是两种证据，别用后者冒充前者。只验了接口没走页面，记 `ui-unverified`。
-- 生成读本、跑真实作答都会打模型（`opencode-go/deepseek-v4.1-flash`）；离线可验的部分先跑完，再决定要不要花这次调用。
+- 生成读本、跑真实作答都会打模型（`opencode-go/deepseek-v4.1-flash`）；`--no-annotate` 只关标注，不关生成。离线可验的部分先跑完，再决定要不要花这次调用。
 - 演示页的会话库在仓库内 `apps/demo/缓存/sessions/`，不随 `BOOKS_ROOT` 隔离，写进去就是写进操作员的会话列表。
 
 ## Evidence
@@ -137,7 +137,7 @@ for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 
 ## Feature map
 
-五个用户面各一份：`features/library-home.md`、`find-a-passage.md`、`four-reads.md`、`daily-lessons.md`、`manage-library.md`。
+五个用户面各一份：`features/library-home.md`、`find-a-passage.md`、`layered-reads.md`、`daily-lessons.md`、`manage-library.md`。
 地图是维护目标：行为变了先改地图，再改这条验证；`features/README.md` 记着当前已知红与未映射的 CLI 面。
 
 改动本文件后，在 Pi 里 `/reload` 让技能重新加载；Pi 只在从仓库目录（或其子目录）启动时才发现项目 `.agents/skills/`。
