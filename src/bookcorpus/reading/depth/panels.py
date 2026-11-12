@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from ..model import ModelProviderError
@@ -333,8 +334,22 @@ def generate_panels(
     source_sha256: str = "",
     model_name: str | None = None,
     effort: str | None = None,
+    on_degraded: Callable[[str, str], None] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """生成并校验面板。两次失败后返回空面板 + warning，不阻塞正文。"""
+    """生成并校验面板。两次失败后返回空面板 + warning，不阻塞正文。
+
+    ``on_degraded(reason, kind)`` 让调用方把「这一层悄悄退化成空面板」记进账本，
+    否则页面上看起来一切正常，只有面板是空的。
+    """
+
+    def degraded(reason: str, kind: str):
+        if on_degraded is not None:
+            on_degraded(reason, kind)
+        return empty_panels(mode, reason, source_sha256), {
+            "prompt_version": PANELS_PROMPT_VERSION,
+            "error": reason,
+        }
+
     messages = _messages(book, chapter, model, blocks, mode, source_sha256)
     attempts = 0
     provider_retried = False
@@ -354,11 +369,7 @@ def generate_panels(
         except json.JSONDecodeError as exc:
             attempts += 1
             if attempts > MAX_JSON_RETRIES:
-                reason = f"面板 JSON 连续失败：{_clip(exc)}"
-                return empty_panels(mode, reason, source_sha256), {
-                    "prompt_version": PANELS_PROMPT_VERSION,
-                    "error": reason,
-                }
+                return degraded(f"面板 JSON 连续失败：{_clip(exc)}", "protocol")
             messages = [
                 *messages,
                 {"role": "user", "content": f"上一次输出不是合法 JSON：{exc}。请只输出完整 JSON。"},
@@ -366,21 +377,13 @@ def generate_panels(
         except PanelsError as exc:
             attempts += 1
             if attempts > MAX_JSON_RETRIES:
-                reason = f"面板校验连续失败：{_clip(exc)}"
-                return empty_panels(mode, reason, source_sha256), {
-                    "prompt_version": PANELS_PROMPT_VERSION,
-                    "error": reason,
-                }
+                return degraded(f"面板校验连续失败：{_clip(exc)}", "protocol")
             messages = [
                 *messages,
                 {"role": "user", "content": f"上一次输出未通过面板校验：{_clip(exc)}。请修正后只输出 JSON。"},
             ]
         except ModelProviderError as exc:
             if provider_retried:
-                reason = f"面板模型提供方连续失败：{exc}"
-                return empty_panels(mode, reason, source_sha256), {
-                    "prompt_version": PANELS_PROMPT_VERSION,
-                    "error": reason,
-                }
+                return degraded(f"面板模型提供方连续失败：{exc}", getattr(exc, "kind", "provider"))
             provider_retried = True
             messages = [*messages, {"role": "user", "content": "上一次调用失败，请重试并只输出 JSON 对象。"}]

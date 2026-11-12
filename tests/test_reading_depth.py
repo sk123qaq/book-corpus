@@ -41,6 +41,7 @@ def _skip_preflight(monkeypatch):
     monkeypatch.setattr(preflight, "require", lambda *args, **kwargs: None)
 
 
+from bookcorpus.reading import events as reading_events
 from bookcorpus.reading.depth.diagrams import audit_figures
 from bookcorpus.reading.depth.disposition import plan_all_dispositions
 from bookcorpus.reading.depth.skim import unsupported_skim
@@ -2583,3 +2584,99 @@ def test_chapter_payload_keeps_model_for_partial_pack(depth_root):
     assert data["depth"]["state"] == "partial"
     assert data["depth"]["model"]["uid"] == "B0003"
     assert data["depth"]["ledger"]
+
+
+class _PanelDownClient:
+    """面板模型连续失败：服务端要退化成空面板，但账上必须留痕。"""
+
+    def __init__(self):
+        self.calls = 0
+        self.model = "fake-model"
+        self.effort = "low"
+
+    def complete_json(self, messages, model=None, effort=None):
+        del messages, model, effort
+        self.calls += 1
+        raise ModelProviderError(
+            "模型调用失败（对端未回状态行就断开）：transport_closed",
+            kind="transport_closed",
+            retryable=True,
+        )
+
+    def prompt_sha256(self):
+        return "fake-prompt"
+
+
+def test_panel_degradation_is_recorded_in_state_and_events(depth_root):
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    files.pop("layers/panels.json")
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    service.client = _PanelDownClient()
+    job = _all_layers_job()
+    job["layers"] = ["panels"]
+    token = reading_events.bind(reading_events.EventLog(service.queue.log_dir, "r-depth-degraded"))
+    try:
+        result = service._run_depth_job("r-depth-degraded", job)
+    finally:
+        reading_events.unbind(token)
+
+    # 空面板落地了，但状态不许报 ready：退化必须看得见。
+    assert result["status"] == "partial"
+    state = json.loads(Path(service.store.depth_path("B0003", 6, "state.json")).read_text())
+    assert state["layer_degraded"]["panels"]["kind"] == "transport_closed"
+    log = Path(service.queue.log_dir) / "r-depth-degraded.jsonl"
+    kinds = [json.loads(line)["kind"] for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert "layer_degraded" in kinds
+    assert service.client.calls >= 2
+
+
+class _NonJsonClient(_PanelDownClient):
+    """面板模型返回的不是 JSON：走 JSON 重试耗尽那条出口，同样必须留痕。"""
+
+    def complete_json(self, messages, model=None, effort=None):
+        del messages, model, effort
+        self.calls += 1
+        return "这不是 JSON 对象", {"total_tokens": 10}
+
+
+def test_panel_non_json_exhaustion_is_also_recorded(depth_root):
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    files.pop("layers/panels.json")
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    service.client = _NonJsonClient()
+    job = _all_layers_job()
+    job["layers"] = ["panels"]
+    token = reading_events.bind(reading_events.EventLog(service.queue.log_dir, "r-depth-nonjson"))
+    try:
+        result = service._run_depth_job("r-depth-nonjson", job)
+    finally:
+        reading_events.unbind(token)
+
+    assert result["status"] == "partial"
+    state = json.loads(Path(service.store.depth_path("B0003", 6, "state.json")).read_text())
+    assert state["layer_degraded"]["panels"]["kind"] == "protocol"
+    log = Path(service.queue.log_dir) / "r-depth-nonjson.jsonl"
+    kinds = [json.loads(line)["kind"] for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert "layer_degraded" in kinds
+
+
+def test_degraded_layer_is_never_skipped_by_resume(depth_root):
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    files.pop("layers/panels.json")
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    service.client = _PanelDownClient()
+    job = _all_layers_job()
+    job["layers"] = ["panels"]
+    service._run_depth_job("r-depth-heal-1", job)
+
+    job2 = _all_layers_job()
+    job2["layers"] = ["panels"]
+    before = service.client.calls
+    result = service._run_depth_job("r-depth-heal-2", job2)
+
+    # 空面板看着“已生成”，但 fresh() 必须否掉它，否则永远补不上。
+    assert result["skipped"] == []
+    assert service.client.calls > before

@@ -1369,6 +1369,9 @@ class ReadingService:
                 return False
             if existing.get(layer) is None:
                 return False
+            # 退化成空面板的层看着“已生成”，但内容不是真的；不重试它就永远补不上。
+            if layer in (state.get("layer_degraded") or {}):
+                return False
             if not Path(self.store.depth_path(uid, n, DEPTH_FILES[layer])).is_file():
                 return False
             if layer_mode.get(layer) not in (None, mode):
@@ -1475,6 +1478,9 @@ class ReadingService:
             if ready == ["model"]:
                 return "model"
             if len(ready) == len(DEPTH_LAYERS) and Path(self.store.depth_path(uid, n, "chapter.html")).is_file():
+                # 空面板算「层在但内容退化了」，不能当 ready 报给读者。
+                if state.get("layer_degraded"):
+                    return "partial"
                 return "ready"
             return "partial"
 
@@ -1518,6 +1524,14 @@ class ReadingService:
         panels = existing.get("panels")
         if "panels" in requested:
             self._set_stage(job_id, "annotating", layer="panels")
+            # 面板退化不能悄悄发生：空面板也要在 state.json 与事件账里留痕。
+            degraded: dict = {}
+
+            def _on_degraded(reason: str, kind: str) -> None:
+                degraded["panels"] = {"reason": reason, "kind": kind}
+                events.current().emit("layer_degraded", layer="panels", reason=reason, error_kind=kind)
+
+            state.pop("layer_degraded", None)
             panels, panels_meta = generate_panels(
                 self.client or ModelClient(),
                 book,
@@ -1528,7 +1542,10 @@ class ReadingService:
                 source_sha256=raw.get("source_sha256") or "",
                 model_name=job.get("model"),
                 effort=job.get("effort"),
+                on_degraded=_on_degraded,
             )
+            if degraded:
+                state["layer_degraded"] = degraded
             self._set_stage(job_id, "validating", layer="panels")
             panels = validate_panels(panels, model, blocks, mode=mode, source_sha256=raw.get("source_sha256") or "")
             audit = audit_panels(panels, model, blocks, mode=mode)
@@ -1638,6 +1655,9 @@ class ReadingService:
             )
             html_written = True
         status = "ready" if skim is not None and html_written else interim_status()
+        if status == "ready" and state.get("layer_degraded"):
+            # 有层退化过（例如空面板），页面能开但不说 ready，跟 interim_status 同一口径。
+            status = interim_status()
         snapshot(status)
         self._invalidate_packs()
         return {"status": status, "pack_id": f"{uid}/ch/{n:02d}", "skipped": skipped, "layers_ready": ready_layers()}
