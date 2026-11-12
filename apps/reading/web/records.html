@@ -222,7 +222,7 @@ function detail(job, open) {
     (RD.jobMeta(job) ? '<div class="rec-meta">' + RD.esc(RD.jobMeta(job)) + '</div>' : '') +
     '<div class="gate">' + (job.pack_id ? '产物 <b>' + RD.esc(job.pack_id) + '</b> · ' : '') +
       '状态 <b>' + RD.esc(RD.statusName[job.state] || job.status || job.state) + '</b>' +
-      (job.error_kind ? ' · 类别 <b>' + RD.esc(job.error_kind) + '</b>' : '') +
+      (job.error_kind ? ' · 类别 <b title="' + RD.esc(job.error_kind) + '">' + RD.esc(RD.errorKindName(job.error_kind)) + '</b>' : '') +
       (job.error ? ' · <b>' + RD.esc(job.error) + '</b>' : '') +
       (job.annotation_source === 'cache' ? ' · 标注 <b>复用</b>（未调用模型，只重渲染）' : '') +
       ' · 更新于 ' + RD.esc(job.updated_at || '—') + '</div>' +

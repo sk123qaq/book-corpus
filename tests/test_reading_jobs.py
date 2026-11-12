@@ -360,6 +360,22 @@ def test_unclassified_exception_still_lands_in_unexpected(tmp_path):
         queue.shutdown()
 
 
+def test_records_page_translates_error_kind_instead_of_showing_raw():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "apps/reading/web/records.html").read_text(encoding="utf-8")
+    assert "RD.errorKindName(job.error_kind)" in html
+    assert "类别 <b>' + RD.esc(job.error_kind)" not in html
+
+    app = (root / "apps/reading/web/assets/app.js").read_text(encoding="utf-8")
+    for label in (
+        "quality: '未过硬门槛'",
+        "unexpected: '未分类异常'",
+        "provider: '提供方失败'",
+        "transport_other: '连接异常'",
+    ):
+        assert label in app
+
+
 def test_restart_marks_interrupted_job_with_restart_kind(tmp_path):
     """进程被杀留下的运行态：标失败、点明第几层、进度不虚报。"""
     path = tmp_path / "阅读" / "jobs.json"
