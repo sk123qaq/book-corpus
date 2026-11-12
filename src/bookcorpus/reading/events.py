@@ -10,12 +10,16 @@
 import contextvars
 import json
 import threading
+import traceback
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 _CURRENT = contextvars.ContextVar("bookcorpus_reading_events", default=None)
 _LOCK = threading.Lock()
+# 栈写进账本是为了定位到行，不是为了存档；尾部保留最内层调用，超出部分丢掉。
+STACK_LIMIT = 8192
+STACK_FRAMES = 10
 
 
 def _now_iso():
@@ -97,6 +101,45 @@ class NullLog:
 
 
 _NULL = NullLog()
+
+
+def _stack_text(exc, frames=STACK_FRAMES):
+    """异常的可定位形态：类型、消息、最内层若干帧、因果链。"""
+    parts = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    text = "".join(parts)
+    if len(text) <= STACK_LIMIT:
+        return text
+    # 超长时留尾部：栈底是出事的那一行，栈顶多是框架。
+    return "…(前略)\n" + text[-STACK_LIMIT:]
+
+
+def _cause_chain(exc):
+    chain, seen = [], set()
+    cur = exc
+    while cur is not None and id(cur) not in seen and len(chain) < 5:
+        seen.add(id(cur))
+        chain.append(f"{type(cur).__name__}: {(str(cur) or '')[:200]}")
+        cur = cur.__cause__ or cur.__context__
+    return chain
+
+
+def record_exception(exc, *, layer=None, extra=None):
+    """把一次失败写成可定位的一条账：类型、分类、消息、栈、因果链。
+
+    只在这里写 ``job_failed``，调用方不要再拼 ``str(exc)`` 当账——
+    一句英文消息定不了位，栈才能定到行。
+    """
+    current().emit(
+        "job_failed",
+        error_class=type(exc).__name__,
+        # 模型错误自带 kind；其余崩溃统一记 unexpected，账里不留空字段。
+        error_kind=getattr(exc, "kind", None) or "unexpected",
+        detail=(str(exc) or type(exc).__name__)[:500],
+        layer=layer,
+        cause_chain=_cause_chain(exc),
+        traceback=_stack_text(exc),
+        extra=extra,
+    )
 
 
 def current():

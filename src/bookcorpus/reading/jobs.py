@@ -352,8 +352,14 @@ class JobQueue:
         try:
             try:
                 with events.job_scope(self.log_dir, job_id):
-                    result = self.runner(job_id, job)
-            except Exception as exc:  # 生成失败必须留可读账，不炸整个服务
+                    try:
+                        result = self.runner(job_id, job)
+                    except Exception as exc:  # 生成失败必须留可读账，不炸整个服务
+                        # 账要带栈：没有栈的 TypeError 只能靠猜，猜不出哪一行。
+                        pending = self._jobs.get(job_id) or {}
+                        events.record_exception(exc, layer=pending.get("layer"))
+                        raise
+            except Exception as exc:
                 with self._lock:
                     if self._is_cancelled_locked(job_id):
                         return
@@ -362,7 +368,7 @@ class JobQueue:
                         job_id,
                         state="failed",
                         error=str(exc) or exc.__class__.__name__,
-                        error_kind=getattr(exc, "kind", None),
+                        error_kind=getattr(exc, "kind", None) or "unexpected",
                         attempts=getattr(exc, "attempt", None),
                         failed_layer=current.get("layer"),
                         elapsed_ms=int((time.monotonic() - started) * 1000),
