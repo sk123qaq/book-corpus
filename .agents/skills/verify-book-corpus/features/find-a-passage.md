@@ -9,7 +9,7 @@
 - `ask-session` 新开会话、多轮追问、会话落盘。
 - `ask-history` 历史页签：按问题筛选、多选删除。
 - `ask-scope` 候选书多选：把检索限定到某几本，或全选。
-- `ask-thinking` 思考等级（off / low / medium / high）。
+- `ask-thinking` 思考等级（off / low / medium / high）**只在经典检索页 `/classic`**（控件 `think-select`）。会话页没有这个控件：它把 `THINKING_LEVEL = 'high'` 写死（`apps/demo/web/session.js:15`，提交在 `:1851`/`:1938`/`:1985`），只在结果 meta 里显示「思考 高」。想在会话页省 token 或换档，代码里没开关。
 - `ask-trace` 依据与落点：回答里的书卡、章节锚点、命中段原文。
 - `ask-classic` `/classic` 五阶段：理解问题 → 词法循环 → 打分与选章 → 书卡 → 结果。
 - `ask-export` 导出单个会话。
@@ -40,7 +40,7 @@ Preconditions:
 - **真实作答。** 输入问题并发送，等结果卡片出现。`python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=…&instant=1&top=1'` 会开一次真问题，末行形如 `CONSOLE ERROR 0`。本次未跑：要一次模型调用。
 - **历史 UI。** `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765` 逐项打「过/败」，末行 `ALL PASS`。它按 `/api/sessions` 里「3 轮会话」和「最后一轮带多书 sources」动态选样本；找不到时分别是 `没有找到可用的 3 轮会话；先用 check_session.py 生成一轮` 与 `没有找到带 2 本以上 sources 的多书会话…`，这是样本缺失，不是页面坏了。
 - **不留外部请求。** `check_session_ui.py` 同时断言控制台 0 错误、页面不向外域发请求。
-- **Host。** 演示页与其它页一致，非 `127.0.0.1`/`localhost` 的 Host 回 `403`。
+- **Host。** `curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: example.com' http://127.0.0.1:18765/` 输出 `403`（2026-11-12 晚补的 `ALLOWED_HOST`；之前这里是 200，旧文档的 200 已作废）。
 
 ## Gotchas
 

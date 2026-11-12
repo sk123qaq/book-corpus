@@ -18,7 +18,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 - `sample` 装内置样书：阿Q正传 `B0001`，9 章，检索索引 123 段，`book_concept` 3 条。字数两处口径不同：`sample` 报 22881 字（含标题等），分层读 `/api/shelf` 报 21362 正文字符。
 - `doctor` 只读，逐行 `ok`/`warn`。允许的 `warn` 只有两类：**环境**（PDF 环境、文档环境）与**云端 key 缺失**（配置·MinerU / PaddleOCR / MiMo）。落在工作区、清单、账、库上的 `warn` 才算问题，先解释再开跑。
 - 端口用本轮私有的一套：演示 18765、分层读 18771、日课 18772、首页 18773（另 18774 / 18775 验 503 与拉起）、操作台 18770。
-- 8765 / 8771 / 8772 / 8773 是操作员的常驻实例，跑在操作员的真实库 `~/文档/book-corpus-data` 上。永不驱、永不杀。
+- 8765 / 8771 / 8772 / 8773 是操作员的常驻实例，跑在操作员的真实库 `~/书库` 上（`apps/reading/server.py --root` 默认值就是它；`~/文档/book-corpus-data` 是旧路径，本机不存在）。永不驱、永不杀。
 - 需要「有内容」才成立的验证，手写 `$ROOT/日课/<date>.json`（契约见 [daily-lessons.md](./daily-lessons.md)）。`book-corpus daily --dry-run` 只把提示词打到 stdout，不落盘，不能当 seed。
 
 ## 驱动约定
@@ -28,9 +28,11 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 - CDP 脚本默认找 `google-chrome-stable`；本机没有，用 `CHROME_BIN=/usr/bin/chromium`（或 `/usr/bin/microsoft-edge-stable`）。缺了它脚本死在 launch，不是页面问题。
 - 命令逐字复制，不改引号、不改参数。
 - 证据写 `artifacts/verify/$RUN_ID/<feature>/`；清理只删实例与临时根，不删证据。
-- 服务只认 `127.0.0.1` / `localhost` 的 Host 头，别的 Host 一律 403。
+- 五个服务（首页 8773 / 分层读 8771 / 日课 8772 / 操作台 8770 / 演示页 8765）都只认 `127.0.0.1` / `localhost` 的 Host 头，别的 Host 回 403。演示页直到 2026-11-12 晚才补上这道检查（`apps/demo/server.py` 的 `ALLOWED_HOST`），旧脚本里「演示页不校验 Host」的说法已作废。
 
 ## 证明与跳过
+
+- 上次全绿：`2026-11-12` 一轮 `RUN_ID=20261112-mt`，五个功能全驱过，证据在 `artifacts/verify/20261112-mt/`，结论见该目录 `README.md`。下一轮跑完请就地更新这一行。
 
 - 一次证明要同时留下动作与结果状态，不能只有最终画面。
 - 只验了接口没走页面时记 `ui-unverified`，不算 UI 通过。
@@ -39,11 +41,11 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 ## 本次已知红（2026-11-12）
 
-- `tests/manual/ops/shot_ops.py` 两个断点都红：末行 `SHOT FAIL`、exit `1`，1440x900 与 390x844 都报 `pdf-list-progress`、`maintain-product`、`log-cancel-hidden` 三项失败，各 2 条 console 404，`overflow=false`。截图照样出。属脚本断言与产品口径不一致，不是页面塌了（同批其余交互全过）。
+- `tests/manual/ops/shot_ops.py` 现在两个断点都绿：末行 `SHOT PASS`、`CONSOLE ERROR 0`、`overflow=false`。2026-11-12 晚修好了三处脚本与产品口径不一致（进度勾选 3→5、`[data-step]` 9→8 且接受「N 步全过」、「停止」按钮改成不在 DOM 里留死节点），并补上 `ledger` 页签，八个页签全通。旧记录里的 `SHOT FAIL` 不要再当预期值。
 - 该脚本必须先设 `CHROME_BIN=/usr/bin/chromium`（本机没有 `google-chrome-stable`），并带 `PYTHONPATH=$PWD/tests/acceptance/ops`；裸命令分别死在 launch 与 `ModuleNotFoundError: No module named 'check_ops'`。
 - `verification/chapter_path/check_paths.py` 必须 `uv run --frozen python ... --root "$ROOT"`，裸 `python3` 会 `ModuleNotFoundError: No module named 'bookcorpus'`。
 - 演示页的会话库在仓库内 `apps/demo/缓存/sessions/`，不随 `BOOKS_ROOT` 隔离；新实例照样列出操作员的会话（本轮 11 条）。见 [find-a-passage.md](./find-a-passage.md) 的 Gotchas。
-- 分层读的生成必然打模型，`--no-annotate` 只关标注；离线只能验到任务被受理（202），任务随后会 `failed`。
+- 分层读的生成必然打模型，`--no-annotate` 只关标注；离线只能验到任务被受理（202）。**202 之后的状态不再是 `failed`**：P1–P4 之后实测 `state done`、`progress 100`、`elapsed_ms 201521`、`layers_ready [model, skim]`、`path depth`、读本页 `/reader/<uid>/<n>/depth` 200（2026-11-12 19:11 一轮，证据 `artifacts/verify/20261112-mt/layered-reads/`）。没有模型 key 时才会失败，那时 `state failed` 带 `error_kind: transport_closed` 这类分类，仍不是裸英文串。
 
 ## 功能入口契约
 

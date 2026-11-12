@@ -12,7 +12,7 @@ argument-hint: "[feature] [run-id]"
 
 这套服务是本地 stdlib Python 进程，全部读写一个「工作区」目录（`books/` + `build/` + `tables/` + `日课/`）。
 验证的前提是：**自己造工作区、自己起服务、自己杀**。操作员有一个 41G 的真实实例常驻在
-8765 / 8771 / 8772 / 8773 上，指向操作员的真实库 `~/文档/book-corpus-data`；那不是验证目标，误连会写进真库。
+8765 / 8771 / 8772 / 8773 上，指向操作员的真实库 `~/书库`（`~/文档/book-corpus-data` 是旧路径，本机已不存在）；那不是验证目标，误连会写进真库。
 
 功能地图在本技能目录的 `features/`：先读 [features/README.md](features/README.md)，再按被验功能的
 文件拿逐条命令。本文件只讲启动、体检、证据与清理。
@@ -88,12 +88,15 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 
 值得驱动 = 工作区根对上 `$ROOT` **且** 就绪行对上端口 **且** 健康检查 `db: ok`。三条里有一条不成立，就不要往里写数据。
 
+起服务前多问一句「这跑的是哪份代码」：读读服务的时间不代表二进制的时间。`stat -c %y` 看进程启动时间，`git rev-parse HEAD` 看当前提交；进程比 HEAD 老，就可能跑的是改造前的老代码（2026-11-12 有个常驻实例跑了七小时的前一代代码，所有新行为都不存在）。要验新行为，一律自己起。
+
 ## Drive
 
 三种驱动方式，按功能文件里写的用，不要自创：
 
 - **curl** 验页面骨架与接口契约：取 HTML 断言稳定标记，取 JSON 断言字段。`features/library-home.md`、`features/daily-lessons.md`、`features/layered-reads.md` 走这条。
-- **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py tests/test_depth_acceptance.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`、`tests/acceptance/ops/check_ops.py`。
+- **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py tests/test_depth_acceptance.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
+- **直接跑脚本**验端到端：`python3 tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
 - **headless Chrome + CDP** 只用于点击、键盘、截图，脚本是仓库自带的，没有 Playwright。先设 `CHROME_BIN`（本机 `/usr/bin/chromium`），默认名 `google-chrome-stable` 在这台机器上不存在：
   - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`。
   - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，末行 `ALL PASS`；它依赖既有会话，临时根上也能命中（会话库共享）。

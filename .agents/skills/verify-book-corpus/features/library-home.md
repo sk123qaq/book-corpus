@@ -11,8 +11,8 @@
 - `home-entry-daily` 「往期日课」卡。
 - `home-entry-ops` 页脚「管理」，新标签打开。
 - `home-keyboard` 按 `1` `2` `3` 走同一跳转。
-- `home-today` 右栏最新一期：当天有日课标「今日日课」，否则标「最近一期」；带期号、书名与标题。
-- `home-link-mode` 目标地址是默认值时卡片指 `/go/<key>`，改动过就直连目标 URL。
+- `home-today` 右栏最新一期：当天有日课标「今日日课」；有期但不是当天标「最近一期」；**一期都没有时仍标「今日日课」并显示「尚无」**（`apps/home/overview.py:110-118`，`tests/test_home_overview.py:116` 钉的就是这一支）。带期号、书名与标题。
+- `home-link-mode` 目标地址是默认值时卡片指 `/go/<key>`，改动过就直连目标 URL。判据两边不一样：**卡片**比完整 URL（`apps/home/server.py:225`），**`/go/<key>` 拉起**只比端口（`apps/home/launcher.py:94`），所以 `--ops-url http://localhost:8770` 会得到「卡片直连、/go 仍会拉起」的混合态，别把两者当等价。
 - `home-autostart` 默认目标没在跑时拉起它再跳。
 - `home-degraded` 拉不起或 `--no-start`：503 页带原因、日志、重试。
 - `home-host` 只认 `127.0.0.1` / `localhost` 的 Host 头。
