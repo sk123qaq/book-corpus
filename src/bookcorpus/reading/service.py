@@ -1351,7 +1351,6 @@ class ReadingService:
         target_model = job.get("model") or DEFAULT_MODEL
         target_effort = job.get("effort") or DEFAULT_EFFORT
         request = {"model": target_model, "effort": target_effort}
-        now = _now()
 
         def model_is_fresh():
             return (
@@ -1441,7 +1440,7 @@ class ReadingService:
             files[DEPTH_FILES["model"]] = json.dumps(model, ensure_ascii=False, indent=1)
             files["ledger.json"] = json.dumps(ledger, ensure_ascii=False, indent=1)
             layer_sha["model"] = _depth_sha(model)
-            layer_updated_at["model"] = now
+            layer_updated_at["model"] = _now()
             layer_request["model"] = dict(request)
             usage = (model_meta or {}).get("usage") if isinstance(model_meta, dict) else None
             if isinstance(usage, dict) and usage:
@@ -1472,9 +1471,24 @@ class ReadingService:
                 and Path(self.store.depth_path(uid, n, DEPTH_FILES[layer])).is_file()
             ]
 
+        def committed_now():
+            """内存里已经备好、马上就是这次要落盘的层。
+
+            按磁盘算会差一层：状态在 save 之前算，盘上还是上一层的模样。
+            落盘的就是 ``files``，所以判断就以 ``files`` 为准。
+            """
+            ready = []
+            for layer in DEPTH_LAYERS:
+                if layer != "model" and DEPTH_FILES[layer] not in files:
+                    continue
+                if layer != "model" and layer_model_sha.get(layer) != chapter_model_sha:
+                    continue
+                ready.append(layer)
+            return ready
+
         def interim_status():
-            """按盘上真实情况报状态：五层齐全且页面在才算 ready，只建结构算 model。"""
-            ready = ready_layers()
+            """五层齐全且页面在才算 ready，只建结构算 model。"""
+            ready = committed_now()
             if ready == ["model"]:
                 return "model"
             if len(ready) == len(DEPTH_LAYERS) and Path(self.store.depth_path(uid, n, "chapter.html")).is_file():
@@ -1498,7 +1512,8 @@ class ReadingService:
                     "prompt_version": model.get("prompt_version") or state.get("prompt_version") or "",
                     "status": status,
                     "path": "depth",
-                    "updated_at": now,
+                    # 账本时间是「写这一次」的时间，不是任务开始那一刻。
+                    "updated_at": _now(),
                     "model": model_meta if model_meta is not None else state.get("model"),
                     "layer_sha": layer_sha,
                     "layer_model_sha": layer_model_sha,
@@ -1508,7 +1523,7 @@ class ReadingService:
                     "layer_request": layer_request,
                 }
             )
-            state.setdefault("generated_at", now)
+            state.setdefault("generated_at", _now())
             if regenerated and isinstance(model_meta, dict) and model_meta.get("cache_key"):
                 state["cache_key"] = model_meta["cache_key"]
             files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
@@ -1554,7 +1569,7 @@ class ReadingService:
             layer_model_sha["panels"] = chapter_model_sha
             layer_mode["panels"] = mode
             layer_request["panels"] = dict(request)
-            layer_updated_at["panels"] = now
+            layer_updated_at["panels"] = _now()
             usage = (panels_meta or {}).get("usage") if isinstance(panels_meta, dict) else None
             if isinstance(usage, dict) and usage:
                 layer_usage["panels"] = usage
@@ -1565,6 +1580,11 @@ class ReadingService:
         skim = existing.get("skim")
         if "skim" in requested:
             self._set_stage(job_id, "annotating", layer="skim")
+            skim_usage: dict = {}
+
+            def _skim_usage(usage: dict) -> None:
+                skim_usage.update(usage)
+
             skim = generate_skim(
                 self.client or ModelClient(),
                 book,
@@ -1575,6 +1595,7 @@ class ReadingService:
                 effort=job.get("effort"),
                 mode=mode,
                 panels=panels,
+                on_usage=_skim_usage,
             )
             self._set_stage(job_id, "validating", layer="skim")
             skim = validate_skim(skim, model, blocks, mode=mode)
@@ -1586,8 +1607,9 @@ class ReadingService:
             layer_model_sha["skim"] = chapter_model_sha
             layer_mode["skim"] = mode
             layer_request["skim"] = dict(request)
-            layer_usage.pop("skim", None)
-            layer_updated_at["skim"] = now
+            if skim_usage:
+                layer_usage["skim"] = skim_usage
+            layer_updated_at["skim"] = _now()
             snapshot(interim_status())
 
         standard = existing.get("standard")
@@ -1599,7 +1621,7 @@ class ReadingService:
             layer_model_sha["standard"] = chapter_model_sha
             layer_request["standard"] = dict(request)
             layer_usage.pop("standard", None)
-            layer_updated_at["standard"] = now
+            layer_updated_at["standard"] = _now()
             snapshot(interim_status())
 
         deep = existing.get("deep")
@@ -1625,7 +1647,7 @@ class ReadingService:
             layer_model_sha["deep"] = chapter_model_sha
             layer_mode["deep"] = mode
             layer_request["deep"] = dict(request)
-            layer_updated_at["deep"] = now
+            layer_updated_at["deep"] = _now()
             usage = (deep_meta or {}).get("usage") if isinstance(deep_meta, dict) else None
             if isinstance(usage, dict) and usage:
                 layer_usage["deep"] = usage
@@ -1647,7 +1669,8 @@ class ReadingService:
                 ledger,
                 skim,
                 resolver=lambda rel: asset_url(uid, rel),
-                generated_at=now,
+                # 页面上的时间要写「这一页什么时候渲染的」，不是任务开始那一刻。
+                generated_at=_now(),
                 standard=standard,
                 deep=deep,
                 panels=panels,

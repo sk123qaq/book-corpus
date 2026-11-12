@@ -373,3 +373,39 @@ def test_events_route_does_not_accept_path_traversal():
     assert not events_route.match("/api/jobs/../etc/events")
     assert not events_route.match("/api/jobs/a%2Fb/events")
     assert not events_route.match("/api/jobs/./events")
+
+
+def test_load_survives_a_ledger_of_only_finished_jobs(tmp_path):
+    """盘上全是终态任务时也要能起：changed 未初始化会让服务直接起不来。"""
+    work = tmp_path / "阅读"
+    work.mkdir(parents=True)
+    jobs_path = work / "jobs.json"
+    jobs_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "r-old",
+                    "kind": "depth",
+                    "uid": "B0005",
+                    "n": "10",
+                    "state": "failed",
+                    "stage": "failed",
+                    "progress": 33,
+                    "steps": [],
+                    "error": "Remote end closed connection without response",
+                    "layer": "deep",
+                    "layers_ready": ["model", "panels"],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    queue = JobQueue(str(tmp_path), lambda *_: {"status": "done"}, max_workers=1)
+    try:
+        jobs = queue.list()
+        assert [job["id"] for job in jobs] == ["r-old"]
+        assert jobs[0]["state"] == "failed"
+        assert jobs[0]["progress"] == 33
+    finally:
+        queue.shutdown()

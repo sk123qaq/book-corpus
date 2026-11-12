@@ -42,6 +42,8 @@ def _skip_preflight(monkeypatch):
 
 
 from bookcorpus.reading import events as reading_events
+from bookcorpus.reading import service as service_module
+from bookcorpus.reading.depth import skim as skim_module
 from bookcorpus.reading.depth.diagrams import audit_figures
 from bookcorpus.reading.depth.disposition import plan_all_dispositions
 from bookcorpus.reading.depth.skim import unsupported_skim
@@ -809,7 +811,12 @@ def _ready_depth(depth_root, *, status="ready"):
 def test_depth_status_ready_layers_usage_and_estimates(depth_root):
     files, *_ = _ready_depth(depth_root)
     service = ReadingService(root=depth_root, annotate=False, depth=True)
+    # 旧包没记层级参数，fresh() 拿整包参数做代理；不写旧模型名就等于「参数一致」，会被当成可复用。
+    files["state.json"]["model"] = {"model": "旧模型", "effort": "high"}
+    # 结构模型默认判定本章「不适合编译速览」，这里要验的是用量记账，绕开那条判定。
+    files["chapter_model.json"]["skim"] = {"supported": True}
     service.store.save_depth("B0003", 6, files)
+    print("DEBUG saved state model", service.store.depth_json("B0003", 6, "state.json").get("model"))
     status = service.depth_status("B0003", 6)
     assert status["state"] == "ready"
     assert set(status["layers"]) == set(DEPTH_LAYERS)
@@ -2680,3 +2687,88 @@ def test_degraded_layer_is_never_skipped_by_resume(depth_root):
     # 空面板看着“已生成”，但 fresh() 必须否掉它，否则永远补不上。
     assert result["skipped"] == []
     assert service.client.calls > before
+
+
+def test_layer_timestamps_move_with_each_layer(depth_root, monkeypatch):
+    """每层记自己的完成时间：五层共用任务开始时间的话，账本会说不出哪层刚跑完。"""
+    _, blocks = _valid()
+    ticks = iter([f"2026-11-12T00:00:{index:02d}" for index in range(40)])
+    monkeypatch.setattr(service_module, "_now", lambda: next(ticks))
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.client = FakeClient([_chunk_payload(blocks)])
+    service._run_depth_job(
+        "r-depth-clock",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["model", "standard"],
+            "model": "fake-model",
+            "effort": "low",
+        },
+    )
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["layer_updated_at"]["model"] != state["layer_updated_at"]["standard"]
+    assert (
+        state["updated_at"] == state["layer_updated_at"]["standard"]
+        or state["updated_at"] > state["layer_updated_at"]["standard"]
+    )
+    assert state["generated_at"] < state["updated_at"]
+
+
+def test_status_moves_with_the_layer_being_written(depth_root):
+    """两层落盘后是 partial，不能还报 model：状态按磁盘算会差一层。"""
+    _, blocks = _valid()
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.client = FakeClient([_chunk_payload(blocks)])
+    result = service._run_depth_job(
+        "r-depth-status",
+        {
+            "uid": "B0003",
+            "n": "06",
+            "kind": "depth",
+            "layers": ["model", "standard"],
+            "model": "fake-model",
+            "effort": "low",
+        },
+    )
+    assert result["status"] == "partial"
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["status"] == "partial"
+    assert service.store.depth_state("B0003", 6)["layers_ready"] == ["model", "standard"]
+
+
+def test_skim_usage_reaches_the_ledger(depth_root, monkeypatch):
+    """速览也是真调用：它的用量要进 layer_usage，否则算钱时少一层。"""
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    skim_payload = copy.deepcopy(files["layers/skim.json"])
+    # 短章保护与「本章不适合编译」是另外两件事，这里只验用量记账。
+    monkeypatch.setattr(skim_module, "MIN_SOURCE_HAN", 0)
+    files["chapter_model.json"]["skim"] = {"supported": True}
+    files.pop("layers/skim.json")
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    service.client = FakeClient([skim_payload])
+    result = service._run_depth_job(
+        "r-depth-skim-usage",
+        {"uid": "B0003", "n": "06", "kind": "depth", "layers": ["skim"], "model": "另一个模型", "effort": "low"},
+    )
+    assert result["skipped"] == []
+    assert len(service.client.calls) == 1
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["layer_usage"]["skim"] == {"total_tokens": 10}
+
+
+def test_rendered_page_carries_its_own_generation_time(depth_root, monkeypatch):
+    """页面上的「生成」时间不能是任务开始时间：九分钟的活，页头会说早了九分钟。"""
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    monkeypatch.setattr(service_module, "_now", lambda: "2026-11-12T09:09:09")
+    service.client = FakeClient([])
+    service._run_depth_job(
+        "r-depth-page-clock",
+        {"uid": "B0003", "n": "06", "kind": "depth", "layers": ["standard"], "model": "fake-model", "effort": "low"},
+    )
+    html = Path(service.store.depth_path("B0003", 6, "chapter.html")).read_text()
+    assert "2026-11-12T09:09:09" in html

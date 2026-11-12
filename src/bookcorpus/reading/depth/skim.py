@@ -618,6 +618,7 @@ def generate_skim(
     effort=None,
     mode="argument",
     panels=None,
+    on_usage=None,
 ):
     """生成并校验速览；短章直接返回 unsupported，不调用模型。"""
     source = source_han(blocks)
@@ -638,7 +639,10 @@ def generate_skim(
     while True:
         try:
             result = client.complete_json(messages, model=model, effort=effort)
-            payload, _ = result
+            payload, usage = result
+            if on_usage is not None and isinstance(usage, dict) and usage:
+                # 用量要留给账本算钱：速览也是一次真调用，不能白记。
+                on_usage(usage)
             if not isinstance(payload, dict):
                 raise json.JSONDecodeError("顶层不是对象", "", 0)
             payload = dict(payload)

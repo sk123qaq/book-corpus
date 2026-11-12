@@ -75,6 +75,7 @@ class JobQueue:
                     self._jobs[job["id"]] = job
                     self._order.append(job["id"])
             # 上次进程留下的运行态统一标失败，避免永远转圈。
+            changed = False
             for job in self._jobs.values():
                 if job.get("state") in ACTIVE_STATES:
                     job["state"] = "failed"
