@@ -20,7 +20,7 @@ from .depth.disposition import audit_conservation, plan_all_dispositions
 from .depth.model import generate_chapter_model
 from .depth.panels import audit_panels, generate_panels, validate_panels
 from .depth.render import render_depth_chapter
-from .depth.skim import audit_skim, generate_skim, validate_skim
+from .depth.skim import SkimError, audit_skim, generate_skim, validate_skim
 from .depth.standard import build_standard
 from .edition import audit_edition, build_brief, decide_template, generate_content, render_edition, validate_content
 from .editorial import EditorialError, audit_editorial, validate_editorial
@@ -1601,7 +1601,11 @@ class ReadingService:
             skim = validate_skim(skim, model, blocks, mode=mode)
             audit = audit_skim(skim, model, blocks, mode=mode)
             if audit.get("errors"):
-                raise RuntimeError(f"速览审计未通过：{'；'.join(audit['errors'])}")
+                raise SkimError(
+                    f"速览审计未通过：{'；'.join(audit['errors'])}",
+                    stats=audit.get("stats"),
+                    payload=skim,
+                )
             files[DEPTH_FILES["skim"]] = json.dumps(skim, ensure_ascii=False, indent=1)
             layer_sha["skim"] = _depth_sha(skim)
             layer_model_sha["skim"] = chapter_model_sha
