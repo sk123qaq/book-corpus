@@ -30,6 +30,7 @@ from bookcorpus.reading.depth import audit as depth_audit
 from bookcorpus.reading.depth import cli as depth_cli
 from bookcorpus.reading.depth.cli import _state_text
 from bookcorpus.reading.depth.cli import main as depth_main
+from bookcorpus.reading.depth.deep import DeepError
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +46,7 @@ from bookcorpus.reading.depth.disposition import plan_all_dispositions
 from bookcorpus.reading.depth.skim import unsupported_skim
 from bookcorpus.reading.depth.standard import STANDARD_PROMPT_VERSION, build_standard
 from bookcorpus.reading.mdparse import parse_markdown
+from bookcorpus.reading.model import ModelProviderError
 from bookcorpus.reading.service import DEPTH_LAYERS, JobConflictError, ReadingService
 from bookcorpus.reading.store import Store
 from bookcorpus.scripts.layout import Layout
@@ -961,7 +963,9 @@ def test_depth_job_model_rebuild_stales_old_layers(depth_root):
         },
     )
     assert result["status"] == "model"
-    assert not Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+    # 重建结构不再删页面：路由已经不认它，删掉只是让回滚少一份东西。
+    assert Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+    assert service.store.chapter_route("B0003", 6)[0] == "none"
     status = service.depth_status("B0003", 6)
     assert status["layers"]["model"]["status"] == "ready"
     for layer in ("skim", "standard", "deep"):
@@ -978,8 +982,11 @@ def test_depth_job_model_rebuild_stales_old_layers(depth_root):
             "effort": "low",
         },
     )
-    assert result["status"] == "model"
-    assert not Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+    # 结构 + 标准两层的现状是 partial：旧代码把所有非成页状态都报成 model，P2 起细分。
+    assert result["status"] == "partial"
+    # 页面留在盘上但路由不再指向它：重建过结构，旧页已经不配这个模型。
+    assert Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+    assert service.store.chapter_route("B0003", 6)[0] == "none"
 
 
 def test_depth_job_standard_only_rerenders_ready_page(depth_root):
@@ -1002,6 +1009,154 @@ def test_depth_job_standard_only_rerenders_ready_page(depth_root):
     assert result["status"] == "ready"
     assert html_path.read_text(encoding="utf-8") != "old"
     assert service.depth_status("B0003", 6)["layers"]["standard"]["status"] == "ready"
+
+
+class _DropClient:
+    """对端在返回状态行前关连接：每次调用都抛分类过的传输错误。"""
+
+    def __init__(self, error):
+        self.error = error
+        self.calls = []
+
+    def complete_json(self, messages, *, model=None, effort=None):
+        self.calls.append(copy.deepcopy(messages))
+        raise self.error
+
+
+def _all_layers_job():
+    return {
+        "uid": "B0003",
+        "n": "06",
+        "kind": "depth",
+        "layers": list(DEPTH_LAYERS),
+        "model": "fake-model",
+        "effort": "low",
+    }
+
+
+def _partial_after_drop(depth_root):
+    """跑到深读层时断连，盘上只剩前四层：P2 续跑的真实现场。"""
+    files, blocks, _ledger, model, _deep, _raw = _ready_depth(depth_root)
+    files.pop("layers/deep.json")
+    files.pop("chapter.html")
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    service.client = _DropClient(
+        ModelProviderError(
+            "模型调用失败（对端在返回状态行前关闭了连接，阶段 read）：transport_closed",
+            kind="transport_closed",
+            retryable=True,
+        )
+    )
+    with pytest.raises(DeepError):
+        service._run_depth_job("r-depth-drop", _all_layers_job())
+    return service, blocks, model
+
+
+def test_depth_job_interrupted_leaves_partial_pack(depth_root):
+    service, _blocks, _model = _partial_after_drop(depth_root)
+    assert len(service.client.calls) == 2  # 服务层重试一次，第二次仍断连才失败
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["status"] == "partial"
+    assert state["schema"] == 2
+    assert service.store.depth_json("B0003", 6, "layers/deep.json") is None
+    assert not Path(service.store.depth_path("B0003", 6, "chapter.html")).exists()
+    info = service.store.depth_state("B0003", 6)
+    assert info["status"] == "partial"
+    assert info["layers_ready"] == ["model", "panels", "skim", "standard"]
+    assert info["layers_missing"] == ["deep"]
+    route, reason = service.store.chapter_route("B0003", 6)
+    assert route == "none"
+    assert "4/5" in reason
+    assert "深读" in reason
+
+
+def test_depth_job_resume_only_runs_the_missing_layer(depth_root):
+    service, blocks, model = _partial_after_drop(depth_root)
+    units = [unit["id"] for unit in model["units"]][:3]
+    client = FakeClient([_deep_payload(blocks, units)] * 3)
+    service.client = client
+    result = service._run_depth_job("r-depth-resume", _all_layers_job())
+    assert len(client.calls) == 1  # 前四层一次调用都不发
+    assert result["skipped"] == ["model", "panels", "skim", "standard"]
+    assert result["status"] == "ready"
+    assert Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+    info = service.store.depth_state("B0003", 6)
+    assert info["status"] == "ready"
+    assert info["layers_missing"] == []
+
+
+def test_chunk_cache_survives_interruption(depth_root, tmp_path, monkeypatch):
+    """第一块落盘后中断，重跑时第一块不再发给模型。"""
+    from bookcorpus.reading.depth import model as depth_model
+
+    _files, blocks, *_ = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    raw = service.library.read_chapter("B0003", 6)
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": raw["source_sha256"]}
+    book = service.library.book("B0003")
+    plans = [
+        {"index": 1, "total": 2, "blocks": blocks, "prev_title": None, "next_title": "下节", "id_prefix": "C01-"},
+        {"index": 2, "total": 2, "blocks": blocks, "prev_title": "上节", "next_title": None, "id_prefix": "C02-"},
+    ]
+    monkeypatch.setattr(depth_model, "_chunk_plans", lambda blocks, limit: plans)
+    cache_dir = tmp_path / "cache"
+    payload = _chunk_payload(blocks)
+    seen = []
+
+    def _serve_one(messages, *, model=None, effort=None):
+        if seen:
+            raise ModelProviderError("模型调用失败：transport_closed", kind="transport_closed")
+        seen.append(copy.deepcopy(messages))
+        return copy.deepcopy(payload), {"total_tokens": 5}
+
+    first = _DropClient(ModelProviderError("flood"))
+    first.complete_json = _serve_one
+    with pytest.raises(DepthModelError):
+        generate_chapter_model(first, book, chapter, blocks, model="fake-model", effort="low", cache_dir=cache_dir)
+    cached = sorted((cache_dir / "chunks").glob("*.json"))
+    assert len(cached) == 1  # 第一块已落盘，第二块失败
+    assert cached[0].name.endswith("-01.json")
+
+    second = _DropClient(ModelProviderError("模型调用失败：transport_closed", kind="transport_closed"))
+    with pytest.raises(DepthModelError):
+        generate_chapter_model(second, book, chapter, blocks, model="fake-model", effort="low", cache_dir=cache_dir)
+    assert len(second.calls) == 2  # 只重发第二块，失败后自己重试一次
+    chunk_one = seen[0][1]["content"]
+    assert all(chunk_one not in call[1]["content"] for call in second.calls)
+
+
+def test_chunk_cache_key_covers_chunk_size_and_output_cap(depth_root):
+    from bookcorpus.reading.depth.model import cache_key
+
+    base = cache_key("src", "prompt", "m", "low", 18000, 32768)
+    assert base == cache_key("src", "prompt", "m", "low", 18000, 32768)
+    assert base != cache_key("src", "prompt", "m", "low", 9000, 32768)
+    assert base != cache_key("src", "prompt", "m", "low", 18000, 8000)
+    assert base != cache_key("src", "prompt", "m", "high", 18000, 32768)
+
+    _files, blocks, *_ = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    raw = service.library.read_chapter("B0003", 6)
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": raw["source_sha256"]}
+    book = service.library.book("B0003")
+    cache_dir = depth_root / "cache-key"
+    payload = _chunk_payload(blocks)
+    client = FakeClient([copy.deepcopy(payload), copy.deepcopy(payload)])
+    _model, meta = generate_chapter_model(
+        client, book, chapter, blocks, model="fake-model", effort="low", cache_dir=cache_dir
+    )
+    assert meta["cache_hit"] is False
+    _model, meta = generate_chapter_model(
+        client, book, chapter, blocks, model="fake-model", effort="low", chunk_chars=9000, cache_dir=cache_dir
+    )
+    assert meta["cache_hit"] is False  # 分块大小变了就不能当命中
+    assert len(client.calls) == 2
+    _model, meta = generate_chapter_model(
+        client, book, chapter, blocks, model="fake-model", effort="low", cache_dir=cache_dir
+    )
+    assert meta["cache_hit"] is True
+    assert len(client.calls) == 2
 
 
 def test_reading_service_depth_default_on(reading_root, monkeypatch):
@@ -2325,3 +2480,106 @@ def test_book_directory_reflects_depth_layers(reading_root):
         "standard": True,
         "deep": True,
     }
+
+
+def test_depth_job_keeps_page_when_a_redo_fails(depth_root):
+    """F1：快照要预载 chapter.html，重做失败不能把已发布的页面删掉。"""
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    # 让盘上的包看起来是用另一个模型建的：这样点名重做 deep 才会真跑。
+    raw_state = files["state.json"]
+    state = json.loads(raw_state) if isinstance(raw_state, str) else dict(raw_state)
+    state["model"] = {"model": "old-model", "effort": "low"}
+    files["state.json"] = state
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    html_path = Path(service.store.depth_path("B0003", 6, "chapter.html"))
+    assert html_path.read_text(encoding="utf-8") == "<html>old depth</html>"
+    service.client = _DropClient(
+        ModelProviderError(
+            "模型调用失败（对端在返回状态行前关闭了连接，阶段 read）：transport_closed",
+            kind="transport_closed",
+            retryable=True,
+        )
+    )
+
+    with pytest.raises(DeepError):
+        service._run_depth_job("r-depth-keep-html", dict(_all_layers_job(), layers=["deep"]))
+
+    assert html_path.is_file()
+    assert html_path.read_text(encoding="utf-8") == "<html>old depth</html>"
+    assert service.store.depth_state("B0003", 6)["status"] == "ready"
+
+
+def test_depth_job_reruns_layer_when_model_changes(depth_root):
+    """F2：换模型点名重做，层参数对不上就必须真跑，不能当成就绪跳过。"""
+    service, blocks, model = _partial_after_drop(depth_root)
+    units = [unit["id"] for unit in model["units"]][:3]
+    payload = _deep_payload(blocks, units)
+    service.client = FakeClient([copy.deepcopy(payload)] * 3)
+    first = service._run_depth_job("r-depth-model-a", dict(_all_layers_job(), layers=["deep"]))
+    assert first["status"] == "ready"
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["layer_request"]["deep"]["model"] == "fake-model"
+
+    service.client = FakeClient([copy.deepcopy(payload)] * 3)
+    result = service._run_depth_job("r-depth-model-b", dict(_all_layers_job(), layers=["deep"], model="另一个模型"))
+
+    assert len(service.client.calls) == 1
+    assert result["status"] == "ready"
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["layer_request"]["deep"]["model"] == "另一个模型"
+
+
+def test_depth_job_all_skipped_keeps_ready_pack(depth_root):
+    """F3：全部命中续跑时不能把 ready 降级成 partial，页面也不该消失。"""
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+
+    result = service._run_depth_job("r-depth-skip-all", dict(_all_layers_job(), layers=["model"]))
+
+    assert result["skipped"] == ["model"]
+    assert result["status"] == "ready"
+    assert Path(service.store.depth_path("B0003", 6, "chapter.html")).is_file()
+
+
+def test_failed_save_leaves_no_stage_dir(depth_root, monkeypatch):
+    """F5：落盘失败要么保留旧包，要么什么都不留，不能留半截目录。"""
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    base = Path(service.store.pack_dir("B0003", 6))
+
+    def boom(root, payload):
+        raise OSError("磁盘已满")
+
+    monkeypatch.setattr(Store, "_write_depth_files", staticmethod(boom))
+    with pytest.raises(OSError):
+        service.store.save_depth("B0003", 6, files)
+
+    assert not [path for path in base.iterdir() if path.name.startswith(".depth-")]
+    assert service.store.depth_state("B0003", 6)["status"] == "ready"
+
+
+def test_chunk_cache_rejects_payload_from_another_plan(tmp_path):
+    """F6：切分变了而整章键没变，也要靠块签名认出旧块不合用。"""
+    from bookcorpus.reading.depth import model as depth_model
+
+    key = "k" * 8
+    path = depth_model.chunk_cache_path(tmp_path, key, 0)
+    depth_model._write_chunk_cache(path, key, 0, {"units": []}, {}, "plan-a")
+
+    assert depth_model._read_chunk_cache(path, key, 0, "plan-b") is None
+    assert depth_model._read_chunk_cache(path, key, 0, "plan-a") is not None
+    assert depth_model._read_chunk_cache(path, key, 1, "plan-a") is None
+
+
+def test_chapter_payload_keeps_model_for_partial_pack(depth_root):
+    """F8：partial 包也要带上结构模型与账，不然前端连"缺哪层"都没得看。"""
+    service, _blocks, _model = _partial_after_drop(depth_root)
+
+    data = service.chapter("B0003", 6)
+
+    assert data["depth"]["state"] == "partial"
+    assert data["depth"]["model"]["uid"] == "B0003"
+    assert data["depth"]["ledger"]

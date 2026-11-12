@@ -115,6 +115,7 @@ def reachable(*, status: str, html: bool, model: bool, ledger: bool) -> bool:
     save_depth writes chapter_model.json and ledger.json together; a depth job
     always writes state.json. ReadyBuild always writes chapter.html, so
     status="ready" without a page is old data, not a current action.
+    P2 起 partial 也是能产出的状态：逐层落盘，页面可能还没出也可能还是旧的。
     """
     if status == "none":
         return not (html or model or ledger)
@@ -198,7 +199,7 @@ def main() -> int:
         reachable_checked = 0
         try:
             for status, html, model, ledger, legacy, sha_match in itertools.product(
-                ("none", "model", "ready"),
+                ("none", "model", "partial", "ready"),
                 (False, True),
                 (False, True),
                 (False, True),

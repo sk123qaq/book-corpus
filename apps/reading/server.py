@@ -355,7 +355,10 @@ class Handler(BaseHTTPRequestHandler):
                     Path(self.service.store.depth_path(uid, n, name)).is_file()
                     for name in ("chapter.html", "chapter_model.json", "ledger.json")
                 )
-                if depth_state.get("status") == "missing" and not has_depth_file:
+                # 跑到一半的包也算深度路径：续跑只补缺层，不该退回旧 submit。
+                if depth_state.get("status") in ("partial", "missing") and (
+                    depth_state.get("status") == "partial" or not has_depth_file
+                ):
                     # 新章默认走深读路径；旧包与已有深度产物仍走旧 submit。
                     job = self.service.submit_depth(
                         uid,

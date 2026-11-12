@@ -13,7 +13,7 @@ from typing import ClassVar
 
 from .. import preflight
 from ..scripts import lib_common as L
-from . import profile
+from . import events, profile
 from .agent_standard import generate_standard_html, render_agent_page
 from .depth.deep import audit_deep, generate_deep, validate_deep
 from .depth.disposition import audit_conservation, plan_all_dispositions
@@ -27,10 +27,10 @@ from .editorial import EditorialError, audit_editorial, validate_editorial
 from .editorial_gen import generate_editorial
 from .jobs import JobQueue
 from .library import Library
-from .model import ModelClient, prompt_sha256
+from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, ModelTruncatedError, prompt_sha256
 from .quality import check_html
 from .render import asset_url, image_data_uri, render_chapter, render_export
-from .store import Store
+from .store import DEPTH_FILES, DEPTH_LAYERS, Store
 from .tiers import TIER_ORDER, TIER_SPECS, project, validate_annotation
 
 GENERATOR = "book-corpus-reading"
@@ -44,14 +44,6 @@ MAX_BUDGET_TOKENS = 500_000
 MAX_BUDGET_USD = 1.0
 USD_PER_MTOK_IN = 1.0
 USD_PER_MTOK_OUT = 2.0
-DEPTH_LAYERS = ("model", "panels", "skim", "standard", "deep")
-DEPTH_FILES = {
-    "model": "chapter_model.json",
-    "panels": "layers/panels.json",
-    "skim": "layers/skim.json",
-    "standard": "layers/standard.json",
-    "deep": "layers/deep.json",
-}
 
 
 class JobConflictError(RuntimeError):
@@ -881,7 +873,7 @@ class ReadingService:
         }
         if self.depth:
             data["depth"] = {"state": depth_state["status"]}
-            if depth_state["status"] in ("model", "ready"):
+            if depth_state["status"] in ("model", "partial", "ready"):
                 data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
                 data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
             if depth_state["status"] == "ready":
@@ -1334,7 +1326,8 @@ class ReadingService:
         for layer, name in DEPTH_FILES.items():
             existing[layer] = self.store.depth_json(uid, n, name)
         files = {}
-        for name in [*list(DEPTH_FILES.values()), "ledger.json"]:
+        # chapter.html 也预载：整目录替换的写法下，不带上它就等于每落一次盘删一次页面。
+        for name in [*list(DEPTH_FILES.values()), "ledger.json", "chapter.html"]:
             path = self.store.depth_path(uid, n, name)
             if Path(path).is_file():
                 with open(path, encoding="utf-8") as fh:
@@ -1347,7 +1340,57 @@ class ReadingService:
         layer_usage = dict(state.get("layer_usage") or {})
         layer_updated_at = dict(state.get("layer_updated_at") or {})
         layer_mode = dict(state.get("layer_mode") or {})
+        layer_request = dict(state.get("layer_request") or {})
+        target_model = job.get("model") or DEFAULT_MODEL
+        target_effort = job.get("effort") or DEFAULT_EFFORT
+        request = {"model": target_model, "effort": target_effort}
         now = _now()
+
+        def model_is_fresh():
+            return (
+                existing.get("model") is not None
+                and not source_changed
+                and not job.get("rebuild")
+                and Path(self.store.depth_path(uid, n, DEPTH_FILES["model"])).is_file()
+            )
+
+        model_pending = "model" in requested and not model_is_fresh()
+
+        def fresh(layer):
+            """盘上已有、且由当前参数与当前结构模型生成的层，续跑时不再花调用。"""
+            if model_pending:
+                return False
+            if existing.get(layer) is None:
+                return False
+            if not Path(self.store.depth_path(uid, n, DEPTH_FILES[layer])).is_file():
+                return False
+            if layer_mode.get(layer) not in (None, mode):
+                return False
+            if layer != "model":
+                current = state.get("chapter_model_sha")
+                if current is not None and layer_model_sha.get(layer) not in (None, current):
+                    return False
+            recorded = layer_request.get(layer)
+            if isinstance(recorded, dict):
+                if recorded.get("model") not in (None, target_model):
+                    return False
+                if recorded.get("effort") not in (None, target_effort):
+                    return False
+            elif layer != "model":
+                # 旧包没记层级参数，只能拿整包结构模型的参数做代理；对不上就重做。
+                meta = state.get("model") or {}
+                if meta.get("model") not in (None, target_model):
+                    return False
+                if meta.get("effort") not in (None, target_effort):
+                    return False
+            return True
+
+        skipped = [layer for layer in requested if fresh(layer)]
+        if skipped:
+            events.current().emit("layers_skipped", layers=skipped, reason="已就绪，续跑保留")
+        requested = [layer for layer in requested if layer not in skipped]
+        if not requested and not skipped:
+            raise ValueError("至少选择一个深度层")
 
         model = existing.get("model")
         ledger = existing.get("ledger")
@@ -1368,7 +1411,8 @@ class ReadingService:
                     refresh=bool(job.get("rebuild")),
                 )
             except Exception as exc:
-                if "max_tokens" not in str(exc):
+                # 只有输出被上限截断才值得换小分块重试；其余错误原样抛。
+                if not isinstance(exc, ModelTruncatedError):
                     raise
                 model, model_meta = generate_chapter_model(
                     self.client or ModelClient(),
@@ -1379,7 +1423,6 @@ class ReadingService:
                     effort=job.get("effort"),
                     chunk_chars=9000,
                     cache_dir=self.store.depth_cache_dir(uid, n),
-                    refresh=True,
                 )
             ledger = plan_all_dispositions(model, blocks)
             gate = audit_conservation(model, ledger, blocks)
@@ -1389,6 +1432,7 @@ class ReadingService:
             files["ledger.json"] = json.dumps(ledger, ensure_ascii=False, indent=1)
             layer_sha["model"] = _depth_sha(model)
             layer_updated_at["model"] = now
+            layer_request["model"] = dict(request)
             usage = (model_meta or {}).get("usage") if isinstance(model_meta, dict) else None
             if isinstance(usage, dict) and usage:
                 layer_usage["model"] = usage
@@ -1407,6 +1451,59 @@ class ReadingService:
             for layer in DEPTH_LAYERS:
                 if layer != "model" and layer not in requested:
                     layer_model_sha[layer] = "__stale__"
+
+        def ready_layers():
+            """盘上真实可用、且由当前结构模型生成的层。"""
+            return [
+                layer
+                for layer in DEPTH_LAYERS
+                if layer in layer_sha
+                and (layer == "model" or layer_model_sha.get(layer) == chapter_model_sha)
+                and Path(self.store.depth_path(uid, n, DEPTH_FILES[layer])).is_file()
+            ]
+
+        def interim_status():
+            """按盘上真实情况报状态：五层齐全且页面在才算 ready，只建结构算 model。"""
+            ready = ready_layers()
+            if ready == ["model"]:
+                return "model"
+            if len(ready) == len(DEPTH_LAYERS) and Path(self.store.depth_path(uid, n, "chapter.html")).is_file():
+                return "ready"
+            return "partial"
+
+        def snapshot(status):
+            """拼 state.json 并立刻落盘；中断时已完成层不会跟着丢。"""
+            state.update(
+                {
+                    "schema": 2,
+                    "uid": uid,
+                    "n": n,
+                    "source_sha256": (
+                        raw.get("source_sha256") if regenerated or not source_changed else state.get("source_sha256")
+                    ),
+                    "chapter_model_sha": chapter_model_sha,
+                    "prompt_version": model.get("prompt_version") or state.get("prompt_version") or "",
+                    "status": status,
+                    "path": "depth",
+                    "updated_at": now,
+                    "model": model_meta if model_meta is not None else state.get("model"),
+                    "layer_sha": layer_sha,
+                    "layer_model_sha": layer_model_sha,
+                    "layer_usage": layer_usage,
+                    "layer_updated_at": layer_updated_at,
+                    "layer_mode": layer_mode,
+                    "layer_request": layer_request,
+                }
+            )
+            state.setdefault("generated_at", now)
+            if regenerated and isinstance(model_meta, dict) and model_meta.get("cache_key"):
+                state["cache_key"] = model_meta["cache_key"]
+            files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
+            self.store.save_depth_partial(uid, n, files, status)
+            events.current().emit("layer_commit", status=status, layers_ready=ready_layers())
+            return status
+
+        snapshot(interim_status())
 
         panels = existing.get("panels")
         if "panels" in requested:
@@ -1429,12 +1526,14 @@ class ReadingService:
             layer_sha["panels"] = _depth_sha(panels)
             layer_model_sha["panels"] = chapter_model_sha
             layer_mode["panels"] = mode
+            layer_request["panels"] = dict(request)
             layer_updated_at["panels"] = now
             usage = (panels_meta or {}).get("usage") if isinstance(panels_meta, dict) else None
             if isinstance(usage, dict) and usage:
                 layer_usage["panels"] = usage
             else:
                 layer_usage.pop("panels", None)
+            snapshot(interim_status())
 
         skim = existing.get("skim")
         if "skim" in requested:
@@ -1459,8 +1558,10 @@ class ReadingService:
             layer_sha["skim"] = _depth_sha(skim)
             layer_model_sha["skim"] = chapter_model_sha
             layer_mode["skim"] = mode
+            layer_request["skim"] = dict(request)
             layer_usage.pop("skim", None)
             layer_updated_at["skim"] = now
+            snapshot(interim_status())
 
         standard = existing.get("standard")
         if "standard" in requested:
@@ -1469,8 +1570,10 @@ class ReadingService:
             files[DEPTH_FILES["standard"]] = json.dumps(standard, ensure_ascii=False, indent=1)
             layer_sha["standard"] = _depth_sha(standard)
             layer_model_sha["standard"] = chapter_model_sha
+            layer_request["standard"] = dict(request)
             layer_usage.pop("standard", None)
             layer_updated_at["standard"] = now
+            snapshot(interim_status())
 
         deep = existing.get("deep")
         if "deep" in requested:
@@ -1494,17 +1597,19 @@ class ReadingService:
             layer_sha["deep"] = _depth_sha(deep)
             layer_model_sha["deep"] = chapter_model_sha
             layer_mode["deep"] = mode
+            layer_request["deep"] = dict(request)
             layer_updated_at["deep"] = now
             usage = (deep_meta or {}).get("usage") if isinstance(deep_meta, dict) else None
             if isinstance(usage, dict) and usage:
                 layer_usage["deep"] = usage
             else:
                 layer_usage.pop("deep", None)
+            snapshot(interim_status())
 
         html_written = False
         skim_fresh = skim is not None and layer_model_sha.get("skim") == chapter_model_sha
         html_layers = {"panels", "skim", "standard", "deep"}
-        need_render = skim_fresh and bool(html_layers & set(requested))
+        need_render = skim_fresh and bool(html_layers & (set(requested) | set(skipped)))
         if need_render:
             self._set_stage(job_id, "rendering")
             files["chapter.html"] = render_depth_chapter(
@@ -1522,35 +1627,10 @@ class ReadingService:
                 reading=reading,
             )
             html_written = True
-        status = "ready" if skim is not None and html_written else "model"
-        state.update(
-            {
-                "schema": state.get("schema", 1),
-                "uid": uid,
-                "n": n,
-                "source_sha256": (
-                    raw.get("source_sha256") if regenerated or not source_changed else state.get("source_sha256")
-                ),
-                "chapter_model_sha": chapter_model_sha,
-                "prompt_version": model.get("prompt_version") or state.get("prompt_version") or "",
-                "status": status,
-                "path": "depth",
-                "updated_at": now,
-                "model": model_meta if model_meta is not None else state.get("model"),
-                "layer_sha": layer_sha,
-                "layer_model_sha": layer_model_sha,
-                "layer_usage": layer_usage,
-                "layer_updated_at": layer_updated_at,
-                "layer_mode": layer_mode,
-            }
-        )
-        state.setdefault("generated_at", now)
-        if regenerated and isinstance(model_meta, dict) and model_meta.get("cache_key"):
-            state["cache_key"] = model_meta["cache_key"]
-        files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
-        self.store.save_depth(uid, n, files)
+        status = "ready" if skim is not None and html_written else interim_status()
+        snapshot(status)
         self._invalidate_packs()
-        return {"status": status, "pack_id": f"{uid}/ch/{n:02d}"}
+        return {"status": status, "pack_id": f"{uid}/ch/{n:02d}", "skipped": skipped}
 
     def _run_job(self, job_id, job):
         if job.get("kind") == "edition":

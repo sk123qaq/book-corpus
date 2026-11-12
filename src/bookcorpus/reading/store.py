@@ -8,6 +8,22 @@ import tempfile
 import uuid
 
 UID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+# 深读五层与各自产物；读写两端共用这一份，避免层名两处漂移。
+DEPTH_LAYERS = ("model", "panels", "skim", "standard", "deep")
+DEPTH_FILES = {
+    "model": "chapter_model.json",
+    "panels": "layers/panels.json",
+    "skim": "layers/skim.json",
+    "standard": "layers/standard.json",
+    "deep": "layers/deep.json",
+}
+DEPTH_LAYER_LABELS = {
+    "model": "结构",
+    "panels": "面板",
+    "skim": "速览",
+    "standard": "标准",
+    "deep": "深读",
+}
 
 
 class Store:
@@ -179,14 +195,42 @@ class Store:
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, indent=1)
             self._write(self._depth_path(root, name), text)
 
+    def save_depth_partial(self, uid, n, files, status):
+        """每层过校验就落一次盘；中断时盘上留下已完成层，续跑不用重花调用。
+
+        ``status`` 由调用方给：``model`` 只建了结构，``partial`` 建了多层但
+        还成不了页，``ready`` 才是可服务。写盘路径与整体写入完全一致。
+        """
+        payload = dict(files)
+        state = payload.get("state.json")
+        if isinstance(state, str):
+            try:
+                state = json.loads(state)
+            except json.JSONDecodeError:
+                state = {}
+        state = dict(state) if isinstance(state, dict) else {}
+        state["status"] = status
+        payload["state.json"] = state
+        return self.save_depth(uid, n, payload)
+
+    def _heal_swap_crash(self, base, target):
+        """上次换目录崩在两次 replace 之间时，把备份放回去，别让整包凭空消失。"""
+        if os.path.exists(target):
+            return
+        for name in sorted(os.listdir(base), reverse=True):
+            if name.startswith(".depth-bak-"):
+                os.replace(os.path.join(base, name), target)
+                return
+
     def save_depth(self, uid, n, files):
         """只替换 depth/；先写模型与账，state.json 最后落，失败保留旧 depth。"""
         base = self.pack_dir(uid, n)
         os.makedirs(base, exist_ok=True)
         if not isinstance(files, dict) or "state.json" not in files:
             raise ValueError("depth files 缺少 state.json")
-        stage = self._stage_dir(base, ".depth-")
         target = os.path.join(base, "depth")
+        self._heal_swap_crash(base, target)
+        stage = self._stage_dir(base, ".depth-")
         backup = self._backup_path(base, ".depth-bak-")
         try:
             self._copy_depth_cache(target, stage)
@@ -230,10 +274,15 @@ class Store:
         }
         if state.get("layers_sha"):
             base["layers_sha"] = state["layers_sha"]
+        ready, missing = self._ready_layers(uid, n, state)
+        base["layers_ready"] = ready
+        base["layers_missing"] = missing
         if source_sha and state.get("source_sha256") != source_sha:
             return dict(base, status="stale")
         if state.get("status") == "model":
             return dict(base, status="model")
+        if state.get("status") == "partial":
+            return dict(base, status="partial")
         if state.get("status") == "ready":
             # ready 必须以可服务的页面为准；旧版 --skip-render 留下的
             # ready 状态没有 chapter.html，按 model 处理而不是给 404。
@@ -242,15 +291,33 @@ class Store:
             return dict(base, status="ready")
         return dict(base, status="stale")
 
+    def _ready_layers(self, uid, n, state):
+        """哪些层真的在盘上，且是当前结构模型生成的。"""
+        model_sha = state.get("chapter_model_sha") or state.get("chapter_model_sha256")
+        layer_model_sha = state.get("layer_model_sha") if isinstance(state.get("layer_model_sha"), dict) else {}
+        ready = []
+        for layer in DEPTH_LAYERS:
+            if not os.path.isfile(self.depth_path(uid, n, DEPTH_FILES[layer])):
+                continue
+            if layer != "model" and model_sha and layer_model_sha.get(layer) not in (None, model_sha):
+                continue
+            ready.append(layer)
+        return ready, [layer for layer in DEPTH_LAYERS if layer not in ready]
+
     def chapter_route(self, uid, n, source_sha=None, manifest=None):
         """这一章能从哪条路径打开；只报真能打开的那条，细节放进 reason。"""
-        status = self.depth_state(uid, n, source_sha).get("status")
+        info = self.depth_state(uid, n, source_sha)
+        status = info.get("status")
         if status == "ready":
             return "depth", None
         if manifest is None:
             manifest = self.manifest(uid, n)
         if manifest:
             return "legacy", "旧包按旧路径打开"
+        if status == "partial":
+            ready = info.get("layers_ready") or []
+            missing = "、".join(DEPTH_LAYER_LABELS.get(layer, layer) for layer in info.get("layers_missing") or [])
+            return "none", f"已生成 {len(ready)}/{len(DEPTH_LAYERS)} 层，缺 {missing or '整章'}"
         if status == "model":
             return "none", "结构模型已建，深度页未出"
         if status == "stale":

@@ -7,9 +7,11 @@
 
 import hashlib
 import json
+import time
 from pathlib import Path
 
-from ..model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelProviderError
+from .. import events
+from ..model import DEFAULT_EFFORT, DEFAULT_MODEL, MAX_TOKENS, ModelProviderError
 from ..textnorm import normalize_verbatim
 from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
 
@@ -68,6 +70,7 @@ SYSTEM_PROMPT = "\n".join(
 )
 
 MAX_JSON_RETRIES = 1
+PLAN_VERSION = 1
 
 
 class DepthModelError(RuntimeError):
@@ -578,8 +581,63 @@ def _prompt_sha256():
     return hashlib.sha256(f"{PROMPT_VERSION}\n{SYSTEM_PROMPT}".encode()).hexdigest()
 
 
-def cache_key(source_sha256, prompt_sha256, model, effort):
-    return hashlib.sha256(f"{source_sha256}{prompt_sha256}{model}{effort}".encode()).hexdigest()
+def cache_key(source_sha256, prompt_sha256, model, effort, chunk_chars=18000, max_tokens=None):
+    """缓存键要带上所有影响输出的参数；少一个就会把别的调法当成命中。"""
+    limit = MAX_TOKENS if max_tokens is None else max_tokens
+    parts = f"{source_sha256}{prompt_sha256}{model}{effort}{chunk_chars}{limit}{PROMPT_VERSION}{PLAN_VERSION}"
+    return hashlib.sha256(parts.encode()).hexdigest()
+
+
+def plan_signature(plan):
+    """单块缓存还要认自己属于哪一段：切分改了而键没变，也不能把旧块拼进去。"""
+    payload = {
+        "index": plan.get("index"),
+        "total": plan.get("total"),
+        "prev_title": plan.get("prev_title"),
+        "next_title": plan.get("next_title"),
+        "id_prefix": plan.get("id_prefix"),
+        "blocks": [block.get("id") for block in plan.get("blocks") or [] if isinstance(block, dict)],
+    }
+    text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def chunk_cache_path(cache_dir, key, index):
+    return Path(cache_dir) / "chunks" / f"{key}-{index:02d}.json"
+
+
+def _read_chunk_cache(path, key, index, signature=""):
+    """单块缓存：块一过校验就落盘，中断时已完成的块不再重花调用。"""
+    if path is None or not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if data.get("prompt_version") != PROMPT_VERSION:
+        return None
+    if data.get("cache_key") != key or data.get("index") != index:
+        return None
+    if signature and data.get("signature") != signature:
+        return None
+    if not isinstance(data.get("payload"), dict):
+        return None
+    return data
+
+
+def _write_chunk_cache(path, key, index, payload, usage, signature=""):
+    _write_cache(
+        path,
+        {
+            "schema": 1,
+            "prompt_version": PROMPT_VERSION,
+            "cache_key": key,
+            "index": index,
+            "signature": signature,
+            "payload": payload,
+            "usage": usage,
+        },
+    )
 
 
 def _read_cache(path, source_sha256, prompt_sha256, model, effort):
@@ -626,7 +684,8 @@ def generate_chapter_model(
 ):
     """生成并校验 chapter_model，返回 ``(model, meta)``；不写任何文件。
 
-    传入 ``cache_dir`` 时按 source、prompt、模型与 effort 的哈希读写缓存；
+    传入 ``cache_dir`` 时按 source、prompt、模型、effort、分块大小与输出上限的
+    哈希读写缓存，并且每块单独落一份；中间中断时已完成的块直接复用。
     ``refresh=True`` 跳过读取、强制重新调用模型，并把结果回写缓存。
     失败抛异常，不生成合成兜底，也不返回部分结果。
     """
@@ -642,7 +701,14 @@ def generate_chapter_model(
     key = None
     cache_path = None
     if cache_dir is not None and source_sha256:
-        key = cache_key(source_sha256, prompt_sha, requested_model, requested_effort)
+        key = cache_key(
+            source_sha256,
+            prompt_sha,
+            requested_model,
+            requested_effort,
+            chunk_chars,
+            getattr(client, "max_tokens", None),
+        )
         cache_path = Path(cache_dir) / f"{key}.json"
         cached = (
             None if refresh else _read_cache(cache_path, source_sha256, prompt_sha, requested_model, requested_effort)
@@ -677,6 +743,16 @@ def generate_chapter_model(
     usage = {}
     actual_model = None
     for plan in plans:
+        index = plan["index"]
+        chunk_path = chunk_cache_path(cache_dir, key, index) if (cache_dir is not None and key) else None
+        signature = plan_signature(plan)
+        cached_chunk = None if refresh else _read_chunk_cache(chunk_path, key, index, signature)
+        if cached_chunk is not None:
+            payloads.append(cached_chunk["payload"])
+            _merge_usage(usage, cached_chunk.get("usage") or {})
+            events.current().emit("chunk_cache_hit", chunk=index, total=len(plans))
+            continue
+        started = time.monotonic()
         messages = _messages(
             book,
             chapter,
@@ -699,6 +775,14 @@ def generate_chapter_model(
         _merge_usage(usage, chunk_usage)
         actual_model = payload.pop("_model", None) or payload.get("model") or actual_model
         payloads.append(payload)
+        if chunk_path is not None:
+            _write_chunk_cache(chunk_path, key, index, payload, chunk_usage, signature)
+        events.current().emit(
+            "chunk_done",
+            chunk=index,
+            total=len(plans),
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+        )
     merged = _merge_chunks(payloads)
     first = payloads[0] if payloads else {}
     merged["uid"] = chapter_view.get("uid") or (book.get("uid") if isinstance(book, dict) else None)
