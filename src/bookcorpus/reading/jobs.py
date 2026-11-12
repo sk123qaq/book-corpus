@@ -6,7 +6,7 @@ import threading
 import time
 import uuid
 
-from . import events
+from . import events, failures
 from .store import DEPTH_LAYERS
 
 STEPS = ("切块", "标注", "校验", "组档", "渲染")
@@ -365,6 +365,8 @@ class JobQueue:
                     if self._is_cancelled_locked(job_id):
                         return
                     current = self._jobs.get(job_id) or {}
+                    artifact, artifact_error = failures.write_failure(self.work, job_id, current, exc)
+                    extra = {"failure_artifact_error": artifact_error} if artifact_error else {}
                     self._update(
                         job_id,
                         state="failed",
@@ -372,7 +374,9 @@ class JobQueue:
                         error_kind=getattr(exc, "kind", None) or "unexpected",
                         attempts=getattr(exc, "attempt", None),
                         failed_layer=current.get("layer"),
+                        failure_artifact=artifact,
                         elapsed_ms=int((time.monotonic() - started) * 1000),
+                        **extra,
                     )
                 return
             with self._lock:

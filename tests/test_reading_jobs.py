@@ -1,11 +1,16 @@
 """任务队列：并行上限、排队、取消即时反馈、失败时账要说真话。"""
 
 import json
+import os
 import threading
 import time
+from pathlib import Path
+from types import SimpleNamespace
 
-from bookcorpus.reading import events
+from bookcorpus.reading import events, failures
+from bookcorpus.reading.depth.skim import SkimError
 from bookcorpus.reading.jobs import JobQueue
+from bookcorpus.reading.store import Store
 
 
 def _wait_until(predicate, timeout=3):
@@ -235,6 +240,122 @@ def test_failed_job_keeps_a_readable_event_log(tmp_path):
         assert records
         assert records[0]["kind"] == "layer_commit"
         assert records[0]["layers_ready"] == ["model"]
+    finally:
+        queue.shutdown()
+
+
+def test_failed_quality_job_writes_sidecar_that_survives_save_depth(tmp_path):
+    """质量失败要留下原始输出；它不能藏在会被 save_depth 换掉的 depth/ 里。"""
+
+    def runner(job_id, _job):
+        queue.set_layer(job_id, "skim")
+        raise SkimError(
+            "正文比例不够",
+            stats={"body_han": 1522, "section_gaps": [{"id": "S01", "body_han": 1522}]},
+            payload={"sections": [{"id": "S01", "claims": []}]},
+        )
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["skim"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "failed")
+        failed = queue.get(job["id"])
+        assert failed["error_kind"] == "quality"
+        assert failed["failed_layer"] == "skim"
+        assert failed["failure_artifact"]
+        artifact = Path(failed["failure_artifact"])
+        assert not artifact.is_absolute()
+        path = tmp_path / artifact
+        assert path.is_file()
+        record = json.loads(path.read_text(encoding="utf-8"))
+        assert record["error_kind"] == "quality"
+        assert record["raw_payload"]["sections"][0]["id"] == "S01"
+        assert record["stats"]["body_han"] == 1522
+        assert record["failed_at"]
+
+        failed_events = [item for item in queue.events(job["id"]) if item.get("kind") == "job_failed"]
+        assert failed_events
+        assert failed_events[-1]["error_kind"] == "quality"
+
+        Store(SimpleNamespace(work=str(tmp_path))).save_depth("B0003", 6, {"state.json": {"status": "ready"}})
+        assert path.is_file()
+    finally:
+        queue.shutdown()
+
+
+def test_failed_quality_job_writes_artifact_even_without_payload(tmp_path):
+    """JSON 耗尽这类失败没有 payload，现场也要落一份，否则操作台只能干看。"""
+
+    def runner(job_id, _job):
+        queue.set_layer(job_id, "skim")
+        raise SkimError("连续 2 次没有得到合法 JSON：坏的")
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["skim"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "failed")
+        failed = queue.get(job["id"])
+        assert failed["error_kind"] == "quality"
+        assert failed["failure_artifact"]
+        record = json.loads((tmp_path / failed["failure_artifact"]).read_text(encoding="utf-8"))
+        assert record["raw_payload"] is None
+        assert record["stats"] is None
+        assert record["failed_at"]
+    finally:
+        queue.shutdown()
+
+
+def test_sidecar_write_error_keeps_the_failure_and_the_worker(tmp_path):
+    """现场写不进去只记一个原因，任务照样要落到 failed，工作线程不能死。"""
+    (tmp_path / "阅读").mkdir()
+    (tmp_path / "阅读" / "failures").write_text("这不是目录", encoding="utf-8")
+
+    def runner(job_id, _job):
+        queue.set_layer(job_id, "skim")
+        raise SkimError("正文比例不够", stats={"body_han": 1}, payload={"sections": []})
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["skim"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "failed")
+        failed = queue.get(job["id"])
+        assert failed["error_kind"] == "quality"
+        assert failed["failure_artifact"] is None
+        assert "Error" in failed["failure_artifact_error"]
+        second = queue.submit("B0003", 7, [], kind="depth", layers=["skim"])
+        assert _wait_until(lambda: queue.get(second["id"])["state"] == "failed")
+    finally:
+        queue.shutdown()
+
+
+def test_failure_artifacts_are_pruned_oldest_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(failures, "KEEP_FILES", 3)
+    for index in range(6):
+        rel, error = failures.write_failure(
+            str(tmp_path), f"job{index}", {"uid": "B0003", "n": index, "layer": "skim"}, SkimError("x", stats={})
+        )
+        assert error is None
+        os.utime(tmp_path / rel, (1000 + index, 1000 + index))
+    rel, error = failures.write_failure(
+        str(tmp_path), "job6", {"uid": "B0003", "n": 9, "layer": "skim"}, SkimError("x")
+    )
+    assert error is None
+    rest = sorted(path.name for path in (tmp_path / "阅读" / "failures").glob("*.json"))
+    assert rest == ["job4-skim.json", "job5-skim.json", "job6-skim.json"]
+
+
+def test_unclassified_exception_still_lands_in_unexpected(tmp_path):
+    def runner(job_id, _job):
+        queue.set_layer(job_id, "skim")
+        raise RuntimeError("没有 kind 的普通异常")
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0003", 6, [], kind="depth", layers=["skim"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "failed")
+        failed = queue.get(job["id"])
+        assert failed["error_kind"] == "unexpected"
+        assert failed["failure_artifact"]
     finally:
         queue.shutdown()
 
