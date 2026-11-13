@@ -32,7 +32,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 ## 证明与跳过
 
-- 上次全绿：`2026-11-12` 一轮 `RUN_ID=20261112-mt`，五个功能全驱过，证据在 `artifacts/verify/20261112-mt/`，结论见该目录 `README.md`。下一轮跑完请就地更新这一行。
+- 上次全绿：`2026-11-13` 一轮 `RUN_ID=20261113-mt`，五个页面全过（首页/日课/分层读/找一段走 curl + HTML，操作台走 `shot_ops.py` CDP），含一次真生成 `r-17da2474c2`（速览 23.1% 首轮过门槛）；证据在 `artifacts/verify/20261113-mt/`，结论见该目录 `README.md`。下一轮跑完请就地更新这一行。
 
 - 一次证明要同时留下动作与结果状态，不能只有最终画面。
 - 只验了接口没走页面时记 `ui-unverified`，不算 UI 通过。

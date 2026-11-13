@@ -6,7 +6,7 @@
 ## Sub-features
 
 - `daily-list` 往期列表：按期倒排，行里是 `MM.DD`、类别、书名、标题（**不带期号**）。页面首屏是最新一期，往期是页底 `<section id="past">`（标题「目录」）；首屏渲染后地址栏会变成 `/#<date>`。
-- `daily-issue` 单期页：期号、正文、引用、为什么挑它；研究记录不是独立区块，只是页脚一行 `路径 · N 字 · 查证 X · 联网 N 次`（`apps/daily/web/app.js:128-141`）。
+- `daily-issue` 单期页：期号、正文、引用、为什么挑它；研究记录不是独立区块，只是页脚一行 `路径 · N 字 · 查证 X · 联网 N 次`（`apps/daily/web/app.js:135-144`）。
 - `daily-empty` 空目录的空状态。
 - `daily-skip-bad` 坏文件跳过，不整页失败。
 - `daily-contract` 文件名必须等于文件里的 `date`。
@@ -50,7 +50,7 @@ Preconditions:
 - **空目录。** 先不写任何期。`curl -s http://127.0.0.1:18772/api/feed` 输出 `{"today": "…", "dir": "$ROOT/日课", "issues": [], "errors": []}`；`curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18772/` 输出 `200`，页面展示空状态。前提是 `$ROOT/日课/` **目录存在**（`book-corpus init` 会建）；目录不存在时 `errors` 会多一条 `{"file": null, "reason": "日课目录不存在：…"}`，页面同时出现「有 1 条日课读取问题，已跳过。」
 - **有内容。** 写入上面那期后 `curl -s http://127.0.0.1:18772/api/feed` 的 `issues` 长度变 `1`，带 `issue`（期号，整数）、`headline`、`book.title`；本期 `issue` 为 `1`。
 - **单期。** `curl -s http://127.0.0.1:18772/api/issue/2026-11-10` 返回同一期；`curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18772/api/issue/2000-01-01` 输出 `404`。
-- **坏文件。** 放一个 `2026-11-11.json` 但把 `date` 写成 `2026-11-12`，再取 `/api/feed`：`issues` 仍是 `1`，`errors` 多一条，形如 `{"file": "2026-11-11.json", "reason": "文件名与 date 不一致，文件里是 2026-11-12。"}`。
+- **坏文件。** 放一个 `2026-11-11.json` 但把 `date` 写成 `2026-11-12`，再取 `/api/feed`：`issues` 仍是 `1`，`errors` 多一条，形如 `{"file": "2026-11-11.json", "reason": "文件名与 date 不一致，文件里是 2026-11-12。"}`。**先复制一期完整合法的记录再改 `date`**：只写 `{"version": 1, "date": "2026-11-12"}` 会先撞字段校验，报 `kind 必须是字符串。`（2026-11-13 实测），验不到文件名规则。
 - **不缓存。** `curl -s -D - -o /dev/null http://127.0.0.1:18772/api/feed` 的响应头含 `Cache-Control: no-store` 与 `X-Content-Type-Options: nosniff`。
 - **Host。** `curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: example.com' http://127.0.0.1:18772/` 输出 `403`。
 - **列表行没有期号。** 列表是前端渲染（`apps/daily/web/app.js`），`curl` 拿不到行文本；要按 DOM 验就得上 CDP。接口里每期带 `issue`，行里只渲染 `date` / `kindLabel` / 书名 / `headline`。
@@ -69,3 +69,4 @@ Preconditions:
 - 日课只认 `127.0.0.1` / `localhost` 的 Host 头，`--port` 改了也一样。
 - 有期但**今天没有**时，页面上会多一行「今天还没有取章」（`apps/daily/web/app.js:57-60`）；断言「页面无额外提示」会误报。
 - 空目录的 `errors: []` 有个前提：`$ROOT/日课/` 必须存在。目录不存在时 `feed.py:144-146` 会多给一条 `{"file": null, "reason": "日课目录不存在：…"}`，页面同时多出「有 1 条日课读取问题」。`book-corpus init` 会建这个目录，手建工作区不会。
+- `errors` 不止「坏 JSON」一种：非法文件名（`feed.py:152`）、字段校验失败（`feed.py:155-165`）、目录不存在（`feed.py:145`）都进同一数组。字段校验先于文件名比对，所以残缺文件报不出「文件名与 date 不一致」。
