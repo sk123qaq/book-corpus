@@ -15,7 +15,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 DEMO = os.path.join(REPO, "apps", "demo")
-INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-data")
+INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库")
 os.environ.setdefault("BOOKS_ROOT", INSTANCE)
 for _p in (DEMO,):
     if _p not in sys.path:

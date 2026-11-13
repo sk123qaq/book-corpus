@@ -15,7 +15,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 OPS = REPO / "tests" / "acceptance" / "ops"
 DEMO = REPO / "tests" / "acceptance" / "demo"
-INSTANCE = Path(os.environ.get("BOOKS_ROOT") or (Path.home() / "文档" / "book-corpus-data"))
+INSTANCE = Path(os.environ.get("BOOKS_ROOT") or (Path.home() / "书库"))
 
 OFFLINE = [
     (OPS / "check_ops.py", 300),

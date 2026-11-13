@@ -1,26 +1,29 @@
 # 书库项目
 
-`~/文档/books` 是个人电子书库。2026-10 按 `docs/design/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
+`~/书库` 是个人电子书库的工作区实例。2026-10 按 `docs/design/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
 
 新会话先读本文件，再按「文件地图」与「脚本」按需深入。方案 §8 开头有两段执行修订，正文里写死的原型数字按修订块读。
 
 本文件记录作者本机的书库实例。批次账与现状数字只对那份语料成立；新克隆的仓库按 `README.md` 从零搭建。
 
-## 这台机器上的两处目录（2026-11-03 起单实例）
+## 这台机器上的两处目录（2026-11-13 起）
 
 | 目录 | 角色 | 有无 `.git` |
 |---|---|---|
 | `~/文档/book-corpus` | 工具仓（公开）：代码、文档、模板、操作台与演示应用 | 有，跟 origin/main |
-| `~/文档/book-corpus-data` | **唯一工作区实例**（私有）：`books/`（book.json + 正文与源文件）、`collections/`、`tables/`、`build/`、`工作区/`（批次机账、运维、中间态）、`archive/`、`books.toml` | 有，私有仓；只跟账，正文与索引在 `.gitignore` 里 |
+| `~/书库` | **唯一工作区实例**（私有）：`books/`（book.json + 正文与源文件）、`collections/`、`tables/`、`build/`、`工作区/`（批次机账、运维、中间态）、`archive/`、`books.toml` | 有，2026-11-13 新初始化的私有仓；只跟账，正文与索引在 `.gitignore` 里 |
 
-`~/文档/books` 是便捷软链，指向 `book-corpus-data`。旧批次里 `~/文档/books/库/...`
-是 v1 时代写死的记录，v2 没有 `库/`，软链救不了；要解析用 `tables/对照表.csv`
-与批次里的 `对照表-0002.csv`，不要把它们当活路径。
+2026-11-13 用 `book-corpus init ~/书库` 重建工作区树，把当时的 `~/文档/book-corpus-data`
+按项目逻辑整体 rename 进来，随后删除旧目录与便捷软链 `~/文档/books`。旧数据仓的 Git 历史
+打成 bundle 留在 `工作区/归档/book-corpus-data-历史-2026-11-13.bundle`（全部 refs，HEAD `34a68c4`）。
+旧批次与旧文档里的 `~/文档/books/...`、`book-corpus-data/...` 都是搬迁前的记录；`库/...`
+是 v1 时代写死的路径，v2 没有 `库/`。要解析用 `tables/对照表.csv` 与批次里的
+`对照表-0002.csv`，不要把旧路径当活路径。
 
 2026-11-02 收尾把 `book-corpus-new` 改名成 `book-corpus-local`，旧 v1 树删掉。2026-11-03 把 local 实例合并进数据仓，`book-corpus-local` 下线，单实例一根。
-迁移账与验收读数见数据仓 `工作区/批次/2026-11-03-合并单实例与账统一/说明.md`。
+迁移账与验收读数见工作区 `工作区/批次/2026-11-03-合并单实例与账统一/说明.md`。
 
-**单实例纪律**：数据仓 `.git` 与 41G 未跟踪正文同树。`git clean -fdx` 会删正文；批次写操作集中在 `工作区/` 下，别在根下跑；`git add -A` 依赖 `.gitignore`，
+**单实例纪律**：工作区 `.git` 与 41G 未跟踪正文同树。`git clean -fdx` 会删正文；批次写操作集中在 `工作区/` 下，别在根下跑；`git add -A` 依赖 `.gitignore`，
 动 `.gitignore` 前先想清楚。
 
 ## 现状
@@ -59,7 +62,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 | `apps/home/` | 统一入口首页，项目默认只启动这一项，127.0.0.1:8773；服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点击时按需代起四个页面服务，验收在 `tests/test_home_*.py` |
 | `docs/design/` | 权威方案、决策记录与流程图 |
 | `docs/briefs/` | 已完成任务书，标注完成日期 |
-| `工作区/批次/` | 只在实例与数据仓；工具仓不再保留 |
+| `工作区/批次/` | 只在工作区实例；工具仓不再保留 |
 | `工作区/中间态/` | 只在实例磁盘上，派生或可再生，不进任何仓 |
 
 `book.json` 是源元数据投影。md 与 html 状态只在 `library.db` 的 `derived` 表里，由 `book-corpus library` 按磁盘生成，不写回 `book.json`。
@@ -144,7 +147,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 - 跟：每本书的 `book.json`、`tables/` 的人工账与小型过程账、`src/` 的脚本、`apps/` 的应用与测试、`docs/` 的方案与任务书。
 - 不跟：`books/**/source/`、`md/`、`html/`、`books/_收件箱/`、`books/_冷宫/`（只留 README）、`build/检索/`（只留 `README.md` 与 `踩坑记录.md`）、`build/views/`、批次 `work/ out/ live/ tmp/ drill/`、模型与虚拟环境、运行态。
 - 规则在根 `.gitignore`。`git status` 里书目录的变化应当只有 `book.json` 与账本；出现正文或索引文件就是规则漏了。
-- 批次账不存本仓。每一批转换、评测、下载的机账在私有数据仓 `book-corpus-data` 的 `工作区/批次/` 下，随语料走：worklist、uid、页数、sha256 只对那份语料成立，克隆者无法复核。要复跑某一批，从数据仓拿；重跑入口在 `src/bookcorpus/`，不要在本仓再放一份批次脚本。
+- 批次账不存本仓。每一批转换、评测、下载的机账在私有工作区 `~/书库` 的 `工作区/批次/` 下，随语料走：worklist、uid、页数、sha256 只对那份语料成立，克隆者无法复核。要复跑某一批，从工作区拿；重跑入口在 `src/bookcorpus/`，不要在本仓再放一份批次脚本。
 - 操作人提出的方向性异议必须落成带检查命令的目标态判据并写进批次说明；会话收尾输出「开场诉求 vs 终态」对照表，对不上不许结。
 
 ## 查书
@@ -152,7 +155,7 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 书级默认入口（2026-10-23）：`book_query.py`。默认 `best_support` + B2.5 5 轮词法循环；触发时默认弹 5-8 张书卡，`--no-cards` 关闭；按需扩展默认关，`--expand-on-demand` 才跑 B4。`qsearch.py --book` 仍是旧 `mix` 口径，只作对照；`book_score.py` 是打分实验台。
 
 ```bash
-cd ~/文档/book-corpus-data
+cd ~/书库
 # 找书（书名或作者），把 波特 换成要查的词
 book-corpus run lq -H "SELECT uid,title,author,path FROM book WHERE title LIKE '%波特%' OR author LIKE '%波特%'"
 # 拿某本书的 md 目录，把 乡土中国 换成书名
@@ -171,7 +174,7 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 | 结构、脚本、html | `book-corpus verify` | 末行「全过：N 项」 |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
 | 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |
-| 书级默认值或书卡 | `python3 ~/文档/book-corpus-data/工作区/批次/qa-检索-2026-10-22-书级融合/probe_b6.py --lanes --gate --perf` | 末行 `ALL PASS`；gate 证据为 `drop`，默认卡是产品决定 |
+| 书级默认值或书卡 | `python3 ~/书库/工作区/批次/qa-检索-2026-10-22-书级融合/probe_b6.py --lanes --gate --perf` | 末行 `ALL PASS`；gate 证据为 `drop`，默认卡是产品决定 |
 
 ## Agent skills
 

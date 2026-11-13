@@ -17,7 +17,7 @@ import pytest
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 DEMO = os.path.join(REPO, "apps", "demo")
-os.environ.setdefault("BOOKS_ROOT", os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-data"))
+os.environ.setdefault("BOOKS_ROOT", os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库"))
 if DEMO not in sys.path:
     sys.path.insert(0, DEMO)
 

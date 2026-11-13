@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """显式书名的后端验收：解析、plan 钉位与默认结果。
 
-  BOOKS_ROOT=~/文档/book-corpus-data python -m pytest \
+  BOOKS_ROOT=~/书库 python -m pytest \
       tests/acceptance/demo/test_book_focus_plan.py -q
 
 离线跑，不调模型。真实数据只在 library.db 与 index.db 都在时用作集成用例，
@@ -14,7 +14,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-data")
+INSTANCE = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库")
 os.environ.setdefault("BOOKS_ROOT", INSTANCE)
 for _p in (
     os.path.join(REPO, "src", "bookcorpus", "scripts"),

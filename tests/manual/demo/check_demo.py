@@ -23,7 +23,7 @@ BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765"
 THREE = "《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球"
 THREE_PATH = "books/B0024/md/03_第二部威慑纪元12年，“青铜世纪”号.md"
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/文档/book-corpus-data")
+ROOT = os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库")
 HAS_FIXTURES = os.path.exists(os.path.join(ROOT, THREE_PATH)) and os.path.isdir(os.path.join(ROOT, "books", "B0168"))
 fails = []
 
