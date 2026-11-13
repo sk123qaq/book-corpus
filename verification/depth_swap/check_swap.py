@@ -11,7 +11,8 @@
 三步：
 1. 盘上 target/backup/stage 的 8 种组合逐个对照 depth_state 与 chapter_route；
 2. 在两次 os.replace 之间注入 SystemExit，复现 depth/ 消失、备份还在的窗口；
-3. 再正常保存一次，验证 _heal_swap_crash（store.py:216-223）把包放回来。
+3. 再正常保存一次，验证 _heal_swap_crash（store.py:216-223）把包放回来；
+4. 再崩一次后调 heal_pending_swaps，验证重启时放回备份、清掉 stage。
 
 用法：
     uv run --frozen python verification/depth_swap/check_swap.py [--root DIR]
@@ -22,6 +23,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import itertools
 import json
 import os
@@ -152,6 +154,55 @@ def check_heal(store: Store) -> bool:
     return healed
 
 
+def check_startup_heal(store: Store) -> bool:
+    """重启时调 heal_pending_swaps：备份放回 target，死掉的 stage 清掉。"""
+    pack = Path(store.pack_dir(UID, N))
+    shutil.rmtree(pack, ignore_errors=True)
+    pack.mkdir(parents=True, exist_ok=True)
+    _write_ready(pack / "depth", OLD_HTML)
+
+    real_replace = os.replace
+
+    def crash_on_swap(src, dst):
+        source = Path(src)
+        if source.parent == pack and source.name.startswith(".depth-") and Path(dst) == pack / "depth":
+            raise SystemExit("模拟两次 replace 之间断电")
+        return real_replace(src, dst)
+
+    print("\n== 启动自愈：heal_pending_swaps ==")
+    with mock.patch("bookcorpus.reading.store.os.replace", side_effect=crash_on_swap), contextlib.suppress(SystemExit):
+        store.save_depth(UID, N, _depth_files(NEW_HTML))
+    crashed = store.depth_state(UID, N).get("status")
+
+    report = store.heal_pending_swaps()
+    state = store.depth_state(UID, N)
+    route = store.chapter_route(UID, N)
+    backups = list(pack.glob(".depth-bak-*"))
+    stages = [p for p in pack.glob(".depth-*") if not p.name.startswith(".depth-bak-")]
+    html = pack / "depth" / "chapter.html"
+
+    ok_pre = _report(crashed == "missing", "自愈前是缺失态", f"status={crashed}")
+    ok_report = _report(
+        report == {"healed": ["B0001/01"], "cleaned": ["B0001/01"], "errors": []},
+        "只修这一章",
+        str(report),
+    )
+    ok_target = _report(
+        html.is_file() and html.read_text(encoding="utf-8") == OLD_HTML,
+        "depth/ 是旧包",
+        str(html),
+    )
+    ok_state = _report(state.get("status") == "ready", "depth_state", f"status={state.get('status')}")
+    ok_route = _report(route == ("depth", None), "chapter_route", f"route={route}")
+    ok_left = _report(not backups and not stages, "没有备份与 stage 残留", f"backup={backups} stage={stages}")
+    again = store.heal_pending_swaps()
+    ok_again = _report(again == {"healed": [], "cleaned": [], "errors": []}, "再调一次是空", str(again))
+
+    healed = all((ok_pre, ok_report, ok_target, ok_state, ok_route, ok_left, ok_again))
+    print(f"STARTUP-HEAL: {'PASS' if healed else 'FAIL'}")
+    return healed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="换 depth/ 的崩溃窗口现场验证")
     parser.add_argument("--root", help="工作根目录；默认 tempfile.mkdtemp(prefix='bc-swap-')")
@@ -167,12 +218,14 @@ def main(argv: list[str] | None = None) -> int:
     states, conformance_ok = check_conformance(store)
     crash_ok = check_crash(store)
     heal_ok = check_heal(store)
-    ok = conformance_ok and crash_ok and heal_ok
+    startup_ok = check_startup_heal(store)
+    ok = conformance_ok and crash_ok and heal_ok and startup_ok
 
     print(
         f"\nstates: {states} | conformance: {'PASS' if conformance_ok else 'FAIL'} "
         f"| crash-window: {'CONFIRMED' if crash_ok else 'NOT CONFIRMED'} "
-        f"| heal: {'PASS' if heal_ok else 'FAIL'}"
+        f"| heal: {'PASS' if heal_ok else 'FAIL'} "
+        f"| startup-heal: {'PASS' if startup_ok else 'FAIL'}"
     )
     if auto_root and ok:
         shutil.rmtree(root, ignore_errors=True)
