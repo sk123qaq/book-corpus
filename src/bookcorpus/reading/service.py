@@ -503,6 +503,9 @@ class ReadingService:
     def __init__(self, root=None, annotate=None, client=None, depth=None):
         self.library = Library(root)
         self.store = Store(self.library.layout)
+        # 换目录时进程死掉会留下 .depth-bak-<hex>，读者看到的 chapter 是「尚未生成」。
+        # 启动时放回去，代价是扫一遍章节目录；此时没有并发保存，改名是安全的。
+        self.recovered_swaps = self.store.heal_pending_swaps()
         if annotate is None:
             annotate = os.environ.get("READING_ANNOTATE", "1") != "0"
         self.annotate = bool(annotate)

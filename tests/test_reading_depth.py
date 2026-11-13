@@ -528,6 +528,65 @@ def test_store_depth_state_missing_stale_model_ready(tmp_path):
     assert store.depth_state("B0009", 1, "sha-two")["layers_sha"] == {"figures": "x"}
 
 
+def test_heal_pending_swaps_restores_backup_and_drops_stage(tmp_path):
+    store = Store(Layout(tmp_path))
+    store.save_depth(
+        "B0009",
+        1,
+        {
+            "chapter_model.json": {"label": "one"},
+            "chapter.html": "<html>old</html>",
+            "state.json": {"status": "ready", "source_sha256": "sha"},
+        },
+    )
+    pack = Path(store.pack_dir("B0009", 1))
+    (pack / "depth").rename(pack / ".depth-bak-deadbeef")
+    (pack / ".depth-stage1").mkdir()
+    assert store.depth_state("B0009", 1)["status"] == "missing"
+    report = store.heal_pending_swaps()
+    assert report == {"healed": ["B0009/01"], "cleaned": ["B0009/01"], "errors": []}
+    assert store.depth_state("B0009", 1)["status"] == "ready"
+    assert not (pack / ".depth-bak-deadbeef").exists()
+    assert not (pack / ".depth-stage1").exists()
+
+
+def test_heal_pending_swaps_keeps_a_lone_stage_when_no_backup(tmp_path):
+    store = Store(Layout(tmp_path))
+    store.save_depth(
+        "B0009",
+        1,
+        {"chapter_model.json": {}, "state.json": {"status": "ready", "source_sha256": "sha"}},
+    )
+    pack = Path(store.pack_dir("B0009", 1))
+    (pack / "depth").rename(pack / ".depth-only-copy")
+    report = store.heal_pending_swaps()
+    assert report == {"healed": [], "cleaned": [], "errors": []}
+    assert (pack / ".depth-only-copy").is_dir()
+    assert store.depth_state("B0009", 1)["status"] == "missing"
+
+
+def test_reading_service_heals_crashed_swap_before_serving(reading_root):
+    first = ReadingService(root=reading_root, annotate=False, depth=True)
+    raw = first.library.read_chapter("B0001", 1)
+    first.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {"label": "model"},
+            "chapter.html": "<html>old</html>",
+            "state.json": {"status": "ready", "source_sha256": raw["source_sha256"]},
+        },
+    )
+    assert first.chapter("B0001", 1)["path"] == "depth"
+    pack = Path(first.store.pack_dir("B0001", 1))
+    (pack / "depth").rename(pack / ".depth-bak-cafe0001")
+    assert first.chapter("B0001", 1)["path"] == "none"
+    second = ReadingService(root=reading_root, annotate=False, depth=True)
+    assert second.recovered_swaps["healed"] == ["B0001/01"]
+    assert second.recovered_swaps["errors"] == []
+    assert second.chapter("B0001", 1)["path"] == "depth"
+
+
 def test_save_without_depth_keeps_existing_depth_and_cache(tmp_path):
     store = Store(Layout(tmp_path))
     uid, n = "B0009", 1

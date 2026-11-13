@@ -222,6 +222,54 @@ class Store:
                 os.replace(os.path.join(base, name), target)
                 return
 
+    def _chapter_dirs(self):
+        """阅读/<uid>/ch/<nn> 的三个层级，扫不到就跳过。启动自愈只认这个形状。"""
+        for uid in sorted(os.listdir(self.base)):
+            ch = os.path.join(self.base, uid, "ch")
+            if not os.path.isdir(ch):
+                continue
+            for name in sorted(os.listdir(ch)):
+                pack = os.path.join(ch, name)
+                if os.path.isdir(pack):
+                    yield uid, name, pack
+
+    def heal_pending_swaps(self):
+        """启动时把上次换目录崩出来的备份放回去，并清掉没换成的 stage。
+
+        只在进程启动、还没有读写之前调用：那时没有正在进行的保存，
+        ``.depth-<rand>`` 一定是死掉的进程留下的半成品。但 target 与 backup
+        都不在、只剩 stage 时不动它，那是盘上唯一的包（NoDataLoss）。
+        返回 healed/cleaned 的章号与放不回去的 error，供启动日志与测试取数。
+        """
+        healed, cleaned, errors = [], [], []
+        try:
+            chapters = list(self._chapter_dirs())
+        except OSError as exc:
+            return {"healed": [], "cleaned": [], "errors": ["%s: %s" % (self.base, exc)]}
+        for uid, name, pack in chapters:
+            label = "%s/%s" % (uid, name)
+            target = os.path.join(pack, "depth")
+            try:
+                entries = sorted(os.listdir(pack), reverse=True)
+            except OSError as exc:
+                errors.append("%s: %s" % (label, exc))
+                continue
+            backups = [e for e in entries if e.startswith(".depth-bak-")]
+            stages = [e for e in entries if e.startswith(".depth-") and not e.startswith(".depth-bak-")]
+            if not os.path.exists(target):
+                if not backups:
+                    continue
+                try:
+                    os.replace(os.path.join(pack, backups[0]), target)
+                except OSError as exc:
+                    errors.append("%s: %s" % (label, exc))
+                    continue
+                healed.append(label)
+            for stage in stages:
+                shutil.rmtree(os.path.join(pack, stage), ignore_errors=True)
+                cleaned.append(label)
+        return {"healed": healed, "cleaned": cleaned, "errors": errors}
+
     def save_depth(self, uid, n, files):
         """只替换 depth/；先写模型与账，state.json 最后落，失败保留旧 depth。"""
         base = self.pack_dir(uid, n)
