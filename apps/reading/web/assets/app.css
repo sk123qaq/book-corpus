@@ -298,10 +298,15 @@
 .mode-override{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;margin:8px 0 0;font:9px/1.5 var(--sans);color:var(--cinnabar)}
 .mode-override span{color:var(--ink-3)}
 .mode-override button{margin-left:auto;border:0;border-bottom:1px solid var(--cinnabar-soft);background:transparent;color:var(--cinnabar);font:9px/1.4 var(--sans);cursor:pointer;padding:0}
+.mode-override button + button{margin-left:8px}
+.mode-warning button{margin-left:8px;border:0;border-bottom:1px solid var(--cinnabar-soft);background:transparent;color:var(--cinnabar);font:9px/1.4 var(--sans);cursor:pointer;padding:0}
 .mode-warning{margin:8px 0 0;font:9px/1.5 var(--sans);color:var(--cinnabar)}
 .mode-foot{margin:8px 0 0;font:8px/1.5 var(--sans);color:var(--ink-3)}
 .mode-readonly{margin:10px 0 12px;padding:10px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font:10px/1.5 var(--sans);color:var(--ink-3)}
 .mode-readonly b{color:var(--ink);font-weight:600}
+.book-mode-set{display:flex;align-items:center;gap:6px;margin-top:7px}
+.book-mode-set select{min-width:0;flex:1;border:1px solid var(--rule);background:var(--paper);color:var(--ink);font:9px/1.4 var(--sans);padding:5px 6px}
+.book-mode-set .btn{flex:none;margin:0}
 .mode-badge{display:inline-block;border:1px solid var(--pine);color:var(--pine);font:8px/1 var(--sans);letter-spacing:.05em;padding:3px 5px;margin-left:8px;vertical-align:2px}
 .ticket{min-width:0}
 .ticket-est{flex-wrap:wrap}

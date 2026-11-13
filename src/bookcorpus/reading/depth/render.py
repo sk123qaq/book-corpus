@@ -332,7 +332,10 @@ def _panels_html(panels, tier):
         parts.append(f"<h3>{html.escape(panel.get('title') or '')}</h3>")
         if panel.get("summary"):
             parts.append(f"<p>{html.escape(panel['summary'])}</p>")
-        parts.append(_panel_items(panel.get("items") or [], 3 if tier == "skim" else None))
+        if tier == "skim":
+            parts.append('<p class="panel-more">条目在标准 / 深读档展开。</p>')
+        else:
+            parts.append(_panel_items(panel.get("items") or []))
         parts.append("</article>")
     parts.append("</section>")
     return "".join(parts)
@@ -636,7 +639,7 @@ def render_depth_chapter(
     """渲染一页两树：编译速览 + 全部原文块；标准/深读各叠加自己的层。"""
     del ledger  # 处置账已落在 skim/核心计数里，这里只需要模型与速览。
     if standard is None:
-        standard = build_standard(model, blocks)
+        standard = build_standard(model, blocks, mode=(reading or {}).get("effective_mode"))
     title = html.escape(book.get("title_short") or book.get("title") or "")
     author = html.escape(book.get("author") or "作者待校")
     chapter_title = html.escape(chapter.get("title") or chapter.get("stem") or "")

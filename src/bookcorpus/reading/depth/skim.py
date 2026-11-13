@@ -287,7 +287,7 @@ def _check_scenes(skim, chapter_model, blocks):
     return clean, g11, g14, warnings, stats
 
 
-def _checks(skim, chapter_model, blocks):
+def _checks(skim, chapter_model, blocks, mode=None):
     g11 = []
     g14 = []
     warnings = []
@@ -297,8 +297,16 @@ def _checks(skim, chapter_model, blocks):
     if not isinstance(skim, dict):
         g11.append("skim 顶层必须是对象")
         return None, g11, g14, warnings, {}
+    if mode:
+        expected_kind = "scenes" if mode == "narrative" else "claims"
+        if skim.get("kind") != expected_kind:
+            g11.append(f"{mode} 读法的速览 kind 必须是 {expected_kind}")
     if skim.get("kind") == "scenes":
-        return _check_scenes(skim, chapter_model, blocks)
+        clean, scene_g11, scene_g14, scene_warnings, stats = _check_scenes(skim, chapter_model, blocks)
+        g11.extend(scene_g11)
+        g14.extend(scene_g14)
+        warnings.extend(scene_warnings)
+        return clean, g11, g14, warnings, stats
 
     block_map = {}
     for block in blocks or []:
@@ -581,18 +589,18 @@ def _checks(skim, chapter_model, blocks):
     return clean, g11, g14, warnings, stats
 
 
-def validate_skim(payload, chapter_model, blocks, mode="argument"):
+def validate_skim(payload, chapter_model, blocks, mode=None):
     """校验并返回规范化副本；任何结构或守恒错误都抛 :class:`SkimError`。"""
-    clean, g11, g14, _, stats = _checks(payload, chapter_model, blocks)
+    clean, g11, g14, _, stats = _checks(payload, chapter_model, blocks, mode)
     problems = g11 + g14
     if problems:
         raise SkimError("；".join(problems), stats=stats, payload=payload, ratio_failed=bool(g14))
     return copy.deepcopy(clean)
 
 
-def audit_skim(skim, chapter_model, blocks, mode="argument"):
+def audit_skim(skim, chapter_model, blocks, mode=None):
     """只读取证：返回错误、警告、统计与 G11/G14 gates。"""
-    clean, g11, g14, warnings, stats = _checks(skim, chapter_model, blocks)
+    clean, g11, g14, warnings, stats = _checks(skim, chapter_model, blocks, mode)
     return {
         "errors": g11 + g14,
         "warnings": warnings,

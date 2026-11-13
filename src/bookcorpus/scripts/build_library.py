@@ -345,10 +345,12 @@ def emit_reading_json():
     for row in rows:
         by_uid.setdefault(row["uid"], []).append(row)
     written = 0
+    keep = set()
     for uid, items in by_uid.items():
         book_row = next((item for item in items if item["chapter"] == "*"), None)
         if not book_row:
             continue
+        keep.add(uid)
         dest = os.path.join(L.BOOKS, uid)
         if not os.path.isdir(dest):
             continue
@@ -375,7 +377,7 @@ def emit_reading_json():
     if os.path.isdir(L.BOOKS):
         for name in os.listdir(L.BOOKS):
             path = os.path.join(L.BOOKS, name, "reading.json")
-            if name in by_uid or not os.path.isfile(path):
+            if name in keep or not os.path.isfile(path):
                 continue
             os.remove(path)
             removed += 1

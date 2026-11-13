@@ -1,6 +1,7 @@
 """读法账、派生文件、建议与解析。"""
 
 import json
+import sqlite3
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -79,6 +80,11 @@ def test_reading_ledger_roundtrip(reading_root):
     assert L.reading_get("B0002", "1", root=reading_root)["mode"] == "narrative"
     assert len(L.reading_get("B0002", root=reading_root)) == 2
 
+    L.reading_set_book("B0002", "practical", root=reading_root)
+    assert L.reading_get("B0002", "1", root=reading_root)["mode"] == "narrative"
+    L.reading_set_book("B0002", "narrative", root=reading_root)
+    assert L.reading_get("B0002", "1", root=reading_root) is None
+
     L.reading_delete("B0002", "1", root=reading_root)
     assert L.reading_get("B0002", "1", root=reading_root) is None
     L.reading_delete("B0002", "*", root=reading_root)
@@ -109,6 +115,33 @@ def test_build_library_emits_reading_json(reading_root):
     assert not (Path(reading_root) / "books" / "B0002" / "reading.json").exists()
 
 
+def test_emit_reading_json_removes_file_without_book_row(reading_root):
+    write_ledger(
+        reading_root,
+        [
+            ("B0001", "文学", "甲书", ""),
+            ("B0002", "人文社科", "乙书", ""),
+            ("B0003", "写作与编剧", "丙书", "无正文"),
+        ],
+    )
+    L.reading_set_book("B0001", "narrative", root=reading_root)
+    L.reading_put("B0001", "argument", chapter="1", source_sha256="abc", root=reading_root)
+    result = run_cli("library", "--emit-json", "--root", str(reading_root), cwd=str(reading_root))
+    assert result.returncode == 0, result.stdout + result.stderr
+    path = Path(reading_root) / "books" / "B0001" / "reading.json"
+    assert path.is_file()
+
+    conn = sqlite3.connect(Path(reading_root) / "tables" / "ledger.db")
+    conn.execute("DELETE FROM 读法 WHERE uid=? AND chapter='*'", ("B0001",))
+    conn.commit()
+    conn.close()
+
+    result = run_cli("library", "--emit-json", "--root", str(reading_root), cwd=str(reading_root))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not path.exists()
+    assert L.reading_get("B0001", "1", root=reading_root)["mode"] == "argument"
+
+
 def test_profile_resolution_precedence_and_hash():
     doc = {
         "mode": "narrative",
@@ -124,6 +157,10 @@ def test_profile_resolution_precedence_and_hash():
     assert stale["effective_mode"] == "narrative"
     assert stale["effective_source"] == "book"
     assert stale["chapter_override"] is None
+    assert stale["chapter_override_pending"] == "argument"
+    assert stale["chapter_override_stale"] is True
+    assert got["chapter_override_pending"] is None
+    assert got["chapter_override_stale"] is False
 
     suggestion = {"mode": "practical", "confidence": 0.7}
     assert profile.resolve(doc, 2, "x", suggestion)["effective_mode"] == "narrative"
@@ -171,6 +208,10 @@ def test_reading_api_put_and_409(server, reading_root, depth_server):
     status, data = _put(server, "/api/chapter/B0001/1/reading", {"action": "book_default", "mode": "argument"})
     assert status == 200
     assert data["book_mode"] == "argument"
+    assert data["chapter_override"] == "practical"
+
+    status, data = _put(server, "/api/chapter/B0001/1/reading", {"action": "override", "mode": "argument"})
+    assert status == 200
     assert data["chapter_override"] is None
 
     status, data = _put(server, "/api/chapter/B0002/1/reading", {"action": "override", "mode": "argument"})
@@ -191,3 +232,21 @@ def test_reading_profile_rejects_hand_edited_file(reading_root):
         encoding="utf-8",
     )
     assert profile.read_profile("B0001", reading_root)["mode"] == "narrative"
+
+
+def test_book_reading_put_sets_default_without_job(server):
+    _, before = _get(server, "/api/jobs")
+    status, data = _put(server, "/api/book/B0001/reading", {"mode": "narrative"})
+    assert status == 200
+    assert data["book_mode"] == "narrative"
+    _, after = _get(server, "/api/jobs")
+    assert len(after["jobs"]) == len(before["jobs"])
+
+    status, book = _get(server, "/api/book/B0001")
+    assert status == 200
+    assert book["reading"]["book_mode"] == "narrative"
+
+    status, data = _put(server, "/api/book/B0001/reading", {"mode": "bogus"})
+    assert status == 400
+    status, data = _put(server, "/api/book/B9999/reading", {"mode": "narrative"})
+    assert status == 404

@@ -30,7 +30,7 @@ from .library import Library
 from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, ModelTruncatedError, prompt_sha256
 from .quality import check_html
 from .render import asset_url, image_data_uri, render_chapter, render_export
-from .store import DEPTH_FILES, DEPTH_LAYERS, Store
+from .store import DEPTH_FILES, DEPTH_LAYERS, MODE_LAYERS, Store
 from .tiers import TIER_ORDER, TIER_SPECS, project, validate_annotation
 
 GENERATOR = "book-corpus-reading"
@@ -667,32 +667,43 @@ class ReadingService:
             return None
         view = self._book_view(book)
         chapters = []
+        reading_rows = L.reading_get(uid, root=self.library.root) or []
         for chapter in self.library.chapters(uid):
             state = self._chapter_states(uid, chapter["n"])
             tiers = state["tiers"] if state else {}
             source_sha = (state or {}).get("source_sha256")
-            path, reason = self._chapter_path(uid, chapter["n"], state, source_sha)
-            depth_info = self.store.depth_state(uid, chapter["n"], source_sha)
+            mode = self._ledger_mode(uid, chapter["n"], source_sha, rows=reading_rows)
+            path, reason = self._chapter_path(uid, chapter["n"], state, source_sha, mode=mode)
+            depth_info = self.store.depth_state(uid, chapter["n"], source_sha, mode=mode)
             pack = None
-            if path == "depth":
+            if path == "depth" or depth_info["status"] == "stale":
                 tiers = self._depth_tiers(uid, chapter["n"], depth_info)
-                pack = self._depth_pack(uid, chapter["n"], depth_info)
+                if path == "depth":
+                    pack = self._depth_pack(uid, chapter["n"], depth_info)
             item = _chapter_api(chapter, tiers, state, path=path, fallback_reason=reason, pack=pack)
             item["jobs"] = self.queue.active_for(uid, chapter["n"])
             chapters.append(item)
         return {"book": view, "chapters": chapters, "reading": self.book_reading(uid)}
 
     def _profile_doc(self, uid):
-        doc = profile.from_rows(L.reading_get(uid, root=self.library.root))
-        if doc is None:
-            doc = profile.read_profile(uid, self.library.root)
-        return doc
+        # 人账是唯一读源；reading.json 只是可重建的导出，不参与回退。
+        return profile.from_rows(L.reading_get(uid, root=self.library.root))
 
     def book_reading(self, uid):
         doc = self._profile_doc(uid)
         if not doc:
             return {"book_mode": None, "panels": [], "chapters": {}}
         return {"book_mode": doc.get("mode"), "panels": doc.get("panels") or [], "chapters": doc.get("chapters") or {}}
+
+    def set_book_reading(self, uid, mode):
+        """书页只设本书默认读法，不提交生成任务。"""
+        if not self.library.book(uid):
+            raise FileNotFoundError("找不到这本书")
+        clean = profile.normalize_mode(mode)
+        if not clean:
+            raise ValueError("mode 必须是 %s" % "/".join(profile.MODES))
+        L.reading_set_book(uid, clean, root=self.library.root)
+        return self.book_reading(uid)
 
     def reading(self, uid, n, raw=None):
         raw = raw or self.library.read_chapter(uid, n) or {}
@@ -716,15 +727,19 @@ class ReadingService:
             clean = profile.normalize_mode(mode)
             if not clean:
                 raise ValueError("mode 必须是 %s" % "/".join(profile.MODES))
-            if not L.reading_get(uid, "*", root=self.library.root):
+            book = L.reading_get(uid, "*", root=self.library.root)
+            if not book:
                 raise MissingProfileError(uid)
-            L.reading_put(
-                uid,
-                clean,
-                chapter=str(int(n)),
-                source_sha256=raw.get("source_sha256") or "",
-                root=self.library.root,
-            )
+            if clean == profile.normalize_mode(book.get("mode")):
+                L.reading_delete(uid, str(int(n)), root=self.library.root)
+            else:
+                L.reading_put(
+                    uid,
+                    clean,
+                    chapter=str(int(n)),
+                    source_sha256=raw.get("source_sha256") or "",
+                    root=self.library.root,
+                )
         elif action == "follow":
             L.reading_delete(uid, str(int(n)), root=self.library.root)
         else:
@@ -735,6 +750,28 @@ class ReadingService:
         if not L.reading_get(uid, "*", root=self.library.root):
             raise MissingProfileError(uid)
         return True
+
+    @staticmethod
+    def _depth_mode(reading):
+        """只有落过账的读法才参与 mode stale；建议与分类兜底都不算。"""
+        if reading.get("effective_source") not in ("book", "chapter"):
+            return None
+        return reading.get("effective_mode")
+
+    def _ledger_mode(self, uid, n, source_sha, rows=None):
+        """书目列表只读账，不触发逐章建议或模型。"""
+        rows = rows if rows is not None else L.reading_get(uid, root=self.library.root) or []
+        book = next((row for row in rows if row.get("chapter") == "*"), None)
+        if not book:
+            return None
+        book_mode = profile.normalize_mode(book.get("mode"))
+        chapter = next((row for row in rows if row.get("chapter") == str(int(n))), None)
+        if chapter:
+            chapter_mode = profile.normalize_mode(chapter.get("mode"))
+            chapter_sha = chapter.get("source_sha256") or ""
+            if chapter_mode and (not chapter_sha or chapter_sha == source_sha):
+                return chapter_mode
+        return book_mode
 
     def _depth_tiers(self, uid, n, info):
         """把 depth 层的磁盘状态映射成书目录页用的三档状态。"""
@@ -758,6 +795,7 @@ class ReadingService:
         if status not in ("ready", "model", "stale"):
             return None
         model = state.get("model") if isinstance(state.get("model"), dict) else {}
+        mode_stale = bool(info.get("mode_stale"))
         return {
             "exists": True,
             "draft": False,
@@ -765,18 +803,18 @@ class ReadingService:
             "state": status,
             "generated_at": state.get("generated_at") or state.get("updated_at"),
             "source_sha256": state.get("source_sha256"),
-            "source_changed": status == "stale",
+            "source_changed": status == "stale" and not mode_stale,
             "preservable": status != "stale",
-            "preserve_reason": "原文已更改" if status == "stale" else None,
+            "preserve_reason": "读法已改，深度页过期" if mode_stale else ("原文已更改" if status == "stale" else None),
             "model": model.get("model") or model.get("requested_model"),
             "reasoning_effort": model.get("effort"),
             "model_fallback": bool(model.get("fallback")),
             "usage": model.get("usage"),
         }
 
-    def _chapter_path(self, uid, n, state=None, source_sha=None):
+    def _chapter_path(self, uid, n, state=None, source_sha=None, mode=None):
         """章节能从哪条路径打开；只读磁盘，不触发模型。"""
-        return self.store.chapter_route(uid, n, source_sha, (state or {}).get("manifest"))
+        return self.store.chapter_route(uid, n, source_sha, (state or {}).get("manifest"), mode=mode)
 
     def chapter(self, uid, n):
         book = self.library.book(uid)
@@ -787,6 +825,8 @@ class ReadingService:
         if not raw:
             return None
         state = self._chapter_states(uid, n)
+        reading = self.reading(uid, n, raw=raw)
+        mode = self._depth_mode(reading)
         annotation = self.store.annotation(uid, n)
         projections = {}
         if annotation:
@@ -836,17 +876,18 @@ class ReadingService:
         edition = self.store.edition(uid, n)
         book_view = self._book_view(book)
         fit = decide_template(build_brief(book_view, raw, raw["blocks"]))
-        path, fallback_reason = self._chapter_path(uid, n, state, raw.get("source_sha256"))
-        depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"))
+        path, fallback_reason = self._chapter_path(uid, n, state, raw.get("source_sha256"), mode=mode)
+        depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"), mode=mode)
         depth_pack = None
-        if path == "depth":
+        if path == "depth" or depth_state["status"] == "stale":
             depth_tiers = self._depth_tiers(uid, n, depth_state)
             for tier in tiers:
                 info = depth_tiers.get(tier["key"], {})
                 tier["exists"] = bool(info.get("exists"))
                 tier["stale"] = bool(info.get("stale"))
                 tier["stats"] = info.get("stats")
-            depth_pack = self._depth_pack(uid, n, depth_state)
+            if path == "depth":
+                depth_pack = self._depth_pack(uid, n, depth_state)
         data = {
             "book": book_view,
             "chapter": _chapter_api(
@@ -872,10 +913,10 @@ class ReadingService:
                 "score": fit["score"],
                 "reason": fit["reason"],
             },
-            "reading": self.reading(uid, n, raw=raw),
+            "reading": reading,
         }
         if self.depth:
-            data["depth"] = {"state": depth_state["status"]}
+            data["depth"] = {"state": depth_state["status"], "reason": depth_state.get("stale_reason")}
             if depth_state["status"] in ("model", "partial", "ready"):
                 data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
                 data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
@@ -912,7 +953,11 @@ class ReadingService:
         raw = self.library.read_chapter(uid, n) or {}
         blocks = raw.get("blocks") or []
         source_sha = raw.get("source_sha256")
-        state_info = self.store.depth_state(uid, n, source_sha)
+        try:
+            current_mode = self._depth_mode(self.reading(uid, n, raw=raw))
+        except Exception:
+            current_mode = None
+        state_info = self.store.depth_state(uid, n, source_sha, mode=current_mode)
         state = state_info.get("state")
         state = state if isinstance(state, dict) else None
         estimates = _depth_estimate(blocks)
@@ -934,13 +979,7 @@ class ReadingService:
         layer_usage = layer_usage if isinstance(layer_usage, dict) else {}
         layer_updated_at = state.get("layer_updated_at") if state else None
         layer_updated_at = layer_updated_at if isinstance(layer_updated_at, dict) else {}
-        layer_mode = state.get("layer_mode") if state else None
-        layer_mode = layer_mode if isinstance(layer_mode, dict) else {}
-        current_mode = None
-        try:
-            current_mode = self.reading(uid, n, raw=raw).get("effective_mode")
-        except Exception:
-            current_mode = None
+        mode_stale = set(state_info.get("mode_stale") or [])
         source_stale = bool(state and source_sha and state.get("source_sha256") != source_sha)
         base_updated = (state or {}).get("updated_at") or (state or {}).get("generated_at")
 
@@ -963,12 +1002,7 @@ class ReadingService:
                     and layer_model_sha.get(layer) != chapter_model_sha
                 ):
                     status = "stale"
-                if (
-                    layer in ("panels", "skim", "deep")
-                    and current_mode
-                    and layer_mode.get(layer)
-                    and layer_mode.get(layer) != current_mode
-                ):
+                if layer in mode_stale:
                     status = "stale"
             if active_job is not None:
                 status = "running"
@@ -1378,6 +1412,9 @@ class ReadingService:
                 return False
             if layer_mode.get(layer) not in (None, mode):
                 return False
+            if mode and layer in MODE_LAYERS and layer_mode.get(layer) is None:
+                # 没记 mode 的旧层不能当新鲜；否则 mode stale 后普通重生成会全部跳过。
+                return False
             if layer != "model":
                 current = state.get("chapter_model_sha")
                 if current is not None and layer_model_sha.get(layer) not in (None, current):
@@ -1622,10 +1659,11 @@ class ReadingService:
         standard = existing.get("standard")
         if "standard" in requested:
             self._set_stage(job_id, "projecting", layer="standard")
-            standard = build_standard(model, blocks)
+            standard = build_standard(model, blocks, mode=mode)
             files[DEPTH_FILES["standard"]] = json.dumps(standard, ensure_ascii=False, indent=1)
             layer_sha["standard"] = _depth_sha(standard)
             layer_model_sha["standard"] = chapter_model_sha
+            layer_mode["standard"] = mode
             layer_request["standard"] = dict(request)
             layer_usage.pop("standard", None)
             layer_updated_at["standard"] = _now()

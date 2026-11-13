@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = document.querySelector('[data-block="' + tick.dataset.block + '"]');
     if (!row) return;
     const src = row.querySelector('[data-origin="source"]');
-    if (src && src.hidden) { toast('本档未收这一段，按 4 切到研读可见'); return; }
+    if (src && src.hidden) { toast('本档未收这一段，按 3 切到深读可见'); return; }
     row.scrollIntoView({behavior: 'smooth', block: 'center'}); row.classList.add('flash');
     setTimeout(() => row.classList.remove('flash'), 900);
   }));
@@ -540,7 +540,7 @@ def _reader_body(book, chapter, blocks, projections, cards, resolver, standalone
         foreedge = '<div class="foreedge" aria-hidden="true">%s</div>' % "".join(ticks)
         modal = (
             '<div class="cmp-overlay" id="cmp-overlay" hidden><div class="cmp" role="dialog" aria-modal="true" aria-label="档位对照">'
-            "<h3>档位对照</h3><p>同一章源文，已生成档位对照。浏览 600 字/分 · 标准 500 · 深读 350 · 研读 300。</p>"
+            "<h3>档位对照</h3><p>同一章源文，已生成档位对照。浏览 600 字/分 · 标准 500 · 深读 350。</p>"
             "<table><thead><tr><th>档</th><th>块覆盖</th><th>字数覆盖</th><th>讲解</th><th>正文字数</th><th>用时</th></tr></thead>"
             "<tbody>%s</tbody></table>"
             '<button class="cmp-close" data-cmp-close>关闭</button></div></div>' % _compare_rows(projections)

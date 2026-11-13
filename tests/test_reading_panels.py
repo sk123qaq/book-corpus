@@ -107,3 +107,13 @@ def test_empty_panels_render_message():
     html = _panels_html(panels, "standard")
     assert "本章没有足够的结构信息" in html
     assert panels["panels"] == []
+
+
+def test_skim_panels_render_index_without_item_text():
+    payload = _payload()
+    skim = _panels_html(payload, "skim")
+    full = _panels_html(payload, "standard deep")
+    assert "论证地图" in skim
+    assert "条目在标准 / 深读档展开" in skim
+    assert "张三在2020年进入市场" not in skim
+    assert "张三在2020年进入市场" in full

@@ -42,6 +42,12 @@
 <script>
 const UID = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
 const TIER_KEYS = ['skim', 'standard', 'deep'];
+const BOOK_MODES = [
+  ['narrative', '叙事'],
+  ['argument', '论证'],
+  ['practical', '实用'],
+  ['reference', '资料·图册'],
+];
 let data = null;
 let current = null;
 let selected = new Set(['standard']);
@@ -110,6 +116,15 @@ function render() {
   renderTicket();
 }
 
+function modeLabel(mode) {
+  const found = BOOK_MODES.find((item) => item[0] === mode);
+  return found ? found[1] : mode;
+}
+
+function staleText(chapter) {
+  return (chapter && chapter.fallback_reason || '').indexOf('读法') >= 0 ? '读法已改' : '原文已改';
+}
+
 function renderChapters() {
   RD.mount('ch-list').innerHTML = (data.chapters || []).map((chapter) => {
     const tiers = chapter.tiers || {};
@@ -144,8 +159,13 @@ function renderTicket() {
     '<h3>' + RD.esc(chapter.title) + '</h3>' +
     '<p class="ticket-meta">' + RD.fmt(chapter.chars) + ' 字 · 原文约 ' + RD.fmt(chapter.minutes) + ' 分钟 · ' +
       RD.esc(chapter.file) + (draft ? ' · <span class="draft-badge">草稿</span>' : '') + '</p>' +
-    '<div class="mode-readonly">本书默认读法 <b>' + RD.esc(mode ? ({narrative:'叙事',argument:'论证',practical:'实用',reference:'资料·图册'}[mode] || mode) : '未设') +
-      '</b><br><span>章级覆写在章页设置；书页只汇总，不生成、不改读法。</span></div>' +
+    '<div class="mode-readonly"><div>本书默认读法 <b>' + RD.esc(mode ? modeLabel(mode) : '未设') +
+      '</b></div>' +
+      '<div class="book-mode-set"><select id="book-mode-select" aria-label="选择本书默认读法">' +
+        '<option value="">选择读法…</option>' +
+        BOOK_MODES.map((item) => '<option value="' + item[0] + '"' + (mode === item[0] ? ' selected' : '') + '>' + item[1] + '</option>').join('') +
+      '</select><button type="button" class="btn btn-ghost" id="book-mode-set">' + (mode ? '更新本书默认' : '设本书默认') + '</button></div>' +
+      '<span>只设本书默认，不生成；章级覆写在章页设置。</span></div>' +
     '<a class="btn btn-primary" href="' + RD.chapterHref(data.book.uid, chapter.n) + '">打开本章工单 →</a>' +
     (hasPack ? '<a class="btn btn-ghost" href="' + RD.readerHref(data.book.uid, chapter.n, 'standard', chapter.path) + '">打开标准本</a>' : '') +
     '<div class="existing" id="existing"></div>' +
@@ -173,7 +193,7 @@ function tierOption(key) {
       (busy ? '<em class="tier-busy">' + RD.esc(busyText) + '</em>' : info.exists ? '<em>' + (draft ? '草稿' : '已出片') + '</em>' : '') +
       '</b><small>' + spec + '</small></span>' +
     '<span class="tier-time">≈' + RD.fmt(minutes) + ' 分钟<small>' +
-      (busy ? (job ? RD.esc(job.id) : '正在提交') : info.stale ? '原文已改' : info.exists ? (draft ? '待补模型' : '可重生成') : '未生成') +
+      (busy ? (job ? RD.esc(job.id) : '正在提交') : info.stale ? staleText(chapter) : info.exists ? (draft ? '待补模型' : '可重生成') : '未生成') +
       '</small></span></label>';
 }
 
@@ -187,7 +207,7 @@ function renderExisting() {
   const tiers = current.tiers || {};
   const draft = !!(current.pack && current.pack.draft);
   const rows = TIER_KEYS.filter((key) => tiers[key] && tiers[key].exists).map((key) =>
-    '<div class="pack-row"><span>' + RD.tierNames[key] + '本' + (tiers[key].stale ? ' · 原文已改' : draft ? ' · 草稿' : '') + '</span>' +
+    '<div class="pack-row"><span>' + RD.tierNames[key] + '本' + (tiers[key].stale ? ' · ' + staleText(current) : draft ? ' · 草稿' : '') + '</span>' +
     '<a href="' + RD.readerHref(data.book.uid, current.n, key, current.path) + '">打开 →</a></div>'
   );
   RD.mount('existing').innerHTML = rows.length
@@ -357,6 +377,26 @@ async function generate() {
   }
 }
 
+async function setBookMode() {
+  const select = document.getElementById('book-mode-select');
+  const mode = select ? select.value : '';
+  if (!mode) {
+    RD.toast('先选择读法', true);
+    return;
+  }
+  const button = document.getElementById('book-mode-set');
+  if (button) button.disabled = true;
+  try {
+    await RD.api('/api/book/' + encodeURIComponent(UID) + '/reading', {method: 'PUT', body: {mode}});
+    await refresh();
+    RD.toast('本书默认读法已更新');
+  } catch (err) {
+    RD.toast(err.message, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function refresh() {
   try {
     data = await RD.api('/api/book/' + encodeURIComponent(UID));
@@ -375,6 +415,10 @@ function bind() {
   const root = RD.mount('book-root');
   root.addEventListener('click', (event) => {
     if (event.target.closest('a')) return;
+    if (event.target.closest('#book-mode-set')) {
+      setBookMode();
+      return;
+    }
     const row = event.target.closest('.ch-row');
     if (!row) return;
     current = data.chapters.find((ch) => ch.n === row.dataset.n) || current;

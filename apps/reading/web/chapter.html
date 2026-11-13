@@ -193,6 +193,8 @@ function modeSelectorHtml() {
   const r = modeInfo();
   const bookMode = r.book_mode || '';
   const override = r.chapter_override || '';
+  const pending = r.chapter_override_pending || '';
+  const pendingStale = Boolean(r.chapter_override_stale && pending);
   const effective = r.effective_mode || 'argument';
   const suggestion = r.suggestion || {};
   const follow = Boolean(bookMode && !override);
@@ -221,6 +223,9 @@ function modeSelectorHtml() {
       }).join('') + '</div>' : '') +
     (override ? '<div class="mode-override">本章覆写：<b>' + RD.esc(modeLabel(override)) +
       '</b><span>（不跟随本书）</span><button type="button" id="mode-reset">恢复跟随本书</button></div>' : '') +
+    (pendingStale ? '<div class="mode-override">本章覆写：<b>' + RD.esc(modeLabel(pending)) +
+      '</b><span>（原文已变，待确认）</span><button type="button" id="mode-confirm">确认覆写</button>' +
+      '<button type="button" id="mode-reset">放弃覆写</button></div>' : '') +
     (!bookMode ? '<div class="mode-warning">本书还没有默认读法；点一个模式会先设为本书默认。</div>' : '') +
     '<div class="mode-foot">档位在下方单独选；读法只改注解与面板。</div>';
 }
@@ -275,6 +280,10 @@ function bindMode() {
       } else {
         putReading('override', mode);
       }
+      return;
+    }
+    if (event.target.closest('#mode-confirm')) {
+      putReading('override', modeInfo().chapter_override_pending);
       return;
     }
     if (event.target.closest('#mode-reset')) {
@@ -380,10 +389,11 @@ function depthPanelHtml() {
   if (!data.depth) return '';
   const layers = data.depth.layers || {};
   const stale = data.depth.state === 'stale';
+  const staleText = data.depth.reason || '源文已变更，旧层已过期';
   const running = depthBusy || DEPTH_KEYS.some((key) => (layers[key] || {}).status === 'running');
   return '<div class="section-title"><h2>深度生产</h2><span class="lbl">逐层生成 · 可单独重跑</span></div>' +
     '<div class="depth-panel" id="depth-panel">' +
-      (stale ? '<p class="depth-warning">源文已变更，旧层已过期</p>' : '') +
+      (stale ? '<p class="depth-warning">' + RD.esc(staleText) + '</p>' : '') +
       DEPTH_KEYS.map(depthRow).join('') +
       '<div class="depth-actions">' +
         '<button class="btn btn-primary" id="depth-generate" type="button"' + (running ? ' disabled' : '') + '>' + depthGenerateLabel() + '</button>' +

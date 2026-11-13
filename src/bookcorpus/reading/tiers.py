@@ -546,7 +546,7 @@ def project(blocks, annotation, tier, draft=False):
                 _closure(selected, entry_map)
                 selected_claims.append(entry)
 
-        # 每条主张至少带一条证据；深读/研读带全部证据。
+        # 每条主张至少带一条证据；深读带全部证据。
         evidence = [entry for entry in entries if entry["role"] == "evidence"]
         evidence.sort(key=lambda entry: (entry["priority"], blocks.index(by_id[entry["id"]])))
         for claim in selected_claims:

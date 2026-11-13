@@ -41,6 +41,7 @@ ROUTES = [
     (re.compile(r"^/api/shelf$"), "shelf"),
     (re.compile(r"^/api/catalog$"), "catalog"),
     (re.compile(r"^/api/book/([A-Za-z0-9_-]+)$"), "book"),
+    (re.compile(r"^/api/book/([A-Za-z0-9_-]+)/reading$"), "book_reading"),
     (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)$"), "chapter"),
     (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)/reading$"), "reading"),
     (re.compile(r"^/api/records$"), "records"),
@@ -218,6 +219,9 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 if name == "reading":
                     self._put_reading(match.group(1), int(match.group(2)))
+                    return
+                if name == "book_reading":
+                    self._put_book_reading(match.group(1))
                     return
                 self._json(405, {"error": "该路由不支持 PUT"})
                 return
@@ -498,6 +502,17 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json(200, result)
 
+    def _put_book_reading(self, uid):
+        try:
+            data = self._body()
+            result = self.service.set_book_reading(uid, data.get("mode"))
+        except FileNotFoundError:
+            self._json(404, {"error": "找不到这本书"})
+        except (TypeError, ValueError) as exc:
+            self._json(400, {"error": str(exc)})
+        else:
+            self._json(200, result)
+
     # ---- 静态与产物 ---------------------------------------------------
     def _serve_page(self, name, head=False):
         path = os.path.join(WEB, name)
@@ -541,13 +556,15 @@ class Handler(BaseHTTPRequestHandler):
         if raw is None:
             self._error(404, "这一章不存在", api=False, head=head)
             return
-        route = self.service.store.chapter_route(uid, n, raw.get("source_sha256"))[0]
+        mode = self.service._ledger_mode(uid, n, raw.get("source_sha256"))
+        route, reason = self.service.store.chapter_route(uid, n, raw.get("source_sha256"), mode=mode)
         path = self.service.store.depth_path(uid, n, "chapter.html")
         if route != "depth" or not os.path.isfile(path):
-            self._error(404, "这一章还没有编译版", api=False, head=head)
+            self._error(404, reason or "这一章还没有编译版", api=False, head=head)
             return
         with open(path, encoding="utf-8") as fh:
-            self._send(200, fh.read(), "text/html; charset=utf-8", head)
+            body = self._with_retire_notice(fh.read())
+        self._send(200, body, "text/html; charset=utf-8", head)
 
     def _serve_edition(self, uid, n, head=False):
         path = os.path.join(self.service.store.edition_dir(uid, n), "index.html")
@@ -564,6 +581,7 @@ class Handler(BaseHTTPRequestHandler):
         if query.get("tier") != ["research"]:
             return False
         query["tier"] = ["deep"]
+        query["retired"] = ["research"]
         location = urllib.parse.urlunsplit(
             (parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query, doseq=True), "")
         )
@@ -572,6 +590,21 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
         return True
+
+    def _retire_notice_requested(self):
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        return query.get("tier") == ["deep"] and query.get("retired") == ["research"]
+
+    def _with_retire_notice(self, text):
+        if not self._retire_notice_requested() or "retire-notice" in text:
+            return text
+        notice = (
+            '<div class="retire-notice" style="margin:12px 0;padding:8px 10px;border-left:3px solid #a33;'
+            'background:#f7eeec;font:13px/1.6 sans-serif;color:#5a2a22">研读档已退役，已切换到深读档。</div>'
+        )
+        if "</body>" in text:
+            return text.replace("</body>", notice + "</body>", 1)
+        return text + notice
 
     def _serve_reader(self, uid, n, head=False):
         if self._retire_research_query():
@@ -582,16 +615,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         with open(path, "rb") as fh:
             body = fh.read()
-        if body and self.service.store.edition(uid, n) is not None:
+        if body:
             text = body.decode("utf-8")
-            link = '<a class="edition-link" href="/reader/%s/%d/edition">视觉读本</a>' % (uid, n)
-            if "<!--EDITION_LINK-->" in text:
-                text = text.replace("<!--EDITION_LINK-->", link)
-            elif "edition-link" not in text:
-                text = text.replace("</div></header>", link + "</div></header>", 1)
-            body = text.encode("utf-8")
-        else:
-            body = body.replace(b"<!--EDITION_LINK-->", b"")
+            if self.service.store.edition(uid, n) is not None:
+                link = '<a class="edition-link" href="/reader/%s/%d/edition">视觉读本</a>' % (uid, n)
+                if "<!--EDITION_LINK-->" in text:
+                    text = text.replace("<!--EDITION_LINK-->", link)
+                elif "edition-link" not in text:
+                    text = text.replace("</div></header>", link + "</div></header>", 1)
+            else:
+                text = text.replace("<!--EDITION_LINK-->", "")
+            body = self._with_retire_notice(text).encode("utf-8")
         self._send(200, body, "text/html; charset=utf-8", head)
 
     def _serve_export(self, uid, n, tier, head=False):

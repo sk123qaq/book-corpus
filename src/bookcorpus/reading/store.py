@@ -10,6 +10,8 @@ import uuid
 UID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 # 深读五层与各自产物；读写两端共用这一份，避免层名两处漂移。
 DEPTH_LAYERS = ("model", "panels", "skim", "standard", "deep")
+# 这些层带读法；结构模型是 mode 无关的，标准本自 A4 起也随 mode 变。
+MODE_LAYERS = ("panels", "skim", "standard", "deep")
 DEPTH_FILES = {
     "model": "chapter_model.json",
     "panels": "layers/panels.json",
@@ -304,7 +306,7 @@ class Store:
         except (OSError, json.JSONDecodeError):
             return None
 
-    def depth_state(self, uid, n, source_sha=None):
+    def depth_state(self, uid, n, source_sha=None, mode=None):
         state = self.depth_json(uid, n, "state.json")
         if not isinstance(state, dict):
             return {
@@ -313,6 +315,9 @@ class Store:
                 "model_sha": None,
                 "prompt_version": None,
                 "schema": None,
+                "layers_ready": [],
+                "layers_missing": list(DEPTH_LAYERS),
+                "mode_stale": [],
             }
         base = {
             "state": state,
@@ -323,10 +328,14 @@ class Store:
         if state.get("layers_sha"):
             base["layers_sha"] = state["layers_sha"]
         ready, missing = self._ready_layers(uid, n, state)
+        mode_stale = self._mode_stale_layers(state, ready, mode)
         base["layers_ready"] = ready
         base["layers_missing"] = missing
+        base["mode_stale"] = mode_stale
         if source_sha and state.get("source_sha256") != source_sha:
-            return dict(base, status="stale")
+            return dict(base, status="stale", stale_reason="源文已改，深度页过期")
+        if mode_stale:
+            return dict(base, status="stale", stale_reason="读法已改，深度页过期")
         if state.get("status") == "model":
             return dict(base, status="model")
         if state.get("status") == "partial":
@@ -338,6 +347,15 @@ class Store:
                 return dict(base, status="model")
             return dict(base, status="ready")
         return dict(base, status="stale")
+
+    def _mode_stale_layers(self, state, ready, mode):
+        """盘上读法层与当前读法不一致的层；没记 mode 的旧层也算。"""
+        if not mode:
+            return []
+        layer_mode = state.get("layer_mode")
+        if not isinstance(layer_mode, dict):
+            layer_mode = {}
+        return [layer for layer in MODE_LAYERS if layer in ready and layer_mode.get(layer) != mode]
 
     def _ready_layers(self, uid, n, state):
         """哪些层真的在盘上，且是当前结构模型生成的。"""
@@ -352,12 +370,14 @@ class Store:
             ready.append(layer)
         return ready, [layer for layer in DEPTH_LAYERS if layer not in ready]
 
-    def chapter_route(self, uid, n, source_sha=None, manifest=None):
+    def chapter_route(self, uid, n, source_sha=None, manifest=None, mode=None):
         """这一章能从哪条路径打开；只报真能打开的那条，细节放进 reason。"""
-        info = self.depth_state(uid, n, source_sha)
+        info = self.depth_state(uid, n, source_sha, mode=mode)
         status = info.get("status")
         if status == "ready":
             return "depth", None
+        if status == "stale":
+            return "none", info.get("stale_reason") or "源文已改，深度页过期"
         if manifest is None:
             manifest = self.manifest(uid, n)
         if manifest:
@@ -368,8 +388,6 @@ class Store:
             return "none", f"已生成 {len(ready)}/{len(DEPTH_LAYERS)} 层，缺 {missing or '整章'}"
         if status == "model":
             return "none", "结构模型已建，深度页未出"
-        if status == "stale":
-            return "none", "源文已改，深度页过期"
         return "none", "尚未生成"
 
     def _write(self, path, data, mode="w"):

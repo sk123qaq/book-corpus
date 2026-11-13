@@ -294,6 +294,7 @@ def resolve(profile, n, source_sha, suggestion):
     book_mode = normalize_mode((profile or {}).get("mode"))
     chapter_mode = normalize_mode((chapter or {}).get("mode"))
     chapter_sha = (chapter or {}).get("source_sha256") or ""
+    stale_chapter = bool(chapter_mode and chapter_sha and chapter_sha != source_sha)
     valid_chapter = bool(chapter_mode and (not chapter_sha or chapter_sha == source_sha))
     if valid_chapter:
         mode, source = chapter_mode, "chapter"
@@ -306,6 +307,8 @@ def resolve(profile, n, source_sha, suggestion):
     return {
         "book_mode": book_mode or None,
         "chapter_override": chapter_mode if valid_chapter else None,
+        "chapter_override_pending": chapter_mode if stale_chapter else None,
+        "chapter_override_stale": stale_chapter,
         "effective_mode": mode,
         "effective_source": source,
         "panels": (chapter or {}).get("panels") if valid_chapter else (profile or {}).get("panels") or [],

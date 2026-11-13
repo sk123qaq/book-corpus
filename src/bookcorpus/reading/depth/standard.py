@@ -10,7 +10,7 @@ import re
 from .diagrams import audit_figures
 from .schema import SCHEMA_VERSION
 
-STANDARD_PROMPT_VERSION = "standard-annotations-v1"
+STANDARD_PROMPT_VERSION = "standard-annotations-v2"
 MAX_LEAD = 80
 MAX_NOTE = 120
 MAX_SECTION_FIGURES = 3
@@ -26,41 +26,56 @@ def _block_order(blocks):
     return {block.get("id"): index for index, block in enumerate(blocks or [])}
 
 
-def _first_sentence(text, limit=MAX_LEAD):
-    """取首个完整句（到句末标点），没有句末标点就截断；不改写。"""
+def _first_sentence(text, limit=MAX_LEAD, mode=None):
+    """取首个完整句；叙事读法没有自然断句时宁可留空，不硬切半句。"""
     value = str(text or "").strip()
     if not value:
         return ""
     match = re.search(r"[。！？!?…]+", value)
     if match:
-        value = value[: match.end()].strip()
-    if len(value) > limit:
-        value = value[:limit].rstrip()
-    return value
+        if match.end() <= limit:
+            return value[: match.end()].strip()
+        return "" if mode == "narrative" else value[:limit].rstrip()
+    if len(value) <= limit:
+        return value
+    return "" if mode == "narrative" else value[:limit].rstrip()
 
 
-def _section_lead(section, unit_map):
+def _fit_lead(text, mode=None, limit=MAX_LEAD):
+    """模型导语只在 80 字内找最后一个句末标点；叙事无断句则略去。"""
+    value = str(text or "").strip()
+    if not value or len(value) <= limit:
+        return value
+    if mode is None:
+        return value[:limit].rstrip()
+    ends = [match.end() for match in re.finditer(r"[。！？!?…]+", value) if match.end() <= limit]
+    if ends:
+        return value[: ends[-1]].strip()
+    return "" if mode == "narrative" else value[:limit].rstrip()
+
+
+def _section_lead(section, unit_map, mode=None):
     """优先用章节模型给的 lead；为空时回退到本节第一个 core unit 的首句。"""
-    lead = str(section.get("lead") or "").strip()
+    lead = _fit_lead(section.get("lead"), mode=mode)
     if lead:
         return lead
     unit_ids = list(section.get("unit_ids") or [])
     for unit_id in unit_ids:
         unit = unit_map.get(unit_id)
         if unit and unit.get("importance") == "core":
-            text = _first_sentence(unit.get("summary") or unit.get("text") or "")
+            text = _first_sentence(unit.get("summary") or unit.get("text") or "", mode=mode)
             if text:
                 return text
     for unit_id in unit_ids:
         unit = unit_map.get(unit_id)
         if unit:
-            text = _first_sentence(unit.get("summary") or unit.get("text") or "")
+            text = _first_sentence(unit.get("summary") or unit.get("text") or "", mode=mode)
             if text:
                 return text
     return ""
 
 
-def _sections(model):
+def _sections(model, mode=None):
     section_rows = []
     warnings = []
     unit_map = {unit.get("id"): unit for unit in model.get("units") or [] if unit.get("id")}
@@ -68,12 +83,15 @@ def _sections(model):
         if not isinstance(section, dict):
             continue
         section_id = section.get("id") or ""
-        lead = _section_lead(section, unit_map)
+        raw_lead = str(section.get("lead") or "").strip()
+        lead = _section_lead(section, unit_map, mode=mode)
         if not lead:
-            warnings.append(f"{section_id or '节'} 没有可用的节导语")
+            if raw_lead:
+                warnings.append(f"{section_id or '节'} 的导语没有自然断句，已略去")
+            else:
+                warnings.append(f"{section_id or '节'} 没有可用的节导语")
             continue
-        if len(lead) > MAX_LEAD:
-            lead = lead[:MAX_LEAD].rstrip()
+        if raw_lead and len(raw_lead) > MAX_LEAD and len(lead) < len(raw_lead):
             warnings.append(f"{section_id or '节'} 的导语超过 {MAX_LEAD} 字，已截断")
         section_rows.append({"id": section_id, "lead": lead})
     return section_rows, warnings
@@ -318,11 +336,12 @@ def _figures(model, blocks):
     return [chapter, *section_figures], warnings
 
 
-def build_standard(model, blocks):
+def build_standard(model, blocks, mode=None):
     """从章节模型与原文块构建标准档，不调用模型。"""
     model = model or {}
     blocks = blocks or []
-    sections, section_warnings = _sections(model)
+    mode = mode or model.get("mode")
+    sections, section_warnings = _sections(model, mode=mode)
     terms, term_warnings = _terms(model, blocks)
     notes, note_warnings = _notes(model, blocks)
     folds, fold_warnings = _folds(model, blocks)

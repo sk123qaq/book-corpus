@@ -787,7 +787,7 @@ def reading_put(uid, mode, chapter="*", panels=None, source_sha256="", root=None
 
 
 def reading_set_book(uid, mode, panels=None, root=None):
-    """写书级默认，并清掉所有章级覆写（一个事务）。"""
+    """写书级默认；只清掉与新默认同模式的章级覆写，其余保留（一个事务）。"""
     uid = (uid or "").strip()
     if not uid:
         raise ValueError("读法 uid 不能为空")
@@ -800,10 +800,15 @@ def reading_set_book(uid, mode, panels=None, root=None):
     with reading_lock(root):
         con = _reading_conn(root)
         try:
-            con.execute("DELETE FROM 读法 WHERE uid=?", (uid,))
             con.execute(
-                "INSERT INTO 读法(uid, chapter, mode, panels, source_sha256, updated_at) VALUES(?,? ,?,?,? ,?)",
+                "INSERT INTO 读法(uid, chapter, mode, panels, source_sha256, updated_at) VALUES(?,?,?,?,?,?)"
+                " ON CONFLICT(uid, chapter) DO UPDATE SET mode=excluded.mode, panels=excluded.panels,"
+                " source_sha256=excluded.source_sha256, updated_at=excluded.updated_at",
                 (uid, "*", mode, json.dumps(panels, ensure_ascii=False), "", now),
+            )
+            con.execute(
+                "DELETE FROM 读法 WHERE uid=? AND chapter<>'*' AND mode=?",
+                (uid, mode),
             )
             con.commit()
         finally:

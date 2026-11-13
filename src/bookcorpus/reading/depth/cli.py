@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ... import envfile, preflight
+from ...scripts import lib_common as L
+from .. import profile
 from ..library import Library
 from ..model import ModelClient
 from ..render import asset_url
@@ -45,6 +47,7 @@ def _parser():
         item.add_argument("--file", help="chapter_model 或 ledger 的 JSON 路径")
         item.add_argument("--model")
         item.add_argument("--effort")
+        item.add_argument("--mode", choices=profile.MODES, help="读法；缺省从账或已有层取，取不到会警告")
         if name == "generate":
             item.add_argument("--no-skim", action="store_true", help="只生成章节模型与账，不编译速览")
             item.add_argument("--skip-render", action="store_true", help="生成速览但不写 chapter.html")
@@ -68,6 +71,33 @@ def _context(args):
     if raw is None:
         raise FileNotFoundError(f"找不到章节 {args.uid}/{args.n:02d}")
     return ChapterContext(args.uid, args.n, Store(library.layout), raw)
+
+
+def _resolve_mode(args, context, *, required=False):
+    """显式 --mode 优先；否则取已有层或读法账。取不到时明确警告，不静默装成 argument。"""
+    if args.mode:
+        return args.mode
+    state = context.store.depth_json(context.uid, context.n, "state.json") or {}
+    recorded = state.get("layer_mode") or {}
+    for layer in ("panels", "skim", "standard", "deep"):
+        mode = profile.normalize_mode(recorded.get(layer))
+        if mode:
+            return mode
+    for layer in ("panels", "deep"):
+        payload = context.store.depth_json(context.uid, context.n, f"layers/{layer}.json")
+        mode = profile.normalize_mode((payload or {}).get("mode"))
+        if mode:
+            return mode
+    row = L.reading_get(context.uid, str(int(context.n)), root=args.root) or L.reading_get(
+        context.uid, "*", root=args.root
+    )
+    mode = profile.normalize_mode((row or {}).get("mode"))
+    if mode:
+        return mode
+    if required:
+        raise ValueError("generate 需要 --mode，或先为本书/本章写读法账")
+    print("警告：未指定 --mode，且没有可用的读法账；本次不校验 skim kind。", file=sys.stderr)
+    return None
 
 
 def _strip_gold_expectations(payload):
@@ -125,6 +155,7 @@ def _state_text(
     skim=None,
     standard=None,
     deep=None,
+    mode=None,
     generated_at=None,
 ):
     model_text = json.dumps(model, ensure_ascii=False, indent=1)
@@ -152,6 +183,12 @@ def _state_text(
         deep_text = json.dumps(deep, ensure_ascii=False, indent=1)
         state["deep_sha"] = hashlib.sha256(deep_text.encode("utf-8")).hexdigest()
         state["deep_prompt_version"] = deep.get("prompt_version")
+    if mode:
+        state["layer_mode"] = {
+            layer: mode
+            for layer, payload in (("skim", skim), ("standard", standard), ("deep", deep))
+            if payload is not None
+        }
     if meta.get("cache_key"):
         state["cache_key"] = meta["cache_key"]
     if meta.get("layers_sha"):
@@ -186,9 +223,10 @@ def _usage_usd(usage):
 def _generate(args):
     if args.file:
         raise ValueError("generate 不接受 --file")
-    preflight.require(["reading.model"])
     started = time.monotonic()
     context = _context(args)
+    mode = None if args.no_skim else _resolve_mode(args, context, required=True)
+    preflight.require(["reading.model"])
     client = ModelClient()
     library = Library(args.root)
     book, chapter = _chapter_context(library, context)
@@ -211,7 +249,14 @@ def _generate(args):
     model_text = json.dumps(model, ensure_ascii=False, indent=1)
     if args.no_skim:
         _, state_text = _state_text(
-            model, context.raw, meta, context.uid, context.n, status="model", generated_at=generated_at
+            model,
+            context.raw,
+            meta,
+            context.uid,
+            context.n,
+            status="model",
+            mode=mode,
+            generated_at=generated_at,
         )
         files = {
             "chapter_model.json": model_text,
@@ -248,16 +293,17 @@ def _generate(args):
         blocks,
         model=args.model,
         effort=args.effort,
+        mode=mode,
     )
-    skim = validate_skim(skim, model, blocks)
-    skim_audit = audit_skim(skim, model, blocks)
+    skim = validate_skim(skim, model, blocks, mode=mode)
+    skim_audit = audit_skim(skim, model, blocks, mode=mode)
     if skim_audit["errors"]:
         print("速览审计未通过：" + "；".join(skim_audit["errors"]), file=sys.stderr)
         return 1
     for warning in skim_audit["warnings"]:
         print(f"速览警告：{warning}", file=sys.stderr)
     skim_text = json.dumps(skim, ensure_ascii=False, indent=1)
-    standard = build_standard(model, blocks)
+    standard = build_standard(model, blocks, mode=mode)
     deep = None
     deep_audit = None
     if not args.no_deep:
@@ -310,6 +356,7 @@ def _generate(args):
         skim=skim,
         standard=standard,
         deep=deep,
+        mode=mode,
         generated_at=generated_at,
     )[1]
     files["state.json"] = state_text
@@ -412,12 +459,12 @@ def _resolve_report(args, context):
     return model, ledger
 
 
-def _skim_summary(context, model, blocks):
+def _skim_summary(context, model, blocks, mode=None):
     skim = context.store.depth_json(context.uid, context.n, "layers/skim.json")
     if skim is None:
         return None
     try:
-        audit = audit_skim(skim, model, blocks)
+        audit = audit_skim(skim, model, blocks, mode=mode)
     except (TypeError, ValueError) as exc:
         return {"supported": bool(isinstance(skim, dict) and skim.get("supported")), "errors": [str(exc)]}
     stats = audit["stats"] or {}
@@ -438,6 +485,7 @@ def _report(args):
     context = _context(args)
     model, ledger = _resolve_report(args, context)
     blocks = context.raw.get("blocks") or []
+    mode = _resolve_mode(args, context)
     expected_core = _load_gold(args.gold) if args.gold else None
     gate = audit_conservation(model, ledger, blocks, expected_core=expected_core)
     tiers = ledger.get("tiers") if isinstance(ledger, dict) else None
@@ -458,7 +506,7 @@ def _report(args):
         "gate_detail": gate["detail"],
         "problems": gate["problems"],
         "core_limitation": gate.get("limitation", ""),
-        "skim": _skim_summary(context, model, blocks),
+        "skim": _skim_summary(context, model, blocks, mode=mode),
     }
     skim = summary["skim"] or {}
     summary["skim_ratio"] = skim.get("ratio")

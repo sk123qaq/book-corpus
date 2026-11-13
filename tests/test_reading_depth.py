@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import shutil
+from argparse import Namespace
 from pathlib import Path
 
 import pytest
@@ -48,7 +49,12 @@ from bookcorpus.reading.depth import skim as skim_module
 from bookcorpus.reading.depth.diagrams import audit_figures
 from bookcorpus.reading.depth.disposition import plan_all_dispositions
 from bookcorpus.reading.depth.skim import unsupported_skim
-from bookcorpus.reading.depth.standard import STANDARD_PROMPT_VERSION, build_standard
+from bookcorpus.reading.depth.standard import (
+    MAX_LEAD,
+    STANDARD_PROMPT_VERSION,
+    _fit_lead,
+    build_standard,
+)
 from bookcorpus.reading.mdparse import parse_markdown
 from bookcorpus.reading.model import ModelProviderError
 from bookcorpus.reading.service import DEPTH_LAYERS, JobConflictError, ReadingService
@@ -181,6 +187,30 @@ def test_skim_scene_mode_requires_scenes_without_claim_chain():
     payload["scenes"] = payload["scenes"][:2]
     with pytest.raises(ValueError, match="至少需要 3"):
         validate_skim(payload, model, blocks, mode="narrative")
+
+
+def test_skim_mode_rejects_wrong_kind():
+    blocks, model, claims = _long_skim_fixture()
+    claims["kind"] = "claims"
+    with pytest.raises(ValueError, match="kind 必须是 scenes"):
+        validate_skim(claims, model, blocks, mode="narrative")
+
+    _blocks, _model, _claims = _long_skim_fixture()
+    scenes = {
+        "schema": 1,
+        "prompt_version": SKIM_PROMPT_VERSION,
+        "kind": "scenes",
+        "supported": True,
+        "reason": "",
+        "scenes": [
+            {"text": "场景甲", "anchor": "B02", "turn": "变化"},
+            {"text": "场景乙", "anchor": "B02", "turn": "变化"},
+            {"text": "场景丙", "anchor": "B02", "turn": "变化"},
+        ],
+    }
+    with pytest.raises(ValueError, match="kind 必须是 claims"):
+        validate_skim(scenes, model, blocks, mode="argument")
+    assert validate_skim(scenes, model, blocks)["kind"] == "scenes"
 
 
 def test_deep_mode_accepts_narrative_types_and_rejects_argument_type():
@@ -751,6 +781,54 @@ def test_chapter_route_only_claims_depth_when_page_is_servable(reading_root):
     assert service.store.chapter_route("B0002", 1, "whatever") == ("legacy", "旧包按旧路径打开")
 
 
+def test_mode_change_marks_depth_stale_everywhere(reading_root):
+    service = ReadingService(root=reading_root, annotate=False, depth=True)
+    raw = service.library.read_chapter("B0001", 1)
+    sha = raw["source_sha256"]
+    service.set_reading("B0001", 1, "book_default", "narrative")
+    service.store.save_depth(
+        "B0001",
+        1,
+        {
+            "chapter_model.json": {"label": "model"},
+            "ledger.json": {"label": "ledger"},
+            "layers/panels.json": {"schema": 1},
+            "layers/skim.json": {"schema": 1, "supported": False, "reason": "短章"},
+            "layers/standard.json": {"schema": 1, "sections": []},
+            "layers/deep.json": {"schema": 1, "notes": []},
+            "chapter.html": "<html>compiled</html>",
+            "state.json": {
+                "status": "ready",
+                "source_sha256": sha,
+                "layer_mode": {
+                    "panels": "argument",
+                    "skim": "argument",
+                    "standard": "argument",
+                    "deep": "argument",
+                },
+            },
+        },
+    )
+
+    data = service.chapter("B0001", 1)
+    assert data["path"] == "none"
+    assert data["fallback_reason"] == "读法已改，深度页过期"
+    assert data["depth"]["state"] == "stale"
+    assert data["depth"]["reason"] == "读法已改，深度页过期"
+    assert "html" not in data["depth"]
+    assert data["depth"]["layers"]["panels"]["status"] == "stale"
+    assert data["depth"]["layers"]["skim"]["status"] == "stale"
+    assert data["depth"]["layers"]["standard"]["status"] == "stale"
+    assert {tier["key"]: tier["stale"] for tier in data["tiers"]}["skim"] is True
+    assert service.book("B0001")["chapters"][0]["tiers"]["deep"]["stale"] is True
+
+    service.set_reading("B0001", 1, "book_default", "argument")
+    data = service.chapter("B0001", 1)
+    assert data["path"] == "depth"
+    assert data["depth"]["state"] == "ready"
+    assert data["depth"]["html"] == "/reader/B0001/1/depth"
+
+
 def test_service_depth_ready_pack_exposes_skim_and_html(reading_root):
     service = ReadingService(root=reading_root, annotate=False, depth=True)
     raw = service.library.read_chapter("B0001", 1)
@@ -859,6 +937,12 @@ def _ready_depth(depth_root, *, status="ready"):
                 "skim": "model-sha",
                 "standard": "model-sha",
                 "deep": "model-sha",
+            },
+            "layer_mode": {
+                "panels": "argument",
+                "skim": "argument",
+                "standard": "argument",
+                "deep": "argument",
             },
             "layer_usage": {"deep": {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500}},
             "layer_updated_at": {"deep": "2026-11-09T00:00:00"},
@@ -2123,6 +2207,7 @@ def test_render_depth_chapter_keeps_all_source_blocks_in_order():
     for tab in ("速览", "标准", "深读"):
         assert tab in markup
     assert "深读注解将在后续生成" in markup
+    assert "研读" not in markup
     assert "@media print" in markup
 
 
@@ -2157,6 +2242,8 @@ def test_cli_generate_status_ready_with_skim_and_render(depth_root, monkeypatch,
             "B0003",
             "--n",
             "6",
+            "--mode",
+            "argument",
             "--model",
             "fake-model",
             "--effort",
@@ -2222,6 +2309,8 @@ def test_cli_generate_no_skim_keeps_model_state(depth_root, monkeypatch, capsys)
             "B0003",
             "--n",
             "6",
+            "--mode",
+            "argument",
             "--model",
             "fake-model",
             "--effort",
@@ -2250,6 +2339,8 @@ def test_cli_generate_skip_render_is_not_ready(depth_root, monkeypatch, capsys):
             "B0003",
             "--n",
             "6",
+            "--mode",
+            "argument",
             "--model",
             "fake-model",
             "--effort",
@@ -2671,6 +2762,26 @@ def test_standard_drops_figure_with_number_not_in_source():
     assert any("F01" in warning for warning in standard["audit"]["warnings"])
 
 
+def test_cli_generate_without_mode_refuses(depth_root, capsys):
+    code = depth_main(
+        [
+            "generate",
+            "--root",
+            str(depth_root),
+            "--uid",
+            "B0003",
+            "--n",
+            "6",
+            "--model",
+            "fake-model",
+            "--effort",
+            "low",
+        ]
+    )
+    assert code == 2
+    assert "需要 --mode" in capsys.readouterr().err
+
+
 def test_cli_state_ready_includes_standard_layer(depth_root, monkeypatch, capsys):
     blocks, _ = _parsed()
     fake = FakeClient([_chunk_payload(blocks), _deep_payload(blocks)])
@@ -2684,6 +2795,8 @@ def test_cli_state_ready_includes_standard_layer(depth_root, monkeypatch, capsys
             "B0003",
             "--n",
             "6",
+            "--mode",
+            "argument",
             "--model",
             "fake-model",
             "--effort",
@@ -2703,6 +2816,7 @@ def test_cli_state_ready_includes_standard_layer(depth_root, monkeypatch, capsys
     state = json.loads((Path(store.pack_dir("B0003", 6)) / "depth" / "state.json").read_text(encoding="utf-8"))
     assert len(state["standard_sha"]) == 64
     assert state["standard_prompt_version"] == STANDARD_PROMPT_VERSION
+    assert state["layer_mode"] == {"skim": "argument", "standard": "argument", "deep": "argument"}
     html = Path(store.depth_path("B0003", 6, "chapter.html")).read_text(encoding="utf-8")
     assert "本章结构" in html
     assert 'data-origin="added"' in html
@@ -2721,6 +2835,8 @@ def test_cli_skip_render_writes_standard_layer(depth_root, monkeypatch, capsys):
             "B0003",
             "--n",
             "6",
+            "--mode",
+            "argument",
             "--model",
             "fake-model",
             "--effort",
@@ -2750,6 +2866,8 @@ def test_cli_no_standard_skips_layer_but_page_annotated(depth_root, monkeypatch,
             "B0003",
             "--n",
             "6",
+            "--mode",
+            "argument",
             "--model",
             "fake-model",
             "--effort",
@@ -2979,6 +3097,21 @@ def test_depth_job_reruns_layer_when_model_changes(depth_root):
     assert result["status"] == "ready"
     state = service.store.depth_json("B0003", 6, "state.json")
     assert state["layer_request"]["deep"]["model"] == "另一个模型"
+
+
+def test_depth_job_rebuilds_layer_when_old_pack_has_no_mode_record(depth_root):
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    files["state.json"].pop("layer_mode")
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    service.client = FakeClient([])
+    result = service._run_depth_job(
+        "r-depth-old-pack",
+        {"uid": "B0003", "n": "06", "kind": "depth", "layers": ["standard"], "model": "fake-model", "effort": "low"},
+    )
+    assert result["skipped"] == []
+    state = service.store.depth_json("B0003", 6, "state.json")
+    assert state["layer_mode"]["standard"] == "argument"
 
 
 def test_depth_job_all_skipped_keeps_ready_pack(depth_root):
@@ -3215,3 +3348,35 @@ def test_rendered_page_carries_its_own_generation_time(depth_root, monkeypatch):
     )
     html = Path(service.store.depth_path("B0003", 6, "chapter.html")).read_text()
     assert "2026-11-12T09:09:09" in html
+
+
+def test_standard_narrative_drops_lead_without_sentence_break():
+    blocks, model = _standard_model()
+    model["sections"][0]["lead"] = "长" * (MAX_LEAD + 1)
+    standard = build_standard(model, blocks, mode="narrative")
+    assert [section["id"] for section in standard["sections"]] == ["S02"]
+    assert any("没有自然断句" in warning for warning in standard["audit"]["warnings"])
+
+
+def test_standard_argument_keeps_sentence_within_lead_limit():
+    blocks, model = _standard_model()
+    model["sections"][0]["lead"] = "第一句。" + "长" * 100
+    standard = build_standard(model, blocks, mode="argument")
+    assert standard["sections"][0]["lead"] == "第一句。"
+    assert len(standard["sections"][0]["lead"]) <= MAX_LEAD
+
+
+def test_standard_without_mode_keeps_legacy_hard_cut():
+    text = "甲" * 60 + "。" + "乙" * 60
+    assert _fit_lead(text, mode=None) == text[:MAX_LEAD]
+    assert _fit_lead(text, mode="argument") == text[:61]
+
+
+def test_cli_resolve_mode_reads_existing_layer_or_explicit(depth_root):
+    files, *_ = _ready_depth(depth_root)
+    ReadingService(root=depth_root, annotate=False, depth=True).store.save_depth("B0003", 6, files)
+    args = Namespace(root=str(depth_root), uid="B0003", n=6, mode=None)
+    context = depth_cli._context(args)
+    assert depth_cli._resolve_mode(args, context) == "argument"
+    args.mode = "narrative"
+    assert depth_cli._resolve_mode(args, context) == "narrative"

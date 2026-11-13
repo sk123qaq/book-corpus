@@ -63,19 +63,19 @@ def test_discover_only_returns_retired_files(tmp_path):
         "工作区/阅读/B0001/ch/01/depth/layers/research.json",
         "工作区/阅读/B0001/ch/01/depth/citations.json",
         "工作区/阅读/B0001/ch/01/export/research.html",
-        "工作区/阅读/B0001/ch/01/manifest.json",
     }
 
 
 def test_apply_archives_deletes_and_keeps_working_layers(tmp_path):
     pack = _fixture(tmp_path)
     result = retire.apply(tmp_path, rerender=False)
-    assert result["removed"] == 4
+    assert result["removed"] == 3
     assert result["questions"] == {"packs": 1, "questions": 3, "skipped": []}
     assert result["state_changed"] == 1
     assert not (pack / "depth" / "layers" / "research.json").exists()
     assert not (pack / "depth" / "citations.json").exists()
     assert not (pack / "export" / "research.html").exists()
+    assert (pack / "manifest.json").is_file()
     assert (pack / "export" / "skim.html").is_file()
     assert (pack / "export" / "standard.html").is_file()
     assert (pack / "export" / "deep.html").is_file()
@@ -97,7 +97,6 @@ def test_apply_archives_deletes_and_keeps_working_layers(tmp_path):
         "工作区/阅读/B0001/ch/01/depth/layers/research.json",
         "工作区/阅读/B0001/ch/01/depth/citations.json",
         "工作区/阅读/B0001/ch/01/export/research.html",
-        "工作区/阅读/B0001/ch/01/manifest.json",
     }
     batch = Path(result["manifest"]["batch"])
     assert (batch / "manifest.json").is_file()
@@ -110,6 +109,17 @@ def test_dry_run_writes_nothing(tmp_path):
     assert result["dry_run"] is True
     assert not Path(result["manifest"]["archive"]).exists()
     assert (tmp_path / "工作区/阅读/B0001/ch/01/depth/layers/research.json").is_file()
+
+
+def test_strip_legacy_pages_covers_export(tmp_path):
+    pack = tmp_path / "工作区" / "阅读" / "B0001" / "ch" / "01"
+    _write(pack / "chapter.html", '<div data-tiers="skim standard deep research">研读 300</div>')
+    _write(pack / "export" / "deep.html", '<div data-tiers="skim standard deep research">研读 300</div>')
+    assert retire.strip_legacy_pages(tmp_path) == 2
+    for page in (pack / "chapter.html", pack / "export" / "deep.html"):
+        text = page.read_text(encoding="utf-8")
+        assert "research" not in text
+        assert "研读" not in text
 
 
 def test_strip_legacy_research():

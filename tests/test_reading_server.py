@@ -168,18 +168,25 @@ def _get_no_redirect(base, path):
         return exc.code, exc.headers, exc.read()
 
 
-def test_research_urls_retire_to_deep_and_410(server):
+def test_research_urls_retire_to_deep_and_410(server, reading_root):
     status, headers, _body = _get_no_redirect(server, "/reader/B0001/01?tier=research")
     assert status == 302
-    assert headers["Location"].endswith("/reader/B0001/01?tier=deep")
+    assert headers["Location"].endswith("/reader/B0001/01?tier=deep&retired=research")
 
     status, headers, _body = _get_no_redirect(server, "/reader/B0001/01/depth?tier=research")
     assert status == 302
-    assert headers["Location"].endswith("/reader/B0001/01/depth?tier=deep")
+    assert headers["Location"].endswith("/reader/B0001/01/depth?tier=deep&retired=research")
 
     status, headers, _body = _get_no_redirect(server, "/api/export/B0001/01/research")
     assert status == 410
     assert "退役" in _body.decode("utf-8")
+
+    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
+    pack.mkdir(parents=True, exist_ok=True)
+    (pack / "chapter.html").write_text("<html><body>旧读本</body></html>", encoding="utf-8")
+    status, body, _headers = _get(server, "/reader/B0001/01?tier=deep&retired=research")
+    assert status == 200
+    assert "研读档已退役" in body
 
 
 def test_pages_and_api_are_real_data(server):
@@ -194,6 +201,8 @@ def test_pages_and_api_are_real_data(server):
         assert status == 200, path
         assert "分层读" in body, path
     assert "深度生产" in body
+    status, body, _ = _get(server, "/book/B0001")
+    assert "设本书默认" in body
     status, body, _ = _get(server, "/api/book/B0001")
     assert len(json.loads(body)["chapters"]) == 2
     status, body, _ = _get(server, "/api/chapter/B0001/01")

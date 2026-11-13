@@ -60,9 +60,6 @@ def discover(root: str | Path) -> list[Path]:
         legacy = pack / "export" / "research.html"
         if legacy.is_file():
             files.append(legacy)
-            manifest = pack / "manifest.json"
-            if manifest.is_file():
-                files.append(manifest)
     return files
 
 
@@ -246,13 +243,16 @@ def _strip_legacy_research(html_text: str) -> str:
     text = text.replace('tier: "research"', 'tier: "deep"')
     text = text.replace('|| "research"', '|| "deep"')
     text = text.replace("e.key >= '1' && e.key <= '4'", "e.key >= '1' && e.key <= '3'")
+    text = text.replace(" · 研读 300", "").replace("研读 300", "")
     return text.replace("按 4 切到研读可见", "按 3 切到深读可见")
 
 
 def strip_legacy_pages(root: str | Path) -> int:
     root = Path(root)
     changed = 0
-    for page in root.glob("工作区/阅读/*/ch/*/chapter.html"):
+    pages = list(root.glob("工作区/阅读/*/ch/*/chapter.html"))
+    pages += list(root.glob("工作区/阅读/*/ch/*/export/*.html"))
+    for page in pages:
         text = page.read_text(encoding="utf-8")
         new = _strip_legacy_research(text)
         if new != text:
