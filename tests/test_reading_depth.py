@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import math
 import shutil
 from pathlib import Path
 
@@ -951,6 +952,38 @@ def test_depth_job_only_skim_preserves_deep_and_editorial(depth_root):
     assert "deep" in state["layer_sha"]
 
 
+def test_depth_job_audit_failure_is_quality_kind(depth_root, monkeypatch):
+    files, _blocks, _ledger, _model, _deep, _raw = _ready_depth(depth_root)
+    files.pop("layers/skim.json")
+    files["chapter_model.json"]["skim"] = {"supported": True}
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    service.store.save_depth("B0003", 6, files)
+    _blocks, _model, payload = _long_skim_fixture()
+    service.client = FakeClient([payload])
+
+    def fake_audit(*_args, **_kwargs):
+        return {"errors": ["模拟审计失败"], "stats": {"body_han": 1522, "section_gaps": []}}
+
+    monkeypatch.setattr(service_module, "audit_skim", fake_audit)
+    with pytest.raises(SkimError) as caught:
+        service._run_depth_job(
+            "r-depth-audit",
+            {
+                "uid": "B0003",
+                "n": "06",
+                "kind": "depth",
+                "layers": ["skim"],
+                "model": "fake-model",
+                "effort": "low",
+                "rebuild": False,
+            },
+        )
+    assert caught.value.kind == "quality"
+    assert caught.value.stats["body_han"] == 1522
+    assert caught.value.payload["schema"] == 1
+    assert "模拟审计失败" in str(caught.value)
+
+
 def test_depth_job_model_rebuild_stales_old_layers(depth_root):
     files, blocks, *_ = _ready_depth(depth_root)
     service = ReadingService(root=depth_root, annotate=False, depth=True)
@@ -1652,6 +1685,357 @@ def test_generate_skim_retries_once_after_validation_error():
     )
     assert len(client.calls) == 2
     assert skim["supported"] is True
+
+
+def _ratio_fixture(source_han, body_han):
+    """造一个只差正文长度的速览：结构合法，比例由 body_han 决定。"""
+    blocks = [{"id": "B02", "kind": "paragraph", "text": "源" * source_han}]
+    model = {
+        "schema": 1,
+        "uid": "B0003",
+        "n": 6,
+        "sections": [{"id": "S01", "title": "第一节", "unit_ids": ["U01", "U02", "U03", "U04"]}],
+        "units": [
+            {"id": "U01", "importance": "core", "source_blocks": ["B02"]},
+            {"id": "U02", "importance": "support", "source_blocks": ["B02"]},
+            {"id": "U03", "importance": "support", "source_blocks": ["B02"]},
+            {"id": "U04", "importance": "support", "source_blocks": ["B02"]},
+        ],
+        "core_units": ["U01"],
+    }
+    payload = {
+        "schema": 1,
+        "prompt_version": SKIM_PROMPT_VERSION,
+        "supported": True,
+        "reason": "",
+        "sections": [
+            {
+                "id": "S01",
+                "lead": "本节",
+                "claims": [
+                    {"text": "甲" * (body_han - 5), "units": ["U01", "U02"], "anchor": "B02"},
+                    {"text": "乙", "units": ["U03"], "anchor": "B02"},
+                    {"text": "丙", "units": ["U04"], "anchor": "B02"},
+                    {"text": "丁", "units": ["U01"], "anchor": "B02"},
+                ],
+                "turn": "",
+            }
+        ],
+        "detail_index": [],
+    }
+    return blocks, model, payload
+
+
+def test_skim_prompt_budget_matches_source_han():
+    blocks, model, payload = _long_skim_fixture()
+    client = FakeClient([payload])
+    skim = generate_skim(
+        client,
+        {"uid": "B0003"},
+        {"uid": "B0003", "n": 6},
+        model,
+        blocks,
+        model="fake-model",
+        effort="low",
+    )
+    assert skim["supported"] is True
+    content = json.loads(client.calls[0][-1]["content"])
+    assert content["budget"] == skim_module._budget(blocks)
+    assert content["budget"]["source_han"] == skim_module.source_han(blocks) == 1203
+    assert content["budget"]["body_min"] == 181
+    assert content["budget"]["body_max"] == 300
+    assert "181–300" in content["reminder"]
+    assert "1203" in content["reminder"]
+
+
+@pytest.mark.parametrize(
+    ("body_han", "ok", "match"),
+    [
+        (1522, False, "15%"),
+        (1523, True, None),
+        (2537, True, None),
+        (2538, False, "25%"),
+    ],
+)
+def test_skim_ratio_boundaries(body_han, ok, match):
+    blocks, model, payload = _ratio_fixture(10150, body_han)
+    if ok:
+        assert validate_skim(payload, model, blocks)["supported"] is True
+    else:
+        with pytest.raises(SkimError, match=match):
+            validate_skim(payload, model, blocks)
+
+
+def test_skim_narrative_budget_has_only_upper_bound():
+    blocks, model, _payload = _long_skim_fixture()
+    messages = skim_module._scene_messages({"uid": "B0003"}, {"uid": "B0003", "n": 6}, model, blocks)
+    content = json.loads(messages[-1]["content"])
+    assert "body_min" not in content["budget"]
+    assert content["budget"]["body_max"] == 300
+    assert "不超过源文 300 汉字" in content["reminder"]
+    assert "须在" not in content["reminder"]
+
+
+def _scenes_payload():
+    return {
+        "schema": 1,
+        "prompt_version": SKIM_PROMPT_VERSION,
+        "supported": True,
+        "reason": "",
+        "scenes": [
+            {"text": "先看前提，再看结论。", "units": ["U01"], "anchor": "B02"},
+            {"text": "正例成立，反例反证。", "units": ["U02"], "anchor": "B02"},
+            {"text": "代价是边界被压缩。", "units": ["U03"], "anchor": "B02"},
+        ],
+    }
+
+
+def test_skim_narrative_still_retries_after_structure_error():
+    """场景档没有比例下限，但结构错误仍该拿到一次返修机会。"""
+    blocks, model, _payload = _long_skim_fixture()
+    client = FakeClient([{}, _scenes_payload()])
+    skim = generate_skim(
+        client,
+        {"uid": "B0003"},
+        {"uid": "B0003", "n": 6},
+        model,
+        blocks,
+        model="fake-model",
+        effort="low",
+        mode="narrative",
+    )
+    assert skim["supported"] is True
+    assert len(client.calls) == 2
+    retry = client.calls[1][-1]["content"]
+    assert "上一次输出未通过速览校验" in retry
+    assert not any(message["role"] == "assistant" for message in client.calls[1])
+
+
+def test_skim_structure_error_does_not_echo_payload():
+    """只有比例越界才回灌上一份输出；导读腔这类结构错误只回错误文本。"""
+    blocks, model, payload = _ratio_fixture(1203, 200)
+    payload["sections"][0]["claims"][0]["text"] = "作者认为" + payload["sections"][0]["claims"][0]["text"]
+    client = FakeClient([payload, copy.deepcopy(payload)])
+    with pytest.raises(SkimError, match="导读腔"):
+        generate_skim(
+            client,
+            {"uid": "B0003"},
+            {"uid": "B0003", "n": 6},
+            model,
+            blocks,
+            model="fake-model",
+            effort="low",
+        )
+    assert len(client.calls) == 2
+    assert not any(message["role"] == "assistant" for message in client.calls[1])
+    assert "导读腔" in client.calls[1][-1]["content"]
+
+
+def test_skim_oversize_repair_drops_detail_index_instead_of_faking_it():
+    """超长回灌只能删掉 detail_index，不能塞一个占位对象让模型照抄。"""
+    payload = _scenes_payload()
+    payload["detail_index"] = [
+        {"label": f"D{i}", "unit": "U01", "anchor": "B02", "quote": "源" * 2000} for i in range(40)
+    ]
+    text, chars, dropped, still_too_long = skim_module._repair_payload_text(payload)
+    assert dropped is True
+    assert still_too_long is False
+    assert chars > skim_module.REPAIR_PAYLOAD_LIMIT
+    assert text is not None
+    assert "detail_index" not in json.loads(text)
+    gap = skim_module._gap_message({"source_han": 1203, "body_han": 100}, "正文汉字比例 8.3% 越界", detail_dropped=True)
+    assert "detail_index 因过长已省略" in gap
+
+
+def test_skim_repair_payload_reports_dropped_even_when_still_too_long():
+    """省掉 detail_index 仍然放不下，也要如实上报「省过」，不能说自己没动。"""
+    payload = _scenes_payload()
+    payload["detail_index"] = [{"label": f"D{i}", "quote": "源" * 500} for i in range(5)]
+    payload["scenes"][0]["text"] = "源" * 70000
+    text, chars, dropped, still_too_long = skim_module._repair_payload_text(payload)
+    assert text is None
+    assert chars > skim_module.REPAIR_PAYLOAD_LIMIT
+    assert dropped is True
+    assert still_too_long is True
+
+
+def test_skim_gap_message_does_not_claim_structure_is_kept_when_whole_payload_omitted():
+    """整份没回灌时，模型看不到上一稿，说「结构不要改」等于让它改看不见的东西。"""
+    stats = {"source_han": 4000, "body_han": 300}
+    gap = skim_module._gap_message(stats, "正文汉字 300 字（7.5%）越界（15%–25%）", whole_omitted=True)
+    assert "整份未能回灌" in gap
+    assert "结构不要改" not in gap
+    assert "detail_index 因过长已省略" not in gap
+
+
+def test_skim_repair_payload_keeps_empty_detail_index():
+    """空 detail_index 不是「省略」：省掉一串空列表既不省字节，也不该谎报。"""
+    payload = _scenes_payload()
+    payload["detail_index"] = []
+    payload["scenes"][0]["text"] = "源" * 70000
+    text, _chars, dropped, still_too_long = skim_module._repair_payload_text(payload)
+    assert dropped is False
+    assert text is None
+    assert still_too_long is True
+
+
+def test_skim_gap_message_asks_to_cut_when_body_is_over_max():
+    """正文超上限时再叫它「扩写」，这次返修必然白费。"""
+    stats = {"source_han": 10150, "body_han": 2600, "section_gaps": []}
+    gap = skim_module._gap_message(stats, "正文汉字 2600 字越界")
+    assert "超出 63 汉字" in gap
+    assert "删减" in gap
+    assert "总缺口" not in gap
+    assert "只扩写" not in gap
+
+
+def test_skim_gap_message_gives_per_section_targets():
+    stats = {
+        "source_han": 10150,
+        "body_han": 1400,
+        "section_gaps": [{"id": "S01", "body_han": 200, "units": 3, "source_han": 4000}],
+    }
+    gap = skim_module._gap_message(stats, "正文汉字 1400 字越界")
+    assert "总缺口 123 汉字" in gap
+    assert "- S01：当前正文 200 汉字（偏少）/ 目标 600–1000 汉字 / 3 个 unit / 源文 4000 汉字" in gap
+
+
+def test_skim_min_ratio_change_updates_prompt_and_error(monkeypatch):
+    monkeypatch.setattr(skim_module, "MIN_RATIO", 0.20)
+    blocks, model, _payload = _long_skim_fixture()
+    content = json.loads(
+        skim_module._messages({"uid": "B0003"}, {"uid": "B0003", "n": 6}, model, blocks)[-1]["content"]
+    )
+    assert content["budget"]["source_han"] == 1203
+    assert content["budget"]["body_min"] == math.ceil(1203 * 0.20) == 241
+    assert "241–300" in content["reminder"]
+
+    blocks, model, thin = _ratio_fixture(10150, 1522)
+    with pytest.raises(SkimError, match="20%"):
+        validate_skim(thin, model, blocks)
+
+
+def test_generate_skim_repairs_once_with_previous_payload_and_gap():
+    blocks, model, thin = _ratio_fixture(10150, 1522)
+    _blocks, _model, good = _ratio_fixture(10150, 1523)
+    client = FakeClient([thin, good])
+    skim = generate_skim(
+        client,
+        {"uid": "B0003"},
+        {"uid": "B0003", "n": 6},
+        model,
+        blocks,
+        model="fake-model",
+        effort="low",
+    )
+    assert skim["supported"] is True
+    assert len(client.calls) == 2
+    repair = client.calls[1]
+    assert repair[-2]["role"] == "assistant"
+    assert json.loads(repair[-2]["content"])["sections"][0]["claims"][0]["text"] == "甲" * 1517
+    gap = repair[-1]["content"]
+    assert "正文汉字 1522 字（15.0%）越界（15%–25%）：下限 1523 字、上限 2537 字" in gap
+    assert "目标 1523–2537 汉字" in gap
+    assert "总缺口 1 汉字" in gap
+    assert "- S01：当前正文 1522 汉字（偏少）/ 目标 1523–2537 汉字 / 4 个 unit / 源文 10150 汉字" in gap
+
+
+def test_json_retry_and_quality_repair_use_separate_budgets():
+    blocks, model, thin = _ratio_fixture(10150, 1522)
+    _blocks, _model, good = _ratio_fixture(10150, 1523)
+    client = FakeClient(["不是 JSON", thin, good])
+    skim = generate_skim(
+        client,
+        {"uid": "B0003"},
+        {"uid": "B0003", "n": 6},
+        model,
+        blocks,
+        model="fake-model",
+        effort="low",
+    )
+    assert skim["supported"] is True
+    assert len(client.calls) == 3
+    assert client.calls[1][-1]["role"] == "user"
+    assert "不是合法 JSON" in client.calls[1][-1]["content"]
+    assert client.calls[2][-2]["role"] == "assistant"
+    assert "总缺口 1 汉字" in client.calls[2][-1]["content"]
+
+    thin_client = FakeClient([thin, thin])
+    with pytest.raises(SkimError, match="连续 2 次未通过速览校验"):
+        generate_skim(
+            thin_client,
+            {"uid": "B0003"},
+            {"uid": "B0003", "n": 6},
+            model,
+            blocks,
+            model="fake-model",
+            effort="low",
+        )
+    assert len(thin_client.calls) == 2
+
+    json_client = FakeClient(["坏", "还是坏"])
+    with pytest.raises(SkimError, match="连续 2 次没有得到合法 JSON"):
+        generate_skim(
+            json_client,
+            {"uid": "B0003"},
+            {"uid": "B0003", "n": 6},
+            model,
+            blocks,
+            model="fake-model",
+            effort="low",
+        )
+    assert len(json_client.calls) == 2
+
+
+def test_generate_skim_omits_oversized_repair_payload_and_emits_event(tmp_path):
+    blocks, model, thin = _ratio_fixture(10150, 1522)
+    _blocks, _model, good = _ratio_fixture(10150, 1523)
+    oversized = copy.deepcopy(thin)
+    oversized["padding"] = "x" * 61000
+    log = reading_events.EventLog(tmp_path, "repair-overlimit")
+    token = reading_events.bind(log)
+    try:
+        client = FakeClient([oversized, good])
+        skim = generate_skim(
+            client,
+            {"uid": "B0003"},
+            {"uid": "B0003", "n": 6},
+            model,
+            blocks,
+            model="fake-model",
+            effort="low",
+        )
+    finally:
+        reading_events.unbind(token)
+        log.close()
+    assert skim["supported"] is True
+    assert len(client.calls) == 2
+    assert client.calls[1][-1]["role"] == "user"
+    assert "总缺口 1 汉字" in client.calls[1][-1]["content"]
+    records = reading_events.read(tmp_path, "repair-overlimit")
+    omitted = [record for record in records if record.get("kind") == "skim_repair_payload_omitted"]
+    assert omitted
+    assert omitted[0]["payload_chars"] > 60000
+
+
+def test_skim_error_carries_quality_context_without_leaking_payload():
+    exc = SkimError("失败", stats={"body_han": 1}, payload={"raw": "x"})
+    assert exc.kind == "quality"
+    assert exc.stats == {"body_han": 1}
+    assert exc.payload == {"raw": "x"}
+    assert str(exc) == "失败"
+    assert exc.args == ("失败",)
+    assert "x" not in str(exc)
+    assert getattr(exc, "__notes__", None) is None
+
+
+def test_existing_v2_skim_layer_still_validates(tmp_path):
+    blocks, model, payload = _long_skim_fixture()
+    path = tmp_path / "skim.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    assert loaded["prompt_version"] == "skim-compiler-v2"
+    assert validate_skim(loaded, model, blocks)["prompt_version"] == "skim-compiler-v2"
 
 
 def test_render_depth_chapter_keeps_all_source_blocks_in_order():

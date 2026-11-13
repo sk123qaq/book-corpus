@@ -7,8 +7,10 @@
 
 import copy
 import json
+import math
 import re
 
+from .. import events
 from ..model import ModelProviderError
 from ..textnorm import normalize_verbatim
 
@@ -19,6 +21,8 @@ MIN_SOURCE_HAN = 1200
 MIN_RATIO = 0.15
 MAX_RATIO = 0.25
 MAX_JSON_RETRIES = 1
+MAX_QUALITY_REPAIRS = 1
+REPAIR_PAYLOAD_LIMIT = 60_000
 
 HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
@@ -55,7 +59,8 @@ SYSTEM_PROMPT = "\n".join(
         "4. 每个 unit 必须出现一次归属：要么进某条 claim 的 units，要么进 detail_index。"
         "detail_index 每项字段为 label、unit、anchor、quote；quote 必须是 anchor 块原文的逐字子串。",
         "5. anchor 必须是该 claim/detail 所引 unit 的 source_blocks 之一，写块 id，不写 # 或标题。",
-        "6. 正文汉字数（lead、claims.text、turn）必须占源文汉字数的 15% 到 25%。detail_index 不计入。"
+        "6. 正文汉字数（lead、claims.text、turn）必须占源文汉字数的 "
+        f"{MIN_RATIO:.0%} 到 {MAX_RATIO:.0%}。detail_index 不计入。"
         "做不到就判 supported=false，不要靠注水或删核心命题凑比例。",
         "7. claims 是编译后的陈述，不是摘抄。不要写导读腔：作者认为、作者指出、本章指出、我们可以看到、"
         "值得注意的是、不难看出、由此可见等一律禁止。",
@@ -79,7 +84,7 @@ SCENE_SYSTEM_PROMPT = "\n".join(
         "2. supported=true 时，scenes 写 5 到 10 个；每个 scene 字段为 text、units、anchor、turn。"
         "anchor 必须是本章块 id；units 可省略。",
         "3. 每个 scene 至少锚定一个块；turn 写这一场的变化/代价，可省略。",
-        "4. scene 正文汉字总数不超过源文的 25%，不设下限；不要为了凑比例注水，也不要删掉关键场景。",
+        f"4. scene 正文汉字总数不超过源文的 {MAX_RATIO:.0%}，不设下限；不要为了凑比例注水，也不要删掉关键场景。",
         "5. 场景是叙事节拍，不是命题链。不要写“作者认为/本章指出/由此可见”等导读腔。",
         "6. 人名、地名、年份、数字必须能在源文里逐字找到；不要补造。",
         "7. 源文不足 1200 汉字，或不足 3 个有效场景，判 supported=false，在 reason 里写人话，scenes 留空。",
@@ -93,6 +98,16 @@ SCENE_SYSTEM_PROMPT = "\n".join(
 class SkimError(ValueError):
     """skim 不满足结构、覆盖、比例或原文约束。"""
 
+    kind = "quality"
+
+    def __init__(self, message, *, stats=None, payload=None, ratio_failed=False):
+        super().__init__(message)
+        self.stats = stats
+        self.payload = payload
+        # 只有比例越界值得把上一份输出整份回灌让模型扩写。锚点、导读腔这类
+        # 结构错误回灌原文只会给它照抄一遍的捷径。
+        self.ratio_failed = bool(ratio_failed)
+
 
 def han_count(text):
     return len(HAN_RE.findall(text or ""))
@@ -100,6 +115,32 @@ def han_count(text):
 
 def source_han(blocks):
     return sum(han_count(block.get("text") or "") for block in blocks or [])
+
+
+def _ratio_bounds(source):
+    """把比例翻成能写进提示和缺口表的整数区间。与校验用同一套算术。"""
+    return math.ceil(source * MIN_RATIO), math.floor(source * MAX_RATIO)
+
+
+def _budget(blocks, mode="argument"):
+    source = source_han(blocks)
+    low, high = _ratio_bounds(source)
+    if mode == "narrative":
+        return {
+            "source_han": source,
+            "body_max": high,
+            "counted": ["scenes.text"],
+            "excluded": [],
+            "unit": "汉字",
+        }
+    return {
+        "source_han": source,
+        "body_min": low,
+        "body_max": high,
+        "counted": ["lead", "claims.text", "turn"],
+        "excluded": ["detail_index"],
+        "unit": "汉字",
+    }
 
 
 def unsupported_skim(reason, mode="argument", kind=None):
@@ -156,7 +197,7 @@ def _check_scenes(skim, chapter_model, blocks):
     block_map = {b.get("id"): b for b in blocks or [] if b.get("id")}
     unit_map = {u.get("id"): u for u in chapter_model.get("units") or [] if u.get("id")}
     source_text = "\n".join(b.get("text") or "" for b in blocks or [])
-    source_han_count = han_count(source_text)
+    source_han_count = source_han(blocks)
     clean_scenes = []
     body_parts = []
     seen_anchors = set()
@@ -208,8 +249,8 @@ def _check_scenes(skim, chapter_model, blocks):
             g11.append(f"supported=true 时至少需要 3 个有效 scene，当前 {len(clean_scenes)} 个")
         body_han = han_count("".join(body_parts))
         ratio = body_han / source_han_count if source_han_count else 0.0
-        if body_han * 100 > source_han_count * 25:
-            g14.append(f"scene 正文汉字比例 {ratio:.1%} 超过 25%")
+        if body_han > source_han_count * MAX_RATIO:
+            g14.append(f"scene 正文汉字比例 {ratio:.2%} 超过 {MAX_RATIO:.0%}")
         stats = {
             "supported": True,
             "source_han": source_han_count,
@@ -277,7 +318,7 @@ def _checks(skim, chapter_model, blocks):
             section_map[section_id] = section
 
     source_text = "\n".join(block.get("text") or "" for block in blocks or [])
-    source_han_count = han_count(source_text)
+    source_han_count = source_han(blocks)
     core_ids = {unit_id for unit_id, unit in unit_map.items() if unit.get("importance") == "core"}
 
     required = ("schema", "prompt_version", "supported", "reason", "sections", "detail_index")
@@ -329,6 +370,7 @@ def _checks(skim, chapter_model, blocks):
             "core_total": len(core_ids),
             "core_covered": 0,
             "core_claim_coverage": 0.0,
+            "section_gaps": [],
         }
         clean = {
             "schema": SKIM_SCHEMA_VERSION,
@@ -346,6 +388,7 @@ def _checks(skim, chapter_model, blocks):
     detail_units = set()
     seen_sections = []
     body_parts = []
+    section_body_han = {}
 
     for index, section in enumerate(sections_raw):
         name = f"sections[{index}]"
@@ -366,6 +409,7 @@ def _checks(skim, chapter_model, blocks):
         lead = _text(section.get("lead"), f"{name}.lead", g11)
         if lead:
             body_parts.append(lead)
+            section_body_han[section_id] = section_body_han.get(section_id, 0) + han_count(lead)
             for phrase in BANNED_PHRASES:
                 if phrase in lead:
                     g11.append(f"{name}.lead 含导读腔：{phrase}")
@@ -375,6 +419,7 @@ def _checks(skim, chapter_model, blocks):
             turn = ""
         if turn.strip():
             body_parts.append(turn)
+            section_body_han[section_id] = section_body_han.get(section_id, 0) + han_count(turn)
             for phrase in BANNED_PHRASES:
                 if phrase in turn:
                     g11.append(f"{name}.turn 含导读腔：{phrase}")
@@ -403,6 +448,7 @@ def _checks(skim, chapter_model, blocks):
             anchor = _text(claim.get("anchor"), f"{claim_name}.anchor", g11)
             if text:
                 body_parts.append(text)
+                section_body_han[section_id] = section_body_han.get(section_id, 0) + han_count(text)
                 for phrase in BANNED_PHRASES:
                     if phrase in text:
                         g11.append(f"{claim_name}.text 含导读腔：{phrase}")
@@ -476,8 +522,33 @@ def _checks(skim, chapter_model, blocks):
     ratio = (body_han_count / source_han_count) if source_han_count else 0.0
     if not source_han_count:
         g14.append("源文没有汉字，无法计算速览比例")
-    elif body_han_count * 100 < source_han_count * 15 or body_han_count * 100 > source_han_count * 25:
-        g14.append(f"正文汉字比例 {ratio:.1%} 越界（15%–25%）")
+    elif body_han_count < source_han_count * MIN_RATIO or body_han_count > source_han_count * MAX_RATIO:
+        # 只说比例，14.99% 会被四舍五入成 15.0%，看账的人会以为门槛自己抽了风。
+        # 比例放括号里，先给可以逐字核对的字数。
+        low, high = _ratio_bounds(source_han_count)
+        g14.append(
+            f"正文汉字 {body_han_count} 字（{ratio:.1%}）越界（{MIN_RATIO:.0%}–{MAX_RATIO:.0%}）："
+            f"下限 {low} 字、上限 {high} 字"
+        )
+
+    section_gaps = []
+    for section_id, model_section in section_map.items():
+        section_unit_ids = set(model_section.get("unit_ids") or [])
+        section_blocks = {}
+        for unit_id in section_unit_ids:
+            unit = unit_map.get(unit_id) or {}
+            for block_id in unit.get("source_blocks") or []:
+                block = block_map.get(block_id)
+                if block is not None:
+                    section_blocks[block_id] = block
+        section_gaps.append(
+            {
+                "id": section_id,
+                "body_han": section_body_han.get(section_id, 0),
+                "units": len(section_unit_ids),
+                "source_han": source_han(section_blocks.values()),
+            }
+        )
 
     stats = {
         "supported": True,
@@ -495,6 +566,7 @@ def _checks(skim, chapter_model, blocks):
         "core_total": len(core_ids),
         "core_covered": len(core_ids & claim_units),
         "core_claim_coverage": (len(core_ids & claim_units) / len(core_ids)) if core_ids else 1.0,
+        "section_gaps": section_gaps,
     }
     clean = {
         "schema": SKIM_SCHEMA_VERSION,
@@ -511,10 +583,10 @@ def _checks(skim, chapter_model, blocks):
 
 def validate_skim(payload, chapter_model, blocks, mode="argument"):
     """校验并返回规范化副本；任何结构或守恒错误都抛 :class:`SkimError`。"""
-    clean, g11, g14, _, _ = _checks(payload, chapter_model, blocks)
+    clean, g11, g14, _, stats = _checks(payload, chapter_model, blocks)
     problems = g11 + g14
     if problems:
-        raise SkimError("；".join(problems))
+        raise SkimError("；".join(problems), stats=stats, payload=payload, ratio_failed=bool(g14))
     return copy.deepcopy(clean)
 
 
@@ -565,12 +637,18 @@ def _messages(book, chapter, chapter_model, blocks):
         "units": [_unit_view(unit) for unit in chapter_model.get("units") or []],
         "core_units": [unit.get("id") for unit in chapter_model.get("units") or [] if unit.get("importance") == "core"],
     }
+    budget = _budget(blocks)
     payload = {
         "book": book_view,
         "chapter": chapter_view,
         "chapter_model": model_view,
         "blocks": [_block_view(block) for block in blocks or []],
-        "reminder": "只输出 JSON；每个 unit 都要有归属；anchor 用块 id；正文比例 15%–25%。",
+        "budget": budget,
+        "reminder": (
+            "只输出 JSON；每个 unit 都要有归属；anchor 用块 id；"
+            f"正文（lead、claims.text、turn）须在 {budget['body_min']}–{budget['body_max']} 汉字之间，"
+            f"源文 {budget['source_han']} 汉字。"
+        ),
     }
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -590,6 +668,7 @@ def _scene_messages(book, chapter, chapter_model, blocks, panels=None):
         for key in ("uid", "n", "title", "source_sha256")
         if isinstance(chapter, dict) and key in chapter
     }
+    budget = _budget(blocks, mode="narrative")
     payload = {
         "book": book_view,
         "chapter": chapter_view,
@@ -599,12 +678,82 @@ def _scene_messages(book, chapter, chapter_model, blocks, panels=None):
         },
         "blocks": [_block_view(block) for block in blocks or []],
         "panels": panels or {},
-        "reminder": "只输出 JSON；5–10 个 scene；每个 scene 至少一个 block anchor；正文不超过源文 25%。",
+        "budget": budget,
+        "reminder": (
+            "只输出 JSON；5–10 个 scene；每个 scene 至少一个 block anchor；"
+            f"正文不超过源文 {budget['body_max']} 汉字（{MAX_RATIO:.0%}）。"
+        ),
     }
     return [
         {"role": "system", "content": SCENE_SYSTEM_PROMPT},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
+
+
+def _gap_message(stats, message, detail_dropped=False, whole_omitted=False):
+    source = stats.get("source_han") or 0
+    body = stats.get("body_han") or 0
+    low, high = _ratio_bounds(source)
+    if body > high:
+        # 超上限还叫它「扩写」只会把一个必然再失败的返修花掉。
+        move = f"超出 {body - high} 汉字。删减 lead、claims.text、turn 的正文，先删与其它条重复的举例。"
+    elif body < low:
+        move = f"总缺口 {low - body} 汉字。只扩写 lead、claims.text、turn 的正文。"
+    else:
+        move = "正文已在区间内，不要动正文长度，只修结构与引文。"
+    lines = [
+        f"未通过的校验：{_clip(message)}",
+        f"当前正文 {body} 汉字，目标 {low}–{high} 汉字（源文 {source} 汉字），{move}",
+    ]
+    if whole_omitted:
+        # 整份都没回灌时，说「结构不要改」等于让模型改一份它看不到的输出。
+        lines.append("上一份输出过长，整份未能回灌；请按源文块重出一份完整 JSON，结构按系统提示重建。")
+    else:
+        lines.append(
+            "sections、claims、units、anchor 的结构不要改，"
+            + ("detail_index 的引文也不要改。" if not detail_dropped else "detail_index 需要按源文块重建。")
+        )
+        if detail_dropped:
+            lines.append("上一份输出的 detail_index 因过长已省略，请按源文块重建，unit 归属规则不变。")
+    gaps = stats.get("section_gaps") or []
+    if gaps:
+        lines.append("分节目标（仅供定位，总正文以整体区间为准）：")
+        for item in gaps:
+            section_source = item.get("source_han", 0)
+            section_low, section_high = _ratio_bounds(section_source)
+            section_body = item.get("body_han", 0)
+            mark = "偏少" if section_body < section_low else ("偏多" if section_body > section_high else "达标")
+            lines.append(
+                f"- {item.get('id')}：当前正文 {section_body} 汉字（{mark}）/ 目标 {section_low}–{section_high} 汉字 / "
+                f"{item.get('units', 0)} 个 unit / 源文 {section_source} 汉字"
+            )
+    return "\n".join(lines)
+
+
+def _repair_payload_text(payload):
+    """返回（可回灌的 assistant 文本，原序列化长度，省了 detail_index，仍太长）。
+
+    文本为 None 表示整份都放不下，调用方只发目标表。省 detail_index 时不能换成
+    占位对象：模型会照抄，列表变对象，下一轮必挂 schema。
+    """
+    try:
+        original = json.dumps(payload, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return None, 0, False, False
+    if len(original) <= REPAIR_PAYLOAD_LIMIT:
+        return original, len(original), False, False
+    reduced = copy.deepcopy(payload)
+    dropped = False
+    if isinstance(reduced, dict) and reduced.get("detail_index"):
+        reduced.pop("detail_index")
+        dropped = True
+        try:
+            reduced_text = json.dumps(reduced, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return None, len(original), True, True
+        if len(reduced_text) <= REPAIR_PAYLOAD_LIMIT:
+            return reduced_text, len(original), True, False
+    return None, len(original), dropped, True
 
 
 def generate_skim(
@@ -635,6 +784,8 @@ def generate_skim(
         else _messages(book, chapter, chapter_model, blocks)
     )
     json_attempts = 0
+    quality_repairs = 0
+    last_quality_error = None
     provider_retried = False
     while True:
         try:
@@ -663,13 +814,61 @@ def generate_skim(
                 },
             ]
         except SkimError as exc:
-            json_attempts += 1
-            if json_attempts > MAX_JSON_RETRIES:
-                raise SkimError(f"连续 {MAX_JSON_RETRIES + 1} 次未通过速览校验：{_clip(exc)}") from exc
-            messages = [
-                *messages,
-                {"role": "user", "content": f"上一次输出未通过速览校验：{_clip(exc)}。请修正后只输出完整 JSON。"},
-            ]
+            if mode == "narrative" or not exc.ratio_failed:
+                # 场景档没有比例下限；锚点、腔调这类结构错误也走旧路：只回错误文本。
+                json_attempts += 1
+                if json_attempts > MAX_JSON_RETRIES:
+                    raise SkimError(
+                        f"连续 {MAX_JSON_RETRIES + 1} 次未通过速览校验：{_clip(exc)}",
+                        stats=exc.stats,
+                        payload=exc.payload,
+                        ratio_failed=exc.ratio_failed,
+                    ) from exc
+                messages = [
+                    *messages,
+                    {
+                        "role": "user",
+                        "content": f"上一次输出未通过速览校验：{_clip(exc)}。请修正后只输出完整 JSON。",
+                    },
+                ]
+                continue
+            quality_repairs += 1
+            if quality_repairs > MAX_QUALITY_REPAIRS:
+                previous = (last_quality_error.stats if last_quality_error else None) or {}
+                current = exc.stats or {}
+                raise SkimError(
+                    f"连续 {MAX_QUALITY_REPAIRS + 1} 次未通过速览校验："
+                    f"上次正文 {previous.get('body_han', 0)} 字、本次 {current.get('body_han', 0)} 字；{_clip(exc)}",
+                    stats=exc.stats,
+                    payload=exc.payload,
+                ) from exc
+            last_quality_error = exc
+            assistant_text, payload_chars, detail_dropped, still_too_long = _repair_payload_text(exc.payload)
+            gap_text = _gap_message(
+                exc.stats or {},
+                str(exc),
+                detail_dropped=detail_dropped,
+                whole_omitted=assistant_text is None,
+            )
+            if assistant_text is None or detail_dropped:
+                events.current().emit(
+                    "skim_repair_payload_omitted",
+                    payload_chars=payload_chars,
+                    limit=REPAIR_PAYLOAD_LIMIT,
+                    detail_index_dropped=detail_dropped,
+                    still_too_long=still_too_long,
+                )
+            if assistant_text is None:
+                messages = [
+                    *messages,
+                    {"role": "user", "content": gap_text},
+                ]
+            else:
+                messages = [
+                    *messages,
+                    {"role": "assistant", "content": assistant_text},
+                    {"role": "user", "content": gap_text},
+                ]
         except ModelProviderError as exc:
             if exc.retries_exhausted:
                 raise
