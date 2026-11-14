@@ -15,7 +15,7 @@ from .shelf_index import ShelfIndex
 
 AUTHOR_NOISE_RE = re.compile(r"(?:z-library(?:\.sk)?|1lib\.sk|z-lib\.sk)", re.I)
 CLOTHES = ("#1E3A36", "#2C4056", "#6B2B2B", "#A87A3E", "#4A5839", "#3F4E5A", "#5A3E2B", "#2F4F4F")
-# 叠加层默认关闭：Work/book-corpus-data 暂不作为本项目的数据源。
+# 叠加层默认关闭：不读旧数据仓的叠加层，需要时由调用方显式传 overlay_root。
 # 需要时由调用方显式传 overlay_root，不读环境变量。
 DEFAULT_OVERLAY = ""
 

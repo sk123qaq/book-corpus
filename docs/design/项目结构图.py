@@ -343,7 +343,7 @@ html = f"""<!doctype html>
 <ul>
   <li><code>AGENTS.md</code> 现状数字、文件地图、脚本表、改完跑什么</li>
   <li><code>docs/design/设计方案-书目结构.md</code> L0 到 L5 的门槛与目标结构</li>
-  <li><code>book-corpus-data/archive/决策记录-2026-10-18_2026-10-26.tsv</code> 每个决定的理由与证据</li>
+  <li><code>~/书库/archive/决策记录-2026-10-18_2026-10-26.tsv</code> 每个决定的理由与证据</li>
   <li><code>目录/检索/README.md</code> 与 <code>踩坑记录.md</code>，改检索脚本前先查</li>
 </ul>
 <p class="sub" style="margin-top:22px">这张图由 <code>docs/design/项目结构图.py</code> 生成，改节点或坐标后重跑它即可。</p>

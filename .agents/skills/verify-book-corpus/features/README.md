@@ -18,7 +18,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 - `sample` 装内置样书：阿Q正传 `B0001`，9 章，检索索引 123 段，`book_concept` 3 条。字数两处口径不同：`sample` 报 22881 字（含标题等），分层读 `/api/shelf` 报 21362 正文字符。
 - `doctor` 只读，逐行 `ok`/`warn`。允许的 `warn` 只有两类：**环境**（PDF 环境、文档环境）与**云端 key 缺失**（配置·MinerU / PaddleOCR / MiMo）。落在工作区、清单、账、库上的 `warn` 才算问题，先解释再开跑。
 - 端口用本轮私有的一套：演示 18765、分层读 18771、日课 18772、首页 18773（另 18774 / 18775 验 503 与拉起）、操作台 18770。
-- 8765 / 8771 / 8772 / 8773 是操作员的常驻实例，跑在操作员的真实库 `~/书库` 上（`apps/reading/server.py --root` 默认值就是它；`~/文档/book-corpus-data` 是旧路径，本机不存在）。永不驱、永不杀。
+- 8765 / 8771 / 8772 / 8773 是操作员的常驻实例，跑在操作员的真实库 `~/书库` 上（`apps/reading/server.py --root` 默认值就是它）。永不驱、永不杀。
 - 需要「有内容」才成立的验证，手写 `$ROOT/日课/<date>.json`（契约见 [daily-lessons.md](./daily-lessons.md)）。`book-corpus daily --dry-run` 只把提示词打到 stdout，不落盘，不能当 seed。
 
 ## 驱动约定
