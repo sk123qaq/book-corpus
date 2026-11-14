@@ -56,4 +56,4 @@ Preconditions:
 - 拉起失败的原因、日志路径和命令都在 503 页里；日志落在 `$XDG_CACHE_HOME/book-corpus/home/<key>.log`（默认 `~/.cache`），可用 `BOOK_CORPUS_HOME_LOG_DIR` 改到 `$ROOT/run/logs`，验证结束随 `$ROOT` 一起清（`apps/home/launcher.py:42-51`）。
 - 拉起演示页时不传 `--root`，改写 `BOOKS_ROOT`；这也是演示页唯一的数据根开关。
 - 首页要读 `books.toml` 与仓库模板：`books.toml` 缺失或 `books/` 不在时进程直接退出（exit 2），不是渲染成空页。`--root` 要指到含这两样的工作区。
-- `--root` 不是最高优先：`src/bookcorpus/scripts/layout.py:36-43` 与 `src/bookcorpus/reading/library.py:46-49` 先看 `BOOKS_ROOT`，再看 `BOOK_CORPUS_DATA`。shell 里残留或仓库 `.env` 被写过，都会让三个首页读到别的工作区，而就绪行照样打印传入的 root。
+- `--root` 不是最高优先：`src/bookcorpus/scripts/layout.py:36-43` 与 `src/bookcorpus/reading/library.py:46-49` 先看 `BOOKS_ROOT`，再看 `BOOK_CORPUS_DATA`。shell 里残留或仓库 `.env` 被写过，都会让三个首页读到别的工作区，而就绪行照样打印传入的 root。自动拉起也按实际 `Library.root` 拼命令（`apps/home/server.py:230-232`），所以不只是读错，`/go/ops` 还可能把子服务拉到错根。
