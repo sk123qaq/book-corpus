@@ -23,6 +23,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 - 端口用本轮私有的一套：演示 18765、分层读 18771、日课 18772、首页 18773（另 18774 / 18775 验 503 与拉起）、操作台 18770。
 - 8765 / 8771 / 8772 / 8773 是操作员的常驻实例，跑在操作员的真实库 `~/书库` 上（`apps/reading/server.py --root` 默认值就是它）。永不驱、永不杀。
 - 需要「有内容」才成立的验证，手写 `$ROOT/日课/<date>.json`（契约见 [daily-lessons.md](./daily-lessons.md)）。`book-corpus daily --dry-run` 打选书、模型/思考/工具、`----- 提示词 -----` 与提示词四块，不落盘，不能当 seed。
+- embed 要 llama-server 与 GGUF 模型，软链进 `$ROOT/工作区/中间态/embed/`，用私有 18780；见 [embed.md](./embed.md)。
 
 ## 驱动约定
 
@@ -70,11 +71,13 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 - [分层读](./layered-reads.md)：8771 的书架、书目、书级默认读法（只写账）、读法切换导致的深度层过期、三档生成、五层深度与读本页，以及章页容量预检与超限 422 阻断。
 - [往期日课](./daily-lessons.md)：8772 的日课列表、单期、坏文件跳过。
 - [管理](./manage-library.md)：8770 的八个页签、导入、拆章、维护、账表、删书、日志。
+- [全库 embedding](./embed.md)：CLI 的 `book-corpus embed`，切块、断点续跑、单写者锁、状态与校验；没有浏览器面。
 
 ## 未映射
 
-CLI 面还没有功能文件，以 `book-corpus list` 为准；操作员最常用的几条是
+除 embed 外的 CLI 面还没有功能文件，以 `book-corpus list` 为准；操作员最常用的几条是
 `book-corpus run <script>`、`verify`、`library`、`index`、`search`、`query`、`catalog`、`numbers`、
 `stats`、`daily`、`status`、`ingest`、`audit_state`，以及演示页的运行记录 CLI
 `python3 apps/demo/runlog.py {list,timeline,bundle,replay,prune,doctor}`。它们没有浏览器面，驱法和上面五个不同，需要另一层 harness。
+[embed.md](./embed.md) 是 CLI 面写法的一份样板：一次性根、私有端口、stdout/stderr 与退出码当断言。
 v1 的 `remap`、`migrate` 已不在 `book-corpus list` 里，别再按旧文档找它们。

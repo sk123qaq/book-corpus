@@ -2,7 +2,8 @@
 name: verify-book-corpus
 description: >
   用一次性工作区启动并驱动 book-corpus 的五个本地页面（8773 书库首页、8765 找一段、8771 分层读、
-  8772 往期日课、8770 操作台），验证用户可见行为、留下可复核的证据，然后清理实例。
+  8772 往期日课、8770 操作台），以及 CLI 的 `book-corpus embed`；验证用户可见行为、留下可复核的证据，
+  然后清理实例。
   当需要验证 book-corpus 的一个改动、复现别人报的页面问题、或按功能地图跑端到端检查时使用。
   Drive the disposable stack, never the operator's live library on 8765/8771/8772/8773.
 argument-hint: "[feature] [run-id]"
@@ -100,6 +101,7 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 - **curl** 验服务端渲染页骨架与接口契约：取 HTML 断言稳定标记，取 JSON 断言字段。`features/library-home.md`、`features/daily-lessons.md`、`features/manage-library.md` 走这条；`features/layered-reads.md` 的接口也走 curl，但章页/记录页是客户端渲染，用户可见状态用 `--dump-dom`。
 - **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py tests/test_depth_acceptance.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
 - **直接跑脚本**验端到端：`python3 tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
+- **CLI** 验用户命令：`book-corpus embed` 在一次性根里跑，断言 stdout/stderr、退出码与磁盘产物，逐条见 `features/embed.md`。它同样只认 `--root` 指到的一次性根；默认 `--server` 是操作员的 18080，必须改 18780。
 - **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读章页、记录页），先剥掉 `<script>` 源码再断言，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。默认找 `google-chrome-stable`；本机有（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。
   - `google-chrome-stable --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，先剥掉 `<script>` 源码再数 `id="depth-panel"`；`--dump-dom` 也带模板字符串，直接 grep 会多算。详细片段见 `features/layered-reads.md`。
   - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`。
@@ -136,6 +138,7 @@ for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 
 - 拉起过的服务（首页自动起的操作台）不在 `run/*.pid` 里：`ss -ltnp | grep :8770` 拿到 PID，记进 `$ROOT/run/autostart.pid` 再杀。
 - 杀完确认 `ss -ltnp | grep -E ':(18765|18770|18771|18772|18773|18774|18775)\b'` 为空；`uv run` 与首页拉起的那类子进程会随父进程一起退出，但端口空才是判据。
+- embed 的 llama-server 在 `18780`：`ss -ltnp | grep ':18780 '` 为空，且 `pgrep -af "$ROOT"` 无输出，才算收干净。跑过 embed 的轮次必查。
 - 删工作区：`rm -rf "$ROOT"`。**不要**删 `artifacts/`，清理只删实例与临时根。
 - 确认仓库 `.env` 没被写：`grep -n '^BOOKS_ROOT' .env || echo 'repo .env untouched'`。出现 `BOOKS_ROOT` 就删掉那一行（本轮没设 `BOOK_CORPUS_ENV` 时 `init` 会写它），再 `git status --short .env` 复核。
 - 删完 `ls artifacts/verify/<RUN_ID>/<feature>/` 还在，才算这轮收干净。
@@ -147,7 +150,8 @@ for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 
 ## Feature map
 
-五个用户面各一份：`features/library-home.md`、`find-a-passage.md`、`layered-reads.md`、`daily-lessons.md`、`manage-library.md`。
+五个页面各一份：`features/library-home.md`、`find-a-passage.md`、`layered-reads.md`、`daily-lessons.md`、`manage-library.md`；
+CLI 的 `features/embed.md` 是第六份。
 地图是维护目标：行为变了先改地图，再改这条验证；`features/README.md` 记着当前已知红与未映射的 CLI 面。分层读的章页与记录页是客户端渲染，地图里的页面断言以 `--dump-dom` 为准。
 
 改动本文件后，在 Pi 里 `/reload` 让技能重新加载；Pi 只在从仓库目录（或其子目录）启动时才发现项目 `.agents/skills/`。
