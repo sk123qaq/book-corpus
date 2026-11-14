@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>入库 · 九张实现图（2026-11-14）</title>
+<style>
+  :root {
+    --paper: #f4f1e9;
+    --card: #fffdf8;
+    --ink: #1b1d22;
+    --muted: #686d77;
+    --line: #ded9cc;
+    --line-strong: #c9c2b1;
+    --amber: #8a5a00;
+    --amber-bg: #fbf0dc;
+    --amber-line: #e6cf9f;
+    --green: #2f6b4f;
+    --green-bg: #e8f2ec;
+    --green-line: #bfd9cb;
+    --red: #a23c2e;
+    --red-bg: #f8e8e4;
+    --red-line: #e8c3bb;
+    --blue: #1d5b63;
+    --blue-bg: #e6f0f0;
+    --blue-line: #bfd6d5;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --sans: "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    padding: 44px 30px 90px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.75 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1180px; margin: 0 auto; }
+  a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(29,91,99,.25); }
+  a:hover { border-bottom-color: var(--blue); }
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: #2c3340;
+    background: #f0eee7;
+    border: 1px solid #e3dfd3;
+    border-radius: 4px;
+    padding: 0 4px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- hero ---------- */
+  .hero { border-bottom: 2px solid var(--ink); padding-bottom: 26px; margin-bottom: 46px; }
+  .stamp {
+    display: flex; justify-content: space-between; gap: 20px;
+    color: var(--muted); font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 14px 0 10px;
+    font-family: var(--serif);
+    font-size: 42px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2;
+  }
+  .statusline {
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--green);
+    background: var(--green-bg);
+    font-size: 13px; color: #264c3b;
+    display: inline-block;
+  }
+  .lede { margin: 0 0 16px; max-width: 920px; color: #3d4047; font-size: 15.5px; }
+  .lede b { color: var(--ink); }
+  .notice {
+    margin: 16px 0 0; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: #faf8f2; color: var(--muted); font-size: 13px;
+  }
+  .notice b { color: var(--ink); }
+
+  .toc {
+    margin-top: 22px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 22px;
+  }
+  .toc a {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 4px 0; border-bottom: 1px dotted var(--line);
+    color: var(--ink); font-size: 13.5px;
+  }
+  .toc a span { color: var(--amber); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; }
+  .toc a:hover { border-bottom-color: var(--ink); }
+
+  .legend { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted); }
+  .legend i {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+    font-style: normal;
+  }
+  .legend i::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--line-strong); }
+  .legend .l-step::before { background: var(--blue); }
+  .legend .l-gate::before { background: var(--amber); }
+  .legend .l-ok::before { background: var(--green); }
+  .legend .l-no::before { background: var(--red); }
+
+  /* ---------- chart shell ---------- */
+  .chart { margin: 0 0 76px; }
+  .chart-head { margin-bottom: 22px; }
+  .chart-kicker {
+    color: var(--amber); font-family: var(--mono); font-size: 11px;
+    letter-spacing: .14em; text-transform: uppercase;
+  }
+  .chart h2 {
+    margin: 4px 0 8px;
+    font-family: var(--serif); font-size: 29px; font-weight: 600; line-height: 1.3;
+  }
+  .io {
+    margin: 0; color: var(--muted); font-size: 13px;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px;
+  }
+  .io span {
+    color: #3b3e45; background: #ece9df; border-radius: 4px; padding: 1px 7px;
+    font-family: var(--mono); font-size: 11.5px;
+  }
+  .io i { font-style: normal; color: var(--amber); }
+  .chart-end {
+    margin-top: 18px; color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; gap: 20px;
+    border-top: 1px solid var(--line); padding-top: 8px;
+  }
+
+  /* ---------- flow ---------- */
+  .flow { display: flex; flex-direction: column; }
+
+  .node {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 22px 16px;
+    box-shadow: 0 1px 0 rgba(30,25,15,.04);
+  }
+  .node::before {
+    content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 4px;
+    border-radius: 0 4px 4px 0; background: var(--blue);
+  }
+  .node-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .node-head .no {
+    font-family: var(--mono); font-size: 12px; color: var(--blue); letter-spacing: .08em;
+  }
+  .node h3 { margin: 0; font-family: var(--serif); font-size: 21px; font-weight: 600; line-height: 1.35; }
+  .node-head code { margin-left: auto; }
+  .node-body > p { margin: 4px 0 0; }
+  .node-body > p + p { margin-top: 8px; }
+  .kv { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .kv li { padding-left: 16px; position: relative; font-size: 13.5px; color: #3f434b; }
+  .kv li::before { content: "·"; position: absolute; left: 4px; color: var(--amber); font-weight: 700; }
+  .kv b { color: var(--ink); }
+
+  .ann {
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .ann.one { grid-template-columns: 1fr; }
+  .ann div > b {
+    display: inline-block; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 2px;
+  }
+  .ann .data > b { color: var(--green); }
+  .ann p { margin: 0; font-size: 12.8px; line-height: 1.7; color: #464a52; }
+  .ann em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+  /* ---------- edges ---------- */
+  .edge { position: relative; height: 42px; display: flex; align-items: center; justify-content: center; }
+  .edge::before {
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 7px; width: 2px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .edge::after {
+    content: ""; position: absolute; left: 50%; bottom: 1px; transform: translateX(-5px);
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 7px solid var(--line-strong);
+  }
+  .edge-label {
+    position: relative; z-index: 1; background: var(--paper);
+    padding: 0 8px; color: var(--muted); font-size: 11.5px; font-family: var(--mono);
+  }
+  .edge-label b { color: var(--amber); font-weight: 600; }
+
+  /* ---------- gate ---------- */
+  .node.gate { background: var(--amber-bg); border: 1.5px dashed var(--amber-line); }
+  .node.gate::before { background: var(--amber); }
+  .node.gate .no { color: var(--amber); }
+  .node.gate h3 { color: #6d4700; }
+  .gate-badge {
+    display: inline-block; margin-left: 2px; padding: 0 7px; border-radius: 3px;
+    background: var(--amber); color: #fff8e8; font-size: 10px; letter-spacing: .12em;
+    vertical-align: 3px;
+  }
+  .node.gate .ann > div > b { color: #8a5a00; }
+
+  /* ---------- outcomes ---------- */
+  .node.stop { background: var(--green-bg); border-color: var(--green-line); }
+  .node.stop::before { background: var(--green); }
+  .node.stop .no { color: var(--green); }
+  .node.stop h3 { color: #24533c; }
+  .node.stop .ann > div > b { color: #2f6b4f; }
+  .node.off { background: #f6f4ee; border-style: solid; }
+  .node.off::before { background: var(--red); }
+  .node.off h3 { color: #6f3028; }
+  .node.off .ann > div > b { color: var(--red); }
+
+  /* ---------- fork ---------- */
+  .fork {
+    position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px; padding-top: 34px;
+  }
+  .fork::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 14px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .fork::after {
+    content: ""; position: absolute; top: 14px; left: 25%; right: 25%; height: 2px;
+    background: var(--line-strong);
+  }
+  .fork-arm { position: relative; padding-top: 18px; }
+  .fork-arm::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 18px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .cond {
+    display: inline-block; margin-bottom: 8px; padding: 1px 9px; border-radius: 999px;
+    font-size: 11.5px; font-family: var(--mono); border: 1px solid var(--line-strong);
+    background: var(--card); color: #3f434b;
+  }
+  .cond.yes { border-color: var(--green-line); background: var(--green-bg); color: #24533c; }
+  .cond.no { border-color: var(--amber-line); background: var(--amber-bg); color: #6d4700; }
+  .cond.off { border-color: var(--red-line); background: var(--red-bg); color: #6f3028; }
+  .fork .node h3 { font-size: 18px; }
+  .fork .node-body > p { font-size: 13.2px; }
+
+  .merge {
+    margin: 14px 0 0; text-align: center; color: var(--muted); font-size: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .merge::before, .merge::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th {
+    background: #efece2; font-weight: 600; font-size: 11.5px; letter-spacing: .06em;
+    color: #4b4f58; white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td code { font-size: 11.5px; }
+  .t-ok { color: var(--green); font-weight: 600; }
+  .t-hold { color: var(--amber); font-weight: 600; }
+  .t-off { color: var(--red); font-weight: 600; }
+
+  /* ---------- footer ---------- */
+  .footer {
+    margin-top: 20px; border-top: 2px solid var(--ink); padding-top: 18px;
+    color: var(--muted); font-size: 13px;
+  }
+  .footer h2 { font-family: var(--serif); font-size: 24px; color: var(--ink); margin: 0 0 10px; }
+  .footer ul { margin: 8px 0 0; padding-left: 20px; }
+  .footer li { margin: 3px 0; }
+  .cmd {
+    margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: #201f1c; color: #eee9dc;
+    font-family: var(--mono); font-size: 12px; line-height: 1.8; overflow-x: auto;
+  }
+  .cmd span { color: #b9b09a; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .two h3 { font-family: var(--serif); font-size: 18px; margin: 0 0 6px; }
+
+  @media (max-width: 860px) {
+    body { padding: 26px 16px 70px; }
+    h1 { font-size: 31px; }
+    .toc, .fork, .ann, .two { grid-template-columns: 1fr; }
+    .fork::after { display: none; }
+    .fork-arm::before { display: none; }
+    .fork-arm { padding-top: 0; }
+    .node-head code { margin-left: 0; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .node, .tablewrap { break-inside: avoid; }
+    .chart { break-before: page; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<header class="hero">
+  <div class="stamp"><span>book-corpus · ingest maps</span><span>2026-11-14</span></div>
+  <h1>入库：九张实现图</h1>
+  <p class="statusline">状态：implemented · 2026-11-14　　验收：<code>uv run --frozen pytest tests/test_ingest_plan.py tests/test_ingest_docformats.py -q</code>（16 passed）</p>
+  <p class="lede">
+    这九张图只下钻<b>入库脚本</b> <code>src/bookcorpus/scripts/ingest.py</code>（931 行）及其直接依赖：收件箱一行文件怎么变成计划、计划怎么被判成新增/换源/删除/待核、分类预填怎么调模型、<code>apply</code> 怎么落书/落源/落人账、重建与操作台的接棒。
+    操作台按钮怎么排队、怎么显示任务状态，见另一份《统一操作台实现流程图》；本文从 <code>scan</code> 开始，到 <code>apply</code> 的结果 JSON 结束。
+  </p>
+  <div class="notice">
+    <b>口径说明。</b>图对应当前工作树（<code>d64c40c</code> 之后），不按旧 README 复述。本机 <code>工作区/批次/ingest/journal.tsv</code> 有 280 条动作（<b>262 add / 13 delete / 5 replace</b>），分类缓存 261 条（其中 7 条低置信或「拿不准」），收件箱当前只剩 1 个 <code>README.md</code>，人账 1,956 行、有 md 的书 1,819 本。
+    计划格式已升到 <code>plan_version 2</code>，旧清单会被直接拒绝；入库只接受 11 种后缀，<code>.doc/.ppt/.csv/.djvu</code> 不静默收。
+  </div>
+  <nav class="toc">
+    <a href="#s1"><span>01</span>扫描：一行计划怎么长出来</a>
+    <a href="#s2"><span>02</span>动作判定树：add / replace / review / delete</a>
+    <a href="#s3"><span>03</span>分类预填：一次模型调用，失败也入库</a>
+    <a href="#s4"><span>04</span>apply 前的收口：计划不合格就整批不入</a>
+    <a href="#s5"><span>05</span>写盘事务：一把 ingest 锁，逐行落地</a>
+    <a href="#s6"><span>06</span>add：新书落三处</a>
+    <a href="#s7"><span>07</span>replace：新源置顶，旧 md 标记待重拆</a>
+    <a href="#s8"><span>08</span>delete：收件箱重复件进回收站</a>
+    <a href="#s9"><span>09</span>重建与回执：apply 之后谁接</a>
+  </nav>
+  <div class="legend">
+    <i class="l-step">处理</i><i class="l-gate">判定</i><i class="l-ok">采用 / 结果</i><i class="l-no">拒绝 / 失败</i>
+    <i>卡片底栏：决策 + 读数</i>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================ 1 -->
+<section class="chart" id="s1">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 01 · scan</div>
+    <h2>扫描：一行计划怎么长出来</h2>
+    <p class="io"><span>输入</span><code>books/_收件箱/</code> 的直属文件<i>→</i><span>输出</span><code>plan.json</code>（一行一个文件）+ 分类缓存</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>枚举收件箱</h3><code>ingest.py:315 scan</code></div>
+      <div class="node-body">
+        <p><code>sorted(os.listdir())</code> 只看直属文件，不递归；跳过点文件。名字是 <code>readme.md</code>/<code>readme.txt</code> 的单独计数后跳过。后缀必须在 <code>lib_common.ACCEPT_EXTS</code> 的 11 种里；不在白名单的按后缀计数，只提示，不生成计划行。</p>
+        <div class="ann">
+          <div><b>决策</b><p>白名单只维护一处，扫描、上传、页面 accept 共用；未知后缀不静默接，避免 <code>source_rank</code> 把它当 0 级源混进换源判断。说明文件不是书，跳过但报数。</p></div>
+          <div class="data"><b>读数</b><p>11 种后缀；<code>.doc/.ppt/.csv/.djvu</code> 是明确的拒绝类。本机收件箱当前只剩 1 个 README，没有待扫书。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">逐个文件</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>指纹与文件名</h3><code>ingest.py:62 sha256_file · :88 parse_name</code></div>
+      <div class="node-body">
+        <p>先按 1 MB 块流式算 sha256，再取后缀、字节数。书名与作者从文件名猜：去掉扩展名后反复剥掉尾部括号；括号里含「著/编译」、中文名加 <code>·</code>、或带英文句点的，当作者；剩下的 stem 当书名。</p>
+        <div class="ann">
+          <div><b>决策</b><p>身份用内容 sha，不用文件名：同名不同内容、同内容不同名都靠 sha 分辨。文件名解析只是预填，括号里的译者、丛书名、下载站标记都可能误判，所以后面留人工改书名/作者。</p></div>
+          <div class="data"><b>读数</b><p>本机 journal 累计 280 条；分类缓存 261 条，说明绝大多数文件走的是同一套文件名解析。z-library 文件名常带两层括号，解析器会剥到没有尾括号为止。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">sha + title + format</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>建库索引</h3><code>ingest.py:107 library_index</code></div>
+      <div class="node-body">
+        <p>先读人账 <code>categories()</code>（1,956 行），再遍历 <code>books/</code>（跳过 <code>_</code> 开头的目录）读每本 <code>book.json</code>。收集 uid、书名、作者、分类（账表优先，缺了才用 book.json）、主源与全部源 sha，建立 <code>sha → uid</code> 与 <code>uid → book</code> 两张表。</p>
+        <div class="ann">
+          <div><b>决策</b><p>分类以人账为准：book.json 是投影，可能停在分类功能上线之前。sha 表同时看所有源，不只主源，所以「库里已有同一文件」不会因为换过源而漏判。</p></div>
+          <div class="data"><b>读数</b><p>人账 1,956 行；有 md 的书 1,819 本；<code>library_index</code> 每次 scan 都全量重建，当前规模下秒级。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">books / shas / sha_uid</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>动作判定</h3><span class="gate-badge">判定</span><code>ingest.py:194 plan_for</code></div>
+      <div class="node-body">
+        <p>一个文件只出四种动作：<code>add</code>、<code>replace</code>、<code>delete</code>、<code>review</code>。先看格式与 sha，再看书名精确/模糊匹配，最后看本批是否已有同名。每一行带 <code>plan_version: 2</code>、目标 uid、目标分类、保留值、状态与说明。</p>
+        <div class="ann">
+          <div><b>决策</b><p><code>review</code> 是阻塞态，不是跳过：扫描拿不准时不给默认动作，人必须改成新增/换源/删除，整张计划才能 apply。这样不会把「疑似同一本」自动写成两本或误删。</p></div>
+          <div class="data"><b>读数</b><p>本机历史：262 次 add、13 次 delete、5 次 replace；没有把 review 直接写进 journal 的记录，因为 review 阶段就被 apply 拦下。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">action = add</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>给新书排 uid</h3><code>ingest.py:158 next_uid · :315 scan</code></div>
+      <div class="node-body">
+        <p>取人账里最大的 <code>B####</code> 加一，作为本批第一个 add 的 uid；后续 add 依次加一。已用过的号不回收，空洞保留。apply 阶段还会再查一次「人账已用或目录已存在」，冲突就继续往上加。</p>
+        <div class="ann">
+          <div><b>决策</b><p>uid 要人可读、可排序、可做目录名，所以用确定性的 <code>B0001</code> 序列，不用随机串。scan 先排是为了页面能显示；apply 再校验是因为手写计划或并发可能漏号。</p></div>
+          <div class="data"><b>读数</b><p>当前最大 uid 是 <code>B1956</code>，人账 1,956 行，正好一一对应；没有复用已删书的号。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">只对 add</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>分类预填</h3><code>ingest.py:408 classify_adds</code></div>
+      <div class="node-body">
+        <p>按 sha 查缓存；没命中的 add 行合成一次模型调用，拿一级/二级/置信度/理由，写回缓存，再按 <code>CLS_MIN=0.45</code> 决定落到「分类」还是「其他」。模型失败只把这一批 add 放「其他」，不阻断扫描。</p>
+        <div class="ann">
+          <div><b>决策</b><p>分类是预填，不是入库前提：宁可粗分到「其他」也不留空。缓存按内容 sha，改文件名不会重复花钱；调用失败把错误写进行内 note，人可以在计划里改。</p></div>
+          <div class="data"><b>读数</b><p>261 条缓存，7 条低置信/拿不准（约 2.7%）；全部用 <code>opencode-go/deepseek-v4.1-flash</code>、提示词版本 <code>2026-10-24.1</code>。详见第 3 张图。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">带分类的计划</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">07</span><h3>输出计划</h3><code>ingest.py:315 · :808</code></div>
+      <div class="node-body">
+        <p><code>--json</code> 打到 stdout；<code>--out</code> 用 <code>write_json_atomic</code> 落文件。操作台还会传 <code>--cache &lt;job&gt;/classify.json</code>，把分类缓存放进任务目录，避免 scan（只读 kind）去写共享缓存。</p>
+        <div class="ann">
+          <div><b>决策</b><p>scan 只写计划和缓存，不移动源、不写人账、不建库；这样它可以被操作台标成只读任务，和写任务并行。计划是 JSON 数组，人可以直接编辑。</p></div>
+          <div class="data"><b>读数</b><p>当前 <code>plan_version 2</code>；每行一个文件；本机操作台历史里 4 次 scan、2 次 apply。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 01 完 · 收件箱 → 计划</span><span>入口：<code>book-corpus run ingest scan</code></span></div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="chart" id="s2">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 02 · 判定</div>
+    <h2>动作判定树：同一个文件为什么是 add / replace / review / delete</h2>
+    <p class="io"><span>输入</span>sha、格式、书名、作者<i>→</i><span>输出</span>action + status + target + subjects + retention</p>
+  </div>
+
+  <div class="flow">
+    <article class="node gate">
+      <div class="node-head"><span class="no">01</span><h3>先看身份</h3><span class="gate-badge">判定</span><code>ingest.py:194 plan_for</code></div>
+      <div class="node-body">
+        <p>格式不在 <code>FORMATS</code> 表里 → <code>review / unknown-format</code>，不猜级别。sha 已在库 → <code>delete / in_library</code>，落到回收站。sha 在本批前面出现过 → <code>delete / batch_dup</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>同 sha 不重复入库，也不静默忽略：走 delete 把收件箱这份移走，并在 manifest 记原因。同批重复保留第一份，后面的删掉。</p></div>
+          <div class="data"><b>读数</b><p>本机 13 条 delete 里多数是「库里已有同一文件」；batch_dup 只在一次拖入重复副本时出现。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">格式与 sha 都过关</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>再看书名</h3><code>ingest.py:148 match</code></div>
+      <div class="node-body">
+        <p>归一化只去空白、转小写。先找 <code>norm(title)</code> 完全相等的；没有再看库书名是否是来名/来名是否是库名的子串，且库书名长度 ≥ 4。命中列表可能 0、1 或多本。</p>
+        <div class="ann">
+          <div><b>决策</b><p>精确优先，模糊只做「疑似」提醒。子串匹配故意加长度门槛，避免《游戏》这种短书名把所有带「游戏」的都拉进来；模糊命中永远进 review，不自动删。</p></div>
+          <div class="data"><b>读数</b><p>精确同名 1 本时才有机会自动 replace；同名多本直接 candidates；模糊命中把候选 uid 写进 <code>target</code> 供页面展示。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">hits = 0 / 1 / n</span></div>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond off">精确同名 1 本</span>
+        <article class="node gate">
+          <div class="node-head"><span class="no">03a</span><h3>源强弱比较</h3><span class="gate-badge">判定</span><code>ingest.py:163 source_rank</code></div>
+          <div class="node-body">
+            <p>同 sha → delete；旧格式已知且新 rank 更高 → replace；旧格式已知但新 rank 相同或更低 → review（<code>same_format</code> / <code>weaker</code>）；旧主源没有可比格式 → review（<code>weaker</code>）。</p>
+            <div class="ann">
+              <div><b>决策</b><p>只有更强的格式才自动换源。epub 换成 pdf、epub 换成 docx 都要人点头；同格式更不敢自动覆盖，因为可能是不同版本/译本。</p></div>
+              <div class="data"><b>读数</b><p>本机 5 次 replace 都是「弱源 → 强源」；13 次 delete 里也有同 sha 的重复件。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">精确同名多本 / 模糊 / 本批同名</span>
+        <article class="node off">
+          <div class="node-head"><span class="no">03b</span><h3>落人工</h3><code>ingest.py:194</code></div>
+          <div class="node-body">
+            <p>精确多本 → <code>review / candidates</code>，target 用逗号列 uid；模糊命中 → <code>review / fuzzy</code>，唯一命中时顺手预填 uid 与保留值；本批已有同名 → <code>review / fuzzy</code>。人改成 add / replace / delete 后才能继续。</p>
+            <div class="ann">
+              <div><b>决策</b><p><code>review</code> 不给默认动作：只有模糊唯一命中才预填 uid 与保留值，扫描器不替人决定「这本是不是同一本」。精确多本只展示前 4 本，模糊只展示前 3 本，完整候选写在 target 里。</p></div>
+              <div class="data"><b>读数</b><p>本机 journal 没有一条 review 直接落地；apply 的待核闸会在写盘前整批拦下。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+    <div class="merge">两条支路都回到同一行计划：action 不解决，apply 整批拒绝</div>
+
+    <div class="edge"><span class="edge-label">没有命中</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">04</span><h3>新书</h3><code>ingest.py:194</code></div>
+      <div class="node-body">
+        <p><code>action=add</code>、<code>status=new</code>、<code>subjects=["其他"]</code>、<code>retention=keep</code>；uid 在第 1 张图的第 05 步排好。分类预填随后覆盖「其他」。</p>
+        <div class="ann">
+          <div><b>决策</b><p>没有命中就是新书，但分类不空着：先落「其他」，模型或人再细分。保留值默认 keep，计划里可改 review/drop。</p></div>
+          <div class="data"><b>读数</b><p>本机 262 次 add，是 journal 的绝对多数；新书入库后立刻成为人账一行、一本书目录。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">source_rank 表</span></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>格式</th><th>rank</th><th>自动换源的资格</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>epub</code></td><td>3</td><td class="t-ok">最高</td><td>结构化最好，优先当主源</td></tr>
+          <tr><td><code>mobi</code> / <code>azw3</code> / <code>azw</code></td><td>2</td><td class="t-ok">可换 pdf/doc/txt</td><td>Kindle 系；azw 在 2026-11-05 补进表</td></tr>
+          <tr><td><code>pdf</code> / <code>docx</code> / <code>xlsx</code> / <code>xls</code> / <code>pptx</code> / <code>md</code></td><td>1</td><td class="t-hold">只能换 txt</td><td>doc 类走文档转 md，不拆章</td></tr>
+          <tr><td><code>txt</code></td><td>0</td><td class="t-off">最低</td><td>纯文本，通常只做兜底源</td></tr>
+          <tr><td>表外格式</td><td>0</td><td class="t-off">禁止</td><td>scan 先拦；直接调 <code>plan_for</code> 也落 review</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="merge">rank 只决定「是否自动 replace」；同级或更弱都进 review</div>
+  </div>
+  <div class="chart-end"><span>图 02 完 · 动作树</span><span>入口：<code>ingest.py:194 plan_for</code></span></div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="chart" id="s3">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 03 · 分类</div>
+    <h2>分类预填：一次模型调用，失败也入库</h2>
+    <p class="io"><span>输入</span>本批 add 行的书名 + 作者<i>→</i><span>输出</span>一级/二级 + 置信度 + 理由，或「其他」</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>按 sha 查缓存</h3><code>ingest.py:367 load_class_cache</code></div>
+      <div class="node-body">
+        <p>默认缓存 <code>工作区/批次/ingest/classify.json</code>，按文件 sha256 存整条记录（level1/level2/confidence/reason/at/model/prompt_version）。命中的 add 不再调用模型；未命中的才进本批 todo。</p>
+        <div class="ann">
+          <div><b>决策</b><p>缓存键用内容 sha 而不是书名：改名、换目录、重复下载都不会重复付费；旧条目缺 model/prompt_version 也能读，不因升级提示词就全部失效。</p></div>
+          <div class="data"><b>读数</b><p>261 条缓存；本机全部记录都带 model 与 prompt_version，说明缓存写入时已经统一。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">todo = add 且未缓存</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>一次批量调用</h3><code>classify_model.py:70 / :158</code></div>
+      <div class="node-body">
+        <p><code>CM.classify(titles, authors)</code> 把所有 todo 拼成一份提示词，走 <code>pi -p --no-tools --no-session --no-context-files --no-skills --no-extensions --model &lt;配置&gt;</code>，超时 240 秒。提示词含 11 个一级类、各二级类与一级说明，要求只回一行 JSON 数组。</p>
+        <div class="ann">
+          <div><b>决策</b><p>一次调用而不是一本一次：批量摊薄启动成本，也让人工等一次而不是 N 次。模型取 <code>books.toml [model]</code> 的配置，默认 <code>opencode-go/deepseek-v4.1-flash</code>；不依赖 TypeSafe。</p></div>
+          <div class="data"><b>读数</b><p><code>PROMPT_VERSION=2026-10-24.1</code>，<code>TIMEOUT=240s</code>；本机 261 条缓存全部是 deepseek-v4.1-flash。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">stdout 一行 JSON</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>解析与归一</h3><code>classify_model.py:102 / :128</code></div>
+      <div class="node-body">
+        <p>先剥 <code>```json</code> 围栏，再取第一个 <code>[</code> 到最后一个 <code>]</code>；JSON 必须是数组且条数与传入一致。一级不在体系内 → <code>拿不准</code>；二级不属于该一级 → 空；置信度夹到 0–1，理由压成一行。</p>
+        <div class="ann">
+          <div><b>决策</b><p>模型输出不信任：条数不符、JSON 坏、一级不在体系内都按失败/不确定处理，不让幻觉类别写进人账。解析失败抛 <code>ClassifyError</code>，由调用方降级。</p></div>
+          <div class="data"><b>读数</b><p>本机缓存里一级分布：人文社科 137、商业与管理 57、科学技术 20、文学 20、建筑 7、生活 6、游戏 4、艺术 3、其他 3、拿不准 3、写作 1。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">归一后的 record</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>置信度闸</h3><span class="gate-badge">判定</span><code>ingest.py:362 / :388 apply_class</code></div>
+      <div class="node-body">
+        <p><code>CLS_MIN=0.45</code>。一级为空/「拿不准」或 c1 &lt; 0.45 → <code>subjects=["其他"]</code>，note 写「低置信 0.xx」，<code>classify.needs_review=True</code>。否则一级必留；二级有效且 c2 ≥ 0.45 才追加，否则只留一级。</p>
+        <div class="ann">
+          <div><b>决策</b><p>门槛只卡「一级敢不敢信」，不追求二级也准：一级可信就先落一级，二级待定，比整本掉进「其他」更有用。低置信不是错，页面用黄色提示人复核。</p></div>
+          <div class="data"><b>读数</b><p>261 条里 7 条命中低置信/拿不准，约 2.7%；其中 3 条一级就是「拿不准」，4 条置信度低于 0.45。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond off">低置信 / 拿不准</span>
+        <article class="node off">
+          <div class="node-head"><span class="no">04a</span><h3>落「其他」</h3><code>ingest.py:388</code></div>
+          <div class="node-body"><p>subjects 固定 <code>["其他"]</code>，note 保留置信度与原始一级；<code>needs_review</code> 写进 <code>classify</code>，但 apply 不会因此拒绝。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond yes">一级可信</span>
+        <article class="node stop">
+          <div class="node-head"><span class="no">04b</span><h3>落一级 / 二级</h3><code>ingest.py:388</code></div>
+          <div class="node-body"><p>一级必留；二级有效且 c2 ≥ 0.45 才追加。note 形如「自动分类 文学/类型小说（0.93/0.81）」。</p></div>
+        </article>
+      </div>
+    </div>
+    <div class="merge">两条都写回计划行；人可在 apply 前手改 subjects</div>
+
+    <div class="edge"><span class="edge-label">成功才写缓存</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>写缓存 / 失败降级</h3><code>ingest.py:408</code></div>
+      <div class="node-body">
+        <p>成功：每条附 <code>at/model/prompt_version</code>，整份缓存 <code>write_json_atomic</code> 一次替换。失败：打印原因，所有 todo 置「其他」，note 写「分类失败：…」，不写缓存。扫描本身仍成功。</p>
+        <div class="ann">
+          <div><b>决策</b><p>模型不可用不该让入库停摆；分类是加速器，不是闸门。缓存整份原子替换，避免半份缓存让下次部分命中。</p></div>
+          <div class="data"><b>读数</b><p>失败时提示「book-corpus model 看配置；不配也能入库」；操作台把缓存写到 <code>jobs/&lt;id&gt;/classify.json</code>，不污染共享缓存。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 03 完 · 分类预填</span><span>入口：<code>ingest.py:408 classify_adds</code></span></div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="chart" id="s4">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 04 · 校验收口</div>
+    <h2>apply 前的收口：计划不合格就整批不入</h2>
+    <p class="io"><span>输入</span>人改完的 <code>plan.json</code><i>→</i><span>输出</span>可执行的 todo 列表，或退出码 2</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>读计划</h3><code>ingest.py:823</code></div>
+      <div class="node-body">
+        <p>文件必须是 JSON 数组；每行必须是对象且 <code>plan_version == 2</code>，否则「旧清单，先重新生成」退出 2。动作只认 add/replace/delete/review。</p>
+        <div class="ann">
+          <div><b>决策</b><p>版本号硬切，不猜旧字段：v1 的列语义与 v2 不同，兼容读会让半旧半新的计划悄悄落错账。旧计划重扫一次成本很低。</p></div>
+          <div class="data"><b>读数</b><p>测试里 v1 计划返回 2；当前操作台 scan 固定写 v2。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">版本通过</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">02</span><h3>待核闸</h3><span class="gate-badge">判定</span><code>ingest.py:854</code></div>
+      <div class="node-body">
+        <p>只要还有一行 <code>action=review</code>，打印「还有 N 行待核」和每行说明，整批退出 2，一个文件都不动。未知动作同样退出 2。</p>
+        <div class="ann">
+          <div><b>决策</b><p>review 是「人还没决定」，不是「可以跳过」。允许带 review 继续 apply 会把模糊同名书变成新书或误删，代价远大于让人再点一次。</p></div>
+          <div class="data"><b>读数</b><p>测试 <code>test_same_format_is_review_and_blocks_apply</code> 与 <code>test_fuzzy_title_is_review_not_delete</code> 都断言退出 2 且收件箱文件仍在。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">没有 review</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>归一字段</h3><code>ingest.py:862</code></div>
+      <div class="node-body">
+        <p>add 的 subjects 空 → <code>["其他"]</code>；所有行必须有非空 title；retention 只认 keep/review/drop；replace 必须有 uid。add 没 uid 的，按人账最大号补；已用号或目录已存在就继续加。</p>
+        <div class="ann">
+          <div><b>决策</b><p>分类为空不再拦：宁可粗分「其他」也不留空的一级。书名与保留值是硬条件，因为它们是账本/目录的必填项，无法安全猜。</p></div>
+          <div class="data"><b>读数</b><p><code>test_empty_category_falls_back_to_other</code> 专门覆盖「手改计划把分类清空」这一支。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">字段齐全</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>路径与内容闸</h3><span class="gate-badge">判定</span><code>ingest.py:697 apply_one</code></div>
+      <div class="node-body">
+        <p>文件名必须是 basename，不能是 <code>.</code>/<code>..</code>/点文件；<code>realpath</code> 必须落在 <code>books/_收件箱</code> 下，否则拒绝。文件必须存在，sha 必须与扫描时一致；add/replace 的 sha 已在库则幂等跳过。</p>
+        <div class="ann">
+          <div><b>决策</b><p>路径用 realpath 再比目录，防 <code>../</code> 与符号链接逃逸；内容再算一次 sha，防扫描后文件被替换。幂等跳过让重跑安全。</p></div>
+          <div class="data"><b>读数</b><p><code>test_old_plan_and_path_escape_are_refused</code>：<code>../x.epub</code> 退出 1，收件箱文件不动。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond no">没加 --apply</span>
+        <article class="node off">
+          <div class="node-head"><span class="no">05a</span><h3>只打印</h3><code>ingest.py:886</code></div>
+          <div class="node-body"><p>打印动作/uid/文件名/说明，末行「未写盘。确认后加 --apply」，退出 0。这是默认行为。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond yes">加了 --apply</span>
+        <article class="node stop">
+          <div class="node-head"><span class="no">05b</span><h3>进写盘事务</h3><code>ingest.py:897</code></div>
+          <div class="node-body"><p>进入第 5 张图：拿 <code>.ingest.lock</code>，逐行 apply，最后重建。</p></div>
+        </article>
+      </div>
+    </div>
+    <div class="merge">默认 dry-run；写盘不是默认值</div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>检查</th><th>不通过时</th><th>为什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>plan_version == 2</code></td><td class="t-off">退出 2</td><td>旧列语义不同，不能猜</td></tr>
+          <tr><td>没有 <code>review</code></td><td class="t-off">退出 2</td><td>人还没决定，不能替人决定</td></tr>
+          <tr><td>动作在四值内</td><td class="t-off">退出 2</td><td>防止拼写错误被静默跳过</td></tr>
+          <tr><td>title 非空、retention 合法</td><td class="t-off">退出 2</td><td>账本/目录必填</td></tr>
+          <tr><td>文件在收件箱、sha 未变</td><td class="t-off">该行失败</td><td>防止路径逃逸与扫描后替换</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="chart-end"><span>图 04 完 · 计划收口</span><span>入口：<code>ingest.py:823</code></span></div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="chart" id="s5">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 05 · apply 事务</div>
+    <h2>写盘事务：一把 ingest 锁，逐行落地</h2>
+    <p class="io"><span>输入</span>已校验收口的 todo<i>→</i><span>输出</span>book.json / source / 人账 / journal / 重建结果</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>拿 ingest 锁</h3><code>ingest.py:466 take_lock</code></div>
+      <div class="node-body">
+        <p><code>os.open(tables/.ingest.lock, O_CREAT|O_EXCL)</code>，写 PID；文件已存在就退出「已有 ingest 在跑」。结束在 <code>finally</code> 删锁。没有过期检测：进程崩了留下的锁要人清。</p>
+        <div class="ann">
+          <div><b>决策</b><p>用独占创建文件而不是 flock：跨进程、跨 NFS/容器都简单，也便于人肉眼看到锁。代价是崩溃后需手动清锁，换来的是不会有两个 ingest 同时挪源。</p></div>
+          <div class="data"><b>读数</b><p>操作台还会在外层拿 <code>工作区/运维/.writer.lock</code>；直接 CLI 只拿 <code>.ingest.lock</code>。两把锁不是同一把，入口不同。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">锁到手</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>读 journal 去重</h3><code>ingest.py:764 journal_keys</code></div>
+      <div class="node-body">
+        <p>扫 <code>工作区/批次/ingest/journal.tsv</code>，收集 <code>(action, file)</code>。如果这对键已处理过且收件箱文件已不在，直接跳过并打印「已处理」。文件还在则仍走 apply，靠 sha 幂等再挡一次。</p>
+        <div class="ann">
+          <div><b>决策</b><p>journal 是人的流水，也是重跑时的备忘录；但最终身份仍由 sha 决定。两个条件都满足才跳过，避免「上次失败只写了 journal」把这次真活漏掉。</p></div>
+          <div class="data"><b>读数</b><p>本机 journal 280 条动作，没有 failed 行；重跑主要发生在补录/修计划时。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">todo 逐行</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>逐行 apply</h3><code>ingest.py:697 apply_one</code></div>
+      <div class="node-body">
+        <p>每行重新定位源、验 sha，然后分派：<code>add → _add</code>、<code>replace → _replace</code>、<code>delete → _delete</code>。成功追加 journal；失败把 <code>failed</code> 写 journal，继续下一行，不中断整批。</p>
+        <div class="ann">
+          <div><b>决策</b><p>逐行尽力而为，不是全有或全无：一本坏 zip 不该让另外九本不入库。代价是部分成功，需要人看 <code>failed</code> 列表和退出码再修。</p></div>
+          <div class="data"><b>读数</b><p>本机 280 条动作全部是 add/delete/replace；失败会以 <code>failed</code> 另记，不计入这三类。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">循环结束 / 有失败</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>重建与回执</h3><span class="gate-badge">判定</span><code>ingest.py:923 / :925</code></div>
+      <div class="node-body">
+        <p>只要成功里出现 add/replace 且没加 <code>--no-rebuild</code>，就跑 <code>build_library.py --emit-json</code>。有 <code>--result</code> 就写 <code>applied.json</code>；有失败返回 1，全成功返回 0。</p>
+        <div class="ann">
+          <div><b>决策</b><p>重建放在所有行之后，只做一次；delete 不触发重建，因为书没变、只是收件箱少一份。失败仍重建已经成功的部分，让库与磁盘尽量一致。</p></div>
+          <div class="data"><b>读数</b><p>本机人账 1,956 行；<code>build_library</code> 当前 <code>conflicts=0</code>。详见第 9 张图。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 05 完 · 事务边界</span><span>入口：<code>ingest.py:897</code></span></div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section class="chart" id="s6">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 06 · add</div>
+    <h2>add：新书落三处</h2>
+    <p class="io"><span>输入</span>一条 action=add 的计划行<i>→</i><span>输出</span><code>books/&lt;uid&gt;/</code> + source + book.json + 人账一行</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>校验并定 uid</h3><code>ingest.py:564 _add</code></div>
+      <div class="node-body">
+        <p>title 非空；retention ∈ keep/review/drop；uid 若给了必须匹配 <code>^B\d{4}$</code>。读人账 used 集合；没 uid 取最大号加一；<code>while uid in used or books/&lt;uid&gt; 已存在</code> 就继续加一。</p>
+        <div class="ann">
+          <div><b>决策</b><p>uid 既是账本主键也是目录名，必须先保证全局唯一再动文件。scan 排的号可能被人改计划或并发删书打乱，所以这里再查一次。</p></div>
+          <div class="data"><b>读数</b><p>当前最大 <code>B1956</code>；262 次 add 没有产生重号目录。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">uid 可用</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>移动源文件</h3><code>ingest.py:564</code></div>
+      <div class="node-body">
+        <p>建 <code>books/&lt;uid&gt;/source/</code>；目标名用 <code>free_path</code>，重名加 <code>-2/-3</code>，绝不覆盖；<code>shutil.move</code> 把收件箱文件移进去；<code>os.path.getsize</code> 记字节。</p>
+        <div class="ann">
+          <div><b>决策</b><p>源文件是唯一真相，先落盘再写元数据；<code>free_path</code> 保证同名源不会互相覆盖，代价是可能出现带后缀的文件名，book.json 里记真实名。</p></div>
+          <div class="data"><b>读数</b><p>源格式按原后缀保留，不做转码；主源 <code>primary_src=1</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">source 已就位</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>写 book.json</h3><code>ingest.py:564 · lib_common:1031</code></div>
+      <div class="node-body">
+        <p>用 <code>L.book_doc</code> 的唯一形状写：uid/title/author/subjects/retention/sources/notes（<code>ingest:日期</code>），<code>sources</code> 只有一条且 primary=1。临时文件 + <code>os.replace</code> 原子替换。</p>
+        <div class="ann">
+          <div><b>决策</b><p>book.json 是投影，不是人账；但入库时它是书目录的出生证明。先写它，是为了后面 build_library 能从磁盘发现这本书。</p></div>
+          <div class="data"><b>读数</b><p>标题来自计划行（可手改），不是文件名；作者可能为空；notes 固定带 <code>ingest:</code> 前缀。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">book.json 可读</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>写人账一行</h3><code>ingest.py:564 · lib_common:847</code></div>
+      <div class="node-body">
+        <p><code>category_put</code> upsert：一级/二级取自 subjects，作者层 <code>0</code>，保留值，正式书名，备注 <code>ingest:日期；待复核</code>；<code>updated_at</code> 写当前时间。写入 <code>tables/ledger.db</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>人账是唯一可编辑的分类真相；book.json 里的 subjects 只是投影。备注带「待复核」是给账表页的提醒，不是错误状态。</p></div>
+          <div class="data"><b>读数</b><p>人账 1,956 行与 1,956 本书一一对应；<code>build_library</code> 会拒绝「有书无账」或「有账无书」。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">账、书、源三处齐</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>记 journal / 重建</h3><code>ingest.py:446 / :923</code></div>
+      <div class="node-body">
+        <p>追加一行 add（ts/action/uid/file/sha256/bytes/note）；随后第 9 张图的重建把这本书读进 <code>library.db</code>，并回写 book.json。</p>
+        <div class="ann">
+          <div><b>决策</b><p>没有跨文件事务：source、book.json、人账、journal 是四次独立写。若在人账前崩溃，会留下「有目录无账」的半成品，build_library 会报错挡住；恢复靠 journal 与人工。</p></div>
+          <div class="data"><b>读数</b><p>262 次 add 都走这条；本机没有出现「有书无账」导致的构建失败。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 06 完 · 新增</span><span>入口：<code>ingest.py:564 _add</code></span></div>
+</section>
+
+<!-- ============================================================ 7 -->
+<section class="chart" id="s7">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 07 · replace</div>
+    <h2>replace：新源置顶，旧 md 标记待重拆</h2>
+    <p class="io"><span>输入</span>一条 action=replace + 目标 uid<i>→</i><span>输出</span>新主源 + 旧源保留 + 旧 md 待重拆标记</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>找书</h3><code>ingest.py:617 _replace</code></div>
+      <div class="node-body">
+        <p>uid 必须匹配 <code>^B\d{4}$</code>；<code>find_by_uid</code> 遍历 books 读 book.json 找目录。找不到就退出「库里没有 Bxxxx」。</p>
+        <div class="ann">
+          <div><b>决策</b><p>换源只认 uid，不认书名：同名书可能多本，uid 才是稳定身份。找不到目录直接失败，不新建。</p></div>
+          <div class="data"><b>读数</b><p>本机 5 次 replace，全部命中已有书；没有出现换源变新增。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">找到 uid</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>继承分类与保留</h3><code>ingest.py:617</code></div>
+      <div class="node-body">
+        <p>分类优先取人账当前一级/二级；账里没有才用 book.json。保留值优先计划行，其次人账，其次 book.json，最后 keep；非法值退出。新源入账不改变书的身份，只改源。</p>
+        <div class="ann">
+          <div><b>决策</b><p>换源不应该顺手改分类：分类是人已经定过的判断，新文件只是更好的载体。保留值允许计划覆盖，因为换源时人可能顺手决定去留。</p></div>
+          <div class="data"><b>读数</b><p>测试 <code>test_replace_writes_retention_and_marks_old_md</code> 把保留改成 drop，确认 book.json 与人账都写成 drop。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">分类/保留确定</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>新源置顶，旧源降级</h3><code>ingest.py:617</code></div>
+      <div class="node-body">
+        <p>移动新文件到 <code>source/</code>（<code>free_path</code> 防覆盖）；把现有所有源 <code>primary_src=0</code>；新源插到列表首位且 <code>primary_src=1</code>。旧源文件不删、不搬。</p>
+        <div class="ann">
+          <div><b>决策</b><p>旧源保留是回滚与审计的底：新源拆不出章时还能退回旧源。列表顺序也表达优先级，第一项就是主源。</p></div>
+          <div class="data"><b>读数</b><p>测试明确断言旧 <code>old.txt</code> 仍在，且旧条目 primary=0；本机 5 次 replace 都保留旧源。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">sources 已重排</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>写 book.json 与人账</h3><code>ingest.py:617</code></div>
+      <div class="node-body">
+        <p>book.json 的 sources/retention/subjects 更新，notes 追加 <code>；替换源:日期</code>；人账有行就更新保留/一级/二级，没行就补一行。book.json 仍用原子替换。</p>
+        <div class="ann">
+          <div><b>决策</b><p>notes 用追加而不是覆盖，保留这本书的来历；人账没行时补写，避免「书在、账没了」让 build_library 失败。</p></div>
+          <div class="data"><b>读数</b><p>人账 1,956 行；换源不会新增行，只更新原 uid。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">旧 md 还在</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>旧 md 标记</h3><span class="gate-badge">判定</span><code>ingest.py:617</code></div>
+      <div class="node-body">
+        <p>如果 <code>books/&lt;uid&gt;/md/</code> 存在、manifest 可读、且 manifest 还没有 <code>source_sha256</code>，就把旧主源 sha 写进去，并补 <code>source</code>/<code>uid</code>；note 追加「旧 md 已标记待重拆」。已有 source_sha256 则不覆盖。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不自动删 md、不自动重拆：拆章要花模型/时间，且新源可能先要人工确认。只打标记，让 <code>v_pending_md</code> 与拆章页看到「源已变」。</p></div>
+          <div class="data"><b>读数</b><p>测试里旧 manifest 只有 uid/method，换源后 <code>source_sha256</code> 等于旧源 sha，证明标记生效；md 目录未被删除。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">交棒</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">06</span><h3>等重拆</h3><code>split_md_batch.py</code></div>
+      <div class="node-body">
+        <p>入库到此结束；接下来由拆章批次按新源重拆。旧 md 在重拆完成前仍是可读的旧版本，但 manifest 会提示源不一致。</p>
+        <div class="ann">
+          <div><b>决策</b><p>把「换源」和「重拆」拆成两个可观察的动作：换源是账/源事实，重拆是派生事实。任何一步失败都不会把旧阅读版直接弄没。</p></div>
+          <div class="data"><b>读数</b><p>本机 5 次 replace；下一份《拆章实现流程图》会展开这条交棒后的脚本。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 07 完 · 换源</span><span>入口：<code>ingest.py:617 _replace</code></span></div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section class="chart" id="s8">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 08 · delete</div>
+    <h2>delete：收件箱重复件进回收站</h2>
+    <p class="io"><span>输入</span>一条 action=delete 的计划行<i>→</i><span>输出</span>回收站文件 + deleted.tsv，书库不动</p>
+  </div>
+
+  <div class="flow">
+    <article class="node gate">
+      <div class="node-head"><span class="no">01</span><h3>再验一次 sha</h3><span class="gate-badge">判定</span><code>ingest.py:534 _delete</code></div>
+      <div class="node-body">
+        <p>对收件箱文件重算 sha；如果计划里已有 sha 且不一致，退出「文件已变，重新扫描」。delete 只处理收件箱这一份，不碰库内书目录。</p>
+        <div class="ann">
+          <div><b>决策</b><p>删的是「这份多余副本」，不是「这本书」。同名/同 sha 的判断在扫描时已经做过，落盘前再验一次防止扫描后换文件。</p></div>
+          <div class="data"><b>读数</b><p>本机 13 条 delete；其中 in_library 带 uid，batch_dup 的 uid 为空。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">sha 未变</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>移到当日回收站</h3><code>ingest.py:534</code></div>
+      <div class="node-body">
+        <p>目标目录 <code>工作区/批次/收件箱删除-YYYY-MM-DD/</code>；<code>free_path</code> 防重名；<code>os.replace</code> 移动。跨文件系统（EXDEV）直接退出，要求人手动移，不做 copy+delete。</p>
+        <div class="ann">
+          <div><b>决策</b><p>同盘 rename 是原子的：要么在收件箱，要么在回收站，不会出现半份。跨盘 copy 中途失败会留下两份/零份，所以宁可不做。</p></div>
+          <div class="data"><b>读数</b><p>回收站按天分目录；误删可把文件移回收件箱再扫一次。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">文件已移走</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>写回收站账</h3><code>ingest.py:534</code></div>
+      <div class="node-body">
+        <p>首次建目录时写 <code>README.md</code>（说明怎么找回）；追加 <code>deleted.tsv</code>：ts、file、sha256、bytes、reason、uid、dest。reason 取 note/status，制表符与换行压平。</p>
+        <div class="ann">
+          <div><b>决策</b><p>回收站也要有账：以后想找「为什么删的、原来叫什么、sha 是多少」不用翻聊天记录。dest 用根相对路径，便于脚本复核。</p></div>
+          <div class="data"><b>读数</b><p>本机回收站 manifest 有 13 条 delete 记录；文件名、sha、原因都在。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">记录完成</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">04</span><h3>结束</h3><code>ingest.py:534</code></div>
+      <div class="node-body">
+        <p>返回 <code>action=delete</code> 的结果行，journal 记一条 delete。delete 不触发 build_library，因为书库书目没有变化。</p>
+        <div class="ann">
+          <div><b>决策</b><p>把「收件箱清理」和「书库删书」分开：后者是 <code>retire_book.py</code> 的七层预览，绝不由入库的 delete 顺手做。</p></div>
+          <div class="data"><b>读数</b><p>13 条 delete 后，书库仍是 1,956 本；没有一本因为收件箱去重被移出流程。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 08 完 · 收件箱删除</span><span>入口：<code>ingest.py:534 _delete</code></span></div>
+</section>
+
+<!-- ============================================================ 9 -->
+<section class="chart" id="s9">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 09 · 重建与接棒</div>
+    <h2>重建与回执：apply 之后谁接</h2>
+    <p class="io"><span>输入</span>apply 的成功/失败行<i>→</i><span>输出</span><code>library.db</code> 新库、<code>applied.json</code>、操作台的后续命令</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>重建 library.db</h3><code>ingest.py:778 · build_library.py:170</code></div>
+      <div class="node-body">
+        <p>调 <code>build_library.py --emit-json</code>：先建 <code>library.db.building</code>，人账与磁盘 book.json 对账（有书无账/有账无书都拒绝），写 book/source/derived/award，<code>PRAGMA wal_checkpoint(TRUNCATE)</code> 后 <code>os.replace</code> 换活库。</p>
+        <div class="ann">
+          <div><b>决策</b><p>绝不在活库上原地写：失败只留下临时库，旧 library.db 原样可用。换名前清 WAL/SHM，避免换名后留下孤儿边车。</p></div>
+          <div class="data"><b>读数</b><p>当前 1,956 本书、1,819 本有 md；<code>conflicts=0</code>；构建失败会保留旧库。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">活库已换</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>写 applied.json</h3><code>ingest.py:740 write_result</code></div>
+      <div class="node-body">
+        <p>形状 <code>{version:1, conflicts, applied:[{uid,file,format,action}], failed:[{file,error}]}</code>。uid 只信这里，不信 plan：scan 排的号可能在 apply 时被调整；操作台靠 <code>applied</code> 决定接哪些书去转文档。</p>
+        <div class="ann">
+          <div><b>决策</b><p>计划是意图，结果才是事实。转文档必须用真落地的 uid；delete 也进 applied，但操作台只挑 add/replace 且格式在 DOC_FORMATS 的行。</p></div>
+          <div class="data"><b>读数</b><p>本机 2 次 import.apply；操作台只在 <code>import.apply</code> 成功后读 <code>applied.json</code> 接 <code>docs.run</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">操作台接管</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>操作台再补两步</h3><code>apps/ops/server.py:874 / :3043</code></div>
+      <div class="node-body">
+        <p>命令序列是 <code>ingest apply --apply --result ...</code>、<code>build_library --emit-json</code>、<code>gen_book_catalog</code>。门槛：<code>conflicts=0</code> 且 <code>未匹配 0 条</code>；doc 类新书再自动排 <code>docs.run</code>，四步 plan/convert/build/catalog。</p>
+        <div class="ann">
+          <div><b>决策</b><p>脚本负责「把账和书落地」，操作台负责「落地后再生成对外书目与文档」。两层都保留自己的门槛，页面不直接写 library.db。</p></div>
+          <div class="data"><b>读数</b><p>本机书目总表 <code>未匹配 0 条</code>；操作台历史 4 次 scan、2 次 apply。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">现状代价</span></div>
+
+    <article class="node off">
+      <div class="node-head"><span class="no">04</span><h3>多一次全库重建</h3><code>ingest.py:923 · ops/server.py:3050</code></div>
+      <div class="node-body">
+        <p><code>ingest apply</code> 默认已经跑一次 <code>build_library</code>；操作台又无条件追加一次 <code>build_library</code>。功能结果一致，但导入任务会全库重建两遍。</p>
+        <div class="ann">
+          <div><b>决策</b><p>现状是两层各自求稳：脚本保证「单独跑也一致」，操作台保证「接上 catalog 前一定重建」。要省掉一遍，需要操作台给 ingest 传 <code>--no-rebuild</code>，或把重建完全上移；本次只记录，不改代码。</p></div>
+          <div class="data"><b>读数</b><p>当前 1,956 本规模下重建是秒级；重复一次主要浪费 I/O，不影响正确性。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">失败也要有回执</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>结果判定</h3><span class="gate-badge">判定</span><code>ingest.py:927 · ops gate</code></div>
+      <div class="node-body">
+        <p>逐行失败写 <code>failed</code> 并返回 1，但已成功的行仍重建、仍写 <code>applied.json</code>；操作台 gate 看 apply 日志的 <code>conflicts=0</code> 和 catalog 的「未匹配 0 条」，失败任务停在 failed，页面给失败行。</p>
+        <div class="ann">
+          <div><b>决策</b><p>退出码表达「有行失败」，不表达「整批回滚」；回执让下一次重跑只补失败行。人账/书目录已经落地的部分不回滚，避免把成功书也删掉。</p></div>
+          <div class="data"><b>读数</b><p>本机 journal 目前没有 failed 行；16 个入库测试覆盖重复 sha、旧计划、路径逃逸、分类回退。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>门槛</th><th>看哪里</th><th>通过条件</th><th>失败时</th></tr></thead>
+        <tbody>
+          <tr><td>apply 行级</td><td><code>failed[]</code> + 退出码</td><td>空 + 0</td><td class="t-off">任务 failed，已成功行保留</td></tr>
+          <tr><td>路径冲突</td><td><code>library.db v_path_conflict</code></td><td><code>conflicts=0</code></td><td class="t-off">apply 门槛失败</td></tr>
+          <tr><td>书目覆盖</td><td><code>gen_book_catalog</code> 末行</td><td><code>未匹配 0 条</code></td><td class="t-off">catalog 非零退出</td></tr>
+          <tr><td>文档接棒</td><td><code>applied.json</code> + <code>report.json</code></td><td>add/replace 的 DOC_FORMATS 全 done</td><td class="t-hold">docs.run failed，可单本重试</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="chart-end"><span>图 09 完 · 重建与接棒</span><span>入口：<code>ingest.py:778 rebuild</code></span></div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <h2>怎么复核这九张图</h2>
+  <div class="two">
+    <div>
+      <h3>代码入口</h3>
+      <ul>
+        <li><code>src/bookcorpus/scripts/ingest.py</code>：scan / plan_for / apply / _add / _replace / _delete</li>
+        <li><code>src/bookcorpus/scripts/classify_model.py</code>：提示词、pi 调用、解析</li>
+        <li><code>src/bookcorpus/scripts/lib_common.py</code>：ACCEPT_EXTS、category_put、write_json_atomic</li>
+        <li><code>src/bookcorpus/scripts/build_library.py</code>：.building、v_path_conflict、emit book.json</li>
+        <li><code>src/bookcorpus/scripts/gen_book_catalog.py</code>：未匹配 0 条</li>
+      </ul>
+    </div>
+    <div>
+      <h3>验收命令</h3>
+      <div class="cmd"><span># 16 个入库测试</span><br>uv run --frozen pytest tests/test_ingest_plan.py tests/test_ingest_docformats.py -q<br><br><span># 只读扫描，不写盘</span><br>book-corpus run ingest scan --json --no-classify<br><br><span># 确认后写盘并重建</span><br>book-corpus run ingest apply plan.json --apply</div>
+    </div>
+  </div>
+  <p style="margin-top:14px">相关文档：<a href="操作台实现流程图-2026-11-14.html">统一操作台实现流程图</a> · <a href="多格式来源支持-2026-11-05.md">多格式来源支持</a> · <a href="设计方案-书目结构.md">书目结构方案</a></p>
+</footer>
+
+</div>
+
+</body>
+</html>

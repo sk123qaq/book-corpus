@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>书库检索 · 八张流程图（2026-11-14）</title>
+<style>
+  :root {
+    --paper: #f4f1e9;
+    --card: #fffdf8;
+    --ink: #1b1d22;
+    --muted: #686d77;
+    --line: #ded9cc;
+    --line-strong: #c9c2b1;
+    --amber: #8a5a00;
+    --amber-bg: #fbf0dc;
+    --amber-line: #e6cf9f;
+    --green: #2f6b4f;
+    --green-bg: #e8f2ec;
+    --green-line: #bfd9cb;
+    --red: #a23c2e;
+    --red-bg: #f8e8e4;
+    --red-line: #e8c3bb;
+    --blue: #24518f;
+    --blue-bg: #e8eef9;
+    --blue-line: #c5d3ea;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --sans: "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    padding: 44px 30px 90px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.75 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1180px; margin: 0 auto; }
+  a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(36,81,143,.25); }
+  a:hover { border-bottom-color: var(--blue); }
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: #2c3340;
+    background: #f0eee7;
+    border: 1px solid #e3dfd3;
+    border-radius: 4px;
+    padding: 0 4px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- hero ---------- */
+  .hero { border-bottom: 2px solid var(--ink); padding-bottom: 26px; margin-bottom: 46px; }
+  .stamp {
+    display: flex; justify-content: space-between; gap: 20px;
+    color: var(--muted); font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 14px 0 10px;
+    font-family: var(--serif);
+    font-size: 42px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2;
+  }
+  .statusline {
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--green);
+    background: var(--green-bg);
+    font-size: 13px; color: #264c3b;
+    display: inline-block;
+  }
+  .lede { margin: 0 0 16px; max-width: 900px; color: #3d4047; font-size: 15.5px; }
+  .lede b { color: var(--ink); }
+  .notice {
+    margin: 16px 0 0; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: #faf8f2; color: var(--muted); font-size: 13px;
+  }
+  .notice b { color: var(--ink); }
+
+  .toc {
+    margin-top: 22px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 22px;
+  }
+  .toc a {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 4px 0; border-bottom: 1px dotted var(--line);
+    color: var(--ink); font-size: 13.5px;
+  }
+  .toc a span { color: var(--amber); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; }
+  .toc a:hover { border-bottom-color: var(--ink); }
+
+  .legend { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted); }
+  .legend i {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+    font-style: normal;
+  }
+  .legend i::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--line-strong); }
+  .legend .l-step::before { background: var(--blue); }
+  .legend .l-gate::before { background: var(--amber); }
+  .legend .l-ok::before { background: var(--green); }
+  .legend .l-no::before { background: var(--red); }
+
+  /* ---------- chart shell ---------- */
+  .chart { margin: 0 0 76px; }
+  .chart-head { margin-bottom: 22px; }
+  .chart-kicker {
+    color: var(--amber); font-family: var(--mono); font-size: 11px;
+    letter-spacing: .14em; text-transform: uppercase;
+  }
+  .chart h2 {
+    margin: 4px 0 8px;
+    font-family: var(--serif); font-size: 29px; font-weight: 600; line-height: 1.3;
+  }
+  .io {
+    margin: 0; color: var(--muted); font-size: 13px;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px;
+  }
+  .io span {
+    color: #3b3e45; background: #ece9df; border-radius: 4px; padding: 1px 7px;
+    font-family: var(--mono); font-size: 11.5px;
+  }
+  .io i { font-style: normal; color: var(--amber); }
+  .chart-end {
+    margin-top: 18px; color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; gap: 20px;
+    border-top: 1px solid var(--line); padding-top: 8px;
+  }
+
+  /* ---------- flow ---------- */
+  .flow { display: flex; flex-direction: column; }
+
+  .node {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 22px 16px;
+    box-shadow: 0 1px 0 rgba(30,25,15,.04);
+  }
+  .node::before {
+    content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 4px;
+    border-radius: 0 4px 4px 0; background: var(--blue);
+  }
+  .node-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .node-head .no {
+    font-family: var(--mono); font-size: 12px; color: var(--blue); letter-spacing: .08em;
+  }
+  .node h3 { margin: 0; font-family: var(--serif); font-size: 21px; font-weight: 600; line-height: 1.35; }
+  .node-head code { margin-left: auto; }
+  .node-body > p { margin: 4px 0 0; }
+  .node-body > p + p { margin-top: 8px; }
+  .kv { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .kv li { padding-left: 16px; position: relative; font-size: 13.5px; color: #3f434b; }
+  .kv li::before { content: "·"; position: absolute; left: 4px; color: var(--amber); font-weight: 700; }
+  .kv b { color: var(--ink); }
+
+  .ann {
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .ann.one { grid-template-columns: 1fr; }
+  .ann div > b {
+    display: inline-block; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 2px;
+  }
+  .ann .data > b { color: var(--green); }
+  .ann p { margin: 0; font-size: 12.8px; line-height: 1.7; color: #464a52; }
+  .ann em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+  /* ---------- edges ---------- */
+  .edge { position: relative; height: 42px; display: flex; align-items: center; justify-content: center; }
+  .edge::before {
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 7px; width: 2px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .edge::after {
+    content: ""; position: absolute; left: 50%; bottom: 1px; transform: translateX(-5px);
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 7px solid var(--line-strong);
+  }
+  .edge-label {
+    position: relative; z-index: 1; background: var(--paper);
+    padding: 0 8px; color: var(--muted); font-size: 11.5px; font-family: var(--mono);
+  }
+  .edge-label b { color: var(--amber); font-weight: 600; }
+
+  /* ---------- gate ---------- */
+  .node.gate { background: var(--amber-bg); border: 1.5px dashed var(--amber-line); }
+  .node.gate::before { background: var(--amber); }
+  .node.gate .no { color: var(--amber); }
+  .node.gate h3 { color: #6d4700; }
+  .gate-badge {
+    display: inline-block; margin-left: 2px; padding: 0 7px; border-radius: 3px;
+    background: var(--amber); color: #fff8e8; font-size: 10px; letter-spacing: .12em;
+    vertical-align: 3px;
+  }
+  .node.gate .ann > div > b { color: #8a5a00; }
+
+  /* ---------- outcomes ---------- */
+  .node.stop { background: var(--green-bg); border-color: var(--green-line); }
+  .node.stop::before { background: var(--green); }
+  .node.stop .no { color: var(--green); }
+  .node.stop h3 { color: #24533c; }
+  .node.stop .ann > div > b { color: #2f6b4f; }
+  .node.off { background: #f6f4ee; border-style: solid; }
+  .node.off::before { background: var(--red); }
+  .node.off h3 { color: #6f3028; }
+  .node.off .ann > div > b { color: var(--red); }
+
+  /* ---------- fork ---------- */
+  .fork {
+    position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px; padding-top: 34px;
+  }
+  .fork::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 14px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .fork::after {
+    content: ""; position: absolute; top: 14px; left: 25%; right: 25%; height: 2px;
+    background: var(--line-strong);
+  }
+  .fork-arm { position: relative; padding-top: 18px; }
+  .fork-arm::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 18px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .cond {
+    display: inline-block; margin-bottom: 8px; padding: 1px 9px; border-radius: 999px;
+    font-size: 11.5px; font-family: var(--mono); border: 1px solid var(--line-strong);
+    background: var(--card); color: #3f434b;
+  }
+  .cond.yes { border-color: var(--green-line); background: var(--green-bg); color: #24533c; }
+  .cond.no { border-color: var(--amber-line); background: var(--amber-bg); color: #6d4700; }
+  .cond.off { border-color: var(--red-line); background: var(--red-bg); color: #6f3028; }
+  .fork .node h3 { font-size: 18px; }
+  .fork .node-body > p { font-size: 13.2px; }
+
+  .merge {
+    margin: 14px 0 0; text-align: center; color: var(--muted); font-size: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .merge::before, .merge::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th {
+    background: #efece2; font-weight: 600; font-size: 11.5px; letter-spacing: .06em;
+    color: #4b4f58; white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td code { font-size: 11.5px; }
+  .t-ok { color: var(--green); font-weight: 600; }
+  .t-hold { color: var(--amber); font-weight: 600; }
+  .t-off { color: var(--red); font-weight: 600; }
+
+  /* ---------- footer ---------- */
+  .footer {
+    margin-top: 20px; border-top: 2px solid var(--ink); padding-top: 18px;
+    color: var(--muted); font-size: 13px;
+  }
+  .footer h2 { font-family: var(--serif); font-size: 24px; color: var(--ink); margin: 0 0 10px; }
+  .footer ul { margin: 8px 0 0; padding-left: 20px; }
+  .footer li { margin: 3px 0; }
+  .cmd {
+    margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: #201f1c; color: #eee9dc;
+    font-family: var(--mono); font-size: 12px; line-height: 1.8; overflow-x: auto;
+  }
+  .cmd span { color: #b9b09a; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .two h3 { font-family: var(--serif); font-size: 18px; margin: 0 0 6px; }
+
+  @media (max-width: 860px) {
+    body { padding: 26px 16px 70px; }
+    h1 { font-size: 31px; }
+    .toc, .fork, .ann, .two { grid-template-columns: 1fr; }
+    .fork::after { display: none; }
+    .fork-arm::before { display: none; }
+    .fork-arm { padding-top: 0; }
+    .node-head code { margin-left: 0; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .node, .tablewrap { break-inside: avoid; }
+    .chart { break-before: page; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <div class="stamp"><span>book-corpus · implementation maps</span><span>2026-11-14</span></div>
+  <h1>书库检索：八张流程图</h1>
+  <p class="statusline">状态：implemented · 2026-11-14　　验收：<code>uv run --frozen pytest tests/test_book_query.py -q</code></p>
+  <p class="lede">
+    这八张图只覆盖<b>书库检索</b>：书怎么进索引、问句怎么变词、五轮怎么停、书序怎么算、章和书卡怎么选、答案和引文怎么落地。
+    每个节点都是当前代码里真实存在的一步，标题右侧是入口；琥珀虚线框是判定，箭头上写分支条件；卡片底部两栏分别是<b>当时的取舍</b>与<b>实测读数</b>。
+  </p>
+  <div class="notice">
+    <b>口径说明。</b>图描述 2026-11-14 的工作树（commit <code>d64c40c</code> 之后），不按旧文档复述。索引读数来自本机 <code>~/书库/build/检索/index.db</code> 只读查询；
+    60 题 gold 与书卡读数是 2026-10-22 批次的结论。旧文档里与代码不一致的地方（默认选章口径、窗口预算的 floor、书卡收益），以图和代码为准。
+  </div>
+  <nav class="toc">
+    <a href="#s1"><span>01</span>全链路：一句话怎么变成可核对的答案</a>
+    <a href="#s2"><span>02</span>入库与索引：书怎么变成可检索的段</a>
+    <a href="#s3"><span>03</span>切词：问句怎么变成词与组</a>
+    <a href="#s4"><span>04</span>五轮规划：什么时候停，停在哪一轮</a>
+    <a href="#s5"><span>05</span>打分与聚合：段落分怎么变成书分</a>
+    <a href="#s6"><span>06</span>选章与书卡：先读书，还是先问人</a>
+    <a href="#s7"><span>07</span>成答与回查：窗口、工具与引文闸门</a>
+    <a href="#s8"><span>08</span>新组件进默认前的四道闸</a>
+  </nav>
+  <div class="legend">
+    <i class="l-step">处理</i><i class="l-gate">判定</i><i class="l-ok">采用 / 结果</i><i class="l-no">未采用 / 存档</i>
+    <i>卡片底栏：决策 + 读数</i>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================ 1 -->
+<section class="chart" id="s1">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 01 · 运行时主链</div>
+    <h2>全链路：一句话怎么变成可核对的答案</h2>
+    <p class="io"><span>输入</span>一句中文问句（可带点名书与会话上下文）<i>→</i><span>输出</span><code>{answer, recap, citations, confidence, not_found}</code>，每条引文带 <code>path/line/quote</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>切词</h3><code>apps/demo/trace.py:294</code></div>
+      <div class="node-body">
+        <p>把问句交给模型，输出 <code>terms</code> 与 <code>groups</code>（每个概念一组同义词）。缓存键含问句与 thinking 档；模型不可用时退到概念表包含匹配与问句切块。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不自写中文分词：问句里的概念边界（“礼治/法治”）用 bigram 切不出来。切词每题只做一次，之后整条链路复用。</p></div>
+          <div class="data"><b>读数</b><p>命中缓存 0 次模型调用；未命中 1 次，结果不可用再试 1 次，之后降级。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">terms + groups</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>五轮规划</h3><code>src/bookcorpus/scripts/book_query.py:195</code></div>
+      <div class="node-body">
+        <p>每轮换一种词集查段落，算覆盖、分差、全组三段；到线即停，最多 5 轮。输出 best round、书序、每本书的 3 章候选。演示页取前 8 本，CLI 默认 10 本。</p>
+        <div class="ann">
+          <div><b>决策</b><p>逐轮加词，而不是一次把全词 OR 出去：全词会把“礼”和“秩序”拆散；而删掉一个词几乎总能抬分，所以只在“到线”的轮次之间比较。</p></div>
+          <div class="data"><b>读数</b><p>45/60 题到线，均 1.40 轮，0 次 cap；检索 + 书级 + 选章 p95 650 ms。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">候选书序</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>段落打分</h3><code>src/bookcorpus/scripts/qsearch.py:107</code></div>
+      <div class="node-body">
+        <p>FTS5 bigram <code>MATCH</code> 取池（2,000 段，正文 ≥40 字），按 <code>rank_score = (-bm25 + 0.8×命中词数 + 0.15×log1p(len)) × 假名惩罚</code> 排序；假名占比 &gt;10% 乘 0.55。</p>
+        <div class="ann">
+          <div><b>决策</b><p>BM25 之外只加“命中词数”和“长度”，不加学习型特征：库内 300 万段，任何逐段模型调用都换不回时延。同义词命中也计数，所以词集较全的书略占便宜。</p></div>
+          <div class="data"><b>读数</b><p>组覆盖重排与纯 BM25 的 top-10 平均重叠 9.5/10，top1 改写 4/59；<code>0.8×cov</code> 中位 0.8、最大 2.4。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">段落分</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>书级聚合</h3><code>src/bookcorpus/scripts/book_score.py:161</code></div>
+      <div class="node-body">
+        <p>按书聚合 <code>best</code>、<code>support</code>（≥0.75×best 的段数，封顶 5）、<code>topk</code>（最好 3 段均值）、<code>coverage</code>（去重命中组/总组），再算 <code>0.60×best + 0.25×topk + 0.15×coverage + 0.05×log1p(support)</code>。best≤0 的书直接丢。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不用旧的 <code>0.7×best + 0.3×mean</code>：长书章多、段落多，会把单章书按全书均值拉低。书级只负责“捞书”，不负责“读哪章”。</p></div>
+          <div class="data"><b>读数</b><p>书级 hit@10 0.983（当前索引 mix 0.967）、书级 MRR 0.877；同分按路径稳定排序。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">书序 + 分差</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>书名明确吗</h3><span class="gate-badge">判定</span><code>src/bookcorpus/scripts/book_cards.py:193</code></div>
+      <div class="node-body">
+        <p>精确点名、作者、原句、明确书名提示 → 不弹卡，直接进选章；同名歧义，或前二名分差 &lt;10%、前 10 名出现 ≥3 种类型 / ≥50 章长书、概念题 → 弹 ≤6 张书卡。</p>
+        <div class="ann">
+          <div><b>决策</b><p>书卡不是检索收益，而是让用户纠正“问的是哪本”的产品入口。等宽复测卡片 top3 15/21、top6 17/21，与循环同宽读数相同。</p></div>
+          <div class="data"><b>读数</b><p>60 题里触发 21 次；卡片首章与循环首章一致；默认展示由产品定，不由指标定。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">明确 · 不弹卡</span>
+        <article class="node">
+          <div class="node-head"><span class="no">06a</span><h3>直接选章</h3><code>book_query.py:431</code></div>
+          <div class="node-body"><p>默认按章聚合分取前 3 章；点名书先读 <code>md/README.md</code> 的目录与摘要，不认路径时退回打分序并滤卷首卷尾。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">模糊 · 弹书卡</span>
+        <article class="node">
+          <div class="node-head"><span class="no">06b</span><h3>用户选书</h3><code>book_cards.py:511</code></div>
+          <div class="node-body"><p>保留选中书，按全词集命中补齐缺章；<code>card.best_chapter</code> 同样优先读 README。选择完成后再进选章/成答。</p></div>
+        </article>
+      </div>
+    </div>
+    <div class="merge">两路汇合：都进入成答（单书或按 sources 多书）</div>
+
+    <div class="edge"><span class="edge-label">书 + 3 章</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">07</span><h3>成答</h3><code>apps/demo/answer.py:1566</code></div>
+      <div class="node-body">
+        <p>点名书 exact → 单书或“点名书 + 其余书”；sources ≥2 → 多书轮转；否则单书。单书 ≤5 窗 × 3,500 字、总 18,000；多书每本 ≤2 窗、点名书拿 50% 预算。<code>pi</code> 带只读 <code>book_grep / read</code> 补读。</p>
+        <div class="ann">
+          <div><b>决策</b><p>窗口只带“证据起点”，不追求装下全部引文。28 份答卷里最佳章平均只覆盖 0.50 引文，另外 52% 由 agent 补读；工具是能力，不是强制步骤。</p></div>
+          <div class="data"><b>读数</b><p>单本 15–40 s，多本 65–87 s；26/28 份答卷跨 ≥2 章（均值 2.64）；48% 引文落在服务端窗口内。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">模型输出 JSON</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">08</span><h3>引文回查</h3><code>apps/demo/answer.py:1370</code></div>
+      <div class="node-body">
+        <p>服务端取每条引文的前 20 个非空白字，先窗口后整章逐行找；路径必须在 <code>books/**.md</code> 且属于本次 sources；行号以文件实际位置为准。找不到或重复的引文丢弃；0–1 条 → <code>confidence=low</code> 并注明“引文回查不足（n 条）”。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不信模型自报行号，也不因引文不足拒答：回查是可信度闸门，不是正确性证明。只查前 20 字，避免模型的小改写被判死。</p></div>
+          <div class="data"><b>读数</b><p>强制、不可关；≥2 条保留原置信度；0–1 条降级但不隐藏答案。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 01 完 · 运行时</span><span>入口：<code>apps/demo/server.py</code> / <code>book_query.py</code> CLI</span></div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="chart" id="s2">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 02 · 离线</div>
+    <h2>入库与索引：书怎么变成可检索的段</h2>
+    <p class="io"><span>输入</span><code>books/_收件箱/</code> 的原书<i>→</i><span>输出</span><code>books/&lt;uid&gt;/md/*.md</code> + <code>build/检索/index.db</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>格式分流</h3><code>src/bookcorpus/scripts/ingest.py</code></div>
+      <div class="node-body">
+        <p>11 种后缀：epub / mobi / azw3 / azw 先转 epub，再按 spine/NCX 拆章；pdf 先测文本层，有目录才切章；docx / xlsx / xls / pptx 用 markitdown 不分章；txt 先 UTF-8、失败回退 GB18030；md 直收。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不为“统一格式”强行全转 PDF/OCR：转换是失败率最高的一步，能直读就直读。单本上限 200 MB / 300 秒。</p></div>
+          <div class="data"><b>读数</b><p>2026-11-14 人账 1,956 本；有 md 章且进索引 1,819 本。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">按格式分叉</span></div>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">PDF 有文本层</span>
+        <article class="node">
+          <div class="node-head"><span class="no">02a</span><h3>pymupdf</h3><code>ebook-to-md</code></div>
+          <div class="node-body"><p>有目录才按目录切章；没有目录时按页/标题启发式。文本层可复制就不 OCR。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">扫描件 / 无文本层</span>
+        <article class="node">
+          <div class="node-head"><span class="no">02b</span><h3>OCR</h3><code>PaddleOCR-VL / MinerU</code></div>
+          <div class="node-body"><p>PaddleOCR-VL 为主，MinerU 兜底。图册、艺术设定集、非中英文不 OCR、不拆章、只存不删。</p></div>
+        </article>
+      </div>
+    </div>
+    <div class="merge">两路都落到 <code>books/&lt;uid&gt;/md/</code></div>
+
+    <div class="edge"><span class="edge-label">拆章产物</span></div>
+
+    <article class="node off">
+      <div class="node-head"><span class="no">03</span><h3>存档判定</h3><code>工作区/批次/…/skip_list.tsv</code></div>
+      <div class="node-body">
+        <p>图册/艺术设定集、非中英文（<code>lang=ja</code>）只存不转不删；操作台显示“存档·图册”“存档·非中英文”，接口值仍是 <code>gallery</code> / <code>ja</code>。</p>
+        <div class="ann one">
+          <div><b>读数</b><p>2026-11-14：存档 125 本（图册 83、非中英文 42）。存档不计入“待转”，避免每日看板永远差一截。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">原子落地</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>写 md 目录</h3><code>books/&lt;uid&gt;/.md-build-&lt;pid&gt;/</code></div>
+      <div class="node-body">
+        <p>先写临时目录，完成后整体 rename 到 <code>md/</code>；失败写枚举 reason：<code>too-large / timeout / convert-error / empty-output / source-missing / source-changed / venv-missing / unsupported</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>目录 rename 是原子操作：半成品 md 不进 <code>v_pending_md</code> 视图，也不会被索引；失败可重试，不会留下“看起来有 md”的坏书。</p></div>
+          <div class="data"><b>读数</b><p>拆章产物落 <code>books/&lt;uid&gt;/md/</code> 才算落地；<code>book.json</code> 不记录 md 状态，状态只在 <code>library.db</code> 的 derived 表。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">md/</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>建段落索引</h3><code>src/bookcorpus/scripts/build_para_index.py:127</code></div>
+      <div class="node-body">
+        <p>非 keep 时先 <code>snapshot_expand</code> 保 LLM 产物；建 <code>index.db.building</code>，逐章 <code>paragraphs()</code> 切段、<code>cjk.index_text()</code> 出 bigram+unigram，每 4,000 段提交；完成后替换正式库。即使 0 行也建 <code>expand</code> 表。</p>
+        <div class="ann">
+          <div><b>决策</b><p>bigram 不是 trigram：2 字词（礼治、乡土）在 trigram 下 0 命中；bigram 精确率相当、索引约 3 倍。删 jieba：词典外的人名/术语切不出来。</p></div>
+          <div class="data"><b>读数</b><p>2026-11-14：<code>para</code> 3,006,736 段 / 1,819 本；<code>expand</code> 104,287 行（prefix/queries 缓存）。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">整章无 token？</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">06</span><h3>假名 / 符号章</h3><span class="gate-badge">判定</span><code>build_para_index.py:158</code></div>
+      <div class="node-body">
+        <p>正文全是假名或符号时没有可索引 token；此时用 <code>keep_front_matter=True</code> 重切，保留卷首、版权页等可索引文本。</p>
+        <div class="ann">
+          <div><b>决策</b><p>宁可多索引一段 front matter，也不让一本书从索引里消失；否则检索排名会凭空少书，书卡和数字对不上。</p></div>
+          <div class="data"><b>读数</b><p>日文原版仍在存档政策下不处理；这条只兜住“有中文 front matter 的双语书”。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">索引可用</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">07</span><h3>三张表成为检索底座</h3><code>build/检索/index.db</code></div>
+      <div class="node-body">
+        <p><code>para</code>：段正文、book、path、line、chars；<code>para_fts</code>：FTS5 bigram 文本；<code>expand</code>：按 path+kind 缓存的 prefix / queries 扩展，重建时快照回灌。</p>
+        <div class="ann">
+          <div><b>决策</b><p>索引与书目分库：<code>library.db</code> 只放书目与 derived，可随时重建；<code>index.db</code> 可重建但 expand 贵，所以单独快照保留。</p></div>
+          <div class="data"><b>读数</b><p>全库重建 4–6 GB、40–70 分钟；expand &lt;200 MB、3–5 小时。没有 md 的书不参与正文检索。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 02 完 · 离线</span><span>入口：<code>book-corpus ingest</code> / <code>book-corpus run build_para_index</code></span></div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="chart" id="s3">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 03 · 问句理解</div>
+    <h2>切词：问句怎么变成词与组</h2>
+    <p class="io"><span>输入</span>问句 + thinking 档<i>→</i><span>输出</span><code>{terms, groups, source: model | cache | degraded}</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>缓存键</h3><code>apps/demo/trace.py:302</code></div>
+      <div class="node-body">
+        <p><code>_cache_path(question, thinking)</code> 对问句与思考档做哈希；命中且 <code>terms</code>、<code>groups</code> 都非空，直接返回，<code>source=cache</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>thinking 进缓存键：low 与 max 切出来的词可能不同，混用会让同一问句忽好忽坏。换档就是另一份切词。</p></div>
+          <div class="data"><b>读数</b><p>命中即 0 次模型调用；缓存文件按问句+档位分文件，坏 JSON 视为未命中。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">cache miss</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>模型切词</h3><code>apps/demo/model_call.py</code></div>
+      <div class="node-body">
+        <p>prompt 只要求输出 <code>{"terms": [...], "groups": [{"name", "variants"}]}</code>；用 <code>pi --mode json</code> 调模型，超时与答题同档；解析失败按空结果处理。</p>
+        <div class="ann">
+          <div><b>决策</b><p>切词是唯一“每题一次模型”的步骤；后面五轮检索全是本地 SQL。贵一次、便宜多次，是这个顺序成立的前提。</p></div>
+          <div class="data"><b>读数</b><p>一次调用输出 terms/group；同义词组让“礼治/礼制/礼俗”只算一个概念，不把长词集变成噪声。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">解析</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">03</span><h3>结果可用吗</h3><span class="gate-badge">判定</span><code>trace.py:364</code></div>
+      <div class="node-body">
+        <p>判据：<code>len(terms) ≥ 2</code> 且 <code>groups</code> 非空。是 → 写缓存，<code>source=model</code>；否 → <code>_fallback_prompt</code> 再试一次（只一次）。</p>
+        <div class="ann">
+          <div><b>决策</b><p>重试只换提示词，不换模型、不加轮数：第一次失败多半是输出格式或问句太短，换提示词足够；无限重试会把首屏拖到分钟级。</p></div>
+          <div class="data"><b>读数</b><p>重试成功记 note“第一次切词不可用，已重试”；仍失败才降级，并把 first/retry 错误一起写进 trace。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">可用</span>
+        <article class="node">
+          <div class="node-head"><span class="no">04a</span><h3>写缓存</h3><code>terms.cache_write</code></div>
+          <div class="node-body"><p>只写 terms 非空且 groups 非空的结果；下次同问句同档直接命中。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">重试仍不可用</span>
+        <article class="node off">
+          <div class="node-head"><span class="no">04b</span><h3>降级</h3><code>trace.py:248</code></div>
+          <div class="node-body"><p>先概念表包含匹配（键/别名，≥2 字，按长度降序，≤12 个），再剥疑问脚手架、按标点与“被把对向给从”切 2–6 段；每组同义词就是自身。</p></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">供第 4 张图的五轮规划使用</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">05</span><h3>输出</h3><code>terms / groups / source / ms</code></div>
+      <div class="node-body">
+        <p><code>source</code> 三态：<code>model</code>（模型首轮）、<code>cache</code>（命中）、<code>degraded</code>（模型两轮都不可用，本地兜底）。降级结果也写缓存，下次不必再等模型。</p>
+        <div class="ann one">
+          <div><b>决策</b><p>不让检索直接吃原问句：原问句里的“为什么 / 怎么样 / 书中”会被 BM25 当噪声。切词把“问什么”和“怎么问”分开，后面所有阈值都只面对词。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 03 完 · 问句理解</span><span>入口：<code>apps/demo/trace.py:294</code></span></div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="chart" id="s4">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 04 · 检索核心</div>
+    <h2>五轮规划：什么时候停，停在哪一轮</h2>
+    <p class="io"><span>输入</span><code>terms</code> + <code>groups</code><i>→</i><span>输出</span><code>Plan{ranking, chapters, rounds, stop, best_round, ms, fetches}</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>分名词集</h3><code>book_query.py:78 split_terms</code></div>
+      <div class="node-body">
+        <p>从全词集里去掉 15 条动作词，得到名词集；名词集为空时退回全词集。名词集只用于“覆盖判据”和换词，不直接决定书序。</p>
+        <div class="ann one">
+          <div><b>决策</b><p>动作词不参与覆盖：“比较 / 认为 / 讲述”几乎每本书都有，算进覆盖会把所有书拉平。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">n=1 按顺序取词集</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>生成本轮词集</h3><code>book_query.py:125 term_sets</code></div>
+      <div class="node-body">
+        <ul class="kv">
+          <li><b>R1 名词原词</b>：最窄，先看核心概念落在哪。</li>
+          <li><b>R2 全词集</b>：把定语、限定词加回来。</li>
+          <li><b>R3 名词 + 概念同义</b>：只取概念表里的键与别名；<code>resolve</code> 精确相等，不做子串。</li>
+          <li><b>R4 全词 + 宽词</b>：<code>--broad</code>，默认关。</li>
+          <li><b>R5 删 df 最大词</b>：按（书数、段数、词序）删掉最泛的词。</li>
+        </ul>
+        <div class="ann">
+          <div><b>决策</b><p>先名词后全词：全词集里“为什么 / 小说”会把书序拉向大路货。概念同义不做子串，否则“爱→自由邦”“人→他人即地狱”“幸福→功利主义”“政治→承认”。</p></div>
+          <div class="data"><b>读数</b><p>概念表 127 条；R3 只有在表内命中键时才产生，不是每轮都多一次查询。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">一轮 = 一次书级 SQL</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>查这一轮</h3><code>book_query.py:224 Planner._one</code></div>
+      <div class="node-body">
+        <p><code>expr = " OR ".join("(bigram…)")</code>，调 <code>qsearch.search(..., pool=2000, min_chars=40, rerank=False)</code>；记录 top1/top2 分与 margin、覆盖段数、A/B/C、耗时。</p>
+        <div class="ann">
+          <div><b>决策</b><p>OR 词集让“缺一个词、其余命中”的段落仍有机会进池；池上限 2,000 防长尾。书级只看聚合结果，不把 2,000 段全部塞进模型。</p></div>
+          <div class="data"><b>读数</b><p>每轮 1 次 SQL；<code>fetches</code> 计入 plan，方便解释“这题为什么多查了一次”。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">算判据</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>A / B / C</h3><code>book_query.py:164 hit_rounds</code></div>
+      <div class="node-body">
+        <ul class="kv">
+          <li><b>A 覆盖</b>：top1 书命中段并集覆盖全部名词组，且至少两段各覆盖 <code>min(2, n)</code> 组。</li>
+          <li><b>B 分差</b>：<code>(top1 − top2) / top1 ≥ 0.10</code>。</li>
+          <li><b>C 全组三段</b>：三段各自覆盖全部组。</li>
+        </ul>
+        <div class="ann">
+          <div><b>决策</b><p>2026-10-23 放宽 A（原为“两段各自覆盖全部组”）。旧口径在三段式问句上几乎不可达：60 题只有 34 到线；放宽后 45，均轮数 1.72→1.40，书序读数不变。</p></div>
+          <div class="data"><b>读数</b><p>到线题数 34 → 45；均轮数 1.72 → 1.40；cap 仍为 0。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">stop?</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>停不停</h3><span class="gate-badge">判定</span><code>stop = C or (A and B)</code></div>
+      <div class="node-body">
+        <p>C 单独可停；A 单独不停。到 5 轮 → <code>cap</code>；词集耗尽 → <code>exhausted</code>；停下的那轮记 <code>stop=1</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>C 是比 A 更强的证据（三段全组）；A 单独不停，因为“覆盖全但 top1/top2 咬得紧”说明还该换词。停的判据只看证据，不看轮数。</p></div>
+          <div class="data"><b>读数</b><p>60 题里 45 题在 5 轮内停；其余 exhausted；没有一题靠 cap 收尾。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">停</span>
+        <article class="node">
+          <div class="node-head"><span class="no">06a</span><h3>进入选轮</h3><code>quality()</code></div>
+          <div class="node-body"><p>把本轮记进 <code>rounds</code>，然后从所有“到线”轮里选最好的一轮。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">不停</span>
+        <article class="node">
+          <div class="node-head"><span class="no">06b</span><h3>换下一组词</h3><code>n+1</code></div>
+          <div class="node-body"><p>按 R1→R5 继续；词集重复跳过，空词集记 skipped，不计入有效轮。</p></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">轮次记录</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">07</span><h3>选 best round</h3><code>book_query.py:149 quality</code></div>
+      <div class="node-body">
+        <p>只在“到线”的轮次里比较：C &gt; A&amp;B &gt; 其它；同分取更早（词更全）。一轮都没到线取第一轮；第一轮空取最早非空轮。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不跨“到线/未到线”比较：去掉一个词几乎总能抬覆盖或分差。实测 O04 从第 2 轮到第 155 名、q019 第 3→22、q035 第 10→29。这是五轮里最容易写错的一处。</p></div>
+          <div class="data"><b>读数</b><p>书序取自 best round 的 <code>ranking</code>；解释器按轮打印 A/B/C/stop/margin，能复盘为什么选这一轮。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">选章用全词集</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">08</span><h3>选章</h3><code>book_query.py:431</code></div>
+      <div class="node-body">
+        <p>用全词集重新 <code>search</code> 一次，取前 limit 本，每本 <code>select_chapters</code> 3 章；focus exact 时 <code>pin_focus</code> 把点名书钉到第 1，并用 README 选章。</p>
+        <div class="ann">
+          <div><b>决策</b><p>选章永远用全词集，不用删词版本：删词是为了“定书”，选章要的是“书内定位”，词越全越好。</p></div>
+          <div class="data"><b>读数</b><p>章级 R@10 0.383 / R@20 0.467（融合档，60 题）；p95 650 ms（检索+书级+选章）。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 04 完 · 检索核心</span><span>入口：<code>book_query.py:195 Planner.plan</code></span></div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="chart" id="s5">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 05 · 打分</div>
+    <h2>打分与聚合：段落分怎么变成书分</h2>
+    <p class="io"><span>输入</span>一轮的词集<code>terms</code> + groups<i>→</i><span>输出</span>书序 <code>BookScore[]</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>候选池</h3><code>qsearch.py:125</code></div>
+      <div class="node-body">
+        <p><code>para_fts MATCH expr</code>，join <code>para</code> 取 path/book/line/text/chars；正文 <code>chars ≥ 40</code>；<code>ORDER BY bm25 LIMIT 2000</code>。exclude 词先剔除。</p>
+        <div class="ann">
+          <div><b>决策</b><p>池 2,000 不是拍脑袋：书级融合要看到同一本书的多段证据，池太小会截掉长书尾部；池太大则书级聚合变慢。BM25 排序保证池里先放“词面最像”的段。</p></div>
+          <div class="data"><b>读数</b><p>默认 <code>POOL=2000</code>；旧口径写死 400，只能在 190 本书里挑，现在由调用方给 pool，书级检索给 2,000。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">每段</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>命中词数</h3><code>qsearch.py:135</code></div>
+      <div class="node-body">
+        <p><code>cov = Σ(g in body for g in groups)</code>：该段命中了多少个查询词（含同义词）。ASCII 组先 lower 一次；纯 CJK 查询不做大小写转换。</p>
+        <div class="ann">
+          <div><b>决策</b><p>这里数“词”不是“组”：同义词命中是独立证据，不应被去重。书级 coverage 才按组去重，避免同一概念多个写法重复加分。</p></div>
+          <div class="data"><b>读数</b><p><code>0.8×cov</code> 中位 0.8、最大 2.4；与纯 BM25 的 top-10 平均重叠 9.5/10。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">假名检测</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>假名惩罚</h3><code>qsearch.py:142</code></div>
+      <div class="node-body">
+        <p>假名（U+3040–U+30FF）占比 &gt;10% → <code>penalty=0.55</code>，否则 1.0；只压排名，不删除。</p>
+        <div class="ann one">
+          <div><b>决策</b><p>日文原版、双语对照会挤进中文问句的 top；0.55 只压不删，留作对照，不把整本书从结果里抹掉。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">score</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>段落分</h3><code>qsearch.py:143</code></div>
+      <div class="node-body">
+        <p><code>rank_score = (-bm25 + 0.8×cov + 0.15×log1p(len)) × penalty</code>；按 <code>(-score, path, line)</code> 排序。<code>--rerank</code> 时加 <code>rerank_bonus</code>，默认关。</p>
+        <div class="ann">
+          <div><b>决策</b><p><code>rerank_bonus</code> 默认关：它罚 <code>#/**/|/&gt;</code> 开头与行号≤3，等于罚章首段；59 题 r@10 只从 0.267 到 0.283，MRR 0.166 不变，净收益 1 题。</p></div>
+          <div class="data"><b>读数</b><p>关掉后 top1 更偏向正文中段；章首段靠 BM25 与长度项自然进入，不靠特判。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">同书所有命中段</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>书级四项</h3><code>book_score.py:161 aggregate</code></div>
+      <div class="node-body">
+        <ul class="kv">
+          <li><b>best</b>：该书最高段分；≤0 整本丢。</li>
+          <li><b>support</b>：段分 ≥0.75×best 的段数，封顶 5。</li>
+          <li><b>topk</b>：最好 <code>min(3, support)</code> 段的均值。</li>
+          <li><b>coverage</b>：去重命中组数 / 总组数。</li>
+        </ul>
+        <div class="ann">
+          <div><b>决策</b><p>support 封顶、topk 只取 3：再多段只说明“书长”，不说明“这本书更对”；封顶避免长书靠段数堆分。</p></div>
+          <div class="data"><b>读数</b><p>support 封顶 5；topk 的分母是 <code>min(3, support)</code>，单段书不会被 3 除。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">加权</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>书分</h3><code>0.60 / 0.25 / 0.15 / 0.05</code></div>
+      <div class="node-body">
+        <p><code>score = 0.60×best + 0.25×topk + 0.15×coverage + 0.05×log1p(support)</code>；并列按 <code>(book, best_path, best_line)</code> 排，保证可复现。</p>
+        <div class="ann">
+          <div><b>决策</b><p>权重来自 B1–B6 的 60 题 gold。对照方案里 mix=0.7best+0.3mean 会把单章书拉低，sum 让长书占位；best_support 用 capped support 换来更好的单章书与平均名次，hit@10 不降。</p></div>
+          <div class="data"><b>读数</b><p>hit@10 0.983（当前索引 mix 0.967、sum 0.883）；long_share@10 0.120（全库段数基线 0.2797）；书级 MRR 0.877。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">书序</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">07</span><h3>交给选章</h3><code>rank() → list[BookScore]</code></div>
+      <div class="node-body">
+        <p>书序按分数降序；每项带 best 段、章节数、类型、命中组、是否已有 prefix/queries 扩展。<code>long_share</code> 只用于读数，不参与书分。</p>
+        <div class="ann one">
+          <div><b>决策</b><p>书级只回答“哪几本值得读”，不回答“读哪一章”。把两种判断分开，才能让书卡、选章、成答各自有可替换的默认值。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 05 完 · 打分</span><span>入口：<code>book_score.py</code> / <code>qsearch.py</code></span></div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section class="chart" id="s6">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 06 · 选书与选章</div>
+    <h2>选章与书卡：先读书，还是先问人</h2>
+    <p class="io"><span>输入</span>书序 + 问句 + 书名提示<i>→</i><span>输出</span>每本 3 章候选 / ≤6 张书卡</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>书名解析</h3><code>book_cards.query_hints / book_title.resolve_title</code></div>
+      <div class="node-body">
+        <p>返回 <code>status = exact / ambiguous / missing</code> 与对应书 uid；只有 exact 才进 <code>pin_focus</code>。作者、原句、概念、问句信号同时进 <code>hints</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>书名匹配只认库内正式书名与别名，不做模糊子串；模糊匹配会把“白话”钉到《白话…》上。ambiguous 交用户选，不猜。</p></div>
+          <div class="data"><b>读数</b><p>exact 时点名书钉到 ranking[0] 与 chapters[0]；missing 时不钉，书名提示也不压制书卡。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">status</span></div>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">exact</span>
+        <article class="node">
+          <div class="node-head"><span class="no">02a</span><h3>钉住点名书</h3><code>book_query.py:480 pin_focus</code></div>
+          <div class="node-body"><p>把点名书放到 ranking[0]；<code>focus_rows</code> 先读 README 选章，不认路径时退回打分序并滤卷首卷尾。无命中给 0 分占位，不把位让给别的书。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">ambiguous / missing</span>
+        <article class="node">
+          <div class="node-head"><span class="no">02b</span><h3>正常书序</h3><code>ranking</code></div>
+          <div class="node-body"><p>ambiguous 继续走书卡；missing 不压制书卡。没有书名提示时，完全由检索分与触发条件决定。</p></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">要不要弹卡</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">03</span><h3>书卡触发</h3><span class="gate-badge">判定</span><code>book_cards.py:193 trigger</code></div>
+      <div class="node-body">
+        <p>无 ranking 不弹；focus exact / 作者 / 原句 / 书名提示非 missing → 不弹；否则看四条原因：<b>margin</b>（前二名分差 &lt;0.10）、<b>types</b>（前 10 名 ≥3 种类型）、<b>long</b>（前 10 名有 ≥50 章书）、<b>concept</b>（概念题/问句）。任一成立 → 弹 ≤6 张。</p>
+        <div class="ann">
+          <div><b>决策</b><p>书卡是“可纠正入口”，不是“检索重排”。等宽复测 top3 15/21、top6 17/21，与循环同宽读数相同；默认展示六张是产品决定。</p></div>
+          <div class="data"><b>读数</b><p>60 题触发 21 次；卡片首章与循环首章一致；卡片不改变 fused tag 命中。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond no">不弹</span>
+        <article class="node">
+          <div class="node-head"><span class="no">04a</span><h3>直接选章</h3><code>select_chapters</code></div>
+          <div class="node-body"><p>按书序逐本取 3 章，进入成答。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond yes">弹</span>
+        <article class="node">
+          <div class="node-head"><span class="no">04b</span><h3>用户选卡</h3><code>book_cards.cards_for</code></div>
+          <div class="node-body"><p>只保留选中书；缺章的按全词集命中补 3 章；卡片顺序成为章节顺序。选卡后不重跑检索：用户选择就是最强 query 信号。</p></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">每本 3 章</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>选章口径</h3><code>book_query.py:431 select_chapters</code></div>
+      <div class="node-body">
+        <p>普通书默认 <code>selector=score</code>：<code>chapter_order</code> 按章聚合分取前 N。点名书的选章在更早的 <code>focus_rows</code> 里先试 <code>book_readme.select</code>；<code>--chapter-selector readme</code> 时普通书也走 README：读 <code>md/README.md</code> 的目录与摘要，滤卷首卷尾；读不到就退回打分序。</p>
+        <div class="ann">
+          <div><b>决策</b><p>README 是作者/编辑写的导览，比纯检索分更懂卷首卷尾；但全库 README 覆盖不齐，所以默认仍是 score，readme 只作点名书的优先路径与可选项。</p></div>
+          <div class="data"><b>读数</b><p>章级只给 3 章；成答阶段再在章内选段/扩窗。选章与选段是两个可分别调参的层。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">chapter 候选</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">06</span><h3>输出</h3><code>{chapter_path, title, line, score, snippet}</code></div>
+      <div class="node-body">
+        <p>Snippet 为空白折叠后的前 150 字；<code>readme_status</code> 一并带出，前端可显示“这章来自 README 还是打分序”。</p>
+        <div class="ann one">
+          <div><b>决策</b><p>不把“选章”和“选段”合成一个黑盒：选章错了还能在章内救，选段错了才有窗口层兜底；两层都留读数。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 06 完 · 选书与选章</span><span>入口：<code>book_cards.py</code> / <code>book_query.py:431</code></span></div>
+</section>
+
+<!-- ============================================================ 7 -->
+<section class="chart" id="s7">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 07 · 成答</div>
+    <h2>成答与回查：窗口、工具与引文闸门</h2>
+    <p class="io"><span>输入</span>question + 1..8 本 sources（book/path/line/terms/groups）<i>→</i><span>输出</span>answer JSON + 回查后的 citations</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>路由</h3><code>apps/demo/answer.py:1566 answer_question</code></div>
+      <div class="node-body">
+        <p>focus exact → 点名书；sources ≥2 → 多书；否则单书。点名书在 sources 里缺失时，先说明再从其余书答；一本都没有才报错。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不做“主答 + 补充”两次模型调用：一次多书提示词让模型自己分配篇幅，省一次 240 秒超时风险。</p></div>
+          <div class="data"><b>读数</b><p>单书/多书两条路各自有缓存键（含 PROMPT_VERSION、thinking、history）；重新检索显式跳过缓存。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">单书</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>选段</h3><code>answer.py:524 pick_passages</code></div>
+      <div class="node-body">
+        <p>同书 qsearch top100 → 按章聚合取前 30 章 → 每组命中取 ±12 行窗口、<code>defpass.score</code> 覆盖 ≥2 的补 4 段 → 当前段 + 补段 + 章代表段去重，最多 24 段，每章 ≤2。</p>
+        <div class="ann">
+          <div><b>决策</b><p>先按章聚类再回选段：答案常在同一章的多段里；直接取 top24 段会散落在 24 章，提示词全是碎片。</p></div>
+          <div class="data"><b>读数</b><p><code>QSEARCH_LIMIT=100</code>、<code>MAX_CHAPTERS=30</code>、<code>MAX_PASSAGES=24</code>、<code>MAX_PER_CHAPTER=2</code>、<code>DEFPASS_TOP=4</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">段</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>扩窗</h3><code>answer.py:645 build_windows</code></div>
+      <div class="node-body">
+        <p><code>make_packet(level 2)</code>：±60 行、3,500 字/窗；同文件区间重叠合并；最多 5 窗；总预算 18,000；剩余 &lt;800 字停；窗口前 40 行内的 <code>#</code> 标题补到开头。</p>
+        <div class="ann">
+          <div><b>决策</b><p>N=5 / W=3500 / T=18000 是 60 题 gold 的覆盖拐点：N=3 51/60、N=5 52/60、N=7 仍 52/60；W=2500 长论证必答覆盖 0.681，W=3500 0.833，W=5000 无新增。参数变更必须升 <code>PROMPT_VERSION</code>。</p></div>
+          <div class="data"><b>读数</b><p>5×3,500=17,500 &lt; 18,000；floor = min(800, max(200, 3500//2)) = 800。旧记录里的“floor 1750”与当前代码不符。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">多书分支</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>多书配额</h3><code>answer.py:869 multi_windows</code></div>
+      <div class="node-body">
+        <p>n 本：点名书拿 50% 预算，其余平分；每本 ≥2,200 字、窗宽 <code>max(200, quota//2)</code>、≤2 窗；非点名书整本最高分 &lt;2.0 不给窗；全空时每本至少 1 窗；按窗序号轮转交织。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不按书数简单除以 n：8 本时每本 2,250 字只够一段。点名书 50% 保证“问的那本”有足够证据，其余书只补角度。</p></div>
+          <div class="data"><b>读数</b><p><code>MULTI_QUOTA_MIN=2200</code>、<code>MULTI_MIN_SCORE=2.0</code>、<code>MULTI_WINDOWS_PER_BOOK=2</code>；超长时从排名最后的书删窗，一本书至少留一扇。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">提示词</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>提示词</h3><code>build_prompt / build_multi_prompt</code></div>
+      <div class="node-body">
+        <p>单书 ≤26,000 字、多书 ≤30,000；开头 1–4 句结论，1–6 节；每个判断至少一处原文；citations ≤10；输出一行 JSON：<code>{answer, recap[3], citations[{path,line,quote}], confidence, not_found}</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>要求“先结论后论证”，不要求“先列原文再总结”：用户读首屏就能判断有没有答到。允许 <code>not_found</code>，不逼模型编。</p></div>
+          <div class="data"><b>读数</b><p>超预算从最后一块窗口删，记 <code>prompt.drop budget</code>；多书提示词带库级覆盖、书名行、每书 4 章地图。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">调模型</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>pi agent</h3><code>answer.py:pi_cmd</code></div>
+      <div class="node-body">
+        <p><code>pi -p --no-session --no-context-files --skill book-corpus-qa -e readonly_tools.ts --tools book_grep,read --model … --thinking …</code>；超时 240 s。</p>
+        <div class="ann">
+          <div><b>决策</b><p>只给两个只读工具，不给写、搜索、网络：模型可补读相邻章，但不能改库、不能引外部。工具调用由模型决定，没有强制“必须先 grep”的闸门。</p></div>
+          <div class="data"><b>读数</b><p>28 份答卷：最佳章平均只覆盖 0.50 引文，52% 引文由 <code>read</code>/<code>book_grep</code> 补读；工具是补偿，不是替代窗口。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">JSON</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">07</span><h3>引文回查</h3><code>answer.py:1370 verify_citations</code></div>
+      <div class="node-body">
+        <p>每条 quote 取前 20 个非空白字；先窗口后整章逐行（跨行）找；路径必须 <code>books/**.md</code> 且属于本次 sources；行号用文件实际位置；找不到/重复丢弃。</p>
+        <div class="ann">
+          <div><b>决策</b><p>只查前 20 字：再长会把模型的小改写判死。路径白名单防止引到没给它的书；丢弃而非改写，保持“答案里的引文都能点回原文”。</p></div>
+          <div class="data"><b>读数</b><p><code>QUOTE_PROBE=20</code>、<code>MAX_CITATIONS=10</code>；窗口内找不到时整章回查，`_ChapterIndex` 用 bisect 换真实行号。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">n 条有效引文</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">08</span><h3>置信度</h3><span class="gate-badge">判定</span><code>≥2 / 0–1</code></div>
+      <div class="node-body">
+        <p>≥2 条保留原 <code>confidence</code>；0–1 条 → <code>confidence=low</code>，answer 追加“引文回查不足（n 条）”；<code>not_found</code> 原样返回。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不因引文不足拒答：拒答会把“答案对但引文改写”误杀；降置信度 + 明示缺口，交给人判断。</p></div>
+          <div class="data"><b>读数</b><p>26/28 份答卷跨 ≥2 章（均值 2.64）；单本 15–40 s，多本 65–87 s；pi 240 s、HTTP 300 s 超时。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 07 完 · 成答</span><span>入口：<code>apps/demo/answer.py:1566</code></span></div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section class="chart" id="s8">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 08 · 决策闸门</div>
+    <h2>新组件进默认前的四道闸</h2>
+    <p class="io"><span>输入</span>一个候选优化（扩展 / 重排 / 向量 / 宽词 / 特征）<i>→</i><span>输出</span>默认开 / 留实验 / 停</p>
+  </div>
+
+  <div class="flow">
+    <article class="node gate">
+      <div class="node-head"><span class="no">闸 1</span><h3>检索指标真的涨吗</h3><span class="gate-badge">判定</span><code>同题集、同分母</code></div>
+      <div class="node-body">
+        <p>章级 R@10 / R@20 / MRR，书级 hit@10 / MRR、long_share；必须同 60 题 gold、同候选池、同口径。只报“感觉更准”不算。</p>
+        <div class="ann">
+          <div><b>反例</b><p><code>rerank_bonus</code>：r@10 0.267→0.283，但 MRR 0.166 不变，净收益 1 题 → 不够。</p></div>
+          <div class="data"><b>过线</b><p>至少一个主指标显著上涨，且没有一个主指标下降；否则留实验。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">指针标</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">闸 2</span><h3>涨的是产品指标吗</h3><span class="gate-badge">判定</span><code>书序 → 选章 → 引文 → 答案</code></div>
+      <div class="node-body">
+        <p>产品是“先书后章再成答”。段落级收益必须能兑换成书级/章级/答案验收；视图错配的收益不算。</p>
+        <div class="ann">
+          <div><b>反例</b><p><code>bge-reranker-v2-m3</code>：近义档 R@20 5→10/20、MRR 0.220，但产品先书后章、6.5–80 s → 兑换不到书级指标。</p></div>
+          <div class="data"><b>过线</b><p>至少一条产品路径上的读数变好，且不是靠换题集/换口径。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">指产品</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">闸 3</span><h3>成本与时延过线吗</h3><span class="gate-badge">判定</span><code>p95 / 建库 / 费用 / 失败率</code></div>
+      <div class="node-body">
+        <p>检索 p95 的 2 倍线 + 2,000 ms 线；建库时长、expand 模型费、失败率与重试成本都要算进默认值。</p>
+        <div class="ann">
+          <div><b>反例</b><p>prefix 651 token/章、全库约 $15；queries 2,619 token/章、$60；向量全库 int8 CPU 15–20 小时。三个都过不了闸 3。</p></div>
+          <div class="data"><b>过线</b><p>p95 不破 2×/2,000 ms；建库可在一个维护窗口内完成；模型费可预算。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">指成本</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">闸 4</span><h3>证据样本够吗</h3><span class="gate-badge">判定</span><code>60 题 gold + 同口径 A/B</code></div>
+      <div class="node-body">
+        <p>10 题 pilot 只能决定“继续试”，不能决定“默认开”；60 题同口径 A/B 才进默认。扩样后重跑闸 1–3。</p>
+        <div class="ann">
+          <div><b>反例</b><p>expand 10 题 A/B：gold 章进前 3 从 6/10 到 10/10，样本小；结论是“不加全库，先补 60 题同口径 A/B”。</p></div>
+          <div class="data"><b>过线</b><p>60 题、同一批 queryset、同一模型档；A/B 的差异能复跑。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">四闸全过</span>
+        <article class="node stop">
+          <div class="node-head"><span class="no">出 1</span><h3>进默认</h3><code>默认开 + 升版本</code></div>
+          <div class="node-body"><p>写进组件表与踩坑账；若改窗口/提示词，升 <code>PROMPT_VERSION</code>；保留关闭开关与读数命令。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">缺一闸</span>
+        <article class="node off">
+          <div class="node-head"><span class="no">出 2</span><h3>留实验</h3><code>默认关 + 留开关</code></div>
+          <div class="node-body"><p>代码可留，默认关；在文档里写清“重启条件”（先选章再重排、K=200、近义/无原词启用），不让下一个会话重新试一遍。</p></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">台账</span></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>候选</th><th>当时读数</th><th>卡在哪道闸</th><th>现状</th></tr></thead>
+        <tbody>
+          <tr><td>prefix 文档扩展</td><td>651 token/章，全库约 $15；20 本 27 目标章 top3 17/27→21/27，均排名 30.4→19.5</td><td>闸 4 样本不足 + 闸 3 成本</td><td class="t-hold">默认关；做到一半停；需 60 题同口径 A/B</td></tr>
+          <tr><td>queries 伪查询</td><td>2,619 token/章，新词率 89%；top3 21/27、均排名 16.0；全库约 $60</td><td>闸 3 成本 + 闸 4 样本</td><td class="t-hold">默认关；只留缓存表与试点</td></tr>
+          <tr><td><code>bge-reranker-v2-m3</code></td><td>近义 R@20 5→10/20、MRR 0.220；原词 14→17/20、MRR 0.653；单次 6.5–80 s</td><td>闸 2 视图错配 + 闸 3 时延</td><td class="t-off"><code>--rerank</code> 关；重启条件：先选章再重排、K=200、近义/无原词</td></tr>
+          <tr><td><code>bge-m3</code> 向量</td><td>原词 14/20、近义 5/20、无原词 5/20；全库 int8 CPU 15–20 h</td><td>闸 3 建库成本 + 未验融合</td><td class="t-off">不建；<code>sem_index.py</code> 未写</td></tr>
+          <tr><td>宽词层 <code>broad</code></td><td>章 hit 0.025 不变；书 hit@10 0.200→0.300；McNemar p=0.289</td><td>闸 1 不显著</td><td class="t-hold"><code>--broad</code> 关；概念宽词留实验表</td></tr>
+          <tr><td>TypeSafe 消歧 / top-20 重排</td><td>收窄到“书名消歧”与“top-20 重排”两个用途</td><td>闸 2 未进主链路</td><td class="t-hold">不默认；作为候选特征</td></tr>
+          <tr><td><code>rerank_bonus</code></td><td>r@10 0.267→0.283；MRR 0.166 不变；净收益 1 题</td><td>闸 1 收益太小 + 误罚章首段</td><td class="t-off">默认关，代码保留</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="chart-end"><span>图 08 完 · 决策闸门</span><span>入口：<code>docs/检索/检索组件与外部证据-2026-11-14.md</code></span></div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <h2>读数与复核入口</h2>
+  <div class="two">
+    <div>
+      <h3>本页数字的出处</h3>
+      <ul>
+        <li><code>docs/design/书级融合与按需扩展-2026-10-22.md</code>：B1–B6、104 用例、B6 门槛 53/60=0.883。</li>
+        <li><code>docs/design/窗口参数-决策记录-2026-11-02.md</code>：N/W/T 的覆盖拐点与版本升级规则。</li>
+        <li><code>docs/检索/检索组件与外部证据-2026-11-14.md</code>：十步组件表、默认值、开关、外部对照。</li>
+        <li><code>docs/检索/README.md</code> 与 <code>指标口径.md</code>：L0–L5、long_share、性能判据。</li>
+        <li><code>/home/shike/文档/工作/book-corpus-实现记录-2026-11-12.md</code>：五阶段叙述；该文写于另一台机器、15 本书的语料，expand 行数为 0，不能当作本机读数。</li>
+      </ul>
+    </div>
+    <div>
+      <h3>复跑</h3>
+      <div class="cmd"><span># 人账 → 书目库 → 索引（工作区实例内）</span><br>book-corpus library --emit-json<br>book-corpus run build_para_index</div>
+      <div class="cmd"><span># 书级融合与五轮规划</span><br>uv run --frozen pytest tests/test_book_query.py -q<br>book-corpus run book_query --question '礼治和法治的区别' --explain</div>
+      <div class="cmd"><span># 书级/书卡门槛（60 题批次）</span><br>python3 ~/书库/工作区/批次/qa-检索-2026-10-22-书级融合/probe_b6.py --lanes --gate --perf</div>
+      <div class="cmd"><span># 索引计数（只读）</span><br>sqlite3 'file:~/书库/build/检索/index.db?mode=ro' \<br>&nbsp;&nbsp;'select count(*), count(distinct book) from para'</div>
+    </div>
+  </div>
+  <p style="margin-top:18px">
+    维护方式：行为变了先改这张图，再改代码里的默认值；图里的每个“读数”都要能从上面的命令复跑，不能复跑的读数删掉。
+    新图沿用本文件的三条约定：节点给代码入口、判定给判据、卡片底栏给“决策 + 读数”。
+  </p>
+</footer>
+
+</div>
+</body>
+</html>

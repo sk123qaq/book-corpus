@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拆章 · 九张实现图（2026-11-14）</title>
+<style>
+  :root {
+    --paper: #f4f1e9;
+    --card: #fffdf8;
+    --ink: #1b1d22;
+    --muted: #686d77;
+    --line: #ded9cc;
+    --line-strong: #c9c2b1;
+    --amber: #8a5a00;
+    --amber-bg: #fbf0dc;
+    --amber-line: #e6cf9f;
+    --green: #2f6b4f;
+    --green-bg: #e8f2ec;
+    --green-line: #bfd9cb;
+    --red: #a23c2e;
+    --red-bg: #f8e8e4;
+    --red-line: #e8c3bb;
+    --blue: #1d5b63;
+    --blue-bg: #e6f0f0;
+    --blue-line: #bfd6d5;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --sans: "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    padding: 44px 30px 90px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.75 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1180px; margin: 0 auto; }
+  a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(29,91,99,.25); }
+  a:hover { border-bottom-color: var(--blue); }
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: #2c3340;
+    background: #f0eee7;
+    border: 1px solid #e3dfd3;
+    border-radius: 4px;
+    padding: 0 4px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- hero ---------- */
+  .hero { border-bottom: 2px solid var(--ink); padding-bottom: 26px; margin-bottom: 46px; }
+  .stamp {
+    display: flex; justify-content: space-between; gap: 20px;
+    color: var(--muted); font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 14px 0 10px;
+    font-family: var(--serif);
+    font-size: 42px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2;
+  }
+  .statusline {
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--green);
+    background: var(--green-bg);
+    font-size: 13px; color: #264c3b;
+    display: inline-block;
+  }
+  .lede { margin: 0 0 16px; max-width: 920px; color: #3d4047; font-size: 15.5px; }
+  .lede b { color: var(--ink); }
+  .notice {
+    margin: 16px 0 0; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: #faf8f2; color: var(--muted); font-size: 13px;
+  }
+  .notice b { color: var(--ink); }
+
+  .toc {
+    margin-top: 22px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 22px;
+  }
+  .toc a {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 4px 0; border-bottom: 1px dotted var(--line);
+    color: var(--ink); font-size: 13.5px;
+  }
+  .toc a span { color: var(--amber); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; }
+  .toc a:hover { border-bottom-color: var(--ink); }
+
+  .legend { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted); }
+  .legend i {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+    font-style: normal;
+  }
+  .legend i::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--line-strong); }
+  .legend .l-step::before { background: var(--blue); }
+  .legend .l-gate::before { background: var(--amber); }
+  .legend .l-ok::before { background: var(--green); }
+  .legend .l-no::before { background: var(--red); }
+
+  /* ---------- chart shell ---------- */
+  .chart { margin: 0 0 76px; }
+  .chart-head { margin-bottom: 22px; }
+  .chart-kicker {
+    color: var(--amber); font-family: var(--mono); font-size: 11px;
+    letter-spacing: .14em; text-transform: uppercase;
+  }
+  .chart h2 {
+    margin: 4px 0 8px;
+    font-family: var(--serif); font-size: 29px; font-weight: 600; line-height: 1.3;
+  }
+  .io {
+    margin: 0; color: var(--muted); font-size: 13px;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px;
+  }
+  .io span {
+    color: #3b3e45; background: #ece9df; border-radius: 4px; padding: 1px 7px;
+    font-family: var(--mono); font-size: 11.5px;
+  }
+  .io i { font-style: normal; color: var(--amber); }
+  .chart-end {
+    margin-top: 18px; color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; gap: 20px;
+    border-top: 1px solid var(--line); padding-top: 8px;
+  }
+
+  /* ---------- flow ---------- */
+  .flow { display: flex; flex-direction: column; }
+
+  .node {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 22px 16px;
+    box-shadow: 0 1px 0 rgba(30,25,15,.04);
+  }
+  .node::before {
+    content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 4px;
+    border-radius: 0 4px 4px 0; background: var(--blue);
+  }
+  .node-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .node-head .no {
+    font-family: var(--mono); font-size: 12px; color: var(--blue); letter-spacing: .08em;
+  }
+  .node h3 { margin: 0; font-family: var(--serif); font-size: 21px; font-weight: 600; line-height: 1.35; }
+  .node-head code { margin-left: auto; }
+  .node-body > p { margin: 4px 0 0; }
+  .node-body > p + p { margin-top: 8px; }
+  .kv { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .kv li { padding-left: 16px; position: relative; font-size: 13.5px; color: #3f434b; }
+  .kv li::before { content: "·"; position: absolute; left: 4px; color: var(--amber); font-weight: 700; }
+  .kv b { color: var(--ink); }
+
+  .ann {
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .ann.one { grid-template-columns: 1fr; }
+  .ann div > b {
+    display: inline-block; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 2px;
+  }
+  .ann .data > b { color: var(--green); }
+  .ann p { margin: 0; font-size: 12.8px; line-height: 1.7; color: #464a52; }
+  .ann em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+  /* ---------- edges ---------- */
+  .edge { position: relative; height: 42px; display: flex; align-items: center; justify-content: center; }
+  .edge::before {
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 7px; width: 2px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .edge::after {
+    content: ""; position: absolute; left: 50%; bottom: 1px; transform: translateX(-5px);
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 7px solid var(--line-strong);
+  }
+  .edge-label {
+    position: relative; z-index: 1; background: var(--paper);
+    padding: 0 8px; color: var(--muted); font-size: 11.5px; font-family: var(--mono);
+  }
+  .edge-label b { color: var(--amber); font-weight: 600; }
+
+  /* ---------- gate ---------- */
+  .node.gate { background: var(--amber-bg); border: 1.5px dashed var(--amber-line); }
+  .node.gate::before { background: var(--amber); }
+  .node.gate .no { color: var(--amber); }
+  .node.gate h3 { color: #6d4700; }
+  .gate-badge {
+    display: inline-block; margin-left: 2px; padding: 0 7px; border-radius: 3px;
+    background: var(--amber); color: #fff8e8; font-size: 10px; letter-spacing: .12em;
+    vertical-align: 3px;
+  }
+  .node.gate .ann > div > b { color: #8a5a00; }
+
+  /* ---------- outcomes ---------- */
+  .node.stop { background: var(--green-bg); border-color: var(--green-line); }
+  .node.stop::before { background: var(--green); }
+  .node.stop .no { color: var(--green); }
+  .node.stop h3 { color: #24533c; }
+  .node.stop .ann > div > b { color: #2f6b4f; }
+  .node.off { background: #f6f4ee; border-style: solid; }
+  .node.off::before { background: var(--red); }
+  .node.off h3 { color: #6f3028; }
+  .node.off .ann > div > b { color: var(--red); }
+
+  /* ---------- fork ---------- */
+  .fork {
+    position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px; padding-top: 34px;
+  }
+  .fork::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 14px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .fork::after {
+    content: ""; position: absolute; top: 14px; left: 25%; right: 25%; height: 2px;
+    background: var(--line-strong);
+  }
+  .fork-arm { position: relative; padding-top: 18px; }
+  .fork-arm::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 18px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .cond {
+    display: inline-block; margin-bottom: 8px; padding: 1px 9px; border-radius: 999px;
+    font-size: 11.5px; font-family: var(--mono); border: 1px solid var(--line-strong);
+    background: var(--card); color: #3f434b;
+  }
+  .cond.yes { border-color: var(--green-line); background: var(--green-bg); color: #24533c; }
+  .cond.no { border-color: var(--amber-line); background: var(--amber-bg); color: #6d4700; }
+  .cond.off { border-color: var(--red-line); background: var(--red-bg); color: #6f3028; }
+  .fork .node h3 { font-size: 18px; }
+  .fork .node-body > p { font-size: 13.2px; }
+
+  .merge {
+    margin: 14px 0 0; text-align: center; color: var(--muted); font-size: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .merge::before, .merge::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th {
+    background: #efece2; font-weight: 600; font-size: 11.5px; letter-spacing: .06em;
+    color: #4b4f58; white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td code { font-size: 11.5px; }
+  .t-ok { color: var(--green); font-weight: 600; }
+  .t-hold { color: var(--amber); font-weight: 600; }
+  .t-off { color: var(--red); font-weight: 600; }
+
+  /* ---------- footer ---------- */
+  .footer {
+    margin-top: 20px; border-top: 2px solid var(--ink); padding-top: 18px;
+    color: var(--muted); font-size: 13px;
+  }
+  .footer h2 { font-family: var(--serif); font-size: 24px; color: var(--ink); margin: 0 0 10px; }
+  .footer ul { margin: 8px 0 0; padding-left: 20px; }
+  .footer li { margin: 3px 0; }
+  .cmd {
+    margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: #201f1c; color: #eee9dc;
+    font-family: var(--mono); font-size: 12px; line-height: 1.8; overflow-x: auto;
+  }
+  .cmd span { color: #b9b09a; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .two h3 { font-family: var(--serif); font-size: 18px; margin: 0 0 6px; }
+
+  @media (max-width: 860px) {
+    body { padding: 26px 16px 70px; }
+    h1 { font-size: 31px; }
+    .toc, .fork, .ann, .two { grid-template-columns: 1fr; }
+    .fork::after { display: none; }
+    .fork-arm::before { display: none; }
+    .fork-arm { padding-top: 0; }
+    .node-head code { margin-left: 0; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .node, .tablewrap { break-inside: avoid; }
+    .chart { break-before: page; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<header class="hero">
+  <div class="stamp"><span>book-corpus · split maps</span><span>2026-11-14</span></div>
+  <h1>拆章：九张实现图</h1>
+  <p class="statusline">状态：implemented · 2026-11-14　　验收：<code>python3 tests/acceptance/ops/test_split.py</code>（15 项，失败 0 项）</p>
+  <p class="lede">
+    这九张图只下钻<b>电子书拆章</b>：<code>src/bookcorpus/scripts/split_md_batch.py</code> 怎么选书、转换、切章、过两道闸、修复、暂存和入库，以及它调用的 <code>ebook_to_md.py</code> / <code>verify_output.py</code> / <code>audit_volume.py</code>。
+    PDF、txt、docx 不走这条；操作台按钮怎么排队、怎么显示任务状态，见《统一操作台实现流程图》。
+  </p>
+  <div class="notice">
+    <b>口径说明。</b>图对应当前工作树（<code>d64c40c</code> 之后），不按旧 README 复述。本机 10 个拆章批次账按 uid 去重共 <b>1,022 本</b>：1,010 本完成、12 本待查；其中 landed 206、replaced 616、accepted 46、staged-green 142、staged-review 9、staged 1、convert-failed 1、split-failed 1。
+    当前库有 md 的书 <b>1,823 本 / 108,505 章</b>；<code>v_pending_md</code> 剩 133 本，全部是 pdf/txt/djvu/csv，<b>没有待拆电子书</b>。最新批次 <code>split-ops-20261104-113547</code> 4 本全部 landed。
+  </div>
+  <nav class="toc">
+    <a href="#s1"><span>01</span>批次入口：范围账本只写一次</a>
+    <a href="#s2"><span>02</span>单本入口：md / 暂存 / 重拆 / 复核</a>
+    <a href="#s3"><span>03</span>转换成 EPUB：Calibre 只是桥</a>
+    <a href="#s4"><span>04</span>章节边界：TOC 拥有跨度</a>
+    <a href="#s5"><span>05</span>正文筛选：默认只写正文</a>
+    <a href="#s6"><span>06</span>两道闸：结构与文本量分开</a>
+    <a href="#s7"><span>07</span>修复回路：agent 只修映射</a>
+    <a href="#s8"><span>08</span>落地：先暂存，再换目录</a>
+    <a href="#s9"><span>09</span>接棒：report、操作台与阅读</a>
+  </nav>
+  <div class="legend">
+    <i class="l-step">处理</i><i class="l-gate">判定</i><i class="l-ok">采用 / 结果</i><i class="l-no">拒绝 / 失败</i>
+    <i>卡片底栏：决策 + 读数</i>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================ 1 -->
+<section class="chart" id="s1">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 01 · batch</div>
+    <h2>批次入口：范围账本只写一次</h2>
+    <p class="io"><span>输入</span><code>build/library.db</code> 的 <code>v_pending_md</code> 或 <code>--uids</code><i>→</i><span>输出</span><code>工作区/批次/&lt;batch&gt;/worklist.tsv</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>建批次目录</h3><code>split_md_batch.py:655 main</code></div>
+      <div class="node-body">
+        <p><code>--batch</code> 必填，目录固定在 <code>工作区/批次/&lt;batch&gt;</code>；只读打开 <code>build/library.db</code>，建 <code>logs/</code>、<code>out/</code>、<code>tmp/</code>。每本书的产物、日志、manifest 都落在这个批次目录，不直接写库。</p>
+        <div class="ann">
+          <div><b>决策</b><p>批次是回滚单位：重跑、复核、人工看证据都围绕一个目录；不建全局隐藏队列，避免「跑到哪了」只存在于进程内存。库只读打开，直写 <code>books/</code> 只发生在最后 <code>land()</code>。</p></div>
+          <div class="data"><b>读数</b><p>本机共有 10 个拆章批次、1,022 个 uid；最新批次 4 本。批次名带时间戳，重跑不覆盖旧账。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">选范围</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>待拆电子书</h3><code>:135 pending_ebooks</code></div>
+      <div class="node-body">
+        <p>只取主源格式为 <code>epub / mobi / azw3 / azw</code>、在 <code>v_pending_md</code> 里、且 <code>path_state='active'</code> 的书，按 uid 数字排序。已拆完的书不在待拆视图；<code>--uids</code> 可以点名重拆已有 md 的书。</p>
+        <div class="ann">
+          <div><b>决策</b><p>以 librarian 的派生视图为准，不另建队列：md 状态、主源 sha、路径状态已经在 <code>library.db</code> 里，批次账只抄一份当时的范围。PDF/txt 不在这条流水线，避免一个脚本兼三种格式。</p></div>
+          <div class="data"><b>读数</b><p>当前 <code>v_pending_md</code> 133 本：pdf 125、txt 5、djvu 2、csv 1；<b>待拆电子书 0</b>。所以现在跑新批次只会得到空范围，历史批次才是主要读数来源。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">范围确定</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>worklist 只写一次</h3><code>:148 build_worklist</code></div>
+      <div class="node-body">
+        <p>如果 <code>worklist.tsv</code> 已存在，直接读它，<b>绝不重写</b>；只有新批次才按 <code>--uids</code> 或待拆视图生成。给的 uid 找不到源文件时抛 <code>ValueError</code>，账本不落盘。写文件走 <code>.tmp</code> + <code>os.replace</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>账本一旦存在就以它为准：批次跑到一半崩溃、或有人手工删了一行，重跑都不能悄悄把范围扩回全库。失败时半条范围也不写，避免「看起来有账、实际没跑」。</p></div>
+          <div class="data"><b>读数</b><p>最新批次 worklist 5 行 = 表头 + 4 本；<code>--uids</code> 重复会去重。历史批次里既有 1 本的重拆，也有整批几十本。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">逐本并发</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">04</span><h3>线程池跑单本</h3><code>:655 main · run_one</code></div>
+      <div class="node-body">
+        <p><code>ThreadPoolExecutor(max_workers)</code>，默认 6 并发；每本一个 <code>run_one</code>，异常只把这一本记 <code>error</code>，不拖整批。每本结束立刻写 <code>logs/&lt;uid&gt;.json</code>，最后统一出 <code>report</code> 与 <code>summary</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>单本失败不能杀死整批：拆一章失败和整批范围错误是两种事。结果先落盘再汇总，进程中途被杀也能从 logs 恢复；并发数由调用方给，默认 6，不自动压满机器。</p></div>
+          <div class="data"><b>读数</b><p>最新批次 4 本、4 并发以内；历史 1,022 本里 12 本待查，说明单本异常没有扩散成整批失败。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="chart" id="s2">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 02 · one book</div>
+    <h2>单本入口：md / 暂存 / 重拆 / 复核</h2>
+    <p class="io"><span>输入</span>一行 worklist + 批次上下文<i>→</i><span>输出</span>一条本书记录（status + manifest）</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>算三条路径</h3><code>:411 run_one</code></div>
+      <div class="node-body">
+        <p><code>dest = books/&lt;uid&gt;/md</code>，<code>stage = 批次/out/&lt;uid&gt;</code>，<code>work = 批次/tmp/&lt;uid&gt;</code>。先看 dest 是否已有 md；再看是不是 <code>--recheck</code>；再看 stage 是否已有产物；都没有才进转换。</p>
+        <div class="ann">
+          <div><b>决策</b><p>三个目录各管一件事：dest 是已发布版本，stage 是待检/待发布，work 是一次性转换区。先判 dest 是为了幂等，先判 recheck 是为了不重跑转换；顺序反过来会把「复核」变成「重拆」。</p></div>
+          <div class="data"><b>读数</b><p>历史结果里 206 landed、616 replaced、46 accepted、142 staged-green；大量 replaced 说明重拆/换源是常态，不是异常。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">dest 已存在？</span></div>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond no">是 · 且没有 --replace</span>
+        <article class="node off">
+          <div class="node-head"><span class="no">02a</span><h3>跳过</h3><code>:418</code></div>
+          <div class="node-body">
+            <p><code>status=skipped-has-md</code>，不读源、不转换、不覆盖。要重拆已有 Markdown，必须显式 <code>--replace</code>；普通 <code>--force</code> 只忽略暂存区，不越过 dest 保护。记录仍会写。</p>
+            <div class="ann">
+              <div><b>决策</b><p>已发布的 md 是读者的资产，默认不覆盖。把「重拆」和「替换」拆成两个开关：<code>--force</code> 重做暂存，<code>--replace</code> 才允许换 dest。</p></div>
+              <div class="data"><b>读数</b><p>本机 206 次 landed 与 616 次 replaced 并存；没有 replace 的重复批次只增加 skipped 记录。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond ok">否 / 允许替换</span>
+        <article class="node">
+          <div class="node-head"><span class="no">02b</span><h3>进入下一岔</h3><code>:421</code></div>
+          <div class="node-body">
+            <p>按顺序检查 <code>--recheck</code>、stage 是否已有产物、是否需要转换。这个岔口只决定「走哪条已有路径」，不产生新的章节。</p>
+            <div class="ann">
+              <div><b>决策</b><p>复核、复用、重拆是三种成本不同的动作：复核只跑两道闸，复用直接看旧 manifest，重拆才花转换与模型时间。先便宜后贵。</p></div>
+              <div class="data"><b>读数</b><p>历史 1 本 <code>staged</code> 是「暂存区有产物但没过检」，说明复用分支确实被走到；没有它就会重复烧转换。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+    <div class="merge">三条路都回到同一个本书记录：status + readings + note</div>
+
+    <div class="edge"><span class="edge-label">recheck？</span></div>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond ok">是</span>
+        <article class="node gate">
+          <div class="node-head"><span class="no">03a</span><h3>只复核暂存区</h3><code>:337 recheck</code></div>
+          <div class="node-body">
+            <p>stage 不存在 → <code>no-stage</code>；存在则重跑 verify/audit、重写 manifest。原文转不出中间 EPUB 时 <code>audit_rc=None</code>，<b>永远不许进库</b>。详见第 8 张图。</p>
+            <div class="ann">
+              <div><b>决策</b><p>复核不重新切章，只回答「上次暂存的产物现在还能不能过闸」。没有原文可量文本量就没有内容关，宁可留在暂存区。</p></div>
+              <div class="data"><b>读数</b><p>验收覆盖 4 个分支：通过 / 无 EPUB / 无 stage / force 冲突；本机 9 本 staged-review 是复核/修复后的待查。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond">否</span>
+        <article class="node gate">
+          <div class="node-head"><span class="no">03b</span><h3>stage 已有？</h3><code>:425</code></div>
+          <div class="node-body">
+            <p>有 stage 且没有 <code>--force</code>：manifest.verified 且允许 land → 直接入库；否则记 <code>staged</code>，沿用上次读数。没有 stage 才进转换。</p>
+            <div class="ann">
+              <div><b>决策</b><p>暂存区的过检产物是可复用资产；但它是否可信只看 manifest，不看目录是否存在。这样中断后重跑不会重复转换。</p></div>
+              <div class="data"><b>读数</b><p>本机 142 条 staged-green；其中一部分是 <code>--no-land</code> 只暂存，不是失败。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+    <div class="merge">没有可复用产物 → 第 3 张图：转换成 EPUB</div>
+  </div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="chart" id="s3">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 03 · convert</div>
+    <h2>转换成 EPUB：Calibre 只是桥</h2>
+    <p class="io"><span>输入</span>主源文件（epub/mobi/azw3/azw）+ override<i>→</i><span>输出</span><code>tmp/&lt;uid&gt;/out/</code> 与转换日志</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>格式分流</h3><code>:444</code></div>
+      <div class="node-body">
+        <p>epub 直接把源文件当 <code>audited</code>；mobi/azw3/azw 需要先转 EPUB。转换前先查 <code>批次/prepared/&lt;uid&gt;.epub</code>：存在就用提前备好的中间件，不再跑 Calibre。</p>
+        <div class="ann">
+          <div><b>决策</b><p>只有非 EPUB 才过 Calibre：EPUB 是唯一“可直接审计”的输入。prepared 目录是人工修过的中间件（例如 MOBI6 缺 guide），优先级高于现场转换，避免每次重跑都重复踩同一个坑。</p></div>
+          <div class="data"><b>读数</b><p>最新批次 4 本全是 epub，没有走 Calibre；历史 1 本 convert-failed 是 Calibre 失败。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">非 epub</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>Calibre 转换</h3><code>:453 sh(CALIBRE)</code></div>
+      <div class="node-body">
+        <p><code>ebook-convert &lt;src&gt; tmp/&lt;uid&gt;/book.epub</code>，超时 900 秒；失败或没有产物 → <code>convert-failed</code>，日志尾部进结果。成功则把 Calibre 中间名换回原始文件名的来源行。</p>
+        <div class="ann">
+          <div><b>决策</b><p>Calibre 只负责“能读”，不负责切章。超时与退出码都算失败，不猜半成品；中间产物名会泄进 YAML/README，所以用 <code>fix_provenance()</code> 改回原名。</p></div>
+          <div class="data"><b>读数</b><p><code>TIMEOUT=900s</code>；本机 1 本 convert-failed。转换日志按 uid 落 <code>logs/&lt;uid&gt;.log</code>，重跑保留 <code>.prev-&lt;stamp&gt;</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">有 EPUB</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">03</span><h3>override 是逃生门</h3><code>:466</code></div>
+      <div class="node-body">
+        <p><code>批次/overrides/&lt;uid&gt;.json</code> 可以是 <code>{tool,args,accept}</code>，也可以直接是参数数组。它可换转换脚本、加 <code>--keep</code>/<code>--drop</code>、或写 <code>accept</code> 受理已知例外。命令里 <code>--title</code> 始终用库里的书名。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不为每本怪书改主脚本：override 是批次级的、可审计的例外。换脚本时 <code>tool_version</code> 跟着实际脚本的 sha 走，manifest 不会记错版本。</p></div>
+          <div class="data"><b>读数</b><p>本机 46 条 accepted；override 不是绕过闸，它把已知问题写进 manifest 的 <code>accepted</code> 字段，报告里单列。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">跑转换器</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>ebook_to_md.py</h3><code>:475</code></div>
+      <div class="node-body">
+        <p><code>python ebook_to_md.py &lt;audited&gt; -o work/out --title &lt;title&gt; [extra]</code>；失败或没有输出目录 → <code>split-failed</code>。成功后才进入第 4 张图的章节边界与第 5 张图的正文筛选。</p>
+        <div class="ann">
+          <div><b>决策</b><p>转换器只依赖 Python + bs4；Calibre 在它之外。command 里保留 <code>out</code> 相对路径，日志可复现；<code>--title</code> 用库名，不用 EPUB 内嵌标题，避免文件名和书目不一致。</p></div>
+          <div class="data"><b>读数</b><p>历史 1 本 split-failed（<code>ebook_to_md rc=1</code>）；其余进入 verify/audit。最新批次 4 本全部通过。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="chart" id="s4">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 04 · chapter boundary</div>
+    <h2>章节边界：TOC 拥有跨度</h2>
+    <p class="io"><span>输入</span>EPUB 的 OPF/spine + nav/NCX<i>→</i><span>输出</span>Unit 列表（title + doc + fragment + span）</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>读容器与 spine</h3><code>ebook_to_md.py:307 Epub</code></div>
+      <div class="node-body">
+        <p>先读 <code>META-INF/container.xml</code> 找 OPF，再解析 metadata/manifest/spine；<code>content_docs()</code> 按 spine 顺序取 HTML/XHTML 文档。不是 zip、没有 container/OPF 都直接报错。</p>
+        <div class="ann">
+          <div><b>决策</b><p>阅读顺序以 spine 为准，不按文件名排序；manifest 只用来解析 href 和 media-type。EPUB 结构错误不猜，直接失败，避免把错书拆成看似正常的 md。</p></div>
+          <div class="data"><b>读数</b><p>这是所有后续切片的唯一入口；EPUB 2/3 都走同一条路径。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">找目录</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>nav 优先，NCX 兜底</h3><code>:421 toc</code></div>
+      <div class="node-body">
+        <p>先找 manifest 里 <code>properties</code> 含 <code>nav</code> 的 EPUB3 nav，按 <code>ol/li/a</code> 递归读；没有 nav 再读 NCX 的 <code>navPoint</code>。都没有时打 warning，退回按 spine 文档切。</p>
+        <div class="ann">
+          <div><b>决策</b><p>TOC 是作者/出版社给的章节视图，优先于任何按文件猜的规则；nav 比 NCX 新，所以先 nav。无 TOC 的书仍要能拆，但会在报告里明确降级。</p></div>
+          <div class="data"><b>读数</b><p>本机大量 EPUB 有 nav/NCX；无 TOC 的兜底会产生更多碎文件，是第 4 张图要避免的情况。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">TocEntry 列表</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>每个 anchor 拥有跨度</h3><code>:983 build_units</code></div>
+      <div class="node-body">
+        <p>TOC 条目按 doc 分组；每个 anchor 拥有从本 anchor 到下一个 anchor 的整个阅读跨度，而不是“一个 spine 文件 = 一章”。同一 anchor 的连续条目只有最后一个拥有跨度；TOC 未列出的 spine 文档按续页规则并入前一个 unit。</p>
+        <div class="ann">
+          <div><b>决策</b><p>Calibre 常把一章拆成“标题页 + 正文页 + 尾页”几个文件；按 spine 切会把一章变成 5 个碎文件（B1941 曾 29 files / 71.6%）。按 TOC 跨度切才还原章节。</p></div>
+          <div class="data"><b>读数</b><p>当前 1,823 本共 108,505 章，平均约 59.5 章/本；最新批次 4 本分别 24 / 43 / 13 / 65 章。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">TOC 之后的散页</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>续页判定</h3><code>:1027</code></div>
+      <div class="node-body">
+        <p>不是部/篇标题、不是新「第 N 章」、且满足以下之一时并入前一个 unit：文本与前一个标题相同、页首不像标题、或本页有 200 字以上正文、或前一个 unit 本身是空页/正文标题。否则单独成 unit（除非加 <code>--no-untoced</code>）。</p>
+        <div class="ann">
+          <div><b>决策</b><p>续页规则解决两个相反错误：把正文续页误当新章（碎文件），或把独立短章误并进上一章（丢标题）。四个条件都是“有证据才并”，拿不准时保留独立页，让人从报告里看到。</p></div>
+          <div class="data"><b>读数</b><p>B1941 的 29 files/71.6% 是这条规则的反面教材；修复后同类书按 TOC 跨度归并。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">数字小节</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>折叠纯数字小节</h3><code>:1248 merge_numeric_sections</code></div>
+      <div class="node-body">
+        <p>标题只有 <code>01</code>/<code>二</code> 这类数字的小节，若前一个 unit 是更浅层的「第 N 章」，折进该章；部/篇分隔和同层数字章不折。折叠后子节正文并进父章，避免生成一堆名为 <code>01.md</code> 的文件。</p>
+        <div class="ann">
+          <div><b>决策</b><p>数字小节不是独立章节，而是章的内部结构；判据同时看标题形态、TOC 层级、父标题是否为「第 N 章」。只折“裸数字”，有实际标题的小节保留。</p></div>
+          <div class="data"><b>读数</b><p>转换报告会打 <code>merged: N numbered sub-section(s)</code>；这是可观察的折叠数，不是静默丢弃。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">Unit + span</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">06</span><h3>按 span 切片</h3><code>:1063 slice_root</code></div>
+      <div class="node-body">
+        <p>从 fragment 切到 next_fragment；锚点落在 inline 元素时向上爬到块级祖先；最后一个条目从锚点取到文档末尾；同 anchor 的重复条目返回空 div；找不到锚点才回退整个 body。</p>
+        <div class="ann">
+          <div><b>决策</b><p>切片只做“取哪一段”，不改正文；空 div 是显式“这条目不拥有内容”，不是错误。回退 body 是最后手段，正常书不应走到。</p></div>
+          <div class="data"><b>读数</b><p>这套切片同时服务单本拆章与合集拆书（<code>split_collection.py</code> 复用），所以边界规则只维护一处。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="chart" id="s5">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 05 · body &amp; files</div>
+    <h2>正文筛选：默认只写正文</h2>
+    <p class="io"><span>输入</span>Unit 列表 + 转换后的 blocks<i>→</i><span>输出</span><code>NN_标题.md</code> + <code>images/</code> + <code>README.md</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node gate">
+      <div class="node-head"><span class="no">01</span><h3>前后件过滤</h3><code>ebook_to_md.py:1770</code></div>
+      <div class="node-body">
+        <p>默认 <code>--all-pages</code> 关闭：TOC 之前的无编号页按 front matter 排除；版权/出版信息页按 <code>COLOPHON_RE</code> 排除；部/篇标题只有标题没有正文（&lt;200 字）按 part divider 排除；标题名命中封面/版权/目录/推荐序/索引等词按 front/back matter 排除。</p>
+        <div class="ann">
+          <div><b>决策</b><p>默认只写正文，是为了让阅读版从第一章开始；但“部/篇标题承载整部正文”的书不能误删（三体 II 上部），所以只有 filler 才排除。注释/参考文献默认保留，读者要能顺着引文查。</p></div>
+          <div class="data"><b>读数</b><p>正文版通常为原文的 94–97%；最新 4 本 0.954–1.023（1.023 仍在 1.15 上限内）。README 的「未收录」列出每个被排除页及原因。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">保留的 unit</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>标题恢复与去重</h3><code>:1790</code></div>
+      <div class="node-body">
+        <p>没有 heading 的 unit 先按字号/加粗候选恢复标题，再按样式统一层级；无 TOC 页用首行猜标题；每个 unit 去掉正文开头重复的章名。标题最终确定后才生成文件名。</p>
+        <div class="ann">
+          <div><b>决策</b><p>很多 EPUB 用 <code>&lt;p&gt;</code> 模拟标题，不能只看标签；但恢复只在“没有 heading”时做，避免把正文段落误升为标题。标题先定、文件名后定，内部链接才能解析。</p></div>
+          <div class="data"><b>读数</b><p><code>--heading-recovery auto</code> 是默认；恢复失败会在 warnings 里留痕，不会静默改正文。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">标题定稿</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>编号、清洗、防重名</h3><code>:1815</code></div>
+      <div class="node-body">
+        <p>按写出顺序编号，宽度至少 2 位；标题开头的章号与序号一致时剥掉；<code>sanitize_filename</code> 去非法字符并截断；同名 stem 追加 <code>_2</code>。正文前写 YAML（title/part/author/source/chapter 等），正文首行是 <code># 标题</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>文件名可读、可排序、可做目录名；编号用写出顺序而不是 TOC 原始序号，因为被排除的前后件不占号。YAML 是阅读版/索引的元数据入口，不靠文件名反推。</p></div>
+          <div class="data"><b>读数</b><p>最新 4 本产出 24/43/13/65 个 md；当前全库 108,505 章。文件名冲突只追加后缀，不覆盖。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">写文件</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">04</span><h3>图片、README、清理</h3><code>:1607 emit_book</code></div>
+      <div class="node-body">
+        <p>图片按需复制到 <code>images/</code>，重名加 <code>_2</code>，Markdown 用相对路径；README 写书名、作者、章节数、图片数、来源、目录和「未收录」原因；最后删掉没有被任何 md 引用的图片，并提示上次遗留的 md。</p>
+        <div class="ann">
+          <div><b>决策</b><p>README 是给人看的审计账：哪些页被跳过、为什么。图片只留被引用的，避免暂存目录越跑越大；旧 md 不静默删除，只在报告里提示。</p></div>
+          <div class="data"><b>读数</b><p>最新 4 本全部有 README；全库 md 目录的章节数与 <code>library.db</code> 的 derived 计数对齐。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section class="chart" id="s6">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 06 · two gates</div>
+    <h2>两道闸：结构与文本量分开</h2>
+    <p class="io"><span>输入</span><code>out/</code> + 原始 EPUB<i>→</i><span>输出</span>verify/audit 的 rc + 读数 + 问题清单</p>
+  </div>
+
+  <div class="flow">
+    <article class="node gate">
+      <div class="node-head"><span class="no">01</span><h3>结构闸 verify</h3><code>verify_output.py</code></div>
+      <div class="node-body">
+        <p>逐 md 检查：有 YAML、有 <code>#</code> 一级标题、字符数不少于 100（少于只警告）、内容不与别的章完全相同；再查图片是否存在、相对链接是否断、磁盘上是否有孤儿图片。发现真正问题 → rc=1。</p>
+        <div class="ann">
+          <div><b>决策</b><p>结构问题必须硬失败：缺 H1、重复章、断图会让阅读版直接坏掉。字符少只警告，因为卷首/版权页本来就短；公式里的 <code>[G(R)](1-u)</code> 不算链接，只有 md/图片后缀才算文件引用。</p></div>
+          <div class="data"><b>读数</b><p>默认 <code>--min-chars 100</code>；problems 与 notes 分开打印。最新 4 本 verify rc 全 0。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">结构读数</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">02</span><h3>文本量闸 audit</h3><code>audit_volume.py</code></div>
+      <div class="node-body">
+        <p>从原始 EPUB 逐 spine 文档数 CJK + 拉丁/数字字符（空白与标点不算），再数输出 md 的同样字符；比值低于 0.88 判 LOW（可能丢正文），高于 1.15 判 HIGH（可能重复）。原文少于 100 字算无文本页；输出 0 字算未转换。</p>
+        <div class="ann">
+          <div><b>决策</b><p>只用标点/空白剥离后的字符数，Markdown 语法不会影响比值；正文版天然是原文 94–97%，所以下限 0.88 留出前后件空间，高于 1.15 才怀疑重复。</p></div>
+          <div class="data"><b>读数</b><p>最新 4 本 0.954 / 0.996 / 1.015 / 1.023；全库 46 条 accepted 是人工受理的例外书。历史 1,016 条有比值记录，12 本仍在待查。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">两个 rc</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">03</span><h3>合闸</h3><code>split_md_batch.py:505</code></div>
+      <div class="node-body">
+        <p><code>verify_rc == 0 and audit_rc == 0</code> 才算过。任一失败且没有 <code>accept</code>，进入第 7 张图的修复/待查；有 <code>accept</code> 则把原因写进 manifest 的 <code>accepted</code>，产物仍可入库。</p>
+        <div class="ann">
+          <div><b>决策</b><p>两个闸回答不同问题：结构对不对、内容够不够。不能用一个总退出码代替；也不让转换器的 rc 直接决定入库，转换成功但内容丢半本必须被抓住。</p></div>
+          <div class="data"><b>读数</b><p>历史 9 本 staged-review、1 本 staged、1 本 convert-failed、1 本 split-failed；没有“转换 rc=0 就直接入库”的记录。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">失败时人看什么</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>证据汇总</h3><code>md_review_report.py</code></div>
+      <div class="node-body">
+        <p>只读批次目录，给每本待查书列：md 正文字符、图片路径字符、跨文件重复的 120 字片段数、自链数、spine 里完全没收录的页及字数、未收录原因计数。操作台「查看问题」就是调它。</p>
+        <div class="ann">
+          <div><b>决策</b><p>待查不是一句“失败了”：人需要看到丢的是哪一页、重复的是哪一段。报告只读，不改 md、不改 manifest，避免“看问题”本身改变证据。</p></div>
+          <div class="data"><b>读数</b><p>本机 12 本待查可用它逐本摊开；最新批次的 4 本不需要走这一支。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================ 7 -->
+<section class="chart" id="s7">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 07 · repair</div>
+    <h2>修复回路：agent 只修映射</h2>
+    <p class="io"><span>输入</span>未过闸的暂存产物 + verify/audit 输出<i>→</i><span>输出</span>修过的 blocks / override / 新的闸读数</p>
+  </div>
+
+  <div class="flow">
+    <article class="node gate">
+      <div class="node-head"><span class="no">01</span><h3>触发条件</h3><code>split_md_batch.py:505</code></div>
+      <div class="node-body">
+        <p>只有 <code>(verify_rc or audit_rc)</code>、<code>ctx.fix</code> 为真、且没有 <code>accept</code> 时才叫 agent。显式受理的例外不修；<code>--no-agent-fix</code> 直接跳过。</p>
+        <div class="ann">
+          <div><b>决策</b><p>修复是“检查失败后的有限补救”，不是默认步骤。人已经受理的例外不再让模型改；关掉修复时行为退回“只报错、留暂存”，保持可预测。</p></div>
+          <div class="data"><b>读数</b><p>本机 43 本用过修复，共 47 次；最新批次 B0004 修了 2 次后 landed。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">有预算</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>预算与并发</h3><code>:250 agent_fix</code></div>
+      <div class="node-body">
+        <p>每本最多 <code>--agent-fix-cap 2</code> 次；整批 <code>--agent-fix-total 0</code> 表示不限；单次 <code>--agent-fix-timeout 600</code> 秒。批次级计数器加锁，避免并发书同时超预算。</p>
+        <div class="ann">
+          <div><b>决策</b><p>修复会打模型、可能改正文，必须有上限；单本 2 次是“先修映射，再修一次”，不是无限试错。整批总额默认不限，但操作台可以传一个总预算。</p></div>
+          <div class="data"><b>读数</b><p>历史上限内最多 2 次/本；47 次修复分布在 43 本，绝大多数只需 1 次。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">组提示词</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>允许与禁止</h3><code>:58 FIX_PROMPT</code></div>
+      <div class="node-body">
+        <p>提示词带书 uid/title/src、暂存目录、批次、verify 尾部 1500 字、audit 尾部 800 字、技能文档路径。允许：调整章节映射与章名、补回漏收正文、改 <code>overrides/&lt;uid&gt;.json</code>。禁止：改 <code>books/</code>、改脚本、用重复段落或编造文本凑字数、删正文抬比例。</p>
+        <div class="ann">
+          <div><b>决策</b><p>模型只修“切法与映射”，不写书：正文必须来自原书，比例不能靠删减/复制来“过闸”。禁止改库和脚本，保证失败最多污染暂存区。</p></div>
+          <div class="data"><b>读数</b><p>修复报告写 <code>logs/&lt;uid&gt;.fix.md</code>，含 rc、耗时、模型输出尾部；manifest 里记 fix 次数。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">pi 修复</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>重跑两闸</h3><code>:520</code></div>
+      <div class="node-body">
+        <p>每次修复后重跑 verify 与 audit，更新读数；仍在预算内可再修。修完仍失败 → <code>staged-review</code>，产物留在暂存区，等人在操作台看证据/改 override/复核。</p>
+        <div class="ann">
+          <div><b>决策</b><p>修复不能自己宣布成功：只有两道闸都过才算过。模型输出只是候选改动，闸是裁判；修不好就停在待查，不把风险带进库。</p></div>
+          <div class="data"><b>读数</b><p>最新批次 4 本最终全 landed；历史 12 本待查说明修复不是万能的。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section class="chart" id="s8">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 08 · land</div>
+    <h2>落地：先暂存，再换目录</h2>
+    <p class="io"><span>输入</span>过闸的 <code>out/&lt;uid&gt;</code> + manifest<i>→</i><span>输出</span><code>books/&lt;uid&gt;/md</code>（或保留暂存）</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>写 manifest</h3><code>:550</code></div>
+      <div class="node-body">
+        <p>manifest 记 uid、method、tool_version、tool、batch、source、source_sha256、source_format、章节数、字节数、图片/字符数、audit 原文与比值、生成时间、verified、accepted。先写 <code>.tmp</code> 再 <code>os.replace</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>manifest 是产物身份证：阅读版/索引/替换源都靠它判断“这份 md 是不是当前源拆的”。原子写避免半份 JSON 被读。</p></div>
+          <div class="data"><b>读数</b><p>替换源时旧 md 只有 manifest 没有 <code>source_sha256</code> 才会被标记；新 manifest 一定带源 sha。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">verified</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">02</span><h3>land 或留暂存</h3><code>:239 land</code></div>
+      <div class="node-body">
+        <p>过闸且允许 land：dest 已存在先改名 <code>stage.prev-&lt;stamp&gt;</code>，再把 stage <code>os.rename</code> 到 dest；旧版本留在批次区，不删。没过闸：留 <code>staged-review</code>；<code>--no-land</code> 则即使过闸也只到 <code>staged-green</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>先暂存再换目录，任何时刻读者看到的都是一个完整版本；旧版本改名而不是删除，出问题可回滚。land 是唯一把产物写进 books/ 的动作。</p></div>
+          <div class="data"><b>读数</b><p>最新批次 4 本全部 landed；历史 616 replaced 说明换目录经常发生，旧版本都留在批次区。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">状态判定</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>状态表</h3><code>:82 STATUS</code></div>
+      <div class="node-body">
+        <table>
+          <thead><tr><th>完成（DONE）</th><th>待查（pending_review）</th></tr></thead>
+          <tbody>
+            <tr><td><code>landed</code> / <code>replaced</code> / <code>accepted</code> / <code>skipped-has-md</code> / <code>staged-green</code></td><td><code>staged</code> / <code>staged-review</code> / <code>no-stage</code> / <code>split-failed</code> / <code>convert-failed</code> / <code>error</code></td></tr>
+          </tbody>
+        </table>
+        <p>成功与否看每本 status，不看进程退出码；CLI 始终返回 0。操作台 gate 读 <code>report.json</code> 的 <code>pending_review</code>，非空就停 <code>awaiting_review</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>退出码只表示“批次跑完了”，不表示“书都成了”；把逐本状态作为产品信号，页面才能显示 4 本里哪一本待查。`skipped-has-md` 是完成，不是失败。</p></div>
+          <div class="data"><b>读数</b><p>历史 1,010 done / 12 pending；最新 4 done。`staged-green` 在 `--no-land` 时也算 done，页面需结合 dest 看是否已发布。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">重跑/复核</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>recheck 的边界</h3><code>:337</code></div>
+      <div class="node-body">
+        <p><code>--recheck</code> 只复核 stage，不重切；stage 不存在 → <code>no-stage</code>。原文转不出中间 EPUB → 没有文本量关，<b>never land</b>。<code>--recheck</code> 与 <code>--force</code> 互斥。dest 已存在且没 <code>--replace</code> 时，入口先判 <code>skipped-has-md</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>复核是便宜的二次判断，不是重拆；没有原文就没有内容关，不能因为结构过了就入库。dest 保护优先于 recheck，避免“复核”顺手覆盖已发布版本。</p></div>
+          <div class="data"><b>读数</b><p>验收覆盖 4 个 recheck 分支（通过/无 EPUB/无 stage/force 冲突）；本机 9 本 staged-review 可复核。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================ 9 -->
+<section class="chart" id="s9">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 09 · handoff</div>
+    <h2>接棒：report、操作台与阅读</h2>
+    <p class="io"><span>输入</span>批次 logs + manifest<i>→</i><span>输出</span><code>report.json</code> / <code>library.db</code> 的 md 状态 / 阅读页</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>批次报告</h3><code>:594 report · :644 summary</code></div>
+      <div class="node-body">
+        <p><code>--report</code> 只读 logs，打状态统计、待查清单、文本量出界（&lt;0.88 或 &gt;1.15，原文≥100 字）；<code>--report-json</code> 在 stdout 最后一行给 <code>{batch,status_counts,books,pending_review}</code>。accepted 例外单列。</p>
+        <div class="ann">
+          <div><b>决策</b><p>报告不给“总成功/失败”二元结论：待查和已受理例外是不同状态。JSON 是操作台 gate 的契约，字段稳定，页面不解析自然语言。</p></div>
+          <div class="data"><b>读数</b><p>最新批次 <code>{"landed":4}</code>、<code>pending_review=[]</code>；历史 12 本待查。报告可直接用于批次复盘。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">操作台接</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>操作台 gate</h3><code>apps/ops/server.py:537 gate_split</code></div>
+      <div class="node-body">
+        <p>拆章任务结束读 <code>report.json</code>（或日志里的 status_counts）；<code>pending_review</code> 非空 → 任务 <code>awaiting_review</code>，否则按命令退出码判成功。单本 <code>--only</code> 自动带 <code>--force</code>；已有 md 的替换走 <code>--replace</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>页面不自己解释章节状态，直接信脚本的 pending_review；这样 CLI、操作台、批次复盘只有一个判据。任务状态与书状态分层，避免页面重复实现规则。</p></div>
+          <div class="data"><b>读数</b><p>操作台验收 <code>check_ops.py</code> 168 项全过（本机 2026-11-14）；拆章页的 11 个状态词与 <code>STATUS</code> 表对齐。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">重建派生</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>重建书目与索引</h3><code>build_library.py</code></div>
+      <div class="node-body">
+        <p>拆章成功后由操作台接 <code>build_library.py --emit-json</code> 与 <code>gen_book_catalog.py</code>；<code>derived</code> 表按磁盘 md 重新生成 <code>status/chapters/source_sha256</code>。<code>v_pending_md</code> 随之减少。</p>
+        <div class="ann">
+          <div><b>决策</b><p>拆章脚本不直接写 <code>library.db</code>/<code>book.json</code>：产物先落 md，再由构建器从磁盘投影。这样手工修 md、重跑构建都能收敛，不会出现脚本和库各说一套。</p></div>
+          <div class="data"><b>读数</b><p>当前 <code>library.db</code>：1,823 本 md / 108,505 章；<code>v_pending_md</code> 133 本，全部非电子书。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">读者看</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">04</span><h3>阅读版与后续</h3><code>apps/reading</code></div>
+      <div class="node-body">
+        <p>阅读版按 <code>books/&lt;uid&gt;/md</code> 和 manifest 提供章节目录与正文；替换源后旧 md 的 manifest 会提示源不一致，等下一次拆章。PDF 走 <code>pdf_md_batch.py</code>，txt/docx 走 <code>docs_to_md.py</code>，都不在这九张图里。</p>
+        <div class="ann">
+          <div><b>决策</b><p>“拆章”“换源”“做阅读版”是三个可观察动作：拆章只产出 md，换源只改 manifest/来源，阅读版按需生成。任何一步失败都不把旧阅读版直接弄没。</p></div>
+          <div class="data"><b>读数</b><p>最新批次 4 本已可供阅读；下一批只需 <code>build_worklist</code> 重新取 <code>v_pending_md</code>，历史批次账不动。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>阶段</th><th>主要方法</th><th>关键判据</th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td>范围</td><td><code>pending_ebooks</code> / <code>build_worklist</code></td><td>主源格式 4 种、<code>v_pending_md</code>、path_state</td><td>worklist 只写一次</td></tr>
+        <tr><td>转换</td><td>EPUB 直读 / Calibre / prepared / override</td><td>能打开、有输出目录</td><td><code>convert-failed</code> 或进入切章</td></tr>
+        <tr><td>切章</td><td>TOC span + 续页 + 数字小节折叠 + slice_root</td><td>章节归属与标题</td><td>Unit 列表 → md</td></tr>
+        <tr><td>检查</td><td>verify 结构 / audit 文本量</td><td>H1、重复、断链、0.88–1.15</td><td>过闸 / 修复 / 待查</td></tr>
+        <tr><td>落地</td><td>manifest + stage + land</td><td>两闸 rc 都 0 或 accept</td><td>landed / replaced / accepted</td></tr>
+        <tr><td>接棒</td><td>report.json + build_library + catalog</td><td><code>pending_review</code> 空</td><td>操作台完成、阅读可见</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <h2>怎么复核这九张图</h2>
+  <div class="two">
+    <div>
+      <h3>代码入口</h3>
+      <ul>
+        <li><code>src/bookcorpus/scripts/split_md_batch.py</code>：main / build_worklist / run_one / recheck / land / report</li>
+        <li><code>.agents/skills/ebook-to-md/scripts/ebook_to_md.py</code>：Epub / toc / build_units / slice_root / emit_book</li>
+        <li><code>.agents/skills/ebook-to-md/scripts/verify_output.py</code>：结构闸</li>
+        <li><code>.agents/skills/ebook-to-md/scripts/audit_volume.py</code>：文本量闸</li>
+        <li><code>src/bookcorpus/scripts/md_review_report.py</code>：待查证据</li>
+      </ul>
+    </div>
+    <div>
+      <h3>验收命令</h3>
+      <div class="cmd"><span># 15 个拆章验收</span><br>python3 tests/acceptance/ops/test_split.py<br><br><span># 技能自测</span><br>uv run --frozen pytest tests/test_skills.py -q<br><br><span># 只读出批次统计</span><br>BOOKS_ROOT=~/书库 python3 src/bookcorpus/scripts/split_md_batch.py --batch split-ops-20261104-113547 --report --report-json</div>
+    </div>
+  </div>
+  <p style="margin-top:14px">相关文档：<a href="操作台实现流程图-2026-11-14.html">统一操作台实现流程图</a> · <a href="入库实现流程图-2026-11-14.html">入库实现流程图</a> · <a href="多格式来源支持-2026-11-05.md">多格式来源支持</a> · <a href="设计方案-书目结构.md">书目结构方案</a></p>
+</footer>
+
+</div>
+
+</body>
+</html>

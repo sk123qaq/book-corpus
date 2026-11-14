@@ -1,0 +1,1181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分层读 · 八张流程图</title>
+<style>
+  :root {
+    --paper: #f4f1e9;
+    --card: #fffdf8;
+    --ink: #1b1d22;
+    --muted: #686d77;
+    --line: #ded9cc;
+    --line-strong: #c9c2b1;
+    --amber: #8a5a00;
+    --amber-bg: #fbf0dc;
+    --amber-line: #e6cf9f;
+    --green: #2f6b4f;
+    --green-bg: #e8f2ec;
+    --green-line: #bfd9cb;
+    --red: #a23c2e;
+    --red-bg: #f8e8e4;
+    --red-line: #e8c3bb;
+    --blue: #24518f;
+    --blue-bg: #e8eef9;
+    --blue-line: #c5d3ea;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --sans: "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    padding: 44px 30px 90px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.75 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1180px; margin: 0 auto; }
+  a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(36,81,143,.25); }
+  a:hover { border-bottom-color: var(--blue); }
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: #2c3340;
+    background: #f0eee7;
+    border: 1px solid #e3dfd3;
+    border-radius: 4px;
+    padding: 0 4px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- hero ---------- */
+  .hero { border-bottom: 2px solid var(--ink); padding-bottom: 26px; margin-bottom: 46px; }
+  .stamp {
+    display: flex; justify-content: space-between; gap: 20px;
+    color: var(--muted); font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 14px 0 10px;
+    font-family: var(--serif);
+    font-size: 42px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2;
+  }
+  .statusline {
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--green);
+    background: var(--green-bg);
+    font-size: 13px; color: #264c3b;
+    display: inline-block;
+  }
+  .lede { margin: 0 0 16px; max-width: 900px; color: #3d4047; font-size: 15.5px; }
+  .lede b { color: var(--ink); }
+  .notice {
+    margin: 16px 0 0; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: #faf8f2; color: var(--muted); font-size: 13px;
+  }
+  .notice b { color: var(--ink); }
+
+  .toc {
+    margin-top: 22px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 22px;
+  }
+  .toc a {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 4px 0; border-bottom: 1px dotted var(--line);
+    color: var(--ink); font-size: 13.5px;
+  }
+  .toc a span { color: var(--amber); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; }
+  .toc a:hover { border-bottom-color: var(--ink); }
+
+  .legend { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted); }
+  .legend i {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+    font-style: normal;
+  }
+  .legend i::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--line-strong); }
+  .legend .l-step::before { background: var(--blue); }
+  .legend .l-gate::before { background: var(--amber); }
+  .legend .l-ok::before { background: var(--green); }
+  .legend .l-no::before { background: var(--red); }
+
+  /* ---------- chart shell ---------- */
+  .chart { margin: 0 0 76px; }
+  .chart-head { margin-bottom: 22px; }
+  .chart-kicker {
+    color: var(--amber); font-family: var(--mono); font-size: 11px;
+    letter-spacing: .14em; text-transform: uppercase;
+  }
+  .chart h2 {
+    margin: 4px 0 8px;
+    font-family: var(--serif); font-size: 29px; font-weight: 600; line-height: 1.3;
+  }
+  .io {
+    margin: 0; color: var(--muted); font-size: 13px;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px;
+  }
+  .io span {
+    color: #3b3e45; background: #ece9df; border-radius: 4px; padding: 1px 7px;
+    font-family: var(--mono); font-size: 11.5px;
+  }
+  .io i { font-style: normal; color: var(--amber); }
+  .chart-end {
+    margin-top: 18px; color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; gap: 20px;
+    border-top: 1px solid var(--line); padding-top: 8px;
+  }
+
+  /* ---------- flow ---------- */
+  .flow { display: flex; flex-direction: column; }
+
+  .node {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 22px 16px;
+    box-shadow: 0 1px 0 rgba(30,25,15,.04);
+  }
+  .node::before {
+    content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 4px;
+    border-radius: 0 4px 4px 0; background: var(--blue);
+  }
+  .node-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .node-head .no {
+    font-family: var(--mono); font-size: 12px; color: var(--blue); letter-spacing: .08em;
+  }
+  .node h3 { margin: 0; font-family: var(--serif); font-size: 21px; font-weight: 600; line-height: 1.35; }
+  .node-head code { margin-left: auto; }
+  .node-body > p { margin: 4px 0 0; }
+  .node-body > p + p { margin-top: 8px; }
+  .kv { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .kv li { padding-left: 16px; position: relative; font-size: 13.5px; color: #3f434b; }
+  .kv li::before { content: "·"; position: absolute; left: 4px; color: var(--amber); font-weight: 700; }
+  .kv b { color: var(--ink); }
+
+  .ann {
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .ann.one { grid-template-columns: 1fr; }
+  .ann div > b {
+    display: inline-block; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 2px;
+  }
+  .ann .data > b { color: var(--green); }
+  .ann p { margin: 0; font-size: 12.8px; line-height: 1.7; color: #464a52; }
+  .ann em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+  /* ---------- edges ---------- */
+  .edge { position: relative; height: 42px; display: flex; align-items: center; justify-content: center; }
+  .edge::before {
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 7px; width: 2px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .edge::after {
+    content: ""; position: absolute; left: 50%; bottom: 1px; transform: translateX(-5px);
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 7px solid var(--line-strong);
+  }
+  .edge-label {
+    position: relative; z-index: 1; background: var(--paper);
+    padding: 0 8px; color: var(--muted); font-size: 11.5px; font-family: var(--mono);
+  }
+  .edge-label b { color: var(--amber); font-weight: 600; }
+
+  /* ---------- gate ---------- */
+  .node.gate { background: var(--amber-bg); border: 1.5px dashed var(--amber-line); }
+  .node.gate::before { background: var(--amber); }
+  .node.gate .no { color: var(--amber); }
+  .node.gate h3 { color: #6d4700; }
+  .gate-badge {
+    display: inline-block; margin-left: 2px; padding: 0 7px; border-radius: 3px;
+    background: var(--amber); color: #fff8e8; font-size: 10px; letter-spacing: .12em;
+    vertical-align: 3px;
+  }
+  .node.gate .ann > div > b { color: #8a5a00; }
+
+  /* ---------- outcomes ---------- */
+  .node.stop { background: var(--green-bg); border-color: var(--green-line); }
+  .node.stop::before { background: var(--green); }
+  .node.stop .no { color: var(--green); }
+  .node.stop h3 { color: #24533c; }
+  .node.stop .ann > div > b { color: #2f6b4f; }
+  .node.off { background: #f6f4ee; border-style: solid; }
+  .node.off::before { background: var(--red); }
+  .node.off h3 { color: #6f3028; }
+  .node.off .ann > div > b { color: var(--red); }
+
+  /* ---------- fork ---------- */
+  .fork {
+    position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px; padding-top: 34px;
+  }
+  .fork::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 14px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .fork::after {
+    content: ""; position: absolute; top: 14px; left: 25%; right: 25%; height: 2px;
+    background: var(--line-strong);
+  }
+  .fork-arm { position: relative; padding-top: 18px; }
+  .fork-arm::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 18px;
+    background: var(--line-strong); transform: translateX(-1px);
+  }
+  .cond {
+    display: inline-block; margin-bottom: 8px; padding: 1px 9px; border-radius: 999px;
+    font-size: 11.5px; font-family: var(--mono); border: 1px solid var(--line-strong);
+    background: var(--card); color: #3f434b;
+  }
+  .cond.yes { border-color: var(--green-line); background: var(--green-bg); color: #24533c; }
+  .cond.no { border-color: var(--amber-line); background: var(--amber-bg); color: #6d4700; }
+  .cond.off { border-color: var(--red-line); background: var(--red-bg); color: #6f3028; }
+  .fork .node h3 { font-size: 18px; }
+  .fork .node-body > p { font-size: 13.2px; }
+
+  .merge {
+    margin: 14px 0 0; text-align: center; color: var(--muted); font-size: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .merge::before, .merge::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th {
+    background: #efece2; font-weight: 600; font-size: 11.5px; letter-spacing: .06em;
+    color: #4b4f58; white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td code { font-size: 11.5px; }
+  .t-ok { color: var(--green); font-weight: 600; }
+  .t-hold { color: var(--amber); font-weight: 600; }
+  .t-off { color: var(--red); font-weight: 600; }
+
+  /* ---------- footer ---------- */
+  .footer {
+    margin-top: 20px; border-top: 2px solid var(--ink); padding-top: 18px;
+    color: var(--muted); font-size: 13px;
+  }
+  .footer h2 { font-family: var(--serif); font-size: 24px; color: var(--ink); margin: 0 0 10px; }
+  .footer ul { margin: 8px 0 0; padding-left: 20px; }
+  .footer li { margin: 3px 0; }
+  .cmd {
+    margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: #201f1c; color: #eee9dc;
+    font-family: var(--mono); font-size: 12px; line-height: 1.8; overflow-x: auto;
+  }
+  .cmd span { color: #b9b09a; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .two h3 { font-family: var(--serif); font-size: 18px; margin: 0 0 6px; }
+
+  @media (max-width: 860px) {
+    body { padding: 26px 16px 70px; }
+    h1 { font-size: 31px; }
+    .toc, .fork, .ann, .two { grid-template-columns: 1fr; }
+    .fork::after { display: none; }
+    .fork-arm::before { display: none; }
+    .fork-arm { padding-top: 0; }
+    .node-head code { margin-left: 0; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .node, .tablewrap { break-inside: avoid; }
+    .chart { break-before: page; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <div class="stamp"><span>BOOK-CORPUS / 分层读</span><span>2026-11-14 · 工作树</span></div>
+  <h1>分层读 · 八张流程图</h1>
+  <p class="statusline">状态：implemented · 2026-11-14　验收：<code>uv run --frozen pytest tests/test_reading_*.py tests/test_depth_acceptance.py</code></p>
+  <p class="lede">一章 md 从读法账出发，经过容量预检、分块建模与四层编译，最后落成一张能逐字回查的深度页。<b>这张图按 2026-11-14 的工作树画</b>，每个节点给出代码入口，每张卡片底栏给出决策与可复跑的读数。</p>
+  <div class="notice">口径：分层读在 2026-11-11 取代四读；2026-11-13 起研究档退役，旧链接退到深读。页面只给<b>速览、标准、深读</b>三档；<b>结构、面板、速览、标准、深读</b>是生成账里的五件产物。两者不是同一张清单，图 06 会把它们拆开。旧包仍按 legacy 路径打开，不在本图的生成链里。</div>
+  <nav class="toc">
+    <a href="#s1"><span>01</span>全链路：一章 md 怎么变成一张深度页</a>
+    <a href="#s2"><span>02</span>读法与过期：一本书从哪里来，什么时候失效</a>
+    <a href="#s3"><span>03</span>提交与预检：按钮点下去先过哪几道闸</a>
+    <a href="#s4"><span>04</span>任务与续跑：一个深度任务怎么跑，失败后怎么续</a>
+    <a href="#s5"><span>05</span>分块建模：长章怎么切，账怎么守恒</a>
+    <a href="#s6"><span>06</span>四层编译：面板、速览、标准、深读各做什么</a>
+    <a href="#s7"><span>07</span>渲染与路由：五件产物怎么变成一张可打开的页</a>
+    <a href="#s8"><span>08</span>闸门与失败账：五道闸分别拦什么</a>
+    <a href="#refs" style="grid-column:1/-1"><span>09</span>读数与复核：每个数字回哪查</a>
+  </nav>
+  <div class="legend">
+    <i class="l-step">处理</i><i class="l-gate">判定</i><i class="l-ok">采用 / 结果</i><i class="l-no">未采用 / 存档</i>
+    <i>卡片底栏：决策 + 读数</i>
+  </div>
+</header>
+
+<main>
+
+<div class="notice" style="margin:22px 0 0">图例加一条：<b class="t-hold">琥珀虚线</b>是判定节点，<b class="t-ok">绿色</b>是会被发布或保存的结果，<b class="t-off">红色</b>是明确不做的分支。代码入口标在每张卡片标题右侧，行号对应 2026-11-14 的工作树。</div>
+
+<!--
+  01 全链路
+-->
+<section class="chart" id="s1">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 01 · 总览</div>
+    <h2>全链路：一章 md 怎么变成一张深度页</h2>
+    <p class="io"><span>输入</span><code>books/&lt;uid&gt;/md/</code> 第 n 章 + <code>读法</code> 表<i>→</i><span>输出</span><code>工作区/阅读/&lt;uid&gt;/ch/&lt;nn&gt;/depth/chapter.html</code>，外加 <code>state.json</code> 与五件层产物</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>章页</h3><code>apps/reading/server.py:246</code></div>
+      <div class="node-body">
+        <p>页面读 <code>/api/chapter/&lt;uid&gt;/&lt;n&gt;</code>，拿到原文块、当前读法、容量预检与五层状态。没有书级读法时，主按钮禁用并显示「先选一个读法 →」。</p>
+        <div class="ann">
+          <div><b>决策</b><p>先立读法再生成。没有读法就用兜底 <code>argument</code> 批量生成，等于把论证注加到小说上，返工比重选一次贵得多。</p></div>
+          <div class="data"><b>读数</b><p>读法值 4 个：<code>narrative</code>、<code>argument</code>、<code>practical</code>、<code>reference</code>；新工作区没有任何读法行时，禁用是正确空状态。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">uid + n</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>裁决读法</h3><code>service.py:712 · profile.py:290</code></div>
+      <div class="node-body">
+        <p>章级覆写、书级默认、建议、兜底 <code>argument</code> 依次比较，产出 <code>effective_mode</code> 与 <code>effective_source</code>。章级覆写只在 <code>source_sha256</code> 匹配时生效。</p>
+        <div class="ann">
+          <div><b>决策</b><p>章级覆写绑定源文哈希。正文一改，旧判断先挂起，不把上一版文本的读法套到新版上。</p></div>
+          <div class="data"><b>读数</b><p>解析来源 4 档：<code>chapter</code>、<code>book</code>、<code>suggestion</code>、<code>fallback</code>；建议不写人账，也不参与过期。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">effective_mode</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>提交</h3><code>server.py:449 · service.py:1051</code></div>
+      <div class="node-body">
+        <p>逐层按钮 <code>POST /api/depth</code>，主按钮 <code>POST /api/jobs</code>。两条路最终都进 <code>submit_depth</code>；后者对新章自动改写成五层任务。</p>
+        <div class="ann">
+          <div><b>决策</b><p>入口不同，队列同一份。主按钮不要求读者先理解五层，深度面板才暴露层选择。</p></div>
+          <div class="data"><b>读数</b><p>默认请求五层；已生成的层可保留，只补缺层；同章已有任务时返回 409 <code>job_active</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">layers + mode</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">04</span><h3>容量预检</h3><span class="gate-badge">判定</span><code>depth/preflight.py:95</code></div>
+      <div class="node-body">
+        <p>用块数、分块数、预计输出 token、预计秒数判四条硬线。命中任一条就 422，不建任务。警告线只显示，不阻断。</p>
+        <div class="ann">
+          <div><b>决策</b><p>48,029 块的 B0041 著者序不可能在一次调用里变成合法 JSON。提交前 50 毫秒拒绝，比花 21 分钟失败便宜。</p></div>
+          <div class="data"><b>读数</b><p>B0001/01 15 块、1 分块、16,800 token、约 155 秒；5,034 块、51 分块、4,955,040 token、45,460 秒。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">ok</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>排队</h3><code>jobs.py:284 · service.py:519</code></div>
+      <div class="node-body">
+        <p>任务带 <code>kind=depth</code> 与层清单进内存队列，同一 uid/n 只允许一个活跃任务。<code>jobs.json</code> 整表原子落盘。</p>
+        <div class="ann">
+          <div><b>决策</b><p>同章并发会让两份 <code>depth/</code> 互相覆盖。冲突直接 409，不让读者猜哪份结果是最后的。</p></div>
+          <div class="data"><b>读数</b><p><code>max_workers=4</code>；任务 id 形如 <code>r-&lt;10hex&gt;</code>；五步进度：切块、标注、校验、组档、渲染。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">job</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>结构模型</h3><code>depth/model.py:981 · disposition.py:286</code></div>
+      <div class="node-body">
+        <p>按块切分，逐块缓存调用模型，合并后过 schema 与守恒审计，写 <code>chapter_model.json</code> 与 <code>ledger.json</code>。模型只提结构，处置账由纯函数生成。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不让模型决定哪段该删。处置是确定的，同一模型重放结果一致，审计才能复算。</p></div>
+          <div class="data"><b>读数</b><p>每个分块最多 100 块，每次调用上限 96k token 输出；G10 要求未映射块为 0。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">model + ledger</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">07</span><h3>四层编译</h3><code>service.py:1361</code></div>
+      <div class="node-body">
+        <p>面板、速览、标准、深读依次生成。每层过校验就落一次盘并快照 <code>state</code>，中断后续跑只补缺层。</p>
+        <div class="ann">
+          <div><b>决策</b><p>五层不是一次事务。已完成层必须活过一次崩溃，否则一次失败会把前面花掉的调用全作废。</p></div>
+          <div class="data"><b>读数</b><p>速览一轮约 194 秒；标准层不调模型；深读缺失时页面仍可出，只是带一句「后续生成」。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">layers</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">08</span><h3>渲染</h3><code>depth/render.py:624</code></div>
+      <div class="node-body">
+        <p>把编译速览与全部原文块合成一页。标准、深读共用逐字正文，深读只叠加注解。页签为速览、标准、深读。</p>
+        <div class="ann">
+          <div><b>决策</b><p>两棵树共用块 id，速览里的锚点能跳回原文。压缩靠折叠与注解，不靠删块。</p></div>
+          <div class="data"><b>读数</b><p>渲染版本 <code>v1</code>；没有 JavaScript 时两棵树同时可见，有 JavaScript 按页签切换。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">chapter.html</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">09</span><h3>打开</h3><span class="gate-badge" style="border-color:#1f6b49;background:#e8f3ec;color:#1f6b49">结果</span><code>server.py:557 · store.py:373</code></div>
+      <div class="node-body">
+        <p>只有 <code>route=depth</code> 且 <code>chapter.html</code> 在盘上才发 200。源文或读法变了，返回 404 并给理由；旧包走 legacy。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不发布过期页。读者不会看到与当前正文不一致的解读，也不会把旧注解当成新结论。</p></div>
+          <div class="data"><b>读数</b><p>404 理由三种：源文已改、读法已改、尚未生成；旧链接 <code>?tier=research</code> 先 302 到深读。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 01 完 · 全链路</span><span>入口：<code>apps/reading/server.py:246</code> 章页 · <code>service.py:1361</code> 任务</span></div>
+</section>
+
+<!--
+  02 读法与过期
+-->
+<section class="chart" id="s2">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 02 · 读法账</div>
+    <h2>一本书的读法从哪里来，什么时候过期</h2>
+    <p class="io"><span>输入</span><code>读法</code> 表 + 章级建议<i>→</i><span>输出</span><code>effective_mode</code>、<code>effective_source</code>、<code>stale</code> 理由</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>书级默认</h3><code>service.py:702</code></div>
+      <div class="node-body">
+        <p>书页「设本书默认」写 <code>读法</code> 表的 <code>chapter='*'</code> 行，同时清掉与新默认同模式的章级覆写。只写账，不提交任务。</p>
+        <div class="ann">
+          <div><b>决策</b><p>设默认不是生成命令。一本书换读法后，哪些章要重生成由章页决定，避免一次点击把全书几百章排队。</p></div>
+          <div class="data"><b>读数</b><p>一次事务写 1 行书级记录；同模式章级覆写一并删除，不同模式的覆写保留。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">chapter='*'</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>章级覆写</h3><code>service.py:720</code></div>
+      <div class="node-body">
+        <p>三个动作：<code>follow</code> 删章级行，<code>override</code> 写章级行并记 <code>source_sha256</code>，<code>book_default</code> 写书级默认。章级行必须先有书级行。</p>
+        <div class="ann">
+          <div><b>决策</b><p><code>follow</code> 是删除，不是写一条与书级相同的记录。读法账里只留真正的判断，不留下噪声行。</p></div>
+          <div class="data"><b>读数</b><p>缺书级行返回 409 <code>reading_profile_required</code>；覆写命中时 <code>effective_source=chapter</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">override</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>建议</h3><code>service.py:712</code></div>
+      <div class="node-body">
+        <p>规则先给建议，模型可用时再补一条；建议存在派生的 <code>reading.json</code> 或内存里，不写 <code>读法</code> 表。</p>
+        <div class="ann">
+          <div><b>决策</b><p>建议可以错，所以不进人账，也不参与过期判定。它只在没有书级默认时进入裁决。</p></div>
+          <div class="data"><b>读数</b><p><code>suggestion</code> 来源的优先级低于书级默认，高于兜底 <code>argument</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">suggestion</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>裁决</h3><code>profile.py:290</code></div>
+      <div class="node-body">
+        <p>章级覆写（哈希匹配）&gt; 书级默认 &gt; 建议 &gt; <code>argument</code>。章级哈希不匹配时记 <code>chapter_override_pending</code>，不生效。</p>
+        <div class="ann">
+          <div><b>决策</b><p>正文一改，旧章级判断先挂起，不直接删除。改回同一正文可以恢复，读者不用重选。</p></div>
+          <div class="data"><b>读数</b><p>返回 <code>effective_mode</code>、<code>effective_source</code>、<code>panels</code>、<code>suggestion</code>；待生效覆写单独列。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">mode</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>过期判定</h3><span class="gate-badge">判定</span><code>service.py:765 · store.py:351</code></div>
+      <div class="node-body">
+        <p>深度页只认账上的 <code>book</code> 或 <code>chapter</code> 来源，不触发模型建议。每层 <code>state.layer_mode</code> 与当前 mode 比对，不一致或缺失都算 stale。</p>
+        <div class="ann">
+          <div><b>决策</b><p>过期按整包算，不按层算。换读法后旧层全部失效，避免一页里混两种注解口径。</p></div>
+          <div class="data"><b>读数</b><p>旧层没有 <code>layer_mode</code> 也算过期；改回原值且层记录一致时恢复。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">stale / fresh</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>章节路由</h3><code>store.py:373</code></div>
+      <div class="node-body">
+        <p><code>ready</code> 才走 depth。<code>stale</code> 直接 none 并报「源文已改」或「读法已改」。有旧 manifest 走 legacy，<code>partial</code> 报已生成层数。</p>
+        <div class="ann">
+          <div><b>决策</b><p>一条章只有一个打开路径。深度页和旧读本同时可开，读者不知道看的是哪份，锚点也对不上。</p></div>
+          <div class="data"><b>读数</b><p><code>partial</code> 文案「已生成 N/5 层，缺 …」；<code>model</code> 文案「结构模型已建，深度页未出」。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 02 完 · 读法账</span><span>入口：<code>tables/ledger.db</code> 的 <code>读法</code> 表 · <code>service.py:702</code></span></div>
+</section>
+
+<!--
+  03 提交与预检
+-->
+<section class="chart" id="s3">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 03 · 提交</div>
+    <h2>按钮点下去，先过哪几道闸</h2>
+    <p class="io"><span>输入</span>章页按钮 + <code>layers</code> / <code>tiers</code><i>→</i><span>输出</span><code>202 job</code>，或 <code>409</code> / <code>422</code> / <code>400</code>，或页面上的阻断卡</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>主按钮</h3><code>web/chapter.html:168</code></div>
+      <div class="node-body">
+        <p>没有书级读法时显示「先选一个读法 →」并禁用。有读法时显示「按「mode」生成读本 →」，点击 <code>POST /api/jobs</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>读者先选读法，再选档位。读法决定注解口径，档位决定长度，两个选择不能混成一个下拉。</p></div>
+          <div class="data"><b>读数</b><p>按钮文案随 <code>reading.book_mode</code> 变化；无读法时禁用是页面行为，不是服务端 409 的替代。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">POST /api/jobs</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>分流</h3><code>server.py:339</code></div>
+      <div class="node-body">
+        <p>开启深度且本章没有旧包时，新章自动走 <code>submit_depth</code> 五层；有旧 manifest 或现成深读产物时仍走旧 <code>submit</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>新章默认深读路径，旧包不强行迁移。迁移失败会把一本能读的书变成不能读。</p></div>
+          <div class="data"><b>读数</b><p>判断含 <code>depth_state</code> 的 <code>partial</code> / <code>missing</code> 与盘上 <code>depth/</code> 文件；partial 续跑只补缺层。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">depth / legacy</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">03</span><h3>读法闸</h3><span class="gate-badge">判定</span><code>service.py:753</code></div>
+      <div class="node-body">
+        <p>先查书级行。没有就 409 <code>reading_profile_required</code>，错误体带 uid。这个检查在预检之前。</p>
+        <div class="ann">
+          <div><b>决策</b><p>读法缺失是配置问题，源文过大是输入问题。先报配置，读者知道下一步点哪，不会被 422 的拆分建议带偏。</p></div>
+          <div class="data"><b>读数</b><p>409 在 422 之前；两者都不建任务。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">有读法</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>补齐结构层</h3><code>service.py:1051</code></div>
+      <div class="node-body">
+        <p><code>submit_depth</code> 按需把 <code>model</code> 插进请求：源文或读法变了而结构层是旧的，或盘上没有结构模型、显式 <code>rebuild_model</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>读法换了却拿旧模型编译新层，注解口径会对不上。结构层必须跟读法一起重做。</p></div>
+          <div class="data"><b>读数</b><p>请求 <code>model</code> 时另查模型配置；缺 key 返回 400 <code>MissingConfigError</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">blocks + plans</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>容量闸</h3><span class="gate-badge">判定</span><code>depth/preflight.py:95</code></div>
+      <div class="node-body">
+        <p>硬线 5,000 块、100 分块、1,000,000 输出 token、7,200 秒。警告线 1,000 块、20 分块、1 小时、单块超过 100 块。警告只显示，不阻断。</p>
+        <div class="ann">
+          <div><b>决策</b><p>阈值取 2 小时预算和 109 token/s 的实测速度。780 块是上限，推荐拆到 500 块，约 1.3 小时，给模型变慢留余量。</p></div>
+          <div class="data"><b>读数</b><p>估算式 <code>ceil((分块×2,000 + 块×800)×1.2)</code>，秒数再除 109；B0001/01 估 16,800 token、155 秒。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">通过</span>
+        <article class="node stop">
+          <div class="node-head"><span class="no">06a</span><h3>入队</h3><code>service.py:1077</code></div>
+          <div class="node-body">
+            <p>预检结果写事件 <code>preflight_gate</code>，任务进队列，页面拿到 202 与任务 id。</p>
+            <div class="ann">
+              <div><b>决策</b><p>警告不阻断。1,000 块以上的章会显示「约 N 分钟」，让读者自己决定等不等。</p></div>
+              <div class="data"><b>读数</b><p>同章冲突 409 <code>job_active</code>；档位已有旧包 409 <code>pack_exists</code>；深度关闭 400。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">阻断</span>
+        <article class="node off">
+          <div class="node-head"><span class="no">06b</span><h3>422 不建任务</h3><code>web/chapter.html:433</code></div>
+          <div class="node-body">
+            <p>返回 <code>source_too_large</code> 与 <code>remediation</code>。章页把预检行切到 blocked，显示内联阻断卡，逐层按钮禁用。</p>
+            <div class="ann">
+              <div><b>决策</b><p>主按钮不提前禁用，点了才看到完整的阻断理由。逐层面板提前禁用，避免读者以为选了层就能绕过。</p></div>
+              <div class="data"><b>读数</b><p>阻断后 <code>GET /api/jobs</code> 仍为空；B0001 追加后第 2 章 5,034 块，预计 45,460 秒。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">全选 / 部分选</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">07</span><h3>选择层</h3><code>web/chapter.html:414</code></div>
+      <div class="node-body">
+        <p>默认「生成全部五层」。部分勾选显示「生成所选层（保留 N 层）」，一层不选显示「没有要生成的层」。另有「只重建结构模型」。</p>
+        <div class="ann">
+          <div><b>决策</b><p>保留已生成层是默认语义。重跑不用全量付费，也不必先删旧页。</p></div>
+          <div class="data"><b>读数</b><p>层白名单 <code>model</code>、<code>panels</code>、<code>skim</code>、<code>standard</code>、<code>deep</code>；<code>rebuild_model</code> 只影响结构层。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 03 完 · 提交与预检</span><span>入口：<code>POST /api/depth</code> · <code>POST /api/jobs</code></span></div>
+</section>
+
+<!--
+  04 任务与续跑
+-->
+<section class="chart" id="s4">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 04 · 任务</div>
+    <h2>一个深度任务怎么跑，失败后怎么续</h2>
+    <p class="io"><span>输入</span><code>{uid, n, layers, model, effort}</code><i>→</i><span>输出</span><code>state.json</code> 与五件层文件，或 <code>blocked</code> / <code>failed</code> + 失败现场</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>入队</h3><code>service.py:1051 · jobs.py:284</code></div>
+      <div class="node-body">
+        <p>冲突检查在同一把提交锁里做。同章已有 queued 或运行中任务时返回 409 与冲突列表。</p>
+        <div class="ann">
+          <div><b>决策</b><p>同一章只允许一个写者，不同章可以并行。写者冲突不能靠重试解决，只能由队列拒绝。</p></div>
+          <div class="data"><b>读数</b><p><code>max_workers=4</code>；任务 id <code>r-&lt;10hex&gt;</code>；<code>jobs.json</code> 整表原子写，服务重启后从盘上恢复。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">queued</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>起跑</h3><code>service.py:1361</code></div>
+      <div class="node-body">
+        <p>重新读原文并再跑一次预检。排队期间源文变大到超限，任务在这里转 <code>blocked</code>。<code>mode</code> 取 <code>effective_mode</code>，缺省 <code>argument</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>提交时的预检不是最终判据。起跑时以盘上源文为准，事件链里能看到两次 gate。</p></div>
+          <div class="data"><b>读数</b><p>起跑再评估一次；超限不写失败现场，只发 <code>blocked</code> 与 <code>remediation</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">chunking</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">03</span><h3>能不能跳过</h3><span class="gate-badge">判定</span><code>service.py:1428</code></div>
+      <div class="node-body">
+        <p>逐层判断：文件在盘上、<code>layer_model_sha</code> 匹配、<code>layer_mode</code> 匹配、<code>layer_request</code> 的 model 与 effort 匹配、没有 degraded。任一不满足就重做。</p>
+        <div class="ann">
+          <div><b>决策</b><p>续跑只补缺层，不重花已成功的调用。旧层缺 <code>layer_mode</code> 不跳过，因为它不知道自己是按哪种读法生成的。</p></div>
+          <div class="data"><b>读数</b><p>跳过层发 <code>layers_skipped</code> 事件；任务结果带 <code>skipped</code> 列表。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">新鲜</span>
+        <article class="node">
+          <div class="node-head"><span class="no">04a</span><h3>保留</h3><code>service.py:1435</code></div>
+          <div class="node-body"><p>层文件不重写，<code>state</code> 里原有 sha、usage、mode 一并保留。后续层如果需要这份产物，直接从盘上读。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">缺失 / 过期</span>
+        <article class="node">
+          <div class="node-head"><span class="no">04b</span><h3>重做</h3><code>service.py:1596</code></div>
+          <div class="node-body"><p>按顺序补 <code>panels</code>、<code>skim</code>、<code>standard</code>、<code>deep</code>。每层过校验后立刻快照，不等整个任务结束。</p></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">structure rebuilt</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>结构重生成</h3><code>service.py:1515</code></div>
+      <div class="node-body">
+        <p>结构模型重建后，本次没有请求的其它层 <code>layer_model_sha</code> 置 <code>__stale__</code>，不计入 ready。下一次任务会重做它们。</p>
+        <div class="ann">
+          <div><b>决策</b><p>新结构下的旧面板与旧速览不能冒充新鲜层。<code>__stale__</code> 是内部哨兵，不写进页面。</p></div>
+          <div class="data"><b>读数</b><p>本次只重建 model 时，状态回 <code>model</code>；其它层文件还在，但不再算 ready。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">层循环</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>失败分类</h3><code>jobs.py:376</code></div>
+      <div class="node-body">
+        <p><code>source_too_large</code> 记 <code>blocked</code>，不写失败现场，不给重试按钮。其它异常记 <code>failed</code>，写 <code>工作区/阅读/failures/&lt;job-id&gt;-&lt;layer&gt;.json</code>，带栈、层与原始 payload。</p>
+        <div class="ann">
+          <div><b>决策</b><p>阻断是输入不可执行，失败是实现或模型出错。两种账不能混，否则操作员会把「拆章」和「重跑模型」搞反。</p></div>
+          <div class="data"><b>读数</b><p>payload 上限 200 KB，超出记 <code>payload_omitted</code>；B0019-08 的账是 <code>r-0b75993eeb-model.json</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">done / partial</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">07</span><h3>收尾</h3><code>service.py:1718</code></div>
+      <div class="node-body">
+        <p>速览新鲜且本次动过页面层时渲染 <code>chapter.html</code>。<code>status</code> 为 <code>ready</code>、<code>partial</code> 或 <code>model</code>；完成前调 <code>_invalidate_packs()</code> 让书目缓存失效。</p>
+        <div class="ann">
+          <div><b>决策</b><p>只有速览新鲜才渲染，避免页面引用旧速览。<code>partial</code> 也保留已生成层，下次续跑。</p></div>
+          <div class="data"><b>读数</b><p>渲染步骤记「渲染」，进度 90%；任务返回 <code>{status, pack_id, skipped, layers_ready}</code>。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 04 完 · 任务与续跑</span><span>入口：<code>service.py:1361</code> · <code>jobs.py:284</code></span></div>
+</section>
+
+<!--
+  05 分块建模
+-->
+<section class="chart" id="s5">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 05 · 结构模型</div>
+    <h2>长章怎么切，模型返回什么，账怎么守恒</h2>
+    <p class="io"><span>输入</span>块列表 <code>B01…</code> + 读法<i>→</i><span>输出</span><code>chapter_model.json</code> 与 <code>ledger.json</code>，每块都有处置</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>切块</h3><code>reading/mdparse.py:105</code></div>
+      <div class="node-body">
+        <p>md 按段落、标题、图片切成块，id 顺序 <code>B01</code>、<code>B02</code>…。同一份源文重复解析得到同一组 id；源文一变，<code>source_sha256</code> 变，缓存和旧层一起失效。</p>
+        <div class="ann">
+          <div><b>决策</b><p>块 id 不随机，缓存才能按块命中。用内容哈希做 id 会让每次改一个错字就全章缓存失效。</p></div>
+          <div class="data"><b>读数</b><p>块自带汉字数 <code>chars</code>；预检另按文本长度算总量，两个口径不要互换。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">blocks</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">02</span><h3>要切吗</h3><span class="gate-badge">判定</span><code>depth/model.py:182</code></div>
+      <div class="node-body">
+        <p>总字符不超过 18,000 且块数不超过 100 时一次调用。否则先按 H2 分组，再按字符与块数切，<code>chunk_id</code> 是 <code>0000-0032</code> 这样的范围。</p>
+        <div class="ann">
+          <div><b>决策</b><p>按块数切，不按字符切。块越多，JSON 的条目与局部 id 越多，输出增长比字符快；18,000 字不一定比 100 块更省。</p></div>
+          <div class="data"><b>读数</b><p>84.5% 的章总块数不超过 100，一次调用完成；总块数 p90 是 131，切两块。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="fork">
+      <div class="fork-arm">
+        <span class="cond yes">不超</span>
+        <article class="node">
+          <div class="node-head"><span class="no">03a</span><h3>一次调用</h3><code>model.py:845</code></div>
+          <div class="node-body"><p>整章一次请求，输出上限 96k token。返回的 <code>uid</code> 必须与本章一致。</p></div>
+        </article>
+      </div>
+      <div class="fork-arm">
+        <span class="cond no">超了</span>
+        <article class="node">
+          <div class="node-head"><span class="no">03b</span><h3>逐块调用</h3><code>model.py:223</code></div>
+          <div class="node-body"><p>每块单独读缓存、单独调用。unit id 带 <code>C&lt;chunk_id&gt;-</code> 前缀，合并后必须回到同一个 uid。</p></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="edge"><span class="edge-label">truncated</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>截断兜底</h3><code>model.py:822</code></div>
+      <div class="node-body">
+        <p>输出截断时只把这一块二分，最多两层。事件记 <code>truncated</code>、<code>chunk_split</code>、<code>chunk_retry</code>。已成功的块留在缓存里。</p>
+        <div class="ann">
+          <div><b>决策</b><p>一块截断不拖累其它块。整章重试会把已经成功的 80% 再付一次钱，还会把稳定输出变成随机输出。</p></div>
+          <div class="data"><b>读数</b><p>100 块乘 800 token 加 2,000 开销约 82k；乘 1.2 安全系数后 98.4k，96k 仍可能截断，靠二分兜底。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">merge</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">05</span><h3>合并校验</h3><code>model.py:validate_chapter_model</code></div>
+      <div class="node-body">
+        <p>合并各块 <code>parts</code>，校验 schema、uid、章节号、块引用。分块时 unit id 带 <code>C&lt;范围&gt;-</code> 前缀，合并后必须回到同一个 uid。</p>
+        <div class="ann">
+          <div><b>决策</b><p>模型返回的 uid 不一致直接判失败，不做猜测修复。猜错会把上一章的结构挂到这一章。</p></div>
+          <div class="data"><b>读数</b><p>B0019-08 的失败原文「uid 不一致：B0019-C04 != B0019」，连续两次拒收。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">model</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>处置账</h3><code>disposition.py:242 · :286</code></div>
+      <div class="node-body">
+        <p>按三档给每个 unit 定处置：<code>verbatim</code>、<code>condensed</code>、<code>indexed</code>、<code>omitted</code>。<code>omitted</code> 只允许 <code>duplicate_of</code> 指向的重复单元。</p>
+        <div class="ann">
+          <div><b>决策</b><p>处置是纯函数，同一模型重放结果一致。模型不参与决定删哪段，审计才能逐条复算。</p></div>
+          <div class="data"><b>读数</b><p>G10 查核心覆盖、硬信息覆盖、未映射块为 0、省略项有重复锚点；任一不过就不写结构层。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">pass</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">07</span><h3>落盘</h3><code>service.py:1493</code></div>
+      <div class="node-body">
+        <p>写 <code>chapter_model.json</code> 与 <code>ledger.json</code>，记 <code>model_sha</code>、usage、updated_at。结构层单独提交一次快照，事件 <code>layer_commit</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>结构层先落盘，后续面板、速览都能在失败后复用。结构层审计失败不写文件，旧包保留。</p></div>
+          <div class="data"><b>读数</b><p>五件产物里结构层最先完成；后续四层都引用同一个 <code>chapter_model_sha</code>。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 05 完 · 结构模型</span><span>入口：<code>depth/model.py:981</code> · <code>disposition.py:286</code></span></div>
+</section>
+
+<!--
+  06 四层编译
+-->
+<section class="chart" id="s6">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 06 · 四层编译</div>
+    <h2>面板、速览、标准、深读各做什么，哪一层会拦任务</h2>
+    <p class="io"><span>输入</span><code>model</code> + <code>ledger</code> + <code>blocks</code> + <code>mode</code><i>→</i><span>输出</span><code>panels.json</code>、<code>skim.json</code>、<code>standard.json</code>、<code>deep.json</code></p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>面板 A1</h3><code>depth/panels.py:326</code></div>
+      <div class="node-body">
+        <p>按 mode 选面板类型，最多 6 个，每个最多 8 条，条目不超 120 字，每条带块锚点。模型调用失败时降级为空面板并记 <code>layer_degraded</code>。</p>
+        <div class="ann">
+          <div><b>决策</b><p>面板不是第二份正文，没有锚点的条目不能进页面。降级后 <code>chapter.html</code> 虽会写出，状态仍是 <code>partial</code>，章节路由不端出，等面板补成才发布。</p></div>
+          <div class="data"><b>读数</b><p><code>validate_panels</code> 的 schema 错误会让任务失败；<code>audit_panels</code> 只记录，不单独拦任务。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">panels</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>速览 A1′</h3><code>depth/skim.py:767</code></div>
+      <div class="node-body">
+        <p>按 mode 把模型编译成 <code>scenes</code> 或 <code>claims</code>。原文汉字少于 1,200 时标 <code>supported=false</code>。非叙事档查 15%–25% 比例闸门。</p>
+        <div class="ann">
+          <div><b>决策</b><p>叙事档不查比例，只查场景与上限。用固定比例卡叙事会逼模型删情节，读起来像摘要而不是小说。</p></div>
+          <div class="data"><b>读数</b><p>JSON 重试 1 次，质量修复 1 次；本轮实测生成约 194 秒；<code>audit_skim</code> 的错误会让任务失败。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">skim</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>标准 A2</h3><code>depth/standard.py:339</code></div>
+      <div class="node-body">
+        <p>从模型与原文确定性投影：章节导语、术语、注释、折叠、图。不调模型。G12 发现坏图先删，再补一张无数字的章级结构图。</p>
+        <div class="ann">
+          <div><b>决策</b><p>标准档必须能在模型不变时复现。图错了删图，不带着错数字上页面，也不因为一张图让整章生成失败。</p></div>
+          <div class="data"><b>读数</b><p>每章最多 3 张节图；标准层不产生模型费用；审计状态写入层文件，任务不因 G12 失败。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">standard</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>深读 A3</h3><code>depth/deep.py:557</code></div>
+      <div class="node-body">
+        <p>按 mode 生成论证注、叙事注、实用注或资料注。最多 12 条，每节最多 3 条，每条 80–200 字。</p>
+        <div class="ann">
+          <div><b>决策</b><p>注解只加在逐字正文上，不复制原文。没有注解也保留原文，深读层缺失不是页面失败。</p></div>
+          <div class="data"><b>读数</b><p>深读缺失时页面提示「深读注解将在后续生成。」；<code>audit_deep</code> 错误会让任务失败。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">validate + audit</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>哪层会拦任务</h3><span class="gate-badge">判定</span><code>validate_* · audit_*</code></div>
+      <div class="node-body">
+        <p>每层先 validate 再 audit。速览与深读的 audit errors 直接让任务失败；面板 schema 错误失败，模型失败降级；标准层记录 audit 状态，不因 G12 失败。</p>
+        <div class="ann">
+          <div><b>决策</b><p>不同层的失败代价不同，闸门也不该一刀切。结构错误必须停，图错可以删，面板缺失可以等。</p></div>
+          <div class="data"><b>读数</b><p>失败不发布半成品；旧 <code>depth/</code> 保留；每层快照独立，失败前的层仍然可用。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">两套「五」</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>五层对页</h3><code>depth/render.py:624</code></div>
+      <div class="node-body">
+        <p>生成账五件是结构、面板、速览、标准、深读。页面五层是 <code>CH</code> 原文、<code>A1</code> 图文总览、<code>A1′</code> 速览、<code>A2</code> 标准、<code>A3</code> 深读。结构模型不是阅读层。</p>
+        <div class="ann">
+          <div><b>决策</b><p>两套「五」分开叫，避免把 <code>chapter_model</code> 当成第五个页签。读者只看到三个页签，结构只在生成账里。</p></div>
+          <div class="data"><b>读数</b><p>页面页签 3 个：速览、标准、深读；面板在速览页签与标准/深读原文树各出现一次，由 CSS 控制可见性。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 06 完 · 四层编译</span><span>入口：<code>service.py:1596</code> 层循环 · <code>render.py:624</code></span></div>
+</section>
+
+<!--
+  07 渲染与路由
+-->
+<section class="chart" id="s7">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 07 · 页面</div>
+    <h2>五件产物怎么变成一张可打开的深度页</h2>
+    <p class="io"><span>输入</span>五件层产物<i>→</i><span>输出</span><code>chapter.html</code>、可服务的路由、404 理由或退役提示</p>
+  </div>
+
+  <div class="flow">
+    <article class="node gate">
+      <div class="node-head"><span class="no">01</span><h3>渲染判据</h3><span class="gate-badge">判定</span><code>service.py:1718</code></div>
+      <div class="node-body">
+        <p>速览新鲜且 <code>layer_model_sha[skim]</code> 等于 <code>chapter_model_sha</code>，并且本次请求或跳过集合里包含 <code>panels</code>、<code>skim</code>、<code>standard</code>、<code>deep</code> 任一层，才渲染。</p>
+        <div class="ann">
+          <div><b>决策</b><p>只重建结构模型不重渲染。页面里的速览必须来自当前模型，不能拿旧结构拼新页面。</p></div>
+          <div class="data"><b>读数</b><p>渲染步骤在任务里记「渲染」，进度 90%；没有页面层变动时任务直接收尾。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">render</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>两棵树</h3><code>depth/render.py:639</code></div>
+      <div class="node-body">
+        <p>编译树放速览与面板，原文树放全部块。标准、深读共用原文，标准叠加导语、术语、注释、折叠；深读叠加注解与链条。</p>
+        <div class="ann">
+          <div><b>决策</b><p>原文块一个不丢。压缩靠折叠与注解，不靠删块，读者随时能回到逐字文本。</p></div>
+          <div class="data"><b>读数</b><p>块锚点 <code>B01…</code> 在两棵树之间互通；深读缺失时原文树仍完整。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">tabs</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>页签</h3><code>depth/render.py:608</code></div>
+      <div class="node-body">
+        <p>三个页签：速览「编译 · 5–8 分钟」、标准「逐字原文」、深读「逐字 · 论证注」。没有 JavaScript 时两棵树同时可见。</p>
+        <div class="ann">
+          <div><b>决策</b><p>先给读得完的版本，再给逐字回查。页签不改变内容，只改变可见性。</p></div>
+          <div class="data"><b>读数</b><p>深读缺失时只显示提示，不空白；页脚 colophon 记 prompt_version、生成时间、渲染版本。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">swap</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>落盘交换</h3><code>store.py:275</code></div>
+      <div class="node-body">
+        <p>先写 stage 的结构、账、层文件，<code>state.json</code> 最后写。然后目录交换 <code>depth/</code>，旧目录做 backup。崩溃时启动 <code>heal_pending_swaps</code> 把 backup 放回。</p>
+        <div class="ann">
+          <div><b>决策</b><p><code>state</code> 是提交点。state 没换，旧页就还是旧页。备份名每次唯一，两个进程同章也不会互删。</p></div>
+          <div class="data"><b>读数</b><p>stage 与 backup 都带随机后缀；启动日志报告 healed / cleaned；只剩 stage 时不动它，避免删掉唯一的包。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">route</span></div>
+
+    <article class="node gate">
+      <div class="node-head"><span class="no">05</span><h3>能不能打开</h3><span class="gate-badge">判定</span><code>store.py:373 · server.py:557</code></div>
+      <div class="node-body">
+        <p><code>ready</code> 且 <code>chapter.html</code> 在盘上才 200。<code>stale</code>、<code>partial</code>、<code>model</code> 都 404，并给一句理由。旧 manifest 走 legacy。</p>
+        <div class="ann">
+          <div><b>决策</b><p>页面自己判断新鲜度不够，服务端再判一次。两条判据必须一致，否则会出现页面能开但接口说没生成。</p></div>
+          <div class="data"><b>读数</b><p>404 文案「已生成 N/5 层，缺 …」；带 <code>?tier=research</code> 的旧链接先 302，不报 404。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">旧书签</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">06</span><h3>研究档退役</h3><code>server.py:588</code></div>
+      <div class="node-body">
+        <p><code>?tier=research</code> 302 到 <code>?tier=deep&amp;retired=research</code>，保留其它参数。200 时注入「研读档已退役，已切换到深读档。」</p>
+        <div class="ann">
+          <div><b>决策</b><p>旧书签不报 404。读者不会以为书没了，也不会把退役当成生成失败。</p></div>
+          <div class="data"><b>读数</b><p>研究导出返回 410；读本页与深度页都注入提示；参数级匹配，保留额外参数。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 07 完 · 页面</span><span>入口：<code>/reader/&lt;uid&gt;/&lt;n&gt;/depth</code> · <code>render.py:624</code></span></div>
+</section>
+
+<!--
+  08 闸门与失败账
+-->
+<section class="chart" id="s8">
+  <div class="chart-head">
+    <div class="chart-kicker">流程 08 · 闸门与失败账</div>
+    <h2>五道闸分别拦什么，失败账留什么</h2>
+    <p class="io"><span>输入</span>提交、生成、渲染的每一步<i>→</i><span>输出</span><code>pass</code> / <code>warn</code> / <code>fail</code> 与可复核的账</p>
+  </div>
+
+  <div class="flow">
+    <article class="node">
+      <div class="node-head"><span class="no">01</span><h3>五道闸</h3><code>见下表</code></div>
+      <div class="node-body">
+        <p>读法闸、容量闸、层校验、守恒审计、标准图审计。每道闸的位置、失败表现与记录方式都不同，不能合并成一句「生成失败」。</p>
+        <div class="ann">
+          <div><b>决策</b><p>能在提交前拒绝的，不放进队列；能在单层拒绝的，不拖垮整章；能删图修的，不判整章失败。</p></div>
+          <div class="data"><b>读数</b><p>阻断与失败分开记账；阻断不给重试按钮，失败给失败现场。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">逐闸判定</span></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>闸</th><th>判据</th><th>失败表现</th><th>入口</th></tr></thead>
+        <tbody>
+          <tr><td>读法闸</td><td>书级 <code>chapter='*'</code> 行存在</td><td>409 <code>reading_profile_required</code>，不建任务</td><td><code>service.py:753</code></td></tr>
+          <tr><td>容量闸</td><td>块数 / 分块 / 输出 token / 秒数四条硬线</td><td>422 <code>source_too_large</code>，页面阻断卡，不建任务</td><td><code>preflight.py:95</code></td></tr>
+          <tr><td>层校验</td><td>schema、uid、块引用、速览比例</td><td><code>failed</code>，写失败现场，旧包保留</td><td><code>panels.py:161</code> / <code>skim.py:767</code> / <code>deep.py:488</code></td></tr>
+          <tr><td>守恒审计</td><td>核心与硬信息覆盖、未映射块、重复省略</td><td><code>failed</code>，不写结构层，后续层不开始</td><td><code>disposition.py:286</code></td></tr>
+          <tr><td>标准图审计</td><td>G12 图数字与单元</td><td>删坏图并补结构图，任务不失败</td><td><code>standard.py:339</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="edge"><span class="edge-label">failed</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">02</span><h3>失败账</h3><code>jobs.py:376</code></div>
+      <div class="node-body">
+        <p>除 <code>blocked</code> 外都写 <code>工作区/阅读/failures/&lt;job-id&gt;-&lt;layer&gt;.json</code>。账里有异常类型、栈、层、模型、usage、原始 payload。记录页五档：全部、运行中、完成、已阻断、失败。</p>
+        <div class="ann">
+          <div><b>决策</b><p>失败账要能单独复核，不依赖服务日志。没有原始 payload，只能从缓存推断模型写了什么，修不了。</p></div>
+          <div class="data"><b>读数</b><p>payload 上限 200 KB；B0019-08 的账是 <code>r-0b75993eeb-model.json</code>。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">resume</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">03</span><h3>断点续跑</h3><code>service.py:1428</code></div>
+      <div class="node-body">
+        <p>重新提交同一章时，已通过校验的层直接跳过。结构模型重建后，旧层置 <code>__stale__</code>，下次重做。</p>
+        <div class="ann">
+          <div><b>决策</b><p>花过钱的层不能因为一次失败全丢。续跑按层判断，不按任务判断。</p></div>
+          <div class="data"><b>读数</b><p>层文件在 <code>depth/</code> 下；续跑事件 <code>layers_skipped</code>；跳过条件含 model 与 effort。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">真实失败</span></div>
+
+    <article class="node">
+      <div class="node-head"><span class="no">04</span><h3>B0019-08</h3><code>设计文档 · 2026-11-14</code></div>
+      <div class="node-body">
+        <p>2026-11-14 10:32:54 提交，10:54:23 失败，21 分 29 秒。8 次调用里 1 次截断、2 次拒收。C04 两次分别输出 16,866 与 12,980 token，仍然没有通过 uid 校验。</p>
+        <div class="ann">
+          <div><b>决策</b><p>这次失败推动了三处改动：分块从 18,000 字改成 100 块，输出上限从 32,768 提到深读单块 96k，提交前加容量预检。</p></div>
+          <div class="data"><b>读数</b><p>旧默认 18,000 字切 3 块；C02 87 块、17,989 字，32,768 token 时 <code>finish_reason=length</code>，300.3 秒。</p></div>
+        </div>
+      </div>
+    </article>
+
+    <div class="edge"><span class="edge-label">验收</span></div>
+
+    <article class="node stop">
+      <div class="node-head"><span class="no">05</span><h3>验收</h3><code>tests/</code></div>
+      <div class="node-body">
+        <p>离线契约跑 <code>pytest</code>；真实服务用一次性根跑分层读功能文件；改动页面要留截图或 <code>--dump-dom</code>。接口断言不能替代页面证据。</p>
+        <div class="ann">
+          <div><b>决策</b><p>接口通过只证明数据对，不证明读者能点、能读、能截图。客户端渲染页只做 curl 断言，记 <code>ui-unverified</code>。</p></div>
+          <div class="data"><b>读数</b><p>样书 <code>B0001/01</code> 是 15 块、1 分块、16,800 token、估 155 秒；分层读正文口径 21,362 字符。</p></div>
+        </div>
+      </div>
+    </article>
+  </div>
+  <div class="chart-end"><span>图 08 完 · 闸门与失败账</span><span>入口：<code>jobs.py:376</code> · <code>tests/test_depth_acceptance.py</code></span></div>
+</section>
+
+<div class="footer" id="refs">
+  <h2>读数与复核入口</h2>
+  <div class="two">
+    <div>
+      <h3>本页数字的出处</h3>
+      <ul>
+        <li><code>docs/design/分层读-方案-2026-11-11.md</code>：五层、三档、读法 mode、研究档退役。</li>
+        <li><code>docs/design/分层读-深度生成分块与预检-2026-11-14.md</code>：B0019-08、阈值、96k、100 块、全库扫描。</li>
+        <li><code>.agents/skills/verify-book-corpus/features/layered-reads.md</code>：页面与接口的实测行为。</li>
+        <li><code>src/bookcorpus/reading/</code>：代码入口与状态机；行号对应 2026-11-14 工作树。</li>
+        <li><code>工作区/阅读/failures/r-0b75993eeb-model.json</code>：B0019-08 的失败现场。</li>
+      </ul>
+    </div>
+    <div>
+      <h3>复跑</h3>
+      <ul>
+        <li><code>uv run --frozen pytest tests/test_reading_*.py tests/test_depth_acceptance.py</code></li>
+        <li><code>uv run --frozen book-corpus init /tmp/bc-verify-&lt;id&gt; --no-pdf-venv</code>，再 <code>sample --root</code>。</li>
+        <li><code>uv run --frozen python apps/reading/server.py --root /tmp/bc-verify-&lt;id&gt; --port 18771 --no-annotate --quiet</code></li>
+        <li><code>curl -s http://127.0.0.1:18771/api/chapter/B0001/1</code> 看 <code>depth.preflight.stats</code> 与 <code>depth.state</code>。</li>
+        <li><code>curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18771/reader/B0001/1/depth?tier=research'</code> 应得 302。</li>
+      </ul>
+    </div>
+  </div>
+  <p class="foot-note">维护方式：行为先改代码与测试，再改这张图。图中的读数如果来自设计文档，改阈值时连同图一起改；如果来自工作树实测，重跑一次再改。本页描述的是 2026-11-14 的工作树，不是某个已发布版本。样书字数有两个口径，<code>sample</code> 自报 22,881 字，分层读书架报 21,362 正文字符，不要拿一个去验另一个；预检里的 155 秒是估算值，不是实测耗时。</p>
+  <div class="cmd"><code>docs/design/分层读实现流程图-2026-11-14.html</code> · 8 charts · 生成于 2026-11-14</div>
+</div>
+
+</main>
+</div>
+</body>
+</html>
