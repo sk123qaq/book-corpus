@@ -168,6 +168,7 @@ def _turn_meta(sid, turn):
         "answer_owner": turn.get("answer_owner") or "",
         "answer_started_at": turn.get("answer_started_at"),
         "answer_finished_at": turn.get("answer_finished_at"),
+        "run": turn.get("run") or "",
         "answered": isinstance(turn.get("answer"), dict),
     }
 
@@ -206,7 +207,7 @@ def begin_answer(sid, n, attempt, owner, token=None):
         return True
 
 
-def finish_answer(sid, n, attempt, info, ctx=None, token=None):
+def finish_answer(sid, n, attempt, info, ctx=None, token=None, run=None):
     """写回答。只认当前 attempt（与 token，给了的话）；旧任务返回 False。"""
     with STATE_LOCK:
         sess = load(sid)
@@ -224,6 +225,8 @@ def finish_answer(sid, n, attempt, info, ctx=None, token=None):
         turn["answer_error"] = "" if turn["answer_state"] == "ready" else str(info.get("error") or "回答失败")
         turn["answer_finished_at"] = now()
         turn["answer_owner"] = ""
+        if run:
+            turn["run"] = run
         save(sess)
         return True
 

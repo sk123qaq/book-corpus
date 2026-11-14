@@ -43,7 +43,7 @@ def test_related_prompt_contains_the_tail_of_the_previous_answer(monkeypatch):
     sess = {"turns": [make_turn(1, "三体", body)]}
     seen = {}
 
-    def fake_call(prompt, thinking):
+    def fake_call(prompt, thinking, rec=None):
         seen["prompt"] = prompt
         return '{"related": true, "reason": "承接上一轮"}', ""
 
@@ -191,7 +191,7 @@ def test_api_run_pins_a_related_followup(monkeypatch, tmp_path):
     monkeypatch.setattr(
         server.related,
         "check",
-        lambda question, previous: {
+        lambda question, previous, rec=None: {
             "related": True,
             "reason": "承接上一轮",
             "against": [1],

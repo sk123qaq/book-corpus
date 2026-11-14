@@ -400,7 +400,7 @@ def test_api_run_appends_existing_session_without_truncation(monkeypatch):
     first_token = session.load(SID)["turns"][0]["run_token"]
     data = {"thinking": "", "plan": {"ranking": []}, "result": {}}
     monkeypatch.setattr(server.tracer, "build", lambda *a, **k: data)
-    monkeypatch.setattr(server.related, "check", lambda q, prev: {"related": False})
+    monkeypatch.setattr(server.related, "check", lambda q, prev, rec=None: {"related": False})
 
     handler = FakeHandler()
     server.Handler.api_run(handler, "第二问", 0, session_id=SID, turn=2)

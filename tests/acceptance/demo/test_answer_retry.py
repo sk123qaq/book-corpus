@@ -56,7 +56,7 @@ def stub(replies):
     prompts = []
     queue = list(replies)
 
-    def fake(prompt, book, books=None, thinking=answer.DEFAULT_THINKING):
+    def fake(prompt, book, books=None, thinking=answer.DEFAULT_THINKING, rec=None, kind="answer"):
         prompts.append(prompt)
         return queue.pop(0) if queue else (GOOD, "")
 

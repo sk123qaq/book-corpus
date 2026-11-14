@@ -5,7 +5,6 @@ the pieces that replaced it without calling a model or reading the real library.
 """
 
 import sys
-import types
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -14,6 +13,7 @@ sys.path.insert(0, str(REPO / "apps" / "demo"))
 import trace
 
 import answer
+import model_call
 
 
 def test_split_answer_folds_dissent_into_body():
@@ -102,22 +102,22 @@ def test_fallback_terms_keep_short_subject():
 def test_degraded_extract_is_cached(monkeypatch, tmp_path):
     calls = []
 
-    def fake_run(*args, **kwargs):
-        calls.append(args)
-        return types.SimpleNamespace(returncode=0, stdout="这不是 JSON")
+    def fake_run(argv, prompt, timeout=None, cwd=None, env=None):
+        calls.append((argv, prompt))
+        return 0, "这不是 JSON", "", False, 1.0
 
-    monkeypatch.setattr(trace.subprocess, "run", fake_run)
+    monkeypatch.setattr(model_call, "_run", fake_run)
     monkeypatch.setattr(trace, "CACHE_DIR", str(tmp_path / "terms"))
 
     first = trace.extract_terms("甲午海战为什么失败", thinking="high", use_cache=True)
     assert first["source"] == "degraded"
-    assert len(calls) == 2, "第一次切词退化后应当再试一次"
+    assert len(calls) == 4, "第一次切词退化后应当再试一次；每次先 JSON 再纯文本"
     assert first["terms"]
     assert first["groups"]
 
     second = trace.extract_terms("甲午海战为什么失败", thinking="high", use_cache=True)
     assert second["source"] == "cache"
-    assert len(calls) == 2, "退化结果也要写缓存，第二次不该再调模型"
+    assert len(calls) == 4, "退化结果也要写缓存，第二次不该再调模型"
 
 
 def test_multi_windows_drops_books_without_support(monkeypatch):
@@ -205,7 +205,7 @@ def test_focus_without_source_answers_from_other_books(monkeypatch):
         got.update(kwargs)
         return {"ok": True}
 
-    monkeypatch.setattr(answer, "_normalize_sources", lambda xs: list(xs))
+    monkeypatch.setattr(answer, "_normalize_sources", lambda xs, report=None: list(xs))
     monkeypatch.setattr(answer, "_focus_source", lambda *a, **k: None)
     monkeypatch.setattr(answer, "_answer_multi", fake_multi)
     out = answer.answer_question(
@@ -222,3 +222,15 @@ def test_focus_without_source_answers_from_other_books(monkeypatch):
     assert got["focus_title"] == "甲书"
     assert got.get("focus_book") is None
     assert [s["book"] for s in got["sources"]] == ["B2"]
+
+
+def test_normalize_sources_records_over_limit_names(monkeypatch):
+    monkeypatch.setattr(answer, "_inside_library", lambda rel: True)
+    monkeypatch.setattr(answer, "book_from_path", lambda rel: rel.split("/")[1])
+    monkeypatch.setattr(answer.defpass, "first_content_line", lambda path: 1)
+    sources = [{"path": f"books/B{i}/md/a.md", "line": 1} for i in range(1, 11)]
+    report = {}
+    kept = answer._normalize_sources(sources, report=report)
+    assert len(kept) == answer.MAX_SOURCES
+    assert report["over_limit"] == 2
+    assert [row["book"] for row in report["dropped"]] == ["B9", "B10"]

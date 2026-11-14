@@ -261,6 +261,45 @@ python3 tests/manual/demo/shot.py --width 390 --height 844 --click-all --questio
 - `全选-书卡-1440x900.png`、`全选-回答-1440x900.png`、`全选-手机-390x844.png`
 - 五阶段的旧图（首屏、桌面结果、播放中、加载中、手机全页）保留作对照；旧结果图不含回答卡。
 
+## 运行记录
+
+`缓存/` 只记「结果」，`运行记录/` 记「这一次结果是怎么来的」。一次用户动作（点卡、换检索、重答）一个运行编号，落在 `apps/demo/运行记录/`：
+
+```
+运行记录/
+  runs/<运行编号>/run.json      结束清单（状态、耗时、计数、模型、版本）
+  runs/<运行编号>/run.jsonl     追加事件流（请求、检索、提示词、模型事件、工具、引文、加工）
+  blobs/<sha 前两位>/<sha>.txt  大文本按内容哈希去重
+  index.jsonl                   一行一个运行，供 list / 时间线 / 会话包
+  service.jsonl                 翻章、导出、删会话等服务事件
+  exports/session-<会话>.zip    会话包（可选）
+```
+
+会话里只多一个可选字段 `turn["run"]`，旧会话没有它照常读；回答运行时带 `parent=turn.run`，能串起「检索 → 回答」。现有 `缓存/` 四个目录的格式、键和文件一个字节都不改。
+
+记录内容：
+
+- 请求与动作：问题、锚点、第几张卡、forced fresh、thinking、入口、会话/轮次、起止、父运行。
+- 检索：切词提示词/原始输出/解析/重试/缓存命中，追问判定的提示词/原始输出/模型 against/兜底原因，词法每轮词组、命中、头两名分差、覆盖与停止原因，完整 ranking（不只前 8）、前 8 的选章、全部书卡、最终窗口与文件指纹。
+- 提示词：完整文本、历史字数、每窗留下/挤掉及原因、章节表、版本与长度上限。单书记录「候选窗口」与「实际留下」的差。
+- 模型：每次调用一条 `model.*`，含模型/thinking/工具/技能指纹、起止、rc/耗时/超时、JSONL 事件流原文、工具名/参数/结果/耗时/错误、每次尝试的 raw、提醒语、解析结果、stderr、降级标记。
+- 引文回查：每条引文一条 `answer.citation`，含书/路径/模型行号/引文/定位行/通过/失败原因/改正；末尾 `answer.citations` 汇总通过、丢弃、覆盖书数。
+- 答案加工：整形前后字数、截断、分歧/缺口、多书请求/归一/丢弃/覆盖、单多书判定、not_found 来源、最终对象、缓存键、命中/生成运行、原始 ms 与读取 ms。
+- 服务与环境：翻章/导出/删会话、异常堆栈、应用提交、提示词版本、模型、pi 版本、library/index 的 size 与 mtime。
+
+写失败不影响回答：`runlog.start()` 先做一次探针，目录不可写就退回禁用记录器，只往 stderr 打一行警告；事件边跑边追加，清单最后原子落盘。不记密钥、环境变量（只留 `BOOKS_ROOT`、`PI_BIN`、`ANSWER_MODEL`、`BOOKS_MODEL*`、`BOOKS_THINKING`、`BOOKS_RUNLOG_ROOT` 白名单）、库外绝对路径。默认不自动删，显式 `prune` 才清。
+
+```bash
+python3 apps/demo/runlog.py list --limit 20
+python3 apps/demo/runlog.py timeline <运行编号> [--full]
+python3 apps/demo/runlog.py bundle <会话id> [--out path]
+python3 apps/demo/runlog.py replay <运行编号>
+python3 apps/demo/runlog.py prune --days 30 [--apply]
+python3 apps/demo/runlog.py doctor
+```
+
+`replay` 只做自检：查 blob 哈希、重拼提示词比哈希、重解析模型 raw 比答案摘要；它不重跑检索或模型。运行根可用 `--root` 或 `BOOKS_RUNLOG_ROOT` 换到临时目录。
+
 ## 已知限制
 
 - 回答依赖本机 `pi` 与 `opencode-go` 凭据；不可用时回答卡报错、可重试，检索与原文不受影响。

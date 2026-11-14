@@ -72,6 +72,9 @@ known-first-party = ["bookcorpus"]
 "src/bookcorpus/**" = ["E402", "S101", "S603", "S607"]
 # 应用入口同样先改 sys.path 再 import。
 "apps/**" = ["E402"]
+# 运行记录/模型调用器是进程边界：argv 由 pimodel/pi_cmd 构造，不含外部输入。
+"apps/demo/runlog.py" = ["E402", "S603"]
+"apps/demo/model_call.py" = ["E402", "S603"]
 # home 的代起进程只用 SERVICES 表拼 argv，参数不含外部输入。
 "apps/home/launcher.py" = ["S603"]
 # 仓库脚本：起子进程跑 ruff 自己，argv 由脚本构造。

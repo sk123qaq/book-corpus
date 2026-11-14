@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+from dataclasses import asdict
 
 
 def _package_scripts():
@@ -39,6 +40,8 @@ import book_query
 import book_score
 import book_title
 import lib_common as L
+import model_call
+import runlog
 from thinking import DEFAULT as DEFAULT_THINKING
 from thinking import normalize as normalize_thinking
 
@@ -56,8 +59,20 @@ try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
 
     _CFG = pimodel.load(ROOT)
     MODEL = pimodel.ref(_CFG["values"]) or "opencode-go/deepseek-v4.1-flash"
+    _PI_HEAD = list(pimodel.pi_head())
     PI = [
-        *pimodel.pi_head(),
+        *_PI_HEAD,
+        "-p",
+        "--no-tools",
+        "--no-session",
+        "--no-context-files",
+        "--no-skills",
+        "--no-extensions",
+    ]
+    PI_JSON = [
+        *_PI_HEAD,
+        "--mode",
+        "json",
         "-p",
         "--no-tools",
         "--no-session",
@@ -72,7 +87,19 @@ try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
 except ImportError:
     pimodel, _CFG = None, None
     MODEL = "opencode-go/deepseek-v4.1-flash"
-    PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files", "--no-skills", "--no-extensions"]
+    _PI_HEAD = ["pi"]
+    PI = [*_PI_HEAD, "-p", "--no-tools", "--no-session", "--no-context-files", "--no-skills", "--no-extensions"]
+    PI_JSON = [
+        *_PI_HEAD,
+        "--mode",
+        "json",
+        "-p",
+        "--no-tools",
+        "--no-session",
+        "--no-context-files",
+        "--no-skills",
+        "--no-extensions",
+    ]
 
     def pi_flags(level):
         return ["--thinking", level, "--model", MODEL]
@@ -264,14 +291,16 @@ def _write_json(path, value):
     os.replace(tmp, path)
 
 
-def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
+def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None):
     """返回 {terms, groups, source, ms, note}。source: model|cache|degraded。
 
     thinking 进缓存键：换档就是另一份切词。use_cache=False 时跳过读缓存，
     但本次模型结果仍写回，下一次同档提问直接命中。
     """
     thinking = normalize_thinking(thinking)
+    rec = rec or runlog.Recorder("", "", {}, enabled=False)
     path = _cache_path(question, thinking)
+    key = os.path.basename(path)[:-5]
     if use_cache and os.path.exists(path):
         t0 = time.time()
         try:
@@ -280,7 +309,7 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
             terms = [t for t in data.get("terms", []) if isinstance(t, str) and t]
             groups = data.get("groups") or []
             if terms and groups:
-                return {
+                out = {
                     "terms": terms[:MAX_TERMS],
                     "groups": groups,
                     "source": "cache",
@@ -288,29 +317,87 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
                     "ms": round((time.time() - t0) * 1000, 1),
                     "model": MODEL,
                 }
-        except (OSError, ValueError):
-            pass
+                rec.event(
+                    "terms.cache",
+                    hit=True,
+                    key=key,
+                    path=path,
+                    source="cache",
+                    terms=out["terms"],
+                    groups=groups,
+                    ms=out["ms"],
+                )
+                rec.set_index(terms_source="cache", terms=len(out["terms"]), groups=len(groups))
+                return out
+            rec.event("terms.cache", hit=False, key=key, path=path, reason="invalid")
+        except (OSError, ValueError) as exc:
+            rec.event("terms.cache", hit=False, key=key, path=path, error=exc.__class__.__name__)
+    elif not use_cache:
+        rec.event("terms.cache", hit=False, key=key, path=path, reason="fresh")
+    else:
+        rec.event("terms.cache", hit=False, key=key, path=path, reason="missing")
 
     t0 = time.time()
     note = ""
     terms, groups = [], []
+    first_terms, first_groups = [], []
+    retry_terms, retry_groups = [], []
+    first_error = ""
+    retry_error = ""
+    retried = False
     try:
-        res = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
-            PI + pi_flags(thinking) + [_prompt(question)], capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT
+        prompt = _prompt(question)
+        rec.event("terms.prompt", **rec.large(prompt, "prompt"), question=question, thinking=thinking)
+        res = model_call.invoke(
+            prompt,
+            [*PI_JSON, *pi_flags(thinking)],
+            [*PI, *pi_flags(thinking)],
+            kind="terms",
+            rec=rec,
+            timeout=PI_TIMEOUT,
+            cwd=ROOT,
+            parser="terms",
         )
-        terms, groups = _parse_extract(res.stdout) if res.returncode == 0 else ([], [])
+        first_error = res.error
+        terms, groups = _parse_extract(res.text) if not res.error else ([], [])
+        first_terms, first_groups = terms, groups
         if len(terms) < 2 or not groups:
-            retry = subprocess.run(  # noqa: S603 同上
-                PI + pi_flags(thinking) + [_fallback_prompt(question)],
-                capture_output=True,
-                text=True,
+            retry_prompt = _fallback_prompt(question)
+            rec.event(
+                "terms.retry_prompt",
+                **rec.large(retry_prompt, "prompt"),
+                question=question,
+                thinking=thinking,
+            )
+            retry = model_call.invoke(
+                retry_prompt,
+                [*PI_JSON, *pi_flags(thinking)],
+                [*PI, *pi_flags(thinking)],
+                kind="terms_retry",
+                rec=rec,
                 timeout=PI_TIMEOUT,
                 cwd=ROOT,
+                parser="terms",
             )
-            more_terms, more_groups = _parse_extract(retry.stdout) if retry.returncode == 0 else ([], [])
-            if len(more_terms) >= 2 and more_groups:
-                terms, groups = more_terms, more_groups
+            retry_error = retry.error
+            retry_terms, retry_groups = _parse_extract(retry.text) if not retry.error else ([], [])
+            if len(retry_terms) >= 2 and retry_groups:
+                terms, groups = retry_terms, retry_groups
                 note = "第一次切词不可用，已重试"
+                retried = True
+            rec.event(
+                "terms.retry",
+                tried=True,
+                used=retried,
+                first_terms=first_terms,
+                first_groups=first_groups,
+                first_error=first_error,
+                retry_terms=retry_terms,
+                retry_groups=retry_groups,
+                retry_error=retry_error,
+            )
+        else:
+            rec.event("terms.retry", tried=False, used=False)
         # 读侧认 terms 且 groups；一条词也缓存，退化结果下次不必再等模型
         if terms and groups:
             ms = round((time.time() - t0) * 1000, 1)
@@ -327,7 +414,7 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
                     "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 },
             )
-            return {
+            out = {
                 "terms": terms,
                 "groups": groups,
                 "source": "model",
@@ -336,7 +423,22 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
                 "model": MODEL,
                 "note": note,
             }
-        note = note or ("模型没给出可用的词组" if res.returncode == 0 else "模型返回不可用（rc=%d）" % res.returncode)
+            rec.event(
+                "terms.model",
+                source="model",
+                terms=terms,
+                groups=groups,
+                note=note,
+                ms=ms,
+                model=MODEL,
+                thinking=thinking,
+                first_error=first_error,
+                retry_error=retry_error,
+            )
+            rec.event("terms.cache_write", key=key, path=path, source="model")
+            rec.set_index(terms_source="model", terms=len(terms), groups=len(groups))
+            return out
+        note = note or ("模型没给出可用的词组" if not first_error else "模型返回不可用（%s）" % first_error)
     except (OSError, subprocess.SubprocessError) as exc:
         note = "切词调用失败：%s" % exc.__class__.__name__
     ms = round((time.time() - t0) * 1000, 1)
@@ -356,6 +458,18 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True):
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             },
         )
+        rec.event("terms.cache_write", key=key, path=path, source="degraded")
+    rec.event(
+        "terms.degraded",
+        source="degraded",
+        note=note,
+        terms=terms,
+        groups=groups,
+        ms=ms,
+        first_error=first_error,
+        retry_error=retry_error,
+    )
+    rec.set_index(terms_source="degraded", terms=len(terms), groups=len(groups))
     return {
         "terms": terms,
         "groups": groups,
@@ -418,7 +532,7 @@ def _clean_line(line):
     return s
 
 
-def read_chapter(path, line=1, chars=STAGE_CHARS, before=STAGE_BEFORE):
+def read_chapter(path, line=1, chars=STAGE_CHARS, before=STAGE_BEFORE, rec=None):
     """从 1-based line 起取前置 before 字 + 命中整行 + 后置约 chars 字的正文。
 
     命中行原样保留（不清理），所以 text[hit_start:hit_end] 一定等于 hit_text。
@@ -513,7 +627,7 @@ def read_chapter(path, line=1, chars=STAGE_CHARS, before=STAGE_BEFORE):
     body = "\n".join(parts)
     book_root = real.split(os.sep + "md" + os.sep)[0]
     has_html = os.path.isfile(os.path.join(book_root, "html", "index.html"))
-    return {
+    info = {
         "path": path,
         "title": title,
         "text": body,
@@ -529,6 +643,18 @@ def read_chapter(path, line=1, chars=STAGE_CHARS, before=STAGE_BEFORE):
         "window_chars": len(body),
         "ms": round((time.time() - t0) * 1000, 1),
     }
+    if rec is not None:
+        rec.event(
+            "window.read",
+            path=path,
+            line=start,
+            title=title,
+            chars=len(body),
+            total_lines=total_lines,
+            ms=info["ms"],
+            file=runlog.file_fingerprint(real),
+        )
+    return info
 
 
 # ---- trace ----------------------------------------------------------
@@ -711,13 +837,32 @@ def _pick_default(plan, cardset, select, focus=None):
     return None
 
 
-def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
+def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
     question = (question or "").strip()
     if not question:
         raise ValueError("question 为空")
     thinking = normalize_thinking(thinking)
-    understand = extract_terms(question, thinking=thinking, use_cache=not fresh)
+    rec = rec or runlog.Recorder("", "", {}, enabled=False)
+    rec.event(
+        "trace.request",
+        question=question,
+        select=select,
+        thinking=thinking,
+        fresh=fresh,
+        index=runlog.file_fingerprint(INDEX_DB, hash_content=False),
+        library=runlog.file_fingerprint(LIB_DB, hash_content=False),
+    )
+    understand = extract_terms(question, thinking=thinking, use_cache=not fresh, rec=rec)
     terms = understand["terms"]
+    rec.event(
+        "trace.terms",
+        source=understand.get("source", ""),
+        terms=list(terms),
+        groups=understand.get("groups", []),
+        note=understand.get("note", ""),
+        ms=understand.get("ms", 0),
+        model=understand.get("model", ""),
+    )
 
     con = _ro(INDEX_DB)
     try:
@@ -728,10 +873,33 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
         t_plan = time.time()
         plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus)
         plan_ms = plan.ms
+        rec.event(
+            "search.plan",
+            **rec.large(json.dumps(asdict(plan), ensure_ascii=False, default=str), "plan"),
+            terms=list(plan.terms),
+            stop=plan.stop,
+            best_round=plan.best_round,
+            quality=list(plan.quality),
+            ms=plan_ms,
+            fetches=plan.fetches,
+            model_calls=plan.model_calls,
+            timings=plan.timings,
+        )
         cardset = book_cards.run(
             question, terms=plan.terms or terms, question=question, expand={}, feedback=None, con=con, focus=focus
         )
         cards_ms = cardset.ms
+        rec.event(
+            "search.cards",
+            **rec.large(json.dumps(asdict(cardset), ensure_ascii=False, default=str), "cards"),
+            trigger=bool(cardset.trigger),
+            reasons=list(cardset.reasons),
+            card_count=len(cardset.cards),
+            next=len(cardset.next),
+            uncertainty=cardset.uncertainty,
+            ms=cards_ms,
+            model_calls=cardset.model_calls,
+        )
 
         card_dicts = []
         for _i, c in enumerate(cardset.cards, 1):
@@ -821,6 +989,19 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
                 for c in _pick_rows(plan.chapters, 3, focus.get("book"))
             ],
         }
+        kept_ranking = _pick_rows(plan.ranking, 8, focus.get("book"))
+        kept_chapters = _pick_rows(plan.chapters, 3, focus.get("book"))
+        rec.event(
+            "search.trim",
+            ranking_total=len(plan.ranking),
+            ranking_kept=[b.book for b in kept_ranking],
+            ranking_dropped=[b.book for b in plan.ranking if b not in kept_ranking],
+            chapters_total=len(plan.chapters),
+            chapters_kept=[c["book"] for c in kept_chapters],
+            chapters_dropped=[c["book"] for c in plan.chapters if c not in kept_chapters],
+            focus=focus,
+            select=select,
+        )
 
         cards_dict = {
             "trigger": bool(cardset.trigger),
@@ -834,6 +1015,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
         }
 
         pick = _pick_default(plan_dict, cards_dict, select, focus)
+        rec.event("trace.pick", pick=pick, select=select, focus=focus)
         t_res = time.time()
         result = None
         if pick and pick.pop("focus_empty", False):
@@ -847,10 +1029,19 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
                 "focus_empty": True,
             }
         elif pick:
-            result = read_chapter(pick["path"], pick["line"], STAGE_CHARS)
+            result = read_chapter(pick["path"], pick["line"], STAGE_CHARS, rec=rec)
             result.update(
                 {"book": pick["book"], "book_title": pick["title"], "chapter": pick["chapter"], "card": pick["card"]}
             )
+        rec.event(
+            "trace.result",
+            book=(result or {}).get("book", ""),
+            path=(result or {}).get("path", ""),
+            line=(result or {}).get("line", 0),
+            chars=len((result or {}).get("text", "")),
+            card=(result or {}).get("card", 0),
+            focus_empty=bool((result or {}).get("focus_empty")),
+        )
         result_ms = round((time.time() - t_res) * 1000, 1)
 
         rounds_ms = round(sum(r.ms for r in plan.rounds), 1)
@@ -861,6 +1052,11 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
             "cards": cards_ms,
             "result": result_ms,
         }
+        meta_info = meta()
+        total_ms = round((time.time() - t_plan) * 1000 + understand["ms"], 1)
+        rec.event("trace.stage_ms", **stage_ms)
+        rec.event("trace.total", total_ms=total_ms, plan_ms=plan_ms, cards_ms=cards_ms)
+        rec.event("trace.meta", **meta_info)
         return {
             "question": question,
             "thinking": thinking,
@@ -870,8 +1066,8 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False):
             "cards": cards_dict,
             "result": result,
             "stage_ms": stage_ms,
-            "meta": meta(),
-            "total_ms": round((time.time() - t_plan) * 1000 + understand["ms"], 1),
+            "meta": meta_info,
+            "total_ms": total_ms,
         }
     finally:
         con.close()

@@ -13,6 +13,7 @@
 /工作区/运维/last-audit.json
 /工作区/运维/backup-*/
 /apps/demo/缓存/
+/apps/demo/运行记录/
 /.pi/
 
 # ---- 内容文件与二进制 ----

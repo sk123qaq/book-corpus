@@ -20,7 +20,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+REPO = os.path.dirname(os.path.dirname(HERE))
+for _p in (os.path.join(REPO, "src"), HERE):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+# 数据根在 import 期就被 trace/answer 算成常量（`ROOT = L.ROOT`），所以仓库根的 .env
+# 必须在这几个 import 之前读。没装包时退回 shell 环境，与原来的行为一致。
+try:
+    from bookcorpus import envfile
+except ImportError:
+    envfile = None
+    _ENV_BEFORE = set()
+else:
+    _ENV_BEFORE = set(os.environ)
+    envfile.load()
 
 import contextlib
 import trace as tracer
@@ -28,7 +42,15 @@ import trace as tracer
 import answer as answerer
 import export_session
 import related
+import runlog
 import session
+
+# .env 只用于让 trace/answer 在 import 期算出的数据根指向真实书库。
+# 不能把 .env 的键留在调用方进程里：pytest 收集时 import server，
+# BOOKS_ROOT 会串到后面的临时实例测试，Library(root) 因此读到真实书库。
+if envfile is not None:
+    for _key in set(os.environ) - _ENV_BEFORE:
+        os.environ.pop(_key, None)
 
 WEB = os.path.join(HERE, "web")
 MAX_BODY = 16 * 1024
@@ -345,10 +367,11 @@ def _inherit_focus(data, sess, n, rel):
     return data
 
 
-def _write_turn(sess, n, question, data, rel, anchor):
+def _write_turn(sess, n, question, data, rel, anchor, run=None):
     """n 已经存在就替掉它并截断后面的轮次（重跑同一问），否则追加。
 
     每个 turn 带一个新的 run_token：旧回答任务即使晚到也认不上这个 token。
+    run 是运行记录编号；旧会话没有这个字段，读侧一律 turn.get("run")。
     """
     turns = sess.setdefault("turns", [])
     turn = {
@@ -369,6 +392,8 @@ def _write_turn(sess, n, question, data, rel, anchor):
         "answer_attempt": 0,
         "answer_owner": "",
     }
+    if run:
+        turn["run"] = run
     index = next((i for i, t in enumerate(turns) if t.get("n") == n), -1)
     if index >= 0:
         turns[index:] = [turn]
@@ -518,6 +543,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
                 return
             (deleted if outcome == "deleted" else missing).append(sid)
+        runlog.service_event("sessions.delete", deleted=deleted, missing=missing)
         self.send_json(200, {"ok": True, "deleted": deleted, "missing": missing, "count": len(deleted)})
 
     def read_payload(self):
@@ -680,27 +706,34 @@ class Handler(BaseHTTPRequestHandler):
     def api_export(self, query):
         sid = (query.get("id") or [""])[0]
         if not session.valid_id(sid):
+            runlog.service_event("export", ok=False, session=sid, error="bad_id")
             self.fail(400, "会话 id 不合法")
             return
         sess = session.load(sid)
         if sess is None:
+            runlog.service_event("export", ok=False, session=sid, error="not_found")
             self.fail(404, "会话不存在")
             return
         fmt = ((query.get("format") or ["md"])[0] or "md").strip().lower()
         if fmt not in ("md", "docx"):
+            runlog.service_event("export", ok=False, session=sid, format=fmt, error="bad_format")
             self.fail(400, "format 只支持 md 或 docx")
             return
         for turn in sess.get("turns") or []:
             session.fill_citations(turn)
         body, ctype, headers = export_session.response(sess, sid, fmt)
+        runlog.service_event(
+            "export", ok=True, session=sid, format=fmt, bytes=len(body), turns=len(sess.get("turns") or [])
+        )
         self.send(200, body, ctype, headers)
 
     def api_run(self, question, select, thinking=None, fresh=False, session_id="", turn=None, anchor=None):
+        rec = None
         if not LOCK.acquire(timeout=120):
             self.fail(503, "服务忙，稍后重试")
             return
         try:
-            sess, n = None, 1
+            sess, n, created, old_run = None, 1, False, ""
             if session_id:
                 sess = session.load(session_id)
                 if sess is None:
@@ -711,32 +744,89 @@ class Handler(BaseHTTPRequestHandler):
                 if not 1 <= n <= total + 1:
                     self.fail(400, "turn 超出会话范围")
                     return
-            data = tracer.build(question, select, thinking=thinking, fresh=fresh)
+                if n <= total:
+                    old_run = sess["turns"][n - 1].get("run") or ""
+            if sess is None:
+                sess = session.create()
+                created = True
+            rec = runlog.start(
+                "turn",
+                session=sess["id"] if sess else "",
+                turn=n,
+                question=question,
+                thinking=thinking or "",
+                anchor=anchor,
+                select=select,
+                fresh=bool(fresh),
+                parent=old_run,
+            )
+            rec.event(
+                "turn.request",
+                session=sess["id"] if sess else "",
+                turn=n,
+                question=question,
+                select=select,
+                fresh=bool(fresh),
+                anchor=anchor,
+            )
+            data = tracer.build(question, select, thinking=thinking, fresh=fresh, rec=rec)
             _fill_citations(data)
             rel = None
             if sess and n > 1:
-                rel = related.check(question, _previous(sess, n))
+                rel = related.check(question, _previous(sess, n), rec=rec)
                 data = _pin_followup(data, sess, n, rel, anchor)
                 data = _inherit_focus(data, sess, n, rel)
-            if sess is None:
-                sess = session.create()
-                _write_turn(sess, n, question, data, rel, anchor)
+            if created:
+                _write_turn(sess, n, question, data, rel, anchor, run=rec.id)
                 session.save(sess)
             else:
                 # 重新读一遍再写：这期间可能刚完成一个回答，不能拿旧快照盖掉它。
                 with session.STATE_LOCK:
                     current = session.load(sess["id"])
                     if current is None:
+                        if rec is not None:
+                            rec.finish("error", error="会话不存在")
                         self.fail(404, "会话不存在")
                         return
-                    _write_turn(current, n, question, data, rel, anchor)
+                    _write_turn(current, n, question, data, rel, anchor, run=rec.id)
                     session.save(current)
                 sess = current
+            result = data.get("result") if isinstance(data.get("result"), dict) else {}
+            cards = data.get("cards") if isinstance(data.get("cards"), dict) else {}
+            plan = data.get("plan") if isinstance(data.get("plan"), dict) else {}
+            rec.event(
+                "turn.result",
+                session=sess["id"],
+                turn=n,
+                result_path=result.get("path", ""),
+                result_line=result.get("line", 0),
+                result_chars=len(result.get("text") or ""),
+                cards=len(cards.get("cards") or []),
+                ranking=len(plan.get("ranking") or []),
+                chapters=len(plan.get("chapters") or []),
+                related=bool(rel.get("related")) if isinstance(rel, dict) else False,
+            )
+            rec.set_index(
+                session=sess["id"],
+                turn=n,
+                question=question,
+                related=bool(rel.get("related")) if isinstance(rel, dict) else False,
+                cards=len(cards.get("cards") or []),
+                ranking=len(plan.get("ranking") or []),
+                windows=1 if result.get("path") else 0,
+            )
+            rec.finish("ok")
             self.send_json(200, dict(data, session_id=sess["id"], turn=n, related=rel, session=session.public(sess)))
         except ValueError as exc:
+            if rec is not None:
+                rec.error("turn", exc)
+                rec.finish("error", error=str(exc))
             self.fail(400, str(exc))
         except Exception as exc:
             traceback.print_exc()
+            if rec is not None:
+                rec.error("turn", exc)
+                rec.finish("error", error="%s: %s" % (exc.__class__.__name__, exc))
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
         finally:
             LOCK.release()
@@ -760,12 +850,26 @@ class Handler(BaseHTTPRequestHandler):
         try:
             info = tracer.read_chapter(path, line, chars, before)
         except ValueError as exc:
+            runlog.service_event("chapter", ok=False, error=str(exc), path=path, line=line, chars=chars, before=before)
             self.fail(400, str(exc))
             return
         except OSError as exc:
+            runlog.service_event(
+                "chapter", ok=False, error=exc.__class__.__name__, path=path, line=line, chars=chars, before=before
+            )
             self.fail(404, "读取失败：%s" % exc.__class__.__name__)
             return
         info["ok"] = True
+        runlog.service_event(
+            "chapter",
+            ok=True,
+            path=path,
+            line=line,
+            chars=chars,
+            before=before,
+            total_lines=info.get("total_lines"),
+            window_chars=info.get("window_chars"),
+        )
         self.send_json(200, info)
 
     def api_answer(
@@ -785,6 +889,7 @@ class Handler(BaseHTTPRequestHandler):
         fresh=False,
     ):
         sid, n, rel, ctx = "", 0, None, None
+        rec = None
         if session_id:
             sid, n, rel, ctx = self.session_context(session_id, turn, sources)
         meta = session.turn_meta(sid, n) if sid and n else None
@@ -814,6 +919,17 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(409, message)
             publish_answer_job(job, error=(409, message))
             return
+        rec = runlog.start(
+            "answer",
+            session=sid,
+            turn=n,
+            parent=meta.get("run", ""),
+            question=question,
+            thinking=thinking or "",
+            attempt=attempt,
+            sources=len(sources or []),
+            focus=bool(focus),
+        )
         try:
             info = answerer.answer_question(
                 question,
@@ -827,14 +943,26 @@ class Handler(BaseHTTPRequestHandler):
                 use_cache=use_cache,
                 history=ctx["text"] if ctx else "",
                 focus=focus,
+                rec=rec,
             )
             _fill_citations(info)
-            if not session.finish_answer(sid, n, attempt, info, ctx, token=token):
+            if not session.finish_answer(sid, n, attempt, info, ctx, token=token, run=rec.id if rec else ""):
                 # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
                 message = "这一轮已重跑，本次回答作废"
+                rec.event("answer.stale", error=message)
+                rec.finish("stale", error=message)
                 publish_answer_job(job, error=(409, message))
                 self.fail(409, message)
                 return
+            rec.set_index(
+                answer_ok=bool(info.get("ok")),
+                answer_error=info.get("error", ""),
+                confidence=info.get("confidence"),
+                citations=len(info.get("citations") or []),
+                passages=len(info.get("passages") or []),
+                mode=info.get("mode", "single"),
+            )
+            rec.finish("ok" if info.get("ok") else "error", error=info.get("error", ""))
             body = dict(
                 info,
                 session_id=sid,
@@ -848,12 +976,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, body)
         except ValueError as exc:
             session.fail_answer(sid, n, attempt, str(exc), token=token)
+            if rec is not None:
+                rec.error("answer", exc)
+                rec.finish("error", error=str(exc))
             publish_answer_job(job, error=(400, str(exc)))
             self.fail(400, str(exc))
         except Exception as exc:
             traceback.print_exc()
             message = "%s: %s" % (exc.__class__.__name__, exc)
             session.fail_answer(sid, n, attempt, message, token=token)
+            if rec is not None:
+                rec.error("answer", exc)
+                rec.finish("error", error=message)
             publish_answer_job(job, error=(500, message))
             self.fail(500, message)
 
@@ -861,6 +995,15 @@ class Handler(BaseHTTPRequestHandler):
         self, question, book, path, line, terms, groups, sources, focus, thinking, use_cache, ctx, sid, n, rel
     ):
         """不带会话状态的回答：照旧调一次模型并把结果发回去。"""
+        rec = runlog.start(
+            "answer_once",
+            session=sid,
+            turn=n,
+            question=question,
+            thinking=thinking or "",
+            sources=len(sources or []),
+            focus=bool(focus),
+        )
         try:
             info = answerer.answer_question(
                 question,
@@ -874,13 +1017,27 @@ class Handler(BaseHTTPRequestHandler):
                 use_cache=use_cache,
                 history=ctx["text"] if ctx else "",
                 focus=focus,
+                rec=rec,
             )
             _fill_citations(info)
+            rec.set_index(
+                answer_ok=bool(info.get("ok")),
+                answer_error=info.get("error", ""),
+                confidence=info.get("confidence"),
+                citations=len(info.get("citations") or []),
+                passages=len(info.get("passages") or []),
+                mode=info.get("mode", "single"),
+            )
+            rec.finish("ok" if info.get("ok") else "error", error=info.get("error", ""))
             self.send_json(200, dict(info, session_id=sid, turn=n, related=rel, history=self.history_brief(ctx)))
         except ValueError as exc:
+            rec.error("answer", exc)
+            rec.finish("error", error=str(exc))
             self.fail(400, str(exc))
         except Exception as exc:
             traceback.print_exc()
+            rec.error("answer", exc)
+            rec.finish("error", error="%s: %s" % (exc.__class__.__name__, exc))
             self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
 
     @staticmethod
@@ -925,6 +1082,7 @@ def main(argv=None):
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args(argv)
+    runlog.configure()
     try:
         count = session.recover_interrupted()
         print("启动恢复：%d 轮上次未完成的回答已标为 interrupted" % count, flush=True)

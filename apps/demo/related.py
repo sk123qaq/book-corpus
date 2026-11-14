@@ -9,14 +9,15 @@
  "source": "model"|"cache"|"fallback", "thinking": str}
 """
 
-import contextlib
 import hashlib
 import json
 import os
 import re
-import subprocess
 import threading
 import time
+
+import model_call
+import runlog
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -36,7 +37,19 @@ WINDOW = 3
 REASON_CHARS = 40
 STOP = set("的是了和与在什么怎么为什么")
 MIN_OVERLAP = 3
-PI = ["pi", "-p", "--no-tools", "--no-session", "--no-context-files", "--no-skills", "--no-extensions"]
+_PI_HEAD = pimodel.pi_head() if pimodel else ["pi"]
+PI = [*_PI_HEAD, "-p", "--no-tools", "--no-session", "--no-context-files", "--no-skills", "--no-extensions"]
+PI_JSON = [
+    *_PI_HEAD,
+    "--mode",
+    "json",
+    "-p",
+    "--no-tools",
+    "--no-session",
+    "--no-context-files",
+    "--no-skills",
+    "--no-extensions",
+]
 
 
 def pi_flags(level):
@@ -124,21 +137,25 @@ def _cache_path(question, previous):
     return os.path.join(CACHE_DIR, hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest() + ".json")
 
 
-def _call(prompt, thinking):
+def _call(prompt, thinking, rec=None):
     """调 pi 判一次。返回 (stdout, error)；失败时 stdout 为 None。"""
-    try:
-        res = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
-            PI + pi_flags(thinking) + [prompt], capture_output=True, text=True, timeout=PI_TIMEOUT, cwd=ROOT
-        )
-    except subprocess.TimeoutExpired:
+    result = model_call.invoke(
+        prompt,
+        PI_JSON + pi_flags(thinking),
+        PI + pi_flags(thinking),
+        kind="related",
+        rec=rec,
+        timeout=PI_TIMEOUT,
+        cwd=ROOT,
+        parser="related",
+    )
+    if result.timed_out:
         return None, "判定超时（%d 秒）" % PI_TIMEOUT
-    except OSError as exc:
-        return None, "调不起 pi：%s" % exc.__class__.__name__
-    if res.returncode != 0:
-        return None, "模型调用失败（rc=%d）" % res.returncode
-    if not (res.stdout or "").strip():
+    if result.exit_code not in (0, None):
+        return None, "模型调用失败（rc=%d）" % result.exit_code
+    if not (result.text or "").strip():
         return None, "模型没有输出"
-    return res.stdout, ""
+    return result.text, ""
 
 
 def parse_reply(raw):
@@ -201,17 +218,25 @@ def _fallback(question, previous):
     return {"related": bool(against), "reason": _clip(reason), "against": against}
 
 
-def check(question, previous, use_cache=True, thinking="low"):
+def check(question, previous, use_cache=True, thinking="low", rec=None):
     """previous: [{"n": 1, "question": "…", "answer": "…"}]，answer 传上一轮回答全文（server 不再截断）。
 
     只比较最后 3 个 previous。第 1 问（没有 previous）直接判 unrelated，不调模型。
     """
+    rec = rec or runlog.Recorder("", "", {}, enabled=False)
     t0 = time.time()
     question = str(question or "").strip()
     thinking = str(thinking or "low").strip().lower() or "low"
     previous = _clean_previous(previous)
+    rec.event(
+        "related.request",
+        question=question,
+        thinking=thinking,
+        use_cache=bool(use_cache),
+        previous=[{"n": t["n"], "question": t["question"], "answer_chars": len(t["answer"])} for t in previous],
+    )
     if not previous:
-        return {
+        out = {
             "related": False,
             "reason": "没有上一轮",
             "against": [],
@@ -219,6 +244,9 @@ def check(question, previous, use_cache=True, thinking="low"):
             "source": "fallback",
             "thinking": thinking,
         }
+        rec.event("related.result", **out)
+        rec.set_index(related_related=False, related_source="fallback")
+        return out
 
     cache_path = _cache_path(question, previous)
     if use_cache and os.path.exists(cache_path):
@@ -228,7 +256,12 @@ def check(question, previous, use_cache=True, thinking="low"):
         except (OSError, ValueError):
             cached = None
         if isinstance(cached, dict) and isinstance(cached.get("related"), bool):
-            return {
+            try:
+                age = round(time.time() - os.path.getmtime(cache_path), 1)
+            except OSError:
+                age = None
+            rec.event("related.cache", hit=True, path=cache_path, age=age)
+            out = {
                 "related": cached["related"],
                 "reason": _clip(cached.get("reason")),
                 "against": [int(n) for n in cached.get("against") or [] if isinstance(n, int)],
@@ -236,9 +269,23 @@ def check(question, previous, use_cache=True, thinking="low"):
                 "source": "cache",
                 "thinking": thinking,
             }
+            rec.event("related.result", **out)
+            rec.set_index(related_related=out["related"], related_source="cache")
+            return out
+        rec.event("related.cache", hit=False, path=cache_path, reason="invalid")
+    else:
+        rec.event("related.cache", hit=False, path=cache_path, reason="missing_or_fresh")
 
     prompt = PROMPT.format(turns=_turns_block(previous), question=question)
-    raw, _error = _call(prompt, thinking)
+    rec.event("related.prompt", chars=len(prompt), **rec.large(prompt, "prompt"))
+    raw, error = _call(prompt, thinking, rec=rec)
+    rec.event(
+        "related.raw",
+        chars=len(raw or ""),
+        sha256=runlog.sha256(raw or ""),
+        error=error,
+        **rec.large(raw or "", "raw"),
+    )
     reply = parse_reply(raw) if raw else None
     if reply is not None:
         out = {
@@ -249,12 +296,34 @@ def check(question, previous, use_cache=True, thinking="low"):
             "source": "model",
             "thinking": thinking,
         }
-        with contextlib.suppress(OSError):
+        rec.event(
+            "related.model",
+            related=reply["related"],
+            reason=runlog.short(reply.get("reason"), 200),
+            model_against=reply.get("against"),
+            against=out["against"],
+        )
+        try:
             _write_json(cache_path, dict(out, question=question, prev=[t["n"] for t in previous], at=_now()))
+        except OSError as exc:
+            rec.event("related.cache_write_error", path=cache_path, error=exc.__class__.__name__)
+        else:
+            rec.event("related.cache_write", path=cache_path)
+        rec.event("related.result", **out)
+        rec.set_index(related_related=out["related"], related_source="model")
         return out
 
+    rec.event(
+        "related.fallback",
+        error=error,
+        raw_present=bool(raw),
+        parsed=reply is not None,
+        previous=[t["n"] for t in previous],
+    )
     out = _fallback(question, previous)
     out.update({"ms": _ms(t0), "source": "fallback", "thinking": thinking})
+    rec.event("related.result", **out)
+    rec.set_index(related_related=out["related"], related_source="fallback")
     return out
 
 
