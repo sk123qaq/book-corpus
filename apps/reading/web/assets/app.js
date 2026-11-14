@@ -181,6 +181,7 @@
     config: '配置错误',
     restart: '服务重启中断',
     cancelled: '已取消',
+    source_too_large: '源文件过大',
     quality: '未过硬门槛',
     unexpected: '未分类异常',
     provider: '提供方失败',

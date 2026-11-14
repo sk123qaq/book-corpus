@@ -397,6 +397,18 @@ def test_records_page_translates_error_kind_instead_of_showing_raw():
         assert label in app
 
 
+def test_records_page_keeps_blocked_jobs_terminal_without_depth_retry():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "apps/reading/web/records.html").read_text(encoding="utf-8")
+    app = (root / "apps/reading/web/assets/app.js").read_text(encoding="utf-8")
+    css = (root / "apps/reading/web/assets/app.css").read_text(encoding="utf-8")
+    assert "{ key: 'blocked', name: '已阻断'" in html
+    assert "const blocked = job.state === 'blocked';" in html
+    assert "if (blocked) return '已阻断 · '" in html
+    assert "source_too_large: '源文件过大'" in app
+    assert ".rec-state.blocked" in css
+
+
 def test_restart_marks_interrupted_job_with_restart_kind(tmp_path):
     """进程被杀留下的运行态：标失败、点明第几层、进度不虚报。"""
     path = tmp_path / "阅读" / "jobs.json"

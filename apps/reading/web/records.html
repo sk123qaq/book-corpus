@@ -70,6 +70,7 @@ const TABS = [
   { key: 'all', name: '全部', match: () => true },
   { key: 'running', name: '运行中', match: (job) => RUNNING.includes(job.state) },
   { key: 'done', name: '完成', match: (job) => job.state === 'done' || job.state === 'partial' },
+  { key: 'blocked', name: '已阻断', match: (job) => job.state === 'blocked' },
   { key: 'failed', name: '失败', match: (job) => job.state === 'failed' || job.state === 'cancelled' }
 ];
 let data = { jobs: [], packs: [] };
@@ -108,7 +109,7 @@ function focusJob() {
   }
   const running = RUNNING.includes(job.state);
   if (!running) {
-    filter = 'all';
+    filter = job.state === 'blocked' ? 'blocked' : 'all';
     openId = id;
     render();
   }
@@ -124,9 +125,11 @@ function render() {
   const running = jobs.filter((job) => RUNNING.includes(job.state));
   const done = jobs.filter((job) => job.state === 'done' || job.state === 'partial');
   const failed = jobs.filter((job) => job.state === 'failed' || job.state === 'cancelled');
+  const blocked = jobs.filter((job) => job.state === 'blocked');
   RD.mount('stats').innerHTML =
     '<span><b>' + RD.fmt(done.length) + '</b>完成</span>' +
     '<span><b>' + RD.fmt(running.length) + '</b>运行中</span>' +
+    '<span><b>' + RD.fmt(blocked.length) + '</b>已阻断</span>' +
     '<span><b>' + RD.fmt(failed.length) + '</b>失败 / 取消</span>' +
     '<span><b>' + RD.fmt(packs.length) + '</b>章读本</span>' +
     '<span><b>' + RD.fmt(jobs.length) + '</b>历史工单</span>';
@@ -161,7 +164,7 @@ function renderQueue(running) {
 }
 
 function renderTabs(running) {
-  const counts = { all: data.jobs.length, running: running.length, done: data.jobs.filter((j) => j.state === 'done' || j.state === 'partial').length, failed: data.jobs.filter((j) => j.state === 'failed' || j.state === 'cancelled').length };
+  const counts = { all: data.jobs.length, running: running.length, done: data.jobs.filter((j) => j.state === 'done' || j.state === 'partial').length, blocked: data.jobs.filter((j) => j.state === 'blocked').length, failed: data.jobs.filter((j) => j.state === 'failed' || j.state === 'cancelled').length };
   RD.mount('tabs').innerHTML = TABS.map((tab) =>
     '<button data-filter="' + tab.key + '" aria-pressed="' + (filter === tab.key) + '">' + tab.name +
     '<span class="count">' + RD.fmt(counts[tab.key]) + '</span></button>'
@@ -202,6 +205,7 @@ function renderJobs(jobs) {
 function detail(job, open) {
   const tiers = job.tiers || [];
   const depth = job.kind === 'depth';
+  const blocked = job.state === 'blocked';
   const outs = depth
     ? '<a href="' + RD.readerHref(job.uid, job.n, 'skim', 'depth') + '">读深读本</a>'
     : tiers.map((tier) =>
@@ -212,14 +216,17 @@ function detail(job, open) {
   const id = RD.esc(job.id);
   const actions = running
     ? '<button data-cancel="' + id + '">取消任务</button>'
-    : depth
-      ? '<button data-depth-retry="' + id + '" data-rebuild="0">重跑所选层</button>' +
-        '<button data-depth-retry="' + id + '" data-rebuild="1">重建结构模型</button>'
-      : '<button data-retry="' + id + '">重渲染</button>' +
-        '<button data-retry="' + id + '" data-force-annotation="1">重新标注</button>';
+    : blocked
+      ? ''
+      : depth
+        ? '<button data-depth-retry="' + id + '" data-rebuild="0">重跑所选层</button>' +
+          '<button data-depth-retry="' + id + '" data-rebuild="1">重建结构模型</button>'
+        : '<button data-retry="' + id + '">重渲染</button>' +
+          '<button data-retry="' + id + '" data-force-annotation="1">重新标注</button>';
   return '<div class="rec-detail' + (open ? ' open' : '') + '">' +
     RD.jobSteps(job) +
     (RD.jobMeta(job) ? '<div class="rec-meta">' + RD.esc(RD.jobMeta(job)) + '</div>' : '') +
+    (blocked && job.remediation ? '<div class="rec-meta">' + RD.esc(job.remediation) + '</div>' : '') +
     '<div class="gate">' + (job.pack_id ? '产物 <b>' + RD.esc(job.pack_id) + '</b> · ' : '') +
       '状态 <b>' + RD.esc(RD.statusName[job.state] || job.status || job.state) + '</b>' +
       (job.error_kind ? ' · 类别 <b title="' + RD.esc(job.error_kind) + '">' + RD.esc(RD.errorKindName(job.error_kind)) + '</b>' : '') +
@@ -406,6 +413,8 @@ function keyName(key) {
 
 function jobSubtitle(job) {
   if (job.state === 'cancelled') return '已取消';
+  const blocked = job.state === 'blocked';
+  if (blocked) return '已阻断 · ' + (RD.errorKindName(job.error_kind) || '源文件过大');
   if (job.error) {
     const text = String(job.error).replace(/\s+/g, ' ').trim();
     return '失败 · ' + (text.length > 42 ? text.slice(0, 42) + '…' : text);
@@ -424,6 +433,7 @@ function currentStep(job) {
 
 function stateClass(state) {
   if (state === 'done' || state === 'partial') return 'done';
+  if (state === 'blocked') return 'blocked';
   if (state === 'failed') return 'fail';
   if (state === 'cancelled') return 'cancel';
   return 'run';

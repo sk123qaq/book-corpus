@@ -435,6 +435,9 @@ class Handler(BaseHTTPRequestHandler):
         except MissingProfileError as exc:
             self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
             return
+        except SourceTooLarge as exc:
+            self._json(422, exc.to_dict())
+            return
         except (TypeError, ValueError) as exc:
             self._json(400, {"error": str(exc)})
             return
