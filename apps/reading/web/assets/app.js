@@ -120,7 +120,7 @@
   RD.statusName = {
     queued: '排队', chunking: '切块', annotating: '标注', validating: '校验',
     projecting: '组档', rendering: '渲染', done: '完成', partial: '部分通过',
-    failed: '失败', cancelled: '已取消'
+    failed: '失败', blocked: '已阻断', cancelled: '已取消'
   };
   RD.activeStates = ['queued', 'chunking', 'annotating', 'validating', 'projecting', 'rendering'];
   RD.jobForTier = (jobs, tier) => (jobs || []).find((job) =>
@@ -144,8 +144,8 @@
   RD.jobSteps = (job) => {
     const steps = (job && job.steps) || [];
     return '<ol class="steps">' + steps.map((step) => (
-      '<li class="step ' + (step.status === 'done' ? 'done' : step.status === 'run' ? 'run' : step.status === 'failed' ? 'fail' : '') + '">' +
-      '<span class="mark">' + (step.status === 'done' ? '✓' : step.status === 'failed' ? '✗' : '') + '</span>' +
+      '<li class="step ' + (step.status === 'done' ? 'done' : step.status === 'run' ? 'run' : step.status === 'blocked' ? 'blocked' : step.status === 'failed' ? 'fail' : '') + '">' +
+      '<span class="mark">' + (step.status === 'done' ? '✓' : step.status === 'blocked' ? '!' : step.status === 'failed' ? '✗' : '') + '</span>' +
       '<span>' + RD.esc(step.name) + '</span></li>'
     )).join('') + '</ol>';
   };
@@ -210,12 +210,13 @@
   RD.jobCard = (job) => {
     const state = job.state || 'queued';
     const bad = state === 'failed';
+    const warn = state === 'blocked';
     const names = job.kind === 'depth'
       ? (job.layers || []).map((layer) => RD.depthNames[layer] || layer)
       : (job.tiers || []).map((tier) => RD.tierNames[tier] || tier);
     return '<div class="job-inline open" data-job="' + RD.esc(job.id) + '">' +
       '<div class="job-head"><span class="eyebrow">工单 ' + RD.esc(job.id) + '</span>' +
-      '<span class="job-state ' + (bad ? 'bad' : '') + '">' + RD.esc(RD.statusName[state] || state) + '</span></div>' +
+      '<span class="job-state ' + (bad ? 'bad' : warn ? 'warn' : '') + '">' + RD.esc(RD.statusName[state] || state) + '</span></div>' +
       '<div class="job-title">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
       names.join(' / ') + '</div>' +
       RD.jobSteps(job) +
@@ -233,7 +234,7 @@
         misses = 0;
         if (mount) mount.innerHTML = RD.jobCard(job);
         if (onTick) onTick(job);
-        if (['done', 'partial', 'failed', 'cancelled'].includes(job.state)) {
+        if (['done', 'partial', 'failed', 'blocked', 'cancelled'].includes(job.state)) {
           if (onDone) onDone(job);
           return;
         }

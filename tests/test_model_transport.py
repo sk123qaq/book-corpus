@@ -191,6 +191,14 @@ def test_server_error_then_success():
         assert recorder.hits == 4
 
 
+def test_per_call_max_tokens_overrides_the_client_default():
+    with _serve(lambda handler, _hits: _send_json(handler, _ok_body())) as (recorder, url, server):
+        client = _client(url)
+        client.complete_json(MESSAGES, max_tokens=96000)
+        assert json.loads(server.bodies[0])["max_tokens"] == 96000
+        assert recorder.hits == 1
+
+
 def test_truncated_output_is_not_retried():
     def respond(handler, _hits):
         body = {
@@ -322,8 +330,8 @@ class _ExhaustedClient:
     def __init__(self):
         self.calls = 0
 
-    def complete_json(self, messages, model=None, effort=None):
-        del messages, model, effort
+    def complete_json(self, messages, model=None, effort=None, max_tokens=None):
+        del messages, model, effort, max_tokens
         self.calls += 1
         exc = model_mod.ModelTransportError(
             "模型调用失败（对端在返回状态行前关闭了连接，阶段 read）：transport_closed",

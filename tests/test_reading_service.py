@@ -468,7 +468,7 @@ class _AnnotatingClient:
             "fallback": False,
         }
 
-    def complete_json(self, messages, *, model=None, effort=None):
+    def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
         payload = {
             "schema": 1,
             "uid": "B0001",
@@ -482,7 +482,7 @@ class _AnnotatingClient:
 
 
 class _NoEditorialClient(_AnnotatingClient):
-    def complete_json(self, messages, *, model=None, effort=None):
+    def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
         raise RuntimeError("图表模型不可用")
 
 

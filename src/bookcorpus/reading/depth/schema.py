@@ -32,6 +32,12 @@ DISPOSITIONS = ("verbatim", "condensed", "indexed", "omitted")
 class ChapterModelError(ValueError):
     """chapter_model 不满足结构、引文或守恒约束。"""
 
+    kind = "schema"
+
+    def __init__(self, message, *, payload=None):
+        super().__init__(message)
+        self.payload = payload
+
 
 def _fail(message):
     raise ChapterModelError(message)

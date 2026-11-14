@@ -11,6 +11,7 @@
 | [docs/design/回答阶段-结构化.md](design/回答阶段-结构化.md) | implemented | 2026-10-25 | 回答阶段结构化（2026-10-25） |
 | [docs/design/多格式来源支持-2026-11-05.md](design/多格式来源支持-2026-11-05.md) | implemented | 2026-11-05 | 多格式来源支持（txt / Word / Excel / PPT / md） |
 | [docs/design/阅读版编辑层.md](design/阅读版编辑层.md) | implemented | 2026-11-07 | 阅读版编辑层 |
+| [docs/design/分层读-深度生成分块与预检-2026-11-14.md](design/分层读-深度生成分块与预检-2026-11-14.md) | implemented | 2026-11-14 | 分层读深度生成：分块、输出预算与预检 |
 | [docs/design/窗口参数-决策记录-2026-11-02.md](design/窗口参数-决策记录-2026-11-02.md) | accepted | 2026-11-02 | 窗口参数决策记录（2026-11-02） |
 | [docs/design/阅读版HTML规范.md](design/阅读版HTML规范.md) | accepted | 2026-11-06 | 阅读版 HTML 规范 |
 | [docs/design/视觉读本-决策记录-2026-11-07.md](design/视觉读本-决策记录-2026-11-07.md) | accepted | 2026-11-07 | 视觉读本决策记录（2026-11-07） |

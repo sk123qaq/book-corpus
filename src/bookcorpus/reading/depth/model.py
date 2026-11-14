@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from .. import events
-from ..model import DEFAULT_EFFORT, DEFAULT_MODEL, MAX_TOKENS, ModelProviderError
+from ..model import DEFAULT_EFFORT, DEFAULT_MODEL, MAX_TOKENS, ModelProviderError, ModelTruncatedError
 from ..textnorm import normalize_verbatim
 from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
 
@@ -37,7 +37,9 @@ SYSTEM_PROMPT = "\n".join(
         "7. 不要输出 tiers。档位由后续确定性计划器生成。",
         "8. 顶层必须有 schema、uid、n、source_sha256、prompt_version、units、sections、terms、figures、"
         "non_semantic、folds。schema 写 1，prompt_version 固定写 chapter-model-v1。"
-        "字段可以多，不能少。sections 用 unit_ids，不用 units。",
+        "字段可以多，不能少。sections 用 unit_ids，不用 units。"
+        "顶层 uid 必须原样等于 chapter.uid，不得加 C01-、C04- 或任何分块前缀；"
+        "分块前缀只用于 section、unit、figure 的局部 id。",
         "9. term 字段为 term、definition、source_block、quote；quote 必须是 source_block 的逐字子串。"
         "figure 字段为 id、family、question、units、origin、caption、reading_note、data、fallback；"
         "family 只能是 argument/matrix/tree/flow/timeline/network/quantity，"
@@ -70,11 +72,23 @@ SYSTEM_PROMPT = "\n".join(
 )
 
 MAX_JSON_RETRIES = 1
-PLAN_VERSION = 1
+PLAN_VERSION = 2
+DEPTH_CHUNK_TOKENS = 96000
+MAX_CHUNK_SPLIT_DEPTH = 2
 
 
 class DepthModelError(RuntimeError):
     """结构模型生成失败。"""
+
+    kind = "depth_model"
+
+    def __init__(self, message, *, kind=None, payload=None, stats=None, remediation=None):
+        super().__init__(message)
+        if kind:
+            self.kind = kind
+        self.payload = payload
+        self.stats = stats
+        self.remediation = remediation
 
 
 def _block_view(block):
@@ -132,13 +146,15 @@ def _merge_usage(target, usage):
             target.setdefault(key, value)
 
 
-def _split_at_limit(blocks, limit):
+def _split_at_limit(blocks, limit, max_blocks=None):
     chunks = []
     current = []
     current_chars = 0
+    if max_blocks is not None and max_blocks <= 0:
+        max_blocks = None
     for block in blocks:
         size = len(block.get("text") or "")
-        if current and current_chars + size > limit:
+        if current and (current_chars + size > limit or (max_blocks and len(current) >= max_blocks)):
             chunks.append(current)
             current = []
             current_chars = 0
@@ -163,26 +179,30 @@ def _h2_groups(blocks):
     return groups
 
 
-def _chunk_plans(blocks, limit):
-    """小章一次调用；超过 limit 才按 H2 与字符上限切块。"""
+def _chunk_plans(blocks, limit, max_blocks=None):
+    """小章一次调用；超过 limit 或块数上限才按 H2 与字符上限切块。"""
+    if max_blocks is not None and max_blocks <= 0:
+        max_blocks = None
+    total_chars = sum(len(block.get("text") or "") for block in blocks)
     if not blocks:
         plans = [{"blocks": [], "start": 0, "end": 0}]
-    elif sum(len(block.get("text") or "") for block in blocks) <= limit:
+    elif total_chars <= limit and (max_blocks is None or len(blocks) <= max_blocks):
         plans = [{"blocks": list(blocks), "start": 0, "end": len(blocks)}]
     else:
         plans = []
         start = 0
         for group in _h2_groups(blocks):
-            for piece in _split_at_limit(group, limit):
+            for piece in _split_at_limit(group, limit, max_blocks):
                 plans.append({"blocks": piece, "start": start, "end": start + len(piece)})
                 start += len(piece)
     total = len(plans)
     for index, plan in enumerate(plans):
         plan["index"] = index
         plan["total"] = total
+        plan["chunk_id"] = f"{plan['start']:04d}-{plan['end']:04d}"
         plan["prev_title"] = _neighbor_h2(blocks, plan["start"], -1)
         plan["next_title"] = _neighbor_h2(blocks, plan["end"] - 1, 1)
-        plan["id_prefix"] = f"C{index + 1:02d}-" if total > 1 else ""
+        plan["id_prefix"] = f"C{plan['chunk_id']}-" if total > 1 else ""
     return plans
 
 
@@ -198,6 +218,11 @@ def _neighbor_h2(blocks, index, step):
                 continue
         current += step
     return None
+
+
+def plan_chunks(blocks, chunk_chars=18000, max_blocks=100):
+    """预检与生成共用的分块规划；max_blocks=None 保持旧行为。"""
+    return _chunk_plans(blocks, chunk_chars, max_blocks)
 
 
 def _chunks(blocks, limit):
@@ -372,33 +397,55 @@ def _normalize_chunk_refs(payload, id_prefix="", chunk=None):
     return data
 
 
+def _brief(value):
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+    return text[:200]
+
+
 def _chunk_payload(payload, chunk, chapter, *, id_prefix=""):
+    raw = payload
     data = _normalize_chunk_refs(payload, id_prefix=id_prefix, chunk=chunk)
     chapter_view = chapter if isinstance(chapter, dict) else {}
-    data.setdefault("schema", 1)
-    data.setdefault("uid", chapter_view.get("uid"))
-    data.setdefault("n", chapter_view.get("n"))
-    data.setdefault("source_sha256", chapter_view.get("source_sha256"))
-    data.setdefault("prompt_version", PROMPT_VERSION)
+    expected = (
+        ("schema", 1, True),
+        ("uid", chapter_view.get("uid"), False),
+        ("n", chapter_view.get("n"), False),
+        ("source_sha256", chapter_view.get("source_sha256"), False),
+        ("prompt_version", PROMPT_VERSION, True),
+    )
+    corrected = {}
+    for field, value, always in expected:
+        if not always and (value is None or value == ""):
+            continue
+        if field not in data or data.get(field) != value:
+            corrected[field] = _brief(data.get(field))
+            data[field] = value
+    if corrected:
+        events.current().emit("envelope_corrected", fields=corrected)
     data.setdefault("folds", [])
     expected_uid = chapter_view.get("uid")
     expected_n = chapter_view.get("n")
     expected_sha = chapter_view.get("source_sha256")
-    return validate_chapter_model(
-        data,
-        chunk,
-        uid=expected_uid if expected_uid is not None else data.get("uid"),
-        n=expected_n if expected_n is not None else data.get("n"),
-        source_sha256=expected_sha if expected_sha is not None else data.get("source_sha256"),
-    )
+    try:
+        return validate_chapter_model(
+            data,
+            chunk,
+            uid=expected_uid if expected_uid is not None else data.get("uid"),
+            n=expected_n if expected_n is not None else data.get("n"),
+            source_sha256=expected_sha if expected_sha is not None else data.get("source_sha256"),
+        )
+    except ChapterModelError as exc:
+        if getattr(exc, "payload", None) is None:
+            exc.payload = raw
+        raise
 
 
-def _complete_json(client, messages, model, effort, *, chunk=None, chapter=None, id_prefix=""):
+def _complete_json(client, messages, model, effort, *, chunk=None, chapter=None, id_prefix="", max_tokens=None):
     json_attempts = 0
     provider_retried = False
     while True:
         try:
-            result = client.complete_json(messages, model=model, effort=effort)
+            result = client.complete_json(messages, model=model, effort=effort, max_tokens=max_tokens)
             payload, usage = result
             if not isinstance(payload, dict):
                 raise json.JSONDecodeError("顶层不是对象", "", 0)
@@ -408,7 +455,16 @@ def _complete_json(client, messages, model, effort, *, chunk=None, chapter=None,
         except json.JSONDecodeError as exc:
             json_attempts += 1
             if json_attempts > MAX_JSON_RETRIES:
-                raise DepthModelError(f"连续 {MAX_JSON_RETRIES + 1} 次没有得到合法 JSON：{exc}") from exc
+                raise DepthModelError(
+                    f"连续 {MAX_JSON_RETRIES + 1} 次没有得到合法 JSON：{exc}",
+                    kind="json",
+                ) from exc
+            events.current().emit(
+                "json_retry",
+                attempt=json_attempts,
+                error_kind="json",
+                error=str(exc)[:500],
+            )
             messages = [
                 *messages,
                 {
@@ -419,17 +475,40 @@ def _complete_json(client, messages, model, effort, *, chunk=None, chapter=None,
         except ChapterModelError as exc:
             json_attempts += 1
             if json_attempts > MAX_JSON_RETRIES:
-                raise DepthModelError(f"连续 {MAX_JSON_RETRIES + 1} 次未通过校验：{exc}") from exc
+                events.current().emit(
+                    "schema_failed",
+                    blocks=[block.get("id") for block in chunk or [] if isinstance(block, dict)],
+                    error=str(exc)[:500],
+                )
+                raise DepthModelError(
+                    f"连续 {MAX_JSON_RETRIES + 1} 次未通过校验：{exc}",
+                    kind="schema",
+                    payload=getattr(exc, "payload", None),
+                ) from exc
+            events.current().emit(
+                "json_retry",
+                attempt=json_attempts,
+                error_kind="schema",
+                error=str(exc)[:500],
+            )
             messages = [
                 *messages,
                 {"role": "user", "content": f"上一次输出未通过结构校验：{exc}。请修正后只输出完整 JSON。"},
             ]
+        except ModelTruncatedError:
+            # 截断不是提供方故障：交给分块层二分，不在这里重试。
+            raise
         except ModelProviderError as exc:
             if exc.retries_exhausted:
                 raise
             if provider_retried:
-                raise DepthModelError(f"模型提供方连续失败：{exc}") from exc
+                raise DepthModelError(f"模型提供方连续失败：{exc}", kind="provider") from exc
             provider_retried = True
+            events.current().emit(
+                "provider_retry",
+                error_kind=exc.kind,
+                error=str(exc)[:500],
+            )
             messages = [*messages, {"role": "user", "content": "上一次调用失败，请重试并只输出 JSON 对象。"}]
 
 
@@ -581,32 +660,86 @@ def _prompt_sha256():
     return hashlib.sha256(f"{PROMPT_VERSION}\n{SYSTEM_PROMPT}".encode()).hexdigest()
 
 
-def cache_key(source_sha256, prompt_sha256, model, effort, chunk_chars=18000, max_tokens=None):
+def cache_key(source_sha256, prompt_sha256, model, effort, chunk_chars=18000, max_tokens=None, max_blocks=None):
     """缓存键要带上所有影响输出的参数；少一个就会把别的调法当成命中。"""
     limit = MAX_TOKENS if max_tokens is None else max_tokens
-    parts = f"{source_sha256}{prompt_sha256}{model}{effort}{chunk_chars}{limit}{PROMPT_VERSION}{PLAN_VERSION}"
+    if max_blocks is not None and max_blocks <= 0:
+        max_blocks = None
+    block_limit = "all" if max_blocks is None else max_blocks
+    parts = (
+        f"{source_sha256}{prompt_sha256}{model}{effort}{chunk_chars}{limit}{block_limit}{PROMPT_VERSION}{PLAN_VERSION}"
+    )
     return hashlib.sha256(parts.encode()).hexdigest()
+
+
+def plan_hint_path(cache_dir):
+    return Path(cache_dir) / "plan.json"
+
+
+def _read_plan_hint(cache_dir, *, source_sha256, model, effort):
+    """读上次成功的计划参数；源、模型、思考档或提示版本变了就不认。"""
+    if cache_dir is None or not source_sha256:
+        return None
+    path = plan_hint_path(cache_dir)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if data.get("source_sha256") != source_sha256:
+        return None
+    if str(data.get("prompt_version")) != str(PROMPT_VERSION):
+        return None
+    if data.get("model") != model or data.get("effort") != effort:
+        return None
+    chunk_chars = data.get("chunk_chars")
+    if not isinstance(chunk_chars, int) or chunk_chars <= 0:
+        return None
+    return data
+
+
+def _write_plan_hint(cache_dir, *, source_sha256, model, effort, chunk_chars, max_blocks, max_tokens):
+    if cache_dir is None or not source_sha256:
+        return
+    path = plan_hint_path(cache_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema": 1,
+        "source_sha256": source_sha256,
+        "prompt_version": PROMPT_VERSION,
+        "model": model,
+        "effort": effort,
+        "chunk_chars": chunk_chars,
+        "max_blocks": max_blocks,
+        "max_tokens": max_tokens,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    tmp.replace(path)
 
 
 def plan_signature(plan):
     """单块缓存还要认自己属于哪一段：切分改了而键没变，也不能把旧块拼进去。"""
     payload = {
-        "index": plan.get("index"),
-        "total": plan.get("total"),
+        "chunk_id": plan.get("chunk_id"),
         "prev_title": plan.get("prev_title"),
         "next_title": plan.get("next_title"),
-        "id_prefix": plan.get("id_prefix"),
         "blocks": [block.get("id") for block in plan.get("blocks") or [] if isinstance(block, dict)],
     }
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
-def chunk_cache_path(cache_dir, key, index):
-    return Path(cache_dir) / "chunks" / f"{key}-{index:02d}.json"
+def chunk_cache_path(cache_dir, key, index, chunk_id=None):
+    suffix = chunk_id if chunk_id is not None else f"{index:02d}"
+    return Path(cache_dir) / "chunks" / f"{key}-{suffix}.json"
 
 
-def _read_chunk_cache(path, key, index, signature=""):
+def _read_chunk_cache(path, key, index, signature="", chunk_id=None):
     """单块缓存：块一过校验就落盘，中断时已完成的块不再重花调用。"""
     if path is None or not path.is_file():
         return None
@@ -616,28 +749,40 @@ def _read_chunk_cache(path, key, index, signature=""):
         return None
     if data.get("prompt_version") != PROMPT_VERSION:
         return None
-    if data.get("cache_key") != key or data.get("index") != index:
+    expected = chunk_id if chunk_id is not None else f"{index:02d}"
+    stored = data.get("chunk_id")
+    if stored is None:
+        stored_index = data.get("index")
+        stored = f"{stored_index:02d}" if isinstance(stored_index, int) else None
+    if stored != expected or data.get("cache_key") != key:
         return None
     if signature and data.get("signature") != signature:
         return None
+    parts = data.get("parts")
+    if parts is not None:
+        if not isinstance(parts, list) or not all(isinstance(item, dict) for item in parts):
+            return None
+        return {"parts": parts, "usage": data.get("usage") or {}}
     if not isinstance(data.get("payload"), dict):
         return None
     return data
 
 
-def _write_chunk_cache(path, key, index, payload, usage, signature=""):
-    _write_cache(
-        path,
-        {
-            "schema": 1,
-            "prompt_version": PROMPT_VERSION,
-            "cache_key": key,
-            "index": index,
-            "signature": signature,
-            "payload": payload,
-            "usage": usage,
-        },
-    )
+def _write_chunk_cache(path, key, index, payload, usage, signature="", *, chunk_id=None, parts=None):
+    record = {
+        "schema": 1,
+        "prompt_version": PROMPT_VERSION,
+        "cache_key": key,
+        "chunk_id": chunk_id if chunk_id is not None else f"{index:02d}",
+        "index": index,
+        "signature": signature,
+        "usage": usage,
+    }
+    if parts is not None:
+        record["parts"] = parts
+    else:
+        record["payload"] = payload
+    _write_cache(path, record)
 
 
 def _read_cache(path, source_sha256, prompt_sha256, model, effort):
@@ -670,6 +815,169 @@ def _write_cache(path, payload):
     tmp.replace(path)
 
 
+def _chunk_id(plan):
+    return plan.get("chunk_id") or f"{plan['index']:02d}"
+
+
+def _split_plan(plan):
+    """把一个分块按块数二分；子块保留父块的 index/total/id_prefix。"""
+    blocks = plan.get("blocks") or []
+    if len(blocks) <= 1:
+        return []
+    mid = len(blocks) // 2
+    parent_id = _chunk_id(plan)
+    start = plan.get("start", 0)
+    pieces = []
+    for part in (blocks[:mid], blocks[mid:]):
+        if not part:
+            continue
+        end = start + len(part)
+        piece = dict(plan)
+        piece["blocks"] = part
+        piece["start"] = start
+        piece["end"] = end
+        piece["chunk_id"] = f"{parent_id}-{start:04d}-{end:04d}"
+        pieces.append(piece)
+        start = end
+    return pieces
+
+
+def _generate_plan(
+    client,
+    book,
+    chapter,
+    plan,
+    *,
+    model,
+    effort,
+    max_tokens,
+    cache_dir,
+    key,
+    refresh=False,
+    depth=0,
+):
+    """生成一个分块；截断时只二分这一块，其他块缓存不受影响。"""
+    index = plan["index"]
+    chunk_id = _chunk_id(plan)
+    chunk_path = chunk_cache_path(cache_dir, key, index, chunk_id) if (cache_dir is not None and key) else None
+    signature = plan_signature(plan)
+    cached_chunk = None if refresh else _read_chunk_cache(chunk_path, key, index, signature, chunk_id)
+    if cached_chunk is not None:
+        parts = cached_chunk.get("parts")
+        if parts is None:
+            parts = [cached_chunk["payload"]]
+        events.current().emit("chunk_cache_hit", chunk=index, total=plan.get("total"), chunk_id=chunk_id)
+        return parts, cached_chunk.get("usage") or {}, {"cache_hit": True, "actual_model": None}
+    started = time.monotonic()
+    messages = _messages(
+        book,
+        chapter,
+        plan["blocks"],
+        plan["index"],
+        plan["total"],
+        prev_title=plan["prev_title"],
+        next_title=plan["next_title"],
+        id_prefix=plan["id_prefix"],
+    )
+    try:
+        payload, chunk_usage = _complete_json(
+            client,
+            messages,
+            model,
+            effort,
+            chunk=plan["blocks"],
+            chapter=chapter,
+            id_prefix=plan["id_prefix"],
+            max_tokens=max_tokens,
+        )
+    except ModelTruncatedError as exc:
+        if depth >= MAX_CHUNK_SPLIT_DEPTH or len(plan.get("blocks") or []) <= 1:
+            exc.stats = {
+                "chunk": index,
+                "chunk_id": chunk_id,
+                "blocks": [block.get("id") for block in plan.get("blocks") or []],
+                "range": [plan.get("start"), plan.get("end")],
+                "split_depth": depth,
+                "max_tokens": max_tokens,
+            }
+            events.current().emit(
+                "truncated",
+                chunk=index,
+                chunk_id=chunk_id,
+                split_depth=depth,
+                max_tokens=max_tokens,
+            )
+            raise
+        events.current().emit(
+            "chunk_retry",
+            chunk=index,
+            chunk_id=chunk_id,
+            attempt=depth + 1,
+            error_kind="truncated",
+            error=str(exc)[:500],
+        )
+        children = _split_plan(plan)
+        events.current().emit(
+            "chunk_split",
+            chunk=index,
+            chunk_id=chunk_id,
+            depth=depth + 1,
+            blocks=len(plan.get("blocks") or []),
+            max_tokens=max_tokens,
+        )
+        parts = []
+        usage = {}
+        actual_model = None
+        for child in children:
+            child_parts, child_usage, child_meta = _generate_plan(
+                client,
+                book,
+                chapter,
+                child,
+                model=model,
+                effort=effort,
+                max_tokens=max_tokens,
+                cache_dir=cache_dir,
+                key=key,
+                refresh=refresh,
+                depth=depth + 1,
+            )
+            parts.extend(child_parts)
+            _merge_usage(usage, child_usage)
+            actual_model = child_meta.get("actual_model") or actual_model
+        if chunk_path is not None:
+            _write_chunk_cache(
+                chunk_path,
+                key,
+                index,
+                None,
+                usage,
+                signature,
+                chunk_id=chunk_id,
+                parts=parts,
+            )
+        events.current().emit(
+            "chunk_done",
+            chunk=index,
+            total=plan.get("total"),
+            chunk_id=chunk_id,
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+            split=len(children),
+        )
+        return parts, usage, {"cache_hit": False, "actual_model": actual_model}
+    actual_model = payload.pop("_model", None) or payload.get("model")
+    if chunk_path is not None:
+        _write_chunk_cache(chunk_path, key, index, payload, chunk_usage, signature, chunk_id=chunk_id)
+    events.current().emit(
+        "chunk_done",
+        chunk=index,
+        total=plan.get("total"),
+        chunk_id=chunk_id,
+        elapsed_ms=int((time.monotonic() - started) * 1000),
+    )
+    return [payload], chunk_usage, {"cache_hit": False, "actual_model": actual_model}
+
+
 def generate_chapter_model(
     client,
     book,
@@ -679,8 +987,11 @@ def generate_chapter_model(
     model=None,
     effort=None,
     chunk_chars=18000,
+    max_blocks=100,
+    max_tokens_per_chunk=DEPTH_CHUNK_TOKENS,
     cache_dir=None,
     refresh=False,
+    plan_hint=True,
 ):
     """生成并校验 chapter_model，返回 ``(model, meta)``；不写任何文件。
 
@@ -691,6 +1002,8 @@ def generate_chapter_model(
     """
     if not isinstance(chunk_chars, int) or chunk_chars <= 0:
         raise ValueError("chunk_chars 必须是正整数")
+    if max_tokens_per_chunk is not None and (not isinstance(max_tokens_per_chunk, int) or max_tokens_per_chunk <= 0):
+        raise ValueError("max_tokens_per_chunk 必须是正整数或 None")
     if effort is not None and effort not in ("max", "high", "medium", "low"):
         raise ValueError("effort 必须是 max、high、medium 或 low")
     chapter_view = chapter if isinstance(chapter, dict) else {}
@@ -698,6 +1011,23 @@ def generate_chapter_model(
     requested_effort = effort or getattr(client, "effort", None) or DEFAULT_EFFORT
     source_sha256 = chapter_view.get("source_sha256")
     prompt_sha = _prompt_sha256()
+    if plan_hint and cache_dir is not None and source_sha256 and chunk_chars == 18000:
+        hint = _read_plan_hint(
+            cache_dir,
+            source_sha256=source_sha256,
+            model=requested_model,
+            effort=requested_effort,
+        )
+        if hint is not None:
+            chunk_chars = hint["chunk_chars"]
+            if max_blocks == 100 and isinstance(hint.get("max_blocks"), int) and hint["max_blocks"] > 0:
+                max_blocks = hint["max_blocks"]
+            if (
+                max_tokens_per_chunk == DEPTH_CHUNK_TOKENS
+                and isinstance(hint.get("max_tokens"), int)
+                and hint["max_tokens"] > 0
+            ):
+                max_tokens_per_chunk = hint["max_tokens"]
     key = None
     cache_path = None
     if cache_dir is not None and source_sha256:
@@ -707,7 +1037,8 @@ def generate_chapter_model(
             requested_model,
             requested_effort,
             chunk_chars,
-            getattr(client, "max_tokens", None),
+            max_tokens_per_chunk,
+            max_blocks,
         )
         cache_path = Path(cache_dir) / f"{key}.json"
         cached = (
@@ -734,55 +1065,40 @@ def generate_chapter_model(
                         "effort": requested_effort,
                         "cache_key": key,
                         "cache_hit": True,
+                        "planned_chunk_chars": chunk_chars,
                     }
                 )
                 return validated, meta
 
-    plans = _chunk_plans(blocks or [], chunk_chars)
+    plans = _chunk_plans(blocks or [], chunk_chars, max_blocks)
+    events.current().emit(
+        "chunk_plan",
+        chunks=len(plans),
+        max_blocks=max_blocks,
+        max_tokens=max_tokens_per_chunk,
+        chunk_chars=chunk_chars,
+    )
     payloads = []
     usage = {}
     actual_model = None
     for plan in plans:
-        index = plan["index"]
-        chunk_path = chunk_cache_path(cache_dir, key, index) if (cache_dir is not None and key) else None
-        signature = plan_signature(plan)
-        cached_chunk = None if refresh else _read_chunk_cache(chunk_path, key, index, signature)
-        if cached_chunk is not None:
-            payloads.append(cached_chunk["payload"])
-            _merge_usage(usage, cached_chunk.get("usage") or {})
-            events.current().emit("chunk_cache_hit", chunk=index, total=len(plans))
-            continue
-        started = time.monotonic()
-        messages = _messages(
+        parts, chunk_usage, chunk_meta = _generate_plan(
+            client,
             book,
             chapter,
-            plan["blocks"],
-            plan["index"],
-            plan["total"],
-            prev_title=plan["prev_title"],
-            next_title=plan["next_title"],
-            id_prefix=plan["id_prefix"],
+            plan,
+            model=requested_model,
+            effort=requested_effort,
+            max_tokens=max_tokens_per_chunk,
+            cache_dir=cache_dir,
+            key=key,
+            refresh=refresh,
         )
-        payload, chunk_usage = _complete_json(
-            client,
-            messages,
-            requested_model,
-            requested_effort,
-            chunk=plan["blocks"],
-            chapter=chapter,
-            id_prefix=plan["id_prefix"],
-        )
+        payloads.extend(parts)
         _merge_usage(usage, chunk_usage)
-        actual_model = payload.pop("_model", None) or payload.get("model") or actual_model
-        payloads.append(payload)
-        if chunk_path is not None:
-            _write_chunk_cache(chunk_path, key, index, payload, chunk_usage, signature)
-        events.current().emit(
-            "chunk_done",
-            chunk=index,
-            total=len(plans),
-            elapsed_ms=int((time.monotonic() - started) * 1000),
-        )
+        actual_model = chunk_meta.get("actual_model") or actual_model
+    if actual_model is None:
+        actual_model = next((payload.get("model") for payload in payloads if payload.get("model")), None)
     merged = _merge_chunks(payloads)
     first = payloads[0] if payloads else {}
     merged["uid"] = chapter_view.get("uid") or (book.get("uid") if isinstance(book, dict) else None)
@@ -803,7 +1119,11 @@ def generate_chapter_model(
             source_sha256=merged["source_sha256"],
         )
     except ChapterModelError as exc:
-        raise DepthModelError(f"合并后的结构模型没有通过校验：{exc}") from exc
+        raise DepthModelError(
+            f"合并后的结构模型没有通过校验：{exc}",
+            kind="schema",
+            payload=merged,
+        ) from exc
     actual_model = actual_model or requested_model
     meta = {
         "requested_model": requested_model,
@@ -811,7 +1131,9 @@ def generate_chapter_model(
         "effort": requested_effort,
         "usage": usage,
         "fallback": bool(actual_model and actual_model != requested_model),
-        "chunks": len(plans),
+        "chunks": len(payloads),
+        "parent_chunks": len(plans),
+        "planned_chunk_chars": chunk_chars,
         "cache_key": key,
         "cache_hit": False,
         "refreshed": bool(refresh),
@@ -830,5 +1152,14 @@ def generate_chapter_model(
                 "chapter_model": validated,
                 "meta": meta,
             },
+        )
+        _write_plan_hint(
+            cache_dir,
+            source_sha256=source_sha256,
+            model=requested_model,
+            effort=requested_effort,
+            chunk_chars=chunk_chars,
+            max_blocks=max_blocks,
+            max_tokens=max_tokens_per_chunk,
         )
     return validated, meta

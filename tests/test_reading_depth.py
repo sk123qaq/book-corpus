@@ -48,6 +48,7 @@ from bookcorpus.reading import service as service_module
 from bookcorpus.reading.depth import skim as skim_module
 from bookcorpus.reading.depth.diagrams import audit_figures
 from bookcorpus.reading.depth.disposition import plan_all_dispositions
+from bookcorpus.reading.depth.preflight import SourceTooLarge
 from bookcorpus.reading.depth.skim import unsupported_skim
 from bookcorpus.reading.depth.standard import (
     MAX_LEAD,
@@ -1035,6 +1036,53 @@ def test_submit_depth_reports_active_conflict(reading_root):
         service.submit_depth("B0001", 1, ["skim"])
 
 
+def test_run_depth_job_blocks_a_chapter_that_grew_after_submit(depth_root, monkeypatch):
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    blocks = [{"id": f"B{index:05d}", "kind": "paragraph", "level": 0, "text": "字"} for index in range(1, 5002)]
+    monkeypatch.setattr(
+        service.library,
+        "read_chapter",
+        lambda uid, n: {"blocks": blocks, "source_sha256": "0" * 64},
+    )
+    with pytest.raises(SourceTooLarge) as caught:
+        service._run_depth_job(
+            "r-depth-grown",
+            {"uid": "B0003", "n": "06", "kind": "depth", "layers": ["model"]},
+        )
+    assert caught.value.stats["blocks"] == 5001
+    assert service.store.depth_json("B0003", 6, "chapter_model.json") is None
+
+
+def test_run_depth_job_does_not_retry_truncation_with_9000(depth_root, monkeypatch):
+    from bookcorpus.reading.model import ModelTruncatedError
+
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    calls = []
+
+    def boom(*args, **kwargs):
+        calls.append(kwargs)
+        raise ModelTruncatedError("cut", attempt=1)
+
+    monkeypatch.setattr("bookcorpus.reading.service.generate_chapter_model", boom)
+    with pytest.raises(ModelTruncatedError):
+        service._run_depth_job(
+            "r-depth-truncated",
+            {"uid": "B0003", "n": "06", "kind": "depth", "layers": ["model"]},
+        )
+    assert len(calls) == 1
+    assert calls[0]["max_tokens_per_chunk"] == 96000
+    assert "chunk_chars" not in calls[0]
+
+
+def test_chapter_payload_carries_the_preflight_gate(depth_root):
+    service = ReadingService(root=depth_root, annotate=False, depth=True)
+    data = service.chapter("B0003", 6)
+    preflight = data["depth"]["preflight"]
+    assert preflight["ok"] is True
+    assert preflight["stats"]["blocks"] > 0
+    assert preflight["stats"]["chunks"] >= 1
+
+
 def test_depth_job_only_model_writes_no_html_and_keeps_editorial(depth_root):
     _, blocks = _valid()
     service = ReadingService(root=depth_root, annotate=False, depth=True)
@@ -1202,7 +1250,7 @@ class _DropClient:
         self.error = error
         self.calls = []
 
-    def complete_json(self, messages, *, model=None, effort=None):
+    def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
         self.calls.append(copy.deepcopy(messages))
         raise self.error
 
@@ -1283,12 +1331,12 @@ def test_chunk_cache_survives_interruption(depth_root, tmp_path, monkeypatch):
         {"index": 1, "total": 2, "blocks": blocks, "prev_title": None, "next_title": "下节", "id_prefix": "C01-"},
         {"index": 2, "total": 2, "blocks": blocks, "prev_title": "上节", "next_title": None, "id_prefix": "C02-"},
     ]
-    monkeypatch.setattr(depth_model, "_chunk_plans", lambda blocks, limit: plans)
+    monkeypatch.setattr(depth_model, "_chunk_plans", lambda blocks, limit, max_blocks=None: plans)
     cache_dir = tmp_path / "cache"
     payload = _chunk_payload(blocks)
     seen = []
 
-    def _serve_one(messages, *, model=None, effort=None):
+    def _serve_one(messages, *, model=None, effort=None, max_tokens=None):
         if seen:
             raise ModelProviderError("模型调用失败：transport_closed", kind="transport_closed")
         seen.append(copy.deepcopy(messages))
@@ -1318,6 +1366,8 @@ def test_chunk_cache_key_covers_chunk_size_and_output_cap(depth_root):
     assert base != cache_key("src", "prompt", "m", "low", 9000, 32768)
     assert base != cache_key("src", "prompt", "m", "low", 18000, 8000)
     assert base != cache_key("src", "prompt", "m", "high", 18000, 32768)
+    assert base != cache_key("src", "prompt", "m", "low", 18000, 32768, 50)
+    assert base != cache_key("src", "prompt", "m", "low", 18000, 32768, 100)
 
     _files, blocks, *_ = _ready_depth(depth_root)
     service = ReadingService(root=depth_root, annotate=False, depth=True)
@@ -1341,6 +1391,279 @@ def test_chunk_cache_key_covers_chunk_size_and_output_cap(depth_root):
     )
     assert meta["cache_hit"] is True
     assert len(client.calls) == 2
+
+
+def test_generate_splits_only_the_truncated_chunk(tmp_path):
+    from bookcorpus.reading.model import ModelTruncatedError
+
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": f"第{index}段。"} for index in range(1, 101)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+    limits = []
+
+    class SplitClient:
+        model = "fake-model"
+        effort = "low"
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            limits.append(max_tokens)
+            if len(limits) == 1:
+                raise ModelTruncatedError("cut", attempt=1)
+            payload = json.loads(messages[-1]["content"])
+            return _chunk_payload(payload["blocks"]), {"total_tokens": 10}
+
+    model, meta = generate_chapter_model(
+        SplitClient(),
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=tmp_path / "cache",
+    )
+    assert limits == [96000, 96000, 96000]
+    assert meta["parent_chunks"] == 1
+    assert meta["chunks"] == 2
+    assert len(model["units"]) == 100
+
+
+def test_split_result_is_cached_without_calling_the_parent_again(tmp_path):
+    from bookcorpus.reading.model import ModelTruncatedError
+
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": f"第{index}段。"} for index in range(1, 101)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+    calls = []
+
+    class SplitClient:
+        model = "fake-model"
+        effort = "low"
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            calls.append(max_tokens)
+            if len(calls) == 1:
+                raise ModelTruncatedError("cut", attempt=1)
+            payload = json.loads(messages[-1]["content"])
+            return _chunk_payload(payload["blocks"]), {"total_tokens": 10}
+
+    client = SplitClient()
+    cache_dir = tmp_path / "cache"
+    _model, meta = generate_chapter_model(
+        client,
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=cache_dir,
+    )
+    (cache_dir / f"{meta['cache_key']}.json").unlink()
+    before = len(calls)
+    _model, meta = generate_chapter_model(
+        client,
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=cache_dir,
+    )
+    assert len(calls) == before
+    assert meta["cache_hit"] is False
+    assert meta["chunks"] == 2
+
+
+def test_truncation_after_two_splits_carries_the_block_range(tmp_path):
+    from bookcorpus.reading.model import ModelTruncatedError
+
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": f"第{index}段。"} for index in range(1, 101)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+    calls = []
+
+    class AlwaysTruncated:
+        model = "fake-model"
+        effort = "low"
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            calls.append(max_tokens)
+            raise ModelTruncatedError("cut", attempt=1)
+
+    with pytest.raises(ModelTruncatedError) as info:
+        generate_chapter_model(
+            AlwaysTruncated(),
+            {"uid": "B0003"},
+            chapter,
+            blocks,
+            model="fake-model",
+            effort="low",
+            cache_dir=tmp_path / "cache",
+        )
+    assert len(calls) == 3
+    assert info.value.stats["split_depth"] == 2
+    assert len(info.value.stats["blocks"]) == 25
+
+
+def test_chunk_plan_and_split_events(tmp_path):
+    from bookcorpus.reading.model import ModelTruncatedError
+
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": f"第{index}段。"} for index in range(1, 101)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+    calls = []
+
+    class SplitClient:
+        model = "fake-model"
+        effort = "low"
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            calls.append(max_tokens)
+            if len(calls) == 1:
+                raise ModelTruncatedError("cut", attempt=1)
+            payload = json.loads(messages[-1]["content"])
+            return _chunk_payload(payload["blocks"]), {"total_tokens": 10}
+
+    logs = tmp_path / "logs"
+    with reading_events.job_scope(logs, "plan-events"):
+        generate_chapter_model(
+            SplitClient(),
+            {"uid": "B0003"},
+            chapter,
+            blocks,
+            model="fake-model",
+            effort="low",
+            cache_dir=tmp_path / "cache",
+        )
+    kinds = [record.get("kind") for record in reading_events.read(logs, "plan-events")]
+    assert "chunk_plan" in kinds
+    assert "chunk_retry" in kinds
+
+
+def test_101_blocks_plan_into_100_and_1(tmp_path):
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": f"第{index}段。"} for index in range(1, 102)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+    sizes = []
+
+    class EchoClient:
+        model = "fake-model"
+        effort = "low"
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            payload = json.loads(messages[-1]["content"])
+            sizes.append(len(payload["blocks"]))
+            return _chunk_payload(payload["blocks"]), {"total_tokens": 10}
+
+    model, meta = generate_chapter_model(
+        EchoClient(),
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=tmp_path / "cache",
+    )
+    assert sizes == [100, 1]
+    assert meta["parent_chunks"] == 2
+    assert len(model["units"]) == 101
+
+
+def test_max_blocks_none_keeps_the_legacy_plan(tmp_path):
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": f"第{index}段。"} for index in range(1, 102)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+
+    class EchoClient:
+        model = "fake-model"
+        effort = "low"
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            payload = json.loads(messages[-1]["content"])
+            return _chunk_payload(payload["blocks"]), {"total_tokens": 10}
+
+    _model, meta = generate_chapter_model(
+        EchoClient(),
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        max_blocks=None,
+        cache_dir=tmp_path / "cache",
+    )
+    assert meta["parent_chunks"] == 1
+
+
+def test_generate_writes_plan_hint(tmp_path):
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": f"第{index}段。"} for index in range(1, 102)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+
+    class EchoClient:
+        model = "fake-model"
+        effort = "low"
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            payload = json.loads(messages[-1]["content"])
+            return _chunk_payload(payload["blocks"]), {"total_tokens": 10}
+
+    generate_chapter_model(
+        EchoClient(),
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=tmp_path / "cache",
+    )
+    hint = json.loads((tmp_path / "cache" / "plan.json").read_text(encoding="utf-8"))
+    assert hint["chunk_chars"] == 18000
+    assert hint["max_blocks"] == 100
+    assert hint["max_tokens"] == 96000
+    assert hint["source_sha256"] == "sha"
+    assert hint["model"] == "fake-model"
+
+
+def test_plan_hint_can_lower_the_chunk_budget(tmp_path):
+    blocks = [{"id": f"B{index:03d}", "kind": "paragraph", "text": "字" * 100} for index in range(1, 101)]
+    chapter = {"uid": "B0003", "n": 6, "source_sha256": "sha"}
+
+    class EchoClient:
+        model = "fake-model"
+        effort = "low"
+
+        def __init__(self):
+            self.sizes = []
+
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
+            payload = json.loads(messages[-1]["content"])
+            self.sizes.append(len(payload["blocks"]))
+            return _chunk_payload(payload["blocks"]), {"total_tokens": 10}
+
+    first = EchoClient()
+    _model, first_meta = generate_chapter_model(
+        first,
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=tmp_path / "cache",
+    )
+    assert first.sizes == [100]
+    assert first_meta["planned_chunk_chars"] == 18000
+
+    hint_path = tmp_path / "cache" / "plan.json"
+    hint = json.loads(hint_path.read_text(encoding="utf-8"))
+    hint["chunk_chars"] = 9000
+    hint_path.write_text(json.dumps(hint, ensure_ascii=False), encoding="utf-8")
+
+    second = EchoClient()
+    _model, second_meta = generate_chapter_model(
+        second,
+        {"uid": "B0003"},
+        chapter,
+        blocks,
+        model="fake-model",
+        effort="low",
+        cache_dir=tmp_path / "cache",
+        refresh=True,
+    )
+    assert second.sizes == [90, 10]
+    assert second_meta["planned_chunk_chars"] == 9000
 
 
 def test_reading_service_depth_default_on(reading_root, monkeypatch):
@@ -1481,7 +1804,7 @@ class FakeClient:
         self.model = "fake-model"
         self.effort = "low"
 
-    def complete_json(self, messages, *, model=None, effort=None):
+    def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
         self.calls.append(copy.deepcopy(messages))
         return self.payloads.pop(0), {"total_tokens": 10}
 
@@ -1587,7 +1910,11 @@ def test_generate_large_chapter_splits_into_multiple_calls():
     payloads = [json.loads(call[1]["content"]) for call in client.calls]
     assert [item["chunk"]["prev_section_title"] for item in payloads] == [None, "第1节", "第2节"]
     assert [item["chunk"]["next_section_title"] for item in payloads] == ["第2节", "第3节", None]
-    assert [item["chunk"]["id_prefix"] for item in payloads] == ["C01-", "C02-", "C03-"]
+    assert [item["chunk"]["id_prefix"] for item in payloads] == [
+        "C0000-0002-",
+        "C0002-0004-",
+        "C0004-0006-",
+    ]
     assert [section["id"] for section in model["sections"]] == ["S01", "S02", "S03"]
     assert model["units"][0]["id"] == "S01-U01"
 
@@ -1599,17 +1926,66 @@ def test_generate_retries_only_once_after_repeated_invalid_json(tmp_path, monkey
             self.model = "bad"
             self.effort = "low"
 
-        def complete_json(self, messages, *, model=None, effort=None):
+        def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
             self.calls += 1
             raise json.JSONDecodeError("bad", "", 0)
 
     blocks, _ = _parsed()
     client = BadClient()
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(DepthModelError):
+    with pytest.raises(DepthModelError) as info:
         generate_chapter_model(client, {}, {"n": 6}, blocks, model="bad", effort="low")
+    assert info.value.kind == "json"
     assert client.calls == 2
     assert list(tmp_path.iterdir()) == []
+
+
+def test_envelope_correction_overwrites_uid_prefix(tmp_path):
+    from bookcorpus.reading import events
+
+    blocks, sha = _parsed()
+    payload = copy.deepcopy(_chunk_payload(blocks))
+    payload["uid"] = "B0003-C01"
+    payload["n"] = 99
+    payload["schema"] = 2
+    payload["prompt_version"] = "old"
+    client = FakeClient([payload])
+    logs = tmp_path / "logs"
+    with events.job_scope(logs, "envelope"):
+        model, _meta = generate_chapter_model(
+            client,
+            {"uid": "B0003"},
+            {"uid": "B0003", "n": 6, "source_sha256": sha},
+            blocks,
+            model="fake-model",
+            effort="low",
+        )
+    assert model["uid"] == "B0003"
+    assert model["n"] == 6
+    assert model["schema"] == 1
+    assert model["prompt_version"] == "chapter-model-v1"
+    corrected = [record for record in events.read(logs, "envelope") if record.get("kind") == "envelope_corrected"]
+    assert corrected
+    assert corrected[0]["fields"]["uid"] == "B0003-C01"
+
+
+def test_schema_failure_keeps_the_raw_payload():
+    blocks, sha = _parsed()
+    bad = copy.deepcopy(_chunk_payload(blocks))
+    bad["uid"] = "B0003-C01"
+    bad["units"][0]["quotes"][0]["text"] = "伪造引文"
+    client = FakeClient([copy.deepcopy(bad), copy.deepcopy(bad)])
+    with pytest.raises(DepthModelError) as info:
+        generate_chapter_model(
+            client,
+            {"uid": "B0003"},
+            {"uid": "B0003", "n": 6, "source_sha256": sha},
+            blocks,
+            model="fake-model",
+            effort="low",
+        )
+    assert info.value.kind == "schema"
+    assert info.value.payload["uid"] == "B0003-C01"
 
 
 def test_generate_feeds_validation_error_back_and_retries():
@@ -3177,8 +3553,8 @@ class _PanelDownClient:
         self.model = "fake-model"
         self.effort = "low"
 
-    def complete_json(self, messages, model=None, effort=None):
-        del messages, model, effort
+    def complete_json(self, messages, model=None, effort=None, max_tokens=None):
+        del messages, model, effort, max_tokens
         self.calls += 1
         raise ModelProviderError(
             "模型调用失败（对端未回状态行就断开）：transport_closed",
@@ -3217,8 +3593,8 @@ def test_panel_degradation_is_recorded_in_state_and_events(depth_root):
 class _NonJsonClient(_PanelDownClient):
     """面板模型返回的不是 JSON：走 JSON 重试耗尽那条出口，同样必须留痕。"""
 
-    def complete_json(self, messages, model=None, effort=None):
-        del messages, model, effort
+    def complete_json(self, messages, model=None, effort=None, max_tokens=None):
+        del messages, model, effort, max_tokens
         self.calls += 1
         return "这不是 JSON 对象", {"total_tokens": 10}
 
@@ -3380,3 +3756,15 @@ def test_cli_resolve_mode_reads_existing_layer_or_explicit(depth_root):
     assert depth_cli._resolve_mode(args, context) == "argument"
     args.mode = "narrative"
     assert depth_cli._resolve_mode(args, context) == "narrative"
+
+
+def test_chapter_page_shows_and_disables_on_a_blocked_preflight():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "apps/reading/web/chapter.html").read_text(encoding="utf-8")
+    app = (root / "apps/reading/web/assets/app.js").read_text(encoding="utf-8")
+    assert "data.depth.preflight" in html
+    assert "depth-preflight" in html
+    assert "payload.code === 'source_too_large'" in html
+    assert "blocked: '已阻断'" in app
+    assert "'blocked', 'cancelled'" in app
+    assert "step.status === 'blocked' ? 'blocked'" in app

@@ -620,3 +620,28 @@ def test_post_depth_returns_202_job_and_validates_payload(reading_root):
             assert code == 400, body
     finally:
         _stop_server(proc)
+
+
+def test_post_depth_rejects_a_too_large_source_with_422(reading_root):
+    L.reading_set_book("B0001", "argument", root=reading_root)
+    md = reading_root / "books" / "B0001" / "md" / "001_第1节.md"
+    paragraphs = "\n\n".join(f"第 {index} 段。" for index in range(1, 5011))
+    md.write_text("# 第1节\n\n" + paragraphs + "\n", encoding="utf-8")
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
+    try:
+        code, payload = _post_error(
+            base,
+            "/api/depth/B0001/1",
+            {"layers": ["model"], "model": "fake-model", "effort": "max"},
+        )
+        assert code == 422, payload
+        assert set(payload) == {"error", "code", "stats", "remediation"}
+        assert payload["code"] == "source_too_large"
+        assert payload["stats"]["blocks"] > 5000
+        assert "超过单章上限 5,000 块" in payload["error"]
+        assert "每 100 块拆成多个 md" in payload["remediation"]
+
+        _status, body, _headers = _get(base, "/api/jobs")
+        assert json.loads(body)["jobs"] == []
+    finally:
+        _stop_server(proc)

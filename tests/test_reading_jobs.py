@@ -567,3 +567,74 @@ def test_load_survives_a_ledger_of_only_finished_jobs(tmp_path):
         assert jobs[0]["progress"] == 33
     finally:
         queue.shutdown()
+
+
+def test_source_too_large_blocks_instead_of_failing(tmp_path):
+    class SourceTooLargeError(RuntimeError):
+        kind = "source_too_large"
+        remediation = "把 md/ 中的这个文件按章节或每 100 块拆成多个 md，再对每个 md 提交深读。"
+
+        def __init__(self):
+            self.stats = {"blocks": 5001, "chunks": 51}
+            super().__init__("本章 5,001 块，超过单章上限 5,000 块。")
+
+    def runner(_job_id, _job):
+        raise SourceTooLargeError()
+
+    queue = JobQueue(str(tmp_path), runner, max_workers=1)
+    try:
+        job = queue.submit("B0001", 1, [], kind="depth", layers=["model"])
+        assert _wait_until(lambda: queue.get(job["id"])["state"] == "blocked", timeout=5)
+        blocked = queue.get(job["id"])
+        assert blocked["error_kind"] == "source_too_large"
+        assert blocked["preflight"] == {"blocks": 5001, "chunks": 51}
+        assert blocked["remediation"].startswith("把 md/")
+        assert blocked["progress"] == 0
+        assert [step["status"] for step in blocked["steps"]] == ["blocked"] + ["pending"] * 5
+        assert blocked["steps"][0]["name"] == "结构"
+        assert not (tmp_path / "阅读" / "failures").exists()
+    finally:
+        queue.shutdown()
+
+
+def test_blocked_is_not_a_failed_state():
+    steps = JobQueue._steps_for("blocked", "depth")
+    assert steps[0]["status"] == "blocked"
+    assert [step["status"] for step in steps[1:]] == ["pending"] * 5
+    assert JobQueue._progress("blocked", "depth", (), "chunking") == 0
+    assert JobQueue._steps_for("blocked", "reading")[0]["status"] == "blocked"
+
+
+def test_load_keeps_blocked_jobs_blocked(tmp_path):
+    path = tmp_path / "阅读" / "jobs.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "r-blocked",
+                    "kind": "depth",
+                    "uid": "B0001",
+                    "n": "01",
+                    "state": "blocked",
+                    "stage": "blocked",
+                    "progress": 0,
+                    "steps": [],
+                    "error": "本章 5,001 块，超过单章上限 5,000 块。",
+                    "error_kind": "source_too_large",
+                    "preflight": {"blocks": 5001},
+                    "remediation": "把 md/ 拆开。",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    queue = JobQueue(str(tmp_path), lambda *_: {"status": "done"}, max_workers=1)
+    try:
+        job = queue.get("r-blocked")
+        assert job["state"] == "blocked"
+        assert job["error_kind"] == "source_too_large"
+        assert job["preflight"] == {"blocks": 5001}
+    finally:
+        queue.shutdown()

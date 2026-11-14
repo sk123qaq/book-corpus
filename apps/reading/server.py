@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from bookcorpus import envfile, preflight
 from bookcorpus.preflight import MissingConfigError
+from bookcorpus.reading.depth.preflight import SourceTooLarge
 from bookcorpus.reading.editorial import EditorialError
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.service import (
@@ -480,6 +481,8 @@ class Handler(BaseHTTPRequestHandler):
             )
         except MissingProfileError as exc:
             self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
+        except SourceTooLarge as exc:
+            self._json(422, exc.to_dict())
         except (TypeError, ValueError) as exc:
             self._json(400, {"error": str(exc)})
         except MissingConfigError as exc:

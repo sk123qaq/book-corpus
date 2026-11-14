@@ -17,8 +17,9 @@ from . import events, profile
 from .agent_standard import generate_standard_html, render_agent_page
 from .depth.deep import audit_deep, generate_deep, validate_deep
 from .depth.disposition import audit_conservation, plan_all_dispositions
-from .depth.model import generate_chapter_model
+from .depth.model import generate_chapter_model, plan_chunks
 from .depth.panels import audit_panels, generate_panels, validate_panels
+from .depth.preflight import evaluate
 from .depth.render import render_depth_chapter
 from .depth.skim import SkimError, audit_skim, generate_skim, validate_skim
 from .depth.standard import build_standard
@@ -27,7 +28,7 @@ from .editorial import EditorialError, audit_editorial, validate_editorial
 from .editorial_gen import generate_editorial
 from .jobs import JobQueue
 from .library import Library
-from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, ModelTruncatedError, prompt_sha256
+from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, prompt_sha256
 from .quality import check_html
 from .render import asset_url, image_data_uri, render_chapter, render_export
 from .store import DEPTH_FILES, DEPTH_LAYERS, MODE_LAYERS, Store
@@ -920,6 +921,7 @@ class ReadingService:
         }
         if self.depth:
             data["depth"] = {"state": depth_state["status"], "reason": depth_state.get("stale_reason")}
+            data["depth"]["preflight"] = evaluate(raw["blocks"], plan_chunks(raw["blocks"], 18000, 100)).to_dict()
             if depth_state["status"] in ("model", "partial", "ready"):
                 data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
                 data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
@@ -1063,13 +1065,23 @@ class ReadingService:
         model_file = self.store.depth_path(uid, n, DEPTH_FILES["model"])
         if "model" not in requested and (rebuild_model or not Path(model_file).is_file()):
             requested.insert(0, "model")
+        gate = evaluate(raw["blocks"], plan_chunks(raw["blocks"], 18000, 100))
+        events.current().emit(
+            "preflight_gate",
+            uid=uid,
+            n=n,
+            ok=gate.ok,
+            code=gate.code,
+            **gate.stats,
+        )
+        gate.raise_if_blocked()
         if "model" in requested:
             preflight.require(["reading.model"], note="深读结构层要用模型生成。")
         with self._submit_lock:
             conflicts = self.queue.conflicts(uid, n)
             if conflicts:
                 raise JobConflictError(conflicts)
-            return self.queue.submit(
+            job = self.queue.submit(
                 uid,
                 n,
                 [],
@@ -1079,6 +1091,16 @@ class ReadingService:
                 layers=requested,
                 rebuild=bool(rebuild_model),
             )
+            noted = self.queue.note(
+                job["id"],
+                preflight=gate.stats,
+                preflight_warnings=list(gate.warnings),
+                chunks=gate.stats.get("chunks"),
+                max_chunk_blocks=gate.stats.get("max_chunk_blocks"),
+                estimated_tokens=gate.stats.get("estimated_output_tokens"),
+                estimated_seconds=gate.stats.get("estimated_seconds"),
+            )
+            return noted or job
 
     def save_editorial(self, uid, n, payload):
         raw = self.library.read_chapter(uid, n)
@@ -1348,6 +1370,7 @@ class ReadingService:
         if not raw:
             raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
         blocks = raw["blocks"]
+        evaluate(blocks, plan_chunks(blocks, 18000, 100)).raise_if_blocked()
         book = self.library.book(uid) or {"uid": uid}
         reading = self.reading(uid, n)
         mode = reading.get("effective_mode") or "argument"
@@ -1451,31 +1474,18 @@ class ReadingService:
         if "model" in requested:
             preflight.require(["reading.model"], note="深读结构层要用模型生成。")
             self._set_stage(job_id, "annotating", layer="model")
-            try:
-                model, model_meta = generate_chapter_model(
-                    self.client or ModelClient(),
-                    book,
-                    chapter,
-                    blocks,
-                    model=job.get("model"),
-                    effort=job.get("effort"),
-                    cache_dir=self.store.depth_cache_dir(uid, n),
-                    refresh=bool(job.get("rebuild")),
-                )
-            except Exception as exc:
-                # 只有输出被上限截断才值得换小分块重试；其余错误原样抛。
-                if not isinstance(exc, ModelTruncatedError):
-                    raise
-                model, model_meta = generate_chapter_model(
-                    self.client or ModelClient(),
-                    book,
-                    chapter,
-                    blocks,
-                    model=job.get("model"),
-                    effort=job.get("effort"),
-                    chunk_chars=9000,
-                    cache_dir=self.store.depth_cache_dir(uid, n),
-                )
+            chunk_tokens = int(os.environ.get("READING_DEPTH_CHUNK_TOKENS") or 96000)
+            model, model_meta = generate_chapter_model(
+                self.client or ModelClient(),
+                book,
+                chapter,
+                blocks,
+                model=job.get("model"),
+                effort=job.get("effort"),
+                max_tokens_per_chunk=chunk_tokens,
+                cache_dir=self.store.depth_cache_dir(uid, n),
+                refresh=bool(job.get("rebuild")),
+            )
             ledger = plan_all_dispositions(model, blocks)
             gate = audit_conservation(model, ledger, blocks)
             if gate.get("status") != "pass":

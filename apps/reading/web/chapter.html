@@ -367,7 +367,8 @@ function depthRow(key) {
   const info = ((data.depth || {}).layers || {})[key] || {};
   const status = info.status || 'missing';
   const running = status === 'running';
-  const disabled = running || depthBusy;
+  const blocked = Boolean((data.depth || {}).preflight && data.depth.preflight.ok === false);
+  const disabled = running || depthBusy || blocked;
   const estimate = info.estimate || {};
   const actual = info.usage
     ? RD.fmt(info.tokens) + ' tokens · $' + Number(info.usd || 0).toFixed(4)
@@ -390,14 +391,28 @@ function depthPanelHtml() {
   const layers = data.depth.layers || {};
   const stale = data.depth.state === 'stale';
   const staleText = data.depth.reason || '源文已变更，旧层已过期';
+  const preflight = data.depth.preflight || null;
+  const blocked = Boolean(preflight && preflight.ok === false);
   const running = depthBusy || DEPTH_KEYS.some((key) => (layers[key] || {}).status === 'running');
+  const preflightHtml = preflight ? '<p class="depth-preflight' + (blocked ? ' blocked' : '') + '">' +
+    '本章 ' + RD.fmt(preflight.stats.blocks || 0) + ' 块 · ' + RD.fmt(preflight.stats.chunks || 0) + ' 个分块 · ' +
+    '单块最多 ' + RD.fmt(preflight.stats.max_chunk_blocks || 0) + ' 块 · 预计 ' +
+    RD.fmt(preflight.stats.estimated_output_tokens || 0) + ' 输出 token · 约 ' +
+    RD.fmt(preflight.stats.estimated_seconds || 0) + ' 秒' +
+    ((preflight.warnings || []).length ? '<br>警告：' + preflight.warnings.map(RD.esc).join('；') : '') +
+    '</p>' : '';
+  const blockedHtml = blocked ? '<p class="depth-warning">' +
+    RD.esc(preflight.remediation || '源文件过大，先拆分 md。') +
+    '<br>md 目录：books/' + RD.esc(UID) + '/md/</p>' : '';
   return '<div class="section-title"><h2>深度生产</h2><span class="lbl">逐层生成 · 可单独重跑</span></div>' +
     '<div class="depth-panel" id="depth-panel">' +
+      preflightHtml +
+      blockedHtml +
       (stale ? '<p class="depth-warning">' + RD.esc(staleText) + '</p>' : '') +
       DEPTH_KEYS.map(depthRow).join('') +
       '<div class="depth-actions">' +
-        '<button class="btn btn-primary" id="depth-generate" type="button"' + (running ? ' disabled' : '') + '>' + depthGenerateLabel() + '</button>' +
-        '<button class="btn btn-ghost" id="depth-rebuild-model" type="button"' + (running ? ' disabled' : '') + '>只重建结构模型</button>' +
+        '<button class="btn btn-primary" id="depth-generate" type="button"' + ((running || blocked) ? ' disabled' : '') + '>' + depthGenerateLabel() + '</button>' +
+        '<button class="btn btn-ghost" id="depth-rebuild-model" type="button"' + ((running || blocked) ? ' disabled' : '') + '>只重建结构模型</button>' +
       '</div>' +
       '<div id="depth-jobs"></div>' +
     '</div>';
@@ -469,8 +484,11 @@ async function submitDepth(layers, rebuildModel) {
         mount.classList.add('open');
         RD.pollJob(job.id, slot, async (finished) => {
           depthBusy = false;
-          RD.toast(finished.state === 'failed' ? (finished.error || '深度生成失败') :
-            '深度层已生成 · ' + RD.statusName[finished.state], finished.state === 'failed');
+          const failed = finished.state === 'failed';
+          const blocked = finished.state === 'blocked';
+          RD.toast(failed || blocked
+            ? (finished.error || (blocked ? '源文件过大，已阻断' : '深度生成失败'))
+            : '深度层已生成 · ' + RD.statusName[finished.state], failed || blocked);
           await load();
         });
       }
@@ -479,6 +497,21 @@ async function submitDepth(layers, rebuildModel) {
       refreshDepthPanel();
       if (err.code === 'job_active') {
         RD.toast('该章已有任务在跑，先去生成记录看进度', true);
+      } else if (err.status === 422 && err.payload && err.payload.code === 'source_too_large') {
+        const payload = err.payload;
+        const stats = payload.stats || {};
+        if (mount) {
+          mount.innerHTML = '<div class="job-inline open"><div class="job-head"><span class="eyebrow">预检未通过</span>' +
+            '<span class="job-state warn">已阻断</span></div>' +
+            '<div class="job-title">' + RD.esc(payload.error || '源文件过大') + '</div>' +
+            '<p class="job-error">本章 ' + RD.fmt(stats.blocks || 0) + ' 块 · ' +
+              RD.fmt(stats.chunks || 0) + ' 个分块 · 约 ' +
+              RD.fmt(stats.estimated_output_tokens || 0) + ' 输出 token</p>' +
+            (payload.remediation ? '<p class="job-error">' + RD.esc(payload.remediation) + '</p>' : '') +
+            '<p class="job-meta">md 目录：books/' + RD.esc(UID) + '/md/</p></div>';
+          mount.classList.add('open');
+        }
+        RD.toast(payload.error || '源文件过大', true);
       } else if (err.code === 'missing_config' && err.payload && err.payload.degradable && !allowUnverified &&
           window.confirm(err.payload.error + '\n\n' + (err.payload.missing[0] ? err.payload.missing[0].fix : '') +
             '\n\n先按「未检索议程」继续？')) {

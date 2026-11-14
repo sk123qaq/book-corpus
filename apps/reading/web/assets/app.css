@@ -151,6 +151,8 @@
 .step.run .mark::after{content:"";width:5px;height:5px;background:#F6F1E6;animation:blink 1s infinite}
 .step.fail{color:var(--cinnabar)}
 .step.fail .mark{background:var(--cinnabar);border-color:var(--cinnabar);color:#F6F1E6}
+.step.blocked{color:var(--ochre)}
+.step.blocked .mark{border-color:var(--ochre);background:var(--ochre);color:#F6F1E6}
 .job-meta{font:9px/1.6 var(--sans);letter-spacing:.04em;color:var(--ink-3);margin-top:8px}
 .step .t{font:9px/1 var(--sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
 @keyframes blink{50%{opacity:.25}}
@@ -250,6 +252,8 @@
 /* depth workbench */
 .depth-panel{border:1px solid var(--rule);background:var(--paper-2);padding:14px 16px 16px;margin:4px 0 20px}
 .depth-warning{font:10px/1.5 var(--sans);letter-spacing:.03em;color:var(--ochre);border-left:2px solid var(--ochre);padding:4px 0 4px 9px;margin:0 0 10px}
+.depth-preflight{font:10px/1.6 var(--sans);letter-spacing:.03em;color:var(--ink-3);margin:0 0 10px;font-variant-numeric:tabular-nums}
+.depth-preflight.blocked{color:var(--cinnabar)}
 .depth-row{display:grid;grid-template-columns:minmax(132px,1.05fr) 66px minmax(140px,1.35fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--rule)}
 .depth-row:first-of-type{border-top:0}
 .depth-check{display:flex;align-items:center;gap:8px;font:11px/1.4 var(--sans);letter-spacing:.03em;color:var(--ink-2);cursor:pointer}

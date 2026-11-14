@@ -118,6 +118,11 @@ class JobQueue:
     @staticmethod
     def _steps_for(state, kind="reading", *, layer=None, layers_ready=(), failed_layer=None, phase=None):
         labels = STEPS_BY_KIND.get(kind, STEPS)
+        if state == "blocked":
+            # 阻断不是失败：指出停在哪一步，但不把整表染红，也不显示满格。
+            return [
+                {"name": label, "status": "blocked" if index == 0 else "pending"} for index, label in enumerate(labels)
+            ]
         if kind != "depth":
             # 失败/部分失败不能把五步全标成完成：那正是「100% + 失败」的来源。
             index, _ = STAGE_TO_STEP.get(phase or state, (0, 0))
@@ -179,6 +184,8 @@ class JobQueue:
 
     @staticmethod
     def _progress(state, kind="reading", layers_ready=(), phase=None):
+        if state == "blocked":
+            return 0
         if kind != "depth":
             if state == "done":
                 return 100
@@ -365,13 +372,27 @@ class JobQueue:
                     if self._is_cancelled_locked(job_id):
                         return
                     current = self._jobs.get(job_id) or {}
+                    kind = getattr(exc, "kind", None) or "unexpected"
+                    if kind == "source_too_large":
+                        # 源文件超限不是生成失败：不写失败现场，也不给重试按钮。
+                        self._update(
+                            job_id,
+                            state="blocked",
+                            error=str(exc) or exc.__class__.__name__,
+                            error_kind=kind,
+                            preflight=getattr(exc, "stats", None),
+                            remediation=getattr(exc, "remediation", None),
+                            failed_layer=None,
+                            elapsed_ms=int((time.monotonic() - started) * 1000),
+                        )
+                        return
                     artifact, artifact_error = failures.write_failure(self.work, job_id, current, exc)
                     extra = {"failure_artifact_error": artifact_error} if artifact_error else {}
                     self._update(
                         job_id,
                         state="failed",
                         error=str(exc) or exc.__class__.__name__,
-                        error_kind=getattr(exc, "kind", None) or "unexpected",
+                        error_kind=kind,
                         attempts=getattr(exc, "attempt", None),
                         failed_layer=current.get("layer"),
                         failure_artifact=artifact,

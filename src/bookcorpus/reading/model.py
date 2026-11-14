@@ -429,7 +429,7 @@ class ModelClient:
         self.last_fallback = fallback
         return annotation, meta
 
-    def complete_json(self, messages, *, model=None, effort=None):
+    def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
         """单次 JSON 补全，供图表编辑等第二遍调用；不做业务校验。"""
         if not self.available():
             raise RuntimeError("模型未配置：缺少 opencode-go key")
@@ -438,7 +438,7 @@ class ModelClient:
         if effort not in EFFORTS:
             raise ValueError(f"reasoning_effort 只能是 {'/'.join(EFFORTS)}")
         try:
-            content, usage = self._request(requested_model, effort, messages)
+            content, usage = self._request(requested_model, effort, messages, max_tokens=max_tokens)
         except ModelProviderError as exc:
             # 只有网络/上游这两类值得换模型重来；鉴权、截断、格式问题换谁都一样。
             target = self.fallback_model
@@ -452,7 +452,7 @@ class ModelClient:
                 error_kind=exc.kind,
                 attempts=1,
             )
-            content, usage = self._request(target, effort, messages, attempts=1)
+            content, usage = self._request(target, effort, messages, attempts=1, max_tokens=max_tokens)
             self.last_fallback = True
             actual_model = target
         else:
@@ -646,12 +646,15 @@ class ModelClient:
             with contextlib.suppress(OSError):
                 conn.close()
 
-    def _request(self, model, effort, messages, *, json_mode=True, attempts=None):
+    def _request(self, model, effort, messages, *, json_mode=True, attempts=None, max_tokens=None):
+        limit = self.max_tokens if max_tokens is None else int(max_tokens)
+        if limit <= 0:
+            raise ValueError("max_tokens 必须是正整数")
         payload = {
             "model": model,
             "messages": messages,
             "reasoning_effort": effort,
-            "max_tokens": self.max_tokens,
+            "max_tokens": limit,
             "temperature": 0.2,
         }
         parsed = _split_endpoint(self.endpoint)
@@ -680,7 +683,7 @@ class ModelClient:
             effort=effort,
             host=parsed[1],
             port=parsed[2],
-            max_tokens=self.max_tokens,
+            max_tokens=limit,
             bytes_out=len(body),
             stream=stream,
         )
@@ -845,11 +848,13 @@ class ModelClient:
                 ) from exc
             if choice.get("finish_reason") == "length":
                 log.emit("call_failed", attempts=attempt, elapsed_ms=elapsed, error_kind="truncated")
-                raise ModelTruncatedError(
+                truncated = ModelTruncatedError(
                     "模型输出被 max_tokens 截断，请重试或降低档位数量",
                     attempt=attempt,
                     elapsed_ms=elapsed,
                 )
+                truncated.payload = {"content": content, "finish_reason": "length"}
+                raise truncated
             usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
             self.total_usage = merge_usage(self.total_usage, usage)
             log.emit(
