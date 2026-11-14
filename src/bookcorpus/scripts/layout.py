@@ -126,6 +126,23 @@ class Layout:
         return os.path.join(self.index_dir, "index.db")
 
     @property
+    def embed_dir(self):
+        return os.path.join(self.index_dir, "embeddings")
+
+    @property
+    def embed_db(self):
+        return os.path.join(self.embed_dir, "emb.db")
+
+    @property
+    def embed_vectors(self):
+        return os.path.join(self.embed_dir, "vectors.f16")
+
+    @property
+    def embed_tools(self):
+        """llama.cpp 与模型权重：可重下的中间态，不进仓。"""
+        return os.path.join(self.work, "中间态", "embed")
+
+    @property
     def catalog(self):
         return os.path.join(self.build, "书目总表.csv")
 

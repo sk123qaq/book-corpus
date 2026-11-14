@@ -24,6 +24,7 @@ ALIASES = {
     "catalog": "gen_book_catalog",
     "render": "build_index",
     "index": "build_para_index",
+    "embed": "embed_corpus",
     "search": "qsearch",
     "query": "book_query",
     "eval": "eval_retrieval",
@@ -48,6 +49,11 @@ HELP = """book-corpus <命令> [参数...]
   daily [--date D] [--book UID] [--chapter N] [--dry-run] [--force]
                           写一期日课到 日课/YYYY-MM-DD.json；install-timer 装定时器
   list                    列出脚本与别名
+
+检索
+  embed [--status|--verify|--dry-run] [--books B0001,B0002] [--force] [--serve]
+                          把 md 正文切块做 embedding；产物在 build/检索/embeddings/，
+                          断点续跑，--serve 只前台起 llama-server
 
 文档
   docs check [--data-root <目录>] [--since <rev>]

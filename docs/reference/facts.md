@@ -49,6 +49,7 @@
 | `defpass.py` | — | 定义/段落级检索：两阶段。 |
 | `doc_numbers.py` | `numbers` | AGENTS.md 现状数字块：现取读数、渲染成固定一段、比对或重写。 |
 | `docs_to_md.py` | — | 把 docx/xlsx/xls/pptx/txt/md 变成书库的 md 契约：README.md + images/ + .manifest.json。 |
+| `embed_corpus.py` | `embed` | 全库 md 正文 embedding：llama.cpp Vulkan 服务 + float16 向量库。 |
 | `eval_report.py` | — | 把 eval-*.tsv 汇总成 §2.2 那张表。只读，缺档就留空。 |
 | `eval_retrieval.py` | `eval` | 四档基线评测：A grep 字面 / B rg 字面 / C defpass 概念组 / D grep 近义词组。 |
 | `gen_book_catalog.py` | `catalog` | 从 build/library.db 出书目总表，并核对每条记录能落到磁盘。 |
