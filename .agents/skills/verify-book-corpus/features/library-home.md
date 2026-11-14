@@ -53,6 +53,6 @@ Preconditions:
 - 唯一能安全验拉起的默认端口是 8770：它空着，且拉起命令会带首页自己的 `--root`，所以起的是临时根的操作台。
 - `--no-start` 下目标没在跑返回 `503`，不是 `502`，也不是空白页。
 - 503 有两种：`--no-start` 的那种只解释「被关掉了」并给日志路径（**没有命令段**）；拉起失败的那种才把原因、日志和命令都摆出来。
-- 拉起失败的原因、日志路径和命令都在 503 页里；日志落在 `$XDG_CACHE_HOME/book-corpus/home/<key>.log`（默认 `~/.cache`）。
+- 拉起失败的原因、日志路径和命令都在 503 页里；日志落在 `$XDG_CACHE_HOME/book-corpus/home/<key>.log`（默认 `~/.cache`），可用 `BOOK_CORPUS_HOME_LOG_DIR` 改到 `$ROOT/run/logs`，验证结束随 `$ROOT` 一起清（`apps/home/launcher.py:42-51`）。
 - 拉起演示页时不传 `--root`，改写 `BOOKS_ROOT`；这也是演示页唯一的数据根开关。
 - 首页要读 `books.toml` 与仓库模板：`books.toml` 缺失或 `books/` 不在时进程直接退出（exit 2），不是渲染成空页。`--root` 要指到含这两样的工作区。

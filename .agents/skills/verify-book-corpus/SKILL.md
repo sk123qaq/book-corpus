@@ -97,9 +97,9 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 - **curl** 验页面骨架与接口契约：取 HTML 断言稳定标记，取 JSON 断言字段。`features/library-home.md`、`features/daily-lessons.md`、`features/layered-reads.md` 走这条。
 - **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py tests/test_depth_acceptance.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
 - **直接跑脚本**验端到端：`python3 tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
-- **headless Chrome + CDP** 只用于点击、键盘、截图，脚本是仓库自带的，没有 Playwright。先设 `CHROME_BIN`（本机 `/usr/bin/chromium`），默认名 `google-chrome-stable` 在这台机器上不存在：
+- **headless Chrome + CDP** 只用于点击、键盘、截图，脚本是仓库自带的，没有 Playwright。默认找 `google-chrome-stable`；本机有（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。
   - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`。
-  - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，末行 `ALL PASS`；它依赖既有会话，临时根上也能命中（会话库共享）。
+  - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机只有 1 轮会话，就属于这一支）。
   - `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py`，自己起临时根；末行 `SHOT PASS`、`CONSOLE ERROR 0`，八个页签含账表（2026-11-13 实测）。
 
 硬规则：
