@@ -587,6 +587,7 @@ class Handler(BaseHTTPRequestHandler):
             session_id=_session_id(payload.get("session_id")),
             turn=_turn_no(payload.get("turn")),
             anchor=_clean_anchor(payload.get("anchor")),
+            stateless=_flag(payload.get("stateless")),
         )
 
     def handle_answer(self, payload):
@@ -727,7 +728,9 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send(200, body, ctype, headers)
 
-    def api_run(self, question, select, thinking=None, fresh=False, session_id="", turn=None, anchor=None):
+    def api_run(
+        self, question, select, thinking=None, fresh=False, session_id="", turn=None, anchor=None, stateless=False
+    ):
         rec = None
         if not LOCK.acquire(timeout=120):
             self.fail(503, "服务忙，稍后重试")
@@ -746,7 +749,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if n <= total:
                     old_run = sess["turns"][n - 1].get("run") or ""
-            if sess is None:
+            if sess is None and not stateless:
                 sess = session.create()
                 created = True
             rec = runlog.start(
@@ -779,7 +782,7 @@ class Handler(BaseHTTPRequestHandler):
             if created:
                 _write_turn(sess, n, question, data, rel, anchor, run=rec.id)
                 session.save(sess)
-            else:
+            elif sess is not None:
                 # 重新读一遍再写：这期间可能刚完成一个回答，不能拿旧快照盖掉它。
                 with session.STATE_LOCK:
                     current = session.load(sess["id"])
@@ -796,7 +799,7 @@ class Handler(BaseHTTPRequestHandler):
             plan = data.get("plan") if isinstance(data.get("plan"), dict) else {}
             rec.event(
                 "turn.result",
-                session=sess["id"],
+                session=sess["id"] if sess else "",
                 turn=n,
                 result_path=result.get("path", ""),
                 result_line=result.get("line", 0),
@@ -807,7 +810,7 @@ class Handler(BaseHTTPRequestHandler):
                 related=bool(rel.get("related")) if isinstance(rel, dict) else False,
             )
             rec.set_index(
-                session=sess["id"],
+                session=sess["id"] if sess else "",
                 turn=n,
                 question=question,
                 related=bool(rel.get("related")) if isinstance(rel, dict) else False,
@@ -816,7 +819,10 @@ class Handler(BaseHTTPRequestHandler):
                 windows=1 if result.get("path") else 0,
             )
             rec.finish("ok")
-            self.send_json(200, dict(data, session_id=sess["id"], turn=n, related=rel, session=session.public(sess)))
+            out = dict(data, session_id="", turn=n, related=rel)
+            if sess is not None:
+                out.update(session_id=sess["id"], session=session.public(sess))
+            self.send_json(200, out)
         except ValueError as exc:
             if rec is not None:
                 rec.error("turn", exc)
