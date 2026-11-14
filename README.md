@@ -225,7 +225,9 @@ book-corpus model check
 | `book-corpus-qa` | `.agents/skills/book-corpus-qa/` | `answer.py` 与问答流程，按原文回答并核对引文 |
 | `ebook-to-md` | `.agents/skills/ebook-to-md/` | 拆章、合集拆分、覆盖率审计、产物校验 |
 | `chapter-html-versions` | `.agents/skills/chapter-html-versions/` | 生成可视化阅读版 HTML，附 `verify_lite.py` 校验 |
+| `depth-swap` | `.agents/skills/depth-swap/` | 改分层读 `Store.save_depth` 或 `ReadingService` 启动流程后跑崩溃窗口检查 |
 | `mineru` | `.agents/skills/mineru/` | OCR 兜底 |
+| `sync-docs` | `.agents/skills/sync-docs/` | 迭代后对账活文档：刷新事实表、审计并修路径/端口/命令漂移 |
 | `typesafe-ai` | `.agents/skills/typesafe-ai/` | 旧分类后端，默认已改用模型 |
 | `verify-book-corpus` | `.agents/skills/verify-book-corpus/` | 一次性工作区起五个页面服务，验证用户可见行为并留证据 |
 

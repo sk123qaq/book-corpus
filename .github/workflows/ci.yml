@@ -28,6 +28,7 @@ jobs:
 
   # 文档对账：生成块、状态头、旧路径、相对链接、端口。
   # 数字块要 --data-root，CI 没有实例库，脚本自动 skip 这一项。
+  # 第二步补 `docs check` 不管的那层：.agents/skills 清单与正文里的仓库路径。
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -38,8 +39,10 @@ jobs:
           enable-cache: true
       - name: 安装
         run: uv sync --frozen
-      - name: 文档与代码对账
+      - name: 文档与代码对账（facts / status / index / links / ports）
         run: uv run --frozen book-corpus docs check
+      - name: 活文档与技能目录一致性校验
+        run: uv run --frozen python tools/check_docs_sync.py --strict
 
   test:
     runs-on: ubuntu-latest

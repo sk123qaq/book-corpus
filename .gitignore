@@ -58,6 +58,9 @@
 # ---- 技能 ----
 /.agents/skills/typesafe-ai/.env
 
+# ---- 文档同步水位线：sync-docs 技能每次巡检写一次，跟本机 HEAD 走 ----
+/docs/.last-doc-sync
+
 # ---- 验证证据：.agents/skills/verify-book-corpus 的产物 ----
 /artifacts/
 
