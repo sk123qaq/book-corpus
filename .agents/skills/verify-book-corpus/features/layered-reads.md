@@ -1,6 +1,6 @@
 # 分层读（读本与深读层）
 
-分层读把一章原文生成五层：`CH`/`A1 图文总览`/`A1′ 速览`/`A2 标准读本`/`A3 深读`，面板、速览、标准层共用一份章节模型。页面上的读法（叙事 `narrative`、论证 `argument`、实用 `practical`、资料 `reference`）是生成与编译的输入；2026-11-13 起，读法改了以后，盘上旧读法生成的层会整体过期，章节路由退回原文，深度页 404。书页可以直接设本书默认读法，但只写账，不生成。2026-11-14 起，章页在生成前做容量预检：按块数与分块规划给出预计 token/秒数；超过单章上限时禁用深度面板入口、显示拆分建议；`POST /api/depth` 返回 422 且不创建任务，主按钮 `POST /api/jobs` 没有 422 分支，会断开连接。
+分层读把一章原文生成五层：`CH`/`A1 图文总览`/`A1′ 速览`/`A2 标准读本`/`A3 深读`，面板、速览、标准层共用一份章节模型。页面上的读法（叙事 `narrative`、论证 `argument`、实用 `practical`、资料 `reference`）是生成与编译的输入；2026-11-13 起，读法改了以后，盘上旧读法生成的层会整体过期，章节路由退回原文，深度页 404。书页可以直接设本书默认读法，但只写账，不生成。2026-11-14 起，章页在生成前做容量预检：按块数与分块规划给出预计 token/秒数；超过单章上限时禁用深度面板入口、显示拆分建议；`POST /api/depth` 与主按钮 `POST /api/jobs` 都返回 422 且不创建任务，章页把预检行切到 blocked 并显示内联阻断卡。
 
 ## Sub-features
 
@@ -8,12 +8,12 @@
 - `read-book` 书页 `/book/<uid>`：书目信息、章节表、**本书默认读法**。按钮文案 `设本书默认`（已有默认时 `更新本书默认`），只写人账，不提交生成；页面上没有「生成读本」。
 - `read-chapter` 章页 `/chapter/<uid>/<n>`：五层读本、读法条（跟随本书默认 / 章级覆写 / 放弃覆写）、生成入口、任务记录。没有书级默认时，主按钮 `#generate` 显示 `先选一个读法 →` 并禁用；已确认读法时渲染成 `按「<mode>」生成读本 →`。逐层深度面板默认全选时 `#depth-generate` 写 `生成全部五层`，取消部分层后写 `生成所选层（保留 N 层）`，一层不选写 `没有要生成的层`；没有读法时点它会 409。
 - `read-preflight` 章页容量预检：`/api/chapter` 的 `depth.preflight.stats` 给出 `blocks/chunks/max_chunk_blocks/estimated_output_tokens/estimated_seconds`，同级还有 `warnings` 与 `remediation`；页面渲染成 `本章 N 块 · M 个分块 · 单块最多 K 块 · 预计 T 输出 token · 约 S 秒`，有警告时同一段 `<br>` 后接 `警告：…`。
-- `read-preflight-blocked` 超限阻断：命中 5,000 块 / 100 个分块 / 1,000,000 输出 token / 7,200 秒任一硬上限时 `ok=false`、`code=source_too_large`；章页预检行带 `blocked`，显示拆分建议与 `md 目录：books/<uid>/md/`，`#depth-generate`、`#depth-rebuild-model` 和层勾选框全部禁用；`POST /api/depth` 返回 422，不创建任务。有书级读法时，主按钮 `#generate` 不在禁用范围，超限时 `POST /api/jobs` 会断连接，见 Gotchas。
+- `read-preflight-blocked` 超限阻断：命中 5,000 块 / 100 个分块 / 1,000,000 输出 token / 7,200 秒任一硬上限时 `ok=false`、`code=source_too_large`；章页预检行带 `blocked`，显示拆分建议与 `md 目录：books/<uid>/md/`，`#depth-generate`、`#depth-rebuild-model` 和层勾选框全部禁用；`POST /api/depth` 返回 422，不创建任务。有书级读法时，主按钮 `#generate` 不在禁用范围；点它走 `POST /api/jobs`，同样返回 422，章页显示 `#job-mount` 内联卡并把预检行切到 blocked。
 - `read-stale` 读法改了：深度层过期。章节路由退回 `none`，理由「读法已改，深度页过期」，`tiers.*.stale` 全为 `true`，`/reader/<uid>/<n>/depth` 404；把读法改回原值时，若盘上 `layer_mode` 与它一致，旧层恢复可用。
 - `read-profile` 读法闸门：没有书级默认读法时，深度生成返回 `409 reading_profile_required`。
 - `read-quality` 速览质量：按读法分支。叙事只要 `scenes` 且不超上限；其余读法要 `claims`，正文占比 15%–25%，最多自动重试一次。
-- `read-generation` 读法确认后的生成：书页只设默认；章页主按钮走 `POST /api/jobs`（三档；深度开关打开、没有旧 `manifest.json`，且 depth 状态是 `missing` 并盘上没有 `chapter.html`/`chapter_model.json`/`ledger.json`，或状态是 `partial`（续跑）时，会被服务端改写成五层 depth 任务），章页下半的逐层面板走 `POST /api/depth`（只补缺层，无覆盖确认，202 + 轮询；先过读法闸门再预检，`POST /api/depth` 的 422 不建任务，409 先于 422；主按钮走同一预检但没有 422 分支）。
-- `read-records` 生成记录 `/records`：队列与历史工单，加上磁盘上有 `manifest.json` 的章读本（`/api/records` 返回 `jobs` + `packs`）。`blocked` 只出现在「全部」档，状态徽标「已阻断」，副标题仍前缀「失败 ·」（已知产品缺口）。
+- `read-generation` 读法确认后的生成：书页只设默认；章页主按钮走 `POST /api/jobs`（三档；深度开关打开、没有旧 `manifest.json`，且 depth 状态是 `missing` 并盘上没有 `chapter.html`/`chapter_model.json`/`ledger.json`，或状态是 `partial`（续跑）时，会被服务端改写成五层 depth 任务），章页下半的逐层面板走 `POST /api/depth`（只补缺层，无覆盖确认，202 + 轮询；先过读法闸门再预检，`POST /api/depth` 的 422 不建任务，409 先于 422；主按钮走同一预检，`POST /api/jobs` 的 422 同样不建任务，并在 `#job-mount` 渲染阻断卡）。
+- `read-records` 生成记录 `/records`：队列与历史工单，加上磁盘上有 `manifest.json` 的章读本（`/api/records` 返回 `jobs` + `packs`）。`blocked` 有独立的「已阻断」档与统计；状态徽标「已阻断」，副标题 `已阻断 · 源文件过大`，详情不出重跑按钮，改为显示 remediation。
 - `read-legacy` 旧链接：`/reader/...?tier=research` 302 到深读档（URL 保留 `retired=research`）；读本页与深度页在 200 时都会注入退役提示，旧根 `chapter.html` 只决定旧读本页存不存在。新 depth 包只有 `depth/chapter.html`，同 URL 会 404「这一章还没有生成读本」，深读页走 `/reader/<uid>/<n>/depth`。研究导出 410。
 - `read-formal` 形式验收：单章磁盘状态检查、读法/深度层可达性，以及预检阈值与 422 契约。
 
@@ -22,7 +22,7 @@
 - 浏览器打开 `http://127.0.0.1:18771/`，书架列出可读的书；点书进 `/book/<uid>`，点章进 `/chapter/<uid>/<n>`。
 - 在书页选一个读法，点 `设本书默认`：只记默认，不出读本；按钮变成 `更新本书默认`，旁边文案仍是「只设本书默认，不生成；章级覆写在章页设置。」
 - 回章页：已生成过的层直接显示；没有生成的层按需点生成。没有书级默认时，主按钮显示 `先选一个读法 →` 并禁用，点它回书页选读法。
-- 章页生成区上方先显示预检行：`本章 N 块 · M 个分块 · 单块最多 K 块 · 预计 T 输出 token · 约 S 秒`。大章（超过 1,000 块、20 个分块或 1 小时）在同一段 `<br>` 后接「警告：…」；超过硬上限时预检行变红、下面给出拆分建议和 `md 目录`，深度面板的两个按钮与层勾选框不可点。有书级读法时，主按钮 `#generate` 仍可点，但超限章上提交会断连接；要验阻断用逐层按钮或 `/api/depth`。
+- 章页生成区上方先显示预检行：`本章 N 块 · M 个分块 · 单块最多 K 块 · 预计 T 输出 token · 约 S 秒`。大章（超过 1,000 块、20 个分块或 1 小时）在同一段 `<br>` 后接「警告：…」；超过硬上限时预检行变红、下面给出拆分建议和 `md 目录`，深度面板的两个按钮与层勾选框不可点。有书级读法时，主按钮 `#generate` 仍可点；点它在超限章上同样得到 422，页面出现「预检未通过 / 已阻断」内联卡并刷新预检行。主按钮可以直接验；逐层按钮要先在小章页加载后再追加源文件，或直接 `POST /api/depth`。
 - 章页读法条可以「跟随本书默认」、给本章单独覆写，或放弃覆写；有覆写时出现「恢复跟随本书」，待确认覆写时出现「确认覆写」与「放弃覆写」。
 - 改读法后回章页：顶部提示「读法已改，深度页过期」，深读页打不开（404），不是坏链；把读法改回原值即可恢复原来的层。
 - 从旧链接进研究档：地址跳到 `?tier=deep&retired=research`；若该章还留着旧根 `chapter.html`，页顶出现「研读档已退役，已切换到深读档。」。新生成的深读包直接走 `/reader/<uid>/<n>/depth`，旧 URL 会是 404。
@@ -127,17 +127,19 @@ curl -s -X POST http://127.0.0.1:18771/api/depth/B0001/02 \
 curl -s http://127.0.0.1:18771/api/jobs   # {"jobs": []}，422 不建任务
 ```
 
-主按钮在超限章上不是这个 422。`POST /api/jobs` 会被改写成 `submit_depth`，但 `_post_job` 没有 `SourceTooLarge` 分支，连接被关闭：
+主按钮同样走预检。`POST /api/jobs` 在超限章上返回同一个结构化 422，不再断连接：
 
 ```bash
-curl -sS -X POST http://127.0.0.1:18771/api/jobs \
+curl -s -X POST http://127.0.0.1:18771/api/jobs \
   -H 'Content-Type: application/json' \
-  -d '{"uid":"B0001","n":1,"tiers":["standard"],"model":"fake-model","effort":"max"}'
-# curl: (52) Empty reply from server；服务端 traceback 到 SourceTooLarge
-curl -s http://127.0.0.1:18771/api/jobs   # {"jobs": []}
+  -d '{"uid":"B0001","n":2,"tiers":["standard"],"model":"fake-model","effort":"max"}' \
+  -w '\nHTTP %{http_code}\n'
+# {"error":"本章 5,034 块，超过单章上限 5,000 块；...","code":"source_too_large","stats":{...},"remediation":"把 md/ 中的这个文件按章节或每 100 块拆成多个 md，再对每个 md 提交深读。"}
+# HTTP 422
+curl -s http://127.0.0.1:18771/api/jobs   # {"jobs": []}，422 不建任务
 ```
 
-这是产品缺口，别用主按钮验 422。
+章页用 CDP 点 `#generate`（主按钮）会：预检行变成 `class="depth-preflight blocked"`、深度两个按钮禁用、`#job-mount` 里出现一张 `预检未通过 / 已阻断` 卡（含 `本章 N 块 · M 个分块 · 约 T 输出 token`、remediation、`md 目录：books/<uid>/md/`），同时弹红 toast。主按钮本身仍可点，这是有意的：提交后才拿 422，不要因为 `#generate` 没禁用就判失败。已 blocked 的页面上 `#depth-generate` 是禁用的；要验逐层按钮的 422 分支，必须先加载小章页、再追加源文件、再点它（或直接 `POST /api/depth`）。
 
 **逐层面板：202 进队列，轮询到 done。**（打模型，本轮约 194 秒；`--no-annotate` 只关注释，模型照打。这是章页下半的「生成所选层」，不是主按钮。）
 
@@ -217,7 +219,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18771/records   # 200
 curl -s http://127.0.0.1:18771/api/records | python3 -m json.tool | head -40
 ```
 
-记录页分 `全部 / 运行中 / 完成 / 失败` 四档（`apps/reading/web/records.html:69-74`）；失败与取消都在「失败」档。`blocked` 不在任何专用档，只在「全部」出现；状态徽标是「已阻断」，但 `jobSubtitle`（`records.html:407-412`）见到 `job.error` 就前缀「失败 · 」，所以副标题仍写失败，统计也不计它（`records.html:124-130`）。`error_kind` 只对 `app.js:167-181` 里登记的类别有中文名；`source_too_large` 没登记，详情仍显示英文原名。blocked 详情仍出 `重跑所选层` / `重建结构模型`（`records.html:216-228`），点了会再发 `/api/depth` 并回到 422。id 形如 `r-<10hex>`，不是 `r-1`。
+记录页分 `全部 / 运行中 / 完成 / 已阻断 / 失败` 五档（`apps/reading/web/records.html:69-75`）；失败与取消都在「失败」档。`blocked` 有专用「已阻断」档和统计（`records.html:125-135`），状态徽标「已阻断」，`jobSubtitle`（`records.html:414-420`）写 `已阻断 · 源文件过大`。`source_too_large` 已在 `RD.errorKindName`（`app.js:167-186`）登记中文名；blocked 详情不出 `重跑所选层` / `重建结构模型`（`records.html:218-231`），改为显示 `job.remediation`。id 形如 `r-<10hex>`，不是 `r-1`。
 
 **研究档旧链接。**
 
@@ -277,9 +279,9 @@ uv run --frozen python verification/chapter_path/check_paths.py
 - 预检只在 `service.depth` 打开时出现在 `/api/chapter`；`--no-annotate` 不关深度，`READING_DEPTH=0` 才关。关掉后章页没有预检行，`POST /api/depth` 返回 400「深读模式已关闭；请按旧路径生成读本」。
 - 超限章在书级读法未设时先返回 409 `reading_profile_required`，不是 422；先 `PUT /api/book/<uid>/reading` 才能看到预检 422。`POST /api/depth` 先过读法闸门（`apps/reading/server.py:466`），再在 `submit_depth` 里预检（`src/bookcorpus/reading/service.py:1068`）。
 - 422 是提交前闸门，不建任务：`GET /api/jobs` 仍是空，记录页不会出现 blocked 工单。别把「记录页没变化」当预检没生效。
-- 422 时章页只弹红 toast，`#depth-jobs` 里不会出现「预检未通过 / 已阻断」内联卡，预检行还保持提交前的旧数据（如 24 块）；这是产品缺口：`apps/reading/web/chapter.html:466` 先取 `mount`，catch 里 `refreshDepthPanel()`（`:497`）重建 `#depth-jobs` 并用旧 `data.depth` 重绘，写进的是已脱离文档的节点。验证以 `POST /api/depth` 的 422、`/api/jobs` 为空和刷新页面后的预检 `blocked` 行为准，别等卡。
-- 主按钮 `POST /api/jobs` 在超限章上不返回 422；`_post_job` 没有 `SourceTooLarge` 分支（`apps/reading/server.py:339-443`），异常冒到 socketserver，客户端得到 `curl: (52) Empty reply from server`，`/api/jobs` 仍空。要验预检 422 用 `/api/depth`；主按钮这条是产品缺口。
-- 记录页 blocked 工单仍出「重跑所选层 / 重建结构模型」（`records.html:216-228`），点了会再发 `/api/depth` 得 422；`source_too_large` 不在 `RD.errorKindName`（`app.js:167-181`），详情显示英文原名。两条都是产品缺口。
+- 422 时章页会先用 payload 更新 `data.depth.preflight` 并重绘预检行，再把「预检未通过 / 已阻断」卡写进重绘后的 `#depth-jobs`（逐层）或 `#job-mount`（主按钮）；卡片含 stats、remediation、`md 目录`，两个深度按钮禁用。旧的「只弹 toast、不刷新预检」行为已修，别按旧缺口判失败。
+- 主按钮 `#generate` 本身不禁用；点它走 `POST /api/jobs`，超限时返回结构化 422（`_post_job` 的 `SourceTooLarge` 分支，`apps/reading/server.py:339-447`），不建任务，不再断连接。`/api/jobs` 仍应是空的。
+- 记录页 blocked 工单有专用「已阻断」档和统计，副标题 `已阻断 · 源文件过大`；详情不出 `重跑所选层` / `重建结构模型`，改为显示 remediation，`source_too_large` 已登记中文名。422 本身不建任务，所以记录页只会有运行期变成 blocked 的工单。
 - 预检硬上限是 5,000 块 / 100 分块 / 1,000,000 输出 token / 7,200 秒；样例短段落约 798 块就先撞 7,200 秒，错误文案是秒数超限，别以为要 5,000 块才阻断。警告线是 1,000 块 / 20 分块 / 1 小时 / 单块 >100；警告不阻断，命中任一硬上限才 `ok=false`。
 - 样例第 1 章原有 15 块，追加 5,010 段后 API 报 5,025 块；第 2 章原有 24 块，追加后报 5,034 块。`blocks` 是解析后的块数，不是追加的段数。
 - `estimated_seconds` 按 109 token/s 估算（`src/bookcorpus/reading/depth/preflight.py:22`），不是实际耗时；45,460 秒只是预检值，别拿它当任务已经跑了 12.6 小时。
