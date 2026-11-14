@@ -131,6 +131,7 @@ python3 apps/demo/server.py
 
 - `GET /api/health` → 书库规模与索引构建时间。索引未建时仍返 200，带 `degraded:true` 与 `message:"未建索引"`；此时 `meta.books/paras/chapters` 为 `null`，会话页与 `/classic` 页头显示 `—` 和「索引未建／为空，先跑索引」，不把占位 0 当规模。真正的库错误才返 500。
 - `POST /api/run` `{"question":"...","thinking":"high","fresh":false}` → 五阶段 trace（结构见 `BRIEF.md` 的「数据契约」）。
+  `stateless:true` 且没带 `session_id` 时不新建会话，响应 `session_id` 为空；`/classic` 用它，会话页不传。
   `thinking` 取 `off/minimal/low/medium/high/xhigh/max`（默认 `high`），进切词缓存键；
   `fresh=true` 跳过切词缓存重新调模型，本次结果仍写回。trace 顶层与 `extract` 都带 `thinking`。
   问题里点名书名时，trace 顶层多一个 `focus`：`status` 为 `exact` / `ambiguous` / `missing`。

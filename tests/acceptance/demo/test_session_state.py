@@ -395,6 +395,25 @@ def test_claim_completed_job_reuses_or_reopens_on_fresh():
     assert not joined["event"].is_set()
 
 
+def test_classic_run_does_not_create_session(monkeypatch):
+    data = {"thinking": "", "plan": {"ranking": []}, "result": {}}
+    monkeypatch.setattr(server.tracer, "build", lambda *a, **k: data)
+    handler = FakeHandler()
+    server.Handler.handle_run(handler, {"question": "经典页一问", "stateless": True})
+    assert handler.code == 200
+    assert handler.payload.get("session_id") == ""
+    assert not os.path.isdir(session.SESS_DIR) or os.listdir(session.SESS_DIR) == []
+
+
+def test_run_without_stateless_still_creates_session(monkeypatch):
+    data = {"thinking": "", "plan": {"ranking": []}, "result": {}}
+    monkeypatch.setattr(server.tracer, "build", lambda *a, **k: data)
+    handler = FakeHandler()
+    server.Handler.handle_run(handler, {"question": "会话页一问"})
+    assert handler.code == 200
+    assert handler.payload.get("session_id")
+
+
 def test_api_run_appends_existing_session_without_truncation(monkeypatch):
     saved_turn()
     first_token = session.load(SID)["turns"][0]["run_token"]

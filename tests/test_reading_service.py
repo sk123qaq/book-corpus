@@ -15,7 +15,7 @@ from bookcorpus.reading.service import (
 )
 from bookcorpus.reading.tiers import project
 
-RUNNING = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
+RUNNING = ("queued", "chunking", "annotating", "validating", "projecting", "editorial", "rendering")
 
 
 def _wait(service, job_id, timeout=10):

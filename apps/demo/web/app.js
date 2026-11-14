@@ -1411,7 +1411,7 @@
         headers: { 'content-type': 'application/json' },
         // select 一起送：URL 带着 ?select=N 刷新时，服务端按同一张卡取原文与回答
         body: JSON.stringify({ question: q, thinking: state.thinking, fresh,
-                               select: (opts && opts.select) || 0 }),
+                               select: (opts && opts.select) || 0, stateless: true }),
       });
       if (seq !== state.runSeq) return;
       state.trace = trace;
