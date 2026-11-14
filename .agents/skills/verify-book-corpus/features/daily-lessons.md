@@ -6,13 +6,13 @@
 ## Sub-features
 
 - `daily-list` 往期列表：按期倒排，行里是 `MM.DD`、类别、书名、标题（**不带期号**）。页面首屏是最新一期，往期是页底 `<section id="past">`（标题「目录」）；首屏渲染后地址栏会变成 `/#<date>`。
-- `daily-issue` 单期页：期号、正文、引用、为什么挑它；研究记录不是独立区块，只是页脚一行 `路径 · N 字 · 查证 X · 联网 N 次`（`apps/daily/web/app.js:135-144`）。
+- `daily-issue` 单期页：期号、正文、引用、为什么挑它；研究记录不是独立区块，只是页脚一行 `路径 · N 字 · 查证 X · 联网 N 次`（`apps/daily/web/app.js:135-143`）。
 - `daily-empty` 空目录的空状态。
 - `daily-skip-bad` 坏文件跳过，不整页失败。
 - `daily-contract` 文件名必须等于文件里的 `date`。
 - `daily-api` `/api/feed` 与 `/api/issue/<date>`。
 - `daily-cache` 响应不缓存。
-- `daily-generate` 生成一期（要模型，`--dry-run` 只出提示词）。
+- `daily-generate` 生成一期（要模型；`--dry-run` 出选书、模型/思考/工具、分隔线与提示词四块）。
 
 ## How to get to it (user POV)
 
@@ -26,7 +26,7 @@ Preconditions:
 
 - 工作区按 [README](./README.md) 建好。
 - 日课服务由本轮起：`python3 apps/daily/server.py --root $ROOT --port 18772`，启动只打印 `http://127.0.0.1:18772` 一行。**端口必须显式传**：程序默认是 `--port 8772`，那正是操作员常驻实例的端口，漏了就会去动真实库。
-- 没有现成日课可抄：`book-corpus daily --dry-run` 只把提示词打到 stdout，不落盘。要验「有内容」就手写一期，键名照下面这份：
+- 没有现成日课可抄：`book-corpus daily --dry-run` 打选书、模型/思考/工具、`----- 提示词 -----` 与提示词四块，不落盘，不能当 seed。要验「有内容」就手写一期，键名照下面这份：
 
 ```json
 {
@@ -54,8 +54,8 @@ Preconditions:
 - **不缓存。** `curl -s -D - -o /dev/null http://127.0.0.1:18772/api/feed` 的响应头含 `Cache-Control: no-store` 与 `X-Content-Type-Options: nosniff`。
 - **Host。** `curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: example.com' http://127.0.0.1:18772/` 输出 `403`。
 - **列表行没有期号。** 列表是前端渲染（`apps/daily/web/app.js`），`curl` 拿不到行文本；要按 DOM 验就得上 CDP。接口里每期带 `issue`，行里只渲染 `date` / `kindLabel` / 书名 / `headline`。
-- **离线回归。** `uv run --frozen pytest -q tests/test_daily.py tests/acceptance/daily/test_feed.py` 全过。
-- **生成。** `uv run --frozen book-corpus daily --root "$ROOT" --dry-run` exit `0`、不写文件，先打含「**选书：**」与「模型：」的两行（不是「选章」），再打 `----- 提示词 -----` 后接提示词正文（不是只打提示词）。两条隐含前置：工作区里要有 ≥3 个 2 KB–120 KB 的章节 md（否则 `DailyError` → 「日课没写成：」exit 1）；PATH 里要有 `pi` 或设了 `PI_BIN`（否则 `MissingConfigError` 直接 traceback，exit 1）。去掉 `--dry-run` 才生成一期（打模型，本次未跑）。
+- **离线回归。** `uv run --frozen pytest -q tests/test_daily.py tests/acceptance/daily/test_feed.py` 全过（2026-11-14 为 17 项）。
+- **生成。** `uv run --frozen book-corpus daily --root "$ROOT" --dry-run` exit `0`、不写文件，打四块：含「**选书：**」与「模型：/思考：/工具：」的两行（不是「选章」）、`----- 提示词 -----`、提示词正文。两条隐含前置：工作区里要有 ≥3 个 2 KB–120 KB 的章节 md（否则 `DailyError` → 「日课没写成：」exit 1）；PATH 里要有 `pi` 或设了 `PI_BIN`（否则 `MissingConfigError` 直接 traceback，exit 1）。去掉 `--dry-run` 才生成一期（打模型，本次未跑）。
 
 ## Gotchas
 

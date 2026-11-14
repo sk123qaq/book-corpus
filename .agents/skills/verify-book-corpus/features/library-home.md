@@ -5,14 +5,14 @@
 
 ## Sub-features
 
-- `home-open` 打开即用：只读 `books/`、`日课/` 与仓库模板，不依赖别的服务在线；`books.toml` 必需。
+- `home-open` 打开即用：只读 `books/`、`日课/` 与仓库模板，不依赖别的服务在线；`books.toml` 必需。根按 `--root` → `BOOKS_ROOT`/`BOOK_CORPUS_DATA`（shell 或仓库 `.env`）→ 仓库默认解析。
 - `home-entry-search` 「找一段」卡。
 - `home-entry-reading` 「翻开书」卡。
 - `home-entry-daily` 「往期日课」卡。
 - `home-entry-ops` 页脚「管理」，新标签打开。
 - `home-keyboard` 按 `1` `2` `3` 走同一跳转。
 - `home-today` 右栏最新一期：当天有日课标「今日日课」；有期但不是当天标「最近一期」；**一期都没有时仍标「今日日课」并显示「尚无」**（`apps/home/overview.py:110-118`，`tests/test_home_overview.py:116` 钉的就是这一支）。带期号、书名与标题。
-- `home-link-mode` 目标地址是默认值时卡片指 `/go/<key>`，改动过就直连目标 URL。判据两边不一样：**卡片**比完整 URL（`apps/home/server.py:226`），**`/go/<key>` 拉起**只比端口（`apps/home/launcher.py:108`），所以 `--ops-url http://localhost:8770` 会得到「卡片直连、/go 仍会拉起」的混合态，别把两者当等价。
+- `home-link-mode` 目标地址是默认值时卡片指 `/go/<key>`，改动过就直连目标 URL。**卡片**比完整 URL（`apps/home/server.py:228`，先去掉尾斜杠）；**`/go/<key>` 拉起**除端口外还要求 scheme 是 `http` 或空、Host 是 `127.0.0.1`/`localhost`（`apps/home/launcher.py:94-108`）。所以 `--ops-url http://localhost:8770` 会得到「卡片直连、/go 仍会拉起」的混合态，别把两者当等价。
 - `home-autostart` 默认目标没在跑时拉起它再跳。
 - `home-degraded` 拉不起或 `--no-start`：503 页带原因、日志、重试。
 - `home-host` 只认 `127.0.0.1` / `localhost` 的 Host 头。
@@ -28,7 +28,7 @@
 
 Preconditions:
 
-- 工作区按 [README](./README.md) 建好。
+- 工作区按 [README](./README.md) 建好，并已 `unset BOOKS_ROOT BOOK_CORPUS_DATA`；仓库 `.env` 里也不能留 `BOOKS_ROOT`，否则 `Library`/`find_root` 会优先用它而不是 `--root`。
 - 本轮起三个首页实例，都指向同一个 `$ROOT`：
   - `--port 18773` 带 `--no-start` 且显式传 `--search-url http://127.0.0.1:18765 --reading-url http://127.0.0.1:18771 --daily-url http://127.0.0.1:18772 --ops-url http://127.0.0.1:18770`；
   - `--port 18775` 不带任何 `--*-url`、不带 `--no-start`（跑默认地址）；
@@ -56,3 +56,4 @@ Preconditions:
 - 拉起失败的原因、日志路径和命令都在 503 页里；日志落在 `$XDG_CACHE_HOME/book-corpus/home/<key>.log`（默认 `~/.cache`），可用 `BOOK_CORPUS_HOME_LOG_DIR` 改到 `$ROOT/run/logs`，验证结束随 `$ROOT` 一起清（`apps/home/launcher.py:42-51`）。
 - 拉起演示页时不传 `--root`，改写 `BOOKS_ROOT`；这也是演示页唯一的数据根开关。
 - 首页要读 `books.toml` 与仓库模板：`books.toml` 缺失或 `books/` 不在时进程直接退出（exit 2），不是渲染成空页。`--root` 要指到含这两样的工作区。
+- `--root` 不是最高优先：`src/bookcorpus/scripts/layout.py:36-43` 与 `src/bookcorpus/reading/library.py:46-49` 先看 `BOOKS_ROOT`，再看 `BOOK_CORPUS_DATA`。shell 里残留或仓库 `.env` 被写过，都会让三个首页读到别的工作区，而就绪行照样打印传入的 root。自动拉起也按实际 `Library.root` 拼命令（`apps/home/server.py:230-232`），所以不只是读错，`/go/ops` 还可能把子服务拉到错根。

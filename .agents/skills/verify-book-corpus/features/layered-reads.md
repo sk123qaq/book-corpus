@@ -4,15 +4,15 @@
 
 ## Sub-features
 
-- `read-shelf` 书架 `/`：可读的书、章节数、字数、最近在读。
+- `read-shelf` 书架 `/`：可读的书、章节数、字数、最近生成的读本（进度固定 `0.0`）。
 - `read-book` 书页 `/book/<uid>`：书目信息、章节表、**本书默认读法**。按钮文案 `设本书默认`（已有默认时 `更新本书默认`），只写人账，不提交生成；页面上没有「生成读本」。
-- `read-chapter` 章页 `/reader/<uid>/<n>`：五层读本、读法条（跟随本书默认 / 章级覆写 / 放弃覆写）、生成入口、任务记录。没有书级默认时，生成区显示 `先选一个读法 →`。
+- `read-chapter` 章页 `/reader/<uid>/<n>`：五层读本、读法条（跟随本书默认 / 章级覆写 / 放弃覆写）、生成入口、任务记录。没有书级默认时，生成区显示 `先选一个读法 →`；已确认读法时主按钮渲染成 `按「<mode>」生成读本 →`。
 - `read-stale` 读法改了：深度层过期。章节路由退回 `none`，理由「读法已改，深度页过期」，`tiers.*.stale` 全为 `true`，`/reader/<uid>/<n>/depth` 404；把读法改回原值时，若盘上 `layer_mode` 与它一致，旧层恢复可用。
 - `read-profile` 读法闸门：没有书级默认读法时，深度生成返回 `409 reading_profile_required`。
 - `read-quality` 速览质量：按读法分支。叙事只要 `scenes` 且不超上限；其余读法要 `claims`，正文占比 15%–25%，最多自动重试一次。
-- `read-generation` 读法确认后的生成：书页只设默认；章页主按钮「生成读本」走 `POST /api/jobs`（三档；新章在深度默认开启且没有旧 manifest 时会被服务端改写成五层 depth 任务），章页下半的逐层面板走 `POST /api/depth`（只补缺层，无覆盖确认，202 + 轮询）。
+- `read-generation` 读法确认后的生成：书页只设默认；章页主按钮走 `POST /api/jobs`（三档；深度开关打开、没有旧 `manifest.json`，且 depth 状态是 `missing` 并盘上没有 `chapter.html`/`chapter_model.json`/`ledger.json`，或状态是 `partial`（续跑）时，会被服务端改写成五层 depth 任务），章页下半的逐层面板走 `POST /api/depth`（只补缺层，无覆盖确认，202 + 轮询）。
 - `read-records` 生成记录 `/records`：队列与历史工单，加上磁盘上有 `manifest.json` 的章读本（`/api/records` 返回 `jobs` + `packs`）。
-- `read-legacy` 旧链接：`/reader/...?tier=research` 302 到深读档（URL 保留 `retired=research`）；**若该章还有旧根 `chapter.html`**，页顶注入退役提示。新 depth 包只有 `depth/chapter.html`，同 URL 会 404「这一章还没有生成读本」，深读页走 `/reader/<uid>/<n>/depth`。研究导出 410。
+- `read-legacy` 旧链接：`/reader/...?tier=research` 302 到深读档（URL 保留 `retired=research`）；读本页与深度页在 200 时都会注入退役提示，旧根 `chapter.html` 只决定旧读本页存不存在。新 depth 包只有 `depth/chapter.html`，同 URL 会 404「这一章还没有生成读本」，深读页走 `/reader/<uid>/<n>/depth`。研究导出 410。
 - `read-formal` 形式验收：单章磁盘状态检查与读法/深度层可达性。
 
 ## How to get to it (user POV)
@@ -52,7 +52,7 @@ curl -s http://127.0.0.1:18771/reader/B0001/01 | grep -c 'mode-confirm'     # 0 
 curl -s http://127.0.0.1:18771/api/chapter/B0001/01 \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['path'], d['fallback_reason']); print(d['reading']['effective_mode'], d['reading']['effective_source'])"
 # none 尚未生成
-# narrative rule
+# narrative suggestion
 curl -s -X POST http://127.0.0.1:18771/api/depth/B0001/01 \
   -H 'Content-Type: application/json' -d '{"layers":["skim"]}' -w '\nHTTP %{http_code}\n'
 # {"error": "这本书还没有读法，请先确认书级默认读法", "code": "reading_profile_required", "uid": "B0001", ...}
@@ -75,7 +75,7 @@ curl -s http://127.0.0.1:18771/api/chapter/B0001/01 \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['reading']['book_mode'])"  # argument
 ```
 
-**逐层面板：202 进队列，轮询到 done。**（打模型，约 3 分钟；`--no-annotate` 只关注释，模型照打。这是章页下半的「生成所选层」，不是主按钮「生成读本」。）
+**逐层面板：202 进队列，轮询到 done。**（打模型，本轮约 194 秒；`--no-annotate` 只关注释，模型照打。这是章页下半的「生成所选层」，不是主按钮。）
 
 ```bash
 curl -s -X POST http://127.0.0.1:18771/api/depth/B0001/01 \
@@ -140,7 +140,7 @@ print('kind', skim.get('kind'), 'ratio', rep['stats'].get('ratio'), 'ok', rep['s
 print('errors', rep['errors'])
 assert not rep['errors'] and rep['stats']['ratio_ok']
 PY
-# kind claims ratio 0.2392 ok True
+# kind claims ratio 0.2464 ok True（本轮 ch02）
 # errors []
 ```
 
@@ -153,7 +153,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18771/records   # 200
 curl -s http://127.0.0.1:18771/api/records | python3 -m json.tool | head -40
 ```
 
-记录页分 `全部 / 运行中 / 完成 / 失败` 四档（`apps/reading/web/records.html:69-74`）；失败与取消都在「失败」档，详情里带 `error_kind` 的中文名。id 形如 `r-<12hex>`，不是 `r-1`。
+记录页分 `全部 / 运行中 / 完成 / 失败` 四档（`apps/reading/web/records.html:69-73`）；失败与取消都在「失败」档，详情里带 `error_kind` 的中文名。id 形如 `r-<12hex>`，不是 `r-1`。
 
 **研究档旧链接。**
 
@@ -169,7 +169,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18771/api/export/B0001
 curl -s -o /dev/null -w '%{http_code}\n' -X GET http://127.0.0.1:18771/api/depth/B0001/01  # 405
 ```
 
-重定向只在查询串恰好是 `tier=research` 时触发；`?tier=research&x=1` 不跳，直接 404。退役提示只由 `_serve_reader` 注入，前提是章目录根上还有旧读本 `chapter.html`；新 depth 包把 `chapter.html` 放在 `depth/` 下，`/reader/<uid>/<n>?tier=deep&retired=research` 会 404。要验提示本身，按 `tests/test_reading_server.py:183-188` 往 `工作区/阅读/<uid>/ch/<n>/chapter.html` 写一个 `<html><body>旧读本</body></html>`，再取该 URL，`grep -c '研读档已退役，已切换到深读档。'` 为 1。`/api/export` 研究档一律 410 `legacy 研究导出已退役；深读档在 /reader/<uid>/<n>/depth`；已保存的导出文件还能直接打开。
+重定向按 `parse_qs` 解析，`?tier=research&x=1` 也跳，额外参数保留；目标同时带 `tier=deep&retired=research`。退役提示由 `_serve_reader` 与 `_serve_depth` 都注入，条件是查询串里有 `tier=deep&retired=research`；旧根 `chapter.html` 只决定 `/reader/<uid>/<n>?tier=deep&retired=research` 能不能出页面（新 depth 包下该 URL 仍 404）。要验旧读本页的提示，按 `tests/test_reading_server.py:183-188` 往 `工作区/阅读/<uid>/ch/<n>/chapter.html` 写一个 `<html><body>旧读本</body></html>`，再取该 URL，`grep -c '研读档已退役，已切换到深读档。'` 为 1；深度页在 200 时同一查询串也会出现提示。`/api/export` 研究档一律 410 `legacy 研究导出已退役；深读档在 /reader/<uid>/<n>/depth`；已保存的导出文件还能直接打开。
 
 **旧三档路径（已有 manifest 的旧包；本技能不默认跑）。** 主按钮「生成读本」发 `POST /api/jobs`，body 形如 `{"uid":"B0001","n":1,"tiers":["skim"]}`。新章在深度默认开启且没有旧 manifest 时，服务端会把请求改写成五层 depth 任务，请求里的 `tiers` 直接丢掉；旧包才走三档 `submit`。已有档位再提交返回 `409`：
 
@@ -184,11 +184,11 @@ curl -s -o /dev/null -w '%{http_code}\n' -X GET http://127.0.0.1:18771/api/depth
 **形式验收。**
 
 ```bash
-uv run --frozen python verification/chapter_path/check_paths.py --root "$ROOT"
+uv run --frozen python verification/chapter_path/check_paths.py
 # checked 128 disk states; 24 reachable by the model; P1/P2 无违规
 ```
 
-`128/24` 是 `sample` 的 8 种磁盘状态 × 16 种读法组合的结果，不是可随手改的常数；换样本或读法表时会变。
+脚本自己造临时根，不读 `sys.argv`，传 `--root` 也不生效。`128` = 4 种 depth 状态 × 32 个布尔组合（`html`/`model`/`ledger`/`legacy`/`sha` 各真假），`24` 是 `reachable()` 认为可服务的组合；换 `reachable()` 规则时 `24` 会变。
 
 ## Gotchas
 
@@ -198,11 +198,12 @@ uv run --frozen python verification/chapter_path/check_paths.py --root "$ROOT"
 - 新工作区章页生成按钮是 `先选一个读法 →`，不是 `按「…」生成读本 →`；后者是模板字符串，别用静态 grep 证明按钮已渲染。
 - 书页的 `设本书默认` 只写账，不生成；`grep -c '生成读本'` 仍应为 0。不要把「能点」当成「已出读本」。
 - 改读法后深读页 404、`path=none`、`tiers.*.stale=true` 都是正确行为，不是 pack 损坏；把读法改回原值就恢复（前提是 `layer_mode` 与改回的值一致）。
-- `?tier=research` 的 302 目标现在带 `retired=research`；只断言 `tier=deep` 会漏掉退役标记。重定向只匹配精确查询串，`?tier=research&x=1` 不跳。
-- 退役提示不是重定向的必然结果：它只注入旧根 `chapter.html`。新 depth 包下 `/reader/<uid>/<n>?tier=deep&retired=research` 是 404，深读页是 `/reader/<uid>/<n>/depth`；别把 404 当重定向坏了。
+- `?tier=research` 的 302 目标现在带 `retired=research`；只断言 `tier=deep` 会漏掉退役标记。重定向是参数级匹配，`?tier=research&x=1` 也跳，额外参数保留。
+- 退役提示不是重定向的必然结果：`_serve_reader` 与 `_serve_depth` 在页面 200 时才注入；新 depth 包没有旧根 `chapter.html`，`/reader/<uid>/<n>?tier=deep&retired=research` 是 404，深读页是 `/reader/<uid>/<n>/depth`；别把 404 当重定向坏了。
 - `layers/skim.json` 是编译后的页面层（`sections`/`scenes`），模型稿 `depth/skim.json` 才有模型原始结构；质量断言读错文件会得到 `KeyError`。
 - 比例闸门的分母是原文汉字数（`source_han`），不是文件字节数；`audit_skim` 的 `ratio` 才是闸门值，拿 `os.path.getsize` 算会偏。
 - 记录 id 形如 `r-<12hex>`，不是固定 `r-1`；新工作区第一次生成后记录页才有一条。
 - 叙事速览没有 15% 下限，只查 `scenes` 与上限；把 15%–25% 套到叙事会误判合格稿。
 - `generate` CLI 的 `--mode` 是新增必填（或先写读法账）；只传 `--root/--uid/--n` 会报 `generate 需要 --mode，或先为本书/章写读法账`。
-- `sample` 的 9 章都是 2 KB 上下的小章，生成一份 skim 约 3 分钟；超时先看任务记录的 `stage`/`phase` 与 `工作区/阅读/failures/`，不要重复提交。
+- `sample` 的 9 章都是 2 KB 上下的小章，生成一份 skim 本轮约 194 秒；超时先看任务记录的 `stage`/`phase` 与 `工作区/阅读/failures/`，不要重复提交。
+- 书架统计来自 `build/阅读/shelf-index.db`，服务启动时增量刷新；重建用 `book-corpus run reading_index --rebuild`，只查状态用 `--status`。索引坏了先看 `.corrupt-*`/`.bak-*`，不是书架没数据。
