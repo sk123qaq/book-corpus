@@ -49,11 +49,11 @@ HELP = """book-corpus <命令> [参数...]
                           写一期日课到 日课/YYYY-MM-DD.json；install-timer 装定时器
   list                    列出脚本与别名
 
-迁移
-  migrate [--apply]       把 v1 布局（库/ 目录/ 视图/）搬成 v2（books/ collections/ tables/ build/）
-                          --dest <目录> 落到新树，--mode move|link|copy，--out <目录> 写对照表
-  remap --map <csv> [--apply]
-                          按对照表改写索引里的路径；--old-db <旧 index.db> 把旧 expand 灌进新索引
+文档
+  docs check [--data-root <目录>] [--since <rev>]
+                          对账：facts 生成块、状态头、旧路径、相对链接、端口；
+                          给了 --data-root 再比 AGENTS「现状」数字。不一致退出 1
+  docs write              重写 docs/reference/facts.md 与 docs/INDEX.md
 
 跑脚本
   run <脚本> [参数...]    scripts/ 下任一脚本，例如 run scan_library --help
@@ -378,6 +378,38 @@ def cmd_remap(root, rest):
     return code
 
 
+def cmd_docs(rest):
+    from . import docfacts
+
+    action = rest[0] if rest and rest[0] in ("check", "write") else "check"
+    args = rest[1:] if rest and rest[0] in ("check", "write") else rest
+    repo = docfacts.REPO_ROOT
+    data_root = None
+    since = None
+    while args:
+        flag = args.pop(0)
+        if flag == "--repo":
+            repo = args.pop(0)
+        elif flag == "--data-root":
+            data_root = args.pop(0)
+        elif flag == "--since":
+            since = args.pop(0)
+        elif flag in ("-h", "--help"):
+            print("book-corpus docs check|write [--repo DIR] [--data-root DIR] [--since REV]")
+            return 0
+        else:
+            print("不认识的参数：%s" % flag)
+            return 2
+    if action == "write":
+        for rel in docfacts.write(repo=repo):
+            print("写了 %s" % rel)
+        return 0
+    if action == "check":
+        return docfacts.run_check(repo=repo, data_root=data_root, since=since)
+    print("docs 只认 check 或 write")
+    return 2
+
+
 def cmd_migrate(root, rest):
     from . import migrate
 
@@ -456,6 +488,8 @@ def main(argv=None):
         return cmd_doctor(workspace.resolve(explicit_root), "--json" in rest)
     if cmd == "list":
         return cmd_list()
+    if cmd == "docs":
+        return cmd_docs(rest)
     if cmd == "migrate":
         return cmd_migrate(explicit_root, rest)
     if cmd == "remap":

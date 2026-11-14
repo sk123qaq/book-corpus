@@ -130,10 +130,11 @@ def _line(key: str, value: str) -> str:
     """一行 ``KEY=value``；有空白、引号或 ``#`` 时加双引号，与 :func:`parse` 对齐。"""
 
     if not value:
-        return "%s=" % key
+        return f"{key}="
     if any(ch.isspace() or ch in "\"'#" for ch in value):
-        return '%s="%s"' % (key, value.replace('"', '\\"'))
-    return "%s=%s" % (key, value)
+        escaped = value.replace('"', '\\"')
+        return f'{key}="{escaped}"'
+    return f"{key}={value}"
 
 
 def _name_of(raw: str) -> str:

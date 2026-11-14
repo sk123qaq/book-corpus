@@ -24,15 +24,14 @@
 | `books/_收件箱/` | 新书落地处，入库走 `book-corpus ingest` |
 | `books/_冷宫/` | 移出处理流程的书，只留原书文件，不在人账，不进检索 |
 | `collections/<Cuid>/source/` | 拆书前的合集原书，由书的 `book.json` 用 `collection` 引用 |
-| `tables/ledger.db` | 唯一人账（`分类` 表一行一本书，`概念`/`概念broad`/`动作词` 是检索词表）。`tables/分类表.csv` 只是 init 的种子，入库后不再读它 |
-| `tables/概念表*.tsv` | 检索层的概念键与同义词组，人写人改 |
+| `tables/ledger.db` | 唯一人账（`分类` 表一行一本书，`概念`/`概念broad`/`动作词` 是检索词表）。旧 CSV 只在 `archive/账切换-2026-11-03/` 留档，缺库时才兜底读 |
 | `tables/系列/` | 书系说明，卷序看这里 |
 | `build/library.db` | 全库书目，SQLite，产物，可重建 |
 | `build/检索/index.db` | 段落倒排与概念剖面，产物，可重建 |
 | `build/views/` | 指向 `books/<uid>/` 的奖项与主题软链树，产物 |
 | `build/书目总表.csv` | 从 DB 导出的书目，产物 |
 | `build/阅读版索引.html` | 有阅读版 HTML 的书的总索引，产物 |
-| `工作区/` | 批次账、缓存与运行时状态；运行时可重建，不进工具仓 |
+| `工作区/` | 实例根下的运行时层（本机是 `~/书库/工作区/`）：批次账、缓存与虚拟环境；可重建，不进工具仓 |
 | `日课/` | 每日一期的 JSON 与日志；页面只读，生成走 `book-corpus daily` |
 
 `book.json` 只记源元数据（uid、书名、学科、sources、awards）。目录名就是 uid，`book.json` 不再存路径。md 与 html 状态在 `library.db` 的 `derived` 表里，由 `build_library.py` 按磁盘生成，不写回 `book.json`。
@@ -380,6 +379,7 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 | 人账 `tables/ledger.db` | `book-corpus library` | `conflicts=0`，`books` 等于人账行数 |
 | 结构、脚本 | `book-corpus doctor` | 无 `fail` |
 | 结构、检索层 | `book-corpus verify` | 末行「全过：N 项」 |
+| 文档、端口、脚本清单 | `book-corpus docs check --data-root <实例根>` | 末行「全过」；改端口或脚本后先 `book-corpus docs write` |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
 | 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |
 

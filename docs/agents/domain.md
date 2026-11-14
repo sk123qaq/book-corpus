@@ -4,39 +4,17 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`GLOSSARY.md`** at the repo root, or
-- **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+- **阅读层词汇**：`GLOSSARY.md`（视觉读本、分层读、读法、面板）。
+- **书库数据与流程词汇**：`AGENTS.md` 的「文件地图」（book、uid、人账、机账、批次、拆章、存档）。
+- **`docs/adr/`**：动手前先读碰到该区域的 ADR。
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
 ## File structure
 
-Single-context repo (most repos):
-
-```
-/
-├── GLOSSARY.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
-
-```
-/
-├── GLOSSARY-MAP.md
-├── docs/adr/                          ← system-wide decisions
-└── src/
-    ├── ordering/
-    │   ├── GLOSSARY.md
-    │   └── docs/adr/                  ← context-specific decisions
-    └── billing/
-        ├── GLOSSARY.md
-        └── docs/adr/
-```
+本仓是单工具仓、两类词汇：阅读层在根 `GLOSSARY.md`，书库数据层在 `AGENTS.md` 的「文件地图」；
+决定只有一套 `docs/adr/`，没有按 `src/<context>/` 分的子 ADR。文档状态与索引由
+`book-corpus docs check` 对账。
 
 ## Use the glossary's vocabulary
 

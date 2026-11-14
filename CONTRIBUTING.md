@@ -19,11 +19,11 @@ Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库�
 - `src/bookcorpus/scripts/`：全部可复跑脚本。批次的一次性脚本不进本仓，放数据仓的批次目录。
 - `tests/acceptance/`：pytest 收集的离线验收。`tests/manual/`：手工验收。测试产物写临时目录，不写仓库。
 - `docs/design/`：方案与决策记录。`docs/briefs/`：已完成的任务书。`docs/检索/`：检索层口径与踩坑账。`reports/`：一次性审计与证据。
-- 仓库里没有 `工作区/`。`工作区/` 是实例的运行时布局（批次账、缓存、虚拟环境），由 `book-corpus init` 生成，不进任何仓。
+- 仓库里没有 `工作区/`。它是实例根下的运行时布局（本机 `~/书库/工作区/`：批次账、缓存、虚拟环境），由 `book-corpus init` 生成，不进任何仓。
 
 ## 改动规则
 
-- 一个账本一个写者。人账 `tables/分类表.csv` 的已有行只由人改，脚本只追加新行。
+- 一个账本一个写者。人账 `tables/ledger.db` 的已有行只由人改，脚本只追加新行；新书走 `book-corpus ingest`，不手填。
 - 写文件用临时文件加 `os.replace`；不要截断式原地写，库里的文件可能与快照共享 inode。
 - 搬文件用 `git mv`，保留历史。改路径时同一波改完所有调用方，不留兼容别名。
 - 不顺手改行为。搬目录、改引用、删可再生成的产物可以一个提交；逻辑变化单独提交，并带能判红绿的测试。
@@ -42,17 +42,18 @@ uv run --frozen ruff check .
 uv run --frozen ruff format --check .
 uv run --frozen python tools/ruff_strict_new.py
 uv run --frozen mypy
+uv run --frozen book-corpus docs check
 git status --short
 ```
 
-这五步也可以交给 git hook：
+这六步也可以交给 git hook：
 
 ```bash
 uv sync                       # 装上 pre-commit
 uv run pre-commit install     # 之后每次提交自动跑
 ```
 
-hook 跑四道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`。
+hook 跑五道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`、`docs check`。
 CI（`.github/workflows/ci.yml`）的 `lint` job 跑同一套，`test` job 在 3.11/3.12/3.13 上跑 pytest 与命令行冒烟：本地闸门过不了的，push 上去必红。
 
 ### ruff 严格档：新代码不许 os.path 拼接和 % 格式化

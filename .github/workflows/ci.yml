@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  # 与本地 pre-commit 的三道闸同一套规则：规则检查、格式、新代码严格档。
+  # 与本地 pre-commit 的规则闸同一套：规则检查、格式、新代码严格档、类型检查。
   # 单独一个 job：只跑一次，不用等 3 个 Python 版本。
   lint:
     runs-on: ubuntu-latest
@@ -25,6 +25,21 @@ jobs:
         run: uv run --frozen python tools/ruff_strict_new.py
       - name: mypy（核心包 src/bookcorpus）
         run: uv run --frozen mypy
+
+  # 文档对账：生成块、状态头、旧路径、相对链接、端口。
+  # 数字块要 --data-root，CI 没有实例库，脚本自动 skip 这一项。
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: 安装
+        run: uv sync --frozen
+      - name: 文档与代码对账
+        run: uv run --frozen book-corpus docs check
 
   test:
     runs-on: ubuntu-latest

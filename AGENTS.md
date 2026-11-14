@@ -2,9 +2,27 @@
 
 `~/书库` 是个人电子书库的工作区实例。2026-10 按 `docs/design/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
 
-新会话先读本文件，再按「文件地图」与「脚本」按需深入。方案 §8 开头有两段执行修订，正文里写死的原型数字按修订块读。
+新会话先读本文件，再按「文件地图」与 `book-corpus list` 按需深入。方案 §8 开头有两段执行修订，正文里写死的原型数字按修订块读。
 
 本文件记录作者本机的书库实例。批次账与现状数字只对那份语料成立；新克隆的仓库按 `README.md` 从零搭建。
+
+## 文档权威顺序
+
+冲突时从上往下赢；低层与高层矛盾算低层的 bug，只删或改成链接。
+
+1. 代码与测试（能跑的）
+2. `docs/reference/facts.md`（`book-corpus docs write` 生成）
+3. `docs/adr/` 里 accepted 的决定
+4. README / CONTRIBUTING / 本文件的正文
+5. `docs/design/` 带日期的方案、`docs/briefs/`
+6. 复盘、踩坑记录、历史数字
+
+事实不手抄：端口、脚本、版本、书目数都从代码或库生成。判断只写一处，其他文件链接。
+
+**状态契约**：`docs/design|briefs` 与 `docs/adr` 的第一屏必须有一行
+`状态：<draft|accepted|proposed|implemented|superseded|historical> · YYYY-MM-DD`。
+`implemented` 再写 `验收：<命令或测试路径>`；`superseded` 再写 `替代：<路径>`。
+历史正文不改，标 `historical` 或加「布局说明」即可。`book-corpus docs check` 查这些。
 
 ## 这台机器上的两处目录（2026-11-13 起）
 
@@ -21,9 +39,10 @@
 `对照表-0002.csv`，不要把旧路径当活路径。
 
 2026-11-02 收尾把 `book-corpus-new` 改名成 `book-corpus-local`，旧 v1 树删掉。2026-11-03 把 local 实例合并进数据仓，`book-corpus-local` 下线，单实例一根。
-迁移账与验收读数见工作区 `工作区/批次/2026-11-03-合并单实例与账统一/说明.md`。
+迁移账与验收读数见 `~/书库/工作区/批次/2026-11-03-合并单实例与账统一/说明.md`。
+`工作区/` 只指实例根下的这一层（`~/书库/工作区/`），工具仓里没有它。
 
-**单实例纪律**：工作区 `.git` 与 41G 未跟踪正文同树。`git clean -fdx` 会删正文；批次写操作集中在 `工作区/` 下，别在根下跑；`git add -A` 依赖 `.gitignore`，
+**单实例纪律**：工作区 `.git` 与 41G 未跟踪正文同树。`git clean -fdx` 会删正文；批次写操作集中在 `~/书库/工作区/` 下，别在根下跑；`git add -A` 依赖 `.gitignore`，
 动 `.gitignore` 前先想清楚。
 
 ## 现状
@@ -44,7 +63,7 @@ As of 2026-11-14：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf�
 | `books/_收件箱/` | 新书先落这里，入库走 `book-corpus ingest`：`scan` 出计划，`apply` 落文件与账；换源用 `replace` |
 | `books/_冷宫/` | 移出处理流程的书，只留原书文件。无 `book.json`、不在人账、不进检索与扩展。规则与账见 `books/_冷宫/README.md` |
 | `collections/<Cuid>/source/` | 拆书前的合集原书；书的 `book.json` 用 `sources[].collection` 引用 |
-| `tables/ledger.db` | **唯一人账**（SQLite）：`分类` 1,954 行（uid、一级、二级、作者层、保留、正式书名、备注、updated_at）、`概念` 127 条、`概念broad` 10 条（宽词层实验，未并入生产）、`动作词` 15 条、`ledger_meta`。人在操作台「账表」页或直接 SQL 改；活账 CSV 已归档 `archive/账切换-2026-11-03/` |
+| `tables/ledger.db` | **唯一人账**（SQLite）：`分类` 1,956 行（uid、一级、二级、作者层、保留、正式书名、备注、updated_at）、`概念` 127 条、`概念broad` 10 条（宽词层实验，未并入生产）、`动作词` 15 条、`ledger_meta`。人在操作台「账表」页或直接 SQL 改；旧 CSV 只在 `archive/账切换-2026-11-03/` 留档，脚本只把它当缺库兜底 |
 | `tables/系列/` | 21 份合集的卷序说明 |
 | `tables/对照表.csv`、`搬迁计划.csv`、`标注样本.csv`、`书目录清单.csv`、`源文件清单.csv` | v1 目录结构与 L0–L2 的过程账，历史留档 |
 | `build/library.db` | 全库书目，SQLite。产物，可重建。查询用 `lq.py` 只读打开 |
@@ -60,10 +79,13 @@ As of 2026-11-14：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf�
 | `apps/demo/` | 检索流程演示页、回答与会话实现，按需启动，127.0.0.1:8765；验收在 `tests/acceptance/demo/` 与 `tests/manual/demo/` |
 | `apps/reading/` | 四读与视觉读本的书架、书目、正文与记录，按需启动，127.0.0.1:8771；验收在 `tests/test_reading_*.py` |
 | `apps/home/` | 统一入口首页，项目默认只启动这一项，127.0.0.1:8773；服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点击时按需代起四个页面服务，验收在 `tests/test_home_*.py` |
-| `docs/design/` | 权威方案、决策记录与流程图 |
+| `docs/design/` | 带日期的方案与决策记录；状态头区分现行/历史，过期方案标 `historical` 或 `superseded` |
 | `docs/briefs/` | 已完成任务书，标注完成日期 |
-| `工作区/批次/` | 只在工作区实例；工具仓不再保留 |
-| `工作区/中间态/` | 只在实例磁盘上，派生或可再生，不进任何仓 |
+| `docs/adr/` | 决定记录（`proposed` / `accepted` / `superseded`），替代链在这里 |
+| `docs/reference/facts.md` | 生成的事实：版本、五个应用默认端口、脚本与别名清单。`book-corpus docs write` 重写 |
+| `docs/INDEX.md` | 文档索引：`docs/adr`、`docs/design`、`docs/briefs` 的状态与日期，生成物 |
+| `~/书库/工作区/批次/` | 只在工作区实例；工具仓不再保留 |
+| `~/书库/工作区/中间态/` | 只在实例磁盘上，派生或可再生，不进任何仓 |
 
 `book.json` 是源元数据投影。md 与 html 状态只在 `library.db` 的 `derived` 表里，由 `book-corpus library` 按磁盘生成，不写回 `book.json`。
 
@@ -86,7 +108,7 @@ As of 2026-11-14：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf�
 
 ## 写入规则
 
-- 改已有书的分类、书名、保留策略改人账 `tables/ledger.db` 的 `分类` 表（操作台「账表」页，或 `lib_common.category_put`），然后跑 `build_library.py --emit-json` 重建 DB 与 `book.json`。新书不要手填人账，走 `ingest.py` 的 `add` 或 `apply`。v2 的目录名是 uid，改书名不动目录。2026-11-03 起活账可用 CSV 已停：`分类表.csv/概念表.tsv` 等只在 `archive/账切换-2026-11-03/` 留档，脚本读 CSV 的路全下线。
+- 改已有书的分类、书名、保留策略改人账 `tables/ledger.db` 的 `分类` 表（操作台「账表」页，或 `lib_common.category_put`），然后跑 `build_library.py --emit-json` 重建 DB 与 `book.json`。新书不要手填人账，走 `ingest.py` 的 `add` 或 `apply`。v2 的目录名是 uid，改书名不动目录。2026-11-03 起活账 CSV 已停：旧账（分类、概念）只在 `archive/账切换-2026-11-03/` 留档，脚本只把它当缺库兜底。
 - 写文件用 tmp 加 `os.replace`。库里的旧文件与 `../books.snapshot-2026-10-18` 共享 inode，截断式原地写会同时改掉快照。
 - 一个账本一个写者。人账的已有行只由人改；新行由 `ingest.py` 与 `classify_books.py --add-new` 追加，写 `tables/ledger.db`（写者走 `.writer.lock` 互斥）。脚本写产物（`library.db`、`book.json`、`tables/` 下的导出），批次机账只追加。
 - 拆章产物落 `books/<uid>/md/` 才算落地，`v_pending_md` 视图只认这个目录。
@@ -123,6 +145,7 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 | 人账 `tables/ledger.db` | `book-corpus library --emit-json` | 输出里 `conflicts=0`，`books` 等于人账行数 |
 | 任何代码 | `uv run --frozen pytest`（在工具仓） | 全部通过 |
 | 任何代码（lint 四道闸） | `uv run --frozen pre-commit run --all-files` | 四行都 `Passed`；CI 的 `lint` job 跑同一套 |
+| 文档、端口、脚本清单 | `book-corpus docs check --data-root ~/书库` | 末行「全过」；改端口/脚本后先 `book-corpus docs write` |
 | 结构、脚本、html | `book-corpus verify` | 末行「全过：N 项」 |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
 | 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |

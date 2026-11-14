@@ -1,5 +1,7 @@
 # 阅读版 HTML 规范
 
+状态：accepted · 2026-11-06
+
 本文件是阅读版章节 HTML 的生成要求与验收清单，唯一机器标准是
 `src/bookcorpus/reading/quality.py` 的 `check_html`。文档里的阈值与 CSS 数值必须与代码一致，
 改动任何一边都要同步另一边。

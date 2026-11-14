@@ -1,8 +1,8 @@
 # 统一操作台（127.0.0.1:8770）
 
 书库日常操作的本地控制台。页面读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调
-`src/bookcorpus/scripts/` 里的脚本。页面不写 `目录/分类表.csv`、`library.db`、`book.json`、
-`目录/检索/index.db`，除「上传」把文件放进 `库/_收件箱/` 外不碰 `库/`。
+`src/bookcorpus/scripts/` 里的脚本。页面不写 `tables/ledger.db`、`build/library.db`、`book.json`、
+`build/检索/index.db`，除「上传」把文件放进 `books/_收件箱/` 外不碰 `books/`。
 
 方案见 `docs/design/统一操作台-方案-2026-10-24.md`，接口与文件归属见
 `apps/ops/CONTRACT.md`。
@@ -39,7 +39,7 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
 1. `src/bookcorpus/scripts/ops_status.py --json --root <root>`：顶栏与总览的读数。脚本不存在时回落到
    `OPS_STATUS_FIXTURE` 指向的 JSON 文件，两者都没有就显示空状态并在顶栏标「状态：缺」。
 2. `ops.db`：任务、步骤、日志路径、状态计数。
-3. `目录/library.db`（只读打开）与各批次的 `worklist.tsv`、`logs/<uid>.json`、
+3. `build/library.db`（只读打开）与各批次的 `worklist.tsv`、`logs/<uid>.json`、
    `triage_final.csv`、`skip_list.tsv`、`defer/lang.tsv`：待拆列表、删书搜索、PDF 队列。
 
 ## 页面
@@ -52,7 +52,7 @@ Ctrl-C 停服务。服务退出不杀检索演示页（8765），也不杀接手
 
 - **总览**：一句话状态与主行动、六格流水线（收书 / 入账 / 上架 / 出正文 / 可检索 / 体检）、
   下一步、最近 4 个任务。三本账与断点表已收进各自页面，总览不再重复。
-- **新书导入**：可点击或拖放的上传区（裸 body 流式写 `库/_收件箱/<名>.part` 再 `os.replace`）、
+- **新书导入**：可点击或拖放的上传区（裸 body 流式写 `books/_收件箱/<名>.part` 再 `os.replace`）、
   收件箱表、生成入库清单、逐行改书名/分类/保留/动作、写回计划、确认入库（自动接
   `build_library` 与 `gen_book_catalog`，doc 格式再自动接「文档转 md」）。门槛 `conflicts=0` 且 `未匹配 0 条`，只进任务判定与日志，
   不进页面文案。低置信行标黄，表下写「黄色行建议再核对一遍」。页面加载时自动带出最近一份可用计划
@@ -142,7 +142,7 @@ GET  /api/retire/search?q=             # uid 或书名，带源、md、奖项
 
 文件白名单只有三类：`工作区/运维/jobs/<id>/` 下的 `log.txt`、`plan.json`、`commands.json`、
 `result.json`、`review.json`、`dry-run.json`、`status.json`、`review/<uid>.json`、`thumbs/*.png`；
-`目录/书目总表.xlsx`、`目录/书目总表.csv`、`目录/分类预填.csv`。其它一律 404，路径接
+`build/书目总表.xlsx`、`build/书目总表.csv`、`tables/分类预填.csv`。其它一律 404，路径接
 `realpath` 后再比一次前缀。
 
 ## 任务与门槛
@@ -220,7 +220,7 @@ python3 tests/manual/ops/shot_ops.py         # 1440x900 与 390x844，报 CONSOL
 ```
 
 `check_ops.py` 自己造临时根：`src/bookcorpus/scripts/` 下写一套 stub（`ingest.py`、`split_md_batch.py`、
-`pdf_md_batch.py`、`ops_pdf_triage.py`、`retire_book.py` 等），`目录/library.db` 造五本书的最小表（含三本待转 PDF），
+`pdf_md_batch.py`、`ops_pdf_triage.py`、`retire_book.py` 等），`build/library.db` 造五本书的最小表（含三本待转 PDF），
 `OPS_STATUS_FIXTURE` 给状态。它验这些东西：状态字段、静态页、任务生命周期与门槛、写互斥（真去
 `flock` 探一次）、取消、上传与文件名、文件白名单与路径穿越、跨站与 Host 拒绝、计划写回、stub 导入、
 stub 分诊、最近计划的复用与失效（源文件不在就不给计划）、PDF 分组、PDF 清单的处置与二次确认（先改判再转、
@@ -294,8 +294,8 @@ stub 分诊、最近计划的复用与失效（源文件不在就不给计划）
   父任务状态不再回写。
 - 状态脚本没就绪时页面显示「—」「未知」「未运行」，不把占位的 0 当读数；真库实测字段与 `ops_status.py` 现状一致。
 - 无登录、只绑本机。任何远程访问要先加鉴权与 TLS。
-- 上传上限 2 GB；更大的文件用文件管理器放进 `库/_收件箱/`。
+- 上传上限 2 GB；更大的文件用文件管理器放进 `books/_收件箱/`。
 - 索引重建没有百分比进度，只有日志尾部与耗时。
 - 目录名仍是分类表的投影：改分类后要手工 `mv`，页面只提示。
-- 读 `目录/library.db` 用 `mode=ro`，WAL 库会顺带留下一只 `library.db-shm`（SQLite 自己重建成，
+- 读 `build/library.db` 用 `mode=ro`，WAL 库会顺带留下一只 `library.db-shm`（SQLite 自己重建成，
   不写任何数据）。要连这个也不留，就得开 `immutable=1`，但那样库被重建时可能读到旧的账，不划算。
