@@ -38,7 +38,8 @@ HELP = """book-corpus <命令> [参数...]
 
 工作区
   init <目录> [--force] [--no-pdf-venv]
-                          建一个空工作区；顺手建 工作区/.venv-pdf/.venv-docs 并装依赖
+                          建一个空工作区；顺手建 工作区/.venv-pdf/.venv-docs 并装依赖，
+                          再把根写进仓库根 .env 的 BOOKS_ROOT
   sample                  装内置样书《阿Q正传》，空库马上能检索
   doctor [--json]         体检工作区
   venv [--check]          建/补 工作区/.venv-pdf 与 工作区/.venv-docs；--check 只导入一遍依赖
@@ -118,6 +119,10 @@ def _init_build(root):
 def cmd_init(target, force, pdf_venv):
     path = workspace.init(target, __version__, force, pdf_venv)
     print("工作区建好：%s" % path)
+    # 建完就把根记进 .env：之后在同仓跑的命令不必再带 --root。
+    # shell 里 export 的 BOOKS_ROOT 仍然优先（envfile.load 只补没设过的键）。
+    env_path = envfile.set_value("BOOKS_ROOT", path)
+    print("已记 BOOKS_ROOT=%s 到 %s" % (path, env_path))
     for label, mod, retry in (
         ("PDF 环境", pdfenv, "book-corpus venv --root %s" % path),
         ("docs 环境", docenv, "book-corpus venv --root %s" % path),

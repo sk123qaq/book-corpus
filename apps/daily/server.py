@@ -21,6 +21,14 @@ from pathlib import Path
 from urllib.parse import unquote
 
 HERE = Path(__file__).resolve().parent
+
+# 数据根先从仓库根 .env 的 BOOKS_ROOT 读；没装包时退回 shell 环境。
+if str(HERE.parent.parent / "src") not in sys.path:
+    sys.path.insert(0, str(HERE.parent.parent / "src"))
+try:
+    from bookcorpus import envfile
+except ImportError:
+    envfile = None
 WEB = HERE / "web"
 ALLOWED_HOST = re.compile(r"(?:127\.0\.0\.1|localhost)(?::\d{1,5})?", re.IGNORECASE)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -115,9 +123,13 @@ def load_feed(root: Path):
 
 
 def main(argv=None):
+    if envfile is not None:
+        envfile.load()
     parser = argparse.ArgumentParser(description="书库日课的只读本地服务")
     parser.add_argument("--port", type=int, default=8772)
-    parser.add_argument("--root", default=os.environ.get("BOOK_CORPUS_DATA") or "~/书库")
+    parser.add_argument(
+        "--root", default=os.environ.get("BOOK_CORPUS_DATA") or os.environ.get("BOOKS_ROOT") or "~/书库"
+    )
     args = parser.parse_args(argv)
 
     Handler.root = Path(args.root).expanduser().resolve()

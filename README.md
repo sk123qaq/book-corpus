@@ -450,7 +450,7 @@ MinerU 两种写法都认：`MINERU_API_KEY`（可以放 `.env`）或 `~/.config
 
 ## 路径与配置
 
-- `BOOKS_ROOT`：工作区根（有 `books.toml` 的那层），默认从当前目录向上找。
+- `BOOKS_ROOT`：工作区根（有 `books.toml` 的那层）。优先级是 `--root` > shell 里 export 的 `BOOKS_ROOT` > 仓库根 `.env` 里的 `BOOKS_ROOT` > 从当前目录向上找 `books.toml`。`book-corpus init <目录>` 建完工作区会把根写进仓库根 `.env` 的这一行，所以一个仓只服务一个实例时不必再设环境变量。
 - `BOOKS_SKILLS_DIR`：技能根，默认是仓库的 `.agents/skills/`。
 - `BOOKS_RG`：`rg` 可执行文件路径，默认从 PATH 找。
 - `PI_BIN`：`pi` 可执行文件路径，默认从 PATH 找。

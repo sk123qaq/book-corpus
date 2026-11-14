@@ -11,6 +11,9 @@
 
 ``.env`` 格式按常见约定：``KEY=value``、可写 ``export`` 前缀、值可用单双引号
 包起来并跨行。解析失败的行忽略，不让配置错误挡住启动。
+
+写侧只有一个入口 :func:`set_value`：``book-corpus init`` 用它把 ``BOOKS_ROOT``
+记进来，让之后的命令不必再带 ``--root``。写盘只改那一行，注释与顺序保留。
 """
 
 from __future__ import annotations
@@ -103,3 +106,68 @@ def load(explicit: str | Path | None = None, repo_root: str | Path | None = None
     for key, value in read(target).items():
         os.environ.setdefault(key, value)
     return target
+
+
+def writable_target(explicit: str | Path | None = None, repo_root: str | Path | None = None) -> Path:
+    """写侧的目标文件：与读同一套优先级，但允许文件还不存在。
+
+    1. 显式传入的路径
+    2. ``BOOK_CORPUS_ENV``：指了就用它，没有就建一个（测试靠这条隔离）
+    3. 已经存在的那份配置（cwd / 用户目录）
+    4. 仓库根 ``.env``：兜底，init 之后新建的就是它
+    """
+
+    if explicit:
+        return Path(explicit).expanduser()
+    override = (os.environ.get(ENV_OVERRIDE) or "").strip()
+    if override:
+        return Path(override).expanduser()
+    existing = path(repo_root=repo_root)
+    return existing if existing is not None else project_env_path(repo_root)
+
+
+def _line(key: str, value: str) -> str:
+    """一行 ``KEY=value``；有空白、引号或 ``#`` 时加双引号，与 :func:`parse` 对齐。"""
+
+    if not value:
+        return "%s=" % key
+    if any(ch.isspace() or ch in "\"'#" for ch in value):
+        return '%s="%s"' % (key, value.replace('"', '\\"'))
+    return "%s=%s" % (key, value)
+
+
+def _name_of(raw: str) -> str:
+    """这一行是哪个键；注释行与不是 ``KEY=value`` 的行返回空串。"""
+
+    body = raw.strip()
+    if body.startswith("export "):
+        body = body[7:].lstrip()
+    if "=" not in body or body.startswith("#"):
+        return ""
+    return body.split("=", 1)[0].strip()
+
+
+def set_value(key: str, value: str, target: str | Path | None = None, repo_root: str | Path | None = None) -> Path:
+    """把 ``key=value`` 写进配置文件，返回实际写入的路径。
+
+    已有该键就原地替换，没有就追加到末尾；其余行（注释、顺序、其它键）原样保留。
+    写盘走临时文件加 ``os.replace``，与仓库其余写文件的规矩一致。
+    """
+
+    dest = writable_target(target, repo_root)
+    lines = dest.read_text(encoding="utf-8-sig").splitlines() if dest.is_file() else []
+    new = _line(key, value)
+    out, done = [], False
+    for raw in lines:
+        if not done and _name_of(raw) == key:
+            out.append(new)
+            done = True
+            continue
+        out.append(raw)
+    if not done:
+        out.append(new)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".tmp")
+    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+    tmp.replace(dest)
+    return dest

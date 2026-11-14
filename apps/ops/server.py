@@ -45,6 +45,16 @@ def _package_scripts():
         return os.path.join(os.path.dirname(os.path.dirname(CODE_DIR)), "src", "bookcorpus", "scripts")
 
 
+def _envfile_module():
+    """仓库根 ``.env`` 的读入口；没装包时返回 None，退回 shell 环境。"""
+    try:
+        from bookcorpus import envfile
+
+        return envfile
+    except ImportError:
+        return None
+
+
 def lib_common_module():
     """scripts/ 下的单一来源常量（ACCEPT_EXTS / DOC_FORMATS）从这里取，别在服务里再抄一份。"""
     scripts = _package_scripts()
@@ -3853,10 +3863,13 @@ def read_table(root, rel, delim="\t"):
 
 
 def main(argv=None):
+    envmod = _envfile_module()
+    if envmod is not None:
+        envmod.load()  # 仓库根 .env 里的 BOOKS_ROOT；shell 里 export 的仍然优先
     ap = argparse.ArgumentParser(description="统一操作台服务（127.0.0.1:8770）")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8770, help="0 表示随机端口（测试用）")
-    ap.add_argument("--root", default=REAL_ROOT, help="数据根，测试指向临时库")
+    ap.add_argument("--root", default=os.environ.get("BOOKS_ROOT") or REAL_ROOT, help="数据根，测试指向临时库")
     ap.add_argument("--scripts", default=None, help="脚本目录，测试指向 stub")
     args = ap.parse_args(argv)
     _bind_batches(args.root)

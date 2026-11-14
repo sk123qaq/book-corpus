@@ -35,6 +35,7 @@ from launcher import (
 )
 from overview import WEB, build_overview, render_page
 
+from bookcorpus import envfile
 from bookcorpus.reading.library import Library
 
 ALLOWED_HOST = re.compile(r"(?:127\.0\.0\.1|localhost)(?::\d{1,5})?", re.I)
@@ -200,6 +201,7 @@ def parse_args(argv=None):
 
 
 def main(argv=None) -> int:
+    envfile.load()  # 仓库根 .env 里的 BOOKS_ROOT；shell 里 export 的仍然优先
     args = parse_args(argv)
     try:
         library = Library(args.root)
