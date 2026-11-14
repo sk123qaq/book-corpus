@@ -27,7 +27,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 ## 驱动约定
 
 - 每个服务由本轮自己起、自己按 PID 杀，不按进程名杀。
-- 页面用 `curl` 取 HTML 断言稳定标记，接口用 `curl` 取 JSON 断言字段；只有点击、键盘这类交互才用 headless Chrome + CDP 脚本。
+- 服务端渲染页（首页、日课、操作台）用 `curl` 取 HTML 断言稳定标记；接口一律 `curl` 取 JSON 断言字段。分层读章页与记录页是客户端渲染，`curl` 只证明模板/js 在，用户可见状态必须用 headless Chrome `--dump-dom` 取渲染后的 DOM，并先剥掉 `<script>` 源码（`--dump-dom` 也会带出模板字符串）；点击、键盘才用 CDP 脚本。具体命令见 [layered-reads.md](./layered-reads.md)。
 - CDP 脚本默认找 `google-chrome-stable`；本机有（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。缺了它脚本死在 launch，不是页面问题。
 - 命令逐字复制，不改引号、不改参数。
 - 证据写 `artifacts/verify/$RUN_ID/<feature>/`；清理只删实例与临时根，不删证据。
@@ -35,7 +35,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 ## 证明与跳过
 
-- 上次全绿：`2026-11-14` 一轮 `RUN_ID=20261114-mt2`，五个页面全过（首页/日课/分层读/找一段走 curl + HTML，操作台走 `shot_ops.py` CDP，`check_ops.py` 168 项全过），含一次真生成 `r-260618d0b1`（速览比例 0.2464 过门槛，`elapsed_ms 193976`，章 02 `path depth`、读本页 200）与一次读法切换过期/恢复实测。首页键盘仍记 `ui-unverified`；`check_session_ui.py` 因无 3 轮样本未跑，多轮 UI 不在这次「全绿」里。证据在 `artifacts/verify/20261114-mt2/`。下一轮跑完请就地更新这一行。
+- 上次全绿（按当时口径）：`2026-11-14` 一轮 `RUN_ID=20261114-mt2`，五个页面全过（首页/日课/分层读/找一段走 curl + HTML，操作台走 `shot_ops.py` CDP，`check_ops.py` 168 项全过），含一次真生成 `r-260618d0b1`（速览比例 0.2464 过门槛，`elapsed_ms 193976`，章 02 `path depth`、读本页 200）与一次读法切换过期/恢复实测。首页键盘仍记 `ui-unverified`；`check_session_ui.py` 因无 3 轮样本未跑，多轮 UI 不在这次「全绿」里。证据在 `artifacts/verify/20261114-mt2/`。2026-11-14 `20261114-lr-preflight` 复核发现章页实为客户端渲染，改用 `--dump-dom` 重验，并记下 422 内联卡缺失、主按钮断连接、记录页 blocked 口径与英文类别等产品缺口（见下节）。下一轮跑完请就地更新这一行。
 - 2026-11-13 的 `20261113-mt` 已随 `artifacts/` 轮转清掉；旧轮次证据不保证还在，别把历史 RUN_ID 当可复核链接。
 
 - 一次证明要同时留下动作与结果状态，不能只有最终画面。
@@ -52,7 +52,10 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 - 演示页的会话库在仓库内 `apps/demo/缓存/sessions/`，不随 `BOOKS_ROOT` 隔离；新实例照样列出操作员的会话（2026-11-14 为 11 条，随使用变化）。见 [find-a-passage.md](./find-a-passage.md) 的 Gotchas。
 - `/classic` 会建会话，但它的 `/api/answer` 不带 `session_id`，服务端落到 `answer_once`，所以该会话的 turn 永远停在 `answer_state=pending`、`answer=null`（2026-11-14 实测 `82abddf275fc`，证据 `artifacts/verify/20261114-mt2/find-a-passage/session-pending-82abddf275fc.json`）。这是产品缺口，不是验证脚本问题；别把它当页面坏或会话恢复失败。
 - `tests/manual/demo/shot.py` 只等 25 秒（`tests/manual/demo/shot.py:233`）。单本回答今天实测 225 秒，脚本会先报 `answer ready=False cites=0`，服务端仍在跑；慢回答要另轮询 `/api/session`，不能把 `ready=False` 当失败。
-- 分层读的生成必然打模型，`--no-annotate` 只关标注；离线只能验到任务被受理（202）。**202 之后的状态不再是 `failed`**：本轮真生成 `r-260618d0b1`（章 02，只勾 `skim`）实测 `state done`、`progress 100`、`elapsed_ms 193976`、`layers_ready [model, skim]`、`state.json status=ready`、`path depth`、读本页 `/reader/<uid>/<n>/depth` 200（2026-11-14，证据 `artifacts/verify/20261114-mt2/layered-reads/`）。盘上 `state.json` 的 `layer_mode` 记下每层生成时的读法；把书级读法改成别的值后，同一章 `path=none`、理由「读法已改，深度页过期」、深度页 404，改回原值即恢复。没有模型 key 时才会失败，那时 `state failed` 带 `error_kind: transport_closed` 这类分类，仍不是裸英文串。
+- 分层读 422 阻断只弹红 toast，`#depth-jobs` 里没有「预检未通过 / 已阻断」内联卡（2026-11-14 实测，`apps/reading/web/chapter.html:466` 先取 `mount`，catch 的 `refreshDepthPanel()` 在 `:497` 重建 `#depth-jobs`，写入已脱离文档的节点）。预检本身生效：`POST /api/depth` 返回 422、`/api/jobs` 为空、按钮禁用；这是产品缺口，不是验证脚本漏了。
+- 分层读主按钮 `#generate`（`POST /api/jobs`）在超限章上不返回 422：有书级读法时它仍可点，`_post_job` 没有 `SourceTooLarge` 分支（`apps/reading/server.py:339-443`），连接被关闭，客户端得到 `curl: (52) Empty reply from server`，`/api/jobs` 仍空；只有逐层 `POST /api/depth` 返回结构化 422。要验阻断用逐层按钮或 `/api/depth`。
+- 记录页 `blocked` 只归「全部」，状态徽标「已阻断」但副标题前缀「失败 · 」，统计也不计它（`apps/reading/web/records.html:69-74`、`:124-130`、`:407-412`）；详情仍出「重跑所选层 / 重建结构模型」（`:216-228`），点了回到 422；`source_too_large` 不在 `RD.errorKindName`（`app.js:167-181`），类别显示英文原名。同上，记产品缺口。
+- 分层读的生成必然打模型，`--no-annotate` 只关标注；离线只能验到任务被受理（202）。202 之后的状态不只有 `done`/`failed`：本轮真生成 `r-260618d0b1`（章 02，只勾 `skim`）实测 `state done`、`progress 100`、`elapsed_ms 193976`、`layers_ready [model, skim]`、`state.json status=ready`、`path depth`、读本页 `/reader/<uid>/<n>/depth` 200（2026-11-14，证据 `artifacts/verify/20261114-mt2/layered-reads/`）。源文件在提交后变大会记 `blocked`；逐层 `POST /api/depth` 提交时预检超限直接 422，不建任务。盘上 `state.json` 的 `layer_mode` 记下每层生成时的读法；把书级读法改成别的值后，同一章 `path=none`、理由「读法已改，深度页过期」、深度页 404，改回原值即恢复。没有模型 key 时才会失败，那时 `state failed` 带 `error_kind: transport_closed` 这类分类，仍不是裸英文串。
 
 ## 功能入口契约
 
@@ -67,7 +70,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 - [书库首页](./library-home.md)：8773 的三张入口卡、最新一期、拉起与 503。
 - [找一段](./find-a-passage.md)：8765 的多轮会话、候选书、思考等级、五阶段经典页。
-- [分层读](./layered-reads.md)：8771 的书架、书目、书级默认读法（只写账）、读法切换导致的深度层过期、三档生成、五层深度与读本页。
+- [分层读](./layered-reads.md)：8771 的书架、书目、书级默认读法（只写账）、读法切换导致的深度层过期、三档生成、五层深度与读本页，以及章页容量预检与超限 422 阻断。
 - [往期日课](./daily-lessons.md)：8772 的日课列表、单期、坏文件跳过。
 - [管理](./manage-library.md)：8770 的八个页签、导入、拆章、维护、账表、删书、日志。
 
