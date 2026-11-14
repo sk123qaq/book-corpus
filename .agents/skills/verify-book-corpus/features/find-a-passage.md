@@ -13,7 +13,8 @@
 - `ask-trace` 依据与落点：回答里的书卡、章节锚点、命中段原文。
 - `ask-classic` `/classic` 五阶段：理解问题 → 词法循环 → 打分与选章 → 书卡 → 结果。
 - `ask-export` 导出单个会话。
-- `ask-runlog` 运行记录：每次提交在磁盘写 `run.jsonl`（`answer_once`/`turn`/`service`），CLI `python3 apps/demo/runlog.py {list,timeline,bundle,replay,prune,doctor}` 可查；没有页面。
+- `ask-retry` 同轮作答去重：键是 `(session_id, n, run_token)`，最多等 300 秒，结果再留 60 秒；`fresh:true` 重开，旧请求 409「这一轮已重跑，本次回答作废」，超时 504「回答仍在生成，请稍后刷新」。
+- `ask-runlog` 运行记录：每次提交在磁盘写 `run.jsonl`（`answer_once`/`turn`/`service`），章读取、导出、删会话也写 `service.jsonl`，导出 zip 落 `exports/session-*.zip`；CLI `python3 apps/demo/runlog.py {list,timeline,bundle,replay,prune,doctor}` 可查；没有页面。
 - `ask-degrade` 没有可用的模型时降级：拆词阶段记「模型返回不可用（模型调用失败（rc=N）：…）」，经典页标「降级」并按概念表包含匹配。
 
 ## How to get to it (user POV)
@@ -57,6 +58,7 @@ Preconditions:
 - `apps/demo/runlog.py` 的默认根是仓库内 `apps/demo/运行记录/`，一次真作答会写进操作员共享的记录；验完用 `BOOKS_RUNLOG_ROOT` 起的实例随 `$ROOT` 一起删，别在默认目录上跑 `prune --apply`。
 - `tests/manual/demo/check_session_ui.py` 的 `SESSION` / `SESSION_MULTI` 常量每次运行都会被覆盖，不是「优先用环境变量」；没有匹配会话时报的是「找不到会话」，不是页面坏了。2026-11-14 本机 11 条会话仍没有 3 轮样本，脚本止于 `没有找到可用的 3 轮会话；先用 check_session.py 生成一轮`；这是样本缺失，离线合同仍应单跑 `tests/test_demo_answer_contract.py`。
 - 示例问句只在 `/classic`；在 `/` 上 `grep 'class="sample"'` 得 0，是正常的，不是模板没渲染。
-- 没有模型 key 时，演示页**不会**报「配置错误」：拆词阶段记「模型返回不可用（rc=N）」，经典页标「降级」并改用概念表包含匹配。别拿「配置错误」这四个字做断言。（配置预检只在分层读与 CLI 上做，演示页没有。）
+- 没有模型 key 时，演示页**不会**报「配置错误」：拆词阶段记「模型返回不可用（模型调用失败（rc=N）：…）」，经典页标「降级」并改用概念表包含匹配。别拿「配置错误」这四个字做断言。（配置预检只在分层读与 CLI 上做，演示页没有。）
+- 旧会话可能出现 `incomplete`/`run_error`，这两个值只从旧数据派生；新写入只有 `pending/running/ready/error/interrupted`，中断文案是「服务重启，上次回答已中断」（`apps/demo/session.py:44-46`）。
 - 作答是长请求：单本今天 225 秒、多本 65-87 秒。断言要等结果卡片，不要固定 sleep；超过 300 秒会拿到 504，不是空回答。
 - `/classic` 的 `?q=&instant=1&top=1` 是自动跑一条问题的入口，链接一打开就花一次模型调用。
