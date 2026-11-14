@@ -83,10 +83,12 @@ RD.ready(async () => {
   RD.night();
   const shelfMount = RD.mount('shelf');
   try {
-    const [shelf, catalog] = await Promise.all([RD.api('/api/shelf'), RD.api('/api/catalog')]);
+    // 首屏只等书架本身：/api/catalog 会把同样的数据再算一遍，翻页时另有页面用。
+    const shelf = await RD.api('/api/shelf');
     const books = shelf.books || [];
     const stats = shelf.stats || {};
-    RD.mount('eyebrow').textContent = '私人书库 · ' + RD.fmt(catalog.total) + ' 本';
+    const totals = { total: shelf.total || books.length, readable_count: books.length };
+    RD.mount('eyebrow').textContent = '私人书库 · ' + RD.fmt(totals.total) + ' 本';
     RD.mount('hero-meta').innerHTML =
       '<span><b>' + RD.fmt(stats.readable) + '</b> 本可读</span>' +
       '<span><b>' + RD.fmt(stats.chapters) + '</b> 章原文</span>' +
@@ -95,18 +97,33 @@ RD.ready(async () => {
 
     renderJobStrip(shelf.jobs || []);
     renderShelf(books, shelf.recent || []);
-    renderDirectory(books);
-    renderCatalog(books, catalog, 'all');
 
     RD.mount('shelf-foot').innerHTML =
       '<span>' + RD.fmt(books.length) + ' 本有正文 · 共 ' + RD.fmt(stats.chapters) + ' 章 · 约 ' +
-      RD.wan(stats.chars) + ' 万字</span><a href="/catalog">全部书目 ' + RD.fmt(catalog.total) + ' 本 →</a>';
+      RD.wan(stats.chars) + ' 万字</span><a href="/catalog">全部书目 ' + RD.fmt(totals.total) + ' 本 →</a>';
+
+    // 目录与书目表都在首屏之外：目录首次展开时再建，书目表等第一批绘制完成。
+    let directoryDrawn = false;
+    const drawDirectory = () => {
+      if (directoryDrawn) return;
+      directoryDrawn = true;
+      renderDirectory(books);
+    };
+    let tableDrawn = false;
+    const drawTable = () => {
+      if (tableDrawn) return;
+      tableDrawn = true;
+      renderCatalog(books, totals, 'all');
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(drawTable, { timeout: 800 });
+    else setTimeout(drawTable, 0);
 
     document.querySelectorAll('.view-toggle button').forEach((b, i) => b.addEventListener('click', () => {
       document.querySelectorAll('.view-toggle button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
       b.setAttribute('aria-pressed', 'true');
       RD.mount('shelf-wrap').hidden = i === 1;
       RD.mount('directory').hidden = i === 0;
+      if (i === 1) drawDirectory();
     }));
 
     const subjects = [...new Set(books.flatMap((b) => b.subjects || []))];
@@ -116,7 +133,8 @@ RD.ready(async () => {
       if (!btn) return;
       document.querySelectorAll('#filters button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
       btn.setAttribute('aria-pressed', 'true');
-      renderCatalog(books, catalog, btn.dataset.filter || 'all');
+      tableDrawn = true;
+      renderCatalog(books, totals, btn.dataset.filter || 'all');
     });
   } catch (err) {
     RD.fail(shelfMount, err.message);
@@ -188,11 +206,11 @@ function renderFilters(items) {
   ).join('');
 }
 
-function renderCatalog(books, catalog, filter) {
+function renderCatalog(books, totals, filter) {
   let rows = books.slice();
   if (filter === '已出片') rows = rows.filter((b) => b.packs > 0);
   else if (filter && filter !== 'all' && filter !== '有正文') rows = rows.filter((b) => (b.subjects || []).includes(filter));
-  RD.mount('cat-count').textContent = '显示 ' + rows.length + ' / ' + RD.fmt(catalog.total);
+  RD.mount('cat-count').textContent = '显示 ' + rows.length + ' / ' + RD.fmt(totals.total);
   RD.mount('cat-body').innerHTML = rows.length ? rows.map((book) =>
     '<tr><td><span class="dot" style="background:' + RD.esc(book.color || '#1E3A36') + '"></span>' +
     '<a class="title title-link" href="' + RD.bookHref(book.uid) + '">' + RD.esc(book.title_short || book.title) +
@@ -202,8 +220,8 @@ function renderCatalog(books, catalog, filter) {
     '<td class="num hide-m">' + RD.fmt(book.chapters) + '</td>' +
     '<td><span class="badge read">可读</span>' + (book.packs ? ' <span class="badge pack">已出片 ' + RD.fmt(book.packs) + '</span>' : '') + '</td></tr>'
   ).join('') : '<tr><td colspan="5" class="empty">这个筛选下没有书。</td></tr>';
-  RD.mount('cat-note').textContent = RD.fmt(catalog.readable_count) + ' 本有正文，可进入选章与生成；' +
-    RD.fmt(catalog.total) + ' 本是书目层。导入正文后才会出现在书墙上。';
+  RD.mount('cat-note').textContent = RD.fmt(totals.readable_count) + ' 本有正文，可进入选章与生成；' +
+    RD.fmt(totals.total) + ' 本是书目层。导入正文后才会出现在书墙上。';
 }
 </script>
 </body>

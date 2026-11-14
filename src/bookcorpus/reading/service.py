@@ -518,6 +518,8 @@ class ReadingService:
         self.queue = JobQueue(self.library.layout.work, self._run_job, max_workers=4)
         self._submit_lock = threading.Lock()
         self._packs = None
+        # 章表索引在这里核对：冷建一次十几秒，之后每次启动只 stat 一遍，首个请求不再等。
+        self.library.prepare_index()
 
     # ---- 只读投影 -----------------------------------------------------
     def _pack_count(self, uid=None):
@@ -650,6 +652,7 @@ class ReadingService:
                 "chars": chars,
                 "packs": self._pack_count(),
             },
+            "total": self.library.total(),
             "books": books,
             "recent": recent,
             "jobs": self.queue.list(8),

@@ -63,8 +63,9 @@ def test_shelf_book_and_chapter_are_real_data(reading_root):
 
 
 def test_draft_job_runs_through_local_queue_and_writes_only_work(reading_root):
-    before = _outside_work(reading_root)
     service = ReadingService(str(reading_root))
+    # 服务构造会建章表索引（build/ 下的派生缓存）；快照从构造之后取，任务本身只许写 工作区。
+    before = _outside_work(reading_root)
     job = service.submit("B0001", 1, ["standard", "deep"])
     done = _wait(service, job["id"])
     assert done["state"] == "done"

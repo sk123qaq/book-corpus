@@ -30,46 +30,65 @@ def han_count(text):
 
 
 def non_space_count(text):
-    return len(re.sub(r"\s", "", text or ""))
+    """非空白字符数。``str.split()`` 的空白集与 str 的 ``\\s`` 完全一致，比 re.sub 快一倍。"""
+    return len("".join((text or "").split()))
+
+
+def _line_at(text, start):
+    """返回 (该行, 下一个行首或 -1)。不 split 全文。"""
+    end = text.find("\n", start)
+    if end < 0:
+        return text[start:], -1
+    return text[start:end], end + 1
 
 
 def strip_front_matter(raw):
     """返回 (meta, body)。首行 ``---`` 起，最多 60 行内闭合。"""
-    text = (raw or "").replace("\r\n", "\n").replace("\r", "\n")
-    lines = text.split("\n")
+    text = raw or ""
+    if "\r" in text:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+    first, pos = _line_at(text, 0)
+    if first.strip() != "---" or pos < 0:
+        return {}, text
     meta = {}
-    if lines and lines[0].strip() == "---":
-        end = None
-        for i in range(1, min(len(lines), FRONT_MATTER_LIMIT)):
-            if lines[i].strip() == "---":
-                end = i
-                break
-        if end is not None:
-            for line in lines[1:end]:
-                if ":" not in line:
+    meta_start = pos
+    for _ in range(1, FRONT_MATTER_LIMIT):
+        line, next_pos = _line_at(text, pos)
+        if line.strip() == "---":
+            block = text[meta_start:pos]
+            if block.endswith("\n"):
+                block = block[:-1]
+            for item in block.split("\n") if block else ():
+                if ":" not in item:
                     continue
-                key, value = line.split(":", 1)
+                key, value = item.split(":", 1)
                 key = key.strip()
                 value = value.strip()
                 if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                     value = value[1:-1]
                 if key:
                     meta[key] = value
-            lines = lines[end + 1 :]
-    return meta, "\n".join(lines)
+            return meta, text[next_pos:] if next_pos >= 0 else ""
+        if next_pos < 0:
+            break
+        pos = next_pos
+    return {}, text
 
 
 def _take_h1(body):
     """摘掉第一个 H1，返回 (h1_text, 其余正文)。"""
-    lines = body.split("\n")
-    for i, line in enumerate(lines):
+    pos = 0
+    while True:
+        line, next_pos = _line_at(body, pos)
         stripped = line.strip().lstrip("\ufeff")
         if not stripped:
+            if next_pos < 0:
+                return "", body
+            pos = next_pos
             continue
         if stripped.startswith("# "):
-            return stripped[2:].strip(), "\n".join(lines[i + 1 :])
-        break
-    return "", body
+            return stripped[2:].strip(), body[next_pos:] if next_pos >= 0 else ""
+        return "", body
 
 
 def _clean_inline(text):
@@ -406,3 +425,21 @@ def chapter_title(raw, stem=""):
     meta, body = strip_front_matter(raw)
     h1, _ = _take_h1(body)
     return (meta.get("title") or h1 or stem or "").strip()
+
+
+def lean_meta(raw):
+    """章表只需要的三个数：标题、正文非空白字数、含标题的非空白字数。
+
+    与 ``Library._read_meta`` 逐字段一致，只为避免同一份 raw 被 strip 两次。
+    """
+    text = raw or ""
+    meta, body = strip_front_matter(text)
+    h1, rest = _take_h1(body)
+    chars = non_space_count(rest)
+    # body = 标题行 + rest（_take_h1 只切后缀），只补算被摘掉的标题行，不再扫一遍全文。
+    prefix = body[: len(body) - len(rest)]
+    return {
+        "title": (meta.get("title") or h1 or "").strip(),
+        "chars": chars,
+        "full_chars": chars + non_space_count(prefix),
+    }

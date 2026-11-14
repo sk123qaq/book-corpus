@@ -29,7 +29,7 @@
 ## 现状
 
 <!-- numbers:start -->
-As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf、5 txt、2 djvu、1 other；存档 125：图册 83、非中英文 42，政策不转不删）；1,009 条奖项记录，视图 2,140 条软链（奖项 1,009、主题 1,131）；坑账 7 类。
+As of 2026-11-14：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf、5 txt、3 other；存档 125：图册 83、非中英文 42，政策不转不删）；1,008 条奖项记录，视图 2,139 条软链（奖项 1,008、主题 1,131）；坑账 7 类。
 <!-- numbers:end -->
 
 **存档政策（2026-11-03 定）**：非中英文书不处理、不分章、不 OCR，只存不删；图册/艺术设定集只存不删不处理。判定来源：非中英文 = `工作区/批次/pdf-ocr-2026-10-19/defer/lang.tsv`（lang=ja），图册 = 普查与 ops 批次的 `skip_list.tsv`（verdict 不转-记图册）。操作台显示为「存档·非中英文」「存档·图册」（接口值仍是 `ja`、`gallery`），顶栏「待转」已扣除存档（现为 8：5 txt + 2 djvu + 1 csv）。存量已全部归入存档：10-19 普查的 73 本图册、10-26 新入账的 10 本图册与艺术设定集、42 本日文原版。5 txt 与 2 djvu 是中文书，仍属可转，只是不在当前批次范围。数字随转换变化，跑 `book-corpus numbers --write` 重写上面的块；`book-corpus catalog` 末行打印「未匹配 N 条」。
@@ -69,60 +69,12 @@ As of 2026-11-03：1,954 本书，1,821 本有 md，133 本待拆章（125 pdf�
 
 ## 脚本
 
-| 脚本 | 用途 |
-|---|---|
-| `lib_common.py` | 共享工具。路径常量、书名与作者清洗、`book_relpath`、md 目录计数。`ROOT` 由脚本位置推导，`BOOKS_ROOT` 可覆盖；`skill_dir()` 先找仓库 `.agents/skills/`，再找 `~/.agents/skills/` |
-| `build_library.py` | 重建 `build/library.db`（读 `books/**/book.json`）。`--emit-json` 同时同步每本书的 `book.json` |
-| `ingest.py` | 收件箱入库：`scan` 出计划（sha256 去重、书名匹配、add/replace/conflict，add 调 pi 的 deepseek-v4.1-flash 预填 subjects 与置信度），`apply` 落文件、写 `book.json` 与人账行、记 journal，再重建 DB。收件箱只收 azw/azw3/docx/epub/md/mobi/pdf/pptx/txt/xls/xlsx 十一种，其余跳过；`apply --result` 可以额外写一份机器可读的 applied.json（操作台接转 md 用）。`--root` 可指到临时目录做测试，`--no-classify` 跳过分类 |
-| `lq.py` | 只读查询 DB。`lq.py [-H] "SELECT ..."`，字段用制表符分隔 |
-| `gen_book_catalog.py` | 出 `build/书目总表.xlsx` 与 `.csv`，并核对每条记录能落到磁盘。有未匹配时只报错，不覆盖旧目录 |
-| `build_index.py` | 重建每本书的 `html/index.html` 与 `build/阅读版索引.html` |
-| `verify_phase.py` | 四箱门槛检查，对任何新库成立、没有「跳过」：奖项 resolve、顶层结构与 book.json（含源文件在盘）、从零重建一致、检索层（`--box 4`）。迁移基线、奖项批次、旧路径对照表都不在门槛里 |
-| `defpass.py` | 段落级概念检索。`defpass.py <md目录> -g 词1,词2 -g 词3 -n 5`，或 `-c 概念键` 走概念表；`-w` 调段落宽度 |
-| `layout.py` | v2 树形的唯一定义：`books/`、`collections/`、`tables/`、`build/`。别的脚本不许再拼旧名字 |
-| `migrate.py` | v1 → v2 迁移：`book-corpus migrate`，默认只打印，`--mode move\|link\|copy`，写对照表 |
-| `remap.py` | 按对照表改写索引里的 `expand.path` 并重建 `expand_fts`：`book-corpus remap` |
-| `classify_books.py` | 模型分类（`opencode-go/deepseek-v4.1-flash`，默认；`--backend typesafe` 保留旧路），结果落 `分类缓存.jsonl`，`--report` 只看统计。`--merge` 以人账为底合并：已有行一个字段都不动，只追加 `--add-new` 里人账没有的 uid；清单里未入账的 uid 默认跳过 |
-| `scan_library.py` | L1 扫描旧布局。旧目录已不在，只作留档；扫到 0 个源文件时报错退出，不覆盖 `tables/` 任何账 |
-| `split_md_batch.py` | 拆章批次驱动。读 DB 出待拆清单、转 EPUB、拆章、verify、audit、原子进库。verify 或 audit 不过时自动叫 pi agent 修（每本 2 次、默认不设整批上限、每次 600 秒），修完重跑检查再决定是否落地。`--force` 重拆，`--recheck` 只复核暂存区已有产物（不重拆，过了就进库），`--report` 只看状态；`worklist.tsv` 存在时即批次范围 |
-| `redo_compare.py` | 重拆验收：旧 md 与暂存产物的逐页锚点覆盖率差。下降的书不落地 |
-| `install_collection.py` | 把 split_collection 的逐册产物装进各书 md/，旧版改名留档，写 manifest |
-| `collection_coverage.py` | 合集重拆的覆盖率验收（源书逐页锚点在给定旧/新 md 目录里的命中数） |
-| `md_review_report.py` | 只读取证：正文字数、图片路径字数、跨文件重复片段、自链、spine 未收录页 |
-| `corpus_stats.py` | 现测书库规模与结构：md 数、章节数、体积、未收录项、长书与系列分布。只读 |
-| `audit_old_md.py` | 旧 md 文本量审计。逐页锚点比对源书，报「缺页」并按 README 未收录与卷首卷尾分类。只读 |
-| `md_link_health.py` | 全库链接健康：章节文件自链数、README 目录段是否全部成链接、目录首行缩进。只读。装了 commonmark 按渲染结果判，没装按 CommonMark 链接目标规则判 |
-| `backfill_readme.py` | 给缺 README 的 md 目录补目录页，格式同拼装器。默认只打印，`--apply` 写盘。只写 README.md，已有 README 的目录不碰 |
-| `pdf_lang_probe.py` | 探页判语种，账落 `工作区/批次/pdf-ocr-2026-10-19/defer/lang.tsv`。`--force` 重探不覆盖已判定语种；额度用尽即停止派发 |
-| `pdf_census.py` | PDF 普查：页数、字体、逐页文本量、图片清单与分辨率。出 `census.jsonl`。`--uid`/`--limit` 子集跑必须给 `--out` |
-| `pdf_scan_probe.py` | 扫描件探针：抽页渲染 70dpi 算 ink 与文字行带数，给分诊用 |
-| `pdf_text_probe.py` | 文本层探针：书签、逐页文本分布、乱码率、字号种类 |
-| `pdf_triage.py` / `pdf_apply_review.py` | 按指标分诊并并人人眼复核结论，出 `triage.csv`/`triage_final.csv` 与 `skip_list.tsv` |
-| `pdf_text_to_md.py` | 文本层 PDF → crate（自带可用目录的按目录切章，其余单文件），`--structure auto\|single\|chapters` |
-| `pdf_audit_volume.py` | 文本层路线的 PDF 侧审计：字数比 + 逐页锚点覆盖率 |
-| `pdf_ocr_to_md.py` | 逐页 md → crate 的拼装器（`--structure single\|chapters`，默认 single）。README/manifest 生成器被 `pdf_text_to_md.py` 与 `docs_to_md.py` 复用 |
-| `docs_to_md.py` | doc 类来源 → 整本 md（不分章）：`plan` 从 `v_pending_md` 与 `applied.json` 出清单，`convert` 逐本落地 README + 单 md + manifest（txt 补 H1、md 原样复制、docx/xlsx/xls/pptx 走 `工作区/.venv-docs` 的 markitdown），写到临时目录、备份旧 md 后原子 rename；单本失败只记 `report.json`，不阻断整批 |
-| `paddleocr_pilot.py` | PaddleOCR-VL 单段流水线：切片、提交、轮询、下载、`--job` 续跑。token 在 `~/.config/PaddleOCR/api_key` |
-| `pdf_md_batch.py` | PDF 批次驱动（`--route ocr\|text`）：切片、提交/续跑、合并、拼装、体检、原子落地、logs、report。失败分 `quota/queue-full/transport/fatal/other` 五类。Paddle 读出 0 字而纸面有字迹的页自动交 MinerU 补投一次，读不出就按跳过受理（账 `skipped-pages.tsv`）。MinerU 没跑（CLI 缺/额度封顶/切片超限）不算跳过受理，可疑页留人工复核 |
-| `eval_retrieval.py` | 四档检索基线：A `grep -rlF`、B `rg -l -F`、C `defpass --concept`、D 近义词组 grep。出 `eval-baseline.tsv` 与 `eval-summary.tsv`（recall@10/@20、MRR、无原词进前 20） |
-| `lib_fts_cjk.py` | CJK bigram 索引与查询的同一份切分，`build_para_index.py` 与 `qsearch.py` 共用 |
-| `build_para_index.py` | 建 `build/检索/index.db`：段落倒排（FTS5 bigram）+ `book_concept` 概念剖面。只读 `books/`，`--rebuild` 全量且顺带重算概念剖面；`--concepts` 只补剖面 |
-| `concept_expand.py` | 概念表展开成同义词组与排除正则，`--audit` 报零命中的别名 |
-| `concept_route.py` | 问句路由到概念表 3 个键，缓存 `build/检索/route_cache/`（键含概念表内容指纹）。`qsearch --route` 与评测 L/M 档依赖它 |
-| `query_expand.py` | 查询侧扩展：一次模型调用扩 4 条短语再融合，缓存 `build/检索/expand_queries/`，`--phrases-only` 只打短语 |
-| `book_score.py` | 书级打分与八种方案，默认 `best_support`；`book_score.py "词" -n 10 --explain` |
-| `book_query.py` | 书级查询默认入口：B2.5 两段词 + 5 轮词法循环；触发时默认弹 5-8 张书卡，`--no-cards` 关；`--expand-on-demand` 才跑 B4 |
-| `book_readme.py` | README 目录解析、章标题/卷名/首末章、选章；B3 用 |
-| `book_expand.py` | 按需扩展 L0-L4；默认档 3 轮、60 秒预算；默认关闭 |
-| `book_cards.py` | B5 书卡：触发、5-8 张卡、选书/排除类型/换一批、反馈；`--gate`/`--perf` |
-| `qsearch.py` | 词法检索：段落倒排 + 组覆盖度重排，`--concept` 走概念表，`--book` 出书级聚合（`--pool low\|medium\|all` 取数 400/2000/不限，`--book-score mix\|sum` 书级打分） |
-| `qsearch_plan.py` | 按检索计划跑：多组词 + 概念/宽词，章级 RRF；`broad` 只在计划显式给出时展开，默认不启用 |
-| `book_rank_bench.py` / `pool_bench.py` / `book_score_bench.py` | 书级排序的三个对比台：打分方案、取数档位、正解名次。只读 |
-| `build_expand.py` | 文档扩展（`--kind prefix\|queries`）：主题前缀或伪查询写进 `index.db` 的 `expand` 表与 `build/检索/expand/<uid>.md`。`--provider commandcode\|mimo\|opencode` 默认 commandcode，mimo 有内容风控没进主流程。`--rebuild-md` 按库重写账文件。`--only-file` 按清单只扩指定章；`--reindex-fts` 重建 expand_fts；`--prune-stub` 备份并剪空正文章行。空正文章（图片页/标题页）跳过不生成，质量账见 qa-检索批次的《质量审计-2026-10-21》 |
-| `sem_index.py` | 段落向量（`bge-m3`）。**待建，向量层当前不做** |
-| `build_views.py` | 重建 `build/views/主题/<概念>/` 与 `奖项/<奖项>/` 的相对软链与清单，排序与 `qsearch --book` 一致 |
-| `eval_report.py` | 把 `eval-*.tsv` 汇总成 README §2.2 的两张表 |
-| `check_p1.py` | P1 题集验收：2 字词、原词类不低于裸 grep、查询边界回归。要 gold.tsv 与同目录的 eval-baseline/eval-index 读数，缺了退出码 2（没跑） |
+脚本清单与一行说明只有一处：`book-corpus list`（读每个脚本的 docstring）。机器可读快照在
+`docs/reference/facts.md`，由 `book-corpus docs write` 生成；别在这里手抄，抄了就会过期。
+
+高频入口：`ingest`（收件箱）、`library`（重建书目库）、`catalog`、`verify`、`numbers`、`daily`、
+`search` / `query`。完整参数用 `book-corpus <脚本> --help`；批次规则与判据见 `docs/检索/`、
+`docs/briefs/` 与各批次账。
 
 路径与技能解析：`BOOKS_ROOT` 换数据根，`BOOKS_SKILLS_DIR` 换技能根，`BOOKS_RG` 指定 `rg`，`PI_BIN` 指定 `pi`。默认值都由脚本位置推导，不写死绝对路径。
 

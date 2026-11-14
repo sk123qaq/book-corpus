@@ -5,16 +5,14 @@ import hashlib
 import json
 import os
 import re
+import threading
 import unicodedata
-from functools import lru_cache
 
 from ..scripts.layout import Layout, find_root
-from .mdparse import _take_h1, chapter_title, non_space_count, parse_markdown, strip_front_matter
+from .chapters import merge_title_pages
+from .mdparse import parse_markdown
+from .shelf_index import ShelfIndex
 
-CHAPTER_RE = re.compile(r"^(\d+)_(.*)\.md$")
-TITLE_PAGE_MAX_CHARS = 120
-BODY_MIN_CHARS = 500
-BODY_STEM_PREFIX = "前置页"
 AUTHOR_NOISE_RE = re.compile(r"(?:z-library(?:\.sk)?|1lib\.sk|z-lib\.sk)", re.I)
 CLOTHES = ("#1E3A36", "#2C4056", "#6B2B2B", "#A87A3E", "#4A5839", "#3F4E5A", "#5A3E2B", "#2F4F4F")
 # 叠加层默认关闭：Work/book-corpus-data 暂不作为本项目的数据源。
@@ -42,23 +40,6 @@ def _cloth(uid):
     return CLOTHES[sum(ord(ch) for ch in uid) % len(CLOTHES)]
 
 
-@lru_cache(maxsize=2048)
-def _read_meta(path, mtime, size):
-    with open(path, encoding="utf-8") as fh:
-        raw = fh.read()
-    meta, body = strip_front_matter(raw)
-    title = chapter_title(raw)
-    _, rest = _take_h1(body)
-    body_no_space = non_space_count(rest)
-    full_chars = non_space_count(body)
-    return {
-        "title": title,
-        "chars": body_no_space,
-        "full_chars": full_chars,
-        "front_title": meta.get("title", ""),
-    }
-
-
 class Library:
     """``root`` 是实例根（含 books.toml）。所有读路径都由 Layout 推出。"""
 
@@ -72,49 +53,70 @@ class Library:
             overlay_root = DEFAULT_OVERLAY
         self.overlay_root = overlay_root
         self._books = None
+        self._books_lock = threading.Lock()
+        self._index = None
+        self._index_lock = threading.Lock()
         self._chapters = {}
         self._overlay = None
 
     # ---- 书目 ---------------------------------------------------------
+    def prepare_index(self):
+        """按盘上签名核对章表索引（冷建或增量）。服务启动时调一次，首个请求就不必等。"""
+        return self._shelf_index().ensure()
+
+    def _shelf_index(self):
+        """章表索引：第一次用时建库或核对签名（单飞）。"""
+        if self._index is None:
+            with self._index_lock:
+                if self._index is None:
+                    index = ShelfIndex(self.layout)
+                    index.ensure()
+                    self._index = index
+        return self._index
+
     def _load_books(self):
         if self._books is not None:
             return self._books
-        books = []
-        for path in sorted(glob.glob(os.path.join(self.layout.books, "*", "book.json"))):
-            uid = os.path.basename(os.path.dirname(path))
-            if uid.startswith("_"):
-                continue
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    data = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                continue
-            chapters = self.chapters(uid)
-            if not chapters:
-                continue
-            total_chars = sum(item.get("full_chars", item["chars"]) for item in chapters)
-            books.append(
-                {
-                    "uid": uid,
-                    "title": data.get("title") or uid,
-                    "title_short": _short_title(data.get("title") or uid),
-                    "author": _clean_author(data.get("author")),
-                    "author_display": _clean_author(data.get("author")) or "作者待校",
-                    "subjects": list(data.get("subjects") or []),
-                    "subject": (data.get("subjects") or ["未分类"])[0],
-                    "retention": data.get("retention", ""),
-                    "chapters": len(chapters),
-                    "chapter_count": len(chapters),
-                    "chars": total_chars,
-                    "packs": 0,
-                    "readable": True,
-                    "color": _cloth(uid),
-                    "cloth": _cloth(uid),
-                    "dir": self.layout.book(uid),
-                }
-            )
-        self._books = books
-        return books
+        with self._books_lock:
+            if self._books is not None:
+                return self._books
+            stats = self._shelf_index().book_stats()
+            books = []
+            for path in sorted(glob.glob(os.path.join(self.layout.books, "*", "book.json"))):
+                uid = os.path.basename(os.path.dirname(path))
+                if uid.startswith("_"):
+                    continue
+                info = stats.get(uid)
+                if not info or not info["chapters"]:
+                    continue
+                try:
+                    with open(path, encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except (OSError, json.JSONDecodeError):
+                    continue
+                chapter_count = info["chapters"]
+                books.append(
+                    {
+                        "uid": uid,
+                        "title": data.get("title") or uid,
+                        "title_short": _short_title(data.get("title") or uid),
+                        "author": _clean_author(data.get("author")),
+                        "author_display": _clean_author(data.get("author")) or "作者待校",
+                        "subjects": list(data.get("subjects") or []),
+                        "subject": (data.get("subjects") or ["未分类"])[0],
+                        "retention": data.get("retention", ""),
+                        "chapters": chapter_count,
+                        "chapter_count": chapter_count,
+                        "chars": info["chars"],
+                        "packs": 0,
+                        "readable": True,
+                        "color": _cloth(uid),
+                        "cloth": _cloth(uid),
+                        "dir": self.layout.book(uid),
+                    }
+                )
+            self._books = books
+            return books
 
     def books(self):
         return self._load_books()
@@ -122,101 +124,26 @@ class Library:
     def book(self, uid):
         for book in self._load_books():
             if book["uid"] == uid:
+                # 服务运行中改章：只核对该书的章目录，不重启也能看到修改。
+                info = self._shelf_index().refresh_book(uid)
+                book["chapters"] = info["chapters"]
+                book["chapter_count"] = info["chapters"]
+                book["chars"] = info["chars"]
+                self._chapters.pop(uid, None)
                 return book
         return None
 
     def chapters(self, uid):
-        if uid in self._chapters:
-            return self._chapters[uid]
-        md_dir = self.layout.md(uid)
-        chapters = []
-        if os.path.isdir(md_dir):
-            for name in os.listdir(md_dir):
-                match = CHAPTER_RE.match(name)
-                if not match:
-                    continue
-                path = os.path.join(md_dir, name)
-                try:
-                    stat = os.stat(path)
-                except OSError:
-                    continue
-                meta = _read_meta(path, stat.st_mtime_ns, stat.st_size)
-                chapters.append(
-                    {
-                        "n": int(match.group(1)),
-                        "file": name,
-                        "stem": match.group(2),
-                        "title": meta["title"] or match.group(2),
-                        "chars": meta["chars"],
-                        "full_chars": meta.get("full_chars", meta["chars"]),
-                    }
-                )
-            if not chapters:
-                candidates = [
-                    name
-                    for name in os.listdir(md_dir)
-                    if name.lower().endswith(".md") and name.lower() != "readme.md" and not name.startswith(".")
-                ]
-                if len(candidates) == 1:
-                    name = candidates[0]
-                    path = os.path.join(md_dir, name)
-                    stat = os.stat(path)
-                    meta = _read_meta(path, stat.st_mtime_ns, stat.st_size)
-                    stem = os.path.splitext(name)[0]
-                    chapters.append(
-                        {
-                            "n": 1,
-                            "file": name,
-                            "stem": stem,
-                            "title": meta["title"] or stem,
-                            "chars": meta["chars"],
-                            "full_chars": meta.get("full_chars", meta["chars"]),
-                        }
-                    )
-        chapters.sort(key=lambda item: (item["n"], item["file"]))
-        chapters = self._merge_title_pages(chapters)
+        cached = self._chapters.get(uid)
+        if cached is not None:
+            return cached
+        chapters = merge_title_pages(self._shelf_index().chapters(uid))
         for ordinal, chapter in enumerate(chapters, 1):
             chapter["ordinal"] = ordinal
+        if len(self._chapters) >= 32:
+            self._chapters.clear()
         self._chapters[uid] = chapters
         return chapters
-
-    @staticmethod
-    def _merge_title_pages(chapters):
-        """Merge a short title/divider page with its following 前置页 body.
-
-        Some EPUB conversions write the chapter title and its epigraph as one md
-        file, then the real body as ``NN_前置页 X.md``.  Treating both as chapters
-        makes the title page a 30-Han "chapter" and hides the body behind a
-        separate entry.  Keep the title page's ``n`` (stable URL) and absorb the
-        body file into it.
-        """
-        merged = []
-        index = 0
-        while index < len(chapters):
-            current = dict(chapters[index])
-            following = chapters[index + 1] if index + 1 < len(chapters) else None
-            if (
-                current["chars"] <= TITLE_PAGE_MAX_CHARS
-                and following is not None
-                and following["stem"].startswith(BODY_STEM_PREFIX)
-                and following["chars"] >= BODY_MIN_CHARS
-            ):
-                current["body_file"] = following["file"]
-                current["body_stem"] = following["stem"]
-                current["body_n"] = following["n"]
-                current["chars"] += following["chars"]
-                current["full_chars"] = current.get("full_chars", 0) + following.get("full_chars", 0)
-                current["title"] = current["title"] or following["title"]
-                current["merged"] = True
-                current["source_files"] = [current["file"], following["file"]]
-                merged.append(current)
-                index += 2
-                continue
-            current["merged"] = False
-            current["source_files"] = [current["file"]]
-            merged.append(current)
-            index += 1
-        return merged
 
     def chapter(self, uid, n):
         for chapter in self.chapters(uid):
@@ -299,22 +226,31 @@ class Library:
                 subjects[subject] = subjects.get(subject, 0) + 1
             if len(books) >= limit:
                 break
-        for book in self._load_books():
-            for chapter in self.chapters(book["uid"]):
-                if q in _nkey(chapter["title"]):
-                    chapters.append(
-                        {
-                            "uid": book["uid"],
-                            "n": chapter["n"],
-                            "title": chapter["title"],
-                            "book_title": book["title_short"],
-                            "chars": chapter["chars"],
-                        }
-                    )
-                    if len(chapters) >= limit:
-                        break
-            if len(chapters) >= limit:
-                break
+        # 索引流式逐本给：并发搜索时内存只占一本书，不物化全库。
+        by_uid = {book["uid"]: book for book in self._load_books()}
+        stream = self._shelf_index().iter_chapters()
+        try:
+            for uid, rows in stream:
+                book = by_uid.get(uid)
+                if book is None:
+                    continue
+                for chapter in merge_title_pages(rows):
+                    if q in _nkey(chapter["title"]):
+                        chapters.append(
+                            {
+                                "uid": uid,
+                                "n": chapter["n"],
+                                "title": chapter["title"],
+                                "book_title": book["title_short"],
+                                "chars": chapter["chars"],
+                            }
+                        )
+                        if len(chapters) >= limit:
+                            break
+                if len(chapters) >= limit:
+                    break
+        finally:
+            stream.close()
         return {
             "books": books[:limit],
             "chapters": chapters,
@@ -379,9 +315,14 @@ class Library:
                 out.append(record)
         return out
 
+    def total(self):
+        """书目总数：有叠加层时以叠加层为准，否则实例书 + 叠加元数据。"""
+        overlay = self._load_overlay()
+        return len(overlay) or (len(self.metadata()) + len(self._load_books()))
+
     def catalog(self, query="", subject=""):
         metadata = self.metadata()
-        total = len(self._load_overlay()) or (len(metadata) + len(self._load_books()))
+        total = self.total()
         readable = [book for book in self.books() if subject in book["subjects"]] if subject else list(self.books())
         if query:
             found = self.search(query)
