@@ -26,11 +26,13 @@ cd "$(git rev-parse --show-toplevel)"   # 在 book-corpus 仓库里执行
 RUN_ID=${1:-$(date +%H%M%S)}
 ROOT=/tmp/bc-verify-$RUN_ID
 mkdir -p "$ROOT/run"
+export BOOK_CORPUS_ENV="$ROOT/run/env"   # init 写这里，不碰仓库 .env
+unset BOOKS_ROOT BOOK_CORPUS_DATA        # find_root() 先看环境变量，不清会盖掉 --root
 uv run --frozen book-corpus init "$ROOT" --no-pdf-venv
 uv run --frozen book-corpus sample --root "$ROOT"
 ```
 
-- `init` 打印「工作区建好」「书目库：空库已建好」「检索索引：空库已建好」，随后两行 venv 未建警告是 `--no-pdf-venv` 的预期结果。
+- `init` 先打印「工作区建好」，再把 `BOOKS_ROOT` 记到 `$BOOK_CORPUS_ENV`（未设时写仓库 `.env`，会污染本仓），随后是两行 venv 未建警告（`--no-pdf-venv` 的预期结果）、概念表、书目库与检索索引。
 - `sample` 装内置样书：阿Q正传 `B0001`、9 章、检索索引 123 段（`sample` 自己报 22881 字，分层读 `/api/shelf` 报 21362 正文字符，两处口径不同，别拿一个去验另一个）。没有它，书架、章页、检索都只能验空状态。
 
 服务按需起，端口固定用私有的一套，PID 落盘：
@@ -47,7 +49,8 @@ setsid uv run --frozen python apps/reading/server.py --root "$ROOT" --port 18771
 setsid python3 apps/daily/server.py --root "$ROOT" --port 18772 \
   >>"$ROOT/run/daily.log" 2>&1 & echo $! > "$ROOT/run/daily.pid"
 
-setsid env BOOKS_ROOT="$ROOT" python3 apps/demo/server.py --port 18765 \
+setsid env BOOKS_ROOT="$ROOT" BOOKS_RUNLOG_ROOT="$ROOT/run/runlog" \
+  python3 apps/demo/server.py --port 18765 \
   >>"$ROOT/run/demo.log" 2>&1 & echo $! > "$ROOT/run/demo.pid"
 
 setsid python3 apps/ops/server.py --root "$ROOT" --port 18770 \
@@ -58,14 +61,14 @@ setsid python3 apps/ops/server.py --root "$ROOT" --port 18770 \
 
 | 服务 | 端口 | 就绪行 | 备注 |
 |---|---|---|---|
-| 首页 | 18773 | `书库首页 http://127.0.0.1:18773 · root=<ROOT>` | 只读 `books/`、`日课/` 与仓库模板；`books.toml` 必需，缺了 exit 2。可以最先起 |
+| 首页 | 18773 | `书库首页 http://127.0.0.1:18773 · root=<ROOT>` | 只读 `books/`、`日课/` 与仓库模板；`books.toml` 必需，缺了 exit 2。启动前清掉 shell/`.env` 里的 `BOOKS_ROOT`，否则 `Library` 用它而不是 `--root`。可以最先起 |
 | 分层读 | 18771 | `分层读 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 紧跟一行「配置提示：缺少配置：MinerU…；PaddleOCR…；MiMo…」，是云端 key 常态，不是故障。`--no-annotate` 只关标注，生成仍打模型；行里的 `8771` 是固定标签，实际端口看 URL |
 | 日课 | 18772 | `http://127.0.0.1:18772` | 单行输出，没有别的就绪信号 |
-| 找一段 | 18765 | `书库检索演示：http://127.0.0.1:18765` | 不接 `--root`，只认 `BOOKS_ROOT`；迎宾前可能多一行 `启动恢复：…` |
+| 找一段 | 18765 | `书库检索演示：http://127.0.0.1:18765` | 不接 `--root`，只认 `BOOKS_ROOT`；启动必打印 `启动恢复：N 轮…`（0 也打）。`BOOKS_RUNLOG_ROOT` 是运行记录的唯一隔离开关，默认落仓库内共享目录；会话库也不随 `BOOKS_ROOT` 隔离 |
 | 操作台 | 18770 | `统一操作台：http://127.0.0.1:18770  root=<ROOT>` | `--port 0` 会打印实际端口 |
 
 - 分层读要读 `build/library.db`，必须在 `sample` 之后起。
-- 日课要验「有内容」时，先按 [features/daily-lessons.md](features/daily-lessons.md) 手写一期 `$ROOT/日课/<date>.json`；`book-corpus daily --dry-run` 只打印提示词、不落盘。
+- 日课要验「有内容」时，先按 [features/daily-lessons.md](features/daily-lessons.md) 手写一期 `$ROOT/日课/<date>.json`；`book-corpus daily --dry-run` 打选书、模型/思考/工具、`----- 提示词 -----` 与提示词四块，不落盘。
 - 首页若用默认地址起（不带 `--*-url`），点卡片会拉起目标服务，拉起命令带首页自己的 `--root`。唯一能安全验这条的是 8770：它空着。8765 若空着，`/go/search` 会在 8765 起一个本轮实例——验跳转时只读 302，别跟随。
 - 拆服务时就别并行起：同一工作区只能有一个写者（`.writer.lock`）。
 
@@ -82,7 +85,7 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 ```
 
 - `doctor` 逐行 `ok`/`warn`。允许的 `warn` 只有两类：环境类（`PDF 环境`、`文档环境`）与云端 key 缺失（`配置·MinerU OCR`、`配置·PaddleOCR 云端 OCR`、`配置·MiMo 扩展生成`）。落在工作区、清单、账、库上的 `warn` 才是问题，先解释再继续。
-- 演示页健康必须 `{"ok": true, "db": "ok", ...}` 且 `meta.books` 为 `1`、`meta.paras` 为 `123`。答 `db: missing` 说明没设 `BOOKS_ROOT`，进程落到了 cwd。
+- 演示页健康必须 `{"ok": true, "db": "ok", ...}` 且 `meta.books` 为 `1`、`meta.paras` 为 `123`。三种降级形状要分清：索引没建是 `db: missing`，索引为空是 `db: empty`，书目库没建是 `library: missing`；后两种 `meta` 里的计数可能是 `null`。
 - 端口清单里每个监听者的命令行必须带 `--root $ROOT` 或 `BOOKS_ROOT=$ROOT`；不属于本轮的监听者停：可能是上一轮没清干净。不要按 PID 比：`uv run --frozen python` 起的服务，监听的是它派生的子进程，不是 `run/*.pid` 里那个包装进程。
 - 页面根路径回 403 说明 Host 头不是 `127.0.0.1`/`localhost`，不是服务坏了。
 
@@ -99,7 +102,7 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 - **直接跑脚本**验端到端：`python3 tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
 - **headless Chrome + CDP** 只用于点击、键盘、截图，脚本是仓库自带的，没有 Playwright。默认找 `google-chrome-stable`；本机有（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。
   - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`。
-  - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机只有 1 轮会话，就属于这一支）。
+  - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机 11 条会话仍没有 3 轮样本，就属于这一支）。
   - `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py`，自己起临时根；末行 `SHOT PASS`、`CONSOLE ERROR 0`，八个页签含账表（2026-11-13 实测）。
 
 硬规则：
@@ -122,15 +125,18 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 
 ## Cleanup
 
-按记录的 PID 杀，不按进程名杀：
+按记录的 PID 杀，不按进程名杀。先删本轮在共享会话库里建的会话：
 
 ```
+curl -s -X POST http://127.0.0.1:18765/api/sessions/delete \
+  -H 'Content-Type: application/json' -d '{"ids":["<session-id>"]}'
 for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 ```
 
 - 拉起过的服务（首页自动起的操作台）不在 `run/*.pid` 里：`ss -ltnp | grep :8770` 拿到 PID，记进 `$ROOT/run/autostart.pid` 再杀。
 - 杀完确认 `ss -ltnp | grep -E ':(18765|18770|18771|18772|18773|18774|18775)\b'` 为空；`uv run` 与首页拉起的那类子进程会随父进程一起退出，但端口空才是判据。
 - 删工作区：`rm -rf "$ROOT"`。**不要**删 `artifacts/`，清理只删实例与临时根。
+- 确认仓库 `.env` 没被写：`grep -n '^BOOKS_ROOT' .env || echo 'repo .env untouched'`。出现 `BOOKS_ROOT` 就删掉那一行（本轮没设 `BOOK_CORPUS_ENV` 时 `init` 会写它），再 `git status --short .env` 复核。
 - 删完 `ls artifacts/verify/<RUN_ID>/<feature>/` 还在，才算这轮收干净。
 - 绝不碰 8765 / 8771 / 8772 / 8773 上的任何进程，哪怕它看起来卡住了。
 
