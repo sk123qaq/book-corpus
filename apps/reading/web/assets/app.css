@@ -194,6 +194,7 @@
 .rec-state.draft{color:var(--ochre)}
 .rec-state.run{color:var(--cinnabar)}
 .rec-state.fail{color:var(--cinnabar)}
+.rec-state.blocked{color:var(--ochre)}
 .rec-state.stale{color:var(--ochre)}
 .rec-state.cancel{color:var(--ink-3)}
 .rec-go{font:13px/1 var(--sans);color:var(--ink-3);text-align:right}

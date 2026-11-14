@@ -3765,6 +3765,8 @@ def test_chapter_page_shows_and_disables_on_a_blocked_preflight():
     assert "data.depth.preflight" in html
     assert "depth-preflight" in html
     assert "payload.code === 'source_too_large'" in html
+    assert "data.depth.preflight = {" in html
+    assert "const liveMount = RD.mount('depth-jobs')" in html
     assert "blocked: '已阻断'" in app
     assert "'blocked', 'cancelled'" in app
     assert "step.status === 'blocked' ? 'blocked'" in app
