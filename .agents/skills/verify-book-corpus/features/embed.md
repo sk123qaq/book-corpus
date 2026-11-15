@@ -2,7 +2,7 @@
 
 `book-corpus embed` 把每本有 md 的书的章节切块，交给本机 llama-server 算向量，
 f16 追加写到工作区的 `build/检索/embeddings/`。断点续跑，同一份向量只允许一个写者。
-这是 CLI 面，没有浏览器页面，产物也还没有检索面在读。
+这是 CLI 面，没有浏览器页面。产物已由 `book_query.py` / `vec_search.py` 与演示页的混合检索消费；端到端验证见 [search-query.md](./search-query.md) 与 [find-a-passage.md](./find-a-passage.md)。
 
 ## Sub-features
 
@@ -23,7 +23,7 @@ f16 追加写到工作区的 `build/检索/embeddings/`。断点续跑，同一�
 - 第一次跑会自动起 llama-server，跑完关掉；已有健康的同 URL 服务则直接复用，且不会替你关。
 - 想先看规模，跑 `book-corpus embed --dry-run`；跑完看 `--status`，再 `--verify` 收口。
 - 产物在 `build/检索/embeddings/emb.db` 与 `vectors.f16`，两件必须一起备份或删除。
-  目前没有检索面读它们，别把「嵌入成功」当成「找一段已经能按语义召回」。
+  消费者是 `src/bookcorpus/scripts/book_query.py`、`vec_search.py` 与演示页的 `answer.pick_passages`；没有它们时 `book-corpus query` 仍是纯词法。别把「嵌入成功」当成「检索一定走语义」——还要 `BOOKS_EMBED_URL` 指向本机服务且健康，见 search-query.md。
 
 ## Driving it with the book-corpus CLI
 
@@ -99,5 +99,5 @@ Preconditions:
   一分钟后仍活着；复跑一次没重现。每轮收尾都查 `ss -ltnp | grep ':18780 '` 与
   `pgrep -af "$ROOT"`，有残留就按 pid 杀，再删根。
 - `--verify` 的「块数」只数全部 chunk，不区分 active；`有效块` 与 `垃圾块` 只在 `--status` 里。
-- 产物目前没有消费者：仓库里除 `embed_corpus.py`、`layout.py`、测试外没有读 `emb.db` 的代码。
-  验证只到「向量落盘且自洽」，语义召回要等检索层落地后另写功能文件。
+- 产物已有消费者：`vec_search.py` 读 `emb.db` 与 `vectors.f16`，`book_query.py` 用它做书/章/段三层 RRF，演示页用 `plan.fusion` 暴露是否命中。
+  验证分两层：embed 只证「向量落盘且自洽」，语义召回与降级走 [search-query.md](./search-query.md) 或 `tests/test_vec_search_hybrid.py`。

@@ -2,8 +2,8 @@
 name: verify-book-corpus
 description: >
   用一次性工作区启动并驱动 book-corpus 的五个本地页面（8773 书库首页、8765 找一段、8771 分层读、
-  8772 往期日课、8770 操作台），以及 CLI 的 `book-corpus embed`；验证用户可见行为、留下可复核的证据，
-  然后清理实例。
+  8772 往期日课、8770 操作台），以及 CLI 的 `book-corpus embed`、`search`、`query`；验证用户可见行为、
+  留下可复核的证据，然后清理实例。找一段包含 SSE 流式与暂停续答。
   当需要验证 book-corpus 的一个改动、复现别人报的页面问题、或按功能地图跑端到端检查时使用。
   Drive the disposable stack, never the operator's live library on 8765/8771/8772/8773.
 argument-hint: "[feature] [run-id]"
@@ -51,6 +51,7 @@ setsid python3 apps/daily/server.py --root "$ROOT" --port 18772 \
   >>"$ROOT/run/daily.log" 2>&1 & echo $! > "$ROOT/run/daily.pid"
 
 setsid env BOOKS_ROOT="$ROOT" BOOKS_RUNLOG_ROOT="$ROOT/run/runlog" \
+  BOOKS_EMBED_URL=http://127.0.0.1:18780 \
   python3 apps/demo/server.py --port 18765 \
   >>"$ROOT/run/demo.log" 2>&1 & echo $! > "$ROOT/run/demo.pid"
 
@@ -86,7 +87,7 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 ```
 
 - `doctor` 逐行 `ok`/`warn`。允许的 `warn` 只有两类：环境类（`PDF 环境`、`文档环境`）与云端 key 缺失（`配置·MinerU OCR`、`配置·PaddleOCR 云端 OCR`、`配置·MiMo 扩展生成`）。落在工作区、清单、账、库上的 `warn` 才是问题，先解释再继续。
-- 演示页健康必须 `{"ok": true, "db": "ok", ...}` 且 `meta.books` 为 `1`、`meta.paras` 为 `123`。三种降级形状要分清：索引没建是 `db: missing`，索引为空是 `db: empty`，书目库没建是 `library: missing`；后两种 `meta` 里的计数可能是 `null`。
+- 演示页健康必须 `{"ok": true, "db": "ok", ...}` 且 `meta.books` 为 `1`、`meta.paras` 为 `123`。三种降级形状要分清：索引没建是 `db: missing`，索引为空是 `db: empty`，书目库没建是 `library: missing`；后两种 `meta` 里的计数可能是 `null`。`meta.embed` 必须存在，字段是 `vectors` / `server` / `ready` / `chunks` / `books` / `url`；`ready:false` 是混合检索降级，不是页面坏。
 - 端口清单里每个监听者的命令行必须带 `--root $ROOT` 或 `BOOKS_ROOT=$ROOT`；不属于本轮的监听者停：可能是上一轮没清干净。不要按 PID 比：`uv run --frozen python` 起的服务，监听的是它派生的子进程，不是 `run/*.pid` 里那个包装进程。
 - 页面根路径回 403 说明 Host 头不是 `127.0.0.1`/`localhost`，不是服务坏了。
 
@@ -101,10 +102,11 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 - **curl** 验服务端渲染页骨架与接口契约：取 HTML 断言稳定标记，取 JSON 断言字段。`features/library-home.md`、`features/daily-lessons.md`、`features/manage-library.md` 走这条；`features/layered-reads.md` 的接口也走 curl，但章页/记录页是客户端渲染，用户可见状态用 `--dump-dom`。
 - **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py tests/test_depth_acceptance.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
 - **直接跑脚本**验端到端：`python3 tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
-- **CLI** 验用户命令：`book-corpus embed` 在一次性根里跑，断言 stdout/stderr、退出码与磁盘产物，逐条见 `features/embed.md`。它同样只认 `--root` 指到的一次性根；默认 `--server` 是操作员的 18080，必须改 18780。
+- **CLI** 验用户命令：`book-corpus embed` 在一次性根里跑，断言 stdout/stderr、退出码与磁盘产物，逐条见 `features/embed.md`；`book-corpus search` / `query` 的词法、混合、降级与书卡逐条见 `features/search-query.md`。两者都只认 `--root` 指到的一次性根；`embed` 默认 `--server` 与 `search/query` 默认 `BOOKS_EMBED_URL` 都是操作员的 18080，必须改 18780。
 - **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读章页、记录页），先剥掉 `<script>` 源码再断言，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。默认找 `google-chrome-stable`；本机有（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。
   - `google-chrome-stable --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，先剥掉 `<script>` 源码再数 `id="depth-panel"`；`--dump-dom` 也带模板字符串，直接 grep 会多算。详细片段见 `features/layered-reads.md`。
-  - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`。
+  - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败。
+  - `python3 .agents/skills/verify-book-corpus/scripts/drive_sse_pause.py --base http://127.0.0.1:18765 --out "$EV/sse-pause-resume.json"`，末行 `RESUMED ... done_ok=True`，exit 0；它真打一次模型，先读完离线合同再决定跑不跑。
   - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机 11 条会话仍没有 3 轮样本，就属于这一支）。
   - `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py`，自己起临时根；末行 `SHOT PASS`、`CONSOLE ERROR 0`，八个页签含账表（2026-11-13 实测）。
 
@@ -146,12 +148,12 @@ for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 
 ## Helpers
 
-本技能不额外附脚本：启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`，不另造一份。
+启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；唯一随技能附带的脚本是 `scripts/drive_sse_pause.py`，因为 SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来。
 
 ## Feature map
 
 五个页面各一份：`features/library-home.md`、`find-a-passage.md`、`layered-reads.md`、`daily-lessons.md`、`manage-library.md`；
-CLI 的 `features/embed.md` 是第六份。
+CLI 的 `features/embed.md` 与 `features/search-query.md` 是第六、第七份。
 地图是维护目标：行为变了先改地图，再改这条验证；`features/README.md` 记着当前已知红与未映射的 CLI 面。分层读的章页与记录页是客户端渲染，地图里的页面断言以 `--dump-dom` 为准。
 
 改动本文件后，在 Pi 里 `/reload` 让技能重新加载；Pi 只在从仓库目录（或其子目录）启动时才发现项目 `.agents/skills/`。
