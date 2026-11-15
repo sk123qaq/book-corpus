@@ -84,5 +84,6 @@
 | `retire_book.py` | — | 移出一本书：原书进 books/_冷宫/<书名>/source/，md、html、json 删除，账本同步。 |
 | `scan_library.py` | — | L1 扫描旧布局（原书/ 原书pdf/ 书md/ 等顶层池）。旧目录已不在，只作留档。 |
 | `split_md_batch.py` | — | 批量把 source 是 ebook 的书拆成 md（方案 §7 的转换接口）。 |
+| `vec_search.py` | — | 全库与单书向量检索（基于 emb.db + vectors.f16 的 memmap 混合加速）。 |
 | `verify_phase.py` | `verify` | 收尾门槛：四个箱子，对任何新库都成立，没有「跳过」。 |
 <!-- facts:end -->

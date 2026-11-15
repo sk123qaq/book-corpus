@@ -420,8 +420,11 @@
         `<div class="chapter-row"><span class="name">${esc(s.chapter_title)}</span><span class="score">${fixed(s.score)} · L${s.line}</span></div>`).join('');
       return `<div class="chapter-book"><h3>${esc(c.title)}</h3>${sel || '<p class="summary-sub">没有选到章</p>'}</div>`;
     }).join('');
+    const fusionTag = plan.vec_used
+      ? `混合检索 BM25 + 向量（vec ${fmtMs(plan.vec_ms || 0)} · ${fmtInt(plan.vec_hits || 0)} 块）`
+      : '仅 BM25';
     $('.stage-body', stages[2]).innerHTML =
-      `<p class="stage-note">书级打分 ${esc(plan.scheme || 'best_support')} · 分数相对第一名 · 覆盖组按名词集计</p>` +
+      `<p class="stage-note">${esc(fusionTag)} · 书级打分 ${esc(plan.scheme || 'best_support')} · 分数相对第一名 · 覆盖组按名词集计</p>` +
       `<div class="rank-grid"><div><p class="panel-title">书级榜</p>${rows}</div>` +
       `<div><p class="panel-title">选章</p>${chap || '<p class="empty">没有选到章</p>'}</div></div>`;
     $('.stage-summary', stages[2]).innerHTML =

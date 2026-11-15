@@ -866,14 +866,23 @@
         lead: ranking.length
           ? 'top1 ' + topName + ' · ' + scoreText + ' 分 · 取 ' + chapters.length + ' 本书的章'
           : '没有命中',
-        meta: '书级打分 ' + (plan.scheme || 'best_support') + ' · 分数相对第一名',
+        meta: (plan.vec_used
+          ? '混合检索 BM25 + 向量（vec ' + Math.round(Number(plan.vec_ms || 0)) + ' ms） · '
+          : '仅 BM25 · ') + '书级打分 ' + (plan.scheme || 'best_support'),
         field: {
           label: '排序',
           chips: ranking.slice(0, 3).map((row, i) => (i + 1) + '. '
             + (row.title || bookName(row.book)) + ' '
             + (isFinite(Number(row.score)) ? Number(row.score).toFixed(2) : '—')),
         },
-        raw: { scheme: plan.scheme, ranking: plan.ranking, chapters: plan.chapters },
+        raw: {
+          scheme: plan.scheme,
+          fusion: plan.fusion || (plan.vec_used ? 'hybrid' : 'bm25_only'),
+          vec_used: !!plan.vec_used,
+          vec_ms: plan.vec_ms || 0,
+          ranking: plan.ranking,
+          chapters: plan.chapters,
+        },
       },
       {
         value: focus ? focusValue : (cards.trigger ? cardList.length + ' 张' : '未触发'),

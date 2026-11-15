@@ -61,6 +61,7 @@ import lib_fts_cjk as cjk
 import model_call
 import qsearch
 import runlog
+import vec_search
 from thinking import DEFAULT as DEFAULT_THINKING
 from thinking import normalize as normalize_thinking
 
@@ -98,7 +99,7 @@ ANSWER_REMIND = (
 )
 
 QSEARCH_LIMIT = 100
-DEFPASS_TOP = 4
+DEFPASS_TOP = 2
 MAX_CHAPTERS = 30
 MAX_PASSAGES = 24
 MAX_PER_CHAPTER = 2
@@ -565,8 +566,8 @@ def _search_book(con, book, expr, terms, limit):
     return cand[:limit]
 
 
-def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
-    """当前命中 + 同书前 limit 的组覆盖二遍 + 按章聚类候选。
+def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT, question="", vec_fn=None):
+    """当前命中 + BM25 与向量书内融合 + 组覆盖二遍 + 按章聚类候选。
 
     返回 (picked, chapters)。picked 是窗口候选，chapters 是给 agent 的候选章地图。
     """
@@ -576,13 +577,23 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
     current = {"path": path, "line": int(line), "score": None, "coverage": None}
     group_lists = _group_lists(groups, terms)
     expr = " OR ".join("(%s)" % e for e in (cjk.query_expr(t) for t in terms) if e)
-    if not expr:
+    book_hits = []
+    if expr:
+        try:
+            book_hits = _search_book(con, book, expr, terms, limit)
+        except sqlite3.Error:
+            book_hits = []
+
+    query_text = (question or "").strip() or " ".join(str(t) for t in (terms or []) if t)
+    if vec_fn is not None:
+        vhits = list(vec_fn(book, query_text, 30) or [])
+    elif query_text:
+        vhits = vec_search.search_book_text(book, query_text, top_k=30)
+    else:
+        vhits = []
+
+    if not book_hits and not vhits:
         return [current], []
-    try:
-        hits = _search_book(con, book, expr, terms, limit)
-    except sqlite3.Error:
-        return [current], []
-    book_hits = [h for h in hits if h.get("book") == book and h.get("path")]
     titles, _status = _chapter_titles(book)
 
     by_path = {}
@@ -591,22 +602,60 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
         cur = by_path.get(p)
         if cur is None or float(h.get("score") or 0) > float(cur.get("score") or 0):
             by_path[p] = h
-    chapters = sorted(by_path.values(), key=lambda h: -float(h.get("score") or 0))[:MAX_CHAPTERS]
-    chapter_rows = [
-        {
-            "path": h["path"],
-            "line": int(h.get("line") or 1),
-            "score": float(h.get("score") or 0),
-            "coverage": h.get("coverage"),
-            "title": _title_for(titles, h["path"]),
-        }
-        for h in chapters
-    ]
+    bm25_sorted = sorted(by_path.values(), key=lambda h: -float(h.get("score") or 0))
+    if vhits:
+        bm25_chap_rows = [
+            {
+                "chapter_path": h["path"],
+                "line": int(h.get("line") or 1),
+                "score": float(h.get("score") or 0),
+                "coverage": h.get("coverage"),
+            }
+            for h in bm25_sorted[: vec_search.CHAP_POOL_LIMIT]
+        ]
+        fused_chaps = vec_search.fuse_chapters(
+            bm25_chap_rows,
+            vhits,
+            max_chapters=MAX_CHAPTERS,
+            title_fn=lambda cp: _title_for(titles, cp),
+            snippet_fn=None,
+        )
+        chapter_rows = [
+            {
+                "path": c["chapter_path"],
+                "line": int(c.get("line") or 1),
+                "score": float(c.get("score") or 0),
+                "coverage": c.get("coverage"),
+                "title": _title_for(titles, c["chapter_path"]),
+            }
+            for c in fused_chaps
+        ]
+    else:
+        chapters = bm25_sorted[:MAX_CHAPTERS]
+        chapter_rows = [
+            {
+                "path": h["path"],
+                "line": int(h.get("line") or 1),
+                "score": float(h.get("score") or 0),
+                "coverage": h.get("coverage"),
+                "title": _title_for(titles, h["path"]),
+            }
+            for h in chapters
+        ]
 
-    # 组覆盖二遍：只在前 100 个同书候选上打分，避免全库扫描把 README 和无关章冲上来
+    # 组覆盖二遍：合入向量候选，对未见组词的重排仍做组覆盖过滤
+    cand_pool = list(book_hits)
+    seen_pos = {(h["path"], int(h.get("line") or 1)) for h in cand_pool}
+    for vh in vhits:
+        vp = vh.get("path")
+        vl = int(vh.get("line") or 1)
+        if vp and (vp, vl) not in seen_pos:
+            seen_pos.add((vp, vl))
+            cand_pool.append(vh)
+
     lines_cache = {}
     scored = []
-    for h in book_hits:
+    for h in cand_pool:
         p = h["path"]
         ln = int(h.get("line") or 1)
         if p == path and abs(ln - int(line)) <= 8:
@@ -632,18 +681,32 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
         if len(def_hits) >= DEFPASS_TOP:
             break
 
-    picked, used = [current], {(path, int(line))}
-    for item in def_hits + [
+    fused_passages = vec_search.fuse_passages(book_hits, vhits) if vhits else []
+    tail_rows = fused_passages + [
         {"path": h["path"], "line": int(h.get("line") or 1), "score": h.get("score"), "coverage": h.get("coverage")}
-        for h in chapters
-    ]:
-        key = (item["path"], item["line"])
+        for h in chapter_rows
+    ]
+    picked, used = [current], {(path, int(line))}
+    for item in def_hits + tail_rows:
+        p_item = item["path"]
+        l_item = int(item.get("line") or 1)
+        key = (p_item, l_item)
         if key in used:
             continue
-        if item["path"] == path and abs(item["line"] - int(line)) <= 8:
+        if p_item == path and abs(l_item - int(line)) <= 8:
+            continue
+        if vhits and any(ep == p_item and abs(el - l_item) <= vec_search.PASSAGE_LINE_SPAN for ep, el in used):
             continue
         used.add(key)
-        picked.append(item)
+        picked.append(
+            {
+                "path": p_item,
+                "line": l_item,
+                "score": item.get("score"),
+                "coverage": item.get("coverage"),
+                **({"group_score": item["group_score"]} if "group_score" in item else {}),
+            }
+        )
         if len(picked) >= MAX_PASSAGES:
             break
     return picked, chapter_rows
@@ -1834,7 +1897,7 @@ def _answer_single(
     titles, status = _chapter_titles(book)
     con = sqlite3.connect("file:%s?mode=ro" % INDEX_DB, uri=True)
     try:
-        chosen, chapters = pick_passages(con, book, rel, line, terms, groups)
+        chosen, chapters = pick_passages(con, book, rel, line, terms, groups, question=question)
     finally:
         con.close()
     for item in chosen:
@@ -2022,7 +2085,14 @@ def _answer_multi(
         for src in sources:
             titles, status = _chapter_titles(src["book"])
             picked, chapters = pick_passages(
-                con, src["book"], src["path"], src["line"], terms, groups, MULTI_QSEARCH_LIMIT
+                con,
+                src["book"],
+                src["path"],
+                src["line"],
+                terms,
+                groups,
+                MULTI_QSEARCH_LIMIT,
+                question=question,
             )
             # 命中行本身就是首个正文行（line==1）也是合法命中，照样进证据窗；
             # 以前 > 1 会把用户点中的那段丢掉

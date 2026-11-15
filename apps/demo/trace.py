@@ -42,6 +42,7 @@ import book_title
 import lib_common as L
 import model_call
 import runlog
+import vec_search
 from thinking import DEFAULT as DEFAULT_THINKING
 from thinking import normalize as normalize_thinking
 
@@ -697,7 +698,9 @@ def meta(refresh=False):
     """书库规模。缺库或索引为空时计数是 None，不是 0：0 只表示真读到了 0 行。"""
     now = time.time()
     if not refresh and _META_CACHE["value"] and now - _META_CACHE["at"] < 60:
-        return _META_CACHE["value"]
+        cached = dict(_META_CACHE["value"])
+        cached["embed"] = vec_search.health_info()
+        return cached
     out = {
         "books": None,
         "paras": None,
@@ -727,7 +730,8 @@ def meta(refresh=False):
             out["paras"] = paras
             out["chapters"] = _int_or_none(vals.get("chapters"))
         out["index"] = "ok" if paras else "empty"
-    _META_CACHE.update(at=now, value=out)
+    _META_CACHE.update(at=now, value=dict(out))
+    out["embed"] = vec_search.health_info()
     return out
 
 
@@ -871,7 +875,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
         hints = book_cards.query_hints(question, books, book_cards.load_concepts())
         focus = book_title.resolve_title(question, books, book_meta, hint=hints.get("title", ""))
         t_plan = time.time()
-        plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus)
+        plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus, question=question)
         plan_ms = plan.ms
         rec.event(
             "search.plan",
@@ -930,6 +934,10 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
             "best_round": plan.best_round,
             "ms": plan_ms,
             "scheme": "best_support",
+            "fusion": plan.fusion,
+            "vec_used": bool(plan.vec_used),
+            "vec_ms": plan.vec_ms,
+            "vec_hits": int(plan.vec_hits),
             "rounds": [
                 {
                     "n": r.n,

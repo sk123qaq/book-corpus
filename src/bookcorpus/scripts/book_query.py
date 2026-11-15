@@ -48,6 +48,7 @@ import book_readme
 import book_score
 import lib_fts_cjk as cjk
 import qsearch
+import vec_search
 
 ACTIONS = PATHS.concepts_action
 CONCEPTS = PATHS.concepts
@@ -144,6 +145,10 @@ class Plan:
     model_calls: int = 0
     ms: float = 0.0
     timings: dict = field(default_factory=dict)
+    fusion: str = "bm25_only"
+    vec_used: bool = False
+    vec_ms: float = 0.0
+    vec_hits: int = 0
 
 
 def quality(r):
@@ -208,6 +213,8 @@ class Planner:
         df_fn=None,
         limit=10,
         exclude=None,
+        vec_fn=None,
+        book_vec_fn=None,
     ):
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
@@ -222,6 +229,8 @@ class Planner:
         self.exclude = list(exclude or [])
         self._search_fn = search_fn
         self._df_fn = df_fn
+        self._vec_fn = vec_fn
+        self._book_vec_fn = book_vec_fn
         self._hits = {}
         self._df = {}
         self._toc = {}
@@ -316,6 +325,28 @@ class Planner:
             groups = [t for t in nouns if t in rest] or rest
             yield "drop-generic", rest, groups
 
+    def _vec_search(self, query_text):
+        if self._vec_fn is not None:
+            res = self._vec_fn(query_text, self.exclude)
+            if isinstance(res, tuple):
+                hits, meta = res
+                return list(hits or []), dict(meta or {})
+            hits = list(res or [])
+            return hits, {"used": True, "ms": 0.0, "hits": len(hits), "qvec": None}
+        if self._search_fn is not None:
+            return [], {"used": False, "ms": 0.0, "hits": 0, "qvec": None}
+        return vec_search.search_text(query_text, top_k=200, exclude=self.exclude)
+
+    def _book_vec_hits(self, book, query_text, vhits, qvec):
+        vh_b = [h for h in (vhits or []) if h.get("book") == book]
+        if len(vh_b) >= 8:
+            return vh_b
+        if self._book_vec_fn is not None:
+            return list(self._book_vec_fn(book, query_text, 20) or vh_b)
+        if self._search_fn is not None or qvec is None:
+            return vh_b
+        return vec_search.search_book_text(book, query_text, top_k=20, qvec=qvec) or vh_b
+
     def plan(
         self,
         terms,
@@ -325,11 +356,13 @@ class Planner:
         chapter_selector="score",
         max_chapters=3,
         focus=None,
+        question="",
     ):
         t0 = time.time()
         terms = dedup(terms)
         nouns = split_terms(terms, self.actions)
         dropped = [t for t in terms if t not in nouns]
+        query_text = (question or "").strip() or " ".join(terms)
         res = Plan(query=",".join(terms), terms=terms, nouns=nouns, action_dropped=dropped)
         seen = set()
         for kind, qterms, groups in self.term_sets(terms, nouns, broad):
@@ -355,7 +388,16 @@ class Planner:
             res.stop = "cap"
         else:
             res.stop = "exhausted"
-        if not res.rounds:
+
+        vhits, vmeta = self._vec_search(query_text)
+        qvec = vmeta.get("qvec")
+        if vmeta.get("used"):
+            res.vec_used = True
+            res.vec_ms = float(vmeta.get("ms") or 0.0)
+            res.vec_hits = len(vhits)
+            res.fusion = "hybrid"
+
+        if not res.rounds and not vhits:
             res.quality = ()
             if focus:
                 pin_focus(
@@ -375,33 +417,67 @@ class Planner:
                 )
             res.ms = round((time.time() - t0) * 1000, 1)
             return res
-        best = res.rounds[0]
-        for r in res.rounds[1:]:
-            if quality(r) > quality(best):
-                best = r
-        res.best_round = best.n
-        res.quality = quality(best)
-        res.ranking = book_score.rank(
-            self.search(best.terms)[0], best.terms, self.scheme, self.exclude, self.meta, self.expand
-        )
+
+        if res.rounds:
+            best = res.rounds[0]
+            for r in res.rounds[1:]:
+                if quality(r) > quality(best):
+                    best = r
+            res.best_round = best.n
+            res.quality = quality(best)
+            best_terms = best.terms
+            res.ranking = book_score.rank(
+                self.search(best_terms)[0], best_terms, self.scheme, self.exclude, self.meta, self.expand
+            )
+        else:
+            res.quality = ()
+            best_terms = terms
+            res.ranking = []
+
+        if vhits:
+            res.ranking = apply_hybrid_ranking(res.ranking, vhits, self.meta)
+
         hits = None
         if chapters:
-            hits, _ = self.search(terms)  # 选章永远用全词集
+            hits, _ = self.search(terms) if terms else ([], 0.0)  # 选章永远用全词集
             for b in res.ranking[: self.limit]:
                 toc, status = self.toc(b.book)
-                rows = select_chapters(hits, b.book, terms, toc, max_chapters, chapter_selector)
+                titles = {e["path"]: e["title"] for e in (toc or [])}
+                bm25_rows = (
+                    select_chapters(
+                        hits,
+                        b.book,
+                        terms,
+                        toc,
+                        vec_search.CHAP_POOL_LIMIT if res.vec_used else max_chapters,
+                        chapter_selector,
+                    )
+                    if hits
+                    else []
+                )
+                if res.vec_used:
+                    vh_b = self._book_vec_hits(b.book, query_text, vhits, qvec)
+                    rows = vec_search.fuse_chapters(
+                        bm25_rows,
+                        vh_b,
+                        max_chapters=max_chapters,
+                        title_fn=lambda cp, t=titles: t.get(cp) or os.path.basename(cp),
+                    )
+                else:
+                    rows = bm25_rows[:max_chapters]
                 for r in rows:
                     r["readme_status"] = status
                 res.chapters.append(
                     {"book": b.book, "title": b.title, "book_score": round(b.score, 4), "selected": rows}
                 )
         if focus:
+            vec_cb = (lambda bk: self._book_vec_hits(bk, query_text, vhits, qvec)) if res.vec_used else None
             pin_focus(
                 res,
                 focus,
                 terms,
-                hits if hits is not None else self.search(best.terms)[0],
-                best.terms,
+                hits if hits is not None else (self.search(best_terms)[0] if best_terms else []),
+                best_terms,
                 limit=self.limit,
                 chapters=chapters,
                 max_chapters=max_chapters,
@@ -410,6 +486,7 @@ class Planner:
                 exclude=self.exclude,
                 meta=self.meta,
                 expand=self.expand,
+                vec_hits_fn=vec_cb,
             )
         res.fetches = self.fetches
         res.ms = round((time.time() - t0) * 1000, 1)
@@ -497,6 +574,63 @@ def focus_rows(hits, book, terms, toc, max_chapters):
     return kept or rows
 
 
+def apply_hybrid_ranking(ranking, vhits, meta):
+    """用 RRF 把 BM25 书级排序与向量书级命中融合。"""
+    v_scores = vec_search.vec_book_scores(vhits)
+    if not v_scores:
+        return list(ranking)
+    v_books = [b for b, _, _ in v_scores]
+    v_top = {}
+    for h in vhits:
+        bk = h.get("book")
+        if bk and bk not in v_top:
+            v_top[bk] = h
+    v_cnt = {b: cnt for b, _, cnt in v_scores}
+    fused = vec_search.fuse_book_scores([b.book for b in ranking], v_books)
+
+    by_book = {b.book: b for b in ranking}
+    out = []
+    for b in ranking:
+        b.score = round(fused.get(b.book, 0.0), 6)
+        out.append(b)
+    for bk in v_books:
+        if bk in by_book:
+            continue
+        info = meta.get(bk) if meta else None
+        title = getattr(info, "title", bk) or bk
+        chaps = int(getattr(info, "chapters", 0) or 0)
+        btype = "long" if chaps >= 500 else "ordinary"
+        top_h = v_top.get(bk, {})
+        bp = top_h.get("path", "")
+        bl = int(top_h.get("line") or 1)
+        bsc = float(top_h.get("score") or 0.0)
+        out.append(
+            book_score.BookScore(
+                book=bk,
+                title=title,
+                type=btype,
+                chapters=chaps,
+                best=round(bsc, 4),
+                best_path=bp,
+                best_line=bl,
+                best_text=vec_search.read_snippet(bp, bl),
+                support=v_cnt.get(bk, 1),
+                topk=round(bsc, 4),
+                coverage=0.0,
+                score=round(fused.get(bk, 0.0), 6),
+                groups=[],
+                has_prefix=False,
+                has_queries=False,
+                scores=[round(bsc, 4)],
+                hits=v_cnt.get(bk, 1),
+                mean=round(bsc, 4),
+                total_groups=0,
+            )
+        )
+    out.sort(key=lambda b: (-b.score, -b.best))
+    return out
+
+
 def pin_focus(
     plan,
     focus,
@@ -511,6 +645,7 @@ def pin_focus(
     exclude=(),
     meta=None,
     expand=None,
+    vec_hits_fn=None,
 ):
     """精确书名钉到 ranking[0] 与 chapters[0]，回写 focus 的首章定位。"""
     if not focus or focus.get("status") != "exact" or not focus.get("book"):
@@ -524,7 +659,18 @@ def pin_focus(
     plan.ranking = ([pinned] + [b for b in plan.ranking if b.book != book])[:limit]
     if chapters:
         toc, status = toc_fn(book) if toc_fn else ([], "")
-        rows = focus_rows(focus_hits, book, terms, toc, max_chapters)
+        titles = {e["path"]: e["title"] for e in (toc or [])}
+        vh_b = vec_hits_fn(book) if vec_hits_fn is not None else []
+        bm25_rows = focus_rows(focus_hits, book, terms, toc, vec_search.CHAP_POOL_LIMIT if vh_b else max_chapters)
+        if vh_b:
+            rows = vec_search.fuse_chapters(
+                bm25_rows,
+                vh_b,
+                max_chapters=max_chapters,
+                title_fn=lambda cp, t=titles: t.get(cp) or os.path.basename(cp),
+            )
+        else:
+            rows = bm25_rows[:max_chapters]
         for r in rows:
             r["readme_status"] = status
         entry = {
@@ -553,6 +699,7 @@ def run(
     chapter_selector="score",
     planner=None,
     focus=None,
+    question="",
 ):
     own = con is None
     if con is None:
@@ -560,7 +707,13 @@ def run(
     try:
         p = planner or Planner(con, scheme=scheme, limit=limit)
         return p.plan(
-            terms, broad=broad, chapters=True, chapter_selector=chapter_selector, max_chapters=max_chapters, focus=focus
+            terms,
+            broad=broad,
+            chapters=True,
+            chapter_selector=chapter_selector,
+            max_chapters=max_chapters,
+            focus=focus,
+            question=question,
         )
     finally:
         if own:

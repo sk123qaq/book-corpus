@@ -43,6 +43,7 @@ import book_readme
 import book_score
 import book_title
 import lib_fts_cjk as cjk
+import vec_search
 
 DB = book_score.DB
 LIBDB = book_score.LIBDB
@@ -274,6 +275,12 @@ def build_cards(ranking, hits, terms, n=DEFAULT_CARDS, toc_fn=None, select_fn=No
     for i, b in enumerate(ranking[:n], 1):
         toc, status = toc_fn(b.book)
         c = _chapter_rows(hits, b.book, terms, toc)
+        titles = {e["path"]: e["title"] for e in (toc or [])}
+        best_ch = c["chapter_path"] if c else getattr(b, "best_path", "")
+        best_ch_title = (
+            c["chapter_title"] if c else (titles.get(best_ch) or os.path.basename(best_ch) if best_ch else "")
+        )
+        snip = c["snippet"] if c else getattr(b, "best_text", "")
         out.append(
             BookCard(
                 book=b.book,
@@ -281,9 +288,9 @@ def build_cards(ranking, hits, terms, n=DEFAULT_CARDS, toc_fn=None, select_fn=No
                 title=b.title,
                 type=b.type,
                 chapters=b.chapters,
-                best_chapter=c["chapter_path"] if c else "",
-                best_chapter_title=c["chapter_title"] if c else "",
-                snippet=c["snippet"] if c else "",
+                best_chapter=best_ch,
+                best_chapter_title=best_ch_title,
+                snippet=snip,
                 matched_groups=list(b.groups),
                 score=round(b.score, 4),
                 reason="第%d名 best=%.2f support=%d cov=%.2f 组=%s"
@@ -452,6 +459,10 @@ def cards_for(
     ranking = book_score.rank(
         noun_hits, nouns, "best_support", getattr(planner, "exclude", []), planner.meta, planner.expand
     )
+    if getattr(planner, "_search_fn", None) is None and (question or "").strip():
+        vhits, _vmeta = vec_search.search_text(question, top_k=200, exclude=getattr(planner, "exclude", []))
+        if vhits:
+            ranking = book_query.apply_hybrid_ranking(ranking, vhits, planner.meta)
     # 选章永远用全词集（B2.5）；卡片排序仍用名词集。
     hits, _ = planner.search(terms) if terms != nouns else (noun_hits, 0.0)
     books = load_books() if books is None else books
