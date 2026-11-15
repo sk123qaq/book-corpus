@@ -1,6 +1,7 @@
 """模型调用器的离线验收：JSONL 事件流、工具调用、纯文本降级。"""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -145,3 +146,45 @@ def test_invoke_related_parser_records_and_replays(tmp_path, monkeypatch):
     assert final["parser"] == "related"
     assert final["parsed_sha256"]
     assert runlog.replay(rec.id) == 0
+
+
+def test_make_json_stream_handler_emits_live_events():
+    seen = []
+    handler = model_call._make_json_stream_handler(seen.append)
+    lines = [
+        json.dumps({"type": "message_update", "assistantMessageEvent": {"type": "thinking_delta", "delta": "思路一"}}),
+        json.dumps(
+            {
+                "type": "tool_execution_start",
+                "toolCallId": "t1",
+                "toolName": "book_grep",
+                "args": {"pattern": "阿Q", "path": "books/B001/md"},
+            }
+        ),
+        json.dumps({"type": "tool_execution_end", "toolCallId": "t1", "toolName": "book_grep", "isError": False}),
+        json.dumps(
+            {"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": '{"answer":"正文"}'}}
+        ),
+    ]
+    for ln in lines:
+        handler(ln)
+    assert [ev["type"] for ev in seen] == ["thinking", "tool_start", "tool_end", "answer_delta"]
+    assert seen[1]["name"] == "book_grep"
+    assert seen[3]["delta"] == "正文"
+
+
+def test_run_streams_lines_when_on_line_provided():
+    seen = []
+    rc, out, err, timed_out, _ms = model_call._run(
+        [sys.executable, "-u", "-c", "import sys; print('line1'); print('line2')"],
+        "",
+        10,
+        None,
+        os.environ.copy(),
+        on_line=seen.append,
+    )
+    assert rc == 0
+    assert timed_out is False
+    assert err == ""
+    assert seen == ["line1\n", "line2\n"]
+    assert out.strip().splitlines() == ["line1", "line2"]

@@ -381,3 +381,212 @@ def test_search_book_pushes_down_book_filter_and_matches_qsearch():
     expected_b1 = [r for r in expected_all if r["book"] == "B1"]
     keys = ("score", "coverage", "bm25", "kana", "line", "path", "book", "text")
     assert [{k: r[k] for k in keys} for r in got] == [{k: r[k] for k in keys} for r in expected_b1]
+
+
+def test_answer_tools_executor_grep_and_read(tmp_path):
+    import answer_tools
+
+    md = tmp_path / "books" / "B001" / "md" / "01.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("# 标题\n第一行赵太爷。\n第二行阿Q挨打。\n第三行收尾。\n", encoding="utf-8")
+    outside = tmp_path / "secret.txt"
+    outside.write_text("机密内容\n", encoding="utf-8")
+
+    ex = answer_tools.ToolExecutor(str(tmp_path), ["books/B001/md"])
+    read_ok, read_err, _ = ex.execute("read", {"path": "books/B001/md/01.md", "offset": 2, "limit": 2})
+    assert read_err is False
+    assert "L2: 第一行赵太爷。" in read_ok
+    assert "L3: 第二行阿Q挨打。" in read_ok
+    assert "第四行" not in read_ok
+
+    blocked, blocked_err, _ = ex.execute("read", {"path": "../secret.txt"})
+    assert blocked_err is True
+    assert "outside" in blocked or "失败" in blocked
+    blocked_root, blocked_root_err, _ = ex.execute("read", {"path": "secret.txt"})
+    assert blocked_root_err is True
+    assert "outside" in blocked_root or "失败" in blocked_root
+
+    grepped, grep_err, _ = ex.execute("book_grep", {"pattern": "阿Q", "path": "books/B001/md"})
+    assert grep_err is False
+    assert "01.md:3:第二行阿Q挨打。" in grepped
+
+
+def test_direct_llm_stream_extractor_and_tool_loop(tmp_path, monkeypatch):
+    import direct_llm
+    import runlog
+
+    assert len(direct_llm.SYSTEM_PROMPT.encode("utf-8")) < 2048
+
+    ext = direct_llm._AnswerStreamExtractor()
+    chunks = [
+        '{"citations":[],"ans',
+        'wer":"判断\\n\\n## 缘由\\n他说\\"姓赵',
+        '\\"，随后\\u6328打。","confiden',
+        'ce":"high","not_found":false}',
+    ]
+    deltas = "".join(ext.feed(c) for c in chunks)
+    assert deltas == '判断\n\n## 缘由\n他说"姓赵"，随后挨打。'
+    assert ext.text == deltas
+
+    md = tmp_path / "books" / "B001" / "md" / "01.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("第1行\n第2行阿Q因姓赵挨打。\n", encoding="utf-8")
+
+    final_reply = (
+        '{"answer":"阿Q因自称姓赵而被打。",'
+        '"citations":[{"path":"books/B001/md/01.md","line":2,"quote":"第2行阿Q因姓赵挨打。"}],'
+        '"confidence":"high","not_found":false}'
+    )
+    turns = [
+        {
+            "content": "",
+            "reasoning": "先搜章节",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "book_grep", "arguments": '{"pattern":"姓赵","path":"books/B001/md"}'},
+                }
+            ],
+            "usage": {"input": 100, "output": 20, "cache_read": 0, "cache_write": 0, "cost": 0.0},
+            "stop_reason": "tool_calls",
+        },
+        {
+            "content": final_reply,
+            "reasoning": "",
+            "tool_calls": [],
+            "usage": {"input": 120, "output": 45, "cache_read": 50, "cache_write": 0, "cost": 0.0},
+            "stop_reason": "stop",
+        },
+    ]
+
+    def fake_stream_turn(cfg, payload, *, session_id="", deadline=0.0, on_delta=None):
+        idx = 0 if len(payload["messages"]) == 2 else 1
+        t = turns[idx]
+        if t["reasoning"] and on_delta:
+            on_delta("reasoning", t["reasoning"], "")
+        if t["content"] and on_delta:
+            on_delta("content", t["content"][:25], "")
+            on_delta("content", t["content"][25:], "")
+        return t, ""
+
+    monkeypatch.setattr(direct_llm, "_http_stream_turn", fake_stream_turn)
+    runlog.configure(str(tmp_path / "logs"))
+    rec = runlog.start("answer", question="阿Q为什么挨打")
+    cfg = {
+        "provider": "magpie",
+        "model_ref": "magpie/opencode-go/deepseek-v4.1-flash",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "url": "http://127.0.0.1:1/v1/chat/completions",
+        "api_key": "test-key",
+        "headers": {},
+        "send_session_affinity": True,
+        "reasoning_effort": "low",
+        "thinking": "low",
+    }
+    seen = []
+    res = direct_llm.invoke_answer(
+        "问题：阿Q为什么挨打",
+        ["books/B001/md"],
+        root=str(tmp_path),
+        cfg=cfg,
+        rec=rec,
+        on_event=seen.append,
+    )
+    assert res.exit_code == 0
+    assert res.mode == "direct"
+    assert '"阿Q因自称姓赵而被打。"' in res.text
+    assert [e["type"] for e in seen if e["type"] in ("tool_start", "tool_end", "answer_delta")][:3] == [
+        "tool_start",
+        "tool_end",
+        "answer_delta",
+    ]
+
+
+def test_repair_reply_json_deterministic_variants():
+    bad_tail_quote = (
+        '{"answer":"结论","citations":[{"path":"books/B1/md/01.md","line":3,"quote":"原文"}]",'
+        '"confidence":"high","not_found":false}'
+    )
+    parsed = answer.repair_reply_json(bad_tail_quote)
+    assert isinstance(parsed, dict)
+    assert parsed["answer"] == "结论"
+    assert len(parsed["citations"]) == 1
+
+    bad_inner_quote = '{"answer":"他说"你好"然后走了。","citations":[],"confidence":"medium","not_found":false}'
+    parsed2 = answer.repair_reply_json(bad_inner_quote)
+    assert isinstance(parsed2, dict)
+    assert '他说"你好"' in parsed2["answer"]
+
+    truncated = '{"answer":"半截内容","citations":[{"path":"books/B1/md/01.md","line":1,"quote":"引文"}]'
+    parsed3 = answer.repair_reply_json(truncated)
+    assert isinstance(parsed3, dict)
+    assert parsed3["answer"] == "半截内容"
+
+
+def test_server_api_answer_sse_and_json_compat(monkeypatch):
+    import json
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    import server
+
+    def fake_answer_question(question, book, path, line, terms, **kwargs):
+        cb = kwargs.get("on_event")
+        if cb:
+            cb({"type": "stage", "stage": "windows", "message": "正在截取原文窗口…"})
+            cb({"type": "tool_start", "id": "t1", "name": "book_grep", "args": {}, "message": "正在检索原文…"})
+            cb({"type": "answer_delta", "delta": "判断一句。", "text": "判断一句。"})
+        return {
+            "ok": True,
+            "mode": "single",
+            "answer": "判断一句。",
+            "lead": "判断一句。",
+            "sections": [],
+            "citations": [],
+            "passages": [],
+            "ms": 12.0,
+        }
+
+    monkeypatch.setattr(server.answerer, "answer_question", fake_answer_question)
+    monkeypatch.setattr(server, "_fill_citations", lambda info: info)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    import threading
+
+    th = threading.Thread(target=httpd.serve_forever, daemon=True)
+    th.start()
+    try:
+        port = httpd.server_address[1]
+        base = f"http://127.0.0.1:{port}/api/answer"
+        payload = {"question": "问", "book": "B1", "path": "books/B1/md/01.md", "line": 1, "terms": ["问"]}
+
+        req_json = urllib.request.Request(
+            base,
+            data=json.dumps(dict(payload, stream=False)).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req_json, timeout=10) as resp:
+            assert "application/json" in resp.headers.get("Content-Type", "")
+            body = json.loads(resp.read().decode("utf-8"))
+            assert body["ok"] is True
+            assert body["answer"] == "判断一句。"
+
+        req_sse = urllib.request.Request(
+            base,
+            data=json.dumps(dict(payload, stream=True)).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req_sse, timeout=10) as resp:
+            assert "text/event-stream" in resp.headers.get("Content-Type", "")
+            raw = resp.read().decode("utf-8")
+        assert "event: stage\n" in raw
+        assert "event: tool_start\n" in raw
+        assert "event: answer_delta\n" in raw
+        assert "event: done\n" in raw
+        assert '"answer": "判断一句。"' in raw
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

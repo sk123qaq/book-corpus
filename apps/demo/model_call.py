@@ -280,7 +280,7 @@ def parse_stream(text):
     }
 
 
-def _run(argv, prompt, timeout, cwd, env):
+def _run(argv, prompt, timeout, cwd, env, on_line=None):
     started = time.monotonic()
     full = [str(part) for part in argv] + [prompt]
     try:
@@ -328,6 +328,8 @@ def _run(argv, prompt, timeout, cwd, env):
         if proc.stdout is not None:
             for line in proc.stdout:
                 out_lines.append(line)
+                if on_line is not None:
+                    on_line(line)
         rc = proc.wait()
     except (OSError, ValueError):
         rc = proc.poll()
@@ -336,6 +338,69 @@ def _run(argv, prompt, timeout, cwd, env):
         watch_thread.join(timeout=2)
         err_thread.join(timeout=2)
     return rc, "".join(out_lines), "".join(err_chunks), state["timed_out"], runlog.ms_since(started)
+
+
+_ORIG_RUN = _run
+
+
+def _make_json_stream_handler(on_event):
+    if on_event is None:
+        return None
+    import answer_tools
+    from direct_llm import _AnswerStreamExtractor
+
+    state = {"extractor": _AnswerStreamExtractor(), "think_chars": 0, "last_think": 0.0}
+
+    def on_line(raw_line):
+        line = (raw_line or "").strip()
+        if not line.startswith("{"):
+            return
+        try:
+            event = json.loads(line)
+        except ValueError:
+            return
+        if not isinstance(event, dict):
+            return
+        kind = event.get("type")
+        if kind == "message_update":
+            sub = event.get("assistantMessageEvent") or {}
+            stype = sub.get("type")
+            if stype == "thinking_delta" and isinstance(sub.get("delta"), str):
+                state["think_chars"] += len(sub["delta"])
+                now = time.monotonic()
+                if state["last_think"] == 0.0 or now - state["last_think"] >= 0.8:
+                    state["last_think"] = now
+                    on_event({"type": "thinking", "chars": state["think_chars"], "message": "正在梳理原文依据…"})
+            elif stype == "text_delta" and isinstance(sub.get("delta"), str):
+                decoded = state["extractor"].feed(sub["delta"])
+                if decoded:
+                    on_event({"type": "answer_delta", "delta": decoded, "text": state["extractor"].text})
+            elif stype == "message_start":
+                state["extractor"] = _AnswerStreamExtractor()
+        elif kind == "tool_execution_start":
+            name = str(event.get("toolName") or "")
+            args = event.get("args") if isinstance(event.get("args"), dict) else {}
+            on_event(
+                {
+                    "type": "tool_start",
+                    "id": str(event.get("toolCallId") or ""),
+                    "name": name,
+                    "args": args,
+                    "message": answer_tools.friendly_tool_label(name, args),
+                }
+            )
+        elif kind == "tool_execution_end":
+            on_event(
+                {
+                    "type": "tool_end",
+                    "id": str(event.get("toolCallId") or ""),
+                    "name": str(event.get("toolName") or ""),
+                    "is_error": bool(event.get("isError")),
+                    "duration_ms": event.get("durationMs"),
+                }
+            )
+
+    return on_line
 
 
 def _error_text(rc, text, stderr, timed_out, timeout, mode):
@@ -400,6 +465,7 @@ def invoke(
     cwd=None,
     env=None,
     parser="",
+    on_event=None,
 ):
     """调用一次模型。json_argv/text_argv 都不含提示词，最后一项由这里补。"""
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
@@ -418,7 +484,11 @@ def invoke(
         model=model,
     )
     if json_argv:
-        rc, stdout, stderr, timed_out, ms = _run(json_argv, prompt, timeout, cwd, env)
+        on_line = _make_json_stream_handler(on_event) if (_run is _ORIG_RUN and on_event is not None) else None
+        if on_line is not None:
+            rc, stdout, stderr, timed_out, ms = _run(json_argv, prompt, timeout, cwd, env, on_line=on_line)
+        else:
+            rc, stdout, stderr, timed_out, ms = _run(json_argv, prompt, timeout, cwd, env)
         result.raw_stream = stdout
         result.stderr = stderr
         result.exit_code = rc

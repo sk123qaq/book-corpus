@@ -27,6 +27,7 @@
 
 import bisect
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -56,6 +57,7 @@ for _p in (SCRIPTS, HERE):
 import book_expand
 import book_readme
 import defpass
+import direct_llm
 import lib_common as L
 import lib_fts_cjk as cjk
 import model_call
@@ -92,6 +94,10 @@ PROMPT_VERSION_MULTI = "answer-v21-multi"
 
 JSON_REMIND = (
     '\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，不要解释，字符串里的双引号写成 \\"。'
+)
+JSON_REPAIR_PROMPT = (
+    "请把下面损坏的 JSON 修复成单个合法 JSON 对象，只输出 JSON，不要代码块或解释。"
+    "保留原有的 answer、citations、confidence、not_found 字段与正文引文含义：\n\n{raw}"
 )
 ANSWER_REMIND = (
     "\n\n上一次没有给出正文。这次只输出一个 JSON 对象，"
@@ -1192,32 +1198,148 @@ def build_multi_prompt(question, plans, windows, coverage="", history="", focus_
 # ---- 调模型 ---------------------------------------------------------
 
 
-def call_pi(prompt, book, books=None, thinking=DEFAULT_THINKING, rec=None, kind="answer"):
-    """返回 (raw_text, error)。失败时 raw_text 为 None。"""
+def _emit_event(on_event, event_type, **fields):
+    if on_event is not None:
+        on_event({"type": event_type, **fields})
+
+
+def _pi_cmd_no_tools(thinking):
+    """退回 pi 做轻量修 JSON 时去掉工具扩展。"""
+    cmd = pi_cmd(thinking)
+    out = []
+    skip = 0
+    for item in cmd:
+        if skip:
+            skip -= 1
+            continue
+        if item in ("-e", "--tools"):
+            skip = 1
+            continue
+        out.append(item)
+    return [*out, "--tools", ""]
+
+
+def call_pi(
+    prompt,
+    book,
+    books=None,
+    thinking=DEFAULT_THINKING,
+    rec=None,
+    kind="answer",
+    on_event=None,
+    use_tools=True,
+    system_prompt=None,
+    titles=None,
+):
+    """返回 (raw_text, error)。失败时 raw_text 为 None。
+
+    优先走 Python 内直连 HTTP + 进程内工具循环；未配直连端点或设了
+    `ANSWER_BACKEND=pi` 时自动退回 `pi` 子进程。
+    """
     roots = ["books/%s/md" % b for b in (books or [book])]
-    env = dict(os.environ)
-    env["BOOK_MD"] = roots[0]
-    env["BOOK_MDS"] = json.dumps(roots, ensure_ascii=False)
     thinking = normalize_thinking(thinking)
-    result = model_call.invoke(
-        prompt,
-        pi_json_cmd(thinking),
-        pi_cmd(thinking),
-        kind=kind,
-        rec=rec,
-        timeout=PI_TIMEOUT,
-        cwd=ROOT,
-        env=env,
-        parser="answer",
-    )
+    backend = (os.environ.get("ANSWER_BACKEND") or "auto").strip().lower()
+    cfg = direct_llm.resolve_config(ROOT, model_ref=MODEL, thinking=thinking, backend=backend)
+    if cfg is not None:
+        result = direct_llm.invoke_answer(
+            prompt,
+            roots,
+            root=ROOT,
+            cfg=cfg,
+            kind=kind,
+            rec=rec,
+            timeout=PI_TIMEOUT,
+            use_tools=use_tools,
+            system_prompt=system_prompt or direct_llm.SYSTEM_PROMPT,
+            titles=titles,
+            on_event=on_event,
+        )
+        if (
+            backend == "auto"
+            and result.exit_code not in (0, None)
+            and not (result.text or "").strip()
+            and "ConnectionRefusedError" in (result.stderr or result.error or "")
+        ):
+            cfg = None
+    if cfg is None:
+        env = dict(os.environ)
+        env["BOOK_MD"] = roots[0]
+        env["BOOK_MDS"] = json.dumps(roots, ensure_ascii=False)
+        text_cmd = pi_cmd(thinking) if use_tools else _pi_cmd_no_tools(thinking)
+        try:
+            at = text_cmd.index("-p")
+            json_cmd = [*text_cmd[:at], "--mode", "json", *text_cmd[at:]]
+        except ValueError:
+            json_cmd = text_cmd
+        result = model_call.invoke(
+            prompt,
+            json_cmd,
+            text_cmd,
+            kind=kind,
+            rec=rec,
+            timeout=PI_TIMEOUT,
+            cwd=ROOT,
+            env=env,
+            parser="answer",
+            on_event=on_event,
+        )
     if result.timed_out:
         return None, "回答超时（%d 秒）" % PI_TIMEOUT
     if result.exit_code not in (0, None):
+        if result.error and result.mode == "direct":
+            return None, result.error
         tail = " ".join((result.stderr or "").split())[:240]
         return None, "模型调用失败（rc=%d）%s" % (result.exit_code, ("：" + tail) if tail else "")
     if not (result.text or "").strip():
-        return None, "模型没有输出"
+        return None, result.error or "模型没有输出"
     return result.text, ""
+
+
+_ORIG_CALL_PI = call_pi
+
+
+def _call_model(
+    prompt,
+    book,
+    books=None,
+    *,
+    thinking=DEFAULT_THINKING,
+    rec=None,
+    kind="answer",
+    on_event=None,
+    use_tools=True,
+    system_prompt=None,
+    titles=None,
+):
+    """调用 `call_pi`，并兼容仅接旧签名的测试替身。"""
+    if call_pi is _ORIG_CALL_PI:
+        return call_pi(
+            prompt,
+            book,
+            books,
+            thinking=thinking,
+            rec=rec,
+            kind=kind,
+            on_event=on_event,
+            use_tools=use_tools,
+            system_prompt=system_prompt,
+            titles=titles,
+        )
+    kwargs = {"thinking": thinking, "rec": rec, "kind": kind}
+    try:
+        params = inspect.signature(call_pi).parameters
+        has_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+        if has_kw or "on_event" in params:
+            kwargs["on_event"] = on_event
+        if has_kw or "use_tools" in params:
+            kwargs["use_tools"] = use_tools
+        if has_kw or "system_prompt" in params:
+            kwargs["system_prompt"] = system_prompt
+        if has_kw or "titles" in params:
+            kwargs["titles"] = titles
+    except (TypeError, ValueError):
+        pass
+    return call_pi(prompt, book, books, **kwargs)
 
 
 def parse_reply(raw):
@@ -1263,63 +1385,323 @@ def parse_reply(raw):
     return None
 
 
-def _request_reply(prompt, book, books=None, thinking=DEFAULT_THINKING, accept=None, rec=None):
-    """调模型并解析，最多两次。返回 (reply, raw, error)，reply 只在成功时非 None。
+def _strip_fence_to_brace(raw):
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```\s*$", "", text)
+    start = text.find("{")
+    return text[start:] if start >= 0 else ""
 
-    解析不出 JSON 换 JSON_REMIND 再问，解析出来但结构不合格换 ANSWER_REMIND。
-    raw 为 None 是调不起 pi（超时、传输失败），重问只会再等一遍，直接返回。
+
+def _skip_ws(text, idx):
+    while idx < len(text) and text[idx].isspace():
+        idx += 1
+    return idx
+
+
+def _repair_json_strings(text):
+    """修字符串内部未转义引号与原始换行/制表，保留合法键值边界引号。"""
+    out = []
+    stack = []
+    in_str = False
+    in_key = False
+    expect_key = False
+    esc = False
+    i = 0
+    n = len(text)
+    valid_esc = {'"', "\\", "/", "b", "f", "n", "r", "t", "u"}
+
+    while i < n:
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+                if ch in valid_esc:
+                    out.append(ch)
+                else:
+                    out.append("\\" + ch)
+                i += 1
+                continue
+            if ch == "\\":
+                esc = True
+                out.append(ch)
+                i += 1
+                continue
+            if ch == "\n":
+                out.append("\\n")
+                i += 1
+                continue
+            if ch == "\r":
+                out.append("\\r")
+                i += 1
+                continue
+            if ch == "\t":
+                out.append("\\t")
+                i += 1
+                continue
+            if ch == '"':
+                j = _skip_ws(text, i + 1)
+                closes = False
+                if in_key:
+                    closes = j < n and text[j] == ":"
+                elif j >= n:
+                    closes = True
+                else:
+                    nxt = text[j]
+                    top = stack[-1] if stack else "{"
+                    if (nxt == "}" and top == "{") or (nxt == "]" and top == "["):
+                        closes = True
+                    elif nxt == ",":
+                        k = _skip_ws(text, j + 1)
+                        if k >= n:
+                            closes = True
+                        elif top == "{":
+                            closes = text[k] in ('"', "}")
+                        else:
+                            closes = text[k] in ('"', "{", "[", "]", "t", "f", "n", "-") or text[k].isdigit()
+                if closes:
+                    in_str = False
+                    in_key = False
+                    out.append('"')
+                else:
+                    out.append('\\"')
+                i += 1
+                continue
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch == "{":
+            stack.append("{")
+            expect_key = True
+            out.append(ch)
+        elif ch == "[":
+            stack.append("[")
+            expect_key = False
+            out.append(ch)
+        elif ch == "}":
+            if stack and stack[-1] == "{":
+                stack.pop()
+            expect_key = False
+            out.append(ch)
+        elif ch == "]":
+            if stack and stack[-1] == "[":
+                stack.pop()
+            expect_key = False
+            out.append(ch)
+        elif ch == ",":
+            expect_key = bool(stack and stack[-1] == "{")
+            out.append(ch)
+        elif ch == ":":
+            expect_key = False
+            out.append(ch)
+        elif ch == '"':
+            # 修 `]"` / `}"` 这类容器闭合后多打的引号
+            k = len(out) - 1
+            while k >= 0 and out[k].isspace():
+                k -= 1
+            if k >= 0 and out[k] in ("]", "}"):
+                j = _skip_ws(text, i + 1)
+                if j < n and text[j] in (",", "}", "]"):
+                    i += 1
+                    continue
+            in_str = True
+            in_key = expect_key
+            expect_key = False
+            out.append(ch)
+        else:
+            out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _close_truncated_json(text):
+    """如果输出在尾端被截断，补齐未闭合引号与括号后再试解析。"""
+    stack = []
+    in_str = False
+    esc = False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            stack.append("}")
+        elif ch == "[":
+            stack.append("]")
+        elif (ch == "}" and stack and stack[-1] == "}") or (ch == "]" and stack and stack[-1] == "]"):
+            stack.pop()
+    if not stack and not in_str:
+        return ""
+    s = text.rstrip()
+    if in_str:
+        if esc:
+            s += "\\"
+        s += '"'
+    s = re.sub(r"[,:\s]+$", "", s)
+    # 若栈顶期待值而刚补了空 key 或挂在半截字段上，只补闭合括号即可试解析
+    return s + "".join(reversed(stack))
+
+
+def repair_reply_json(raw):
+    """坏 JSON 本地确定性轻修复，尽量免去二次调模型。修不了返回 None。"""
+    base = _strip_fence_to_brace(raw)
+    if not base:
+        return None
+    # 1. `]"` / `}"` 多余引号与尾逗号（ANSWER-BRIEF 记录的常见坏形态）
+    step1 = re.sub(r'([}\]])"\s*(?=[,}\]])', r"\1", base)
+    step1 = re.sub(r",\s*([}\]])", r"\1", step1)
+    parsed = parse_reply(step1)
+    if parsed is not None:
+        return parsed
+    # 2. 字符串内未转义双引号 / 原始换行 / 括号后 stray quote
+    step2 = _repair_json_strings(step1)
+    step2 = re.sub(r",\s*([}\]])", r"\1", step2)
+    parsed = parse_reply(step2)
+    if parsed is not None:
+        return parsed
+    # 3. 截断补全引号与括号
+    step3 = _close_truncated_json(step2)
+    if step3:
+        parsed = parse_reply(step3)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _request_reply(
+    prompt, book, books=None, thinking=DEFAULT_THINKING, accept=None, rec=None, on_event=None, titles=None
+):
+    """调模型并解析：优先本地确定性修 JSON，修不了只把 raw 传给 thinking=off 轻修一次。
+
+    只有当合法 JSON 里没有正文（accept 失败）才用 ANSWER_REMIND 补问；
+    raw 为 None（超时、传输失败）直接返回，不重问。
     """
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
-    raw, error, reply = None, "", None
-    ask = prompt
-    for _attempt in range(2):
-        rec.event(
-            "answer.attempt",
-            attempt=_attempt + 1,
-            chars=len(ask),
-            sha256=runlog.sha256(ask),
-            **rec.large(ask, "prompt"),
-        )
-        raw, error = call_pi(
-            ask, book, books, thinking=thinking, rec=rec, kind="answer" if _attempt == 0 else "answer_retry"
-        )
-        if raw is None:
-            rec.event("answer.attempt_end", attempt=_attempt + 1, ok=False, error=error)
-            return None, None, error
-        rec.event(
-            "answer.raw",
-            attempt=_attempt + 1,
-            chars=len(raw),
-            sha256=runlog.sha256(raw),
-            **rec.large(raw, "raw"),
-        )
-        reply = parse_reply(raw)
-        if reply is not None and (accept is None or accept(reply)):
-            rec.event("answer.attempt_end", attempt=_attempt + 1, ok=True, parsed=True, accepted=True)
-            return reply, raw, ""
-        error = "模型没有返回 JSON" if reply is None else "模型没有给出答案结构"
-        rec.event(
-            "answer.parse",
-            attempt=_attempt + 1,
-            ok=False,
-            parsed=reply is not None,
-            error=error,
-            raw_chars=len(raw),
-            raw_sha256=runlog.sha256(raw),
-        )
-        # server.log 里要能看出这次答案多等了一轮，以及坏在哪
+    rec.event(
+        "answer.attempt",
+        attempt=1,
+        chars=len(prompt),
+        sha256=runlog.sha256(prompt),
+        **rec.large(prompt, "prompt"),
+    )
+    raw, error = _call_model(
+        prompt,
+        book,
+        books,
+        thinking=thinking,
+        rec=rec,
+        kind="answer",
+        on_event=on_event,
+        use_tools=True,
+        titles=titles,
+    )
+    if raw is None:
+        rec.event("answer.attempt_end", attempt=1, ok=False, error=error)
+        return None, None, error
+    rec.event(
+        "answer.raw",
+        attempt=1,
+        chars=len(raw),
+        sha256=runlog.sha256(raw),
+        **rec.large(raw, "raw"),
+    )
+
+    reply = parse_reply(raw)
+    if reply is None:
+        reply = repair_reply_json(raw)
+        if reply is not None:
+            rec.event("answer.repair", method="local", ok=True, raw_chars=len(raw))
+            if accept is None or accept(reply):
+                rec.event("answer.attempt_end", attempt=1, ok=True, parsed=True, accepted=True, repaired="local")
+                return reply, raw, ""
+            reply = None
+
+    if reply is not None and (accept is None or accept(reply)):
+        rec.event("answer.attempt_end", attempt=1, ok=True, parsed=True, accepted=True)
+        return reply, raw, ""
+
+    is_parse_fail = reply is None
+    error = "模型没有返回 JSON" if is_parse_fail else "模型没有给出答案结构"
+    rec.event(
+        "answer.parse",
+        attempt=1,
+        ok=False,
+        parsed=not is_parse_fail,
+        error=error,
+        raw_chars=len(raw),
+        raw_sha256=runlog.sha256(raw),
+    )
+
+    if is_parse_fail:
         print(
-            "回答重问（%s）：%s" % ("解析失败" if reply is None else "没有正文", " ".join(raw.split())[:120]),
+            "回答轻量修 JSON（thinking=off）：%s" % (" ".join(raw.split())[:120]),
             file=sys.stderr,
             flush=True,
         )
-        reminder = JSON_REMIND if reply is None else ANSWER_REMIND
-        rec.event(
-            "answer.reminder", attempt=_attempt + 1, reminder="json" if reply is None else "answer", chars=len(reminder)
+        _emit_event(on_event, "stage", stage="repair", message="正在修复回答格式…")
+        repair_prompt = JSON_REPAIR_PROMPT.format(raw=raw[:16000])
+        rec.event("answer.repair", method="model_off", ok=False, stage="start", raw_chars=len(raw))
+        rep_raw, rep_err = _call_model(
+            repair_prompt,
+            book,
+            books,
+            thinking="off",
+            rec=rec,
+            kind="answer_repair",
+            on_event=on_event,
+            use_tools=False,
+            system_prompt=direct_llm.REPAIR_SYSTEM_PROMPT,
+            titles=titles,
         )
-        ask = prompt + reminder
-    rec.event("answer.attempt_end", attempt=2, ok=False, error=error)
-    return None, raw, error
+        if rep_raw is None:
+            rec.event("answer.attempt_end", attempt=2, ok=False, error=rep_err or error)
+            return None, raw, error
+        rep_reply = parse_reply(rep_raw) or repair_reply_json(rep_raw)
+        if rep_reply is not None and (accept is None or accept(rep_reply)):
+            rec.event("answer.repair", method="model_off", ok=True, raw_chars=len(rep_raw))
+            rec.event("answer.attempt_end", attempt=2, ok=True, parsed=True, accepted=True, repaired="model_off")
+            return rep_reply, rep_raw, ""
+        rec.event("answer.attempt_end", attempt=2, ok=False, error="模型没有返回 JSON")
+        return None, rep_raw, "模型没有返回 JSON"
+
+    # 解析出了 JSON 但没有正文：保留一次带 ANSWER_REMIND 的补问
+    print(
+        "回答重问（没有正文）：%s" % (" ".join(raw.split())[:120]),
+        file=sys.stderr,
+        flush=True,
+    )
+    rec.event("answer.reminder", attempt=1, reminder="answer", chars=len(ANSWER_REMIND))
+    ask2 = prompt + ANSWER_REMIND
+    rec.event("answer.attempt", attempt=2, chars=len(ask2), sha256=runlog.sha256(ask2), **rec.large(ask2, "prompt"))
+    raw2, error2 = _call_model(
+        ask2,
+        book,
+        books,
+        thinking=thinking,
+        rec=rec,
+        kind="answer_retry",
+        on_event=on_event,
+        use_tools=True,
+        titles=titles,
+    )
+    if raw2 is None:
+        rec.event("answer.attempt_end", attempt=2, ok=False, error=error2)
+        return None, None, error2
+    reply2 = parse_reply(raw2) or repair_reply_json(raw2)
+    if reply2 is not None and (accept is None or accept(reply2)):
+        rec.event("answer.attempt_end", attempt=2, ok=True, parsed=True, accepted=True)
+        return reply2, raw2, ""
+    err_final = "模型没有返回 JSON" if reply2 is None else "模型没有给出答案结构"
+    rec.event("answer.attempt_end", attempt=2, ok=False, error=err_final)
+    return None, raw2, err_final
 
 
 def _split_answer(text):
@@ -1710,6 +2092,7 @@ def answer_question(
     history="",
     focus=None,
     rec=None,
+    on_event=None,
 ):
     """返回 Answer dict（结构见 ANSWER-BRIEF.md 的「数据形状」）。
 
@@ -1753,6 +2136,7 @@ def answer_question(
     named = _normalize_focus(focus)
     if named:
         rec.event("answer.focus", **named)
+    extra_ev = {"on_event": on_event} if on_event is not None else {}
     if named and named["status"] == "exact" and named["book"]:
         hit = _focus_source(named, scope, book, path, line)
         note = _focus_note(named, hit)
@@ -1772,6 +2156,7 @@ def answer_question(
                     history,
                     focus_title=note["title"],
                     rec=rec,
+                    **extra_ev,
                 )
                 out["focus"] = note
                 rec.event("answer.focus_result", **note)
@@ -1798,6 +2183,7 @@ def answer_question(
                 thinking,
                 history,
                 rec=rec,
+                **extra_ev,
             )
         else:
             out = _answer_multi(
@@ -1812,15 +2198,18 @@ def answer_question(
                 focus_title=note["title"],
                 focus_book=hit["book"],
                 rec=rec,
+                **extra_ev,
             )
         out["focus"] = note
         rec.event("answer.focus_result", **note)
         return out
     if len(scope) >= 2:
         rec.event("answer.route", mode="multi", sources=len(scope))
-        return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking, history, rec=rec)
+        return _answer_multi(question, scope, terms, groups, use_cache, t0, thinking, history, rec=rec, **extra_ev)
     rec.event("answer.route", mode="single", sources=len(scope))
-    return _answer_single(question, book, path, line, terms, groups, use_cache, t0, thinking, history, rec=rec)
+    return _answer_single(
+        question, book, path, line, terms, groups, use_cache, t0, thinking, history, rec=rec, **extra_ev
+    )
 
 
 def _answer_single(
@@ -1836,6 +2225,7 @@ def _answer_single(
     history="",
     version=None,
     rec=None,
+    on_event=None,
 ):
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
     rel = _rel(path)
@@ -1894,6 +2284,7 @@ def _answer_single(
             )
             return cached
 
+    _emit_event(on_event, "stage", stage="windows", message="正在抽取原文证据窗口…")
     titles, status = _chapter_titles(book)
     con = sqlite3.connect("file:%s?mode=ro" % INDEX_DB, uri=True)
     try:
@@ -1935,7 +2326,7 @@ def _answer_single(
         return out
 
     prompt = build_prompt(question, book, windows, chapters, history, rec=rec)
-    reply, raw, error = _request_reply(prompt, book, thinking=thinking, rec=rec)
+    reply, raw, error = _request_reply(prompt, book, thinking=thinking, rec=rec, on_event=on_event, titles=titles)
     if raw is None:
         out = _err(error, passages=_passages(windows), ms=_ms(t0), thinking=thinking)
         rec.event("answer.error", mode="single", stage="model", error=out.get("error"))
@@ -1948,6 +2339,7 @@ def _answer_single(
         rec.set_index(answer_ok=False, answer_error=out.get("error"))
         return out
 
+    _emit_event(on_event, "stage", stage="verify", message="正在回查核对引文行号…")
     lead, sections, dissent, gap, answer = _shape_answer(reply, rec=rec)
     not_found = bool(reply.get("not_found")) or not answer
     citations, dropped = verify_citations(reply.get("citations"), windows, rel, line, rec=rec)
@@ -2033,6 +2425,7 @@ def _answer_multi(
     focus_title="",
     focus_book=None,
     rec=None,
+    on_event=None,
 ):
     """多书：每本取两窗，一次提示词写完整篇，引文按书归并。"""
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
@@ -2079,11 +2472,14 @@ def _answer_multi(
             )
             return cached
 
+    _emit_event(on_event, "stage", stage="windows", message="正在汇总 %d 本书的原文窗口…" % len(sources))
     plans = []
+    all_titles = {}
     con = sqlite3.connect("file:%s?mode=ro" % INDEX_DB, uri=True)
     try:
         for src in sources:
             titles, status = _chapter_titles(src["book"])
+            all_titles.update(titles)
             picked, chapters = pick_passages(
                 con,
                 src["book"],
@@ -2159,6 +2555,8 @@ def _answer_multi(
         thinking,
         accept=lambda reply: bool(reply.get("not_found")) or bool(_shape_answer(reply)[4]),
         rec=rec,
+        on_event=on_event,
+        titles=all_titles,
     )
     if raw is None:
         out = _err(error, passages=_passages(windows), ms=_ms(t0), thinking=thinking)
@@ -2174,6 +2572,7 @@ def _answer_multi(
         rec.set_index(answer_ok=False, answer_error=out.get("error"))
         return out
 
+    _emit_event(on_event, "stage", stage="verify", message="正在跨书回查引文行号…")
     lead, sections, dissent, gap, answer = _shape_answer(reply, rec=rec)
     not_found = bool(reply.get("not_found")) or not answer
     citations, dropped = verify_citations(reply.get("citations"), windows, sources=sources, rec=rec)

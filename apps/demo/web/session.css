@@ -1023,6 +1023,8 @@ a { color: inherit; text-decoration: none; }
   50% { opacity: 1; transform: scale(1); }
 }
 .elapsed { color: var(--ink); }
+.stream-preview { margin-top: 12px; opacity: .94; }
+.stream-preview p { margin: 0 0 10px; line-height: 1.72; }
 
 /* 初始页 */
 .start { padding: 38px 0 6px; max-width: 560px; }

@@ -9,6 +9,7 @@
 
 import argparse
 import copy
+import inspect
 import json
 import os
 import re
@@ -98,17 +99,44 @@ def claim_answer_job(key, attempt=0, fresh=False):
             # 用户点了「重试回答」：旧任务只留给还拿着它引用的等待者，
             # 这次重新调模型，不能把上一次的错误或结果当成这一次的回答。
             ANSWER_JOBS.pop(key, None)
-        job = {"event": threading.Event(), "result": None, "error": None, "attempt": attempt, "expires": 0.0}
+        job = _new_answer_job(attempt)
         ANSWER_JOBS[key] = job
         return job, True
 
 
+def _new_answer_job(attempt=0):
+    return {
+        "event": threading.Event(),
+        "cond": threading.Condition(),
+        "events": [],
+        "result": None,
+        "error": None,
+        "attempt": attempt,
+        "expires": 0.0,
+    }
+
+
+def append_answer_event(job, event):
+    """向同轮任务事件流追加一条进度/增量文本，唤醒所有流式订阅者。"""
+    if job is None or not isinstance(event, dict):
+        return
+    with job["cond"]:
+        job["events"].append(event)
+        job["cond"].notify_all()
+
+
 def publish_answer_job(job, result=None, error=None):
-    """写结果、开 Event。job 再保留 ANSWER_JOB_TTL 秒，迟到请求还能复用。"""
-    job["result"] = result
-    job["error"] = error
-    job["expires"] = time.time() + ANSWER_JOB_TTL
-    job["event"].set()
+    """写结果、追加终态事件并开 Event。job 再保留 ANSWER_JOB_TTL 秒。"""
+    with job["cond"]:
+        job["result"] = result
+        job["error"] = error
+        job["expires"] = time.time() + ANSWER_JOB_TTL
+        if error:
+            job["events"].append({"type": "error", "data": {"ok": False, "status": error[0], "error": error[1]}})
+        elif result is not None:
+            job["events"].append({"type": "done", "data": result})
+        job["event"].set()
+        job["cond"].notify_all()
 
 
 def _session_id(value):
@@ -651,6 +679,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             book = book or focus["book"]
         fresh = _flag(payload.get("fresh"))
+        stream = _flag(payload.get("stream")) or "text/event-stream" in (self.headers.get("Accept") or "").lower()
         self.api_answer(
             question,
             book,
@@ -663,6 +692,7 @@ class Handler(BaseHTTPRequestHandler):
             thinking=payload.get("thinking"),
             use_cache=not fresh,
             fresh=fresh,
+            stream=stream,
             session_id=_session_id(payload.get("session_id")),
             turn=_turn_no(payload.get("turn")),
         )
@@ -878,6 +908,88 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send_json(200, info)
 
+    def _send_sse_headers(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Connection", "close")
+        self.close_connection = True
+        self.end_headers()
+
+    def _write_sse(self, chunk):
+        try:
+            self.wfile.write(chunk)
+            self.wfile.flush()
+            return True
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return False
+
+    def _stream_job(self, job):
+        """把同轮任务的事件列表以 SSE 持续推给客户端，断开不影响后台任务落盘。"""
+        self._send_sse_headers()
+        idx = 0
+        deadline = time.monotonic() + ANSWER_WAIT_SECONDS
+        while True:
+            need_ping = False
+            with job["cond"]:
+                while idx >= len(job["events"]) and not job["event"].is_set():
+                    rem = deadline - time.monotonic()
+                    if rem <= 0:
+                        break
+                    job["cond"].wait(timeout=min(15.0, rem))
+                    if idx >= len(job["events"]) and not job["event"].is_set() and time.monotonic() < deadline:
+                        need_ping = True
+                        break
+                batch = list(job["events"][idx:])
+                done = job["event"].is_set()
+                total_len = len(job["events"])
+            if need_ping and not batch and not done:
+                if not self._write_sse(b": ping\n\n"):
+                    return
+                continue
+            for ev in batch:
+                etype = ev.get("type") or "message"
+                payload = json.dumps(ev, ensure_ascii=False)
+                if not self._write_sse(("event: %s\ndata: %s\n\n" % (etype, payload)).encode("utf-8")):
+                    return
+                idx += 1
+            if done and idx >= total_len:
+                return
+            if not done and time.monotonic() >= deadline:
+                timeout_ev = {
+                    "type": "error",
+                    "data": {"ok": False, "status": 504, "error": "回答仍在生成，请稍后刷新"},
+                }
+                self._write_sse(
+                    ("event: error\ndata: %s\n\n" % json.dumps(timeout_ev, ensure_ascii=False)).encode("utf-8")
+                )
+                return
+
+    @staticmethod
+    def _call_answer_question(
+        question, book, path, line, terms, groups, sources, thinking, use_cache, history, focus, rec, on_event
+    ):
+        kwargs = {
+            "groups": groups,
+            "sources": sources,
+            "thinking": thinking,
+            "use_cache": use_cache,
+            "history": history,
+            "focus": focus,
+            "rec": rec,
+        }
+        try:
+            sig = inspect.signature(answerer.answer_question)
+            accepts_event = "on_event" in sig.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+        except (TypeError, ValueError):
+            accepts_event = False
+        if on_event is not None and accepts_event:
+            kwargs["on_event"] = on_event
+        return answerer.answer_question(question, book, path, line, terms, **kwargs)
+
     def api_answer(
         self,
         question,
@@ -893,22 +1005,39 @@ class Handler(BaseHTTPRequestHandler):
         session_id="",
         turn=None,
         fresh=False,
+        stream=False,
     ):
         sid, n, rel, ctx = "", 0, None, None
-        rec = None
         if session_id:
             sid, n, rel, ctx = self.session_context(session_id, turn, sources)
         meta = session.turn_meta(sid, n) if sid and n else None
         if meta is None:
             # 没带会话、或会话里没这一轮：老的同路无状态路径。
             self.answer_once(
-                question, book, path, line, terms, groups, sources, focus, thinking, use_cache, ctx, sid, n, rel
+                question,
+                book,
+                path,
+                line,
+                terms,
+                groups,
+                sources,
+                focus,
+                thinking,
+                use_cache,
+                ctx,
+                sid,
+                n,
+                rel,
+                stream=stream,
             )
             return
         key = answer_job_key(sid, n, meta["run_token"])
         attempt = (meta["answer_attempt"] or 0) + 1
         job, owner = claim_answer_job(key, attempt, fresh=fresh)
         if not owner:
+            if stream:
+                self._stream_job(job)
+                return
             if not job["event"].wait(ANSWER_WAIT_SECONDS):
                 self.fail(504, "回答仍在生成，请稍后刷新")
                 return
@@ -922,129 +1051,175 @@ class Handler(BaseHTTPRequestHandler):
         token = meta["run_token"]
         if not session.begin_answer(sid, n, attempt, os.getpid(), token=token):
             message = "这一轮已重跑，本次回答作废"
-            self.fail(409, message)
             publish_answer_job(job, error=(409, message))
-            return
-        rec = runlog.start(
-            "answer",
-            session=sid,
-            turn=n,
-            parent=meta.get("run", ""),
-            question=question,
-            thinking=thinking or "",
-            attempt=attempt,
-            sources=len(sources or []),
-            focus=bool(focus),
-        )
-        try:
-            info = answerer.answer_question(
-                question,
-                book,
-                path,
-                line,
-                terms,
-                groups=groups,
-                sources=sources,
-                thinking=thinking,
-                use_cache=use_cache,
-                history=ctx["text"] if ctx else "",
-                focus=focus,
-                rec=rec,
-            )
-            _fill_citations(info)
-            if not session.finish_answer(sid, n, attempt, info, ctx, token=token, run=rec.id if rec else ""):
-                # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
-                message = "这一轮已重跑，本次回答作废"
-                rec.event("answer.stale", error=message)
-                rec.finish("stale", error=message)
-                publish_answer_job(job, error=(409, message))
+            if stream:
+                self._stream_job(job)
+            else:
                 self.fail(409, message)
-                return
-            rec.set_index(
-                answer_ok=bool(info.get("ok")),
-                answer_error=info.get("error", ""),
-                confidence=info.get("confidence"),
-                citations=len(info.get("citations") or []),
-                passages=len(info.get("passages") or []),
-                mode=info.get("mode", "single"),
-            )
-            rec.finish("ok" if info.get("ok") else "error", error=info.get("error", ""))
-            body = dict(
-                info,
-                session_id=sid,
+            return
+
+        def _worker():
+            rec = runlog.start(
+                "answer",
+                session=sid,
                 turn=n,
-                related=rel,
-                history=self.history_brief(ctx),
-                run_token=token,
-                answer_state=session.answer_state_for(info),
+                parent=meta.get("run", ""),
+                question=question,
+                thinking=thinking or "",
+                attempt=attempt,
+                sources=len(sources or []),
+                focus=bool(focus),
             )
-            publish_answer_job(job, result=body)
-            self.send_json(200, body)
-        except ValueError as exc:
-            session.fail_answer(sid, n, attempt, str(exc), token=token)
-            if rec is not None:
+            try:
+                info = self._call_answer_question(
+                    question,
+                    book,
+                    path,
+                    line,
+                    terms,
+                    groups,
+                    sources,
+                    thinking,
+                    use_cache,
+                    ctx["text"] if ctx else "",
+                    focus,
+                    rec,
+                    (lambda ev: append_answer_event(job, ev)) if stream else None,
+                )
+                _fill_citations(info)
+                if not session.finish_answer(sid, n, attempt, info, ctx, token=token, run=rec.id if rec else ""):
+                    # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
+                    message = "这一轮已重跑，本次回答作废"
+                    rec.event("answer.stale", error=message)
+                    rec.finish("stale", error=message)
+                    publish_answer_job(job, error=(409, message))
+                    return
+                rec.set_index(
+                    answer_ok=bool(info.get("ok")),
+                    answer_error=info.get("error", ""),
+                    confidence=info.get("confidence"),
+                    citations=len(info.get("citations") or []),
+                    passages=len(info.get("passages") or []),
+                    mode=info.get("mode", "single"),
+                )
+                rec.finish("ok" if info.get("ok") else "error", error=info.get("error", ""))
+                body = dict(
+                    info,
+                    session_id=sid,
+                    turn=n,
+                    related=rel,
+                    history=self.history_brief(ctx),
+                    run_token=token,
+                    answer_state=session.answer_state_for(info),
+                )
+                publish_answer_job(job, result=body)
+            except ValueError as exc:
+                session.fail_answer(sid, n, attempt, str(exc), token=token)
                 rec.error("answer", exc)
                 rec.finish("error", error=str(exc))
-            publish_answer_job(job, error=(400, str(exc)))
-            self.fail(400, str(exc))
-        except Exception as exc:
-            traceback.print_exc()
-            message = "%s: %s" % (exc.__class__.__name__, exc)
-            session.fail_answer(sid, n, attempt, message, token=token)
-            if rec is not None:
+                publish_answer_job(job, error=(400, str(exc)))
+            except Exception as exc:
+                traceback.print_exc()
+                message = "%s: %s" % (exc.__class__.__name__, exc)
+                session.fail_answer(sid, n, attempt, message, token=token)
                 rec.error("answer", exc)
                 rec.finish("error", error=message)
-            publish_answer_job(job, error=(500, message))
-            self.fail(500, message)
+                publish_answer_job(job, error=(500, message))
+
+        if stream:
+            threading.Thread(target=_worker, daemon=True).start()
+            self._stream_job(job)
+            return
+        _worker()
+        if job["error"]:
+            self.fail(*job["error"])
+        else:
+            self.send_json(200, job["result"])
 
     def answer_once(
-        self, question, book, path, line, terms, groups, sources, focus, thinking, use_cache, ctx, sid, n, rel
+        self,
+        question,
+        book,
+        path,
+        line,
+        terms,
+        groups,
+        sources,
+        focus,
+        thinking,
+        use_cache,
+        ctx,
+        sid,
+        n,
+        rel,
+        stream=False,
     ):
         """不带会话状态的回答：照旧调一次模型并把结果发回去。"""
-        rec = runlog.start(
-            "answer_once",
-            session=sid,
-            turn=n,
-            question=question,
-            thinking=thinking or "",
-            sources=len(sources or []),
-            focus=bool(focus),
-        )
-        try:
-            info = answerer.answer_question(
-                question,
-                book,
-                path,
-                line,
-                terms,
-                groups=groups,
-                sources=sources,
-                thinking=thinking,
-                use_cache=use_cache,
-                history=ctx["text"] if ctx else "",
-                focus=focus,
-                rec=rec,
+        job = _new_answer_job(0) if stream else None
+
+        def _run_once():
+            rec = runlog.start(
+                "answer_once",
+                session=sid,
+                turn=n,
+                question=question,
+                thinking=thinking or "",
+                sources=len(sources or []),
+                focus=bool(focus),
             )
-            _fill_citations(info)
-            rec.set_index(
-                answer_ok=bool(info.get("ok")),
-                answer_error=info.get("error", ""),
-                confidence=info.get("confidence"),
-                citations=len(info.get("citations") or []),
-                passages=len(info.get("passages") or []),
-                mode=info.get("mode", "single"),
-            )
-            rec.finish("ok" if info.get("ok") else "error", error=info.get("error", ""))
-            self.send_json(200, dict(info, session_id=sid, turn=n, related=rel, history=self.history_brief(ctx)))
-        except ValueError as exc:
-            rec.error("answer", exc)
-            rec.finish("error", error=str(exc))
-            self.fail(400, str(exc))
-        except Exception as exc:
-            traceback.print_exc()
-            rec.error("answer", exc)
-            rec.finish("error", error="%s: %s" % (exc.__class__.__name__, exc))
-            self.fail(500, "%s: %s" % (exc.__class__.__name__, exc))
+            try:
+                info = self._call_answer_question(
+                    question,
+                    book,
+                    path,
+                    line,
+                    terms,
+                    groups,
+                    sources,
+                    thinking,
+                    use_cache,
+                    ctx["text"] if ctx else "",
+                    focus,
+                    rec,
+                    (lambda ev: append_answer_event(job, ev)) if stream else None,
+                )
+                _fill_citations(info)
+                rec.set_index(
+                    answer_ok=bool(info.get("ok")),
+                    answer_error=info.get("error", ""),
+                    confidence=info.get("confidence"),
+                    citations=len(info.get("citations") or []),
+                    passages=len(info.get("passages") or []),
+                    mode=info.get("mode", "single"),
+                )
+                rec.finish("ok" if info.get("ok") else "error", error=info.get("error", ""))
+                body = dict(info, session_id=sid, turn=n, related=rel, history=self.history_brief(ctx))
+                if job is not None:
+                    publish_answer_job(job, result=body)
+                else:
+                    self.send_json(200, body)
+            except ValueError as exc:
+                rec.error("answer", exc)
+                rec.finish("error", error=str(exc))
+                if job is not None:
+                    publish_answer_job(job, error=(400, str(exc)))
+                else:
+                    self.fail(400, str(exc))
+            except Exception as exc:
+                traceback.print_exc()
+                message = "%s: %s" % (exc.__class__.__name__, exc)
+                rec.error("answer", exc)
+                rec.finish("error", error=message)
+                if job is not None:
+                    publish_answer_job(job, error=(500, message))
+                else:
+                    self.fail(500, message)
+
+        if stream:
+            threading.Thread(target=_run_once, daemon=True).start()
+            self._stream_job(job)
+            return
+        _run_once()
 
     @staticmethod
     def history_brief(ctx):

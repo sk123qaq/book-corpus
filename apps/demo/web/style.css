@@ -1124,6 +1124,9 @@ a { color: inherit; text-decoration: none; }
   color: var(--muted);
 }
 
+.stream-preview { margin-top: 10px; opacity: .94; }
+.stream-preview p { margin: 0 0 8px; line-height: 1.7; }
+
 .answer-error {
   margin: 8px 0 0;
   font-size: 13px;

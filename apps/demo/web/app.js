@@ -150,6 +150,72 @@
     return data;
   }
 
+  function parseSSEFrame(rawFrame, onEvent) {
+    const lines = rawFrame.replace(/\r/g, '').split('\n');
+    let eventName = '';
+    const dataLines = [];
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+      if (!ln || ln[0] === ':') continue;
+      if (ln.startsWith('event:')) eventName = ln.slice(6).trim();
+      else if (ln.startsWith('data:')) dataLines.push(ln.slice(5).trimStart());
+    }
+    if (!dataLines.length) return null;
+    let payload = null;
+    try { payload = JSON.parse(dataLines.join('\n')); } catch (err) { return null; }
+    if (!payload || typeof payload !== 'object') return null;
+    if (!payload.type && eventName) payload.type = eventName;
+    if (payload.type === 'done') return { terminal: 'done', data: payload.data };
+    if (payload.type === 'error') {
+      const msg = (payload.data && payload.data.error) || payload.error || '回答失败';
+      throw new Error(msg);
+    }
+    if (onEvent) onEvent(payload);
+    return null;
+  }
+
+  async function fetchAnswerStream(url, opts, onEvent) {
+    const headers = Object.assign({}, (opts && opts.headers) || {}, {
+      accept: 'text/event-stream, application/json',
+    });
+    const res = await fetch(url, Object.assign({}, opts, { headers }));
+    const ctype = String((res.headers && res.headers.get('content-type')) || '').toLowerCase();
+    if (!ctype.includes('text/event-stream') || !res.body || !res.body.getReader) {
+      let data = null;
+      try { data = await res.json(); } catch (err) { data = null; }
+      if (!res.ok || !data || data.ok === false) {
+        const msg = (data && data.error) || ('HTTP ' + res.status);
+        throw new Error(msg);
+      }
+      return data;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let doneData = null;
+    while (true) {
+      const step = await reader.read();
+      if (step.value) buffer += decoder.decode(step.value, { stream: !step.done });
+      let sep = buffer.indexOf('\n\n');
+      while (sep >= 0) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const resFrame = parseSSEFrame(frame, onEvent);
+        if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+        sep = buffer.indexOf('\n\n');
+      }
+      if (step.done) break;
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      const resFrame = parseSSEFrame(buffer, onEvent);
+      if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+    }
+    if (!doneData) throw new Error('连接中断');
+    if (doneData.ok === false) throw new Error(doneData.error || '回答失败');
+    return doneData;
+  }
+
   function termChip(term, dropped) {
     if (dropped) {
       return `<span class="term dropped"><span class="t">${esc(term)}</span>` +
@@ -634,6 +700,11 @@
     </section>`;
   }
 
+  // 正文按换行拆段：空行与单换行各成一段。
+  function paragraphs(text) {
+    return String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean);
+  }
+
   function answerHTML() {
     const a = state.answer;
     if (!a) return '';
@@ -650,12 +721,18 @@
         : (n > 1
           ? `正在检索 ${n} 本书的原文并组织回答，最长约 2 分钟…`
           : '正在检索原文并组织回答，最长约 90 秒…');
+      const statusText = a.streamStatus || line;
+      const previewParas = a.streamText ? paragraphs(a.streamText) : [];
+      const preview = previewParas.length
+        ? `<div class="answer-body stream-preview" data-stream-body>${previewParas.map((p) => `<p>${esc(p)}</p>`).join('')}</div>`
+        : '';
       return `<section class="answer-card is-loading">
         <div class="answer-head">
           <span class="answer-label">回答</span>
           <span class="answer-note">${esc(note)}</span>
         </div>
-        <p class="answer-loading"><span class="dot-pulse"></span>${esc(line)}</p>
+        <p class="answer-loading"><span class="dot-pulse"></span><span data-stream-status>${esc(statusText)}</span></p>
+        ${preview}
       </section>`;
     }
     if (a.error) {
@@ -670,8 +747,6 @@
     const isAnchored = d.mode === 'anchored';
     const scope = multi ? (d.sources || []) : [];
     const covered = new Set(((d.citations || []).map((c) => c.book || c.book_title)).filter(Boolean)).size;
-    // 正文按换行拆段：空行与单换行各成一段。
-    const paragraphs = (text) => String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean);
     const partList = Array.isArray(d.parts) ? d.parts.filter((p) => p && typeof p === 'object') : [];
     const sectionHTML = (section) => {
       if (!section || (!section.heading && !section.body)) return '';
@@ -958,10 +1033,25 @@
       try { state.answer.controller.abort(); } catch (err) { /* ignore */ }
     }
     const controller = new AbortController();
-    state.answer = { key, locator: loc, loading: true, data: null, error: '', controller };
+    state.answer = {
+      key, locator: loc, loading: true, data: null, error: '', controller,
+      streamStatus: '', streamText: '',
+    };
     renderStage4(state.trace);
+    const updateClassicStreamDOM = () => {
+      const statusEl = $('.answer-card [data-stream-status]');
+      if (statusEl && state.answer.streamStatus) statusEl.textContent = state.answer.streamStatus;
+      if (!state.answer.streamText) return;
+      const bodyEl = $('.answer-card [data-stream-body]');
+      if (!bodyEl) {
+        renderStage4(state.trace);
+        return;
+      }
+      const paras = paragraphs(state.answer.streamText);
+      bodyEl.innerHTML = paras.map((p) => `<p>${esc(p)}</p>`).join('');
+    };
     try {
-      const data = await fetchJSON('/api/answer', {
+      const data = await fetchAnswerStream('/api/answer', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -971,8 +1061,24 @@
           focus,
           thinking: state.thinking,
           fresh: !!fresh,
+          stream: true,
         }),
         signal: controller.signal,
+      }, (ev) => {
+        if (seq !== state.answerSeq || !state.answer) return;
+        if (ev.type === 'answer_delta') {
+          if (typeof ev.text === 'string' && ev.text) state.answer.streamText = ev.text;
+          else if (typeof ev.delta === 'string') state.answer.streamText += ev.delta;
+          if (!state.answer.streamStatus || !state.answer.streamStatus.includes('正在生成回答')) {
+            state.answer.streamStatus = '正在生成回答正文…';
+          }
+          updateClassicStreamDOM();
+          return;
+        }
+        if (ev.message && (ev.type === 'stage' || ev.type === 'tool_start' || ev.type === 'thinking')) {
+          state.answer.streamStatus = String(ev.message);
+          updateClassicStreamDOM();
+        }
       });
       if (seq !== state.answerSeq) return;
       state.answer = { key, locator: loc, loading: false, data, error: '', controller: null };

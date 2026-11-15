@@ -197,6 +197,79 @@
     });
   }
 
+  function parseSSEFrame(rawFrame, onEvent) {
+    const lines = rawFrame.replace(/\r/g, '').split('\n');
+    let eventName = '';
+    const dataLines = [];
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+      if (!ln || ln[0] === ':') continue;
+      if (ln.startsWith('event:')) eventName = ln.slice(6).trim();
+      else if (ln.startsWith('data:')) dataLines.push(ln.slice(5).trimStart());
+    }
+    if (!dataLines.length) return null;
+    let payload = null;
+    try {
+      payload = JSON.parse(dataLines.join('\n'));
+    } catch (err) {
+      return null;
+    }
+    if (!payload || typeof payload !== 'object') return null;
+    if (!payload.type && eventName) payload.type = eventName;
+    if (payload.type === 'done') return { terminal: 'done', data: payload.data };
+    if (payload.type === 'error') {
+      const msg = (payload.data && payload.data.error) || payload.error || '回答失败';
+      throw new Error(msg);
+    }
+    if (onEvent) onEvent(payload);
+    return null;
+  }
+
+  async function postAnswerStream(url, body, onEvent) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'text/event-stream, application/json',
+      },
+      body: JSON.stringify(Object.assign({}, body, { stream: true })),
+    });
+    const ctype = String((res.headers && res.headers.get('content-type')) || '').toLowerCase();
+    if (!ctype.includes('text/event-stream') || !res.body || !res.body.getReader) {
+      let data = null;
+      try { data = await res.json(); } catch (err) { data = null; }
+      if (!res.ok || !data || data.ok === false) {
+        throw new Error((data && data.error) || ('请求失败 ' + res.status));
+      }
+      return data;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let doneData = null;
+    while (true) {
+      const step = await reader.read();
+      if (step.value) buffer += decoder.decode(step.value, { stream: !step.done });
+      let sep = buffer.indexOf('\n\n');
+      while (sep >= 0) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const resFrame = parseSSEFrame(frame, onEvent);
+        if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+        sep = buffer.indexOf('\n\n');
+      }
+      if (step.done) break;
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      const resFrame = parseSSEFrame(buffer, onEvent);
+      if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+    }
+    if (!doneData) throw new Error('Failed to fetch');
+    if (doneData.ok === false) throw new Error(doneData.error || '回答失败');
+    return doneData;
+  }
+
   /* ---- 引文 ------------------------------------------------------ */
 
   function citesOf(turn) {
@@ -1167,6 +1240,25 @@
       + (state.busy ? ' disabled' : '') + '>重新回答</button></div>';
   }
 
+  function streamPreviewHTML(text) {
+    const raw = String(text || '');
+    if (!raw.trim()) return '';
+    return raw.split(/\n\s*\n/).map(plain).filter(Boolean)
+      .map((p) => '<p>' + esc(p) + '</p>').join('');
+  }
+
+  function updateStreamDOM(turn) {
+    const statusEl = mainEl.querySelector('[data-stream-status]');
+    if (statusEl && turn.streamStatus) statusEl.textContent = turn.streamStatus;
+    if (!turn.streamText) return;
+    const bodyEl = mainEl.querySelector('[data-stream-body]');
+    if (!bodyEl) {
+      render();
+      return;
+    }
+    bodyEl.innerHTML = streamPreviewHTML(turn.streamText);
+  }
+
   function bodyHTML(turn) {
     if (turn.status === 'retrieving') {
       return '<p class="loading-card"><span class="dot-pulse"></span>正在检索，通常 20 到 60 秒 · '
@@ -1174,11 +1266,17 @@
     }
     if (turn.status === 'answering') {
       const focus = focusExact(turn);
-      const line = focus
+      const fallback = focus
         ? '先取指定书的原文，再取其他书补充，最长约 2 分钟…'
         : '正在组织回答，通常 40 到 90 秒…';
-      return '<p class="loading-card"><span class="dot-pulse"></span>' + esc(line) + ' · '
+      const line = turn.streamStatus || fallback;
+      const head = '<p class="loading-card"><span class="dot-pulse"></span>'
+        + '<span data-stream-status>' + esc(line) + '</span> · '
         + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></p>';
+      const preview = streamPreviewHTML(turn.streamText);
+      return head + (preview
+        ? '<div class="answer stream-preview" data-stream-body>' + preview + '</div>'
+        : '');
     }
     if (turn.status === 'run-error') {
       return '<p class="answer-error">检索失败：' + esc(turn.runError || '没有记录原因，可能服务重启或连接断开') + '</p>'
@@ -1960,6 +2058,8 @@
     turn.thinking = state.thinking;
     turn.status = 'answering';
     turn.answerError = '';
+    turn.streamStatus = '';
+    turn.streamText = '';
     turn.stageStates = ['done', 'done', 'done', 'done', 'active'];
     turn.stageOpen = new Set([4]);
     turn.stripOpen = true;
@@ -1984,7 +2084,22 @@
     };
     if (options.fresh) body.fresh = true;
     try {
-      const data = await postJSON('/api/answer', body);
+      const data = await postAnswerStream('/api/answer', body, (ev) => {
+        if (epoch !== state.epoch) return;
+        if (ev.type === 'answer_delta') {
+          if (typeof ev.text === 'string' && ev.text) turn.streamText = ev.text;
+          else if (typeof ev.delta === 'string') turn.streamText += ev.delta;
+          if (!turn.streamStatus || turn.streamStatus.indexOf('正在生成回答') < 0) {
+            turn.streamStatus = '正在生成回答正文…';
+          }
+          if (state.viewN === turn.n) updateStreamDOM(turn);
+          return;
+        }
+        if (ev.message && (ev.type === 'stage' || ev.type === 'tool_start' || ev.type === 'thinking')) {
+          turn.streamStatus = String(ev.message);
+          if (state.viewN === turn.n) updateStreamDOM(turn);
+        }
+      });
       if (epoch !== state.epoch) return;
       stopAnswerPoll();
       turn.answer = data;
@@ -2006,6 +2121,8 @@
       }
     }
     if (epoch !== state.epoch) return;
+    turn.streamStatus = '';
+    turn.streamText = '';
     turn.stageStates = ALL_DONE.slice();
     turn.stageOpen = new Set();
     turn.stripOpen = false;
