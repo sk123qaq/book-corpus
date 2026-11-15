@@ -1125,7 +1125,6 @@ a { color: inherit; text-decoration: none; }
 }
 
 .stream-preview { margin-top: 10px; opacity: .94; }
-.stream-preview p { margin: 0 0 8px; line-height: 1.7; }
 
 .answer-error {
   margin: 8px 0 0;
@@ -1238,6 +1237,38 @@ a { color: inherit; text-decoration: none; }
 
 .raw summary::-webkit-details-marker { display: none; }
 .raw summary::before { content: "{ } "; font-family: var(--mono); }
+
+.stage-loading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.loading-text { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.pause-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  flex: 0 0 auto;
+}
+.stream-pause-btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+.stream-pause-btn.is-resume {
+  color: var(--red);
+  border-color: var(--red);
+}
+.answer-loading.is-paused {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .raw summary:hover { color: var(--red); }
 
 .raw pre {

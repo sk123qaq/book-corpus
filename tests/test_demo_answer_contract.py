@@ -590,3 +590,225 @@ def test_server_api_answer_sse_and_json_compat(monkeypatch):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_direct_llm_pause_checkpoint_and_resume(monkeypatch, tmp_path):
+    import threading
+
+    import direct_llm
+
+    seen_payloads = []
+    cancel_ev = threading.Event()
+    events = []
+
+    def fake_turn(cfg, payload, *, session_id, deadline, on_delta=None, cancel_event=None):
+        seen_payloads.append(payload)
+        if len(seen_payloads) == 1:
+            assert cancel_event is cancel_ev
+            if on_delta:
+                on_delta("content", '{"answer":"前段结论', "")
+            cancel_ev.set()
+            return {"content": '{"answer":"前段结论', "reasoning": ""}, "PAUSED"
+        final = '{"answer":"前段结论，接续补完。","citations":[]}'
+        if on_delta:
+            on_delta("content", final, "")
+        return {"content": final, "reasoning": "", "tool_calls": [], "usage": {}, "raw_stream": final}, ""
+
+    monkeypatch.setattr(direct_llm, "_http_stream_turn", fake_turn)
+
+    cfg = {"provider": "opencode-go", "model": "deepseek-v4.1-flash", "url": "http://127.0.0.1:9/v1/chat/completions"}
+    cp = {}
+    res1 = direct_llm.invoke_answer(
+        "测试问题",
+        ["books/B1/md"],
+        root=tmp_path,
+        cfg=cfg,
+        use_tools=False,
+        on_event=events.append,
+        cancel_event=cancel_ev,
+        checkpoint_out=cp,
+    )
+    assert res1.paused is True
+    assert res1.error == "PAUSED"
+    assert res1.text == "前段结论"
+    assert cp["partial_text"] == "前段结论"
+    assert cp["partial_raw"] == '{"answer":"前段结论'
+    assert any(ev.get("type") == "paused" and ev.get("partial_text") == "前段结论" for ev in events)
+
+    res2 = direct_llm.invoke_answer(
+        "测试问题",
+        ["books/B1/md"],
+        root=tmp_path,
+        cfg=cfg,
+        use_tools=False,
+        resume_state=cp,
+    )
+    assert res2.paused is False
+    assert res2.exit_code == 0
+    assert "接续补完" in res2.text
+    resumed_msgs = seen_payloads[1]["messages"]
+    assert any(m["role"] == "assistant" and '{"answer":"前段结论' in (m.get("content") or "") for m in resumed_msgs)
+    assert resumed_msgs[-1]["role"] == "user"
+    assert "暂停" in resumed_msgs[-1]["content"]
+
+
+def test_session_pause_answer_persists_partial(monkeypatch, tmp_path):
+    import session
+
+    monkeypatch.setattr(session, "SESS_DIR", str(tmp_path))
+    sess = session.create()
+    sess["turns"].append({"n": 1, "question": "问", "run_token": "tok1", "answer_attempt": 0})
+    session.save(sess)
+
+    assert session.begin_answer(sess["id"], 1, 1, 999999, token="tok1")
+    assert session.pause_answer(sess["id"], 1, 1, partial="已流式半段", token="tok1")
+    loaded = session.load(sess["id"])
+    turn = loaded["turns"][0]
+    assert turn["answer_state"] == "paused"
+    assert turn["answer_partial"] == "已流式半段"
+
+
+def test_server_api_answer_pause_and_resume_sse(monkeypatch, tmp_path):
+    import json
+    import threading
+    import time
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    import server
+    import session
+
+    monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
+    sess = session.create()
+    sess["turns"].append(
+        {
+            "n": 1,
+            "question": "暂停续跑",
+            "run_token": "tok_pause",
+            "answer_attempt": 0,
+            "trace": {"result": {"book": "B1", "path": "books/B1/md/01.md", "line": 1}},
+        }
+    )
+    session.save(sess)
+
+    calls = []
+
+    def fake_answer_question(question, book, path, line, terms, **kwargs):
+        calls.append(kwargs)
+        cb = kwargs.get("on_event")
+        cancel_ev = kwargs.get("cancel_event")
+        cp_out = kwargs.get("checkpoint_out")
+        resume_state = kwargs.get("resume_state")
+        if resume_state is None:
+            if cb:
+                cb({"type": "answer_delta", "delta": "半截", "text": "半截"})
+            assert cancel_ev is not None
+            assert cancel_ev.wait(timeout=3.0)
+            if cp_out is not None:
+                cp_out.update({"messages": [{"role": "user", "content": question}], "partial_text": "半截"})
+            return {"ok": False, "paused": True, "partial_text": "半截", "error": "PAUSED"}
+        assert resume_state.get("partial_text") == "半截"
+        if cb:
+            cb({"type": "answer_delta", "delta": "完整答案", "text": "完整答案"})
+        return {
+            "ok": True,
+            "mode": "single",
+            "answer": "完整答案",
+            "lead": "完整答案",
+            "sections": [],
+            "citations": [],
+            "passages": [],
+            "ms": 15.0,
+        }
+
+    monkeypatch.setattr(server.answerer, "answer_question", fake_answer_question)
+    monkeypatch.setattr(server, "_fill_citations", lambda info: info)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    th = threading.Thread(target=httpd.serve_forever, daemon=True)
+    th.start()
+    try:
+        port = httpd.server_address[1]
+        base = f"http://127.0.0.1:{port}"
+        common = {
+            "question": "暂停续跑",
+            "book": "B1",
+            "path": "books/B1/md/01.md",
+            "line": 1,
+            "terms": ["暂停"],
+            "session_id": sess["id"],
+            "turn": 1,
+            "stream": True,
+        }
+
+        sse_result = {}
+
+        def run_first_sse():
+            req = urllib.request.Request(
+                base + "/api/answer",
+                data=json.dumps(common).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                sse_result["raw"] = resp.read().decode("utf-8")
+
+        t1 = threading.Thread(target=run_first_sse, daemon=True)
+        t1.start()
+        deadline = time.monotonic() + 2.0
+        while not calls and time.monotonic() < deadline:
+            time.sleep(0.02)
+        pause_req = urllib.request.Request(
+            base + "/api/answer/pause",
+            data=json.dumps({"session_id": sess["id"], "turn": 1}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(pause_req, timeout=5) as presp:
+            pbody = json.loads(presp.read().decode("utf-8"))
+        assert pbody["ok"] is True
+        assert pbody["paused"] is True
+        t1.join(timeout=5)
+        assert "event: paused\n" in sse_result["raw"]
+        assert '"partial_text": "半截"' in sse_result["raw"]
+        assert session.load(sess["id"])["turns"][0]["answer_state"] == "paused"
+
+        req2 = urllib.request.Request(
+            base + "/api/answer",
+            data=json.dumps(dict(common, fresh=True, resume=True)).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req2, timeout=10) as resp2:
+            raw2 = resp2.read().decode("utf-8")
+        assert "event: done\n" in raw2
+        assert '"answer": "完整答案"' in raw2
+        assert session.load(sess["id"])["turns"][0]["answer_state"] == "ready"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_stream_citations_stage_emitted_once_after_answer_closes():
+    import direct_llm
+
+    events: list[dict] = []
+    extractor = direct_llm._AnswerStreamExtractor()
+    handler = direct_llm._make_turn_delta_handler(events.append, None, extractor=extractor)
+
+    assert extractor.done is False
+    handler("content", '{"answer":"总体结论。\\n\\n## 缘由\\n细节正文', "")
+    assert extractor.done is False
+    assert [e for e in events if e.get("type") == "answer_delta"]
+    assert not [e for e in events if e.get("stage") == "citations"]
+
+    # Closing quote arrives without any new decoded characters
+    handler("content", '","recap":"摘要', "")
+    assert extractor.done is True
+    cit_stages = [e for e in events if e.get("type") == "stage" and e.get("stage") == "citations"]
+    assert len(cit_stages) == 1
+    assert "引文" in cit_stages[0]["message"]
+
+    # Subsequent chunks in recap/citations must not re-emit citations stage
+    handler("content", '","citations":[]}', "")
+    assert len([e for e in events if e.get("stage") == "citations"]) == 1

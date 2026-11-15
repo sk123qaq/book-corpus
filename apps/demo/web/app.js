@@ -41,6 +41,10 @@
     playing: false,
     busy: false,
     runSeq: 0,
+    runController: null,
+    runPausing: false,
+    lastRunQuestion: '',
+    lastRunOpts: null,
     noScroll: false,
     scrollHit: false,
     open: new Set(),
@@ -166,6 +170,7 @@
     if (!payload || typeof payload !== 'object') return null;
     if (!payload.type && eventName) payload.type = eventName;
     if (payload.type === 'done') return { terminal: 'done', data: payload.data };
+    if (payload.type === 'paused') return { terminal: 'paused', data: payload.data };
     if (payload.type === 'error') {
       const msg = (payload.data && payload.data.error) || payload.error || '回答失败';
       throw new Error(msg);
@@ -183,6 +188,7 @@
     if (!ctype.includes('text/event-stream') || !res.body || !res.body.getReader) {
       let data = null;
       try { data = await res.json(); } catch (err) { data = null; }
+      if (data && data.paused) return data;
       if (!res.ok || !data || data.ok === false) {
         const msg = (data && data.error) || ('HTTP ' + res.status);
         throw new Error(msg);
@@ -193,6 +199,7 @@
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let doneData = null;
+    let pausedData = null;
     while (true) {
       const step = await reader.read();
       if (step.value) buffer += decoder.decode(step.value, { stream: !step.done });
@@ -202,6 +209,7 @@
         buffer = buffer.slice(sep + 2);
         const resFrame = parseSSEFrame(frame, onEvent);
         if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+        if (resFrame && resFrame.terminal === 'paused') pausedData = resFrame.data;
         sep = buffer.indexOf('\n\n');
       }
       if (step.done) break;
@@ -210,7 +218,9 @@
     if (buffer.trim()) {
       const resFrame = parseSSEFrame(buffer, onEvent);
       if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+      if (resFrame && resFrame.terminal === 'paused') pausedData = resFrame.data;
     }
+    if (pausedData) return pausedData;
     if (!doneData) throw new Error('连接中断');
     if (doneData.ok === false) throw new Error(doneData.error || '回答失败');
     return doneData;
@@ -705,6 +715,48 @@
     return String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean);
   }
 
+  function plain(value) {
+    return String(value == null ? '' : value)
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\*\*/g, '')
+      .trim();
+  }
+
+  function streamPreviewHTML(text) {
+    const raw = String(text || '').replace(/\r\n?/g, '\n');
+    if (!raw.trim()) return '';
+    const lines = raw.split('\n');
+    // 末尾尚未跟上空格和标题文本的孤立 # 标记暂不渲染，避免流式吐字时闪烁出裸 ##
+    if (lines.length && /^\s*#{1,4}\s*$/.test(lines[lines.length - 1])) lines.pop();
+    const leadLines = [];
+    const sections = [];
+    let current = null;
+    for (let i = 0; i < lines.length; i += 1) {
+      const m = lines[i].match(/^\s*#{1,4}\s+(.+?)\s*$/);
+      if (m) {
+        const heading = plain(m[1]);
+        if (heading) {
+          current = { heading, lines: [] };
+          sections.push(current);
+          continue;
+        }
+      }
+      if (current) current.lines.push(lines[i]);
+      else leadLines.push(lines[i]);
+    }
+    const leadParas = paragraphs(leadLines.join('\n')).map(plain).filter(Boolean);
+    if (!sections.length) {
+      return leadParas.map((p) => `<p>${esc(p)}</p>`).join('');
+    }
+    const parts = leadParas.map((p, idx) => `<p${idx === 0 ? ' class="answer-lead"' : ''}>${esc(p)}</p>`);
+    sections.forEach((sec) => {
+      const ps = paragraphs(sec.lines.join('\n')).map(plain).filter(Boolean)
+        .map((p) => `<p>${esc(p)}</p>`).join('');
+      parts.push(`<section class="answer-section"><h3 class="answer-h">${esc(sec.heading)}</h3>${ps}</section>`);
+    });
+    return parts.join('');
+  }
+
   function answerHTML() {
     const a = state.answer;
     if (!a) return '';
@@ -722,16 +774,32 @@
           ? `正在检索 ${n} 本书的原文并组织回答，最长约 2 分钟…`
           : '正在检索原文并组织回答，最长约 90 秒…');
       const statusText = a.streamStatus || line;
-      const previewParas = a.streamText ? paragraphs(a.streamText) : [];
-      const preview = previewParas.length
-        ? `<div class="answer-body stream-preview" data-stream-body>${previewParas.map((p) => `<p>${esc(p)}</p>`).join('')}</div>`
+      const previewHTML = a.streamText ? streamPreviewHTML(a.streamText) : '';
+      const preview = previewHTML
+        ? `<div class="answer-text stream-preview" data-stream-body>${previewHTML}</div>`
         : '';
       return `<section class="answer-card is-loading">
         <div class="answer-head">
           <span class="answer-label">回答</span>
           <span class="answer-note">${esc(note)}</span>
+          <button type="button" class="link-btn stream-pause-btn answer-pause" id="classic-pause-btn">暂停</button>
         </div>
         <p class="answer-loading"><span class="dot-pulse"></span><span data-stream-status>${esc(statusText)}</span></p>
+        ${preview}
+      </section>`;
+    }
+    if (a.paused) {
+      const previewHTML = a.streamText ? streamPreviewHTML(a.streamText) : '';
+      const preview = previewHTML
+        ? `<div class="answer-text stream-preview" data-stream-body>${previewHTML}</div>`
+        : '';
+      return `<section class="answer-card is-paused">
+        <div class="answer-head">
+          <span class="answer-label">回答</span>
+          <span class="answer-note">已暂停</span>
+          <button type="button" class="link-btn stream-pause-btn is-resume answer-resume" id="classic-pause-btn">继续问答</button>
+        </div>
+        <p class="answer-loading is-paused"><span class="pause-dot"></span><span>${esc(a.streamStatus || '已暂停 · 点击「继续问答」可接续生成')}</span></p>
         ${preview}
       </section>`;
     }
@@ -1033,22 +1101,27 @@
       try { state.answer.controller.abort(); } catch (err) { /* ignore */ }
     }
     const controller = new AbortController();
+    const streamId = opts.streamId || ('c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8));
+    const prePauseText = opts.initialStreamText ? String(opts.initialStreamText) : '';
+    let streamReplaced = !prePauseText;
     state.answer = {
-      key, locator: loc, loading: true, data: null, error: '', controller,
-      streamStatus: '', streamText: '',
+      key, locator: loc, loading: true, paused: false, pausing: false,
+      data: null, error: '', controller, streamId,
+      streamStatus: opts.resume ? '正在从暂停处继续生成回答…' : '',
+      streamText: prePauseText,
     };
     renderStage4(state.trace);
     const updateClassicStreamDOM = () => {
       const statusEl = $('.answer-card [data-stream-status]');
       if (statusEl && state.answer.streamStatus) statusEl.textContent = state.answer.streamStatus;
-      if (!state.answer.streamText) return;
+      const previewHTML = streamPreviewHTML(state.answer.streamText);
+      if (!previewHTML) return;
       const bodyEl = $('.answer-card [data-stream-body]');
       if (!bodyEl) {
         renderStage4(state.trace);
         return;
       }
-      const paras = paragraphs(state.answer.streamText);
-      bodyEl.innerHTML = paras.map((p) => `<p>${esc(p)}</p>`).join('');
+      bodyEl.innerHTML = previewHTML;
     };
     try {
       const data = await fetchAnswerStream('/api/answer', {
@@ -1060,15 +1133,27 @@
           sources: loc.sources || [],
           focus,
           thinking: state.thinking,
-          fresh: !!fresh,
+          fresh: !!(fresh || opts.resume),
+          resume: !!opts.resume,
+          stream_id: streamId,
           stream: true,
         }),
         signal: controller.signal,
       }, (ev) => {
-        if (seq !== state.answerSeq || !state.answer) return;
+        if (seq !== state.answerSeq || !state.answer || state.answer.pausing || state.answer.paused) return;
         if (ev.type === 'answer_delta') {
-          if (typeof ev.text === 'string' && ev.text) state.answer.streamText = ev.text;
-          else if (typeof ev.delta === 'string') state.answer.streamText += ev.delta;
+          if (typeof ev.text === 'string' && ev.text) {
+            if (streamReplaced || ev.text.length >= 16 || ev.text.length >= prePauseText.length) {
+              streamReplaced = true;
+              state.answer.streamText = ev.text;
+            }
+          } else if (typeof ev.delta === 'string') {
+            if (!streamReplaced) {
+              streamReplaced = true;
+              state.answer.streamText = '';
+            }
+            state.answer.streamText += ev.delta;
+          }
           if (!state.answer.streamStatus || !state.answer.streamStatus.includes('正在生成回答')) {
             state.answer.streamStatus = '正在生成回答正文…';
           }
@@ -1081,7 +1166,19 @@
         }
       });
       if (seq !== state.answerSeq) return;
-      state.answer = { key, locator: loc, loading: false, data, error: '', controller: null };
+      if (data && data.paused) {
+        const kept = state.answer ? state.answer.streamText : '';
+        state.answer = {
+          key, locator: loc, loading: false, paused: true, pausing: false,
+          data: null, error: '', controller: null, streamId,
+          streamStatus: data.message || '已暂停 · 点击「继续问答」可接续生成',
+          streamText: kept || String(data.partial_text || ''),
+        };
+        renderStage4(state.trace);
+        return;
+      }
+      if (state.answer && (state.answer.pausing || state.answer.paused)) return;
+      state.answer = { key, locator: loc, loading: false, paused: false, pausing: false, data, error: '', controller: null, streamId };
       renderStage4(state.trace);
       renderRaw(4, state.trace);
       const first = (data.citations || []).find((c) => c.verified && c.path);
@@ -1105,11 +1202,37 @@
     } catch (err) {
       if (seq !== state.answerSeq) return;
       if (err && err.name === 'AbortError') return;
-      state.answer = { key, locator: loc, loading: false, data: null,
+      if (state.answer && (state.answer.pausing || state.answer.paused)) return;
+      state.answer = { key, locator: loc, loading: false, paused: false, data: null,
         error: (err && err.message) || String(err), controller: null };
       renderStage4(state.trace);
       renderRaw(4, state.trace);
     }
+  }
+
+  async function pauseClassicAnswer() {
+    const a = state.answer;
+    if (!a || !a.loading) return;
+    a.pausing = true;
+    a.paused = true;
+    a.loading = false;
+    a.streamStatus = '已暂停 · 点击「继续问答」可接续生成';
+    renderStage4(state.trace);
+    const ctl = a.controller;
+    if (a.streamId) {
+      try {
+        await fetchJSON('/api/answer/pause', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ stream_id: a.streamId }),
+        });
+      } catch (err) { /* keep paused */ }
+    }
+    setTimeout(() => {
+      if (state.answer === a && a.paused && ctl) {
+        try { ctl.abort(); } catch (err) { /* ignore */ }
+      }
+    }, 1500);
   }
 
   function maybeAnswer() {
@@ -1117,7 +1240,7 @@
     if (!loc) return;
     const key = locatorKey(loc);
     if (state.answer && state.answer.key === key &&
-        (state.answer.loading || state.answer.data || state.answer.error)) return;
+        (state.answer.loading || state.answer.paused || state.answer.data || state.answer.error)) return;
     startAnswer(loc);
   }
 
@@ -1314,7 +1437,8 @@
     stages[0].dataset.state = 'active';
     railItems[0].classList.add('active');
     $('.stage-body', stages[0]).innerHTML =
-      '<p class="stage-loading"><span class="dot-pulse"></span>正在理解这句话，切成检索词。新问题要调一次模型，约 3 到 5 秒。</p>';
+      '<p class="stage-loading"><span class="loading-text"><span class="dot-pulse"></span>正在理解这句话，切成检索词。新问题要调一次模型，约 3 到 5 秒。</span>'
+      + '<button type="button" class="link-btn stream-pause-btn classic-run-pause" id="classic-pause-btn">暂停</button></p>';
     const segs = $('#segments');
     if (!segs.children.length) {
       segs.innerHTML = STAGE_NAMES.map(() => '<span class="segment"></span>').join('');
@@ -1461,6 +1585,40 @@
         openCitation(cite);
         return;
       }
+      if (ev.target.closest('.answer-pause')) {
+        pauseClassicAnswer();
+        return;
+      }
+      if (ev.target.closest('.answer-resume')) {
+        const a = state.answer;
+        const loc = (a && a.locator) || answerLocator();
+        if (loc) {
+          startAnswer(loc, {
+            fresh: true,
+            resume: true,
+            streamId: a && a.streamId,
+            initialStreamText: a && a.streamText,
+          });
+        }
+        return;
+      }
+      if (ev.target.closest('.classic-run-pause')) {
+        if (state.runController) {
+          state.runPausing = true;
+          try { state.runController.abort(); } catch (err) { /* ignore */ }
+          state.runController = null;
+          $('.stage-body', stages[0]).innerHTML =
+            '<p class="stage-loading is-paused"><span class="loading-text"><span class="pause-dot"></span>已暂停检索，点击「继续问答」重新继续</span>'
+            + '<button type="button" class="link-btn stream-pause-btn is-resume classic-run-resume" id="classic-pause-btn">继续问答</button></p>';
+        }
+        return;
+      }
+      if (ev.target.closest('.classic-run-resume')) {
+        if (state.lastRunQuestion) {
+          run(state.lastRunQuestion, state.lastRunOpts || {});
+        }
+        return;
+      }
       if (ev.target.closest('.answer-retry')) {
         const loc = (state.answer && state.answer.locator) || answerLocator();
         if (loc) startAnswer(loc, { fresh: true });
@@ -1513,6 +1671,14 @@
     const thinkSel = $('#think-select');
     if (thinkSel) thinkSel.disabled = true;
     const seq = ++state.runSeq;
+    if (state.runController) {
+      try { state.runController.abort(); } catch (err) { /* ignore */ }
+    }
+    const runController = new AbortController();
+    state.runController = runController;
+    state.runPausing = false;
+    state.lastRunQuestion = q;
+    state.lastRunOpts = opts;
     enterLoading(q);
     try {
       const trace = await fetchJSON('/api/run', {
@@ -1521,8 +1687,10 @@
         // select 一起送：URL 带着 ?select=N 刷新时，服务端按同一张卡取原文与回答
         body: JSON.stringify({ question: q, thinking: state.thinking, fresh,
                                select: (opts && opts.select) || 0, stateless: true }),
+        signal: runController.signal,
       });
       if (seq !== state.runSeq) return;
+      state.runController = null;
       state.trace = trace;
       state.instant = !!opts.instant;
       state.expandAll = !!opts.expandAll;
@@ -1555,10 +1723,16 @@
       history.replaceState(null, '', '?' + params.toString());
     } catch (err) {
       if (seq !== state.runSeq) return;
+      state.runController = null;
+      if (err && err.name === 'AbortError' && state.runPausing) {
+        state.runPausing = false;
+        return;
+      }
       state.answerFresh = false;
       backToHero();
       showError(err.message || String(err));
     } finally {
+      state.runController = null;
       state.busy = false;
       btn.disabled = false;
       btn.textContent = old;

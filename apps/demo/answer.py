@@ -1230,12 +1230,17 @@ def call_pi(
     use_tools=True,
     system_prompt=None,
     titles=None,
+    cancel_event=None,
+    checkpoint_out=None,
+    resume_state=None,
 ):
-    """返回 (raw_text, error)。失败时 raw_text 为 None。
+    """返回 (raw_text, error)。失败时 raw_text 为 None；暂停时返回 (None, 'PAUSED')。
 
     优先走 Python 内直连 HTTP + 进程内工具循环；未配直连端点或设了
     `ANSWER_BACKEND=pi` 时自动退回 `pi` 子进程。
     """
+    if cancel_event is not None and cancel_event.is_set():
+        return None, "PAUSED"
     roots = ["books/%s/md" % b for b in (books or [book])]
     thinking = normalize_thinking(thinking)
     backend = (os.environ.get("ANSWER_BACKEND") or "auto").strip().lower()
@@ -1253,7 +1258,14 @@ def call_pi(
             system_prompt=system_prompt or direct_llm.SYSTEM_PROMPT,
             titles=titles,
             on_event=on_event,
+            cancel_event=cancel_event,
+            checkpoint_out=checkpoint_out,
+            resume_state=resume_state,
         )
+        if getattr(result, "paused", False) or result.error == "PAUSED":
+            if checkpoint_out is not None and isinstance(getattr(result, "checkpoint", None), dict):
+                checkpoint_out.update(result.checkpoint)
+            return None, "PAUSED"
         if (
             backend == "auto"
             and result.exit_code not in (0, None)
@@ -1262,6 +1274,12 @@ def call_pi(
         ):
             cfg = None
     if cfg is None:
+        pi_prompt = prompt
+        if isinstance(resume_state, dict) and resume_state.get("partial_text"):
+            pi_prompt += (
+                "\n\n【接续提示】用户此前已在生成前半段预览：\n%s\n请继续输出完整且合法的 JSON 对象。"
+                % (str(resume_state["partial_text"])[:2000])
+            )
         env = dict(os.environ)
         env["BOOK_MD"] = roots[0]
         env["BOOK_MDS"] = json.dumps(roots, ensure_ascii=False)
@@ -1272,7 +1290,7 @@ def call_pi(
         except ValueError:
             json_cmd = text_cmd
         result = model_call.invoke(
-            prompt,
+            pi_prompt,
             json_cmd,
             text_cmd,
             kind=kind,
@@ -1283,6 +1301,8 @@ def call_pi(
             parser="answer",
             on_event=on_event,
         )
+        if cancel_event is not None and cancel_event.is_set():
+            return None, "PAUSED"
     if result.timed_out:
         return None, "回答超时（%d 秒）" % PI_TIMEOUT
     if result.exit_code not in (0, None):
@@ -1310,6 +1330,9 @@ def _call_model(
     use_tools=True,
     system_prompt=None,
     titles=None,
+    cancel_event=None,
+    checkpoint_out=None,
+    resume_state=None,
 ):
     """调用 `call_pi`，并兼容仅接旧签名的测试替身。"""
     if call_pi is _ORIG_CALL_PI:
@@ -1324,19 +1347,25 @@ def _call_model(
             use_tools=use_tools,
             system_prompt=system_prompt,
             titles=titles,
+            cancel_event=cancel_event,
+            checkpoint_out=checkpoint_out,
+            resume_state=resume_state,
         )
     kwargs = {"thinking": thinking, "rec": rec, "kind": kind}
     try:
         params = inspect.signature(call_pi).parameters
         has_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
-        if has_kw or "on_event" in params:
-            kwargs["on_event"] = on_event
-        if has_kw or "use_tools" in params:
-            kwargs["use_tools"] = use_tools
-        if has_kw or "system_prompt" in params:
-            kwargs["system_prompt"] = system_prompt
-        if has_kw or "titles" in params:
-            kwargs["titles"] = titles
+        for name, val in (
+            ("on_event", on_event),
+            ("use_tools", use_tools),
+            ("system_prompt", system_prompt),
+            ("titles", titles),
+            ("cancel_event", cancel_event),
+            ("checkpoint_out", checkpoint_out),
+            ("resume_state", resume_state),
+        ):
+            if has_kw or name in params:
+                kwargs[name] = val
     except (TypeError, ValueError):
         pass
     return call_pi(prompt, book, books, **kwargs)
@@ -1577,12 +1606,22 @@ def repair_reply_json(raw):
 
 
 def _request_reply(
-    prompt, book, books=None, thinking=DEFAULT_THINKING, accept=None, rec=None, on_event=None, titles=None
+    prompt,
+    book,
+    books=None,
+    thinking=DEFAULT_THINKING,
+    accept=None,
+    rec=None,
+    on_event=None,
+    titles=None,
+    cancel_event=None,
+    checkpoint_out=None,
+    resume_state=None,
 ):
     """调模型并解析：优先本地确定性修 JSON，修不了只把 raw 传给 thinking=off 轻修一次。
 
     只有当合法 JSON 里没有正文（accept 失败）才用 ANSWER_REMIND 补问；
-    raw 为 None（超时、传输失败）直接返回，不重问。
+    raw 为 None（暂停、超时、传输失败）直接返回，不重问。
     """
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
     rec.event(
@@ -1602,9 +1641,15 @@ def _request_reply(
         on_event=on_event,
         use_tools=True,
         titles=titles,
+        cancel_event=cancel_event,
+        checkpoint_out=checkpoint_out,
+        resume_state=resume_state,
     )
     if raw is None:
-        rec.event("answer.attempt_end", attempt=1, ok=False, error=error)
+        if error == "PAUSED":
+            rec.event("answer.attempt_paused", attempt=1)
+        else:
+            rec.event("answer.attempt_end", attempt=1, ok=False, error=error)
         return None, None, error
     rec.event(
         "answer.raw",
@@ -1641,6 +1686,8 @@ def _request_reply(
     )
 
     if is_parse_fail:
+        if cancel_event is not None and cancel_event.is_set():
+            return None, None, "PAUSED"
         print(
             "回答轻量修 JSON（thinking=off）：%s" % (" ".join(raw.split())[:120]),
             file=sys.stderr,
@@ -1660,8 +1707,11 @@ def _request_reply(
             use_tools=False,
             system_prompt=direct_llm.REPAIR_SYSTEM_PROMPT,
             titles=titles,
+            cancel_event=cancel_event,
         )
         if rep_raw is None:
+            if rep_err == "PAUSED":
+                return None, None, "PAUSED"
             rec.event("answer.attempt_end", attempt=2, ok=False, error=rep_err or error)
             return None, raw, error
         rep_reply = parse_reply(rep_raw) or repair_reply_json(rep_raw)
@@ -1672,6 +1722,8 @@ def _request_reply(
         rec.event("answer.attempt_end", attempt=2, ok=False, error="模型没有返回 JSON")
         return None, rep_raw, "模型没有返回 JSON"
 
+    if cancel_event is not None and cancel_event.is_set():
+        return None, None, "PAUSED"
     # 解析出了 JSON 但没有正文：保留一次带 ANSWER_REMIND 的补问
     print(
         "回答重问（没有正文）：%s" % (" ".join(raw.split())[:120]),
@@ -1691,8 +1743,11 @@ def _request_reply(
         on_event=on_event,
         use_tools=True,
         titles=titles,
+        cancel_event=cancel_event,
     )
     if raw2 is None:
+        if error2 == "PAUSED":
+            return None, None, "PAUSED"
         rec.event("answer.attempt_end", attempt=2, ok=False, error=error2)
         return None, None, error2
     reply2 = parse_reply(raw2) or repair_reply_json(raw2)
@@ -2093,6 +2148,9 @@ def answer_question(
     focus=None,
     rec=None,
     on_event=None,
+    cancel_event=None,
+    checkpoint_out=None,
+    resume_state=None,
 ):
     """返回 Answer dict（结构见 ANSWER-BRIEF.md 的「数据形状」）。
 
@@ -2136,7 +2194,15 @@ def answer_question(
     named = _normalize_focus(focus)
     if named:
         rec.event("answer.focus", **named)
-    extra_ev = {"on_event": on_event} if on_event is not None else {}
+    extra_ev = {}
+    if on_event is not None:
+        extra_ev["on_event"] = on_event
+    if cancel_event is not None:
+        extra_ev["cancel_event"] = cancel_event
+    if checkpoint_out is not None:
+        extra_ev["checkpoint_out"] = checkpoint_out
+    if resume_state is not None:
+        extra_ev["resume_state"] = resume_state
     if named and named["status"] == "exact" and named["book"]:
         hit = _focus_source(named, scope, book, path, line)
         note = _focus_note(named, hit)
@@ -2226,6 +2292,9 @@ def _answer_single(
     version=None,
     rec=None,
     on_event=None,
+    cancel_event=None,
+    checkpoint_out=None,
+    resume_state=None,
 ):
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
     rel = _rel(path)
@@ -2325,9 +2394,48 @@ def _answer_single(
         rec.set_index(answer_ok=False, answer_error=out.get("error"))
         return out
 
+    if cancel_event is not None and cancel_event.is_set():
+        partial_text = str((checkpoint_out or {}).get("partial_text") or (resume_state or {}).get("partial_text") or "")
+        out = _err(
+            "PAUSED",
+            paused=True,
+            partial_text=partial_text,
+            passages=_passages(windows),
+            ms=_ms(t0),
+            thinking=thinking,
+        )
+        rec.event("answer.paused", mode="single", stage="pre_model", partial_chars=len(partial_text))
+        rec.set_index(answer_ok=False, answer_error="PAUSED")
+        return out
+
     prompt = build_prompt(question, book, windows, chapters, history, rec=rec)
-    reply, raw, error = _request_reply(prompt, book, thinking=thinking, rec=rec, on_event=on_event, titles=titles)
+    reply, raw, error = _request_reply(
+        prompt,
+        book,
+        thinking=thinking,
+        rec=rec,
+        on_event=on_event,
+        titles=titles,
+        cancel_event=cancel_event,
+        checkpoint_out=checkpoint_out,
+        resume_state=resume_state,
+    )
     if raw is None:
+        if error == "PAUSED":
+            partial_text = str(
+                (checkpoint_out or {}).get("partial_text") or (resume_state or {}).get("partial_text") or ""
+            )
+            out = _err(
+                "PAUSED",
+                paused=True,
+                partial_text=partial_text,
+                passages=_passages(windows),
+                ms=_ms(t0),
+                thinking=thinking,
+            )
+            rec.event("answer.paused", mode="single", stage="model", partial_chars=len(partial_text))
+            rec.set_index(answer_ok=False, answer_error="PAUSED")
+            return out
         out = _err(error, passages=_passages(windows), ms=_ms(t0), thinking=thinking)
         rec.event("answer.error", mode="single", stage="model", error=out.get("error"))
         rec.set_index(answer_ok=False, answer_error=out.get("error"))
@@ -2426,6 +2534,9 @@ def _answer_multi(
     focus_book=None,
     rec=None,
     on_event=None,
+    cancel_event=None,
+    checkpoint_out=None,
+    resume_state=None,
 ):
     """多书：每本取两窗，一次提示词写完整篇，引文按书归并。"""
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
@@ -2545,6 +2656,19 @@ def _answer_multi(
         rec.event("answer.error", mode="multi", stage="windows", error=out.get("error"))
         rec.set_index(answer_ok=False, answer_error=out.get("error"))
         return out
+    if cancel_event is not None and cancel_event.is_set():
+        partial_text = str((checkpoint_out or {}).get("partial_text") or (resume_state or {}).get("partial_text") or "")
+        out = _err(
+            "PAUSED",
+            paused=True,
+            partial_text=partial_text,
+            passages=_passages(windows),
+            ms=_ms(t0),
+            thinking=thinking,
+        )
+        rec.event("answer.paused", mode="multi", stage="pre_model", partial_chars=len(partial_text))
+        rec.set_index(answer_ok=False, answer_error="PAUSED")
+        return out
     coverage = _coverage(terms)
     prompt = build_multi_prompt(question, plans, windows, coverage, history, focus_title, rec=rec)
     # 模型给了 JSON 但没有任何正文时重问，别当成「库里没有」。
@@ -2557,8 +2681,26 @@ def _answer_multi(
         rec=rec,
         on_event=on_event,
         titles=all_titles,
+        cancel_event=cancel_event,
+        checkpoint_out=checkpoint_out,
+        resume_state=resume_state,
     )
     if raw is None:
+        if error == "PAUSED":
+            partial_text = str(
+                (checkpoint_out or {}).get("partial_text") or (resume_state or {}).get("partial_text") or ""
+            )
+            out = _err(
+                "PAUSED",
+                paused=True,
+                partial_text=partial_text,
+                passages=_passages(windows),
+                ms=_ms(t0),
+                thinking=thinking,
+            )
+            rec.event("answer.paused", mode="multi", stage="model", partial_chars=len(partial_text))
+            rec.set_index(answer_ok=False, answer_error="PAUSED")
+            return out
         out = _err(error, passages=_passages(windows), ms=_ms(t0), thinking=thinking)
         rec.event("answer.error", mode="multi", stage="model", error=out.get("error"))
         rec.set_index(answer_ok=False, answer_error=out.get("error"))

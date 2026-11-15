@@ -33,6 +33,8 @@ class Result:
         self.system = None
         self.exit_code = None
         self.timed_out = False
+        self.paused = False
+        self.checkpoint = None
         self.mode = "json"
         self.ms = 0.0
         self.text_blob = None

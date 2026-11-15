@@ -62,8 +62,11 @@ SESSION_LOCK = threading.Lock()
 # 同时进来的第二个请求等它的 Event，拿到同一份结果，不再调一次模型。
 ANSWER_JOBS = {}
 ANSWER_JOBS_LOCK = threading.Lock()
+STREAM_JOBS = {}
+PAUSED_CHECKPOINTS = {}
 ANSWER_WAIT_SECONDS = 300
 ANSWER_JOB_TTL = 60
+PAUSED_CHECKPOINT_TTL = 1800
 MAX_DELETE = 100
 # 与首页 / 日课 / 分层读 / 操作台同一道门口：只服务本机页面，别让浏览器里的
 # 其它站点借 DNS rebinding 打到本机的书库 API。
@@ -84,6 +87,68 @@ def _purge_answer_jobs(at):
         k for k, job in ANSWER_JOBS.items() if job["event"].is_set() and job["expires"] and job["expires"] <= at
     ]:
         ANSWER_JOBS.pop(key, None)
+    for sid in [
+        k for k, job in STREAM_JOBS.items() if job["event"].is_set() and job["expires"] and job["expires"] <= at
+    ]:
+        STREAM_JOBS.pop(sid, None)
+    for key in [k for k, entry in PAUSED_CHECKPOINTS.items() if entry["expires"] <= at]:
+        PAUSED_CHECKPOINTS.pop(key, None)
+
+
+def _stream_id(value):
+    if not isinstance(value, str):
+        return ""
+    clean = value.strip()
+    if not clean or len(clean) > 64:
+        return ""
+    if not re.match(r"^[A-Za-z0-9_.:-]+$", clean):
+        return ""
+    return clean
+
+
+def _save_paused_checkpoint(key, data):
+    if not key or not isinstance(data, dict):
+        return
+    with ANSWER_JOBS_LOCK:
+        _purge_answer_jobs(time.time())
+        PAUSED_CHECKPOINTS[key] = {
+            "data": dict(data),
+            "expires": time.time() + PAUSED_CHECKPOINT_TTL,
+        }
+
+
+def _pop_paused_checkpoint(key):
+    if not key:
+        return None
+    with ANSWER_JOBS_LOCK:
+        _purge_answer_jobs(time.time())
+        entry = PAUSED_CHECKPOINTS.pop(key, None)
+    return dict(entry["data"]) if entry and isinstance(entry.get("data"), dict) else None
+
+
+def pause_active_answer(sid="", n=0, stream_id=""):
+    """标记正在运行的回答任务为暂停；返回 `(matched_active, job)`。"""
+    with ANSWER_JOBS_LOCK:
+        _purge_answer_jobs(time.time())
+        candidates = []
+        if stream_id and stream_id in STREAM_JOBS:
+            candidates.append(STREAM_JOBS[stream_id])
+        if sid and n:
+            for k, job in ANSWER_JOBS.items():
+                if k[0] == sid and k[1] == int(n):
+                    candidates.append(job)
+        for job in candidates:
+            if not job["event"].is_set():
+                job["paused"] = True
+                job["cancel_event"].set()
+                return True, job
+        return False, (candidates[-1] if candidates else None)
+
+
+def _wait_if_pausing(job):
+    """若同键上一个刚触发暂停的任务仍在收尾，先等它写完断点再继续。"""
+    if job is not None and job.get("paused") and not job["event"].is_set():
+        job["event"].wait(timeout=2.5)
 
 
 def claim_answer_job(key, attempt=0, fresh=False):
@@ -107,10 +172,14 @@ def claim_answer_job(key, attempt=0, fresh=False):
 def _new_answer_job(attempt=0):
     return {
         "event": threading.Event(),
+        "cancel_event": threading.Event(),
         "cond": threading.Condition(),
         "events": [],
         "result": None,
         "error": None,
+        "paused": False,
+        "paused_data": None,
+        "checkpoint": {},
         "attempt": attempt,
         "expires": 0.0,
     }
@@ -125,14 +194,19 @@ def append_answer_event(job, event):
         job["cond"].notify_all()
 
 
-def publish_answer_job(job, result=None, error=None):
+def publish_answer_job(job, result=None, error=None, paused=None):
     """写结果、追加终态事件并开 Event。job 再保留 ANSWER_JOB_TTL 秒。"""
     with job["cond"]:
         job["result"] = result
         job["error"] = error
+        job["paused_data"] = paused
+        if paused is not None:
+            job["paused"] = True
         job["expires"] = time.time() + ANSWER_JOB_TTL
         if error:
             job["events"].append({"type": "error", "data": {"ok": False, "status": error[0], "error": error[1]}})
+        elif paused is not None:
+            job["events"].append({"type": "paused", "data": paused})
         elif result is not None:
             job["events"].append({"type": "done", "data": result})
         job["event"].set()
@@ -537,7 +611,7 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(403, "只接受 127.0.0.1 或 localhost。")
             return
         route = unquote(urlparse(self.path).path)
-        if route not in ("/api/run", "/api/answer", "/api/sessions/delete"):
+        if route not in ("/api/run", "/api/answer", "/api/answer/pause", "/api/sessions/delete"):
             self.fail(404, "unknown api")
             return
         payload = self.read_payload()
@@ -547,8 +621,21 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_run(payload)
         elif route == "/api/answer":
             self.handle_answer(payload)
+        elif route == "/api/answer/pause":
+            self.handle_answer_pause(payload)
         else:
             self.handle_sessions_delete(payload)
+
+    def handle_answer_pause(self, payload):
+        sid = _session_id(payload.get("session_id"))
+        n = _turn_no(payload.get("turn"))
+        stream_id = _stream_id(payload.get("stream_id"))
+        if not (sid and n) and not stream_id:
+            self.fail(400, "缺少 session_id+turn 或 stream_id")
+            return
+        active, job = pause_active_answer(sid=sid, n=n, stream_id=stream_id)
+        done = bool(job is not None and not active and job["event"].is_set())
+        self.send_json(200, {"ok": True, "paused": bool(active), "already_done": done})
 
     def handle_sessions_delete(self, payload):
         ids = payload.get("ids")
@@ -679,7 +766,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             book = book or focus["book"]
         fresh = _flag(payload.get("fresh"))
+        resume = _flag(payload.get("resume"))
         stream = _flag(payload.get("stream")) or "text/event-stream" in (self.headers.get("Accept") or "").lower()
+        stream_id = _stream_id(payload.get("stream_id"))
         self.api_answer(
             question,
             book,
@@ -690,9 +779,11 @@ class Handler(BaseHTTPRequestHandler):
             clean,
             focus=focus,
             thinking=payload.get("thinking"),
-            use_cache=not fresh,
-            fresh=fresh,
+            use_cache=not (fresh or resume),
+            fresh=fresh or resume,
             stream=stream,
+            resume=resume,
+            stream_id=stream_id,
             session_id=_session_id(payload.get("session_id")),
             turn=_turn_no(payload.get("turn")),
         )
@@ -968,7 +1059,22 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _call_answer_question(
-        question, book, path, line, terms, groups, sources, thinking, use_cache, history, focus, rec, on_event
+        question,
+        book,
+        path,
+        line,
+        terms,
+        groups,
+        sources,
+        thinking,
+        use_cache,
+        history,
+        focus,
+        rec,
+        on_event,
+        cancel_event=None,
+        checkpoint_out=None,
+        resume_state=None,
     ):
         kwargs = {
             "groups": groups,
@@ -981,13 +1087,22 @@ class Handler(BaseHTTPRequestHandler):
         }
         try:
             sig = inspect.signature(answerer.answer_question)
-            accepts_event = "on_event" in sig.parameters or any(
-                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-            )
+            params = sig.parameters
+            has_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+            accepts_event = has_kw or "on_event" in params
+            accepts_cancel = has_kw or "cancel_event" in params
+            accepts_cp = has_kw or "checkpoint_out" in params
+            accepts_resume = has_kw or "resume_state" in params
         except (TypeError, ValueError):
-            accepts_event = False
+            accepts_event = accepts_cancel = accepts_cp = accepts_resume = False
         if on_event is not None and accepts_event:
             kwargs["on_event"] = on_event
+        if cancel_event is not None and accepts_cancel:
+            kwargs["cancel_event"] = cancel_event
+        if checkpoint_out is not None and accepts_cp:
+            kwargs["checkpoint_out"] = checkpoint_out
+        if resume_state is not None and accepts_resume:
+            kwargs["resume_state"] = resume_state
         return answerer.answer_question(question, book, path, line, terms, **kwargs)
 
     def api_answer(
@@ -1006,6 +1121,8 @@ class Handler(BaseHTTPRequestHandler):
         turn=None,
         fresh=False,
         stream=False,
+        resume=False,
+        stream_id="",
     ):
         sid, n, rel, ctx = "", 0, None, None
         if session_id:
@@ -1029,11 +1146,18 @@ class Handler(BaseHTTPRequestHandler):
                 n,
                 rel,
                 stream=stream,
+                resume=resume,
+                stream_id=stream_id,
             )
             return
         key = answer_job_key(sid, n, meta["run_token"])
+        if resume:
+            with ANSWER_JOBS_LOCK:
+                prev_job = ANSWER_JOBS.get(key)
+            _wait_if_pausing(prev_job)
+        resume_state = _pop_paused_checkpoint(key) if resume else None
         attempt = (meta["answer_attempt"] or 0) + 1
-        job, owner = claim_answer_job(key, attempt, fresh=fresh)
+        job, owner = claim_answer_job(key, attempt, fresh=fresh or resume)
         if not owner:
             if stream:
                 self._stream_job(job)
@@ -1043,6 +1167,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if job["error"]:
                 self.fail(*job["error"])
+            elif job.get("paused_data") is not None:
+                self.send_json(200, job["paused_data"])
             elif job["result"] is None:
                 self.fail(500, "回答任务没有结果")
             else:
@@ -1085,7 +1211,35 @@ class Handler(BaseHTTPRequestHandler):
                     focus,
                     rec,
                     (lambda ev: append_answer_event(job, ev)) if stream else None,
+                    cancel_event=job["cancel_event"],
+                    checkpoint_out=job["checkpoint"],
+                    resume_state=resume_state,
                 )
+                if (isinstance(info, dict) and info.get("paused")) or job["cancel_event"].is_set():
+                    partial_text = str(
+                        (info.get("partial_text") if isinstance(info, dict) else "")
+                        or job["checkpoint"].get("partial_text")
+                        or (resume_state or {}).get("partial_text")
+                        or ""
+                    )
+                    cp = job["checkpoint"] or ({"partial_text": partial_text} if partial_text else {})
+                    if cp:
+                        _save_paused_checkpoint(key, cp)
+                    session.pause_answer(sid, n, attempt, partial=partial_text, token=token)
+                    rec.event("answer.paused", partial_chars=len(partial_text))
+                    rec.finish("paused")
+                    paused_body = {
+                        "ok": False,
+                        "paused": True,
+                        "partial_text": partial_text,
+                        "message": "已暂停，点击「继续问答」可接续生成",
+                        "session_id": sid,
+                        "turn": n,
+                        "run_token": token,
+                        "answer_state": "paused",
+                    }
+                    publish_answer_job(job, paused=paused_body)
+                    return
                 _fill_citations(info)
                 if not session.finish_answer(sid, n, attempt, info, ctx, token=token, run=rec.id if rec else ""):
                     # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
@@ -1133,6 +1287,8 @@ class Handler(BaseHTTPRequestHandler):
         _worker()
         if job["error"]:
             self.fail(*job["error"])
+        elif job.get("paused_data") is not None:
+            self.send_json(200, job["paused_data"])
         else:
             self.send_json(200, job["result"])
 
@@ -1153,9 +1309,21 @@ class Handler(BaseHTTPRequestHandler):
         n,
         rel,
         stream=False,
+        resume=False,
+        stream_id="",
     ):
         """不带会话状态的回答：照旧调一次模型并把结果发回去。"""
-        job = _new_answer_job(0) if stream else None
+        cp_key = ("stream", stream_id) if stream_id else None
+        if resume and stream_id:
+            with ANSWER_JOBS_LOCK:
+                prev_job = STREAM_JOBS.get(stream_id)
+            _wait_if_pausing(prev_job)
+        resume_state = _pop_paused_checkpoint(cp_key) if (resume and cp_key) else None
+        job = _new_answer_job(0) if (stream or stream_id) else None
+        if job is not None and stream_id:
+            with ANSWER_JOBS_LOCK:
+                _purge_answer_jobs(time.time())
+                STREAM_JOBS[stream_id] = job
 
         def _run_once():
             rec = runlog.start(
@@ -1182,7 +1350,41 @@ class Handler(BaseHTTPRequestHandler):
                     focus,
                     rec,
                     (lambda ev: append_answer_event(job, ev)) if stream else None,
+                    cancel_event=job["cancel_event"] if job is not None else None,
+                    checkpoint_out=job["checkpoint"] if job is not None else None,
+                    resume_state=resume_state,
                 )
+                if (isinstance(info, dict) and info.get("paused")) or (
+                    job is not None and job["cancel_event"].is_set()
+                ):
+                    partial_text = str(
+                        (info.get("partial_text") if isinstance(info, dict) else "")
+                        or (job["checkpoint"].get("partial_text") if job is not None else "")
+                        or (resume_state or {}).get("partial_text")
+                        or ""
+                    )
+                    if cp_key:
+                        cp = (job["checkpoint"] if job is not None else {}) or (
+                            {"partial_text": partial_text} if partial_text else {}
+                        )
+                        if cp:
+                            _save_paused_checkpoint(cp_key, cp)
+                    rec.event("answer.paused", partial_chars=len(partial_text))
+                    rec.finish("paused")
+                    paused_body = {
+                        "ok": False,
+                        "paused": True,
+                        "partial_text": partial_text,
+                        "message": "已暂停，点击「继续问答」可接续生成",
+                        "stream_id": stream_id,
+                    }
+                    if stream and job is not None:
+                        publish_answer_job(job, paused=paused_body)
+                    else:
+                        if job is not None:
+                            publish_answer_job(job, paused=paused_body)
+                        self.send_json(200, paused_body)
+                    return
                 _fill_citations(info)
                 rec.set_index(
                     answer_ok=bool(info.get("ok")),
@@ -1194,25 +1396,31 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 rec.finish("ok" if info.get("ok") else "error", error=info.get("error", ""))
                 body = dict(info, session_id=sid, turn=n, related=rel, history=self.history_brief(ctx))
-                if job is not None:
+                if stream and job is not None:
                     publish_answer_job(job, result=body)
                 else:
+                    if job is not None:
+                        publish_answer_job(job, result=body)
                     self.send_json(200, body)
             except ValueError as exc:
                 rec.error("answer", exc)
                 rec.finish("error", error=str(exc))
-                if job is not None:
+                if stream and job is not None:
                     publish_answer_job(job, error=(400, str(exc)))
                 else:
+                    if job is not None:
+                        publish_answer_job(job, error=(400, str(exc)))
                     self.fail(400, str(exc))
             except Exception as exc:
                 traceback.print_exc()
                 message = "%s: %s" % (exc.__class__.__name__, exc)
                 rec.error("answer", exc)
                 rec.finish("error", error=message)
-                if job is not None:
+                if stream and job is not None:
                     publish_answer_job(job, error=(500, message))
                 else:
+                    if job is not None:
+                        publish_answer_job(job, error=(500, message))
                     self.fail(500, message)
 
         if stream:

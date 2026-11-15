@@ -8,7 +8,7 @@
   const THINKING = { off: '关', low: '低', medium: '中', high: '高' };
   const CONFIDENCE = { high: '高', medium: '中', low: '低' };
   const STATUS_TEXT = {
-    retrieving: '检索中', answering: '回答中',
+    retrieving: '检索中', answering: '回答中', paused: '已暂停',
     'run-error': '检索失败', 'answer-error': '回答失败',
     'answer-interrupted': '回答中断', 'answer-incomplete': '未回答',
   };
@@ -189,12 +189,12 @@
     return data;
   }
 
-  function postJSON(url, body) {
-    return fetchJSON(url, {
+  function postJSON(url, body, fetchOpts) {
+    return fetchJSON(url, Object.assign({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
-    });
+    }, fetchOpts || {}));
   }
 
   function parseSSEFrame(rawFrame, onEvent) {
@@ -217,6 +217,7 @@
     if (!payload || typeof payload !== 'object') return null;
     if (!payload.type && eventName) payload.type = eventName;
     if (payload.type === 'done') return { terminal: 'done', data: payload.data };
+    if (payload.type === 'paused') return { terminal: 'paused', data: payload.data };
     if (payload.type === 'error') {
       const msg = (payload.data && payload.data.error) || payload.error || '回答失败';
       throw new Error(msg);
@@ -225,19 +226,20 @@
     return null;
   }
 
-  async function postAnswerStream(url, body, onEvent) {
-    const res = await fetch(url, {
+  async function postAnswerStream(url, body, onEvent, fetchOpts) {
+    const res = await fetch(url, Object.assign({
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'text/event-stream, application/json',
       },
       body: JSON.stringify(Object.assign({}, body, { stream: true })),
-    });
+    }, fetchOpts || {}));
     const ctype = String((res.headers && res.headers.get('content-type')) || '').toLowerCase();
     if (!ctype.includes('text/event-stream') || !res.body || !res.body.getReader) {
       let data = null;
       try { data = await res.json(); } catch (err) { data = null; }
+      if (data && data.paused) return data;
       if (!res.ok || !data || data.ok === false) {
         throw new Error((data && data.error) || ('请求失败 ' + res.status));
       }
@@ -247,6 +249,7 @@
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let doneData = null;
+    let pausedData = null;
     while (true) {
       const step = await reader.read();
       if (step.value) buffer += decoder.decode(step.value, { stream: !step.done });
@@ -256,6 +259,7 @@
         buffer = buffer.slice(sep + 2);
         const resFrame = parseSSEFrame(frame, onEvent);
         if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+        if (resFrame && resFrame.terminal === 'paused') pausedData = resFrame.data;
         sep = buffer.indexOf('\n\n');
       }
       if (step.done) break;
@@ -264,7 +268,9 @@
     if (buffer.trim()) {
       const resFrame = parseSSEFrame(buffer, onEvent);
       if (resFrame && resFrame.terminal === 'done') doneData = resFrame.data;
+      if (resFrame && resFrame.terminal === 'paused') pausedData = resFrame.data;
     }
+    if (pausedData) return pausedData;
     if (!doneData) throw new Error('Failed to fetch');
     if (doneData.ok === false) throw new Error(doneData.error || '回答失败');
     return doneData;
@@ -595,9 +601,9 @@
     });
   }
 
-  function startClock() {
+  function startClock(initialElapsed = 0) {
     stopClock();
-    state.elapsed = 0;
+    state.elapsed = Number(initialElapsed) > 0 ? Math.floor(Number(initialElapsed)) : 0;
     state.timer = setInterval(() => {
       state.elapsed += 1;
       tickClock();
@@ -627,6 +633,9 @@
     // 显式状态优先：重试失败时后端会保留旧 answer，不能据此报 ready。
     const name = String(saved.answer_state || '');
     if (name === 'running') return { status: 'answering', error: '' };
+    if (name === 'paused') {
+      return { status: 'paused', error: String(saved.answer_error || '') };
+    }
     if (name === 'interrupted') {
       return { status: 'answer-interrupted', error: String(saved.answer_error || '') };
     }
@@ -647,6 +656,7 @@
 
   function answerStateName(status) {
     if (status === 'answering') return 'running';
+    if (status === 'paused') return 'paused';
     if (status === 'answer-interrupted') return 'interrupted';
     if (status === 'answer-error') return 'error';
     if (status === 'answer-incomplete') return 'incomplete';
@@ -1240,29 +1250,68 @@
       + (state.busy ? ' disabled' : '') + '>重新回答</button></div>';
   }
 
+  function parseStreamMarkdown(text) {
+    const raw = String(text || '').replace(/\r\n?/g, '\n');
+    if (!raw.trim()) return null;
+    const lines = raw.split('\n');
+    // 末尾尚未跟上空格和标题文本的孤立 # 标记暂不渲染，避免流式吐字时闪烁出裸 ##
+    if (lines.length && /^\s*#{1,4}\s*$/.test(lines[lines.length - 1])) lines.pop();
+    const leadLines = [];
+    const sections = [];
+    let current = null;
+    for (let i = 0; i < lines.length; i += 1) {
+      const m = lines[i].match(/^\s*#{1,4}\s+(.+?)\s*$/);
+      if (m) {
+        const heading = plain(m[1]);
+        if (heading) {
+          current = { heading, lines: [] };
+          sections.push(current);
+          continue;
+        }
+      }
+      if (current) current.lines.push(lines[i]);
+      else leadLines.push(lines[i]);
+    }
+    return { leadLines, sections };
+  }
+
   function streamPreviewHTML(text) {
-    const raw = String(text || '');
-    if (!raw.trim()) return '';
-    return raw.split(/\n\s*\n/).map(plain).filter(Boolean)
-      .map((p) => '<p>' + esc(p) + '</p>').join('');
+    const parsed = parseStreamMarkdown(text);
+    if (!parsed) return '';
+    const leadParas = parsed.leadLines.join('\n').split(/\n+/).map(plain).filter(Boolean);
+    if (!parsed.sections.length) {
+      return leadParas.map((p) => '<p>' + esc(p) + '</p>').join('');
+    }
+    const parts = [];
+    leadParas.forEach((p, idx) => {
+      parts.push('<p' + (idx === 0 ? ' class="answer-lead"' : '') + '>' + esc(p) + '</p>');
+    });
+    parsed.sections.forEach((sec) => {
+      const bodyParas = sec.lines.join('\n').split(/\n+/).map(plain).filter(Boolean);
+      parts.push('<section><h3>' + esc(sec.heading) + '</h3>'
+        + bodyParas.map((p) => '<p>' + esc(p) + '</p>').join('') + '</section>');
+    });
+    return parts.join('');
   }
 
   function updateStreamDOM(turn) {
     const statusEl = mainEl.querySelector('[data-stream-status]');
     if (statusEl && turn.streamStatus) statusEl.textContent = turn.streamStatus;
-    if (!turn.streamText) return;
+    const preview = streamPreviewHTML(turn.streamText);
+    if (!preview) return;
     const bodyEl = mainEl.querySelector('[data-stream-body]');
     if (!bodyEl) {
       render();
       return;
     }
-    bodyEl.innerHTML = streamPreviewHTML(turn.streamText);
+    bodyEl.innerHTML = preview;
   }
 
   function bodyHTML(turn) {
     if (turn.status === 'retrieving') {
-      return '<p class="loading-card"><span class="dot-pulse"></span>正在检索，通常 20 到 60 秒 · '
-        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></p>';
+      return '<p class="loading-card"><span class="loading-text"><span class="dot-pulse"></span>正在检索，通常 20 到 60 秒 · '
+        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></span>'
+        + '<button class="btn stream-pause-btn" type="button" data-toggle-pause="' + turn.n + '">暂停</button></p>';
     }
     if (turn.status === 'answering') {
       const focus = focusExact(turn);
@@ -1270,9 +1319,25 @@
         ? '先取指定书的原文，再取其他书补充，最长约 2 分钟…'
         : '正在组织回答，通常 40 到 90 秒…';
       const line = turn.streamStatus || fallback;
-      const head = '<p class="loading-card"><span class="dot-pulse"></span>'
+      const head = '<p class="loading-card"><span class="loading-text"><span class="dot-pulse"></span>'
         + '<span data-stream-status>' + esc(line) + '</span> · '
-        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></p>';
+        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></span>'
+        + '<button class="btn stream-pause-btn" type="button" data-toggle-pause="' + turn.n + '">暂停</button></p>';
+      const preview = streamPreviewHTML(turn.streamText);
+      return head + (preview
+        ? '<div class="answer stream-preview" data-stream-body>' + preview + '</div>'
+        : '');
+    }
+    if (turn.status === 'paused') {
+      const line = turn.streamStatus || (turn.pausedAt === 'retrieving'
+        ? '已暂停检索 · 点击「继续问答」重新继续'
+        : '已暂停 · 点击「继续问答」从当前进度继续');
+      const elapsedTag = turn.pausedElapsed
+        ? ' · <span class="elapsed mono">已用 ' + turn.pausedElapsed + 's</span>'
+        : '';
+      const head = '<p class="loading-card is-paused"><span class="loading-text"><span class="pause-dot"></span>'
+        + '<span data-stream-status>' + esc(line) + '</span>' + elapsedTag + '</span>'
+        + '<button class="btn stream-pause-btn is-resume" type="button" data-toggle-pause="' + turn.n + '">继续问答</button></p>';
       const preview = streamPreviewHTML(turn.streamText);
       return head + (preview
         ? '<div class="answer stream-preview" data-stream-body>' + preview + '</div>'
@@ -1979,13 +2044,23 @@
   async function runTurn(turn, opts) {
     const options = opts || {};
     const epoch = state.epoch;
+    if (turn.controller) {
+      try { turn.controller.abort(); } catch (err) { /* ignore */ }
+    }
+    const controller = new AbortController();
+    turn.controller = controller;
+    turn.pausing = false;
+    turn.pausedAt = '';
+    turn.lastFresh = !!options.fresh;
     turn.status = 'retrieving';
     turn.runError = '';
+    turn.streamStatus = '';
+    turn.streamText = '';
     turn.stageStates = ['active', 'pending', 'pending', 'pending', 'pending'];
     turn.stageOpen = new Set([0]);
     turn.stripOpen = true;
     syncBusy();
-    startClock();
+    startClock(options.resumeElapsed || 0);
     render();
     const body = { question: turn.question, thinking: state.thinking };
     if (state.sessionId) {
@@ -1995,8 +2070,10 @@
     if (turn.anchor) body.anchor = turn.anchor;
     if (options.fresh) body.fresh = true;
     try {
-      const data = await postJSON('/api/run', body);
+      const data = await postJSON('/api/run', body, { signal: controller.signal });
       if (epoch !== state.epoch) return;
+      turn.controller = null;
+      if (turn.pausing || turn.status === 'paused') return;
       turn.trace = data;
       turn.related = data.related || null;
       turn.sources = defaultSources(turn);
@@ -2013,6 +2090,11 @@
       if (!ok) return;
     } catch (err) {
       if (epoch !== state.epoch) return;
+      turn.controller = null;
+      if (err && err.name === 'AbortError' && turn.pausing) {
+        turn.pausing = false;
+        return;
+      }
       turn.status = 'run-error';
       turn.runError = err.message;
       turn.stageStates = ALL_PENDING.slice();
@@ -2051,6 +2133,13 @@
       render();
       return;
     }
+    if (turn.controller) {
+      try { turn.controller.abort(); } catch (err) { /* ignore */ }
+    }
+    const controller = new AbortController();
+    turn.controller = controller;
+    turn.pausing = false;
+    turn.pausedAt = '';
     turn.sources = ordered;
     turn.answerSources = ordered.map(cloneSource);
     turn.answer = null;
@@ -2058,13 +2147,15 @@
     turn.thinking = state.thinking;
     turn.status = 'answering';
     turn.answerError = '';
-    turn.streamStatus = '';
-    turn.streamText = '';
+    turn.streamStatus = options.resume ? '正在从暂停处继续生成回答…' : '';
+    const prePauseText = options.initialStreamText ? String(options.initialStreamText) : '';
+    turn.streamText = prePauseText;
+    let streamReplaced = !prePauseText;
     turn.stageStates = ['done', 'done', 'done', 'done', 'active'];
     turn.stageOpen = new Set([4]);
     turn.stripOpen = true;
     syncBusy();
-    startClock();
+    startClock(options.resumeElapsed || 0);
     render();
     const primary = ordered[0];
     const body = {
@@ -2082,13 +2173,24 @@
       turn: turn.n,
       thinking: state.thinking,
     };
-    if (options.fresh) body.fresh = true;
+    if (options.fresh || options.resume) body.fresh = true;
+    if (options.resume) body.resume = true;
     try {
       const data = await postAnswerStream('/api/answer', body, (ev) => {
-        if (epoch !== state.epoch) return;
+        if (epoch !== state.epoch || turn.pausing || turn.status === 'paused') return;
         if (ev.type === 'answer_delta') {
-          if (typeof ev.text === 'string' && ev.text) turn.streamText = ev.text;
-          else if (typeof ev.delta === 'string') turn.streamText += ev.delta;
+          if (typeof ev.text === 'string' && ev.text) {
+            if (streamReplaced || ev.text.length >= 16 || ev.text.length >= prePauseText.length) {
+              streamReplaced = true;
+              turn.streamText = ev.text;
+            }
+          } else if (typeof ev.delta === 'string') {
+            if (!streamReplaced) {
+              streamReplaced = true;
+              turn.streamText = '';
+            }
+            turn.streamText += ev.delta;
+          }
           if (!turn.streamStatus || turn.streamStatus.indexOf('正在生成回答') < 0) {
             turn.streamStatus = '正在生成回答正文…';
           }
@@ -2099,8 +2201,22 @@
           turn.streamStatus = String(ev.message);
           if (state.viewN === turn.n) updateStreamDOM(turn);
         }
-      });
+      }, { signal: controller.signal });
       if (epoch !== state.epoch) return;
+      turn.controller = null;
+      if (data && data.paused) {
+        turn.pausing = false;
+        turn.pausedAt = 'answering';
+        turn.status = 'paused';
+        if (data.partial_text && !turn.streamText) turn.streamText = String(data.partial_text);
+        turn.streamStatus = data.message || '已暂停 · 点击「继续问答」从当前进度继续';
+        stopClock();
+        syncBusy();
+        render();
+        loadSessions();
+        return;
+      }
+      if (turn.pausing || turn.status === 'paused') return;
       stopAnswerPoll();
       turn.answer = data;
       turn.status = 'ready';
@@ -2110,6 +2226,11 @@
       }
     } catch (err) {
       if (epoch !== state.epoch) return;
+      turn.controller = null;
+      if (err && err.name === 'AbortError' && (turn.pausing || turn.status === 'paused')) {
+        turn.pausing = false;
+        return;
+      }
       if (networkError(err.message)) {
         // 连接断了不代表服务端失败：先按中断展示，再轮询会话详情。
         turn.status = 'answer-interrupted';
@@ -2120,9 +2241,10 @@
         turn.answerError = err.message;
       }
     }
-    if (epoch !== state.epoch) return;
+    if (epoch !== state.epoch || turn.status === 'paused') return;
     turn.streamStatus = '';
     turn.streamText = '';
+    turn.pausedElapsed = 0;
     turn.stageStates = ALL_DONE.slice();
     turn.stageOpen = new Set();
     turn.stripOpen = false;
@@ -2134,6 +2256,57 @@
     if (turn.status === 'ready' && first && state.viewN === turn.n) {
       showCitation(first);
     }
+  }
+
+  async function togglePause(n) {
+    const turn = state.turns.find((t) => t.n === n);
+    if (!turn) return;
+    if (turn.status === 'paused') {
+      if (turn.pausedAt === 'retrieving' || !turn.trace) {
+        await runTurn(turn, { fresh: !!turn.lastFresh, resumeElapsed: turn.pausedElapsed || 0 });
+      } else {
+        await answerTurn(turn, {
+          resume: true,
+          fresh: true,
+          initialStreamText: turn.streamText || '',
+          resumeElapsed: turn.pausedElapsed || 0,
+        });
+      }
+      return;
+    }
+    if (turn.status !== 'retrieving' && turn.status !== 'answering') return;
+    const phase = turn.status;
+    turn.pausedAt = phase;
+    turn.pausing = true;
+    turn.pausedElapsed = state.elapsed || 0;
+    turn.status = 'paused';
+    turn.streamStatus = phase === 'retrieving'
+      ? '已暂停检索 · 点击「继续问答」重新继续'
+      : '已暂停 · 点击「继续问答」从当前进度继续';
+    stopClock();
+    syncBusy();
+    render();
+    if (phase === 'retrieving') {
+      if (turn.controller) {
+        try { turn.controller.abort(); } catch (err) { /* ignore */ }
+      }
+      loadSessions();
+      return;
+    }
+    const ctl = turn.controller;
+    if (state.sessionId) {
+      try {
+        await postJSON('/api/answer/pause', { session_id: state.sessionId, turn: turn.n });
+      } catch (err) {
+        // 即使暂停接口慢或失败，前端仍保持暂停态
+      }
+    }
+    setTimeout(() => {
+      if (turn.controller && turn.controller === ctl && turn.status === 'paused') {
+        try { ctl.abort(); } catch (err) { /* ignore */ }
+      }
+    }, 1500);
+    loadSessions();
   }
 
   async function ask(question) {
@@ -2407,6 +2580,11 @@
       retryAnswer(Number(answerRetry.dataset.retryAnswer));
       return;
     }
+    const pauseBtn = e.target.closest('[data-toggle-pause]');
+    if (pauseBtn) {
+      togglePause(Number(pauseBtn.dataset.togglePause));
+      return;
+    }
     const stepper = e.target.closest('[data-step]');
     if (stepper) {
       stepCitation(Number(stepper.dataset.step));
@@ -2594,6 +2772,10 @@
       status: saved.status,
       runError: '',
       answerError: saved.error,
+      streamText: saved.status === 'paused' ? String(turn.answer_partial || '') : '',
+      streamStatus: '',
+      pausedAt: saved.status === 'paused' ? (trace ? 'answering' : 'retrieving') : '',
+      pausedElapsed: 0,
       stageStates: ALL_DONE.slice(),
       stageOpen: new Set(),
       stripOpen: false,

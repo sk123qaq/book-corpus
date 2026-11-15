@@ -14,8 +14,10 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import select
 import socket
 import ssl
+import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -350,6 +352,11 @@ class _AnswerStreamExtractor:
             self.text += emitted
         return emitted
 
+    @property
+    def done(self) -> bool:
+        """Return True once the JSON ``answer`` string has reached its closing quote."""
+        return self._state == "done"
+
 
 def _compute_cost(usage: dict[str, Any], cost_cfg: dict[str, Any]) -> dict[str, float]:
     def per_m(key: str) -> float:
@@ -397,6 +404,51 @@ def _normalize_usage(raw: dict[str, Any] | None, cost_cfg: dict[str, Any]) -> di
     return out
 
 
+def _has_buffered_bytes(resp: http.client.HTTPResponse, sock: Any) -> bool:
+    try:
+        if getattr(sock, "pending", None) and sock.pending() > 0:
+            return True
+    except OSError:
+        pass
+    try:
+        peek = getattr(resp.fp, "peek", None)
+        if peek and len(peek(1)) > 0:
+            return True
+    except (OSError, ValueError):
+        pass
+    return False
+
+
+def _wait_sock_or_cancel(
+    sock: Any,
+    cancel_event: threading.Event | None,
+    deadline: float,
+    chunk_timeout: float,
+) -> str:
+    """在有取消信号时按 0.25s 短步等 socket 可读，确保暂停后很快停止读取。"""
+    if cancel_event is None or sock is None:
+        return "ok"
+    idle_deadline = min(deadline, time.monotonic() + float(chunk_timeout))
+    while True:
+        if cancel_event.is_set():
+            return "PAUSED"
+        try:
+            if getattr(sock, "pending", None) and sock.pending() > 0:
+                return "ok"
+        except OSError:
+            return "ok"
+        now = time.monotonic()
+        if now >= deadline or now >= idle_deadline:
+            return "TIMED_OUT"
+        step = min(0.25, max(0.02, min(deadline, idle_deadline) - now))
+        try:
+            ready, _, _ = select.select([sock], [], [], step)
+        except (OSError, ValueError, TypeError):
+            return "ok"
+        if ready:
+            return "ok"
+
+
 def _http_stream_turn(
     cfg: dict[str, Any],
     payload: dict[str, Any],
@@ -404,8 +456,11 @@ def _http_stream_turn(
     session_id: str,
     deadline: float,
     on_delta: Callable[[str, str, str], None] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> tuple[dict[str, Any], str]:
     """发一轮 OpenAI-compatible SSE 请求，返回 `(turn_result, error)`。"""
+    if cancel_event is not None and cancel_event.is_set():
+        return {}, "PAUSED"
     parsed = urlsplit(cfg["url"])
     is_https = parsed.scheme.lower() == "https"
     host = parsed.hostname or "127.0.0.1"
@@ -443,8 +498,23 @@ def _http_stream_turn(
     stop_reason = ""
     raw_lines: list[str] = []
 
+    def _partial_result() -> dict[str, Any]:
+        return {
+            "content": "".join(content_parts),
+            "reasoning": "".join(reasoning_parts),
+            "tool_calls": [],
+            "usage": _normalize_usage(usage_raw, cfg.get("cost") or {}),
+            "stop_reason": stop_reason,
+            "duration_ms": round(runlog.ms_since(t0), 1),
+            "raw_stream": "\n".join(raw_lines),
+        }
+
     try:
         conn.request("POST", target, body=raw_body, headers=headers)
+        if cancel_event is not None:
+            wait_st = _wait_sock_or_cancel(conn.sock, cancel_event, deadline, CHUNK_READ_TIMEOUT)
+            if wait_st != "ok":
+                return {}, wait_st
         if conn.sock is not None:
             conn.sock.settimeout(min(float(CHUNK_READ_TIMEOUT), max(1.0, deadline - time.monotonic())))
         resp = conn.getresponse()
@@ -487,8 +557,16 @@ def _http_stream_turn(
         else:
             # 标准 SSE 流式读取
             while True:
+                if cancel_event is not None and cancel_event.is_set():
+                    return _partial_result(), "PAUSED"
                 if time.monotonic() >= deadline:
                     return {}, "TIMED_OUT"
+                if cancel_event is not None and conn.sock is not None and not _has_buffered_bytes(resp, conn.sock):
+                    wait_st = _wait_sock_or_cancel(conn.sock, cancel_event, deadline, CHUNK_READ_TIMEOUT)
+                    if wait_st == "PAUSED":
+                        return _partial_result(), "PAUSED"
+                    if wait_st == "TIMED_OUT":
+                        return {}, "TIMED_OUT"
                 if conn.sock is not None:
                     conn.sock.settimeout(min(float(CHUNK_READ_TIMEOUT), max(1.0, deadline - time.monotonic())))
                 raw_line = resp.readline()
@@ -597,10 +675,12 @@ def _build_turn_payload(cfg: dict[str, Any], messages: list[dict[str, Any]], *, 
 def _make_turn_delta_handler(
     emit: Callable[[dict[str, Any]], None],
     titles: dict[str, str] | None,
+    extractor: _AnswerStreamExtractor | None = None,
 ) -> Callable[[str, str, str], None]:
-    extractor = _AnswerStreamExtractor()
+    extractor = extractor if extractor is not None else _AnswerStreamExtractor()
     think_state: dict[str, Any] = {"announced": False, "last_ts": 0.0, "chars": 0}
     tool_seen: set[str] = set()
+    cit_sent = {"v": False}
 
     def handle_delta(kind_delta: str, delta_val: str, _extra: str) -> None:
         if kind_delta == "reasoning":
@@ -625,6 +705,15 @@ def _make_turn_delta_handler(
             decoded = extractor.feed(delta_val)
             if decoded:
                 emit({"type": "answer_delta", "delta": decoded, "text": extractor.text})
+            if not cit_sent["v"] and extractor.done and extractor.text.strip():
+                cit_sent["v"] = True
+                emit(
+                    {
+                        "type": "stage",
+                        "stage": "citations",
+                        "message": "正文已生成，正在整理并核对原文引文…",
+                    }
+                )
 
     return handle_delta
 
@@ -642,6 +731,9 @@ def invoke_answer(
     system_prompt: str = SYSTEM_PROMPT,
     titles: dict[str, str] | None = None,
     on_event: Callable[[dict[str, Any]], None] | None = None,
+    cancel_event: threading.Event | None = None,
+    checkpoint_out: dict[str, Any] | None = None,
+    resume_state: dict[str, Any] | None = None,
 ) -> model_call.Result:
     """直连 HTTP 跑完多轮工具循环并返回与 `model_call.Result` 同构的结果对象。"""
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
@@ -674,10 +766,27 @@ def invoke_answer(
         **rec.large(system_prompt, "system", inline=1000),
     )
 
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt},
-    ]
+    resumed_from = resume_state if isinstance(resume_state, dict) else None
+    if resumed_from and isinstance(resumed_from.get("messages"), list) and resumed_from["messages"]:
+        messages = [dict(m) for m in resumed_from["messages"]]
+        partial_raw_prev = str(resumed_from.get("partial_raw") or "")
+        if partial_raw_prev.strip():
+            messages.append({"role": "assistant", "content": partial_raw_prev})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "刚才回答已暂停，现在继续完成。"
+                        "请直接接着已有原文依据与前文内容，"
+                        "输出完整且合法的 JSON 对象（包含完整的 answer 与 citations 字段）。"
+                    ),
+                }
+            )
+    else:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
     executor = answer_tools.ToolExecutor(root, md_roots) if use_tools else None
     raw_chunks: list[str] = []
     last_text = ""
@@ -686,19 +795,64 @@ def invoke_answer(
         if on_event is not None:
             on_event(ev)
 
-    emit({"type": "stage", "stage": "model", "message": "正在联系模型分析原文…"})
+    def save_checkpoint(partial_raw: str = "", partial_text: str = "") -> None:
+        cp = {
+            "messages": [dict(m) for m in messages],
+            "partial_raw": partial_raw,
+            "partial_text": partial_text,
+        }
+        result.checkpoint = cp
+        if checkpoint_out is not None:
+            checkpoint_out.clear()
+            checkpoint_out.update(cp)
 
+    def mark_paused(partial_raw: str = "", partial_text: str = "") -> None:
+        fallback = str((resumed_from or {}).get("partial_text") or "")
+        shown = partial_text or fallback
+        save_checkpoint(partial_raw=partial_raw, partial_text=shown)
+        result.paused = True
+        result.error = "PAUSED"
+        result.text = shown
+        emit({"type": "paused", "partial_text": shown, "message": "已暂停，点击「继续问答」可接续生成"})
+
+    emit(
+        {
+            "type": "stage",
+            "stage": "model",
+            "message": "正在从暂停处继续生成回答…" if resumed_from else "正在联系模型分析原文…",
+        }
+    )
+
+    paused_mid_turn = False
     for turn_idx in range(MAX_TOOL_TURNS):
+        if cancel_event is not None and cancel_event.is_set():
+            mark_paused()
+            paused_mid_turn = True
+            break
         if time.monotonic() >= deadline:
             result.timed_out = True
             result.error = f"回答超时（{timeout} 秒）"
             break
 
         payload = _build_turn_payload(cfg, messages, use_tools=use_tools)
-        handle_delta = _make_turn_delta_handler(emit, titles)
-        turn_res, err = _http_stream_turn(cfg, payload, session_id=session_id, deadline=deadline, on_delta=handle_delta)
+        extractor = _AnswerStreamExtractor()
+        handle_delta = _make_turn_delta_handler(emit, titles, extractor=extractor)
+        stream_kwargs: dict[str, Any] = {
+            "session_id": session_id,
+            "deadline": deadline,
+            "on_delta": handle_delta,
+        }
+        if cancel_event is not None:
+            stream_kwargs["cancel_event"] = cancel_event
+        turn_res, err = _http_stream_turn(cfg, payload, **stream_kwargs)
         if err:
-            if err == "TIMED_OUT":
+            if err == "PAUSED":
+                mark_paused(
+                    partial_raw=str(turn_res.get("content") or last_text or ""),
+                    partial_text=extractor.text,
+                )
+                paused_mid_turn = True
+            elif err == "TIMED_OUT":
                 result.timed_out = True
                 result.error = f"回答超时（{timeout} 秒）"
             else:
@@ -738,6 +892,7 @@ def invoke_answer(
             result.exit_code = 0
             break
 
+        turn_base_len = len(messages)
         assistant_msg: dict[str, Any] = {
             "role": "assistant",
             "content": turn_res.get("content") or None,
@@ -747,6 +902,11 @@ def invoke_answer(
             assistant_msg["reasoning_content"] = turn_res["reasoning"]
         messages.append(assistant_msg)
         for tc in tool_calls:
+            if cancel_event is not None and cancel_event.is_set():
+                del messages[turn_base_len:]
+                mark_paused()
+                paused_mid_turn = True
+                break
             fn = tc.get("function") or {}
             name = str(fn.get("name") or "")
             raw_args = str(fn.get("arguments") or "{}")
@@ -773,19 +933,31 @@ def invoke_answer(
             )
             emit({"type": "tool_end", "id": call_id, "name": name, "is_error": is_error, "duration_ms": dur_ms})
             messages.append({"role": "tool", "tool_call_id": call_id, "content": out_text})
+        if paused_mid_turn:
+            break
     else:
         # 达到最大工具轮次，做最后一轮不带 tools 的收尾输出
-        if not result.text and not result.error:
+        if not result.text and not result.error and not result.paused:
             messages.append({"role": "user", "content": "工具查询已达上限，请直接基于已有原文按要求的 JSON 格式作答。"})
             payload = _build_turn_payload(cfg, messages, use_tools=False)
-            turn_res, err = _http_stream_turn(
-                cfg,
-                payload,
-                session_id=session_id,
-                deadline=deadline,
-                on_delta=_make_turn_delta_handler(emit, titles),
-            )
-            if err:
+            extractor_final = _AnswerStreamExtractor()
+            final_kwargs: dict[str, Any] = {
+                "session_id": session_id,
+                "deadline": deadline,
+                "on_delta": _make_turn_delta_handler(emit, titles, extractor=extractor_final),
+            }
+            if cancel_event is not None:
+                final_kwargs["cancel_event"] = cancel_event
+            turn_res, err = _http_stream_turn(cfg, payload, **final_kwargs)
+            if err == "PAUSED":
+                mark_paused(
+                    partial_raw=str(turn_res.get("content") or last_text or ""),
+                    partial_text=extractor_final.text,
+                )
+            elif err == "TIMED_OUT":
+                result.timed_out = True
+                result.error = f"回答超时（{timeout} 秒）"
+            elif err:
                 result.error = f"模型调用失败：{err[:240]}"
                 result.exit_code = 1
             else:
@@ -803,7 +975,7 @@ def invoke_answer(
                         }
                     )
 
-    if not result.error and not (result.text or "").strip():
+    if not result.error and not result.paused and not (result.text or "").strip():
         result.error = "模型没有输出"
 
     result.raw_stream = "\n".join(raw_chunks)

@@ -41,7 +41,7 @@ FOOT = "这一问如果是在接着上面问，就用这些事实定位，不要
 # 一轮回答的状态。pending 是刚跑完检索、还没人答；running 有任务在答。
 # incomplete 与 run_error 只由旧会话派生：有 trace 没回答算没答完，连 trace
 # 都没有说明那一轮没跑成。新写入的 turn 不用这两个值。
-ANSWER_STATES = ("pending", "running", "ready", "error", "interrupted")
+ANSWER_STATES = ("pending", "running", "ready", "error", "interrupted", "paused")
 LEGACY_ANSWER_STATES = ("incomplete", "run_error")
 INTERRUPTED_ERROR = "服务重启，上次回答已中断"
 
@@ -110,6 +110,8 @@ def _turn_defaults(turn):
         turn["answer_attempt"] = 0
     turn["answer_started_at"] = turn.get("answer_started_at") or None
     turn["answer_finished_at"] = turn.get("answer_finished_at") or None
+    if not isinstance(turn.get("answer_partial"), str):
+        turn["answer_partial"] = str(turn.get("answer_partial") or "")
     if turn.get("answer_state") in ANSWER_STATES + LEGACY_ANSWER_STATES:
         return
     ans = turn.get("answer")
@@ -124,7 +126,9 @@ def _turn_defaults(turn):
 
 
 def answer_state_for(info):
-    """答案 dict 对应的状态：ok 明确为假才算 error。"""
+    """答案 dict 对应的状态：paused 为暂停，ok 明确为假才算 error。"""
+    if isinstance(info, dict) and info.get("paused"):
+        return "paused"
     return "ready" if isinstance(info, dict) and info.get("ok") is not False else "error"
 
 
@@ -202,6 +206,7 @@ def begin_answer(sid, n, attempt, owner, token=None):
         turn["answer_owner"] = str(owner or "")
         turn["answer_started_at"] = now()
         turn["answer_error"] = ""
+        turn["answer_partial"] = ""
         turn["answer_finished_at"] = None
         save(sess)
         return True
@@ -222,11 +227,32 @@ def finish_answer(sid, n, attempt, info, ctx=None, token=None, run=None):
         turn["answer"] = info
         turn["context"] = ctx
         turn["answer_state"] = answer_state_for(info)
-        turn["answer_error"] = "" if turn["answer_state"] == "ready" else str(info.get("error") or "回答失败")
+        turn["answer_error"] = (
+            "" if turn["answer_state"] in ("ready", "paused") else str(info.get("error") or "回答失败")
+        )
+        turn["answer_partial"] = ""
         turn["answer_finished_at"] = now()
         turn["answer_owner"] = ""
         if run:
             turn["run"] = run
+        save(sess)
+        return True
+
+
+def pause_answer(sid, n, attempt, partial="", message="已暂停", token=None):
+    """记录暂停态并保留已生成的前半段预览；不覆盖原有 answer。"""
+    with STATE_LOCK:
+        sess = load(sid)
+        turn = find(sess, n)
+        if turn is None or not _token_matches(turn, token):
+            return False
+        if (turn.get("answer_attempt") or 0) != _attempt(attempt):
+            return False
+        turn["answer_state"] = "paused"
+        turn["answer_error"] = str(message or "已暂停")
+        turn["answer_partial"] = str(partial or "")
+        turn["answer_finished_at"] = now()
+        turn["answer_owner"] = ""
         save(sess)
         return True
 
