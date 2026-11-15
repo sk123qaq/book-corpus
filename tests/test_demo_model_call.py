@@ -117,3 +117,31 @@ def test_invoke_falls_back_to_text(tmp_path, monkeypatch):
     rec.finish("ok")
     events = runlog.read_run(rec.id)["events"]
     assert any(row["type"] == "model.fallback" for row in events)
+
+
+def test_invoke_related_parser_records_and_replays(tmp_path, monkeypatch):
+    runlog.configure(str(tmp_path))
+    rec = runlog.start("turn", session="abcdefabcdef", turn=2, question="追问")
+    reply = '{"related": true, "reason": "延续上一问"}'
+    stream = (
+        json.dumps(
+            {"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": reply}]}}
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(model_call, "_run", lambda *a, **k: (0, stream, "", False, 2.0))
+    result = model_call.invoke(
+        "p",
+        ["pi", "--mode", "json", "-p", "--model", "test/model"],
+        ["pi", "-p", "--model", "test/model"],
+        kind="related",
+        rec=rec,
+        parser="related",
+    )
+    assert result.text == reply
+    rec.finish("ok")
+    events = runlog.read_run(rec.id)["events"]
+    final = next(row for row in events if row["type"] == "model.final")
+    assert final["parser"] == "related"
+    assert final["parsed_sha256"]
+    assert runlog.replay(rec.id) == 0

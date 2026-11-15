@@ -365,7 +365,7 @@ def _parsed_sha(parser, raw):
         if parser == "related":
             import related
 
-            parsed = related._parse(raw)
+            parsed = related.parse_reply(raw)
             if not parsed:
                 return ""
             return runlog.sha256(json.dumps(parsed, ensure_ascii=False, sort_keys=True))

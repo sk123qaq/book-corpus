@@ -708,7 +708,7 @@ def replay(run_id):
                 from importlib import import_module
 
                 related = import_module("related")
-                parsed = related._parse(raw)
+                parsed = related.parse_reply(raw)
                 got = sha256(json.dumps(parsed, ensure_ascii=False, sort_keys=True)) if parsed else ""
                 ok = bool(parsed) and got == event.get("parsed_sha256", "")
             else:
