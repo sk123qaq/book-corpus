@@ -466,7 +466,7 @@ def cards_for(
     # 选章永远用全词集（B2.5）；卡片排序仍用名词集。
     hits, _ = planner.search(terms) if terms != nouns else (noun_hits, 0.0)
     books = load_books() if books is None else books
-    concepts = load_concepts() if concepts is None else concepts
+    concepts = {} if concepts is None else concepts
     hints = query_hints(question, books, concepts, terms, focus)
     ranking = focus_order(ranking, focus)
     fire, reasons = trigger(question, ranking, hints, n)
@@ -550,7 +550,7 @@ def run(
         meta = book_score.load_meta() if meta is None else meta
         expand = book_score.load_expand(con) if expand is None else expand
         books = load_books() if books is None else books
-        concepts = load_concepts() if concepts is None else concepts
+        concepts = {} if concepts is None else concepts
         planner = book_query.Planner(con, meta, expand, limit=max(n, 10))
         res, hits, _nouns, ranking = cards_for(planner, terms, question, n, books, concepts, toc_fn, select_fn, focus)
         res.query = query

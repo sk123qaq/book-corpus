@@ -219,9 +219,10 @@ class Planner:
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
         self.expand = book_score.load_expand(con) if expand is None else expand
-        self.actions = load_actions() if actions is None else set(actions)
-        self.concepts = read_table("main") if concepts is None else concepts
-        self.broad = read_table("broad") if broad is None else broad
+        # Plan A：在线默认不再隐式注入概念表、宽词表与动作词；仅显式入参或 CLI --concept/--broad 使用
+        self.actions = set() if actions is None else set(actions)
+        self.concepts = {} if concepts is None else concepts
+        self.broad = {} if broad is None else broad
         self.scheme = scheme
         self.pool = pool
         self.min_chars = min_chars
@@ -760,7 +761,13 @@ def main(argv=None):
     else:
         ap.error("要给查询词或 --concept")
     con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
-    p = Planner(con, scheme=a.book_score, limit=a.limit, exclude=exclude)
+    p = Planner(
+        con,
+        scheme=a.book_score,
+        limit=a.limit,
+        exclude=exclude,
+        broad=read_table("broad") if a.broad else None,
+    )
     question = a.question or " ".join(terms)
     res = p.plan(
         terms, broad=a.broad, max_rounds=a.max_rounds, chapter_selector=a.chapter_selector, max_chapters=a.max_chapters

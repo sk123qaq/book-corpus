@@ -812,3 +812,128 @@ def test_stream_citations_stage_emitted_once_after_answer_closes():
     # Subsequent chunks in recap/citations must not re-emit citations stage
     handler("content", '","citations":[]}', "")
     assert len([e for e in events if e.get("stage") == "citations"]) == 1
+
+
+def test_parse_extract_handles_smart_quotes_and_drops_generic_stopwords():
+    raw = (
+        "前导噪声 {broken} 真正输出："
+        "{“terms”:[“宋朝”,“介绍”,“金融”,“原因”,“交子”],"
+        "“groups”:[{“name”:“宋代”,“variants”:[“宋朝”,“北宋”]}]} 尾注"
+    )
+    terms, groups = trace._parse_extract(raw)
+    assert terms == ["宋朝", "金融", "交子"]
+    assert groups == [{"name": "宋代", "variants": ["宋朝", "北宋"]}]
+
+
+def test_fallback_terms_splits_long_phrases_and_strips_particles():
+    assert trace._fallback_terms("介绍下宋朝的金融史") == ["宋朝", "金融史"]
+    assert trace._fallback_terms("东晋初年的兵力情况") == ["东晋初年", "兵力"]
+    assert trace._fallback_terms("阿Q为什么挨打") == ["阿Q", "挨打"]
+    assert trace._fallback_terms("《中国是部金融史》里写过交子吗？") == ["中国是部金融史", "交子"]
+
+
+def test_extract_terms_rescues_reasoning_json_without_retry(monkeypatch, tmp_path):
+    import json
+
+    calls = []
+    stream = json.dumps(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "thinking",
+                        "thinking": (
+                            "分析完毕，输出："
+                            '{"terms":["阿Q","未庄","赵太爷","精神胜利法"],'
+                            '"groups":[{"name":"阿Q","variants":["阿Q","阿桂"]}]}'
+                        ),
+                    }
+                ],
+            },
+        }
+    )
+
+    def fake_run(argv, prompt, timeout=None, cwd=None, env=None):
+        calls.append((argv, prompt))
+        return 0, stream, "", False, 1.0
+
+    monkeypatch.setattr(model_call, "_run", fake_run)
+    monkeypatch.setattr(trace, "CACHE_DIR", str(tmp_path / "terms"))
+    monkeypatch.setattr(trace, "INDEX_DB", str(tmp_path / "missing-index.db"))
+
+    res = trace.extract_terms("阿Q为什么挨打", thinking="high", use_cache=False)
+    assert len(calls) == 1, "thinking 里有合法 JSON 时不该再触发 retry"
+    assert res["source"] == "model"
+    assert res["terms"] == ["阿Q", "未庄", "赵太爷", "精神胜利法"]
+    assert "抢救" in res["note"]
+
+
+def test_extract_terms_no_retry_when_terms_ready_without_groups(monkeypatch, tmp_path):
+    import json
+
+    calls = []
+    stream = json.dumps(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": '{"terms":["宋朝","金融","货币"]}'}],
+            },
+        }
+    )
+
+    def fake_run(argv, prompt, timeout=None, cwd=None, env=None):
+        calls.append((argv, prompt))
+        return 0, stream, "", False, 1.0
+
+    monkeypatch.setattr(model_call, "_run", fake_run)
+    monkeypatch.setattr(trace, "CACHE_DIR", str(tmp_path / "terms"))
+    monkeypatch.setattr(trace, "INDEX_DB", str(tmp_path / "missing-index.db"))
+
+    res = trace.extract_terms("介绍下宋朝的金融史", thinking="low", use_cache=False)
+    assert len(calls) == 1, "只缺 groups 但已有 >=2 个 terms 时不该重试"
+    assert res["source"] == "model"
+    assert res["terms"] == ["宋朝", "金融", "货币"]
+    assert res["groups"] == [
+        {"name": "宋朝", "variants": ["宋朝"]},
+        {"name": "金融", "variants": ["金融"]},
+        {"name": "货币", "variants": ["货币"]},
+    ]
+
+
+def test_preflight_terms_splits_zero_hit_compounds(tmp_path):
+    from bookcorpus.scripts import lib_fts_cjk as cjk
+
+    db_path = tmp_path / "index.db"
+    con = sqlite3.connect(str(db_path))
+    con.execute("CREATE VIRTUAL TABLE para_fts USING fts5(text, tokenize='unicode61')")
+    passages = [
+        "北宋与宋朝建立后，四川出现最早的纸币交子。",
+        "金融史研究关注宋代与货币体系的演变。",
+        "未庄，阿Q常与赵太爷发生口角，只能靠精神胜利法自慰。",
+        "地保与闲人议论挨打的场面。",
+    ]
+    for idx, p in enumerate(passages, 1):
+        con.execute("INSERT INTO para_fts(rowid, text) VALUES (?, ?)", (idx, cjk.index_text(p)))
+    con.commit()
+    con.close()
+
+    after, dropped = trace._preflight_terms(
+        ["宋朝金融史", "宋代金融", "交子纸币", "金融制度"],
+        groups=[],
+        question="介绍下宋朝的金融史",
+        index_db=str(db_path),
+    )
+    assert dropped == ["宋朝金融史", "宋代金融", "交子纸币", "金融制度"]
+    assert after == ["宋朝", "金融史", "宋代", "金融", "交子", "纸币"]
+
+    q_after, q_dropped = trace._preflight_terms(
+        ["阿Q挨打", "精神胜利法", "挨打原因"],
+        groups=[],
+        question="阿Q为什么挨打",
+        index_db=str(db_path),
+    )
+    assert q_dropped == ["阿Q挨打", "挨打原因"]
+    assert q_after == ["阿Q", "挨打", "精神胜利法"]

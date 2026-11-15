@@ -399,7 +399,7 @@
     const notes = [];
     notes.push(terms.length + ' 个检索词');
     if (ex.source === 'cache') notes.push('命中切词缓存');
-    if (ex.source === 'degraded') notes.push('模型不可用，按概念表包含匹配');
+    if (ex.source === 'degraded') notes.push('模型不可用，按问句切词降级');
     if (dropped.size) notes.push(dropped.size + ' 个动作词已排除');
     if (ex.note) notes.push(ex.note);
     const chips = terms.length

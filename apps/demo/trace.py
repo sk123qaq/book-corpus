@@ -2,12 +2,11 @@
 """组装一条检索 trace：切词 → 词法循环 → 打分选章 → 书卡 → 原文。
 
 只读 build/检索/index.db、build/library.db 与 books/**.md。
-切词用一次 pi 调用并缓存到 缓存/terms/<问题+思考等级 sha1>.json；失败退回概念表包含匹配。
+切词用一次 pi 调用并缓存到 缓存/terms/<问题+思考等级 sha1>.json；失败退回问句去噪切词降级。
 fresh=True 跳过切词缓存，前端「重新检索」走这条路。
 不跑 B4：book_cards.run 的 expand 固定为 {}。
 """
 
-import csv
 import hashlib
 import json
 import os
@@ -40,6 +39,7 @@ import book_query
 import book_score
 import book_title
 import lib_common as L
+import lib_fts_cjk as cjk
 import model_call
 import runlog
 import vec_search
@@ -52,8 +52,6 @@ INDEX_DB = os.path.join(ROOT, "build", "检索", "index.db")
 LIB_DB = os.path.join(ROOT, "build", "library.db")
 LIBRARY = os.path.join(ROOT, "books")
 CACHE_DIR = os.path.join(HERE, "缓存", "terms")
-CONCEPTS = os.path.join(ROOT, "tables", "概念表.tsv")
-ACTIONS = os.path.join(ROOT, "tables", "概念表-动作词.tsv")
 
 try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
     from bookcorpus import pimodel
@@ -108,9 +106,50 @@ except ImportError:
 
 PI_TIMEOUT = 90
 MAX_TERMS = 6
-TERM_VERSION = "terms-v4"
+TERM_VERSION = "terms-v5"
 STAGE_CHARS = 900
 STAGE_BEFORE = 700
+
+GENERIC_TERM_STOPWORDS = frozenset(
+    {
+        "介绍",
+        "介绍一下",
+        "介绍下",
+        "详细",
+        "详细介绍",
+        "情况",
+        "问题",
+        "原因",
+        "哪些",
+        "什么",
+        "怎么",
+        "怎么样",
+        "如何",
+        "为什么",
+        "为何",
+        "是否",
+        "有没有",
+        "区别",
+        "关系",
+        "影响",
+        "作用",
+        "过程",
+        "经过",
+        "特点",
+        "表现",
+        "意义",
+        "背景",
+        "结果",
+        "评价",
+        "看法",
+        "事情",
+        "方面",
+        "内容",
+        "故事",
+        "道理",
+    }
+)
+PREFLIGHT_SUFFIXES = ("研究", "原因", "过程", "经过", "影响", "问题", "情况", "关系", "特点", "表现", "历史")
 
 _META_CACHE = {"at": 0.0, "value": None}
 
@@ -119,79 +158,78 @@ def _ro(path):
     return sqlite3.connect("file:%s?mode=ro" % path, uri=True)
 
 
-def read_table(path, kind="concept"):
-    out = {}
-    if not os.path.exists(path):
-        return out
-    with open(path, encoding="utf-8-sig") as fh:
-        for row in csv.DictReader(fh, delimiter="\t"):
-            key = (row.get("key") or "").strip()
-            if not key:
-                continue
-            aliases = [a.strip() for a in (row.get("aliases") or "").split(",") if a.strip()]
-            out[key] = aliases
-    return out
-
-
-def load_concepts():
-    return read_table(CONCEPTS)
-
-
-def load_actions():
-    out = []
-    if not os.path.exists(ACTIONS):
-        return out
-    with open(ACTIONS, encoding="utf-8-sig") as fh:
-        for row in csv.DictReader(fh, delimiter="\t"):
-            term = (row.get("term") or "").strip()
-            if term:
-                out.append(term)
-    return out
-
-
 # ---- 切词 -----------------------------------------------------------
 
 
 def _prompt(question):
-    concepts = load_concepts()
-    actions = load_actions()
-    table = "\n".join("%s：%s" % (k, ",".join(v)) for k, v in concepts.items())
     return (
-        "你是书库全文检索的切词器。把问题拆成 2 到 6 个用于检索的中文词，并给出 3 到 5 组同义说法。\n"
+        "你是书库全文检索的切词器。把问题拆成 3 到 6 个中文“检索原子词”（terms），供中文 bigram BM25 检索使用；同时给出 3 到 5 组同义说法（groups）供后续重排。\n"
         "规则：\n"
         '- 只回 JSON，形如 {"terms":["词1","词2"],"groups":[{"name":"组名","variants":["说法1","说法2"]}]}，不要解释、不要代码块。\n'
-        "- terms 必须是单个词，不能带空格；优先名词与概念，用书里可能原样出现的词；疑问词、介词、连词不要。\n"
-        "- groups 用于第二遍组覆盖检索：覆盖人物、事件、动作、身份；每组 2 到 6 个同义、近义、书里可能用的说法；不要只重复 terms。\n"
-        "- 这些是动作词，不要放进 terms：%s\n"
-        "- 以下概念键与别名可优先用（key：aliases）：\n%s\n"
-        "问题：%s" % ("、".join(actions), table, question)
+        "- 每个 term 优先 2 个汉字；3 到 4 个汉字只用于固定术语或专名（如 王安石、开元通宝、差序格局、精神胜利法）；5 个汉字以上只允许书名、人名或历史事件原名。\n"
+        "- 一个 term 只表达一个概念，严禁把“朝代/人物 + 主题”拼成长词或短语（如「宋朝金融史」「宋代货币」「交子纸币」「某人挨打」「挨打原因」）。\n"
+        "- 先放锚点词（朝代/人物/书名/地点），再放主题词（制度/领域），再放具体物件或机制词（如 交子、飞钱、柜坊）；同义词要参与首轮检索必须直接放进 terms，不要只放在 groups。\n"
+        "- 不要输出单字词（除非不可替代的专名），也不要输出 介绍、影响、发展、问题、关系、情况、原因、过程、哪些、怎么、为什么 等空泛词或疑问词。\n"
+        "- groups 用于后续章节与段落重排：覆盖人物、事件、制度、同义近义表达；每组 2 到 6 个说法。\n"
+        "示例：\n"
+        '- 问「介绍下宋朝的金融史」：不要输出 ["宋朝金融史","宋代金融","交子纸币"]，应输出 {"terms":["宋朝","宋代","金融","货币","交子","纸币"],"groups":[{"name":"朝代","variants":["宋朝","宋代","北宋","南宋"]},{"name":"货币制度","variants":["交子","会子","纸币","铜钱","金融"]}]}\n'
+        '- 问「孔乙己为什么总挨打」：不要输出 ["孔乙己挨打","挨打原因"]，应输出 {"terms":["孔乙己","丁举人","咸亨酒店","偷书","长衫"],"groups":[{"name":"人物","variants":["孔乙己","丁举人","掌柜"]},{"name":"遭遇","variants":["挨打","折腿","偷书","嘲笑"]}]}\n'
+        "问题：%s" % question
     )
 
 
-def _clean_term(text):
+def _clean_token(text, limit):
     t = unicodedata.normalize("NFKC", text or "")
     t = re.sub(r"^[\s\"'“”‘’《》〈〉「」『』\[\]{}()（）]+|[\s\"'“”‘’《》〈〉「」『』\[\]{}()（）]+$", "", t)
     t = re.sub(r"\s+", "", t)
-    return t[:24]
+    return t[:limit]
+
+
+def _clean_term(text):
+    return _clean_token(text, 24)
 
 
 def _clean_variant(text):
-    t = unicodedata.normalize("NFKC", text or "")
-    t = re.sub(r"^[\s\"'“”‘’《》〈〉「」『』\[\]{}()（）]+|[\s\"'“”‘’《》〈〉「」『』\[\]{}()（）]+$", "", t)
-    t = re.sub(r"\s+", "", t)
-    return t[:32]
+    return _clean_token(text, 32)
+
+
+def _load_json_dict(raw):
+    """解析模型输出的 JSON 对象；外层包裹噪声或全角引号时逐段扫描抢救。"""
+    if not raw:
+        return None
+    normalized = raw.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+    decoder = json.JSONDecoder()
+    for text in (raw, normalized):
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                data = json.loads(text[start : end + 1])
+                if isinstance(data, dict):
+                    return data
+            except ValueError:
+                pass
+        best = None
+        idx = 0
+        while True:
+            pos = text.find("{", idx)
+            if pos < 0:
+                break
+            try:
+                obj, nxt = decoder.raw_decode(text, pos)
+            except ValueError:
+                idx = pos + 1
+                continue
+            if isinstance(obj, dict) and ("terms" in obj or best is None):
+                best = obj
+            idx = max(nxt, pos + 1)
+        if best is not None:
+            return best
+    return None
 
 
 def _parse_extract(stdout):
-    raw = stdout or ""
-    start, end = raw.find("{"), raw.rfind("}")
-    if start < 0 or end <= start:
-        return [], []
-    try:
-        data = json.loads(raw[start : end + 1])
-    except ValueError:
-        return [], []
-    if not isinstance(data, dict):
+    data = _load_json_dict(stdout or "")
+    if not data:
         return [], []
     terms = []
     for item in data.get("terms") or []:
@@ -199,7 +237,7 @@ def _parse_extract(stdout):
             continue
         for part in re.split(r"[\s,，、;；]+", item):
             part = _clean_term(part)
-            if part and part not in terms:
+            if part and part not in GENERIC_TERM_STOPWORDS and part not in terms:
                 terms.append(part)
     groups = []
     for g in data.get("groups") or []:
@@ -217,6 +255,127 @@ def _parse_extract(stdout):
     return terms[:MAX_TERMS], groups[:5]
 
 
+def _extract_from_result(res):
+    """优先从正文解析切词 JSON；正文为空或缺词时从 reasoning block 抢救最后一段 JSON。"""
+    terms, groups = ([], [])
+    if not res.error:
+        terms, groups = _parse_extract(res.text)
+        if len(terms) >= 2:
+            return terms, groups, False
+    # res.text 为空时 model_call 会把 error 记成「模型没有输出」；若 thinking 里有合法 JSON，仍可抢救
+    if not res.error or res.error == "模型没有输出":
+        reasoning_text = "\n".join(
+            item.get("thinking", "") for item in (getattr(res, "reasoning", None) or []) if isinstance(item, dict)
+        ).strip()
+        if reasoning_text:
+            r_terms, r_groups = _parse_extract(reasoning_text)
+            if len(r_terms) >= 2 or (not terms and r_terms):
+                return r_terms, r_groups, True
+    return terms, groups, False
+
+
+def _split_candidates(term):
+    """为 4 字以上零命中复合词生成拆分候选（先双段，后去后缀词干）。"""
+    cands = []
+    n = len(term)
+    for split_at in (2, 3, n - 2, n - 3):
+        if not (2 <= split_at <= n - 2):
+            continue
+        left = term[:split_at].strip("的与和及在里中被把对向给从")
+        right = term[split_at:].strip("的与和及在里中被把对向给从")
+        if (
+            len(left) >= 2
+            and len(right) >= 2
+            and left not in GENERIC_TERM_STOPWORDS
+            and right not in GENERIC_TERM_STOPWORDS
+        ):
+            cands.append((left, right))
+    for suffix in PREFLIGHT_SUFFIXES:
+        if term.endswith(suffix) and len(term) - len(suffix) >= 2:
+            stem = term[: -len(suffix)]
+            if stem not in GENERIC_TERM_STOPWORDS:
+                cands.append((stem,))
+    return cands
+
+
+def _harvest_group_variants(groups, has_hit, target, limit, max_len=3, match_term=""):
+    """从 groups 里回收有命中的短原子变体，补齐零命中复合词被拆/丢后的缺口。"""
+    for g in groups or []:
+        for v in g.get("variants") or []:
+            if not (isinstance(v, str) and 2 <= len(v) <= max_len):
+                continue
+            if v in GENERIC_TERM_STOPWORDS or v in target:
+                continue
+            if match_term and not any(ch in match_term for ch in v):
+                continue
+            if has_hit(v):
+                target.append(v)
+                if len(target) >= limit:
+                    return
+
+
+def _preflight_terms(terms, groups=None, question="", index_db=INDEX_DB):
+    """用 para_fts 轻量检查 >=4 字非专名检索词；零命中复合词拆成有命中的原子短词。"""
+    terms = [t for t in (terms or []) if isinstance(t, str) and t]
+    if not terms or not index_db or not os.path.exists(index_db):
+        return terms[:MAX_TERMS], []
+    quoted_titles = set(re.findall(r"《([^》]{2,})》", question or ""))
+    try:
+        con = _ro(index_db)
+    except sqlite3.Error:
+        return terms[:MAX_TERMS], []
+    hit_cache = {}
+
+    def has_hit(cand):
+        if cand in hit_cache:
+            return hit_cache[cand]
+        expr = cjk.query_expr(cand)
+        if not expr:
+            hit_cache[cand] = False
+            return False
+        try:
+            ok = con.execute("SELECT 1 FROM para_fts WHERE para_fts MATCH ? LIMIT 1", (expr,)).fetchone() is not None
+        except sqlite3.Error:
+            ok = False
+        hit_cache[cand] = ok
+        return ok
+
+    def add_unique(target, item):
+        if item and item not in GENERIC_TERM_STOPWORDS and item not in target:
+            target.append(item)
+
+    try:
+        out = []
+        dropped = []
+        for term in terms:
+            if term.isascii() or len(term) < 4 or term in quoted_titles or has_hit(term):
+                add_unique(out, term)
+                continue
+            dropped.append(term)
+            replaced = []
+            for parts in _split_candidates(term):
+                if all(has_hit(p) for p in parts):
+                    replaced = list(parts)
+                    break
+            if not replaced:
+                _harvest_group_variants(groups, has_hit, replaced, 2, max_len=3, match_term=term)
+            if not replaced:
+                for parts in _split_candidates(term):
+                    hitting = [p for p in parts if has_hit(p)]
+                    if hitting:
+                        replaced = hitting
+                        break
+            for piece in replaced:
+                add_unique(out, piece)
+        if len(out) < 2:
+            _harvest_group_variants(groups, has_hit, out, 2, max_len=4)
+        if len(out) >= 2 or (out and all(t in dropped for t in terms)):
+            return out[:MAX_TERMS], dropped
+        return terms[:MAX_TERMS], []
+    finally:
+        con.close()
+
+
 FALLBACK_HEAD = re.compile(
     r"^(?:请问|请|帮我|帮忙|麻烦|我想知道|想知道|介绍一下|介绍下|详细介绍下|详细介绍|说说|讲讲|告诉我|解释一下|解释下|分析一下|分析|查一下|查查|看看|看下|列一下|列出|能否|可以)+"
 )
@@ -224,6 +383,8 @@ FALLBACK_TAIL = re.compile(r"(?:吗|呢|吧|啊|呀|的)+$")
 FALLBACK_SPLIT = re.compile(
     r"(?:是怎么|怎么样|怎么|如何|为什么|为何|哪些|哪几种|哪几个|哪一个|哪个|谁|什么|多少|多久|多大|是否|有没有)"
 )
+FALLBACK_PARTICLES = re.compile(r"[的与和及在里中被把对向给从、]")
+FALLBACK_VERBS = re.compile(r"^(?:提到|提及|谈到|谈及|写过|讲过|说过|写了|讲了|说了)+")
 
 
 def _strip_question(question):
@@ -237,43 +398,49 @@ def _strip_question(question):
 
 
 def _fallback_prompt(question):
-    """第一次切词退化时再问一次，只要名词短语，不要整句。"""
+    """第一次切词退化时再问一次，只要短原子词，不要长复合短语。"""
     return (
-        "把问题拆成 3 到 5 个用于书库全文检索的中文名词短语，每个短语 2 到 8 个字。\n"
-        "不要疑问词，不要整句，不要解释。只回一行 JSON：\n"
-        '{"terms":["短语1","短语2"],"groups":[{"name":"组名","variants":["说法1","说法2"]}]}\n'
+        "把问题拆成 3 到 6 个用于书库全文检索的中文检索原子词（优先 2 个字；3 到 4 个字只给专名或固定术语，书名和事件原名除外）。\n"
+        "严禁把朝代、人物和主题拼在一起（如「宋朝金融史」「某人挨打」「挨打原因」）。\n"
+        "不要疑问词，不要空泛词（如介绍、情况、原因、影响、问题），不要整句，不要解释。只回一行 JSON：\n"
+        '{"terms":["词1","词2","词3"],"groups":[{"name":"组名","variants":["说法1","说法2"]}]}\n'
         "问题：%s" % question
     )
 
 
 def _fallback_terms(question):
-    """概念表包含匹配；再不行去掉疑问脚手架，按问句切出 2 到 6 段。"""
-    concepts = load_concepts()
-    found = []
-    for key, aliases in concepts.items():
-        for cand in [key, *aliases]:
-            if len(cand) >= 2 and cand in question and cand not in found:
-                found.append(cand)
-                break
-    found = sorted(found, key=lambda x: (-len(x), x))[:MAX_TERMS]
-    if found:
-        return found
-    text = _strip_question(question)
+    """去掉疑问脚手架与虚词，提取可进 bigram 检索的短原子词。"""
+    raw = unicodedata.normalize("NFKC", question or "")
+    titles = []
+    for title in re.findall(r"《([^》]{2,24})》", raw):
+        cleaned = _clean_term(title)
+        if cleaned and cleaned not in titles:
+            titles.append(cleaned)
+    body = re.sub(r"《[^》]{2,24}》", "、", raw)
+    text = _strip_question(body)
     if not text:
-        return []
+        return titles[:MAX_TERMS]
     chunks = [part for part in FALLBACK_SPLIT.split(text) if part]
     if len(chunks) == 1 and len(text) > 12:
         chunks = [part for part in re.split(r"[被把对向给从]", text) if part]
-    out = []
+    out = list(titles)
     for part in chunks:
-        part = part.strip("的了是在有和与及讲说写做")
-        for piece in re.split(r"[被把]", part) if len(part) > 14 else [part]:
-            piece = piece.strip("的了是在有和与及讲说写做")
-            piece = piece[:24]
-            if len(piece) >= 2 and piece not in out:
+        part = part.strip("的了是在有和与及讲说写做、")
+        pieces = FALLBACK_PARTICLES.split(part) if len(part) > 4 else [part]
+        for piece in pieces:
+            piece = FALLBACK_VERBS.sub("", piece)
+            piece = _clean_term(piece.strip("的了是在有和与及讲说写做"))
+            if len(piece) >= 4:
+                for suffix in ("情况", "问题", "原因"):
+                    if piece.endswith(suffix) and len(piece) - len(suffix) >= 2:
+                        piece = piece[: -len(suffix)]
+                        break
+            if len(piece) >= 2 and piece not in GENERIC_TERM_STOPWORDS and piece not in out:
                 out.append(piece)
     if not out:
-        out = [text[:24]]
+        fallback = _clean_term(text)
+        if fallback and fallback not in GENERIC_TERM_STOPWORDS:
+            out = [fallback]
     return out[:MAX_TERMS]
 
 
@@ -308,7 +475,7 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None)
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
             terms = [t for t in data.get("terms", []) if isinstance(t, str) and t]
-            groups = data.get("groups") or []
+            groups = data.get("groups") or [{"name": t, "variants": [t]} for t in terms]
             if terms and groups:
                 out = {
                     "terms": terms[:MAX_TERMS],
@@ -360,9 +527,12 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None)
             parser="terms",
         )
         first_error = res.error
-        terms, groups = _parse_extract(res.text) if not res.error else ([], [])
+        terms, groups, rescued = _extract_from_result(res)
         first_terms, first_groups = terms, groups
-        if len(terms) < 2 or not groups:
+        if rescued and first_error == "模型没有输出":
+            first_error = ""
+            note = "已从思考过程抢救切词 JSON"
+        if len(terms) < 2:
             retry_prompt = _fallback_prompt(question)
             rec.event(
                 "terms.retry_prompt",
@@ -381,9 +551,12 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None)
                 parser="terms",
             )
             retry_error = retry.error
-            retry_terms, retry_groups = _parse_extract(retry.text) if not retry.error else ([], [])
-            if len(retry_terms) >= 2 and retry_groups:
-                terms, groups = retry_terms, retry_groups
+            retry_terms, retry_groups, retry_rescued = _extract_from_result(retry)
+            if retry_rescued and retry_error == "模型没有输出":
+                retry_error = ""
+            if len(retry_terms) >= 2:
+                terms = retry_terms
+                groups = retry_groups or [{"name": t, "variants": [t]} for t in retry_terms]
                 note = "第一次切词不可用，已重试"
                 retried = True
             rec.event(
@@ -398,9 +571,22 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None)
                 retry_error=retry_error,
             )
         else:
-            rec.event("terms.retry", tried=False, used=False)
-        # 读侧认 terms 且 groups；一条词也缓存，退化结果下次不必再等模型
+            rec.event("terms.retry", tried=False, used=False, rescued=rescued)
+        if terms and not groups:
+            groups = [{"name": t, "variants": [t]} for t in terms]
+        # 读侧认 terms 且 groups；模型输出后对 >=4 字非专名先做 FTS5 零命中拆词，再写缓存
         if terms and groups:
+            raw_terms = list(terms)
+            terms, preflight_dropped = _preflight_terms(terms, groups=groups, question=question)
+            if preflight_dropped:
+                rec.event(
+                    "terms.preflight",
+                    before=raw_terms,
+                    after=terms,
+                    dropped=preflight_dropped,
+                )
+                extra = "已拆零命中长词：" + "、".join(preflight_dropped)
+                note = f"{note}；{extra}" if note else extra
             ms = round((time.time() - t0) * 1000, 1)
             _write_json(
                 path,
@@ -872,7 +1058,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
     try:
         books = book_cards.load_books()
         book_meta = book_score.load_meta()
-        hints = book_cards.query_hints(question, books, book_cards.load_concepts())
+        hints = book_cards.query_hints(question, books, {})
         focus = book_title.resolve_title(question, books, book_meta, hint=hints.get("title", ""))
         t_plan = time.time()
         plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus, question=question)
@@ -890,7 +1076,14 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
             timings=plan.timings,
         )
         cardset = book_cards.run(
-            question, terms=plan.terms or terms, question=question, expand={}, feedback=None, con=con, focus=focus
+            question,
+            terms=plan.terms or terms,
+            question=question,
+            expand={},
+            feedback=None,
+            con=con,
+            concepts={},
+            focus=focus,
         )
         cards_ms = cardset.ms
         rec.event(
