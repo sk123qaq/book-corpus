@@ -12,7 +12,9 @@
     'run-error': '检索失败', 'answer-error': '回答失败',
     'answer-interrupted': '回答中断', 'answer-incomplete': '未回答',
   };
-  const THINKING_LEVEL = 'high';
+  const THINKING_LEVELS = ['off', 'low', 'medium', 'high'];
+  const THINKING_DEFAULT = 'low';
+  const THINKING_KEY = 'booksearch.thinking';
   const ALL_DONE = ['done', 'done', 'done', 'done', 'done'];
   const ALL_PENDING = ['pending', 'pending', 'pending', 'pending', 'pending'];
   const REPLAY_MS = 900;
@@ -24,6 +26,7 @@
     sessionId: '',
     turns: [],
     viewN: 0,
+    thinking: THINKING_DEFAULT,
     selected: null,
     shown: null,
     drawer: { seq: 0, loading: false, data: null, error: '' },
@@ -64,8 +67,33 @@
   const railEmptyEl = $('#rail-empty');
   const field = $('#q');
   const sendBtn = $('#send');
+  const thinkSelectEl = $('#think-select');
   const drawerEl = $('#drawer');
   const toastEl = $('#toast');
+
+  function normalizeThinking(v) {
+    const raw = String(v || '').trim().toLowerCase();
+    return THINKING_LEVELS.includes(raw) ? raw : THINKING_DEFAULT;
+  }
+
+  function savedThinking() {
+    try {
+      return normalizeThinking(localStorage.getItem(THINKING_KEY));
+    } catch (err) {
+      return THINKING_DEFAULT;
+    }
+  }
+
+  function setThinking(v, persist = false) {
+    state.thinking = normalizeThinking(v);
+    if (thinkSelectEl) thinkSelectEl.value = state.thinking;
+    if (!persist) return;
+    try {
+      localStorage.setItem(THINKING_KEY, state.thinking);
+    } catch (err) {
+      // 同 setUrl：拿不到 storage 时只保留当前页状态
+    }
+  }
   let railShown = 0;
 
   /* ---- 小工具 ---------------------------------------------------- */
@@ -1342,6 +1370,7 @@
     sendBtn.textContent = state.busy ? (answering() ? '回答中…' : '检索中…')
       : (state.turns.length ? '追问' : '提问');
     sendBtn.disabled = state.busy;
+    if (thinkSelectEl) thinkSelectEl.disabled = state.busy;
   }
 
   function scrollRail() {
@@ -1819,8 +1848,10 @@
 
   async function replayStages(turn) {
     const epoch = state.epoch;
+    const active = () => epoch === state.epoch
+      && (turn.status === 'answering' || turn.status === 'retrieving');
     for (let i = 0; i < 4; i += 1) {
-      if (epoch !== state.epoch) return false;
+      if (!active()) return false;
       turn.stageStates = [0, 1, 2, 3, 4].map((k) => {
         if (k < i) return 'done';
         return k === i ? 'active' : 'pending';
@@ -1830,7 +1861,7 @@
       render();
       await sleep(REPLAY_MS);
     }
-    if (epoch !== state.epoch) return false;
+    if (!active()) return false;
     turn.stageStates = ['done', 'done', 'done', 'done', 'active'];
     turn.stageOpen = new Set([4]);
     turn.stripOpen = true;
@@ -1849,7 +1880,7 @@
     syncBusy();
     startClock();
     render();
-    const body = { question: turn.question, thinking: THINKING_LEVEL };
+    const body = { question: turn.question, thinking: state.thinking };
     if (state.sessionId) {
       body.session_id = state.sessionId;
       body.turn = turn.n;
@@ -1869,8 +1900,10 @@
       }
       render();
       loadSessions();
-      if (!(await replayStages(turn))) return;
-      await answerTurn(turn, options.fresh ? { fresh: true } : {});
+      const ansPromise = answerTurn(turn, options.fresh ? { fresh: true } : {});
+      const ok = await replayStages(turn);
+      await ansPromise;
+      if (!ok) return;
     } catch (err) {
       if (epoch !== state.epoch) return;
       turn.status = 'run-error';
@@ -1907,6 +1940,7 @@
       turn.stageOpen = new Set();
       turn.stripOpen = false;
       stopClock();
+      syncBusy();
       render();
       return;
     }
@@ -1914,6 +1948,7 @@
     turn.answerSources = ordered.map(cloneSource);
     turn.answer = null;
     turn.context = null;
+    turn.thinking = state.thinking;
     turn.status = 'answering';
     turn.answerError = '';
     turn.stageStates = ['done', 'done', 'done', 'done', 'active'];
@@ -1936,7 +1971,7 @@
       focus: focus || null,
       session_id: state.sessionId,
       turn: turn.n,
-      thinking: THINKING_LEVEL,
+      thinking: state.thinking,
     };
     if (options.fresh) body.fresh = true;
     try {
@@ -1984,7 +2019,7 @@
     const turn = {
       n: prev ? prev.n + 1 : 1,
       question: text,
-      thinking: THINKING_LEVEL,
+      thinking: state.thinking,
       trace: null,
       related: null,
       anchor,
@@ -2020,6 +2055,7 @@
     if (!turn || !last || last.n !== n || state.busy) return;
     turn.answer = null;
     turn.context = null;
+    turn.thinking = state.thinking;
     state.viewN = n;
     state.epoch += 1;
     runTurn(turn);
@@ -2492,6 +2528,11 @@
     loadStats();
     loadSessions();
     const params = new URLSearchParams(location.search);
+    const paramThinking = params.get('thinking');
+    setThinking(paramThinking || savedThinking(), Boolean(paramThinking));
+    if (thinkSelectEl) {
+      thinkSelectEl.addEventListener('change', () => setThinking(thinkSelectEl.value, true));
+    }
     const sessionId = params.get('session') || '';
     const question = params.get('q') || '';
     if (location.pathname !== pagePath()) {

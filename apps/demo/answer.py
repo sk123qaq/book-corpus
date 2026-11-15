@@ -28,6 +28,7 @@
 import bisect
 import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
@@ -83,10 +84,10 @@ MODEL = (
     or "opencode-go/deepseek-v4.1-flash"
 )
 PI_TIMEOUT = 240
-PROMPT_VERSION = "answer-v14"
+PROMPT_VERSION = "answer-v15"
 # 点名一本书时也走一次写手：点名书排在最前，其他书只补它没有的角度。
 # 不再分成「主答」「补充」两次调用，版本统一到多书写手。
-PROMPT_VERSION_MULTI = "answer-v20-multi"
+PROMPT_VERSION_MULTI = "answer-v21-multi"
 
 JSON_REMIND = (
     '\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，不要解释，字符串里的双引号写成 \\"。'
@@ -140,8 +141,7 @@ def pi_cmd(thinking):
         "-p",
         "--no-session",
         "--no-context-files",
-        "--skill",
-        SKILL,
+        "--no-skills",
         "-e",
         EXT,
         "--tools",
@@ -170,8 +170,8 @@ PROMPT = """你是书库问答的回答阶段。依据这一本书的原文回�
 - book_grep(pattern, path?, max?)：在本书 md 目录里搜正则，返回 file:line。
 - read：读命中的章节文件。
 
-先看候选章与候选窗口。候选章是按检索分排的前 {n} 章，窗口是其中最相关的几段。窗口不够，或要确认「是谁」「结局」「身份」，用 book_grep 搜人物、事件、同义说法，再 read 命中的章。窗口里只有一句主张、看不到展开时，用 book_grep 搜这个主张的关键词，读到展开段再写。不要写文件。
-注意：原文里的「应该」「十有八九」「猜测」是推测，不是结论。涉及「是谁」「结局」，必须找到身份或结果被确认的段落（令牌、名号、旁白、后文），并往后多读一到两章；推测不能写进答案。
+先看候选章与候选窗口。候选章是按检索分排的前 {n} 章，窗口是其中最相关的几段（窗口每行已带 `L行号: ` 前缀，直接据此填写 citations 的 line 和逐字 quote；quote 不要带 `L行号: ` 前缀）。若候选窗口已包含回答问题所需的事实，不要调用任何工具，直接在一轮内输出 JSON 回答。
+只有当候选窗口缺少关键事实，或问「是谁」「结局」「身份」而窗口里只有猜测词（「应该」「十有八九」「猜测」），才调 book_grep（优先搜 2-4 字核心短词）或 read 补查（揭底题可 read 最后一两章确认终局）。注意：系统会按逐字 quote 自动回查并修正准确行号；对 read 补读的无行号段落，line 填 offset 等大致行号即可，严禁在思考中逐行数行号，也严禁为了确认行号或复核已有窗口再调 book_grep。猜测不能写进答案。不要写文件。
 
 答案按问题本身的结构写，不按章节顺序写。用 Markdown 小标题分段，标题行以「## 」开头。
 
@@ -209,9 +209,8 @@ MULTI_PROMPT = """你是书库问答的回答阶段。这次要同时用几本�
 - book_grep(pattern, path?, max?)：在这些书的 md 目录里搜正则，返回 file:line。
 - read：读命中的章节文件。
 
-先看各书的候选章与候选窗口。候选章是各书按检索分排的前 4 章，窗口是其中最相关的几段。窗口不够，或要确认「是谁」「结局」「身份」，用 book_grep 搜人物、事件、同义说法，再 read 命中的章。不要写文件。
-有窗口的书至少确认一次它的机制章：窗口里只有一句主张、看不到展开时，用 book_grep 在该书 md 目录里搜这个主张的关键词，读到展开段再写。没有窗口的书不要硬找。
-注意：原文里的「应该」「十有八九」「猜测」是推测，不是结论。涉及「是谁」「结局」，必须找到身份或结果被确认的段落，并往后多读一到两章；推测不能写进答案。
+先盘点各书的候选章与候选窗口。候选章是各书按检索分排的前 4 章，窗口是其中最相关的几段（每行已带 `L行号: ` 前缀，直接据此填写 citations 的 line 与逐字 quote；quote 不要带 `L行号: ` 前缀）。若某本书的候选窗口已有实质论述与引文，不要再对该书调用任何工具。
+只对窗口不足或确实存在缺口的书调只读工具补查；没有窗口的书不要硬找。注意：系统会按逐字 quote 自动回查并修正准确行号；对 read 补读的无行号段落，line 填大致行号即可，严禁在思考中逐行数行号，也严禁为了核对行号调 book_grep。原文里的「应该」「十有八九」「猜测」是推测，不是结论。涉及「是谁」「结局」，必须找到身份或结果被确认的段落，并往后多读一到两章；推测不能写进答案。不要写文件。
 
 答案是一个整体，不是几本书的摘要拼起来。先判断这一问要什么，再决定用哪几本书、按什么顺序讲。用 Markdown 小标题分段，标题行以「## 」开头。
 
@@ -521,8 +520,53 @@ def _cand_window(lines, line, span=12):
     return "\n".join(lines[a - 1 : b])
 
 
+def _search_book(con, book, expr, terms, limit):
+    """按书下推 SQL 条件取前 pool 条，再按 qsearch 同公式重排。"""
+    if not expr:
+        return []
+    if not isinstance(con, sqlite3.Connection):
+        hits, _elapsed = qsearch.search(con, expr, terms, [], limit, 40, False, 2000)
+        return [h for h in hits if h.get("book") == book and h.get("path")]
+    pool = max(int(limit or QSEARCH_LIMIT) * 4, 400)
+    rows = con.execute(
+        "SELECT p.id, p.path, p.book, p.line, p.text, bm25(para_fts) AS score "
+        "FROM para_fts f JOIN para p ON p.id=f.rowid "
+        "WHERE para_fts MATCH ? AND p.book = ? AND p.chars >= 40 "
+        "ORDER BY score LIMIT ?",
+        (expr, book, pool),
+    ).fetchall()
+    groups = [t for t in (terms or []) if t]
+    ascii_groups = bool(qsearch.ASCII_ALPHA.search("".join(groups)))
+    low_groups = [g.lower() for g in groups] if ascii_groups else None
+    cand = []
+    for pid, path, bk, line, text, score in rows:
+        if ascii_groups:
+            low = text.lower()
+            cov = sum(1 for g in low_groups if qsearch.group_in(g, low))
+        else:
+            cov = sum(1 for g in groups if g in text)
+        kana = sum(1 for ch in text if "\u3040" <= ch <= "\u30ff")
+        penalty = 0.55 if text and kana > 0.1 * len(text) else 1.0
+        rank_score = (-score + 0.8 * cov + 0.15 * math.log1p(len(text))) * penalty
+        cand.append(
+            {
+                "id": pid,
+                "path": path,
+                "book": bk,
+                "line": line,
+                "text": text,
+                "bm25": round(score, 4),
+                "kana": round(kana / len(text), 2) if text else 0.0,
+                "coverage": cov,
+                "score": round(rank_score, 4),
+            }
+        )
+    cand.sort(key=lambda r: (-r["score"], r["path"], r["line"]))
+    return cand[:limit]
+
+
 def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
-    """当前命中 + qsearch 前 limit 的组覆盖二遍 + 按章聚类候选。
+    """当前命中 + 同书前 limit 的组覆盖二遍 + 按章聚类候选。
 
     返回 (picked, chapters)。picked 是窗口候选，chapters 是给 agent 的候选章地图。
     """
@@ -535,7 +579,7 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT):
     if not expr:
         return [current], []
     try:
-        hits, _elapsed = qsearch.search(con, expr, terms, [], limit, 40, False, 2000)
+        hits = _search_book(con, book, expr, terms, limit)
     except sqlite3.Error:
         return [current], []
     book_hits = [h for h in hits if h.get("book") == book and h.get("path")]
@@ -708,6 +752,29 @@ def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS, window_chars=
     return windows
 
 
+_LINE_PREFIX_RE = re.compile(r"^L\d+\s*[:：]\s*")
+
+
+def _numbered_window_text(w):
+    """在提示词渲染层给窗口非空行加 `L行号: ` 前缀，不改 build_windows 的 text。"""
+    start = int(w.get("start") or 1)
+    end = int(w.get("end") or start)
+    lines = str(w.get("text") or "").splitlines()
+    expected = max(0, end - start + 1)
+    has_prepended_heading = bool(lines) and len(lines) == expected + 1 and lines[0].lstrip().startswith("#")
+    out = []
+    for idx, text in enumerate(lines):
+        if has_prepended_heading and idx == 0:
+            out.append(text)
+            continue
+        lineno = start + (idx - 1 if has_prepended_heading else idx)
+        if text.strip():
+            out.append(f"L{lineno}: {text}")
+        else:
+            out.append("")
+    return "\n".join(out)
+
+
 def build_prompt(question, book, windows, chapters, history="", rec=None):
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
     inputs = {
@@ -719,7 +786,7 @@ def build_prompt(question, book, windows, chapters, history="", rec=None):
         "history": history,
     }
     rec.event("prompt.inputs", **rec.large(json.dumps(inputs, ensure_ascii=False), "inputs"))
-    blocks = ["%s:%d-%d\n%s" % (w["path"], w["start"], w["end"], w["text"]) for w in windows]
+    blocks = ["%s:%d-%d\n%s" % (w["path"], w["start"], w["end"], _numbered_window_text(w)) for w in windows]
     kept = ["%s:%d-%d" % (w["path"], w["start"], w["end"]) for w in windows]
     rows = []
     for i, c in enumerate(chapters, 1):
@@ -801,30 +868,31 @@ def _coverage(terms):
         con = sqlite3.connect("file:%s?mode=ro" % INDEX_DB, uri=True)
     except sqlite3.Error:
         return ""
-    stats = []
+    stats, picked = [], []
     try:
         for term in ordered:
             expr = cjk.query_expr(term)
             if not expr:
                 continue
-            count = con.execute("SELECT count(*) FROM para_fts WHERE para_fts MATCH ?", (expr,)).fetchone()[0]
-            nbooks = con.execute(
-                "SELECT count(DISTINCT p.book) FROM para_fts f JOIN para p ON p.id=f.rowid WHERE para_fts MATCH ?",
-                (expr,),
-            ).fetchone()[0]
             rows = con.execute(
                 "SELECT p.book, count(*) c FROM para_fts f JOIN para p ON p.id=f.rowid "
-                "WHERE para_fts MATCH ? GROUP BY p.book ORDER BY c DESC LIMIT 2",
+                "WHERE para_fts MATCH ? GROUP BY p.book ORDER BY c DESC",
                 (expr,),
             ).fetchall()
-            stats.append({"term": term, "count": count, "nbooks": nbooks, "books": [(b, c) for b, c in rows]})
+            count = sum(c for _b, c in rows)
+            nbooks = len(rows)
+            entry = {"term": term, "count": count, "nbooks": nbooks, "books": [(b, c) for b, c in rows[:2]]}
+            stats.append(entry)
+            if count <= 200:
+                picked.append(entry)
+                if len(picked) >= 3:
+                    break
     except sqlite3.Error:
         return ""
     finally:
         con.close()
     if not stats:
         return ""
-    picked = [s for s in stats if s["count"] <= 200][:3]
     if not picked:
         picked = [min(stats, key=lambda s: s["count"])]
 
@@ -1021,7 +1089,8 @@ def build_multi_prompt(question, plans, windows, coverage="", history="", focus_
                 )
             chapter_blocks.append("\n".join(rows))
         blocks = [
-            "%s %s:%d-%d\n%s" % (_quoted(labels.get(w["book"], "")), w["path"], w["start"], w["end"], w["text"])
+            "%s %s:%d-%d\n%s"
+            % (_quoted(labels.get(w["book"], "")), w["path"], w["start"], w["end"], _numbered_window_text(w))
             for w in keep
         ]
         empty = [labels[p["source"]["book"]] for p in plans if not any(w["book"] == p["source"]["book"] for w in keep)]
@@ -1397,6 +1466,7 @@ def verify_citations(cites, windows, hit_path="", hit_line=0, sources=None, rec=
         if not isinstance(quote, str):
             fail("quote_not_str", path=item.get("path", ""), claimed_line=item.get("line"))
             continue
+        quote = _LINE_PREFIX_RE.sub("", quote).strip()
         needle = _norm(quote)[:QUOTE_PROBE]
         if len(needle) < 4:
             fail(
@@ -1484,6 +1554,7 @@ def _verify_multi(cites, windows, sources, rec=None):
         if not isinstance(quote, str):
             fail("quote_not_str", path=item.get("path", ""), claimed_line=item.get("line"))
             continue
+        quote = _LINE_PREFIX_RE.sub("", quote).strip()
         needle = _norm(quote)[:QUOTE_PROBE]
         if len(needle) < 4:
             fail(

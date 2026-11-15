@@ -9,7 +9,7 @@
 - `ask-session` 新开会话、多轮追问、会话落盘。
 - `ask-history` 历史页签：按问题筛选、多选删除。
 - `ask-scope` 候选书多选：把检索限定到某几本，或全选。
-- `ask-thinking` 思考等级（off / low / medium / high）**只在经典检索页 `/classic`**（控件 `think-select`）。会话页没有这个控件：它把 `THINKING_LEVEL = 'high'` 写死（`apps/demo/web/session.js:15`，提交在 `:1852`/`:1939`/`:1987`），只在结果 meta 里显示「思考 高」。想在会话页省 token 或换档，代码里没开关。
+- `ask-thinking` 思考等级（off / low / medium / high）在会话页 `/` 与经典检索页 `/classic` 均通过 `think-select` 下拉切换（持久化到 `localStorage['booksearch.thinking']`，前端默认 `low`；后端 `/api/answer` 缺省仍兼容 `high`）。
 - `ask-trace` 依据与落点：回答里的书卡、章节锚点、命中段原文。
 - `ask-classic` `/classic` 五阶段：理解问题 → 词法循环 → 打分与选章 → 书卡 → 结果。
 - `ask-export` 导出单个会话。

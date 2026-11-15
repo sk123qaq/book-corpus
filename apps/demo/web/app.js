@@ -20,7 +20,7 @@
   const SOURCE_CLASS = { model: 'model', cache: 'cache', degraded: 'degraded' };
   const THINKING = { off: '关', low: '低', medium: '中', high: '高' };
   const THINKING_LEVELS = ['off', 'low', 'medium', 'high'];
-  const THINKING_DEFAULT = 'high';
+  const THINKING_DEFAULT = 'low';
   const THINKING_KEY = 'booksearch.thinking';
 
   const state = {
@@ -1434,6 +1434,8 @@
         else bindSwitch();
       } else {
         play();
+        if (state.selected > 0 && !state.selectAll) selectCard(state.selected);
+        else maybeAnswer();
       }
       const params = new URLSearchParams();
       params.set('q', q);

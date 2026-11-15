@@ -1128,6 +1128,19 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
 }
 .ask-row { display: flex; gap: 8px; align-items: stretch; }
+.think-select {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12.5px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.think-select:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
+.think-select:disabled { opacity: 0.55; cursor: not-allowed; }
 .ask-field { position: relative; flex: 1; min-width: 0; }
 .ask-field .field { padding: 10px 13px; }
 .ask-field .caret {
@@ -1430,6 +1443,7 @@ a { color: inherit; text-decoration: none; }
   .ask { padding: 8px 0 12px; }
   .ask-field .field { font-size: 14px; padding: 9px 12px; }
   .ask-field .caret { left: 14px; top: 11px; height: 17px; }
+  .think-select { font-size: 12px; padding: 0 6px; }
   .ask-send { font-size: 12.5px; padding: 0 16px; }
 }
 

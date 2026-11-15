@@ -4,6 +4,7 @@ The old two-part anchored reply (primary + supplement) is gone; these tests pin
 the pieces that replaced it without calling a model or reading the real library.
 """
 
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -234,3 +235,149 @@ def test_normalize_sources_records_over_limit_names(monkeypatch):
     assert len(kept) == answer.MAX_SOURCES
     assert report["over_limit"] == 2
     assert [row["book"] for row in report["dropped"]] == ["B9", "B10"]
+
+
+def test_pi_cmd_uses_no_skills():
+    cmd = answer.pi_cmd("low")
+    assert "--no-skills" in cmd
+    assert "--skill" not in cmd
+    assert "--thinking" in cmd
+    assert cmd[cmd.index("--thinking") + 1] == "low"
+
+
+def test_numbered_window_text_and_prompt_injection():
+    plain_text = "第一句原文。\n\n第二句原文。"
+    heading_text = "# 第一章\n正文第十行。\n正文第十一行。"
+    w_plain = {
+        "book": "B1",
+        "title": "书一",
+        "chapter": "第一章",
+        "path": "books/B1/md/01.md",
+        "start": 10,
+        "end": 12,
+        "chars": len(plain_text),
+        "text": plain_text,
+    }
+    w_heading = {
+        "book": "B1",
+        "title": "书一",
+        "chapter": "第一章",
+        "path": "books/B1/md/01.md",
+        "start": 10,
+        "end": 11,
+        "chars": len(heading_text),
+        "text": heading_text,
+    }
+    assert answer._numbered_window_text(w_plain) == "L10: 第一句原文。\n\nL12: 第二句原文。"
+    assert answer._numbered_window_text(w_heading) == "# 第一章\nL10: 正文第十行。\nL11: 正文第十一行。"
+
+    single_prompt = answer.build_prompt("问一句？", "B1", [w_plain], [])
+    assert "L10: 第一句原文。" in single_prompt
+    assert "L12: 第二句原文。" in single_prompt
+    assert w_plain["text"] == plain_text
+
+    plans = [
+        {"source": {"book": "B1", "title": "书一"}, "titles": {}, "status": {}, "chapters": [], "chosen": []},
+        {"source": {"book": "B2", "title": "书二"}, "titles": {}, "status": {}, "chapters": [], "chosen": []},
+    ]
+    multi_prompt = answer.build_multi_prompt("问一句？", plans, [w_heading], "", "", "书一")
+    assert "# 第一章\nL10: 正文第十行。\nL11: 正文第十一行。" in multi_prompt
+    assert w_heading["text"] == heading_text
+
+
+def test_verify_citations_strips_line_number_prefix(tmp_path, monkeypatch):
+    rel = "books/B1/md/01.md"
+    target = tmp_path / rel
+    target.parent.mkdir(parents=True)
+    lines = [f"第{i}行填充内容。" for i in range(1, 13)]
+    quote_body = "这一段原文完整记录了事件的起因与经过，可供核对。"
+    lines[9] = quote_body
+    lines[10] = "下一段原文补充了后来的结局与人物去向。"
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    monkeypatch.setattr(answer, "ROOT", str(tmp_path))
+    monkeypatch.setattr(answer, "LIBRARY", str(tmp_path / "books"))
+
+    windows = [
+        {
+            "book": "B1",
+            "title": "书一",
+            "chapter": "第一章",
+            "path": rel,
+            "start": 10,
+            "end": 11,
+            "text": quote_body,
+        }
+    ]
+    cites = [
+        {"path": rel, "line": 10, "quote": f"L10: {quote_body}"},
+        {"path": rel, "line": 10, "quote": f"L10：{quote_body}"},
+    ]
+    kept_single, dropped_single = answer.verify_citations(cites[:1], windows, hit_path=rel, hit_line=10)
+    assert dropped_single == 0
+    assert len(kept_single) == 1
+    assert kept_single[0]["line"] == 10
+    assert kept_single[0]["quote"] == quote_body
+
+    sources = [{"book": "B1", "title": "书一", "path": rel, "line": 10}]
+    kept_multi, dropped_multi = answer._verify_multi(cites[1:2], windows, sources)
+    assert dropped_multi == 0
+    assert len(kept_multi) == 1
+    assert kept_multi[0]["line"] == 10
+    assert kept_multi[0]["quote"] == quote_body
+
+
+def test_search_book_pushes_down_book_filter_and_matches_qsearch():
+    import lib_fts_cjk as cjk
+    import qsearch
+
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.executescript(
+        """
+        CREATE TABLE para(
+          id INTEGER PRIMARY KEY, path TEXT NOT NULL, book TEXT NOT NULL,
+          line INTEGER NOT NULL, chars INTEGER NOT NULL, tok TEXT NOT NULL, text TEXT NOT NULL);
+        CREATE VIRTUAL TABLE para_fts USING fts5(
+          tok, content='para', content_rowid='id', tokenize="unicode61 remove_diacritics 0");
+        """
+    )
+    rows = [
+        (
+            "books/B1/md/01.md",
+            "B1",
+            5,
+            "阿Q因为摸了小尼姑的头皮又被赵太爷打嘴巴，这里是一段足够超过四十个字的详细记叙文本。",
+        ),
+        (
+            "books/B1/md/02.md",
+            "B1",
+            18,
+            "赵太爷认为阿Q不配姓赵，便当众打了他一记耳光，这段文字同样超过了四十个字符以通过筛选。",
+        ),
+        (
+            "books/B2/md/01.md",
+            "B2",
+            7,
+            "赵太爷和阿Q在另一本书里被当作文学典型分析，阿Q挨打的情节在这里反复出现并超过四十字。",
+        ),
+    ]
+    for path, book, line, text in rows:
+        tok = cjk.index_text(text)
+        cur = con.execute(
+            "INSERT INTO para(path, book, line, chars, tok, text) VALUES (?, ?, ?, ?, ?, ?)",
+            (path, book, line, len(text), tok, text),
+        )
+        con.execute("INSERT INTO para_fts(rowid, tok) VALUES (?, ?)", (cur.lastrowid, tok))
+    con.commit()
+
+    terms = ["阿Q", "赵太爷"]
+    expr = f"({cjk.query_expr('阿Q')}) OR ({cjk.query_expr('赵太爷')})"
+    got = answer._search_book(con, "B1", expr, terms, limit=10)
+    assert got
+    assert all(r["book"] == "B1" for r in got)
+
+    expected_all, _ = qsearch.search(con, expr, terms, [], limit=50, min_chars=40, rerank=False, pool=2000)
+    expected_b1 = [r for r in expected_all if r["book"] == "B1"]
+    keys = ("score", "coverage", "bm25", "kana", "line", "path", "book", "text")
+    assert [{k: r[k] for k in keys} for r in got] == [{k: r[k] for k in keys} for r in expected_b1]
