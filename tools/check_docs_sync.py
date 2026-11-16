@@ -60,8 +60,8 @@ IGNORED_PATH_PREFIXES = (
     "artifacts/",
 )
 
-# verify-book-corpus 约定的私有验证端口与 embed 默认端口
-EXTRA_ALLOWED_PORTS = {18080, 18765, 18770, 18771, 18772, 18773, 18774, 18775, 18780}
+# verify-book-corpus 约定的私有验证端口与 embed/rerank 默认端口
+EXTRA_ALLOWED_PORTS = {18080, 18081, 18765, 18770, 18771, 18772, 18773, 18774, 18775, 18780}
 
 # cli.py 内置顶层子命令（非 ALIASES 映射表中的分发命令）
 BUILTIN_SUBCOMMANDS = {
@@ -73,6 +73,8 @@ BUILTIN_SUBCOMMANDS = {
     "daily",
     "list",
     "embed",
+    "rerank-setup",
+    "rerank-serve",
     "docs",
     "run",
     "help",

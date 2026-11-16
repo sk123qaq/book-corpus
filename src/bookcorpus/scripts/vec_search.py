@@ -25,6 +25,7 @@ if HERE not in sys.path:
 
 import embed_corpus
 import lib_common
+import rerank_client
 
 PATHS = lib_common.PATHS
 DEFAULT_DIM = embed_corpus.DEFAULT_DIM
@@ -32,6 +33,7 @@ DEFAULT_W_VEC = 1.35
 BOOK_RRF_K = 30
 CHAP_RRF_K = 5
 CHAP_POOL_LIMIT = 10
+CHAP_W_RERANK = 2.0
 PASSAGE_RRF_K = 5
 PASSAGE_POOL_LIMIT = 30
 PASSAGE_LINE_SPAN = 30
@@ -453,6 +455,100 @@ def read_snippet(rel_path, line, max_chars=150):
     return text[:max_chars]
 
 
+def fetch_chunk_texts(chunk_ids, embed_db=None):
+    """按 chunk_id 批量读取 emb.db 里存好的约 700 字原文块。"""
+    ids = sorted({int(c) for c in (chunk_ids or ()) if c is not None})
+    if not ids:
+        return {}
+    db_p, _ = _resolve_paths(embed_db, None)
+    if not Path(db_p).is_file():
+        return {}
+    out = {}
+    try:
+        con = sqlite3.connect(f"file:{db_p}?mode=ro", uri=True)
+        try:
+            for i in range(0, len(ids), 400):
+                batch = ids[i : i + 400]
+                ph = ",".join("?" * len(batch))
+                for cid, txt in con.execute(
+                    f"SELECT id, text FROM chunk WHERE id IN ({ph})",  # noqa: S608
+                    batch,
+                ):
+                    if txt:
+                        out[int(cid)] = txt
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return {}
+    return out
+
+
+def _score_chapter_rerank(
+    bm_list,
+    v_list,
+    question,
+    rerank_fn=None,
+    chapter_text_fn=None,
+    embed_db=None,
+    max_chars=700,
+):
+    """对候选章的代表命中跑交叉编码器精排，返回 {chapter_path: max_score} 或 None。"""
+    q = (question or "").strip()
+    if not q or (not bm_list and not v_list):
+        return None
+    if rerank_fn is None and not rerank_client.server_healthy():
+        return None
+
+    cands = []
+    seen = []  # (cp, line)
+    for r in bm_list:
+        cp = r.get("chapter_path")
+        if cp:
+            ln = int(r.get("line") or 1)
+            cands.append((cp, ln, None, r.get("snippet") or ""))
+            seen.append((cp, ln))
+    for vr in v_list:
+        cp = vr["chapter_path"]
+        ln = int(vr.get("line") or 1)
+        if any(scp == cp and abs(sln - ln) <= PASSAGE_LINE_SPAN for scp, sln in seen):
+            continue
+        cands.append((cp, ln, vr.get("chunk_id"), ""))
+        seen.append((cp, ln))
+
+    if not cands:
+        return None
+
+    chunk_texts = fetch_chunk_texts([cid for _, _, cid, _ in cands if cid is not None], embed_db=embed_db)
+    texts = []
+    for cp, ln, cid, fallback in cands:
+        txt = ""
+        if chapter_text_fn is not None:
+            txt = chapter_text_fn(cp, ln, cid, fallback) or ""
+        if not txt and cid is not None:
+            txt = chunk_texts.get(int(cid), "")[:max_chars]
+        if not txt:
+            txt = rerank_client.read_centered_text(cp, ln, max_chars=max_chars) or fallback
+        texts.append(txt[:max_chars])
+
+    valid_idx = [i for i, t in enumerate(texts) if t.strip()]
+    if not valid_idx:
+        return None
+    scores = (
+        rerank_fn(q, [texts[i] for i in valid_idx])
+        if rerank_fn is not None
+        else rerank_client.rerank_scores(q, [texts[i] for i in valid_idx])
+    )
+    if not scores or len(scores) != len(valid_idx):
+        return None
+    chap_best = {}
+    for i, sc in zip(valid_idx, scores, strict=True):
+        cp = cands[i][0]
+        fsc = float(sc)
+        if cp not in chap_best or fsc > chap_best[cp]:
+            chap_best[cp] = fsc
+    return chap_best
+
+
 def fuse_chapters(
     bm25_rows,
     vec_hits,
@@ -462,8 +558,13 @@ def fuse_chapters(
     max_vec=CHAP_POOL_LIMIT,
     title_fn=None,
     snippet_fn=read_snippet,
+    question="",
+    rerank_fn=None,
+    w_rerank=CHAP_W_RERANK,
+    chapter_text_fn=None,
+    embed_db=None,
 ):
-    """章级 RRF 融合：合并 BM25 已选章列表与单书向量块命中。"""
+    """章级 RRF 融合：合并 BM25、单书向量与可选交叉编码器精排。"""
     v_chaps = {}
     for h in vec_hits or ():
         cp = h.get("path")
@@ -475,22 +576,32 @@ def fuse_chapters(
                 "chapter_path": cp,
                 "line": int(h.get("line") or 1),
                 "vscore": sc,
+                "chunk_id": h.get("chunk_id"),
             }
     v_sorted = sorted(v_chaps.values(), key=lambda x: -x["vscore"])
-    if not bm25_rows and not v_sorted:
+    bm_list = [r for r in (bm25_rows or ())[:CHAP_POOL_LIMIT] if r.get("chapter_path")]
+    v_list = v_sorted[:max_vec]
+    if not bm_list and not v_list:
         return []
-    if not v_sorted:
+
+    chap_rr = _score_chapter_rerank(
+        bm_list,
+        v_list,
+        question,
+        rerank_fn=rerank_fn,
+        chapter_text_fn=chapter_text_fn,
+        embed_db=embed_db,
+    )
+    if not v_list and chap_rr is None:
         return list(bm25_rows)[:max_chapters]
 
     scores = {}
     meta = {}
-    for rk, r in enumerate((bm25_rows or ())[:CHAP_POOL_LIMIT], 1):
-        cp = r.get("chapter_path")
-        if not cp:
-            continue
+    for rk, r in enumerate(bm_list, 1):
+        cp = r["chapter_path"]
         scores[cp] = scores.get(cp, 0.0) + 1.0 / (k + rk)
         meta[cp] = dict(r)
-    for rk, vr in enumerate(v_sorted[:max_vec], 1):
+    for rk, vr in enumerate(v_list, 1):
         cp = vr["chapter_path"]
         scores[cp] = scores.get(cp, 0.0) + w_vec / (k + rk)
         if cp not in meta:
@@ -506,6 +617,13 @@ def fuse_chapters(
             }
         else:
             meta[cp]["vec_score"] = round(vr["vscore"], 4)
+
+    if chap_rr:
+        rr_sorted = sorted(chap_rr.items(), key=lambda kv: -kv[1])
+        for rk, (cp, rsc) in enumerate(rr_sorted, 1):
+            if cp in scores:
+                scores[cp] += float(w_rerank) / (k + rk)
+                meta[cp]["rerank_score"] = round(rsc, 4)
 
     ordered = sorted(scores.items(), key=lambda kv: -kv[1])[:max_chapters]
     out = []

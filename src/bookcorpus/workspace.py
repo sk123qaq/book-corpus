@@ -6,7 +6,7 @@ import sqlite3
 import sys
 import tomllib
 
-from . import docenv, pdfenv
+from . import docenv, pdfenv, rerankenv
 from .scripts import layout as L
 
 SCHEMA = L.SCHEMA
@@ -162,6 +162,9 @@ def check(root, version="0.1.0"):
         add("ok", "文档环境", "工作区/.venv-docs 就绪")
     else:
         add("warn", "文档环境", "无 工作区/.venv-docs，跑 book-corpus venv")
+
+    rr_level, rr_detail = rerankenv.status(root)
+    add(rr_level, "精排环境", rr_detail)
 
     add("ok", "工具", "book-corpus %s，Python %s" % (version, sys.version.split()[0]))
     return rows

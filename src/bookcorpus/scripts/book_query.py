@@ -100,6 +100,8 @@ class Plan:
     vec_used: bool = False
     vec_ms: float = 0.0
     vec_hits: int = 0
+    rerank_used: bool = False
+    rerank_ms: float = 0.0
 
 
 def quality(r):
@@ -163,6 +165,7 @@ class Planner:
         exclude=None,
         vec_fn=None,
         book_vec_fn=None,
+        rerank_fn=None,
     ):
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
@@ -176,6 +179,7 @@ class Planner:
         self._df_fn = df_fn
         self._vec_fn = vec_fn
         self._book_vec_fn = book_vec_fn
+        self._rerank_fn = rerank_fn
         self._hits = {}
         self._df = {}
         self._toc = {}
@@ -366,30 +370,44 @@ class Planner:
 
         hits = None
         if chapters:
+            import rerank_client
+
+            rerank_ready = bool(query_text) and (
+                self._rerank_fn is not None or (self._search_fn is None and rerank_client.server_healthy())
+            )
+            focus_book = focus.get("book") if focus and focus.get("status") == "exact" else None
             hits, _ = self.search(terms) if terms else ([], 0.0)  # 选章永远用全词集
-            for b in res.ranking[: self.limit]:
+            for idx, b in enumerate(res.ranking[: self.limit]):
                 toc, status = self.toc(b.book)
                 titles = {e["path"]: e["title"] for e in (toc or [])}
+                use_rr = rerank_ready and (idx < 3 or b.book == focus_book)
+                need_pool = res.vec_used or use_rr
                 bm25_rows = (
                     select_chapters(
                         hits,
                         b.book,
                         terms,
                         toc,
-                        vec_search.CHAP_POOL_LIMIT if res.vec_used else max_chapters,
+                        vec_search.CHAP_POOL_LIMIT if need_pool else max_chapters,
                         chapter_selector,
                     )
                     if hits
                     else []
                 )
-                if res.vec_used:
-                    vh_b = self._book_vec_hits(b.book, query_text, vhits, qvec)
+                if need_pool:
+                    vh_b = self._book_vec_hits(b.book, query_text, vhits, qvec) if res.vec_used else []
+                    t_rr = time.time()
                     rows = vec_search.fuse_chapters(
                         bm25_rows,
                         vh_b,
                         max_chapters=max_chapters,
                         title_fn=lambda cp, t=titles: t.get(cp) or os.path.basename(cp),
+                        question=query_text if use_rr else "",
+                        rerank_fn=self._rerank_fn if use_rr else None,
                     )
+                    if use_rr and any("rerank_score" in row for row in rows):
+                        res.rerank_used = True
+                        res.rerank_ms = round(res.rerank_ms + (time.time() - t_rr) * 1000, 1)
                 else:
                     rows = bm25_rows[:max_chapters]
                 for r in rows:
@@ -414,6 +432,8 @@ class Planner:
                 meta=self.meta,
                 expand=self.expand,
                 vec_hits_fn=vec_cb,
+                question=query_text,
+                rerank_fn=self._rerank_fn,
             )
         res.fetches = self.fetches
         res.ms = round((time.time() - t0) * 1000, 1)
@@ -573,6 +593,8 @@ def pin_focus(
     meta=None,
     expand=None,
     vec_hits_fn=None,
+    question="",
+    rerank_fn=None,
 ):
     """精确书名钉到 ranking[0] 与 chapters[0]，回写 focus 的首章定位。"""
     if not focus or focus.get("status") != "exact" or not focus.get("book"):
@@ -585,17 +607,26 @@ def pin_focus(
     pinned.pinned = True
     plan.ranking = ([pinned] + [b for b in plan.ranking if b.book != book])[:limit]
     if chapters:
+        import rerank_client
+
         toc, status = toc_fn(book) if toc_fn else ([], "")
         titles = {e["path"]: e["title"] for e in (toc or [])}
         vh_b = vec_hits_fn(book) if vec_hits_fn is not None else []
-        bm25_rows = focus_rows(focus_hits, book, terms, toc, vec_search.CHAP_POOL_LIMIT if vh_b else max_chapters)
-        if vh_b:
+        use_rr = bool(question) and (rerank_fn is not None or rerank_client.server_healthy())
+        bm25_rows = focus_rows(
+            focus_hits, book, terms, toc, vec_search.CHAP_POOL_LIMIT if (vh_b or use_rr) else max_chapters
+        )
+        if vh_b or use_rr:
             rows = vec_search.fuse_chapters(
                 bm25_rows,
                 vh_b,
                 max_chapters=max_chapters,
                 title_fn=lambda cp, t=titles: t.get(cp) or os.path.basename(cp),
+                question=question,
+                rerank_fn=rerank_fn,
             )
+            if any("rerank_score" in row for row in rows):
+                plan.rerank_used = True
         else:
             rows = bm25_rows[:max_chapters]
         for r in rows:

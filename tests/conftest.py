@@ -27,6 +27,8 @@ def _isolate_user_dotenv(tmp_path, monkeypatch):
     # 预检只判断“有没有配”，不发请求。给一套假凭据，让测试机/CI 与开发机行为一致；
     # 需要验证“缺配置”的用例自己删环境变量。
     monkeypatch.setenv("OPENCODE_GO_API_KEY", "test-key")
+    # 避免开发机已常驻 18081 精排服务污染既有单元测试，单测要测精排时显式覆盖或传 rerank_fn。
+    monkeypatch.setenv("BOOKS_RERANK_URL", "off")
 
 
 # 这些脚本由 test_acceptance.py 以子进程入口跑，不让 pytest 二次收集。
@@ -63,6 +65,8 @@ def run_cli(*args, cwd=None, env=None):
     # 测试里不建 工作区/.venv-pdf：要 20 秒、要联网。单独测这条路的用例自己开。
     full_env.setdefault("BOOKS_NO_PDF_VENV", "1")
     full_env.setdefault("BOOKS_NO_DOCS_VENV", "1")
+    full_env.setdefault("BOOKS_NO_RERANK_VENV", "1")
+    full_env.setdefault("BOOKS_RERANK_URL", "off")
     if env:
         full_env.update(env)
     return subprocess.run(

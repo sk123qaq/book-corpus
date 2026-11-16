@@ -146,11 +146,14 @@ book-corpus venv
 
 `book-corpus init` 重建工作区时也会把它带上；只想重建目录与模板、不碰 Python 时加 `--no-pdf-venv`。
 
-只做重排实验时再补：
+启停交叉编码器精排环境（可选，无 GPU 自动跳过并降级回 `BM25 + 向量`）：
 
 ```bash
-工作区/.venv-pdf/bin/pip install -r requirements-rerank.txt
+book-corpus rerank-setup   # 先检 GPU/显存与测速包源，达标才建 工作区/.venv-rerank 并走 hf-mirror 下模型
+book-corpus rerank-serve --daemon   # 常驻本地精排 HTTP 服务（默认端口 18081，BOOKS_RERANK_URL 可改）
 ```
+
+如需手动安装 `requirements-rerank.txt` 里的包，请装进独立环境 `工作区/.venv-rerank/`，不要污染主环境。
 
 PDF 脚本必须用这个解释器跑。`pdf_md_batch.py` 启动时会检查当前解释器能否 `import pymupdf`，不能就直接退出。
 
@@ -234,7 +237,7 @@ book-corpus model check
 
 ### 6. 本地模型（可选）
 
-`工作区/models/` 下的模型都不在 Git 里。只跑检索与问答不需要它们。重排实验需要能用的 GPU；`rerank.py` 的设备名写死 `cuda`，AMD 显卡用 ROCm 版 torch 也映射成这个名字。
+`工作区/models/` 下的模型都不在 Git 里。只跑词法/混合检索与问答不需要它们。`bge-reranker-v2-m3` 交叉编码器精排（单书选章 Stage B 与作答选窗 Stage C）需要可用 GPU（总显存 ≥ 2.5 GB、可用 ≥ 1.8 GB；AMD 显卡需 ROCm `/dev/kfd`）；`rerank.py` 的设备名写死 `cuda`，AMD 显卡用 ROCm 版 torch 也映射成这个名字。`book-corpus rerank-setup` 会在安装前先检查 GPU，不满足时直接跳过下载模型；常驻精排服务离线时，上层自动降级回 `BM25 + 向量` RRF。
 
 ## 准备语料
 

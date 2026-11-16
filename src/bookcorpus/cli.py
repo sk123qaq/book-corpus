@@ -9,7 +9,7 @@ import sqlite3
 import subprocess
 import sys
 
-from . import __version__, docenv, envfile, pdfenv, preflight, workspace
+from . import __version__, docenv, envfile, pdfenv, preflight, rerankenv, workspace
 
 # 不在这里 import lib_common：它 import 时就按 cwd 定根，先 import 会让
 # run_script 设的 BOOKS_ROOT 失效。只算路径，脚本自己 import。
@@ -54,6 +54,10 @@ HELP = """book-corpus <命令> [参数...]
   embed [--status|--verify|--dry-run] [--books B0001,B0002] [--force] [--serve]
                           把 md 正文切块做 embedding；产物在 build/检索/embeddings/，
                           断点续跑，--serve 只前台起 llama-server
+  rerank-setup [--check|--probe|--force] [--json]
+                          先检 GPU/显存并测速源，达标才建 工作区/.venv-rerank 与下模型
+  rerank-serve [--serve|--daemon|--status] [--url URL]
+                          启停或探活交叉编码器精排 HTTP 服务（默认 18081 端口）
 
 文档
   docs check [--data-root <目录>] [--since <rev>]
@@ -481,6 +485,15 @@ def main(argv=None):
         return cmd_sample(workspace.resolve(explicit_root))
     if cmd == "venv":
         return cmd_venv(workspace.resolve(explicit_root), "--check" in rest)
+    if cmd == "rerank-setup":
+        root = workspace.resolve(explicit_root)
+        return rerankenv.main(["--root", root, *rest])
+    if cmd == "rerank-serve":
+        root = workspace.resolve(explicit_root)
+        os.environ["BOOKS_ROOT"] = root
+        from .scripts import rerank_client
+
+        return rerank_client.main(rest)
     if cmd == "init":
         target = next((a for a in rest if not a.startswith("-")), None)
         if not target:

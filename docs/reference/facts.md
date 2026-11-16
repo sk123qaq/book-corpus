@@ -78,7 +78,8 @@
 | `query_expand.py` | — | 查询侧扩展：把用户的口语问法换成 4 条书里可能出现的话，再并回段落倒排。 |
 | `reading_index.py` | — | 分层读的章表索引：看状态或整库重建。 |
 | `redo_compare.py` | — | 重拆批次的验收闸门：逐个比「旧 md」与「暂存新 md」的源页覆盖率。 |
-| `rerank.py` | — | 交叉编码器精排封装：Reranker().score(query, texts) 按入参顺序返回打分。 |
+| `rerank.py` | — | 交叉编码器精排封装与常驻 HTTP 服务：Reranker().score(query, texts) 按入参顺序返回打分。 |
+| `rerank_client.py` | — | 交叉编码器精排 HTTP 客户端（纯标准库，主环境零 torch 依赖）。 |
 | `retire_book.py` | — | 移出一本书：原书进 books/_冷宫/<书名>/source/，md、html、json 删除，账本同步。 |
 | `scan_library.py` | — | L1 扫描旧布局（原书/ 原书pdf/ 书md/ 等顶层池）。旧目录已不在，只作留档。 |
 | `split_md_batch.py` | — | 批量把 source 是 ebook 的书拆成 md（方案 §7 的转换接口）。 |

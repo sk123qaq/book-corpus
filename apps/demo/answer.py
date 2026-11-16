@@ -62,6 +62,7 @@ import lib_common as L
 import lib_fts_cjk as cjk
 import model_call
 import qsearch
+import rerank_client
 import runlog
 import vec_search
 from thinking import DEFAULT as DEFAULT_THINKING
@@ -87,10 +88,10 @@ MODEL = (
     or "opencode-go/deepseek-v4.1-flash"
 )
 PI_TIMEOUT = 240
-PROMPT_VERSION = "answer-v15"
+PROMPT_VERSION = "answer-v16"
 # 点名一本书时也走一次写手：点名书排在最前，其他书只补它没有的角度。
 # 不再分成「主答」「补充」两次调用，版本统一到多书写手。
-PROMPT_VERSION_MULTI = "answer-v21-multi"
+PROMPT_VERSION_MULTI = "answer-v22-multi"
 
 JSON_REMIND = (
     '\n\n上一次的输出不是合法 JSON。这次只输出一个 JSON 对象，不要代码块，不要解释，字符串里的双引号写成 \\"。'
@@ -106,6 +107,8 @@ ANSWER_REMIND = (
 
 QSEARCH_LIMIT = 100
 DEFPASS_TOP = 2
+PASSAGE_W_RERANK = 4.0
+MAX_RERANK_CANDS = 60
 MAX_CHAPTERS = 30
 MAX_PASSAGES = 24
 MAX_PER_CHAPTER = 2
@@ -572,8 +575,147 @@ def _search_book(con, book, expr, terms, limit):
     return cand[:limit]
 
 
-def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT, question="", vec_fn=None):
-    """当前命中 + BM25 与向量书内融合 + 组覆盖二遍 + 按章聚类候选。
+def _rerank_passages(
+    query_text,
+    current,
+    book_hits,
+    vhits,
+    lines_cache,
+    rerank_fn=None,
+    w_rerank=PASSAGE_W_RERANK,
+    max_cands=MAX_RERANK_CANDS,
+):
+    """对书内候选段做交叉编码器精排并与 BM25+向量做三路 RRF；不可用返回 None。"""
+    q = (query_text or "").strip()
+    if not q or (not book_hits and not vhits):
+        return None
+    if rerank_fn is None and not rerank_client.server_healthy():
+        return None
+
+    span = max(1, int(vec_search.PASSAGE_LINE_SPAN))
+    k = vec_search.PASSAGE_RRF_K
+    b_sorted = sorted(book_hits or (), key=lambda h: -float(h.get("score") or 0.0))[: vec_search.PASSAGE_POOL_LIMIT]
+    v_sorted = sorted(vhits or (), key=lambda h: -float(h.get("score") or 0.0))[: vec_search.PASSAGE_POOL_LIMIT]
+
+    buckets = {}
+    for rk, h in enumerate(b_sorted, 1):
+        p = h.get("path")
+        if not p:
+            continue
+        ln = int(h.get("line") or 1)
+        key = (p, ln // span)
+        if key not in buckets:
+            buckets[key] = {
+                "path": p,
+                "line": ln,
+                "bm_rank": rk,
+                "vec_rank": None,
+                "chunk_id": None,
+                "score": float(h.get("score") or 0.0),
+                "coverage": h.get("coverage"),
+                "text": h.get("text") or "",
+            }
+    for rk, h in enumerate(v_sorted, 1):
+        p = h.get("path")
+        if not p:
+            continue
+        ln = int(h.get("line") or 1)
+        match_key = None
+        for ex_k, ex_v in buckets.items():
+            if ex_k[0] == p and abs(ex_v["line"] - ln) <= span:
+                match_key = ex_k
+                break
+        key = match_key or (p, ln // span)
+        if key not in buckets:
+            buckets[key] = {
+                "path": p,
+                "line": ln,
+                "bm_rank": None,
+                "vec_rank": rk,
+                "chunk_id": h.get("chunk_id"),
+                "score": float(h.get("score") or 0.0),
+                "coverage": 0,
+                "text": "",
+            }
+        elif buckets[key]["vec_rank"] is None:
+            buckets[key]["vec_rank"] = rk
+            if not buckets[key]["chunk_id"] and h.get("chunk_id"):
+                buckets[key]["chunk_id"] = h.get("chunk_id")
+
+    cur_p = current.get("path")
+    cur_l = int(current.get("line") or 1)
+    if cur_p and not any(v["path"] == cur_p and abs(v["line"] - cur_l) <= span for v in buckets.values()):
+        buckets[(cur_p, cur_l // span)] = {
+            "path": cur_p,
+            "line": cur_l,
+            "bm_rank": None,
+            "vec_rank": None,
+            "chunk_id": None,
+            "score": None,
+            "coverage": None,
+            "text": "",
+        }
+
+    cands = list(buckets.values())
+    if not cands:
+        return None
+    if len(cands) > max_cands:
+        cands.sort(
+            key=lambda c: (
+                -(
+                    (1.0 / (k + c["bm_rank"]) if c["bm_rank"] else 0.0)
+                    + (vec_search.DEFAULT_W_VEC / (k + c["vec_rank"]) if c["vec_rank"] else 0.0)
+                )
+            )
+        )
+        cands = cands[:max_cands]
+
+    chunk_texts = vec_search.fetch_chunk_texts([c["chunk_id"] for c in cands if c.get("chunk_id")])
+    texts = []
+    for c in cands:
+        cid = c.get("chunk_id")
+        txt = chunk_texts.get(int(cid), "")[:700] if cid else ""
+        if not txt:
+            p = c["path"]
+            lines = lines_cache.get(p)
+            if lines is None:
+                lines = _lines(p)
+                lines_cache[p] = lines
+            txt = rerank_client.extract_centered_text(lines, c["line"], max_chars=700) if lines else ""
+        if not txt:
+            txt = (c.get("text") or "")[:700]
+        texts.append(txt)
+
+    valid_idx = [i for i, t in enumerate(texts) if t.strip()]
+    if not valid_idx:
+        return None
+    scores = (
+        rerank_fn(q, [texts[i] for i in valid_idx])
+        if rerank_fn is not None
+        else rerank_client.rerank_scores(q, [texts[i] for i in valid_idx])
+    )
+    if not scores or len(scores) != len(valid_idx):
+        return None
+
+    for i, sc in zip(valid_idx, scores, strict=True):
+        cands[i]["rerank_score"] = float(sc)
+    rr_sorted = sorted((cands[i] for i in valid_idx), key=lambda c: -c["rerank_score"])
+    rr_rank = {(c["path"], c["line"]): rk for rk, c in enumerate(rr_sorted, 1)}
+
+    for c in cands:
+        rk_rr = rr_rank.get((c["path"], c["line"]))
+        rrf = (
+            (1.0 / (k + c["bm_rank"]) if c["bm_rank"] else 0.0)
+            + (vec_search.DEFAULT_W_VEC / (k + c["vec_rank"]) if c["vec_rank"] else 0.0)
+            + (float(w_rerank) / (k + rk_rr) if rk_rr else 0.0)
+        )
+        c["rrf_score"] = round(rrf, 6)
+    cands.sort(key=lambda c: (-c["rrf_score"], -c.get("rerank_score", -1e9)))
+    return cands
+
+
+def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT, question="", vec_fn=None, rerank_fn=None):
+    """当前命中 + BM25 与向量书内融合 + 可选交叉编码器精排 + 组覆盖二遍 + 按章聚类候选。
 
     返回 (picked, chapters)。picked 是窗口候选，chapters 是给 agent 的候选章地图。
     """
@@ -609,7 +751,8 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT, que
         if cur is None or float(h.get("score") or 0) > float(cur.get("score") or 0):
             by_path[p] = h
     bm25_sorted = sorted(by_path.values(), key=lambda h: -float(h.get("score") or 0))
-    if vhits:
+    use_rr_chap = bool(query_text) and (rerank_fn is not None or rerank_client.server_healthy())
+    if vhits or use_rr_chap:
         bm25_chap_rows = [
             {
                 "chapter_path": h["path"],
@@ -625,6 +768,11 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT, que
             max_chapters=MAX_CHAPTERS,
             title_fn=lambda cp: _title_for(titles, cp),
             snippet_fn=None,
+            question=query_text,
+            rerank_fn=rerank_fn,
+            chapter_text_fn=lambda cp, ln, _cid, fb: (
+                rerank_client.extract_centered_text(_lines(cp), ln, max_chars=700) or fb
+            ),
         )
         chapter_rows = [
             {
@@ -649,7 +797,37 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT, que
             for h in chapters
         ]
 
-    # 组覆盖二遍：合入向量候选，对未见组词的重排仍做组覆盖过滤
+    lines_cache = {}
+    reranked = _rerank_passages(query_text, current, book_hits, vhits, lines_cache, rerank_fn=rerank_fn)
+    if reranked is not None:
+        chap_tail = [
+            {"path": h["path"], "line": int(h.get("line") or 1), "score": h.get("score"), "coverage": h.get("coverage")}
+            for h in chapter_rows
+        ]
+        picked, used = [], set()
+        for item in reranked + chap_tail:
+            p_item = item["path"]
+            l_item = int(item.get("line") or 1)
+            key = (p_item, l_item)
+            if key in used:
+                continue
+            if any(ep == p_item and abs(el - l_item) <= vec_search.PASSAGE_LINE_SPAN for ep, el in used):
+                continue
+            used.add(key)
+            entry = {
+                "path": p_item,
+                "line": l_item,
+                "score": item.get("score"),
+                "coverage": item.get("coverage"),
+            }
+            if "rerank_score" in item:
+                entry["rerank_score"] = round(item["rerank_score"], 4)
+            picked.append(entry)
+            if len(picked) >= MAX_PASSAGES:
+                break
+        return picked, chapter_rows
+
+    # 降级路径（精排离线或未启用）：保留原 组覆盖二遍 + fuse_passages + current 固定首窗
     cand_pool = list(book_hits)
     seen_pos = {(h["path"], int(h.get("line") or 1)) for h in cand_pool}
     for vh in vhits:
@@ -659,7 +837,6 @@ def pick_passages(con, book, path, line, terms, groups, limit=QSEARCH_LIMIT, que
             seen_pos.add((vp, vl))
             cand_pool.append(vh)
 
-    lines_cache = {}
     scored = []
     for h in cand_pool:
         p = h["path"]
@@ -762,7 +939,7 @@ def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS, window_chars=
     """
     cache, prefix, meta = {}, {}, {}
     order, per_path = [], {}
-    for p in chosen:
+    for rank_idx, p in enumerate(chosen):
         path = p["path"]
         book = p.get("book", "")
         lines = cache.get(path)
@@ -780,16 +957,21 @@ def build_windows(chosen, titles, status, total_chars=TOTAL_CHARS, window_chars=
         if path not in per_path:
             per_path[path] = []
             order.append(path)
-        per_path[path].append((packet.window_start, packet.window_end, p["line"]))
+        per_path[path].append((packet.window_start, packet.window_end, p["line"], rank_idx))
 
     merged = []
     for path in order:
-        for start, end, line in sorted(per_path[path]):
+        for start, end, line, rank_idx in sorted(per_path[path]):
             cur = merged[-1] if merged and merged[-1]["path"] == path else None
             if cur and start <= cur["end"] + 1:
                 cur["end"] = max(cur["end"], end)
+                # 合并重叠段时保留排名更靠前命中的中心行，避免被靠前小行号覆盖截断
+                if rank_idx < cur["rank"]:
+                    cur["mid"] = line
+                    cur["rank"] = rank_idx
             else:
-                merged.append({"path": path, "start": start, "end": end, "mid": line})
+                merged.append({"path": path, "start": start, "end": end, "mid": line, "rank": rank_idx})
+    merged.sort(key=lambda item: item["rank"])
 
     floor = min(800, max(200, window_chars // 2))
     windows, used = [], 0

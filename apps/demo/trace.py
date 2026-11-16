@@ -41,6 +41,7 @@ import book_title
 import lib_common as L
 import lib_fts_cjk as cjk
 import model_call
+import rerank_client
 import runlog
 import vec_search
 from thinking import DEFAULT as DEFAULT_THINKING
@@ -886,6 +887,7 @@ def meta(refresh=False):
     if not refresh and _META_CACHE["value"] and now - _META_CACHE["at"] < 60:
         cached = dict(_META_CACHE["value"])
         cached["embed"] = vec_search.health_info()
+        cached["rerank"] = rerank_client.health_info(root=ROOT)
         return cached
     out = {
         "books": None,
@@ -918,6 +920,7 @@ def meta(refresh=False):
         out["index"] = "ok" if paras else "empty"
     _META_CACHE.update(at=now, value=dict(out))
     out["embed"] = vec_search.health_info()
+    out["rerank"] = rerank_client.health_info(root=ROOT)
     return out
 
 
@@ -1130,6 +1133,8 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
             "vec_used": bool(plan.vec_used),
             "vec_ms": plan.vec_ms,
             "vec_hits": int(plan.vec_hits),
+            "rerank_used": bool(getattr(plan, "rerank_used", False)),
+            "rerank_ms": float(getattr(plan, "rerank_ms", 0.0)),
             "rounds": [
                 {
                     "n": r.n,
