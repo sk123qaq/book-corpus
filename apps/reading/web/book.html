@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
-<title>分层读 · 书</title>
+<title>阅读工作台 · 书</title>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/pages.css">
@@ -21,7 +21,7 @@
   <nav class="nav">
     <a href="/">书架</a>
     <a href="/catalog">书目</a>
-    <a href="/records">记录</a>
+    <a href="/records">操作日志</a>
   </nav>
   <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
     <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
@@ -41,7 +41,6 @@
 <script src="/assets/theme.js"></script>
 <script>
 const UID = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
-const TIER_KEYS = ['skim', 'standard', 'deep'];
 const BOOK_MODES = [
   ['narrative', '叙事'],
   ['argument', '论证'],
@@ -49,11 +48,6 @@ const BOOK_MODES = [
   ['reference', '资料·图册'],
 ];
 let data = null;
-let current = null;
-let selected = new Set(['standard']);
-const pending = new Set();
-let pendingBusy = false;
-const polling = new Set();
 
 RD.ready(async () => {
   RD.night();
@@ -63,370 +57,108 @@ RD.ready(async () => {
     RD.fail(RD.mount('book-root'), err.message);
     return;
   }
-  const wanted = new URLSearchParams(location.search).get('n');
-  const packed = (data.chapters || []).find((ch) => ch.pack && ch.pack.exists &&
-    ch.tiers && ch.tiers.standard && ch.tiers.standard.exists);
-  current = (data.chapters || []).find((ch) => ch.n === wanted) || packed || data.chapters[0];
-  if (current) current.jobs = current.jobs || [];
   render();
   bind();
 });
+
+function modeLabel(mode) {
+  const found = BOOK_MODES.find((item) => item[0] === mode);
+  return found ? found[1] : (mode || '自动识别');
+}
 
 function render() {
   const book = data.book;
   const chapters = data.chapters || [];
   const chars = book.chars || 0;
   const packs = book.packs || 0;
-  const firstRead = current || chapters[0];
-  const firstReadsPack = !!(firstRead && firstRead.tiers && firstRead.tiers.standard && firstRead.tiers.standard.exists);
-  const firstDraft = !!(firstRead && firstRead.pack && firstRead.pack.draft);
+  const firstRead = chapters[0];
+  const r = data.reading || {};
+  const mode = r.book_mode;
+
   RD.mount('crumb').innerHTML = '<a href="/">书架</a><i>/</i><a href="/catalog?q=' +
     encodeURIComponent((book.subjects || [])[0] || '') + '">' + RD.esc((book.subjects || [])[0] || '未分类') +
     '</a><i>/</i><span>' + RD.esc(book.title_short || book.title) + '</span>';
-  document.title = '分层读 · ' + (book.title_short || book.title);
+  document.title = '阅读工作台 · ' + (book.title_short || book.title);
 
   RD.mount('book-root').innerHTML =
     '<section class="book-hero">' +
       '<div class="cover" style="background:' + RD.esc(book.color) + '">' +
-        '<span class="cv-kicker">分层读 · ' + RD.esc(book.uid) + '</span>' +
+        '<span class="cv-kicker">正文工作台 · ' + RD.esc(book.uid) + '</span>' +
         '<span class="cv-title">' + RD.esc(book.title_short || book.title) + '</span>' +
         '<span class="cv-author">' + RD.esc(book.author_display) + '</span>' +
         '<span class="cv-stamp">可读</span></div>' +
       '<div class="book-copy"><div class="eyebrow">' + RD.esc((book.subjects || []).join(' · ') || '未分类') + '</div>' +
         '<h1>' + RD.esc(book.title) + '</h1>' +
-        '<p class="sub">' + RD.esc(book.author_display) + ' · ' + RD.fmt(chapters.length) + ' 章 · 三档读本工作台</p>' +
+        '<p class="sub">' + RD.esc(book.author_display) + ' · ' + RD.fmt(chapters.length) + ' 章 · 打开章节即看完整正文</p>' +
         '<div class="book-meta"><span><b>' + RD.fmt(chapters.length) + '</b>章</span>' +
           '<span><b>' + RD.wan(chars) + '</b>万字</span>' +
-          '<span><b>' + RD.fmt(packs) + '</b>章有读本</span>' +
+          '<span><b>' + RD.fmt(packs) + '</b>章有旁批/导图</span>' +
           '<span><b>' + RD.esc(book.uid) + '</b>书目号</span></div>' +
         '<div class="book-subjects">' + (book.subjects || []).map((s) => '<span>' + RD.esc(s) + '</span>').join('') +
           '<span>' + RD.esc(book.author_display) + '</span></div>' +
         '<div class="book-actions">' +
-          (firstRead ? '<a class="btn btn-primary" href="' + (firstReadsPack ? RD.readerHref(book.uid, firstRead.n, 'standard', firstRead.path) : RD.chapterHref(book.uid, firstRead.n)) + '">' +
-            (firstReadsPack ? (firstDraft ? '查看标准本草稿 →' : '开始读 标准本 →') : '打开本章工单 →') + '</a>' : '') +
-          (firstReadsPack ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, firstRead.n) + '">打开本章工单</a>' : '') +
+          (firstRead ? '<a class="btn btn-primary" href="' + RD.chapterHref(book.uid, firstRead.n) + '">翻开第 ' + RD.esc(firstRead.n) + ' 章 →</a>' : '') +
         '</div></div></section>' +
     '<div class="work book-work">' +
-      '<section><div class="section-title"><h2>章目</h2><span class="lbl">' + RD.fmt(chapters.length) + ' 章 · 点行选章</span></div>' +
+      '<section><div class="section-title"><h2>章目</h2><span class="lbl">' + RD.fmt(chapters.length) + ' 章 · 点击直接阅读全文</span></div>' +
         '<div class="ch-list" id="ch-list"></div></section>' +
-      '<aside class="ticket" id="ticket"></aside>' +
+      '<aside class="ticket" id="book-prefs">' +
+        '<div class="ticket-top"><span class="eyebrow">伴读偏好（后台参考）</span><span class="ticket-id">不阻断阅读</span></div>' +
+        '<h3>本书文体提示</h3>' +
+        '<p class="ticket-meta">仅用于调整划词浮动条的按钮排序与回答侧重，不影响正文显示。</p>' +
+        '<div class="mode-readonly"><div>当前设定 <b>' + RD.esc(modeLabel(mode)) + '</b></div>' +
+          '<div class="book-mode-set"><select id="book-mode-select" aria-label="选择本书文体偏好">' +
+            '<option value="">选择文体…</option>' +
+            BOOK_MODES.map((item) => '<option value="' + item[0] + '"' + (mode === item[0] ? ' selected' : '') + '>' + item[1] + '</option>').join('') +
+          '</select><button type="button" class="btn btn-ghost" id="book-mode-set">' + (mode ? '更新偏好' : '保存偏好') + '</button></div>' +
+          '<span>任何时候都可直接点左侧章节开始阅读。</span></div>' +
+        '<div class="existing" id="book-notes-summary"></div>' +
+      '</aside>' +
     '</div>';
 
-  renderChapters();
-  renderTicket();
-}
-
-function modeLabel(mode) {
-  const found = BOOK_MODES.find((item) => item[0] === mode);
-  return found ? found[1] : mode;
-}
-
-function staleText(chapter) {
-  return (chapter && chapter.fallback_reason || '').indexOf('读法') >= 0 ? '读法已改' : '原文已改';
-}
-
-function renderChapters() {
-  RD.mount('ch-list').innerHTML = (data.chapters || []).map((chapter) => {
-    const tiers = chapter.tiers || {};
-    const has = TIER_KEYS.some((key) => tiers[key] && tiers[key].exists);
-    const isDraft = !!(chapter.pack && chapter.pack.draft);
-    return '<div class="ch-row" data-n="' + RD.esc(chapter.n) + '" aria-current="' + (current && current.n === chapter.n) + '">' +
-      '<span class="ch-n">' + RD.esc(chapter.n) + '</span>' +
-      '<a class="ch-title" href="' + RD.chapterHref(data.book.uid, chapter.n) + '">' + RD.esc(chapter.title) +
-      '<small>' + RD.esc(chapter.file) + ' · ' + RD.fmt(chapter.chars) + ' 字</small></a>' +
-      '<span class="ch-chars">' + RD.fmt(chapter.chars) + ' 字</span>' +
-      '<span class="ch-min">' + RD.fmt(chapter.minutes) + ' 分钟</span>' +
-      '<span class="ch-tier">' + RD.tierDots(tiers) + '</span>' +
-      '<span class="ch-state' + (has ? ' has' : '') + (isDraft ? ' draft' : '') + '">' + (has ? (isDraft ? '草稿' : '有读本') : '未出片') + '</span>' +
-      '<a class="ch-go" href="' + RD.chapterHref(data.book.uid, chapter.n) + '" aria-label="打开工单">→</a></div>';
+  RD.mount('ch-list').innerHTML = chapters.map((ch) => {
+    const badges = [];
+    if (ch.has_map) badges.push('导图');
+    if (ch.note_count) badges.push(ch.note_count + ' 条旁批');
+    const stateLabel = badges.length ? badges.join(' · ') : '直读全文';
+    return '<a class="ch-row" href="' + RD.chapterHref(book.uid, ch.n) + '">' +
+      '<span class="ch-n">' + RD.esc(ch.n) + '</span>' +
+      '<span class="ch-title">' + RD.esc(ch.title) + '<small>' + RD.esc(ch.file) + ' · ' + RD.fmt(ch.chars) + ' 字</small></span>' +
+      '<span class="ch-chars">' + RD.fmt(ch.chars) + ' 字</span>' +
+      '<span class="ch-min">' + RD.fmt(ch.minutes) + ' 分钟</span>' +
+      '<span class="ch-state' + (badges.length ? ' has' : '') + '">' + RD.esc(stateLabel) + '</span>' +
+      '<span class="ch-go" aria-hidden="true">→</span></a>';
   }).join('');
-}
 
-function renderTicket() {
-  if (!current) {
-    RD.mount('ticket').innerHTML = '<div class="empty">这本书还没有章节。</div>';
-    return;
-  }
-  const chapter = current;
-  chapter.jobs = chapter.jobs || [];
-  const r = data.reading || {};
-  const mode = r.book_mode;
-  const draft = !!(chapter.pack && chapter.pack.draft);
-  const hasPack = !!(chapter.pack && chapter.pack.exists);
-  RD.mount('ticket').innerHTML =
-    '<div class="ticket-top"><span class="eyebrow">读本工单</span><span class="ticket-id">只读 · #' +
-      RD.esc(data.book.uid) + '-' + RD.esc(chapter.n) + '</span></div>' +
-    '<h3>' + RD.esc(chapter.title) + '</h3>' +
-    '<p class="ticket-meta">' + RD.fmt(chapter.chars) + ' 字 · 原文约 ' + RD.fmt(chapter.minutes) + ' 分钟 · ' +
-      RD.esc(chapter.file) + (draft ? ' · <span class="draft-badge">草稿</span>' : '') + '</p>' +
-    '<div class="mode-readonly"><div>本书默认读法 <b>' + RD.esc(mode ? modeLabel(mode) : '未设') +
-      '</b></div>' +
-      '<div class="book-mode-set"><select id="book-mode-select" aria-label="选择本书默认读法">' +
-        '<option value="">选择读法…</option>' +
-        BOOK_MODES.map((item) => '<option value="' + item[0] + '"' + (mode === item[0] ? ' selected' : '') + '>' + item[1] + '</option>').join('') +
-      '</select><button type="button" class="btn btn-ghost" id="book-mode-set">' + (mode ? '更新本书默认' : '设本书默认') + '</button></div>' +
-      '<span>只设本书默认，不生成；章级覆写在章页设置。</span></div>' +
-    '<a class="btn btn-primary" href="' + RD.chapterHref(data.book.uid, chapter.n) + '">打开本章工单 →</a>' +
-    (hasPack ? '<a class="btn btn-ghost" href="' + RD.readerHref(data.book.uid, chapter.n, 'standard', chapter.path) + '">打开标准本</a>' : '') +
-    '<div class="existing" id="existing"></div>' +
-    '<div id="job-mount"></div>' +
-    '<p class="fine">读法只改注解与面板，不改变正文覆盖和锚点。档位仍在章页由读者按精力选择。</p>';
-  renderExisting();
-  showJobs(chapter.jobs);
-}
-
-function tierOption(key) {
-  const chapter = current;
-  const spec = { skim: 'C 40–55% · E ≤10% · 600 字/分', standard: 'C 60–75% · E ≤25% · 500 字/分', deep: 'C 80–90% · E ≤40% · 350 字/分' }[key];
-  const info = (chapter.tiers || {})[key] || {};
-  const job = RD.jobForTier(chapter.jobs, key);
-  const busy = Boolean(job || pending.has(key));
-  const busyText = job ? RD.jobHint(job) : '提交中';
-  const draft = !!(chapter.pack && chapter.pack.draft);
-  const speed = { skim: 600, standard: 500, deep: 350 }[key];
-  const minutes = info.stats ? info.stats.minutes : Math.max(1, Math.round(chapter.chars / speed));
-  return '<label class="tier-opt' + (selected.has(key) ? ' checked' : '') + (busy ? ' busy' : '') +
-    '"><input type="checkbox" value="' + key + '"' +
-    (selected.has(key) ? ' checked' : '') + '><span class="box"></span>' +
-    '<span class="tier-dot" style="--tc:var(--tier-' + key + ')"></span>' +
-    '<span class="tier-copy"><b>' + RD.tierNames[key] +
-      (busy ? '<em class="tier-busy">' + RD.esc(busyText) + '</em>' : info.exists ? '<em>' + (draft ? '草稿' : '已出片') + '</em>' : '') +
-      '</b><small>' + spec + '</small></span>' +
-    '<span class="tier-time">≈' + RD.fmt(minutes) + ' 分钟<small>' +
-      (busy ? (job ? RD.esc(job.id) : '正在提交') : info.stale ? staleText(chapter) : info.exists ? (draft ? '待补模型' : '可重生成') : '未生成') +
-      '</small></span></label>';
-}
-
-function refreshTiers() {
-  const list = RD.mount('tier-list');
-  if (list) list.innerHTML = TIER_KEYS.map(tierOption).join('');
-  updateEstimate();
-}
-
-function renderExisting() {
-  const tiers = current.tiers || {};
-  const draft = !!(current.pack && current.pack.draft);
-  const rows = TIER_KEYS.filter((key) => tiers[key] && tiers[key].exists).map((key) =>
-    '<div class="pack-row"><span>' + RD.tierNames[key] + '本' + (tiers[key].stale ? ' · ' + staleText(current) : draft ? ' · 草稿' : '') + '</span>' +
-    '<a href="' + RD.readerHref(data.book.uid, current.n, key, current.path) + '">打开 →</a></div>'
-  );
-  RD.mount('existing').innerHTML = rows.length
-    ? '<div class="lbl">本章已有</div>' + rows.join('')
-    : '<div class="lbl">本章尚未生成</div><p class="fine" style="margin:4px 0 0">生成后会在本轮工单里看到三档进度。</p>';
-}
-
-function planFor(keys) {
-  if (!current) return { existingSelected: [], unselected: [], destructive: false, reason: null };
-  const existing = TIER_KEYS.filter((key) => ((current.tiers || {})[key] || {}).exists);
-  const existingSelected = existing.filter((key) => keys.includes(key));
-  const unselected = existing.filter((key) => !keys.includes(key));
-  const destructive = Boolean(unselected.length && current.pack && current.pack.preservable === false);
-  return { existingSelected, unselected, destructive, reason: current.pack && current.pack.preserve_reason };
-}
-
-function planText(keys, plan) {
-  const head = plan.existingSelected.length ? '将重新生成：' : '将新增：';
-  let text = head + keys.map((key) => RD.tierNames[key]).join('、');
-  if (plan.unselected.length) {
-    text += (plan.destructive ? '；未勾选档位将被移除：' : '；保留：') +
-      plan.unselected.map((key) => RD.tierNames[key]).join('、');
-  }
-  if (plan.destructive && plan.reason) text += '（' + plan.reason + '）';
-  return text;
-}
-
-function updateEstimate() {
-  if (!RD.mount('ticket-est') || !current) return;
-  const keys = TIER_KEYS.filter((key) => selected.has(key));
-  const active = keys.filter((key) => pending.has(key) || RD.jobForTier(current.jobs, key));
-  const button = RD.mount('generate');
-  if (button) {
-    button.disabled = keys.length === 0 || pendingBusy;
-    const hasPack = !!(current.pack && current.pack.exists);
-    button.textContent = pendingBusy ? '正在提交…' : active.length ? '查看进行中的工单' :
-      keys.length ? (hasPack ? '更新 ' : '生成 ') + keys.length + ' 档读本 →' : '至少选一档';
-  }
-  RD.mount('ticket-est').textContent = keys.length
-    ? planText(keys, planFor(keys)) + ' · ' + RD.fmt(current.chars) + ' 字'
-    : '未选读法';
-}
-
-function jobSlot(job) {
-  const mount = RD.mount('job-mount');
-  return mount ? mount.querySelector('[data-job-slot="' + job.id + '"]') : null;
-}
-
-function showJobs(jobs) {
-  const mount = RD.mount('job-mount');
-  if (!mount || !jobs.length) return;
-  jobs.forEach((job) => {
-    let slot = jobSlot(job);
-    if (!slot) {
-      slot = document.createElement('div');
-      slot.setAttribute('data-job-slot', job.id);
-      mount.appendChild(slot);
-    }
-    slot.innerHTML = RD.jobCard(job);
-    const card = slot.querySelector('.job-inline');
-    if (card) card.classList.add('open');
-  });
-  mount.classList.add('open');
-}
-
-function watchJob(job, onDone) {
-  const slot = jobSlot(job);
-  if (!slot || polling.has(job.id)) return;
-  polling.add(job.id);
-  RD.pollJob(job.id, slot, async (finished) => {
-    polling.delete(finished.id);
-    if (onDone) onDone(finished);
-    await refresh();
-  }, (updated) => {
-    const index = current.jobs.findIndex((item) => item.id === updated.id);
-    if (index >= 0) current.jobs[index] = updated; else current.jobs.push(updated);
-    if (['done', 'partial', 'failed', 'cancelled'].includes(updated.state)) polling.delete(updated.id);
-    refreshTiers();
-  });
-}
-
-async function postJob(tiers, overwrite, rebuild) {
-  const settings = RD.modelSettings();
-  return RD.api('/api/jobs', { method: 'POST', body: {
-    uid: data.book.uid, n: current.n, tiers, model: settings.model, effort: settings.effort,
-    overwrite: Boolean(overwrite), rebuild: Boolean(rebuild),
-  } });
-}
-
-async function generate() {
-  if (!current || selected.size === 0) return;
-  if (pendingBusy) {
-    RD.toast('正在提交，请稍候', true);
-    return;
-  }
-  const tiers = TIER_KEYS.filter((key) => selected.has(key));
-  const active = tiers.map((key) => RD.jobForTier(current.jobs, key)).filter(Boolean);
-  if (active.length) {
-    location.href = RD.recordsJobHref(active[0].id);
-    return;
-  }
-  const plan = planFor(tiers);
-  const summary = planText(tiers, plan);
-  let overwrite = false;
-  let rebuild = false;
-  if (plan.destructive) {
-    if (!window.confirm(summary + '。未勾选档位将被移除，整包重建为所选档位，确定吗？')) return;
-    overwrite = true;
-    rebuild = true;
-  } else if (plan.existingSelected.length) {
-    if (!window.confirm(summary + '。继续会重新生成并覆盖所选档位，确定吗？')) return;
-    overwrite = true;
-  }
-  const mount = RD.mount('job-mount');
-  pendingBusy = true;
-  tiers.forEach((key) => pending.add(key));
-  refreshTiers();
-  try {
-    let job;
-    try {
-      job = await postJob(tiers, overwrite, rebuild);
-    } catch (err) {
-      if (err.code === 'pack_exists' && !overwrite) {
-        const labels = (err.payload.tiers || tiers).map((key) => RD.tierNames[key] || key).join('、');
-        if (!window.confirm(labels + ' 已有读本。' + summary + '。继续会重新生成并覆盖，确定吗？')) throw err;
-        job = await postJob(tiers, true, rebuild);
-      } else if (err.code === 'rebuild_required' && !rebuild) {
-        const labels = (err.payload.tiers || []).map((key) => RD.tierNames[key] || key).join('、');
-        if (!window.confirm('未勾选档位将被移除：' + labels + '（' + (err.payload.reason || '原文或生成模式已变化') +
-            '），整包重建为所选档位。确定吗？')) throw err;
-        job = await postJob(tiers, true, true);
-      } else {
-        throw err;
-      }
-    }
-    current.jobs = (current.jobs || []).concat([job]);
-    showJobs([job]);
-    watchJob(job, (finished) => {
-      if (finished.state === 'failed') {
-        RD.toast(finished.error || '生成失败', true);
-      } else {
-        RD.toast('读本已生成 · ' + RD.statusName[finished.state]);
-      }
-    });
-  } catch (err) {
-    if (err.code === 'job_active') {
-      const conflicts = err.conflicts || [];
-      const jobs = current.jobs || [];
-      conflicts.forEach((item) => {
-        if (!jobs.some((job) => job.id === item.id)) jobs.push(item);
-      });
-      current.jobs = jobs;
-      showJobs(conflicts);
-      conflicts.forEach((item) => watchJob(item, null));
-      refreshTiers();
-    } else if (mount) {
-      const banner = document.createElement('div');
-      banner.innerHTML = '<div class="job-inline open"><p class="job-error">' + RD.esc(err.message) + '</p></div>';
-      mount.appendChild(banner);
-      mount.classList.add('open');
-    }
-    RD.toast(err.message, true);
-  } finally {
-    pendingBusy = false;
-    pending.clear();
-    refreshTiers();
-  }
-}
-
-async function setBookMode() {
-  const select = document.getElementById('book-mode-select');
-  const mode = select ? select.value : '';
-  if (!mode) {
-    RD.toast('先选择读法', true);
-    return;
-  }
-  const button = document.getElementById('book-mode-set');
-  if (button) button.disabled = true;
-  try {
-    await RD.api('/api/book/' + encodeURIComponent(UID) + '/reading', {method: 'PUT', body: {mode}});
-    await refresh();
-    RD.toast('本书默认读法已更新');
-  } catch (err) {
-    RD.toast(err.message, true);
-  } finally {
-    if (button) button.disabled = false;
-  }
-}
-
-async function refresh() {
-  try {
-    data = await RD.api('/api/book/' + encodeURIComponent(UID));
-    current = data.chapters.find((ch) => current && ch.n === current.n) || data.chapters[0];
-    if (current) current.jobs = current.jobs || [];
-    pending.clear();
-    pendingBusy = false;
-    renderChapters();
-    renderTicket();
-  } catch (err) {
-    RD.toast(err.message, true);
-  }
+  const activeChapters = chapters.filter((ch) => ch.has_map || ch.note_count > 0 || ch.ops_count > 0);
+  RD.mount('book-notes-summary').innerHTML = activeChapters.length
+    ? '<div class="lbl">近期伴读章目</div>' + activeChapters.slice(0, 5).map((ch) =>
+        '<div class="pack-row"><span>第 ' + RD.esc(ch.n) + ' 章 · ' + RD.esc(ch.title) + '</span>' +
+        '<a href="' + RD.chapterHref(book.uid, ch.n) + '">继续 →</a></div>'
+      ).join('')
+    : '<div class="lbl">随文伴读</div><p class="fine" style="margin:4px 0 0">进入章节正文后，可随时点击「知识地图」或划词呼出伴读工具条。</p>';
 }
 
 function bind() {
-  const root = RD.mount('book-root');
-  root.addEventListener('click', (event) => {
-    if (event.target.closest('a')) return;
-    if (event.target.closest('#book-mode-set')) {
-      setBookMode();
-      return;
+  const btn = RD.mount('book-mode-set');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const sel = RD.mount('book-mode-select');
+    const mode = sel ? sel.value : '';
+    if (!mode) { RD.toast('请先选一种文体偏好', true); return; }
+    btn.disabled = true;
+    try {
+      data.reading = await RD.api('/api/book/' + encodeURIComponent(UID) + '/reading', {
+        method: 'PUT',
+        body: { mode },
+      });
+      render();
+      bind();
+      RD.toast('已更新本书伴读偏好');
+    } catch (err) {
+      RD.toast(err.message, true);
+      btn.disabled = false;
     }
-    const row = event.target.closest('.ch-row');
-    if (!row) return;
-    current = data.chapters.find((ch) => ch.n === row.dataset.n) || current;
-    if (current) current.jobs = current.jobs || [];
-    render();
-    const url = new URL(location.href);
-    if (current) url.searchParams.set('n', current.n);
-    history.replaceState(null, '', url);
   });
 }
 </script>

@@ -1,4 +1,4 @@
-/* 分层读前端公共层：只读 API，数据全部来自本地服务。 */
+/* 阅读工作台前端公共层：只读与伴读 API，数据全部来自本地服务。 */
 (function () {
   const RD = (window.RD = {});
 
@@ -46,7 +46,6 @@
       error.status = res.status;
       error.payload = payload;
       error.code = payload && payload.code;
-      error.conflicts = (payload && payload.conflicts) || [];
       throw error;
     }
     return payload;
@@ -74,8 +73,17 @@
     }
   };
 
-  RD.tierNames = { skim: '速览', standard: '标准', deep: '深读' };
-  RD.depthNames = { model: '结构模型', panels: '面板', skim: '速览', standard: '标准', deep: '深读' };
+  RD.actionNames = {
+    chapter_map: '知识地图',
+    diagram: '图解此段',
+    explain: '讲人话举例',
+    translate: '翻译原意',
+    critique: '拆解前提',
+    ask: '自由追问',
+    pin: '钉住旁批',
+    unpin: '移除旁批',
+  };
+
   RD.modelDefaults = { model: 'deepseek-v4.1-flash', effort: 'high' };
   RD.modelOptions = ['deepseek-v4.1-flash', 'glm-5.3-flash'];
   RD.modelSettings = () => {
@@ -100,7 +108,7 @@
       '<label class="model-field effort"><span>推理</span><select id="effort-select">' + efforts + '</select></label>' +
       '<datalist id="model-options">' + options + '</datalist></div>' +
       '<p class="model-note">默认 ' + RD.esc(RD.modelDefaults.model) + ' · ' + RD.esc(RD.modelDefaults.effort) +
-        '；可改，按本次工单生效。</p>';
+        '；修改后用于伴读与知识地图。</p>';
   };
   RD.bindModelSettings = () => {
     const model = RD.mount('model-input');
@@ -117,43 +125,10 @@
     effort.addEventListener('change', save);
   };
 
-  RD.statusName = {
-    queued: '排队', chunking: '切块', annotating: '标注', validating: '校验',
-    projecting: '组档', rendering: '渲染', done: '完成', partial: '部分通过',
-    failed: '失败', blocked: '已阻断', cancelled: '已取消'
-  };
-  RD.activeStates = ['queued', 'chunking', 'annotating', 'validating', 'projecting', 'rendering'];
-  RD.jobForTier = (jobs, tier) => (jobs || []).find((job) =>
-    (job.tiers || []).includes(tier) && RD.activeStates.includes(job.state)
-  ) || null;
-  RD.activeTierKeys = (jobs) => {
-    const keys = new Set();
-    (jobs || []).forEach((job) => {
-      if (RD.activeStates.includes(job.state)) (job.tiers || []).forEach((tier) => keys.add(tier));
-    });
-    return keys;
-  };
-  RD.jobHint = (job) => {
-    if (!job) return '';
-    if (job.state === 'cancelled') return '已取消（收尾中）';
-    // 失败/完成/部分通过都不是「进行中」，别拼出「失败中」。
-    if (!RD.activeStates.includes(job.state)) return RD.statusName[job.state] || job.state;
-    return (RD.statusName[job.state] || job.state) + '中';
-  };
-
-  RD.jobSteps = (job) => {
-    const steps = (job && job.steps) || [];
-    return '<ol class="steps">' + steps.map((step) => (
-      '<li class="step ' + (step.status === 'done' ? 'done' : step.status === 'run' ? 'run' : step.status === 'blocked' ? 'blocked' : step.status === 'failed' ? 'fail' : '') + '">' +
-      '<span class="mark">' + (step.status === 'done' ? '✓' : step.status === 'blocked' ? '!' : step.status === 'failed' ? '✗' : '') + '</span>' +
-      '<span>' + RD.esc(step.name) + '</span></li>'
-    )).join('') + '</ol>';
-  };
-
-  // 「已用 2 分 17 秒」比毫秒好读，也便于核对六层各花了多久。
   RD.elapsed = (ms) => {
     const total = Number(ms);
     if (!(total > 0)) return '';
+    if (total < 1000) return total + ' ms';
     const seconds = Math.round(total / 1000);
     if (seconds < 60) return seconds + ' 秒';
     const minutes = Math.floor(seconds / 60);
@@ -162,111 +137,56 @@
     return Math.floor(minutes / 60) + ' 小时 ' + (minutes % 60) + ' 分';
   };
 
-  // 一行摘要：第几层、用时、错误种类。失败时不用展开也能判断停在哪。
-  // 页面上不出现裸的英文类别；认不出的原样显示，方便查事件账。
-  RD.errorKindName = (kind) => ({
-    transport_closed: '对端未回状态行就断开',
-    transport_timeout: '读超时',
-    transport_reset: '连接被重置',
-    transport_truncated: '响应被截断',
-    transport_dns: '域名解析失败',
-    transport_tls: 'TLS 握手失败',
-    transport_refused: '连接被拒',
-    rate_limited: '被限流',
-    http_5xx: '服务端错误',
-    http_4xx: '请求被拒',
-    auth: '鉴权失败',
-    truncated: '输出被截断',
-    protocol: '响应不合协议',
-    config: '配置错误',
-    restart: '服务重启中断',
-    cancelled: '已取消',
-    source_too_large: '源文件过大',
-    quality: '未过硬门槛',
-    unexpected: '未分类异常',
-    provider: '提供方失败',
-    transport_other: '连接异常',
-  })[kind] || kind || '';
-
-  RD.jobMeta = (job) => {
-    if (!job) return '';
-    const parts = [];
-    if (job.kind === 'depth') {
-      const order = ['model', 'panels', 'skim', 'standard', 'deep', 'render'];
-      const layer = job.failed_layer || job.layer;
-      const index = order.indexOf(layer);
-      if (index >= 0) {
-        parts.push('第 ' + (index + 1) + '/6 层' + (layer === 'render' ? '' : ' · ' + (RD.depthNames[layer] || layer)));
-      }
-      const ready = (job.layers_ready || []).length;
-      if (ready) parts.push('已落 ' + ready + '/5 层');
-    }
-    const took = RD.elapsed(job.elapsed_ms);
-    if (took) parts.push('已用 ' + took);
-    if (job.error_kind) parts.push(RD.errorKindName(job.error_kind));
-    if (job.attempts) parts.push('尝试 ' + job.attempts + ' 次');
-    return parts.join(' · ');
-  };
-
-  RD.jobCard = (job) => {
-    const state = job.state || 'queued';
-    const bad = state === 'failed';
-    const warn = state === 'blocked';
-    const names = job.kind === 'depth'
-      ? (job.layers || []).map((layer) => RD.depthNames[layer] || layer)
-      : (job.tiers || []).map((tier) => RD.tierNames[tier] || tier);
-    return '<div class="job-inline open" data-job="' + RD.esc(job.id) + '">' +
-      '<div class="job-head"><span class="eyebrow">工单 ' + RD.esc(job.id) + '</span>' +
-      '<span class="job-state ' + (bad ? 'bad' : warn ? 'warn' : '') + '">' + RD.esc(RD.statusName[state] || state) + '</span></div>' +
-      '<div class="job-title">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
-      names.join(' / ') + '</div>' +
-      RD.jobSteps(job) +
-      (RD.jobMeta(job) ? '<div class="job-meta">' + RD.esc(RD.jobMeta(job)) + '</div>' : '') +
-      '<div class="job-progress"><i style="width:' + Number(job.progress || 0) + '%"></i></div>' +
-      (job.error ? '<p class="job-error">' + RD.esc(job.error) + '</p>' : '') +
-      '</div>';
-  };
-
-  RD.pollJob = (jobId, mount, onDone, onTick) => {
-    let misses = 0;
-    const tick = async () => {
-      try {
-        const job = await RD.api('/api/jobs/' + encodeURIComponent(jobId));
-        misses = 0;
-        if (mount) mount.innerHTML = RD.jobCard(job);
-        if (onTick) onTick(job);
-        if (['done', 'partial', 'failed', 'blocked', 'cancelled'].includes(job.state)) {
-          if (onDone) onDone(job);
-          return;
-        }
-      } catch (err) {
-        misses += 1;
-        if (misses > 6) {
-          RD.toast(err.message, true);
-          return;
-        }
-      }
-      setTimeout(tick, 700);
+  RD.renderMarkdown = (text) => {
+    const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+    const out = [];
+    let inList = false;
+    const flushList = () => {
+      if (inList) { out.push('</ul>'); inList = false; }
     };
-    tick();
-  };
-
-  RD.tierDots = (tiers) => {
-    const keys = ['skim', 'standard', 'deep'];
-    return '<span class="tier-sq" title="三档出片状态">' + keys.map((key) => {
-      const info = (tiers && tiers[key]) || {};
-      const cls = info.exists ? (info.stale ? 'stale' : 'on') : '';
-      return '<i class="' + cls + '" data-tier="' + key + '"></i>';
-    }).join('') + '</span>';
+    const inline = (s) => {
+      let html = RD.esc(s);
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\[(原文|补充|举例)\]/g, (_, tag) => {
+        const cls = tag === '原文' ? 'tag-src' : 'tag-ext';
+        return '<span class="src-tag ' + cls + '">[' + tag + ']</span>';
+      });
+      return html;
+    };
+    for (const raw of lines) {
+      const line = raw.trimEnd();
+      if (!line.trim()) {
+        flushList();
+        continue;
+      }
+      if (/^###\s+/.test(line)) {
+        flushList();
+        out.push('<h4>' + inline(line.replace(/^###\s+/, '')) + '</h4>');
+      } else if (/^##?\s+/.test(line)) {
+        flushList();
+        out.push('<h3>' + inline(line.replace(/^##?\s+/, '')) + '</h3>');
+      } else if (/^[-*•]\s+/.test(line.trim())) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push('<li>' + inline(line.trim().replace(/^[-*•]\s+/, '')) + '</li>');
+      } else if (/^\d+\.\s+/.test(line.trim())) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push('<li>' + inline(line.trim()) + '</li>');
+      } else {
+        flushList();
+        out.push('<p>' + inline(line.trim()) + '</p>');
+      }
+    }
+    flushList();
+    return out.join('');
   };
 
   RD.path = () => location.pathname.replace(/\/+$/, '');
-
   RD.bookHref = (uid) => '/book/' + encodeURIComponent(uid);
-  RD.chapterHref = (uid, n) => '/chapter/' + encodeURIComponent(uid) + '/' + String(n).padStart(2, '0');
-  RD.recordsJobHref = (jobId) => '/records?job=' + encodeURIComponent(jobId);
-  RD.readerHref = (uid, n, tier, path) => '/reader/' + encodeURIComponent(uid) + '/' + String(n).padStart(2, '0') +
-    (path === 'depth' ? '/depth' : '') + (tier ? '?tier=' + encodeURIComponent(tier) : '');
+  RD.chapterHref = (uid, n, blockId) => {
+    const base = '/chapter/' + encodeURIComponent(uid) + '/' + String(n).padStart(2, '0');
+    return blockId ? base + '#blk-' + encodeURIComponent(blockId) : base;
+  };
 
   RD.night = () => {
     const KEY = 'reading-night';

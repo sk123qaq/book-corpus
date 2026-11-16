@@ -21,7 +21,7 @@
   <nav class="nav">
     <a href="/" aria-current="page">书架</a>
     <a href="/catalog">书目</a>
-    <a href="/records">记录</a>
+    <a href="/records">操作日志</a>
   </nav>
   <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
     <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
@@ -34,12 +34,10 @@
 <main class="page">
   <section class="hero">
     <div class="eyebrow" id="eyebrow">私人书库 · 本地实例</div>
-    <h1>今天，读多深？</h1>
-    <p class="lede">从书架上选一章，裁成速览、标准、深读三档读本。原文一字不改，讲解只做旁批。</p>
+    <h1>打开即读，随手伴读。</h1>
+    <p class="lede">点开任一章直接看 100% 完整正文；需要时再按需展开知识地图，或划词图解、讲人话、翻译、拆前提。</p>
     <div class="meta" id="hero-meta"></div>
   </section>
-
-  <div id="job-strip"></div>
 
   <div class="shelf-head">
     <div>
@@ -93,9 +91,8 @@ RD.ready(async () => {
       '<span><b>' + RD.fmt(stats.readable) + '</b> 本可读</span>' +
       '<span><b>' + RD.fmt(stats.chapters) + '</b> 章原文</span>' +
       '<span><b>' + RD.wan(stats.chars) + '</b> 万字</span>' +
-      '<span><b>4</b> 档读法</span>';
+      '<span><b>' + RD.fmt(stats.notes || 0) + '</b> 条旁批 · ' + RD.fmt(stats.maps || 0) + ' 导图</span>';
 
-    renderJobStrip(shelf.jobs || []);
     renderShelf(books, shelf.recent || []);
 
     RD.mount('shelf-foot').innerHTML =
@@ -127,7 +124,7 @@ RD.ready(async () => {
     }));
 
     const subjects = [...new Set(books.flatMap((b) => b.subjects || []))];
-    renderFilters(['全部', '有正文', '已出片', ...subjects]);
+    renderFilters(['全部', '有正文', '有笔记', ...subjects]);
     RD.mount('filters').addEventListener('click', (event) => {
       const btn = event.target.closest('button');
       if (!btn) return;
@@ -140,23 +137,6 @@ RD.ready(async () => {
     RD.fail(shelfMount, err.message);
   }
 });
-
-function renderJobStrip(jobs) {
-  const mount = RD.mount('job-strip');
-  const job = jobs[0];
-  if (!job) {
-    mount.innerHTML = '<a class="job-strip" href="/records"><span class="js-k">工单</span>' +
-      '<span class="js-t">暂无生成任务 · 从任一章开工</span><span class="js-p">—</span>' +
-      '<span class="js-s">0 / 0</span><span class="js-go">记录 →</span></a>';
-    return;
-  }
-  mount.innerHTML = '<a class="job-strip" href="/records"><span class="js-k">工单</span>' +
-    '<span class="js-t">' + RD.esc(job.uid) + '-' + RD.esc(job.n) + ' · ' +
-    (job.tiers || []).map((t) => RD.tierNames[t] || t).join(' / ') + '</span>' +
-    '<span class="js-p">' + RD.fmt(job.progress) + '%</span>' +
-    '<span class="js-s">' + RD.esc(RD.statusName[job.state] || job.state) + '</span>' +
-    '<span class="js-go">查看 →</span></a>';
-}
 
 function spineHeight(book) {
   return Math.max(205, Math.min(358, 190 + Number(book.chapters || 0) * 2.4));
@@ -176,26 +156,24 @@ function renderShelf(books, recent) {
       '<span class="n">' + String(book.chapters).padStart(2, '0') + ' 章</span>' +
       '<span class="t">' + RD.esc(book.title_short || book.title) + '</span>' +
       '<span class="a">' + RD.esc(book.author_display) + '</span>' +
-      (book.packs ? '<span class="stamp" title="已出片 ' + RD.fmt(book.packs) + ' 章 · 三档"></span>' : '') +
+      (book.packs ? '<span class="stamp" title="已伴读 ' + RD.fmt(book.packs) + ' 章"></span>' : '') +
       '<span class="edge" aria-hidden="true">' + dots + '</span></a>';
   }).join('') + (recent.length ? readingCard(recent[0]) : '');
 }
 
 function readingCard(item) {
-  return '<a class="reading-card" href="' + RD.readerHref(item.uid, item.n, item.tier || 'standard') + '">' +
-    '<span class="rc-eyebrow">继续阅读</span><span class="rc-book">' + RD.esc(item.uid) + ' · 第 ' +
+  return '<a class="reading-card" href="' + RD.chapterHref(item.uid, item.n) + '">' +
+    '<span class="rc-eyebrow">最近阅读</span><span class="rc-book">' + RD.esc(item.uid) + ' · 第 ' +
     String(item.n).replace(/^0/, '') + ' 章</span>' +
     '<span class="rc-title">' + RD.esc(item.title) + '</span>' +
-    '<span class="rc-progress"><i style="width:' + Math.round(Number(item.progress || 0) * 100) + '%"></i></span>' +
-    '<span class="rc-foot"><span>' + RD.esc(RD.tierNames[item.tier] || '标准') + '本 · ' +
-    Math.round(Number(item.progress || 0) * 100) + '%</span><span>接着读 →</span></span></a>';
+    '<span class="rc-foot"><span>' + RD.esc(item.action || '打开正文') + '</span><span>直接阅读 →</span></span></a>';
 }
 
 function renderDirectory(books) {
   RD.mount('directory').innerHTML = books.map((book) =>
     '<a href="' + RD.bookHref(book.uid) + '"><b>' + RD.esc(book.title_short || book.title) + '</b>' +
-    '<span>' + RD.esc(book.author_display) + ' · ' + RD.fmt(book.chapters) + ' 章 · ' +
-    (book.packs ? '已出片 ' + RD.fmt(book.packs) + ' 章' : '未出片') + '</span>' +
+    '<span>' + RD.esc(book.author_display) + ' · ' + RD.fmt(book.chapters) + ' 章' +
+    (book.packs ? ' · 已伴读 ' + RD.fmt(book.packs) + ' 章' : '') + '</span>' +
     '<em>' + String(book.chapters).padStart(2, '0') + '</em></a>'
   ).join('');
 }
@@ -208,7 +186,7 @@ function renderFilters(items) {
 
 function renderCatalog(books, totals, filter) {
   let rows = books.slice();
-  if (filter === '已出片') rows = rows.filter((b) => b.packs > 0);
+  if (filter === '有笔记') rows = rows.filter((b) => b.packs > 0);
   else if (filter && filter !== 'all' && filter !== '有正文') rows = rows.filter((b) => (b.subjects || []).includes(filter));
   RD.mount('cat-count').textContent = '显示 ' + rows.length + ' / ' + RD.fmt(totals.total);
   RD.mount('cat-body').innerHTML = rows.length ? rows.map((book) =>
@@ -218,10 +196,10 @@ function renderCatalog(books, totals, filter) {
     '<td class="author">' + RD.esc(book.author_display) + '</td>' +
     '<td class="subject hide-m">' + RD.esc((book.subjects || []).join(' / ')) + '</td>' +
     '<td class="num hide-m">' + RD.fmt(book.chapters) + '</td>' +
-    '<td><span class="badge read">可读</span>' + (book.packs ? ' <span class="badge pack">已出片 ' + RD.fmt(book.packs) + '</span>' : '') + '</td></tr>'
+    '<td><span class="badge read">可读</span>' + (book.packs ? ' <span class="badge pack">伴读 ' + RD.fmt(book.packs) + '</span>' : '') + '</td></tr>'
   ).join('') : '<tr><td colspan="5" class="empty">这个筛选下没有书。</td></tr>';
-  RD.mount('cat-note').textContent = RD.fmt(totals.readable_count) + ' 本有正文，可进入选章与生成；' +
-    RD.fmt(totals.total) + ' 本是书目层。导入正文后才会出现在书墙上。';
+  RD.mount('cat-note').textContent = RD.fmt(totals.readable_count) + ' 本有正文，点开即可读全章与随文伴读；' +
+    RD.fmt(totals.total) + ' 本是书目层。';
 }
 </script>
 </body>

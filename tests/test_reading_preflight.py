@@ -1,32 +1,12 @@
 import math
-from pathlib import Path
 
 import pytest
 
 from bookcorpus import preflight
-from bookcorpus.reading.depth import preflight as depth_preflight
-from bookcorpus.reading.depth.model import plan_chunks
-from bookcorpus.reading.depth.preflight import SourceTooLarge
+from bookcorpus.reading import preflight as reading_preflight
+from bookcorpus.reading.chapmap import plan_chunks
+from bookcorpus.reading.preflight import SourceTooLarge, chapter_map_gate
 from bookcorpus.reading.service import ReadingService
-
-
-class _Queue:
-    """只记账、不真跑任务的队列，让预检成为唯一会拦人的东西。"""
-
-    def __init__(self):
-        self.jobs = []
-        self.notes = []
-
-    def conflicts(self, *args):
-        return []
-
-    def note(self, job_id, **fields):
-        self.notes.append((job_id, fields))
-
-    def submit(self, uid, n, tiers, **kwargs):
-        job = {"id": "r-test", "uid": uid, "n": n, "tiers": list(tiers), **kwargs}
-        self.jobs.append(job)
-        return job
 
 
 @pytest.fixture(autouse=True)
@@ -38,23 +18,8 @@ def _no_credentials(tmp_path, monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def _service(root, annotate=False):
-    service = ReadingService(root=root, annotate=annotate, depth=True)
-    service.queue = _Queue()
-    return service
-
-
-def test_rerun_without_annotation_needs_no_model(reading_root):
-    service = _service(reading_root)
-    job = service.submit("B0001", 1, ["standard"], overwrite=True)
-    assert job["tiers"] == ["standard"]
-
-
-def test_force_annotation_requires_model(reading_root):
-    service = _service(reading_root, annotate=True)
-    with pytest.raises(preflight.MissingConfigError) as exc:
-        service.submit("B0001", 1, ["standard"], force_annotation=True)
-    assert exc.value.statuses[0].key == "reading.model"
+def _service(root):
+    return ReadingService(root=root, annotate=False)
 
 
 def _blocks(count, text="字"):
@@ -64,7 +29,7 @@ def _blocks(count, text="字"):
 def _gate(blocks, limits=None, *, chunk_chars=18000, max_blocks=100, plans=None):
     if plans is None:
         plans = plan_chunks(blocks, chunk_chars, max_blocks)
-    return depth_preflight.evaluate(blocks, plans, limits or depth_preflight.Limits())
+    return reading_preflight.evaluate(blocks, plans, limits or reading_preflight.Limits())
 
 
 def test_small_chapter_passes_with_the_stats_contract():
@@ -99,14 +64,14 @@ def test_small_chapter_passes_with_the_stats_contract():
 
 
 def test_large_chapter_warns_without_blocking():
-    limits = depth_preflight.Limits(max_output_tokens_per_chapter=10**9, max_seconds_per_chapter=10**9)
+    limits = reading_preflight.Limits(max_output_tokens_per_chapter=10**9, max_seconds_per_chapter=10**9)
     gate = _gate(_blocks(1001), limits)
     assert gate.ok is True
     assert any("1,000 块" in warning for warning in gate.warnings)
 
 
 def test_many_chunks_warn_without_blocking():
-    limits = depth_preflight.Limits(max_output_tokens_per_chapter=10**9, max_seconds_per_chapter=10**9)
+    limits = reading_preflight.Limits(max_output_tokens_per_chapter=10**9, max_seconds_per_chapter=10**9)
     gate = _gate(_blocks(2100), limits)
     assert gate.ok is True
     assert any("21 个分块" in warning for warning in gate.warnings)
@@ -131,7 +96,7 @@ def test_blocks_gate_rejects_and_reports_the_exact_numbers():
 def test_chunks_gate_rejects_before_tokens_and_seconds():
     blocks = _blocks(10)
     plans = [{"blocks": blocks[:5]}, {"blocks": blocks[5:]}]
-    limits = depth_preflight.Limits(
+    limits = reading_preflight.Limits(
         max_chunks_per_chapter=1,
         max_output_tokens_per_chapter=10**9,
         max_seconds_per_chapter=10**9,
@@ -146,7 +111,7 @@ def test_chunks_gate_rejects_before_tokens_and_seconds():
 
 
 def test_tokens_gate_rejects():
-    limits = depth_preflight.Limits(
+    limits = reading_preflight.Limits(
         max_output_tokens_per_chapter=100,
         max_seconds_per_chapter=10**9,
     )
@@ -159,7 +124,7 @@ def test_tokens_gate_rejects():
 
 
 def test_seconds_gate_rejects():
-    limits = depth_preflight.Limits(
+    limits = reading_preflight.Limits(
         max_output_tokens_per_chapter=10**9,
         max_seconds_per_chapter=1,
     )
@@ -172,7 +137,7 @@ def test_seconds_gate_rejects():
 
 
 def test_4999_blocks_passes_the_block_gate_with_isolated_limits():
-    limits = depth_preflight.Limits(max_output_tokens_per_chapter=10**9, max_seconds_per_chapter=10**9)
+    limits = reading_preflight.Limits(max_output_tokens_per_chapter=10**9, max_seconds_per_chapter=10**9)
     gate = _gate(_blocks(4999), limits)
     assert gate.ok is True
     assert gate.stats["blocks"] == 4999
@@ -214,7 +179,7 @@ def test_source_too_large_payload_has_the_fixed_shape():
     assert "md/" in payload["remediation"]
 
 
-def test_submit_depth_rejects_a_too_large_source_before_queueing(reading_root, monkeypatch):
+def test_chapter_map_rejects_a_too_large_source_before_model(reading_root, monkeypatch):
     service = _service(reading_root)
     blocks = _blocks(5001)
     monkeypatch.setattr(
@@ -224,40 +189,21 @@ def test_submit_depth_rejects_a_too_large_source_before_queueing(reading_root, m
     )
     # 凭据已由 autouse fixture 清空：仍然先报超限，证明预检在缺配置之前。
     with pytest.raises(SourceTooLarge) as caught:
-        service.submit_depth("B0001", 1, ["model"], model="fake-model", effort="max")
+        service.generate_chapter_map("B0001", 1, force=True, model="fake-model", effort="max")
     assert caught.value.stats["blocks"] == 5001
-    assert service.queue.jobs == []
 
 
-def test_submit_depth_gates_a_skim_only_job_when_a_model_already_exists(reading_root, monkeypatch):
-    service = _service(reading_root)
-    model_file = Path(service.store.depth_path("B0001", 1, "chapter_model.json"))
-    model_file.parent.mkdir(parents=True, exist_ok=True)
-    model_file.write_text("{}", encoding="utf-8")
-    blocks = _blocks(5001)
-    monkeypatch.setattr(
-        service.library,
-        "read_chapter",
-        lambda uid, n: {"blocks": blocks, "source_sha256": "0" * 64},
-    )
-    with pytest.raises(SourceTooLarge):
-        service.submit_depth("B0001", 1, ["skim"])
-    assert service.queue.jobs == []
+def test_short_flat_chapter_gate_recommends_direct_reading():
+    short_blocks = [{"id": f"B{i:02d}", "kind": "paragraph", "level": 0, "text": "短段。" * 20} for i in range(1, 10)]
+    gate = chapter_map_gate(short_blocks)
+    assert gate["supported"] is False
+    assert gate["can_force"] is True
+    assert "建议直接阅读正文" in gate["reason"]
 
-
-def test_submit_depth_records_preflight_stats_on_the_job(reading_root, monkeypatch):
-    service = _service(reading_root)
-    monkeypatch.setattr(preflight, "require", lambda *args, **kwargs: None)
-    expected = len(service.library.read_chapter("B0001", 1)["blocks"])
-    job = service.submit_depth("B0001", 1, ["skim"], model="fake-model", effort="max")
-    assert job["layers"] == ["model", "skim"]
-    assert service.queue.notes[0][0] == "r-test"
-    assert service.queue.notes[0][1]["preflight"]["blocks"] == expected
-    assert service.queue.notes[0][1]["preflight_warnings"] == []
-    assert service.queue.notes[0][1]["chunks"] == service.queue.notes[0][1]["preflight"]["chunks"]
-    assert service.queue.notes[0][1]["max_chunk_blocks"] == service.queue.notes[0][1]["preflight"]["max_chunk_blocks"]
-    assert (
-        service.queue.notes[0][1]["estimated_tokens"]
-        == service.queue.notes[0][1]["preflight"]["estimated_output_tokens"]
-    )
-    assert service.queue.notes[0][1]["estimated_seconds"] == service.queue.notes[0][1]["preflight"]["estimated_seconds"]
+    structured_blocks = [
+        {"id": "B01", "kind": "heading", "level": 2, "text": "第一节"},
+        *[{"id": f"B{i:02d}", "kind": "paragraph", "level": 0, "text": "展开论证。" * 40} for i in range(2, 12)],
+        {"id": "B12", "kind": "heading", "level": 2, "text": "第二节"},
+        *[{"id": f"B{i:02d}", "kind": "paragraph", "level": 0, "text": "继续论证。" * 40} for i in range(13, 20)],
+    ]
+    assert chapter_map_gate(structured_blocks)["supported"] is True

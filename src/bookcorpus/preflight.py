@@ -82,8 +82,8 @@ SPECS: dict[str, Spec] = {
         ),
     ),
     "reading.model": Spec(
-        label="四读的标注/结构模型",
-        scenario="给章节做标注、生成或重建深读结构层时",
+        label="阅读工作台伴读/地图模型",
+        scenario="生成章节知识地图、划词伴读与旁批解释时",
         needs="OPENCODE_GO_API_KEY 环境变量，或 pi 已登录的 opencode-go（~/.pi/agent/auth.json）",
         fix=(
             "在 %s 里写 OPENCODE_GO_API_KEY=...，存盘后重启 8771；或者直接在 pi 里 /login 选 opencode-go" % _env_file()

@@ -1,37 +1,36 @@
-"""读本包与账：唯一写区 ``工作区/阅读``。原子写、manifest 最后落。"""
+"""阅读工作台持久化：唯一写区 ``工作区/阅读``。
 
+只存三类可随时删除再生的轻量产物：
+- ``<uid>/ch/<nn>/assist_notes.json``：读者手动钉住的局部旁批
+- ``<uid>/ch/<nn>/chapter_map.json``：按需生成的全章知识地图与术语表
+- ``ops_log.jsonl``：各章各功能的 append-only 操作日志
+"""
+
+from __future__ import annotations
+
+import glob
 import json
 import os
 import re
-import shutil
-import tempfile
+import threading
 import uuid
+from datetime import UTC, datetime
 
 UID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-# 深读五层与各自产物；读写两端共用这一份，避免层名两处漂移。
-DEPTH_LAYERS = ("model", "panels", "skim", "standard", "deep")
-# 这些层带读法；结构模型是 mode 无关的，标准本自 A4 起也随 mode 变。
-MODE_LAYERS = ("panels", "skim", "standard", "deep")
-DEPTH_FILES = {
-    "model": "chapter_model.json",
-    "panels": "layers/panels.json",
-    "skim": "layers/skim.json",
-    "standard": "layers/standard.json",
-    "deep": "layers/deep.json",
-}
-DEPTH_LAYER_LABELS = {
-    "model": "结构",
-    "panels": "面板",
-    "skim": "速览",
-    "standard": "标准",
-    "deep": "深读",
-}
+OPS_LOG_LIMIT = 500
+
+
+def _now_iso():
+    return datetime.now(UTC).astimezone().isoformat(timespec="seconds")
 
 
 class Store:
+    """工作区阅读产物与操作日志读写器（全部原子写或加锁追加）。"""
+
     def __init__(self, layout):
         self.layout = layout
         self.base = os.path.join(layout.work, "阅读")
+        self._op_lock = threading.Lock()
 
     def _check(self, uid, n):
         if not UID_RE.match(uid or ""):
@@ -45,460 +44,221 @@ class Store:
         uid, n = self._check(uid, n)
         return os.path.join(self.base, uid, "ch", "%02d" % n)
 
-    def manifest(self, uid, n):
-        path = os.path.join(self.pack_dir(uid, n), "manifest.json")
-        try:
-            with open(path, encoding="utf-8") as fh:
-                return json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            return None
-
-    def annotation(self, uid, n):
-        path = os.path.join(self.pack_dir(uid, n), "annotation.json")
-        try:
-            with open(path, encoding="utf-8") as fh:
-                return json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            return None
-
-    def editorial(self, uid, n):
-        path = os.path.join(self.pack_dir(uid, n), "editorial.json")
-        try:
-            with open(path, encoding="utf-8") as fh:
-                return json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            return None
-
-    def audit(self, uid, n):
-        path = os.path.join(self.pack_dir(uid, n), "audit.json")
-        try:
-            with open(path, encoding="utf-8") as fh:
-                return json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            return None
-
-    def save_editorial(self, uid, n, editorial):
-        path = os.path.join(self.pack_dir(uid, n), "editorial.json")
-        self._write(path, json.dumps(editorial, ensure_ascii=False, indent=1))
-        return editorial
-
-    def edition_dir(self, uid, n):
-        return os.path.join(self.pack_dir(uid, n), "edition")
-
-    def edition(self, uid, n):
-        path = os.path.join(self.edition_dir(uid, n), "content.json")
-        try:
-            with open(path, encoding="utf-8") as fh:
-                return json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            return None
-
-    def save_edition(self, uid, n, content, html_text, audit, brief):
-        """edition 子目录整体替换；失败保留旧的视觉读本。"""
-        base = self.pack_dir(uid, n)
-        target = os.path.join(base, "edition")
-        os.makedirs(base, exist_ok=True)
-        stage = tempfile.mkdtemp(prefix=".edition-", dir=base)
-        backup = os.path.join(base, ".edition-bak-" + uuid.uuid4().hex[:8])
-        try:
-            self._write(os.path.join(stage, "content.json"), json.dumps(content, ensure_ascii=False, indent=1))
-            self._write(os.path.join(stage, "index.html"), html_text)
-            self._write(os.path.join(stage, "audit.json"), json.dumps(audit, ensure_ascii=False, indent=1))
-            self._write(os.path.join(stage, "brief.json"), json.dumps(brief, ensure_ascii=False, indent=1))
-            if os.path.isdir(backup):
-                shutil.rmtree(backup)
-            if os.path.exists(target):
-                os.replace(target, backup)
-            os.replace(stage, target)
-            if os.path.isdir(backup):
-                shutil.rmtree(backup)
-        except Exception:
-            if not os.path.exists(target) and os.path.exists(backup):
-                os.replace(backup, target)
-            shutil.rmtree(stage, ignore_errors=True)
-            raise
-        return content
-
-    def chapter_html_path(self, uid, n):
-        return os.path.join(self.pack_dir(uid, n), "chapter.html")
-
-    def export_path(self, uid, n, tier):
-        return os.path.join(self.pack_dir(uid, n), "export", "%s.html" % tier)
-
-    def asset_dir(self, uid, n):
-        return os.path.join(self.pack_dir(uid, n), "assets")
-
-    def tier_states(self, uid, n, source_sha=None):
-        manifest = self.manifest(uid, n)
-        states = {}
-        for tier in ("skim", "standard", "deep"):
-            states[tier] = {"status": "missing", "stats": None, "generated_at": None}
-        if not manifest:
-            return {"manifest": None, "tiers": states, "status": "missing"}
-        stale = bool(source_sha and manifest.get("source_sha256") != source_sha)
-        for tier, info in (manifest.get("tiers") or {}).items():
-            if tier not in states:
-                continue
-            path = self.export_path(uid, n, tier)
-            if os.path.exists(path):
-                states[tier] = {
-                    "status": "stale" if stale else "available",
-                    "stats": info.get("stats"),
-                    "generated_at": info.get("generated_at") or manifest.get("generated_at"),
-                }
-        status = "stale" if stale else manifest.get("status", "ok")
-        return {"manifest": manifest, "tiers": states, "status": status}
-
-    def _depth_path(self, root, name):
-        if not isinstance(name, str) or not name or os.path.isabs(name) or "\\" in name:
-            raise ValueError("非法 depth 路径：%s" % name)
-        parts = name.split("/")
-        if any(part in ("", ".", "..") for part in parts):
-            raise ValueError("非法 depth 路径：%s" % name)
-        return os.path.join(root, *parts)
-
-    def _stage_dir(self, base, prefix):
-        os.makedirs(base, exist_ok=True)
-        return tempfile.mkdtemp(prefix=prefix, dir=base)
-
-    def _backup_path(self, base, prefix=".bak-"):
-        return os.path.join(base, prefix + uuid.uuid4().hex[:8])
-
-    def _swap_dir(self, target, stage, backup):
-        if os.path.isdir(backup):
-            shutil.rmtree(backup)
-        if os.path.exists(target):
-            os.replace(target, backup)
-        os.replace(stage, target)
-        if os.path.isdir(backup):
-            shutil.rmtree(backup, ignore_errors=True)
-
-    def _recover_dir(self, target, stage, backup):
-        if not os.path.exists(target) and os.path.exists(backup):
-            os.replace(backup, target)
-        shutil.rmtree(stage, ignore_errors=True)
-
-    def _copy_depth_cache(self, depth_root, stage_depth):
-        source = os.path.join(depth_root, "cache")
-        if os.path.isdir(source):
-            shutil.copytree(source, os.path.join(stage_depth, "cache"))
-
-    def _write_depth_files(self, root, files):
-        if not isinstance(files, dict):
-            raise ValueError("depth files 必须是对象")
-        if "state.json" not in files:
-            raise ValueError("depth files 缺少 state.json")
-        os.makedirs(root, exist_ok=True)
-        order = [name for name in ("chapter_model.json", "ledger.json") if name in files]
-        order += sorted(name for name in files if name not in order and name != "state.json")
-        order += ["state.json"]
-        for name in order:
-            value = files[name]
-            text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, indent=1)
-            self._write(self._depth_path(root, name), text)
-
-    def save_depth_partial(self, uid, n, files, status):
-        """每层过校验就落一次盘；中断时盘上留下已完成层，续跑不用重花调用。
-
-        ``status`` 由调用方给：``model`` 只建了结构，``partial`` 建了多层但
-        还成不了页，``ready`` 才是可服务。写盘路径与整体写入完全一致。
-        """
-        payload = dict(files)
-        state = payload.get("state.json")
-        if isinstance(state, str):
-            try:
-                state = json.loads(state)
-            except json.JSONDecodeError:
-                state = {}
-        state = dict(state) if isinstance(state, dict) else {}
-        state["status"] = status
-        payload["state.json"] = state
-        return self.save_depth(uid, n, payload)
-
-    def _heal_swap_crash(self, base, target):
-        """上次换目录崩在两次 replace 之间时，把备份放回去，别让整包凭空消失。"""
-        if os.path.exists(target):
-            return
-        for name in sorted(os.listdir(base), reverse=True):
-            if name.startswith(".depth-bak-"):
-                os.replace(os.path.join(base, name), target)
-                return
-
-    def _chapter_dirs(self):
-        """阅读/<uid>/ch/<nn> 的三个层级，扫不到就跳过。启动自愈只认这个形状。"""
-        for uid in sorted(os.listdir(self.base)):
-            ch = os.path.join(self.base, uid, "ch")
-            if not os.path.isdir(ch):
-                continue
-            for name in sorted(os.listdir(ch)):
-                pack = os.path.join(ch, name)
-                if os.path.isdir(pack):
-                    yield uid, name, pack
-
-    def heal_pending_swaps(self):
-        """启动时把上次换目录崩出来的备份放回去，并清掉没换成的 stage。
-
-        只在进程启动、还没有读写之前调用：那时没有正在进行的保存，
-        ``.depth-<rand>`` 一定是死掉的进程留下的半成品。但 target 与 backup
-        都不在、只剩 stage 时不动它，那是盘上唯一的包（NoDataLoss）。
-        返回 healed/cleaned 的章号与放不回去的 error，供启动日志与测试取数。
-        """
-        healed, cleaned, errors = [], [], []
-        try:
-            chapters = list(self._chapter_dirs())
-        except OSError as exc:
-            return {"healed": [], "cleaned": [], "errors": ["%s: %s" % (self.base, exc)]}
-        for uid, name, pack in chapters:
-            label = "%s/%s" % (uid, name)
-            target = os.path.join(pack, "depth")
-            try:
-                entries = sorted(os.listdir(pack), reverse=True)
-            except OSError as exc:
-                errors.append("%s: %s" % (label, exc))
-                continue
-            backups = [e for e in entries if e.startswith(".depth-bak-")]
-            stages = [e for e in entries if e.startswith(".depth-") and not e.startswith(".depth-bak-")]
-            if not os.path.exists(target):
-                if not backups:
-                    continue
-                try:
-                    os.replace(os.path.join(pack, backups[0]), target)
-                except OSError as exc:
-                    errors.append("%s: %s" % (label, exc))
-                    continue
-                healed.append(label)
-            for stage in stages:
-                shutil.rmtree(os.path.join(pack, stage), ignore_errors=True)
-                cleaned.append(label)
-        return {"healed": healed, "cleaned": cleaned, "errors": errors}
-
-    def save_depth(self, uid, n, files):
-        """只替换 depth/；先写模型与账，state.json 最后落，失败保留旧 depth。"""
-        base = self.pack_dir(uid, n)
-        os.makedirs(base, exist_ok=True)
-        if not isinstance(files, dict) or "state.json" not in files:
-            raise ValueError("depth files 缺少 state.json")
-        target = os.path.join(base, "depth")
-        self._heal_swap_crash(base, target)
-        stage = self._stage_dir(base, ".depth-")
-        backup = self._backup_path(base, ".depth-bak-")
-        try:
-            self._copy_depth_cache(target, stage)
-            self._write_depth_files(stage, files)
-            self._swap_dir(target, stage, backup)
-        except Exception:
-            self._recover_dir(target, stage, backup)
-            raise
-        return files
-
-    def depth_cache_dir(self, uid, n):
-        return os.path.join(self.pack_dir(uid, n), "depth", "cache")
-
-    def depth_path(self, uid, n, name):
-        """depth 目录内某个文件的绝对路径；分段校验同名读取口一致。"""
-        return self._depth_path(os.path.join(self.pack_dir(uid, n), "depth"), name)
-
-    def depth_json(self, uid, n, name):
-        path = self._depth_path(os.path.join(self.pack_dir(uid, n), "depth"), name)
-        try:
-            with open(path, encoding="utf-8") as fh:
-                return json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            return None
-
-    def depth_state(self, uid, n, source_sha=None, mode=None):
-        state = self.depth_json(uid, n, "state.json")
-        if not isinstance(state, dict):
-            return {
-                "status": "missing",
-                "state": None,
-                "model_sha": None,
-                "prompt_version": None,
-                "schema": None,
-                "layers_ready": [],
-                "layers_missing": list(DEPTH_LAYERS),
-                "mode_stale": [],
-            }
-        base = {
-            "state": state,
-            "model_sha": state.get("chapter_model_sha256") or state.get("chapter_model_sha"),
-            "prompt_version": state.get("prompt_version"),
-            "schema": state.get("schema"),
-        }
-        if state.get("layers_sha"):
-            base["layers_sha"] = state["layers_sha"]
-        ready, missing = self._ready_layers(uid, n, state)
-        mode_stale = self._mode_stale_layers(state, ready, mode)
-        base["layers_ready"] = ready
-        base["layers_missing"] = missing
-        base["mode_stale"] = mode_stale
-        if source_sha and state.get("source_sha256") != source_sha:
-            return dict(base, status="stale", stale_reason="源文已改，深度页过期")
-        if mode_stale:
-            return dict(base, status="stale", stale_reason="读法已改，深度页过期")
-        if state.get("status") == "model":
-            return dict(base, status="model")
-        if state.get("status") == "partial":
-            return dict(base, status="partial")
-        if state.get("status") == "ready":
-            # ready 必须以可服务的页面为准；旧版 --skip-render 留下的
-            # ready 状态没有 chapter.html，按 model 处理而不是给 404。
-            if not os.path.isfile(self.depth_path(uid, n, "chapter.html")):
-                return dict(base, status="model")
-            return dict(base, status="ready")
-        return dict(base, status="stale")
-
-    def _mode_stale_layers(self, state, ready, mode):
-        """盘上读法层与当前读法不一致的层；没记 mode 的旧层也算。"""
-        if not mode:
-            return []
-        layer_mode = state.get("layer_mode")
-        if not isinstance(layer_mode, dict):
-            layer_mode = {}
-        return [layer for layer in MODE_LAYERS if layer in ready and layer_mode.get(layer) != mode]
-
-    def _ready_layers(self, uid, n, state):
-        """哪些层真的在盘上，且是当前结构模型生成的。"""
-        model_sha = state.get("chapter_model_sha") or state.get("chapter_model_sha256")
-        layer_model_sha = state.get("layer_model_sha") if isinstance(state.get("layer_model_sha"), dict) else {}
-        ready = []
-        for layer in DEPTH_LAYERS:
-            if not os.path.isfile(self.depth_path(uid, n, DEPTH_FILES[layer])):
-                continue
-            if layer != "model" and model_sha and layer_model_sha.get(layer) not in (None, model_sha):
-                continue
-            ready.append(layer)
-        return ready, [layer for layer in DEPTH_LAYERS if layer not in ready]
-
-    def chapter_route(self, uid, n, source_sha=None, manifest=None, mode=None):
-        """这一章能从哪条路径打开；只报真能打开的那条，细节放进 reason。"""
-        info = self.depth_state(uid, n, source_sha, mode=mode)
-        status = info.get("status")
-        if status == "ready":
-            return "depth", None
-        if status == "stale":
-            return "none", info.get("stale_reason") or "源文已改，深度页过期"
-        if manifest is None:
-            manifest = self.manifest(uid, n)
-        if manifest:
-            return "legacy", "旧包按旧路径打开"
-        if status == "partial":
-            ready = info.get("layers_ready") or []
-            missing = "、".join(DEPTH_LAYER_LABELS.get(layer, layer) for layer in info.get("layers_missing") or [])
-            return "none", f"已生成 {len(ready)}/{len(DEPTH_LAYERS)} 层，缺 {missing or '整章'}"
-        if status == "model":
-            return "none", "结构模型已建，深度页未出"
-        return "none", "尚未生成"
-
-    def _write(self, path, data, mode="w"):
+    def _write(self, path, data):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
-        if "b" in mode:
-            with open(tmp, mode) as fh:
-                fh.write(data)
-        else:
-            with open(tmp, mode, encoding="utf-8") as fh:
-                fh.write(data)
+        tmp = path + f".tmp.{uuid.uuid4().hex[:8]}"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(data)
         os.replace(tmp, path)
 
-    def save(
-        self,
-        uid,
-        n,
-        manifest,
-        annotation,
-        audit,
-        chapter_html,
-        exports,
-        editorial=None,
-        depth=None,
-        drop_editorial=False,
-    ):
-        """先写 staging，再目录级替换；manifest 最后写。失败保留旧包。
-
-        ``depth=None`` 原样带走旧 depth/；传入字典时整体替换 depth/。
-        ``drop_editorial=True`` 时不带走旧 editorial.json（标注重做后旧编辑层已失效）。
-        """
-        base = self.pack_dir(uid, n)
-        parent = os.path.dirname(base)
-        os.makedirs(parent, exist_ok=True)
-        stage = self._stage_dir(parent, ".tmp-")
-        # 备份名每次唯一：两个进程/线程同时写同一章时不会互相删掉对方的 .bak。
-        backup = self._backup_path(parent)
+    def _read_json(self, path):
         try:
-            preserved = set()
-            if depth is not None:
-                # 深度任务只换 depth/，根旧产物原样带走。
-                for name in (
-                    "annotation.json",
-                    "editorial.json",
-                    "audit.json",
-                    "chapter.html",
-                    "agent-standard.html",
-                ):
-                    source = os.path.join(base, name)
-                    if os.path.isfile(source):
-                        shutil.copy2(source, os.path.join(stage, name))
-                        preserved.add(name)
-                for name in ("export", "edition"):
-                    source = os.path.join(base, name)
-                    if os.path.isdir(source):
-                        shutil.copytree(source, os.path.join(stage, name))
-                        preserved.add(name)
-            if annotation is not None and "annotation.json" not in preserved:
-                self._write(
-                    os.path.join(stage, "annotation.json"), json.dumps(annotation, ensure_ascii=False, indent=1)
-                )
-            if editorial is not None and "editorial.json" not in preserved:
-                self._write(os.path.join(stage, "editorial.json"), json.dumps(editorial, ensure_ascii=False, indent=1))
-            elif (
-                not drop_editorial
-                and "editorial.json" not in preserved
-                and os.path.exists(os.path.join(base, "editorial.json"))
-            ):
-                shutil.copy2(os.path.join(base, "editorial.json"), os.path.join(stage, "editorial.json"))
-            if audit is not None and "audit.json" not in preserved:
-                self._write(os.path.join(stage, "audit.json"), json.dumps(audit, ensure_ascii=False, indent=1))
-            if "export" not in preserved:
-                for tier, html in exports.items():
-                    self._write(os.path.join(stage, "export", "%s.html" % tier), html)
-            # 分层读重生成不能带走视觉读本与 Agent 标准档。
-            if "edition" not in preserved:
-                source = os.path.join(base, "edition")
-                if os.path.isdir(source):
-                    shutil.copytree(source, os.path.join(stage, "edition"))
-            if "agent-standard.html" not in preserved:
-                source = os.path.join(base, "agent-standard.html")
-                if os.path.isfile(source):
-                    shutil.copy2(source, os.path.join(stage, "agent-standard.html"))
-            old_depth = os.path.join(base, "depth")
-            if depth is None:
-                if os.path.isdir(old_depth):
-                    shutil.copytree(old_depth, os.path.join(stage, "depth"))
-            else:
-                self._copy_depth_cache(old_depth, os.path.join(stage, "depth"))
-                self._write_depth_files(os.path.join(stage, "depth"), depth)
-            if "chapter.html" not in preserved:
-                self._write(os.path.join(stage, "chapter.html"), chapter_html)
-            self._write(os.path.join(stage, "manifest.json"), json.dumps(manifest, ensure_ascii=False, indent=1))
-            if os.path.isdir(backup):
-                shutil.rmtree(backup)
-            self._swap_dir(base, stage, backup)
-        except Exception:
-            self._recover_dir(base, stage, backup)
-            raise
-        return manifest
-
-    def recorded_job(self, uid, n):
-        manifest = self.manifest(uid, n)
-        if not manifest:
+            with open(path, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, json.JSONDecodeError):
             return None
-        return {
+
+    # ---- 钉住旁批（assist_notes.json） --------------------------------
+    def assist_notes_path(self, uid, n):
+        return os.path.join(self.pack_dir(uid, n), "assist_notes.json")
+
+    def assist_notes(self, uid, n, source_sha=None):
+        doc = self._read_json(self.assist_notes_path(uid, n))
+        if not isinstance(doc, dict):
+            return []
+        notes = doc.get("notes")
+        if not isinstance(notes, list):
+            return []
+        stale = bool(source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha)
+        out = []
+        for item in notes:
+            if not isinstance(item, dict) or not item.get("id"):
+                continue
+            copy = dict(item)
+            if stale:
+                copy["stale"] = True
+            out.append(copy)
+        return out
+
+    def save_assist_notes(self, uid, n, notes, *, source_sha=""):
+        payload = {
+            "schema": 1,
             "uid": uid,
-            "n": n,
-            "status": manifest.get("status", "ok"),
-            "draft": manifest.get("draft", False),
-            "generated_at": manifest.get("generated_at"),
-            "generator": manifest.get("generator"),
-            "tiers": list((manifest.get("tiers") or {}).keys()),
+            "n": "%02d" % int(n),
+            "source_sha256": source_sha or "",
+            "updated_at": _now_iso(),
+            "notes": list(notes or []),
         }
+        self._write(self.assist_notes_path(uid, n), json.dumps(payload, ensure_ascii=False, indent=1))
+        return payload
+
+    def pin_assist_note(self, uid, n, note, *, source_sha="", valid_block_ids=None):
+        """追加或更新一条按块锚定的旁批，落盘失败不影响已有笔记。"""
+        block_ids = [str(bid) for bid in (note.get("block_ids") or []) if str(bid).strip()]
+        if not block_ids:
+            raise ValueError("旁批必须锚定至少一个正文块")
+        if valid_block_ids is not None:
+            missing = [bid for bid in block_ids if bid not in valid_block_ids]
+            if missing:
+                raise ValueError("旁批引用了不存在的正文块：" + ", ".join(missing))
+        content = str(note.get("content") or "").strip()
+        diagram_html = str(note.get("diagram_html") or "").strip()
+        if not content and not diagram_html:
+            raise ValueError("旁批内容不能为空")
+
+        existing = self.assist_notes(uid, n)
+        note_id = str(note.get("id") or f"note-{uuid.uuid4().hex[:8]}")
+        clean = {
+            "id": note_id,
+            "action": str(note.get("action") or "explain"),
+            "title": str(note.get("title") or "").strip()[:120],
+            "block_ids": block_ids,
+            "selected_text": str(note.get("selected_text") or "").strip()[:1000],
+            "question": str(note.get("question") or "").strip()[:400],
+            "content": content,
+            "diagram_html": diagram_html,
+            "created_at": str(note.get("created_at") or _now_iso()),
+            "updated_at": _now_iso(),
+        }
+        updated = False
+        new_notes = []
+        for item in existing:
+            if item.get("id") == note_id:
+                new_notes.append(clean)
+                updated = True
+            else:
+                item.pop("stale", None)
+                new_notes.append(item)
+        if not updated:
+            new_notes.append(clean)
+        self.save_assist_notes(uid, n, new_notes, source_sha=source_sha)
+        return clean
+
+    def unpin_assist_note(self, uid, n, note_id, *, source_sha=""):
+        existing = self.assist_notes(uid, n)
+        removed = None
+        kept = []
+        for item in existing:
+            if item.get("id") == note_id and removed is None:
+                removed = item
+            else:
+                item.pop("stale", None)
+                kept.append(item)
+        if removed is None:
+            return None
+        self.save_assist_notes(uid, n, kept, source_sha=source_sha)
+        return removed
+
+    # ---- 全章知识地图（chapter_map.json） -----------------------------
+    def chapter_map_path(self, uid, n):
+        return os.path.join(self.pack_dir(uid, n), "chapter_map.json")
+
+    def chapter_map_cache_dir(self, uid, n):
+        return os.path.join(self.pack_dir(uid, n), "cache")
+
+    def chapter_map(self, uid, n, source_sha=None):
+        doc = self._read_json(self.chapter_map_path(uid, n))
+        if not isinstance(doc, dict):
+            return None
+        if source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha:
+            copy = dict(doc)
+            copy["stale"] = True
+            return copy
+        return doc
+
+    def save_chapter_map(self, uid, n, payload):
+        self._write(self.chapter_map_path(uid, n), json.dumps(payload, ensure_ascii=False, indent=1))
+        return payload
+
+    # ---- 全章活跃度统计（供书架/书页只读计数） -------------------------
+    def activity_counts(self):
+        """统计每本书已有旁批或知识地图的章数，以及总笔记/地图数。"""
+        book_chapters = {}
+        total_maps = 0
+        total_notes = 0
+        for path in glob.glob(os.path.join(self.base, "*", "ch", "*", "chapter_map.json")):
+            parts = path.split(os.sep)
+            if len(parts) < 4:
+                continue
+            uid, ch_str = parts[-4], parts[-2]
+            doc = self._read_json(path)
+            if isinstance(doc, dict) and doc.get("supported", True):
+                book_chapters.setdefault(uid, set()).add(ch_str)
+                total_maps += 1
+        for path in glob.glob(os.path.join(self.base, "*", "ch", "*", "assist_notes.json")):
+            parts = path.split(os.sep)
+            if len(parts) < 4:
+                continue
+            uid, ch_str = parts[-4], parts[-2]
+            doc = self._read_json(path)
+            notes = doc.get("notes") if isinstance(doc, dict) else None
+            if isinstance(notes, list) and notes:
+                book_chapters.setdefault(uid, set()).add(ch_str)
+                total_notes += len(notes)
+        return {
+            "by_book": {uid: len(chs) for uid, chs in book_chapters.items()},
+            "chapters": sum(len(chs) for chs in book_chapters.values()),
+            "maps": total_maps,
+            "notes": total_notes,
+        }
+
+    # ---- 操作日志（ops_log.jsonl） ------------------------------------
+    def ops_log_path(self):
+        return os.path.join(self.base, "ops_log.jsonl")
+
+    def append_op(self, entry):
+        record = {
+            "id": str(entry.get("id") or f"op-{uuid.uuid4().hex[:10]}"),
+            "ts": str(entry.get("ts") or _now_iso()),
+            "uid": str(entry.get("uid") or ""),
+            "n": "%02d" % int(entry.get("n") or 0) if entry.get("n") else "",
+            "book_title": str(entry.get("book_title") or ""),
+            "chapter_title": str(entry.get("chapter_title") or ""),
+            "action": str(entry.get("action") or ""),
+            "block_ids": list(entry.get("block_ids") or []),
+            "status": str(entry.get("status") or "ok"),
+            "model": str(entry.get("model") or ""),
+            "tokens": int(entry.get("tokens") or 0),
+            "elapsed_ms": int(entry.get("elapsed_ms") or 0),
+            "summary": str(entry.get("summary") or "")[:300],
+            "error": str(entry.get("error") or "")[:500],
+        }
+        path = self.ops_log_path()
+        line = json.dumps(record, ensure_ascii=False)
+        with self._op_lock:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+        return record
+
+    def ops_logs(self, *, limit=OPS_LOG_LIMIT, uid=None, n=None, action=None, status=None):
+        path = self.ops_log_path()
+        try:
+            with open(path, encoding="utf-8") as fh:
+                lines = fh.readlines()
+        except OSError:
+            return []
+        target_n = ("%02d" % int(n)) if n not in (None, "") else None
+        out = []
+        for raw in reversed(lines):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                item = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(item, dict):
+                continue
+            if uid and item.get("uid") != uid:
+                continue
+            if target_n and item.get("n") != target_n:
+                continue
+            if action and item.get("action") != action:
+                continue
+            if status and item.get("status") != status:
+                continue
+            out.append(item)
+            if len(out) >= limit:
+                break
+        return out

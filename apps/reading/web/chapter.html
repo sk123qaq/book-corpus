@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
-<title>分层读 · 章节工单</title>
+<title>阅读工作台</title>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/pages.css">
 <link rel="stylesheet" href="/assets/theme.css">
+<link rel="stylesheet" href="/assets/workbench.css">
 </head>
 <body>
 <header class="topbar">
@@ -21,7 +22,7 @@
   <nav class="nav">
     <a href="/">书架</a>
     <a href="/catalog">书目</a>
-    <a href="/records">记录</a>
+    <a href="/records">操作日志</a>
   </nav>
   <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
     <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
@@ -31,746 +32,609 @@
   </button>
 </header>
 
-<main class="page">
+<main class="wb-shell">
   <div class="crumb" id="crumb"></div>
-  <div id="chapter-root"><div class="empty">正在取章…</div></div>
+  <div id="wb-root"><div class="empty">正在展开全章正文…</div></div>
 </main>
+
+<div class="selection-bar" id="selection-bar" role="toolbar" aria-label="划词伴读工具"></div>
 
 <script src="/assets/app.js"></script>
 <script src="/assets/common.js"></script>
 <script src="/assets/theme.js"></script>
 <script>
-const PARTS = location.pathname.split('/').filter(Boolean);
-const UID = decodeURIComponent(PARTS[1] || '');
-const N = PARTS[2] || '';
-const TIER_KEYS = ['skim', 'standard', 'deep'];
-const DEPTH_KEYS = ['model', 'panels', 'skim', 'standard', 'deep'];
+const parts = location.pathname.split('/').filter(Boolean);
+const UID = decodeURIComponent(parts[1] || '');
+const N = parts[2] || '01';
+
 let data = null;
-let draft = false;
-let selected = new Set(['standard']);
-let depthSelected = null;
-let depthBusy = false;
-const pending = new Set();
-let pendingBusy = false;
-let modeBusy = false;
-const polling = new Set();
+let showMap = false;
+let showTerms = false;
+let showModelBox = false;
+let drawerOpen = false;
+let hidePins = false;
+let currentSelection = { block_ids: [], text: '' };
+let lastResult = null;
+let abortCtrl = null;
 
 RD.ready(async () => {
   RD.night();
-  await load();
-});
-
-async function load() {
   try {
     data = await RD.api('/api/chapter/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N));
   } catch (err) {
-    RD.fail(RD.mount('chapter-root'), err.message);
+    RD.fail(RD.mount('wb-root'), err.message);
     return;
   }
-  data.jobs = data.jobs || [];
-  if (data.depth) {
-    const layers = data.depth.layers || {};
-    // 默认只勾「缺失 / 失败 / 过期」：已就绪的层默认保留，不白花调用。
-    depthSelected = new Set(DEPTH_KEYS.filter((key) => {
-      const status = (layers[key] || {}).status;
-      return status === 'missing' || status === 'failed' || status === 'stale';
-    }));
-  } else {
-    depthSelected = null;
-  }
-  depthBusy = false;
-  pending.clear();
-  pendingBusy = false;
-  render();
-  bind();
-}
+  renderShell();
+  renderMapDrawer();
+  renderBlocks();
+  renderSelectionBarButtons();
+  bindEvents();
+  jumpToHash();
+});
 
-function render() {
+function renderShell() {
   const book = data.book;
-  const chapter = data.chapter;
-  const blocks = data.blocks || [];
-  const tiers = data.tiers || [];
-  const preview = new Set(data.preview_blocks || []);
-  const standardBlocks = new Set(data.standard_blocks || []);
-  draft = !!(data.pack && data.pack.draft);
-  const path = data.path === 'depth' ? 'depth' : data.path === 'legacy' ? 'legacy' : 'none';
-  const pathLabel = path === 'depth' ? '深度路径' : path === 'legacy' ? '旧路径' : '未生成';
-  const pathReason = data.fallback_reason ? ' title="' + RD.esc(data.fallback_reason) + '"' : '';
-  const generated = tiers.filter((t) => t.exists);
-  const standardPack = generated.some((t) => t.key === 'standard');
-  document.title = '分层读 · ' + chapter.title;
-  const prev = Number(chapter.n) > 1 ? String(Number(chapter.n) - 1).padStart(2, '0') : '';
-  const next = Number(chapter.n) < book.chapters ? String(Number(chapter.n) + 1).padStart(2, '0') : '';
-  RD.mount('crumb').innerHTML = '<a href="/">书架</a><i>/</i><a href="' + RD.bookHref(book.uid) + '">' +
-    RD.esc(book.title_short || book.title) + '</a><i>/</i><span>第 ' + String(chapter.n).replace(/^0/, '') + ' 章</span>';
+  const ch = data.chapter;
+  const r = data.reading || {};
+  const pinCount = (data.assist_notes || []).length;
+  const mapReady = Boolean(data.chapter_map && data.chapter_map.supported !== false);
+  const blockCount = (data.blocks || []).length;
 
-  RD.mount('chapter-root').innerHTML =
-    '<section class="chap-head"><div class="eyebrow">' + RD.esc(book.uid) + ' · ' + RD.esc(book.title_short || book.title) + '</div>' +
-      '<h1>' + RD.esc(chapter.title) + '</h1>' +
-      '<p class="chap-meta">' + RD.fmt(chapter.chars) + ' 字 · ' + RD.fmt(blocks.length) + ' 个原文块 · 标准本约 ' +
-        RD.fmt(chapter.minutes) + ' 分钟 · ' + RD.esc(chapter.file) +
-        ' · <span class="path-badge path-badge-' + path + '"' + pathReason + '>' + pathLabel + '</span>' +
-        (draft ? ' · <span class="draft-badge">草稿</span>' : '') + '</p>' +
-      '<div class="chap-actions">' +
-        (generated.length ? generated.map((t) => '<a class="btn btn-primary" href="' + RD.readerHref(book.uid, chapter.n, t.key, data.path) + '">读 ' + RD.esc(t.name) + '本 →</a>').join('') :
-          '<a class="btn btn-ghost" href="#ticket">先出一版读本</a>') +
-        (data.edition ? '<a class="btn btn-primary" href="' + RD.esc(data.edition.url) + '">视觉读本 →</a>' : '') +
-        (standardPack ? '<a class="btn btn-ghost" href="' + RD.readerHref(book.uid, chapter.n, 'standard', data.path) + '">打开默认读本</a>' : '') +
-        (prev ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, prev) + '">← 上一章</a>' : '') +
-        (next ? '<a class="btn btn-ghost" href="' + RD.chapterHref(book.uid, next) + '">下一章 →</a>' : '') +
-      '</div></section>' +
-    '<div class="work">' +
-      '<section>' +
-        '<div class="section-title"><h2>原文切块</h2><span class="lbl">只读 · 逐字保留</span></div>' +
-        '<p class="hint">共 ' + RD.fmt(blocks.length) + ' 块。色块标出标准本保留的块；下方只预览前 8 块，全文见读本。</p>' +
-        '<div class="cutbar"><div class="cutbar-head"><span class="lbl">' + RD.fmt(blocks.length) + ' 块</span>' +
-          '<span><b>' + RD.fmt(standardBlocks.size) + '</b> 块进标准本</span></div><div class="ticks" id="ticks"></div></div>' +
-        '<div class="preview" id="preview"></div>' +
-        '<div class="section-title"><h2>三档状态</h2><span class="lbl">存在于 工作区/阅读</span></div>' +
-        '<div class="pack-list" id="packs"></div>' +
-        '<div class="section-title"><h2>门槛</h2><span class="lbl">最近一次生成</span></div>' +
-        '<div class="gate-list" id="gates"></div>' +
-        '<div id="depth-root">' + depthPanelHtml() + '</div>' +
-      '</section>' +
-      '<aside class="ticket" id="ticket">' + ticketHtml() + '</aside>' +
+  RD.mount('crumb').innerHTML =
+    '<a href="/">书架</a><i>/</i>' +
+    '<a href="' + RD.bookHref(book.uid) + '">' + RD.esc(book.title_short || book.title) + '</a><i>/</i>' +
+    '<span>第 ' + RD.esc(ch.n) + ' 章</span>';
+  document.title = ch.title + ' · ' + (book.title_short || book.title);
+
+  RD.mount('wb-root').innerHTML =
+    '<section class="wb-head">' +
+      '<div><div class="eyebrow">' + RD.esc(book.title) + ' · ' + RD.esc(r.mode_label || r.mode || '自由阅读') + '</div>' +
+      '<h1>' + RD.esc(ch.title) + '</h1>' +
+      '<div class="wb-sub">' + RD.fmt(ch.chars) + ' 字 · ' + RD.fmt(blockCount) + ' 个原文块 · 约 ' + RD.fmt(ch.minutes) + ' 分钟 · 100% 完整正文直出</div></div>' +
+      '<div><a class="btn btn-ghost" href="/records?uid=' + encodeURIComponent(UID) + '">本章日志 →</a></div>' +
+    '</section>' +
+
+    '<div class="wb-toolbar" id="wb-toolbar">' +
+      '<button type="button" class="wb-btn" id="btn-map" aria-pressed="' + showMap + '">知识地图' + (mapReady ? '（已缓存）' : '') + '</button>' +
+      '<button type="button" class="wb-btn" id="btn-terms" aria-pressed="' + showTerms + '">核心术语</button>' +
+      '<span class="wb-sep"></span>' +
+      '<button type="button" class="wb-btn" id="btn-toggle-pins" aria-pressed="' + (!hidePins) + '">旁批 <b id="pin-count">' + pinCount + '</b></button>' +
+      '<button type="button" class="wb-btn" id="btn-model-box" aria-pressed="' + showModelBox + '">模型设置</button>' +
+      '<span class="wb-spacer"></span>' +
+      '<span class="wb-sub" style="font-size:11.5px">提示：拖选任意正文或点段尾 ✦ 唤起图解 / 讲人话 / 翻译 / 拆前提</span>' +
+      '<button type="button" class="wb-btn" id="btn-drawer" aria-pressed="' + drawerOpen + '">伴读抽屉</button>' +
     '</div>' +
-    '<div class="pager"><span>' + (prev ? '<a href="' + RD.chapterHref(book.uid, prev) + '">← ' + RD.esc(prev) + '</a>' : '') +
-      '</span><a href="' + RD.bookHref(book.uid) + '">返回章目</a><span>' +
-      (next ? '<a href="' + RD.chapterHref(book.uid, next) + '">' + RD.esc(next) + ' →</a>' : '') + '</span></div>';
 
-  renderTicks(blocks, standardBlocks);
-  renderPreview(blocks, preview, standardPack);
-  renderPacks(generated);
-  renderGates();
-  bindTicket();
+    '<div class="wb-top-drawer" id="model-box" hidden>' + RD.modelSettingsHtml() + '</div>' +
+    '<div class="wb-top-drawer" id="map-drawer" hidden></div>' +
+
+    '<div class="wb-grid' + (drawerOpen ? ' has-drawer' : '') + '" id="wb-grid">' +
+      '<article class="reader-column"><div class="reader-body" id="reader-body"></div></article>' +
+      '<aside class="assist-drawer" id="assist-drawer" hidden>' +
+        '<div class="drawer-head">' +
+          '<h3 id="drawer-title">随文伴读</h3>' +
+          '<div style="display:flex;gap:6px">' +
+            '<button type="button" class="wb-btn" id="btn-pin" disabled>钉住到段落</button>' +
+            '<button type="button" class="wb-btn" id="btn-drawer-close" aria-label="关闭抽屉">×</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="drawer-body" id="drawer-body">' +
+          '<div class="empty" id="drawer-empty">在左侧正文中拖选一段文字，或点段落右上角 <b>✦</b>，即可流式图解、举例、翻译或拆解前提。</div>' +
+          '<div class="drawer-quote" id="drawer-quote" hidden></div>' +
+          '<div class="drawer-diagram" id="drawer-diagram"></div>' +
+          '<div class="drawer-answer" id="drawer-answer"></div>' +
+          '<div class="wb-sub" id="drawer-meta" style="margin-top:10px;font-size:11.5px"></div>' +
+        '</div>' +
+        '<div class="drawer-foot">' +
+          '<form class="drawer-ask" id="drawer-ask-form">' +
+            '<input id="drawer-ask-input" placeholder="针对所选段落继续追问…" aria-label="追问内容">' +
+            '<button type="submit" class="wb-btn primary">追问</button>' +
+          '</form>' +
+        '</div>' +
+      '</aside>' +
+    '</div>';
+
+  RD.bindModelSettings();
 }
 
-function ticketHtml() {
-  const chapter = data.chapter;
-  const fit = data.edition_fit || { ok: true, reason: '' };
-  const running = (data.jobs || []).filter((job) =>
-    RD.activeStates.includes(job.state) || job.state === 'cancelled'
-  );
-  return '<div class="ticket-top"><span class="eyebrow">读本工单</span><span class="ticket-id">#' +
-    RD.esc(data.book.uid) + '-' + RD.esc(chapter.n) + '</span></div>' +
-    '<h3>' + RD.esc(chapter.title) + '</h3>' +
-    '<p class="ticket-meta">' + RD.fmt(chapter.chars) + ' 字 · 原文约 ' + RD.fmt(chapter.minutes) + ' 分钟</p>' +
-    '<div class="mode-box" id="mode-root">' + modeSelectorHtml() + '</div>' +
-    '<div class="tier-list" id="tier-list">' + TIER_KEYS.map(tierOption).join('') + '</div>' +
-    RD.modelSettingsHtml() +
-    '<div class="ticket-est"><span id="ticket-est"></span><span>本地队列 · 最多 4 个并行</span></div>' +
-    (running.length ? '<p class="fine job-live">进行中：' + running.map((job) => {
-      const name = job.kind === 'depth'
-        ? (job.layers || []).map((layer) => RD.depthNames[layer] || layer).join('/')
-        : (job.tiers || []).map((tier) => RD.tierNames[tier] || tier).join('/');
-      return RD.esc(name || '—') + ' · ' + RD.esc(RD.jobHint(job)) + ' · ' + RD.esc(job.id);
-    }).join('；') + '</p>' : '') +
-    '<button class="btn btn-primary" id="generate">生成读本 →</button>' +
-    '<button class="btn btn-ghost" id="generate-edition"' + (fit.ok ? '' : ' disabled title="' + RD.esc(fit.reason) + '"') + '>生成视觉读本（模型约 30–60 秒）</button>' +
-    (fit.ok ? '' : '<p class="fine edition-fit">本章不宜视觉读本：' + RD.esc(fit.reason) + '</p>') +
-    '<div id="job-mount"></div>' +
-    '<p class="fine">' + (draft ? '当前是草稿：三档暂时同文，讲解为空。接入模型后重新生成才会产生取舍。' :
-      '原文逐字保留；讲解只做旁批，可一键隐藏。原文不重写、不合并。') + '</p>';
+function renderBlockHtml(blk) {
+  const kind = blk.kind || 'paragraph';
+  const text = blk.text || '';
+  if (kind === 'heading') {
+    const lvl = Math.min(4, Math.max(1, Number(blk.level || 2)));
+    return '<h' + lvl + '>' + RD.esc(text) + '</h' + lvl + '>';
+  }
+  if (kind === 'quote') return '<blockquote>' + RD.esc(text) + '</blockquote>';
+  if (kind === 'code') return '<pre><code>' + RD.esc(text) + '</code></pre>';
+  if (kind === 'list') {
+    const tag = blk.ordered ? 'ol' : 'ul';
+    const items = (blk.items || []).map((x) => '<li>' + RD.esc(x) + '</li>').join('');
+    return '<' + tag + '>' + items + '</' + tag + '>';
+  }
+  if (kind === 'table') {
+    const head = (blk.head || []).length
+      ? '<thead><tr>' + blk.head.map((c) => '<th>' + RD.esc(c) + '</th>').join('') + '</tr></thead>' : '';
+    const rows = (blk.rows || []).map((r) => '<tr>' + (r || []).map((c) => '<td>' + RD.esc(c) + '</td>').join('') + '</tr>').join('');
+    return '<table>' + head + '<tbody>' + rows + '</tbody></table>';
+  }
+  if (kind === 'image') {
+    const rel = blk.rel || '';
+    const src = rel ? '/api/asset?uid=' + encodeURIComponent(UID) + '&rel=' + encodeURIComponent(rel) : '';
+    return src
+      ? '<figure><img src="' + src + '" alt="' + RD.esc(text || '插图') + '">' +
+        (text ? '<figcaption class="wb-sub">' + RD.esc(text) + '</figcaption>' : '') + '</figure>'
+      : '<p class="wb-sub">[图片] ' + RD.esc(text) + '</p>';
+  }
+  if (kind === 'footnote') return '<p class="wb-sub">' + RD.esc(text) + '</p>';
+  return '<p>' + RD.esc(text) + '</p>';
 }
 
+function renderBlocks() {
+  const blocks = data.blocks || [];
+  const notesByAnchor = new Map();
+  for (const note of (data.assist_notes || [])) {
+    const ids = note.block_ids || [];
+    const anchor = ids[ids.length - 1] || (blocks[0] && blocks[0].id);
+    if (!anchor) continue;
+    if (!notesByAnchor.has(anchor)) notesByAnchor.set(anchor, []);
+    notesByAnchor.get(anchor).push(note);
+  }
 
-const MODE_META = {
-  narrative: { label: '叙事', desc: '人物、场景、情节与手法' },
-  argument: { label: '论证', desc: '命题、论据、推理与反驳' },
-  practical: { label: '实用', desc: '步骤、清单、决策与做法' },
-  reference: { label: '资料·图册', desc: '图版、条目、术语与版本' },
-};
+  RD.mount('reader-body').innerHTML = blocks.map((blk) => {
+    const bid = blk.id || '';
+    const pinned = notesByAnchor.get(bid) || [];
+    const pinsHtml = pinned.length
+      ? '<div class="pinned-notes">' + pinned.map((note) =>
+          '<div class="pin-card" data-note-id="' + RD.esc(note.id) + '">' +
+            '<div class="pin-card-head">' +
+              '<b>' + RD.esc(RD.actionNames[note.action] || note.action || '旁批') +
+                (note.title ? ' · ' + RD.esc(note.title) : '') + '</b>' +
+              '<span>' + RD.esc((note.block_ids || []).join(', ')) +
+                (note.stale ? ' · 原文已变' : '') + '</span>' +
+              '<button type="button" class="pin-del" data-del-pin="' + RD.esc(note.id) + '">移除</button>' +
+            '</div>' +
+            (note.diagram_html ? '<div>' + note.diagram_html + '</div>' : '') +
+            (note.content ? '<div class="drawer-answer">' + RD.renderMarkdown(note.content) + '</div>' : '') +
+          '</div>'
+        ).join('') + '</div>'
+      : '';
+    return '<div class="reader-block" id="blk-' + RD.esc(bid) + '" data-block="' + RD.esc(bid) + '" data-kind="' + RD.esc(blk.kind || 'paragraph') + '">' +
+      renderBlockHtml(blk) +
+      '<button type="button" class="blk-trigger" data-trigger="' + RD.esc(bid) + '" title="对第 ' + RD.esc(bid) + ' 段伴读">✦</button>' +
+      pinsHtml +
+    '</div>';
+  }).join('');
 
-function modeInfo() {
-  return data.reading || {};
+  const countEl = RD.mount('pin-count');
+  if (countEl) countEl.textContent = String((data.assist_notes || []).length);
 }
 
-function modeLabel(mode) {
-  return (MODE_META[mode] || {}).label || mode || '未定';
-}
+function renderMapDrawer() {
+  const box = RD.mount('map-drawer');
+  if (!showMap && !showTerms) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const cmap = data.chapter_map;
+  const gate = (data.preflight && data.preflight.chapter_map) || { supported: true, reason: '' };
 
-function modeSelectorHtml() {
-  const r = modeInfo();
-  const bookMode = r.book_mode || '';
-  const override = r.chapter_override || '';
-  const pending = r.chapter_override_pending || '';
-  const pendingStale = Boolean(r.chapter_override_stale && pending);
-  const effective = r.effective_mode || 'argument';
-  const suggestion = r.suggestion || {};
-  const follow = Boolean(bookMode && !override);
-  const modes = ['narrative', 'argument', 'practical', 'reference'];
-  const confirmed = suggestion.mode && suggestion.source === 'model' ? '模型建议' : '建议';
-  return '<div class="mode-head"><span class="lbl">本章读法</span>' +
-      '<span class="mode-hint">读法不改档位</span></div>' +
-    '<label class="mode-follow' + (bookMode ? '' : ' is-empty') + '">' +
-      '<input type="checkbox" id="mode-follow"' + (follow ? ' checked' : '') +
-      (bookMode && !modeBusy ? '' : ' disabled') + '>' +
-      '<span>跟随本书' + (bookMode ? '（' + RD.esc(modeLabel(bookMode)) + '）' : '（未设）') + '</span>' +
-    '</label>' +
-    '<div class="mode-grid">' + modes.map(function (mode) {
-      return '<button type="button" class="mode-btn' + (effective === mode ? ' active' : '') +
-        '" data-mode="' + mode + '"' + (modeBusy ? ' disabled' : '') + '>' +
-        '<b>' + RD.esc(MODE_META[mode].label) + '</b><small>' + RD.esc(MODE_META[mode].desc) + '</small>' +
-        (suggestion.mode === mode ? '<em class="mode-suggest-dot">' + RD.esc(confirmed) + '</em>' : '') +
-        '</button>';
-    }).join('') + '</div>' +
-    (suggestion.mode ? '<div class="mode-suggest"><b>' + RD.esc(confirmed) + '：' + RD.esc(modeLabel(suggestion.mode)) +
-      (suggestion.confidence ? ' · 置信度 ' + Number(suggestion.confidence).toFixed(2) : '') + '</b>' +
-      '<span>' + RD.esc(suggestion.reason || '') + '</span></div>' : '') +
-    (suggestion.evidence && suggestion.evidence.length ? '<div class="mode-evidence">' +
-      suggestion.evidence.map(function (item) {
-        return '<span><i>' + RD.esc(item.label) + '</i>' + RD.esc(item.value) + '</span>';
-      }).join('') + '</div>' : '') +
-    (override ? '<div class="mode-override">本章覆写：<b>' + RD.esc(modeLabel(override)) +
-      '</b><span>（不跟随本书）</span><button type="button" id="mode-reset">恢复跟随本书</button></div>' : '') +
-    (pendingStale ? '<div class="mode-override">本章覆写：<b>' + RD.esc(modeLabel(pending)) +
-      '</b><span>（原文已变，待确认）</span><button type="button" id="mode-confirm">确认覆写</button>' +
-      '<button type="button" id="mode-reset">放弃覆写</button></div>' : '') +
-    (!bookMode ? '<div class="mode-warning">本书还没有默认读法；点一个模式会先设为本书默认。</div>' : '') +
-    '<div class="mode-foot">档位在下方单独选；读法只改注解与面板。</div>';
-}
-
-function refreshMode() {
-  const root = RD.mount('mode-root');
-  if (!root) return;
-  root.innerHTML = modeSelectorHtml();
-  bindMode();
-  updateEstimate();
-}
-
-async function putReading(action, mode) {
-  if (modeBusy) return;
-  modeBusy = true;
-  refreshMode();
-  try {
-    const result = await RD.api('/api/chapter/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N) + '/reading', {
-      method: 'PUT',
-      body: { action: action, mode: mode },
-    });
-    data.reading = result;
-    RD.toast('本章读法：' + modeLabel(result.effective_mode));
-  } catch (err) {
-    if (err.code === 'reading_profile_required') {
-      RD.toast('先设本书默认读法，再设章级覆写', true);
+  if (!cmap) {
+    if (!gate.supported) {
+      box.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
+          '<div><b>无需强行展开导图</b> · <span class="wb-sub">' + RD.esc(gate.reason) + '</span></div>' +
+          '<button type="button" class="wb-btn" id="btn-gen-map-force">仍要展开简图（调用模型）</button>' +
+        '</div>';
     } else {
-      RD.toast(err.message, true);
+      box.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
+          '<div><b>按需生成全章知识地图与术语</b> · <span class="wb-sub">点击后一次性提取结构节拍与核心概念，并缓存供后续复用。</span></div>' +
+          '<button type="button" class="wb-btn primary" id="btn-gen-map">生成知识地图 →</button>' +
+        '</div>';
     }
-  } finally {
-    modeBusy = false;
-    refreshMode();
+    bindMapButtons();
+    return;
+  }
+
+  if (cmap.supported === false) {
+    box.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
+        '<div><b>直读建议</b> · <span class="wb-sub">' + RD.esc(cmap.reason) + '</span></div>' +
+        '<button type="button" class="wb-btn" id="btn-gen-map-force">仍要展开简图</button>' +
+      '</div>';
+    bindMapButtons();
+    return;
+  }
+
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
+    '<div><b>全章知识地图</b> · <span class="wb-sub">' +
+      RD.fmt((cmap.sections || []).length) + ' 节 · ' +
+      RD.fmt((cmap.terms || []).length) + ' 个术语' +
+      (cmap.stale ? ' · 原文已更新，建议重生成' : '') +
+    '</span></div>' +
+    '<button type="button" class="wb-btn" id="btn-gen-map-force">重新生成</button>' +
+  '</div>';
+
+  if (showMap && (cmap.sections || []).length) {
+    html += '<div class="map-sections">' + cmap.sections.map((sec) =>
+      '<div class="map-card"><h4>' + RD.esc(sec.title) + '</h4>' +
+      (sec.summary ? '<p>' + RD.esc(sec.summary) + '</p>' : '') +
+      '<div class="map-nodes">' + (sec.nodes || []).map((node) => {
+        const target = (node.block_ids || sec.block_ids || [])[0] || '';
+        return '<button type="button" class="map-node" data-jump="' + RD.esc(target) + '">' +
+          RD.esc(node.summary || node.id) +
+          (target ? ' <span class="wb-sub">[' + RD.esc(target) + ']</span>' : '') + '</button>';
+      }).join('') + '</div></div>'
+    ).join('') + '</div>';
+  }
+  if (showTerms) {
+    const terms = cmap.terms || [];
+    html += terms.length
+      ? '<div class="term-pills">' + terms.map((t) =>
+          '<button type="button" class="term-pill" data-jump="' + RD.esc(t.source_block || '') + '">' +
+            '<b>' + RD.esc(t.term) + '</b>：' + RD.esc(t.definition) +
+          '</button>'
+        ).join('') + '</div>'
+      : '<p class="wb-sub" style="margin:10px 0 0">本章未提取出独立术语。</p>';
+  }
+  if (showMap && (cmap.figures || []).length) {
+    html += cmap.figures.map((fig) => fig.html || '').join('');
+  }
+  box.innerHTML = html;
+  bindMapButtons();
+}
+
+function bindMapButtons() {
+  const genBtn = RD.mount('btn-gen-map');
+  if (genBtn) genBtn.addEventListener('click', () => requestChapterMap(false));
+  const forceBtn = RD.mount('btn-gen-map-force');
+  if (forceBtn) forceBtn.addEventListener('click', () => requestChapterMap(true));
+  RD.mount('map-drawer').querySelectorAll('[data-jump]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const bid = el.getAttribute('data-jump');
+      if (bid) focusBlock(bid);
+    });
+  });
+}
+
+async function requestChapterMap(force) {
+  const settings = RD.modelSettings();
+  const box = RD.mount('map-drawer');
+  box.innerHTML = '<div class="wb-sub">正在生成全章知识地图与术语…</div>';
+  try {
+    const res = await RD.api('/api/chapter-map/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
+      method: 'POST',
+      body: { force: Boolean(force), model: settings.model, effort: settings.effort },
+    });
+    data.chapter_map = res;
+    if (res.supported === false) {
+      RD.toast(res.reason || '篇幅较短，建议直读原文');
+    } else {
+      showMap = true;
+      RD.toast('知识地图已就绪');
+    }
+    renderShell();
+    renderMapDrawer();
+    renderBlocks();
+    renderSelectionBarButtons();
+    bindEvents();
+  } catch (err) {
+    RD.toast(err.message, true);
+    renderMapDrawer();
   }
 }
 
-function bindMode() {
-  const root = RD.mount('mode-root');
-  if (!root) return;
-  root.onclick = function (event) {
-    const button = event.target.closest('[data-mode]');
-    if (button) {
-      const mode = button.getAttribute('data-mode');
-      const r = modeInfo();
-      if (!r.book_mode) {
-        putReading('book_default', mode);
-      } else if (mode === r.book_mode && !r.chapter_override) {
-        return;
-      } else if (mode === r.book_mode) {
-        putReading('follow');
-      } else if (mode === r.chapter_override) {
-        return;
-      } else {
-        putReading('override', mode);
-      }
-      return;
-    }
-    if (event.target.closest('#mode-confirm')) {
-      putReading('override', modeInfo().chapter_override_pending);
-      return;
-    }
-    if (event.target.closest('#mode-reset')) {
-      putReading('follow');
-    }
-  };
-  root.onchange = function (event) {
-    if (event.target && event.target.id === 'mode-follow') {
-      if (event.target.checked) putReading('follow');
-      else RD.toast('选一个模式覆盖本书，或重新打开跟随', true);
-    }
-  };
-}
-
-function tierOption(key) {
-  const info = (data.tiers || []).find((t) => t.key === key) || {};
-  const job = RD.jobForTier(data.jobs, key);
-  const busy = Boolean(job || pending.has(key));
-  const busyText = job ? RD.jobHint(job) : '提交中';
-  const spec = 'C ' + Math.round(info.c_min * 100) + '–' + Math.round(info.c_max * 100) + '% · E ≤' +
-    Math.round((info.e_max || 0) * 100) + '% · ' + RD.fmt(info.speed || 0) + ' 字/分';
-  const minutes = info.stats ? info.stats.minutes : Math.max(1, Math.round(data.chapter.chars / (info.speed || 500)));
-  return '<label class="tier-opt' + (selected.has(key) ? ' checked' : '') + (busy ? ' busy' : '') +
-    '"><input type="checkbox" value="' + key + '"' +
-    (selected.has(key) ? ' checked' : '') + '><span class="box"></span>' +
-    '<span class="tier-dot" style="--tc:var(--tier-' + key + ')"></span>' +
-    '<span class="tier-copy"><b>' + (info.name || RD.tierNames[key]) +
-      (busy ? '<em class="tier-busy">' + RD.esc(busyText) + '</em>' : info.exists ? '<em>' + (draft ? '草稿' : '已出片') + '</em>' : '') +
-      '</b><small>' + spec + '</small></span>' +
-    '<span class="tier-time">≈' + RD.fmt(minutes) + ' 分钟<small>' +
-      (busy ? (job ? RD.esc(job.id) : '正在提交') : info.stale ? '原文已改' : info.exists ? (draft ? '待补模型' : '可重生成') : '未生成') +
-      '</small></span></label>';
-}
-
-function refreshTiers() {
-  const list = RD.mount('tier-list');
-  if (list) list.innerHTML = TIER_KEYS.map(tierOption).join('');
-  updateEstimate();
-}
-
-function renderTicks(blocks, preview) {
-  RD.mount('ticks').innerHTML = blocks.map((block) =>
-    '<i class="' + (preview.has(block.id) ? '' : 'cut') + '" title="' + RD.esc(block.id + ' · ' + block.kind) + '"></i>'
+function renderSelectionBarButtons() {
+  const bar = RD.mount('selection-bar');
+  const toolbar = (data && data.toolbar) || [
+    { action: 'diagram', label: '图解此段' },
+    { action: 'explain', label: '讲人话举例' },
+    { action: 'translate', label: '翻译原意' },
+    { action: 'critique', label: '拆解前提' },
+    { action: 'ask', label: '问这句' },
+  ];
+  bar.innerHTML = toolbar.map((item) =>
+    '<button type="button" data-action="' + RD.esc(item.action) + '">' + RD.esc(item.label) + '</button>'
   ).join('');
 }
 
-function renderPreview(blocks, preview, standardPack) {
-  const selectedBlocks = blocks.filter((block) => preview.has(block.id));
-  RD.mount('preview').innerHTML =
-    '<div class="preview-head"><span class="lbl">标准本前段 · ' + selectedBlocks.length + ' 块</span><span class="tag">原文</span></div>' +
-    (selectedBlocks.length ? selectedBlocks.map((block) =>
-      '<div class="blk" data-kind="' + RD.esc(block.kind) + '" data-block="' + RD.esc(block.id) + '">' +
-      '<span class="blk-n">' + RD.esc(block.id) + '</span><p>' +
-      (block.kind === 'image' ? '[图] ' + RD.esc(block.alt || block.text || '') : RD.esc(block.text)) + '</p></div>'
-    ).join('') : '<p class="empty">标准本尚未投影；生成后这里会显示保留的块。</p>') +
-    '<div class="preview-foot"><span>只显示前 ' + selectedBlocks.length + ' 块，全文见读本</span>' +
-    (standardPack ? '<a href="' + RD.readerHref(data.book.uid, data.chapter.n, 'standard', data.path) + '">打开标准本 →</a>' : '') + '</div>';
+function setDrawerOpen(open) {
+  drawerOpen = Boolean(open);
+  const drawer = RD.mount('assist-drawer');
+  const grid = RD.mount('wb-grid');
+  const btn = RD.mount('btn-drawer');
+  if (drawer) drawer.hidden = !drawerOpen;
+  if (grid) grid.classList.toggle('has-drawer', drawerOpen);
+  if (btn) btn.setAttribute('aria-pressed', String(drawerOpen));
 }
 
-function renderPacks(generated) {
-  RD.mount('packs').innerHTML = generated.length ? generated.map((tier) =>
-    '<div class="pack-item"><span class="nm"><i style="--tc:var(--tier-' + tier.key + ')"></i><b>' + RD.esc(tier.name) + '本</b></span>' +
-    '<span class="meta">' + (tier.stats ? 'C ' + Math.round(tier.stats.c_char * 100) + '% · ' + RD.fmt(tier.stats.minutes) + ' 分钟' : '已生成') +
-    (tier.stale ? ' · 原文已改' : draft ? ' · 草稿' : '') + '</span><a href="' + RD.readerHref(data.book.uid, data.chapter.n, tier.key, data.path) + '">打开 →</a></div>'
-  ).join('') : '<div class="pack-item"><span class="nm"><b>尚未出片</b></span><span class="pending">选档后生成</span></div>';
+function focusBlock(bid) {
+  const el = document.getElementById('blk-' + bid);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 2000);
 }
 
-function renderGates() {
-  const gates = data.gates || [];
-  RD.mount('gates').innerHTML = gates.length ? gates.map((gate) =>
-    '<div class="gate-row ' + (gate.status === 'fail' ? 'fail' : gate.status === 'warn' ? 'warn' : '') + '">' +
-    '<b>' + RD.esc(gate.id) + '</b><span>' + RD.esc(gate.name) + ' · ' + RD.esc(gate.detail) + '</span></div>'
-  ).join('') : '<div class="gate-row"><b>—</b><span>还没有生成记录；出片后写入 G1 / G3 / G4 / G6。</span></div>';
+function jumpToHash() {
+  const h = (location.hash || '').replace(/^#/, '');
+  if (h.startsWith('blk-')) focusBlock(h.slice(4));
 }
 
-function depthStatusName(status) {
-  return { missing: '未生成', running: '生成中', ready: '已就绪', stale: '已过期', failed: '失败' }[status] || status;
+function blockOfNode(node) {
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  return el ? el.closest('.reader-block[data-block]') : null;
 }
 
-function depthRow(key) {
-  const info = ((data.depth || {}).layers || {})[key] || {};
-  const status = info.status || 'missing';
-  const running = status === 'running';
-  const blocked = Boolean((data.depth || {}).preflight && data.depth.preflight.ok === false);
-  const disabled = running || depthBusy || blocked;
-  const estimate = info.estimate || {};
-  const actual = info.usage
-    ? RD.fmt(info.tokens) + ' tokens · $' + Number(info.usd || 0).toFixed(4)
-    : status === 'ready' ? '实际 无调用' : '实际 —';
-  return '<div class="depth-row depth-' + RD.esc(status) + '" data-depth-row="' + RD.esc(key) + '">' +
-    '<label class="depth-check"><input type="checkbox" data-depth-layer="' + RD.esc(key) + '"' +
-      (depthSelected && depthSelected.has(key) ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
-      '<span>' + RD.esc(RD.depthNames[key]) + '</span></label>' +
-    '<span class="depth-pill ' + RD.esc(status) + '">' + RD.esc(depthStatusName(status)) + '</span>' +
-    '<span class="depth-meta">估算 ' + RD.fmt(estimate.tokens || 0) + ' tokens / $' +
-      Number(estimate.usd || 0).toFixed(4) + ' · ' + actual + '</span>' +
-    (info.error ? '<span class="depth-error">' + RD.esc(info.error) + '</span>' : '') +
-    '<button class="btn btn-ghost depth-one" type="button" data-depth-one="' + RD.esc(key) + '"' +
-      (disabled ? ' disabled' : '') + '>' + (status === 'failed' ? '重试' : '只生成此层') + '</button>' +
-    '</div>';
+function captureSelection() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) return null;
+  const text = sel.toString().trim();
+  if (!text) return null;
+  const reader = RD.mount('reader-body');
+  if (!reader) return null;
+  const range = sel.getRangeAt(0);
+  const startBlk = blockOfNode(range.startContainer);
+  const endBlk = blockOfNode(range.endContainer);
+  if (!startBlk && !endBlk) return null;
+  const all = Array.from(reader.querySelectorAll('.reader-block[data-block]'));
+  const i1 = startBlk ? all.indexOf(startBlk) : 0;
+  const i2 = endBlk ? all.indexOf(endBlk) : i1;
+  const lo = Math.min(i1, i2);
+  const hi = Math.max(i1, i2);
+  const ids = all.slice(lo, hi + 1).map((el) => el.getAttribute('data-block')).filter(Boolean);
+  const rect = range.getBoundingClientRect();
+  return { block_ids: ids, text, rect };
 }
 
-function depthPanelHtml() {
-  if (!data.depth) return '';
-  const layers = data.depth.layers || {};
-  const stale = data.depth.state === 'stale';
-  const staleText = data.depth.reason || '源文已变更，旧层已过期';
-  const preflight = data.depth.preflight || null;
-  const blocked = Boolean(preflight && preflight.ok === false);
-  const running = depthBusy || DEPTH_KEYS.some((key) => (layers[key] || {}).status === 'running');
-  const preflightHtml = preflight ? '<p class="depth-preflight' + (blocked ? ' blocked' : '') + '">' +
-    '本章 ' + RD.fmt(preflight.stats.blocks || 0) + ' 块 · ' + RD.fmt(preflight.stats.chunks || 0) + ' 个分块 · ' +
-    '单块最多 ' + RD.fmt(preflight.stats.max_chunk_blocks || 0) + ' 块 · 预计 ' +
-    RD.fmt(preflight.stats.estimated_output_tokens || 0) + ' 输出 token · 约 ' +
-    RD.fmt(preflight.stats.estimated_seconds || 0) + ' 秒' +
-    ((preflight.warnings || []).length ? '<br>警告：' + preflight.warnings.map(RD.esc).join('；') : '') +
-    '</p>' : '';
-  const blockedHtml = blocked ? '<p class="depth-warning">' +
-    RD.esc(preflight.remediation || '源文件过大，先拆分 md。') +
-    '<br>md 目录：books/' + RD.esc(UID) + '/md/</p>' : '';
-  return '<div class="section-title"><h2>深度生产</h2><span class="lbl">逐层生成 · 可单独重跑</span></div>' +
-    '<div class="depth-panel" id="depth-panel">' +
-      preflightHtml +
-      blockedHtml +
-      (stale ? '<p class="depth-warning">' + RD.esc(staleText) + '</p>' : '') +
-      DEPTH_KEYS.map(depthRow).join('') +
-      '<div class="depth-actions">' +
-        '<button class="btn btn-primary" id="depth-generate" type="button"' + ((running || blocked) ? ' disabled' : '') + '>' + depthGenerateLabel() + '</button>' +
-        '<button class="btn btn-ghost" id="depth-rebuild-model" type="button"' + ((running || blocked) ? ' disabled' : '') + '>只重建结构模型</button>' +
-      '</div>' +
-      '<div id="depth-jobs"></div>' +
-    '</div>';
+function positionSelectionBar(rect) {
+  const bar = RD.mount('selection-bar');
+  bar.classList.add('show');
+  const top = Math.max(66, rect.top - 48);
+  const left = Math.min(window.innerWidth - bar.offsetWidth - 16, Math.max(12, rect.left));
+  bar.style.top = top + 'px';
+  bar.style.left = left + 'px';
 }
 
-function depthGenerateLabel() {
-  const selected = depthSelected ? depthSelected.size : DEPTH_KEYS.length;
-  const kept = DEPTH_KEYS.length - selected;
-  if (!selected) return '没有要生成的层';
-  return kept > 0 ? '生成所选层（保留 ' + kept + ' 层）' : '生成全部五层';
+function hideSelectionBar() {
+  RD.mount('selection-bar').classList.remove('show');
 }
 
-function refreshDepthPanel() {
-  const root = RD.mount('depth-root');
-  if (root) root.innerHTML = depthPanelHtml();
-}
-
-function markPreflightBlocked(payload) {
-  if (!data.depth) return;
-  data.depth.preflight = {
-    ok: false,
-    code: payload.code,
-    warnings: [],
-    remediation: payload.remediation || null,
-    stats: payload.stats || {},
-  };
-  refreshDepthPanel();
-}
-
-function blockedCardHtml(payload) {
-  const stats = payload.stats || {};
-  return '<div class="job-inline open"><div class="job-head"><span class="eyebrow">预检未通过</span>' +
-    '<span class="job-state warn">已阻断</span></div>' +
-    '<div class="job-title">' + RD.esc(payload.error || '源文件过大') + '</div>' +
-    '<p class="job-error">本章 ' + RD.fmt(stats.blocks || 0) + ' 块 · ' +
-      RD.fmt(stats.chunks || 0) + ' 个分块 · 约 ' +
-      RD.fmt(stats.estimated_output_tokens || 0) + ' 输出 token</p>' +
-    (payload.remediation ? '<p class="job-error">' + RD.esc(payload.remediation) + '</p>' : '') +
-    '<p class="job-meta">md 目录：books/' + RD.esc(UID) + '/md/</p></div>';
-}
-
-function bindDepth() {
-  const root = RD.mount('depth-root');
-  if (!root) return;
-  root.addEventListener('change', (event) => {
-    const input = event.target.closest('input[data-depth-layer]');
-    if (!input || !depthSelected) return;
-    if (input.checked) depthSelected.add(input.value); else depthSelected.delete(input.value);
-    const button = document.getElementById('depth-generate');
-    if (button) button.textContent = depthGenerateLabel();
+function bindEvents() {
+  RD.mount('btn-map').addEventListener('click', () => {
+    showMap = !showMap;
+    RD.mount('btn-map').setAttribute('aria-pressed', String(showMap));
+    renderMapDrawer();
   });
-  root.addEventListener('click', (event) => {
-    const one = event.target.closest('[data-depth-one]');
-    if (one) {
-      const key = one.getAttribute('data-depth-one');
-      submitDepth([key], key === 'model');
+  RD.mount('btn-terms').addEventListener('click', () => {
+    showTerms = !showTerms;
+    RD.mount('btn-terms').setAttribute('aria-pressed', String(showTerms));
+    if (showTerms) showMap = true;
+    renderMapDrawer();
+  });
+  RD.mount('btn-toggle-pins').addEventListener('click', () => {
+    hidePins = !hidePins;
+    document.body.classList.toggle('hide-pins', hidePins);
+    RD.mount('btn-toggle-pins').setAttribute('aria-pressed', String(!hidePins));
+  });
+  RD.mount('btn-model-box').addEventListener('click', () => {
+    showModelBox = !showModelBox;
+    RD.mount('model-box').hidden = !showModelBox;
+    RD.mount('btn-model-box').setAttribute('aria-pressed', String(showModelBox));
+  });
+  RD.mount('btn-drawer').addEventListener('click', () => setDrawerOpen(!drawerOpen));
+  RD.mount('btn-drawer-close').addEventListener('click', () => setDrawerOpen(false));
+  RD.mount('btn-pin').addEventListener('click', pinCurrentResult);
+
+  RD.mount('drawer-ask-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = RD.mount('drawer-ask-input');
+    const q = (input.value || '').trim();
+    if (!q) return;
+    if (!currentSelection.block_ids.length && data.blocks && data.blocks.length) {
+      currentSelection = { block_ids: [data.blocks[0].id], text: data.blocks[0].text || '' };
+    }
+    input.value = '';
+    runAssist('ask', q);
+  });
+
+  const reader = RD.mount('reader-body');
+  reader.addEventListener('mouseup', () => {
+    setTimeout(() => {
+      const cap = captureSelection();
+      if (!cap) return;
+      currentSelection = { block_ids: cap.block_ids, text: cap.text };
+      positionSelectionBar(cap.rect);
+    }, 10);
+  });
+
+  reader.addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('[data-del-pin]');
+    if (delBtn) {
+      e.stopPropagation();
+      const noteId = delBtn.getAttribute('data-del-pin');
+      await deletePin(noteId);
       return;
     }
-    if (event.target.closest('#depth-generate')) {
-      submitDepth(DEPTH_KEYS.filter((key) => depthSelected && depthSelected.has(key)), false);
-    } else if (event.target.closest('#depth-rebuild-model')) {
-      submitDepth(['model'], true);
+    const trig = e.target.closest('[data-trigger]');
+    if (trig) {
+      e.stopPropagation();
+      const bid = trig.getAttribute('data-trigger');
+      const blk = (data.blocks || []).find((b) => b.id === bid);
+      currentSelection = { block_ids: [bid], text: (blk && blk.text) || '' };
+      reader.querySelectorAll('.reader-block.active').forEach((n) => n.classList.remove('active'));
+      trig.closest('.reader-block').classList.add('active');
+      positionSelectionBar(trig.getBoundingClientRect());
     }
   });
-}
 
-async function submitDepth(layers, rebuildModel) {
-  if (depthBusy || !data.depth) return;
-  if (!layers.length) {
-    RD.toast('至少选一层', true);
-    return;
-  }
-  depthBusy = true;
-  refreshDepthPanel();
-  const mount = RD.mount('depth-jobs');
-  const send = async (allowUnverified) => {
-    try {
-      const settings = RD.modelSettings();
-      const job = await RD.api('/api/depth/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
-        method: 'POST',
-        body: {
-          layers,
-          model: settings.model,
-          effort: settings.effort,
-          rebuild_model: Boolean(rebuildModel),
-          allow_unverified: Boolean(allowUnverified),
-        },
-      });
-      if (mount) {
-        const slot = document.createElement('div');
-        slot.setAttribute('data-depth-job', job.id);
-        mount.appendChild(slot);
-        mount.classList.add('open');
-        RD.pollJob(job.id, slot, async (finished) => {
-          depthBusy = false;
-          const failed = finished.state === 'failed';
-          const blocked = finished.state === 'blocked';
-          RD.toast(failed || blocked
-            ? (finished.error || (blocked ? '源文件过大，已阻断' : '深度生成失败'))
-            : '深度层已生成 · ' + RD.statusName[finished.state], failed || blocked);
-          await load();
-        });
-      }
-    } catch (err) {
-      depthBusy = false;
-      if (err.status === 422 && err.payload && err.payload.code === 'source_too_large') {
-        const payload = err.payload;
-        markPreflightBlocked(payload);
-        const liveMount = RD.mount('depth-jobs');
-        if (liveMount) {
-          liveMount.innerHTML = blockedCardHtml(payload);
-          liveMount.classList.add('open');
-        }
-        RD.toast(payload.error || '源文件过大', true);
-        return;
-      }
-      refreshDepthPanel();
-      if (err.code === 'job_active') {
-        RD.toast('该章已有任务在跑，先去生成记录看进度', true);
-      } else if (err.code === 'missing_config' && err.payload && err.payload.degradable && !allowUnverified &&
-          window.confirm(err.payload.error + '\n\n' + (err.payload.missing[0] ? err.payload.missing[0].fix : '') +
-            '\n\n先按「未检索议程」继续？')) {
-        return send(true);
-      } else {
-        RD.toast(err.message, true);
-      }
+  document.addEventListener('mousedown', (e) => {
+    const bar = RD.mount('selection-bar');
+    if (bar.contains(e.target) || e.target.closest('[data-trigger]')) return;
+    if (!reader.contains(e.target)) hideSelectionBar();
+    else setTimeout(() => { if (!window.getSelection() || window.getSelection().isCollapsed) hideSelectionBar(); }, 10);
+  });
+
+  RD.mount('selection-bar').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.getAttribute('data-action');
+    hideSelectionBar();
+    if (action === 'ask') {
+      setDrawerOpen(true);
+      const qEl = RD.mount('drawer-ask-input');
+      if (qEl) { qEl.focus(); qEl.placeholder = '输入想问这段话的问题…'; }
+      RD.mount('drawer-empty').hidden = true;
+      RD.mount('drawer-quote').hidden = false;
+      RD.mount('drawer-quote').textContent = currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', '));
+      return;
     }
-  };
-  return send(false);
-}
-
-
-function bindTicket() {
-  bindMode();
-  RD.mount('tier-list').addEventListener('change', (event) => {
-    const input = event.target.closest('input[type=checkbox]');
-    if (!input) return;
-    if (input.checked) selected.add(input.value); else selected.delete(input.value);
-    input.closest('.tier-opt').classList.toggle('checked', input.checked);
-    updateEstimate();
-  });
-  RD.mount('generate').addEventListener('click', generate);
-  RD.mount('generate-edition').addEventListener('click', generateEdition);
-  RD.bindModelSettings();
-  updateEstimate();
-}
-
-function planFor(keys) {
-  const existing = (data.tiers || []).filter((tier) => tier.exists).map((tier) => tier.key);
-  const existingSelected = existing.filter((key) => keys.includes(key));
-  const unselected = existing.filter((key) => !keys.includes(key));
-  const destructive = Boolean(unselected.length && data.pack && data.pack.preservable === false);
-  return { existingSelected, unselected, destructive, reason: data.pack && data.pack.preserve_reason };
-}
-
-function planText(keys, plan) {
-  const head = plan.existingSelected.length ? '将重新生成：' : '将新增：';
-  let text = head + keys.map((key) => RD.tierNames[key]).join('、');
-  if (plan.unselected.length) {
-    text += (plan.destructive ? '；未勾选档位将被移除：' : '；保留：') +
-      plan.unselected.map((key) => RD.tierNames[key]).join('、');
-  }
-  if (plan.destructive && plan.reason) text += '（' + plan.reason + '）';
-  return text;
-}
-
-function updateEstimate() {
-  if (!RD.mount('ticket-est')) return;
-  const keys = TIER_KEYS.filter((key) => selected.has(key));
-  const active = keys.filter((key) => pending.has(key) || RD.jobForTier(data.jobs, key));
-  const button = RD.mount('generate');
-  if (button) {
-    button.disabled = keys.length === 0 || pendingBusy;
-    button.textContent = pendingBusy ? '正在提交…' : active.length ? '查看进行中的工单' :
-      keys.length ? '生成 ' + keys.length + ' 档读本 →' : '至少选一档';
-  }
-  const mode = (data.reading || {}).effective_mode || 'argument';
-  const hasProfile = Boolean((data.reading || {}).book_mode);
-  if (button) {
-    button.disabled = keys.length === 0 || pendingBusy || !hasProfile;
-    button.title = hasProfile ? '' : '先选一个读法，设为本书默认';
-    button.textContent = hasProfile
-      ? '按「' + modeLabel(mode) + '」生成读本 →'
-      : '先选一个读法 →';
-  }
-  RD.mount('ticket-est').textContent = keys.length
-    ? '按「' + modeLabel(mode) + '」生成 ' + keys.length + ' 档 · ' + planText(keys, planFor(keys)) +
-      ' · ' + RD.fmt(data.chapter.chars) + ' 字'
-    : '未选档位';
-}
-
-function jobSlot(job) {
-  const mount = RD.mount('job-mount');
-  return mount ? mount.querySelector('[data-job-slot="' + job.id + '"]') : null;
-}
-
-function showJobs(jobs) {
-  const mount = RD.mount('job-mount');
-  if (!mount || !jobs.length) return;
-  jobs.forEach((job) => {
-    let slot = jobSlot(job);
-    if (!slot) {
-      slot = document.createElement('div');
-      slot.setAttribute('data-job-slot', job.id);
-      mount.appendChild(slot);
-    }
-    slot.innerHTML = RD.jobCard(job);
-    const card = slot.querySelector('.job-inline');
-    if (card) card.classList.add('open');
-  });
-  mount.classList.add('open');
-}
-
-function watchJob(job, onDone) {
-  const slot = jobSlot(job);
-  if (!slot || polling.has(job.id)) return;
-  polling.add(job.id);
-  RD.pollJob(job.id, slot, async (finished) => {
-    polling.delete(finished.id);
-    if (onDone) onDone(finished);
-    await load();
-  }, (updated) => {
-    const index = data.jobs.findIndex((item) => item.id === updated.id);
-    if (index >= 0) data.jobs[index] = updated; else data.jobs.push(updated);
-    if (['done', 'partial', 'failed', 'cancelled'].includes(updated.state)) polling.delete(updated.id);
-    refreshTiers();
+    runAssist(action, '');
   });
 }
 
-async function postJob(keys, overwrite, rebuild, allowUnverified) {
+async function runAssist(action, question) {
+  if (abortCtrl) abortCtrl.abort();
+  abortCtrl = new AbortController();
   const settings = RD.modelSettings();
-  return RD.api('/api/jobs', { method: 'POST', body: {
-    uid: data.book.uid, n: data.chapter.n, tiers: keys, model: settings.model, effort: settings.effort,
-    mode: (data.reading || {}).effective_mode, reading_hash: JSON.stringify(data.reading || {}),
-    overwrite: Boolean(overwrite), rebuild: Boolean(rebuild), allow_unverified: Boolean(allowUnverified),
-  } });
-}
+  lastResult = null;
+  setDrawerOpen(true);
+  RD.mount('btn-pin').disabled = true;
+  RD.mount('drawer-empty').hidden = true;
+  RD.mount('drawer-title').textContent = (RD.actionNames[action] || action) +
+    (currentSelection.block_ids.length ? ' · ' + currentSelection.block_ids.join('-') : '');
+  RD.mount('drawer-quote').hidden = false;
+  RD.mount('drawer-quote').textContent = currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', '));
+  RD.mount('drawer-diagram').innerHTML = '';
+  RD.mount('drawer-answer').innerHTML = '<span class="wb-sub">正在思考与生成…</span>';
+  RD.mount('drawer-meta').textContent = '';
 
-async function generateEdition() {
-  if (!window.confirm('生成视觉读本会调用模型，约 30–60 秒，并用当前原文重建这一章的版式。继续吗？')) return;
-  const button = RD.mount('generate-edition');
-  button.disabled = true;
-  button.textContent = '正在提交…';
+  let streamBuf = '';
   try {
-    const settings = RD.modelSettings();
-    const job = await RD.api('/api/edition/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
+    const res = await fetch('/api/assist', {
       method: 'POST',
-      body: { model: settings.model, effort: settings.effort, overwrite: Boolean(data.edition) },
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      signal: abortCtrl.signal,
+      body: JSON.stringify({
+        uid: UID,
+        n: N,
+        action,
+        block_ids: currentSelection.block_ids,
+        selected_text: currentSelection.text,
+        question,
+        model: settings.model,
+        effort: settings.effort,
+        stream: true,
+      }),
     });
-    location.href = RD.recordsJobHref(job.id);
-  } catch (err) {
-    button.disabled = false;
-    button.textContent = '生成视觉读本（模型约 30–60 秒）';
-    if (err.code === 'job_active') {
-      RD.toast('这一章已有任务在跑，先去生成记录看进度', true);
-    } else {
-      RD.toast(err.message, true);
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || ('请求失败：' + res.status));
     }
+    const ctype = res.headers.get('Content-Type') || '';
+    if (!ctype.includes('text/event-stream')) {
+      const json = await res.json();
+      applyDoneResult(json);
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let rest = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      rest += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = rest.indexOf('\n\n')) >= 0) {
+        const frame = rest.slice(0, idx);
+        rest = rest.slice(idx + 2);
+        let evName = 'message';
+        let dataLine = '';
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) evName = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+        }
+        if (!dataLine) continue;
+        const payload = JSON.parse(dataLine);
+        if (evName === 'delta') {
+          streamBuf += payload.text || '';
+          RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(streamBuf);
+        } else if (evName === 'diagram') {
+          RD.mount('drawer-diagram').innerHTML = payload.html || '';
+        } else if (evName === 'done') {
+          applyDoneResult(payload);
+        } else if (evName === 'error') {
+          throw new Error(payload.error || '伴读调用失败');
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    RD.mount('drawer-answer').innerHTML = '<p class="job-error">' + RD.esc(err.message) + '</p>';
+    RD.toast(err.message, true);
   }
 }
 
-async function generate() {
-  const keys = TIER_KEYS.filter((key) => selected.has(key));
-  if (!keys.length) return;
-  if (!(data.reading || {}).book_mode) {
-    RD.toast('先在右侧选一个读法，设本书默认', true);
-    return;
+function applyDoneResult(payload) {
+  lastResult = payload;
+  if (payload.diagram_html) {
+    RD.mount('drawer-diagram').innerHTML = payload.diagram_html;
   }
-  if (pendingBusy) {
-    RD.toast('正在提交，请稍候', true);
-    return;
+  if (payload.content) {
+    RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(payload.content);
   }
-  const active = keys.map((key) => RD.jobForTier(data.jobs, key)).filter(Boolean);
-  if (active.length) {
-    location.href = RD.recordsJobHref(active[0].id);
-    return;
-  }
-  const plan = planFor(keys);
-  const summary = planText(keys, plan);
-  let overwrite = false;
-  let rebuild = false;
-  if (plan.destructive) {
-    if (!window.confirm(summary + '。未勾选档位将被移除，整包重建为所选档位，确定吗？')) return;
-    overwrite = true;
-    rebuild = true;
-  } else if (plan.existingSelected.length) {
-    if (!window.confirm(summary + '。继续会重新生成并覆盖所选档位，确定吗？')) return;
-    overwrite = true;
-  }
-  const mount = RD.mount('job-mount');
-  pendingBusy = true;
-  keys.forEach((key) => pending.add(key));
-  refreshTiers();
+  const metaParts = [];
+  if (payload.model) metaParts.push(payload.model);
+  if (payload.tokens) metaParts.push(RD.fmt(payload.tokens) + ' tokens');
+  if (payload.elapsed_ms) metaParts.push(RD.elapsed(payload.elapsed_ms));
+  RD.mount('drawer-meta').textContent = metaParts.join(' · ');
+  RD.mount('btn-pin').disabled = false;
+}
+
+async function pinCurrentResult() {
+  if (!lastResult) return;
+  const btn = RD.mount('btn-pin');
+  btn.disabled = true;
   try {
-    let job;
-    try {
-      job = await postJob(keys, overwrite, rebuild);
-    } catch (err) {
-      if (err.code === 'pack_exists' && !overwrite) {
-        const labels = (err.payload.tiers || keys).map((key) => RD.tierNames[key] || key).join('、');
-        if (!window.confirm(labels + ' 已有读本。' + summary + '。继续会重新生成并覆盖，确定吗？')) throw err;
-        job = await postJob(keys, true, rebuild);
-      } else if (err.code === 'rebuild_required' && !rebuild) {
-        const labels = (err.payload.tiers || []).map((key) => RD.tierNames[key] || key).join('、');
-        if (!window.confirm('未勾选档位将被移除：' + labels + '（' + (err.payload.reason || '原文或生成模式已变化') +
-            '），整包重建为所选档位。确定吗？')) throw err;
-        job = await postJob(keys, true, true);
-      } else if (err.code === 'missing_config' && err.payload && err.payload.degradable) {
-        const fix = err.payload.missing && err.payload.missing[0] ? err.payload.missing[0].fix : '';
-        if (!window.confirm(err.payload.error + '\n\n' + fix + '\n\n先按「未检索议程」继续？')) throw err;
-        job = await postJob(keys, overwrite, rebuild, true);
-      } else {
-        throw err;
-      }
-    }
-    data.jobs = (data.jobs || []).concat([job]);
-    showJobs([job]);
-    watchJob(job, (finished) => {
-      RD.toast(finished.state === 'failed' ? (finished.error || '生成失败') : '读本已生成 · ' + RD.statusName[finished.state], finished.state === 'failed');
+    const title = (lastResult.figure && lastResult.figure.caption) || '';
+    const saved = await RD.api('/api/assist/pin', {
+      method: 'POST',
+      body: {
+        uid: UID,
+        n: N,
+        action: lastResult.action,
+        title,
+        block_ids: lastResult.block_ids && lastResult.block_ids.length ? lastResult.block_ids : currentSelection.block_ids,
+        selected_text: lastResult.selected_text || currentSelection.text,
+        question: lastResult.question || '',
+        content: lastResult.content || '',
+        diagram_html: lastResult.diagram_html || '',
+      },
     });
+    data.assist_notes = (data.assist_notes || []).concat([saved]);
+    renderBlocks();
+    RD.toast('已钉住到正文旁');
+    focusBlock(saved.block_ids[saved.block_ids.length - 1]);
   } catch (err) {
-    if (err.code === 'job_active') {
-      const conflicts = err.conflicts || [];
-      const jobs = data.jobs || [];
-      conflicts.forEach((item) => {
-        if (!jobs.some((job) => job.id === item.id)) jobs.push(item);
-      });
-      data.jobs = jobs;
-      showJobs(conflicts);
-      conflicts.forEach((item) => watchJob(item, null));
-      refreshTiers();
-      RD.toast(err.message, true);
-    } else if (err.status === 422 && err.payload && err.payload.code === 'source_too_large') {
-      markPreflightBlocked(err.payload);
-      if (mount) {
-        const banner = document.createElement('div');
-        banner.innerHTML = blockedCardHtml(err.payload);
-        mount.appendChild(banner);
-        mount.classList.add('open');
-      }
-      RD.toast(err.payload.error || '源文件过大', true);
-    } else {
-      if (mount) {
-        const banner = document.createElement('div');
-        banner.innerHTML = '<div class="job-inline open"><p class="job-error">' + RD.esc(err.message) + '</p></div>';
-        mount.appendChild(banner);
-        mount.classList.add('open');
-      }
-      RD.toast(err.message, true);
-    }
-  } finally {
-    pendingBusy = false;
-    pending.clear();
-    refreshTiers();
+    RD.toast(err.message, true);
+    btn.disabled = false;
   }
 }
 
-function bind() { bindDepth(); }
+async function deletePin(noteId) {
+  try {
+    await RD.api('/api/assist/pin/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N) + '/' + encodeURIComponent(noteId), {
+      method: 'DELETE',
+    });
+    data.assist_notes = (data.assist_notes || []).filter((n) => n.id !== noteId);
+    renderBlocks();
+    RD.toast('已移除旁批');
+  } catch (err) {
+    RD.toast(err.message, true);
+  }
+}
 </script>
 </body>
 </html>

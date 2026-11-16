@@ -2,12 +2,12 @@ import copy
 
 import pytest
 
-from bookcorpus.reading.depth.model import (
+from bookcorpus.reading.chapmap import (
     _chunk_payload,
     _merge_chunks,
     _normalize_chunk_refs,
 )
-from bookcorpus.reading.depth.schema import PROMPT_VERSION, ChapterModelError
+from bookcorpus.reading.map_schema import PROMPT_VERSION, ChapterModelError
 
 
 def _blocks():
@@ -118,31 +118,3 @@ def test_structural_leftover_becomes_non_semantic():
     raw["non_semantic"] = [{"block": "C01-B05", "reason": "decorative"}]
     out = _normalize_chunk_refs(raw, id_prefix="C01-", chunk=blocks)
     assert {"block": "B06", "reason": "heading"} in out["non_semantic"]
-
-
-def test_skim_allows_one_claim_for_a_two_unit_section():
-    from bookcorpus.reading.depth.skim import _checks
-
-    blocks = [{"id": "B01", "kind": "paragraph", "text": "甲" * 1000}]
-    model = {
-        "units": [{"id": "U01", "source_blocks": ["B01"], "importance": "core", "section": "S01"}],
-        "sections": [{"id": "S01", "unit_ids": ["U01"]}],
-    }
-    payload = {
-        "schema": 1,
-        "prompt_version": "skim-compiler-v2",
-        "kind": "claims",
-        "supported": True,
-        "reason": "",
-        "sections": [
-            {
-                "id": "S01",
-                "lead": "导语。",
-                "claims": [{"text": "乙" * 200, "units": ["U01"], "anchor": "B01"}],
-                "turn": "",
-            }
-        ],
-        "detail_index": [],
-    }
-    _clean, g11, _g14, _warnings, _audit = _checks(payload, model, blocks)
-    assert not any("claims 必须有" in item for item in g11)

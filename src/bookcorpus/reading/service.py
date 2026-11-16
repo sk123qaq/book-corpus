@@ -1,667 +1,309 @@
-"""编排：解析 → （可选）标注 → 校验 → 三档 → 渲染 → 门禁 → 原子落盘。"""
+"""阅读工作台编排服务：完整正文直出、划词伴读、知识地图与操作日志。"""
 
-import glob
-import hashlib
-import json
+from __future__ import annotations
+
 import os
-import re
-import threading
 import time
-from html.parser import HTMLParser
-from pathlib import Path
-from typing import ClassVar
+import uuid
 
-from .. import preflight
+from .. import preflight as env_preflight
 from ..scripts import lib_common as L
-from . import events, profile
-from .agent_standard import generate_standard_html, render_agent_page
-from .depth.deep import audit_deep, generate_deep, validate_deep
-from .depth.disposition import audit_conservation, plan_all_dispositions
-from .depth.model import generate_chapter_model, plan_chunks
-from .depth.panels import audit_panels, generate_panels, validate_panels
-from .depth.preflight import evaluate
-from .depth.render import render_depth_chapter
-from .depth.skim import SkimError, audit_skim, generate_skim, validate_skim
-from .depth.standard import build_standard
-from .edition import audit_edition, build_brief, decide_template, generate_content, render_edition, validate_content
-from .editorial import EditorialError, audit_editorial, validate_editorial
-from .editorial_gen import generate_editorial
-from .jobs import JobQueue
+from . import chapmap, diagrams, events, profile
 from .library import Library
-from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, prompt_sha256
-from .quality import check_html
-from .render import asset_url, image_data_uri, render_chapter, render_export
-from .store import DEPTH_FILES, DEPTH_LAYERS, MODE_LAYERS, Store
-from .tiers import TIER_ORDER, TIER_SPECS, project, validate_annotation
+from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, _loads_content
+from .preflight import chapter_map_gate, evaluate
+from .store import Store
 
-GENERATOR = "book-corpus-reading"
-GENERATOR_VERSION = "phase1-1"
-RENDER_VERSION = "r3"
-# 覆盖率按整块取舍，块粒度决定了结果只能落在离散点上。给 G3 留
-# 两个百分点的容差，避免一个 17% 的长块把 0.80 卡成 0.78。
-COVERAGE_TOLERANCE = 0.02
-DRAFT_PROMPT = "draft"
-MAX_BUDGET_TOKENS = 500_000
-MAX_BUDGET_USD = 1.0
-USD_PER_MTOK_IN = 1.0
-USD_PER_MTOK_OUT = 2.0
-
-
-class JobConflictError(RuntimeError):
-    """同一章已有任务在排队或运行。"""
-
-    def __init__(self, conflicts):
-        self.conflicts = conflicts or []
-        super().__init__("该章已有任务在排队或运行")
-
-
-class RebuildRequiredError(RuntimeError):
-    """原文或生成模式变了，未勾选档位无法保留，必须显式整包重建。"""
-
-    def __init__(self, tiers, reason):
-        self.tiers = list(tiers or [])
-        self.reason = reason or "原文或生成模式已变化"
-        super().__init__("未勾选档位无法保留：%s" % self.reason)
+ASSIST_ACTIONS = ("diagram", "explain", "translate", "critique", "ask")
+ACTION_LABELS = {
+    "chapter_map": "知识地图",
+    "diagram": "图解此段",
+    "explain": "讲人话举例",
+    "translate": "翻译原意",
+    "critique": "拆解前提",
+    "ask": "自由追问",
+    "pin": "钉住旁批",
+    "unpin": "移除旁批",
+}
+ACTION_PRIORITY = {
+    "argument": ("diagram", "critique", "explain", "translate", "ask"),
+    "practical": ("diagram", "explain", "ask", "translate", "critique"),
+    "narrative": ("explain", "translate", "diagram", "ask", "critique"),
+    "reference": ("diagram", "explain", "translate", "ask", "critique"),
+}
+WORDS_PER_MINUTE = 480
 
 
 class MissingProfileError(ValueError):
-    """本章所属书还没有书级读法；生成前必须由人确认，不能隐式写账。"""
+    """本书尚未设定默认读法时给出明确提示，不再阻断章节页阅读。"""
 
     def __init__(self, uid):
         self.uid = uid
-        super().__init__("这本书还没有读法，请先确认书级默认读法")
+        super().__init__("这本书还没有设定默认读法")
 
 
-class PackExistsError(RuntimeError):
-    """该档位已有读本，需要用户确认覆盖。"""
-
-    def __init__(self, tiers):
-        self.tiers = list(tiers or [])
-        super().__init__("该档位已有读本")
-
-
-def _now():
+def _now_iso():
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 
 
-def _nkey(text):
-    return re.sub(r"[\W_]+", "", (text or "").lower())
+def _elapsed_ms(started):
+    return max(0, int((time.perf_counter() - started) * 1000))
 
 
-def _pack_meta(state):
-    manifest = (state or {}).get("manifest") or {}
-    if not manifest:
-        return None
+def _usage_tokens(usage):
+    if not isinstance(usage, dict):
+        return 0
+    total = int(usage.get("total_tokens") or 0)
+    if total:
+        return total
+    return int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0) + int(
+        usage.get("completion_tokens") or usage.get("output_tokens") or 0
+    )
+
+
+def _block_preview_text(block):
+    text = (block.get("text") or "").strip()
+    if text:
+        return text
+    items = block.get("items") or []
+    if items:
+        return "\n".join(str(item) for item in items)
+    rows = block.get("rows") or []
+    if rows:
+        return "\n".join(" | ".join(str(cell) for cell in row) for row in rows if isinstance(row, list))
+    return ""
+
+
+def _summarize_chapter_map(model_doc, blocks):
+    """将结构模型收口成工作台左侧/顶部可直接渲染的知识地图。"""
+    unit_by_id = {u.get("id"): u for u in (model_doc.get("units") or []) if isinstance(u, dict) and u.get("id")}
+    sections = []
+    for sec in model_doc.get("sections") or []:
+        if not isinstance(sec, dict):
+            continue
+        sec_blocks = []
+        seen_blocks = set()
+        nodes = []
+        for uid_item in sec.get("unit_ids") or []:
+            unit = unit_by_id.get(uid_item)
+            if not unit:
+                continue
+            for bid in unit.get("source_blocks") or []:
+                if bid not in seen_blocks:
+                    seen_blocks.add(bid)
+                    sec_blocks.append(bid)
+            nodes.append(
+                {
+                    "id": uid_item,
+                    "kind": unit.get("kind") or "claim",
+                    "importance": unit.get("importance") or "support",
+                    "summary": unit.get("summary") or "",
+                    "block_ids": list(unit.get("source_blocks") or []),
+                    "hard_info": bool(unit.get("hard_info")),
+                    "hard_info_note": unit.get("hard_info_note") or "",
+                }
+            )
+        sections.append(
+            {
+                "id": sec.get("id") or "",
+                "title": sec.get("title") or "未命名节拍",
+                "summary": sec.get("summary") or "",
+                "block_ids": sec_blocks,
+                "nodes": nodes,
+            }
+        )
+    terms = []
+    for term in model_doc.get("terms") or []:
+        if not isinstance(term, dict) or not term.get("term"):
+            continue
+        terms.append(
+            {
+                "term": term.get("term") or "",
+                "definition": term.get("definition") or "",
+                "source_block": term.get("source_block") or "",
+                "quote": term.get("quote") or "",
+            }
+        )
+    figures = []
+    for fig in model_doc.get("figures") or []:
+        if not isinstance(fig, dict):
+            continue
+        figures.append(
+            {
+                "id": fig.get("id") or "",
+                "family": fig.get("family") or "flow",
+                "caption": fig.get("caption") or "",
+                "reading_note": fig.get("reading_note") or "",
+                "html": diagrams.render_assist_figure(fig),
+            }
+        )
     return {
-        "exists": True,
-        "draft": bool(manifest.get("draft")),
-        "status": manifest.get("status"),
-        "state": (state or {}).get("status"),
-        "generated_at": manifest.get("generated_at"),
-        "source_sha256": manifest.get("source_sha256"),
-        "source_changed": bool((state or {}).get("source_changed")),
-        "preservable": (state or {}).get("preservable"),
-        "preserve_reason": (state or {}).get("preserve_reason"),
-        "model": manifest.get("model"),
-        "reasoning_effort": manifest.get("reasoning_effort"),
-        "model_fallback": manifest.get("model_fallback"),
-        "usage": manifest.get("usage"),
-    }
-
-
-def _estimate_budget(blocks):
-    """保守估算一次标注的 token / 美元；真实 usage 另记。"""
-    text_chars = sum(len((block.get("text") or "").strip()) for block in blocks)
-    input_tokens = int(text_chars * 0.8) + 1_500
-    output_tokens = min(8_192, 1_500 + len([b for b in blocks if (b.get("text") or "").strip()]) * 50)
-    usd = input_tokens / 1_000_000 * USD_PER_MTOK_IN + output_tokens / 1_000_000 * USD_PER_MTOK_OUT
-    return {
-        "input_tokens_est": input_tokens,
-        "output_tokens_est": output_tokens,
-        "tokens_est": input_tokens + output_tokens,
-        "usd_est": round(usd, 4),
-        "limit_tokens": MAX_BUDGET_TOKENS,
-        "limit_usd": MAX_BUDGET_USD,
-    }
-
-
-def _usage_cost(usage):
-    """从一次调用的 usage 算实际 token 与美元；字段兼容常见两种命名。"""
-    usage = usage or {}
-    prompt = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
-    completion = int(usage.get("completion_tokens") or usage.get("output_tokens") or 0)
-    total = int(usage.get("total_tokens") or 0) or prompt + completion
-    usd = prompt / 1_000_000 * USD_PER_MTOK_IN + completion / 1_000_000 * USD_PER_MTOK_OUT
-    return total, usd
-
-
-def _depth_sha(payload):
-    """深度层哈希：排序键、无空白，同一对象在任意进程里得到同一串。"""
-    text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _depth_estimate(blocks):
-    """每层保守用量估算；只用 source 块，调用前后稳定。"""
-    model_budget = _estimate_budget(blocks or [])
-    input_tokens = model_budget["input_tokens_est"]
-    output_tokens = model_budget["output_tokens_est"]
-    model_tokens = input_tokens + output_tokens
-    model_usd = model_budget["usd_est"]
-
-    def scaled(token_ratio, usd_ratio):
-        return {
-            "tokens": max(0, round(model_tokens * token_ratio)),
-            "usd": max(0.0, round(model_usd * usd_ratio, 4)),
-        }
-
-    return {
-        "model": {"tokens": model_tokens, "usd": model_usd},
-        "skim": {
-            "tokens": max(0, round(input_tokens * 0.5 + output_tokens * 0.2)),
-            "usd": max(
-                0.0,
-                round(
-                    input_tokens * 0.5 / 1_000_000 * USD_PER_MTOK_IN
-                    + output_tokens * 0.2 / 1_000_000 * USD_PER_MTOK_OUT,
-                    4,
-                ),
-            ),
+        "sections": sections,
+        "terms": terms,
+        "figures": figures,
+        "stats": {
+            "sections": len(sections),
+            "units": len(unit_by_id),
+            "terms": len(terms),
+            "figures": len(figures),
+            "blocks": len(blocks or []),
         },
-        "panels": scaled(0.35, 0.35),
-        "standard": {"tokens": 0, "usd": 0.0},
-        "deep": scaled(0.6, 0.6),
     }
 
 
-def _chapter_api(chapter, tiers=None, state=None, path=None, fallback_reason=None, pack=None):
-    data = dict(chapter)
-    data["n"] = "%02d" % int(chapter["n"])
-    data["minutes"] = max(1, round(chapter.get("chars", 0) / TIER_SPECS["standard"]["wpm"]))
-    data["tiers"] = tiers or {}
-    pack = pack if pack is not None else _pack_meta(state)
-    data["pack"] = pack
-    data["draft"] = bool(pack and pack["draft"])
-    data["path"] = path or "none"
-    data["fallback_reason"] = fallback_reason
-    return data
+def _toolbar_for_mode(mode):
+    order = ACTION_PRIORITY.get(mode, ("diagram", "explain", "translate", "critique", "ask"))
+    return [{"action": act, "label": ACTION_LABELS[act]} for act in order]
 
 
-class _Structure(HTMLParser):
-    VOID: ClassVar[set[str]] = {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
+def _assist_prompts(action, *, mode, book, chapter, selected_text, block_ids, context_text, question=""):
+    book_title = (book or {}).get("title") or ""
+    chapter_title = (chapter or {}).get("title") or ""
+    mode_meta = profile.MODE_META.get(mode) or profile.MODE_META["argument"]
+    loc = f"《{book_title}》· {chapter_title}（段落 {', '.join(block_ids) or '整章'}）"
+    context_block = f"相邻上下文：\n{context_text}\n\n" if context_text else ""
+    focus_block = f"读者选中的原文：\n{selected_text}" if selected_text else "读者针对当前章节提问。"
 
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.stack = []
-        self.errors = []
-        self.doctype = False
-
-    def handle_decl(self, decl):
-        if decl.lower().startswith("doctype html"):
-            self.doctype = True
-
-    def handle_starttag(self, tag, attrs):
-        if tag not in self.VOID:
-            self.stack.append(tag)
-
-    def handle_startendtag(self, tag, attrs):
-        return
-
-    def handle_endtag(self, tag):
-        if tag in self.VOID:
-            return
-        if not self.stack or self.stack[-1] != tag:
-            self.errors.append("</%s>" % tag)
-            return
-        self.stack.pop()
-
-
-class _SourceText(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.depth = 0
-        self.current = None
-        self.chunks = {}
-        self.order = []
-
-    def handle_starttag(self, tag, attrs):
-        if self.current:
-            self.depth += 1
-            return
-        values = dict(attrs)
-        if values.get("data-origin") == "source" and values.get("data-block"):
-            self.current = values["data-block"]
-            self.depth = 1
-            self.chunks[self.current] = []
-            self.order.append(self.current)
-
-    def handle_startendtag(self, tag, attrs):
-        if self.current and tag in ("img", "br", "hr"):
-            return
-        if not self.current:
-            values = dict(attrs)
-            if values.get("data-origin") == "source" and values.get("data-block"):
-                self.chunks.setdefault(values["data-block"], [])
-                self.order.append(values["data-block"])
-
-    def handle_endtag(self, tag):
-        if not self.current:
-            return
-        self.depth -= 1
-        if self.depth <= 0:
-            self.current = None
-
-    def handle_data(self, data):
-        if self.current:
-            self.chunks[self.current].append(data)
-
-
-def source_texts(html_text):
-    parser = _SourceText()
-    parser.feed(html_text)
-    return {block_id: "".join(parts).strip() for block_id, parts in parser.chunks.items()}
-
-
-def _han_only(text):
-    return "".join(re.findall(r"[\u4e00-\u9fff]", text or ""))
-
-
-def _coverage_problems(projections):
-    """G3 的字数判定；容差留给整块取舍的粒度。字数带是各档的长度契约，越界即拦。"""
-    problems = []
-    for tier, projection in projections.items():
-        stats = projection["stats"]
-        spec = TIER_SPECS[tier]
-        if stats["c_char"] < spec["c_min"] - COVERAGE_TOLERANCE or stats["c_char"] > spec["c_max"] + COVERAGE_TOLERANCE:
-            problems.append("%s C字=%.2f" % (tier, stats["c_char"]))
-    return problems
-
-
-def _block_band_problems(projections):
-    """G3 的块覆盖判定，只作诊断。
-
-    对话密集的章节里，块数以 2–16 字的台词块为主；要凑进块带只能把这些
-    孤立台词塞进速览，凑够了反而更伤内容。块覆盖如实报告，不拦发布。
-    """
-    problems = []
-    for tier, projection in projections.items():
-        stats = projection["stats"]
-        spec = TIER_SPECS[tier]
-        if (
-            stats["c_block"] < spec["b_min"] - COVERAGE_TOLERANCE
-            or stats["c_block"] > spec["b_max"] + COVERAGE_TOLERANCE
-        ):
-            problems.append("%s C块=%.2f" % (tier, stats["c_block"]))
-    return problems
-
-
-def audit_pack(blocks, projections, html_text, annotation, drafts, editorial=None):
-    gates = []
-    quality = check_html(html_text)
-
-    def quality_gate(gate_id, name, keys, ok_detail):
-        related = [finding for finding in quality if finding["key"] in keys]
-        fails = [finding for finding in related if finding["level"] == "fail"]
-        warns = [finding for finding in related if finding["level"] == "warn"]
-        picked = fails or warns
-        if fails:
-            status = "fail"
-        elif warns:
-            status = "warn"
-        else:
-            status = "pass"
-        return {
-            "id": gate_id,
-            "name": name,
-            "status": status,
-            "detail": ok_detail if not picked else "；".join(finding["detail"] for finding in picked[:8]),
-        }
-
-    rendered = source_texts(html_text)
-    expected_ids = {block["id"] for projection in projections.values() for block in projection["blocks"]}
-    missing = []
-    for block in blocks:
-        if block["id"] not in expected_ids:
-            continue
-        text = (block.get("text") or "").strip()
-        if not text:
-            continue
-        if rendered.get(block["id"], "") != text:
-            missing.append(block["id"])
-    gates.append(
-        {
-            "id": "G1",
-            "name": "原文逐字",
-            "status": "pass" if not missing else "fail",
-            "detail": "所选档位原文块逐字命中" if not missing else "缺失：" + ", ".join(missing[:8]),
-        }
-    )
-
-    if drafts:
-        gates.append({"id": "G2", "name": "骨架完整", "status": "warn", "detail": "draft：无模型骨架"})
-        gates.append({"id": "G3", "name": "覆盖率", "status": "warn", "detail": "draft：所选档位保留全部正文"})
-    else:
-        entry_map = {entry["id"]: entry for entry in (annotation or {}).get("blocks", [])}
-        structure_problems = []
-        for tier, projection in projections.items():
-            ids = {block["id"] for block in projection["blocks"]}
-            for entry in entry_map.values():
-                if entry.get("spine") and entry["id"] not in ids:
-                    structure_problems.append("%s 缺骨架 %s" % (tier, entry["id"]))
-                if entry["id"] in ids:
-                    for dep in entry.get("deps", []):
-                        if dep not in ids:
-                            structure_problems.append("%s 缺依赖 %s→%s" % (tier, dep, entry["id"]))
-        gates.append(
-            {
-                "id": "G2",
-                "name": "骨架完整",
-                "status": "pass" if not structure_problems else "fail",
-                "detail": "骨架/依赖闭合" if not structure_problems else "；".join(structure_problems[:8]),
-            }
+    if action == "diagram":
+        system = (
+            "你是阅读伴读助手，擅长把复杂文字转成清晰的关系图。"
+            "只输出一个 JSON 对象，不要 markdown 代码围栏，不要多余解释。\n"
+            "JSON 字段：\n"
+            '{"caption":"简短图题（≤18字）","family":"flow|tree|matrix|quantity|timeline|network|argument",'
+            '"reading_note":"一句话读图要点（≤40字）",'
+            '"summary":"2-3句简明文字说明（区分 [原文] 与 [补充]）",'
+            '"data":{...}}\n'
+            "- flow/tree/timeline/network/argument：data 为 "
+            '{"nodes":[{"id":"N1","label":"节点名(≤14字)","note":"简注(≤16字)"}],"edges":[{"from":"N1","to":"N2","label":"关系"}]}\n'
+            '- matrix：data 为 {"columns":["维度","A","B"],"rows":[["行名","值1","值2"]]}\n'
+            '- quantity：data 为 {"items":[{"label":"项名","value":12.5}]}'
         )
-        problems = _coverage_problems(projections)
-        block_notes = [note + "（仅诊断）" for note in _block_band_problems(projections)]
-        if problems:
-            g3_status = "fail"
-        elif block_notes:
-            g3_status = "warn"
-        else:
-            g3_status = "pass"
-        gates.append(
-            {
-                "id": "G3",
-                "name": "覆盖率",
-                "status": g3_status,
-                "detail": "；".join(problems + block_notes) or "所选档位在范围内",
-            }
+        user = f"{loc}\n书型参考：{mode_meta['label']}\n\n{context_block}{focus_block}"
+        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+    if action == "explain":
+        system = (
+            "你是耐心的伴读老师。读者选中了一段觉得抽象或不好懂的文字。\n"
+            "请用大白话拆解它到底在说什么，并举一个具体、贴近日常或工程实际的例子。\n"
+            "格式要求（直接输出清晰 Markdown，不要废话开头）：\n"
+            "1. **一句话说透**（用最直白的话讲清核心意思）\n"
+            "2. **举个例子**（可用书外现实或工程例子帮助理解，允许并鼓励跳出原文）\n"
+            "3. **为什么这里要提它**（放回当前章节语境的意义）\n"
+            "遇到源于原文的判断标 `[原文]`，补充常识或类比标 `[补充]`，让读者一眼分清。"
+        )
+    elif action == "translate":
+        system = (
+            "你是双语及古今汉语对读编辑。请根据选中文本的语言特征自动选择最合适的辅助方式：\n"
+            "- 如果是文言/古文/半文言：给出流畅的【现代汉语直译】，再列出【关键实词/典故注】；\n"
+            "- 如果是中译本（翻译腔或术语）：给出更自然的重述，并尽可能还原对应的"
+            "【英文原词/概念】，解释中文译名可能遮蔽的语境；\n"
+            "- 如果是英文原文：给出信达雅的中文翻译，并标注关键学术/行业术语。\n"
+            "原文词义标 `[原文]`，语言或背景延展标 `[补充]`。"
+        )
+    elif action == "critique":
+        system = (
+            "你是严谨的审稿同伴。读者主动要求拆解所选段落背后的隐含前提。\n"
+            "请克制、具体、不空泛地列出：\n"
+            "1. **明面结论** `[原文]`\n"
+            "2. **未明说的隐含前提** `[补充]`（作者默认了什么条件才成立？）\n"
+            "3. **适用边界 / 反例情景** `[补充]`（什么情况下这句话会失效或需修正？）"
+        )
+    else:  # ask
+        system = (
+            "你是随身伴读助手。紧扣读者选中的原文与前后上下文回答问题。"
+            "回答直接切中要点；引用书中已有事实请标 `[原文]`，涉及书外背景知识或推理补充请标 `[补充]`。"
         )
 
-    all_source = "\n".join(_han_only(block.get("text")) for block in blocks)
-    overlap = []
-    for tier, projection in projections.items():
-        spec = TIER_SPECS[tier]
-        for card in projection["cards"]:
-            han = _han_only(card["text"])
-            if len(han) >= 20:
-                for index in range(0, len(han) - 20 + 1):
-                    if han[index : index + 20] in all_source:
-                        overlap.append("%s/%s" % (tier, card["id"]))
-                        break
-        if projection["stats"]["e"] > spec["e_max"] + 0.01:
-            overlap.append("%s E=%.2f" % (tier, projection["stats"]["e"]))
-    gates.append(
-        {
-            "id": "G4",
-            "name": "讲解层",
-            "status": "pass" if not overlap else "fail",
-            "detail": "E 合规且无 20 字连续重合" if not overlap else "；".join(overlap[:8]),
-        }
-    )
-    gates.append(
-        quality_gate(
-            "G5",
-            "版式",
-            {
-                "contrast",
-                "font-size",
-                "measure",
-                "line-height",
-                "paragraph-marker",
-                "external-resource",
-                "heading-gap",
-            },
-            "对比度、字号、行长、行高、分段均在范围内",
-        )
-    )
-
-    quote_problems = []
-    for projection in projections.values():
-        for card in projection["cards"]:
-            for quote in card.get("quotes", []):
-                if quote["text"] not in (
-                    block_text := next((block["text"] for block in blocks if block["id"] == quote["block"]), "")
-                ):
-                    quote_problems.append(card["id"])
-                if block_text:
-                    continue
-    gates.append(
-        {
-            "id": "G6",
-            "name": "引文",
-            "status": "pass" if not quote_problems else "fail",
-            "detail": "卡引文均逐字来自所引块" if not quote_problems else "；".join(sorted(set(quote_problems))),
-        }
-    )
-    gates.append(
-        quality_gate(
-            "G7",
-            "图文",
-            {"figure-caption", "alt", "image-size", "caption-text", "figure-density"},
-            "图注、alt、尺寸、图表密度均合规",
-        )
-    )
-
-    structure = _Structure()
-    structure.feed(html_text)
-    structure_problems = ([] if structure.doctype else ["缺 doctype"]) + structure.errors
-    if structure.stack:
-        structure_problems.append("未闭合：" + ",".join(structure.stack[-4:]))
-    gates.append(
-        {
-            "id": "G8",
-            "name": "结构与移动端",
-            "status": "pass" if not structure_problems else "fail",
-            "detail": "HTML 结构完整；390/1440 人工验收通过"
-            if not structure_problems
-            else "；".join(structure_problems[:8]),
-        }
-    )
-
-    if editorial is not None:
-        try:
-            editorial_problems = audit_editorial(editorial, blocks, projections)
-        except EditorialError as exc:
-            editorial_problems = [str(exc)]
-        gates.append(
-            {
-                "id": "G9",
-                "name": "编辑层",
-                "status": "pass" if not editorial_problems else "fail",
-                "detail": "节拍、图版、结论与原文和档位对齐"
-                if not editorial_problems
-                else "；".join(editorial_problems[:8]),
-            }
-        )
-
-    if any(gate["status"] == "fail" for gate in gates if gate["id"] == "G1"):
-        status = "failed"
-    elif drafts:
-        status = "draft"
-    elif any(gate["status"] == "fail" for gate in gates):
-        status = "partial"
-    else:
-        status = "ok"
-    return {"status": status, "checked_at": _now(), "gates": gates}
+    user = f"{loc}\n阅读偏好参考：{mode_meta['label']}（{mode_meta['desc']}）\n\n{context_block}{focus_block}"
+    if question:
+        user += f"\n\n读者追问：{question}"
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
 class ReadingService:
-    def __init__(self, root=None, annotate=None, client=None, depth=None):
+    """8771 阅读工作台服务层。"""
+
+    def __init__(self, root=None, annotate=None, client=None):
         self.library = Library(root)
         self.store = Store(self.library.layout)
-        # 换目录时进程死掉会留下 .depth-bak-<hex>，读者看到的 chapter 是「尚未生成」。
-        # 启动时放回去，代价是扫一遍章节目录；此时没有并发保存，改名是安全的。
-        self.recovered_swaps = self.store.heal_pending_swaps()
         if annotate is None:
             annotate = os.environ.get("READING_ANNOTATE", "1") != "0"
         self.annotate = bool(annotate)
-        self.figures = os.environ.get("READING_EDITORIAL", "1") != "0"
-        if depth is None:
-            depth = os.environ.get("READING_DEPTH", "1") != "0"
-        self.depth = bool(depth)
-        self.agent_standard = os.environ.get("READING_AGENT_STANDARD", "0") != "0"
         self.client = client or ModelClient()
-        self.queue = JobQueue(self.library.layout.work, self._run_job, max_workers=4)
-        self._submit_lock = threading.Lock()
-        self._packs = None
-        # 章表索引在这里核对：冷建一次十几秒，之后每次启动只 stat 一遍，首个请求不再等。
         self.library.prepare_index()
 
-    # ---- 只读投影 -----------------------------------------------------
-    def _pack_count(self, uid=None):
-        if self._packs is None:
-            counted = set()
-            for path in glob.glob(os.path.join(self.store.base, "*", "ch", "*", "manifest.json")):
-                parts = path.split(os.sep)
-                if len(parts) < 3:
-                    continue
-                key = (parts[-4], parts[-2])
-                # 标题页合并后旧章号可能已不存在，孤儿包不计入书/全站读本数。
-                try:
-                    if self.library.chapter(key[0], int(key[1])):
-                        counted.add(key)
-                except (TypeError, ValueError, FileNotFoundError):
-                    continue
-            for path in glob.glob(os.path.join(self.store.base, "*", "ch", "*", "depth", "state.json")):
-                parts = path.split(os.sep)
-                if len(parts) < 5:
-                    continue
-                key = (parts[-5], parts[-3])
-                try:
-                    state = json.loads(Path(path).read_text(encoding="utf-8"))
-                    if not self.library.chapter(key[0], int(key[1])):
-                        continue
-                except (OSError, TypeError, ValueError, FileNotFoundError):
-                    continue
-                if state.get("status") == "ready" and Path(path).with_name("chapter.html").is_file():
-                    counted.add(key)
-            counts = {}
-            for key in counted:
-                counts[key[0]] = counts.get(key[0], 0) + 1
-            self._packs = counts
-        if uid:
-            return self._packs.get(uid, 0)
-        return sum(self._packs.values())
+    def _require_model_client(self):
+        if self.client.available():
+            return
+        env_preflight.require(["reading.model"])
 
-    def _invalidate_packs(self):
-        self._packs = None
-
-    def _book_view(self, book):
+    def _book_view(self, book, counts=None):
         data = dict(book)
-        data["packs"] = self._pack_count(book["uid"])
+        by_book = (counts or self.store.activity_counts()).get("by_book") or {}
+        data["packs"] = by_book.get(book["uid"], 0)
         data["chapters"] = book.get("chapters") or book.get("chapter_count") or 0
         return data
 
-    def _chapter_states(self, uid, n):
-        chapter = self.library.chapter(uid, n)
-        if not chapter:
-            return None
-        raw = self.library.read_chapter(uid, n)
-        state = self.store.tier_states(uid, n, raw["source_sha256"] if raw else None)
-        manifest = state.get("manifest") or {}
-        if manifest:
-            source_changed = manifest.get("source_sha256") != (raw or {}).get("source_sha256")
-            same_mode = bool(manifest.get("draft")) == (not self.annotate)
-            state["source_changed"] = source_changed
-            state["same_mode"] = same_mode
-            state["preservable"] = not source_changed and same_mode
-            state["preserve_reason"] = (
-                "原文已更改" if source_changed else ("生成模式不同（草稿/正式）" if not same_mode else None)
-            )
-        states = state["tiers"]
-        tiers = {}
-        for key in TIER_ORDER:
-            info = states.get(key, {})
-            tiers[key] = {
-                "exists": info.get("status") in ("available", "stale"),
-                "stale": info.get("status") == "stale",
-                "generated_at": info.get("generated_at"),
-                "stats": info.get("stats"),
-            }
-        return {
-            "manifest": state.get("manifest"),
-            "status": state.get("status"),
-            "source_sha256": (raw or {}).get("source_sha256"),
-            "tiers": tiers,
-            "source_changed": state.get("source_changed"),
-            "same_mode": state.get("same_mode"),
-            "preservable": state.get("preservable"),
-            "preserve_reason": state.get("preserve_reason"),
-        }
-
+    # ---- 只读书架 / 书目 / 书页 / 章节 --------------------------------
     def shelf(self):
-        books = [self._book_view(book) for book in self.library.books()]
+        counts = self.store.activity_counts()
+        books = [self._book_view(book, counts) for book in self.library.books()]
         chapters = sum(book["chapters"] for book in books)
         chars = sum(book["chars"] for book in books)
         recent = []
-        manifests = []
-        for path in glob.glob(os.path.join(self.store.base, "*", "ch", "*", "manifest.json")):
+        seen_chapters = set()
+        for op in self.store.ops_logs(limit=40):
+            key = (op.get("uid"), op.get("n"))
+            if not op.get("uid") or not op.get("n") or key in seen_chapters:
+                continue
             try:
-                with open(path, encoding="utf-8") as fh:
-                    data = json.load(fh)
-            except (OSError, json.JSONDecodeError):
+                ch = self.library.chapter(op["uid"], int(op["n"]))
+            except (TypeError, ValueError):
+                ch = None
+            if not ch:
                 continue
-            manifests.append(data)
-        manifests.sort(key=lambda item: item.get("generated_at", ""), reverse=True)
-        for manifest in manifests[:4]:
-            uid, n = manifest.get("uid"), manifest.get("n")
-            chapter = self.library.chapter(uid, n) if uid and n else None
-            if not chapter:
-                continue
+            seen_chapters.add(key)
             recent.append(
                 {
-                    "uid": uid,
-                    "n": "%02d" % int(n),
-                    "title": chapter["title"],
-                    "tier": "standard",
-                    "progress": 0.0,
-                    "updated_at": manifest.get("generated_at"),
+                    "uid": op["uid"],
+                    "n": "%02d" % int(op["n"]),
+                    "title": ch["title"],
+                    "action": ACTION_LABELS.get(op.get("action"), op.get("action") or ""),
+                    "updated_at": op.get("ts"),
                 }
             )
+            if len(recent) >= 4:
+                break
         if not recent and books:
-            book = books[0]
-            chapter = self.library.chapters(book["uid"])[0]
-            recent.append(
-                {
-                    "uid": book["uid"],
-                    "n": "%02d" % int(chapter["n"]),
-                    "title": chapter["title"],
-                    "tier": "standard",
-                    "progress": 0.0,
-                    "updated_at": None,
-                }
-            )
+            first_ch = self.library.chapters(books[0]["uid"])
+            if first_ch:
+                recent.append(
+                    {
+                        "uid": books[0]["uid"],
+                        "n": "%02d" % int(first_ch[0]["n"]),
+                        "title": first_ch[0]["title"],
+                        "action": "开始阅读",
+                        "updated_at": None,
+                    }
+                )
         return {
             "stats": {
                 "readable": len(books),
                 "chapters": chapters,
                 "chars": chars,
-                "packs": self._pack_count(),
+                "packs": counts["chapters"],
+                "notes": counts["notes"],
+                "maps": counts["maps"],
             },
             "total": self.library.total(),
             "books": books,
             "recent": recent,
-            "jobs": self.queue.list(8),
         }
 
     def catalog(self, q="", subject=""):
+        counts = self.store.activity_counts()
         data = self.library.catalog(q, subject)
-        data["readable"] = [self._book_view(book) for book in data.get("readable", [])]
+        data["readable"] = [self._book_view(book, counts) for book in data.get("readable", [])]
         data["books"] = data["readable"]
         return data
 
@@ -669,28 +311,29 @@ class ReadingService:
         book = self.library.book(uid)
         if not book:
             return None
-        view = self._book_view(book)
+        counts = self.store.activity_counts()
+        view = self._book_view(book, counts)
+        ops_by_ch = {}
+        for op in self.store.ops_logs(limit=1000, uid=uid):
+            ch_n = op.get("n") or ""
+            ops_by_ch[ch_n] = ops_by_ch.get(ch_n, 0) + 1
         chapters = []
-        reading_rows = L.reading_get(uid, root=self.library.root) or []
-        for chapter in self.library.chapters(uid):
-            state = self._chapter_states(uid, chapter["n"])
-            tiers = state["tiers"] if state else {}
-            source_sha = (state or {}).get("source_sha256")
-            mode = self._ledger_mode(uid, chapter["n"], source_sha, rows=reading_rows)
-            path, reason = self._chapter_path(uid, chapter["n"], state, source_sha, mode=mode)
-            depth_info = self.store.depth_state(uid, chapter["n"], source_sha, mode=mode)
-            pack = None
-            if path == "depth" or depth_info["status"] == "stale":
-                tiers = self._depth_tiers(uid, chapter["n"], depth_info)
-                if path == "depth":
-                    pack = self._depth_pack(uid, chapter["n"], depth_info)
-            item = _chapter_api(chapter, tiers, state, path=path, fallback_reason=reason, pack=pack)
-            item["jobs"] = self.queue.active_for(uid, chapter["n"])
+        for ch in self.library.chapters(uid):
+            n_int = int(ch["n"])
+            n_str = "%02d" % n_int
+            notes = self.store.assist_notes(uid, n_int)
+            cmap = self.store.chapter_map(uid, n_int)
+            item = dict(ch)
+            item["n"] = n_str
+            item["minutes"] = max(1, round(ch.get("chars", 0) / WORDS_PER_MINUTE))
+            item["note_count"] = len(notes)
+            item["has_map"] = bool(cmap and cmap.get("supported", True))
+            item["ops_count"] = ops_by_ch.get(n_str, 0)
             chapters.append(item)
         return {"book": view, "chapters": chapters, "reading": self.book_reading(uid)}
 
+    # ---- 后台读法提示账（不阻断正文阅读） -----------------------------
     def _profile_doc(self, uid):
-        # 人账是唯一读源；reading.json 只是可重建的导出，不参与回退。
         return profile.from_rows(L.reading_get(uid, root=self.library.root))
 
     def book_reading(self, uid):
@@ -700,7 +343,6 @@ class ReadingService:
         return {"book_mode": doc.get("mode"), "panels": doc.get("panels") or [], "chapters": doc.get("chapters") or {}}
 
     def set_book_reading(self, uid, mode):
-        """书页只设本书默认读法，不提交生成任务。"""
         if not self.library.book(uid):
             raise FileNotFoundError("找不到这本书")
         clean = profile.normalize_mode(mode)
@@ -712,13 +354,10 @@ class ReadingService:
     def reading(self, uid, n, raw=None):
         raw = raw or self.library.read_chapter(uid, n) or {}
         doc = self._profile_doc(uid)
-        suggestion = profile.suggestion_for(
-            uid, n, self.library, self.library.root, self.client if self.annotate else None
-        )
+        suggestion = profile.suggestion_for(uid, n, self.library, self.library.root, None)
         return profile.resolve(doc, n, raw.get("source_sha256") or "", suggestion)
 
     def set_reading(self, uid, n, action, mode=None):
-        """工单只写读法账；follow/override/book_default 三种动作。"""
         raw = self.library.read_chapter(uid, n)
         if raw is None:
             raise FileNotFoundError("找不到章节")
@@ -750,76 +389,6 @@ class ReadingService:
             raise ValueError("action 必须是 follow/override/book_default")
         return self.reading(uid, n, raw=raw)
 
-    def require_reading(self, uid):
-        if not L.reading_get(uid, "*", root=self.library.root):
-            raise MissingProfileError(uid)
-        return True
-
-    @staticmethod
-    def _depth_mode(reading):
-        """只有落过账的读法才参与 mode stale；建议与分类兜底都不算。"""
-        if reading.get("effective_source") not in ("book", "chapter"):
-            return None
-        return reading.get("effective_mode")
-
-    def _ledger_mode(self, uid, n, source_sha, rows=None):
-        """书目列表只读账，不触发逐章建议或模型。"""
-        rows = rows if rows is not None else L.reading_get(uid, root=self.library.root) or []
-        book = next((row for row in rows if row.get("chapter") == "*"), None)
-        if not book:
-            return None
-        book_mode = profile.normalize_mode(book.get("mode"))
-        chapter = next((row for row in rows if row.get("chapter") == str(int(n))), None)
-        if chapter:
-            chapter_mode = profile.normalize_mode(chapter.get("mode"))
-            chapter_sha = chapter.get("source_sha256") or ""
-            if chapter_mode and (not chapter_sha or chapter_sha == source_sha):
-                return chapter_mode
-        return book_mode
-
-    def _depth_tiers(self, uid, n, info):
-        """把 depth 层的磁盘状态映射成书目录页用的三档状态。"""
-        state = info.get("state") or {}
-        status = info.get("status")
-        updated = state.get("layer_updated_at") or {}
-        tiers = {}
-        for key in ("skim", "standard", "deep"):
-            exists = status in ("ready", "stale") and Path(self.store.depth_path(uid, n, DEPTH_FILES[key])).is_file()
-            tiers[key] = {
-                "exists": exists,
-                "stale": status == "stale",
-                "generated_at": updated.get(key) or state.get("updated_at") or state.get("generated_at"),
-                "stats": None,
-            }
-        return tiers
-
-    def _depth_pack(self, uid, n, info):
-        state = info.get("state") or {}
-        status = info.get("status")
-        if status not in ("ready", "model", "stale"):
-            return None
-        model = state.get("model") if isinstance(state.get("model"), dict) else {}
-        mode_stale = bool(info.get("mode_stale"))
-        return {
-            "exists": True,
-            "draft": False,
-            "status": "ok" if status == "ready" else status,
-            "state": status,
-            "generated_at": state.get("generated_at") or state.get("updated_at"),
-            "source_sha256": state.get("source_sha256"),
-            "source_changed": status == "stale" and not mode_stale,
-            "preservable": status != "stale",
-            "preserve_reason": "读法已改，深度页过期" if mode_stale else ("原文已更改" if status == "stale" else None),
-            "model": model.get("model") or model.get("requested_model"),
-            "reasoning_effort": model.get("effort"),
-            "model_fallback": bool(model.get("fallback")),
-            "usage": model.get("usage"),
-        }
-
-    def _chapter_path(self, uid, n, state=None, source_sha=None, mode=None):
-        """章节能从哪条路径打开；只读磁盘，不触发模型。"""
-        return self.store.chapter_route(uid, n, source_sha, (state or {}).get("manifest"), mode=mode)
-
     def chapter(self, uid, n):
         book = self.library.book(uid)
         chapter = self.library.chapter(uid, n)
@@ -828,1265 +397,424 @@ class ReadingService:
         raw = self.library.read_chapter(uid, n)
         if not raw:
             return None
-        state = self._chapter_states(uid, n)
+        source_sha = raw.get("source_sha256") or ""
         reading = self.reading(uid, n, raw=raw)
-        mode = self._depth_mode(reading)
-        annotation = self.store.annotation(uid, n)
-        projections = {}
-        if annotation:
-            try:
-                annotation = validate_annotation(annotation, raw["blocks"])
-                for tier in TIER_ORDER:
-                    projections[tier] = project(raw["blocks"], annotation, tier)
-            except ValueError:
-                projections = {}
-        if not projections:
-            projections = (
-                {tier: project(raw["blocks"], None, tier) for tier in TIER_ORDER} if state and state["manifest"] else {}
-            )
-        tiers = []
-        for key in TIER_ORDER:
-            spec = TIER_SPECS[key]
-            info = (state or {}).get("tiers", {}).get(key, {})
-            stats = info.get("stats")
-            if not stats and projections.get(key):
-                stats = projections[key]["stats"]
-            tiers.append(
-                {
-                    "key": key,
-                    "name": spec["label"],
-                    "c_min": spec["c_min"],
-                    "c_max": spec["c_max"],
-                    "e_max": spec["e_max"],
-                    "f_max": spec["figures"],
-                    "speed": spec["wpm"],
-                    "selected": key == "standard",
-                    "exists": bool(info.get("exists")),
-                    "stale": bool(info.get("stale")),
-                    "stats": stats,
-                }
-            )
-        standard_ids = []
-        if projections.get("standard"):
-            standard_ids = [block["id"] for block in projections["standard"]["blocks"]]
-        preview = (
-            standard_ids[:8]
-            if standard_ids
-            else [block["id"] for block in raw["blocks"] if block["kind"] in ("heading", "paragraph", "quote", "list")][
-                :8
-            ]
-        )
-        audit = self.store.audit(uid, n) or {}
-        edition = self.store.edition(uid, n)
-        book_view = self._book_view(book)
-        fit = decide_template(build_brief(book_view, raw, raw["blocks"]))
-        path, fallback_reason = self._chapter_path(uid, n, state, raw.get("source_sha256"), mode=mode)
-        depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"), mode=mode)
-        depth_pack = None
-        if path == "depth" or depth_state["status"] == "stale":
-            depth_tiers = self._depth_tiers(uid, n, depth_state)
-            for tier in tiers:
-                info = depth_tiers.get(tier["key"], {})
-                tier["exists"] = bool(info.get("exists"))
-                tier["stale"] = bool(info.get("stale"))
-                tier["stats"] = info.get("stats")
-            if path == "depth":
-                depth_pack = self._depth_pack(uid, n, depth_state)
-        data = {
-            "book": book_view,
-            "chapter": _chapter_api(
-                chapter,
-                state["tiers"] if state else {},
-                state,
-                path=path,
-                fallback_reason=fallback_reason,
-                pack=depth_pack,
-            ),
-            "path": path,
-            "fallback_reason": fallback_reason,
-            "jobs": self.queue.active_for(uid, n),
-            "blocks": raw["blocks"],
-            "tiers": tiers,
-            "standard_blocks": standard_ids,
-            "preview_blocks": preview,
-            "pack": depth_pack if path == "depth" else _pack_meta(state),
-            "gates": audit.get("gates", []),
-            "edition": ({"exists": True, "url": "/reader/%s/%02d/edition" % (uid, n)} if edition else None),
-            "edition_fit": {
-                "ok": fit["template"] is not None,
-                "score": fit["score"],
-                "reason": fit["reason"],
-            },
+        blocks = raw["blocks"]
+        map_gate = chapter_map_gate(blocks)
+        cap_gate = evaluate(blocks, chapmap.plan_chunks(blocks, 18000, 100)).to_dict()
+        notes = self.store.assist_notes(uid, n, source_sha=source_sha)
+        cmap = self.store.chapter_map(uid, n, source_sha=source_sha)
+        ch_view = dict(chapter)
+        ch_view["n"] = "%02d" % int(chapter["n"])
+        ch_view["minutes"] = max(1, round(chapter.get("chars", 0) / WORDS_PER_MINUTE))
+        ch_view["source_sha256"] = source_sha
+        return {
+            "book": self._book_view(book),
+            "chapter": ch_view,
+            "blocks": blocks,
             "reading": reading,
+            "toolbar": _toolbar_for_mode(reading.get("mode")),
+            "preflight": {"chapter_map": map_gate, "capacity": cap_gate},
+            "assist_notes": notes,
+            "chapter_map": cmap,
         }
-        if self.depth:
-            data["depth"] = {"state": depth_state["status"], "reason": depth_state.get("stale_reason")}
-            data["depth"]["preflight"] = evaluate(raw["blocks"], plan_chunks(raw["blocks"], 18000, 100)).to_dict()
-            if depth_state["status"] in ("model", "partial", "ready"):
-                data["depth"]["model"] = self.store.depth_json(uid, n, "chapter_model.json")
-                data["depth"]["ledger"] = self.store.depth_json(uid, n, "ledger.json")
-            if depth_state["status"] == "ready":
-                data["depth"]["panels"] = self.store.depth_json(uid, n, "layers/panels.json")
-                data["depth"]["skim"] = self.store.depth_json(uid, n, "layers/skim.json")
-                deep = self.store.depth_json(uid, n, "layers/deep.json")
-                if deep is not None:
-                    data["depth"]["deep"] = deep
-                data["depth"]["html"] = "/reader/%s/%d/depth" % (uid, n)
-            status = self.depth_status(uid, n)
-            data["depth"]["layers"] = status["layers"]
-            data["depth"]["jobs"] = status["jobs"]
-        return data
 
-    def _depth_jobs(self, uid, n):
-        listed = getattr(self.queue, "list", None)
-        if not callable(listed):
-            return []
-        jobs = []
-        for job in listed(200):
-            if job.get("kind") != "depth" or job.get("uid") != uid:
-                continue
-            try:
-                if int(job.get("n")) != int(n):
-                    continue
-            except (TypeError, ValueError):
-                continue
-            jobs.append(job)
-        return jobs
+    # ---- 划词局部伴读（POST /api/assist） ------------------------------
+    def _context_for_blocks(self, blocks, block_ids):
+        if not blocks:
+            return ""
+        id_to_idx = {b.get("id"): idx for idx, b in enumerate(blocks) if b.get("id")}
+        indices = [id_to_idx[bid] for bid in block_ids if bid in id_to_idx]
+        if not indices:
+            sample = blocks[:4]
+        else:
+            lo = max(0, min(indices) - 2)
+            hi = min(len(blocks), max(indices) + 3)
+            sample = blocks[lo:hi]
+        parts = []
+        for blk in sample:
+            bid = blk.get("id") or ""
+            txt = _block_preview_text(blk)
+            if txt:
+                parts.append(f"[{bid}] {txt[:240]}")
+        return "\n".join(parts)[:1800]
 
-    def depth_status(self, uid, n):
-        """磁盘上的深度层账：状态、用量与估算；不触发任何模型调用。"""
-        raw = self.library.read_chapter(uid, n) or {}
-        blocks = raw.get("blocks") or []
-        source_sha = raw.get("source_sha256")
+    def assist(
+        self,
+        uid,
+        n,
+        action,
+        *,
+        block_ids=None,
+        selected_text="",
+        question="",
+        model=None,
+        effort=None,
+        on_delta=None,
+    ):
+        action = str(action or "").strip().lower()
+        if action not in ASSIST_ACTIONS:
+            raise ValueError("action 必须是 %s" % "/".join(ASSIST_ACTIONS))
+        book = self.library.book(uid)
+        chapter = self.library.chapter(uid, n)
+        raw = self.library.read_chapter(uid, n)
+        if not book or not chapter or not raw:
+            raise FileNotFoundError("找不到章节")
+        self._require_model_client()
+
+        blocks = raw["blocks"]
+        valid_ids = {b.get("id") for b in blocks if b.get("id")}
+        clean_blocks = [str(bid).strip() for bid in (block_ids or []) if str(bid).strip()]
+        invalid = [bid for bid in clean_blocks if bid not in valid_ids]
+        if invalid:
+            raise ValueError("block_ids 引用了不存在的段落：" + ", ".join(invalid))
+        clean_text = str(selected_text or "").strip()
+        clean_q = str(question or "").strip()
+        if not clean_text and clean_blocks:
+            blk_map = {b.get("id"): b for b in blocks if b.get("id")}
+            clean_text = "\n\n".join(
+                _block_preview_text(blk_map[bid]) for bid in clean_blocks if bid in blk_map
+            ).strip()
+        if not clean_text and not clean_q:
+            raise ValueError("请先选中一段正文，或输入具体问题")
+
+        reading = self.reading(uid, n, raw=raw)
+        requested_model = str(model or getattr(self.client, "model", None) or DEFAULT_MODEL).strip()
+        requested_effort = str(effort or getattr(self.client, "effort", None) or DEFAULT_EFFORT).strip().lower()
+        context_text = self._context_for_blocks(blocks, clean_blocks)
+        messages = _assist_prompts(
+            action,
+            mode=reading.get("mode") or "argument",
+            book=book,
+            chapter=chapter,
+            selected_text=clean_text,
+            block_ids=clean_blocks,
+            context_text=context_text,
+            question=clean_q,
+        )
+
+        op_id = f"op-{uuid.uuid4().hex[:10]}"
+        started = time.perf_counter()
+        log_dir = os.path.join(self.store.base, "logs")
         try:
-            current_mode = self._depth_mode(self.reading(uid, n, raw=raw))
-        except Exception:
-            current_mode = None
-        state_info = self.store.depth_state(uid, n, source_sha, mode=current_mode)
-        state = state_info.get("state")
-        state = state if isinstance(state, dict) else None
-        estimates = _depth_estimate(blocks)
-        jobs = self._depth_jobs(uid, n)
-        active = []
-        for job in self.queue.active_for(uid, n):
-            if job.get("kind") == "depth":
-                active.append(job)
-        failed_by_layer = {}
-        for job in jobs:
-            if job.get("state") != "failed":
-                continue
-            for layer in job.get("layers") or []:
-                failed_by_layer.setdefault(layer, job)
-
-        layer_model_sha = state.get("layer_model_sha") if state else None
-        chapter_model_sha = state.get("chapter_model_sha") if state else None
-        layer_usage = state.get("layer_usage") if state else None
-        layer_usage = layer_usage if isinstance(layer_usage, dict) else {}
-        layer_updated_at = state.get("layer_updated_at") if state else None
-        layer_updated_at = layer_updated_at if isinstance(layer_updated_at, dict) else {}
-        mode_stale = set(state_info.get("mode_stale") or [])
-        source_stale = bool(state and source_sha and state.get("source_sha256") != source_sha)
-        base_updated = (state or {}).get("updated_at") or (state or {}).get("generated_at")
-
-        layers = {}
-        for layer in DEPTH_LAYERS:
-            path = self.store.depth_path(uid, n, DEPTH_FILES[layer])
-            exists = Path(path).is_file()
-            active_job = next((job for job in active if layer in (job.get("layers") or [])), None)
-            failed_job = failed_by_layer.get(layer)
-            status = "missing"
-            if exists and state is not None:
-                status = "ready"
-            if state is not None and exists:
-                if source_stale:
-                    status = "stale"
-                if (
-                    layer != "model"
-                    and isinstance(layer_model_sha, dict)
-                    and layer in layer_model_sha
-                    and layer_model_sha.get(layer) != chapter_model_sha
-                ):
-                    status = "stale"
-                if layer in mode_stale:
-                    status = "stale"
-            if active_job is not None:
-                status = "running"
-            elif failed_job is not None and not exists:
-                status = "failed"
-
-            usage = layer_usage.get(layer)
-            usage = usage if isinstance(usage, dict) and usage else None
-            tokens, usd = _usage_cost(usage) if usage else (0, 0.0)
-            updated_at = layer_updated_at.get(layer)
-            if not updated_at:
-                if active_job is not None:
-                    updated_at = active_job.get("updated") or active_job.get("created")
-                elif failed_job is not None and status == "failed":
-                    updated_at = failed_job.get("updated") or failed_job.get("created")
-                elif exists:
-                    updated_at = base_updated
-            layers[layer] = {
-                "status": status,
-                "updated_at": updated_at,
-                "usage": usage,
-                "tokens": int(tokens),
-                "usd": float(usd),
-                "error": (failed_job.get("error") if failed_job is not None and status == "failed" else None),
-                "estimate": estimates[layer],
-            }
-        top_status = state_info.get("status") or "missing"
-        if top_status == "ready" and any(info["status"] == "stale" for info in layers.values()):
-            top_status = "stale"
-        return {
-            "state": top_status,
-            "source_sha256": source_sha,
-            "updated_at": base_updated,
-            "layers": layers,
-            "jobs": jobs[:20],
-        }
-
-    def editorial(self, uid, n):
-        return self.store.editorial(uid, n)
-
-    def submit_depth(self, uid, n, layers, model=None, effort=None, rebuild_model=False):
-        """提交一层或多层深度生产；每层独立，未勾选的层原样保留。"""
-        if not self.library.book(uid) or not self.library.chapter(uid, n):
-            raise FileNotFoundError(f"找不到章节 {uid}/{n}")
-        if not isinstance(layers, (list, tuple)) or not layers:
-            raise ValueError("至少选择一个深度层")
-        unknown = [layer for layer in layers if layer not in DEPTH_LAYERS]
-        if unknown:
-            raise ValueError(f"未知深度层：{', '.join(str(layer) for layer in unknown)}")
-        requested = [layer for layer in DEPTH_LAYERS if layer in set(layers)]
-        raw = self.library.read_chapter(uid, n) or {}
-        depth_state = self.store.depth_state(uid, n, raw.get("source_sha256"))
-        if depth_state.get("status") == "stale" and "model" not in requested:
-            requested.insert(0, "model")
-        model_file = self.store.depth_path(uid, n, DEPTH_FILES["model"])
-        if "model" not in requested and (rebuild_model or not Path(model_file).is_file()):
-            requested.insert(0, "model")
-        gate = evaluate(raw["blocks"], plan_chunks(raw["blocks"], 18000, 100))
-        events.current().emit(
-            "preflight_gate",
-            uid=uid,
-            n=n,
-            ok=gate.ok,
-            code=gate.code,
-            **gate.stats,
-        )
-        gate.raise_if_blocked()
-        if "model" in requested:
-            preflight.require(["reading.model"], note="深读结构层要用模型生成。")
-        with self._submit_lock:
-            conflicts = self.queue.conflicts(uid, n)
-            if conflicts:
-                raise JobConflictError(conflicts)
-            job = self.queue.submit(
-                uid,
-                n,
-                [],
-                model=model,
-                effort=effort,
-                kind="depth",
-                layers=requested,
-                rebuild=bool(rebuild_model),
-            )
-            noted = self.queue.note(
-                job["id"],
-                preflight=gate.stats,
-                preflight_warnings=list(gate.warnings),
-                chunks=gate.stats.get("chunks"),
-                max_chunk_blocks=gate.stats.get("max_chunk_blocks"),
-                estimated_tokens=gate.stats.get("estimated_output_tokens"),
-                estimated_seconds=gate.stats.get("estimated_seconds"),
-            )
-            return noted or job
-
-    def save_editorial(self, uid, n, payload):
-        raw = self.library.read_chapter(uid, n)
-        if not raw:
-            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
-        clean = validate_editorial(payload, raw["blocks"], uid=uid, n=n)
-        self.store.save_editorial(uid, n, clean)
-        return clean
-
-    def _editorial_with_meta(self, book, chapter, blocks, annotation, *, model=None, effort=None, allowed_ids=None):
-        complete = getattr(self.client, "complete_json", None)
-        if not callable(complete):
-            raise RuntimeError("当前模型客户端不支持图表编辑")
-        return generate_editorial(
-            self.client,
-            book,
-            chapter,
-            blocks,
-            annotation,
-            model=model,
-            effort=effort,
-            allowed_ids=allowed_ids,
-        )
-
-    def generate_editorial(self, uid, n, *, model=None, effort=None, save=True, allowed_ids=None):
-        raw = self.library.read_chapter(uid, n)
-        if not raw:
-            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
-        annotation = self.store.annotation(uid, n)
-        if not annotation:
-            raise RuntimeError("该章还没有标注，无法生成图表；请先生成读本")
-        annotation = validate_annotation(annotation, raw["blocks"])
-        book = self._book_view(self.library.book(uid))
-        if allowed_ids is None:
-            editorial_tiers = {tier: project(raw["blocks"], annotation, tier) for tier in ("standard", "deep")}
-            allowed_ids = set.intersection(
-                *[{block["id"] for block in projection["blocks"]} for projection in editorial_tiers.values()]
-            )
-        editorial, meta = self._editorial_with_meta(
-            book,
-            _chapter_api(raw),
-            raw["blocks"],
-            annotation,
-            model=model,
-            effort=effort,
-            allowed_ids=allowed_ids,
-        )
-        if save:
-            editorial = self.store.save_editorial(uid, n, editorial)
-        return {"editorial": editorial, "meta": meta}
-
-    def generate_agent_standard(self, uid, n, *, model=None, effort=None):
-        if not self.agent_standard:
-            raise ValueError("实验性标准 HTML 已退役；请使用标准注解页")
-        raw = self.library.read_chapter(uid, n)
-        if not raw:
-            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
-        blocks = raw["blocks"]
-        book = self._book_view(self.library.book(uid))
-        chapter = _chapter_api(raw)
-        image_data = {}
-        for block in blocks:
-            if block.get("kind") != "image" or not block.get("rel"):
-                continue
-            path = os.path.join(self.library.layout.md(uid), block["rel"])
-            if os.path.exists(path):
-                image_data[block["id"]] = image_data_uri(path)
-        fragment, meta = generate_standard_html(
-            self.client,
-            book,
-            chapter,
-            blocks,
-            model=model,
-            effort=effort,
-            image_data=image_data,
-        )
-        present = [block["id"] for block in blocks if ('data-block="%s"' % block["id"]) in fragment]
-        chars = sum(len(block.get("text") or "") for block in blocks if block["id"] in present)
-        stats = {
-            "chars": chars,
-            "plates": fragment.count('class="plate-row"'),
-            "minutes": max(1, round(chars / 420)),
-            "blocks": len(present),
-            "total_blocks": len(blocks),
-        }
-        page = render_agent_page(book, chapter, fragment, stats=stats)
-        path = os.path.join(self.store.pack_dir(uid, n), "agent-standard.html")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(page)
-        os.replace(tmp, path)
-        return {
-            "url": "/reader/%s/%02d/agent" % (uid, n),
-            "path": path,
-            "stats": stats,
-            "meta": meta,
-        }
-
-    # ---- 视觉读本 -----------------------------------------------------
-    def edition(self, uid, n):
-        return self.store.edition(uid, n)
-
-    def _edition_parts(self, uid, n):
-        raw = self.library.read_chapter(uid, n)
-        if not raw:
-            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
-        book = self._book_view(self.library.book(uid))
-        blocks = raw["blocks"]
-        return raw, book, blocks
-
-    def _edition_render(self, book, raw, blocks, content):
-        chapter = _chapter_api(raw)
-        brief = build_brief(book, raw, blocks)
-        decision = decide_template(brief)
-        html_text = render_edition(book, chapter, blocks, content)
-        audit = audit_edition(blocks, html_text, content)
-        return brief, decision, html_text, audit
-
-    def save_edition(self, uid, n, payload):
-        raw, book, blocks = self._edition_parts(uid, n)
-        content = validate_content(payload, blocks)
-        brief, decision, html_text, audit = self._edition_render(book, raw, blocks, content)
-        if audit["errors"]:
-            raise ValueError("视觉读本门禁未通过：%s" % "；".join(audit["errors"][:4]))
-        self.store.save_edition(uid, n, content, html_text, audit, brief.as_dict())
-        return {
-            "content": content,
-            "audit": audit,
-            "brief": brief.as_dict(),
-            "decision": decision,
-            "url": "/reader/%s/%02d/edition" % (uid, n),
-        }
-
-    def generate_edition(self, uid, n, *, model=None, effort="low", save=True):
-        raw, book, blocks = self._edition_parts(uid, n)
-        brief = build_brief(book, raw, blocks)
-        decision = decide_template(brief)
-        if decision["template"] is None:
-            return {"status": "fallback", "brief": brief.as_dict(), "decision": decision}
-        content, usage, warnings = generate_content(
-            self.client, book, _chapter_api(raw), blocks, model=model, effort=effort
-        )
-        _brief, _decision, html_text, audit = self._edition_render(book, raw, blocks, content)
-        if audit["errors"]:
-            raise ValueError("视觉读本门禁未通过：%s" % "；".join(audit["errors"][:4]))
-        if save:
-            self.store.save_edition(uid, n, content, html_text, audit, brief.as_dict())
-        return {
-            "status": "ok",
-            "url": "/reader/%s/%02d/edition" % (uid, n),
-            "brief": brief.as_dict(),
-            "decision": decision,
-            "audit": audit,
-            "usage": usage,
-            "warnings": warnings,
-        }
-
-    def _run_edition_job(self, job_id, job):
-        uid, n = job["uid"], int(job["n"])
-        if self.queue.cancelled(job_id):
-            raise RuntimeError("任务已取消")
-        self._set_stage(job_id, "chunking")
-        raw, book, blocks = self._edition_parts(uid, n)
-        brief = build_brief(book, raw, blocks)
-        decision = decide_template(brief)
-        if decision["template"] is None:
-            raise RuntimeError("不适合视觉读本：%s" % decision["reason"])
-        self._set_stage(job_id, "annotating")
-        content, usage, warnings = generate_content(
-            self.client, book, _chapter_api(raw), blocks, model=job.get("model"), effort=job.get("effort") or "low"
-        )
-        self._set_stage(job_id, "validating")
-        _brief, _decision, html_text, audit = self._edition_render(book, raw, blocks, content)
-        if audit["errors"]:
-            raise RuntimeError("视觉读本门禁未通过：%s" % "；".join(audit["errors"][:4]))
-        self._set_stage(job_id, "rendering")
-        self.store.save_edition(uid, n, content, html_text, audit, brief.as_dict())
-        return {
-            "status": "done",
-            "pack_id": "%s/%02d" % (uid, n),
-            "url": "/reader/%s/%02d/edition" % (uid, n),
-            "usage": usage,
-            "warnings": warnings,
-            "audit": audit,
-        }
-
-    def submit_edition(self, uid, n, *, model=None, effort="low", overwrite=False):
-        if not self.library.book(uid) or not self.library.chapter(uid, n):
-            raise FileNotFoundError("找不到章节 %s/%s" % (uid, n))
-        with self._submit_lock:
-            conflicts = self.queue.conflicts(uid, n)
-            if conflicts:
-                raise JobConflictError(conflicts)
-            if self.store.edition(uid, n) and not overwrite:
-                raise PackExistsError(["edition"])
-            preflight.require(["reading.model"], note="图版编辑层要用模型生成。")
-            return self.queue.submit(
-                uid,
-                n,
-                ["standard"],
-                model=model,
-                effort=effort,
-                overwrite=overwrite,
-                kind="edition",
-            )
-
-    def records(self):
-        return {"jobs": self.queue.list(100), "packs": self._records_packs()}
-
-    def _records_packs(self):
-        out = []
-        for path in glob.glob(os.path.join(self.store.base, "*", "ch", "*", "manifest.json")):
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    data = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                continue
-            uid, n = data.get("uid"), data.get("n")
-            try:
-                if not self.library.chapter(uid, int(n)):
-                    continue
-            except (TypeError, ValueError, FileNotFoundError):
-                continue
-            out.append(
-                {
-                    "uid": uid,
-                    "n": n,
-                    "status": data.get("status"),
-                    "draft": data.get("draft"),
-                    "generated_at": data.get("generated_at"),
-                    "tiers": list((data.get("tiers") or {}).keys()),
-                }
-            )
-        out.sort(key=lambda item: item.get("generated_at", ""), reverse=True)
-        return out
-
-    # ---- 生成 ---------------------------------------------------------
-    def _set_stage(self, job_id, state, layer=None):
-        if layer:
-            self.queue.set_layer(job_id, layer)
-        self.queue.set_stage(job_id, state)
-
-    def _annotate_with_meta(self, book, chapter, blocks, model=None, effort=None):
-        """每次调用独立取元信息；旧 client 仍可走 annotate() 的兼容路径。"""
-        function = getattr(self.client, "annotate_with_meta", None)
-        if callable(function):
-            return function(book, chapter, blocks, model=model, effort=effort)
-        annotation = self.client.annotate(book, chapter, blocks, model=model, effort=effort)
-        return annotation, {
-            "requested_model": model or getattr(self.client, "model", None),
-            "model": getattr(self.client, "last_model", None) or model or getattr(self.client, "model", None),
-            "effort": getattr(self.client, "last_effort", None) or effort or getattr(self.client, "effort", None),
-            "usage": dict(getattr(self.client, "last_usage", {}) or {}),
-            "fallback": bool(getattr(self.client, "last_fallback", False)),
-        }
-
-    def _run_depth_job(self, job_id, job):
-        uid, n = job["uid"], int(job["n"])
-        requested = [layer for layer in DEPTH_LAYERS if layer in set(job.get("layers") or [])]
-        if not requested:
-            raise ValueError("至少选择一个深度层")
-        if self.queue.cancelled(job_id):
-            raise RuntimeError("任务已取消")
-        self._set_stage(job_id, "chunking")
-        raw = self.library.read_chapter(uid, n)
-        if not raw:
-            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
-        blocks = raw["blocks"]
-        evaluate(blocks, plan_chunks(blocks, 18000, 100)).raise_if_blocked()
-        book = self.library.book(uid) or {"uid": uid}
-        reading = self.reading(uid, n)
-        mode = reading.get("effective_mode") or "argument"
-        chapter = {
-            "uid": uid,
-            "n": n,
-            "title": raw.get("title") or raw.get("stem") or "",
-            "source_sha256": raw.get("source_sha256"),
-            "stem": raw.get("stem"),
-            "ordinal": raw.get("ordinal"),
-        }
-        state = self.store.depth_json(uid, n, "state.json")
-        state = dict(state) if isinstance(state, dict) else {}
-        source_changed = bool(
-            state and raw.get("source_sha256") and state.get("source_sha256") != raw.get("source_sha256")
-        )
-        existing = {}
-        for layer, name in DEPTH_FILES.items():
-            existing[layer] = self.store.depth_json(uid, n, name)
-        # 续跑的任务从盘上已有层起步：进度条不该从 0 开始爬，与「已落 4/5 层」打架。
-        self.queue.note(
-            job_id,
-            layers_ready=self.store.depth_state(uid, n, raw.get("source_sha256")).get("layers_ready") or [],
-        )
-        files = {}
-        # chapter.html 也预载：整目录替换的写法下，不带上它就等于每落一次盘删一次页面。
-        for name in [*list(DEPTH_FILES.values()), "ledger.json", "chapter.html"]:
-            path = self.store.depth_path(uid, n, name)
-            if Path(path).is_file():
-                with open(path, encoding="utf-8") as fh:
-                    files[name] = fh.read()
-        layer_sha = dict(state.get("layer_sha") or {})
-        for layer, payload in existing.items():
-            if payload is not None and layer not in layer_sha:
-                layer_sha[layer] = _depth_sha(payload)
-        layer_model_sha = dict(state.get("layer_model_sha") or {})
-        layer_usage = dict(state.get("layer_usage") or {})
-        layer_updated_at = dict(state.get("layer_updated_at") or {})
-        layer_mode = dict(state.get("layer_mode") or {})
-        layer_request = dict(state.get("layer_request") or {})
-        target_model = job.get("model") or DEFAULT_MODEL
-        target_effort = job.get("effort") or DEFAULT_EFFORT
-        request = {"model": target_model, "effort": target_effort}
-
-        def model_is_fresh():
-            return (
-                existing.get("model") is not None
-                and not source_changed
-                and not job.get("rebuild")
-                and Path(self.store.depth_path(uid, n, DEPTH_FILES["model"])).is_file()
-            )
-
-        model_pending = "model" in requested and not model_is_fresh()
-
-        def fresh(layer):
-            """盘上已有、且由当前参数与当前结构模型生成的层，续跑时不再花调用。"""
-            if model_pending:
-                return False
-            if existing.get(layer) is None:
-                return False
-            # 退化成空面板的层看着“已生成”，但内容不是真的；不重试它就永远补不上。
-            if layer in (state.get("layer_degraded") or {}):
-                return False
-            if not Path(self.store.depth_path(uid, n, DEPTH_FILES[layer])).is_file():
-                return False
-            if layer_mode.get(layer) not in (None, mode):
-                return False
-            if mode and layer in MODE_LAYERS and layer_mode.get(layer) is None:
-                # 没记 mode 的旧层不能当新鲜；否则 mode stale 后普通重生成会全部跳过。
-                return False
-            if layer != "model":
-                current = state.get("chapter_model_sha")
-                if current is not None and layer_model_sha.get(layer) not in (None, current):
-                    return False
-            recorded = layer_request.get(layer)
-            if isinstance(recorded, dict):
-                if recorded.get("model") not in (None, target_model):
-                    return False
-                if recorded.get("effort") not in (None, target_effort):
-                    return False
-            elif layer != "model":
-                # 旧包没记层级参数，只能拿整包结构模型的参数做代理；对不上就重做。
-                meta = state.get("model") or {}
-                if meta.get("model") not in (None, target_model):
-                    return False
-                if meta.get("effort") not in (None, target_effort):
-                    return False
-            return True
-
-        skipped = [layer for layer in requested if fresh(layer)]
-        if skipped:
-            events.current().emit("layers_skipped", layers=skipped, reason="已就绪，续跑保留")
-        requested = [layer for layer in requested if layer not in skipped]
-        if not requested and not skipped:
-            raise ValueError("至少选择一个深度层")
-
-        model = existing.get("model")
-        ledger = existing.get("ledger")
-        model_meta = state.get("model")
-        regenerated = False
-        if "model" in requested:
-            preflight.require(["reading.model"], note="深读结构层要用模型生成。")
-            self._set_stage(job_id, "annotating", layer="model")
-            chunk_tokens = int(os.environ.get("READING_DEPTH_CHUNK_TOKENS") or 96000)
-            model, model_meta = generate_chapter_model(
-                self.client or ModelClient(),
-                book,
-                chapter,
-                blocks,
-                model=job.get("model"),
-                effort=job.get("effort"),
-                max_tokens_per_chunk=chunk_tokens,
-                cache_dir=self.store.depth_cache_dir(uid, n),
-                refresh=bool(job.get("rebuild")),
-            )
-            ledger = plan_all_dispositions(model, blocks)
-            gate = audit_conservation(model, ledger, blocks)
-            if gate.get("status") != "pass":
-                raise RuntimeError(f"结构账审计未通过：{gate.get('detail')}")
-            files[DEPTH_FILES["model"]] = json.dumps(model, ensure_ascii=False, indent=1)
-            files["ledger.json"] = json.dumps(ledger, ensure_ascii=False, indent=1)
-            layer_sha["model"] = _depth_sha(model)
-            layer_updated_at["model"] = _now()
-            layer_request["model"] = dict(request)
-            usage = (model_meta or {}).get("usage") if isinstance(model_meta, dict) else None
-            if isinstance(usage, dict) and usage:
-                layer_usage["model"] = usage
-            else:
-                layer_usage.pop("model", None)
-            regenerated = True
-        if model is None:
-            raise RuntimeError("缺少章节结构模型；请先勾选结构模型生成")
-        if ledger is None:
-            ledger = plan_all_dispositions(model, blocks)
-            files["ledger.json"] = json.dumps(ledger, ensure_ascii=False, indent=1)
-        if "model" in requested and "model" not in layer_sha:
-            layer_sha["model"] = _depth_sha(model)
-        chapter_model_sha = _depth_sha(model) if regenerated else (state.get("chapter_model_sha") or _depth_sha(model))
-        if regenerated:
-            for layer in DEPTH_LAYERS:
-                if layer != "model" and layer not in requested:
-                    layer_model_sha[layer] = "__stale__"
-
-        def ready_layers():
-            """盘上真实可用、且由当前结构模型生成的层。"""
-            return [
-                layer
-                for layer in DEPTH_LAYERS
-                if layer in layer_sha
-                and (layer == "model" or layer_model_sha.get(layer) == chapter_model_sha)
-                and Path(self.store.depth_path(uid, n, DEPTH_FILES[layer])).is_file()
-            ]
-
-        def committed_now():
-            """内存里已经备好、马上就是这次要落盘的层。
-
-            按磁盘算会差一层：状态在 save 之前算，盘上还是上一层的模样。
-            落盘的就是 ``files``，所以判断就以 ``files`` 为准。
-            """
-            ready = []
-            for layer in DEPTH_LAYERS:
-                if layer != "model" and DEPTH_FILES[layer] not in files:
-                    continue
-                if layer != "model" and layer_model_sha.get(layer) != chapter_model_sha:
-                    continue
-                ready.append(layer)
-            return ready
-
-        def interim_status():
-            """五层齐全且页面在才算 ready，只建结构算 model。"""
-            ready = committed_now()
-            if ready == ["model"]:
-                return "model"
-            if len(ready) == len(DEPTH_LAYERS) and Path(self.store.depth_path(uid, n, "chapter.html")).is_file():
-                # 空面板算「层在但内容退化了」，不能当 ready 报给读者。
-                if state.get("layer_degraded"):
-                    return "partial"
-                return "ready"
-            return "partial"
-
-        def snapshot(status):
-            """拼 state.json 并立刻落盘；中断时已完成层不会跟着丢。"""
-            state.update(
-                {
-                    "schema": 2,
-                    "uid": uid,
-                    "n": n,
-                    "source_sha256": (
-                        raw.get("source_sha256") if regenerated or not source_changed else state.get("source_sha256")
-                    ),
-                    "chapter_model_sha": chapter_model_sha,
-                    "prompt_version": model.get("prompt_version") or state.get("prompt_version") or "",
-                    "status": status,
-                    "path": "depth",
-                    # 账本时间是「写这一次」的时间，不是任务开始那一刻。
-                    "updated_at": _now(),
-                    "model": model_meta if model_meta is not None else state.get("model"),
-                    "layer_sha": layer_sha,
-                    "layer_model_sha": layer_model_sha,
-                    "layer_usage": layer_usage,
-                    "layer_updated_at": layer_updated_at,
-                    "layer_mode": layer_mode,
-                    "layer_request": layer_request,
-                }
-            )
-            state.setdefault("generated_at", _now())
-            if regenerated and isinstance(model_meta, dict) and model_meta.get("cache_key"):
-                state["cache_key"] = model_meta["cache_key"]
-            files["state.json"] = json.dumps(state, ensure_ascii=False, indent=1)
-            self.store.save_depth_partial(uid, n, files, status)
-            committed = ready_layers()
-            # 任务账要与磁盘同步：记录页的步骤表和进度从这两个字段推。
-            self.queue.note(job_id, layers_ready=committed)
-            events.current().emit("layer_commit", status=status, layers_ready=committed)
-            return status
-
-        snapshot(interim_status())
-
-        panels = existing.get("panels")
-        if "panels" in requested:
-            self._set_stage(job_id, "annotating", layer="panels")
-            # 面板退化不能悄悄发生：空面板也要在 state.json 与事件账里留痕。
-            degraded: dict = {}
-
-            def _on_degraded(reason: str, kind: str) -> None:
-                degraded["panels"] = {"reason": reason, "kind": kind}
-                events.current().emit("layer_degraded", layer="panels", reason=reason, error_kind=kind)
-
-            state.pop("layer_degraded", None)
-            panels, panels_meta = generate_panels(
-                self.client or ModelClient(),
-                book,
-                chapter,
-                model,
-                blocks,
-                mode=mode,
-                source_sha256=raw.get("source_sha256") or "",
-                model_name=job.get("model"),
-                effort=job.get("effort"),
-                on_degraded=_on_degraded,
-            )
-            if degraded:
-                state["layer_degraded"] = degraded
-            self._set_stage(job_id, "validating", layer="panels")
-            panels = validate_panels(panels, model, blocks, mode=mode, source_sha256=raw.get("source_sha256") or "")
-            audit = audit_panels(panels, model, blocks, mode=mode)
-            files[DEPTH_FILES["panels"]] = json.dumps(panels, ensure_ascii=False, indent=1)
-            layer_sha["panels"] = _depth_sha(panels)
-            layer_model_sha["panels"] = chapter_model_sha
-            layer_mode["panels"] = mode
-            layer_request["panels"] = dict(request)
-            layer_updated_at["panels"] = _now()
-            usage = (panels_meta or {}).get("usage") if isinstance(panels_meta, dict) else None
-            if isinstance(usage, dict) and usage:
-                layer_usage["panels"] = usage
-            else:
-                layer_usage.pop("panels", None)
-            snapshot(interim_status())
-
-        skim = existing.get("skim")
-        if "skim" in requested:
-            self._set_stage(job_id, "annotating", layer="skim")
-            skim_usage: dict = {}
-
-            def _skim_usage(usage: dict) -> None:
-                skim_usage.update(usage)
-
-            skim = generate_skim(
-                self.client or ModelClient(),
-                book,
-                chapter,
-                model,
-                blocks,
-                model=job.get("model"),
-                effort=job.get("effort"),
-                mode=mode,
-                panels=panels,
-                on_usage=_skim_usage,
-            )
-            self._set_stage(job_id, "validating", layer="skim")
-            skim = validate_skim(skim, model, blocks, mode=mode)
-            audit = audit_skim(skim, model, blocks, mode=mode)
-            if audit.get("errors"):
-                raise SkimError(
-                    f"速览审计未通过：{'；'.join(audit['errors'])}",
-                    stats=audit.get("stats"),
-                    payload=skim,
-                )
-            files[DEPTH_FILES["skim"]] = json.dumps(skim, ensure_ascii=False, indent=1)
-            layer_sha["skim"] = _depth_sha(skim)
-            layer_model_sha["skim"] = chapter_model_sha
-            layer_mode["skim"] = mode
-            layer_request["skim"] = dict(request)
-            if skim_usage:
-                layer_usage["skim"] = skim_usage
-            layer_updated_at["skim"] = _now()
-            snapshot(interim_status())
-
-        standard = existing.get("standard")
-        if "standard" in requested:
-            self._set_stage(job_id, "projecting", layer="standard")
-            standard = build_standard(model, blocks, mode=mode)
-            files[DEPTH_FILES["standard"]] = json.dumps(standard, ensure_ascii=False, indent=1)
-            layer_sha["standard"] = _depth_sha(standard)
-            layer_model_sha["standard"] = chapter_model_sha
-            layer_mode["standard"] = mode
-            layer_request["standard"] = dict(request)
-            layer_usage.pop("standard", None)
-            layer_updated_at["standard"] = _now()
-            snapshot(interim_status())
-
-        deep = existing.get("deep")
-        if "deep" in requested:
-            self._set_stage(job_id, "annotating", layer="deep")
-            deep, deep_meta = generate_deep(
-                self.client or ModelClient(),
-                book,
-                chapter,
-                model,
-                blocks,
-                model=job.get("model"),
-                effort=job.get("effort"),
-                mode=mode,
-            )
-            self._set_stage(job_id, "validating", layer="deep")
-            deep = validate_deep(deep, model, blocks, mode=mode)
-            audit = audit_deep(deep, model, blocks, mode=mode)
-            if audit.get("errors"):
-                raise RuntimeError(f"深读审计未通过：{'；'.join(audit['errors'])}")
-            files[DEPTH_FILES["deep"]] = json.dumps(deep, ensure_ascii=False, indent=1)
-            layer_sha["deep"] = _depth_sha(deep)
-            layer_model_sha["deep"] = chapter_model_sha
-            layer_mode["deep"] = mode
-            layer_request["deep"] = dict(request)
-            layer_updated_at["deep"] = _now()
-            usage = (deep_meta or {}).get("usage") if isinstance(deep_meta, dict) else None
-            if isinstance(usage, dict) and usage:
-                layer_usage["deep"] = usage
-            else:
-                layer_usage.pop("deep", None)
-            snapshot(interim_status())
-
-        html_written = False
-        skim_fresh = skim is not None and layer_model_sha.get("skim") == chapter_model_sha
-        html_layers = {"panels", "skim", "standard", "deep"}
-        need_render = skim_fresh and bool(html_layers & (set(requested) | set(skipped)))
-        if need_render:
-            self._set_stage(job_id, "rendering", layer="render")
-            files["chapter.html"] = render_depth_chapter(
-                book,
-                chapter,
-                blocks,
-                model,
-                ledger,
-                skim,
-                resolver=lambda rel: asset_url(uid, rel),
-                # 页面上的时间要写「这一页什么时候渲染的」，不是任务开始那一刻。
-                generated_at=_now(),
-                standard=standard,
-                deep=deep,
-                panels=panels,
-                reading=reading,
-            )
-            html_written = True
-        status = "ready" if skim is not None and html_written else interim_status()
-        if status == "ready" and state.get("layer_degraded"):
-            # 有层退化过（例如空面板），页面能开但不说 ready，跟 interim_status 同一口径。
-            status = interim_status()
-        snapshot(status)
-        self._invalidate_packs()
-        return {"status": status, "pack_id": f"{uid}/ch/{n:02d}", "skipped": skipped, "layers_ready": ready_layers()}
-
-    def _run_job(self, job_id, job):
-        if job.get("kind") == "edition":
-            return self._run_edition_job(job_id, job)
-        if job.get("kind") == "depth":
-            return self._run_depth_job(job_id, job)
-        uid, n = job["uid"], int(job["n"])
-        tiers = job.get("tiers") or ["standard"]
-        requested = [tier for tier in TIER_ORDER if tier in set(tiers)]
-        if not requested:
-            raise ValueError("至少选择一个档位")
-        if self.queue.cancelled(job_id):
-            raise RuntimeError("任务已取消")
-        self._set_stage(job_id, "chunking")
-        raw = self.library.read_chapter(uid, n)
-        if not raw:
-            raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
-        blocks = raw["blocks"]
-        book = self._book_view(self.library.book(uid))
-
-        # 有编辑层的章节，标注是编辑层的一部分；重新跑模型会改变档位选块，
-        # 让图版锚点漂移。此时只接受与原文一致的旧标注。
-        editorial = self.store.editorial(uid, n)
-        force_annotation = bool(job.get("force_annotation"))
-        if force_annotation:
-            # 显式重新标注：编辑层（图版锚点、旁批）挂在标注上，必须跟着重建；
-            # 否则新标注换了选块，旧锚点会指向已不存在的块。
-            if not self.annotate:
-                raise RuntimeError("标注模型已关闭（READING_ANNOTATE=0），无法重新标注")
-            editorial = None
-        annotation = None
-        annotation_source = "cache"
-        draft = False
-        budget_estimate = None
-        model_meta = None
-        if self.annotate and editorial is None:
-            preflight.require(["reading.model"], note="本次任务要重新标注（重跑线上只重渲染的任务不受影响）。")
-            budget_estimate = _estimate_budget(blocks)
-            if budget_estimate["tokens_est"] > MAX_BUDGET_TOKENS or budget_estimate["usd_est"] > MAX_BUDGET_USD:
-                raise RuntimeError(
-                    "预算超限：预计 %s tokens / $%s" % (budget_estimate["tokens_est"], budget_estimate["usd_est"])
-                )
-            self._set_stage(job_id, "annotating")
-            annotation, model_meta = self._annotate_with_meta(
-                book,
-                _chapter_api(raw),
-                blocks,
-                model=job.get("model"),
-                effort=job.get("effort"),
-            )
-            annotation_source = "model"
-            self._set_stage(job_id, "validating")
-            # 校验失败直接让任务失败；旧包保留，不发布半成品。
-            annotation = validate_annotation(annotation, blocks)
-            usage = dict(model_meta.get("usage") or {})
-            total, usd = _usage_cost(usage)
-            if total > MAX_BUDGET_TOKENS or usd > MAX_BUDGET_USD:
-                raise RuntimeError(
-                    "模型用量超限：%s tokens / $%.4f（usage=%s；预算 %s tokens / $%s）"
-                    % (
-                        total,
-                        usd,
-                        json.dumps(usage, ensure_ascii=False),
-                        MAX_BUDGET_TOKENS,
-                        MAX_BUDGET_USD,
-                    )
-                )
-        else:
-            cached = self.store.annotation(uid, n)
-            manifest = self.store.manifest(uid, n)
-            if cached and manifest and manifest.get("source_sha256") == raw["source_sha256"]:
+            with events.job_scope(log_dir, op_id):
                 try:
-                    annotation = validate_annotation(cached, blocks)
-                except ValueError:
-                    annotation = None
-            draft = annotation is None
-        # 账上写清楚这次是重做标注还是复用旧标注：复用只需渲染，秒级完成。
-        self.queue.note(job_id, annotation_source=annotation_source)
-        if editorial is not None and annotation is None:
-            raise RuntimeError("该章有编辑层，但标注缺失或与原文不一致；请先删除 editorial.json 再重新标注")
-
-        # 只生成用户勾选的档位；已有包中未勾选的档位原样保留。
-        # 只有源文未变、草稿状态一致且旧标注可用时才做增量保留，避免混入不同源文/模型的内容。
-        previous = self.store.manifest(uid, n)
-        preserved = []
-        old_annotation = None
-        if previous:
-            old_tiers = [tier for tier in TIER_ORDER if tier in (previous.get("tiers") or {})]
-            candidates = [tier for tier in old_tiers if tier not in requested]
-            if candidates and not job.get("rebuild"):
-                if previous.get("source_sha256") != raw["source_sha256"]:
-                    raise RebuildRequiredError(candidates, "原文已更改")
-                old_draft = bool(previous.get("draft"))
-                if old_draft != draft:
-                    raise RebuildRequiredError(candidates, "生成模式不同（草稿/正式）")
-                if old_draft:
-                    preserved = candidates
-                else:
-                    old_raw = self.store.annotation(uid, n)
-                    try:
-                        old_annotation = validate_annotation(old_raw, blocks) if old_raw else None
-                    except ValueError:
-                        old_annotation = None
-                    if old_annotation is None:
-                        raise RuntimeError("旧包缺少可用标注，无法只更新所选档位；请勾选全部档位重新生成")
-                    preserved = candidates
-
-        self._set_stage(job_id, "projecting")
-        projections = {}
-        for tier in TIER_ORDER:
-            if tier in requested:
-                projections[tier] = project(blocks, annotation, tier, draft=draft)
-            elif tier in preserved:
-                projections[tier] = project(blocks, old_annotation, tier, draft=draft)
-        if self.queue.cancelled(job_id):
-            raise RuntimeError("任务已取消")
-
-        editorial_meta = None
-        editorial_error = None
-        if editorial is None and self.annotate and self.figures:
-            preflight.require(["reading.model"], note="编辑层（图版与旁批）要用模型生成。")
-            editable = [tier for tier in ("standard", "deep") if tier in projections]
-            allowed_ids = (
-                set.intersection(*[{block["id"] for block in projections[tier]["blocks"]} for tier in editable])
-                if editable
-                else None
-            )
-            self._set_stage(job_id, "editorial")
-            try:
-                editorial, editorial_meta = self._editorial_with_meta(
-                    book,
-                    _chapter_api(raw),
-                    blocks,
-                    annotation,
-                    model=job.get("model"),
-                    effort=job.get("effort"),
-                    allowed_ids=allowed_ids,
-                )
-                editorial = self.store.save_editorial(uid, n, editorial)
-            except Exception as exc:  # 图表生成失败时仍发布无图读本，原因写进 manifest
-                if force_annotation:
-                    # 新标注换了选块，旧编辑层的锚点已经对不上；宁可整包失败，也不能留下漂移的图版。
-                    raise RuntimeError("重新标注后重建编辑层失败，旧包未改动：%s" % exc) from exc
-                editorial = None
-                editorial_error = str(exc)
-
-        # 渲染前先定稿模型/时间/版本，读本页脚与导出的出处信息才能落到真实值。
-        prompt = prompt_sha256() if annotation else DRAFT_PROMPT
-        if model_meta:
-            model = model_meta.get("model")
-            requested_model = model_meta.get("requested_model") or job.get("model") or self.client.model
-            effort = model_meta.get("effort")
-            fallback = bool(model_meta.get("fallback"))
-            usage = dict(model_meta.get("usage") or {})
-        elif annotation:
-            model = (previous or {}).get("model") or self.client.model
-            requested_model = (previous or {}).get("model_requested") or job.get("model") or self.client.model
-            effort = (previous or {}).get("reasoning_effort")
-            fallback = bool((previous or {}).get("model_fallback"))
-            usage = dict((previous or {}).get("usage") or {})
-        else:
-            model = "draft"
-            requested_model = job.get("model") or self.client.model
-            effort = None
-            fallback = False
-            usage = {}
-        generated_at = _now()
-
-        def tier_model(tier):
-            # 保留档位沿用旧档位/旧包的模型；旧账没有模型时记 unknown，
-            # 不能把本次新任务的模型写进未重算的档位。
-            if tier in preserved:
-                old_tier = ((previous or {}).get("tiers") or {}).get(tier) or {}
-                return old_tier.get("model") or (previous or {}).get("model") or "unknown"
-            return model
-
-        chapter = _chapter_api(self.library.chapter(uid, n))
-        chapter["source_sha256"] = raw["source_sha256"]
-        chapter["generated_at"] = generated_at
-        chapter["generator_version"] = GENERATOR_VERSION
-        chapter["model"] = model
-        chapter["draft"] = draft
-        chapter["status"] = "draft" if draft else "available"
-        for tier, projection in projections.items():
-            if tier in preserved:
-                tier_generated_at = ((previous or {}).get("tiers") or {}).get(tier, {}).get("generated_at") or (
-                    previous or {}
-                ).get("generated_at")
-            else:
-                tier_generated_at = generated_at
-            chapter["tiers"][tier] = {
-                "exists": True,
-                "stale": False,
-                "generated_at": tier_generated_at,
-                "model": tier_model(tier),
-                "stats": projection["stats"],
-            }
-
-        self._set_stage(job_id, "rendering")
-
-        # 重新标注时只能用这次的内存结果：盘上的 editorial.json 还是旧标注的锚点。
-        if not force_annotation:
-            editorial = self.store.editorial(uid, n)
-
-        def resolver(rel):
-            return asset_url(uid, rel)
-
-        chapter_html = render_chapter(book, chapter, blocks, projections, resolver=resolver, editorial=editorial)
-        audit = audit_pack(blocks, projections, chapter_html, annotation, draft, editorial=editorial)
-        exports = {}
-        for tier, projection in projections.items():
-            exports[tier] = render_export(
-                book,
-                chapter,
-                blocks,
-                projection,
-                resolver=lambda rel: _export_asset(self.library.layout, uid, rel),
-                editorial=editorial,
-            )
-        cache_material = "%s|%s|%s|%s|%s|%s" % (
-            raw["source_sha256"],
-            GENERATOR_VERSION,
-            prompt,
-            model,
-            effort,
-            RENDER_VERSION,
-        )
-        cache_key = hashlib.sha256(cache_material.encode("utf-8")).hexdigest()
-        manifest = {
-            "schema": 1,
-            "pack_id": "%s/ch/%02d" % (uid, n),
-            "uid": uid,
-            "n": "%02d" % n,
-            "title": chapter["title"],
-            "source_sha256": raw["source_sha256"],
-            "source_file": raw.get("file"),
-            "source_files": raw.get("source_files") or [raw.get("file")],
-            "generated_at": generated_at,
-            "generator": GENERATOR,
-            "generator_version": GENERATOR_VERSION,
-            "render_version": RENDER_VERSION,
-            "prompt_sha256": prompt,
-            "model": model,
-            "model_requested": requested_model,
-            "reasoning_effort": effort,
-            "model_fallback": fallback,
-            "usage": usage,
-            "budget_estimate": budget_estimate,
-            "cache_key": cache_key,
-            "draft": draft,
-            "status": audit["status"],
-            "editorial": editorial is not None,
-            "editorial_generated": editorial_meta is not None,
-            "editorial_model": (editorial_meta or {}).get("model"),
-            "editorial_error": editorial_error,
-            "requested_tiers": requested,
-            "preserved_tiers": preserved,
-            "tiers": {
-                tier: {
-                    "label": TIER_SPECS[tier]["label"],
-                    "file": "export/%s.html" % tier,
-                    "stats": projection["stats"],
-                    "generated_at": chapter["tiers"][tier]["generated_at"],
-                    "model": chapter["tiers"][tier]["model"],
-                    "preserved": tier in preserved,
+                    # diagram 需要严格 JSON 来渲染 SVG/表格，因此不直接把原始 JSON 字符推给用户正文区。
+                    raw_content, usage = self.client.complete(
+                        messages,
+                        model=requested_model,
+                        effort=requested_effort,
+                        json_mode=(action == "diagram"),
+                        on_delta=None if action == "diagram" else on_delta,
+                    )
+                except Exception as exc:
+                    events.record_exception(exc, layer=action)
+                    raise
+        except Exception as exc:
+            self.store.append_op(
+                {
+                    "id": op_id,
+                    "uid": uid,
+                    "n": int(n),
+                    "book_title": book.get("title") or "",
+                    "chapter_title": chapter.get("title") or "",
+                    "action": action,
+                    "block_ids": clean_blocks,
+                    "status": "error",
+                    "model": requested_model,
+                    "tokens": 0,
+                    "elapsed_ms": _elapsed_ms(started),
+                    "summary": (clean_q or clean_text)[:120],
+                    "error": str(exc),
                 }
-                for tier, projection in projections.items()
-            },
+            )
+            raise
+
+        elapsed_ms = _elapsed_ms(started)
+        tokens = _usage_tokens(usage)
+        diagram_html = ""
+        figure = None
+        content = str(raw_content or "").strip()
+        if action == "diagram":
+            try:
+                parsed = _loads_content(content)
+                if isinstance(parsed, dict) and parsed.get("data"):
+                    figure = parsed
+                    diagram_html = diagrams.render_assist_figure(parsed)
+                    content = str(parsed.get("summary") or parsed.get("reading_note") or "").strip()
+            except ValueError:
+                # 模型偶尔没吐出合法 JSON 时直接保留其可读文字，不报错丢内容。
+                figure = None
+                diagram_html = ""
+
+        summary = (clean_q or clean_text).replace("\n", " ")[:90]
+        if diagram_html and isinstance(figure, dict) and figure.get("caption"):
+            summary = f"{figure['caption']}（{summary[:50]}）"
+        op = self.store.append_op(
+            {
+                "id": op_id,
+                "uid": uid,
+                "n": int(n),
+                "book_title": book.get("title") or "",
+                "chapter_title": chapter.get("title") or "",
+                "action": action,
+                "block_ids": clean_blocks,
+                "status": "ok",
+                "model": requested_model,
+                "tokens": tokens,
+                "elapsed_ms": elapsed_ms,
+                "summary": summary,
+            }
+        )
+        return {
+            "id": op_id,
+            "uid": uid,
+            "n": "%02d" % int(n),
+            "action": action,
+            "action_label": ACTION_LABELS[action],
+            "block_ids": clean_blocks,
+            "selected_text": clean_text,
+            "question": clean_q,
+            "content": content,
+            "diagram_html": diagram_html,
+            "figure": figure,
+            "model": requested_model,
+            "usage": usage or {},
+            "tokens": tokens,
+            "elapsed_ms": elapsed_ms,
+            "op": op,
         }
-        if not draft and audit["status"] != "ok":
-            failed = [gate for gate in audit["gates"] if gate["status"] == "fail"]
-            raise RuntimeError("门禁未通过，未发布：" + "；".join("%s %s" % (g["id"], g["detail"]) for g in failed[:4]))
-        if self.queue.cancelled(job_id):
-            raise RuntimeError("任务已取消")
-        if not job.get("overwrite") and not job.get("rebuild"):
-            existing = self.store.manifest(uid, n)
-            existing_tiers = set((existing or {}).get("tiers") or {})
-            if existing_tiers.intersection(requested):
-                raise RuntimeError("所选档位已有读本，未覆盖；如需覆盖请重新生成")
-        self.store.save(
+
+    # ---- 旁批钉住 / 删除 ---------------------------------------------
+    def pin_assist_note(self, uid, n, payload):
+        book = self.library.book(uid)
+        chapter = self.library.chapter(uid, n)
+        raw = self.library.read_chapter(uid, n)
+        if not book or not chapter or not raw:
+            raise FileNotFoundError("找不到章节")
+        valid_ids = {b.get("id") for b in raw["blocks"] if b.get("id")}
+        saved = self.store.pin_assist_note(
             uid,
             n,
-            manifest,
-            annotation,
-            audit,
-            chapter_html,
-            exports,
-            editorial=editorial,
-            # 重新标注后没能重建编辑层（如图表模型关闭）：旧文件必须删，不能留给下一次重跑误用。
-            drop_editorial=bool(force_annotation and editorial is None),
+            payload,
+            source_sha=raw.get("source_sha256") or "",
+            valid_block_ids=valid_ids,
         )
-        self._invalidate_packs()
-        return {"status": audit["status"], "pack_id": manifest["pack_id"]}
+        pin_summary = saved.get("title") or saved.get("content", "")
+        pin_summary = pin_summary.replace("**", "").replace("`", "").replace("\n", " ").strip()[:80]
+        self.store.append_op(
+            {
+                "uid": uid,
+                "n": int(n),
+                "book_title": book.get("title") or "",
+                "chapter_title": chapter.get("title") or "",
+                "action": "pin",
+                "block_ids": saved["block_ids"],
+                "status": "ok",
+                "summary": pin_summary,
+            }
+        )
+        return saved
 
-    def submit(self, uid, n, tiers, model=None, effort=None, overwrite=False, rebuild=False, force_annotation=False):
-        if not self.library.book(uid) or not self.library.chapter(uid, n):
-            raise FileNotFoundError("找不到章节 %s/%s" % (uid, n))
-        requested = [tier for tier in TIER_ORDER if tier in set(tiers or [])]
-        if not requested:
-            raise ValueError("至少选择一个档位")
-        with self._submit_lock:
-            conflicts = self.queue.conflicts(uid, n, requested)
-            if conflicts:
-                raise JobConflictError(conflicts)
-            state = self._chapter_states(uid, n)
-            previous = (state or {}).get("manifest") or {}
-            old_tiers = [tier for tier in TIER_ORDER if tier in (previous.get("tiers") or {})]
-            candidates = [tier for tier in old_tiers if tier not in requested]
-            if candidates and not rebuild and not (state or {}).get("preservable"):
-                raise RebuildRequiredError(
-                    candidates,
-                    (state or {}).get("preserve_reason") or "原文或生成模式已变化",
-                )
-            existing = [tier for tier in requested if (state or {}).get("tiers", {}).get(tier, {}).get("exists")]
-            if existing and not overwrite and not rebuild:
-                raise PackExistsError(existing)
-            manifest = (state or {}).get("manifest") or {}
-            needs_model = self.annotate and (force_annotation or not manifest or self.store.editorial(uid, n) is None)
-            if needs_model:
-                preflight.require(
-                    ["reading.model"],
-                    note="这次提交要调标注/编辑模型；只想重渲染已有包时不要勾“重新标注”。",
-                )
-            return self.queue.submit(
-                uid,
-                n,
-                requested,
-                model=model,
-                effort=effort,
-                overwrite=overwrite,
-                rebuild=rebuild,
-                force_annotation=force_annotation,
+    def unpin_assist_note(self, uid, n, note_id):
+        book = self.library.book(uid)
+        chapter = self.library.chapter(uid, n)
+        raw = self.library.read_chapter(uid, n)
+        if not book or not chapter or not raw:
+            raise FileNotFoundError("找不到章节")
+        removed = self.store.unpin_assist_note(uid, n, note_id, source_sha=raw.get("source_sha256") or "")
+        if removed is None:
+            return None
+        unpin_summary = removed.get("title") or removed.get("content", "")
+        unpin_summary = unpin_summary.replace("**", "").replace("`", "").replace("\n", " ").strip()[:80]
+        self.store.append_op(
+            {
+                "uid": uid,
+                "n": int(n),
+                "book_title": book.get("title") or "",
+                "chapter_title": chapter.get("title") or "",
+                "action": "unpin",
+                "block_ids": removed.get("block_ids") or [],
+                "status": "ok",
+                "summary": unpin_summary,
+            }
+        )
+        return {"ok": True, "deleted": note_id}
+
+    # ---- 全章知识地图（POST /api/chapter-map/<uid>/<n>） ---------------
+    def generate_chapter_map(self, uid, n, *, force=False, model=None, effort=None):
+        book = self.library.book(uid)
+        chapter = self.library.chapter(uid, n)
+        raw = self.library.read_chapter(uid, n)
+        if not book or not chapter or not raw:
+            raise FileNotFoundError("找不到章节")
+        blocks = raw["blocks"]
+        source_sha = raw.get("source_sha256") or ""
+
+        plans = chapmap.plan_chunks(blocks, 18000, 100)
+        cap_gate = evaluate(blocks, plans)
+        cap_gate.raise_if_blocked()
+
+        if not force:
+            cached = self.store.chapter_map(uid, n, source_sha=source_sha)
+            if cached and not cached.get("stale") and cached.get("supported", True):
+                return dict(cached, cached=True)
+            short_gate = chapter_map_gate(blocks)
+            if not short_gate["supported"]:
+                return {
+                    "schema": 1,
+                    "uid": uid,
+                    "n": "%02d" % int(n),
+                    "source_sha256": source_sha,
+                    "supported": False,
+                    "can_force": True,
+                    "reason": short_gate["reason"],
+                    "stats": short_gate["stats"],
+                }
+
+        self._require_model_client()
+        requested_model = str(model or getattr(self.client, "model", None) or DEFAULT_MODEL).strip()
+        requested_effort = str(effort or getattr(self.client, "effort", None) or DEFAULT_EFFORT).strip().lower()
+        op_id = f"op-{uuid.uuid4().hex[:10]}"
+        started = time.perf_counter()
+        log_dir = os.path.join(self.store.base, "logs")
+        cache_dir = self.store.chapter_map_cache_dir(uid, n)
+        try:
+            with events.job_scope(log_dir, op_id):
+                try:
+                    model_doc, meta = chapmap.generate_chapter_model(
+                        self.client,
+                        book,
+                        dict(chapter, source_sha256=source_sha),
+                        blocks,
+                        model=requested_model,
+                        effort=requested_effort,
+                        cache_dir=cache_dir,
+                        refresh=bool(force),
+                    )
+                except Exception as exc:
+                    events.record_exception(exc, layer="chapter_map")
+                    raise
+        except Exception as exc:
+            self.store.append_op(
+                {
+                    "id": op_id,
+                    "uid": uid,
+                    "n": int(n),
+                    "book_title": book.get("title") or "",
+                    "chapter_title": chapter.get("title") or "",
+                    "action": "chapter_map",
+                    "block_ids": [],
+                    "status": "error",
+                    "model": requested_model,
+                    "tokens": 0,
+                    "elapsed_ms": _elapsed_ms(started),
+                    "summary": chapter.get("title") or "",
+                    "error": str(exc),
+                }
             )
+            raise
 
+        elapsed_ms = _elapsed_ms(started)
+        usage = meta.get("usage") or {}
+        tokens = _usage_tokens(usage)
+        view = _summarize_chapter_map(model_doc, blocks)
+        payload = {
+            "schema": 1,
+            "uid": uid,
+            "n": "%02d" % int(n),
+            "source_sha256": source_sha,
+            "supported": True,
+            "forced": bool(force),
+            "generated_at": _now_iso(),
+            "model": meta.get("model") or requested_model,
+            "usage": usage,
+            "elapsed_ms": elapsed_ms,
+            **view,
+        }
+        self.store.save_chapter_map(uid, n, payload)
+        self.store.append_op(
+            {
+                "id": op_id,
+                "uid": uid,
+                "n": int(n),
+                "book_title": book.get("title") or "",
+                "chapter_title": chapter.get("title") or "",
+                "action": "chapter_map",
+                "block_ids": [],
+                "status": "ok",
+                "model": payload["model"],
+                "tokens": tokens,
+                "elapsed_ms": elapsed_ms,
+                "summary": f"{view['stats']['sections']} 节 · {view['stats']['terms']} 术语",
+            }
+        )
+        return payload
 
-def _export_asset(layout, uid, rel):
-    if not rel:
-        return ""
-    path = os.path.join(layout.md(uid), rel)
-    try:
-        size = os.path.getsize(path)
-    except OSError:
-        return asset_url(uid, rel)
-    if size < 2 * 1024 * 1024:
-        uri = image_data_uri(path)
-        if uri:
-            return uri
-    return asset_url(uid, rel)
+    # ---- 操作日志查询（GET /api/records） ----------------------------
+    def records(self, *, uid=None, action=None, status=None, limit=300):
+        logs = self.store.ops_logs(limit=limit, uid=uid, action=action, status=status)
+        chapter_map = {}
+        ok_count = 0
+        err_count = 0
+        pin_count = 0
+        map_count = 0
+        assist_count = 0
+        for item in logs:
+            act = item.get("action") or ""
+            st = item.get("status") or "ok"
+            if st == "error":
+                err_count += 1
+            else:
+                ok_count += 1
+            if act in ("pin", "unpin"):
+                pin_count += 1
+            elif act == "chapter_map":
+                map_count += 1
+            elif act in ASSIST_ACTIONS:
+                assist_count += 1
+
+            key = (item.get("uid") or "", item.get("n") or "")
+            if key[0] and key[1]:
+                bucket = chapter_map.setdefault(
+                    key,
+                    {
+                        "uid": key[0],
+                        "n": key[1],
+                        "book_title": item.get("book_title") or "",
+                        "chapter_title": item.get("chapter_title") or "",
+                        "ops": 0,
+                        "last_ts": item.get("ts") or "",
+                        "actions": [],
+                    },
+                )
+                bucket["ops"] += 1
+                if act and act not in bucket["actions"]:
+                    bucket["actions"].append(act)
+
+        chapters = sorted(chapter_map.values(), key=lambda c: c.get("last_ts") or "", reverse=True)
+        for ch in chapters:
+            notes = self.store.assist_notes(ch["uid"], int(ch["n"]))
+            cmap = self.store.chapter_map(ch["uid"], int(ch["n"]))
+            ch["note_count"] = len(notes)
+            ch["has_map"] = bool(cmap and cmap.get("supported", True))
+            if not ch["book_title"]:
+                bk = self.library.book(ch["uid"])
+                ch["book_title"] = (bk or {}).get("title") or ch["uid"]
+            if not ch["chapter_title"]:
+                meta = self.library.chapter(ch["uid"], int(ch["n"]))
+                ch["chapter_title"] = (meta or {}).get("title") or f"第 {ch['n']} 章"
+
+        return {
+            "logs": logs,
+            "chapters": chapters,
+            "summary": {
+                "total": len(logs),
+                "ok": ok_count,
+                "error": err_count,
+                "assist": assist_count,
+                "chapter_map": map_count,
+                "pin": pin_count,
+                "chapters": len(chapters),
+            },
+        }

@@ -7,7 +7,7 @@
 import html
 import re
 
-from .schema import FIGURE_FAMILIES, FIGURE_ORIGINS
+from .map_schema import FIGURE_FAMILIES, FIGURE_ORIGINS
 
 NODE_FAMILIES = ("tree", "network", "argument", "flow", "timeline")
 LABEL_KEYS = ("label", "labels", "caption", "title", "name", "columns")
@@ -247,4 +247,114 @@ def render_figure(figure, model, blocks):
     return (
         f'<figure class="depth-figure" data-origin="added" data-figure="{figure_id}" data-family="{escaped_family}">'
         f"<figcaption><b>{escaped_caption}</b><span>{escaped_note}</span></figcaption>{body}</figure>"
+    )
+
+
+def _node_svg(figure):
+    """把 nodes/edges 渲染为横向或纵折的零依赖 SVG 流程图。"""
+    data = figure.get("data") if isinstance(figure.get("data"), dict) else {}
+    nodes = [node for node in (data.get("nodes") or []) if isinstance(node, dict)]
+    if not nodes:
+        return ""
+    edges = [edge for edge in (data.get("edges") or []) if isinstance(edge, dict)]
+    cols = min(3, max(1, len(nodes)))
+    box_w, box_h, gap_x, gap_y = 190, 62, 34, 34
+    pad_x, pad_y = 16, 16
+    rows = (len(nodes) + cols - 1) // cols
+    width = pad_x * 2 + cols * box_w + max(0, cols - 1) * gap_x
+    height = pad_y * 2 + rows * box_h + max(0, rows - 1) * gap_y
+    pos = {}
+    rects = []
+    for idx, node in enumerate(nodes):
+        nid = str(node.get("id") or f"N{idx + 1}")
+        row, col = divmod(idx, cols)
+        x = pad_x + col * (box_w + gap_x)
+        y = pad_y + row * (box_h + gap_y)
+        pos[nid] = (x, y)
+        label = str(node.get("label") or nid)
+        short = (label[:24] + "…") if len(label) > 25 else label
+        sub = str(node.get("note") or node.get("block") or "")
+        rects.append(
+            f'<g class="svg-node" data-node="{html.escape(nid, quote=True)}">'
+            f'<rect x="{x}" y="{y}" width="{box_w}" height="{box_h}" rx="7" '
+            f'fill="#faf7ef" stroke="#1E3A36" stroke-width="1.3"/>'
+            f'<text x="{x + 12}" y="{y + 26}" font-size="13" font-weight="600" '
+            f'fill="#181817">{html.escape(short)}</text>'
+            + (
+                f'<text x="{x + 12}" y="{y + 46}" font-size="11" fill="#6d6962">{html.escape(sub[:28])}</text>'
+                if sub
+                else ""
+            )
+            + "</g>"
+        )
+    arrows = []
+    if edges:
+        for edge in edges:
+            src = pos.get(str(edge.get("from") or ""))
+            dst = pos.get(str(edge.get("to") or ""))
+            if not src or not dst:
+                continue
+            x1 = src[0] + box_w if dst[0] > src[0] else src[0] + box_w / 2
+            y1 = src[1] + box_h / 2 if dst[0] > src[0] else src[1] + box_h
+            x2 = dst[0] if dst[0] > src[0] else dst[0] + box_w / 2
+            y2 = dst[1] + box_h / 2 if dst[0] > src[0] else dst[1]
+            lbl = str(edge.get("label") or "").strip()
+            arrows.append(
+                f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                f'stroke="#A8442F" stroke-width="1.4" marker-end="url(#rd-arrow)"/>'
+            )
+            if lbl:
+                arrows.append(
+                    f'<text x="{(x1 + x2) / 2:.1f}" y="{(y1 + y2) / 2 - 4:.1f}" '
+                    f'text-anchor="middle" font-size="10.5" fill="#A8442F">{html.escape(lbl[:16])}</text>'
+                )
+    else:
+        for idx in range(len(nodes) - 1):
+            nid1 = str(nodes[idx].get("id") or f"N{idx + 1}")
+            nid2 = str(nodes[idx + 1].get("id") or f"N{idx + 2}")
+            x1, y1 = pos[nid1]
+            x2, y2 = pos[nid2]
+            if y1 == y2:
+                arrows.append(
+                    f'<line x1="{x1 + box_w}" y1="{y1 + box_h / 2}" x2="{x2}" y2="{y2 + box_h / 2}" '
+                    f'stroke="#A8442F" stroke-width="1.4" marker-end="url(#rd-arrow)"/>'
+                )
+            else:
+                arrows.append(
+                    f'<path d="M {x1 + box_w / 2} {y1 + box_h} L {x1 + box_w / 2} {y1 + box_h + gap_y / 2} '
+                    f'L {x2 + box_w / 2} {y2 - gap_y / 2} L {x2 + box_w / 2} {y2}" fill="none" '
+                    f'stroke="#A8442F" stroke-width="1.4" marker-end="url(#rd-arrow)"/>'
+                )
+    return (
+        f'<svg class="assist-svg" viewBox="0 0 {width} {height}" role="img" '
+        f'aria-label="{html.escape(str(figure.get("caption") or "关系图"), quote=True)}">'
+        '<defs><marker id="rd-arrow" viewBox="0 0 10 10" refX="8" refY="5" '
+        'markerWidth="6" markerHeight="6" orient="auto-start-reverse">'
+        '<path d="M 0 1 L 10 5 L 0 9 z" fill="#A8442F"/></marker></defs>' + "".join(arrows) + "".join(rects) + "</svg>"
+    )
+
+
+def render_assist_figure(figure):
+    """将划词生成的图结构（nodes/edges/matrix/quantity）渲染为内联图卡 HTML。"""
+    if not isinstance(figure, dict):
+        return ""
+    family = str(figure.get("family") or "flow")
+    if family not in FIGURE_FAMILIES:
+        family = "flow"
+    caption = str(figure.get("caption") or "段落图解")
+    reading_note = str(figure.get("reading_note") or "")
+    body = ""
+    if family in NODE_FAMILIES:
+        body = _node_svg(figure)
+    elif family == "matrix":
+        body = _matrix_body(figure, {}, [])
+    elif family == "quantity":
+        body = _quantity_body(figure, {}, [])
+    if not body:
+        body = _fallback(figure, "暂缺可视化数据，以要点呈现。", {}, [])
+    return (
+        f'<figure class="assist-figure" data-family="{html.escape(family, quote=True)}">'
+        f"<figcaption><b>{html.escape(caption)}</b>"
+        + (f"<span>{html.escape(reading_note)}</span>" if reading_note else "")
+        + f"</figcaption>{body}</figure>"
     )

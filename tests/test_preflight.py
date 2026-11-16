@@ -41,4 +41,4 @@ def test_reading_model_from_env_or_pi_auth(tmp_path):
 
 def test_summary_lists_every_missing_capability():
     text = preflight.summary()
-    assert "四读的标注/结构模型" in text
+    assert "阅读工作台伴读/地图模型" in text

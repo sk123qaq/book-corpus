@@ -50,16 +50,7 @@ def _post(base, path, body):
 
 @pytest.fixture
 def server(reading_root):
-    proc, base = _start_server(reading_root, {"READING_DEPTH": "0", "READING_ANNOTATE": "0"})
-    try:
-        yield base
-    finally:
-        _stop_server(proc)
-
-
-@pytest.fixture
-def depth_server(reading_root):
-    proc, base = _start_server(reading_root, {"READING_DEPTH": "1", "READING_ANNOTATE": "0"})
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0"})
     try:
         yield base
     finally:
@@ -179,7 +170,7 @@ def test_rule_suggestions_and_cache(reading_root):
     assert cache.is_file()
 
 
-def test_reading_api_put_and_409(server, reading_root, depth_server):
+def test_reading_api_put_and_409(server, reading_root):
     status, chapter = _get(server, "/api/chapter/B0001/1")
     assert status == 200
     assert chapter["reading"]["effective_source"] == "suggestion"
@@ -218,10 +209,6 @@ def test_reading_api_put_and_409(server, reading_root, depth_server):
     assert status == 409
     assert data["code"] == "reading_profile_required"
 
-    status, data = _post(depth_server, "/api/depth/B0002/1", {"layers": ["skim"]})
-    assert status == 409
-    assert data["code"] == "reading_profile_required"
-
 
 def test_reading_profile_rejects_hand_edited_file(reading_root):
     path = Path(reading_root) / "books" / "B0001" / "reading.json"
@@ -234,13 +221,13 @@ def test_reading_profile_rejects_hand_edited_file(reading_root):
     assert profile.read_profile("B0001", reading_root)["mode"] == "narrative"
 
 
-def test_book_reading_put_sets_default_without_job(server):
-    _, before = _get(server, "/api/jobs")
+def test_book_reading_put_sets_default_without_ops_log(server):
+    _, before = _get(server, "/api/records")
     status, data = _put(server, "/api/book/B0001/reading", {"mode": "narrative"})
     assert status == 200
     assert data["book_mode"] == "narrative"
-    _, after = _get(server, "/api/jobs")
-    assert len(after["jobs"]) == len(before["jobs"])
+    _, after = _get(server, "/api/records")
+    assert len(after["logs"]) == len(before["logs"])
 
     status, book = _get(server, "/api/book/B0001")
     assert status == 200

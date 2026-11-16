@@ -1,12 +1,11 @@
-"""可选模型标注：OpenAI-compatible chat/completions。
+"""模型传输与补全客户端：OpenAI-compatible chat/completions。
 
-默认开启。测试可用 ``READING_ANNOTATE=0`` / ``--no-annotate`` 走离线草稿；
-真实生成失败时直接报错，不再用三档同文草稿冒充成功。
+支持 `complete`（含流式增量 `on_delta`）与 `complete_json`，
+内置按错分类重试与仅针对网络/上游错误的备用模型切换。
 """
 
 import contextlib
 import errno
-import hashlib
 import http.client
 import json
 import os
@@ -19,7 +18,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import events
-from .tiers import TIER_ORDER, validate_annotation
 
 ENDPOINT = "https://opencode.ai/inference/go/v1/chat/completions"
 DEFAULT_MODEL = "deepseek-v4.1-flash"
@@ -42,7 +40,6 @@ STREAM_MODES = ("auto", "on", "off")
 STREAM_READ_TIMEOUT = 90
 STREAM_DEADLINE = 1200
 MAX_TOKENS = 32768
-PROMPT_VERSION = "phase1-v5"
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 # 重试的判据是「再试一次可能不同」，不是「看起来像网络问题」。
 RETRYABLE_KINDS = frozenset(
@@ -59,52 +56,6 @@ RETRYABLE_KINDS = frozenset(
 _STREAM_UNSUPPORTED: set[str] = set()
 # 有的网关流式时拒收 response_format，记下来别再发，而不是整条流式关掉。
 _NO_JSON_MODE: set[str] = set()
-
-SYSTEM_PROMPT = """你是中文书稿的结构编辑。只输出一个 JSON 对象，不要 markdown 代码围栏，不要解释。
-输入是一章中**有文字的块**（id/kind/text），空脚注块已省略。为每块给出 role、priority、spine、deps；
-可选给出 supports。再给 4–6 条 cards。规则：
-- role 只能是 spine/claim/conclusion/evidence/context/transition/card。
-- priority 是 1..3，1 最重要。
-- spine 只给真正的骨架块；deps 只能引用已有块 id，且不要把所有块串成一条链。
-- cards 是讲解层，每项必须含 id、trigger、text、citations、quotes；
-  trigger 必须是某块 id，citations 非空。quotes 必须是对象数组，每项显式写
-  {"block":"B03","text":"原文逐字片段"}，block 不能省略、不能为 null；
-  quotes 可以是完整句，也可以是 8 字以上的原文短语，不要改写或拼接。
-- 不要改写原文，不要合并块。
-- supports 必须放在顶层数组，每项是 {"from":"支撑块 id","to":"被支撑的 claim/conclusion id"}；
-  不要把 supports 放进 blocks 条目。
-- 不要输出 note、rationale、tier_blocks；档位由确定性投影器选块。
-- 输入里也会给出 image 块，带 rel 和 hint（紧跟其后的图题）。
-  每张 image 块都必须给 caption：一句话写这张图说明什么、为什么值得看，≤40 字；
-  不写「如图/下图」，不复述 hint。
-JSON 顶层：{"schema":1,"blocks":[...],"supports":[...],"cards":[...]}。
-image 块的条目形如 {"id":"B07","role":"evidence","priority":2,"spine":false,"deps":[],"caption":"一句话图注"}。
-"""
-
-
-def _payload_blocks(blocks):
-    """Send text blocks plus figures. The hint is the next heading."""
-    out = []
-    for index, block in enumerate(blocks):
-        if block["kind"] == "image":
-            hint = ""
-            for neighbor in blocks[index + 1 : index + 3]:
-                if neighbor["kind"] == "heading" and (neighbor.get("text") or "").strip():
-                    hint = neighbor["text"].strip()
-                    break
-            out.append(
-                {
-                    "id": block["id"],
-                    "kind": "image",
-                    "text": "",
-                    "rel": block.get("rel", ""),
-                    "hint": hint,
-                }
-            )
-            continue
-        if (block.get("text") or "").strip():
-            out.append({"id": block["id"], "kind": block["kind"], "text": block["text"]})
-    return out
 
 
 class ModelProviderError(RuntimeError):
@@ -295,10 +246,6 @@ def _transport_error(exc, kind, attempt, elapsed_ms, meta):
     )
 
 
-def prompt_sha256():
-    return hashlib.sha256((PROMPT_VERSION + "\n" + SYSTEM_PROMPT).encode("utf-8")).hexdigest()
-
-
 def _api_key():
     key = os.environ.get("OPENCODE_GO_API_KEY")
     if key:
@@ -361,74 +308,6 @@ class ModelClient:
     def available(self):
         return bool(self.key)
 
-    def annotate(self, book, chapter, blocks, model=None, effort=None):
-        """兼容入口：返回 annotation，元信息仍写回 ``last_*``。"""
-        annotation, _meta = self.annotate_with_meta(book, chapter, blocks, model=model, effort=effort)
-        return annotation
-
-    def annotate_with_meta(self, book, chapter, blocks, model=None, effort=None):
-        """调用一次并返回 ``(annotation, meta)``；并发任务各用各的元信息。
-
-        ``meta`` 含 requested_model / model（实际使用）/ effort / usage / fallback。
-        ``last_*`` 仅为旧调用方保留，编排层不得依赖它。
-        """
-        if not self.available():
-            raise RuntimeError("模型未配置：缺少 opencode-go key")
-        requested_model = (model or self.model).strip()
-        effort = (effort or self.effort).strip().lower()
-        if effort not in EFFORTS:
-            raise ValueError(f"reasoning_effort 只能是 {'/'.join(EFFORTS)}")
-        if not requested_model:
-            raise ValueError("模型名不能为空")
-        payload_blocks = _payload_blocks(blocks)
-        user = json.dumps(
-            {
-                "book": book.get("title", ""),
-                "chapter": chapter.get("title", ""),
-                "tiers": list(TIER_ORDER),
-                "blocks": payload_blocks,
-            },
-            ensure_ascii=False,
-        )
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user},
-        ]
-        actual_model = requested_model
-        fallback = False
-        try:
-            annotation, usage = self._annotate_once(messages, blocks, book, chapter, requested_model, effort)
-        except ModelProviderError as exc:
-            # 门槛与 complete_json 一致：鉴权/截断/格式换谁都一样，只有读路和上游这类值得换。
-            if requested_model == FALLBACK_MODEL or not _fallback_worthy(exc):
-                raise
-            fallback = True
-            actual_model = FALLBACK_MODEL
-            try:
-                annotation, usage = self._annotate_once(
-                    messages,
-                    blocks,
-                    book,
-                    chapter,
-                    FALLBACK_MODEL,
-                    effort,
-                    attempts=1,
-                )
-            except Exception as fallback_exc:
-                raise RuntimeError(f"主模型失败：{exc}；备用模型也失败：{fallback_exc}") from fallback_exc
-        meta = {
-            "requested_model": requested_model,
-            "model": actual_model,
-            "effort": effort,
-            "usage": usage,
-            "fallback": fallback,
-        }
-        self.last_model = actual_model
-        self.last_effort = effort
-        self.last_usage = usage
-        self.last_fallback = fallback
-        return annotation, meta
-
     def complete_json(self, messages, *, model=None, effort=None, max_tokens=None):
         """单次 JSON 补全，供图表编辑等第二遍调用；不做业务校验。"""
         if not self.available():
@@ -464,31 +343,7 @@ class ModelClient:
         self.last_usage = usage
         return _loads_content(content), usage
 
-    def _annotate_once(self, messages, blocks, book, chapter, model, effort, attempts=None):
-        last_error = None
-        usage_total = {}
-        for _attempt in range(2):
-            content, usage = self._request(model, effort, messages, attempts=attempts)
-            usage_total = merge_usage(usage_total, usage)
-            try:
-                annotation = _loads_content(content)
-                annotation.setdefault("uid", book.get("uid"))
-                annotation.setdefault("n", chapter.get("n"))
-                # 档位必须由确定性投影器决定；模型偶尔仍会输出 tier_blocks。
-                annotation.pop("tier_blocks", None)
-                return validate_annotation(annotation, blocks), usage_total
-            except (ValueError, json.JSONDecodeError) as exc:
-                last_error = exc
-                messages.append({"role": "assistant", "content": content})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"上面的 JSON 未通过校验：{exc}。只重发修正后的完整 JSON，不要解释。",
-                    }
-                )
-        raise ValueError(f"模型标注解析失败：{last_error}")
-
-    def complete(self, messages, *, model=None, effort=None, json_mode=False):
+    def complete(self, messages, *, model=None, effort=None, json_mode=False, max_tokens=None, on_delta=None):
         """单次文本补全；``json_mode`` 仅用于需要 JSON 对象的调用。"""
         if not self.available():
             raise RuntimeError("模型未配置：缺少 opencode-go key")
@@ -496,7 +351,14 @@ class ModelClient:
         effort = (effort or self.effort).strip().lower()
         if effort not in EFFORTS:
             raise ValueError(f"reasoning_effort 只能是 {'/'.join(EFFORTS)}")
-        return self._request(requested_model, effort, messages, json_mode=json_mode)
+        return self._request(
+            requested_model,
+            effort,
+            messages,
+            json_mode=json_mode,
+            max_tokens=max_tokens,
+            on_delta=on_delta,
+        )
 
     def _stream_enabled(self, parsed=None):
         """auto/on 且该端点没被记过「不认流式」；off 永不流式。"""
@@ -508,7 +370,7 @@ class ModelClient:
                 return False
         return True
 
-    def _read_sse(self, response, meta, deadline_at=None):
+    def _read_sse(self, response, meta, deadline_at=None, on_delta=None):
         """逐块读 SSE。读超时管“两次读之间”，总时长由 deadline_at 管。
 
         没见到 ``[DONE]`` 也没见到 ``finish_reason`` 就断流，判定为截断：
@@ -564,6 +426,8 @@ class ModelClient:
                     if not pieces:
                         meta["first_delta_ms"] = _elapsed_ms(meta.get("_started", time.perf_counter()))
                     pieces.append(delta["content"])
+                    if on_delta is not None:
+                        on_delta(delta["content"])
                 if choice.get("finish_reason"):
                     finish = choice["finish_reason"]
         meta["stream"] = True
@@ -588,7 +452,7 @@ class ModelClient:
             return 0.0
         return base * random.uniform(0.8, 1.2)
 
-    def _post_once(self, body, headers, parsed, meta, budget, stream=False, attempts=None):
+    def _post_once(self, body, headers, parsed, meta, budget, stream=False, attempts=None, on_delta=None):
         """一次 HTTP 尝试。meta 在失败前先把已测得的事实填好。"""
         scheme, host, port, path = parsed
         started = time.perf_counter()
@@ -628,7 +492,7 @@ class ModelClient:
                     if sock is not None:
                         sock.settimeout(max(0.001, min(self.stream_read_timeout, budget)))
                     meta["_started"] = started
-                    raw = self._read_sse(response, meta, time.perf_counter() + budget)
+                    raw = self._read_sse(response, meta, time.perf_counter() + budget, on_delta=on_delta)
                     meta.pop("_started", None)
                 else:
                     if stream and status == 200:
@@ -646,7 +510,7 @@ class ModelClient:
             with contextlib.suppress(OSError):
                 conn.close()
 
-    def _request(self, model, effort, messages, *, json_mode=True, attempts=None, max_tokens=None):
+    def _request(self, model, effort, messages, *, json_mode=True, attempts=None, max_tokens=None, on_delta=None):
         limit = self.max_tokens if max_tokens is None else int(max_tokens)
         if limit <= 0:
             raise ValueError("max_tokens 必须是正整数")
@@ -703,9 +567,21 @@ class ModelClient:
             stream=stream,
             rebuild=rebuild,
             attempts=attempts,
+            on_delta=on_delta,
         )
 
-    def _call_with_retry(self, body, headers, parsed, started, log, stream=False, rebuild=None, attempts=None):
+    def _call_with_retry(
+        self,
+        body,
+        headers,
+        parsed,
+        started,
+        log,
+        stream=False,
+        rebuild=None,
+        attempts=None,
+        on_delta=None,
+    ):
         """重试策略只在这里，别处不许再写第二套。"""
         try:
             return self._attempt_loop(
@@ -717,6 +593,7 @@ class ModelClient:
                 stream=stream,
                 rebuild=rebuild,
                 attempts=attempts,
+                on_delta=on_delta,
             )
         except ModelProviderError as exc:
             # protocol 类错误（响应体缺字段、不是 JSON）再问一次可能好，留给上层那一次；
@@ -725,7 +602,18 @@ class ModelClient:
                 exc.retries_exhausted = True
             raise
 
-    def _attempt_loop(self, body, headers, parsed, started, log, stream=False, rebuild=None, attempts=None):
+    def _attempt_loop(
+        self,
+        body,
+        headers,
+        parsed,
+        started,
+        log,
+        stream=False,
+        rebuild=None,
+        attempts=None,
+        on_delta=None,
+    ):
         attempt = 0
         limit = self.attempts if attempts is None else max(1, int(attempts))
         # 流式有内容不断到达，不需要 1800 秒那么宽的兜底；1200 秒够一章，也不会让挂住的流占半小时。
@@ -737,7 +625,15 @@ class ModelClient:
             attempt += 1
             meta = {"attempt": attempt, "phase": "connect"}
             try:
-                status, raw = self._post_once(body, headers, parsed, meta, remaining, stream=stream)
+                status, raw = self._post_once(
+                    body,
+                    headers,
+                    parsed,
+                    meta,
+                    remaining,
+                    stream=stream,
+                    on_delta=on_delta,
+                )
             except Exception as exc:
                 kind = _classify(exc, meta.get("phase"))
                 elapsed = _elapsed_ms(started)

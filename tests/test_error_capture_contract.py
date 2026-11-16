@@ -19,7 +19,7 @@ from http.client import IncompleteRead, RemoteDisconnected
 import pytest
 
 from bookcorpus.reading import events, model
-from bookcorpus.reading.jobs import JobQueue
+from bookcorpus.reading.service import ReadingService
 
 DISCONNECT = "Remote end closed connection without response"
 
@@ -86,32 +86,32 @@ def test_boundary_failure_keeps_the_failing_frame_in_the_log(monkeypatch, tmp_pa
     assert failure["phase"] == "connect"
 
 
-def test_job_crash_is_recorded_with_a_traceback(tmp_path):
-    def runner(_job_id, _job):
-        raise KeyError("choices")
+def test_assist_crash_is_recorded_with_a_traceback(reading_root):
+    class _ExplodingClient:
+        model = "fake-model"
+        effort = "low"
 
-    queue = JobQueue(str(tmp_path), runner, max_workers=1)
-    try:
-        job = queue.submit("B0003", "06", ["standard"])
-        deadline = 5
-        import time as _time
+        def available(self):
+            return True
 
-        end = _time.time() + deadline
-        while _time.time() < end and queue.get(job["id"])["state"] not in ("failed", "done", "partial"):
-            _time.sleep(0.01)
-        stored = queue.get(job["id"])
-        assert stored["state"] == "failed"
-        assert stored["error"]
-        path = tmp_path / "阅读" / "logs" / f"{job['id']}.jsonl"
-        records = [json.loads(line) for line in path.read_text().splitlines()]
-        crash = next(record for record in records if record["kind"] == "job_failed")
-        assert crash["error_class"] == "KeyError"
-        assert "KeyError" in crash["traceback"]
-        # 栈要指向真实代码位置，而不是只有一句消息。
-        assert "test_error_capture_contract.py" in crash["traceback"]
-        assert crash["cause_chain"]
-    finally:
-        queue.shutdown()
+        def complete(self, *args, **kwargs):
+            raise KeyError("choices")
+
+    service = ReadingService(reading_root, annotate=False, client=_ExplodingClient())
+    with pytest.raises(KeyError, match="choices"):
+        service.assist("B0001", 1, "explain", block_ids=["B01"], selected_text="测试原文")
+
+    logs = service.store.ops_logs(limit=10)
+    assert len(logs) == 1
+    assert logs[0]["status"] == "error"
+    assert "choices" in logs[0]["error"]
+    path = reading_root / "工作区" / "阅读" / "logs" / f"{logs[0]['id']}.jsonl"
+    records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    crash = next(record for record in records if record["kind"] == "job_failed")
+    assert crash["error_class"] == "KeyError"
+    assert "KeyError" in crash["traceback"]
+    assert "test_error_capture_contract.py" in crash["traceback"]
+    assert crash["cause_chain"]
 
 
 def test_record_exception_survives_an_unwritable_log(tmp_path):

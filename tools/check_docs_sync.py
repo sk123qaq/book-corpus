@@ -84,7 +84,7 @@ HISTORICAL_SUBCOMMANDS = {"migrate", "remap"}
 
 def _is_historical(text: str) -> bool:
     head = "\n".join(text.splitlines()[:35])
-    if re.search(r"^状态：\s*historical\b", head, re.MULTILINE):
+    if re.search(r"^状态：\s*(?:historical|superseded)\b", head, re.MULTILINE):
         return True
     return bool(re.search(r"布局(说明|迁移)", head))
 

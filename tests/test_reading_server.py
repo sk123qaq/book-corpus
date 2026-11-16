@@ -1,4 +1,4 @@
-"""8771 HTTP 外壳：本地绑定、真实 API、任务与读本。"""
+"""8771 阅读工作台 HTTP 服务：本地绑定、全章正文接口、伴读 SSE 与操作日志。"""
 
 import json
 import os
@@ -12,12 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from bookcorpus.reading.service import ReadingService
-from bookcorpus.scripts import lib_common as L
-
 REPO = Path(__file__).resolve().parents[1]
-
-ACTIVE_STATES = ("queued", "chunking", "annotating", "validating", "projecting", "rendering")
 
 
 def _free_port():
@@ -28,60 +23,9 @@ def _free_port():
     return port
 
 
-@pytest.fixture
-def server(reading_root):
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0"})
-    try:
-        yield base
-    finally:
-        _stop_server(proc)
-
-
-@pytest.fixture
-def no_key_server(reading_root):
-    """没有任何模型凭据：预检必须在排队前给出 400，而不是让任务跑一半才炸。"""
-    home = reading_root.parent / "bare-home"
-    home.mkdir(exist_ok=True)
-    proc, base = _start_server(
-        reading_root,
-        {"READING_ANNOTATE": "1", "OPENCODE_GO_API_KEY": "", "HOME": str(home)},
-    )
-    try:
-        yield base
-    finally:
-        _stop_server(proc)
-
-
-@pytest.fixture
-def slow_server(reading_root):
-    """模型端只接连接不回响应：任务确定地停在 annotating，方便观察冲突与取消。"""
-    hang = socket.socket()
-    hang.bind(("127.0.0.1", 0))
-    hang.listen(16)
-    try:
-        proc, base = _start_server(
-            reading_root,
-            {
-                "READING_ANNOTATE": "1",
-                "READING_MODEL_URL": f"http://127.0.0.1:{hang.getsockname()[1]}/v1/chat/completions",
-                "READING_MODEL_TIMEOUT": "30",
-                "OPENCODE_GO_API_KEY": "test-key",
-            },
-        )
-        try:
-            yield base
-        finally:
-            _stop_server(proc)
-    finally:
-        hang.close()
-
-
 def _start_server(reading_root, extra_env=None):
     port = _free_port()
     env = dict(os.environ)
-    # 现有用例按旧路径断言；默认切换只由专门的用例显式打开。
-    env["READING_DEPTH"] = "0"
-    env["READING_AGENT_STANDARD"] = "0"
     env.update(extra_env or {})
     proc = subprocess.Popen(
         [
@@ -124,549 +68,191 @@ def _stop_server(proc):
         proc.wait()
 
 
-def _wait_job_state(base, job_id, target, timeout=15):
-    deadline = time.time() + timeout
-    current = None
-    while time.time() < deadline:
-        _, body, _ = _get(base, "/api/jobs/" + job_id)
-        current = json.loads(body)
-        if current["state"] == target:
-            return current
-        if current["state"] not in ACTIVE_STATES:
-            raise AssertionError(f"job left active before {target}: {current}")
-        time.sleep(0.01)
-    raise AssertionError(f"job never reached {target}: {current}")
-
-
-def _get(base, path):
-    with urllib.request.urlopen(base + path, timeout=5) as response:
-        return response.status, response.read().decode("utf-8"), response.headers
-
-
-def _post(base, path, payload):
-    request = urllib.request.Request(
-        base + path,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=5) as response:
-        return response.status, json.loads(response.read().decode("utf-8"))
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-def _get_no_redirect(base, path):
-    opener = urllib.request.build_opener(_NoRedirect)
+def _request(base, path, method="GET", body=None, headers=None):
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
+    hdrs = dict(headers or {})
+    if data is not None:
+        hdrs.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(base + path, data=data, method=method, headers=hdrs)
     try:
-        with opener.open(base + path, timeout=5) as response:
-            return response.status, response.headers, response.read()
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status, resp.read().decode("utf-8"), resp.headers
     except urllib.error.HTTPError as exc:
-        return exc.code, exc.headers, exc.read()
+        return exc.code, exc.read().decode("utf-8"), exc.headers
 
 
-def test_research_urls_retire_to_deep_and_410(server, reading_root):
-    status, headers, _body = _get_no_redirect(server, "/reader/B0001/01?tier=research")
-    assert status == 302
-    assert headers["Location"].endswith("/reader/B0001/01?tier=deep&retired=research")
-
-    status, headers, _body = _get_no_redirect(server, "/reader/B0001/01/depth?tier=research")
-    assert status == 302
-    assert headers["Location"].endswith("/reader/B0001/01/depth?tier=deep&retired=research")
-
-    status, headers, _body = _get_no_redirect(server, "/api/export/B0001/01/research")
-    assert status == 410
-    assert "退役" in _body.decode("utf-8")
-
-    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
-    pack.mkdir(parents=True, exist_ok=True)
-    (pack / "chapter.html").write_text("<html><body>旧读本</body></html>", encoding="utf-8")
-    status, body, _headers = _get(server, "/reader/B0001/01?tier=deep&retired=research")
-    assert status == 200
-    assert "研读档已退役" in body
+@pytest.fixture
+def server(reading_root):
+    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0"})
+    try:
+        yield base
+    finally:
+        _stop_server(proc)
 
 
-def test_pages_and_api_are_real_data(server):
-    status, body, _headers = _get(server, "/api/shelf")
-    assert status == 200
-    shelf = json.loads(body)
-    assert shelf["stats"]["readable"] == 2
-    assert shelf["stats"]["chapters"] == 3
-
-    for path in ("/", "/catalog", "/records", "/book/B0001", "/chapter/B0001/01"):
-        status, body, _ = _get(server, path)
-        assert status == 200, path
-        assert "分层读" in body, path
-    assert "深度生产" in body
-    status, body, _ = _get(server, "/book/B0001")
-    assert "设本书默认" in body
-    status, body, _ = _get(server, "/api/book/B0001")
-    assert len(json.loads(body)["chapters"]) == 2
-    status, body, _ = _get(server, "/api/chapter/B0001/01")
-    chapter = json.loads(body)
-    assert chapter["chapter"]["chars"] > 0
-    assert len(chapter["tiers"]) == 3
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        _get(server, "/api/book/NOPE")
-    assert exc.value.code == 404
-    assert exc.value.headers["Content-Type"].startswith("application/json")
-
-
-def test_job_poll_and_generated_reader(server, reading_root):
-    status, job = _post(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert status == 202
-    assert job["state"] in ("queued", "chunking", "annotating", "validating", "projecting", "rendering", "done")
-    deadline = time.time() + 15
-    current = job
-    while time.time() < deadline:
-        _, body, _ = _get(server, "/api/jobs/" + job["id"])
-        current = json.loads(body)
-        if current["state"] not in ("queued", "chunking", "annotating", "validating", "projecting", "rendering"):
-            break
-        time.sleep(0.05)
-    assert current["state"] == "done", current
-    assert current["status"] == "draft"
-    assert (Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01" / "chapter.html").is_file()
-
-    status, body, _ = _get(server, "/reader/B0001/01")
-    assert status == 200
-    assert 'data-origin="source"' in body
-    assert body.count('data-tier-tab="') == 3
-    assert "第一段写一个人走进屋子" in body
-    status, body, headers = _get(server, "/api/export/B0001/01/standard")
-    assert status == 200
-    assert "text/html" in headers["Content-Type"]
-
-    _, body, _ = _get(server, "/api/chapter/B0001/01")
-    chapter = json.loads(body)
-    assert [item["exists"] for item in chapter["tiers"]] == [False, True, False]
-    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
-    assert not (pack / "export" / "skim.html").exists()
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        _get(server, "/api/export/B0001/01/skim")
-    assert exc.value.code == 404
-
-    status, records, _ = _get(server, "/api/records")
-    records = json.loads(records)
-    assert any(item["id"] == job["id"] for item in records["jobs"])
-    assert records["packs"][0]["uid"] == "B0001"
-
-
-def test_missing_model_key_returns_400_before_queueing(no_key_server):
-    status, body = _post_error(
-        no_key_server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["skim"], "overwrite": True}
-    )
-    assert status == 400
-    assert body["code"] == "missing_config"
-    assert body["degradable"] is False
-    assert [item["key"] for item in body["missing"]] == ["reading.model"]
-    assert body["missing"][0]["fix"]
-
-
-def test_edition_without_model_key_returns_400_with_fix(no_key_server):
-    status, body = _post_error(no_key_server, "/api/edition/B0001/1", {"model": "fake", "effort": "high"})
-    assert status == 400
-    assert body["code"] == "missing_config"
-    assert body["missing"][0]["key"] == "reading.model"
-    assert "OPENCODE_GO_API_KEY" in body["missing"][0]["fix"]
-
-
-def test_post_validates_payload_and_host(server):
-    request = urllib.request.Request(
-        server + "/api/jobs",
-        data=b"not json",
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        urllib.request.urlopen(request, timeout=5)
-    assert exc.value.code == 400
-
-    request = urllib.request.Request(server + "/api/shelf", headers={"Host": "evil.example"}, method="GET")
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        urllib.request.urlopen(request, timeout=5)
-    assert exc.value.code == 403
-
-
-def _post_error(base, path, payload):
-    request = urllib.request.Request(
-        base + path,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+@pytest.fixture
+def no_key_server(reading_root):
+    home = reading_root.parent / "bare-home"
+    home.mkdir(exist_ok=True)
+    proc, base = _start_server(
+        reading_root,
+        {"READING_ANNOTATE": "1", "OPENCODE_GO_API_KEY": "", "HOME": str(home)},
     )
     try:
-        urllib.request.urlopen(request, timeout=5)
-    except urllib.error.HTTPError as exc:
-        return exc.code, json.loads(exc.read().decode("utf-8"))
-    raise AssertionError("expected HTTP error")
+        yield base
+    finally:
+        _stop_server(proc)
 
 
-def test_existing_tier_returns_409_and_overwrite_is_accepted(server):
-    status, job = _post(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert status == 202
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        _, body, _ = _get(server, "/api/jobs/" + job["id"])
-        state = json.loads(body)["state"]
-        if state not in ("queued", "chunking", "annotating", "validating", "projecting", "rendering"):
-            break
-        time.sleep(0.05)
-    else:
-        raise AssertionError("job did not finish")
+def test_pages_and_retired_routes(server):
+    for page in ("/", "/catalog", "/book/B0001", "/chapter/B0001/01", "/records"):
+        status, body, headers = _request(server, page)
+        assert status == 200
+        assert "text/html" in headers.get("Content-Type", "")
+        assert "工单" not in body or page == "/"  # 页面已清除工单系统
 
-    code, body = _post_error(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert code == 409
-    assert body["code"] == "pack_exists"
-    assert body["tiers"] == ["standard"]
-
-    status, fresh = _post(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"], "overwrite": True})
-    assert status == 202
-    assert fresh["overwrite"] is True
+    for gone in (
+        "/reader/B0001/01",
+        "/reader/B0001/01/depth",
+        "/reader/B0001/01/edition",
+        "/api/jobs",
+        "/api/depth/B0001/01",
+        "/api/edition/B0001/01",
+        "/api/editorial/B0001/01",
+        "/api/export/B0001/01/standard",
+    ):
+        status, _, _ = _request(server, gone)
+        assert status == 404, gone
 
 
-def test_source_change_returns_409_rebuild_required_and_rebuild_drops_unselected(server, reading_root):
-    status, job = _post(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert status == 202
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        _, body, _ = _get(server, "/api/jobs/" + job["id"])
-        if json.loads(body)["state"] not in (
-            "queued",
-            "chunking",
-            "annotating",
-            "validating",
-            "projecting",
-            "rendering",
-        ):
-            break
-        time.sleep(0.05)
-    else:
-        raise AssertionError("job did not finish")
-
-    path = Path(reading_root) / "books" / "B0001" / "md" / "001_第1节.md"
-    path.write_text(path.read_text(encoding="utf-8") + "\n\n后来补写的一段。\n", encoding="utf-8")
-
-    code, body = _post_error(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["deep"]})
-    assert code == 409
-    assert body["code"] == "rebuild_required"
-    assert body["tiers"] == ["standard"]
-    assert body["reason"] == "原文已更改"
-
-    status, fresh = _post(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["deep"], "rebuild": True})
-    assert status == 202
-    assert fresh["rebuild"] is True
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        _, body, _ = _get(server, "/api/jobs/" + fresh["id"])
-        state = json.loads(body)["state"]
-        if state not in ("queued", "chunking", "annotating", "validating", "projecting", "rendering"):
-            break
-        time.sleep(0.05)
-    else:
-        raise AssertionError("rebuild job did not finish")
-
-    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
-    manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
-    assert set(manifest["tiers"]) == {"deep"}
-    assert not (pack / "export" / "standard.html").exists()
-
-
-def test_double_post_same_chapter_returns_409_job_active(slow_server):
-    status, job = _post(slow_server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert status == 202
-    _wait_job_state(slow_server, job["id"], "annotating")
-
-    code, body = _post_error(slow_server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert code == 409
-    assert body["code"] == "job_active"
-    assert [item["id"] for item in body["conflicts"]] == [job["id"]]
-
-    _, payload, _ = _get(slow_server, "/api/chapter/B0001/01")
-    chapter = json.loads(payload)
-    assert [item["id"] for item in chapter["jobs"]] == [job["id"]]
-
-
-def test_cancel_running_job_returns_cancelled_immediately(slow_server):
-    status, job = _post(slow_server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert status == 202
-    _wait_job_state(slow_server, job["id"], "annotating")
-
-    status, cancelled = _post(slow_server, "/api/jobs/" + job["id"] + "/cancel", {})
+def test_chapter_api_returns_full_blocks_and_validates_host(server):
+    status, body, _ = _request(server, "/api/chapter/B0001/1")
     assert status == 200
-    assert cancelled["state"] == "cancelled"
-    assert cancelled["error"] == "已取消"
+    ch = json.loads(body)
+    assert ch["chapter"]["n"] == "01"
+    assert len(ch["blocks"]) >= 1
+    assert "toolbar" in ch
+    assert "tiers" not in ch
+    assert "edition" not in ch
 
-    # 后台线程还在收尾：内联任务不能消失，新任务仍被这一章挡住。
-    _, payload, _ = _get(slow_server, "/api/chapter/B0001/01")
-    chapter = json.loads(payload)
-    assert [item["id"] for item in chapter["jobs"]] == [job["id"]]
-
-    code, body = _post_error(slow_server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["deep"]})
-    assert code == 409
-    assert body["code"] == "job_active"
+    status, _, _ = _request(server, "/api/shelf", headers={"Host": "evil.example"})
+    assert status == 403
 
 
-def test_editorial_api_roundtrip(server, reading_root):
-    status, job = _post(server, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-    assert status == 202
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        _, body, _ = _get(server, "/api/jobs/" + job["id"])
-        current = json.loads(body)
-        if current["state"] not in ACTIVE_STATES:
-            break
-        time.sleep(0.05)
-    assert current["state"] == "done", current
+def test_assist_missing_model_key_returns_400_with_fix(no_key_server):
+    status, body, _ = _request(
+        no_key_server,
+        "/api/assist",
+        method="POST",
+        body={
+            "uid": "B0001",
+            "n": 1,
+            "action": "explain",
+            "block_ids": ["B01"],
+            "selected_text": "正文节选",
+            "stream": False,
+        },
+    )
+    assert status == 400
+    payload = json.loads(body)
+    assert payload["code"] == "missing_config"
+    assert payload["fix"]
 
-    _, body, _ = _get(server, "/api/chapter/B0001/01")
-    chapter = json.loads(body)
-    blocks = chapter["blocks"]
-    payload = {
-        "schema": 1,
-        "uid": "B0001",
-        "n": 1,
-        "beats": [
+
+def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
+    mock_http_port = _free_port()
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class _MockUpstream(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length") or 0)
+            self.rfile.read(length)
+            body = (
+                'data: {"choices":[{"delta":{"content":"白话"}}]}\n\n'
+                'data: {"choices":[{"delta":{"content":"解析"},"finish_reason":"stop"}],'
+                '"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}\n\n'
+                "data: [DONE]\n\n"
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            return
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", mock_http_port), _MockUpstream)
+    t = threading.Thread(target=upstream.serve_forever, daemon=True)
+    t.start()
+    try:
+        proc, base = _start_server(
+            reading_root,
             {
-                "id": "beat-1",
-                "title": "一个人走进屋子",
-                "question": "这封信是谁留下的？",
-                "before_block": blocks[0]["id"],
-                "tiers": ["standard"],
-            }
-        ],
-        "visuals": [
-            {
-                "id": "steps-1",
-                "kind": "steps",
-                "title": "两段之间的一个动作",
-                "after_block": blocks[0]["id"],
-                "placement": "after",
-                "tiers": ["standard"],
-                "data": {
-                    "steps": [{"label": "进门", "detail": "看见桌上的灯"}, {"label": "坐下", "detail": "听见雨声"}],
-                    "result": {"label": "想起", "detail": "许多年前的一个下午"},
-                },
-                "claims": [{"block": blocks[0]["id"], "quote": "第一段写一个人走进屋子"}],
-            }
-        ],
-        "takeaways": [
-            {"text": "一封信把现在和过去接上。", "sources": [blocks[0]["id"]]},
-        ],
-    }
-    status, saved = _post(server, "/api/editorial/B0001/01", payload)
-    assert status == 200
-    assert saved["uid"] == "B0001"
-    assert saved["beats"][0]["id"] == "beat-1"
-
-    status, body, _ = _get(server, "/api/editorial/B0001/01")
-    assert status == 200
-    assert json.loads(body)["visuals"][0]["kind"] == "steps"
-    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
-    assert (pack / "editorial.json").is_file()
-
-    payload["visuals"][0]["after_block"] = "nope"
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        _post(server, "/api/editorial/B0001/01", payload)
-    assert exc.value.code == 400
-
-
-def test_reading_server_new_chapter_uses_depth_job(reading_root):
-    L.reading_set_book("B0001", "argument", root=reading_root)
-    L.reading_set_book("B0002", "argument", root=reading_root)
-    service = ReadingService(root=reading_root, annotate=False, depth=False)
-    raw = service.library.read_chapter("B0002", 1)
-    pack = Path(reading_root) / "工作区" / "阅读" / "B0002" / "ch" / "01"
-    pack.mkdir(parents=True, exist_ok=True)
-    (pack / "manifest.json").write_text(
-        json.dumps(
-            {
-                "schema": 1,
-                "uid": "B0002",
-                "n": 1,
-                "tiers": {},
-                "draft": True,
-                "source_sha256": raw["source_sha256"],
+                "READING_MODEL_URL": f"http://127.0.0.1:{mock_http_port}/v1/chat/completions",
+                "OPENCODE_GO_API_KEY": "sk-mock",
             },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
-    try:
-        status, job = _post(base, "/api/jobs", {"uid": "B0001", "n": 1, "tiers": ["standard"]})
-        assert status == 202
-        assert job["kind"] == "depth"
-        # 没有检索 provider 时确认降级：研究层照出，引用层整层不出。
-        assert job["layers"] == ["model", "panels", "skim", "standard", "deep"]
-        assert job["tiers"] == []
-
-        status, old = _post(base, "/api/jobs", {"uid": "B0002", "n": 1, "tiers": ["standard"]})
-        assert status == 202
-        assert old["kind"] == "reading"
-    finally:
-        _stop_server(proc)
-
-
-def test_reading_server_agent_reader_retired(reading_root):
-    pack = Path(reading_root) / "工作区" / "阅读" / "B0001" / "ch" / "01"
-    pack.mkdir(parents=True, exist_ok=True)
-    (pack / "agent-standard.html").write_text("<!doctype html><html><body>旧标准档</body></html>", encoding="utf-8")
-
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_AGENT_STANDARD": "0"})
-    try:
-        with pytest.raises(urllib.error.HTTPError) as exc:
-            _get(base, "/reader/B0001/1/agent")
-        assert exc.value.code == 404
-        assert "退役" in exc.value.read().decode("utf-8")
-    finally:
-        _stop_server(proc)
-
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_AGENT_STANDARD": "1"})
-    try:
-        status, body, _headers = _get(base, "/reader/B0001/1/agent")
-        assert status == 200
-        assert "旧标准档" in body
-    finally:
-        _stop_server(proc)
-
-
-def test_depth_route_is_404_when_flag_off(reading_root):
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "0"})
-    try:
-        with pytest.raises(urllib.error.HTTPError) as exc:
-            _get(base, "/reader/B0001/1/depth")
-        assert exc.value.code == 404
-    finally:
-        _stop_server(proc)
-
-
-def test_depth_route_serves_ready_chapter_and_404s_missing(reading_root):
-    service = ReadingService(root=reading_root, annotate=False, depth=False)
-    raw = service.library.read_chapter("B0001", 1)
-    service.store.save_depth(
-        "B0001",
-        1,
-        {
-            "chapter.html": "<!doctype html><html><body>编译版</body></html>",
-            "state.json": {"status": "ready", "source_sha256": raw["source_sha256"]},
-        },
-    )
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
-    try:
-        status, body, headers = _get(base, "/reader/B0001/1/depth")
-        assert status == 200
-        assert "编译版" in body
-        assert headers.get_content_type() == "text/html"
-        with pytest.raises(urllib.error.HTTPError) as exc:
-            _get(base, "/reader/B0001/2/depth")
-        assert exc.value.code == 404
-    finally:
-        _stop_server(proc)
-
-
-def test_depth_route_404s_model_state_even_with_old_html(reading_root):
-    service = ReadingService(root=reading_root, annotate=False, depth=False)
-    raw = service.library.read_chapter("B0001", 1)
-    service.store.save_depth(
-        "B0001",
-        1,
-        {
-            "chapter_model.json": {"label": "model"},
-            "chapter.html": "<!doctype html><html><body>旧编译版</body></html>",
-            "state.json": {"status": "model", "source_sha256": raw["source_sha256"]},
-        },
-    )
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
-    try:
-        with pytest.raises(urllib.error.HTTPError) as exc:
-            _get(base, "/reader/B0001/1/depth")
-        assert exc.value.code == 404
-        _status, body, _headers = _get(base, "/api/chapter/B0001/1")
-        assert json.loads(body)["path"] == "none"
-    finally:
-        _stop_server(proc)
-
-
-def test_post_depth_returns_202_job_and_validates_payload(reading_root):
-    L.reading_set_book("B0001", "argument", root=reading_root)
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
-    try:
-        status, job = _post(
-            base,
-            "/api/depth/B0001/1",
-            {"layers": ["skim"], "model": "fake-model", "effort": "max"},
         )
-        assert status == 202
-        assert job["kind"] == "depth"
-        assert job["tiers"] == []
-        assert job["layers"] == ["model", "skim"]
-        assert job["model"] == "fake-model"
-        assert job["effort"] == "max"
+        try:
+            # 1. 短章触发直读建议门控
+            status, map_body, _ = _request(base, "/api/chapter-map/B0001/1", method="POST", body={"force": False})
+            assert status == 200
+            map_res = json.loads(map_body)
+            assert map_res["supported"] is False
+            assert map_res["can_force"] is True
 
-        for payload in (
-            {"layers": []},
-            {"layers": ["unknown"]},
-            {"layers": ["research"]},
-            {"layers": ["citations"]},
-            {"layers": ["skim"], "rebuild_model": "yes"},
-            {"layers": ["skim"], "effort": "nope"},
-            {"layers": ["skim"], "model": "x" * 81},
-        ):
-            code, body = _post_error(base, "/api/depth/B0001/1", payload)
-            assert code == 400, body
+            # 2. SSE 划词伴读
+            status, sse_body, headers = _request(
+                base,
+                "/api/assist",
+                method="POST",
+                body={
+                    "uid": "B0001",
+                    "n": 1,
+                    "action": "explain",
+                    "block_ids": ["B01"],
+                    "selected_text": "选中原文",
+                    "stream": True,
+                },
+            )
+            assert status == 200
+            assert "text/event-stream" in headers.get("Content-Type", "")
+            assert "event: delta" in sse_body
+            assert "event: done" in sse_body
+            assert "白话解析" in sse_body
+
+            # 3. 钉住与删除旁批
+            status, pin_body, _ = _request(
+                base,
+                "/api/assist/pin",
+                method="POST",
+                body={
+                    "uid": "B0001",
+                    "n": 1,
+                    "action": "explain",
+                    "title": "分段注",
+                    "block_ids": ["B01"],
+                    "selected_text": "选中原文",
+                    "content": "白话解析",
+                },
+            )
+            assert status == 200
+            note_id = json.loads(pin_body)["id"]
+
+            # 4. /api/records 返回操作日志流水
+            status, rec_body, _ = _request(base, "/api/records")
+            assert status == 200
+            recs = json.loads(rec_body)
+            assert recs["summary"]["total"] == 2
+            assert [r["action"] for r in recs["logs"]] == ["pin", "explain"]
+
+            status, _, _ = _request(base, f"/api/assist/pin/B0001/1/{note_id}", method="DELETE")
+            assert status == 200
+            status, after_ch, _ = _request(base, "/api/chapter/B0001/1")
+            assert json.loads(after_ch)["assist_notes"] == []
+        finally:
+            _stop_server(proc)
     finally:
-        _stop_server(proc)
-
-
-def test_post_depth_rejects_a_too_large_source_with_422(reading_root):
-    L.reading_set_book("B0001", "argument", root=reading_root)
-    md = reading_root / "books" / "B0001" / "md" / "001_第1节.md"
-    paragraphs = "\n\n".join(f"第 {index} 段。" for index in range(1, 5011))
-    md.write_text("# 第1节\n\n" + paragraphs + "\n", encoding="utf-8")
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
-    try:
-        code, payload = _post_error(
-            base,
-            "/api/depth/B0001/1",
-            {"layers": ["model"], "model": "fake-model", "effort": "max"},
-        )
-        assert code == 422, payload
-        assert set(payload) == {"error", "code", "stats", "remediation"}
-        assert payload["code"] == "source_too_large"
-        assert payload["stats"]["blocks"] > 5000
-        assert "超过单章上限 5,000 块" in payload["error"]
-        assert "每 100 块拆成多个 md" in payload["remediation"]
-
-        _status, body, _headers = _get(base, "/api/jobs")
-        assert json.loads(body)["jobs"] == []
-    finally:
-        _stop_server(proc)
-
-
-def test_post_jobs_rejects_a_too_large_source_with_422(reading_root):
-    L.reading_set_book("B0001", "argument", root=reading_root)
-    md = reading_root / "books" / "B0001" / "md" / "001_第1节.md"
-    paragraphs = "\n\n".join(f"第 {index} 段。" for index in range(1, 5011))
-    md.write_text("# 第1节\n\n" + paragraphs + "\n", encoding="utf-8")
-    proc, base = _start_server(reading_root, {"READING_ANNOTATE": "0", "READING_DEPTH": "1"})
-    try:
-        code, payload = _post_error(
-            base,
-            "/api/jobs",
-            {"uid": "B0001", "n": 1, "tiers": ["standard"], "model": "fake-model", "effort": "max"},
-        )
-        assert code == 422, payload
-        assert set(payload) == {"error", "code", "stats", "remediation"}
-        assert payload["code"] == "source_too_large"
-        assert payload["stats"]["blocks"] > 5000
-        assert "超过单章上限 5,000 块" in payload["error"]
-        assert "每 100 块拆成多个 md" in payload["remediation"]
-
-        _status, body, _headers = _get(base, "/api/jobs")
-        assert json.loads(body)["jobs"] == []
-    finally:
-        _stop_server(proc)
+        upstream.shutdown()
+        upstream.server_close()

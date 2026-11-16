@@ -1,7 +1,6 @@
-"""深读提交前的容量预检：只看块数与规划，不读模型、不写盘。
+"""章节地图与容量预检：超长章限流，短章与扁平章不强行展开导图。
 
-判定用的是与生成相同的 ``plan_chunks``，所以「预检说几块」和「实际切几块」
-不会漂移。阈值是起始值，实施后用真实任务日志校准（见设计 §阈值与判定）。
+超长判定使用与 :func:`chapmap.plan_chunks` 相同的切分规则。
 """
 
 from dataclasses import dataclass
@@ -154,3 +153,47 @@ def evaluate(blocks, plans, limits=DEFAULT_LIMITS):
         stats=stats,
         remediation=remediation,
     )
+
+
+def chapter_map_gate(blocks, *, min_chars=1200, min_blocks=14):
+    """短章与扁平结构门控：不值得展开全章知识地图时给出直读建议。"""
+    substantive = [
+        block
+        for block in (blocks or [])
+        if block.get("kind") in ("paragraph", "heading", "quote", "list", "table", "code")
+        and ((block.get("text") or "").strip() or block.get("items") or block.get("rows"))
+    ]
+    chars = sum(len("".join((b.get("text") or "").split())) for b in substantive)
+    subheadings = sum(1 for b in substantive if b.get("kind") == "heading" and int(b.get("level") or 1) >= 2)
+    tables = sum(1 for b in substantive if b.get("kind") == "table")
+    stats = {
+        "blocks": len(substantive),
+        "chars": chars,
+        "subheadings": subheadings,
+        "tables": tables,
+    }
+    if chars < min_chars and subheadings < 2 and tables == 0:
+        return {
+            "supported": False,
+            "reason": (
+                f"本章篇幅较短且脉络单一（约 {chars:,} 字，{len(substantive)} 块），"
+                "建议直接阅读正文；如仍需要可手动展开简图。"
+            ),
+            "can_force": True,
+            "stats": stats,
+        }
+    if len(substantive) < min_blocks and subheadings < 2 and tables == 0 and chars < min_chars * 1.5:
+        return {
+            "supported": False,
+            "reason": (
+                f"本章结构扁平（{len(substantive)} 块、无多级小节），直读原文比看导图更省力；如仍需要可手动展开简图。"
+            ),
+            "can_force": True,
+            "stats": stats,
+        }
+    return {
+        "supported": True,
+        "reason": "",
+        "can_force": True,
+        "stats": stats,
+    }

@@ -13,9 +13,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from bookcorpus.reading import events, jobs, model
+from bookcorpus.reading import chapmap, events, model
 from bookcorpus.reading import model as model_mod
-from bookcorpus.reading.depth import model as depth_model
 
 
 class _AbortError(Exception):
@@ -268,33 +267,18 @@ def test_bad_endpoint_is_a_config_error():
         client.complete_json(MESSAGES)
 
 
-def test_job_queue_writes_transport_log_to_work_tree(tmp_path):
-    (tmp_path / "阅读").mkdir()
+def test_events_job_scope_writes_transport_log_to_work_tree(tmp_path):
+    log_dir = tmp_path / "阅读" / "logs"
     with _serve(_close_without_response) as (_recorder, url, _server):
-
-        def runner(job_id, job):
-            del job_id, job
+        with (
+            events.job_scope(log_dir, "op-transport"),
+            pytest.raises(model.ModelTransportError, match="对端在返回状态行前关闭了连接"),
+        ):
             _client(url, attempts=1).complete_json(MESSAGES)
-
-        queue = jobs.JobQueue(str(tmp_path), runner, max_workers=1)
-        try:
-            job = queue.submit("B0005", 10, [], kind="depth", layers=["deep"], model="m", effort="high")
-            state = None
-            deadline = time.time() + 10
-            while time.time() < deadline:
-                state = queue.get(job["id"])
-                if state and state["state"] == "failed":
-                    break
-                time.sleep(0.05)
-            assert state is not None
-            assert state["state"] == "failed"
-            assert "对端在返回状态行前关闭了连接" in (state["error"] or "")
-            log_path = tmp_path / "阅读" / "logs" / (job["id"] + ".jsonl")
-            assert log_path.exists()
-            kinds = [json.loads(line)["kind"] for line in log_path.read_text(encoding="utf-8").splitlines()]
-            assert "http_error" in kinds
-        finally:
-            queue.shutdown()
+        log_path = log_dir / "op-transport.jsonl"
+        assert log_path.exists()
+        kinds = [json.loads(line)["kind"] for line in log_path.read_text(encoding="utf-8").splitlines()]
+        assert "http_error" in kinds
 
 
 def test_events_record_peer_phase_and_timing(tmp_path):
@@ -343,10 +327,10 @@ class _ExhaustedClient:
         raise exc
 
 
-def test_depth_layer_does_not_stack_a_second_retry():
+def test_chapmap_does_not_stack_a_second_retry():
     client = _ExhaustedClient()
     with pytest.raises(model.ModelProviderError, match="对端在返回状态行前关闭了连接"):
-        depth_model._complete_json(client, MESSAGES, "m", "high")
+        chapmap._complete_json(client, MESSAGES, "m", "high")
     assert client.calls == 1
 
 
@@ -630,20 +614,17 @@ def test_fallback_failure_restores_shared_attempts():
     assert recorder.hits == 5
 
 
-def test_annotate_auth_failure_does_not_switch_to_fallback_model():
+def test_complete_auth_failure_does_not_switch_to_fallback_model():
     def respond(handler, hits):
         handler.send_response(401)
         handler.send_header("Content-Length", "2")
         handler.end_headers()
         handler.wfile.write(b"no")
 
-    book = {"title": "示例书"}
-    chapter = {"title": "第一章", "n": 1}
-    blocks = [{"id": "B01", "kind": "para", "text": "正文"}]
     with _serve(respond) as (recorder, url, _server):
         client = _client(url, attempts=2, fallback=True)
         with pytest.raises(model.ModelAuthError):
-            client.annotate_with_meta(book, chapter, blocks, model="primary-model")
-    # 标注路径也必须有门槛：鉴权坏了不该悄悄换模型把成功写在账上。
+            client.complete([{"role": "user", "content": "hi"}], model="primary-model")
+    # 文本补全路径也必须有门槛：鉴权坏了不该悄悄换模型把成功写在账上。
     assert recorder.hits == 1
     assert json.loads(_server.bodies[0])["model"] == "primary-model"

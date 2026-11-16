@@ -1,8 +1,7 @@
 """章节结构模型生成：分块、重试、缓存、合并与最终校验。
 
-这个模块只产生 chapter_model 与调用元数据，不写文件。落盘、档位和守恒账
-由 CLI 与 ``disposition`` 负责。生成失败必须整体失败：不合成兜底模型，也不
-返回半截结果。
+这个模块只产生 chapter_model 与调用元数据，不写文件。供全章知识地图与核心术语
+按需生成使用。生成失败必须整体失败：不合成兜底模型，也不返回半截结果。
 """
 
 import hashlib
@@ -10,10 +9,10 @@ import json
 import time
 from pathlib import Path
 
-from .. import events
-from ..model import DEFAULT_EFFORT, DEFAULT_MODEL, MAX_TOKENS, ModelProviderError, ModelTruncatedError
-from ..textnorm import normalize_verbatim
-from .schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
+from . import events
+from .map_schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
+from .model import DEFAULT_EFFORT, DEFAULT_MODEL, MAX_TOKENS, ModelProviderError, ModelTruncatedError
+from .textnorm import normalize_verbatim
 
 SYSTEM_PROMPT = "\n".join(
     [

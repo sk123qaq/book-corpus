@@ -1,6 +1,7 @@
 # 三档分层读：research 与 citations 退役
 
-状态：accepted · 2026-11-11
+状态：superseded · 2026-11-16
+替代：docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md
 
 ## 背景
 

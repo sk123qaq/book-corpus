@@ -1,6 +1,6 @@
 """分块规划：块数上限、H2 分组与旧行为。"""
 
-from bookcorpus.reading.depth.model import (
+from bookcorpus.reading.chapmap import (
     _chunks,
     _read_plan_hint,
     _write_plan_hint,

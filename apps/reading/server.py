@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""8771 分层读 本地服务。只绑 127.0.0.1，只用标准库。"""
+"""8771 阅读工作台 本地服务。只绑 127.0.0.1，只用标准库。"""
 
 import argparse
+import contextlib
 import json
 import mimetypes
 import os
@@ -9,7 +10,6 @@ import posixpath
 import re
 import sys
 import urllib.parse
-from pathlib import Path
 
 # 允许直接 ``python3 apps/reading/server.py``。
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,17 +21,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from bookcorpus import envfile, preflight
 from bookcorpus.preflight import MissingConfigError
-from bookcorpus.reading.depth.preflight import SourceTooLarge
-from bookcorpus.reading.editorial import EditorialError
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
-from bookcorpus.reading.service import (
-    DEPTH_LAYERS,
-    JobConflictError,
-    MissingProfileError,
-    PackExistsError,
-    ReadingService,
-    RebuildRequiredError,
-)
+from bookcorpus.reading.preflight import SourceTooLarge
+from bookcorpus.reading.service import ASSIST_ACTIONS, MissingProfileError, ReadingService
 from bookcorpus.reading.store import UID_RE
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -45,16 +37,13 @@ ROUTES = [
     (re.compile(r"^/api/book/([A-Za-z0-9_-]+)/reading$"), "book_reading"),
     (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)$"), "chapter"),
     (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)/reading$"), "reading"),
+    (re.compile(r"^/api/assist$"), "assist"),
+    (re.compile(r"^/api/assist/pin$"), "assist_pin"),
+    (re.compile(r"^/api/assist/pin/([A-Za-z0-9_-]+)/(\d+)/([A-Za-z0-9_-]+)$"), "assist_unpin_full"),
+    (re.compile(r"^/api/assist/pin/([A-Za-z0-9_-]+)$"), "assist_unpin"),
+    (re.compile(r"^/api/chapter-map/([A-Za-z0-9_-]+)/(\d+)$"), "chapter_map"),
     (re.compile(r"^/api/records$"), "records"),
-    (re.compile(r"^/api/jobs$"), "jobs"),
-    (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)$"), "job"),
-    (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)/events$"), "job_events"),
-    (re.compile(r"^/api/jobs/([A-Za-z0-9_-]+)/cancel$"), "cancel"),
-    (re.compile(r"^/api/export/([A-Za-z0-9_-]+)/(\d+)/([a-z]+)$"), "export"),
     (re.compile(r"^/api/asset$"), "asset"),
-    (re.compile(r"^/api/depth/([A-Za-z0-9_-]+)/(\d+)$"), "depth"),
-    (re.compile(r"^/api/editorial/([A-Za-z0-9_-]+)/(\d+)$"), "editorial"),
-    (re.compile(r"^/api/edition/([A-Za-z0-9_-]+)/(\d+)$"), "edition"),
 ]
 
 
@@ -92,6 +81,19 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, status, payload, head=False):
         self._send(status, json.dumps(payload, ensure_ascii=False), "application/json; charset=utf-8", head)
 
+    def _sse_start(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+    def _sse_event(self, event_name, payload):
+        frame = f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n".encode()
+        self.wfile.write(frame)
+        self.wfile.flush()
+
     def _redirect(self, location, head=False):
         self.send_response(302)
         self.send_header("Location", location)
@@ -103,8 +105,7 @@ class Handler(BaseHTTPRequestHandler):
         if api:
             self._json(status, {"error": message}, head)
         else:
-            html = _page_404(message)
-            self._send(status, html, "text/html; charset=utf-8", head)
+            self._send(status, _page_404(message), "text/html; charset=utf-8", head)
 
     def _guard(self):
         if not local_ok(self):
@@ -112,13 +113,15 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return True
 
-    def _body(self):
+    def _body(self, required=True):
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError as exc:
             raise ValueError("Content-Length 非法") from exc
         if length <= 0:
-            raise ValueError("请求体为空")
+            if required:
+                raise ValueError("请求体为空")
+            return {}
         if length > MAX_BODY:
             raise ValueError("请求体超过 1MB")
         raw = self.rfile.read(length)
@@ -130,7 +133,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("请求体必须是 JSON 对象")
         return data
 
-    # ---- 路由 ---------------------------------------------------------
+    # ---- HTTP 入口 ----------------------------------------------------
     def do_GET(self):
         self._handle("GET", head=False)
 
@@ -142,6 +145,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         self._handle("PUT", head=False)
+
+    def do_DELETE(self):
+        self._handle("DELETE", head=False)
 
     def _handle(self, method, head=False):
         if not self._guard():
@@ -155,58 +161,14 @@ class Handler(BaseHTTPRequestHandler):
                 match = pattern.match(path)
                 if not match:
                     continue
-                if name == "jobs":
-                    self._post_job()
+                if name == "assist":
+                    self._post_assist()
                     return
-                if name == "depth":
-                    self._post_depth(match.group(1), int(match.group(2)))
+                if name == "assist_pin":
+                    self._post_assist_pin()
                     return
-                if name == "cancel":
-                    job = self.service.queue.cancel(match.group(1))
-                    if not job:
-                        self._json(404, {"error": "任务不存在"})
-                    else:
-                        self._json(200, job)
-                    return
-                if name == "editorial":
-                    try:
-                        clean = self.service.save_editorial(match.group(1), int(match.group(2)), self._body())
-                    except EditorialError as exc:
-                        self._json(400, {"error": str(exc)})
-                    except (FileNotFoundError, ValueError) as exc:
-                        self._json(400, {"error": str(exc)})
-                    else:
-                        self._json(200, clean)
-                    return
-                if name == "edition":
-                    try:
-                        data = self._body()
-                        model = str(data.get("model") or DEFAULT_MODEL).strip()
-                        effort = str(data.get("effort") or "low").strip().lower()
-                        overwrite = data.get("overwrite", False)
-                        if not isinstance(overwrite, bool):
-                            raise ValueError("overwrite 必须是布尔值")
-                        if not model or len(model) > 80:
-                            raise ValueError("模型名非法")
-                        if effort not in EFFORTS:
-                            raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
-                        job = self.service.submit_edition(
-                            match.group(1), int(match.group(2)), model=model, effort=effort, overwrite=overwrite
-                        )
-                    except JobConflictError as exc:
-                        self._json(
-                            409, {"error": "该章已有任务在排队或运行", "code": "job_active", "conflicts": exc.conflicts}
-                        )
-                    except PackExistsError:
-                        self._json(409, {"error": "这一章已有视觉读本", "code": "edition_exists"})
-                    except FileNotFoundError:
-                        self._json(404, {"error": "找不到章节"})
-                    except MissingConfigError as exc:
-                        self._json(400, exc.as_payload())
-                    except (TypeError, ValueError) as exc:
-                        self._json(400, {"error": str(exc)})
-                    else:
-                        self._json(202, job)
+                if name == "chapter_map":
+                    self._post_chapter_map(match.group(1), int(match.group(2)))
                     return
                 self._json(405, {"error": "该路由不支持 POST"})
                 return
@@ -225,6 +187,31 @@ class Handler(BaseHTTPRequestHandler):
                     self._put_book_reading(match.group(1))
                     return
                 self._json(405, {"error": "该路由不支持 PUT"})
+                return
+            self._error(404, "没有这个接口")
+            return
+
+        if method == "DELETE":
+            for pattern, name in ROUTES:
+                match = pattern.match(path)
+                if not match:
+                    continue
+                if name == "assist_unpin_full":
+                    self._delete_assist_pin(match.group(1), int(match.group(2)), match.group(3))
+                    return
+                if name == "assist_unpin":
+                    uid = (query.get("uid") or [""])[0]
+                    n_raw = (query.get("n") or [""])[0]
+                    if not uid or not n_raw:
+                        body = self._body(required=False)
+                        uid = uid or str(body.get("uid") or "")
+                        n_raw = n_raw or str(body.get("n") or "")
+                    if not uid or not str(n_raw).isdigit():
+                        self._json(400, {"error": "请提供 uid 与章号 n"})
+                        return
+                    self._delete_assist_pin(uid, int(n_raw), match.group(1))
+                    return
+                self._json(405, {"error": "该路由不支持 DELETE"})
                 return
             self._error(404, "没有这个接口")
             return
@@ -250,22 +237,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._redirect("/chapter/%s/%02d" % (match.group(1), target), head)
                 return
             self._serve_page("chapter.html", head)
-            return
-        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/agent$", path)
-        if match:
-            self._serve_agent_reader(match.group(1), int(match.group(2)), head)
-            return
-        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/depth$", path)
-        if match:
-            self._serve_depth(match.group(1), int(match.group(2)), head)
-            return
-        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)/edition$", path)
-        if match:
-            self._serve_edition(match.group(1), int(match.group(2)), head)
-            return
-        match = re.match(r"^/reader/([A-Za-z0-9_-]+)/(\d+)$", path)
-        if match:
-            self._serve_reader(match.group(1), int(match.group(2)), head)
             return
         if path.startswith("/assets/"):
             self._serve_asset_file(path, head)
@@ -298,200 +269,177 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self._json(200, data, head)
             elif name == "records":
-                self._json(200, self.service.records(), head)
-            elif name == "jobs":
-                self._json(200, {"jobs": self.service.queue.list(100)}, head)
-            elif name == "job":
-                job = self.service.queue.get(match.group(1))
-                if not job:
-                    self._json(404, {"error": "任务不存在"}, head)
-                else:
-                    self._json(200, job, head)
-            elif name == "job_events":
-                job_id = match.group(1)
-                if not self.service.queue.get(job_id):
-                    self._json(404, {"error": "任务不存在"}, head)
-                else:
-                    self._json(
-                        200,
-                        {
-                            "job": job_id,
-                            "path": self.service.queue.events_path(job_id),
-                            "events": self.service.queue.events(job_id),
-                        },
-                        head,
-                    )
-            elif name == "export":
-                self._serve_export(match.group(1), int(match.group(2)), match.group(3), head)
+                uid = (query.get("uid") or [None])[0] or None
+                action = (query.get("action") or [None])[0] or None
+                status = (query.get("status") or [None])[0] or None
+                try:
+                    limit = max(1, min(1000, int((query.get("limit") or ["300"])[0])))
+                except ValueError:
+                    self._json(400, {"error": "limit 必须是整数"}, head)
+                    return
+                self._json(200, self.service.records(uid=uid, action=action, status=status, limit=limit), head)
             elif name == "asset":
                 self._serve_asset_query(query, head)
-            elif name == "editorial":
-                data = self.service.editorial(match.group(1), int(match.group(2)))
-                if data is None:
-                    self._json(404, {"error": "还没有编辑层"}, head)
-                else:
-                    self._json(200, data, head)
             else:
                 self._json(405, {"error": "该路由不支持 GET"}, head)
             return
-        self._error(404, "没有这个页面或接口", api=path.startswith("/api/"))
+        self._error(404, "没有这个页面或接口", api=path.startswith("/api/"), head=head)
 
-    def _post_job(self):
+    # ---- POST / PUT / DELETE 处理器 -----------------------------------
+    def _post_assist(self):
         try:
             data = self._body()
-            uid = str(data.get("uid") or "")
-            n = int(data.get("n"))
-            tiers = data.get("tiers") or ["standard"]
-            model = str(data.get("model") or DEFAULT_MODEL).strip()
-            effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
-            overwrite = data.get("overwrite", False)
-            rebuild = data.get("rebuild", False)
-            force_annotation = data.get("force_annotation", False)
-            if not isinstance(overwrite, bool):
-                raise ValueError("overwrite 必须是布尔值")
-            if not isinstance(rebuild, bool):
-                raise ValueError("rebuild 必须是布尔值")
-            if not isinstance(force_annotation, bool):
-                raise ValueError("force_annotation 必须是布尔值")
+            uid = str(data.get("uid") or "").strip()
             if not UID_RE.match(uid):
                 raise ValueError("uid 非法")
-            if not isinstance(tiers, list) or not all(isinstance(item, str) for item in tiers):
-                raise ValueError("tiers 必须是字符串数组")
-            if any(item not in ("skim", "standard", "deep") for item in tiers):
-                raise ValueError("未知档位")
+            n = int(data.get("n"))
+            action = str(data.get("action") or "").strip().lower()
+            if action not in ASSIST_ACTIONS:
+                raise ValueError("action 必须是 %s" % "/".join(ASSIST_ACTIONS))
+            block_ids = data.get("block_ids") or []
+            if not isinstance(block_ids, list) or not all(isinstance(x, str) for x in block_ids):
+                raise ValueError("block_ids 必须是字符串数组")
+            selected_text = str(data.get("selected_text") or "")
+            question = str(data.get("question") or "")
+            model = str(data.get("model") or DEFAULT_MODEL).strip()
+            effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
+            stream = data.get("stream", True)
+            if not isinstance(stream, bool):
+                raise ValueError("stream 必须是布尔值")
             if not model or len(model) > 80:
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
                 raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
-            if self.service.depth:
-                self.service.require_reading(uid)
-            job = None
-            if self.service.depth and self.service.store.manifest(uid, n) is None:
-                raw = self.service.library.read_chapter(uid, n)
-                if raw is None:
-                    raise FileNotFoundError("找不到章节 %s/%02d" % (uid, n))
-                depth_state = self.service.store.depth_state(uid, n, raw.get("source_sha256"))
-                has_depth_file = any(
-                    Path(self.service.store.depth_path(uid, n, name)).is_file()
-                    for name in ("chapter.html", "chapter_model.json", "ledger.json")
-                )
-                # 跑到一半的包也算深度路径：续跑只补缺层，不该退回旧 submit。
-                if depth_state.get("status") in ("partial", "missing") and (
-                    depth_state.get("status") == "partial" or not has_depth_file
-                ):
-                    # 新章默认走深读路径；旧包与已有深度产物仍走旧 submit。
-                    job = self.service.submit_depth(
-                        uid,
-                        n,
-                        list(DEPTH_LAYERS),
-                        model=model,
-                        effort=effort,
-                    )
-            if job is None:
-                job = self.service.submit(
+            # 先过存在性与凭据门控，错误仍回 404/400 JSON。
+            if not self.service.library.book(uid) or not self.service.library.read_chapter(uid, n):
+                raise FileNotFoundError("找不到章节")
+            self.service._require_model_client()
+        except FileNotFoundError:
+            self._json(404, {"error": "找不到章节"})
+            return
+        except MissingConfigError as exc:
+            payload = exc.as_payload()
+            if "fix" not in payload and payload.get("missing"):
+                payload["fix"] = payload["missing"][0].get("fix", "")
+            self._json(400, payload)
+            return
+        except (TypeError, ValueError) as exc:
+            self._json(400, {"error": str(exc)})
+            return
+
+        if not stream:
+            try:
+                result = self.service.assist(
                     uid,
                     n,
-                    tiers,
+                    action,
+                    block_ids=block_ids,
+                    selected_text=selected_text,
+                    question=question,
                     model=model,
                     effort=effort,
-                    overwrite=overwrite,
-                    rebuild=rebuild,
-                    force_annotation=force_annotation,
                 )
+            except FileNotFoundError:
+                self._json(404, {"error": "找不到章节"})
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception as exc:
+                self._json(502, {"error": str(exc)})
+            else:
+                self._json(200, result)
+            return
+
+        self._sse_start()
+
+        def emit_delta(chunk):
+            with contextlib.suppress(OSError):
+                self._sse_event("delta", {"text": chunk})
+
+        try:
+            result = self.service.assist(
+                uid,
+                n,
+                action,
+                block_ids=block_ids,
+                selected_text=selected_text,
+                question=question,
+                model=model,
+                effort=effort,
+                on_delta=emit_delta,
+            )
+        except Exception as exc:
+            with contextlib.suppress(OSError):
+                self._sse_event("error", {"error": str(exc)})
+            return
+
+        try:
+            if result.get("diagram_html"):
+                self._sse_event(
+                    "diagram",
+                    {"html": result["diagram_html"], "figure": result.get("figure")},
+                )
+            self._sse_event("done", result)
+        except OSError:
+            pass
+
+    def _post_assist_pin(self):
+        try:
+            data = self._body()
+            uid = str(data.get("uid") or "").strip()
+            if not UID_RE.match(uid):
+                raise ValueError("uid 非法")
+            n = int(data.get("n"))
+            saved = self.service.pin_assist_note(uid, n, data)
         except FileNotFoundError:
             self._json(404, {"error": "找不到章节"})
-            return
-        except JobConflictError as exc:
-            self._json(
-                409,
-                {
-                    "error": "该章已有任务在排队或运行",
-                    "code": "job_active",
-                    "conflicts": exc.conflicts,
-                },
-            )
-            return
-        except RebuildRequiredError as exc:
-            self._json(
-                409,
-                {
-                    "error": "未勾选档位无法保留",
-                    "code": "rebuild_required",
-                    "tiers": exc.tiers,
-                    "reason": exc.reason,
-                },
-            )
-            return
-        except PackExistsError as exc:
-            self._json(
-                409,
-                {
-                    "error": "该档位已有读本",
-                    "code": "pack_exists",
-                    "tiers": exc.tiers,
-                },
-            )
-            return
-        except MissingProfileError as exc:
-            self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
-            return
-        except SourceTooLarge as exc:
-            self._json(422, exc.to_dict())
+        except (TypeError, ValueError) as exc:
+            self._json(400, {"error": str(exc)})
+        else:
+            self._json(200, saved)
+
+    def _delete_assist_pin(self, uid, n, note_id):
+        try:
+            if not UID_RE.match(uid or ""):
+                raise ValueError("uid 非法")
+            removed = self.service.unpin_assist_note(uid, int(n), note_id)
+        except FileNotFoundError:
+            self._json(404, {"error": "找不到章节"})
             return
         except (TypeError, ValueError) as exc:
             self._json(400, {"error": str(exc)})
             return
-        except MissingConfigError as exc:
-            self._json(400, exc.as_payload())
+        if removed is None:
+            self._json(404, {"error": "旁批不存在"})
             return
-        self._json(202, job)
+        self._json(200, removed)
 
-    def _post_depth(self, uid, n):
-        if not self.service.depth:
-            self._json(400, {"error": "深读模式已关闭；请按旧路径生成读本"})
-            return
+    def _post_chapter_map(self, uid, n):
         try:
-            data = self._body()
-            layers = data.get("layers")
+            if not UID_RE.match(uid or ""):
+                raise ValueError("uid 非法")
+            data = self._body(required=False)
+            force = data.get("force", False)
+            if not isinstance(force, bool):
+                raise ValueError("force 必须是布尔值")
             model = str(data.get("model") or DEFAULT_MODEL).strip()
             effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
-            rebuild_model = data.get("rebuild_model", False)
-            if not UID_RE.match(uid):
-                raise ValueError("uid 非法")
-            if not isinstance(layers, list) or not layers or not all(isinstance(item, str) for item in layers):
-                raise ValueError("layers 必须是非空字符串数组")
-            if not isinstance(rebuild_model, bool):
-                raise ValueError("rebuild_model 必须是布尔值")
             if not model or len(model) > 80:
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
                 raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
-            self.service.require_reading(uid)
-            job = self.service.submit_depth(
-                uid,
-                n,
-                layers,
-                model=model,
-                effort=effort,
-                rebuild_model=rebuild_model,
-            )
+            result = self.service.generate_chapter_map(uid, n, force=force, model=model, effort=effort)
         except FileNotFoundError:
             self._json(404, {"error": "找不到章节"})
-        except JobConflictError as exc:
-            self._json(
-                409,
-                {"error": "该章已有任务在排队或运行", "code": "job_active", "conflicts": exc.conflicts},
-            )
-        except MissingProfileError as exc:
-            self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
         except SourceTooLarge as exc:
             self._json(422, exc.to_dict())
-        except (TypeError, ValueError) as exc:
-            self._json(400, {"error": str(exc)})
         except MissingConfigError as exc:
             self._json(400, exc.as_payload())
+        except (TypeError, ValueError) as exc:
+            self._json(400, {"error": str(exc)})
+        except Exception as exc:
+            self._json(502, {"error": str(exc)})
         else:
-            self._json(202, job)
+            self._json(200, result)
 
     def _put_reading(self, uid, n):
         try:
@@ -519,7 +467,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json(200, result)
 
-    # ---- 静态与产物 ---------------------------------------------------
+    # ---- 静态与原文附件 -----------------------------------------------
     def _serve_page(self, name, head=False):
         path = os.path.join(WEB, name)
         try:
@@ -543,126 +491,6 @@ class Handler(BaseHTTPRequestHandler):
             body = fh.read()
         self._send(200, body, ctype, head)
 
-    def _serve_agent_reader(self, uid, n, head=False):
-        if not self.service.agent_standard:
-            self._error(404, "实验性标准 HTML 已退役；请使用标准注解页")
-            return
-        path = os.path.join(self.service.store.pack_dir(uid, n), "agent-standard.html")
-        if not os.path.exists(path):
-            self._error(404, "这一章还没有 Agent 标准档")
-            return
-        with open(path, encoding="utf-8") as fh:
-            self._send(200, fh.read(), "text/html; charset=utf-8", head)
-
-    def _serve_depth(self, uid, n, head=False):
-        # 只端出与当前源文一致的页面；模型重建或源文改动后的旧页都不端。
-        if self._retire_research_query():
-            return
-        raw = self.service.library.read_chapter(uid, n)
-        if raw is None:
-            self._error(404, "这一章不存在", api=False, head=head)
-            return
-        mode = self.service._ledger_mode(uid, n, raw.get("source_sha256"))
-        route, reason = self.service.store.chapter_route(uid, n, raw.get("source_sha256"), mode=mode)
-        path = self.service.store.depth_path(uid, n, "chapter.html")
-        if route != "depth" or not os.path.isfile(path):
-            self._error(404, reason or "这一章还没有编译版", api=False, head=head)
-            return
-        with open(path, encoding="utf-8") as fh:
-            body = self._with_retire_notice(fh.read())
-        self._send(200, body, "text/html; charset=utf-8", head)
-
-    def _serve_edition(self, uid, n, head=False):
-        path = os.path.join(self.service.store.edition_dir(uid, n), "index.html")
-        if not os.path.exists(path):
-            self._error(404, "这一章还没有视觉读本")
-            return
-        with open(path, encoding="utf-8") as fh:
-            self._send(200, fh.read(), "text/html; charset=utf-8", head)
-
-    def _retire_research_query(self):
-        """旧书签 ?tier=research 退到深读档；返回 True 表示已发 302。"""
-        parsed = urllib.parse.urlsplit(self.path)
-        query = urllib.parse.parse_qs(parsed.query)
-        if query.get("tier") != ["research"]:
-            return False
-        query["tier"] = ["deep"]
-        query["retired"] = ["research"]
-        location = urllib.parse.urlunsplit(
-            (parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query, doseq=True), "")
-        )
-        self.send_response(302)
-        self.send_header("Location", location)
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-        return True
-
-    def _retire_notice_requested(self):
-        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
-        return query.get("tier") == ["deep"] and query.get("retired") == ["research"]
-
-    def _with_retire_notice(self, text):
-        if not self._retire_notice_requested() or "retire-notice" in text:
-            return text
-        notice = (
-            '<div class="retire-notice" style="margin:12px 0;padding:8px 10px;border-left:3px solid #a33;'
-            'background:#f7eeec;font:13px/1.6 sans-serif;color:#5a2a22">研读档已退役，已切换到深读档。</div>'
-        )
-        if "</body>" in text:
-            return text.replace("</body>", notice + "</body>", 1)
-        return text + notice
-
-    def _serve_reader(self, uid, n, head=False):
-        if self._retire_research_query():
-            return
-        path = self.service.store.chapter_html_path(uid, n)
-        if not os.path.isfile(path):
-            self._error(404, "这一章还没有生成读本", api=False, head=head)
-            return
-        with open(path, "rb") as fh:
-            body = fh.read()
-        if body:
-            text = body.decode("utf-8")
-            if self.service.store.edition(uid, n) is not None:
-                link = '<a class="edition-link" href="/reader/%s/%d/edition">视觉读本</a>' % (uid, n)
-                if "<!--EDITION_LINK-->" in text:
-                    text = text.replace("<!--EDITION_LINK-->", link)
-                elif "edition-link" not in text:
-                    text = text.replace("</div></header>", link + "</div></header>", 1)
-            else:
-                text = text.replace("<!--EDITION_LINK-->", "")
-            body = self._with_retire_notice(text).encode("utf-8")
-        self._send(200, body, "text/html; charset=utf-8", head)
-
-    def _serve_export(self, uid, n, tier, head=False):
-        if tier == "research":
-            self._json(
-                410,
-                {"error": "legacy 研究导出已退役；深读档在 /reader/%s/%d/depth" % (uid, n)},
-                head,
-            )
-            return
-        if tier not in ("skim", "standard", "deep"):
-            self._json(404, {"error": "未知档位"}, head)
-            return
-        path = self.service.store.export_path(uid, n, tier)
-        if not os.path.isfile(path):
-            self._json(404, {"error": "还没有这一档"}, head)
-            return
-        with open(path, "rb") as fh:
-            body = fh.read()
-        if body and self.service.store.edition(uid, n) is not None:
-            text = body.decode("utf-8")
-            link = '<a class="edition-link" href="/reader/%s/%d/edition">视觉读本</a>' % (uid, n)
-            if "<!--EDITION_LINK-->" in text:
-                text = text.replace("<!--EDITION_LINK-->", link)
-            elif "edition-link" not in text:
-                text = text.replace("</div></header>", link + "</div></header>", 1)
-            body = text.encode("utf-8")
-        else:
-            body = body.replace(b"<!--EDITION_LINK-->", b"")
-        self._send(200, body, "text/html; charset=utf-8", head)
-
     def _serve_asset_query(self, query, head=False):
         uid = (query.get("uid") or [""])[0]
         rel = (query.get("rel") or [""])[0]
@@ -682,21 +510,20 @@ class Handler(BaseHTTPRequestHandler):
 
 def _page_404(message):
     return """<!doctype html><html lang="zh-CN"><meta charset="utf-8">
-<title>404 · 分层读</title><style>
+<title>404 · 阅读工作台</title><style>
 body{background:#F3F0E7;color:#181817;font:16px/1.8 "Noto Serif CJK SC",serif;margin:0;
 display:grid;place-items:center;min-height:100vh}
 main{max-width:560px;padding:40px;border-top:3px solid #A8442F}
 h1{font-size:28px;margin:0 0 12px}a{color:#1E3A36}
 </style><main><h1>没有找到</h1><p>%s</p>
-<p><a href="/">← 回书架</a> · <a href="/records">生成记录</a></p></main></html>""" % (
+<p><a href="/">← 回书架</a> · <a href="/records">操作日志</a></p></main></html>""" % (
         message.replace("&", "&amp;").replace("<", "&lt;")
     )
 
 
 def main(argv=None):
-    # 仓库根的 .env 是主配置；先读它，下面解析默认值时才看得到。
     envfile.load()
-    parser = argparse.ArgumentParser(description="8771 分层读 本地服务")
+    parser = argparse.ArgumentParser(description="8771 阅读工作台 本地服务")
     parser.add_argument("--root", default=os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库"))
     parser.add_argument("--port", type=int, default=8771)
     group = parser.add_mutually_exclusive_group()
@@ -705,9 +532,9 @@ def main(argv=None):
         dest="annotate",
         action="store_true",
         default=os.environ.get("READING_ANNOTATE", "1") != "0",
-        help="调用模型标注（默认开启）",
+        help="保留启动参数兼容（伴读与地图按需调用模型）",
     )
-    group.add_argument("--no-annotate", dest="annotate", action="store_false", help="离线确定性草稿，仅用于测试")
+    group.add_argument("--no-annotate", dest="annotate", action="store_false", help="仅测试用途")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -719,7 +546,7 @@ def main(argv=None):
     Handler.service = service
     Handler.quiet = args.quiet
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print("分层读 8771 · root=%s · http://127.0.0.1:%d/" % (service.library.root, args.port), flush=True)
+    print("阅读工作台 8771 · root=%s · http://127.0.0.1:%d/" % (service.library.root, args.port), flush=True)
     warning = preflight.summary(service.library.root)
     if warning:
         print("配置提示：" + warning + "；book-corpus doctor 看全部", file=sys.stderr, flush=True)

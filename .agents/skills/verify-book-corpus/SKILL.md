@@ -64,7 +64,7 @@ setsid python3 apps/ops/server.py --root "$ROOT" --port 18770 \
 | 服务 | 端口 | 就绪行 | 备注 |
 |---|---|---|---|
 | 首页 | 18773 | `书库首页 http://127.0.0.1:18773 · root=<ROOT>` | 只读 `books/`、`日课/` 与仓库模板；`books.toml` 必需，缺了 exit 2。启动前清掉 shell/`.env` 里的 `BOOKS_ROOT`，否则 `Library` 用它而不是 `--root`。可以最先起 |
-| 分层读 | 18771 | `分层读 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 紧跟一行「配置提示：缺少配置：MinerU…；PaddleOCR…；MiMo…」，是云端 key 常态，不是故障。`--no-annotate` 只关标注，生成仍打模型；深度开关默认仍开，`/api/chapter` 会带预检，`READING_DEPTH=0` 才关。行里的 `8771` 是固定标签，实际端口看 URL |
+| 分层读 | 18771 | `分层读 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 紧跟一行「配置提示：缺少配置：MinerU…；PaddleOCR…；MiMo…」，是云端 key 常态，不是故障。章页展示完整正文工作台与工具栏，`/api/chapter` 带知识地图预检，`--no-annotate` 跳过伴读/地图真实模型调用 |
 | 日课 | 18772 | `http://127.0.0.1:18772` | 单行输出，没有别的就绪信号 |
 | 找一段 | 18765 | `书库检索演示：http://127.0.0.1:18765` | 不接 `--root`，只认 `BOOKS_ROOT`；启动必打印 `启动恢复：N 轮…`（0 也打）。`BOOKS_RUNLOG_ROOT` 是运行记录的唯一隔离开关，默认落仓库内共享目录；会话库也不随 `BOOKS_ROOT` 隔离 |
 | 操作台 | 18770 | `统一操作台：http://127.0.0.1:18770  root=<ROOT>` | `--port 0` 会打印实际端口 |

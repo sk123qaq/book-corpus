@@ -44,7 +44,7 @@
 |---|---|
 | `apps/ops/` | 统一操作台服务与 web，按需启动，127.0.0.1:8770 |
 | `apps/demo/` | 检索流程演示页与回答实现，按需启动，127.0.0.1:8765 |
-| `apps/reading/` | 分层读书架、书目、正文与记录，按需启动，127.0.0.1:8771 |
+| `apps/reading/` | 正文伴读工作台的书架、书目、正文与操作日志，按需启动，127.0.0.1:8771 |
 | `apps/daily/` | 每日一章的只读阅读页，按需启动，127.0.0.1:8772 |
 | `apps/home/` | 统一入口首页，默认启动项，服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点入口按需代起四个服务，127.0.0.1:8773 |
 | `src/bookcorpus/` | 命令行包；`scripts/` 是全部可复跑脚本 |
@@ -225,7 +225,6 @@ book-corpus model check
 | `book-corpus-qa` | `.agents/skills/book-corpus-qa/` | `answer.py` 与问答流程，按原文回答并核对引文 |
 | `ebook-to-md` | `.agents/skills/ebook-to-md/` | 拆章、合集拆分、覆盖率审计、产物校验 |
 | `chapter-html-versions` | `.agents/skills/chapter-html-versions/` | 生成可视化阅读版 HTML，附 `verify_lite.py` 校验 |
-| `depth-swap` | `.agents/skills/depth-swap/` | 改分层读 `Store.save_depth` 或 `ReadingService` 启动流程后跑崩溃窗口检查 |
 | `mineru` | `.agents/skills/mineru/` | OCR 兜底 |
 | `sync-docs` | `.agents/skills/sync-docs/` | 迭代后对账活文档：刷新事实表、审计并修路径/端口/命令漂移 |
 | `typesafe-ai` | `.agents/skills/typesafe-ai/` | 旧分类后端，默认已改用模型 |
@@ -338,19 +337,6 @@ python3 apps/daily/server.py --root <实例根>      # http://127.0.0.1:8772
 
 演示页从 `BOOKS_ROOT` 认根，其余页面用 `--root`。首页读 `books.toml`、`books/` 与 `日课/`；点入口时如果对应服务没起，会代起并等端口就绪，已经在跑就直接跳转。页脚的「管理」也走同一条路，进入 8770。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。
 
-### 出视觉读本
-
-分层读是逐段读本；视觉读本是同一章的第二形态——xerox 复印稿风格的单页，含 hero、概览卡、图版、图表和 takeaways，正文仍逐字取自原文。章节工单里的「生成视觉读本」会调用模型，约 30–60 秒；文学、短章、超长章与图册会自动退回分层读。
-
-```bash
-uv run --frozen python - <<'PY'
-from bookcorpus.reading.service import ReadingService
-ReadingService('/home/colaqaq/书库').generate_edition('B0003', 6, effort='low')
-PY
-```
-
-判决、字段、门禁与产物结构见 [docs/视觉读本.md](docs/视觉读本.md)。
-
 ### 重建产物
 
 ```bash
@@ -372,8 +358,6 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 `migrate` 读 v1 的 `库/`、`目录/`、`视图/`，落成 v2。`remap` 按对照表改写 `expand` 路径并重建 FTS；默认只打印。
 
 ## 改完跑什么
-
-视觉读本相关：`uv run --frozen pytest -q tests/test_reading_edition.py`。
 
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
@@ -406,8 +390,7 @@ chmod 600 .env
 ### 缺配置会怎样
 
 提交任务前按场景预检，缺了直接报「缺少配置：…」，写清缺哪个变量、当前值是什么、该写在哪。
-分层读现在只保留速览、标准、深读三档，生成只检查模型 key；原研究层与引用层的
-检索/抓页配置已随阶段 1 退役，不再有“确认后降级”的入口。
+阅读工作台只检查模型 key，供章节知识地图与划词/旁批伴读使用。
 
 看全部能力的当前状态：
 
@@ -420,7 +403,7 @@ book-corpus doctor
 
 | 能力 | 什么时候要 | 变量 / 文件 | 缺了会怎样 |
 |---|---|---|---|
-| 分层读·标注/结构模型 | 标注章节、生成或重建深读结构层 | `OPENCODE_GO_API_KEY`，或 pi 已登录 `opencode-go`（`~/.pi/agent/auth.json`） | 拒绝提交，提示配 key |
+| 分层读·伴读/地图模型 | 生成知识地图、划词伴读与旁批解释 | `OPENCODE_GO_API_KEY`，或 pi 已登录 `opencode-go`（`~/.pi/agent/auth.json`） | 返回缺 key 提示，正文阅读仍可用 |
 | 书库·模型 | `ingest`、分类、拆章修复、问答归纳 | 工作区 `books.toml` 的 `[model]` + 可执行的 `pi` | 脚本启动前报缺 |
 | MinerU | PDF 读不出字、OCR 兜底 | `MINERU_API_KEY`，或 `~/.config/mineru/api_key` | `doctor` 标缺；OCR 任务自己也会报 |
 | PaddleOCR | 扫描件逐页 OCR | `~/.config/PaddleOCR/api_key` | 跑之前报缺 |
@@ -481,7 +464,7 @@ MIT，见 `LICENSE`。
 ## 更多文档
 
 - `AGENTS.md`：作者本机实例的运行手册，含批次账与脚本表。新克隆的仓库没有那些批次数据。
-- `docs/视觉读本.md`：视觉读本的判决、流水线、接口与产物；改 edition 前先看。
+- `docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md`：正文伴读工作台、工具与操作日志的现行设计方案。
 - `docs/design/设计方案-书目结构.md`：权威方案，L0 到 L5 门槛与目标结构。
 - `CONTRIBUTING.md`：改代码、跑测试与提交的约定。
 - `docs/检索/README.md`：检索层方案与实测基线。
