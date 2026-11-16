@@ -95,12 +95,10 @@ POST /api/delete/apply             {uid, reason, plan_hash, confirm_uid}
 GET  /api/search/health
 POST /api/search/start
 GET  /api/file?path=...
-GET  /api/ledger                        # tables/ledger.db 全量：ledger/concepts/broad/actions + ledger_db 路径
+GET  /api/ledger                        # tables/ledger.db 分类账表：ledger + ledger_db 路径
 POST /api/ledger/row                    # {row} upsert 人账一行；新 uid 拒收；写锁 .writer.lock
 POST /api/ledger/rows/delete            # {uids} 删人账行（不动机书目录）
 POST /api/ledger/rows/confirm            # {uids} 备注里的「待复核」换成「分类确认 日期」，其余字不动；已确认/不在账上的行进 skipped
-POST /api/ledger/concept                # {which: main|broad|action, row} upsert 词表条目
-POST /api/ledger/concept/delete         # {which, key} 删词表条目
 GET  /api/pdf/books
 ```
 
@@ -152,7 +150,7 @@ report:{summary:{total, done, skipped, failed}, scope:{new, backfill}, items:[..
   "index": {"built_at": "...", "paras": 2593173, "chapters": 87644,
             "books": 1693, "lag_books": 0, "lag_chapters": 0,
             "extra_books": 0, "extra_chapters": 0},
-  "views": {"awards": 1009, "topics": 1034, "broken": 0, "ok": true},
+  "views": {"awards": 1009, "broken": 0, "ok": true},
   "audit": {"fail": 0, "warn": 3, "items": [], "at": "...", "ran": true, "stale": false},
   "ocr": {"remaining_books": 0, "remaining_pages": 0, "quota": "20000/天"},
   "jobs": {"running": 0, "awaiting_review": 0, "last": null}

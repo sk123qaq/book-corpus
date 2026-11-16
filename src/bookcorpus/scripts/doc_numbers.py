@@ -79,16 +79,13 @@ def collect(root=ROOT, as_of=None):
 
 
 def views(root):
-    out = {"奖项": 0, "主题": 0}
-    base = os.path.join(root, "build", "views")
+    out = {"奖项": 0}
+    base = os.path.join(root, "build", "views", "奖项")
     for dirpath, dirnames, filenames in os.walk(base):
         for name in dirnames + filenames:
             entry = os.path.join(dirpath, name)
-            if not os.path.islink(entry):
-                continue
-            top = os.path.relpath(entry, base).split(os.sep)[0]
-            if top in out:
-                out[top] += 1
+            if os.path.islink(entry):
+                out["奖项"] += 1
     return out
 
 
@@ -147,10 +144,7 @@ def render(counts):
             num(a.get("gallery", 0)),
             num(a.get("ja", 0)),
         )
-    line = (
-        "As of %s：%s 本书，%s 本有 md，%s 本待拆章（%s%s）；%s 条奖项记录，"
-        "视图 %s 条软链（奖项 %s、主题 %s）；坑账 %s 类。"
-    ) % (
+    line = ("As of %s：%s 本书，%s 本有 md，%s 本待拆章（%s%s）；%s 条奖项记录，视图 %s 条奖项软链；坑账 %s 类。") % (
         counts["as_of"],
         num(counts["books"]),
         num(counts["md"]),
@@ -158,9 +152,7 @@ def render(counts):
         "、".join(parts),
         archive_note,
         num(counts["awards"]),
-        num(counts["view_total"]),
         num(view["奖项"]),
-        num(view["主题"]),
         num(counts["pitfall_classes"]),
     )
     return "%s\n%s\n%s" % (START, line, END)

@@ -3,17 +3,13 @@
 
   const STAGE_NAMES = ['理解问题', '词法循环', '打分与选章', '书卡', '结果'];
   const KIND = {
-    noun: '名词集',
+    noun: '全词集',
     full: '全词集',
-    'noun+concept': '名词 + 同义组',
-    'full+broad': '全词 + 宽词组',
     'drop-generic': '去掉最泛的词',
   };
   const WHY_NEXT = {
-    noun: '换名词集',
-    full: '补回动作词',
-    'noun+concept': '换同义组',
-    'full+broad': '加宽词组',
+    noun: '重排词集',
+    full: '全词检索',
     'drop-generic': '去掉最泛的词',
   };
   const SOURCE = { model: '模型切词', cache: '缓存', degraded: '降级' };

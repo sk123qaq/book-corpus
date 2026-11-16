@@ -54,8 +54,6 @@ CREATE VIEW v_pending_md AS
 INDEX_SCHEMA = """
 CREATE TABLE para(id INTEGER PRIMARY KEY, path TEXT NOT NULL, book TEXT NOT NULL,
   line INTEGER NOT NULL, chars INTEGER NOT NULL, tok TEXT NOT NULL, text TEXT NOT NULL);
-CREATE TABLE book_concept(book TEXT NOT NULL, key TEXT NOT NULL, hits INTEGER NOT NULL,
-  book_chars INTEGER NOT NULL, score REAL NOT NULL, PRIMARY KEY(book, key));
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE expand(path TEXT, kind TEXT, tok TEXT, text TEXT, model TEXT,
   prompt_hash TEXT, tokens_in INT, tokens_out INT, built_at TEXT);
@@ -184,7 +182,7 @@ def build_root(root):
     write(os.path.join(root, "build", "书目总表.csv"), "uid,书名\nB0001,甲书\nB0002,乙书\nB0003,丙书\nB0004,图册\n")
 
     views = os.path.join(root, "build", "views")
-    for sub, book, uid in (("奖项", "测试奖", "B0001"), ("主题", "测试主题", "B0002")):
+    for sub, book, uid in (("奖项", "测试奖", "B0001"),):
         target = os.path.join(views, sub, book, uid)
         os.makedirs(os.path.dirname(target), exist_ok=True)
         os.symlink(os.path.join("..", "..", "..", "..", "books", uid), target)
@@ -259,8 +257,8 @@ def fixture_checks(root):
         state["index"],
     )
     check(
-        "视图 奖项 1 / 主题 1 / 断链 0",
-        (state["views"]["awards"], state["views"]["topics"], state["views"]["broken"]) == (1, 1, 0),
+        "视图 奖项 1 / 断链 0",
+        (state["views"]["awards"], state["views"]["broken"]) == (1, 0),
         state["views"],
     )
     check(
@@ -352,11 +350,11 @@ def fixture_checks(root):
     print("\n== fixture: 断链与退出码 ==")
     os.symlink(
         os.path.join("..", "..", "..", "..", "books", "B9999"),
-        os.path.join(root, "build", "views", "主题", "测试主题", "坏链"),
+        os.path.join(root, "build", "views", "奖项", "测试奖", "坏链"),
     )
     light, _ = read_json([OPS_STATUS, "--root", root], root)
     if light:
-        check("断链计入 views.broken", (light["views"]["topics"], light["views"]["broken"]) == (2, 1), light["views"])
+        check("断链计入 views.broken", (light["views"]["awards"], light["views"]["broken"]) == (2, 1), light["views"])
     proc = run([AUDIT, "--root", root, "--json"], root)
     check("有 FAIL 时 --json 退出码 1", proc.returncode == 1, proc.returncode)
     try:
@@ -430,14 +428,13 @@ def real_checks():
     con.close()
     check("真库人账行数与 ledger.db 一致", state["ledger"]["rows"] == ledger_n, state["ledger"])
     broken = total = 0
-    for sub in ("奖项", "主题"):
-        for dirpath, dirnames, filenames in os.walk(os.path.join(REAL_ROOT, "build", "views", sub)):
-            for name in dirnames + filenames:
-                fp = os.path.join(dirpath, name)
-                if os.path.islink(fp):
-                    total += 1
-                    broken += 0 if os.path.exists(fp) else 1
-    check("真库视图软链计数一致", state["views"]["awards"] + state["views"]["topics"] == total, state["views"])
+    for dirpath, dirnames, filenames in os.walk(os.path.join(REAL_ROOT, "build", "views", "奖项")):
+        for name in dirnames + filenames:
+            fp = os.path.join(dirpath, name)
+            if os.path.islink(fp):
+                total += 1
+                broken += 0 if os.path.exists(fp) else 1
+    check("真库视图软链计数一致", state["views"]["awards"] == total, state["views"])
     check("真库视图断链计数一致", state["views"]["broken"] == broken, state["views"])
     check(
         "真库 OCR 剩余页数非负，有批次时批次名非空",

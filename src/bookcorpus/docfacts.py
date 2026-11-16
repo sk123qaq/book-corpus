@@ -41,7 +41,7 @@ PORT_RE = re.compile(r"127\.0\.0\.1:(\d{2,5})")
 LEGACY_PATH_RE = re.compile(r"(?<!书)库/(?!索引)[0-9A-Za-z_\u4e00-\u9fff]")
 FENCE_RE = re.compile(r"^\s*```")
 
-#: v2 已不存在的路径。分类表.csv / 概念表.tsv 仍作兜底种子存在，不算退役。
+#: v2 已不存在的路径。分类表.csv 仍作兜底种子存在，不算退役。
 RETIRED_TOKENS = (
     ("目录/书目总表", "v2 是 build/书目总表.*"),
     ("目录/分类预填", "v2 是 tables/分类预填.csv"),

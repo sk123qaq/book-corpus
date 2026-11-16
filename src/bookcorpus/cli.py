@@ -139,10 +139,6 @@ def cmd_init(target, force, pdf_venv):
         else:
             print("%s没建好：%s" % (label, detail))
             print("  重试：%s" % retry)
-    print(
-        "概念表带通用概念（tables/ledger.db 的 概念 表，改表用操作台或直接改库），"
-        "按自己的语料增删；--concept 只认表里的键。"
-    )
     _init_build(path)
     print("下一步：放一本书进 %s/books/_收件箱，或跑 book-corpus sample 用内置样书" % path)
     return 0

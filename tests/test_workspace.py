@@ -12,7 +12,6 @@ def test_init_creates_layout(tmp_path):
     assert r.returncode == 0, r.stderr
     assert (root / "books.toml").exists()
     assert (root / "tables" / "分类表.csv").exists()
-    assert (root / "tables" / "概念表.tsv").exists()
     assert (root / "books" / "_收件箱" / "README.md").exists()
     assert (root / "books" / "_冷宫" / "README.md").exists()
     header = (root / "tables" / "分类表.csv").read_text(encoding="utf-8-sig").splitlines()[0]
@@ -55,12 +54,3 @@ def test_list_marks_aliases():
     assert r.returncode == 0
     assert "qsearch" in r.stdout
     assert "search" in r.stdout
-
-
-def test_init_ships_full_concept_tables(tmp_path):
-    root = tmp_path / "ws"
-    run_cli("init", root)
-    for name in ("概念表.tsv", "概念表-broad.tsv", "概念表-动作词.tsv"):
-        expected = len((TEMPLATES / name).read_text(encoding="utf-8-sig").splitlines()) - 1
-        lines = (root / "tables" / name).read_text(encoding="utf-8-sig").splitlines()
-        assert len(lines) - 1 == expected, "%s 只有 %d 行，模板 %d 行" % (name, len(lines) - 1, expected)

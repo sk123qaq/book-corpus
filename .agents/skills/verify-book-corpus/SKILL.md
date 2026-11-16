@@ -33,7 +33,7 @@ uv run --frozen book-corpus init "$ROOT" --no-pdf-venv
 uv run --frozen book-corpus sample --root "$ROOT"
 ```
 
-- `init` 先打印「工作区建好」，再把 `BOOKS_ROOT` 记到 `$BOOK_CORPUS_ENV`（未设时写仓库 `.env`，会污染本仓），随后是两行 venv 未建警告（`--no-pdf-venv` 的预期结果）、概念表、书目库与检索索引。
+- `init` 先打印「工作区建好」，再把 `BOOKS_ROOT` 记到 `$BOOK_CORPUS_ENV`（未设时写仓库 `.env`，会污染本仓），随后是两行 venv 未建警告（`--no-pdf-venv` 的预期结果）、书目库与检索索引。
 - `sample` 装内置样书：阿Q正传 `B0001`、9 章、检索索引 123 段（`sample` 自己报 22881 字，分层读 `/api/shelf` 报 21362 正文字符，两处口径不同，别拿一个去验另一个）。没有它，书架、章页、检索都只能验空状态。
 
 服务按需起，端口固定用私有的一套，PID 落盘：

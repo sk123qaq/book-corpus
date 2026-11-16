@@ -282,23 +282,20 @@ def index(p, state, deep):
 
 
 def views(p, state):
-    counts = {"awards": 0, "topics": 0}
+    awards = 0
     broken = 0
-    for key, sub in (("awards", "奖项"), ("topics", "主题")):
-        base = os.path.join(p.views, sub)
-        if not os.path.isdir(base):
-            continue
+    base = os.path.join(p.views, "奖项")
+    if os.path.isdir(base):
         for dirpath, dirnames, filenames in os.walk(base):
             for name in dirnames + filenames:
                 fp = os.path.join(dirpath, name)
                 if not os.path.islink(fp):
                     continue
-                counts[key] += 1
+                awards += 1
                 if not os.path.exists(fp):
                     broken += 1
     state["views"] = {
-        "awards": counts["awards"],
-        "topics": counts["topics"],
+        "awards": awards,
         "broken": broken,
         "ok": os.path.isdir(p.views),
     }
@@ -529,7 +526,7 @@ def collect(p, deep=False):
             "extra_chapters": 0,
             "lag_exact": False,
         },
-        "views": {"awards": 0, "topics": 0, "broken": 0},
+        "views": {"awards": 0, "broken": 0},
         "audit": {"fail": 0, "warn": 0, "items": [], "at": None, "ran": False, "stale": False},
         "ocr": {
             "batch": None,
@@ -587,8 +584,7 @@ def render(state):
             idx["lag_chapters"],
             "" if idx["lag_exact"] else "（按计数，--deep 精确）",
         ),
-        "视图 奖项 %d / 主题 %d / 断链 %d"
-        % (state["views"]["awards"], state["views"]["topics"], state["views"]["broken"]),
+        "视图 奖项 %d / 断链 %d" % (state["views"]["awards"], state["views"]["broken"]),
         "审计 FAIL %d / WARN %d（%s%s）"
         % (
             audit_state_["fail"],

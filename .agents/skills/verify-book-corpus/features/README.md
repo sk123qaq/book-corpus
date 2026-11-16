@@ -17,8 +17,8 @@ uv run --frozen book-corpus sample --root "$ROOT"
 uv run --frozen book-corpus doctor --root "$ROOT"
 ```
 
-- `init` 约 0.2 秒，先打印「工作区建好」，再把 `BOOKS_ROOT` 记到 `$BOOK_CORPUS_ENV`（未设时写仓库 `.env`，会污染本仓），随后两行 venv 未建警告（`--no-pdf-venv` 的预期结果）、概念表、书目库与检索索引。
-- `sample` 装内置样书：阿Q正传 `B0001`，9 章，检索索引 123 段，`book_concept` 3 条。字数两处口径不同：`sample` 报 22881 字（含标题等），分层读 `/api/shelf` 报 21362 正文字符。
+- `init` 约 0.2 秒，先打印「工作区建好」，再把 `BOOKS_ROOT` 记到 `$BOOK_CORPUS_ENV`（未设时写仓库 `.env`，会污染本仓），随后两行 venv 未建警告（`--no-pdf-venv` 的预期结果）、书目库与检索索引。
+- `sample` 装内置样书：阿Q正传 `B0001`，9 章，检索索引 123 段。字数两处口径不同：`sample` 报 22881 字（含标题等），分层读 `/api/shelf` 报 21362 正文字符。
 - `doctor` 只读，逐行 `ok`/`warn`。允许的 `warn` 只有两类：**环境**（PDF 环境、文档环境）与**云端 key 缺失**（配置·MinerU / PaddleOCR / MiMo）。落在工作区、清单、账、库上的 `warn` 才算问题，先解释再开跑。
 - 端口用本轮私有的一套：演示 18765、分层读 18771、日课 18772、首页 18773（另 18774 / 18775 验 503 与拉起）、操作台 18770。
 - 8765 / 8771 / 8772 / 8773 是操作员的常驻实例，跑在操作员的真实库 `~/书库` 上（`apps/reading/server.py --root` 默认值就是它）。永不驱、永不杀。

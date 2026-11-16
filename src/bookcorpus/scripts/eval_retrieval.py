@@ -27,19 +27,8 @@ ROOT = L.ROOT
 DEFPASS = os.path.join(HERE, "defpass.py")
 RG = L.RG
 QEXPAND = os.path.join(HERE, "query_expand.py")
-QROUTE = os.path.join(HERE, "concept_route.py")
 QSEARCH = os.path.join(HERE, "qsearch.py")
 CAP = 99
-
-
-def concept_table():
-    table = {}
-    for r in L.concept_rows():
-        table[r["key"]] = (
-            L.split_aliases(r["aliases"]),
-            L.split_exclude(r.get("exclude", "")),
-        )
-    return table
 
 
 def env():
@@ -147,27 +136,6 @@ def qexpand_files(args):
     return order
 
 
-def route_files(args):
-    out = subprocess.run(
-        [sys.executable, QROUTE, *args, "--json", "-n", "100"], cwd=ROOT, capture_output=True, text=True
-    )
-    if out.returncode != 0:
-        raise RuntimeError(
-            "%s 退出码 %d：%s" % (os.path.basename(QROUTE), out.returncode, (out.stderr or "").strip()[-300:])
-        )
-    try:
-        hits = json.loads(out.stdout)["hits"]
-    except (json.JSONDecodeError, KeyError) as exc:
-        raise RuntimeError("%s 回包读不出 hits：%s" % (os.path.basename(QROUTE), exc)) from exc
-    seen, order = set(), []
-    for h in hits:
-        path = h["path"]
-        if path not in seen:
-            seen.add(path)
-            order.append(path)
-    return order
-
-
 def rank_of(path, candidates):
     try:
         pos = candidates.index(path) + 1
@@ -191,34 +159,21 @@ def main():
         gold = list(csv.DictReader(fh, delimiter="\t"))
     if a.limit:
         gold = gold[: a.limit]
-    table = concept_table()
 
     def one(sysname, r):
         terms = [t for t in r["terms"].split(",") if t]
-        aliases, excludes = table.get(r["concept"], ([], []))
         if sysname == "A":
             cand = grep_files(terms)
         elif sysname == "B":
             cand = rg_files(terms)
         elif sysname == "C":
-            cand = defpass_files(terms, aliases or terms)
+            cand = defpass_files(terms, terms)
         elif sysname == "D":
-            pool = terms + aliases
-            cand = grep_expanded([re.escape(p) for p in pool], excludes)
+            cand = grep_expanded([re.escape(p) for p in terms], [])
         elif sysname == "E":
             cand = qsearch_files([" ".join(terms)])
-        elif sysname == "F":
-            if r["concept"] not in table:
-                return None
-            cand = qsearch_files(["--concept", r["concept"]])
         elif sysname == "G":
             cand = qsearch_files(["--expand", "--expand-kind", "prefix", " ".join(terms)])
-        elif sysname == "N":
-            cand = qsearch_files(["--route", "--route-mode", "append", " ".join(terms)])
-        elif sysname == "M":
-            cand = qsearch_files(["--route", " ".join(terms)])
-        elif sysname == "L":
-            cand = route_files([r["question"]])
         elif sysname == "K":
             cand = qexpand_files([" ".join(terms), "--question", r["question"]])
         elif sysname in ("K1", "K2"):

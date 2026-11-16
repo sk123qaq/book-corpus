@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""查询规划：两套词、两段检索、最多 5 轮词法循环（B2.5）。
+"""查询规划：词法循环 + 向量三层混合检索（B2.5）。
 
   book_query.py 礼治 秩序 法律
   book_query.py 石昊 天人族 收拾 --explain
-  book_query.py 权力 日常生活 --broad
   book_query.py 礼治,秩序,法律 --json
 
 一轮 = 一次书级查询（用本轮词集）。全词集只在最后给选定书选章时查一次，两段共用。
@@ -14,19 +13,13 @@
   C  top1 书里名词组全覆盖的段落数 >= 3
 
   A 且（B 或 C）成立即停。C 成立时 A 必然成立，所以实际是 C 或 A 且 B。
-  A 的「各覆盖 min(2, n) 组」是 2026-10-23 的放宽：原口径要求两段各自覆盖全部组，
-  三段式在自然文本里几乎不可能到线（同一段很少同时出现三个名词组）。
 
-换词顺序（方案 B2.5-方案.md）：
-  1 名词集          2 全词集
-  3 名词 + 概念表同义组（能解析到概念键时）
-  4 全词 + 宽词组     （只在 --broad 或计划显式给出时）
-  5 去掉最泛的一个词  （书级 df 最高者）
+换词顺序：
+  1 全词集
+  2 去掉最泛的一个词（书级 df 最高者）
 
 两段：书级排序用本轮词集，选章始终用全词集。最多 5 轮，到线上限记 stop=cap，
 词集用尽记 stop=exhausted，返回质量最好的一轮（见 quality()）。
-
-词性划分：名词 = 概念表命中 + 实体；动作词见 目录/概念表-动作词.tsv。名词集为空时退回全词集。
 
 只读 目录/检索/index.db 与 目录/library.db。
 """
@@ -41,7 +34,6 @@ from dataclasses import asdict, dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import PATHS, L
 
 sys.path.insert(0, HERE)
 import book_readme
@@ -50,53 +42,12 @@ import lib_fts_cjk as cjk
 import qsearch
 import vec_search
 
-ACTIONS = PATHS.concepts_action
-CONCEPTS = PATHS.concepts
-BROAD = PATHS.concepts_broad
 MAX_ROUNDS = 5
 MARGIN = 0.10  # 判据 B 的 10%
 # B6 验收后的默认值。qsearch --book 仍是 mix 旧口径，不在这里。
 DEFAULTS = {"book_score": "best_support", "cards": True, "expand_on_demand": False, "max_rounds": MAX_ROUNDS}
 MIN_CHARS = 40
 POOL = 2000
-
-
-def read_table(which="main"):
-    """概念表 → {key: {aliases, exclude}}。which='broad' 读宽词层。"""
-    out = {}
-    for row in L.concept_rows("broad" if which == "broad" else "main"):
-        key = (row.get("key") or "").strip()
-        if not key:
-            continue
-        aliases = [a.strip() for a in L.split_aliases(row.get("aliases", ""))]
-        exclude = [a.strip() for a in L.split_exclude(row.get("exclude", ""))]
-        out[key] = {"aliases": aliases, "exclude": exclude}
-    return out
-
-
-def load_actions(path=None):
-    del path
-    return {w["term"] for w in L.action_word_rows() if (w.get("term") or "").strip()}
-
-
-def split_terms(terms, actions):
-    """名词集 = 全词集去掉动作词。全被去掉时退回全词集。"""
-    nouns = [t for t in terms if t not in actions]
-    return nouns if nouns else list(terms)
-
-
-def resolve(term, concepts):
-    """认概念键：只认键与别名精确相等。
-
-    不做子串包含：主表里「爱」会被包含关系认成「自由邦」、「人」认成「他人即地狱」、
-    「幸福」认成「功利主义」、「政治」认成「承认」。那是查询期扩词的噪声源。
-    """
-    if term in concepts:
-        return term
-    for key, rec in concepts.items():
-        if term in rec["aliases"]:
-            return key
-    return None
 
 
 def dedup(seq):
@@ -203,9 +154,6 @@ class Planner:
         con,
         meta=None,
         expand=None,
-        actions=None,
-        concepts=None,
-        broad=None,
         scheme="best_support",
         pool=POOL,
         min_chars=MIN_CHARS,
@@ -219,10 +167,6 @@ class Planner:
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
         self.expand = book_score.load_expand(con) if expand is None else expand
-        # Plan A：在线默认不再隐式注入概念表、宽词表与动作词；仅显式入参或 CLI --concept/--broad 使用
-        self.actions = set() if actions is None else set(actions)
-        self.concepts = {} if concepts is None else concepts
-        self.broad = {} if broad is None else broad
         self.scheme = scheme
         self.pool = pool
         self.min_chars = min_chars
@@ -302,29 +246,14 @@ class Planner:
         )
 
     # ---- 换词 -------------------------------------------------------
-    def term_sets(self, terms, nouns, allow_broad):
-        """按方案顺序给出 (kind, query_terms, coverage_groups)，第 5 轮延迟生成。"""
-        keys = dedup([k for k in (resolve(t, self.concepts) for t in nouns) if k])
-        syn = []
-        for key in keys:
-            syn.extend([key] + self.concepts[key]["aliases"])
-        broad = []
-        if allow_broad:
-            bkeys = dedup([k for k in (resolve(t, self.broad) for t in terms) if k])
-            for key in bkeys:
-                broad.extend([key] + self.broad[key]["aliases"])
-        yield "noun", nouns, nouns
-        yield "full", list(terms), nouns
-        if [t for t in syn if t not in nouns]:
-            yield "noun+concept", dedup(nouns + syn), nouns
-        if broad:
-            yield "full+broad", dedup(list(terms) + broad), nouns
+    def term_sets(self, terms):
+        """给出 (kind, query_terms, coverage_groups)：先全词检索，不够好再去掉最泛一词。"""
+        yield "full", list(terms), list(terms)
         if len(terms) > 1:
             dfs = [(self.df(t), i, t) for i, t in enumerate(terms)]
             drop = max(dfs, key=lambda x: (x[0][0], x[0][1], x[1]))[2]
             rest = [t for t in terms if t != drop]
-            groups = [t for t in nouns if t in rest] or rest
-            yield "drop-generic", rest, groups
+            yield "drop-generic", rest, rest
 
     def _vec_search(self, query_text):
         if self._vec_fn is not None:
@@ -351,7 +280,6 @@ class Planner:
     def plan(
         self,
         terms,
-        broad=False,
         max_rounds=MAX_ROUNDS,
         chapters=True,
         chapter_selector="score",
@@ -361,12 +289,10 @@ class Planner:
     ):
         t0 = time.time()
         terms = dedup(terms)
-        nouns = split_terms(terms, self.actions)
-        dropped = [t for t in terms if t not in nouns]
         query_text = (question or "").strip() or " ".join(terms)
-        res = Plan(query=",".join(terms), terms=terms, nouns=nouns, action_dropped=dropped)
+        res = Plan(query=",".join(terms), terms=terms, nouns=list(terms), action_dropped=[])
         seen = set()
-        for kind, qterms, groups in self.term_sets(terms, nouns, broad):
+        for kind, qterms, groups in self.term_sets(terms):
             if len(res.rounds) >= max_rounds:
                 break
             key = tuple(dedup(qterms))
@@ -693,7 +619,6 @@ def pin_focus(
 def run(
     terms,
     con=None,
-    broad=False,
     scheme="best_support",
     limit=10,
     max_chapters=3,
@@ -709,7 +634,6 @@ def run(
         p = planner or Planner(con, scheme=scheme, limit=limit)
         return p.plan(
             terms,
-            broad=broad,
             chapters=True,
             chapter_selector=chapter_selector,
             max_chapters=max_chapters,
@@ -723,8 +647,7 @@ def run(
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("query", nargs="*")
-    ap.add_argument("--concept")
+    ap.add_argument("query", nargs="+")
     ap.add_argument("-n", "--limit", type=int, default=5)
     ap.add_argument("--max-chapters", type=int, default=3)
     ap.add_argument(
@@ -744,7 +667,6 @@ def main(argv=None):
         default=DEFAULTS["expand_on_demand"],
         help="选中后跑 B4 按需扩展（默认关，会调模型）",
     )
-    ap.add_argument("--broad", action="store_true", help="第 4 轮加宽词组（默认不给）")
     ap.add_argument(
         "--max-rounds", type=int, default=DEFAULTS["max_rounds"], help="最多几轮（默认 %d）" % DEFAULTS["max_rounds"]
     )
@@ -752,26 +674,11 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--explain", action="store_true")
     a = ap.parse_args(argv)
-    exclude = []
-    if a.concept:
-        groups, exclude = qsearch.load_concept(a.concept)
-        terms = groups
-    elif a.query:
-        terms = cjk.split_groups(" ".join(a.query))
-    else:
-        ap.error("要给查询词或 --concept")
+    terms = cjk.split_groups(" ".join(a.query))
     con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
-    p = Planner(
-        con,
-        scheme=a.book_score,
-        limit=a.limit,
-        exclude=exclude,
-        broad=read_table("broad") if a.broad else None,
-    )
+    p = Planner(con, scheme=a.book_score, limit=a.limit)
     question = a.question or " ".join(terms)
-    res = p.plan(
-        terms, broad=a.broad, max_rounds=a.max_rounds, chapter_selector=a.chapter_selector, max_chapters=a.max_chapters
-    )
+    res = p.plan(terms, max_rounds=a.max_rounds, chapter_selector=a.chapter_selector, max_chapters=a.max_chapters)
     cardset = None
     if a.cards:
         import book_cards

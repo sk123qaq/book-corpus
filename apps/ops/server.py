@@ -859,16 +859,15 @@ MAINTAIN_STEPS = {
         "args": ["--emit-json"],
         "marker": r'"conflicts":\s*0',
     },
-    "index": {"label": "检索索引", "script": "build_para_index.py", "args": ["--rebuild", "--concepts"]},
-    "topics": {"label": "主题软链", "script": "build_views.py", "args": ["--only", "topics"]},
-    "awards": {"label": "奖项软链", "script": "build_views.py", "args": ["--only", "awards"]},
+    "index": {"label": "检索索引", "script": "build_para_index.py", "args": ["--rebuild"]},
+    "awards": {"label": "奖项软链", "script": "build_views.py", "args": []},
     "audit": {"label": "深审计", "script": "audit_state.py", "args": ["--deep"], "marker": r"FAIL 0 项"},
     "verify": {"label": "四箱验收", "script": "verify_phase.py", "args": [], "marker": r"(?m)^全过：\d+ 项\s*$"},
     "catalog": {"label": "书目总表", "script": "gen_book_catalog.py", "args": [], "marker": r"未匹配 0 条"},
     "doc": {"label": "阅读版 html", "script": "build_index.py", "args": []},
 }
-MAINTAIN_ORDER = ("db", "index", "topics", "awards", "audit", "verify", "catalog", "doc")
-FINISH_DEFAULT = ("db", "index", "topics", "awards", "audit", "verify", "catalog")
+MAINTAIN_ORDER = ("db", "index", "awards", "audit", "verify", "catalog", "doc")
+FINISH_DEFAULT = ("db", "index", "awards", "audit", "verify", "catalog")
 
 
 def rebuild_commands(env):
@@ -1465,7 +1464,7 @@ class App:
                     "ok": False,
                 },
                 "library": {"db": None, "ok": False},
-                "views": {"awards": 0, "topics": 0, "broken": 0, "ok": False},
+                "views": {"awards": 0, "broken": 0, "ok": False},
                 "audit": {"fail": 0, "warn": 0, "items": [], "at": None, "ran": False, "stale": False},
                 "ocr": {"remaining_books": 0, "remaining_pages": 0, "quota": "20000/天"},
                 "jobs": {"running": 0, "awaiting_review": 0, "last": None},
@@ -2183,9 +2182,6 @@ class App:
             "ok": True,
             "ledger_db": p if os.path.isfile(p) else None,
             "ledger": LC.categories(root=root),
-            "concepts": LC.concept_rows("main", root=root),
-            "broad": LC.concept_rows("broad", root=root),
-            "actions": LC.action_word_rows(root=root),
         }
         out["ledger"].sort(key=lambda r: r.get("uid") or "")
         return out
@@ -2275,76 +2271,6 @@ class App:
             if rows:
                 LC.category_put_many(rows, updated_by="ops", root=self.env.root)
         return {"ok": True, "confirmed": len(done), "uids": done, "skipped": skipped}
-
-    def ledger_concept_put(self, payload):
-        LC = self._ledger_mod()
-        which = payload.get("which") or "main"
-        if which not in ("main", "broad", "action"):
-            raise ValueError("which 只收 main/broad/action")
-        row = payload.get("row")
-        if not isinstance(row, dict):
-            raise ValueError("row 为空")
-        col = "term" if which == "action" else "key"
-        key = str(row.get(col) or "").strip()
-        if not key:
-            raise ValueError("%s 为空" % col)
-        note = str(row.get("note") or "").strip()
-        aliases = str(row.get("aliases") or "").strip()
-        exclude = str(row.get("exclude") or "").strip()
-        kind = str(row.get("kind") or "").strip()
-        with ledger_lock(self.env):
-            # 写之前先自举账库：fresh 工作区里 ledger.db 不存在时，直接
-            # ledger_connect("rw") 会建个空库，然后 no such table，账表页永久 500
-            LC._ensure_ledger(root=self.env.root, create=True)
-            if which == "action":
-                con = LC.ledger_connect("rw", root=self.env.root)
-                try:
-                    con.execute(
-                        "INSERT INTO 动作词(term,kind,note) VALUES(?,?,?)"
-                        " ON CONFLICT(term) DO UPDATE SET kind=excluded.kind,"
-                        " note=excluded.note",
-                        (key, kind, note),
-                    )
-                    con.commit()
-                finally:
-                    con.close()
-            else:
-                con = LC.ledger_connect("rw", root=self.env.root)
-                table = "概念" if which == "main" else "概念broad"
-                try:
-                    con.execute(
-                        "INSERT INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)"
-                        " ON CONFLICT(key) DO UPDATE SET aliases=excluded.aliases,"
-                        " exclude=excluded.exclude, note=excluded.note" % table,
-                        (key, aliases, exclude, note),
-                    )
-                    con.commit()
-                finally:
-                    con.close()
-        return {"ok": True, "which": which, "key": key}
-
-    def ledger_concept_delete(self, payload):
-        LC = self._ledger_mod()
-        which = payload.get("which") or "main"
-        if which not in ("main", "broad", "action"):
-            raise ValueError("which 只收 main/broad/action")
-        col = "term" if which == "action" else "key"
-        key = str(payload.get("key") or "").strip()
-        if not key:
-            raise ValueError("%s 为空" % col)
-        with ledger_lock(self.env):
-            LC._ensure_ledger(root=self.env.root, create=True)
-            con = LC.ledger_connect("rw", root=self.env.root)
-            try:
-                table = {"main": "概念", "broad": "概念broad", "action": "动作词"}[which]
-                n = con.execute(
-                    "DELETE FROM %s WHERE %s=?" % (table, col),  # noqa: S608 table/col 取自本函数的常量映射
-                    (key,),
-                ).rowcount
-                con.commit()
-            finally:
-                con.close()
-        return {"ok": True, "deleted": n}
 
     def _retired(self, uid):
         batch_root = os.path.join(self.env.batches)
@@ -2794,8 +2720,6 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/ledger/row": lambda: self.send_json(200, self.app.ledger_row_put(payload)),
                 "/api/ledger/rows/delete": lambda: self.send_json(200, self.app.ledger_rows_delete(payload)),
                 "/api/ledger/rows/confirm": lambda: self.send_json(200, self.app.ledger_rows_confirm(payload)),
-                "/api/ledger/concept": lambda: self.send_json(200, self.app.ledger_concept_put(payload)),
-                "/api/ledger/concept/delete": lambda: self.send_json(200, self.app.ledger_concept_delete(payload)),
             }.get(route)
             if handler:
                 if route in WRITE_ROUTES:
@@ -3727,8 +3651,6 @@ WRITE_ROUTES = (
     "/api/ledger/row",
     "/api/ledger/rows/delete",
     "/api/ledger/rows/confirm",
-    "/api/ledger/concept",
-    "/api/ledger/concept/delete",
 )
 PDF_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 

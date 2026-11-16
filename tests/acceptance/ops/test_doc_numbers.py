@@ -4,7 +4,7 @@
   python3 tests/acceptance/ops/test_doc_numbers.py     # 末行 ALL PASS
 
 fixture 六本书：两本有 md，四本待拆章（pdf/txt/docx/azw3 各一），奖项记录两条、奖项名一个，
-视图软链三条（奖项两条、主题一条）。全部读写都在 tempfile 里，真 AGENTS.md 只记指纹不写。
+奖项视图软链两条。全部读写都在 tempfile 里，真 AGENTS.md 只记指纹不写。
 """
 
 import datetime
@@ -57,8 +57,6 @@ CREATE VIEW v_pending_md AS
 INDEX_SCHEMA = """
 CREATE TABLE para(id INTEGER PRIMARY KEY, path TEXT NOT NULL, book TEXT NOT NULL,
   line INTEGER NOT NULL, chars INTEGER NOT NULL, tok TEXT NOT NULL, text TEXT NOT NULL);
-CREATE TABLE book_concept(book TEXT NOT NULL, key TEXT NOT NULL, hits INTEGER NOT NULL,
-  book_chars INTEGER NOT NULL, score REAL NOT NULL, PRIMARY KEY(book, key));
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE expand(path TEXT, kind TEXT, tok TEXT, text TEXT, model TEXT,
   prompt_hash TEXT, tokens_in INT, tokens_out INT, built_at TEXT);
@@ -89,15 +87,15 @@ SPEC_COUNTS = {
     "pending": {"pdf": 125, "txt": 5, "docx": 2, "other": 0},
     "awards": 1009,
     "award_names": 10,
-    "view_total": 2066,
-    "view": {"奖项": 1009, "主题": 1057},
+    "view_total": 1009,
+    "view": {"奖项": 1009},
     "pitfall_classes": 7,
     "as_of": "2026-10-26",
 }
 SPEC_BLOCK = (
     "<!-- numbers:start -->\n"
     "As of 2026-10-26：1,779 本书，1,647 本有 md，132 本待拆章（125 pdf、5 txt、2 docx）；"
-    "1,009 条奖项记录，视图 2,066 条软链（奖项 1,009、主题 1,057）；坑账 7 类。\n"
+    "1,009 条奖项记录，视图 1,009 条奖项软链；坑账 7 类。\n"
     "<!-- numbers:end -->"
 )
 
@@ -200,7 +198,7 @@ def build_root(root):
     idx.close()
 
     views = os.path.join(root, "build", "views")
-    for sub, name, uid in (("奖项", "测试奖", "B0001"), ("奖项", "测试奖", "B0002"), ("主题", "测试主题", "B0001")):
+    for sub, name, uid in (("奖项", "测试奖", "B0001"), ("奖项", "测试奖", "B0002")):
         target = os.path.join(views, sub, name, uid)
         os.makedirs(os.path.dirname(target), exist_ok=True)
         os.symlink(os.path.join("..", "..", "..", "..", "books", uid), target)
@@ -226,7 +224,7 @@ def unit_checks():
     check("render 逐字等于约定的块", doc_numbers.render(SPEC_COUNTS) == SPEC_BLOCK, doc_numbers.render(SPEC_COUNTS))
     check(
         "千位分隔符落在每个四位数上",
-        all(s in doc_numbers.render(SPEC_COUNTS) for s in ("1,779", "1,647", "1,009", "2,066", "1,057")),
+        all(s in doc_numbers.render(SPEC_COUNTS) for s in ("1,779", "1,647", "1,009")),
     )
     shuffled = dict(SPEC_COUNTS, pending={"docx": 2, "txt": 5, "other": 0, "pdf": 125})
     check(
@@ -294,8 +292,8 @@ def fixture_checks(root):
     check("待拆章合计 4", counts["pending_total"] == 4, counts["pending_total"])
     check("奖项记录 2 / 奖项名 1", (counts["awards"], counts["award_names"]) == (2, 1), counts)
     check(
-        "视图 奖项 2 / 主题 1 / 合计 3（普通文件不计数）",
-        (counts["view"], counts["view_total"]) == ({"奖项": 2, "主题": 1}, 3),
+        "视图 奖项 2 / 合计 2（普通文件不计数）",
+        (counts["view"], counts["view_total"]) == ({"奖项": 2}, 2),
         counts["view"],
     )
     check("坑账按 ^## [A-Z] 类 数到 2（「已知未修」不算）", counts["pitfall_classes"] == 2, counts["pitfall_classes"])

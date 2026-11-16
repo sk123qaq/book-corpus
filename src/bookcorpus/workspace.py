@@ -108,14 +108,6 @@ def check(root, version="0.1.0"):
     except SystemExit as exc:
         add("fail", "人账", str(exc))
 
-    try:
-        from .scripts import lib_common as LC
-
-        n = len(LC.concept_rows(root=str(root)))
-        add("ok" if n else "warn", "概念表", "ledger.db 概念 %d 条" % n)
-    except (OSError, sqlite3.Error) as exc:
-        add("fail", "概念表", "%s" % exc)
-
     books = 0
     for dirpath, dirnames, filenames in os.walk(paths.books):
         dirnames[:] = [d for d in dirnames if not (dirpath == paths.books and d in L.RESERVED)]

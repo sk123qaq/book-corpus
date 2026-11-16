@@ -37,7 +37,7 @@ genre = book_score.genre
 
 
 def collect(con, key, depth=2000):
-    groups, exclude = qsearch.load_concept(key)
+    groups, exclude = cjk.split_groups(key), []
     expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
     hits, ms = qsearch.search(con, expr, groups, exclude, depth, 40, False, depth)
     return hits, groups, exclude, ms
@@ -45,20 +45,16 @@ def collect(con, key, depth=2000):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("concepts", nargs="*", help="概念键，默认 自由 内卷 规训 异化 荒诞")
+    ap.add_argument("concepts", nargs="*", help="查询词，默认 自由 内卷 规训 异化 荒诞")
     ap.add_argument(
-        "--depth", type=int, default=2000, help="每个概念取多少段进打分，默认 2000（与 qsearch --book 同口径）"
+        "--depth", type=int, default=2000, help="每个词取多少段进打分，默认 2000（与 qsearch --book 同口径）"
     )
     a = ap.parse_args()
     concepts = a.concepts or ["自由", "内卷", "规训", "异化", "荒诞"]
     con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True)
     meta = book_score.load_meta(LIBDB)
     expand = book_score.load_expand(con)
-    keys = {r[0] for r in con.execute("SELECT DISTINCT key FROM book_concept")}
-    missing = [k for k in concepts if k not in keys]
-    if missing:
-        print("概念表或索引里没有这些键，跳过：%s" % " ".join(missing))
-    for key in [k for k in concepts if k in keys]:
+    for key in concepts:
         hits, groups, exclude, ms = collect(con, key, a.depth)
         print("\n" + "=" * 78)
         print("概念 %s  %d 段候选  %.0f ms" % (key, len(hits), ms))

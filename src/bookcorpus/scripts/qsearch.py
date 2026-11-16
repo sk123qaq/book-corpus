@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """词法检索：段落倒排 + 组覆盖度重排，书级聚合。
 
-  qsearch.py 自由 -n 20
-  qsearch.py --concept 自由 -n 20
-  qsearch.py 自由 --book -n 20
-  qsearch.py 自由 --json
-
-概念模式把 tables/ledger.db 概念表的同义词当 OR 组展开，排除词只在重排时扣分，不在召回时过滤。
+qsearch.py 自由 -n 20
+qsearch.py 自由 --book -n 20
+qsearch.py 自由 --json
 """
 
 import argparse
@@ -20,39 +17,12 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import PATHS, L
+from lib_common import PATHS
 
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 
 DB = PATHS.index_db
-CONCEPTS = PATHS.concepts
-
-
-def all_concepts():
-    return {r["key"]: L.split_aliases(r["aliases"]) for r in L.concept_rows()}
-
-
-def resolve(text):
-    """把用户打的词认成概念键：键精确 > 别名精确 > 最长的别名包含关系。"""
-    table = all_concepts()
-    if text in table:
-        return text
-    best = None
-    for key, aliases in table.items():
-        for al in aliases:
-            if al == text:
-                return key
-            if len(al) >= 2 and (al in text or text in al) and (best is None or len(al) > len(best[1])):
-                best = (key, al)
-    return best[0] if best else None
-
-
-def load_concept(key):
-    for r in L.concept_rows():
-        if r["key"] == key:
-            return [key, *L.split_aliases(r["aliases"])], L.split_exclude(r.get("exclude", ""))
-    sys.exit("概念表里没有 " + key)
 
 
 ASCII_ALPHA = re.compile(r"[A-Za-z]")
@@ -220,9 +190,7 @@ def rollup_by_book(cand, con, limit, mode="mix"):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("query", nargs="?")
-    ap.add_argument("--concept")
-    ap.add_argument("--auto-concept", action="store_true", help="把查询词认成概念键再展开")
+    ap.add_argument("query")
     ap.add_argument("-n", "--limit", type=int, default=20)
     ap.add_argument("--book", action="store_true")
     ap.add_argument(
@@ -235,39 +203,15 @@ def main():
     ap.add_argument("--expand", action="store_true", help="并上 build/检索/expand 的扩展文本档")
     ap.add_argument("--expand-kind", default="both", choices=["both", "prefix", "queries"])
     ap.add_argument("--rerank", action="store_true", help="加模型无关的定义式/引号/卷首页特征")
-    ap.add_argument(
-        "--route-mode",
-        default="append",
-        choices=["append", "rrf"],
-        help="默认 append，保留基底前 10 名再把路由结果接在后面；rrf 为等权融合",
-    )
-    ap.add_argument(
-        "--route", action="store_true", help="模型把问句路由到概念表 3 个键，再与段落档等权 RRF（需联网，结果有缓存）"
-    )
     ap.add_argument("--pool", default="medium", help="取多少段进打分：low=400 / medium=2000 / all=不限 / 也可给数字")
     ap.add_argument("--min-chars", type=int, default=40)
     ap.add_argument("--db", default=DB)
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--no-exclude", action="store_true")
     a = ap.parse_args()
-    if not (a.query or a.concept):
-        ap.error("要给查询词或 --concept")
-    if not a.concept and a.auto_concept and a.query:
-        key = resolve(a.query.strip())
-        if key:
-            print("查询词认成概念 %s" % key, file=sys.stderr)
-            a.concept = key
-    if a.concept:
-        groups, exclude = load_concept(a.concept)
-        if a.no_exclude:
-            exclude = []
-        expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
-        label = a.concept
-    else:
-        groups = cjk.split_groups(a.query)
-        exclude = []
-        expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
-        label = a.query
+    groups = cjk.split_groups(a.query)
+    exclude = []
+    expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
+    label = a.query
     con = sqlite3.connect("file:%s?mode=ro" % a.db, uri=True)
     pool = {"low": 400, "medium": 2000, "all": 0}.get(a.pool)
     if pool is None:
@@ -278,51 +222,6 @@ def main():
     hits, ms = search(
         con, expr, groups, exclude, max(a.limit, 2000) if a.book else a.limit, a.min_chars, a.rerank, pool
     )
-    if a.route and a.book:
-        print("--book 是书级聚合，不支持问句路由；本次忽略 --route", file=sys.stderr)
-    if a.route and not a.book:
-        try:
-            import concept_route
-
-            keys = concept_route.route(a.query or label)
-            second, ms2 = concept_route.search_keys(con, keys, 200, a.min_chars, pool=pool)
-        except Exception as exc:
-            print("路由失败，退回段落档: %s" % exc, file=sys.stderr)
-            keys, second = [], []
-        if second and a.route_mode == "append":
-            head = max(1, min(10, a.limit // 2))
-            base = hits
-            seen, out = set(), []
-            for r in base[:head]:
-                seen.add(r["path"])
-                out.append(r)
-            for r in second:
-                if len(out) >= a.limit:
-                    break
-                if r["path"] not in seen:
-                    seen.add(r["path"])
-                    out.append(r)
-            for r in base[head:]:
-                if len(out) >= a.limit:
-                    break
-                if r["path"] not in seen:
-                    seen.add(r["path"])
-                    out.append(r)
-            hits = out
-        elif second:
-            base = hits
-            order, scores = fuse(base, second)
-            best = {r["path"]: r for r in reversed(base)}
-            best.update({r["path"]: r for r in reversed(second)})
-            hits = []
-            for pth in order[: a.limit]:
-                r = dict(
-                    best.get(pth)
-                    or {"path": pth, "line": 0, "text": "", "book": pth.split("/md/")[0][2:], "coverage": 0}
-                )
-                r["score"] = round(scores[pth], 6)
-                hits.append(r)
-            ms += ms2
     if a.expand:
         exp = search_expand(con, expr, a.expand_kind, max(400, pool) if pool > 0 else -1)
         order, scores = fuse(hits, exp)

@@ -447,14 +447,6 @@ CREATE TABLE IF NOT EXISTS 分类(
   正式书名 TEXT NOT NULL DEFAULT '',
   备注 TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT '');
-CREATE TABLE IF NOT EXISTS 概念(
-  key TEXT PRIMARY KEY, aliases TEXT NOT NULL DEFAULT '',
-  exclude TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '');
-CREATE TABLE IF NOT EXISTS 概念broad(
-  key TEXT PRIMARY KEY, aliases TEXT NOT NULL DEFAULT '',
-  exclude TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '');
-CREATE TABLE IF NOT EXISTS 动作词(
-  term TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS ledger_meta(
   key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');
 """
@@ -582,10 +574,7 @@ def _ensure_ledger(root=None, create=False):
         return False
     tables = os.path.dirname(ledger_path(root))
     cat_csv = os.path.join(tables, "分类表.csv")
-    concepts_csv = os.path.join(tables, "概念表.tsv")
-    broad_csv = os.path.join(tables, "概念表-broad.tsv")
-    action_csv = os.path.join(tables, "概念表-动作词.tsv")
-    if not (os.path.isfile(cat_csv) or os.path.isfile(concepts_csv)):
+    if not os.path.isfile(cat_csv):
         # 没有种子可导：空 schema 就够了（init 后的全新工作区走这里）
         return True
     try:
@@ -607,17 +596,6 @@ def _ensure_ledger(root=None, create=False):
                         now,
                     ),
                 )
-            for table, path in (("概念", concepts_csv), ("概念broad", broad_csv)):
-                for row in read_tsv(path):
-                    con.execute(
-                        "INSERT OR IGNORE INTO %s(key,aliases,exclude,note) VALUES(?,?,?,?)" % table,
-                        (row.get("key", ""), row.get("aliases", ""), row.get("exclude", ""), row.get("note", "")),
-                    )
-            for row in read_tsv(action_csv):
-                con.execute(
-                    "INSERT OR IGNORE INTO 动作词(term,kind,note) VALUES(?,?,?)",
-                    (row.get("term", ""), row.get("kind", ""), row.get("note", "")),
-                )
             con.execute("INSERT OR REPLACE INTO ledger_meta VALUES('imported_from', ?)", (now,))
             con.commit()
         finally:
@@ -626,16 +604,6 @@ def _ensure_ledger(root=None, create=False):
     except (OSError, sqlite3.Error) as exc:
         sys.stderr.write("ledger.db 自举失败：%r\n" % (exc,))
         return False
-
-
-def split_aliases(text):
-    """aliases 列 → 非空列表。"""
-    return [a for a in (text or "").split(",") if a]
-
-
-def split_exclude(text):
-    """exclude 列 → 排除词列表。空与「无」都不算。"""
-    return [x for x in (text or "").split(",") if x and x != "无"]
 
 
 def categories(root=None, create=False):
@@ -757,43 +725,6 @@ def categories_delete(uids, root=None):
 
 def raise_systemexit_ledger():
     raise SystemExit("tables/ledger.db 建不起来，先查 tables/ 可写性")
-
-
-def concept_rows(which="main", root=None, create=False):
-    """词表行。which='main'|'broad'。退 CSV 的兜底同 categories()。"""
-    if _ensure_ledger(root, create):
-        con = ledger_connect("ro", root)
-        try:
-            sql = "SELECT key,aliases,exclude,note FROM %s ORDER BY key" % (  # noqa: S608 表名只在本模块两张常量表之间二选一
-                "概念" if which == "main" else "概念broad"
-            )
-            return [dict(r) for r in con.execute(sql)]
-        finally:
-            con.close()
-    tables = os.path.dirname(ledger_path(root))
-    src = os.path.join(tables, "概念表.tsv" if which == "main" else "概念表-broad.tsv")
-    return read_tsv(src)
-
-
-def concept_fingerprint(which="main", root=None, create=False):
-    """词表内容指纹（进缓存键）。按行文规整后哈希，同一内容换引擎不换键。"""
-    parts = []
-    for row in concept_rows(which, root, create):
-        parts.append(
-            "%s|%s|%s|%s" % (row.get("key", ""), row.get("aliases", ""), row.get("exclude", ""), row.get("note", ""))
-        )
-    blob = "\n".join(parts).encode("utf-8")
-    return hashlib.sha256(blob).hexdigest()[:8]
-
-
-def action_word_rows(root=None, create=False):
-    if _ensure_ledger(root, create):
-        con = ledger_connect("ro", root)
-        try:
-            return [dict(r) for r in con.execute("SELECT term,kind,note FROM 动作词 ORDER BY term")]
-        finally:
-            con.close()
-    return read_tsv(os.path.join(os.path.dirname(ledger_path(root)), "概念表-动作词.tsv"))
 
 
 def path_safe(s):

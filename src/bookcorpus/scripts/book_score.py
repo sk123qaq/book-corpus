@@ -227,8 +227,7 @@ def snippet(text):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("query", nargs="?")
-    ap.add_argument("--concept")
+    ap.add_argument("query")
     ap.add_argument("-n", "--limit", type=int, default=10)
     ap.add_argument("--book-score", default="best_support", choices=list(SCHEMES))
     ap.add_argument("--pool", default="2000", help="取多少段进打分：low=400 / medium=2000 / all=不限 / 整数")
@@ -238,15 +237,9 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--explain", action="store_true")
     a = ap.parse_args(argv)
-    if not (a.query or a.concept):
-        ap.error("要给查询词或 --concept")
-    if a.concept:
-        groups, exclude = qsearch.load_concept(a.concept)
-        label = a.concept
-    else:
-        groups = cjk.split_groups(a.query)
-        exclude = []
-        label = a.query
+    groups = cjk.split_groups(a.query)
+    exclude = []
+    label = a.query
     expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
     try:
         pool = parse_pool(a.pool)

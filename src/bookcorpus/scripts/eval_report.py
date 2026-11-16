@@ -58,14 +58,14 @@ def main():
     labels = {
         "A": "A `grep -rlF`",
         "B": "B `rg -l -F`",
-        "C": "C `defpass --concept`",
-        "D": "D 近义词组 grep",
+        "C": "C `defpass`",
+        "D": "D 扩展组 grep",
         "E": "E FTS bigram + 覆盖度（P1）",
-        "F": "F 概念表档（P1，概念键按 gold 给）",
+        "F": "F 历史概念表档",
         "G": "G E + 文档扩展档（P1.5）",
         "H": "H E + 伪查询档（P1.5）",
         "K": "K 查询侧扩展（query_expand）",
-        "L": "L 问句路由（concept_route）",
+        "L": "L 历史问句路由档",
         "M": "M 路由与段落档降合（路 E）",
     }
     all_keys = ("A", "B", "C", "D", "E", "F", "G", "H", "K", "L", "M")

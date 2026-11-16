@@ -242,16 +242,10 @@ def search(con, terms, exclude=(), pool=2000):
     return qsearch.search(con, expr, terms, list(exclude), 2000, 40, False, pool)
 
 
-def run(
-    query, con, meta, expand, scheme="best_support", concept=None, limit=10, max_chapters=3, pool=2000, title_weight=0.0
-):
-    if concept:
-        groups, exclude = qsearch.load_concept(concept)
-        label = concept
-    else:
-        groups = cjk.split_groups(query)
-        exclude = []
-        label = query
+def run(query, con, meta, expand, scheme="best_support", limit=10, max_chapters=3, pool=2000, title_weight=0.0):
+    groups = cjk.split_groups(query)
+    exclude = []
+    label = query
     hits, ms = search(con, groups, exclude, pool)
     ranked = book_score.rank(hits, groups, scheme, exclude, meta, expand)
     out = []
@@ -276,8 +270,7 @@ def run(
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("query", nargs="?")
-    ap.add_argument("--concept")
+    ap.add_argument("query")
     ap.add_argument("-n", "--limit", type=int, default=10)
     ap.add_argument("--max-chapters", type=int, default=3)
     ap.add_argument("--book-score", default="best_support", choices=list(book_score.SCHEMES))
@@ -288,12 +281,10 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--explain", action="store_true")
     a = ap.parse_args(argv)
-    if not (a.query or a.concept):
-        ap.error("要给查询词或 --concept")
     con = sqlite3.connect("file:%s?mode=ro" % a.db, uri=True)
     meta = book_score.load_meta(a.libdb)
     expand = book_score.load_expand(con)
-    res = run(a.query, con, meta, expand, a.book_score, a.concept, a.limit, a.max_chapters, a.pool, a.title_weight)
+    res = run(a.query, con, meta, expand, a.book_score, a.limit, a.max_chapters, a.pool, a.title_weight)
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return 0

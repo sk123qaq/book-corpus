@@ -58,13 +58,9 @@ book-corpus run lq -H "SELECT uid,title,author,path FROM book WHERE title LIKE '
 ```bash
 cd "$BOOKS_ROOT"
 book-corpus search '<用户会打的词>' -n 20          # 段落倒排，按相关度排序
-book-corpus search --concept <概念键> -n 20         # 同义词组展开，键在 tables/概念表.tsv
-book-corpus search '<词>' --auto-concept -n 20      # 把打的词认成概念键（如 过密化 → 内卷）
-book-corpus search --concept <概念键> --book -n 20  # 书级路由：「哪本书讲 X」先看这个
-book-corpus search '<词>' --route -n 20              # 同上，但让模型先把词认成 3 个概念键再查
+book-corpus search '<词1 词2>' --book -n 20          # 书级聚合：「哪本书讲 X」
+book-corpus query '<完整问题>'                       # 书级默认入口：5 轮词法循环 + 书卡
 ```
-
-`--route` 的使用前提很窄：先把问句里的词跟 `tables/概念表.tsv` 对一遍，表里确实有讲这个话题的键时才加 `--route`。表里没有的时候它会硬挑三个不相干的键，把正确答案挤出前 20，比不加还差。拿不准就先不加，跑一遍看结果里是不是真有那个概念的段落。
 
 用法边界：检索层只用来找材料和排候选，**它不是证据**。命中行必须回章节 md 用 `grep -nF` 复核后再引用。问法里一个原文词都没有时，别指望检索层，回到 S1 按书挑。
 

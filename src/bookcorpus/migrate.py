@@ -20,9 +20,6 @@ from .scripts import lib_common as L
 
 TABLE_MEMBERS = (
     "分类表.csv",
-    "概念表.tsv",
-    "概念表-broad.tsv",
-    "概念表-动作词.tsv",
     "书目录清单.csv",
     "对照表.csv",
     "搬迁计划.csv",

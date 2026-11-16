@@ -280,8 +280,7 @@ import json, sys
 print(json.dumps({"at": "2026-10-24T23:00:00+08:00", "books": 42, "md_done": 41,
                   "pending": {"pdf": 1, "txt": 0, "djvu": 0},
                   "inbox": {"files": 0, "items": []},
-                  "index": {"lag_books": 2}, "views": {"awards": 0, "topics": 0,
-                                                       "broken": 0},
+                  "index": {"lag_books": 2}, "views": {"awards": 0, "broken": 0},
                   "audit": {"fail": 0, "warn": 0, "items": []},
                   "ocr": {"remaining_books": 0, "remaining_pages": 0},
                   "ledger": {"rows": 42}, "catalog": {"unmatched": 0}}))
@@ -321,7 +320,7 @@ FIXTURE_STATUS = {
         "lag_books": 3,
         "lag_chapters": 9,
     },
-    "views": {"awards": 2, "topics": 3, "broken": 0},
+    "views": {"awards": 2, "broken": 0},
     "audit": {
         "fail": 0,
         "warn": 2,
@@ -342,7 +341,6 @@ def build_root():
         "tables",
         "books/_收件箱",
         "build/views/奖项",
-        "build/views/主题",
         "build/检索",
     ):
         os.makedirs(os.path.join(root, rel), exist_ok=True)

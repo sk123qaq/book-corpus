@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""建 目录/检索/index.db：段落倒排（CJK bigram FTS5）+ 概念剖面。零第三方依赖。
+"""建 目录/检索/index.db：段落倒排（CJK bigram FTS5）。零第三方依赖。
 
-  build_para_index.py --rebuild                 # 全库重建，40-70 min；顺带重算概念剖面
+  build_para_index.py --rebuild                 # 全库重建，40-70 min
   build_para_index.py --rebuild --limit-books 20
-  build_para_index.py --concepts                # 只补 book_concept 剖面
 
 索引只读 库/。重建用内容表 para 存原文，FTS 用 external content 只存索引。
 """
@@ -16,14 +15,13 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import PATHS, ROOT, L
+from lib_common import PATHS, ROOT
 
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 from defpass import paragraphs
 
 DB = PATHS.index_db
-CONCEPTS = PATHS.concepts
 CORPUS = PATHS.books
 SNAP = os.path.join(ROOT, "工作区", "中间态", "index-expand-snapshot.db")
 os.makedirs(os.path.dirname(SNAP), exist_ok=True)
@@ -36,9 +34,6 @@ CREATE TABLE para(
   line INTEGER NOT NULL, chars INTEGER NOT NULL, tok TEXT NOT NULL, text TEXT NOT NULL);
 CREATE VIRTUAL TABLE para_fts USING fts5(
   tok, content='para', content_rowid='id', tokenize="unicode61 remove_diacritics 0");
-CREATE TABLE book_concept(
-  book TEXT NOT NULL, key TEXT NOT NULL, hits INTEGER NOT NULL,
-  book_chars INTEGER NOT NULL, score REAL NOT NULL, PRIMARY KEY(book, key)) WITHOUT ROWID;
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -55,13 +50,6 @@ def chapters(limit_books=0):
             books.append((book, [os.path.join(dirpath, f) for f in files]))
     books.sort()
     return books[:limit_books] if limit_books else books
-
-
-def read_concepts():
-    out = []
-    for r in L.concept_rows():
-        out.append((r["key"], [r["key"], *L.split_aliases(r["aliases"])]))
-    return out
 
 
 def snapshot_expand(db, snap=SNAP):
@@ -201,50 +189,15 @@ def build(db, limit_books=0, keep=False):
     return con
 
 
-def build_concepts(con):
-    con.execute("DELETE FROM book_concept")  # 全量重算，概念表删键后不留孤儿
-    t0 = time.time()
-    concepts = read_concepts()
-    book_chars = dict(con.execute("SELECT book, sum(chars) FROM para GROUP BY book").fetchall())
-    per = {}
-    for key, aliases in concepts:
-        hits = {}
-        for alias in aliases:
-            expr = cjk.query_expr(alias)
-            if not expr:
-                continue
-            for book, n in con.execute(
-                "SELECT p.book, count(*) FROM para_fts f JOIN para p ON p.id=f.rowid "
-                "WHERE para_fts MATCH ? GROUP BY p.book",
-                (expr,),
-            ):
-                hits[book] = hits.get(book, 0) + n
-        for book, n in hits.items():
-            per[(book, key)] = n
-    nbooks = len(book_chars)
-    rows = []
-    for (book, key), n in per.items():
-        idf = max(0.0, __import__("math").log(nbooks / max(1, len({b for b, k in per if k == key}))))
-        score = n * idf / (1.0 + __import__("math").log1p(book_chars.get(book, 1)))
-        rows.append((book, key, n, book_chars.get(book, 0), round(score, 6)))
-    con.executemany("INSERT OR REPLACE INTO book_concept VALUES(?,?,?,?,?)", rows)
-    con.commit()
-    print("book_concept %d 条  %.0fs" % (len(rows), time.time() - t0))
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=DB)
     ap.add_argument("--rebuild", action="store_true")
-    ap.add_argument("--concepts", action="store_true")
     ap.add_argument("--limit-books", type=int, default=0)
     a = ap.parse_args()
-    if not (a.rebuild or a.concepts or not os.path.exists(a.db)):
-        ap.error("要 --rebuild 或 --concepts")
-    fresh = a.rebuild or not os.path.exists(a.db)
-    con = build(a.db, a.limit_books) if fresh else sqlite3.connect(a.db)
-    if fresh or a.concepts:
-        build_concepts(con)
+    if not (a.rebuild or not os.path.exists(a.db)):
+        ap.error("要 --rebuild")
+    build(a.db, a.limit_books)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@
 - `ops-import` 新书导入：扫描、计划、执行、上传到 `books/_收件箱/`。
 - `ops-split` 电子书（页签叫「电子书」，不是「电子书出正文」）：拆章计划、逐本状态、批量执行。
 - `ops-pdf` PDF（页签叫「PDF」）：PDF 书目列表、分诊、队列、执行；`pdf-list` 是这一页的隐藏子页签。
-- `ops-maintain` 维护：八个勾选项（索引/主题/奖项/审计/校验/书目/库/阅读版）加一键收尾（默认七步，`doc` 不勾就不跑）。
+- `ops-maintain` 维护：七个勾选项（索引/奖项/审计/校验/书目/库/阅读版）加一键收尾（默认六步，`doc` 不勾就不跑）。
 - `ops-ledger` 账表：人账 `tables/ledger.db` 的浏览与改行。
 - `ops-retire` 删书：dry-run 与 apply 两步；apply 侧还有三道闸（uid 复核、`plan_hash`、勾确认）。
 - `ops-logs` 日志：待确认的批次、取消与重跑。

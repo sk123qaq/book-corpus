@@ -11,7 +11,6 @@ const ALL_TABS = TABS.map(([key]) => key).concat(EXTRA_TABS);
 
 const MAINTAIN_STEPS = [
   ['index', '更新检索索引', '让新章节能被搜到。最花时间。'],
-  ['topics', '刷新主题入口', '重建按主题浏览的链接。'],
   ['awards', '刷新奖项入口', '重建按奖项浏览的链接。'],
   ['audit', '体检', '检查书目、文件与索引是否对得上。'],
   ['verify', '结构验收', '按固定清单检查库的结构是否完整。'],
@@ -19,7 +18,7 @@ const MAINTAIN_STEPS = [
   ['db', '重建书目数据库', '从每本书的记录重算索引库。'],
   ['doc', '重出阅读版页面', '只有阅读版有改动时才需要。'],
 ];
-const FINISH_DEFAULT = ['db', 'index', 'topics', 'awards', 'audit', 'verify', 'catalog'];
+const FINISH_DEFAULT = ['db', 'index', 'awards', 'audit', 'verify', 'catalog'];
 const SETTLE_ROUTES = ['OCR', '本地抽文本', '不转-记图册', '日文暂缓'];
 const JOB_WORD = {
   queued: '排队', running: '在跑', awaiting_review: '待确认', succeeded: '完成',
@@ -309,7 +308,6 @@ function bookCounts() {
     inbox: dig(st, 'inbox.files', 0),
     ledgerRows: dig(st, 'ledger.rows', 0),
     awards: dig(st, 'views.awards', 0),
-    topics: dig(st, 'views.topics', 0),
     broken: dig(st, 'views.broken', 0),
     lagBooks: Math.max(0, lagBooksRaw),
     lagChapters: Math.max(0, lagChaptersRaw),
@@ -482,7 +480,7 @@ function todoItems(c) {
     if (!c.libKnown) lack.push('build/library.db');
     if (!c.indexKnown) lack.push('检索索引');
     if (!c.catalogKnown) lack.push('书目总表');
-    if (!c.viewsKnown) lack.push('浏览入口（奖项/主题）');
+    if (!c.viewsKnown) lack.push('浏览入口（奖项）');
     items.push({
       title: '书库状态不完整',
       note: '缺 ' + lack.join('、') + '，计数和体检都不可信。',
@@ -631,7 +629,7 @@ function pipeline(c) {
         ? '浏览入口缺失'
         : (c.broken
           ? num(c.broken) + ' 条入口失效'
-          : '奖项 ' + num(c.awards) + ' · 主题 ' + num(c.topics)),
+          : '奖项 ' + num(c.awards) + ' 条'),
     },
     {
       name: '出正文', href: c.toConvert ? '#pdf' : '#split',
@@ -1642,7 +1640,7 @@ function viewMaintain() {
           : (statusState() === 'ok' ? '与书库同步' : '没有落后'))))}
         ${stateCell('浏览入口', !c.viewsKnown ? 'miss' : (c.broken ? 'miss' : 'ok'),
     !c.viewsKnown ? '未知' : (c.broken ? '需处理' : '正常'),
-    !c.viewsKnown ? '浏览入口缺失' : (c.broken ? num(c.broken) + ' 条失效' : '奖项与主题都在'))}
+    !c.viewsKnown ? '浏览入口缺失' : (c.broken ? num(c.broken) + ' 条失效' : '奖项入口都在'))}
         ${stateCell('体检', !info.ran ? 'miss'
     : (info.stale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half')))),
     !info.ran ? '未运行'
@@ -1667,11 +1665,11 @@ function viewMaintain() {
     <div class="section card">
       <div class="card-head"><h2>一键收尾</h2>
         <button class="btn primary" data-write data-act="maintain-run-default">开始收尾</button></div>
-      <p class="small">一次跑完七步，大致是这四组动作：</p>
+      <p class="small">一次跑完六步，大致是这四组动作：</p>
       <ul class="next">
         <li>重建书目与总表</li>
         <li>更新检索索引</li>
-        <li>刷新主题与奖项入口</li>
+        <li>刷新奖项入口</li>
         <li>体检与抽查</li>
       </ul>
       <p class="hint">大约 8 分钟，任何一步没过就停在那里，修好后再点一次。</p>
@@ -1803,14 +1801,6 @@ const LEDGER_ROW_FIELDS = [
   ['保留', '保留', 'select'], ['正式书名', '正式书名', ''],
   ['备注', '备注', ''],
 ];
-const LEDGER_DEL = { main: '概念', broad: '宽词', action: '动作词' };
-const LEDGER_CONCEPT_FIELDS = {
-  main: [['key', '键', ''], ['aliases', '同义词（逗号分隔）', ''], ['exclude', '排除词（逗号分隔，「无」表示不排）', ''], ['note', '说明', '']],
-  broad: [['key', '键', ''], ['aliases', '同义词', ''], ['exclude', '排除词', ''], ['note', '说明', '']],
-  // 动作词行没有 key，只认 term（lib_common 的 动作词 表就是 term/kind/note）
-  action: [['term', '词', ''], ['kind', ' 类型（动作/事件…）', ''], ['note', '说明', '']],
-};
-
 const LEDGER_PENDING = '待复核';
 
 function ledgerPending(row) {
@@ -1861,34 +1851,6 @@ function ledgerRowHtml(row) {
   </tr>`;
 }
 
-function ledgerConceptHtml(which, row, force) {
-  const fields = LEDGER_CONCEPT_FIELDS[which];
-  const keyOf = (r) => (which === 'action' ? r.term : r.key);
-  const edit = !!force || (S.ledgerEdit && S.ledgerEdit.type === 'concept'
-    && S.ledgerEdit.which === which && String(S.ledgerEdit.key)
-      === String(keyOf(row) == null ? '' : keyOf(row)));
-  if (!edit) {
-    return `<tr>
-      ${(which === 'action')
-    ? `<td class="num">${esc(row.term)}</td><td>${esc(row.kind)}</td><td class="wrap small">${esc(row.note)}</td>`
-    : `<td class="num">${esc(row.key)}</td><td class="wrap">${esc(row.aliases)}</td><td class="wrap small">${esc(row.exclude)}</td><td class="wrap small">${esc(row.note)}</td>`}
-      <td class="nowrap"><button class="btn sm" data-act="ledger-concept-edit" data-which="${which}" data-key="${esc(keyOf(row) || '')}">改</button>
-        <button class="btn sm miss" data-write data-act="ledger-concept-delete" data-which="${which}" data-key="${esc(keyOf(row) || '')}">删</button></td>
-    </tr>`;
-  }
-  const val = which === 'action'
-    ? { term: row.term || '', kind: row.kind || '', note: row.note || '' }
-    : { key: row.key || '', aliases: row.aliases || '', exclude: row.exclude || '', note: row.note || '' };
-  const isNew = !!(S.ledgerEdit && S.ledgerEdit.isNew);
-  const readonly = (name) => (isNew || !(name === 'key' || name === 'term') ? '' : ' readonly');
-  const inputs = fields.map(([name, label]) =>
-    `<td><input id="led-c-${esc(name)}" value="${esc(val[name] || '')}"${readonly(name)} title="${esc(label.trim())}"></td>`);
-  return `<tr class="editing">${inputs.join('')}
-    <td class="nowrap"><button class="btn sm primary" data-write data-act="ledger-concept-save" data-which="${which}">存</button>
-      <button class="btn sm" data-act="ledger-edit-clear">取消</button></td>
-  </tr>`;
-}
-
 function viewLedger() {
   const L = S.ledger;
   if (!L) {
@@ -1900,29 +1862,6 @@ function viewLedger() {
   const allPicked = pendingRows.length > 0 && picked === pendingRows.length;
   const shown = rows.length !== L.ledger.length
     ? `<p class="hint">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '';
-  const pick = (list, which) => {
-    // 「加一条」没有真行可选：先插一行空的带输入框的表单，不然存按钮读不到 #led-c-*
-    const adding = !!(S.ledgerEdit && S.ledgerEdit.type === 'concept'
-      && S.ledgerEdit.isNew && S.ledgerEdit.which === which);
-    const body = (adding ? [null].concat(list) : list)
-      .map((row) => (row === null
-        ? ledgerConceptHtml(which, {}, true)
-        : ledgerConceptHtml(which, row))).join('');
-    return `
-    <div class="card">
-      <div class="card-head"><h2>${LEDGER_DEL[which]}（${num(list.length)}）</h2>
-        <span class="row tight">
-          <button class="btn sm" data-act="ledger-concept-edit" data-which="${which}" data-key="">加一条</button>
-          <button class="btn sm" data-act="ledger-load">刷新</button></span></div>
-      <div class="tw"><table class="ledger-table">
-        <thead><tr>${which === 'action'
-    ? '<th>词</th><th>类型</th><th>说明</th>'
-    : '<th>键</th><th>同义词</th><th>排除词</th><th>说明</th>'}
-          <th style="width:120px"></th></tr></thead>
-        <tbody>${body}</tbody>
-      </table></div>
-    </div>`;
-  };
   return `
     <h1>账表</h1>
     <div class="list">
@@ -1942,10 +1881,6 @@ function viewLedger() {
         </table></div>
         <p class="hint">编号行是入库给的，加书走「新书导入」；这里改的是已有行——顺序、保留与分类。改完人账，去「维护」跑一次收尾，书目库与总表才会跟上。备注里带「待复核」的行多一个「同意」：点了把这三个字改成「分类确认 日期」，其余照旧；表头「只看待复核」一勾，已确认的行就不在表里了。</p>
       </div>
-      ${pick(L.concepts || [], 'main')}
-      ${pick(L.broad || [], 'broad')}
-      ${pick(L.actions || [], 'action')}
-      <p class="hint">词表改键或加词只影响之后跑的检索与索引；要影响已建剖面，得在「维护」里勾上「更新检索索引」再跑一次。</p>
     </div>`;
 }
 
@@ -2540,49 +2475,6 @@ const actions = {
     try {
       const body = await post('/api/ledger/rows/delete', { uids: [uid] });
       toast('删了 ' + (body.deleted || 0) + ' 行');
-      await loadLedger();
-      render();
-    } finally {
-      setBusy(false);
-    }
-  },
-
-  async 'ledger-concept-edit'(el) {
-    const which = el.dataset.which || 'main';
-    const key = el.dataset.key || '';
-    S.ledgerEdit = { type: 'concept', which: which, key: key, isNew: key === '' };
-    render();
-  },
-
-  async 'ledger-concept-save'(el) {
-    const which = el.dataset.which || 'main';
-    const val = (id) => (document.getElementById(id) || {}).value || '';
-    const isNew = S.ledgerEdit && S.ledgerEdit.isNew;
-    const key = isNew
-      ? (which === 'action' ? val('led-c-term') : val('led-c-key'))
-      : String(S.ledgerEdit.key);
-    if (!key.trim()) { toast(which === 'action' ? '词不能为空' : '键不能为空', true); return; }
-    const row = which === 'action'
-      ? { term: key, kind: val('led-c-kind'), note: val('led-c-note') }
-      : { key: key, aliases: val('led-c-aliases'), exclude: val('led-c-exclude'), note: val('led-c-note') };
-    try {
-      await post('/api/ledger/concept', { which: which, row: row });
-      S.ledgerEdit = null;
-      await loadLedger();
-      render();
-      toast('已存 ' + LEDGER_DEL[which] + ' ' + key);
-    } finally {
-      setBusy(false);
-    }
-  },
-
-  async 'ledger-concept-delete'(el) {
-    const which = el.dataset.which || 'main';
-    const key = el.dataset.key || '';
-    if (!window.confirm('删掉 ' + LEDGER_DEL[which] + ' 里的「' + key + '」？概念剖面里已落地的行要在维护里重建才会清掉。')) return;
-    try {
-      const body = await post('/api/ledger/concept/delete', { which: which, key: key });
-      toast('删了 ' + ((body.deleted || 0) ? '1' : '0') + ' 条');
       await loadLedger();
       render();
     } finally {

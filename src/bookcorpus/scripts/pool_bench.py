@@ -36,7 +36,7 @@ def books_meta(lib):
 
 
 def rank(con, key, pool, n=20):
-    groups, exclude = qsearch.load_concept(key)
+    groups, exclude = cjk.split_groups(key), []
     expr = " OR ".join("(%s)" % cjk.query_expr(g) for g in groups if cjk.query_expr(g))
     t = time.time()
     hits, _ = qsearch.search(con, expr, groups, exclude, 10**6, 40, False, pool)

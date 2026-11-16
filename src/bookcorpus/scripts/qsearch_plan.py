@@ -9,9 +9,6 @@
     {"name": "口语", "terms": ["打工", "被换掉"], "weight": 1.0},
     {"name": "学术", "terms": ["劳动力商品化", "产业后备军"], "weight": 1.2}
   ],
-  "concepts": ["铁笼"],
-  "broad": ["权力"],
-  "broad_weight": 1.0,
   "exclude": ["铁笼山"],
   "book_hint": ""
 }
@@ -21,7 +18,6 @@
 """
 
 import argparse
-import contextlib
 import json
 import os
 import re
@@ -32,14 +28,13 @@ from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from lib_common import PATHS, L
+from lib_common import PATHS
 
 sys.path.insert(0, HERE)
 import lib_fts_cjk as cjk
 import qsearch
 
 DB = PATHS.index_db
-BROAD = PATHS.concepts_broad
 
 
 def load_plan(path):
@@ -47,13 +42,6 @@ def load_plan(path):
         return json.load(sys.stdin)
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
-
-
-def load_broad(key):
-    for r in L.concept_rows("broad"):
-        if r["key"] == key:
-            return [key, *L.split_aliases(r["aliases"])], L.split_exclude(r.get("exclude", ""))
-    raise KeyError(key)
 
 
 def normalize(plan):
@@ -69,22 +57,6 @@ def normalize(plan):
     if not groups and plan.get("must"):
         groups.append({"name": "原词", "terms": [str(t) for t in plan["must"]], "weight": 1.0})
     exclude = [str(x) for x in (plan.get("exclude") or []) if str(x).strip()]
-    for key in plan.get("concepts") or []:
-        terms, ex = [], []
-        with contextlib.suppress(Exception):
-            terms, ex = qsearch.load_concept(key)
-        if terms:
-            groups.append({"name": "概念:" + key, "terms": terms, "weight": weight(plan.get("concept_weight"))})
-            exclude += ex
-    for key in plan.get("broad") or []:
-        try:
-            terms, ex = load_broad(key)
-        except KeyError:
-            continue
-        if terms:
-            groups.append(
-                {"name": "宽:" + key, "terms": terms, "weight": weight(plan.get("broad_weight")), "exclude": ex}
-            )
     return groups, exclude
 
 

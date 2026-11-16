@@ -1058,7 +1058,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
     try:
         books = book_cards.load_books()
         book_meta = book_score.load_meta()
-        hints = book_cards.query_hints(question, books, {})
+        hints = book_cards.query_hints(question, books)
         focus = book_title.resolve_title(question, books, book_meta, hint=hints.get("title", ""))
         t_plan = time.time()
         plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus, question=question)
@@ -1082,7 +1082,6 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
             expand={},
             feedback=None,
             con=con,
-            concepts={},
             focus=focus,
         )
         cards_ms = cardset.ms

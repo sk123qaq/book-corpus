@@ -136,12 +136,9 @@ def load_books(libdb=LIBDB):
         con.close()
 
 
-def load_concepts():
-    return book_query.read_table()
-
-
-def query_hints(query, books, concepts, terms=None, focus=None):
-    """书名/作者/原句/概念/问句提示。只做词法判断。"""
+def query_hints(query, books, concepts=None, terms=None, focus=None):
+    """书名/作者/原句/问句提示。只做词法判断。"""
+    del concepts, terms
     q = normalize(query)
     qw = [w for w in QUESTION_WORDS if w in q]
     title = ""
@@ -169,22 +166,11 @@ def query_hints(query, books, concepts, terms=None, focus=None):
                 author = a
     quoted = re.search(r"[“\"「『](.{8,})[”\"」』]", query or "")
     verbatim = bool(quoted) or (len(q) >= 12 and not qw)
-    terms = terms or cjk.split_groups(query or "")
-    concept = any(book_query.resolve(t, concepts) for t in terms)
-    if not concept:
-        for key, rec in concepts.items():
-            for al in [key] + rec["aliases"]:
-                a = normalize(al)
-                if len(a) >= 2 and a in q:
-                    concept = True
-                    break
-            if concept:
-                break
     return {
         "title": title,
         "author": author,
         "verbatim": verbatim,
-        "concept": concept,
+        "concept": False,
         "question": bool(qw),
         "qw": qw,
         "focus": focus,
@@ -454,27 +440,24 @@ def cards_for(
     terms = [t for t in (terms or []) if t]
     if not terms:
         terms = cjk.split_groups(question or "")
-    nouns = book_query.split_terms(terms, planner.actions)
-    noun_hits, _ = planner.search(nouns)
+    noun_hits, _ = planner.search(terms)
     ranking = book_score.rank(
-        noun_hits, nouns, "best_support", getattr(planner, "exclude", []), planner.meta, planner.expand
+        noun_hits, terms, "best_support", getattr(planner, "exclude", []), planner.meta, planner.expand
     )
     if getattr(planner, "_search_fn", None) is None and (question or "").strip():
         vhits, _vmeta = vec_search.search_text(question, top_k=200, exclude=getattr(planner, "exclude", []))
         if vhits:
             ranking = book_query.apply_hybrid_ranking(ranking, vhits, planner.meta)
-    # 选章永远用全词集（B2.5）；卡片排序仍用名词集。
-    hits, _ = planner.search(terms) if terms != nouns else (noun_hits, 0.0)
+    hits = noun_hits
     books = load_books() if books is None else books
-    concepts = {} if concepts is None else concepts
-    hints = query_hints(question, books, concepts, terms, focus)
+    hints = query_hints(question, books, None, terms, focus)
     ranking = focus_order(ranking, focus)
     fire, reasons = trigger(question, ranking, hints, n)
     cards = build_cards(ranking, hits, terms, n, toc_fn, select_fn) if fire else []
     res = CardSet(query=question, terms=terms, trigger=fire, reasons=reasons, hints=hints, cards=cards, ask_user=False)
     res.uncertainty = uncertainty(ranking, hints, reasons, cards)
     res.default_selection = [c.book for c in cards[:3]]
-    return res, hits, nouns, ranking
+    return res, hits, terms, ranking
 
 
 def expand_selected(question, books, expand_fn=None):
@@ -641,7 +624,7 @@ def _card_long(cards, k):
     return sum(1 for c in xs if c.chapters >= LONG_SHARE) / len(xs) if xs else 0.0
 
 
-def gate(con=None, meta=None, expand=None, books=None, concepts=None, n=DEFAULT_CARDS, path=GOLD, out=None):
+def gate(con=None, meta=None, expand=None, books=None, n=DEFAULT_CARDS, path=GOLD, out=None):
     """60 题：触发率、等宽命中、长书占比、排除类型后的读数。
 
     等宽口径（2026-10-23 审计后）：
@@ -658,14 +641,13 @@ def gate(con=None, meta=None, expand=None, books=None, concepts=None, n=DEFAULT_
         meta = book_score.load_meta() if meta is None else meta
         expand = book_score.load_expand(con) if expand is None else expand
         books = load_books() if books is None else books
-        concepts = load_concepts() if concepts is None else concepts
         rows, out_rows = gold_rows(path), []
         for row in rows:
             planner = book_query.Planner(con, meta, expand, limit=max(n, 10))
-            nouns = book_query.split_terms(row["terms"], planner.actions)
+            nouns = row["terms"]
             hits, _ = planner.search(nouns)
             ranking = book_score.rank(hits, nouns, "best_support", [], meta, expand)
-            hints = query_hints(row["question"], books, concepts, row["terms"])
+            hints = query_hints(row["question"], books, None, row["terms"])
             fire, reasons = trigger(row["question"], ranking, hints, n)
             cards = build_cards(ranking, hits, nouns, n) if fire else []
             # 自动基线：首轮 top1 / top5
@@ -880,7 +862,7 @@ def perf(con=None, meta=None, expand=None, n=20, cards=DEFAULT_CARDS, passes=2):
     try:
         meta = book_score.load_meta() if meta is None else meta
         expand = book_score.load_expand(con) if expand is None else expand
-        books, concepts = load_books(), load_concepts()
+        books = load_books()
         rows = gold_rows()[:n]
         out = []
         for p in range(passes):
@@ -888,11 +870,11 @@ def perf(con=None, meta=None, expand=None, n=20, cards=DEFAULT_CARDS, passes=2):
                 for mode in ("off", "cards"):
                     t0 = time.time()
                     planner = book_query.Planner(con, meta, expand, limit=10)
-                    nouns = book_query.split_terms(row["terms"], planner.actions)
+                    nouns = row["terms"]
                     hits, _ = planner.search(nouns)
                     ranking = book_score.rank(hits, nouns, "best_support", [], meta, expand)
                     if mode == "cards":
-                        hints = query_hints(row["question"], books, concepts, row["terms"])
+                        hints = query_hints(row["question"], books, None, row["terms"])
                         fire, _ = trigger(row["question"], ranking, hints, cards)
                         if fire:
                             build_cards(ranking, hits, nouns, cards)

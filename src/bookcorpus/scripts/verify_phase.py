@@ -194,19 +194,6 @@ def box4():
             fail("倒排指向 %d 个不存在的文件，例：%s" % (len(gone), gone[:3]))
         else:
             ok("倒排路径全部落在 books/ 且文件都在")
-        rows = L.concept_rows()
-        keys = [r["key"] for r in rows]
-        if not rows or len(set(keys)) != len(keys):
-            fail("概念表 %d 条，或键有重复" % len(rows))
-        else:
-            ok("概念表 %d 条，键不重复" % len(rows))
-        known = set(keys)
-        bc = con.execute("SELECT key, count(*) FROM book_concept GROUP BY key").fetchall()
-        stray = [c for c, _ in bc if c not in known]
-        if stray:
-            fail("概念剖面里有 %d 个键不在概念表：%s" % (len(stray), stray[:3]))
-        else:
-            ok("概念剖面 %d 条，键都在概念表里" % sum(n for _, n in bc))
     except sqlite3.Error as exc:
         fail("index.db 查询失败：%s" % exc)
     finally:

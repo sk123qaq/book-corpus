@@ -8,12 +8,12 @@
 
 - `search-hits` 段检索：位置参数按空白/逗号拆词组；CJK 三个字以上按相邻二元组短语匹配。每条一行 `path:line score` 加 150 字片段。
 - `search-book` `--book` 把段命中按书汇总，输出 `uid +N 段 score best_path:line`。
-- `search-options` `--concept` / `--auto-concept` 扩概念，`-n` 默认 20，`--book-score mix|sum`（默认 `mix=0.7*最好段+0.3*段落均值`），`--rerank` 加定义式/引号/卷首特征，`--pool` 默认 `medium`（2000 段），`--min-chars` 默认 40，`--no-exclude` 关排除词。
-- `search-expand` `--expand` 并上 `build/检索/expand` 的扩展文本，`--expand-kind both|prefix|queries`；`--route` 让模型把问句路由到概念表三个键（需联网，有缓存），`--route-mode append|rrf`。
+- `search-options` `-n` 默认 20，`--book-score mix|sum`（默认 `mix=0.7*最好段+0.3*段落均值`），`--rerank` 加定义式/引号/卷首特征，`--pool` 默认 `medium`（2000 段），`--min-chars` 默认 40。
+- `search-expand` `--expand` 并上 `build/检索/expand` 的扩展文本，`--expand-kind both|prefix|queries`。
 - `query-plan` 书级规划：最多 5 轮词法循环，stop 为 `C` / `A+B` / `cap` / `exhausted`；默认 `--book-score best_support`、`-n 5`、`--max-chapters 3`、`--chapter-selector score`。
 - `query-hybrid` 规划后跑向量检索：段、章、书三层 RRF（书 k=30、`w_vec=1.35`；章 k=5、最多 10 章）。成功时 JSON 顶层 `fusion:"hybrid"`、`vec_used:true`、`vec_ms`、`vec_hits`；失败/缺索引时 `fusion:"bm25_only"`、`vec_used:false`、`vec_hits:0`，章节仍由词法给出。
 - `query-cards` 书卡：`--cards` 默认开，`--no-cards` 关；触发原因有 `margin`、`types`、`long`、`concept`、`title_ambiguous` 等。文本在 stderr 打 `书卡：N 张，原因 …` 或 `不弹卡：书名/作者/原句提示`，`--json` 顶层带 `cards`。
-- `query-expand` `--expand-on-demand` 选中后跑 B4 按需扩展（默认关，会调模型）；`--broad` 第 4 轮加宽词组（默认关）。
+- `query-expand` `--expand-on-demand` 选中后跑 B4 按需扩展（默认关，会调模型）。
 - `query-explain` `--json` 给 `ranking`、`chapters`、`rounds`、`timings`、`fusion` 等字段，`--explain` 打规划解释。
 
 ## How to get to it (user POV)

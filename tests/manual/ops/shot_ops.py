@@ -937,7 +937,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         ok = (
             maint2.get("button")
             and maint2.get("open") is False
-            and maint2.get("steps") == 8
+            and maint2.get("steps") == 7
             and not maint2.get("leaks")
         )
         if not live:

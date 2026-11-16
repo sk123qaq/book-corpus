@@ -3,7 +3,7 @@
   books/<uid>/            一本书一个目录，装 book.json、source/、md/、html/
   books/_收件箱、_冷宫      不属任何书，下划线开头
   collections/<Cuid>/     合集原书，原始文件放 source/
-  tables/                 人写的表与三张概念表
+  tables/                 人账与辅助表
   build/                  一切派生产物，整目录删掉能重建
 
 根靠 books.toml 认。manifest 里的 schema 就是这个树形的版本号。
@@ -96,18 +96,6 @@ class Layout:
     @property
     def inventory(self):
         return os.path.join(self.tables, "书目录清单.csv")
-
-    @property
-    def concepts(self):
-        return os.path.join(self.tables, "概念表.tsv")
-
-    @property
-    def concepts_broad(self):
-        return os.path.join(self.tables, "概念表-broad.tsv")
-
-    @property
-    def concepts_action(self):
-        return os.path.join(self.tables, "概念表-动作词.tsv")
 
     @property
     def series(self):

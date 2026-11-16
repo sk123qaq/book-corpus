@@ -114,31 +114,17 @@ def score(text, groups):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("root")
-    ap.add_argument("-g", "--group", action="append", required=False)
-    ap.add_argument("-c", "--concept", help="概念表键，替代 -g，用同义词组展开")
+    ap.add_argument("-g", "--group", action="append", required=True)
     ap.add_argument("-n", "--limit", type=int, default=5)
     ap.add_argument("-w", "--width", type=int, default=260)
     a = ap.parse_args()
 
-    exclude = None
-    if a.concept:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from concept_expand import expand
-
-        terms, ex = expand(a.concept)
-        groups = [terms]
-        exclude = re.compile("|".join(map(re.escape, ex))) if ex else None
-    else:
-        if not a.group:
-            ap.error("要 -g 或 --concept")
-        groups = [g.split(",") for g in a.group]
-    min_hit = 1 if (a.concept or len(groups) == 1) else 2
+    groups = [g.split(",") for g in a.group]
+    min_hit = 1 if len(groups) == 1 else 2
     files = rg_candidates(a.root, [w for g in groups for w in g])
     results = []
     for f in files:
         for start, txt in paragraphs(f):
-            if exclude:
-                txt = exclude.sub("", txt)
             hit, sc = score(txt, groups)
             if hit >= min_hit:
                 results.append((sc, hit, f, start, txt))

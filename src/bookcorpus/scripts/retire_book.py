@@ -206,21 +206,18 @@ def db_facts(ctx, uid):
 
 
 def find_view_links(ctx, book_dir):
-    """build/views/ 下指向这本书的软链，(奖项视图, 主题视图)，root 相对路径。"""
+    """build/views/奖项 下指向这本书的软链，root 相对路径。"""
     target = os.path.realpath(book_dir)
-    found = {"奖项": [], "主题": []}
-    for top in ("奖项", "主题"):
-        base = os.path.join(ctx.views, top)
-        if not os.path.isdir(base):
-            continue
+    found = []
+    base = os.path.join(ctx.views, "奖项")
+    if os.path.isdir(base):
         for dirpath, dirnames, filenames in os.walk(base):
             for name in list(dirnames) + list(filenames):
                 link = os.path.join(dirpath, name)
                 if os.path.islink(link) and os.path.realpath(link) == target:
-                    found[top].append(ctx.rel(link))
-    for key in found:
-        found[key].sort()
-    return found["奖项"], found["主题"]
+                    found.append(ctx.rel(link))
+    found.sort()
+    return found
 
 
 def find_series_docs(ctx, doc):
@@ -395,7 +392,7 @@ def build_preview(ctx, uid):
     delete = delete_list(book_dir)
     leftovers = leftover_files(ctx, book_dir, delete, doc.get("sources") or [])
     has_db_row, db_awards = db_facts(ctx, uid)
-    award_views, topic_views = find_view_links(ctx, book_dir)
+    award_views = find_view_links(ctx, book_dir)
     series_docs = find_series_docs(ctx, doc)
     md_dir = os.path.join(book_dir, "md")
     chapters, md_bytes = L.count_md_dir(md_dir) if os.path.isdir(md_dir) else (0, 0)
@@ -431,9 +428,8 @@ def build_preview(ctx, uid):
         "ledger_row": led_row or {},
         "db": has_db_row,
         "awards": sorted(awards),
-        "views": award_views + topic_views,
+        "views": award_views,
         "view_awards": award_views,
-        "view_topics": topic_views,
         "series_docs": series_docs,
         "md_chapters": chapters,
         "md_bytes": md_bytes,
@@ -658,9 +654,6 @@ def rebuild_derived(ctx, preview, run):
                 if "para_fts" in have:
                     con.execute("INSERT INTO para_fts(para_fts) VALUES('rebuild')")
                 done.append("para rows %d" % max(para, 0))
-            if "book_concept" in have:
-                concept = con.execute("DELETE FROM book_concept WHERE book=?", (book_key,)).rowcount
-                done.append("book_concept rows %d" % max(concept, 0))
             con.commit()
         finally:
             con.close()

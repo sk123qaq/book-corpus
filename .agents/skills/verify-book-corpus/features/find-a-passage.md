@@ -19,7 +19,7 @@
 - `ask-export` 导出单个会话为 MD 或 DOCX：`GET /api/export?id=<12hex>&format=md|docx`，下载名 `会话-<时间>-<问题前12字>.<ext>`；页面入口在历史会话的悬浮菜单。没有 zip 导出。
 - `ask-retry` 同轮作答去重：键是 `(session_id, n, run_token)`，最多等 300 秒，结果再留 60 秒；`fresh:true` 重开，旧请求 409「这一轮已重跑，本次回答作废」，超时 504「回答仍在生成，请稍后刷新」。
 - `ask-runlog` 运行记录：每次提交在磁盘写 `run.jsonl`（`answer_once`/`turn`/`service`），章读取、导出、删会话也写 `service.jsonl`；CLI `python3 apps/demo/runlog.py {list,timeline,bundle,replay,prune,doctor}` 可查。`bundle` 才产 zip，落 `exports/session-*.zip`；页面导出不走它。
-- `ask-degrade` 没有可用模型时降级：默认直连 HTTP 后端报 `模型调用失败：…`，经典页标「降级」并按概念表包含匹配；`ANSWER_BACKEND=pi` 才回退旧子进程，旧路径的错误才带 `rc=N`。
+- `ask-degrade` 没有可用模型时降级：默认直连 HTTP 后端报 `模型调用失败：…`，经典页标「降级」并改用直接词匹配；`ANSWER_BACKEND=pi` 才回退旧子进程，旧路径的错误才带 `rc=N`。
 
 ## How to get to it (user POV)
 
@@ -71,7 +71,7 @@ Preconditions:
 - `apps/demo/runlog.py` 的默认根是仓库内 `apps/demo/运行记录/`，一次真作答会写进操作员共享的记录；验完用 `BOOKS_RUNLOG_ROOT` 起的实例随 `$ROOT` 一起删，别在默认目录上跑 `prune --apply`。
 - `tests/manual/demo/check_session_ui.py` 的 `SESSION` / `SESSION_MULTI` 常量每次运行都会被覆盖，不是「优先用环境变量」；没有匹配会话时报的是「找不到会话」，不是页面坏了。
 - 示例问句只在 `/classic`；在 `/` 上 `grep 'class="sample"'` 得 0，是正常的，不是模板没渲染。
-- 没有模型 key 时，演示页**不会**报「配置错误」：默认直连后端记 `模型调用失败：…`，经典页标「降级」并改用概念表包含匹配。别拿「配置错误」这四个字做断言，也别看到 `rc=N` 就以为默认路径还在跑——它只在 `ANSWER_BACKEND=pi` 时出现。
+- 没有模型 key 时，演示页**不会**报「配置错误」：默认直连后端记 `模型调用失败：…`，经典页标「降级」并改用直接词匹配。别拿「配置错误」这四个字做断言，也别看到 `rc=N` 就以为默认路径还在跑——它只在 `ANSWER_BACKEND=pi` 时出现。
 - 旧会话可能出现 `incomplete`/`run_error`，这两个值只从旧数据派生；新写入是 `pending/running/ready/error/interrupted/paused`，中断文案是「服务重启，上次回答已中断」（`apps/demo/session.py:40-46`）。
 - SSE 的 `done` 事件把结果放在**内层** `data`（`{"type":"done","data":{"ok":true,"answer":"…"}}`）；`paused` 可能先来一条扁平事件、再来一条带内层 `data` 的，解析时两种都取。`curl -N` 不加 `-s` 会在 stderr 打进度，别把它当响应体。
 - `/classic` 的 `?q=&instant=1&top=1` 是自动跑一条问题的入口，链接一打开就花一次模型调用。

@@ -1,13 +1,13 @@
 # 书库
 
-本地电子书库的工具箱。每本书一个 `books/<uid>/` 目录，正文拆成章节 Markdown，另有可视化阅读版 HTML。SQLite 保存书目与检索索引，全库正文可以按词、按概念、按书检索，也可以交给 pi agent 按原文回答问题，答案带逐字引文。
+本地电子书库的工具箱。每本书一个 `books/<uid>/` 目录，正文拆成章节 Markdown，另有可视化阅读版 HTML。SQLite 保存书目与检索索引，全库正文可以按词、按书检索，也可以交给 pi agent 按原文回答问题，答案带逐字引文。
 
 仓库只放工具、文档与模板，不放任何人的书。克隆下来是**空的工具仓**；用 `book-corpus init` 建工作区，再把自己的书放进 `books/_收件箱/`。本机的书目账在私有工作区 `~/书库`，见下文。
 
 ## 能做什么
 
 - 找书：按书名、作者、分类路径查 `build/library.db`。
-- 查原文：段落级倒排检索，支持概念同义词组，返回 `books/<uid>/md/章节.md:行号`。
+- 查原文：段落级倒排检索（BM25 + 向量混合），返回 `books/<uid>/md/章节.md:行号`。
 - 问书：`book-corpus query` 定位书与章。要成段回答并带逐字引文，用 `book-corpus-qa` 技能或演示页。
 - 管书：入库、分类、拆章、出 HTML 阅读版、PDF 转 Markdown、删书与冷宫。
 - 看库：项目默认只启动统一入口（8773）；分层读（8771）、操作台（8770）、检索演示页（8765）与日课页（8772）按需启动，全部只绑 `127.0.0.1`。
@@ -24,11 +24,11 @@
 | `books/_收件箱/` | 新书落地处，入库走 `book-corpus ingest` |
 | `books/_冷宫/` | 移出处理流程的书，只留原书文件，不在人账，不进检索 |
 | `collections/<Cuid>/source/` | 拆书前的合集原书，由书的 `book.json` 用 `collection` 引用 |
-| `tables/ledger.db` | 唯一人账（`分类` 表一行一本书，`概念`/`概念broad`/`动作词` 是检索词表）。旧 CSV 只在 `archive/账切换-2026-11-03/` 留档，缺库时才兜底读 |
+| `tables/ledger.db` | 唯一人账（`分类` 表一行一本书）。旧 CSV 只在 `archive/账切换-2026-11-03/` 留档，缺库时才兜底读 |
 | `tables/系列/` | 书系说明，卷序看这里 |
 | `build/library.db` | 全库书目，SQLite，产物，可重建 |
-| `build/检索/index.db` | 段落倒排与概念剖面，产物，可重建 |
-| `build/views/` | 指向 `books/<uid>/` 的奖项与主题软链树，产物 |
+| `build/检索/index.db` | 段落倒排索引，产物，可重建 |
+| `build/views/` | 指向 `books/<uid>/` 的奖项软链树，产物 |
 | `build/书目总表.csv` | 从 DB 导出的书目，产物 |
 | `build/阅读版索引.html` | 有阅读版 HTML 的书的总索引，产物 |
 | `工作区/` | 实例根下的运行时层（本机是 `~/书库/工作区/`）：批次账、缓存与虚拟环境；可重建，不进工具仓 |
@@ -238,7 +238,7 @@ book-corpus model check
 
 ## 准备语料
 
-克隆下来是空工作区：`books/` 里只有 `_收件箱/` 与 `_冷宫/` 的 README，`tables/` 下只有表头与通用概念表。
+克隆下来是空工作区：`books/` 里只有 `_收件箱/` 与 `_冷宫/` 的 README，`tables/` 下只有表头。
 
 想先看效果、不想自己备书，装一本公有领域样书：
 
@@ -301,10 +301,9 @@ book-corpus run lq -H "SELECT uid,title,author,path FROM book WHERE title LIKE '
 
 ```bash
 book-corpus search '关键词 关键词' -n 5
-book-corpus search --concept 概念键 -n 5
 ```
 
-返回 `books/<uid>/md/xx.md:行号`、分数与命中段。`--book` 出书级聚合，`--concept` 走概念表。
+返回 `books/<uid>/md/xx.md:行号`、分数与命中段。`--book` 出书级聚合。
 
 ### 问一本书
 
@@ -341,9 +340,9 @@ python3 apps/daily/server.py --root <实例根>      # http://127.0.0.1:8772
 
 ```bash
 book-corpus library                  # 人账与 book.json -> build/library.db
-book-corpus index --rebuild          # 段落倒排与概念剖面
+book-corpus index --rebuild          # 段落倒排索引
 book-corpus render                   # 每本书的 html 索引与阅读版总索引
-book-corpus run build_views          # build/views/奖项 与 主题 软链
+book-corpus run build_views          # build/views/奖项 软链
 book-corpus catalog                  # build/书目总表.csv（装 openpyxl 时也出 xlsx）
 ```
 

@@ -4,7 +4,7 @@
   const STAGE_NAMES = ['理解问题', '词法循环', '打分与选章', '书卡', '结果'];
   const STAGE_KEYS = ['understand', 'rounds', 'rank', 'cards', 'result'];
   const STOP = { C: 'C 到线', 'A+B': 'A+B 到线', cap: '跑满 5 轮', exhausted: '词集用尽' };
-  const KIND = { noun: '名词', 'noun+concept': '名词+概念', 'drop-generic': '去泛词' };
+  const KIND = { noun: '全词', full: '全词', 'drop-generic': '去泛词' };
   const THINKING = { off: '关', low: '低', medium: '中', high: '高' };
   const CONFIDENCE = { high: '高', medium: '中', low: '低' };
   const STATUS_TEXT = {

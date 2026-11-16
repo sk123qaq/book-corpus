@@ -144,7 +144,7 @@ def make_fixture(base, with_snapshot=True):
     with open(os.path.join(cat, "系列", "测试合集-合集说明.md"), "w", encoding="utf-8") as fh:
         fh.write("# 测试合集\n\n- 独本\n")
 
-    for top, key in (("奖项", "某奖"), ("主题", "某主题")):
+    for top, key in (("奖项", "某奖"),):
         d = os.path.join(root, "build", "views", top, key)
         os.makedirs(d)
         target = os.path.relpath(unique_dir, d)
@@ -214,9 +214,7 @@ def test_preview_and_apply():
         check(preview["leftovers"] == [], "没有附带删除项")
         check(preview["ledger"] is True and preview["db"] is True, "人账行与 DB 行都在")
         check(preview["awards"] == ["某奖"], "奖项行读到了")
-        check(
-            len(preview["views"]) == 2 and preview["view_awards"] and preview["view_topics"], "奖项与主题视图软链各一条"
-        )
+        check(len(preview["views"]) == 1 and preview["view_awards"], "奖项视图软链一条")
         check(len(preview["series_docs"]) == 1, "受影响系列文档一条")
         check(preview["md_chapters"] == 1 and preview["md_bytes"] > 0, "md 章数与字节")
         check(preview["expand_rows"] == 1 and preview["index_rows"] == 3, "expand 行与 para 行数对得上")

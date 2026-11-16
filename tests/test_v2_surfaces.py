@@ -54,7 +54,7 @@ def test_views_point_into_books(workspace):
     doc["awards"] = [{"award": "测试奖", "year": "", "edition": "", "result": "已在盘"}]
     doc_path.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     assert run_cli("--root", workspace, "library").returncode == 0
-    r = run_cli("--root", workspace, "index", "--rebuild", "--concepts")
+    r = run_cli("--root", workspace, "index", "--rebuild")
     assert r.returncode == 0, r.stdout + r.stderr
 
     r = run_cli("--root", workspace, "run", "build_views")
@@ -64,9 +64,4 @@ def test_views_point_into_books(workspace):
     assert links
     assert all(p.resolve().is_dir() for p in links)
     assert all(os.path.realpath(p).startswith(str((workspace / "books").resolve())) for p in links)
-
-    topics = workspace / "build" / "views" / "主题"
-    assert topics.is_dir()
-    all_links = [p for p in topics.rglob("*") if p.is_symlink()]
-    assert all_links, "概念视图没有产出软链"
-    assert all(os.path.realpath(p).startswith(str((workspace / "books").resolve())) for p in all_links)
+    assert not (workspace / "build" / "views" / "主题").exists()

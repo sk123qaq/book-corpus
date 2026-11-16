@@ -27,7 +27,7 @@
 | `backfill_readme.py` | — | 给缺 README 的 md 目录补目录页。只写 README.md，不动正文与 .manifest.json。 |
 | `book_cards.py` | — | B5 书卡与用户反馈：首轮之后按触发规则弹 5 到 8 张卡，用户选书/排除类型/换一批。 |
 | `book_expand.py` | — | 按需扩展：只给选中的章做摘要，渐进披露，不整章投喂。 |
-| `book_query.py` | `query` | 查询规划：两套词、两段检索、最多 5 轮词法循环（B2.5）。 |
+| `book_query.py` | `query` | 查询规划：词法循环 + 向量三层混合检索（B2.5）。 |
 | `book_rank_bench.py` | — | 书级排序方案对比台。同一概念，八种书级打分，看前 10 名怎么变。 |
 | `book_readme.py` | — | README 选章：把 md/README.md 当章节目录读，按检索分挑前三章。 |
 | `book_score.py` | — | 书级打分：把段落命中聚成书，按多种书级方案排序。 |
@@ -36,14 +36,12 @@
 | `build_expand.py` | — | P1.5 文档扩展：给每章生成「主题前缀」，写进独立索引，不碰正文。 |
 | `build_index.py` | `render` | 扫描 books/**/html/，给每本有阅读版的书重建 html/index.html，并重建 build/阅读版索引.html。 |
 | `build_library.py` | `library` | L1/L5 索引构建。人账 + 机账 + 磁盘 -> 目录/library.db（可随时重建）。 |
-| `build_para_index.py` | `index` | 建 目录/检索/index.db：段落倒排（CJK bigram FTS5）+ 概念剖面。零第三方依赖。 |
-| `build_views.py` | — | 重建 build/views/：主题按概念、奖项按奖项名，各建一棵指向 books/<uid> 的软链树。 |
+| `build_para_index.py` | `index` | 建 目录/检索/index.db：段落倒排（CJK bigram FTS5）。零第三方依赖。 |
+| `build_views.py` | — | 重建 build/views/奖项/ 软链树。 |
 | `check_p1.py` | — | P1 验收：2 字词可查且有序、原词类不低于裸 grep、查询边界回归。 |
 | `classify_books.py` | — | 给书做学科分类（一级 + 二级），批量提问，带缓存。 |
 | `classify_model.py` | — | 走 pi 的一次性书目分类：一次调用给出一级、二级、置信与理由。 |
 | `collection_coverage.py` | — | 合集重拆后的覆盖率验收：源书每页的 10 个 20 字 CJK 锚点在给定 md 目录里命中多少。 |
-| `concept_expand.py` | — | 概念表展开：键 → 同义词组 + 排除正则。defpass 用它；qsearch 自己解析一遍概念表（见 qsearch.load_concept）。 |
-| `concept_route.py` | — | 把一句人话路由到 概念表.tsv 的键，再交给 qsearch。 |
 | `corpus_stats.py` | `stats` | 现测书库规模与结构：书目数、md 数、章节数、体积、未收录项、长书与系列分布。只读。 |
 | `daily.py` | `daily` | 日课：每天从书库里挑一章，生成一期 300 到 500 字的稿子。 |
 | `defpass.py` | — | 定义/段落级检索：两阶段。 |
