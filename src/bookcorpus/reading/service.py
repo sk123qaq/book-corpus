@@ -7,8 +7,7 @@ import time
 import uuid
 
 from .. import preflight as env_preflight
-from ..scripts import lib_common as L
-from . import chapmap, diagrams, events, profile
+from . import chapmap, diagrams, events
 from .library import Library
 from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, _loads_content
 from .preflight import chapter_map_gate, evaluate
@@ -25,21 +24,8 @@ ACTION_LABELS = {
     "pin": "钉住旁批",
     "unpin": "移除旁批",
 }
-ACTION_PRIORITY = {
-    "argument": ("diagram", "critique", "explain", "translate", "ask"),
-    "practical": ("diagram", "explain", "ask", "translate", "critique"),
-    "narrative": ("explain", "translate", "diagram", "ask", "critique"),
-    "reference": ("diagram", "explain", "translate", "ask", "critique"),
-}
+DEFAULT_TOOLBAR = ("explain", "translate", "diagram", "critique", "ask")
 WORDS_PER_MINUTE = 480
-
-
-class MissingProfileError(ValueError):
-    """本书尚未设定默认读法时给出明确提示，不再阻断章节页阅读。"""
-
-    def __init__(self, uid):
-        self.uid = uid
-        super().__init__("这本书还没有设定默认读法")
 
 
 def _now_iso():
@@ -151,15 +137,13 @@ def _summarize_chapter_map(model_doc, blocks):
     }
 
 
-def _toolbar_for_mode(mode):
-    order = ACTION_PRIORITY.get(mode, ("diagram", "explain", "translate", "critique", "ask"))
-    return [{"action": act, "label": ACTION_LABELS[act]} for act in order]
+def _default_toolbar():
+    return [{"action": act, "label": ACTION_LABELS[act]} for act in DEFAULT_TOOLBAR]
 
 
-def _assist_prompts(action, *, mode, book, chapter, selected_text, block_ids, context_text, question=""):
+def _assist_prompts(action, *, book, chapter, selected_text, block_ids, context_text, question=""):
     book_title = (book or {}).get("title") or ""
     chapter_title = (chapter or {}).get("title") or ""
-    mode_meta = profile.MODE_META.get(mode) or profile.MODE_META["argument"]
     loc = f"《{book_title}》· {chapter_title}（段落 {', '.join(block_ids) or '整章'}）"
     context_block = f"相邻上下文：\n{context_text}\n\n" if context_text else ""
     focus_block = f"读者选中的原文：\n{selected_text}" if selected_text else "读者针对当前章节提问。"
@@ -178,7 +162,7 @@ def _assist_prompts(action, *, mode, book, chapter, selected_text, block_ids, co
             '- matrix：data 为 {"columns":["维度","A","B"],"rows":[["行名","值1","值2"]]}\n'
             '- quantity：data 为 {"items":[{"label":"项名","value":12.5}]}'
         )
-        user = f"{loc}\n书型参考：{mode_meta['label']}\n\n{context_block}{focus_block}"
+        user = f"{loc}\n\n{context_block}{focus_block}"
         return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     if action == "explain":
@@ -193,20 +177,23 @@ def _assist_prompts(action, *, mode, book, chapter, selected_text, block_ids, co
         )
     elif action == "translate":
         system = (
-            "你是双语及古今汉语对读编辑。请根据选中文本的语言特征自动选择最合适的辅助方式：\n"
-            "- 如果是文言/古文/半文言：给出流畅的【现代汉语直译】，再列出【关键实词/典故注】；\n"
-            "- 如果是中译本（翻译腔或术语）：给出更自然的重述，并尽可能还原对应的"
-            "【英文原词/概念】，解释中文译名可能遮蔽的语境；\n"
+            "你是双语、古今汉语及方言旧词对读编辑。"
+            "请严格聚焦读者选中的文本本身，按其语言特征提供直接对读辅助：\n"
+            "- 如果是文言/古文/半文言/近代白话旧词或方言俗语："
+            "给出流畅准确的【现代汉语直译】，再列出【关键实词/典故/旧词注】；\n"
+            "- 如果是中译本（翻译腔或术语）：给出更自然的重述，"
+            "并尽可能还原对应的【英文原词/概念】，解释中文译名可能遮蔽的语境；\n"
             "- 如果是英文原文：给出信达雅的中文翻译，并标注关键学术/行业术语。\n"
-            "原文词义标 `[原文]`，语言或背景延展标 `[补充]`。"
+            "只输出与所选原文直接相关的译文、词注与语境还原，"
+            "不要附加章节主旨分析或阅读指南。原文词义标 `[原文]`，语言或背景延展标 `[补充]`。"
         )
     elif action == "critique":
         system = (
-            "你是严谨的审稿同伴。读者主动要求拆解所选段落背后的隐含前提。\n"
+            "你是严谨的文本细读同伴。读者主动要求拆解所选段落背后未明说的前提或视角。\n"
             "请克制、具体、不空泛地列出：\n"
-            "1. **明面结论** `[原文]`\n"
-            "2. **未明说的隐含前提** `[补充]`（作者默认了什么条件才成立？）\n"
-            "3. **适用边界 / 反例情景** `[补充]`（什么情况下这句话会失效或需修正？）"
+            "1. **明面表述** `[原文]`\n"
+            "2. **未明说的隐含前提** `[补充]`（这段话成立或如此叙述时默认了什么条件、立场或背景？）\n"
+            "3. **适用边界 / 反例情景** `[补充]`（什么情况下这句话会失效、片面或需要限定？）"
         )
     else:  # ask
         system = (
@@ -214,7 +201,7 @@ def _assist_prompts(action, *, mode, book, chapter, selected_text, block_ids, co
             "回答直接切中要点；引用书中已有事实请标 `[原文]`，涉及书外背景知识或推理补充请标 `[补充]`。"
         )
 
-    user = f"{loc}\n阅读偏好参考：{mode_meta['label']}（{mode_meta['desc']}）\n\n{context_block}{focus_block}"
+    user = f"{loc}\n\n{context_block}{focus_block}"
     if question:
         user += f"\n\n读者追问：{question}"
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -330,64 +317,7 @@ class ReadingService:
             item["has_map"] = bool(cmap and cmap.get("supported", True))
             item["ops_count"] = ops_by_ch.get(n_str, 0)
             chapters.append(item)
-        return {"book": view, "chapters": chapters, "reading": self.book_reading(uid)}
-
-    # ---- 后台读法提示账（不阻断正文阅读） -----------------------------
-    def _profile_doc(self, uid):
-        return profile.from_rows(L.reading_get(uid, root=self.library.root))
-
-    def book_reading(self, uid):
-        doc = self._profile_doc(uid)
-        if not doc:
-            return {"book_mode": None, "panels": [], "chapters": {}}
-        return {"book_mode": doc.get("mode"), "panels": doc.get("panels") or [], "chapters": doc.get("chapters") or {}}
-
-    def set_book_reading(self, uid, mode):
-        if not self.library.book(uid):
-            raise FileNotFoundError("找不到这本书")
-        clean = profile.normalize_mode(mode)
-        if not clean:
-            raise ValueError("mode 必须是 %s" % "/".join(profile.MODES))
-        L.reading_set_book(uid, clean, root=self.library.root)
-        return self.book_reading(uid)
-
-    def reading(self, uid, n, raw=None):
-        raw = raw or self.library.read_chapter(uid, n) or {}
-        doc = self._profile_doc(uid)
-        suggestion = profile.suggestion_for(uid, n, self.library, self.library.root, None)
-        return profile.resolve(doc, n, raw.get("source_sha256") or "", suggestion)
-
-    def set_reading(self, uid, n, action, mode=None):
-        raw = self.library.read_chapter(uid, n)
-        if raw is None:
-            raise FileNotFoundError("找不到章节")
-        if action == "book_default":
-            clean = profile.normalize_mode(mode)
-            if not clean:
-                raise ValueError("mode 必须是 %s" % "/".join(profile.MODES))
-            L.reading_set_book(uid, clean, root=self.library.root)
-        elif action == "override":
-            clean = profile.normalize_mode(mode)
-            if not clean:
-                raise ValueError("mode 必须是 %s" % "/".join(profile.MODES))
-            book = L.reading_get(uid, "*", root=self.library.root)
-            if not book:
-                raise MissingProfileError(uid)
-            if clean == profile.normalize_mode(book.get("mode")):
-                L.reading_delete(uid, str(int(n)), root=self.library.root)
-            else:
-                L.reading_put(
-                    uid,
-                    clean,
-                    chapter=str(int(n)),
-                    source_sha256=raw.get("source_sha256") or "",
-                    root=self.library.root,
-                )
-        elif action == "follow":
-            L.reading_delete(uid, str(int(n)), root=self.library.root)
-        else:
-            raise ValueError("action 必须是 follow/override/book_default")
-        return self.reading(uid, n, raw=raw)
+        return {"book": view, "chapters": chapters}
 
     def chapter(self, uid, n):
         book = self.library.book(uid)
@@ -398,7 +328,6 @@ class ReadingService:
         if not raw:
             return None
         source_sha = raw.get("source_sha256") or ""
-        reading = self.reading(uid, n, raw=raw)
         blocks = raw["blocks"]
         map_gate = chapter_map_gate(blocks)
         cap_gate = evaluate(blocks, chapmap.plan_chunks(blocks, 18000, 100)).to_dict()
@@ -412,8 +341,7 @@ class ReadingService:
             "book": self._book_view(book),
             "chapter": ch_view,
             "blocks": blocks,
-            "reading": reading,
-            "toolbar": _toolbar_for_mode(reading.get("mode")),
+            "toolbar": _default_toolbar(),
             "preflight": {"chapter_map": map_gate, "capacity": cap_gate},
             "assist_notes": notes,
             "chapter_map": cmap,
@@ -478,13 +406,11 @@ class ReadingService:
         if not clean_text and not clean_q:
             raise ValueError("请先选中一段正文，或输入具体问题")
 
-        reading = self.reading(uid, n, raw=raw)
         requested_model = str(model or getattr(self.client, "model", None) or DEFAULT_MODEL).strip()
         requested_effort = str(effort or getattr(self.client, "effort", None) or DEFAULT_EFFORT).strip().lower()
         context_text = self._context_for_blocks(blocks, clean_blocks)
         messages = _assist_prompts(
             action,
-            mode=reading.get("mode") or "argument",
             book=book,
             chapter=chapter,
             selected_text=clean_text,

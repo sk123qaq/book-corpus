@@ -10,7 +10,7 @@
 ## Sub-features
 
 - `read-shelf` 书架 `/`：可读的书、章节数、字数、伴读与知识地图活动统计（`/api/shelf`）。
-- `read-book` 书页 `/book/<uid>`：书目信息、章节目录与各章操作计数、本书默认读法 `reading.book_mode`（`PUT /api/book/<uid>/reading`）。
+- `read-book` 书页 `/book/<uid>`：书目信息、章节目录与各章操作计数、伴读入口（`/api/book/<uid>`，不再设置或暴露「默认读法」）。
 - `read-chapter` 章页 `/chapter/<uid>/<n>`：完整原文正文、顶部工具台（`#btn-map` / `#btn-terms` / `#btn-toggle-pins` / `#btn-model-box` / `#btn-drawer`）、划词浮动工具栏（`#selection-bar`）、伴读抽屉（`#assist-drawer`）与段落旁批。
 - `read-preflight` 知识地图预检：`/api/chapter/<uid>/<n>` 中的 `preflight.chapter_map` 给出 `supported`、`reason` 与 `stats`（`blocks` / `han_chars` / `chunks` 等）；短章（< 800 汉字且 < 5 块）禁用地图生成并给原因提示。
 - `read-assist` 流式伴读与旁批：`POST /api/assist` 返回 SSE 事件流（`meta` / `delta` / `done` / `error`），可选 `action`：`diagram` / `explain` / `translate` / `critique` / `ask`；`POST /api/assist/pin` 将结果钉选成某段落旁批并持久化到 `assist_notes.json`。

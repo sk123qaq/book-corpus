@@ -115,6 +115,8 @@ def test_pages_and_retired_routes(server):
         "/reader/B0001/01",
         "/reader/B0001/01/depth",
         "/reader/B0001/01/edition",
+        "/api/book/B0001/reading",
+        "/api/chapter/B0001/01/reading",
         "/api/jobs",
         "/api/depth/B0001/01",
         "/api/edition/B0001/01",
@@ -123,6 +125,9 @@ def test_pages_and_retired_routes(server):
     ):
         status, _, _ = _request(server, gone)
         assert status == 404, gone
+    for retired_put in ("/api/book/B0001/reading", "/api/chapter/B0001/01/reading"):
+        status, _, _ = _request(server, retired_put, method="PUT", body={"mode": "narrative"})
+        assert status == 404, retired_put
 
 
 def test_chapter_api_returns_full_blocks_and_validates_host(server):
@@ -132,6 +137,7 @@ def test_chapter_api_returns_full_blocks_and_validates_host(server):
     assert ch["chapter"]["n"] == "01"
     assert len(ch["blocks"]) >= 1
     assert "toolbar" in ch
+    assert "reading" not in ch
     assert "tiers" not in ch
     assert "edition" not in ch
 
@@ -164,10 +170,12 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+    captured_requests = []
+
     class _MockUpstream(BaseHTTPRequestHandler):
         def do_POST(self):
             length = int(self.headers.get("Content-Length") or 0)
-            self.rfile.read(length)
+            captured_requests.append(json.loads(self.rfile.read(length).decode("utf-8")))
             body = (
                 'data: {"choices":[{"delta":{"content":"白话"}}]}\n\n'
                 'data: {"choices":[{"delta":{"content":"解析"},"finish_reason":"stop"}],'
@@ -202,7 +210,7 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
             assert map_res["supported"] is False
             assert map_res["can_force"] is True
 
-            # 2. SSE 划词伴读
+            # 2. SSE 划词伴读（含 translate 不带读法提示注入）
             status, sse_body, headers = _request(
                 base,
                 "/api/assist",
@@ -210,7 +218,7 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
                 body={
                     "uid": "B0001",
                     "n": 1,
-                    "action": "explain",
+                    "action": "translate",
                     "block_ids": ["B01"],
                     "selected_text": "选中原文",
                     "stream": True,
@@ -221,6 +229,10 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
             assert "event: delta" in sse_body
             assert "event: done" in sse_body
             assert "白话解析" in sse_body
+            assert captured_requests
+            sent_text = "\n".join(m["content"] for m in captured_requests[-1]["messages"])
+            assert "阅读偏好参考" not in sent_text
+            assert "论证" not in sent_text
 
             # 3. 钉住与删除旁批
             status, pin_body, _ = _request(
@@ -230,7 +242,7 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
                 body={
                     "uid": "B0001",
                     "n": 1,
-                    "action": "explain",
+                    "action": "translate",
                     "title": "分段注",
                     "block_ids": ["B01"],
                     "selected_text": "选中原文",
@@ -245,7 +257,7 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
             assert status == 200
             recs = json.loads(rec_body)
             assert recs["summary"]["total"] == 2
-            assert [r["action"] for r in recs["logs"]] == ["pin", "explain"]
+            assert [r["action"] for r in recs["logs"]] == ["pin", "translate"]
 
             status, _, _ = _request(base, f"/api/assist/pin/B0001/1/{note_id}", method="DELETE")
             assert status == 200

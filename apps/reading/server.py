@@ -23,7 +23,7 @@ from bookcorpus import envfile, preflight
 from bookcorpus.preflight import MissingConfigError
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.preflight import SourceTooLarge
-from bookcorpus.reading.service import ASSIST_ACTIONS, MissingProfileError, ReadingService
+from bookcorpus.reading.service import ASSIST_ACTIONS, ReadingService
 from bookcorpus.reading.store import UID_RE
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -34,9 +34,7 @@ ROUTES = [
     (re.compile(r"^/api/shelf$"), "shelf"),
     (re.compile(r"^/api/catalog$"), "catalog"),
     (re.compile(r"^/api/book/([A-Za-z0-9_-]+)$"), "book"),
-    (re.compile(r"^/api/book/([A-Za-z0-9_-]+)/reading$"), "book_reading"),
     (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)$"), "chapter"),
-    (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)/reading$"), "reading"),
     (re.compile(r"^/api/assist$"), "assist"),
     (re.compile(r"^/api/assist/pin$"), "assist_pin"),
     (re.compile(r"^/api/assist/pin/([A-Za-z0-9_-]+)/(\d+)/([A-Za-z0-9_-]+)$"), "assist_unpin_full"),
@@ -176,18 +174,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if method == "PUT":
-            for pattern, name in ROUTES:
-                match = pattern.match(path)
-                if not match:
-                    continue
-                if name == "reading":
-                    self._put_reading(match.group(1), int(match.group(2)))
+            for pattern, _name in ROUTES:
+                if pattern.match(path):
+                    self._json(405, {"error": "该路由不支持 PUT"})
                     return
-                if name == "book_reading":
-                    self._put_book_reading(match.group(1))
-                    return
-                self._json(405, {"error": "该路由不支持 PUT"})
-                return
             self._error(404, "没有这个接口")
             return
 
@@ -438,32 +428,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
         except Exception as exc:
             self._json(502, {"error": str(exc)})
-        else:
-            self._json(200, result)
-
-    def _put_reading(self, uid, n):
-        try:
-            data = self._body()
-            action = str(data.get("action") or "").strip()
-            mode = data.get("mode")
-            result = self.service.set_reading(uid, n, action, mode)
-        except FileNotFoundError:
-            self._json(404, {"error": "找不到章节"})
-        except MissingProfileError as exc:
-            self._json(409, {"error": str(exc), "code": "reading_profile_required", "uid": exc.uid})
-        except (TypeError, ValueError) as exc:
-            self._json(400, {"error": str(exc)})
-        else:
-            self._json(200, result)
-
-    def _put_book_reading(self, uid):
-        try:
-            data = self._body()
-            result = self.service.set_book_reading(uid, data.get("mode"))
-        except FileNotFoundError:
-            self._json(404, {"error": "找不到这本书"})
-        except (TypeError, ValueError) as exc:
-            self._json(400, {"error": str(exc)})
         else:
             self._json(200, result)
 

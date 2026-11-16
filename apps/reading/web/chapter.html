@@ -76,7 +76,6 @@ RD.ready(async () => {
 function renderShell() {
   const book = data.book;
   const ch = data.chapter;
-  const r = data.reading || {};
   const pinCount = (data.assist_notes || []).length;
   const mapReady = Boolean(data.chapter_map && data.chapter_map.supported !== false);
   const blockCount = (data.blocks || []).length;
@@ -89,7 +88,7 @@ function renderShell() {
 
   RD.mount('wb-root').innerHTML =
     '<section class="wb-head">' +
-      '<div><div class="eyebrow">' + RD.esc(book.title) + ' · ' + RD.esc(r.mode_label || r.mode || '自由阅读') + '</div>' +
+      '<div><div class="eyebrow">' + RD.esc(book.title) + (book.subject ? ' · ' + RD.esc(book.subject) : '') + '</div>' +
       '<h1>' + RD.esc(ch.title) + '</h1>' +
       '<div class="wb-sub">' + RD.fmt(ch.chars) + ' 字 · ' + RD.fmt(blockCount) + ' 个原文块 · 约 ' + RD.fmt(ch.minutes) + ' 分钟 · 100% 完整正文直出</div></div>' +
       '<div><a class="btn btn-ghost" href="/records?uid=' + encodeURIComponent(UID) + '">本章日志 →</a></div>' +

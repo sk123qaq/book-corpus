@@ -41,12 +41,6 @@
 <script src="/assets/theme.js"></script>
 <script>
 const UID = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
-const BOOK_MODES = [
-  ['narrative', '叙事'],
-  ['argument', '论证'],
-  ['practical', '实用'],
-  ['reference', '资料·图册'],
-];
 let data = null;
 
 RD.ready(async () => {
@@ -58,13 +52,7 @@ RD.ready(async () => {
     return;
   }
   render();
-  bind();
 });
-
-function modeLabel(mode) {
-  const found = BOOK_MODES.find((item) => item[0] === mode);
-  return found ? found[1] : (mode || '自动识别');
-}
 
 function render() {
   const book = data.book;
@@ -72,8 +60,6 @@ function render() {
   const chars = book.chars || 0;
   const packs = book.packs || 0;
   const firstRead = chapters[0];
-  const r = data.reading || {};
-  const mode = r.book_mode;
 
   RD.mount('crumb').innerHTML = '<a href="/">书架</a><i>/</i><a href="/catalog?q=' +
     encodeURIComponent((book.subjects || [])[0] || '') + '">' + RD.esc((book.subjects || [])[0] || '未分类') +
@@ -102,16 +88,10 @@ function render() {
     '<div class="work book-work">' +
       '<section><div class="section-title"><h2>章目</h2><span class="lbl">' + RD.fmt(chapters.length) + ' 章 · 点击直接阅读全文</span></div>' +
         '<div class="ch-list" id="ch-list"></div></section>' +
-      '<aside class="ticket" id="book-prefs">' +
-        '<div class="ticket-top"><span class="eyebrow">伴读偏好（后台参考）</span><span class="ticket-id">不阻断阅读</span></div>' +
-        '<h3>本书文体提示</h3>' +
-        '<p class="ticket-meta">仅用于调整划词浮动条的按钮排序与回答侧重，不影响正文显示。</p>' +
-        '<div class="mode-readonly"><div>当前设定 <b>' + RD.esc(modeLabel(mode)) + '</b></div>' +
-          '<div class="book-mode-set"><select id="book-mode-select" aria-label="选择本书文体偏好">' +
-            '<option value="">选择文体…</option>' +
-            BOOK_MODES.map((item) => '<option value="' + item[0] + '"' + (mode === item[0] ? ' selected' : '') + '>' + item[1] + '</option>').join('') +
-          '</select><button type="button" class="btn btn-ghost" id="book-mode-set">' + (mode ? '更新偏好' : '保存偏好') + '</button></div>' +
-          '<span>任何时候都可直接点左侧章节开始阅读。</span></div>' +
+      '<aside class="ticket" id="book-notes-panel">' +
+        '<div class="ticket-top"><span class="eyebrow">正文伴读工作台</span><span class="ticket-id">' + RD.esc(book.uid) + '</span></div>' +
+        '<h3>随文阅读工具</h3>' +
+        '<p class="ticket-meta">进章即看 100% 完整正文；划选段落或点击 ✦ 可按需调用讲人话、翻译原意、图解、拆解前提或追问，回答可钉住为永久旁批。</p>' +
         '<div class="existing" id="book-notes-summary"></div>' +
       '</aside>' +
     '</div>';
@@ -136,30 +116,7 @@ function render() {
         '<div class="pack-row"><span>第 ' + RD.esc(ch.n) + ' 章 · ' + RD.esc(ch.title) + '</span>' +
         '<a href="' + RD.chapterHref(book.uid, ch.n) + '">继续 →</a></div>'
       ).join('')
-    : '<div class="lbl">随文伴读</div><p class="fine" style="margin:4px 0 0">进入章节正文后，可随时点击「知识地图」或划词呼出伴读工具条。</p>';
-}
-
-function bind() {
-  const btn = RD.mount('book-mode-set');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    const sel = RD.mount('book-mode-select');
-    const mode = sel ? sel.value : '';
-    if (!mode) { RD.toast('请先选一种文体偏好', true); return; }
-    btn.disabled = true;
-    try {
-      data.reading = await RD.api('/api/book/' + encodeURIComponent(UID) + '/reading', {
-        method: 'PUT',
-        body: { mode },
-      });
-      render();
-      bind();
-      RD.toast('已更新本书伴读偏好');
-    } catch (err) {
-      RD.toast(err.message, true);
-      btn.disabled = false;
-    }
-  });
+    : '<div class="lbl">近期伴读章目</div><p class="fine" style="margin:4px 0 0">尚未生成导图或旁批。翻开任意章节即可使用顶部知识地图与划词浮动工具条。</p>';
 }
 </script>
 </body>

@@ -43,6 +43,7 @@ def test_shelf_book_and_chapter_return_full_blocks(reading_root):
 
     book = service.book("B0001")
     assert book["book"]["title"] == "甲书"
+    assert "reading" not in book
     assert len(book["chapters"]) == 2
     assert book["chapters"][0]["n"] == "01"
     assert book["chapters"][0]["note_count"] == 0
@@ -50,7 +51,16 @@ def test_shelf_book_and_chapter_return_full_blocks(reading_root):
     ch = service.chapter("B0001", 1)
     assert ch["chapter"]["n"] == "01"
     assert len(ch["blocks"]) >= 1
-    for retired in ("tiers", "preview_blocks", "standard_blocks", "edition", "edition_fit", "depth", "gates"):
+    for retired in (
+        "tiers",
+        "preview_blocks",
+        "standard_blocks",
+        "edition",
+        "edition_fit",
+        "depth",
+        "gates",
+        "reading",
+    ):
         assert retired not in ch
     assert ch["preflight"]["chapter_map"]["supported"] is False
 
@@ -165,3 +175,37 @@ def test_chapter_map_short_gate_and_force(reading_root):
     cached = service.generate_chapter_map("B0001", 1, force=False)
     assert cached["cached"] is True
     assert len(client.calls) == 1
+
+
+def test_assist_prompts_have_no_reading_mode_injection(reading_root):
+    fig_payload = {
+        "caption": "关系简图",
+        "family": "flow",
+        "reading_note": "两步衔接",
+        "summary": "[原文] 只讲选区本身。",
+        "data": {
+            "nodes": [{"id": "N1", "label": "甲"}, {"id": "N2", "label": "乙"}],
+            "edges": [{"from": "N1", "to": "N2"}],
+        },
+    }
+    client = _FakeAssistClient(figure_json=fig_payload)
+    service = ReadingService(str(reading_root), client=client)
+    raw = service.library.read_chapter("B0001", 1)
+    bid = raw["blocks"][0]["id"]
+    text = raw["blocks"][0]["text"]
+
+    for action in ("translate", "explain", "critique", "diagram", "ask"):
+        service.assist(
+            "B0001",
+            1,
+            action,
+            block_ids=[bid],
+            selected_text=text,
+            question="这句什么意思" if action == "ask" else "",
+        )
+
+    assert len(client.calls) == 5
+    for idx, call in enumerate(client.calls):
+        joined = "\n".join(msg["content"] for msg in call["messages"])
+        for banned in ("阅读偏好参考", "书型参考", "论证式", "读法提示", "命题、论据"):
+            assert banned not in joined, f"call[{idx}] unexpectedly contained {banned!r}"
