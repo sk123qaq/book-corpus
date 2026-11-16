@@ -1,49 +1,110 @@
 # 分层读（正文伴读工作台与操作日志）
 
-分层读阅读页采用**正文伴读 + 顶部工具台 + 划词工具栏 + 右侧旁批与伴读抽屉**结构，已退役旧版三档/五层读本、工单队列与视觉读本（`edition`）：
-
-- 章页 `/chapter/<uid>/<n>` 默认直接呈现章节 **100% 完整原文**（按段落 `B01`, `B02`, … 锚点渲染）；
-- 顶部常驻工具栏：`知识地图`（带短章门槛预检 `chapter_map_gate`）、`核心术语`、`旁批` 开关、`模型设置`、`伴读抽屉`；
-- 正文划词或选中段落浮现工具栏：解释、白话/译文、背景补充、逻辑拆解、图解，点击走 `POST /api/assist`（SSE 流式输出），支持「钉选为旁批」（`POST /api/assist/pin` / `DELETE /api/assist/pin`）；
-- 记录页 `/records` 仅保留**各章节伴读与知识地图操作日志**（`ops_log.jsonl`，只记用户实际触发的动作、模型、状态与回跳 `#blk-<id>` 锚点）。
+8771 把一本书拆成可读的章，默认给 100% 原文；知识地图与划词伴读按需调用模型。
+当前没有书级读法、三档/五层读本、读本页或工单队列，`/reader/...`、`/api/depth/...`、`/api/jobs` 等旧路由一律 404。
 
 ## Sub-features
 
-- `read-shelf` 书架 `/`：可读的书、章节数、字数、伴读与知识地图活动统计（`/api/shelf`）。
-- `read-book` 书页 `/book/<uid>`：书目信息、章节目录与各章操作计数、伴读入口（`/api/book/<uid>`，不再设置或暴露「默认读法」）。
-- `read-chapter` 章页 `/chapter/<uid>/<n>`：完整原文正文、顶部工具台（`#btn-map` / `#btn-terms` / `#btn-toggle-pins` / `#btn-model-box` / `#btn-drawer`）、划词浮动工具栏（`#selection-bar`）、伴读抽屉（`#assist-drawer`）与段落旁批。
-- `read-preflight` 知识地图预检：`/api/chapter/<uid>/<n>` 中的 `preflight.chapter_map` 给出 `supported`、`reason` 与 `stats`（`blocks` / `han_chars` / `chunks` 等）；短章（< 800 汉字且 < 5 块）禁用地图生成并给原因提示。
-- `read-assist` 流式伴读与旁批：`POST /api/assist` 返回 SSE 事件流（`meta` / `delta` / `done` / `error`），可选 `action`：`diagram` / `explain` / `translate` / `critique` / `ask`；`POST /api/assist/pin` 将结果钉选成某段落旁批并持久化到 `assist_notes.json`。
-- `read-records` 操作日志 `/records`：`GET /api/records` 返回所有操作日志（`logs` / `chapters` / `summary`），每条包含 `uid`、`n`、`action`、`block_ids`、`model`、`status`、`error`、`ts`，支持按状态筛选并回跳 `/chapter/<uid>/<n>#blk-<block_id>`。
+- `read-shelf` 书架：`/` 调 `/api/shelf`，渲染书墙、目录表与「最近阅读」。统计是 `readable` / `chapters` / `chars` / `packs` / `notes` / `maps`；`packs` 现在指有旁批或有知识地图的章数，不是旧读本包。`recent` 取最近 40 条操作按 `(uid,n)` 去重、最多 4 条；没有操作时回退到第一本书的第一章，动作写作「开始阅读」、`updated_at: null`。
+- `read-catalog` 书目与搜索：`/catalog` 调 `/api/catalog?q=&subject=`，按书名、作者、分类、章名搜；结果分书、元数据、章节、作者几组。`q` 为空时 `metadata` / `chapters` / `authors` / `subjects` 都是空数组，只靠 `subject` 也能筛。页内写明「段落级全文检索不在本期」，别拿它当全库检索。
+- `read-book` 书页：`/book/<uid>` 调 `/api/book/<uid>`，首屏是封面、作者、章数/字数、分类与「翻开第 NN 章」，下面是章表（每章分钟数、是否有导图、旁批数、直读全文）和「随文阅读工具」。没有默认读法选择器；`/api/book` 没有 mode 字段。未知 uid 返回 404。
+- `read-chapter` 章页：`/chapter/<uid>/<n>` 调 `/api/chapter/<uid>/<n>`，正文按块 100% 渲染。静态锚点有 `#top-q`、`#night`、`#crumb`、`#wb-root`、`#selection-bar`；渲染后有 `#wb-toolbar`、`#btn-map`、`#btn-terms`、`#btn-toggle-pins`（内含 `#pin-count`）、`#btn-model-box`、`#btn-drawer`、`#model-box`、`#map-drawer`、`#wb-grid`、`#reader-body`、`#assist-drawer` 与 `#drawer-*`。块是 `#blk-<id>` / `.reader-block`，段尾触发是 `.blk-trigger`，钉住的旁批是 `.pin-card` / `.pin-del`。没有 `#depth-panel`，也没有工单、三档、五层、读法提示这些 DOM；`app.css` 里还留着 `.depth-*` 死样式，不能拿 CSS 名字当页面证据。
+- `read-preflight` 章页门控：`/api/chapter` 的 `preflight.chapter_map` 恰好是 `{supported, reason, can_force, stats}`，`stats` 是 `{blocks, chars, subheadings, tables}`，没有 `han_chars` / `chunks`。短章门控有两条：`chars < 1200 且 subheadings < 2 且 tables == 0`，或 `blocks < 14 且 subheadings < 2 且 tables == 0 且 chars < 1800`；不支持的章节仍返回 `can_force: true`。`preflight.capacity` 是另一份 Gate，形状 `{ok, code, warnings, stats, remediation}`，`stats` 里才有 `chunks` / `max_chunk_blocks` / `estimated_output_tokens` / `estimated_seconds` / `limits`。容量超限只影响知识地图生成，不阻断直读正文。
+- `read-chapter-map` 按需知识地图：`POST /api/chapter-map/<uid>/<n>`，body 可选 `{force, model, effort}`。`force:false` 且命中未过期缓存时返回 `dict(cached, cached=true)`；未命中且短章门控不支持时返回 200 `{supported:false, can_force:true, reason, stats}`，不调模型；生成时返回 `{supported:true, forced, generated_at, model, usage, elapsed_ms, sections, terms, figures, stats}`。缓存落 `工作区/阅读/<uid>/ch/<nn>/chapter_map.json`；源文件哈希变了，读取时只加内存里的 `stale:true`，不写回。`sections` 给 UI 的形状是 `{id, title, summary, block_ids, nodes}`，不是模型文档里的 `unit_ids`。容量阻断返回 422 `{error, code:"source_too_large", stats, remediation}`；模型缺失 400 `missing_config`；其他上游错误 502。
+- `read-assist` 划词伴读：`POST /api/assist`，body `{uid,n,action,block_ids,selected_text,question,model,effort,stream}`。动作只有 `diagram` 图解此段、`explain` 讲人话举例、`translate` 翻译原意、`critique` 拆解前提、`ask` 自由追问；工具栏按这个集合从 `data.toolbar` 生成。`stream:true` 是默认值，HTTP 200 `text/event-stream`，事件只有 `delta`（`{text}`）、可选的 `diagram`（`{html, figure}`）、`done`（完整结果）和流内异常时的 `error`；**没有 `meta` 事件**。`stream:false` 返回完整 JSON，键含 `id/uid/n/action/action_label/block_ids/selected_text/question/content/diagram_html/figure/model/usage/tokens/elapsed_ms/op`。无模型 key 时在开流前就 400 `{code:"missing_config", missing, fix}`；参数错误 400；章节不存在 404；开流后的上游错误仍是 HTTP 200，只在流里发 `error`；非流式上游错误 502。`diagram` 必须回严格 JSON 才渲染 SVG，模型回普通文字时 `diagram_html` 为空但不丢正文。
+- `read-pins` 旁批：`POST /api/assist/pin` 写入 `工作区/阅读/<uid>/ch/<nn>/assist_notes.json`，body 是 `{uid,n,action,title,block_ids,selected_text,question,content,diagram_html}`；返回带 `id:"note-xxxxxxxx"` 的 note。旁批按最后一个 `block_ids` 锚在段后；源文件哈希变了，读取时只加 `stale:true`。`DELETE /api/assist/pin/<uid>/<n>/<id>` 返回 `{ok:true, deleted:id}`；不存在的 note 返回 404。旧的 `DELETE /api/assist/pin/<uid>?n=...` 仍在，但新代码不要用它。每次钉住/移除都追加 `pin` / `unpin` 操作日志。
+- `read-records` 操作日志：`/records` 调 `/api/records`，页面自己按 `uid` / 动作 / 状态做客户端筛选。接口支持 `?uid=&action=&status=&limit=`，`limit` 默认 300、夹在 1..1000；返回 `{logs, chapters, summary}`。`logs` 每条有 `id/ts/uid/n/book_title/chapter_title/action/block_ids/status/model/tokens/elapsed_ms/summary/error`，只有真跑过模型的记录才有 `model`，旁批记录留空。`summary` 是 `{total, ok, error, assist, chapter_map, pin, chapters}`，`pin` 统计 pin+unpin。`chapters` 按最近操作倒排，带 `ops` / `actions` / `note_count` / `has_map`。页面有「全部 / 知识地图 / 划词伴读 / 旁批变更 / 失败」五个页签，行尾「定位 →」跳到 `/chapter/<uid>/<n>#blk-<first_block>`。
+- `read-guard` 边界：Host 不是 `127.0.0.1` / `localhost` 时页面和接口都 403；POST 的 `Origin` 不是本机 http 源也 403。响应带 `Cache-Control: no-store` 与 `X-Content-Type-Options: nosniff`。已知路由用错方法返回 405（例如 GET `/api/assist`、POST `/api/shelf`），未知接口 404 JSON，未知页面 404 HTML。`/api/asset?uid=&rel=` 只服务书目录内的图片，缺参 400、越界或不存在 404。
+
+## How to get to it (user POV)
+
+- 从 8773 首页的「翻开书」卡进来，或直接打开 `http://127.0.0.1:18771/`。首屏是书墙，点书脊进书页；也可以用顶栏「书目」进 `/catalog`，用「操作日志」进 `/records`。
+- 书页点「翻开第 NN 章」或章表里的「直读全文」进章页。章页默认就是完整正文，不点任何按钮也能读。
+- 章页工具栏点「知识地图」展开按需生成抽屉；已有缓存时按钮写「知识地图（已缓存）」，抽屉里是「重新生成」。短章会显示「无需强行展开导图」和「仍要展开简图（调用模型）」。
+- 在正文里拖选一段，或点段尾 ✦，浮出划词工具栏；选「图解此段 / 讲人话举例 / 翻译原意 / 拆解前提 / 自由追问」后右边抽屉流式出结果。抽屉底部可以继续追问；结果右上「钉住到段落」把旁批钉在原文后，旁批卡上的「移除」删除。
+- 「模型设置」只改浏览器 localStorage 里的模型名与推理档，默认 `deepseek-v4.1-flash` / `high`，不影响服务端默认值。
+- 章页右上「本章日志 →」带 `?uid=` 进 `/records`，记录页可按页签和关键字筛，再点「定位 →」跳回原段落。
 
 ## Driving it with curl + headless Chrome + pytest
 
 Preconditions:
 
-- 工作区按 [README](./README.md) 建好，`apps/reading/server.py` 启动在 `18771`。
-- `google-chrome-stable` 可用；章页和记录页是客户端渲染，用户可见状态以剥掉 `<script>` 后的 `--dump-dom` 为准。
+- 工作区按 [README](./README.md) 建好，并装了样书：`uv run --frozen book-corpus sample --root "$ROOT"`。本章命令默认样书 `B0001` 第一章是 `01`，15 个正文块、1,719 字；九章都高于短章门控。
+- 证据目录先定：`RUN_ID=${RUN_ID:-20261116-layered}; EV="$PWD/artifacts/verify/$RUN_ID/layered-reads"; mkdir -p "$EV"`。
+- 阅读服务由本轮起，端口必须是 18771，不能碰操作员的 8771：
 
 ```bash
-CHROME=google-chrome-stable
-DOM="$ROOT/run/chapter-dom.html"
-"$CHROME" --headless=new --disable-gpu --no-sandbox \
-  --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 \
-  --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$DOM"
-python3 - "$DOM" <<'PY'
-import re, sys
-html = open(sys.argv[1], encoding="utf-8").read()
-body = re.sub(r"<script\b.*?</script>", "", html, flags=re.S | re.I)
-for pat in ('id="btn-map"', 'id="btn-terms"', 'id="assist-drawer"', 'id="selection-bar"', 'blk-B01'):
-    print(pat, body.count(pat))
-assert "工单" not in body
-PY
+cd /home/shike/文档/book-corpus
+export BOOK_CORPUS_ENV="$ROOT/run/env"
+: >"$ROOT/run/reading.log"
+setsid uv run --frozen python apps/reading/server.py --root "$ROOT" --port 18771 \
+  --no-annotate --quiet >>"$ROOT/run/reading.log" 2>&1 & echo $! > "$ROOT/run/reading.pid"
+until grep -q '^阅读工作台 8771 · root=' "$ROOT/run/reading.log"; do sleep 0.2; done
 ```
+
+- 就绪行是 `阅读工作台 8771 · root=<ROOT> · http://127.0.0.1:18771/`，不是旧的 `分层读 8771`。不带 `--quiet` 时 stderr 还会打「配置提示：…」，那是云端 key 的常态，不是服务坏。
+- `--no-annotate` 现在只是兼容开关，`ReadingService.annotate` 存了但没人读；它**不关**伴读或知识地图的模型调用。模型只在 `POST /api/assist` 与需要生成的知识地图里按需调用，能否调用只看 `ModelClient.available()`。
+- 不要用「环境里没有 `OPENCODE_GO_API_KEY`」当离线保证：`ModelClient` 还会读 `~/.pi/agent/auth.json` 里的 opencode-go 登录。要离线验模型分支，起本地 stub，并把阅读服务指向它：
 
 ```bash
-curl -s http://127.0.0.1:18771/api/chapter/B0001/01 \
-  | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d['blocks']), d['preflight']['chapter_map']['supported'])"
-
-curl -s http://127.0.0.1:18771/api/records \
-  | python3 -c "import json,sys; d=json.load(sys.stdin); print(list(d.keys()))"
-# ['logs', 'chapters', 'summary']
+setsid python3 .agents/skills/verify-book-corpus/scripts/mock_reading_model.py --port 18790 \
+  >"$ROOT/run/mock-model.log" 2>&1 & echo $! > "$ROOT/run/mock-model.pid"
+: >"$ROOT/run/reading.log"
+setsid env OPENCODE_GO_API_KEY=sk-mock \
+  READING_MODEL_URL=http://127.0.0.1:18790/v1/chat/completions \
+  uv run --frozen python apps/reading/server.py --root "$ROOT" --port 18771 \
+  --no-annotate --quiet >>"$ROOT/run/reading.log" 2>&1 & echo $! > "$ROOT/run/reading.pid"
+until grep -q '^阅读工作台 8771 · root=' "$ROOT/run/reading.log"; do sleep 0.2; done
 ```
+
+- stub 只认本地 18790，返回固定的白话、流程图与按原文块拼的知识地图，不评价模型质量；`READING_MODEL_URL` 必须指向它，否则会去 opencode 真打。下面的模型分支命令都假设这个 stub 已起。
+
+- **页面骨架。** `curl -s -o /dev/null -w '%{http_code} %{content_type}\n'` 取 `/`、`/catalog`、`/book/B0001`、`/chapter/B0001/01`、`/records`，五个都是 `200 text/html`。`/chapter/B0001/1` 也返回 200（章号可写 1 或 01），只有被并入正文的旧前置页才会 302 到合并后的章号；样书没有这种合并页。
+- **书架。** `curl -s http://127.0.0.1:18771/api/shelf` 的键是 `stats/books/recent/total`；`stats` 是 `readable/chapters/chars/packs/notes/maps`，样书为 `1/9/21362/0/0/0`（生成了地图或旁批后 `packs` 与对应计数会变）。`recent` 至少一条，没操作时是 `B0001/01/第一章 序/开始阅读`。
+- **书目。** `curl -s 'http://127.0.0.1:18771/api/catalog?q=%E9%98%BFQ'` 的 `query` 是 `阿Q`、`readable` 至少 1 条、`books` 与 `readable` 同长；空 `q` 时 `metadata` / `chapters` / `authors` / `subjects` 都是 `[]`。
+- **书页与章页 JSON。** `/api/book/B0001` 是 `{book, chapters}`，章项有 `n/note_count/has_map/ops_count/minutes`；`/api/chapter/B0001/01` 是 `{book, chapter, blocks, toolbar, preflight, assist_notes, chapter_map}`，`toolbar` 五项的 `action` 顺序是 `explain/translate/diagram/critique/ask`。`preflight.chapter_map` 的键只应有 `supported/reason/can_force/stats`，`stats` 只应有 `blocks/chars/subheadings/tables`；如果出现 `han_chars` 或 `chunks`，是拿错了旧的容量结构。
+- **短章门控（不调模型）。** 样书九章都高于门控，先手写一个短章：
+
+```bash
+cat > "$ROOT/books/B0001/md/10_短章.md" <<'MD'
+---
+title: "第十章 短章"
+author: "鲁迅"
+language: "zh"
+source: "source/阿Q正传.txt"
+chapter: "10"
+---
+
+很短的一章。
+MD
+curl -s -X POST http://127.0.0.1:18771/api/chapter-map/B0001/10 \
+  -H 'Content-Type: application/json' -d '{"force":false}' > "$EV/map-short-gated.json"
+```
+
+结果 `supported:false`、`can_force:true`、`stats` 是 `{blocks:1, chars:6, subheadings:0, tables:0}`，`reason` 里同时点出字数和块数；服务端没有模型调用。`/api/chapter/B0001/10` 的 `preflight.chapter_map` 也应给出同一份门控。
+- **强制短章（stub）。** 同章 `-d '{"force":true}'` 返回 200 `supported:true`，`stats.units` 为 1；这一步会走 stub，不是真模型。
+- **生成与缓存（stub）。** `POST /api/chapter-map/B0001/01` 加 `{"force":false}` 返回 `supported:true`，`stats.units` 为 15、`stats.sections` 为 1；再发一次同一请求，第二份是 `cached:true`。磁盘上应出现 `$ROOT/工作区/阅读/B0001/ch/01/chapter_map.json`，形如 `{"schema":1,"uid":"B0001","n":"01","source_sha256":"…","sections":[…],"stats":{…}}`。把源文件改一个字节后再取，`/api/chapter` 的 `chapter_map.stale` 变 `true`，但缓存文件本身不被重写。
+- **划词伴读 SSE（stub）。** `curl -sS -N -X POST http://127.0.0.1:18771/api/assist -H 'Content-Type: application/json' -d '{"uid":"B0001","n":1,"action":"explain","block_ids":["B01"],"selected_text":"我要给阿Q做正传","stream":true}'` 以 `event: delta` 开头、以 `event: done` 收尾；`event: meta` 不应出现。`action:"diagram"` 的事件序列是 `diagram` 后接 `done`，`diagram` 的 `html` 含 `<svg`，`done.figure.caption` 是 `两步关系`。
+- **划词伴读非流式（stub）。** 同一请求体加 `"stream":false` 返回 200 JSON，`action` 是 `explain`，`content` 非空，`tokens` 是 30；`block_ids` 原样带回。
+- **旁批钉住与移除（不调模型）。** `POST /api/assist/pin` 传 `{uid:"B0001", n:1, action:"explain", title:"测试旁批", block_ids:["B01"], selected_text:"我要给阿Q做正传", content:"一条可复核的旁批"}`，返回 `id` 以 `note-` 开头；`$ROOT/工作区/阅读/B0001/ch/01/assist_notes.json` 出现该 note，`GET /api/chapter/B0001/01` 的 `assist_notes` 长度变 1；`DELETE /api/assist/pin/B0001/01/<id>` 返回 `{ok:true, deleted:<id>}`，再取章节 `assist_notes` 为空。`DELETE` 不存在的 id 返回 404。
+- **操作日志。** 做完旁批后 `curl -s http://127.0.0.1:18771/api/records` 的 `summary` 至少 `pin:1`，`logs` 第一项是 `unpin`（如果刚删）或 `pin`；`chapters[0]` 带 `ops` / `actions` / `note_count` / `has_map`。`?limit=1` 只回一条；`?status=error` 在无失败时是空数组，不要拿它证明日志写了。`/records?uid=B0001` 的页面筛选是客户端行为，接口的 `uid` 参数也支持。
+- **错误与边界。** 不设模型 key、且 `~/.pi/agent/auth.json` 没有 opencode-go 登录时，`POST /api/assist` 是 400 `{code:"missing_config", fix:…}`；本机 pi 已登录时这条会变成真调用，别拿它当离线用例。`GET /api/assist` 是 405；`POST /api/shelf` 是 405；`Host: evil.example` 取 `/` 是 403；`/reader/B0001/01`、`/reader/B0001/01/depth`、`/api/depth/B0001/01`、`/api/jobs`、`/api/book/B0001/reading` 都是 404。`/api/asset` 缺参 400、路径越界或不存在 404。
+- **headless Chrome 章页。** 先剥 `<script>`，再断言 `id="btn-map"`、`id="btn-terms"`、`id="btn-toggle-pins"`、`id="btn-model-box"`、`id="btn-drawer"`、`id="selection-bar"`、`id="assist-drawer"`、`id="pin-count"`、`blk-B01` 都在，正文含「100% 完整正文直出」；`id="depth-panel"` 一定不在，工单/读法/三档/五层文本也不在。缓存地图生成后 `#btn-map` 的文本含「（已缓存）」。
+- **书页、书目、记录页。** 同样用 `--dump-dom`：书页断言 `#book-root`、`#ch-list`、`#book-notes-panel`、`#book-notes-summary`；书目断言 `#q`、`#results`、`#stats`、`#note`；记录页断言 `#stats`、`#chapters`、`#records`、`#tabs`、`#ops-q`、`#btn-refresh`。三页都是客户端渲染，`curl` 只证明模板在。
+- **离线回归。** `uv run --frozen pytest -q tests/test_reading_server.py tests/test_reading_service.py tests/test_reading_preflight.py` 全过；服务端用例自己起临时进程与 mock upstream，不会碰 18771。
+- **容量 422 未 live 演练。** 要触发 `source_too_large` 需要造 >5000 块或 >1M 估算 token 的章节；`tests/test_reading_preflight.py` 证明 gate 与 payload 形状，路由的 422 只按源码核对，复跑时记 `unexercised`，不要伪装成页面通过。
+
+## Gotchas
+
+- 章号可以写 `1` 或 `01`，不会像旧文档说的那样一律 302 到两位章号；只有被并入正文的旧前置页（`body_n` 指向的章）才 302 到合并后的章号。样书没有这种合并页，别用 `/chapter/B0001/1` 验证重定向。
+- `preflight.chapter_map` 不是容量预检。短章门控的 `stats` 是 `blocks/chars/subheadings/tables`；`chunks` / `estimated_*` / `limits` 在 `preflight.capacity.stats` 里。把两者混在一起会写出 `<800 汉字且 <5 块` 这种已经不存在的阈值。
+- 短章门控不调模型，但「生成成功」一定调模型。样书九章都高于门控，想验门控必须手写一个短章；想验生成必须起 stub 或花一次真调用。`--no-annotate` 不是离线开关。
+- `ModelClient.available()` 不只看 `OPENCODE_GO_API_KEY`，还看 `~/.pi/agent/auth.json` 的 opencode-go 登录。没有环境变量也可能真打模型；离线验证要么起 stub，要么把 HOME 指到没有 auth.json 的目录后重启服务。
+- SSE 没有 `meta` 事件。实际顺序是若干 `delta`（`diagram` 动作时先来一个 `diagram`）再 `done`；流内异常是 HTTP 200 加 `error` 事件，不是 500。`stream:false` 才是普通 JSON 200。
+- `diagram` 的模型输出必须是严格 JSON 且带 `data`；回普通文字时 `diagram_html` 为空、`content` 保留文字，这不是接口坏。`done` 里可能有 `figure:null`，断言 `<svg` 前先看是否真的走了 `diagram` 分支。
+- 旁批的 `stale` 只在读取时按源文件 sha 计算，不写回 `assist_notes.json`；改源文件后再读会看到 `stale:true`，重新钉住才会写新 sha。`note_count` / `packs` / `maps` 都是按磁盘产物现算的，不是账本字段。
+- `sections` 的 UI 形状是 `{id,title,summary,block_ids,nodes}`，没有 `unit_ids`；`units` 数量只在 `stats.units` 里。按模型文档的 `unit_ids` 去断言会 KeyError。
+- 页面是客户端渲染，`curl` 拿到的 HTML 只有模板；`--dump-dom` 也会带出 `<script>` 里的模板字符串，所以先剥脚本再数 id。`#btn-gen-map` / `#btn-gen-map-force` 只在点开地图抽屉后才出现，默认 DOM 里没有，不能拿「没找到」判页面坏。
+- 记录页的筛选是客户端行为，`/api/records?status=...` 是另一条接口路径；页面本身只取一次全量日志。`logs[].model` 在旁批记录里是空串，不是所有记录都有模型名。
+- 操作日志 append-only，测试写入会留在 `工作区/阅读/ops_log.jsonl` 与 `logs/`。清理只删一次性根和进程，不要把证据目录或操作员的 `~/书库` 一起删。
+- 旧 CSS 里还有 `.depth-*`、`.rec-tiers`、`.path-badge-depth`，但模板里没有对应 DOM；`rg depth` 会命中 CSS，不能据此说页面还有深度层。退役路由的 404 由 `tests/test_reading_server.py` 的可执行清单守着，改路由先跑它。

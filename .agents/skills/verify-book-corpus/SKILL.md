@@ -64,7 +64,7 @@ setsid python3 apps/ops/server.py --root "$ROOT" --port 18770 \
 | 服务 | 端口 | 就绪行 | 备注 |
 |---|---|---|---|
 | 首页 | 18773 | `书库首页 http://127.0.0.1:18773 · root=<ROOT>` | 只读 `books/`、`日课/` 与仓库模板；`books.toml` 必需，缺了 exit 2。启动前清掉 shell/`.env` 里的 `BOOKS_ROOT`，否则 `Library` 用它而不是 `--root`。可以最先起 |
-| 分层读 | 18771 | `分层读 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 紧跟一行「配置提示：缺少配置：MinerU…；PaddleOCR…；MiMo…」，是云端 key 常态，不是故障。章页展示完整正文工作台与工具栏，`/api/chapter` 带知识地图预检，`--no-annotate` 跳过伴读/地图真实模型调用 |
+| 分层读 | 18771 | `阅读工作台 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 不带 `--quiet` 时 stderr 还会打「配置提示：…」，是云端 key 常态，不是故障。章页展示完整正文工作台与工具栏，`/api/chapter` 带知识地图与容量预检；`--no-annotate` 只是兼容开关，不关伴读/地图的模型调用 |
 | 日课 | 18772 | `http://127.0.0.1:18772` | 单行输出，没有别的就绪信号 |
 | 找一段 | 18765 | `书库检索演示：http://127.0.0.1:18765` | 不接 `--root`，只认 `BOOKS_ROOT`；启动必打印 `启动恢复：N 轮…`（0 也打）。`BOOKS_RUNLOG_ROOT` 是运行记录的唯一隔离开关，默认落仓库内共享目录；会话库也不随 `BOOKS_ROOT` 隔离 |
 | 操作台 | 18770 | `统一操作台：http://127.0.0.1:18770  root=<ROOT>` | `--port 0` 会打印实际端口 |
@@ -100,21 +100,22 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 四种驱动方式，按功能文件里写的用，不要自创：
 
 - **curl** 验服务端渲染页骨架与接口契约：取 HTML 断言稳定标记，取 JSON 断言字段。`features/library-home.md`、`features/daily-lessons.md`、`features/manage-library.md` 走这条；`features/layered-reads.md` 的接口也走 curl，但章页/记录页是客户端渲染，用户可见状态用 `--dump-dom`。
-- **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py tests/test_depth_acceptance.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
+- **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
 - **直接跑脚本**验端到端：`python3 tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
 - **CLI** 验用户命令：`book-corpus embed` 在一次性根里跑，断言 stdout/stderr、退出码与磁盘产物，逐条见 `features/embed.md`；`book-corpus search` / `query` 的词法、混合、降级与书卡逐条见 `features/search-query.md`。两者都只认 `--root` 指到的一次性根；`embed` 默认 `--server` 与 `search/query` 默认 `BOOKS_EMBED_URL` 都是操作员的 18080，必须改 18780。
 - **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读章页、记录页），先剥掉 `<script>` 源码再断言，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。默认找 `google-chrome-stable`；本机有（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。
-  - `google-chrome-stable --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，先剥掉 `<script>` 源码再数 `id="depth-panel"`；`--dump-dom` 也带模板字符串，直接 grep 会多算。详细片段见 `features/layered-reads.md`。
+  - `google-chrome-stable --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，先剥掉 `<script>` 源码再数 `id="btn-map"`、`id="wb-toolbar"`、`blk-B01`，并断言 `id="depth-panel"` 不在；`--dump-dom` 也带模板字符串，直接 grep 会多算。详细片段见 `features/layered-reads.md`。
   - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败。
   - `python3 .agents/skills/verify-book-corpus/scripts/drive_sse_pause.py --base http://127.0.0.1:18765 --out "$EV/sse-pause-resume.json"`，末行 `RESUMED ... done_ok=True`，exit 0；它真打一次模型，先读完离线合同再决定跑不跑。
   - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机 11 条会话仍没有 3 轮样本，就属于这一支）。
   - `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py`，自己起临时根；末行 `SHOT PASS`、`CONSOLE ERROR 0`，八个页签含账表（2026-11-13 实测）。
+- **本地模型 stub** 验分层读的 SSE 与知识地图生成：`python3 .agents/skills/verify-book-corpus/scripts/mock_reading_model.py --port 18790`，阅读服务带 `OPENCODE_GO_API_KEY=sk-mock`，并把 `READING_MODEL_URL` 指向这个 stub 起。它只返回可渲染的固定形状，不评价模型质量；逐条命令见 `features/layered-reads.md`。
 
 硬规则：
 
 - 每个功能文件里的命令逐字复制，不改引号与参数。
 - 页面动作和接口断言是两种证据，别用后者冒充前者。只验了接口没走页面，记 `ui-unverified`；客户端渲染页只做 curl 断言，同样记 `ui-unverified`，不能算页面通过。
-- 生成读本、跑真实作答都会打模型（`opencode-go/deepseek-v4.1-flash`）；`--no-annotate` 只关标注，不关生成。离线可验的部分先跑完，再决定要不要花这次调用。
+- 知识地图生成与划词伴读会打模型（默认 `opencode-go/deepseek-v4.1-flash`）；`--no-annotate` 是兼容开关，不关任何模型调用。没有环境 key 也不等于离线：`ModelClient` 还会读 `~/.pi/agent/auth.json` 的 opencode-go 登录。模型分支用 `scripts/mock_reading_model.py` 本地 stub；只有决定花真调用时才打真模型，并在证据里记下这次调用。
 - 演示页的会话库在仓库内 `apps/demo/缓存/sessions/`，不随 `BOOKS_ROOT` 隔离，写进去就是写进操作员的会话列表。
 
 ## Evidence

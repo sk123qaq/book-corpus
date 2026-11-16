@@ -36,7 +36,8 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 ## 证明与跳过
 
-- 上次全绿（按当时口径）：`2026-11-14` 一轮 `RUN_ID=20261114-mt2`，五个页面全过（首页/日课/分层读/找一段走 curl + HTML，操作台走 `shot_ops.py` CDP，`check_ops.py` 168 项全过），含一次真生成 `r-260618d0b1`（速览比例 0.2464 过门槛，`elapsed_ms 193976`，章 02 `path depth`、读本页 200）与一次读法切换过期/恢复实测。首页键盘仍记 `ui-unverified`；`check_session_ui.py` 因无 3 轮样本未跑，多轮 UI 不在这次「全绿」里。证据在 `artifacts/verify/20261114-mt2/`。2026-11-14 `20261114-lr-preflight` 复核发现章页实为客户端渲染，改用 `--dump-dom` 重验；同日 `20261114-fix3` 复验 422 内联卡、主按钮 422、记录页 blocked 专档/中文类别/无重跑三项修复，证据在 `artifacts/verify/20261114-fix3/reading-blocked-ux/`。下一轮跑完请就地更新这一行。
+- 2026-11-16 分层读局部复核 `RUN_ID=20261116-layered`：书架/书目/书页/章页/记录页走 curl + `--dump-dom`，并用 CDP 点了知识地图、模型设置与伴读抽屉；短章门控、stub 生成/缓存、SSE 图解/讲人话、旁批钉住/移除、Host 403 与退役路由 404 都有证据，`CONSOLE ERROR 0`。真模型未跑，模型分支由 `scripts/mock_reading_model.py` 本地 stub 驱动；容量 422 未 live 演练。证据在 `artifacts/verify/20261116-layered/layered-reads/`。下一轮跑完请就地更新这一行。
+- 2026-11-14 的 `20261114-mt2` 是旧口径：当时还有书级读法、三档/五层读本与 `/reader/<uid>/<n>/depth`，这些界面在 `ce30e6a` / `2b8bf2d` 已退役，不能按原记录复跑，只作历史。`20261114-lr-preflight` 的「章页是客户端渲染」仍然成立。
 - 2026-11-15 书库检索局部复核 `RUN_ID=20261115-search-update`：找一段补 SSE / 暂停续答 / 混合检索（真答 34–42 秒、暂停 `partial_text` 3–5 字、resume `done.ok=true`；`shot.py` 截到流式半截正文与「暂停」按钮、`CONSOLE ERROR 0`、`overflow=False`）；CLI 补 `search`/`query` 词法与混合 (`hybrid, vec_hits=34`)、降级 `bm25_only`、书卡触发。证据在 `artifacts/verify/20261115-search-update/`。候选书多选与暂停按钮点击仍记 `ui-unverified`：样书只有 1 本，多选需 ≥2 本候选；暂停点击已由 API 层 SSE+pause+resume 证明。
 - 2026-11-13 的 `20261113-mt` 已随 `artifacts/` 轮转清掉；旧轮次证据不保证还在，别把历史 RUN_ID 当可复核链接。
 
@@ -54,7 +55,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 - 演示页的会话库在仓库内 `apps/demo/缓存/sessions/`，不随 `BOOKS_ROOT` 隔离；新实例照样列出操作员的会话（2026-11-14 为 11 条，随使用变化）。见 [find-a-passage.md](./find-a-passage.md) 的 Gotchas。
 - `/classic` 自 `de5e792` 起发 `stateless:true`，不建会话（`apps/demo/server.py:873`），旧记录里的「经典页 turn 永远 pending」已作废。经典页的 turn 不进历史、不能导出，这是设计；要验导出或历史必须走 `/` 的会话页。
 - `tests/manual/demo/shot.py` 只等 25 秒（`tests/manual/demo/shot.py:233`）。单本回答 2026-11-15 实测 34–42 秒，流式期间脚本会先报 `answer ready=False cites=0`，但正文已在上屏；不能把 `ready=False` 当失败，慢回答另轮询 `/api/session` 或看 SSE 的 `done`。
-- 分层读的生成必然打模型，`--no-annotate` 只关标注；离线只能验到任务被受理（202）。202 之后的状态不只有 `done`/`failed`：本轮真生成 `r-260618d0b1`（章 02，只勾 `skim`）实测 `state done`、`progress 100`、`elapsed_ms 193976`、`layers_ready [model, skim]`、`state.json status=ready`、`path depth`、读本页 `/reader/<uid>/<n>/depth` 200（2026-11-14，证据 `artifacts/verify/20261114-mt2/layered-reads/`）。源文件在提交后变大会记 `blocked`；逐层 `POST /api/depth` 提交时预检超限直接 422，不建任务。盘上 `state.json` 的 `layer_mode` 记下每层生成时的读法；把书级读法改成别的值后，同一章 `path=none`、理由「读法已改，深度页过期」、深度页 404，改回原值即恢复。没有模型 key 时才会失败，那时 `state failed` 带 `error_kind: transport_closed` 这类分类，仍不是裸英文串。
+- 分层读已经没有读法、三档/五层、读本页或工单系统；`/reader/...`、`/api/depth/...`、`/api/jobs` 等退役路由一律 404。`--no-annotate` 只是兼容开关，不再关任何生成；模型只在划词伴读与知识地图生成时按需调用。离线可验书架、书目、书页、章页、容量/短章门控、缓存地图、旁批与日志；真生成与真伴读用 `scripts/mock_reading_model.py` 的本地 stub，或明确记 `ui-unverified`。没有环境 key 也不等于离线：`ModelClient` 还会读 `~/.pi/agent/auth.json` 的 opencode-go 登录。
 
 ## 功能入口契约
 
@@ -69,7 +70,7 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 - [书库首页](./library-home.md)：8773 的三张入口卡、最新一期、拉起与 503。
 - [找一段](./find-a-passage.md)：8765 的多轮会话、候选书、思考等级、五阶段经典页。
-- [分层读](./layered-reads.md)：8771 的书架、书目、书级默认读法（只写账）、读法切换导致的深度层过期、三档生成、五层深度与读本页，以及章页容量预检与超限 422 阻断。
+- [分层读](./layered-reads.md)：8771 的书架、书目、书页、全章正文工作台、按需知识地图与术语、划词伴读与旁批、操作日志，以及短章门控、容量预检与缓存/过期。
 - [往期日课](./daily-lessons.md)：8772 的日课列表、单期、坏文件跳过。
 - [管理](./manage-library.md)：8770 的八个页签、导入、拆章、维护、账表、删书、日志。
 - [书库检索（CLI）](./search-query.md)：`book-corpus search` / `query` 的段检索、书级规划、混合检索、书卡与降级。
