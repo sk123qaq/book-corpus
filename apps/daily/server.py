@@ -26,8 +26,9 @@ HERE = Path(__file__).resolve().parent
 if str(HERE.parent.parent / "src") not in sys.path:
     sys.path.insert(0, str(HERE.parent.parent / "src"))
 try:
-    from bookcorpus import envfile
+    from bookcorpus import app_links, envfile
 except ImportError:
+    app_links = None
     envfile = None
 WEB = HERE / "web"
 ALLOWED_HOST = re.compile(r"(?:127\.0\.0\.1|localhost)(?::\d{1,5})?", re.IGNORECASE)
@@ -45,6 +46,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     root: Path
+    reading_url: str = "http://127.0.0.1:8771"
 
     def log_message(self, fmt, *args):
         sys.stderr.write(f"{self.address_string()} {fmt % args}\n")
@@ -101,7 +103,9 @@ class Handler(BaseHTTPRequestHandler):
         self.fail(404, "没有这个页面。")
 
     def feed(self):
-        return load_feed(self.root)
+        data = dict(load_feed(self.root))
+        data["reading_url"] = self.reading_url
+        return data
 
     def issue(self, date: str):
         if not DATE_RE.fullmatch(date):
@@ -130,9 +134,20 @@ def main(argv=None):
     parser.add_argument(
         "--root", default=os.environ.get("BOOK_CORPUS_DATA") or os.environ.get("BOOKS_ROOT") or "~/书库"
     )
+    parser.add_argument(
+        "--reading-url",
+        default=None,
+        help="「分层读」地址（仅用于生成只读跳转链接，不拉起进程）",
+    )
     args = parser.parse_args(argv)
 
     Handler.root = Path(args.root).expanduser().resolve()
+    if app_links is not None:
+        Handler.reading_url = app_links.resolve_targets({"reading": args.reading_url})["reading"]
+    else:
+        Handler.reading_url = str(
+            args.reading_url or os.environ.get("BOOK_CORPUS_READING_URL") or "http://127.0.0.1:8771"
+        ).rstrip("/")
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     httpd.daemon_threads = True
     port = httpd.server_address[1]

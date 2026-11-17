@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import glob
 import json
 import os
@@ -224,11 +225,17 @@ class Store:
             "error": str(entry.get("error") or "")[:500],
         }
         path = self.ops_log_path()
+        lock_path = path + ".lock"
         line = json.dumps(record, ensure_ascii=False)
         with self._op_lock:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "a", encoding="utf-8") as fh:
-                fh.write(line + "\n")
+            with open(lock_path, "a+", encoding="utf-8") as lock_fh:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+                try:
+                    with open(path, "a", encoding="utf-8") as fh:
+                        fh.write(line + "\n")
+                finally:
+                    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
         return record
 
     def ops_logs(self, *, limit=OPS_LOG_LIMIT, uid=None, n=None, action=None, status=None):

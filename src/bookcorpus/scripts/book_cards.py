@@ -124,9 +124,9 @@ def normalize(text):
     return book_title.normalize(text)
 
 
-def load_books(libdb=LIBDB):
+def load_books(libdb=None):
     """path → title/author，只读 library.db。"""
-    con = sqlite3.connect("file:%s?mode=ro" % libdb, uri=True)
+    con = sqlite3.connect("file:%s?mode=ro" % (libdb or LIBDB), uri=True)
     try:
         out = {}
         for path, title, author in con.execute("SELECT path,title,author FROM book"):
@@ -446,6 +446,9 @@ def cards_for(
     )
     if getattr(planner, "_search_fn", None) is None and (question or "").strip():
         vhits, _vmeta = vec_search.search_text(question, top_k=200, exclude=getattr(planner, "exclude", []))
+        scope = getattr(planner, "scope", set())
+        if scope:
+            vhits = [h for h in vhits if h.get("book") in scope]
         if vhits:
             ranking = book_query.apply_hybrid_ranking(ranking, vhits, planner.meta)
     hits = noun_hits
@@ -521,6 +524,7 @@ def run(
     select_fn=None,
     expand_fn=None,
     focus=None,
+    scope=None,
 ):
     """首轮 → 触发 → 卡片 → 动作 → 下一步。不调模型（--expand 除外）。"""
     t0 = time.time()
@@ -534,7 +538,7 @@ def run(
         expand = book_score.load_expand(con) if expand is None else expand
         books = load_books() if books is None else books
         concepts = {} if concepts is None else concepts
-        planner = book_query.Planner(con, meta, expand, limit=max(n, 10))
+        planner = book_query.Planner(con, meta, expand, limit=max(n, 10), scope=scope)
         res, hits, _nouns, ranking = cards_for(planner, terms, question, n, books, concepts, toc_fn, select_fn, focus)
         res.query = query
         direct = []

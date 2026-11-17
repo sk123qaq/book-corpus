@@ -142,6 +142,23 @@
       ].join(" · "),
     );
 
+    const openLink = $("open-reading");
+    if (openLink) {
+      const readingBase = String((state.feed && state.feed.reading_url) || "http://127.0.0.1:8771").replace(/\/+$/, "");
+      if (issue.book && issue.book.uid && issue.chapter && issue.chapter.path) {
+        const params = new URLSearchParams();
+        params.set("uid", issue.book.uid);
+        params.set("path", issue.chapter.path);
+        if (issue.quote && issue.quote.line) params.set("line", String(issue.quote.line));
+        if (issue.quote && issue.quote.text) params.set("q", String(issue.quote.text).slice(0, 120));
+        params.set("from", "daily");
+        openLink.href = `${readingBase}/open?${params.toString()}`;
+        openLink.hidden = false;
+      } else {
+        openLink.hidden = true;
+      }
+    }
+
     renderPast(state.feed.issues, issue.date);
     state.activeDate = issue.date;
 

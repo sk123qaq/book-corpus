@@ -26,9 +26,9 @@ python3 apps/home/server.py --root <实例根> \
 
 ## 点击与代起
 
-- 页面里的入口默认指向 `/go/search`、`/go/reading`、`/go/daily`、`/go/ops`。
+- 页面里的入口默认指向 `/go/search`、`/go/reading`、`/go/daily`、`/go/ops`（均支持 `?to=/...` 站内相对路径透传）。
 - 请求先进首页：端口已在听就直接 `302` 到目标；没在听就按白名单命令起进程，等端口就绪后再 `302`。
-- 四个命令固定在 `launcher.py`，不接受页面传来的任意命令。演示页用 `BOOKS_ROOT`，其余用 `--root`。
+- 四个命令收口在 `src/bookcorpus/app_links.py`（`apps/home/launcher.py` 为兼容门面），不接受页面传来的任意命令，统一传 `--port` 与 `--root`（演示页同时补设 `BOOKS_ROOT`）。
 - 子进程 `start_new_session=True`，不随首页退出；输出写到日志。
 - 日志目录读 `BOOK_CORPUS_HOME_LOG_DIR`，默认 `$XDG_CACHE_HOME/book-corpus/home/`，再退回 `~/.cache/book-corpus/home/`，每个服务一个 `<key>.log`。
 - 起不来时返回 `503`，页面上有原因、日志、命令和「重试」；已经在跑的服务点第二次不会重复起。

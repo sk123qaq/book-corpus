@@ -180,11 +180,15 @@ function renderResults({ q, data, books, meta }) {
   if (meta.length) {
     rows.push(group('仅有书目', '元数据层，未导入正文', meta.map((book) => metaRow(book, q))));
   }
+  const searchHref = q ? '/go/search?to=' + encodeURIComponent('/?q=' + encodeURIComponent(q) + '&from=reading&mode=trace') : '';
   RD.mount('results').innerHTML = rows.length ? rows.join('') :
     '<div class="empty"><b>' + (q ? '没有找到“' + RD.esc(q) + '”' : '这里还没有书') + '</b>' +
-    (q ? '试试书名、作者、分类，或只搜一个字。' : '换一个分类，或清空筛选。') + '</div>';
-  RD.mount('note').textContent = q
-    ? '搜索范围：书名、作者、分类、章名。段落级全文检索不在本期。'
+    (q
+      ? '试试书名、作者、分类，或只搜一个字。' +
+        '<div style="margin-top:12px"><a class="btn btn-primary" href="' + searchHref + '" target="_blank" rel="noopener">去书库按正文段落全文检索「' + RD.esc(q) + '」↗</a></div>'
+      : '换一个分类，或清空筛选。') + '</div>';
+  RD.mount('note').innerHTML = q
+    ? '搜索范围：书名、作者、分类、章名。要按正文段落搜索，请点击 <a href="' + searchHref + '" target="_blank" rel="noopener">去书库全文检索「' + RD.esc(q) + '」↗</a>。'
     : RD.fmt(data.readable_count) + ' 本有正文；书目层共 ' + RD.fmt(data.total) + ' 条，导入正文后才会出现在书架上。';
   bindRows();
 }

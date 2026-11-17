@@ -38,7 +38,7 @@ import book_cards
 import book_query
 import book_score
 import book_title
-import lib_common as L
+import context as demo_context
 import lib_fts_cjk as cjk
 import model_call
 import rerank_client
@@ -47,12 +47,13 @@ import vec_search
 from thinking import DEFAULT as DEFAULT_THINKING
 from thinking import normalize as normalize_thinking
 
-ROOT = L.ROOT
+_PATHS = demo_context.build_paths()
+ROOT = str(_PATHS.root)
 
-INDEX_DB = os.path.join(ROOT, "build", "检索", "index.db")
-LIB_DB = os.path.join(ROOT, "build", "library.db")
-LIBRARY = os.path.join(ROOT, "books")
-CACHE_DIR = os.path.join(HERE, "缓存", "terms")
+INDEX_DB = str(_PATHS.index_db)
+LIB_DB = str(_PATHS.lib_db)
+LIBRARY = str(_PATHS.books)
+CACHE_DIR = str(_PATHS.terms_dir)
 
 try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
     from bookcorpus import pimodel
@@ -103,6 +104,20 @@ except ImportError:
 
     def pi_flags(level):
         return ["--thinking", level, "--model", MODEL]
+
+
+def configure(paths):
+    """按实例路径重新绑定只读库与词缓存目录。"""
+    global ROOT, INDEX_DB, LIB_DB, LIBRARY, CACHE_DIR, _CFG, MODEL, DEFAULT_THINKING
+    ROOT = str(paths.root)
+    INDEX_DB = str(paths.index_db)
+    LIB_DB = str(paths.lib_db)
+    LIBRARY = str(paths.books)
+    CACHE_DIR = str(paths.terms_dir)
+    if pimodel is not None:
+        _CFG = pimodel.load(ROOT)
+        MODEL = pimodel.ref(_CFG["values"]) or MODEL
+        DEFAULT_THINKING = normalize_thinking(pimodel.thinking(_CFG["values"]), DEFAULT_THINKING)
 
 
 PI_TIMEOUT = 90
@@ -315,8 +330,9 @@ def _harvest_group_variants(groups, has_hit, target, limit, max_len=3, match_ter
                     return
 
 
-def _preflight_terms(terms, groups=None, question="", index_db=INDEX_DB):
+def _preflight_terms(terms, groups=None, question="", index_db=None):
     """用 para_fts 轻量检查 >=4 字非专名检索词；零命中复合词拆成有命中的原子短词。"""
+    index_db = index_db or INDEX_DB
     terms = [t for t in (terms or []) if isinstance(t, str) and t]
     if not terms or not index_db or not os.path.exists(index_db):
         return terms[:MAX_TERMS], []
@@ -1030,11 +1046,27 @@ def _pick_default(plan, cardset, select, focus=None):
     return None
 
 
-def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
+def _clean_scope_books(scope):
+    if not isinstance(scope, dict):
+        return []
+    raw = scope.get("books")
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw[:16]:
+        if isinstance(item, str):
+            uid = item.strip()
+            if uid and re.fullmatch(r"[A-Za-z0-9_-]+", uid) and uid not in out:
+                out.append(uid)
+    return out
+
+
+def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, scope=None):
     question = (question or "").strip()
     if not question:
         raise ValueError("question 为空")
     thinking = normalize_thinking(thinking)
+    scope_books = _clean_scope_books(scope)
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
     rec.event(
         "trace.request",
@@ -1042,6 +1074,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
         select=select,
         thinking=thinking,
         fresh=fresh,
+        scope={"books": scope_books} if scope_books else None,
         index=runlog.file_fingerprint(INDEX_DB, hash_content=False),
         library=runlog.file_fingerprint(LIB_DB, hash_content=False),
     )
@@ -1059,12 +1092,36 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
 
     con = _ro(INDEX_DB)
     try:
-        books = book_cards.load_books()
-        book_meta = book_score.load_meta()
-        hints = book_cards.query_hints(question, books)
-        focus = book_title.resolve_title(question, books, book_meta, hint=hints.get("title", ""))
+        books = book_cards.load_books(LIB_DB)
+        book_meta = book_score.load_meta(LIB_DB)
+        scope_set = set(scope_books)
+        visible_books = {uid: rec for uid, rec in books.items() if uid in scope_set} if scope_set else books
+        hints = book_cards.query_hints(question, visible_books)
+        if len(scope_books) == 1 and scope_books[0] in books:
+            uid = scope_books[0]
+            rec_book = books[uid]
+            focus = {
+                "status": "exact",
+                "match": "scope",
+                "query_title": rec_book.get("title") or uid,
+                "book": uid,
+                "uid": uid,
+                "title": rec_book.get("title") or uid,
+                "author": rec_book.get("author") or "",
+                "chapters": book_title._chapters(book_meta, uid),
+                "candidates": [],
+                "best_path": "",
+                "best_line": 0,
+                "explicit_scope": True,
+            }
+        else:
+            focus = book_title.resolve_title(question, visible_books, book_meta, hint=hints.get("title", ""))
+            if focus.get("book") and not focus.get("uid"):
+                focus["uid"] = focus["book"]
         t_plan = time.time()
-        plan = book_query.run(terms, con=con, limit=8, max_chapters=3, focus=focus, question=question)
+        plan = book_query.run(
+            terms, con=con, limit=8, max_chapters=3, focus=focus, question=question, scope=scope_books
+        )
         plan_ms = plan.ms
         rec.event(
             "search.plan",
@@ -1086,6 +1143,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
             feedback=None,
             con=con,
             focus=focus,
+            scope=scope_books,
         )
         cards_ms = cardset.ms
         rec.event(
@@ -1103,6 +1161,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
         card_dicts = []
         for _i, c in enumerate(cardset.cards, 1):
             row = {
+                "uid": c.book,
                 "book": c.book,
                 "rank": c.rank,
                 "title": c.title,
@@ -1158,6 +1217,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
             ],
             "ranking": [
                 {
+                    "uid": b.book,
                     "book": b.book,
                     "title": b.title,
                     "type": b.type,
@@ -1176,6 +1236,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
             ],
             "chapters": [
                 {
+                    "uid": c["book"],
                     "book": c["book"],
                     "title": c["title"],
                     "book_score": c["book_score"],
@@ -1225,6 +1286,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
         result = None
         if pick and pick.pop("focus_empty", False):
             result = {
+                "uid": pick["book"],
                 "book": pick["book"],
                 "book_title": pick["title"],
                 "chapter": "",
@@ -1236,7 +1298,13 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
         elif pick:
             result = read_chapter(pick["path"], pick["line"], STAGE_CHARS, rec=rec)
             result.update(
-                {"book": pick["book"], "book_title": pick["title"], "chapter": pick["chapter"], "card": pick["card"]}
+                {
+                    "uid": pick["book"],
+                    "book": pick["book"],
+                    "book_title": pick["title"],
+                    "chapter": pick["chapter"],
+                    "card": pick["card"],
+                }
             )
         rec.event(
             "trace.result",
@@ -1265,6 +1333,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None):
         return {
             "question": question,
             "thinking": thinking,
+            "scope": {"books": scope_books} if scope_books else None,
             "extract": understand,
             "plan": plan_dict,
             "focus": focus,

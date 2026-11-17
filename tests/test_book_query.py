@@ -1,6 +1,6 @@
 import sqlite3
 
-from bookcorpus.scripts import book_query
+from bookcorpus.scripts import book_query, book_score
 
 
 def test_planner_runs_full_and_drop_generic_without_concept_tables():
@@ -15,6 +15,44 @@ def test_planner_runs_full_and_drop_generic_without_concept_tables():
     plan = planner.plan(["平等", "社会"], chapters=False)
     assert plan.action_dropped == []
     assert [r.kind for r in plan.rounds] == ["full", "drop-generic"]
+
+
+def test_planner_scope_filters_hits_before_ranking():
+    hits = []
+    for i in range(1, 13):
+        book = f"B{i:04d}"
+        for line in range(1, 2 if i == 12 else 11):
+            hits.append(
+                {
+                    "book": book,
+                    "path": f"books/{book}/md/01.md",
+                    "line": line,
+                    "text": "铁笼 礼治 秩序",
+                    "score": 1.0 if i < 12 else 0.1,
+                }
+            )
+    meta = {
+        f"B{i:04d}": book_score.Meta(title=f"书{i}", subject1="社科", subject2="", chapters=1) for i in range(1, 13)
+    }
+
+    def planner(scope=None):
+        return book_query.Planner(
+            None,
+            meta=meta,
+            expand={},
+            scope=scope,
+            limit=8,
+            search_fn=lambda terms: (hits, 0.1),
+            df_fn=lambda term: (1, 1),
+        )
+
+    unscoped = planner().plan(["铁笼"], chapters=True)
+    assert "B0012" not in [row.book for row in unscoped.ranking[:8]]
+
+    scoped = planner(scope={"B0012"}).plan(["铁笼"], chapters=True)
+    assert [row.book for row in scoped.ranking] == ["B0012"]
+    assert [entry["book"] for entry in scoped.chapters] == ["B0012"]
+    assert scoped.chapters[0]["selected"]
 
 
 def test_book_cards_runs_cleanly_without_concept_tables(monkeypatch, tmp_path):

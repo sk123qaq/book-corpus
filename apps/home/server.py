@@ -16,7 +16,7 @@ import sys
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
@@ -31,6 +31,8 @@ from launcher import (
     START_TIMEOUT,
     ensure,
     is_local_target,
+    join_target,
+    safe_rel_path,
     same_target,
 )
 from overview import WEB, build_overview, render_page
@@ -107,10 +109,15 @@ class Handler(BaseHTTPRequestHandler):
         if key not in SERVICES:
             self.fail(404, "没有这个入口。")
             return
+        query = parse_qs(urlsplit(self.path).query)
+        clean_to = safe_rel_path((query.get("to") or [""])[0])
+        if not clean_to:
+            self.fail(400, "非法跳转路径：仅允许站内相对路径。")
+            return
         target = self.targets.get(key) or DEFAULT_TARGETS[key]
         # 自定义到别的地址时只跳转，不替它起本地进程。
         if not is_local_target(key, target):
-            self.redirect(target)
+            self.redirect(join_target(target, clean_to))
             return
         result = ensure(
             key,
@@ -119,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
             allow_start=self.allow_start,
         )
         if result["state"] in ("already", "started"):
-            self.redirect(target)
+            self.redirect(join_target(target, clean_to))
             return
         self.serve_go_error(key, result)
 

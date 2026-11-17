@@ -166,6 +166,7 @@ class Planner:
         vec_fn=None,
         book_vec_fn=None,
         rerank_fn=None,
+        scope=None,
     ):
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
@@ -175,6 +176,7 @@ class Planner:
         self.min_chars = min_chars
         self.limit = limit
         self.exclude = list(exclude or [])
+        self.scope = set(scope or ())
         self._search_fn = search_fn
         self._df_fn = df_fn
         self._vec_fn = vec_fn
@@ -196,6 +198,8 @@ class Planner:
             expr = " OR ".join("(%s)" % cjk.query_expr(t) for t in key if cjk.query_expr(t))
             hits, ms = qsearch.search(self.con, expr, list(key), self.exclude, 2000, self.min_chars, False, self.pool)
         self.fetches += 1
+        if self.scope:
+            hits = [h for h in hits if h.get("book") in self.scope]
         self._hits[key] = (hits, ms)
         return hits, ms
 
@@ -321,6 +325,8 @@ class Planner:
             res.stop = "exhausted"
 
         vhits, vmeta = self._vec_search(query_text)
+        if self.scope:
+            vhits = [h for h in vhits if h.get("book") in self.scope]
         qvec = vmeta.get("qvec")
         if vmeta.get("used"):
             res.vec_used = True
@@ -657,12 +663,13 @@ def run(
     planner=None,
     focus=None,
     question="",
+    scope=None,
 ):
     own = con is None
     if con is None:
         con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
     try:
-        p = planner or Planner(con, scheme=scheme, limit=limit)
+        p = planner or Planner(con, scheme=scheme, limit=limit, scope=scope)
         return p.plan(
             terms,
             chapters=True,

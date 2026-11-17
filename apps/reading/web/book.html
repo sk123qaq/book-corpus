@@ -60,6 +60,7 @@ function render() {
   const chars = book.chars || 0;
   const packs = book.packs || 0;
   const firstRead = chapters[0];
+  const notice = (new URLSearchParams(location.search).get('notice') || '').trim();
 
   RD.mount('crumb').innerHTML = '<a href="/">书架</a><i>/</i><a href="/catalog?q=' +
     encodeURIComponent((book.subjects || [])[0] || '') + '">' + RD.esc((book.subjects || [])[0] || '未分类') +
@@ -67,6 +68,7 @@ function render() {
   document.title = '阅读工作台 · ' + (book.title_short || book.title);
 
   RD.mount('book-root').innerHTML =
+    (notice ? '<div class="wb-top-drawer" style="margin-bottom:14px;padding:10px 14px;border-left:3px solid var(--ochre,#a87a3e)">' + RD.esc(notice) + '</div>' : '') +
     '<section class="book-hero">' +
       '<div class="cover" style="background:' + RD.esc(book.color) + '">' +
         '<span class="cv-kicker">正文工作台 · ' + RD.esc(book.uid) + '</span>' +
@@ -84,6 +86,7 @@ function render() {
           '<span>' + RD.esc(book.author_display) + '</span></div>' +
         '<div class="book-actions">' +
           (firstRead ? '<a class="btn btn-primary" href="' + RD.chapterHref(book.uid, firstRead.n) + '">翻开第 ' + RD.esc(firstRead.n) + ' 章 →</a>' : '') +
+          '<a class="btn btn-ghost" href="/go/search?to=' + encodeURIComponent('/?books=' + encodeURIComponent(book.uid) + '&from=reading&mode=trace') + '" target="_blank" rel="noopener">在本书内检索 ↗</a>' +
         '</div></div></section>' +
     '<div class="work book-work">' +
       '<section><div class="section-title"><h2>章目</h2><span class="lbl">' + RD.fmt(chapters.length) + ' 章 · 点击直接阅读全文</span></div>' +

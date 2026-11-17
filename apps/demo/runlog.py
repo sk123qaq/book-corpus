@@ -32,7 +32,12 @@ from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_ROOT = HERE / "运行记录"
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+from context import build_paths as _build_demo_paths
+
+DEFAULT_ROOT = _build_demo_paths().runlog_dir
 APP_VERSION = "demo-runlog-1"
 RUN_ID_RE = re.compile(r"^[0-9A-Za-z._-]+$")
 SESSION_ID_RE = re.compile(r"^[a-f0-9]{12}$")

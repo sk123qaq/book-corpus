@@ -12,6 +12,7 @@
 | [docs/design/多格式来源支持-2026-11-05.md](design/多格式来源支持-2026-11-05.md) | implemented | 2026-11-05 | 多格式来源支持（txt / Word / Excel / PPT / md） |
 | [docs/design/全库embedding.md](design/全库embedding.md) | implemented | 2026-11-14 | 全库 md embedding |
 | [docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md](design/阅读页重构-正文伴读与工具台-2026-11-15.md) | implemented | 2026-11-16 | 分层读阅读页重构：正文伴读、工具台与旧体系清理方案 |
+| [docs/design/检索与分层读联动方案-2026-11-17.md](design/检索与分层读联动方案-2026-11-17.md) | implemented | 2026-11-17 | 书库检索与分层读联动重构方案 |
 | [docs/design/窗口参数-决策记录-2026-11-02.md](design/窗口参数-决策记录-2026-11-02.md) | accepted | 2026-11-02 | 窗口参数决策记录（2026-11-02） |
 | [docs/design/研究检索配置.md](design/研究检索配置.md) | accepted | 2026-11-09 | 研究检索配置 |
 | [docs/design/待办-批次续跑与删书治理-2026-10-22.md](design/待办-批次续跑与删书治理-2026-10-22.md) | draft | 2026-10-22 | 待办：批次续跑与删书治理（2026-10-22） |

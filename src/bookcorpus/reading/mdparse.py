@@ -42,14 +42,14 @@ def _line_at(text, start):
     return text[start:end], end + 1
 
 
-def strip_front_matter(raw):
-    """返回 (meta, body)。首行 ``---`` 起，最多 60 行内闭合。"""
+def _strip_front_matter_with_lines(raw):
+    """返回 (meta, body, consumed_lines)。首行 ``---`` 起，最多 60 行内闭合。"""
     text = raw or ""
     if "\r" in text:
         text = text.replace("\r\n", "\n").replace("\r", "\n")
     first, pos = _line_at(text, 0)
     if first.strip() != "---" or pos < 0:
-        return {}, text
+        return {}, text, 0
     meta = {}
     meta_start = pos
     for _ in range(1, FRONT_MATTER_LIMIT):
@@ -68,27 +68,43 @@ def strip_front_matter(raw):
                     value = value[1:-1]
                 if key:
                     meta[key] = value
-            return meta, text[next_pos:] if next_pos >= 0 else ""
+            if next_pos >= 0:
+                return meta, text[next_pos:], text[:next_pos].count("\n")
+            return meta, "", text.count("\n") + 1
         if next_pos < 0:
             break
         pos = next_pos
-    return {}, text
+    return {}, text, 0
 
 
-def _take_h1(body):
-    """摘掉第一个 H1，返回 (h1_text, 其余正文)。"""
+def strip_front_matter(raw):
+    """返回 (meta, body)。首行 ``---`` 起，最多 60 行内闭合。"""
+    meta, body, _ = _strip_front_matter_with_lines(raw)
+    return meta, body
+
+
+def _take_h1_with_lines(body):
+    """摘掉第一个 H1，返回 (h1_text, 其余正文, consumed_lines)。"""
     pos = 0
     while True:
         line, next_pos = _line_at(body, pos)
         stripped = line.strip().lstrip("\ufeff")
         if not stripped:
             if next_pos < 0:
-                return "", body
+                return "", body, 0
             pos = next_pos
             continue
         if stripped.startswith("# "):
-            return stripped[2:].strip(), body[next_pos:] if next_pos >= 0 else ""
-        return "", body
+            if next_pos >= 0:
+                return stripped[2:].strip(), body[next_pos:], body[:next_pos].count("\n")
+            return stripped[2:].strip(), "", body.count("\n") + 1
+        return "", body, 0
+
+
+def _take_h1(body):
+    """摘掉第一个 H1，返回 (h1_text, 其余正文)。"""
+    h1, rest, _ = _take_h1_with_lines(body)
+    return h1, rest
 
 
 def _clean_inline(text):
@@ -122,7 +138,7 @@ def _table_align_row(cells):
     return bool(cells) and all(TABLE_ALIGN_RE.fullmatch(cell or "") for cell in cells)
 
 
-def _append_table(blocks, lines):
+def _append_table(blocks, lines, **span):
     grid = [_table_row(line) for line in lines]
     head, align, rows = [], [], grid
     if len(grid) >= 2 and _table_align_row(grid[1]):
@@ -135,6 +151,7 @@ def _append_table(blocks, lines):
         extra["head"] = head
     if align:
         extra["align"] = align
+    extra.update(span)
     _append_raw(blocks, "table", " ".join(flat), **extra)
 
 
@@ -250,23 +267,23 @@ def _image_extra(rel, base_dir):
     return {"width": size[0], "height": size[1]}
 
 
-def _emit_inline(blocks, text, base_dir=None):
+def _emit_inline(blocks, text, base_dir=None, **span):
     """段落里可能夹着图片；图片单独成块，其余文字保住顺序。"""
     pos = 0
     for match in IMAGE_RE.finditer(text):
         before = text[pos : match.start()]
         if before.strip():
-            _append(blocks, "paragraph", before)
+            _append(blocks, "paragraph", before, **span)
         alt, rel = match.group(1), match.group(2)
         kind = _image_kind(rel)
         if kind == "footnote":
-            _append(blocks, "footnote", alt, rel=rel)
+            _append(blocks, "footnote", alt, rel=rel, **span)
         else:
-            _append(blocks, "image", alt, rel=rel, **_image_extra(rel, base_dir))
+            _append(blocks, "image", alt, rel=rel, **_image_extra(rel, base_dir), **span)
         pos = match.end()
     tail = text[pos:]
     if tail.strip():
-        _append(blocks, "paragraph", tail)
+        _append(blocks, "paragraph", tail, **span)
 
 
 def _heading_text(text):
@@ -274,7 +291,8 @@ def _heading_text(text):
     return " ".join(text.replace("**", "").split())
 
 
-def _parse_chunk(blocks, chunk, base_dir=None):
+def _parse_chunk(blocks, chunk, base_dir=None, *, start_line=0, end_line=0):
+    span = {"start_line": start_line, "end_line": end_line} if start_line > 0 else {}
     lines = [line for line in chunk.split("\n") if line.strip()]
     if not lines:
         return
@@ -283,20 +301,20 @@ def _parse_chunk(blocks, chunk, base_dir=None):
 
     heading = HEADING_RE.match(lines[0].strip())
     if heading and len(lines) == 1:
-        _append(blocks, "heading", _heading_text(heading.group(2)), level=len(heading.group(1)))
+        _append(blocks, "heading", _heading_text(heading.group(2)), level=len(heading.group(1)), **span)
         return
 
     footnote = FOOTNOTE_RE.match(lines[0].strip())
     if footnote:
-        _append(blocks, "footnote", footnote.group(2), marker=footnote.group(1))
+        _append(blocks, "footnote", footnote.group(2), marker=footnote.group(1), **span)
         return
 
     if all(QUOTE_RE.match(line.strip()) for line in lines):
         text = " ".join((QUOTE_RE.match(line.strip()).group(1) or "").strip() for line in lines)
         if text.startswith("`") and text.endswith("`") and "`" not in text[1:-1]:
-            _append_raw(blocks, "code", text[1:-1].strip())
+            _append_raw(blocks, "code", text[1:-1].strip(), **span)
         else:
-            _append(blocks, "quote", text)
+            _append(blocks, "quote", text, **span)
         return
 
     if all(LIST_RE.match(line.strip()) for line in lines):
@@ -304,12 +322,12 @@ def _parse_chunk(blocks, chunk, base_dir=None):
             _clean_inline(LIST_RE.match(line.strip()).group(1).strip()).replace("**", "").lstrip("*").strip()
             for line in lines
         ]
-        _append(blocks, "list", " ".join(items), items=items)
+        _append(blocks, "list", " ".join(items), items=items, **span)
         return
 
     rows = [line for line in lines if TABLE_ROW_RE.match(line)]
     if len(rows) == len(lines):
-        _append_table(blocks, lines)
+        _append_table(blocks, lines, **span)
         return
 
     only = IMAGE_RE.fullmatch(chunk.strip())
@@ -317,39 +335,64 @@ def _parse_chunk(blocks, chunk, base_dir=None):
         alt, rel = only.group(1), only.group(2)
         kind = _image_kind(rel)
         extra = _image_extra(rel, base_dir) if kind == "image" else {}
-        _append(blocks, kind, alt, rel=rel, **extra)
+        _append(blocks, kind, alt, rel=rel, **extra, **span)
         return
 
-    _emit_inline(blocks, " ".join(line.strip() for line in lines), base_dir)
+    _emit_inline(blocks, " ".join(line.strip() for line in lines), base_dir, **span)
 
 
-def _segments(body=""):
-    """把正文切成 ("md", 文本) 与 ("code",  (lang, 文本)) 段，保序。
+def _segments(body="", base_line=1):
+    """把正文切成 ("md", 文本, 起始行, 结束行) 与 ("code", (lang, 文本), 起始行, 结束行) 段，保序。
 
     代码块内的空行不切块；围栏行本身不进 text。
     """
     lines = body.split("\n")
     segs, buf = [], []
+    buf_start = None
     i = 0
     while i < len(lines):
         fence = CODE_FENCE_RE.match(lines[i].strip())
         if fence:
             if buf:
-                segs.append(("md", "\n".join(buf)))
+                segs.append(("md", "\n".join(buf), buf_start, base_line + i - 1))
                 buf = []
+                buf_start = None
+            fence_start = base_line + i
             i += 1
             code = []
             while i < len(lines) and not lines[i].strip().startswith("```"):
                 code.append(lines[i])
                 i += 1
+            fence_end = base_line + min(i, len(lines) - 1)
             i += 1
-            segs.append(("code", (fence.group(1), "\n".join(code).strip("\n"))))
+            segs.append(("code", (fence.group(1), "\n".join(code).strip("\n")), fence_start, fence_end))
         else:
+            if buf_start is None:
+                buf_start = base_line + i
             buf.append(lines[i])
             i += 1
     if buf:
-        segs.append(("md", "\n".join(buf)))
+        segs.append(("md", "\n".join(buf), buf_start, base_line + len(lines) - 1))
     return segs
+
+
+def _iter_md_chunks(seg, seg_start_line):
+    """按空行切块并返回 ``(chunk_text, start_line, end_line)``。"""
+    lines = seg.split("\n")
+    buf = []
+    buf_start = None
+    for offset, line in enumerate(lines):
+        if not line.strip():
+            if buf:
+                yield "\n".join(buf), buf_start, seg_start_line + offset - 1
+                buf = []
+                buf_start = None
+        else:
+            if buf_start is None:
+                buf_start = seg_start_line + offset
+            buf.append(line)
+    if buf:
+        yield "\n".join(buf), buf_start, seg_start_line + len(lines) - 1
 
 
 def _sections(blocks):
@@ -390,21 +433,23 @@ def _attach_orphan_footnotes(blocks):
 
 def parse_markdown(raw, stem="", meta=None, base_dir=None):
     """解析一章。返回 ``dict``：title/blocks/sections/body_han/body_chars/meta``。"""
-    parsed_meta, body = strip_front_matter(raw)
+    parsed_meta, body, fm_lines = _strip_front_matter_with_lines(raw)
     merged = dict(parsed_meta)
     if meta:
         merged.update(meta)
-    h1, rest = _take_h1(body)
+    h1, rest, h1_lines = _take_h1_with_lines(body)
+    base_line = 1 + fm_lines + h1_lines
     blocks = []
-    for seg_kind, seg in _segments(rest):
+    for seg_kind, seg, seg_start, seg_end in _segments(rest, base_line=base_line):
         if seg_kind == "code":
             lang, text = seg
-            extra = {} if not lang else {"lang": lang}
+            extra = {"start_line": seg_start, "end_line": seg_end}
+            if lang:
+                extra["lang"] = lang
             _append_raw(blocks, "code", text, **extra)
         else:
-            for chunk in re.split(r"\n[ \t]*\n", seg):
-                if chunk.strip():
-                    _parse_chunk(blocks, chunk, base_dir)
+            for chunk, chunk_start, chunk_end in _iter_md_chunks(seg, seg_start):
+                _parse_chunk(blocks, chunk, base_dir, start_line=chunk_start, end_line=chunk_end)
     _attach_orphan_footnotes(blocks)
     title = (merged.get("title") or h1 or stem or "").strip()
     body_han = sum(block["chars"] for block in blocks)

@@ -46,6 +46,8 @@
     historyDeleting: false,
     historySelectMode: false,
     histMenu: null,
+    scopeBooks: [],
+    scopeOrigin: '',
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -301,6 +303,40 @@
     if (cite.chapter) return cite.chapter;
     const name = String(cite.path || '').split('/').pop() || '';
     return name.replace(/^\d+[_、.\- ]*/, '').replace(/\.md$/, '');
+  }
+
+  function readingOpenHref(opts) {
+    const o = opts || {};
+    const p = new URLSearchParams();
+    const uid = o.uid || o.book || (o.path ? bookKey(o.path) : '');
+    if (uid) p.set('uid', uid);
+    if (o.path) p.set('path', o.path);
+    if (o.line) p.set('line', String(o.line));
+    if (o.quote) p.set('q', String(o.quote).slice(0, 120));
+    if (o.question) p.set('query', String(o.question).slice(0, 200));
+    p.set('from', 'search');
+    return '/go/reading?to=' + encodeURIComponent('/open?' + p.toString());
+  }
+
+  function readingBookHref(uid) {
+    return '/go/reading?to=' + encodeURIComponent('/book/' + encodeURIComponent(uid));
+  }
+
+  async function loadScopeBookMeta(uids) {
+    if (!uids || !uids.length) return;
+    try {
+      const data = await fetchJSON('/api/books/meta?uids=' + encodeURIComponent(uids.join(',')));
+      if (Array.isArray(data.books) && data.books.length) {
+        const byUid = new Map(data.books.map((b) => [b.uid, b.title || b.uid]));
+        state.scopeBooks = state.scopeBooks.map((item) => ({
+          uid: item.uid,
+          title: byUid.get(item.uid) || item.title,
+        }));
+        renderHint();
+      }
+    } catch (err) {
+      // 查不到书名时保留 uid 展示即可
+    }
   }
 
   /* ---- 回答范围：一本书或几本书 ---------------------------------- */
@@ -1127,12 +1163,19 @@
         + (full ? ' is-full' : '');
       const fullTitle = '《' + (row.source.title || row.source.book) + '》· '
         + (row.source.chapter || '');
-      return '<button class="' + cls + '" type="button" data-book-pick="' + esc(key) + '"'
+      const uid = row.source.uid || row.source.book || bookKey(row.source.path);
+      return '<span class="book-pick-wrap">'
+        + '<button class="' + cls + '" type="button" data-book-pick="' + esc(key) + '"'
         + ' data-from="' + turn.n + '" title="' + esc(fullTitle) + '"'
         + (readonly || full ? ' disabled' : '') + '>'
         + '<span class="bp-title">《' + esc(cut(row.source.title || row.source.book, 18)) + '》</span>'
         + (tagText ? '<span class="bp-tag">' + esc(tagText) + '</span>' : '')
-        + '</button>';
+        + '</button>'
+        + (uid
+          ? '<a class="bp-open" href="' + readingBookHref(uid) + '" target="_blank" rel="noopener"'
+            + ' data-stop="1" title="在分层读查看书目与章节">↗</a>'
+          : '')
+        + '</span>';
     }).join('');
     const notes = [];
     if (focus) {
@@ -1368,21 +1411,43 @@
       const last = lastTurn();
       const canRetry = last && last.n === turn.n;
       const interrupted = turn.status === 'answer-interrupted';
-      let text = '上次只完成检索，还没有生成回答';
+      const hit = turn.trace && turn.trace.result && turn.trace.result.path ? turn.trace.result : null;
+      let text = hit ? '已完成检索定位，可直达原文精读或按需生成模型回答' : '上次只完成检索，还没有生成回答';
       if (interrupted) {
         text = networkError(turn.answerError)
           ? '连接中断，回答可能仍在后台，刷新或稍后重试'
           : '上次回答被中断（服务重启或连接断开）';
       }
-      return '<p class="answer-error">' + esc(text) + '</p>'
+      const hitCard = hit
+        ? '<div class="trace-hit-card">'
+          + '<div class="trace-hit-head"><b>《' + esc(hit.book_title || hit.book) + '》</b> · '
+          + esc(hit.chapter || '') + ' <span class="mono">L' + esc(hit.line || 1) + '</span></div>'
+          + (hit.hit_text ? '<p class="trace-hit-quote">' + esc(cut(hit.hit_text, 140)) + '</p>' : '')
+          + '</div>'
+        : '';
+      const openLink = hit
+        ? '<a class="btn" href="' + readingOpenHref({
+            uid: hit.uid || hit.book,
+            path: hit.path,
+            line: hit.line,
+            quote: hit.hit_text || '',
+            question: turn.question,
+          }) + '" target="_blank" rel="noopener">在分层读中打开 ↗</a>'
+        : '';
+      const actionLabel = interrupted ? '重试回答' : (hit ? '由模型归纳回答' : '重试回答');
+      return '<p class="' + (interrupted ? 'answer-error' : 'answer-pending-note') + '">' + esc(text) + '</p>'
+        + hitCard
         + '<p class="answer-meta">' + (interrupted && turn.answerError && !networkError(turn.answerError)
           ? '原因：' + esc(turn.answerError) + ' · ' : '')
         + (canRetry
-          ? '检索结果已保留，重试只重发回答。'
+          ? '检索结果已保留，点击即可补充模型归纳。'
           : '历史轮次，回答不再重试。') + '</p>'
+        + '<div class="trace-pending-actions">'
         + (canRetry
-          ? '<button class="btn" type="button" data-retry-answer="' + turn.n + '">重试回答</button>'
-          : '');
+          ? '<button class="btn btn-primary" type="button" data-retry-answer="' + turn.n + '">' + actionLabel + '</button>'
+          : '')
+        + openLink
+        + '</div>';
     }
     const answer = turn.answer || {};
     if (answer.ok === false) {
@@ -1406,13 +1471,23 @@
       const k = i + 1;
       const on = state.selected && state.selected.fromN === turn.n && state.selected.cite === k;
       const pinned = sameSpot(turn.anchor, cite);
+      const readHref = readingOpenHref({
+        uid: cite.uid || cite.book,
+        path: cite.path,
+        line: cite.line,
+        quote: cite.quote || '',
+        question: turn.question,
+      });
       return '<button class="ev' + (on ? ' is-on' : '') + (pinned ? ' is-anchor' : '')
         + '" type="button" data-cite="' + k + '" data-from="' + turn.n + '">'
         + '<span class="cite' + (on ? ' is-on' : '') + '">[' + k + ']</span>'
         + '<span><span class="ev-src">《' + esc(bookOf(cite)) + '》· ' + esc(chapterOf(cite))
         + (pinned ? '<span class="pin-tag">落点</span>' : '') + '</span>'
         + '<span class="ev-quote">' + esc(cite.quote || '') + '</span></span>'
-        + '<span class="ev-go">' + (on ? '落点' : '原文') + '</span></button>';
+        + '<span class="ev-ops">'
+        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener" data-stop="1" title="在分层读直达这段正文">精读 ↗</a>'
+        + '<span class="ev-go">' + (on ? '落点' : '原文') + '</span>'
+        + '</span></button>';
     }).join('');
     return '<section class="evidences"><div class="ev-head">'
       + '<span class="t">本轮依据 · ' + list.length + ' 段</span>'
@@ -1489,13 +1564,23 @@
         + '<button type="button" data-step="1"' + (pos >= list.length - 1 ? ' disabled' : '')
         + '>下一条依据 ›</button></div>'
       : '';
+    const openHref = readingOpenHref({
+      uid: cite.uid || cite.book,
+      path: cite.path,
+      line: cite.line,
+      quote: cite.quote || '',
+      question: owner ? owner.question : '',
+    });
     panelEl.innerHTML = '<div class="drawer-head"><div class="dh-top">'
       + '<span class="cite">[' + (ref.cite || '·') + ']</span>'
       + '<span class="book">《' + esc(bookOf(cite)) + '》</span>' + tags + '</div>'
       + '<p class="dh-sub">' + esc(chapterOf(cite)) + '</p></div>'
       + '<div class="drawer-body">' + body + nav + '</div>'
       + '<div class="drawer-foot"><span class="path">' + esc(cite.path) + '</span>'
-      + '<button class="btn" type="button" data-copy="' + esc(cite.path) + '">复制路径</button></div>';
+      + '<div class="drawer-foot-actions">'
+      + '<button class="btn" type="button" data-copy="' + esc(cite.path) + '">复制路径</button>'
+      + '<a class="btn btn-primary" href="' + openHref + '" target="_blank" rel="noopener">在分层读中打开 ↗</a>'
+      + '</div></div>';
   }
 
   function showCitation(ref) {
@@ -1526,12 +1611,23 @@
 
   function renderHint() {
     const empty = state.turns.length === 0;
+    const scopeLabel = state.scopeBooks.length
+      ? '<span class="on scope-pill">限定书目：'
+        + state.scopeBooks.map((b) => '《' + esc(b.title || b.uid) + '》').join('、')
+        + ' · <button class="x" type="button" data-clear-scope="1">搜全库</button></span>'
+      : '';
     if (state.selected) {
-      hintEl.innerHTML = '<span class="on">下一问挂在 <span class="cite">['
+      hintEl.innerHTML = scopeLabel
+        + '<span class="on">下一问挂在 <span class="cite">['
         + state.selected.cite + ']</span><span class="qt">'
         + esc(cut(state.selected.citation.quote, 20)) + '</span>· '
         + '<button class="x" type="button" data-clear="1">取消</button></span>';
       field.placeholder = '就 [' + state.selected.cite + '] 这一段接着问';
+    } else if (scopeLabel) {
+      hintEl.innerHTML = scopeLabel;
+      field.placeholder = state.scopeBooks.length === 1
+        ? '在《' + (state.scopeBooks[0].title || state.scopeBooks[0].uid) + '》里检索或提问'
+        : '在选定的 ' + state.scopeBooks.length + ' 本书里检索或提问';
     } else if (empty) {
       hintEl.innerHTML = '';
       field.placeholder = '问一句，从书里找原文';
@@ -2068,6 +2164,9 @@
       body.turn = turn.n;
     }
     if (turn.anchor) body.anchor = turn.anchor;
+    if (state.scopeBooks.length) {
+      body.scope = { books: state.scopeBooks.map((b) => b.uid) };
+    }
     if (options.fresh) body.fresh = true;
     try {
       const data = await postJSON('/api/run', body, { signal: controller.signal });
@@ -2081,6 +2180,19 @@
       if (data.session_id && data.session_id !== state.sessionId) {
         state.sessionId = data.session_id;
         setUrl(state.sessionId);
+      }
+      if (options.traceOnly) {
+        turn.status = 'answer-incomplete';
+        turn.stageStates = ['done', 'done', 'done', 'done', 'pending'];
+        turn.stageOpen = new Set([2, 3]);
+        turn.stripOpen = true;
+        stopClock();
+        syncBusy();
+        render();
+        loadSessions();
+        const ref = defaultRef(turn);
+        if (ref) showCitation(ref);
+        return;
       }
       render();
       loadSessions();
@@ -2309,7 +2421,8 @@
     loadSessions();
   }
 
-  async function ask(question) {
+  async function ask(question, opts) {
+    const options = opts || {};
     const text = String(question || '').trim();
     if (!text || state.busy) return;
     state.turns = state.turns.filter((t) => t.status !== 'run-error');
@@ -2345,7 +2458,7 @@
     field.closest('.ask-field').classList.remove('has-text');
     render();
     field.focus();
-    await runTurn(turn);
+    await runTurn(turn, options);
   }
 
   function retryRun(n) {
@@ -2453,6 +2566,8 @@
     state.historyQuery = '';
     state.historySelectMode = false;
     state.historySelected.clear();
+    state.scopeBooks = [];
+    state.scopeOrigin = '';
     if (histFilterEl) histFilterEl.value = '';
     field.value = '';
     field.closest('.ask-field').classList.remove('has-text');
@@ -2467,7 +2582,24 @@
     const anchor = anchorRef(turn);
     if (anchor) return anchor;
     const first = citesOf(turn)[0];
-    return first ? { citation: first, fromN: turn.n, cite: 1 } : null;
+    if (first) return { citation: first, fromN: turn.n, cite: 1 };
+    const hit = turn && turn.trace && turn.trace.result;
+    if (hit && hit.path) {
+      return {
+        citation: {
+          path: hit.path,
+          line: Number(hit.line) || 1,
+          book: hit.book || bookKey(hit.path),
+          uid: hit.uid || hit.book || bookKey(hit.path),
+          book_title: hit.book_title || '',
+          chapter: hit.chapter || '',
+          quote: hit.hit_text || '',
+        },
+        fromN: turn.n,
+        cite: 0,
+      };
+    }
+    return null;
   }
 
   function viewRound(n) {
@@ -2526,6 +2658,9 @@
   }
 
   document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-stop]')) {
+      return;
+    }
     const menuBtn = e.target.closest('[data-hist-menu]');
     if (menuBtn) {
       openHistMenu(menuBtn.dataset.histMenu, menuBtn);
@@ -2538,6 +2673,12 @@
     if (state.histMenu) closeHistMenu();
     if (e.target.closest('#drawer-toggle')) {
       drawerEl.classList.toggle('is-open');
+      return;
+    }
+    if (e.target.closest('[data-clear-scope]')) {
+      state.scopeBooks = [];
+      state.scopeOrigin = '';
+      renderHint();
       return;
     }
     if (e.target.closest('[data-clear]')) {
@@ -2843,6 +2984,14 @@
     }
     const sessionId = params.get('session') || '';
     const question = params.get('q') || '';
+    const booksRaw = params.get('books') || params.get('book') || '';
+    const mode = (params.get('mode') || '').trim().toLowerCase();
+    state.scopeOrigin = (params.get('from') || '').trim();
+    const uids = booksRaw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (uids.length) {
+      state.scopeBooks = uids.map((uid) => ({ uid, title: uid }));
+      loadScopeBookMeta(uids);
+    }
     if (location.pathname !== pagePath()) {
       try {
         history.replaceState(null, '', pagePath() + (location.search || ''));
@@ -2856,8 +3005,16 @@
     }
     render();
     if (question) {
-      setUrl('');
-      await ask(question);
+      if (mode === 'prefill') {
+        field.value = question;
+        field.closest('.ask-field').classList.add('has-text');
+        field.focus();
+      } else {
+        setUrl('');
+        await ask(question, { traceOnly: mode === 'trace' });
+      }
+    } else if (uids.length) {
+      field.focus();
     }
   }
 

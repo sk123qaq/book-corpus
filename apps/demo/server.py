@@ -26,32 +26,21 @@ for _p in (os.path.join(REPO, "src"), HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-# 数据根在 import 期就被 trace/answer 算成常量（`ROOT = L.ROOT`），所以仓库根的 .env
-# 必须在这几个 import 之前读。没装包时退回 shell 环境，与原来的行为一致。
 try:
-    from bookcorpus import envfile
+    from bookcorpus import app_links, envfile
 except ImportError:
+    app_links = None
     envfile = None
-    _ENV_BEFORE = set()
-else:
-    _ENV_BEFORE = set(os.environ)
-    envfile.load()
 
 import contextlib
 import trace as tracer
 
 import answer as answerer
+import context as demo_context
 import export_session
 import related
 import runlog
 import session
-
-# .env 只用于让 trace/answer 在 import 期算出的数据根指向真实书库。
-# 不能把 .env 的键留在调用方进程里：pytest 收集时 import server，
-# BOOKS_ROOT 会串到后面的临时实例测试，Library(root) 因此读到真实书库。
-if envfile is not None:
-    for _key in set(os.environ) - _ENV_BEFORE:
-        os.environ.pop(_key, None)
 
 WEB = os.path.join(HERE, "web")
 MAX_BODY = 16 * 1024
@@ -250,6 +239,25 @@ def _clean_anchor(value):
         "title": title.strip() if isinstance(title, str) else "",
         "quote": quote.strip() if isinstance(quote, str) else "",
     }
+
+
+def _clean_scope(value):
+    """请求里的范围定界：只保留合法书目 uid 列表。"""
+    if isinstance(value, list):
+        raw = value
+    elif isinstance(value, dict):
+        raw = value.get("books")
+    else:
+        return None
+    if not isinstance(raw, list):
+        return None
+    books = []
+    for item in raw[:16]:
+        if isinstance(item, str):
+            uid = item.strip()
+            if uid and re.fullmatch(r"[A-Za-z0-9_-]+", uid) and uid not in books:
+                books.append(uid)
+    return {"books": books} if books else None
 
 
 def _clean_focus(value):
@@ -518,9 +526,15 @@ def _flag(value):
 class Handler(BaseHTTPRequestHandler):
     server_version = "BookTrace/1.0"
     protocol_version = "HTTP/1.1"
+    root = str(demo_context.build_paths().root)
+    targets = app_links.resolve_targets() if app_links is not None else {}
+    allow_start = True
+    start_timeout = app_links.START_TIMEOUT if app_links is not None else 12.0
+    quiet = False
 
     def log_message(self, fmt, *args):
-        sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
+        if not self.quiet:
+            sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
 
     # ---- helpers ---------------------------------------------------
     def send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
@@ -586,8 +600,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.serve_file("app.js", "application/javascript; charset=utf-8")
             elif route == "/session.js":
                 self.serve_file("session.js", "application/javascript; charset=utf-8")
+            elif route.startswith("/go/"):
+                self.serve_go(route[4:].strip("/"), parse_qs(parsed.query))
             elif route == "/api/health":
                 self.api_health()
+            elif route == "/api/books/meta":
+                self.api_books_meta(parse_qs(parsed.query))
             elif route == "/api/sessions":
                 self.api_sessions(parse_qs(parsed.query))
             elif route == "/api/session":
@@ -694,6 +712,7 @@ class Handler(BaseHTTPRequestHandler):
             select = int(select)
         except (TypeError, ValueError):
             select = 0
+        scope = _clean_scope(payload.get("scope") if "scope" in payload else payload.get("books"))
         self.api_run(
             question,
             select,
@@ -703,6 +722,7 @@ class Handler(BaseHTTPRequestHandler):
             turn=_turn_no(payload.get("turn")),
             anchor=_clean_anchor(payload.get("anchor")),
             stateless=_flag(payload.get("stateless")),
+            scope=scope,
         )
 
     def handle_answer(self, payload):
@@ -788,6 +808,59 @@ class Handler(BaseHTTPRequestHandler):
             turn=_turn_no(payload.get("turn")),
         )
 
+    def serve_go(self, key, query):
+        if app_links is None:
+            self.fail(503, "app_links 未加载")
+            return
+        rel_to = (query.get("to") or ["/"])[0]
+        status, location, err_html = app_links.resolve_go_redirect(
+            key,
+            rel_to,
+            root=self.root,
+            targets=self.targets,
+            allow_start=self.allow_start,
+            timeout=self.start_timeout,
+        )
+        if status == 302:
+            self.send_response(302)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            return
+        self.send(status, err_html, "text/html; charset=utf-8")
+
+    def api_books_meta(self, query):
+        raw = ",".join(query.get("uids") or [])
+        uids = []
+        for part in raw.split(","):
+            uid = part.strip()
+            if uid and re.fullmatch(r"[A-Za-z0-9_-]+", uid) and uid not in uids:
+                uids.append(uid)
+            if len(uids) >= 16:
+                break
+        if not uids or not os.path.exists(tracer.LIB_DB):
+            self.send_json(200, {"ok": True, "books": []})
+            return
+        import sqlite3
+
+        books = []
+        try:
+            con = sqlite3.connect("file:%s?mode=ro" % tracer.LIB_DB, uri=True)
+            try:
+                by_uid = {}
+                for uid in uids:
+                    row = con.execute("SELECT path, title, author FROM book WHERE path = ?", (uid,)).fetchone()
+                    if row is not None:
+                        by_uid[row[0]] = {"uid": row[0], "title": row[1] or row[0], "author": row[2] or ""}
+                books = [by_uid.get(u, {"uid": u, "title": u, "author": ""}) for u in uids]
+            finally:
+                con.close()
+        except sqlite3.Error:
+            books = [{"uid": u, "title": u, "author": ""} for u in uids]
+        self.send_json(200, {"ok": True, "books": books})
+
     # ---- API -------------------------------------------------------
     def api_health(self):
         try:
@@ -850,7 +923,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200, body, ctype, headers)
 
     def api_run(
-        self, question, select, thinking=None, fresh=False, session_id="", turn=None, anchor=None, stateless=False
+        self,
+        question,
+        select,
+        thinking=None,
+        fresh=False,
+        session_id="",
+        turn=None,
+        anchor=None,
+        stateless=False,
+        scope=None,
     ):
         rec = None
         if not LOCK.acquire(timeout=120):
@@ -893,7 +975,7 @@ class Handler(BaseHTTPRequestHandler):
                 fresh=bool(fresh),
                 anchor=anchor,
             )
-            data = tracer.build(question, select, thinking=thinking, fresh=fresh, rec=rec)
+            data = tracer.build(question, select, thinking=thinking, fresh=fresh, rec=rec, scope=scope)
             _fill_citations(data)
             rel = None
             if sess and n > 1:
@@ -1470,8 +1552,22 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--root", default=None, help="实例根，含 books.toml")
+    ap.add_argument("--reading-url", default=None, help="「分层读」地址覆盖")
+    ap.add_argument("--home-url", default=None, help="「首页」地址覆盖")
+    ap.add_argument("--no-start", action="store_true", help="目标服务未起时不代起")
+    ap.add_argument("--start-timeout", type=float, default=12.0, help="等待服务就绪秒数")
+    ap.add_argument("--quiet", action="store_true", help="不打印访问日志")
     args = ap.parse_args(argv)
-    runlog.configure()
+    if not args.root and envfile is not None:
+        envfile.load()
+    paths = demo_context.configure_runtime(args.root)
+    Handler.root = str(paths.root)
+    Handler.allow_start = not args.no_start
+    Handler.start_timeout = max(0.1, args.start_timeout)
+    Handler.quiet = args.quiet
+    if app_links is not None:
+        Handler.targets = app_links.resolve_targets({"reading": args.reading_url, "home": args.home_url})
     try:
         count = session.recover_interrupted()
         print("启动恢复：%d 轮上次未完成的回答已标为 interrupted" % count, flush=True)
@@ -1479,7 +1575,7 @@ def main(argv=None):
         traceback.print_exc()
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     httpd.daemon_threads = True
-    print("书库检索演示：http://%s:%d" % (args.host, args.port), flush=True)
+    print("书库检索演示：http://%s:%d · root=%s" % (args.host, args.port, paths.root), flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

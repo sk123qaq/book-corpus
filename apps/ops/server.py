@@ -1558,24 +1558,26 @@ class App:
         script = os.path.join(REAL_ROOT, "apps", "demo", "server.py")
         if not os.path.exists(script):
             return {"ok": False, "error": "演示页脚本不存在：%s" % self.env.rel(script)}
-        os.makedirs(self.env.ops, exist_ok=True)
-        with open(self.env.search_log, "ab") as fh:
-            fh.write(("\n=== %s 启动 8765 ===\n" % now_iso()).encode("utf-8"))
-            proc = subprocess.Popen(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
-                [sys.executable, script],
-                cwd=self.env.root,
-                stdout=fh,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,
+        src_dir = os.path.join(REAL_ROOT, "src")
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+        from bookcorpus import app_links
+
+        result = app_links.ensure("search", self.env.root, timeout=8.0)
+        if result.get("ok"):
+            os.makedirs(self.env.ops, exist_ok=True)
+            write_json_atomic(
+                self.env.search_pid,
+                {"pid": result.get("pid"), "at": now_iso(), "argv": result.get("command") or [sys.executable, script]},
             )
-        write_json_atomic(self.env.search_pid, {"pid": proc.pid, "at": now_iso(), "argv": [sys.executable, script]})
-        deadline = time.time() + 8
-        while time.time() < deadline:
-            time.sleep(0.3)
             if self.search_health()["running"]:
-                return {"ok": True, "started": True, "pid": proc.pid}
-        return {"ok": False, "error": "起来了但 8765 健康检查还没通，看 search.log", "pid": proc.pid}
+                return {"ok": True, "started": True, "pid": result.get("pid")}
+            return {
+                "ok": False,
+                "error": "起来了但 8765 健康检查还没通，看 %s" % result.get("log", "search.log"),
+                "pid": result.get("pid"),
+            }
+        return {"ok": False, "error": str(result.get("error") or "演示页启动失败"), "pid": result.get("pid")}
 
     # ---- read-only data --------------------------------------------
     def db_rows(self, sql, args=()):

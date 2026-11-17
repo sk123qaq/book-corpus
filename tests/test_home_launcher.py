@@ -26,7 +26,7 @@ def test_command_for_demo_sets_books_root(tmp_path):
 
     assert command[0] == sys.executable
     assert command[1].endswith("apps/demo/server.py")
-    assert command[-2:] == ["--port", "8765"]
+    assert command[-4:] == ["--port", "8765", "--root", str(root)]
     assert env["BOOKS_ROOT"] == str(root)
 
 
@@ -35,7 +35,7 @@ def test_command_for_reading_uses_root_argument(tmp_path):
     command, env = command_for("reading", root)
 
     assert command[1].endswith("apps/reading/server.py")
-    assert command[-2:] == ["--root", str(root)]
+    assert command[-4:] == ["--port", "8771", "--root", str(root)]
     assert "BOOKS_ROOT" not in env
 
 

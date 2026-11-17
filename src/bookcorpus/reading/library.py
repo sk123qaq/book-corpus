@@ -74,6 +74,35 @@ class Library:
                     self._index = index
         return self._index
 
+    def _book_entry(self, uid, info):
+        if not info or not info["chapters"]:
+            return None
+        path = os.path.join(self.layout.book(uid), "book.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return None
+        chapter_count = info["chapters"]
+        return {
+            "uid": uid,
+            "title": data.get("title") or uid,
+            "title_short": _short_title(data.get("title") or uid),
+            "author": _clean_author(data.get("author")),
+            "author_display": _clean_author(data.get("author")) or "作者待校",
+            "subjects": list(data.get("subjects") or []),
+            "subject": (data.get("subjects") or ["未分类"])[0],
+            "retention": data.get("retention", ""),
+            "chapters": chapter_count,
+            "chapter_count": chapter_count,
+            "chars": info["chars"],
+            "packs": 0,
+            "readable": True,
+            "color": _cloth(uid),
+            "cloth": _cloth(uid),
+            "dir": self.layout.book(uid),
+        }
+
     def _load_books(self):
         if self._books is not None:
             return self._books
@@ -86,35 +115,9 @@ class Library:
                 uid = os.path.basename(os.path.dirname(path))
                 if uid.startswith("_"):
                     continue
-                info = stats.get(uid)
-                if not info or not info["chapters"]:
-                    continue
-                try:
-                    with open(path, encoding="utf-8") as fh:
-                        data = json.load(fh)
-                except (OSError, json.JSONDecodeError):
-                    continue
-                chapter_count = info["chapters"]
-                books.append(
-                    {
-                        "uid": uid,
-                        "title": data.get("title") or uid,
-                        "title_short": _short_title(data.get("title") or uid),
-                        "author": _clean_author(data.get("author")),
-                        "author_display": _clean_author(data.get("author")) or "作者待校",
-                        "subjects": list(data.get("subjects") or []),
-                        "subject": (data.get("subjects") or ["未分类"])[0],
-                        "retention": data.get("retention", ""),
-                        "chapters": chapter_count,
-                        "chapter_count": chapter_count,
-                        "chars": info["chars"],
-                        "packs": 0,
-                        "readable": True,
-                        "color": _cloth(uid),
-                        "cloth": _cloth(uid),
-                        "dir": self.layout.book(uid),
-                    }
-                )
+                entry = self._book_entry(uid, stats.get(uid))
+                if entry is not None:
+                    books.append(entry)
             self._books = books
             return books
 
@@ -131,7 +134,19 @@ class Library:
                 book["chars"] = info["chars"]
                 self._chapters.pop(uid, None)
                 return book
-        return None
+        # 运行中刚新拆章/入库的书：增量补扫单书并挂入缓存，不必重启服务。
+        if not uid or uid.startswith("_"):
+            return None
+        info = self._shelf_index().refresh_book(uid)
+        entry = self._book_entry(uid, info)
+        if entry is None:
+            return None
+        with self._books_lock:
+            if self._books is not None and not any(b["uid"] == uid for b in self._books):
+                self._books.append(entry)
+                self._books.sort(key=lambda b: b["uid"])
+        self._chapters.pop(uid, None)
+        return entry
 
     def chapters(self, uid):
         cached = self._chapters.get(uid)
@@ -182,11 +197,18 @@ class Library:
                 chunks.append(fh.read())
         raw_bytes = b"\0".join(chunks)
         raw = chunks[0].decode("utf-8", "replace")
+        first_name = os.path.basename(paths[0])
         parsed = parse_markdown(raw, chapter["stem"], base_dir=os.path.dirname(paths[0]))
+        for block in parsed.get("blocks") or []:
+            block["source_file"] = first_name
         if len(chunks) > 1:
             body_raw = chunks[1].decode("utf-8", "replace")
+            second_name = os.path.basename(paths[1])
             body = parse_markdown(body_raw, chapter.get("body_stem", "body"), base_dir=os.path.dirname(paths[1]))
-            blocks = list(parsed.get("blocks") or []) + list(body.get("blocks") or [])
+            body_blocks = list(body.get("blocks") or [])
+            for block in body_blocks:
+                block["source_file"] = second_name
+            blocks = list(parsed.get("blocks") or []) + body_blocks
             for block_index, block in enumerate(blocks, 1):
                 block["id"] = f"B{block_index:02d}"
             parsed["blocks"] = blocks

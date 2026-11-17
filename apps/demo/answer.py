@@ -56,6 +56,7 @@ for _p in (SCRIPTS, HERE):
 
 import book_expand
 import book_readme
+import context as demo_context
 import defpass
 import direct_llm
 import lib_common as L
@@ -68,12 +69,13 @@ import vec_search
 from thinking import DEFAULT as DEFAULT_THINKING
 from thinking import normalize as normalize_thinking
 
-ROOT = L.ROOT
+_PATHS = demo_context.build_paths()
+ROOT = str(_PATHS.root)
 
-INDEX_DB = os.path.join(ROOT, "build", "检索", "index.db")
-LIBRARY_DB = os.path.join(ROOT, "build", "library.db")
-LIBRARY = os.path.join(ROOT, "books")
-CACHE_DIR = os.path.join(HERE, "缓存", "answers")
+INDEX_DB = str(_PATHS.index_db)
+LIBRARY_DB = str(_PATHS.lib_db)
+LIBRARY = str(_PATHS.books)
+CACHE_DIR = str(_PATHS.answers_dir)
 SKILL = os.path.join(L.skill_dir("book-corpus-qa"), "SKILL.md")
 try:  # 项目配的模型与思考等级；没装包时退回写死的那一套
     from bookcorpus import pimodel
@@ -87,6 +89,22 @@ MODEL = (
     or (pimodel.ref(_CFG["values"]) if pimodel else "")
     or "opencode-go/deepseek-v4.1-flash"
 )
+
+
+def configure(paths):
+    """按实例路径重新绑定只读库与回答缓存目录。"""
+    global ROOT, INDEX_DB, LIBRARY_DB, LIBRARY, CACHE_DIR, _CFG, MODEL, DEFAULT_THINKING
+    ROOT = str(paths.root)
+    INDEX_DB = str(paths.index_db)
+    LIBRARY_DB = str(paths.lib_db)
+    LIBRARY = str(paths.books)
+    CACHE_DIR = str(paths.answers_dir)
+    if pimodel is not None:
+        _CFG = pimodel.load(ROOT)
+        DEFAULT_THINKING = normalize_thinking(pimodel.thinking(_CFG["values"]), DEFAULT_THINKING)
+    MODEL = os.environ.get("ANSWER_MODEL") or (pimodel.ref(_CFG["values"]) if pimodel else "") or MODEL
+
+
 PI_TIMEOUT = 240
 PROMPT_VERSION = "answer-v16"
 # 点名一本书时也走一次写手：点名书排在最前，其他书只补它没有的角度。

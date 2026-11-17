@@ -22,11 +22,21 @@ if HERE not in sys.path:
 
 import trace as tracer
 
+import context as demo_context
 from answer import HISTORY_CHARS_MULTI, HISTORY_CHARS_SINGLE  # noqa: F401 供本模块与其他调用方从这里取常量
 
-SESS_DIR = os.path.join(HERE, "缓存", "sessions")
-LIBRARY_DB = tracer.LIB_DB
+_PATHS = demo_context.build_paths()
+SESS_DIR = str(_PATHS.sessions_dir)
+LIBRARY_DB = str(_PATHS.lib_db)
 ID_RE = re.compile(r"^[a-f0-9]{12}$")
+
+
+def configure(paths):
+    """按实例路径重新绑定会话与书目库位置。"""
+    global SESS_DIR, LIBRARY_DB
+    SESS_DIR = str(paths.sessions_dir)
+    LIBRARY_DB = str(paths.lib_db)
+
 
 MAX_CHAPTERS = 12
 MAX_PARAGRAPHS = 8

@@ -81,6 +81,34 @@ class Layout:
         return os.path.join(self.root, "工作区")
 
     @property
+    def work_reading(self):
+        return os.path.join(self.work, "阅读")
+
+    @property
+    def work_search(self):
+        return os.path.join(self.work, "检索")
+
+    @property
+    def search_sessions(self):
+        return os.path.join(self.work_search, "sessions")
+
+    @property
+    def search_terms(self):
+        return os.path.join(self.work_search, "terms")
+
+    @property
+    def search_answers(self):
+        return os.path.join(self.work_search, "answers")
+
+    @property
+    def search_related(self):
+        return os.path.join(self.work_search, "related")
+
+    @property
+    def search_runlog(self):
+        return os.path.join(self.work_search, "运行记录")
+
+    @property
     def daily(self):
         return os.path.join(self.root, DAILY)
 

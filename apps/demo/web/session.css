@@ -1494,3 +1494,99 @@ a { color: inherit; text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* 检索 ↔ 分层读联动样式 */
+.book-pick-wrap {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+}
+.book-pick-wrap .book-pick {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.bp-open {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  font: 11px/1 var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  text-decoration: none;
+  background: transparent;
+}
+.bp-open:hover {
+  color: var(--red-ink);
+  border-color: var(--red-soft);
+  background: var(--red-soft);
+}
+.ev-ops {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.ev-read {
+  font: 10.5px/1 var(--sans);
+  color: var(--red-ink);
+  text-decoration: none;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper, #faf8f3);
+  white-space: nowrap;
+}
+.ev-read:hover {
+  border-color: var(--red-ink);
+  background: var(--red-soft);
+}
+.drawer-foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.drawer-foot-actions a.btn {
+  text-decoration: none;
+}
+.trace-hit-card {
+  margin: 12px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--red-ink);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .45);
+}
+.trace-hit-head {
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.trace-hit-quote {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--ink);
+}
+.answer-pending-note {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.trace-pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.trace-pending-actions a.btn {
+  text-decoration: none;
+}
+.scope-pill {
+  margin-right: 10px;
+}

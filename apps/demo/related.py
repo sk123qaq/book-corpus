@@ -13,16 +13,22 @@ import hashlib
 import json
 import os
 import re
+import sys
 import threading
 import time
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+import context as demo_context
 import model_call
 import runlog
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
+_PATHS = demo_context.build_paths()
+ROOT = str(_PATHS.root)
 
-CACHE_DIR = os.path.join(HERE, "缓存", "related")
+CACHE_DIR = str(_PATHS.related_dir)
 try:  # 项目配的模型；没装包时退回写死的那一套
     from bookcorpus import pimodel
 
@@ -31,6 +37,18 @@ try:  # 项目配的模型；没装包时退回写死的那一套
 except ImportError:
     pimodel, _CFG = None, None
     MODEL = "opencode-go/deepseek-v4.1-flash"
+
+
+def configure(paths):
+    """按实例路径重新绑定工作区与追问判定缓存目录。"""
+    global ROOT, CACHE_DIR, _CFG, MODEL
+    ROOT = str(paths.root)
+    CACHE_DIR = str(paths.related_dir)
+    if pimodel is not None:
+        _CFG = pimodel.load(ROOT)
+        MODEL = pimodel.ref(_CFG["values"]) or MODEL
+
+
 PI_TIMEOUT = 60
 PROMPT_VERSION = "related-v1"
 WINDOW = 3

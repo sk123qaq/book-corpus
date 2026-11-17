@@ -95,8 +95,8 @@ def genre(meta, book):
     return m.subject1
 
 
-def load_meta(libdb=LIBDB):
-    lib = sqlite3.connect("file:%s?mode=ro" % libdb, uri=True)
+def load_meta(libdb=None):
+    lib = sqlite3.connect("file:%s?mode=ro" % (libdb or LIBDB), uri=True)
     out = {}
     try:
         for path, title, s1, s2, chapters in lib.execute(CHAPTER_SQL):

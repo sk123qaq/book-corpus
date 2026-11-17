@@ -562,3 +562,69 @@ body.hide-pins .pinned-notes {
     box-shadow: 0 12px 36px rgba(0, 0, 0, .28);
   }
 }
+
+/* 联动来路条、持久命中轮廓与句段高亮 */
+.reader-block.hit {
+  background: rgba(168, 122, 62, .08);
+  border-left-color: var(--ochre, #a87a3e);
+}
+
+mark.hl-hit {
+  background: rgba(168, 68, 47, .16);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.arrival-banner {
+  margin-top: 14px;
+  margin-bottom: 10px;
+  padding: 12px 16px;
+  border-left-color: var(--ochre, #a87a3e);
+}
+
+.arrival-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.arrival-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.arrival-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font: 11px/1.4 var(--sans);
+  background: var(--pine);
+  color: #f7f4ec;
+  border-radius: 3px;
+}
+
+.arrival-query {
+  font: 12.5px/1.5 var(--sans);
+  color: var(--ink-2);
+}
+
+.arrival-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.selection-bar-sep {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, .22);
+  margin: 0 2px;
+  vertical-align: middle;
+}

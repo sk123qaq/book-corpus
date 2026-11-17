@@ -19,8 +19,9 @@ if SRC not in sys.path:
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from bookcorpus import envfile, preflight
+from bookcorpus import app_links, envfile, preflight
 from bookcorpus.preflight import MissingConfigError
+from bookcorpus.reading.locator import resolve_open_target
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.preflight import SourceTooLarge
 from bookcorpus.reading.service import ASSIST_ACTIONS, ReadingService
@@ -56,6 +57,9 @@ def local_ok(handler):
 class Handler(BaseHTTPRequestHandler):
     service = None
     quiet = False
+    targets = app_links.resolve_targets()
+    allow_start = True
+    start_timeout = app_links.START_TIMEOUT
 
     def log_message(self, fmt, *args):
         if not self.quiet:
@@ -210,6 +214,25 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/" or path == "/index.html":
             self._serve_page("shelf.html", head)
             return
+        if path == "/open":
+            self._serve_open(query, head)
+            return
+        if path.startswith("/go/"):
+            key = urllib.parse.unquote(path[4:]).strip("/")
+            rel_to = (query.get("to") or ["/"])[0]
+            status, location, err_html = app_links.resolve_go_redirect(
+                key,
+                rel_to,
+                root=self.service.library.root,
+                targets=self.targets,
+                allow_start=self.allow_start,
+                timeout=self.start_timeout,
+            )
+            if status == 302:
+                self._redirect(location, head)
+            else:
+                self._send(status, err_html, "text/html; charset=utf-8", head)
+            return
         if path == "/catalog":
             self._serve_page("catalog.html", head)
             return
@@ -224,7 +247,8 @@ class Handler(BaseHTTPRequestHandler):
         if match:
             target = self.service.library.redirect_target(match.group(1), int(match.group(2)))
             if target:
-                self._redirect("/chapter/%s/%02d" % (match.group(1), target), head)
+                qs = ("?" + parsed.query) if parsed.query else ""
+                self._redirect("/chapter/%s/%02d%s" % (match.group(1), target, qs), head)
                 return
             self._serve_page("chapter.html", head)
             return
@@ -432,6 +456,48 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, result)
 
     # ---- 静态与原文附件 -----------------------------------------------
+    def _serve_open(self, query, head=False):
+        uid = (query.get("uid") or [""])[0].strip()
+        rel_path = (query.get("path") or [""])[0].strip()
+        line_raw = (query.get("line") or [""])[0].strip()
+        line = int(line_raw) if line_raw.isdigit() else None
+        quote_probe = (query.get("q") or [""])[0]
+        origin = (query.get("from") or [""])[0].strip()
+        orig_query = (query.get("query") or [""])[0].strip()
+
+        target = resolve_open_target(
+            self.service.library,
+            uid=uid,
+            path=rel_path,
+            line=line,
+            quote=quote_probe,
+        )
+        if target.kind == "not_found":
+            self._error(404, target.notice or "没有找到对应正文", api=False, head=head)
+            return
+        if target.kind == "book":
+            params = {}
+            if target.notice:
+                params["notice"] = target.notice
+            if origin:
+                params["from"] = origin
+            qs = ("?" + urllib.parse.urlencode(params)) if params else ""
+            self._redirect(f"/book/{urllib.parse.quote(target.uid, safe='')}{qs}", head)
+            return
+
+        params = {}
+        if origin:
+            params["from"] = origin
+        if orig_query:
+            params["query"] = orig_query[:200]
+        if target.highlight:
+            params["hl"] = target.highlight
+        if target.block_ids:
+            params["blocks"] = ",".join(target.block_ids)
+        qs = ("?" + urllib.parse.urlencode(params)) if params else ""
+        frag = f"#blk-{target.block_ids[0]}" if target.block_ids else ""
+        self._redirect(f"/chapter/{urllib.parse.quote(target.uid, safe='')}/{target.n:02d}{qs}{frag}", head)
+
     def _serve_page(self, name, head=False):
         path = os.path.join(WEB, name)
         try:
@@ -490,6 +556,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="8771 阅读工作台 本地服务")
     parser.add_argument("--root", default=os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库"))
     parser.add_argument("--port", type=int, default=8771)
+    parser.add_argument("--search-url", default=None, help="「找一段」跳转地址覆盖")
+    parser.add_argument("--home-url", default=None, help="「首页」跳转地址覆盖")
+    parser.add_argument("--no-start", action="store_true", help="目标服务未起时不代起")
+    parser.add_argument("--start-timeout", type=float, default=app_links.START_TIMEOUT, help="等待服务就绪秒数")
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--annotate",
@@ -509,6 +579,9 @@ def main(argv=None):
         parser.error("根下没有 books/：%s" % args.root)
     Handler.service = service
     Handler.quiet = args.quiet
+    Handler.allow_start = not args.no_start
+    Handler.start_timeout = max(0.1, args.start_timeout)
+    Handler.targets = app_links.resolve_targets({"search": args.search_url, "home": args.home_url})
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print("阅读工作台 8771 · root=%s · http://127.0.0.1:%d/" % (service.library.root, args.port), flush=True)
     warning = preflight.summary(service.library.root)
