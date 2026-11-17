@@ -28,7 +28,7 @@
 Preconditions:
 
 - 工作区按 [README](./README.md) 建好；`check_ops.py` 自己造临时根，不需要样书。
-- 操作台起在本轮端口：`python3 apps/ops/server.py --root $ROOT --port 18770`，启动行是 `统一操作台：http://127.0.0.1:18770  root=<ROOT>`；`--port 0` 会自己挑一个空闲端口并打印实际值。**产品默认端口是 8770**（`apps/ops/server.py:3871`；`:3869` 是 description），18770 只是本技能传 `--port` 的结果；操作员的常驻实例在 8770，不要照抄 18770 去连他。
+- 操作台起在本轮端口：`BOOKS_ROOT=$ROOT python3 apps/ops/server.py --root $ROOT --port 18770`，启动行是 `统一操作台：http://127.0.0.1:18770  root=<ROOT>`；`--port 0` 会自己挑一个空闲端口并打印实际值。**产品默认端口是 8770**（`apps/ops/server.py:3871`；`:3869` 是 description），18770 只是本技能传 `--port` 的结果；操作员的常驻实例在 8770，不要照抄 18770 去连他。
 - CDP 脚本要一个 Chrome 系浏览器：默认找 `google-chrome-stable`；本机有这个（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。找不到时报的是 `FileNotFoundError: [Errno 2] No such file or directory: 'google-chrome-stable'`，不是页面问题。
 - 只对临时根操作：上传写 `books/_收件箱/`，任务写 `jobs/<id>/`，状态写 `ops.db`。绝不指向 `~/书库`。
 
@@ -52,8 +52,8 @@ Preconditions:
 - `shot_ops.py` 已覆盖账表页签（八条目，`shot_ops.py:37-46`），并断言 `<h1>账表</h1>`；它不覆盖的是逐行改账这类写入动作，账表数据仍验 `/api/ledger`。
 - `check_ops.py` 与 `shot_ops.py` 用的都是临时根 + stub 脚本；真实队列会调 `src/bookcorpus/scripts/` 里的东西，用临时根跑才安全。
 - 直接跑 `tests/acceptance/ops/test_status.py` 或 `test_pdf.py` 时，`REAL_ROOT`/`INSTANCE` 在未设 `BOOKS_ROOT` 时默认 `~/书库`（`test_status.py:22`、`test_pdf.py:26`），会读真实账与索引；要跑就先 `export BOOKS_ROOT=$ROOT`。`test_status.py` 没有 `def test_`，pytest 不会收集它，只能当脚本跑。
-- `/api/search/health` 与 `/api/search/start` 写死 `http://127.0.0.1:8765`（`apps/ops/server.py:77`），不随 `--root` 或 `--port` 变。临时根的 18770 也会探操作员的 8765；`启动阅读搜索` 还会以 `cwd=$ROOT` 起一个没传 `--port` 的 demo，可能占住 8765。验证这两个接口前先确认 8765 是不是操作员的，别在临时实例上点启动。
+- `/api/search/health` 仍写死探测 `http://127.0.0.1:8765`（`apps/ops/server.py` 的 `SEARCH_URL`），不随 `--root` 或 `--port` 变；临时根的 18770 也会探操作员的 8765，返回 `running:true` 是正常的。`/api/search/start` 改走 `app_links.ensure("search", root)`，命令带 `--port 8765 --root $ROOT`，但仍会占默认 8765；本机 8765 被常驻实例占着，这条分支记 `unexercised`，别在临时实例上点启动。
 - 上传是唯一往库里写文件的入口，目标固定是 `_收件箱/`；其余动作只改账本与 `jobs/`。
 - 同一份工作区同时只能有一个写者（`.writer.lock`）；两个验证进程并行跑会互相等锁，看起来像卡住。
-- 用裸 `python3 apps/ops/server.py` 起时没有 `bookcorpus` 可导入，`main()` 里那段 `envfile.load()` 是空操作，仓库 `.env` 的 `BOOKS_ROOT` 也不会生效；本技能因此显式传 `--root`。若改用 `uv run --frozen python` 或设 `PYTHONPATH=src`，`.env` 会被加载，默认根可能是 `BOOKS_ROOT`，起服务前先清掉。
+- 用裸 `python3 apps/ops/server.py` 起时没有 `bookcorpus` 可导入，`main()` 里那段 `envfile.load()` 是空操作，仓库 `.env` 的 `BOOKS_ROOT` 也不会生效；本技能因此显式传 `--root`。若改用 `uv run --frozen python` 或设 `PYTHONPATH=src`，`.env` 会被加载，但只影响不传 `--root` 时的默认值；显式 `--root` 仍优先。起服务前显式 `export BOOKS_ROOT=$ROOT`，不要改仓库 `.env`。
 - `--port 0` 时实际端口只在启动行里，不要假设 8770。

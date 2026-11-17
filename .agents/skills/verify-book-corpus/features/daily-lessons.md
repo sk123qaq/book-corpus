@@ -1,12 +1,13 @@
 # 往期日课
 
 日课每天从书库里挑一章，生成一期短文：书名、章名、正文、一句原文引用，加一段「为什么挑它」。
-往期页把 `<root>/日课/` 下的期按日期倒排列出来，点一期读全文。
+往期页把 `<root>/日课/` 下的期按日期倒排列出来，点一期读全文；本期若有 `chapter.path`，还能一键到分层读的 `/open` 落段。
 
 ## Sub-features
 
 - `daily-list` 往期列表：按期倒排，行里是 `MM.DD`、类别、书名、标题（**不带期号**）。页面首屏是最新一期，往期是页底 `<section id="past">`（标题「目录」）；首屏渲染后地址栏会变成 `/#<date>`。
 - `daily-issue` 单期页：期号、正文、引用、为什么挑它；研究记录不是独立区块，只是页脚一行 `路径 · N 字 · 查证 X · 联网 N 次`（`apps/daily/web/app.js:135-143`）。
+- `daily-open` 在分层读打开：`book.uid` 与 `chapter.path` 都有时显示 `#open-reading`，链接是 `<reading_url>/open?uid=&path=&line=&q=&from=daily`；`q` 取引用前 120 字，`line` 只在有引用行时带。缺 uid/path 时链接隐藏，不是 404。
 - `daily-empty` 空目录的空状态。
 - `daily-skip-bad` 坏文件跳过，不整页失败。
 - `daily-contract` 文件名必须等于文件里的 `date`。
@@ -19,13 +20,14 @@
 - 浏览器打开 `http://127.0.0.1:18772/`，首屏直接是最新一期（不是列表），往期在页底「目录」；渲染完地址栏变 `/#2026-11-10` 这种形式。
 - 点某一期读全文。
 - 从首页「往期日课」卡进来是同一页。
+- 本期有章节路径时，正文下方有「在分层读打开这一章 ↗」，点开落到 8771 的原文章节并高亮引用。
 
 ## Driving it with curl + pytest
 
 Preconditions:
 
 - 工作区按 [README](./README.md) 建好。
-- 日课服务由本轮起：`python3 apps/daily/server.py --root $ROOT --port 18772`，启动只打印 `http://127.0.0.1:18772` 一行。**端口必须显式传**：程序默认是 `--port 8772`，那正是操作员常驻实例的端口，漏了就会去动真实库。
+- 日课服务由本轮起：`BOOKS_ROOT=$ROOT python3 apps/daily/server.py --root $ROOT --port 18772 --reading-url http://127.0.0.1:18771`，启动只打印 `http://127.0.0.1:18772` 一行。**端口必须显式传**：程序默认是 `--port 8772`，那正是操作员常驻实例的端口，漏了就会去动真实库。`--reading-url` 决定 `/api/feed` 的 `reading_url`，不传会默认操作员的 8771。
 - 没有现成日课可抄：`book-corpus daily --dry-run` 打选书、模型/思考/工具、`----- 提示词 -----` 与提示词四块，不落盘，不能当 seed。要验「有内容」就手写一期，键名照下面这份：
 
 ```json
@@ -48,7 +50,8 @@ Preconditions:
 - 文件名必须是 `<date>.json`，`date` 与文件名不一致会进 `errors`，不进 `issues`。
 
 - **空目录。** 先不写任何期。`curl -s http://127.0.0.1:18772/api/feed` 输出 `{"today": "…", "dir": "$ROOT/日课", "issues": [], "errors": []}`；`curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18772/` 输出 `200`，页面展示空状态。前提是 `$ROOT/日课/` **目录存在**（`book-corpus init` 会建）；目录不存在时 `errors` 会多一条 `{"file": null, "reason": "日课目录不存在：…"}`，页面同时出现「有 1 条日课读取问题，已跳过。」
-- **有内容。** 写入上面那期后 `curl -s http://127.0.0.1:18772/api/feed` 的 `issues` 长度变 `1`，带 `issue`（期号，整数）、`headline`、`book.title`；本期 `issue` 为 `1`。
+- **有内容。** 写入上面那期后 `curl -s http://127.0.0.1:18772/api/feed` 的 `issues` 长度变 `1`，带 `issue`（期号，整数）、`headline`、`book.title`；本期 `issue` 为 `1`。顶层同时有 `reading_url`，应等于本轮 `--reading-url`（如 `http://127.0.0.1:18771`）。
+- **分层读链接。** `google-chrome-stable --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-daily" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18772/ > "$EV/daily-dom.html"`，剥脚本后断言 `<a id="open-reading"` 的 `href` 以 `<reading_url>/open?` 开头，带 `uid=B0001`、URL 编码后的 `path=`、`from=daily`；页面文字含「在分层读打开这一章」。
 - **单期。** `curl -s http://127.0.0.1:18772/api/issue/2026-11-10` 返回同一期；`curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18772/api/issue/2000-01-01` 输出 `404`。
 - **坏文件。** 放一个 `2026-11-11.json` 但把 `date` 写成 `2026-11-12`，再取 `/api/feed`：`issues` 仍是 `1`，`errors` 多一条，形如 `{"file": "2026-11-11.json", "reason": "文件名与 date 不一致，文件里是 2026-11-12。"}`。**先复制一期完整合法的记录再改 `date`**：只写 `{"version": 1, "date": "2026-11-12"}` 会先撞字段校验，报 `kind 必须是字符串。`（2026-11-13 实测），验不到文件名规则。
 - **不缓存。** `curl -s -D - -o /dev/null http://127.0.0.1:18772/api/feed` 的响应头含 `Cache-Control: no-store` 与 `X-Content-Type-Options: nosniff`。
@@ -62,7 +65,8 @@ Preconditions:
 - `--dry-run` 不产生任何文件，不能拿它当 seed，也不能用它证明列表能渲染。
 - 期号在 `/api/feed` 与单期页 masthead 里，**列表行里没有**；要验「带期号」得看当前期，别看列表行。
 - 目录里只有坏文件时页面是空状态加错误，不是 500；断言要看 `errors`，别只看 `issues.length`。
-- 引用里的 `line` 只在**生成时**按原文复核改正；服务端读盘时只校验它是 >= 1 的整数。手写 seed 填错行，页面照原样显示错行，不会让整期失效——所以别用 `line` 去验「引用对得上原文」。
+- 引用里的 `line` 只在**生成时**按原文复核改正；服务端读盘时只校验它是 >= 1 的整数。手写 seed 填错行，页面照原样显示错行，不会让整期失效——所以别用 `line` 去验「引用对得上原文」。`/open` 链接的 `line` 只是定位提示，真正高亮靠 `q`。
+- 分层读链接只在 `book.uid` 与 `chapter.path` 都存在时出现；只有书没有章时 `#open-reading` 隐藏，不要判页面坏。`reading_url` 只影响链接前缀，不影响日课正文。
 - 研究记录只显示 `research.chapters` 与 `research.web`；`queries`、`note` 会过校验但不渲染。
 - 300–500 字只写在生成提示词里，服务端不校正文长度；手写 seed 一两个字也照发。
 - 静态路由只有 `/`、`/index.html`、`/style.css`、`/app.js`；没有 `/issue/2026-11-10` 这种页面路径，单期内容走 `/api/issue/<date>`。

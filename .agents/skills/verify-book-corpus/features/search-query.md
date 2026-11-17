@@ -11,6 +11,7 @@
 - `search-options` `-n` 默认 20，`--book-score mix|sum`（默认 `mix=0.7*最好段+0.3*段落均值`），`--rerank` 加定义式/引号/卷首特征，`--pool` 默认 `medium`（2000 段），`--min-chars` 默认 40。
 - `search-expand` `--expand` 并上 `build/检索/expand` 的扩展文本，`--expand-kind both|prefix|queries`。
 - `query-plan` 书级规划：最多 5 轮词法循环，stop 为 `C` / `A+B` / `cap` / `exhausted`；默认 `--book-score best_support`、`-n 5`、`--max-chapters 3`、`--chapter-selector score`。
+- `query-scope` 内部范围参数：`book_query.Planner(scope={uid,...})` 与 `book_cards.run(..., scope=...)` 在词法/向量命中合并前先过滤到书目集合，demo 的 `scope.books` 走这条；CLI 没有 `--scope` 开关，别在命令行找。
 - `query-hybrid` 规划后跑向量检索：段、章、书三层 RRF（书 k=30、`w_vec=1.35`；章 k=5、最多 10 章）。成功时 JSON 顶层 `fusion:"hybrid"`、`vec_used:true`、`vec_ms`、`vec_hits`；失败/缺索引时 `fusion:"bm25_only"`、`vec_used:false`、`vec_hits:0`，章节仍由词法给出。
 - `query-cards` 书卡：`--cards` 默认开，`--no-cards` 关；触发原因有 `margin`、`types`、`long`、`concept`、`title_ambiguous` 等。文本在 stderr 打 `书卡：N 张，原因 …` 或 `不弹卡：书名/作者/原句提示`，`--json` 顶层带 `cards`。
 - `query-expand` `--expand-on-demand` 选中后跑 B4 按需扩展（默认关，会调模型）。
@@ -31,7 +32,7 @@ Preconditions:
 - 按 [README](./README.md) 建一次性根并装样书：
   `ROOT=/tmp/bc-verify-$RUN_ID; mkdir -p "$ROOT/run"; export BOOK_CORPUS_ENV="$ROOT/run/env"; unset BOOKS_ROOT BOOK_CORPUS_DATA; uv run --frozen book-corpus init "$ROOT" --no-pdf-venv; uv run --frozen book-corpus sample --root "$ROOT"`。
 - **始终显式设** `BOOKS_EMBED_URL=http://127.0.0.1:18780`（或本轮 stub 端口）。缺省 `18080` 是操作员常驻的 llama-server，不设会打到真实语料/真实服务。
-- 词法用例不需要向量索引；混合用例先按 [embed.md](./embed.md) 对 `B0001` 建索引并起 18780，或使用该文件的 stub 方案。
+- 词法用例不需要向量索引；混合用例先按 [embed.md](./embed.md) 对 `B0001` 建索引并起 18780，或使用该文件的 stub 方案。仓库 `.env` 若有 `BOOKS_ROOT`，一次性根验证时同时 `export BOOKS_ROOT="$ROOT"`，不要只 `unset`，避免命令在不同入口读到活库路径。
 - 所有命令都在工具仓根跑；`--root "$ROOT"` 指数据根。`book-corpus run` 会导出 `BOOKS_ROOT`，但 `search`/`query` 不是 `run` 的别名，直接给 `--root` 最稳。
 - 证据目录先定：`EV="$PWD/artifacts/verify/$RUN_ID/search-query"; mkdir -p "$EV"`。
 
@@ -57,7 +58,7 @@ Preconditions:
 - 混合检索要求三件事同时成立：`emb.db` 存在、`vectors.f16` 非空、`POST $BOOKS_EMBED_URL/v1/embeddings` 在 5 秒内回 1024 维。任一不满足都静默 `bm25_only`；`vec_hits=0` 本身不是原因。
 - `BOOKS_EMBED_URL` 不设就会用 `127.0.0.1:18080`，那是操作员的常驻服务。验证必须显式指到本轮端口或 stub；否则你测的是另一份索引/另一个模型。
 - `--expand` 即使扩展档为空也会走 RRF 重打分，分数从 BM25 几百分变成 `1/(60+rank)` 量级，且没有警告。要判断扩展是否真的命中，看 `hits[].expand` 字段，不要只看分数。
-- `book_cards` 的 5–8 张是独立 CLI 的 `--cards` 边界，不是 `query` 的保证。样书只有 `B0001` 时 `query` 出一张卡是正常的；要验证多卡/候选书多选，先往根里装第二本书。
+- `book_cards` 的 5–8 张是独立 CLI 的 `--cards` 边界，不是 `query` 的保证。样书只有 `B0001` 时 `query` 出一张卡是正常的；要验证多卡/候选书多选，先往根里装第二本书。`scope` 是 demo 的内部下推参数，CLI 的 `search/query` 没有它；验多书范围要用 `/api/run`，不是命令行。
 - 空数据根是合法的：`search`/`query` 会建空 `library.db`/`index.db` 并输出 `0 条`。别把空根当「索引坏了」；它和 `doctor` 的 `db: empty` 是两种状态。
 - `--route` 会联网调模型，`--expand-on-demand` 也会；纯离线回归只跑 `search` 与 `query --no-cards`，或直接跑 `tests/test_vec_search_hybrid.py`。
 - 结果片段里的 `path:line` 是 `books/<uid>/md/...` 相对路径；要打开原文先拼 `$ROOT/`，别按仓库根找。
