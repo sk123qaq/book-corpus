@@ -330,13 +330,15 @@ def _harvest_group_variants(groups, has_hit, target, limit, max_len=3, match_ter
                     return
 
 
-def _preflight_terms(terms, groups=None, question="", index_db=None):
+def _preflight_terms(terms, groups=None, question="", index_db=None, exclude_books=None, exclude_text=""):
     """用 para_fts 轻量检查 >=4 字非专名检索词；零命中复合词拆成有命中的原子短词。"""
     index_db = index_db or INDEX_DB
     terms = [t for t in (terms or []) if isinstance(t, str) and t]
     if not terms or not index_db or not os.path.exists(index_db):
         return terms[:MAX_TERMS], []
     quoted_titles = set(re.findall(r"《([^》]{2,})》", question or ""))
+    excl = [b for b in (exclude_books or ()) if isinstance(b, str) and b]
+    excl_text = str(exclude_text or "").strip()
     try:
         con = _ro(index_db)
     except sqlite3.Error:
@@ -351,7 +353,27 @@ def _preflight_terms(terms, groups=None, question="", index_db=None):
             hit_cache[cand] = False
             return False
         try:
-            ok = con.execute("SELECT 1 FROM para_fts WHERE para_fts MATCH ? LIMIT 1", (expr,)).fetchone() is not None
+            if excl or excl_text:
+                where = ["para_fts MATCH ?"]
+                params = [expr]
+                if excl:
+                    ph = ",".join("?" * len(excl))
+                    where.append(f"p.book NOT IN ({ph})")
+                    params.extend(excl)
+                limit = 8 if excl_text else 1
+                rows = con.execute(
+                    f"SELECT p.text FROM para_fts f JOIN para p ON p.id=f.rowid "  # noqa: S608
+                    f"WHERE {' AND '.join(where)} LIMIT ?",
+                    (*params, limit),
+                ).fetchall()
+                if excl_text:
+                    ok = any(not book_query.is_duplicate_passage(r[0], excl_text) for r in rows)
+                else:
+                    ok = bool(rows)
+            else:
+                ok = (
+                    con.execute("SELECT 1 FROM para_fts WHERE para_fts MATCH ? LIMIT 1", (expr,)).fetchone() is not None
+                )
         except sqlite3.Error:
             ok = False
         hit_cache[cand] = ok
@@ -382,6 +404,13 @@ def _preflight_terms(terms, groups=None, question="", index_db=None):
                     if hitting:
                         replaced = hitting
                         break
+            if not replaced and len(term) >= 6:
+                for i in range(0, len(term) - 1):
+                    bi = term[i : i + 2]
+                    if bi not in GENERIC_TERM_STOPWORDS and bi not in replaced and has_hit(bi):
+                        replaced.append(bi)
+                        if len(replaced) >= 2:
+                            break
             for piece in replaced:
                 add_unique(out, piece)
         if len(out) < 2:
@@ -407,11 +436,11 @@ FALLBACK_VERBS = re.compile(r"^(?:提到|提及|谈到|谈及|写过|讲过|说�
 def _strip_question(question):
     """去掉问句的礼貌语、疑问词与句末语气词，留下可检索的实词。"""
     text = unicodedata.normalize("NFKC", question or "")
-    text = re.sub(r"\s+", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
     text = text.strip("？?！!。.，,、；;：:")
-    text = FALLBACK_HEAD.sub("", text)
-    text = FALLBACK_TAIL.sub("", text)
-    return text.strip("，,、；;：:？?！!。.")
+    text = FALLBACK_HEAD.sub("", text).lstrip()
+    text = FALLBACK_TAIL.sub("", text).rstrip()
+    return text.strip(" ，,、；;：:？?！!。.")
 
 
 def _fallback_prompt(question):
@@ -442,18 +471,24 @@ def _fallback_terms(question):
         chunks = [part for part in re.split(r"[被把对向给从]", text) if part]
     out = list(titles)
     for part in chunks:
-        part = part.strip("的了是在有和与及讲说写做、")
-        pieces = FALLBACK_PARTICLES.split(part) if len(part) > 4 else [part]
-        for piece in pieces:
-            piece = FALLBACK_VERBS.sub("", piece)
-            piece = _clean_term(piece.strip("的了是在有和与及讲说写做"))
-            if len(piece) >= 4:
-                for suffix in ("情况", "问题", "原因"):
-                    if piece.endswith(suffix) and len(piece) - len(suffix) >= 2:
-                        piece = piece[: -len(suffix)]
-                        break
-            if len(piece) >= 2 and piece not in GENERIC_TERM_STOPWORDS and piece not in out:
-                out.append(piece)
+        for seg in re.split(
+            r"(?<![A-Za-z0-9])\s+|\s+(?![A-Za-z0-9])|[，,；;。\.！!？?：:\"“”'‘’（）()]+",
+            part,
+        ):
+            seg = seg.strip("的了是在有和与及讲说写做、 ")
+            if not seg:
+                continue
+            pieces = FALLBACK_PARTICLES.split(seg) if len(seg) > 4 else [seg]
+            for piece in pieces:
+                piece = FALLBACK_VERBS.sub("", piece)
+                piece = _clean_term(piece.strip("的了是在有和与及讲说写做"))
+                if len(piece) >= 4:
+                    for suffix in ("情况", "问题", "原因"):
+                        if piece.endswith(suffix) and len(piece) - len(suffix) >= 2:
+                            piece = piece[: -len(suffix)]
+                            break
+                if len(piece) >= 2 and piece not in GENERIC_TERM_STOPWORDS and piece not in out:
+                    out.append(piece)
     if not out:
         fallback = _clean_term(text)
         if fallback and fallback not in GENERIC_TERM_STOPWORDS:
@@ -476,7 +511,7 @@ def _write_json(path, value):
     os.replace(tmp, path)
 
 
-def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None):
+def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None, exclude_books=None, exclude_text=""):
     """返回 {terms, groups, source, ms, note}。source: model|cache|degraded。
 
     thinking 进缓存键：换档就是另一份切词。use_cache=False 时跳过读缓存，
@@ -594,7 +629,13 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None)
         # 读侧认 terms 且 groups；模型输出后对 >=4 字非专名先做 FTS5 零命中拆词，再写缓存
         if terms and groups:
             raw_terms = list(terms)
-            terms, preflight_dropped = _preflight_terms(terms, groups=groups, question=question)
+            terms, preflight_dropped = _preflight_terms(
+                terms,
+                groups=groups,
+                question=question,
+                exclude_books=exclude_books,
+                exclude_text=exclude_text,
+            )
             if preflight_dropped:
                 rec.event(
                     "terms.preflight",
@@ -649,6 +690,14 @@ def extract_terms(question, thinking=DEFAULT_THINKING, use_cache=True, rec=None)
     terms = _fallback_terms(question)
     groups = [{"name": t, "variants": [t]} for t in terms]
     if terms and groups:
+        terms, _ = _preflight_terms(
+            terms,
+            groups=groups,
+            question=question,
+            exclude_books=exclude_books,
+            exclude_text=exclude_text,
+        )
+        groups = [{"name": t, "variants": [t]} for t in terms]
         _write_json(
             path,
             {
@@ -1046,10 +1095,11 @@ def _pick_default(plan, cardset, select, focus=None):
     return None
 
 
-def _clean_scope_books(scope):
-    if not isinstance(scope, dict):
-        return []
-    raw = scope.get("books")
+DEFAULT_RELATED_THRESHOLD = 0.45
+MAX_RELATED_BOOKS = 10
+
+
+def _clean_uid_list(raw):
     if not isinstance(raw, list):
         return []
     out = []
@@ -1061,12 +1111,95 @@ def _clean_scope_books(scope):
     return out
 
 
-def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, scope=None):
+def _clean_scope_books(scope):
+    if not isinstance(scope, dict):
+        return []
+    return _clean_uid_list(scope.get("books"))
+
+
+def _clean_exclude_spots(raw):
+    if not isinstance(raw, list):
+        return []
+    out = []
+    seen = set()
+    for item in raw[:16]:
+        if isinstance(item, dict):
+            path = str(item.get("path") or "").strip()
+            try:
+                line = max(0, int(item.get("line") or 0))
+            except (TypeError, ValueError):
+                line = 0
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            path = str(item[0] or "").strip()
+            try:
+                line = max(0, int(item[1] or 0))
+            except (TypeError, ValueError):
+                line = 0
+        else:
+            continue
+        if path and (path, line) not in seen:
+            seen.add((path, line))
+            out.append((path, line))
+    return out
+
+
+def _clean_threshold(value, default=None):
+    if value is None or value == "":
+        return default
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return default
+    if num != num:  # NaN
+        return default
+    return round(max(0.0, min(1.0, num)), 4)
+
+
+def _book_relevance(b):
+    """把书级命中压成 0..1 的相关性分，供跨书阈值筛选（兼顾纯词法、纯向量与混合）。"""
+    lex_rel = 0.0
+    if getattr(b, "total_groups", 0) > 0 and b.best > 0:
+        bm25_part = b.best / (b.best + 4.5)
+        support_part = min(1.0, b.support / 3.0)
+        lex_rel = 0.50 * min(1.0, b.coverage) + 0.35 * bm25_part + 0.15 * support_part
+    vec_best = float(getattr(b, "vec_best", 0.0) or 0.0)
+    vec_rel = max(0.0, min(1.0, (vec_best - 0.20) / 0.55)) if vec_best > 0 else 0.0
+    if lex_rel > 0 and vec_rel > 0:
+        rel = 0.60 * max(lex_rel, vec_rel) + 0.40 * ((lex_rel + vec_rel) / 2.0)
+    elif lex_rel > 0:
+        rel = lex_rel
+    else:
+        rel = 0.95 * vec_rel
+    return round(max(0.0, min(1.0, rel)), 4)
+
+
+def build(
+    question,
+    select=0,
+    thinking=DEFAULT_THINKING,
+    fresh=False,
+    rec=None,
+    scope=None,
+    mode="",
+    exclude_books=None,
+    exclude_spots=None,
+    threshold=None,
+    source_text="",
+):
     question = (question or "").strip()
     if not question:
         raise ValueError("question 为空")
     thinking = normalize_thinking(thinking)
+    mode = str(mode or "").strip().lower()
+    related_mode = mode == "related"
     scope_books = _clean_scope_books(scope)
+    excl_books = _clean_uid_list(exclude_books)
+    if excl_books and scope_books:
+        excl_set = set(excl_books)
+        scope_books = [u for u in scope_books if u not in excl_set]
+    excl_spots = _clean_exclude_spots(exclude_spots)
+    rel_threshold = _clean_threshold(threshold, DEFAULT_RELATED_THRESHOLD if related_mode else None)
+    excl_text = str(source_text or (question if related_mode else "")).strip()
     rec = rec or runlog.Recorder("", "", {}, enabled=False)
     rec.event(
         "trace.request",
@@ -1074,11 +1207,22 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
         select=select,
         thinking=thinking,
         fresh=fresh,
+        mode=mode,
         scope={"books": scope_books} if scope_books else None,
+        exclude_books=excl_books,
+        exclude_spots=len(excl_spots),
+        threshold=rel_threshold,
         index=runlog.file_fingerprint(INDEX_DB, hash_content=False),
         library=runlog.file_fingerprint(LIB_DB, hash_content=False),
     )
-    understand = extract_terms(question, thinking=thinking, use_cache=not fresh, rec=rec)
+    understand = extract_terms(
+        question,
+        thinking=thinking,
+        use_cache=not fresh,
+        rec=rec,
+        exclude_books=excl_books if related_mode else None,
+        exclude_text=excl_text if related_mode else "",
+    )
     terms = understand["terms"]
     rec.event(
         "trace.terms",
@@ -1095,9 +1239,26 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
         books = book_cards.load_books(LIB_DB)
         book_meta = book_score.load_meta(LIB_DB)
         scope_set = set(scope_books)
-        visible_books = {uid: rec for uid, rec in books.items() if uid in scope_set} if scope_set else books
+        excl_set = set(excl_books)
+        visible_books = {
+            uid: rec for uid, rec in books.items() if (not scope_set or uid in scope_set) and uid not in excl_set
+        }
         hints = book_cards.query_hints(question, visible_books)
-        if len(scope_books) == 1 and scope_books[0] in books:
+        if related_mode:
+            focus = {
+                "status": "missing",
+                "match": "",
+                "query_title": "",
+                "book": "",
+                "uid": "",
+                "title": "",
+                "author": "",
+                "chapters": [],
+                "candidates": [],
+                "best_path": "",
+                "best_line": 0,
+            }
+        elif len(scope_books) == 1 and scope_books[0] in books:
             uid = scope_books[0]
             rec_book = books[uid]
             focus = {
@@ -1119,8 +1280,18 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
             if focus.get("book") and not focus.get("uid"):
                 focus["uid"] = focus["book"]
         t_plan = time.time()
+        plan_limit = 15 if related_mode else 10
         plan = book_query.run(
-            terms, con=con, limit=8, max_chapters=3, focus=focus, question=question, scope=scope_books
+            terms,
+            con=con,
+            limit=plan_limit,
+            max_chapters=3,
+            focus=focus,
+            question=question,
+            scope=scope_books,
+            exclude_books=excl_books,
+            exclude_spots=excl_spots,
+            exclude_text=excl_text if related_mode else "",
         )
         plan_ms = plan.ms
         rec.event(
@@ -1135,48 +1306,74 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
             model_calls=plan.model_calls,
             timings=plan.timings,
         )
-        cardset = book_cards.run(
-            question,
-            terms=plan.terms or terms,
-            question=question,
-            expand={},
-            feedback=None,
-            con=con,
-            focus=focus,
-            scope=scope_books,
-        )
-        cards_ms = cardset.ms
-        rec.event(
-            "search.cards",
-            **rec.large(json.dumps(asdict(cardset), ensure_ascii=False, default=str), "cards"),
-            trigger=bool(cardset.trigger),
-            reasons=list(cardset.reasons),
-            card_count=len(cardset.cards),
-            next=len(cardset.next),
-            uncertainty=cardset.uncertainty,
-            ms=cards_ms,
-            model_calls=cardset.model_calls,
-        )
-
-        card_dicts = []
-        for _i, c in enumerate(cardset.cards, 1):
-            row = {
-                "uid": c.book,
-                "book": c.book,
-                "rank": c.rank,
-                "title": c.title,
-                "type": c.type,
-                "chapters": c.chapters,
-                "best_chapter": c.best_chapter,
-                "best_chapter_title": c.best_chapter_title,
-                "snippet": c.snippet,
-                "matched_groups": list(c.matched_groups),
-                "score": c.score,
-                "reason": c.reason,
-                "readme_status": c.readme_status,
-                "line": resolve_line(c.best_chapter, c.snippet),
+        if related_mode:
+            cards_ms = 0.0
+            card_dicts = []
+            cards_dict = {
+                "trigger": False,
+                "reasons": [],
+                "hints": dict(hints),
+                "cards": [],
+                "next": [],
+                "ms": 0.0,
+                "uncertainty": {},
+                "terms": list(plan.terms or terms),
             }
-            card_dicts.append(row)
+        else:
+            cardset = book_cards.run(
+                question,
+                terms=plan.terms or terms,
+                question=question,
+                expand={},
+                feedback=None,
+                con=con,
+                focus=focus,
+                scope=scope_books,
+            )
+            cards_ms = cardset.ms
+            rec.event(
+                "search.cards",
+                **rec.large(json.dumps(asdict(cardset), ensure_ascii=False, default=str), "cards"),
+                trigger=bool(cardset.trigger),
+                reasons=list(cardset.reasons),
+                card_count=len(cardset.cards),
+                next=len(cardset.next),
+                uncertainty=cardset.uncertainty,
+                ms=cards_ms,
+                model_calls=cardset.model_calls,
+            )
+
+            card_dicts = []
+            for _i, c in enumerate(cardset.cards, 1):
+                if c.book in excl_set:
+                    continue
+                row = {
+                    "uid": c.book,
+                    "book": c.book,
+                    "rank": c.rank,
+                    "title": c.title,
+                    "type": c.type,
+                    "chapters": c.chapters,
+                    "best_chapter": c.best_chapter,
+                    "best_chapter_title": c.best_chapter_title,
+                    "snippet": c.snippet,
+                    "matched_groups": list(c.matched_groups),
+                    "score": c.score,
+                    "reason": c.reason,
+                    "readme_status": c.readme_status,
+                    "line": resolve_line(c.best_chapter, c.snippet),
+                }
+                card_dicts.append(row)
+            cards_dict = {
+                "trigger": bool(cardset.trigger) and bool(card_dicts),
+                "reasons": list(cardset.reasons),
+                "hints": dict(cardset.hints),
+                "cards": card_dicts,
+                "next": [n for n in cardset.next if n.get("book") not in excl_set],
+                "ms": cards_ms,
+                "uncertainty": cardset.uncertainty,
+                "terms": list(cardset.terms),
+            }
 
         plan_dict = {
             "query": plan.query,
@@ -1223,6 +1420,8 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
                     "type": b.type,
                     "chapters": b.chapters,
                     "score": round(b.score, 4),
+                    "relevance": _book_relevance(b),
+                    "vec_best": round(float(getattr(b, "vec_best", 0.0) or 0.0), 4),
                     "coverage": round(b.coverage, 4),
                     "groups": list(b.groups),
                     "total_groups": b.total_groups,
@@ -1232,7 +1431,8 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
                     "support": b.support,
                     "pinned": b.pinned,
                 }
-                for b in _pick_rows(plan.ranking, 8, focus.get("book"))
+                for b in _pick_rows(plan.ranking, 15 if related_mode else 8, focus.get("book"))
+                if not (related_mode and excl_text and book_query.is_duplicate_passage(b.best_text or "", excl_text))
             ],
             "chapters": [
                 {
@@ -1250,13 +1450,18 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
                             "snippet": s.get("snippet", ""),
                         }
                         for s in c["selected"]
+                        if not (
+                            related_mode
+                            and excl_text
+                            and book_query.is_duplicate_passage(s.get("snippet", ""), excl_text)
+                        )
                     ],
                 }
-                for c in _pick_rows(plan.chapters, 3, focus.get("book"))
+                for c in _pick_rows(plan.chapters, 15 if related_mode else 3, focus.get("book"))
             ],
         }
-        kept_ranking = _pick_rows(plan.ranking, 8, focus.get("book"))
-        kept_chapters = _pick_rows(plan.chapters, 3, focus.get("book"))
+        kept_ranking = _pick_rows(plan.ranking, 15 if related_mode else 8, focus.get("book"))
+        kept_chapters = _pick_rows(plan.chapters, 15 if related_mode else 3, focus.get("book"))
         rec.event(
             "search.trim",
             ranking_total=len(plan.ranking),
@@ -1269,18 +1474,43 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
             select=select,
         )
 
-        cards_dict = {
-            "trigger": bool(cardset.trigger),
-            "reasons": list(cardset.reasons),
-            "hints": dict(cardset.hints),
-            "cards": card_dicts,
-            "next": cardset.next,
-            "ms": cards_ms,
-            "uncertainty": cardset.uncertainty,
-            "terms": list(cardset.terms),
-        }
-
-        pick = _pick_default(plan_dict, cards_dict, select, focus)
+        if related_mode:
+            qualified = [r for r in plan_dict["ranking"] if r["relevance"] >= rel_threshold]
+            pick = None
+            if qualified:
+                top_r = qualified[0]
+                ch_entry = next((c for c in plan_dict["chapters"] if c["book"] == top_r["uid"]), None)
+                sel0 = (ch_entry.get("selected") or [None])[0] if ch_entry else None
+                if sel0 and sel0.get("chapter_path"):
+                    pick = {
+                        "book": top_r["uid"],
+                        "title": top_r["title"],
+                        "chapter": sel0.get("chapter_title") or chapter_title("", sel0["chapter_path"]),
+                        "path": sel0["chapter_path"],
+                        "line": sel0.get("line") or 1,
+                        "card": 0,
+                    }
+                elif top_r.get("best_path"):
+                    pick = {
+                        "book": top_r["uid"],
+                        "title": top_r["title"],
+                        "chapter": chapter_title("", top_r["best_path"]),
+                        "path": top_r["best_path"],
+                        "line": top_r.get("best_line") or 1,
+                        "card": 0,
+                    }
+            related_info = {
+                "active": True,
+                "threshold": rel_threshold,
+                "max_books": MAX_RELATED_BOOKS,
+                "exclude_books": excl_books,
+                "exclude_spots": [{"path": p, "line": ln} for p, ln in excl_spots],
+                "qualified_count": len(qualified),
+                "selected_books": [r["uid"] for r in qualified[:MAX_RELATED_BOOKS]],
+            }
+        else:
+            pick = _pick_default(plan_dict, cards_dict, select, focus)
+            related_info = None
         rec.event("trace.pick", pick=pick, select=select, focus=focus)
         t_res = time.time()
         result = None
@@ -1330,7 +1560,7 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
         rec.event("trace.stage_ms", **stage_ms)
         rec.event("trace.total", total_ms=total_ms, plan_ms=plan_ms, cards_ms=cards_ms)
         rec.event("trace.meta", **meta_info)
-        return {
+        out = {
             "question": question,
             "thinking": thinking,
             "scope": {"books": scope_books} if scope_books else None,
@@ -1343,6 +1573,9 @@ def build(question, select=0, thinking=DEFAULT_THINKING, fresh=False, rec=None, 
             "meta": meta_info,
             "total_ms": total_ms,
         }
+        if related_info is not None:
+            out["related_search"] = related_info
+        return out
     finally:
         con.close()
 

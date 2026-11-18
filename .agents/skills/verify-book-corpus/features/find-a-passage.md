@@ -12,7 +12,7 @@
 - `ask-history` 历史页签：按问题筛选、多选删除。
 - `ask-scope` 候选书多选：选中后作为 `scope.books` 下推给 `/api/run` 的检索，不再只做结果后过滤；最多 16 本。
 - `ask-books-meta` `GET /api/books/meta?uids=B0001,B0002` 用 `build/library.db` 补书名与作者，最多 16 本，缺的 uid 用 uid 当标题。
-- `ask-cross-open` `?q=&books=&mode=trace` 只跑检索不生成回答；命中卡与书卡链到 `/go/reading?to=/open...`，`mode=prefill` 只预填问题。
+- `ask-cross-open` `?q=&books=&mode=trace` 只跑检索不生成回答；命中卡与书卡链到 `/go/reading?to=/open...`，`mode=prefill` 只预填问题。`mode=related&exclude=<uid>&src_path=...&src_line=...&threshold=0.45` 走跨书找相关：排除来源书与原段（含几乎相同的复本段），按 `0..1` 相关性阈值筛选（最多 10 本、最少 1 本或 0 本），可滑块实时调阈值后再由模型归纳回答。
 - `ask-thinking` 思考等级（off / low / medium / high）在会话页 `/` 与经典检索页 `/classic` 均通过 `think-select` 下拉切换（持久化到 `localStorage['booksearch.thinking']`，前端默认 `low`；后端 `/api/answer` 缺省仍兼容 `high`）。
 - `ask-trace` 依据与落点：回答里的书卡、章节锚点、命中段原文。
 - `ask-classic` `/classic` 五阶段：理解问题 → 词法循环 → 打分与选章 → 书卡 → 结果；经典页发 `stateless:true`，不建会话，也不进历史。

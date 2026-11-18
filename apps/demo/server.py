@@ -713,6 +713,13 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             select = 0
         scope = _clean_scope(payload.get("scope") if "scope" in payload else payload.get("books"))
+        raw_mode = payload.get("mode")
+        mode = raw_mode.strip().lower() if isinstance(raw_mode, str) else ""
+        exclude_books = tracer._clean_uid_list(payload.get("exclude_books"))
+        exclude_spots = tracer._clean_exclude_spots(payload.get("exclude_spots"))
+        threshold = tracer._clean_threshold(payload.get("threshold"))
+        raw_src = payload.get("source_text")
+        source_text = raw_src.strip()[:500] if isinstance(raw_src, str) else ""
         self.api_run(
             question,
             select,
@@ -723,6 +730,11 @@ class Handler(BaseHTTPRequestHandler):
             anchor=_clean_anchor(payload.get("anchor")),
             stateless=_flag(payload.get("stateless")),
             scope=scope,
+            mode=mode,
+            exclude_books=exclude_books,
+            exclude_spots=exclude_spots,
+            threshold=threshold,
+            source_text=source_text,
         )
 
     def handle_answer(self, payload):
@@ -933,6 +945,11 @@ class Handler(BaseHTTPRequestHandler):
         anchor=None,
         stateless=False,
         scope=None,
+        mode="",
+        exclude_books=None,
+        exclude_spots=None,
+        threshold=None,
+        source_text="",
     ):
         rec = None
         if not LOCK.acquire(timeout=120):
@@ -975,7 +992,19 @@ class Handler(BaseHTTPRequestHandler):
                 fresh=bool(fresh),
                 anchor=anchor,
             )
-            data = tracer.build(question, select, thinking=thinking, fresh=fresh, rec=rec, scope=scope)
+            data = tracer.build(
+                question,
+                select,
+                thinking=thinking,
+                fresh=fresh,
+                rec=rec,
+                scope=scope,
+                mode=mode,
+                exclude_books=exclude_books,
+                exclude_spots=exclude_spots,
+                threshold=threshold,
+                source_text=source_text,
+            )
             _fill_citations(data)
             rel = None
             if sess and n > 1:

@@ -229,12 +229,12 @@ def test_normalize_sources_records_over_limit_names(monkeypatch):
     monkeypatch.setattr(answer, "_inside_library", lambda rel: True)
     monkeypatch.setattr(answer, "book_from_path", lambda rel: rel.split("/")[1])
     monkeypatch.setattr(answer.defpass, "first_content_line", lambda path: 1)
-    sources = [{"path": f"books/B{i}/md/a.md", "line": 1} for i in range(1, 11)]
+    sources = [{"path": f"books/B{i}/md/a.md", "line": 1} for i in range(1, 13)]
     report = {}
     kept = answer._normalize_sources(sources, report=report)
     assert len(kept) == answer.MAX_SOURCES
     assert report["over_limit"] == 2
-    assert [row["book"] for row in report["dropped"]] == ["B9", "B10"]
+    assert [row["book"] for row in report["dropped"]] == ["B11", "B12"]
 
 
 def test_pi_cmd_uses_no_skills():

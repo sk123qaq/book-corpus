@@ -37,8 +37,20 @@
     return '/go/search?to=' + encodeURIComponent('/?' + targetParams.toString());
   }
 
+  function buildRelatedHref(queryText, srcPath, srcLine) {
+    const targetParams = new URLSearchParams();
+    if (queryText) targetParams.set('q', queryText);
+    targetParams.set('from', 'reading');
+    targetParams.set('mode', 'related');
+    targetParams.set('exclude', UID);
+    if (srcPath) targetParams.set('src_path', srcPath);
+    if (srcLine) targetParams.set('src_line', String(srcLine));
+    targetParams.set('threshold', '0.45');
+    return '/go/search?to=' + encodeURIComponent('/?' + targetParams.toString());
+  }
+
   function clipSearchProbe(text) {
-    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    const clean = String(text || '').replace(/^[#>\-\*\s]+/, '').replace(/\s+/g, ' ').trim();
     if (clean.length <= 120) return clean;
     const cut = clean.slice(0, 120);
     const punct = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf('，'), cut.lastIndexOf('；'), cut.lastIndexOf(' '));
@@ -425,8 +437,7 @@
         '<button type="button" data-action="' + RD.esc(item.action) + '">' + RD.esc(item.label) + '</button>'
       ).join('') +
       '<span class="selection-bar-sep" aria-hidden="true"></span>' +
-      '<button type="button" data-action="search-book" title="在当前这本书内按段落检索选中内容">本书查这段</button>' +
-      '<button type="button" data-action="search-all" title="在全库范围按段落检索选中内容">全库查这段 ↗</button>';
+      '<button type="button" data-action="search-related" title="在其他书中找相关内容，并按阈值选书回答">跨书找相关 ↗</button>';
   }
 
   function setDrawerOpen(open) {
@@ -571,13 +582,17 @@
       if (!btn) return;
       const action = btn.getAttribute('data-action');
       hideSelectionBar();
-      if (action === 'search-book' || action === 'search-all') {
+      if (action === 'search-related') {
         const probe = clipSearchProbe(currentSelection.text);
         if (!probe) {
           RD.toast('请先选中一段有效正文', true);
           return;
         }
-        window.open(buildSearchHref(probe, action === 'search-book'), '_blank', 'noopener');
+        const firstBid = (currentSelection.block_ids || [])[0] || '';
+        const blk = ((data && data.blocks) || []).find((b) => b.id === firstBid);
+        const srcPath = (blk && blk.source_file) ? ('books/' + UID + '/md/' + blk.source_file) : '';
+        const srcLine = (blk && blk.start_line) ? blk.start_line : 0;
+        window.open(buildRelatedHref(probe, srcPath, srcLine), '_blank', 'noopener');
         return;
       }
       if (action === 'ask') {

@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 from bookcorpus import app_links
-from conftest import run_cli
+from conftest import run_cli, write_book, write_ledger
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -187,6 +187,13 @@ def test_reading_open_and_go_search_bridge(reading_root: Path):
         assert "/assets/chapter.js" in page
         with urllib.request.urlopen(f"{base}/assets/chapter.js", timeout=5) as resp:
             assert resp.status == 200
+            chapter_js = resp.read().decode("utf-8")
+        assert "本书查这段" not in chapter_js
+        assert 'data-action="search-book"' not in chapter_js
+        assert "全库查这段" not in chapter_js
+        assert "跨书找相关 ↗" in chapter_js
+        assert "mode', 'related'" in chapter_js
+        assert "exclude', UID" in chapter_js
 
         search_to = urllib.parse.quote("/?q=铁笼&books=B0001&from=reading&mode=trace", safe="")
         s_status, s_headers, _ = _get_no_redirect(f"{base}/go/search?to={search_to}")
@@ -260,6 +267,107 @@ def test_demo_root_isolation_books_meta_and_scope(workspace: Path):
         sid = trace["session_id"]
         assert (workspace / "工作区" / "检索" / "sessions" / f"{sid}.json").is_file()
         assert (workspace / "工作区" / "检索" / "运行记录" / "index.jsonl").is_file()
+    finally:
+        _stop(proc)
+
+
+def test_demo_related_mode_excludes_source_and_applies_threshold(tmp_path: Path):
+    env = {"BOOKS_ROOT": str(tmp_path)}
+    assert run_cli("init", str(tmp_path), "--no-pdf-venv", env=env).returncode == 0
+
+    src_para = "乡土社会是礼治社会，依靠长老教化与传统习惯维持日常秩序，不需要外在的法律强力与铁笼约束。"
+    # Create 13 books: B0001 (source), B0002 (verbatim duplicate),
+    # B0003 (all 4 terms, highest relevance), B0004..B0012 (3 terms), B0013 (1 term, weak)
+    books_spec = [("B0001", "源书", src_para), ("B0002", "复本", src_para)]
+    for i in range(3, 14):
+        if i == 3:
+            body = "这本书深入分析礼治、秩序、法律与铁笼，比较传统社会与现代制度的差异。" * 3
+        elif i <= 12:
+            body = f"第{i}本书探讨礼治、秩序与铁笼，说明社会约束如何形成与演化。" * 2
+        else:
+            body = f"第{i}本书只顺便提到过铁笼一次，主要讨论完全不相干的农业技术与水利工程方法。" * 2
+        books_spec.append((f"B{i:04d}", f"相关书{i}", body))
+
+    ledger_rows = []
+    for uid, title, body in books_spec:
+        write_book(tmp_path, uid, "人文社科", title, [body])
+        ledger_rows.append((uid, "人文社科", title, ""))
+    write_ledger(tmp_path, ledger_rows)
+
+    assert run_cli("index", "--rebuild", env=env).returncode == 0
+    assert run_cli("library", env=env).returncode == 0
+
+    proc, base = _start_app(
+        "apps/demo/server.py",
+        ["--root", str(tmp_path), "--reading-url", "http://127.0.0.1:18771", "--quiet"],
+        ready_path="/api/health",
+        env={"PI_BIN": "/bin/false"},
+    )
+    try:
+
+        def post_run(payload):
+            req = urllib.request.Request(
+                f"{base}/api/run",
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+
+        # 1. Moderate threshold (0.40): excludes B0001 and duplicate B0002, caps selected_books at 10
+        res = post_run(
+            {
+                "question": "礼治 秩序 法律 铁笼",
+                "mode": "related",
+                "exclude_books": ["B0001"],
+                "exclude_spots": [{"path": "books/B0001/md/001_第1节.md", "line": 3}],
+                "source_text": src_para,
+                "threshold": 0.40,
+                "stateless": True,
+            }
+        )
+        uids = [r["uid"] for r in res["plan"]["ranking"]]
+        assert "B0001" not in uids
+        assert "B0002" not in uids
+        assert res["related_search"]["active"] is True
+        assert res["related_search"]["max_books"] == 10
+        assert len(res["related_search"]["selected_books"]) == 10
+        assert res["result"]["uid"] == "B0003"
+
+        # 2. Mid-high threshold between B0003 and B0004..B0012 -> only 1 book qualifies
+        top_rel = res["plan"]["ranking"][0]["relevance"]
+        second_rel = res["plan"]["ranking"][1]["relevance"]
+        assert top_rel > second_rel
+        mid_thr = round((top_rel + second_rel) / 2, 4)
+        res_one = post_run(
+            {
+                "question": "礼治 秩序 法律 铁笼",
+                "mode": "related",
+                "exclude_books": ["B0001"],
+                "source_text": src_para,
+                "threshold": mid_thr,
+                "stateless": True,
+            }
+        )
+        assert res_one["related_search"]["qualified_count"] == 1
+        assert res_one["related_search"]["selected_books"] == ["B0003"]
+        assert res_one["result"]["uid"] == "B0003"
+
+        # 3. Very high threshold (0.99): 0 books qualify -> result is None
+        res_empty = post_run(
+            {
+                "question": "礼治 秩序 法律 铁笼",
+                "mode": "related",
+                "exclude_books": ["B0001"],
+                "source_text": src_para,
+                "threshold": 0.99,
+                "stateless": True,
+            }
+        )
+        assert res_empty["related_search"]["qualified_count"] == 0
+        assert res_empty["related_search"]["selected_books"] == []
+        assert res_empty["result"] is None
     finally:
         _stop(proc)
 

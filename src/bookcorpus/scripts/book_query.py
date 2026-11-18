@@ -27,6 +27,7 @@
 import argparse
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -57,6 +58,28 @@ def dedup(seq):
             seen.add(x)
             out.append(x)
     return out
+
+
+_NORM_STRIP_RE = re.compile(r"[\s`*_>#\[\]()（）「」『』“”\"'‘’.,，。；;：:！!？?、…—\-]+")
+
+
+def _norm_passage(text):
+    """压平空白与标点，供跨书去重比较使用。"""
+    return _NORM_STRIP_RE.sub("", str(text or "")).lower()
+
+
+def is_duplicate_passage(hit_text, source_text):
+    """命中段落与来路选段正文几乎相同时判为重复（避免查出原文自身/整段复本）。"""
+    src = _norm_passage(source_text)
+    hit = _norm_passage(hit_text)
+    if not src or not hit:
+        return False
+    if len(src) >= 30:
+        if src in hit and len(src) / max(1, len(hit)) >= 0.78:
+            return True
+        if hit in src and len(hit) / max(1, len(src)) >= 0.78:
+            return True
+    return len(src) >= 12 and hit == src
 
 
 @dataclass
@@ -167,6 +190,9 @@ class Planner:
         book_vec_fn=None,
         rerank_fn=None,
         scope=None,
+        exclude_books=None,
+        exclude_spots=None,
+        exclude_text="",
     ):
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
@@ -177,6 +203,9 @@ class Planner:
         self.limit = limit
         self.exclude = list(exclude or [])
         self.scope = set(scope or ())
+        self.exclude_books = set(exclude_books or ())
+        self.exclude_spots = {(str(p), int(ln or 0)) for p, ln in (exclude_spots or ()) if p}
+        self.exclude_text = str(exclude_text or "").strip()
         self._search_fn = search_fn
         self._df_fn = df_fn
         self._vec_fn = vec_fn
@@ -186,6 +215,21 @@ class Planner:
         self._df = {}
         self._toc = {}
         self.fetches = 0
+
+    def _filter_hits(self, hits, check_text=True):
+        out = []
+        for h in hits or ():
+            bk = h.get("book")
+            if self.scope and bk not in self.scope:
+                continue
+            if self.exclude_books and bk in self.exclude_books:
+                continue
+            if self.exclude_spots and (h.get("path"), int(h.get("line") or 0)) in self.exclude_spots:
+                continue
+            if check_text and self.exclude_text and is_duplicate_passage(h.get("text") or "", self.exclude_text):
+                continue
+            out.append(h)
+        return out
 
     # ---- 检索 -------------------------------------------------------
     def search(self, terms):
@@ -198,8 +242,7 @@ class Planner:
             expr = " OR ".join("(%s)" % cjk.query_expr(t) for t in key if cjk.query_expr(t))
             hits, ms = qsearch.search(self.con, expr, list(key), self.exclude, 2000, self.min_chars, False, self.pool)
         self.fetches += 1
-        if self.scope:
-            hits = [h for h in hits if h.get("book") in self.scope]
+        hits = self._filter_hits(hits, check_text=True)
         self._hits[key] = (hits, ms)
         return hits, ms
 
@@ -264,8 +307,9 @@ class Planner:
             yield "drop-generic", rest, rest
 
     def _vec_search(self, query_text):
+        vec_excl = sorted(self.exclude_books) if self.exclude_books else self.exclude
         if self._vec_fn is not None:
-            res = self._vec_fn(query_text, self.exclude)
+            res = self._vec_fn(query_text, vec_excl)
             if isinstance(res, tuple):
                 hits, meta = res
                 return list(hits or []), dict(meta or {})
@@ -273,17 +317,19 @@ class Planner:
             return hits, {"used": True, "ms": 0.0, "hits": len(hits), "qvec": None}
         if self._search_fn is not None:
             return [], {"used": False, "ms": 0.0, "hits": 0, "qvec": None}
-        return vec_search.search_text(query_text, top_k=200, exclude=self.exclude)
+        return vec_search.search_text(query_text, top_k=200, exclude=vec_excl)
 
     def _book_vec_hits(self, book, query_text, vhits, qvec):
         vh_b = [h for h in (vhits or []) if h.get("book") == book]
         if len(vh_b) >= 8:
             return vh_b
         if self._book_vec_fn is not None:
-            return list(self._book_vec_fn(book, query_text, 20) or vh_b)
-        if self._search_fn is not None or qvec is None:
-            return vh_b
-        return vec_search.search_book_text(book, query_text, top_k=20, qvec=qvec) or vh_b
+            rows = list(self._book_vec_fn(book, query_text, 20) or vh_b)
+        elif self._search_fn is not None or qvec is None:
+            rows = vh_b
+        else:
+            rows = vec_search.search_book_text(book, query_text, top_k=20, qvec=qvec) or vh_b
+        return self._filter_hits(rows, check_text=False)
 
     def plan(
         self,
@@ -325,8 +371,7 @@ class Planner:
             res.stop = "exhausted"
 
         vhits, vmeta = self._vec_search(query_text)
-        if self.scope:
-            vhits = [h for h in vhits if h.get("book") in self.scope]
+        vhits = self._filter_hits(vhits, check_text=False)
         qvec = vmeta.get("qvec")
         if vmeta.get("used"):
             res.vec_used = True
@@ -533,9 +578,14 @@ def apply_hybrid_ranking(ranking, vhits, meta):
     if not v_scores:
         return list(ranking)
     v_books = [b for b, _, _ in v_scores]
+    v_best_map = {}
     v_top = {}
     for h in vhits:
         bk = h.get("book")
+        if bk:
+            sc = float(h.get("score") or 0.0)
+            if sc > v_best_map.get(bk, 0.0):
+                v_best_map[bk] = sc
         if bk and bk not in v_top:
             v_top[bk] = h
     v_cnt = {b: cnt for b, _, cnt in v_scores}
@@ -545,6 +595,7 @@ def apply_hybrid_ranking(ranking, vhits, meta):
     out = []
     for b in ranking:
         b.score = round(fused.get(b.book, 0.0), 6)
+        b.vec_best = round(v_best_map.get(b.book, 0.0), 4)
         out.append(b)
     for bk in v_books:
         if bk in by_book:
@@ -578,6 +629,7 @@ def apply_hybrid_ranking(ranking, vhits, meta):
                 hits=v_cnt.get(bk, 1),
                 mean=round(bsc, 4),
                 total_groups=0,
+                vec_best=round(bsc, 4),
             )
         )
     out.sort(key=lambda b: (-b.score, -b.best))
@@ -664,12 +716,23 @@ def run(
     focus=None,
     question="",
     scope=None,
+    exclude_books=None,
+    exclude_spots=None,
+    exclude_text="",
 ):
     own = con is None
     if con is None:
         con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
     try:
-        p = planner or Planner(con, scheme=scheme, limit=limit, scope=scope)
+        p = planner or Planner(
+            con,
+            scheme=scheme,
+            limit=limit,
+            scope=scope,
+            exclude_books=exclude_books,
+            exclude_spots=exclude_spots,
+            exclude_text=exclude_text,
+        )
         return p.plan(
             terms,
             chapters=True,

@@ -80,6 +80,7 @@ class BookScore:
     mean: float
     total_groups: int
     pinned: bool = False
+    vec_best: float = 0.0
 
 
 def genre(meta, book):

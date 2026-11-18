@@ -94,3 +94,37 @@ def test_book_cards_runs_cleanly_without_concept_tables(monkeypatch, tmp_path):
     assert cardset.hints["question"] is True
     assert cardset.trigger is True
     assert "concept" in cardset.reasons
+
+
+def test_planner_excludes_source_book_spot_and_duplicate_passage():
+    source_para = "礼治社会依靠长老教化与传统习惯维持秩序，不需要外在的法律强力压迫，就像一套自然习得的规矩。"
+    commentary_para = (
+        "费孝通曾指出："
+        + source_para[:22]
+        + "，但在现代都市陌生人社会中，契约与法治逐渐取代了熟人间的默契，两种秩序逻辑有着本质区别。"
+    )
+    hits = [
+        {"book": "B0001", "path": "books/B0001/md/01.md", "line": 12, "text": source_para, "score": 12.0},
+        {"book": "B0002", "path": "books/B0002/md/01.md", "line": 5, "text": source_para, "score": 11.0},
+        {"book": "B0003", "path": "books/B0003/md/02.md", "line": 20, "text": commentary_para, "score": 8.0},
+    ]
+    meta = {
+        "B0001": book_score.Meta(title="甲书", subject1="社科", subject2="", chapters=1),
+        "B0002": book_score.Meta(title="甲书复本", subject1="社科", subject2="", chapters=1),
+        "B0003": book_score.Meta(title="乙书", subject1="社科", subject2="", chapters=1),
+    }
+
+    p = book_query.Planner(
+        None,
+        meta=meta,
+        expand={},
+        exclude_books=["B0001"],
+        exclude_spots=[("books/B0003/md/02.md", 99)],
+        exclude_text=source_para,
+        search_fn=lambda terms: (hits, 0.1),
+        df_fn=lambda term: (1, 1),
+    )
+    plan = p.plan(["礼治", "秩序"], chapters=True)
+    # B0001 excluded by book UID; B0002 suppressed as verbatim duplicate; B0003 commentary kept
+    assert [row.book for row in plan.ranking] == ["B0003"]
+    assert plan.chapters[0]["book"] == "B0003"

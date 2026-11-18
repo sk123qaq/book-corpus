@@ -48,6 +48,8 @@
     histMenu: null,
     scopeBooks: [],
     scopeOrigin: '',
+    excludeBooks: [],
+    relatedMeta: null,
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -322,27 +324,58 @@
     return '/go/reading?to=' + encodeURIComponent('/book/' + encodeURIComponent(uid));
   }
 
-  async function loadScopeBookMeta(uids) {
-    if (!uids || !uids.length) return;
+  async function fetchBookTitles(uids) {
+    if (!uids || !uids.length) return new Map();
     try {
       const data = await fetchJSON('/api/books/meta?uids=' + encodeURIComponent(uids.join(',')));
       if (Array.isArray(data.books) && data.books.length) {
-        const byUid = new Map(data.books.map((b) => [b.uid, b.title || b.uid]));
-        state.scopeBooks = state.scopeBooks.map((item) => ({
-          uid: item.uid,
-          title: byUid.get(item.uid) || item.title,
-        }));
-        renderHint();
+        return new Map(data.books.map((b) => [b.uid, b.title || b.uid]));
       }
     } catch (err) {
       // 查不到书名时保留 uid 展示即可
     }
+    return new Map();
+  }
+
+  async function loadScopeBookMeta(uids) {
+    const byUid = await fetchBookTitles(uids);
+    if (!byUid.size) return;
+    state.scopeBooks = state.scopeBooks.map((item) => ({
+      uid: item.uid,
+      title: byUid.get(item.uid) || item.title,
+    }));
+    renderHint();
+  }
+
+  async function loadExcludeBookMeta(uids) {
+    const byUid = await fetchBookTitles(uids);
+    if (!byUid.size) return;
+    state.excludeBooks = state.excludeBooks.map((item) => ({
+      uid: item.uid,
+      title: byUid.get(item.uid) || item.title,
+    }));
+    state.turns.forEach((t) => {
+      if (t.relatedMode && Array.isArray(t.excludeBookMeta)) {
+        t.excludeBookMeta = t.excludeBookMeta.map((item) => ({
+          uid: item.uid,
+          title: byUid.get(item.uid) || item.title,
+        }));
+      }
+    });
+    render();
   }
 
   /* ---- 回答范围：一本书或几本书 ---------------------------------- */
 
-  const MAX_SOURCES = 8;
+  const MAX_SOURCES = 10;
   const MAX_SUPPLEMENTS = 3;
+  const DEFAULT_RELATED_THRESHOLD = 0.45;
+
+  function clampThreshold(v, fallback = DEFAULT_RELATED_THRESHOLD) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.round(Math.max(0, Math.min(1, n)) * 100) / 100;
+  }
 
   function sourceFromAnchor(anchor) {
     if (!anchor || typeof anchor.path !== 'string' || !anchor.path) return null;
@@ -521,7 +554,62 @@
     return out.slice(0, MAX_SOURCES);
   }
 
+  function relatedCandidates(turn) {
+    const trace = (turn && turn.trace) || {};
+    const plan = trace.plan || {};
+    const ranking = Array.isArray(plan.ranking) ? plan.ranking : [];
+    const chList = Array.isArray(plan.chapters) ? plan.chapters : [];
+    const chByBook = new Map();
+    chList.forEach((entry) => {
+      if (entry && (entry.book || entry.uid)) chByBook.set(entry.book || entry.uid, entry);
+    });
+    const out = [];
+    const seen = new Set();
+    ranking.forEach((row) => {
+      const book = (row && (row.uid || row.book)) || '';
+      if (!book || seen.has(book)) return;
+      const chEntry = chByBook.get(book);
+      const sel = chEntry && Array.isArray(chEntry.selected) ? chEntry.selected[0] : null;
+      const path = (sel && sel.chapter_path) || row.best_path || '';
+      const line = Number((sel && sel.line) || row.best_line) || 1;
+      if (!path) return;
+      seen.add(book);
+      const rel = Number.isFinite(Number(row.relevance)) ? Number(row.relevance) : 0;
+      out.push({
+        book,
+        title: row.title || book,
+        type: row.type || '',
+        chapters: Number(row.chapters) || 0,
+        relevance: Math.max(0, Math.min(1, rel)),
+        score: Number(row.score) || 0,
+        path,
+        line,
+        chapter: (sel && sel.chapter_title) || chapterOf({ path }),
+        snippet: (sel && sel.snippet) || row.best_text || '',
+      });
+    });
+    return out;
+  }
+
+  function relatedQualified(turn) {
+    const thr = clampThreshold(turn && turn.relatedThreshold);
+    return relatedCandidates(turn).filter((c) => c.relevance >= thr);
+  }
+
+  function relatedDefaultSources(turn) {
+    return relatedQualified(turn).slice(0, MAX_SOURCES).map((c) => ({
+      book: c.book,
+      title: c.title,
+      chapter: c.chapter,
+      path: c.path,
+      line: c.line,
+    }));
+  }
+
   function defaultSources(turn) {
+    if (turn && turn.relatedMode) {
+      return relatedDefaultSources(turn);
+    }
     const focus = focusExact(turn);
     if (focus) {
       const primary = sourceFromFocus(turn, turn.sources);
@@ -1133,7 +1221,112 @@
       + '<span class="quote">' + text + '</span></div>';
   }
 
+  function relatedPanelHTML(turn) {
+    if (!turn || !turn.trace) return '';
+    const last = lastTurn();
+    const readonly = !last || last.n !== turn.n;
+    const thr = clampThreshold(turn.relatedThreshold);
+    const thrPct = Math.round(thr * 100);
+    const candidates = relatedCandidates(turn);
+    const qualified = candidates.filter((c) => c.relevance >= thr);
+    const below = candidates.filter((c) => c.relevance < thr);
+    const chosen = turn.sources || [];
+    const picked = new Set(chosen.map(sourceKey));
+    const exclList = (Array.isArray(turn.excludeBookMeta) && turn.excludeBookMeta.length
+      ? turn.excludeBookMeta
+      : (turn.excludeBooks || []).map((uid) => ({ uid, title: uid })));
+    const exclText = exclList.length
+      ? '已排除' + exclList.map((b) => '《' + esc(b.title || b.uid) + '》').join('、') + '及原段'
+      : '已排除原段落';
+    const maxPct = candidates.length
+      ? Math.floor(Math.max(...candidates.map((c) => c.relevance)) * 100 / 5) * 5
+      : 0;
+
+    let countMsg = '';
+    if (!candidates.length) {
+      countMsg = '全库其他书中没有命中相关内容';
+    } else if (!qualified.length) {
+      countMsg = '当前阈值 ≥ ' + thrPct + '% 下命中 0 本（候选共 ' + candidates.length + ' 本，最高 '
+        + Math.round(candidates[0].relevance * 100) + '%）';
+    } else if (qualified.length > MAX_SOURCES) {
+      countMsg = '命中 ' + qualified.length + ' 本（超过 ' + MAX_SOURCES + ' 本上限），已选前 '
+        + chosen.length + ' 本参与回答';
+    } else if (qualified.length === 1) {
+      countMsg = '命中 1 本 · 将从这 1 本书回答';
+    } else {
+      countMsg = '命中 ' + qualified.length + ' 本 · 已选 ' + chosen.length + ' 本参与回答';
+    }
+
+    const renderCard = (c, isBelow) => {
+      const on = !isBelow && picked.has(c.book);
+      const pct = Math.round(c.relevance * 100);
+      const readHref = readingOpenHref({
+        uid: c.book,
+        path: c.path,
+        line: c.line,
+        quote: c.snippet || '',
+        question: turn.question,
+      });
+      return '<div class="related-card' + (on ? ' is-on' : '') + (isBelow ? ' is-below' : '') + '">'
+        + '<div class="related-card-top">'
+        + (isBelow
+          ? '<span class="related-card-title">《' + esc(c.title) + '》</span>'
+          : '<button class="related-card-pick' + (on ? ' is-on' : '') + '" type="button"'
+            + ' data-related-pick="' + esc(c.book) + '" data-from="' + turn.n + '"'
+            + (readonly ? ' disabled' : '') + '>'
+            + '<span class="rc-check" aria-hidden="true">' + (on ? '✓' : '+') + '</span>'
+            + '<span class="rc-title">《' + esc(c.title) + '》</span>'
+            + '</button>')
+        + '<span class="related-score mono">' + pct + '%</span>'
+        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener">精读 ↗</a>'
+        + '</div>'
+        + '<div class="related-card-sub">' + esc(c.chapter || '')
+        + ' <span class="mono">L' + esc(c.line) + '</span></div>'
+        + (c.snippet ? '<p class="related-card-snip">' + esc(cut(c.snippet, 120)) + '</p>' : '')
+        + '</div>';
+    };
+
+    const quickLower = (!readonly && !qualified.length && candidates.length)
+      ? '<button class="btn related-lower-btn" type="button" data-related-threshold-set="'
+        + (maxPct / 100) + '" data-from="' + turn.n + '">调低阈值到 ' + maxPct + '%</button>'
+      : '';
+
+    const act = !readonly && turn.answer && staleSources(turn) && chosen.length
+      ? '<div class="books-act"><span class="books-note">当前回答按 '
+        + scopeSources(turn).length + ' 本生成</span>'
+        + '<button class="btn btn-primary" type="button" data-reanswer="' + turn.n + '"'
+        + (state.busy ? ' disabled' : '') + '>用这 ' + chosen.length + ' 本重新回答</button></div>'
+      : '';
+
+    return '<section class="books related-panel" data-related-panel="' + turn.n + '">'
+      + '<div class="related-head">'
+      + '<span class="t">跨书找相关</span>'
+      + '<span class="h">' + esc(exclText) + '</span>'
+      + '</div>'
+      + '<div class="related-threshold-row">'
+      + '<label class="related-thr-lbl" for="rel-thr-' + turn.n + '">相关性阈值</label>'
+      + '<input class="related-thr-range" id="rel-thr-' + turn.n + '" type="range"'
+      + ' min="0" max="95" step="5" value="' + thrPct + '"'
+      + ' data-related-threshold="' + turn.n + '"' + (readonly ? ' disabled' : '') + '>'
+      + '<span class="related-thr-val mono" data-threshold-label="' + turn.n + '">≥ ' + thrPct + '%</span>'
+      + quickLower
+      + '</div>'
+      + '<p class="related-summary">' + esc(countMsg) + '</p>'
+      + (qualified.length
+        ? '<div class="related-list">' + qualified.map((c) => renderCard(c, false)).join('') + '</div>'
+        : '')
+      + (below.length
+        ? '<details class="related-below"' + (!qualified.length ? ' open' : '') + '>'
+          + '<summary>低于当前阈值（' + below.length + ' 本不参与回答）</summary>'
+          + '<div class="related-list">' + below.map((c) => renderCard(c, true)).join('') + '</div>'
+          + '</details>'
+        : '')
+      + act
+      + '</section>';
+  }
+
   function booksHTML(turn) {
+    if (turn && turn.relatedMode) return relatedPanelHTML(turn);
     const choices = bookChoices(turn);
     const chosen = turn.sources || [];
     const focus = focusExact(turn);
@@ -1411,6 +1604,22 @@
       const last = lastTurn();
       const canRetry = last && last.n === turn.n;
       const interrupted = turn.status === 'answer-interrupted';
+      if (turn.relatedMode && !interrupted) {
+        const count = (turn.sources || []).length;
+        if (!count) {
+          return '<p class="answer-pending-note">当前阈值下没有找到符合条件的其他书籍，无法生成回答。</p>'
+            + '<p class="answer-meta">可调低上方相关性阈值查看较弱关联书目，或直接在下方输入新问题。</p>';
+        }
+        const label = count === 1 ? '由模型从这 1 本回答' : '由模型跨这 ' + count + ' 本回答';
+        return '<p class="answer-pending-note">已按阈值筛选出 ' + count + ' 本跨书相关书目（上限 '
+          + MAX_SOURCES + ' 本），可直接点选精读或由模型归纳回答。</p>'
+          + '<div class="trace-pending-actions">'
+          + (canRetry
+            ? '<button class="btn btn-primary" type="button" data-retry-answer="' + turn.n + '">'
+              + label + '</button>'
+            : '')
+          + '</div>';
+      }
       const hit = turn.trace && turn.trace.result && turn.trace.result.path ? turn.trace.result : null;
       let text = hit ? '已完成检索定位，可直达原文精读或按需生成模型回答' : '上次只完成检索，还没有生成回答';
       if (interrupted) {
@@ -2167,6 +2376,19 @@
     if (state.scopeBooks.length) {
       body.scope = { books: state.scopeBooks.map((b) => b.uid) };
     }
+    if (turn.relatedMode) {
+      body.mode = 'related';
+      body.threshold = clampThreshold(turn.relatedThreshold);
+      if (Array.isArray(turn.excludeBooks) && turn.excludeBooks.length) {
+        body.exclude_books = turn.excludeBooks.slice();
+      }
+      if (Array.isArray(turn.excludeSpots) && turn.excludeSpots.length) {
+        body.exclude_spots = turn.excludeSpots.slice();
+      }
+      if (turn.sourceText) {
+        body.source_text = turn.sourceText;
+      }
+    }
     if (options.fresh) body.fresh = true;
     try {
       const data = await postJSON('/api/run', body, { signal: controller.signal });
@@ -2270,8 +2492,11 @@
     startClock(options.resumeElapsed || 0);
     render();
     const primary = ordered[0];
+    const answerQuestion = turn.relatedMode
+      ? ('请结合选中的这几本书原文，对比、补充或阐释与下面选段相关的论述：「' + turn.question + '」').slice(0, 300)
+      : turn.question;
     const body = {
-      question: turn.question,
+      question: answerQuestion,
       book: primary.book || bookKey(primary.path),
       path: primary.path,
       line: Number(primary.line) || 1,
@@ -2445,6 +2670,12 @@
       stageStates: ['active', 'pending', 'pending', 'pending', 'pending'],
       stageOpen: new Set([0]),
       stripOpen: true,
+      relatedMode: Boolean(options.relatedMode),
+      relatedThreshold: clampThreshold(options.threshold),
+      excludeBooks: Array.isArray(options.excludeBooks) ? options.excludeBooks.slice() : [],
+      excludeBookMeta: Array.isArray(options.excludeBookMeta) ? options.excludeBookMeta.slice() : [],
+      excludeSpots: Array.isArray(options.excludeSpots) ? options.excludeSpots.slice() : [],
+      sourceText: options.sourceText || '',
     };
     state.turns.push(turn);
     if (anchor) {
@@ -2480,6 +2711,45 @@
     stopAnswerPoll();
     state.viewN = n;
     answerTurn(turn, { fresh: true });
+  }
+
+  function toggleRelatedBook(n, bookUid) {
+    const turn = state.turns.find((t) => t.n === n);
+    const last = lastTurn();
+    if (!turn || !last || last.n !== n) return;
+    const cand = relatedQualified(turn).find((c) => c.book === bookUid);
+    if (!cand) return;
+    const chosen = turn.sources || [];
+    const on = chosen.some((s) => sourceKey(s) === bookUid);
+    if (on) {
+      if (chosen.length <= 1) {
+        toast('至少留一本');
+        return;
+      }
+      turn.sources = chosen.filter((s) => sourceKey(s) !== bookUid);
+    } else {
+      if (chosen.length >= MAX_SOURCES) {
+        toast('最多 ' + MAX_SOURCES + ' 本');
+        return;
+      }
+      turn.sources = chosen.concat([{
+        book: cand.book,
+        title: cand.title,
+        chapter: cand.chapter,
+        path: cand.path,
+        line: cand.line,
+      }]);
+    }
+    render();
+  }
+
+  function applyRelatedThreshold(n, val) {
+    const turn = state.turns.find((t) => t.n === n);
+    const last = lastTurn();
+    if (!turn || !last || last.n !== n || !turn.relatedMode) return;
+    turn.relatedThreshold = clampThreshold(val);
+    turn.sources = relatedDefaultSources(turn);
+    render();
   }
 
   function toggleBook(n, key) {
@@ -2691,6 +2961,19 @@
       toggleBook(Number(picker.dataset.from), picker.dataset.bookPick);
       return;
     }
+    const relPicker = e.target.closest('[data-related-pick]');
+    if (relPicker) {
+      toggleRelatedBook(Number(relPicker.dataset.from), relPicker.dataset.relatedPick);
+      return;
+    }
+    const relThrSet = e.target.closest('[data-related-threshold-set]');
+    if (relThrSet) {
+      applyRelatedThreshold(
+        Number(relThrSet.dataset.from),
+        Number(relThrSet.dataset.relatedThresholdSet)
+      );
+      return;
+    }
     const allBooks = e.target.closest('[data-books-all]');
     if (allBooks) {
       toggleAllBooks(Number(allBooks.dataset.booksAll));
@@ -2827,6 +3110,23 @@
     field.closest('.ask-field').classList.toggle('has-text', field.value !== '');
   });
 
+  mainEl.addEventListener('input', (e) => {
+    const range = e.target.closest('[data-related-threshold]');
+    if (!range) return;
+    const n = Number(range.dataset.relatedThreshold);
+    const pct = Math.max(0, Math.min(95, Math.round(Number(range.value) || 0)));
+    const lbl = mainEl.querySelector('[data-threshold-label="' + n + '"]');
+    if (lbl) lbl.textContent = '≥ ' + pct + '%';
+  });
+
+  mainEl.addEventListener('change', (e) => {
+    const range = e.target.closest('[data-related-threshold]');
+    if (!range) return;
+    const n = Number(range.dataset.relatedThreshold);
+    const val = (Number(range.value) || 0) / 100;
+    applyRelatedThreshold(n, val);
+  });
+
   if (histFilterEl) {
     histFilterEl.addEventListener('input', () => {
       state.historyQuery = histFilterEl.value;
@@ -2898,7 +3198,9 @@
   function turnFromSaved(turn) {
     const answer = turn.answer && typeof turn.answer === 'object' ? turn.answer : null;
     const trace = turn.trace && typeof turn.trace === 'object' ? turn.trace : null;
+    const relMeta = trace && trace.related_search && trace.related_search.active ? trace.related_search : null;
     const saved = savedStatusOf(turn);
+    const exclBooks = relMeta && Array.isArray(relMeta.exclude_books) ? relMeta.exclude_books.slice() : [];
     const row = {
       n: turn.n,
       question: turn.question || '',
@@ -2920,7 +3222,17 @@
       stageStates: ALL_DONE.slice(),
       stageOpen: new Set(),
       stripOpen: false,
+      relatedMode: Boolean(relMeta),
+      relatedThreshold: relMeta ? clampThreshold(relMeta.threshold) : DEFAULT_RELATED_THRESHOLD,
+      excludeBooks: exclBooks,
+      excludeBookMeta: exclBooks.map((uid) => ({ uid, title: uid })),
+      excludeSpots: relMeta && Array.isArray(relMeta.exclude_spots) ? relMeta.exclude_spots.slice() : [],
+      sourceText: turn.question || '',
     };
+    if (row.relatedMode && !answer) {
+      row.sources = relatedDefaultSources(row);
+      return row;
+    }
     const restored = savedSources(row);
     row.answerSources = restored.map(cloneSource);
     row.sources = restored.map(cloneSource);
@@ -2956,6 +3268,8 @@
       syncBusy();
       if (state.busy) startClock();
       render();
+      const exclAll = uniq([].concat(...state.turns.map((t) => t.excludeBooks || [])));
+      if (exclAll.length) loadExcludeBookMeta(exclAll);
       if (last) showCitation(defaultRef(last));
       if (last && last.status === 'answering') {
         startAnswerPoll(state.sessionId, last.n, epoch);
@@ -2985,12 +3299,21 @@
     const sessionId = params.get('session') || '';
     const question = params.get('q') || '';
     const booksRaw = params.get('books') || params.get('book') || '';
+    const excludeRaw = params.get('exclude') || params.get('exclude_books') || '';
+    const srcPath = (params.get('src_path') || '').trim();
+    const srcLine = Number(params.get('src_line') || 0) || 0;
+    const thresholdParam = params.get('threshold');
     const mode = (params.get('mode') || '').trim().toLowerCase();
     state.scopeOrigin = (params.get('from') || '').trim();
     const uids = booksRaw.split(',').map((s) => s.trim()).filter(Boolean);
     if (uids.length) {
       state.scopeBooks = uids.map((uid) => ({ uid, title: uid }));
       loadScopeBookMeta(uids);
+    }
+    const exclUids = excludeRaw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (exclUids.length) {
+      state.excludeBooks = exclUids.map((uid) => ({ uid, title: uid }));
+      loadExcludeBookMeta(exclUids);
     }
     if (location.pathname !== pagePath()) {
       try {
@@ -3009,6 +3332,17 @@
         field.value = question;
         field.closest('.ask-field').classList.add('has-text');
         field.focus();
+      } else if (mode === 'related') {
+        setUrl('');
+        await ask(question, {
+          traceOnly: true,
+          relatedMode: true,
+          threshold: clampThreshold(thresholdParam),
+          excludeBooks: exclUids,
+          excludeBookMeta: state.excludeBooks,
+          excludeSpots: srcPath ? [{ path: srcPath, line: srcLine }] : [],
+          sourceText: question,
+        });
       } else {
         setUrl('');
         await ask(question, { traceOnly: mode === 'trace' });
