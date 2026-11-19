@@ -76,7 +76,7 @@ def apply_shared_scripts(paths: DemoPaths) -> None:
     L.BUILD = layout.build
     L.WORK = layout.work
 
-    for name in ("book_score", "book_cards", "vec_search"):
+    for name in ("book_score", "book_cards", "vec_search", "book_expand", "book_readme", "qsearch"):
         mod = sys.modules.get(name)
         if mod is None:
             continue
@@ -88,6 +88,16 @@ def apply_shared_scripts(paths: DemoPaths) -> None:
             mod.DB = layout.index_db
         if hasattr(mod, "LIBDB"):
             mod.LIBDB = layout.library_db
+        if name == "book_expand" and hasattr(mod, "CACHE"):
+            mod.CACHE = str(Path(layout.index_dir) / "expand_cache")
+        if name == "book_cards":
+            batch = paths.root / "工作区" / "批次" / "qa-检索-2026-10-22-书级融合"
+            if hasattr(mod, "BATCH"):
+                mod.BATCH = str(batch)
+            if hasattr(mod, "FEEDBACK"):
+                mod.FEEDBACK = str(batch / "book_feedback.tsv")
+            if hasattr(mod, "GOLD"):
+                mod.GOLD = str(batch / "book_gold.tsv")
         if name == "vec_search" and hasattr(mod, "clear_caches"):
             mod.clear_caches()
 

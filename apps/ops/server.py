@@ -46,7 +46,10 @@ def _package_scripts():
 
 
 def _envfile_module():
-    """仓库根 ``.env`` 的读入口；没装包时返回 None，退回 shell 环境。"""
+    """仓库根 ``.env`` 的读入口；没装包时先挂 ``src/`` 再试。"""
+    src_dir = os.path.join(REAL_ROOT, "src")
+    if os.path.isdir(src_dir) and src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
     try:
         from bookcorpus import envfile
 
@@ -3793,12 +3796,22 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="统一操作台服务（127.0.0.1:8770）")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8770, help="0 表示随机端口（测试用）")
-    ap.add_argument("--root", default=os.environ.get("BOOKS_ROOT") or REAL_ROOT, help="数据根，测试指向临时库")
+    ap.add_argument("--root", default=None, help="数据根，默认读 .env 里的 BOOKS_ROOT（测试指向临时库）")
     ap.add_argument("--scripts", default=None, help="脚本目录，测试指向 stub")
     args = ap.parse_args(argv)
-    _bind_batches(args.root)
+    if envmod is not None:
+        try:
+            root = str(envmod.resolve_books_root(args.root))
+        except SystemExit as exc:
+            ap.error(str(exc))
+    else:
+        raw = args.root or os.environ.get("BOOKS_ROOT")
+        if not raw:
+            ap.error("未配置工作区根：请在仓库根 .env 中设置 BOOKS_ROOT，或传 --root <目录>")
+        root = os.path.abspath(os.path.expanduser(raw))
+    _bind_batches(root)
 
-    env = Env(args.root, args.scripts)
+    env = Env(root, args.scripts)
     app = App(env)
     Handler.app = app
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)

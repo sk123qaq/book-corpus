@@ -554,7 +554,7 @@ h1{font-size:28px;margin:0 0 12px}a{color:#1E3A36}
 def main(argv=None):
     envfile.load()
     parser = argparse.ArgumentParser(description="8771 阅读工作台 本地服务")
-    parser.add_argument("--root", default=os.environ.get("BOOKS_ROOT") or os.path.expanduser("~/书库"))
+    parser.add_argument("--root", default=None, help="实例根，含 books.toml；默认读 .env 里的 BOOKS_ROOT")
     parser.add_argument("--port", type=int, default=8771)
     parser.add_argument("--search-url", default=None, help="「找一段」跳转地址覆盖")
     parser.add_argument("--home-url", default=None, help="「首页」跳转地址覆盖")
@@ -572,11 +572,15 @@ def main(argv=None):
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
     try:
-        service = ReadingService(args.root, annotate=args.annotate)
+        root = str(envfile.resolve_books_root(args.root))
+    except SystemExit as exc:
+        parser.error(str(exc))
+    try:
+        service = ReadingService(root, annotate=args.annotate)
     except FileNotFoundError as exc:
         parser.error(str(exc))
     if not os.path.isdir(service.library.layout.books):
-        parser.error("根下没有 books/：%s" % args.root)
+        parser.error("根下没有 books/：%s" % root)
     Handler.service = service
     Handler.quiet = args.quiet
     Handler.allow_start = not args.no_start

@@ -320,24 +320,22 @@ book-corpus query 关键词 关键词 --no-cards
 
 ### 启动（默认只起统一入口）
 
-在工具仓里跑。默认只启动入口页一个进程：
+在工具仓里跑。五个页面服务默认都从 `.env`（或环境变量）读取 `BOOKS_ROOT`，不设其它兜底路径，也可用 `--root <实例根>` 临时覆盖（`<实例根>` 是有 `books.toml` 的那层）。默认只启动入口页一个进程：
 
 ```bash
-python3 apps/home/server.py --root <实例根>       # http://127.0.0.1:8773
+python3 apps/home/server.py                       # http://127.0.0.1:8773
 ```
-
-`<实例根>` 是有 `books.toml` 的那层。
 
 其他页面按需再起，不随默认启动：
 
 ```bash
-BOOKS_ROOT=<实例根> python3 apps/demo/server.py   # http://127.0.0.1:8765
-python3 apps/ops/server.py --root <实例根>        # http://127.0.0.1:8770
-python3 apps/reading/server.py --root <实例根>    # http://127.0.0.1:8771
-python3 apps/daily/server.py --root <实例根>      # http://127.0.0.1:8772
+python3 apps/demo/server.py                       # http://127.0.0.1:8765
+python3 apps/ops/server.py                        # http://127.0.0.1:8770
+python3 apps/reading/server.py                    # http://127.0.0.1:8771
+python3 apps/daily/server.py                      # http://127.0.0.1:8772
 ```
 
-演示页从 `BOOKS_ROOT` 认根，其余页面用 `--root`。首页读 `books.toml`、`books/` 与 `日课/`；点入口时如果对应服务没起，会代起并等端口就绪，已经在跑就直接跳转。页脚的「管理」也走同一条路，进入 8770。演示页只读索引与 `books/**.md`，回答缓存写到 `apps/demo/缓存/`（运行时可重建，已 ignore）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。
+上面五条在未传 `--root` 时统一读 `.env` 里的 `BOOKS_ROOT`；需要临时切换实例时统一加 `--root <实例根>`。首页读 `books.toml`、`books/` 与 `日课/`；点入口时如果对应服务没起，会代起并等端口就绪，已经在跑就直接跳转。页脚的「管理」也走同一条路，进入 8770。演示页只读索引与 `books/**.md`，会话、切词、回答与运行记录写到 `<实例根>/工作区/检索/`（可重建，不进工具仓）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。
 
 ### 重建产物
 
@@ -387,7 +385,7 @@ chmod 600 .env
 
 真实环境变量永远优先；配置文件只读第一个存在的：仓库根 `.env` > 当前目录 `.env` > `~/.config/book-corpus/.env`。
 `BOOK_CORPUS_ENV=/path/to/file` 可以整个换成另一个文件（指了就不回退）。
-改完 `.env` 要重启对应服务（8771 分层读、8773 首页）才会读到。
+改完 `.env` 要重启对应服务（8765 找一段、8770 操作台、8771 分层读、8772 日课、8773 首页）才会读到。
 
 ### 缺配置会怎样
 
@@ -437,7 +435,7 @@ MinerU 两种写法都认：`MINERU_API_KEY`（可以放 `.env`）或 `~/.config
 
 ## 路径与配置
 
-- `BOOKS_ROOT`：工作区根（有 `books.toml` 的那层）。优先级是 `--root` > shell 里 export 的 `BOOKS_ROOT` > 仓库根 `.env` 里的 `BOOKS_ROOT` > 从当前目录向上找 `books.toml`。`book-corpus init <目录>` 建完工作区会把根写进仓库根 `.env` 的这一行，所以一个仓只服务一个实例时不必再设环境变量。
+- `BOOKS_ROOT`：工作区根（有 `books.toml` 的那层）。`book-corpus` CLI 的优先级是 `--root` > shell 里 export 的 `BOOKS_ROOT` > `.env` 里的 `BOOKS_ROOT` > 从当前目录向上找 `books.toml`；五个页面服务（8765/8770/8771/8772/8773）只认 `--root` > shell `BOOKS_ROOT` > `.env` 里的 `BOOKS_ROOT`，不回退其它路径。`book-corpus init <目录>` 建完工作区会把根写进仓库根 `.env` 的这一行，所以一个仓只服务一个实例时不必再设环境变量。
 - `BOOKS_SKILLS_DIR`：技能根，默认是仓库的 `.agents/skills/`。
 - `BOOKS_RG`：`rg` 可执行文件路径，默认从 PATH 找。
 - `PI_BIN`：`pi` 可执行文件路径，默认从 PATH 找。
@@ -456,8 +454,8 @@ MinerU 两种写法都认：`MINERU_API_KEY`（可以放 `.env`）或 `~/.config
 
 - 仓库不含书的正文。克隆后只有工具与模板，正文要自备。
 - 只有 `md/` 存在的书能搜到正文。只有 epub 或 PDF 的书先看 `build/书目总表.csv` 的 `md状态` 列。
-- 向量检索未建。重排只在实验台，`book_query.py` 不调用它。
-- 演示页与操作台默认只绑 `127.0.0.1`，没有鉴权。改 `--host` 前先想清楚，不要暴露到局域网。
+- 向量检索（`book-corpus embed` + `vec_search.py`）与交叉编码器精排（`book-corpus rerank-serve` + `rerank_client.py`）为可选增强；未建向量索引或精排服务离线时，`book_query.py` 与演示页自动降级回纯 BM25 或 `BM25 + 向量` RRF。
+- 五个本地页面服务默认只绑 `127.0.0.1`，没有鉴权。改 `--host` 前先想清楚，不要暴露到局域网。
 
 ## 许可证
 

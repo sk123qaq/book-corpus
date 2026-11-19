@@ -6,11 +6,11 @@
 
 ```bash
 python3 apps/daily/server.py --port 8772 --root /home/colaqaq/书库
-# 或者
-BOOK_CORPUS_DATA=/home/colaqaq/书库 python3 apps/daily/server.py
+# 或在仓库根 .env 设置 BOOKS_ROOT 后直接启动
+python3 apps/daily/server.py
 ```
 
-打开 <http://127.0.0.1:8772>。端口默认 8772，`--root` 默认取 `BOOK_CORPUS_DATA`，没有就用 `~/书库`。
+打开 <http://127.0.0.1:8772>。端口默认 8772，`--root` 默认只从 `.env`（或环境变量）读 `BOOKS_ROOT`，不设其它回退路径。
 
 ## 数据契约
 

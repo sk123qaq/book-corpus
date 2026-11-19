@@ -44,7 +44,7 @@ class Library:
     """``root`` 是实例根（含 books.toml）。所有读路径都由 Layout 推出。"""
 
     def __init__(self, root=None, overlay_root=None):
-        found = find_root(root) if root else find_root()
+        found = find_root(root, ignore_env=True) if root else find_root()
         if not found:
             raise FileNotFoundError("找不到 books.toml；用 --root 指定实例根")
         self.layout = Layout(found)

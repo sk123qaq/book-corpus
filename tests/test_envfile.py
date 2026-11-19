@@ -1,8 +1,15 @@
 import json
 import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
 
 from bookcorpus import envfile
 from conftest import run_cli
+
+REPO = Path(__file__).resolve().parents[1]
 
 
 def test_project_env_beats_cwd_and_user_file(tmp_path, monkeypatch):
@@ -107,3 +114,54 @@ def test_cli_takes_root_from_env_file(tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
     rows = json.loads(done.stdout)
     assert any(row["label"] == "清单" and row["level"] == "ok" for row in rows), rows
+
+
+def test_resolve_books_root_reads_env_only_without_fallbacks(tmp_path, monkeypatch):
+    """默认只读 .env 里的 BOOKS_ROOT，不回退 ~/书库、BOOK_CORPUS_DATA 或 cwd。"""
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    env_path = tmp_path / "app.env"
+    env_path.write_text(f"BOOKS_ROOT={ws}\n", encoding="utf-8")
+
+    monkeypatch.delenv("BOOKS_ROOT", raising=False)
+    monkeypatch.setenv("BOOK_CORPUS_DATA", str(tmp_path / "legacy-data"))
+    monkeypatch.setenv("BOOK_CORPUS_ENV", str(env_path))
+    assert envfile.resolve_books_root() == ws.resolve()
+
+    explicit = tmp_path / "explicit"
+    assert envfile.resolve_books_root(explicit) == explicit.resolve()
+
+    monkeypatch.delenv("BOOKS_ROOT", raising=False)
+    monkeypatch.setenv("BOOK_CORPUS_ENV", str(tmp_path / "absent.env"))
+    with pytest.raises(SystemExit):
+        envfile.resolve_books_root()
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "apps/home/server.py",
+        "apps/reading/server.py",
+        "apps/daily/server.py",
+        "apps/ops/server.py",
+        "apps/demo/server.py",
+    ],
+)
+def test_all_app_servers_reject_missing_books_root_without_fallback(tmp_path, script):
+    """不传 --root 且 .env/环境里没有 BOOKS_ROOT 时，五个服务都不回退其它路径而直接退出。"""
+
+    env = dict(os.environ)
+    env.pop("BOOKS_ROOT", None)
+    env["BOOK_CORPUS_DATA"] = str(tmp_path / "ignored-legacy")
+    env["BOOK_CORPUS_ENV"] = str(tmp_path / "missing.env")
+    proc = subprocess.run(
+        [sys.executable, str(REPO / script)],
+        cwd=str(REPO),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert proc.returncode != 0
+    assert "BOOKS_ROOT" in (proc.stdout + proc.stderr)

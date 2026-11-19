@@ -408,3 +408,140 @@ def test_daily_feed_exposes_reading_url(reading_root: Path):
         assert feed["reading_url"] == "http://127.0.0.1:18771"
     finally:
         _stop(proc)
+
+
+def test_demo_reads_books_root_from_dotenv_and_syncs_book_expand_and_readme(tmp_path: Path):
+    """不传 --root、不设 BOOKS_ROOT 时，8765 从 .env 读 BOOKS_ROOT 并同步 book_expand / book_readme。"""
+    env = {"BOOKS_ROOT": str(tmp_path)}
+    assert run_cli("init", str(tmp_path), "--no-pdf-venv", env=env).returncode == 0
+    write_book(
+        tmp_path,
+        "B0001",
+        "人文社科",
+        "源书",
+        ["这是源书的第一段内容，专门讨论制度与习惯。"],
+    )
+    write_book(
+        tmp_path,
+        "B0002",
+        "人文社科",
+        "相关书",
+        ["这本书深入分析礼治秩序与传统习惯如何约束社会成员行为。" * 2],
+    )
+    write_ledger(tmp_path, [("B0001", "人文社科", "源书", ""), ("B0002", "人文社科", "相关书", "")])
+    assert run_cli("index", "--rebuild", env=env).returncode == 0
+    assert run_cli("library", env=env).returncode == 0
+
+    dotenv = tmp_path / "demo.env"
+    dotenv.write_text(f"BOOKS_ROOT={tmp_path}\n", encoding="utf-8")
+
+    # 1. 不带 --root、不带 BOOKS_ROOT，仅靠 .env 启动 demo server，能健康就绪并跑通 related 检索
+    proc, base = _start_app(
+        "apps/demo/server.py",
+        ["--quiet"],
+        ready_path="/api/health",
+        env={"BOOK_CORPUS_ENV": str(dotenv), "PI_BIN": "/bin/false"},
+    )
+    try:
+        with urllib.request.urlopen(f"{base}/api/health", timeout=5) as resp:
+            health = json.loads(resp.read().decode("utf-8"))
+        assert health["ok"] is True
+        assert health["meta"]["books"] == 2
+
+        req = urllib.request.Request(
+            f"{base}/api/run",
+            data=json.dumps(
+                {
+                    "question": "礼治 秩序 传统 习惯",
+                    "mode": "related",
+                    "exclude_books": ["B0001"],
+                    "source_text": "制度与习惯。",
+                    "threshold": 0.20,
+                    "stateless": True,
+                },
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            run_res = json.loads(resp.read().decode("utf-8"))
+        assert run_res["result"]["uid"] == "B0002"
+        assert (tmp_path / "工作区" / "检索" / "运行记录" / "index.jsonl").is_file()
+    finally:
+        _stop(proc)
+
+    # 2. 先在无 BOOKS_ROOT 下导入 answer / book_expand / book_readme，再 configure_runtime 也能取到原文窗口
+    probe_code = (
+        "import os, sys\n"
+        f"sys.path.insert(0, {str(REPO / 'apps' / 'demo')!r})\n"
+        "import context as demo_context\n"
+        "import answer\n"
+        "import book_expand\n"
+        "import book_readme\n"
+        f"demo_context.configure_runtime({str(tmp_path)!r})\n"
+        "entries, status = book_readme.readme_toc('B0002')\n"
+        "assert entries and entries[0]['path'] == 'books/B0002/md/001_第1节.md', (entries, status)\n"
+        "lines = book_expand.read_lines('books/B0002/md/001_第1节.md')\n"
+        "assert lines and '礼治秩序' in '\\n'.join(lines), lines\n"
+        "win = answer.build_windows(\n"
+        "    [{'book': 'B0002', 'path': 'books/B0002/md/001_第1节.md', 'line': 3}],\n"
+        "    {'B0002': {'books/B0002/md/001_第1节.md': '第1节'}},\n"
+        "    {'B0002': status},\n"
+        ")\n"
+        "assert len(win) == 1 and '礼治秩序' in win[0]['text'], win\n"
+    )
+    clean_env = dict(os.environ)
+    clean_env.pop("BOOKS_ROOT", None)
+    clean_env["BOOK_CORPUS_ENV"] = str(tmp_path / "missing.env")
+    proc2 = subprocess.run(
+        [sys.executable, "-c", probe_code],
+        cwd=str(REPO),
+        env=clean_env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert proc2.returncode == 0, proc2.stdout + proc2.stderr
+
+
+def test_other_apps_read_books_root_from_dotenv_without_cli_flag(reading_root: Path, tmp_path: Path):
+    """不传 --root、不设 BOOKS_ROOT 时，8773/8771/8772/8770 统一从 .env 读 BOOKS_ROOT。"""
+    dotenv = tmp_path / "apps.env"
+    dotenv.write_text(f"BOOKS_ROOT={reading_root}\n", encoding="utf-8")
+    env = {"BOOK_CORPUS_ENV": str(dotenv)}
+
+    # 8773 首页
+    proc, base = _start_app("apps/home/server.py", ["--quiet"], ready_path="/", env=env)
+    try:
+        with urllib.request.urlopen(f"{base}/", timeout=5) as resp:
+            assert resp.status == 200
+    finally:
+        _stop(proc)
+
+    # 8771 分层读
+    proc, base = _start_app("apps/reading/server.py", ["--no-annotate", "--quiet"], ready_path="/api/shelf", env=env)
+    try:
+        with urllib.request.urlopen(f"{base}/api/shelf", timeout=5) as resp:
+            shelf = json.loads(resp.read().decode("utf-8"))
+        assert {b["uid"] for b in shelf["books"]} == {"B0001", "B0002"}
+    finally:
+        _stop(proc)
+
+    # 8772 日课
+    proc, base = _start_app("apps/daily/server.py", [], ready_path="/api/feed", env=env)
+    try:
+        with urllib.request.urlopen(f"{base}/api/feed", timeout=5) as resp:
+            feed = json.loads(resp.read().decode("utf-8"))
+        assert Path(feed["dir"]).resolve() == (reading_root / "日课").resolve()
+    finally:
+        _stop(proc)
+
+    # 8770 操作台
+    proc, base = _start_app("apps/ops/server.py", [], ready_path="/api/status", env=env)
+    try:
+        with urllib.request.urlopen(f"{base}/api/status", timeout=5) as resp:
+            status = json.loads(resp.read().decode("utf-8"))
+        assert status["status"] is not None
+    finally:
+        _stop(proc)

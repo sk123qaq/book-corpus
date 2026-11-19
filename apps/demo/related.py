@@ -348,6 +348,13 @@ def check(question, previous, use_cache=True, thinking="low", rec=None):
 def main(argv=None):
     import argparse
 
+    try:
+        from bookcorpus import envfile
+
+        demo_context.configure_runtime(str(envfile.resolve_books_root()))
+    except ImportError:
+        pass
+
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
     ap.add_argument("--prev", action="append", default=[], help="上一轮，格式 n:问题，可重复")

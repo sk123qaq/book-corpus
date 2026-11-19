@@ -12,7 +12,7 @@ python3 apps/home/server.py --root /home/colaqaq/书库
 
 打开 `http://127.0.0.1:8773`。
 
-`--root` 指有 `books.toml` 的实例根；不传时依次读 `BOOK_CORPUS_DATA`、`BOOKS_ROOT`，再退回 `~/书库`。四个跳转地址都可以改：
+`--root` 指有 `books.toml` 的实例根；不传时统一从仓库根 `.env`（或环境变量）读 `BOOKS_ROOT`，不回退其它路径。四个跳转地址都可以改：
 
 ```bash
 python3 apps/home/server.py --root <实例根> \

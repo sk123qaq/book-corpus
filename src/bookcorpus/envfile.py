@@ -108,6 +108,21 @@ def load(explicit: str | Path | None = None, repo_root: str | Path | None = None
     return target
 
 
+def resolve_books_root(explicit: str | Path | None = None, repo_root: str | Path | None = None) -> Path:
+    """统一工作区根解析：显式参数优先，否则只读 ``.env`` / 环境中的 ``BOOKS_ROOT``。
+
+    不回退 ``~/书库``、``BOOK_CORPUS_DATA``、仓库目录或当前工作目录。
+    """
+
+    if explicit is not None and str(explicit).strip():
+        return Path(str(explicit)).expanduser().resolve()
+    load(repo_root=repo_root)
+    val = (os.environ.get("BOOKS_ROOT") or "").strip()
+    if not val:
+        raise SystemExit("未配置工作区根：请在仓库根 .env 中设置 BOOKS_ROOT，或传 --root <目录>")
+    return Path(val).expanduser().resolve()
+
+
 def writable_target(explicit: str | Path | None = None, repo_root: str | Path | None = None) -> Path:
     """写侧的目标文件：与读同一套优先级，但允许文件还不存在。
 

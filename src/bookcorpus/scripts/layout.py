@@ -32,12 +32,13 @@ INIT_DIRS = (
 )
 
 
-def find_root(start=None):
+def find_root(start=None, *, ignore_env=False):
     """工作区根。BOOKS_ROOT 优先，其次从 start 向上找 books.toml，找不到返回 None。"""
-    env = os.environ.get("BOOKS_ROOT")
-    if env:
-        return os.path.abspath(os.path.expanduser(env))
-    cur = os.path.abspath(start or os.getcwd())
+    if not ignore_env:
+        env = os.environ.get("BOOKS_ROOT")
+        if env:
+            return os.path.abspath(os.path.expanduser(env))
+    cur = os.path.abspath(os.path.expanduser(start or os.getcwd()))
     while True:
         if os.path.exists(os.path.join(cur, MANIFEST)):
             return cur

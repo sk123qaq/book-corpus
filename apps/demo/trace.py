@@ -1583,6 +1583,13 @@ def build(
 def main(argv=None):
     import argparse
 
+    try:
+        from bookcorpus import envfile
+
+        demo_context.configure_runtime(str(envfile.resolve_books_root()))
+    except ImportError:
+        pass
+
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
     ap.add_argument("--select", type=int, default=0)

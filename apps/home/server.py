@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import html
-import os
 import re
 import sys
 import traceback
@@ -184,14 +183,10 @@ a{{color:#A8442F;margin-right:22px}}
         self.send(200, body, "text/css; charset=utf-8")
 
 
-def _default_root() -> str:
-    return os.environ.get("BOOK_CORPUS_DATA") or os.environ.get("BOOKS_ROOT") or "~/书库"
-
-
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="书库统一入口首页；读书目与日课，按需代起页面服务。")
     parser.add_argument("--port", type=int, default=8773, help="端口，默认 8773")
-    parser.add_argument("--root", default=_default_root(), help="实例根，含 books.toml")
+    parser.add_argument("--root", default=None, help="实例根，含 books.toml；默认读 .env 里的 BOOKS_ROOT")
     parser.add_argument("--search-url", default=DEFAULT_TARGETS["search"], help="「找一段」跳转地址")
     parser.add_argument("--reading-url", default=DEFAULT_TARGETS["reading"], help="「翻开书」跳转地址")
     parser.add_argument("--daily-url", default=DEFAULT_TARGETS["daily"], help="「往期日课」跳转地址")
@@ -211,7 +206,11 @@ def main(argv=None) -> int:
     envfile.load()  # 仓库根 .env 里的 BOOKS_ROOT；shell 里 export 的仍然优先
     args = parse_args(argv)
     try:
-        library = Library(args.root)
+        root = str(envfile.resolve_books_root(args.root))
+        library = Library(root)
+    except SystemExit as exc:
+        print(f"书库首页：{exc}", file=sys.stderr)
+        return 2
     except Exception as exc:
         print(f"书库首页：{exc}", file=sys.stderr)
         return 2

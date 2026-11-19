@@ -75,3 +75,22 @@ def test_library_ignores_work_overlay_by_default(tmp_path, monkeypatch):
     data = lib.catalog()
     assert data["total"] == 1
     assert data["metadata"] == []
+
+
+def test_library_explicit_root_ignores_books_root_env(tmp_path, monkeypatch):
+    from conftest import write_book
+
+    env_root = tmp_path / "env_ws"
+    env_root.mkdir()
+    (env_root / "books.toml").write_text("schema = 2\n", encoding="utf-8")
+    write_book(env_root, "B0001", "文学", "环境书", ["环境正文。"])
+
+    explicit_root = tmp_path / "explicit_ws"
+    explicit_root.mkdir()
+    (explicit_root / "books.toml").write_text("schema = 2\n", encoding="utf-8")
+    write_book(explicit_root, "B0002", "文学", "显式书", ["显式正文。"])
+
+    monkeypatch.setenv("BOOKS_ROOT", str(env_root))
+    lib = Library(explicit_root)
+    assert lib.root == str(explicit_root.resolve())
+    assert [b["uid"] for b in lib.books()] == ["B0002"]

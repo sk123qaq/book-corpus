@@ -1581,16 +1581,24 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--root", default=None, help="实例根，含 books.toml")
+    ap.add_argument("--root", default=None, help="实例根，含 books.toml；默认读 .env 里的 BOOKS_ROOT")
     ap.add_argument("--reading-url", default=None, help="「分层读」地址覆盖")
     ap.add_argument("--home-url", default=None, help="「首页」地址覆盖")
     ap.add_argument("--no-start", action="store_true", help="目标服务未起时不代起")
     ap.add_argument("--start-timeout", type=float, default=12.0, help="等待服务就绪秒数")
     ap.add_argument("--quiet", action="store_true", help="不打印访问日志")
     args = ap.parse_args(argv)
-    if not args.root and envfile is not None:
+    if envfile is not None:
         envfile.load()
-    paths = demo_context.configure_runtime(args.root)
+        try:
+            root = str(envfile.resolve_books_root(args.root))
+        except SystemExit as exc:
+            ap.error(str(exc))
+    else:
+        root = args.root or os.environ.get("BOOKS_ROOT") or ""
+        if not root:
+            ap.error("未配置工作区根：请在仓库根 .env 中设置 BOOKS_ROOT，或传 --root <目录>")
+    paths = demo_context.configure_runtime(root)
     Handler.root = str(paths.root)
     Handler.allow_start = not args.no_start
     Handler.start_timeout = max(0.1, args.start_timeout)

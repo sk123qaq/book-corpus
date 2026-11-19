@@ -131,9 +131,7 @@ def main(argv=None):
         envfile.load()
     parser = argparse.ArgumentParser(description="书库日课的只读本地服务")
     parser.add_argument("--port", type=int, default=8772)
-    parser.add_argument(
-        "--root", default=os.environ.get("BOOK_CORPUS_DATA") or os.environ.get("BOOKS_ROOT") or "~/书库"
-    )
+    parser.add_argument("--root", default=None, help="实例根，默认读 .env 里的 BOOKS_ROOT")
     parser.add_argument(
         "--reading-url",
         default=None,
@@ -141,7 +139,16 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
 
-    Handler.root = Path(args.root).expanduser().resolve()
+    if envfile is not None:
+        try:
+            Handler.root = envfile.resolve_books_root(args.root)
+        except SystemExit as exc:
+            parser.error(str(exc))
+    else:
+        raw = args.root or os.environ.get("BOOKS_ROOT")
+        if not raw:
+            parser.error("未配置工作区根：请在仓库根 .env 中设置 BOOKS_ROOT，或传 --root <目录>")
+        Handler.root = Path(raw).expanduser().resolve()
     if app_links is not None:
         Handler.reading_url = app_links.resolve_targets({"reading": args.reading_url})["reading"]
     else:
