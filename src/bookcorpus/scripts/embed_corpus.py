@@ -36,7 +36,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from defpass import paragraphs
-from lib_common import PATHS, ROOT
+from lib_common import ROOT
 
 DEFAULT_URL = "http://127.0.0.1:18080"
 DEFAULT_DIM = 1024
@@ -225,17 +225,31 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self._init_meta()
+        self.dim = int(self.meta("dim", str(dim)))
         self.last_id = int(self.meta("last_id", "0"))
         self._open_vectors()
 
     def acquire_write_lock(self):
         """同一份向量只允许一个写者；--status/--verify 不加锁。"""
+        if getattr(self, "_lock", None) is not None:
+            return
         path = self.db_path.parent / (self.db_path.name + ".lock")
         self._lock = path.open("a")
         try:
             fcntl.flock(self._lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
+            self._lock.close()
+            self._lock = None
             raise SystemExit(f"另一个 embed 进程正在写 {self.db_path}（锁 {path}），等它跑完再试") from None
+
+    def close(self):
+        try:
+            self.db.close()
+        finally:
+            lk = getattr(self, "_lock", None)
+            if lk is not None:
+                self._lock = None
+                lk.close()
 
     def meta(self, key, default=None):
         row = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
@@ -338,6 +352,149 @@ class Store:
         with self.db:
             self.set_meta("seconds", float(self.meta("seconds", "0")) + seconds)
             self.set_meta("updated_at", now())
+
+    def deactivate_books(self, uids):
+        """把退库或删掉正文的书在向量库中失活（chunk.active=0，book.status='removed'）。"""
+        targets = sorted({u for u in uids if u})
+        if not targets:
+            return {"books": 0, "chunks": 0}
+        deactivated_chunks = 0
+        deactivated_books = 0
+        with self.db:
+            for uid in targets:
+                n = self.db.execute("UPDATE chunk SET active=0 WHERE book=? AND active=1", (uid,)).rowcount
+                row = self.book_row(uid)
+                if n > 0 or (row and row["status"] != "removed"):
+                    deactivated_chunks += max(n, 0)
+                    deactivated_books += 1
+                    self.db.execute(
+                        "INSERT INTO book(uid,title,sig,chunks,chars,status,error,done_at)"
+                        " VALUES(?,?,'',0,0,'removed','',?)"
+                        " ON CONFLICT(uid) DO UPDATE SET sig='', chunks=0, chars=0,"
+                        " status='removed', error='', done_at=excluded.done_at",
+                        (uid, (row["title"] if row else ""), now()),
+                    )
+            if deactivated_books:
+                self.set_meta("updated_at", now())
+        return {"books": deactivated_books, "chunks": deactivated_chunks}
+
+    def prune_orphans(self, live_uids):
+        """清理已不在活库（或已无 md）的孤儿书向量。"""
+        live = set(live_uids)
+        db_books = {r[0] for r in self.db.execute("SELECT uid FROM book WHERE status != 'removed'").fetchall()} | {
+            r[0] for r in self.db.execute("SELECT DISTINCT book FROM chunk WHERE active=1").fetchall()
+        }
+        orphans = sorted(db_books - live)
+        return self.deactivate_books(orphans)
+
+    def compact(self):
+        """零推理磁盘压缩：仅拷贝 active=1 的块与向量并重编连续 id，回收垃圾块空间。"""
+        self.acquire_write_lock()
+        before_stats = self.stats()
+        row_bytes = self.dim * 2
+        if before_stats["garbage"] == 0:
+            return {
+                "kept_chunks": before_stats["chunks"],
+                "removed_garbage": 0,
+                "before_bytes": before_stats["vec_bytes"],
+                "after_bytes": before_stats["vec_bytes"],
+            }
+        tmp_db = self.db_path.with_name(self.db_path.name + ".compact.building")
+        tmp_vec = self.vec_path.with_name(self.vec_path.name + ".compact.building")
+        for p in (tmp_db, tmp_vec):
+            if p.exists():
+                p.unlink()
+        for suf in ("-wal", "-shm", "-journal"):
+            side = Path(str(tmp_db) + suf)
+            if side.exists():
+                side.unlink()
+
+        dst = sqlite3.connect(tmp_db, timeout=30)
+        try:
+            dst.executescript(SCHEMA)
+            meta_rows = self.db.execute("SELECT key, value FROM meta").fetchall()
+            book_rows = self.db.execute(
+                "SELECT uid, title, sig, chunks, chars, status, error, done_at FROM book WHERE status != 'removed'"
+            ).fetchall()
+            new_id = 0
+            batch = []
+            with self.vec_path.open("rb") as src_vec, tmp_vec.open("wb") as out_vec:
+                cur = self.db.execute(
+                    "SELECT id, book, path, seq, line, chars, text FROM chunk WHERE active=1 ORDER BY id"
+                )
+                for row in cur:
+                    src_vec.seek((row["id"] - 1) * row_bytes)
+                    blob = src_vec.read(row_bytes)
+                    if len(blob) != row_bytes:
+                        raise RuntimeError(f"压缩时读取向量截断：chunk id={row['id']}")
+                    out_vec.write(blob)
+                    new_id += 1
+                    batch.append(
+                        (new_id, row["book"], row["path"], row["seq"], row["line"], row["chars"], row["text"], 1)
+                    )
+                    if len(batch) >= 4000:
+                        dst.executemany(
+                            "INSERT INTO chunk(id,book,path,seq,line,chars,text,active) VALUES(?,?,?,?,?,?,?,?)",
+                            batch,
+                        )
+                        batch.clear()
+                if batch:
+                    dst.executemany(
+                        "INSERT INTO chunk(id,book,path,seq,line,chars,text,active) VALUES(?,?,?,?,?,?,?,?)",
+                        batch,
+                    )
+                out_vec.flush()
+                os.fsync(out_vec.fileno())
+            with dst:
+                dst.executemany("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", meta_rows)
+                dst.executemany(
+                    "INSERT OR REPLACE INTO book(uid,title,sig,chunks,chars,status,error,done_at) "
+                    "VALUES(?,?,?,?,?,?,?,?)",
+                    book_rows,
+                )
+                dst.execute(
+                    "INSERT INTO meta(key,value) VALUES('last_id',?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (str(new_id),),
+                )
+                dst.execute(
+                    "INSERT INTO meta(key,value) VALUES('updated_at',?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (now(),),
+                )
+            try:
+                dst.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                dst.execute("PRAGMA journal_mode=DELETE")
+            except sqlite3.Error:
+                pass
+            dst.close()
+        except BaseException:
+            dst.close()
+            for p in (tmp_db, tmp_vec):
+                if p.exists():
+                    p.unlink()
+            raise
+
+        self.db.close()
+        for suf in ("-wal", "-shm", "-journal"):
+            side = Path(str(self.db_path) + suf)
+            if side.exists():
+                side.unlink()
+            tmp_side = Path(str(tmp_db) + suf)
+            if tmp_side.exists():
+                tmp_side.unlink()
+        tmp_vec.replace(self.vec_path)
+        tmp_db.replace(self.db_path)
+        self.db = sqlite3.connect(self.db_path, timeout=30)
+        self.db.row_factory = sqlite3.Row
+        self.last_id = new_id
+        after_bytes = self.vec_path.stat().st_size if self.vec_path.exists() else 0
+        return {
+            "kept_chunks": new_id,
+            "removed_garbage": before_stats["garbage"],
+            "before_bytes": before_stats["vec_bytes"],
+            "after_bytes": after_bytes,
+        }
 
     def stats(self):
         row = self.db.execute(
@@ -569,33 +726,132 @@ def cmd_serve(root, args):
     return subprocess.call(cmd, cwd=str(binary.parent))
 
 
+def diff_embed(root, db_path=None, server_url=None, check_network=True):
+    """只读计算向量库与活库 md 的增量差集（不建库、不启 llama-server）。"""
+    root = Path(root)
+    db = Path(db_path) if db_path else (root / "build" / "检索" / "embeddings" / "emb.db")
+    url = server_url or os.environ.get("BOOKS_EMBED_URL", DEFAULT_URL)
+    engine_ready = bool((check_network and healthy(url)) or (find_server(root) and find_model(root)))
+    live_books = md_books(root)
+    live_map = {}
+    for uid, path, _title in live_books:
+        paths = chapter_paths(root, path)
+        if paths:
+            live_map[uid] = sig_of(paths)
+
+    if not db.is_file():
+        return {
+            "has_db": False,
+            "engine_ready": engine_ready,
+            "added": sorted(live_map),
+            "modified": [],
+            "orphan": [],
+            "unchanged": 0,
+            "chunks": 0,
+            "garbage": 0,
+            "garbage_ratio": 0.0,
+        }
+
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        con.row_factory = sqlite3.Row
+        book_rows = {r["uid"]: (r["status"], r["sig"]) for r in con.execute("SELECT uid, status, sig FROM book")}
+        active_books = {r[0] for r in con.execute("SELECT DISTINCT book FROM chunk WHERE active=1")}
+        active_chunks = con.execute("SELECT count(*) FROM chunk WHERE active=1").fetchone()[0]
+        m_row = con.execute("SELECT value FROM meta WHERE key='last_id'").fetchone()
+        last_id = int(m_row[0]) if m_row else active_chunks
+    finally:
+        con.close()
+
+    added, modified = [], []
+    unchanged = 0
+    for uid, cur_sig in sorted(live_map.items()):
+        rec = book_rows.get(uid)
+        if rec is None or rec[0] == "removed":
+            added.append(uid)
+        elif (rec[0] == "done" and rec[1] == cur_sig) or (rec[0] == "empty" and rec[1] == cur_sig):
+            unchanged += 1
+        else:
+            modified.append(uid)
+    db_live = {u for u, (st, _) in book_rows.items() if st != "removed"} | active_books
+    orphan = sorted(db_live - set(live_map))
+    garbage = max(0, last_id - active_chunks)
+    garbage_ratio = round(garbage / last_id, 4) if last_id > 0 else 0.0
+    return {
+        "has_db": True,
+        "engine_ready": engine_ready,
+        "added": added,
+        "modified": modified,
+        "orphan": orphan,
+        "unchanged": unchanged,
+        "chunks": active_chunks,
+        "garbage": garbage,
+        "garbage_ratio": garbage_ratio,
+    }
+
+
+def deactivate_books_at(root, uids):
+    """供 retie_book.py 直接调用：若向量库存在则失活指定书的块。"""
+    db = Path(root) / "build" / "检索" / "embeddings" / "emb.db"
+    vec = Path(root) / "build" / "检索" / "embeddings" / "vectors.f16"
+    if not db.is_file() or not uids:
+        return {"books": 0, "chunks": 0}
+    store = Store(db, vec, DEFAULT_DIM, DEFAULT_MODEL)
+    try:
+        store.acquire_write_lock()
+        return store.deactivate_books(uids)
+    finally:
+        store.close()
+
+
 def run_embedding(root, store, books, args):
     store.acquire_write_lock()
+    pruned = {"books": 0, "chunks": 0}
+    if getattr(args, "sync", False) and not getattr(args, "books", None):
+        pruned = store.prune_orphans([u for u, _, _ in books])
+        if pruned["books"]:
+            print(f"已失活孤儿书 {pruned['books']} 本（{pruned['chunks']} 块标为垃圾块）", flush=True)
+
     total_bytes = 0
     todo = []
+    skipped = 0
     for uid, path, title in books:
         paths = chapter_paths(root, path)
+        if not paths:
+            continue
+        sig = sig_of(paths)
+        row = store.book_row(uid)
+        if row and row["status"] in ("done", "empty") and row["sig"] == sig and not args.force:
+            skipped += 1
+            continue
         size = sum(p.stat().st_size for p in paths)
         total_bytes += size
-        todo.append((uid, path, title, paths, size))
+        todo.append((uid, path, title, paths, size, sig))
+
     if not todo:
-        print("没有要跑的书")
+        s = store.stats()
+        print(
+            f"本次：新嵌 0 本，跳过 {skipped} 本，失活 {pruned['books']} 本，失败 0 本；"
+            f"库内 {s['chunks']} 块，{human(s['vec_bytes'])}"
+        )
+        return 0
+
+    if (
+        getattr(args, "allow_missing_engine", False)
+        and not healthy(args.server)
+        and not (find_server(root) and find_model(root))
+    ):
+        print(f"未配置本地向量引擎（llama-server / GGUF 模型），跳过 {len(todo)} 本待嵌书", flush=True)
         return 0
 
     done_bytes = 0
-    processed = skipped = errors = 0
+    processed = errors = 0
     tokens_run = 0
     run_started = time.time()
     book_started = run_started
     proc = ensure_server(root, args.server, keep=args.keep_server)
     try:
-        for i, (uid, path, title, paths, size) in enumerate(todo, 1):
-            sig = sig_of(paths)
-            row = store.book_row(uid)
-            if row and row["status"] == "done" and row["sig"] == sig and not args.force:
-                skipped += 1
-                done_bytes += size
-                continue
+        for i, (uid, path, title, _paths, size, sig) in enumerate(todo, 1):
             t0 = time.time()
             book_started = time.time()
             try:
@@ -643,7 +899,7 @@ def run_embedding(root, store, books, args):
             proc.terminate()
     s = store.stats()
     print(
-        f"本次：新嵌 {processed} 本，跳过 {skipped} 本，失败 {errors} 本；"
+        f"本次：新嵌 {processed} 本，跳过 {skipped} 本，失活 {pruned['books']} 本，失败 {errors} 本；"
         f"库内 {s['chunks']} 块，{human(s['vec_bytes'])}"
     )
     return 1 if errors else 0
@@ -651,9 +907,15 @@ def run_embedding(root, store, books, args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--root", help="工作区根，默认取 BOOKS_ROOT")
     ap.add_argument("--status", action="store_true", help="看进度")
     ap.add_argument("--verify", action="store_true", help="校验向量与元数据")
-    ap.add_argument("--dry-run", action="store_true", help="只切块，不请求服务")
+    ap.add_argument("--dry-run", action="store_true", help="只切块或看增量差集，不请求服务")
+    ap.add_argument("--sync", action="store_true", help="增量同步：先失活孤儿书，再补嵌新增/变更书")
+    ap.add_argument("--prune", action="store_true", help="只失活已退库/无 md 的孤儿书，不启推理服务")
+    ap.add_argument("--compact", action="store_true", help="零推理磁盘压缩：回收 active=0 垃圾块")
+    ap.add_argument("--allow-missing-engine", action="store_true", help="未配 llama-server/模型时平滑跳过返回 0")
+    ap.add_argument("--json", action="store_true", help="JSON 输出（配合 --dry-run / --prune / --compact）")
     ap.add_argument("--serve", action="store_true", help="前台起 llama-server")
     ap.add_argument("--books", help="逗号分隔的 uid，默认全部")
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 本")
@@ -666,15 +928,41 @@ def main():
     ap.add_argument("--keep-server", action="store_true", help="跑完不杀自己起的服务")
     args = ap.parse_args()
 
-    root = Path(ROOT)
+    root = Path(args.root).resolve() if args.root else Path(ROOT)
+    emb_dir = root / "build" / "检索" / "embeddings"
+    emb_db = emb_dir / "emb.db"
+    emb_vec = emb_dir / "vectors.f16"
+
     if args.serve:
         return cmd_serve(root, args)
-    store = Store(PATHS.embed_db, PATHS.embed_vectors, DEFAULT_DIM, DEFAULT_MODEL, args.chunk_chars, args.overlap)
+    if args.dry_run and args.json:
+        print(json.dumps(diff_embed(root, db_path=emb_db, server_url=args.server), ensure_ascii=False))
+        return 0
+
+    store = Store(emb_db, emb_vec, DEFAULT_DIM, DEFAULT_MODEL, args.chunk_chars, args.overlap)
     if args.status:
         cmd_status(store)
         return 0
     if args.verify:
         return cmd_verify(store)
+    if args.prune:
+        store.acquire_write_lock()
+        res = store.prune_orphans([u for u, _, _ in md_books(root)])
+        if args.json:
+            print(json.dumps(res, ensure_ascii=False))
+        else:
+            print(f"已失活孤儿书 {res['books']} 本（{res['chunks']} 块）")
+        return 0
+    if args.compact:
+        res = store.compact()
+        if args.json:
+            print(json.dumps(res, ensure_ascii=False))
+        else:
+            print(
+                f"压缩完成：保留 {res['kept_chunks']} 块，回收垃圾 {res['removed_garbage']} 块，"
+                f"{human(res['before_bytes'])} -> {human(res['after_bytes'])}"
+            )
+        return 0
 
     books = md_books(root)
     if args.books:

@@ -36,7 +36,7 @@
 | `build_expand.py` | — | P1.5 文档扩展：给每章生成「主题前缀」，写进独立索引，不碰正文。 |
 | `build_index.py` | `render` | 扫描 books/**/html/，给每本有阅读版的书重建 html/index.html，并重建 build/阅读版索引.html。 |
 | `build_library.py` | `library` | L1/L5 索引构建。人账 + 机账 + 磁盘 -> 目录/library.db（可随时重建）。 |
-| `build_para_index.py` | `index` | 建 目录/检索/index.db：段落倒排（CJK bigram FTS5）。零第三方依赖。 |
+| `build_para_index.py` | `index` | 建 build/检索/index.db：段落倒排（CJK bigram FTS5）。零第三方依赖。 |
 | `build_views.py` | — | 重建 build/views/奖项/ 软链树。 |
 | `check_p1.py` | — | P1 验收：2 字词可查且有序、原词类不低于裸 grep、查询边界回归。 |
 | `classify_books.py` | — | 给书做学科分类（一级 + 二级），批量提问，带缓存。 |

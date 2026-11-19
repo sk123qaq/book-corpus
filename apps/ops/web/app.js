@@ -1,12 +1,15 @@
 'use strict';
 
 const TABS = [
-  ['overview', '总览'], ['import', '新书导入'], ['split', '电子书'],
-  ['pdf', 'PDF'], ['maintain', '维护'], ['ledger', '账表'], ['retire', '删书'],
-  ['logs', '日志'],
+  ['overview', '总览'],
+  ['import', '新书入库'],
+  ['ledger', '书目与分类'],
+  ['split', '正文生产'],
+  ['maintain', '同步与维护'],
+  ['logs', '任务与日志'],
 ];
-// pdf-list 是 PDF 页的子页，不进左侧导航，但能用 #pdf-list 直接打开
-const EXTRA_TABS = ['pdf-list'];
+// 子页不进左侧主导航，支持直接用 #hash 跳转并保持兼容
+const EXTRA_TABS = ['docs', 'pdf', 'pdf-list', 'manual', 'retire', 'cold'];
 const ALL_TABS = TABS.map(([key]) => key).concat(EXTRA_TABS);
 
 const MAINTAIN_STEPS = [
@@ -29,7 +32,10 @@ const KIND_WORD = {
   'split.inspect': '查看问题',
   'pdf.triage': 'PDF 分诊', 'pdf.confirm': '确认处理方式', 'pdf.run': 'PDF 转写',
   'docs.run': '文档转 md',
-  maintain: '收尾', 'delete.dry-run': '删书预览', 'delete.apply': '删书',
+  maintain: '系统维护', 'sync.fts': '词法增量同步', 'sync.embed': '向量增量同步',
+  'sync.reconcile': '偏差增量同步', 'sync.expand': '主题扩展',
+  'embed.compact': '向量库压缩', 'manual.rescan': '扫描手工正文',
+  'delete.dry-run': '删书预览', 'delete.apply': '删书',
 };
 const STEP_WORD = { pending: '等待', ok: '通过', fail: '失败', running: '在跑', unknown: '退出码未知' };
 const SPLIT_WORD = {
@@ -87,8 +93,8 @@ const S = {
   ledgerPick: new Set(),
   tab: 'overview',
   payload: null, status: {}, health: null,
-  jobs: [], pending: [], inbox: [], pdf: null,
-  plan: null, planJob: null, planDirty: false, legacyPlan: false,
+  jobs: [], pending: [], inbox: [], inboxIgnored: [], pdf: null,
+  plan: null, planJob: null, planDirty: false, legacyPlan: false, nextUid: '',
   batch: null, splitBooks: [],
   review: null, reviewJob: null,
   retireHits: [], retireDrop: [], retireQuery: '', preview: null,
@@ -99,13 +105,15 @@ const S = {
   overviewHtml: '',
   filter: '', selected: new Set(), busy: false,
   replaceMd: false, splitWorkers: 4,
-  pdfLimit: 0, pdfLimitFrom: -1, pdfWorkers: 3, triageSeen: null, pdfToday: null,
+  pdfLimit: 0, pdfLimitFrom: -1, pdfWorkers: 3, pdfReplace: false, triageSeen: null, pdfToday: null,
   pdfUntriaged: null,
   books: [], bookCounts: null, pick: new Set(), pickQ: '',
   pickTags: new Set(['convert', 'untriaged', 'gallery', 'ja']),
   pickProgress: new Set(['todo', 'running', 'failed', 'staged', 'deferred']), pickRecheck: false,
-  pickSubject: '', pickSort: 'pages', settle: null,
+  pickSubject: '', pickSort: 'pages', settle: null, triageInfo: null,
   maintainSteps: new Set(FINISH_DEFAULT),
+  cold: null, settings: { auto_embed: true }, services: [],
+  reconcileExtra: new Set(),
 };
 
 // 轮询没有「超时失败」这回事：到上限只是降频继续看，别把在跑的任务当没跑
@@ -262,17 +270,26 @@ function setBusy(flag) {
 // ---- 顶栏与导航 ---------------------------------------------------
 function renderNav() {
   const counts = (S.payload && S.payload.state_counts) || {};
-  const on = S.tab === 'pdf-list' ? 'pdf' : S.tab;
+  const c = bookCounts();
+  const groupOf = (tab) => {
+    if (tab === 'retire' || tab === 'cold') return 'ledger';
+    if (tab === 'docs' || tab === 'pdf' || tab === 'pdf-list' || tab === 'manual') return 'split';
+    return tab;
+  };
+  const on = groupOf(S.tab);
   $('#nav').innerHTML = TABS.map(([key, label]) => {
     let badge = '';
-    if (key === 'logs') {
+    if (key === 'import' && c.inbox) {
+      badge = `<span class="badge">${c.inbox}</span>`;
+    } else if (key === 'split' && c.toConvert) {
+      badge = `<span class="badge">${c.toConvert}</span>`;
+    } else if (key === 'maintain') {
+      const delta = (S.status && S.status.sync_delta) || null;
+      if (delta && delta.has_drift) badge = '<span class="badge">!</span>';
+    } else if (key === 'logs') {
       const active = (counts.running || 0) + (counts.queued || 0);
       if (active) badge = `<span class="badge">${active}</span>`;
       else if (counts.awaiting_review) badge = `<span class="badge">${counts.awaiting_review}</span>`;
-    }
-    if (key === 'split' && S.pending.length) {
-      const ebooks = S.pending.filter((r) => /^(epub|mobi|azw3|azw)$/.test(r.format)).length;
-      if (ebooks) badge = `<span class="badge">${ebooks}</span>`;
     }
     return `<a href="#${key}" class="${on === key ? 'on' : ''}">${esc(label)}${badge}</a>`;
   }).join('');
@@ -291,12 +308,19 @@ function bookCounts() {
   const lagChapters = dig(st, 'index.lag_chapters', 0);
   const lagBooksRaw = dig(st, 'index.lag_books', 0);
   const lagChaptersRaw = dig(st, 'index.lag_chapters', 0);
-  const convertible = st.convertible || null;
+  const convertible = st.convertible != null ? st.convertible : null;
+  const cg = st.convertible_groups || null;
   // 缺库时服务端把计数填 0，但带 ok:false：0 不能当真实读数，页面要显示「—/未知」
   const libKnown = dig(st, 'library.ok', true) !== false;
   const indexKnown = dig(st, 'index.ok', true) !== false;
   const viewsKnown = dig(st, 'views.ok', true) !== false;
   const catalogKnown = st.catalog ? st.catalog.unmatched != null : true;
+  const ebooksToConvert = cg ? (Number(cg.ebook) || 0) : ebookCount();
+  const docsToConvert = cg ? (Number(cg.doc) || 0) : docsBackfill();
+  const otherToConvert = cg ? (Number(cg.other) || 0) : 0;
+  const pdfsToConvert = cg
+    ? (Number(cg.pdf) || 0)
+    : Math.max(0, (convertible != null ? convertible : 0) - ebooksToConvert - docsToConvert - otherToConvert);
   return {
     books: dig(st, 'books', 0),
     readable: dig(st, 'md_done', 0),
@@ -304,9 +328,16 @@ function bookCounts() {
     // 待转口径在服务端：无 md 的书里去掉已定存档的。缺口径时退回旧公式
     toConvert: convertible != null ? convertible
       : (pending.pdf || 0) + (pending.txt || 0) + (pending.djvu || 0),
+    ebooksToConvert,
+    docsToConvert,
+    pdfsToConvert,
+    otherToConvert,
     archive: st.archive || null,
     inbox: dig(st, 'inbox.files', 0),
+    inboxIgnored: dig(st, 'inbox.ignored_count', 0),
     ledgerRows: dig(st, 'ledger.rows', 0),
+    ledgerStale: !!dig(st, 'ledger.stale', false),
+    prefillReady: !!dig(st, 'prefill_ready', false),
     awards: dig(st, 'views.awards', 0),
     broken: dig(st, 'views.broken', 0),
     lagBooks: Math.max(0, lagBooksRaw),
@@ -428,9 +459,18 @@ function render() {
   renderSearch();
   const view = $('#view');
   const map = {
-    overview: viewOverview, import: viewImport, split: viewSplit, pdf: viewPdf,
+    overview: viewOverview,
+    import: viewImport,
+    split: viewSplit,
+    docs: viewDocs,
+    pdf: viewPdf,
     'pdf-list': viewPdfList,
-    maintain: viewMaintain, ledger: viewLedger, retire: viewRetire, logs: viewLogs,
+    manual: viewManual,
+    maintain: viewMaintain,
+    ledger: viewLedger,
+    retire: viewRetire,
+    cold: viewCold,
+    logs: viewLogs,
   };
   // 整页重画会丢掉日志框的滚动位置：画之前先记下，paintJobDetail 再落回去
   const logPre = document.querySelector('#job-log');
@@ -516,23 +556,47 @@ function todoItems(c) {
       note: '核对书名和分类之后入库。', href: '#import', label: '去导入',
     });
   }
+  if (c.inboxIgnored) {
+    items.push({
+      title: '收件箱有 ' + num(c.inboxIgnored) + ' 个不支持格式文件',
+      note: '不在白名单内（如 .doc/.djvu/.csv），不会自动入库。', href: '#import', label: '去查看',
+    });
+  }
+  if (c.ledgerStale) {
+    items.push({
+      title: '账表有修改，书目库尚未同步',
+      note: '改过分类、书名或保留策略，去维护跑重建后才会生效。', href: '#maintain', label: '去同步',
+    });
+  }
   if (c.awaiting) {
     items.push({
       title: num(c.awaiting) + ' 个任务待确认',
       note: '有结果等人看过才算完。', href: '#logs', label: '去确认',
     });
   }
-  const ebooks = ebookCount();
+  const ebooks = c.ebooksToConvert || ebookCount();
   if (ebooks) {
     items.push({
       title: '有 ' + num(ebooks) + ' 本电子书待拆章',
       note: '拆成按章的 Markdown 才能搜索。', href: '#split', label: '去拆章',
     });
   }
-  if (c.toConvert) {
+  if (c.docsToConvert) {
     items.push({
-      title: num(c.toConvert) + ' 本还没有正文',
-      note: '先看建议，确认处理方式再转。', href: '#pdf', label: '去分诊',
+      title: '有 ' + num(c.docsToConvert) + ' 本文档待转 md',
+      note: 'TXT / DOCX / XLSX / PPTX 可在「正文生产 · 文档」一键补转，落地后自动同步检索。', href: '#docs', label: '去转文档',
+    });
+  }
+  if (c.pdfsToConvert) {
+    items.push({
+      title: num(c.pdfsToConvert) + ' 本 PDF 还没有正文',
+      note: '先看分诊建议，确认处理方式再转。', href: '#pdf', label: '去分诊',
+    });
+  }
+  if (c.otherToConvert) {
+    items.push({
+      title: num(c.otherToConvert) + ' 本为手工格式（如 djvu/csv）',
+      note: '手工转出 md 放入书目录后，在「正文生产 · 手工格式」点扫描落位。', href: '#manual', label: '去查看',
     });
   }
   if (c.lagBooks) {
@@ -585,8 +649,10 @@ function heroAction(c) {
   if (statusState() === 'unknown' || !c.libKnown || !c.indexKnown) return ['去维护', '#maintain'];
   if (c.inbox) return ['导入新书', '#import'];
   if (c.awaiting) return ['查看待确认', '#logs'];
-  if (c.toConvert) return ['继续出正文', ebookCount() ? '#split' : '#pdf'];
-  if (c.lagBooks || c.warn || c.unmatched) return ['去维护', '#maintain'];
+  if (c.ebooksToConvert || ebookCount()) return ['去拆章', '#split'];
+  if (c.pdfsToConvert) return ['去分诊 PDF', '#pdf'];
+  if (c.docsToConvert) return ['去转文档', '#import'];
+  if (c.ledgerStale || c.lagBooks || c.warn || c.unmatched) return ['去维护', '#maintain'];
   return null;
 }
 
@@ -614,12 +680,13 @@ function pipeline(c) {
       read: unknown ? '状态读不到' : (c.inbox ? num(c.inbox) + ' 本待处理' : '收件箱是空的'),
     },
     {
-      name: '入账', href: '#import',
-      state: !c.libKnown ? 'miss' : (ledgerGap ? 'miss' : 'ok'),
-      word: !c.libKnown ? '未知' : (ledgerGap ? '需核对' : '正常'),
+      name: '入账', href: c.ledgerStale ? '#maintain' : '#ledger',
+      state: !c.libKnown ? 'miss' : (ledgerGap ? 'miss' : (c.ledgerStale ? 'half' : 'ok')),
+      word: !c.libKnown ? '未知' : (ledgerGap ? '需核对' : (c.ledgerStale ? '需同步' : '正常')),
       read: !c.libKnown
         ? '书数未知'
-        : (ledgerGap ? '差 ' + num(Math.abs(ledgerGap)) + ' 本' : num(c.books) + ' 本已登记'),
+        : (ledgerGap ? '差 ' + num(Math.abs(ledgerGap)) + ' 本'
+          : (c.ledgerStale ? '账表已改，待重建同步' : num(c.books) + ' 本已登记')),
     },
     {
       name: '上架', href: '#maintain',
@@ -632,7 +699,9 @@ function pipeline(c) {
           : '奖项 ' + num(c.awards) + ' 条'),
     },
     {
-      name: '出正文', href: c.toConvert ? '#pdf' : '#split',
+      name: '出正文',
+      href: (c.ebooksToConvert || ebookCount()) ? '#split'
+        : (c.pdfsToConvert ? '#pdf' : (c.docsToConvert ? '#import' : '#split')),
       state: !c.libKnown ? 'miss' : (c.toConvert ? 'half' : 'ok'),
       word: !c.libKnown ? '未知' : (c.toConvert ? '待处理' : '正常'),
       read: !c.libKnown
@@ -686,33 +755,91 @@ function nextSteps(todos) {
   </div>`).join('');
 }
 
+function subtabsBar(items, active) {
+  return `<div class="subtabs">${items.map(([key, label, count]) => `<a class="subtab${active === key ? ' on' : ''}" href="#${key}">${esc(label)}${count ? `<span class="badge">${num(count)}</span>` : ''}</a>`).join('')}</div>`;
+}
+
+function catalogSubtabs(active) {
+  const coldCount = dig(S.status, 'sync_delta.cold_count', 0);
+  const dropCount = (S.retireDrop || []).length;
+  return subtabsBar([
+    ['ledger', '分类与全库台账', 0],
+    ['retire', '待退库与删书', dropCount],
+    ['cold', '冷宫（只读专区）', coldCount],
+  ], active);
+}
+
+function contentSubtabs(active) {
+  const c = bookCounts();
+  return subtabsBar([
+    ['split', '电子书', c.ebooksToConvert],
+    ['docs', '文档（TXT/Office）', c.docsToConvert],
+    ['pdf', 'PDF 分诊与转写', c.pdfsToConvert],
+    ['manual', '手工格式（djvu/csv）', c.otherToConvert],
+  ], active);
+}
+
+function reviewHref(job) {
+  if (!job || job.state !== 'awaiting_review') return '';
+  if (job.kind === 'import.scan') return '#import';
+  if (job.kind === 'split.run') return '#split';
+  if (job.kind === 'pdf.triage') return '#pdf-list';
+  return '';
+}
+
 function jobLine(job) {
   const state = job.state;
+  const rhref = reviewHref(job);
   return `<div class="jobline">
     <span class="t">${esc(fmtTime(job.created))}</span>
     <span class="pill">${esc(JOB_WORD[state] || state)}</span>
     <span class="jl-title">${esc(summaryText(job.title))}</span>
     <span class="jl-sum small">${esc(summaryText(job.summary))}</span>
-    <a class="btn sm" href="#logs" data-act="job-open" data-id="${esc(job.id)}">详情</a>
+    <span class="row tight">
+      ${rhref ? `<a class="btn sm primary" href="${rhref}">去处理</a>` : ''}
+      <a class="btn sm" href="#logs" data-act="job-open" data-id="${esc(job.id)}">详情</a>
+    </span>
+  </div>`;
+}
+
+function servicesCard() {
+  const list = S.services || [];
+  if (!list.length) return '';
+  return `<div class="section card">
+    <div class="card-head"><h2>书库应用入口</h2><button class="btn sm" data-act="services-refresh">刷新</button></div>
+    <div class="svc-bar">${list.map((svc) => `<div class="svc-item">
+      <div class="svc-meta">
+        <span class="dot ${svc.running ? 'on' : 'off'}"></span>
+        <div><div class="svc-name">${esc(svc.name)}</div><div class="svc-port">:${esc(svc.port)}</div></div>
+      </div>
+      ${svc.running
+        ? `<a class="btn sm" href="${esc(svc.url)}" target="_blank" rel="noopener">打开</a>`
+        : `<button class="btn sm" data-act="service-start" data-key="${esc(svc.key)}">启动</button>`}
+    </div>`).join('')}</div>
   </div>`;
 }
 
 function viewOverview() {
   const c = bookCounts();
   const todos = todoItems(c);
-  const jobs = S.jobs.slice(0, 4);
+  const jobs = S.jobs.slice(0, 5);
   return `${hero(c, todos)}
     <div class="section">${pipeline(c)}</div>
     <div class="grid c2 section">
       <div class="card"><h2>下一步</h2>${nextSteps(todos)}</div>
       <div class="card"><h2>最近任务</h2>${jobs.length ? jobs.map(jobLine).join('') : '<p class="empty">还没有任务。</p>'}
         <p><a class="btn sm" href="#logs">全部任务</a></p></div>
-    </div>`;
+    </div>
+    ${servicesCard()}`;
 }
 
 // ---- 新书导入 -----------------------------------------------------
 function nextPlanUid() {
   let max = 0;
+  if (S.nextUid) {
+    const nm = /^B(\d+)$/.exec(String(S.nextUid));
+    if (nm) max = Math.max(max, parseInt(nm[1], 10) - 1);
+  }
   (S.plan || []).forEach((it) => {
     const m = /^B(\d+)$/.exec(String(it.uid || ''));
     if (m) max = Math.max(max, parseInt(m[1], 10));
@@ -774,6 +901,10 @@ function planBlockers(plan) {
 }
 
 function inboxCard(inbox, hasPlan) {
+  const ignored = S.inboxIgnored || [];
+  const ignoredHtml = ignored.length
+    ? `<p class="hint">另有 ${num(ignored.length)} 个非支持格式文件被跳过：${ignored.slice(0, 6).map((f) => esc(f.name)).join('、')}${ignored.length > 6 ? ' 等' : ''}（可在命令行手工处理）。</p>`
+    : '';
   return `<div class="card">
     <div class="card-head"><h2>收件箱 <span class="hint">${num(inbox.length)} 本</span></h2>
       <button class="btn sm" data-act="inbox-refresh">刷新</button></div>
@@ -783,8 +914,9 @@ function inboxCard(inbox, hasPlan) {
         <td>${esc(f.format)}</td><td class="num">${fmtBytes(f.bytes)}</td>
         <td class="nowrap">${esc(fmtTime(f.mtime))}</td></tr>`).join('')}</tbody></table></div>`
     : '<p class="empty">收件箱是空的。把新书拖到上面，它就会出现在这里。</p>'}
+    ${ignoredHtml}
     <div class="toolbar">
-      <button class="btn${hasPlan ? '' : ' primary'}" data-write data-act="import-scan">生成入库清单</button>
+      <button class="btn${hasPlan ? '' : ' primary'}" data-write data-act="import-scan"${inbox.length ? '' : ' disabled'}>生成入库清单</button>
       <span class="hint">会识别书名、作者和分类建议。</span>
     </div>
   </div>`;
@@ -830,10 +962,10 @@ function viewImport() {
     <div class="section card">
       <div class="card-head"><h2>${esc(planHead())}</h2>
         <span class="row tight">
-          <button class="btn sm" data-act="plan-defaults" ${plan ? '' : 'disabled'}>采用建议分类</button>
-          <button class="btn sm${plan && !bad.length ? ' primary' : ''}" data-write data-act="import-apply" ${plan && !bad.length ? '' : 'disabled'}>确认入库</button>
+          <button class="btn sm" data-act="plan-defaults" ${plan && plan.length ? '' : 'disabled'}>采用建议分类</button>
+          <button class="btn sm${plan && plan.length && !bad.length ? ' primary' : ''}" data-write data-act="import-apply" ${plan && plan.length && !bad.length ? '' : 'disabled'}>确认入库</button>
         </span></div>
-      ${plan ? planTable(plan) : '<p class="empty">收件箱里有书时，点「生成入库清单」。</p>'}
+      ${plan && plan.length ? planTable(plan) : '<p class="empty">收件箱里有书时，点「生成入库清单」。</p>'}
     </div>
     <div class="section" data-live="docs" id="docs-slot">${docsCard()}</div>`;
   // 刚整页画过，让 2.5 秒的重绘别白写一遍
@@ -1081,8 +1213,10 @@ async function submitDocs(payload, note) {
     await loadJobs();
     paintDocs();
     watchJob(body.job_id, afterJob).then(async (detail) => {
-      await loadDocs();
+      await Promise.all([loadDocs(), loadPending(), loadStatus()]);
       paintDocs();
+      renderNav();
+      renderStats();
       if (detail && detail.job) toast(jobNote(detail.job), jobBad(detail.job));
     }).catch(() => {});
   } catch (err) {
@@ -1090,12 +1224,13 @@ async function submitDocs(payload, note) {
   }
 }
 
-// ---- 电子书 -------------------------------------------------------
+// ---- 正文生产：电子书 / 文档 / PDF / 手工格式 ----------------------
 function viewSplit() {
   const ebooks = S.pending.filter((r) => EBOOK.test(r.format));
   const allPicked = ebooks.length > 0 && ebooks.every((r) => S.selected.has(r.uid));
-  return `<h1>电子书出正文</h1>
-    <p class="lead">把电子书拆成按章的 Markdown。选书后一次跑完，失败的书可以单独重跑。</p>
+  return `<h1>正文生产 · 电子书</h1>
+    ${contentSubtabs('split')}
+    <p class="lead">把电子书拆成按章的 Markdown；落地后自动差量同步书目库、词法索引并排队增量向量同步。</p>
     <div class="section card">
       <div class="toolbar">
         <span class="hint">待拆 ${num(ebooks.length)} 本</span>
@@ -1183,6 +1318,10 @@ function reviewPanel() {
     <div class="metrics">${reasonRows.join('') || stat('未收录原因', '没有')}</div>
     <div class="metrics">${alarmRows.join('') || stat('结构报警', '没有')}</div>
     <p class="hint">差在卷首卷尾或图版的，多半用章节映射调整后再重拆；确认本来就该少，就写受理原因后放进库。</p>
+    ${row.uid ? `<div class="toolbar">
+      <input type="text" id="split-accept-reason" placeholder="写受理原因（如：卷首序言/版权页无需收录）" size="34">
+      <button class="btn sm primary" data-write data-act="split-accept" data-uid="${esc(row.uid)}">受理并重新检查</button>
+    </div>` : ''}
     <p class="hint">文本量低于原文 88% 或高于 115% 才会被标出。</p>`;
 }
 
@@ -1300,6 +1439,7 @@ function pickRowHtml(rows) {
     }
     if (row.route) marks.push(`<span class="hint">${esc(routeWord(row.route))}</span>`);
     if (row.recheck) marks.push('<span class="hint">复看</span>');
+    if (row.has_md) marks.push('<span class="hint">已有正文</span>');
     const pages = row.pages === null || row.pages === undefined ? '—' : num(row.pages);
     const note = pickNote(row);
     const act = row.disposition === 'untriaged' && row.suggestion && !row.suggestion.manual
@@ -1400,6 +1540,7 @@ function pickBar() {
     <button class="btn sm" data-act="pick-all-convert"${converts ? '' : ' disabled'}>全选可转的</button>
     <button class="btn sm" data-act="pick-clear"${c.total ? '' : ' disabled'}>清空</button>
     <span class="spacer"></span>
+    <label class="check"><input type="checkbox" id="pdf-replace"${S.pdfReplace ? ' checked' : ''}> 覆盖已有正文</label>
     <label class="check" title="按全书合计，含文本层抽取、OCR 与强制转的存档书">最多转 <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0" style="width:64px"> 本（合计）</label>
     <label class="check">同时处理 <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8" style="width:64px"> 本</label>
     <button class="btn primary" data-write data-act="pdf-run"${c.total ? '' : ' disabled'}>开始转写</button>`;
@@ -1413,7 +1554,8 @@ function viewPdfList() {
   const lead = '还没有正文的 PDF 都在这里，共 ' + num(total) + ' 本：可转 '
     + num(counts.convert || 0) + ' 本、存档·图册 ' + num(counts.gallery || 0) + ' 本、存档·非中英文 '
     + num(counts.ja || 0) + ' 本、未分诊 ' + num(counts.untriaged || 0) + ' 本。存档的书按政策不转不删。';
-  return `<h1>待转 PDF 清单</h1>
+  return `<h1>正文生产 · 待转 PDF 清单</h1>
+    ${contentSubtabs('pdf')}
     <p class="lead">${esc(lead)}</p>
     <div class="section card">
       ${pickToolbar()}
@@ -1563,15 +1705,52 @@ function runCard() {
       <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0"></label>
     <label class="field"><span>同时处理</span>
       <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8"></label>
-    <button class="btn primary" data-write data-act="pdf-run">开始转写</button>
+    <label class="check"><input type="checkbox" id="pdf-replace"${S.pdfReplace ? ' checked' : ''}> 覆盖已有正文（re-run / 强制重转）</label>
+    <div style="margin-top:10px"><button class="btn primary" data-write data-act="pdf-run">开始转写</button></div>
     <p class="hint">最多转几本按全书合计：文本层抽取、OCR 与强制转的存档书都占名额，填 0 表示不限。存档的书（图册、非中英文）默认不动，要转得逐本点会再问一次；未分诊的书只送去分诊，不出正文。</p>
   </div>`;
 }
 
+function viewDocs() {
+  const docRe = /^(txt|md|docx|xlsx|xls|pptx)$/i;
+  const rows = S.pending.filter((r) => docRe.test(String(r.format || '')));
+  return `<h1>正文生产 · 文档</h1>
+    ${contentSubtabs('docs')}
+    <p class="lead">TXT / MD / DOCX / XLSX / XLS / PPTX 入库或换源后会自动转成 md，落地后自动同步检索；这里可补转历史遗漏或重试失败书。</p>
+    <div class="section">${docsCard()}</div>
+    <div class="section card">
+      <div class="card-head"><h2>当前待转文档 <span class="hint">${num(rows.length)} 本</span></h2>
+        <button class="btn sm" data-act="docs-refresh">刷新</button></div>
+      ${rows.length ? `<div class="tw"><table><thead><tr><th>编号</th><th>书名</th><th>分类</th><th>格式</th><th class="num">大小</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr><td class="mono">${esc(r.uid)}</td><td class="wrap">${esc(r.title)}</td>
+          <td class="wrap small">${esc([r.subject1, r.subject2].filter(Boolean).join('/') || '其他')}</td>
+          <td>${esc(r.format)}</td><td class="num">${fmtBytes(r.bytes)}</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="empty">当前没有待转的文档类书。</p>'}
+    </div>`;
+}
+
+function viewManual() {
+  const autoRe = /^(epub|mobi|azw3|azw|pdf|txt|md|docx|xlsx|xls|pptx)$/i;
+  const rows = S.pending.filter((r) => !autoRe.test(String(r.format || '')));
+  return `<h1>正文生产 · 手工格式</h1>
+    ${contentSubtabs('manual')}
+    <p class="lead">.djvu / .csv 等暂不支持自动转换的书目。把外部转好的章节 Markdown 放进对应书的 <span class="mono">books/&lt;uid&gt;/md/</span> 后，点「扫描落位」即可入库并自动触发增量检索同步。</p>
+    <div class="section card">
+      <div class="card-head"><h2>手工待转书目 <span class="hint">${num(rows.length)} 本</span></h2>
+        <button class="btn primary sm" data-write data-act="manual-rescan">扫描落位</button></div>
+      ${rows.length ? `<div class="tw"><table><thead><tr><th>编号</th><th>书名</th><th>格式</th><th>源文件</th><th>正文放置目录</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr><td class="mono">${esc(r.uid)}</td><td class="wrap">${esc(r.title)}</td>
+          <td>${esc(r.format || '未知')}</td><td class="wrap small">${esc(r.file || '')}</td>
+          <td class="mono small">books/${esc(r.uid)}/md/</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="empty">没有需要手工处理的格式书目。</p>'}
+    </div>`;
+}
+
 function viewPdf() {
   const batch = (S.pdf && S.pdf.batch) || {};
-  return `<h1>PDF 出正文</h1>
-    <p class="lead">待转的 PDF 先分诊定处置，再从清单里勾书转成 Markdown。</p>
+  return `<h1>正文生产 · PDF</h1>
+    ${contentSubtabs('pdf')}
+    <p class="lead">待转的 PDF 先分诊定处置，再从清单里勾书转成 Markdown；落地后自动同步词法索引与增量向量。</p>
     <div class="section card">
       <div class="card-head"><h2>现在的状态</h2><span class="row tight"><button class="btn sm" data-act="pdf-refresh">刷新</button></span></div>
       ${queueStrip()}
@@ -1584,15 +1763,48 @@ function viewPdf() {
     <div class="section card"><h2>最近的分诊与转 md</h2>${recentPdfJobs()}</div>`;
 }
 
+function triagePreviewHtml(info) {
+  if (!info) return '';
+  if (info.loading) return '<p class="hint">正在载入分诊指标与缩略图…</p>';
+  const res = info.result;
+  const thumbList = info.thumbs || [];
+  if (!res && !thumbList.length) return '';
+  const m = (res && res.metrics) || {};
+  const metricBits = [];
+  if (m.pages !== undefined) metricBits.push('页数 ' + num(m.pages));
+  if (m.text_page_share !== undefined && m.text_page_share !== null) {
+    metricBits.push('文字页比 ' + pct(m.text_page_share, 0));
+  }
+  if (m.image_share !== undefined && m.image_share !== null) {
+    metricBits.push('图片占比 ' + pct(m.image_share, 0));
+  }
+  if (m.ink !== undefined && m.ink !== null) metricBits.push('墨迹 ' + m.ink);
+  if (m.img_ppi_median) metricBits.push('图分辨率 ' + num(m.img_ppi_median) + ' ppi');
+  const thumbs = thumbList.map((rel) => `<a href="/api/file?path=${encodeURIComponent(rel)}" target="_blank" rel="noopener"><img src="/api/file?path=${encodeURIComponent(rel)}" alt="thumb" style="max-height:140px;border:1px solid var(--line);border-radius:4px"></a>`).join('');
+  return `<div class="section">
+    ${metricBits.length ? `<p class="hint">${esc(metricBits.join(' · '))}</p>` : ''}
+    ${thumbs ? `<div class="row" style="gap:8px;flex-wrap:wrap">${thumbs}</div>` : ''}
+  </div>`;
+}
+
 function settleModal(row) {
   if (!row) return '';
   const current = row.route || (row.disposition === 'gallery' ? '不转-记图册'
     : (row.disposition === 'ja' ? '日文暂缓' : (row.suggestion || {}).route));
   const pages = row.pages === null || row.pages === undefined ? '' : ' · ' + num(row.pages) + ' 页';
+  const acceptBox = row.progress === 'staged'
+    ? `<div class="section">
+        <p class="hint">这本书已转写但留在暂存区未过审，若确认可放行，写受理原因后放入待复核入口：</p>
+        <div class="toolbar">
+          <input type="text" id="pdf-accept-reason" placeholder="受理原因（如：扫图版页数吻合）" size="28">
+          <button class="btn sm" data-write data-act="pdf-accept" data-uid="${esc(row.uid)}">写入受理并重审</button>
+        </div>
+      </div>` : '';
   return `<div class="overlay" data-act="close-modal">
     <div class="modal" data-stop="1">
       <h2>改处置：${esc(row.title || row.uid)}</h2>
       <p class="hint">${esc(row.uid)}${esc(pages)}</p>
+      ${triagePreviewHtml(S.triageInfo)}
       <label class="field"><span>处置</span><select id="settle-route">
         ${SETTLE_ROUTES.map((r) => `<option value="${esc(r)}"${r === current ? ' selected' : ''}>${esc(routeWord(r))}</option>`).join('')}
       </select></label>
@@ -1601,6 +1813,7 @@ function settleModal(row) {
         <button class="btn" data-act="close-modal">取消</button>
         <span class="hint">改处置只写台账，不出正文。</span>
       </div>
+      ${acceptBox}
     </div>
   </div>`;
 }
@@ -1614,19 +1827,40 @@ function stateCell(name, cls, word, note) {
   </div>`;
 }
 
+function deltaBox(title, ok, word, detail, uids) {
+  const shown = (uids || []).slice(0, 12);
+  const more = (uids || []).length > 12 ? ` 等 ${num(uids.length)} 本` : '';
+  return `<div class="delta-box">
+    <div class="k">${esc(title)}</div>
+    <div class="v">${status(ok ? 'ok' : 'half', word)}</div>
+    <div class="small muted">${esc(detail)}</div>
+    ${shown.length ? `<div class="delta-uids">${esc(shown.join(', ') + more)}</div>` : ''}
+  </div>`;
+}
+
 function viewMaintain() {
   const c = bookCounts();
   const info = statusIssues();
-  const last = S.jobs.find((j) => j.kind === 'maintain') || null;
+  const delta = (S.status && S.status.sync_delta) || null;
+  const last = S.jobs.find((j) => j.kind === 'sync.reconcile' || j.kind === 'sync.fts' || j.kind === 'maintain') || null;
   const lastCls = !last ? 'out' : (last.state === 'succeeded' ? 'ok'
     : (last.state === 'failed' || last.state === 'orphaned' ? 'miss' : 'half'));
-  const lastWord = !last ? '还没有记录'
-    : (JOB_WORD[last.state] || last.state);
-  const lastNote = last
-    ? fmtTime(last.ended || last.created).slice(5)
-    : '还没跑过，点一次就够';
-  return `<h1>维护</h1>
-    <p class="lead">让书目、检索和浏览入口保持一致。平时点一次「一键收尾」就够。</p>
+  const lastWord = !last ? '还没有记录' : (JOB_WORD[last.state] || last.state);
+  const lastNote = last ? fmtTime(last.ended || last.created).slice(5) : '正文落地会自动增量同步';
+
+  const fts = (delta && delta.fts) || { added: [], modified: [], removed: [], drift_count: 0 };
+  const emb = (delta && delta.embed) || { ok: false, engine_ready: false, added: [], modified: [], orphan: [], chunks: 0, garbage: 0, garbage_ratio: 0, compact_recommended: false };
+  const exp = (delta && delta.expand) || { covered_books: 0, uncovered_books: 0 };
+  const meta = (delta && delta.meta) || { ledger_stale: c.ledgerStale, catalog_missing: false, views_missing: false };
+  const ftsUids = [...(fts.added || []).map((u) => '+' + u), ...(fts.modified || []).map((u) => '~' + u), ...(fts.removed || []).map((u) => '-' + u)];
+  const embUids = [...(emb.added || []).map((u) => '+' + u), ...(emb.modified || []).map((u) => '~' + u), ...(emb.orphan || []).map((u) => '-' + u)];
+  const embDrift = (emb.added || []).length + (emb.modified || []).length + (emb.orphan || []).length;
+  const hasDrift = delta ? !!delta.has_drift : (c.lagBooks > 0 || c.indexExtra > 0 || c.ledgerStale);
+  const autoEmbed = !S.settings || S.settings.auto_embed !== false;
+  const garbagePct = Math.round((Number(emb.garbage_ratio) || 0) * 100);
+
+  return `<h1>同步与维护</h1>
+    <p class="lead">日常在操作台入库、改分类、拆章、OCR 与退库后会自动增量同步；本页用于外部命令行改动的偏差兜底、异步补偿、付费扩展与低频灾备重建。</p>
     <div class="section card">
       <h2>库的状态</h2>
       <div class="strip">
@@ -1654,59 +1888,130 @@ function viewMaintain() {
     !c.catalogKnown ? '未知' : (c.unmatched ? '需注意' : '正常'),
     !c.catalogKnown ? '没有书目总表'
       : (c.unmatched ? num(c.unmatched) + ' 条对不上文件' : '改于 ' + fmtTime(c.catalogAt).slice(5)))}
-        ${stateCell('上次收尾', lastCls, lastWord, lastNote)}
+        ${stateCell('上次同步', lastCls, lastWord, lastNote)}
       </div>
+    </div>
+    <div class="section card">
+      <div class="card-head">
+        <h2>自动同步与偏差对齐</h2>
+        <span class="row tight">
+          <label class="check"><input type="checkbox" data-act="toggle-auto-embed"${autoEmbed ? ' checked' : ''}> 正文落地后自动同步向量库</label>
+          <button class="btn${hasDrift ? ' primary' : ''}" data-write data-act="sync-reconcile">${hasDrift ? '补齐偏差（增量同步）' : '复核并增量对齐'}</button>
+        </span>
+      </div>
+      <div class="delta-grid">
+        ${deltaBox('元数据（library.db / book.json）', !meta.ledger_stale && !meta.views_missing,
+    meta.ledger_stale ? '有改动未对齐' : (meta.views_missing ? '缺奖项入口' : '正常'),
+    meta.ledger_stale ? '人账新于书目库，增量对齐 <1 秒' : '人账保存时已自动差量同步', [])}
+        ${deltaBox('词法索引（index.db FTS5）', ftsUids.length === 0 && c.indexKnown,
+    !c.indexKnown ? '未知' : (ftsUids.length ? '待增量 ' + num(ftsUids.length) + ' 本' : '无差集'),
+    ftsUids.length ? '仅增删改差集书目（秒级，不重建全库）' : '与磁盘正文一致', ftsUids)}
+        ${deltaBox('向量索引（emb.db / vectors.f16）',
+    !emb.initialized ? true : (embDrift === 0 && !emb.compact_recommended),
+    !emb.engine_ready && !emb.initialized ? '未启用'
+      : (!emb.initialized ? '未首次构建' : (embDrift ? '待处理 ' + num(embDrift) + ' 本' : '正常')),
+    !emb.initialized
+      ? (emb.engine_ready
+        ? '尚未建库（全库约 6–7 小时，请在下方高级运维手动启动；建成后新书自动增量同步）'
+        : '未配置本地向量引擎（词法检索不受影响）')
+      : (!emb.engine_ready
+        ? '已存 ' + num(emb.chunks) + ' 块（未检测到本地 llama-server）'
+        : ('有效 ' + num(emb.chunks) + ' 块 · 垃圾块 ' + num(emb.garbage) + '（' + garbagePct + '%）')),
+    emb.initialized ? embUids : [])}
+        ${deltaBox('LLM 主题扩展（付费可选）', exp.uncovered_books === 0,
+    exp.uncovered_books ? '未覆盖 ' + num(exp.uncovered_books) + ' 本' : '全部覆盖',
+    '已覆盖 ' + num(exp.covered_books) + ' 本，消耗外部 API 额度，仅按需触发', [])}
+      </div>
+      <div class="toolbar">
+        <label class="check"><input type="checkbox" data-reconcile="catalog"${S.reconcileExtra.has('catalog') ? ' checked' : ''}> 同时更新书目总表（Excel/CSV）</label>
+        <label class="check"><input type="checkbox" data-reconcile="doc"${S.reconcileExtra.has('doc') ? ' checked' : ''}> 同时刷新阅读版 HTML 索引</label>
+      </div>
+      <p class="hint">仅针对外部命令行改动或上次异步向量同步跳过/失败后的兜底补齐：先差量对齐元数据，再按书签名增量同步 FTS5 与向量库，最后跑一次快速体检。</p>
     </div>
     <div class="section card" id="status-issues">
       <h2>体检提醒</h2>
       ${issueList(info)}
       ${info.at ? `<p class="hint">体检于 ${esc(fmtTime(info.at).slice(5))}</p>` : ''}
     </div>
-    <div class="section card">
-      <div class="card-head"><h2>一键收尾</h2>
-        <button class="btn primary" data-write data-act="maintain-run-default">开始收尾</button></div>
-      <p class="small">一次跑完六步，大致是这四组动作：</p>
-      <ul class="next">
-        <li>重建书目与总表</li>
-        <li>更新检索索引</li>
-        <li>刷新奖项入口</li>
-        <li>体检与抽查</li>
-      </ul>
-      <p class="hint">大约 8 分钟，任何一步没过就停在那里，修好后再点一次。</p>
+    <div class="grid c2 section">
+      <div class="card">
+        <div class="card-head"><h2>LLM 章级主题扩展（可选）</h2>
+          <button class="btn sm" data-write data-act="sync-expand"${exp.uncovered_books ? '' : ' disabled'}>扩展未覆盖书目</button></div>
+        <p class="small">给新书章节生成抽象主题前缀写入 <span class="mono">expand_fts</span>，提升概念型问题的召回率。</p>
+        <p class="hint">当前未覆盖 ${num(exp.uncovered_books)} 本。因调用外部模型 API 产生费用，不会在正文落地时静默扣费。</p>
+      </div>
+      <div class="card"><h2>导出与下载</h2>
+        <p><a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.xlsx')}">书目总表（Excel）</a>
+           <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.csv')}">书目总表（CSV）</a>
+           ${c.prefillReady
+             ? `<a class="btn sm" href="/api/file?path=${encodeURIComponent('tables/分类预填.csv')}">分类预填表</a>`
+             : '<button class="btn sm" disabled title="当前没有未分类新书的预填表">分类预填表</button>'}</p>
+        <p class="hint">书目总表改于 ${esc(fmtTime(c.catalogAt).slice(5))}，分类预填表只包含新书。</p>
+      </div>
     </div>
     <div class="section card">
       <details class="adv">
-        <summary>只想跑其中几步</summary>
-        <div id="maintain-steps">${MAINTAIN_STEPS.map(([key, title, text]) => `
-          <label class="check" style="display:flex;margin:2px 0">
-            <input type="checkbox" data-step="${key}"${S.maintainSteps.has(key) ? ' checked' : ''}>
-            <span><span class="small">${esc(title)}</span>
-            <span class="hint">${esc(text)}</span></span>
-          </label>`).join('')}</div>
-        <p class="row"><button class="btn" data-write data-act="maintain-run">跑选中的步骤</button>
-          <span class="hint">默认勾的就是「一键收尾」跑的那几步。</span></p>
+        <summary>高级运维与灾备重建（低频 · 仅异常或整理碎片时使用）</summary>
+        <div class="adv-grid">
+          ${!emb.initialized && emb.engine_ready ? `<div class="adv-item">
+            <div><b>首次构建全库向量索引</b> <span class="pill half">支持断点续跑</span>
+              <p class="hint">从零为全库正文建立语义向量索引（约 6–7 小时）。建完后，之后新增或修改的书才会自动秒级/分钟级增量补嵌。</p></div>
+            <button class="btn sm primary" data-write data-act="adv-action" data-op="embed_init">启动首次构建</button>
+          </div>` : ''}
+          <div class="adv-item">
+            <div><b>向量库零推理压缩</b> ${emb.compact_recommended ? '<span class="pill half">建议运行</span>' : ''}
+              <p class="hint">回收退库与换源留下的 active=0 垃圾块（当前 ${num(emb.garbage)} 块，占比 ${garbagePct}%）。纯磁盘重编，不重跑 GPU 推理，约 10–30 秒。</p></div>
+            <button class="btn sm" data-write data-act="adv-action" data-op="embed_compact"${emb.garbage ? '' : ' disabled'}>压缩向量库</button>
+          </div>
+          <div class="adv-item">
+            <div><b>全量重建词法索引 index.db</b>
+              <p class="hint">从零扫描全库重建 6.7 GB 倒排索引（约 40–70 分钟）。仅在数据库损坏或分词规则升级时使用。</p></div>
+            <button class="btn sm" data-write data-act="adv-action" data-op="fts_rebuild">全量重建 index.db</button>
+          </div>
+          <div class="adv-item">
+            <div><b>向量库全量重嵌</b>
+              <p class="hint">强制重算全库所有章节向量（约 6–7 小时）。仅在更换 Embedding 模型时使用。</p></div>
+            <button class="btn sm" data-write data-act="adv-action" data-op="embed_rebuild">全量重嵌向量</button>
+          </div>
+          <div class="adv-item">
+            <div><b>深度体检与四箱结构验收</b>
+              <p class="hint">运行 audit_state --deep 与 verify_phase 四箱不变量校验，适合大批量迁移或升级后核查。</p></div>
+            <button class="btn sm" data-write data-act="adv-action" data-op="deep_verify">深度体检 + 四箱验收</button>
+          </div>
+          <div class="adv-item">
+            <div><b>清理旧任务记录</b>
+              <p class="hint">删掉 90 天以前或第 200 个之后的运行记录与缩略图，不碰书和账。</p></div>
+            <button class="btn sm" data-act="jobs-clean">清理旧记录</button>
+          </div>
+        </div>
+        <details class="adv" style="margin-top:12px">
+          <summary>传统单步维护勾选</summary>
+          <div id="maintain-steps">${MAINTAIN_STEPS.map(([key, title, text]) => `
+            <label class="check" style="display:flex;margin:2px 0">
+              <input type="checkbox" data-step="${key}"${S.maintainSteps.has(key) ? ' checked' : ''}>
+              <span><span class="small">${esc(title)}</span>
+              <span class="hint">${esc(text)}</span></span>
+            </label>`).join('')}</div>
+          <p class="row"><button class="btn sm" data-write data-act="maintain-run">跑选中的步骤</button></p>
+        </details>
       </details>
     </div>
-    <div class="grid c2 section">
-      <div class="card"><h2>下载</h2>
-        <p><a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.xlsx')}">书目总表（Excel）</a>
-           <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.csv')}">书目总表（CSV）</a>
-           <a class="btn sm" href="/api/file?path=${encodeURIComponent('tables/分类预填.csv')}">分类预填表</a></p>
-        <p class="hint">书目总表改于 ${esc(fmtTime(c.catalogAt).slice(5))}，分类预填表只包含新书。</p>
-      </div>
-      <div class="card"><h2>清理旧记录</h2>
-        <p class="hint">删掉 90 天以前或第 200 个之后的运行记录与缩略图，不碰书和账。</p>
-        <p><button class="btn sm" data-act="jobs-clean">清理</button></p>
-      </div>
-    </div>
-    <div class="section card"><h2>最近的收尾记录</h2>${recentJobs('maintain', 4)}</div>`;
+    <div class="section card"><h2>最近的同步与维护记录</h2>${recentSyncJobs(6)}</div>`;
 }
 
-// ---- 删书 ---------------------------------------------------------
+function recentSyncJobs(limit = 6) {
+  const kinds = new Set(['sync.reconcile', 'sync.fts', 'sync.embed', 'sync.expand', 'embed.compact', 'maintain']);
+  const rows = S.jobs.filter((j) => kinds.has(j.kind)).slice(0, limit);
+  if (!rows.length) return '<p class="empty">还没有同步或维护记录。</p>';
+  return rows.map(jobLine).join('');
+}
+
+// ---- 删书与冷宫 ---------------------------------------------------
 function viewRetire() {
   const drop = S.retireDrop || [];
-  return `<h1>删书</h1>
-    <p class="lead">删书是把书移出流程。原书留在冷宫，阅读用的 Markdown、页面和索引记录会删掉。</p>
+  return `<h1>书目与分类 · 待退库与删书</h1>
+    ${catalogSubtabs('retire')}
+    <p class="lead">删书是把书移出流程。原书进冷宫（仅冷宫专区只读可查，恢复靠手工），正文 Markdown、阅读版、词法索引与向量块会同步清理。</p>
     <div class="section card">
       <div class="card-head"><h2>不留的书 <span class="hint">${num(drop.length)} 本</span></h2>
         <button class="btn sm" data-act="retire-drop-refresh">刷新</button></div>
@@ -1759,7 +2064,7 @@ function previewModal(p) {
         <tr><th>书目录</th><td class="wrap">${esc(p.book_dir || p.path || '')}</td></tr>
         <tr><th>会删掉</th><td class="wrap">${esc((p.delete || []).join('、'))}（Markdown ${num(p.md_chapters)} 章 / ${fmtBytes(p.md_bytes)}）</td></tr>
         <tr><th>书目记录</th><td>${p.ledger ? '删掉这一行' : '无'}</td></tr>
-        <tr><th>检索扩展</th><td>${num(p.expand_rows)} 行扩展 + ${num(p.index_rows)} 行索引</td></tr>
+        <tr><th>检索清理</th><td>${num(p.expand_rows)} 行扩展 + ${num(p.index_rows)} 行词法 + ${num(p.embed_chunks || 0)} 块向量</td></tr>
         <tr><th>奖项</th><td class="wrap">${esc((p.awards || []).map((a) => a.award || a).join('、') || '无')}</td></tr>
         <tr><th>入口</th><td class="wrap">${esc((p.views || []).join('、') || '无')}</td></tr>
         <tr><th>系列文档</th><td class="wrap">${esc((p.series_docs || []).join('、') || '无')}</td></tr>
@@ -1829,8 +2134,7 @@ function ledgerRowHtml(row) {
       <td class="wrap">${esc(row.正式书名)}</td>
       <td class="wrap small">${esc(row.备注)}</td>
       <td class="nowrap">${ledgerPending(row)
-    ? `<button class="btn sm primary" data-write data-act="ledger-row-confirm" data-uid="${esc(row.uid)}">同意</button> ` : ''}<button class="btn sm" data-act="ledger-row-edit" data-uid="${esc(row.uid)}">改</button>
-        <button class="btn sm miss" data-write data-act="ledger-row-delete" data-uid="${esc(row.uid)}">移出</button></td>
+    ? `<button class="btn sm primary" data-write data-act="ledger-row-confirm" data-uid="${esc(row.uid)}">同意</button> ` : ''}<button class="btn sm" data-act="ledger-row-edit" data-uid="${esc(row.uid)}">改</button></td>
     </tr>`;
   }
   const f = (name, label) => {
@@ -1851,19 +2155,55 @@ function ledgerRowHtml(row) {
   </tr>`;
 }
 
+function viewCold() {
+  const data = S.cold;
+  const items = (data && data.items) || [];
+  const extras = (data && data.extra_dirs) || [];
+  return `<h1>书目与分类 · 冷宫（只读专区）</h1>
+    ${catalogSubtabs('cold')}
+    <p class="lead">冷宫严格与活库隔离：原书仅留存在 <span class="mono">books/_冷宫/</span>，不进入 <span class="mono">book.json</span>、<span class="mono">md/</span>、书目库与任何检索索引。此页面仅做只读归档查阅，恢复一律走手工流程。</p>
+    <div class="section card">
+      <div class="card-head"><h2>退库归档记录 <span class="hint">${num(items.length)} 条</span></h2>
+        <button class="btn sm" data-act="cold-refresh">刷新</button></div>
+      ${items.length ? `<div class="tw"><table>
+        <thead><tr><th>退库时间</th><th>编号</th><th>书名</th><th>格式</th><th class="num">大小</th><th>原因</th><th>冷宫路径</th></tr></thead>
+        <tbody>${items.map((r) => `<tr>
+          <td class="nowrap small">${esc(fmtTime(r.retired_at))}</td>
+          <td class="mono">${esc(r.uid)}</td>
+          <td class="wrap">${esc(r.title)}</td>
+          <td>${esc(r.format)}</td>
+          <td class="num">${fmtBytes(r.bytes)}</td>
+          <td class="wrap small">${esc(r.reason)}</td>
+          <td class="wrap mono small">${esc(r.cold_path)}</td>
+        </tr>`).join('')}</tbody></table></div>`
+        : '<p class="empty">目前没有通过退库流程记账的冷宫记录。</p>'}
+    </div>
+    ${extras.length ? `<div class="section card">
+      <h2>冷宫目录中的其他归档 <span class="hint">${num(extras.length)} 项</span></h2>
+      <p class="hint">历史上直接移入 <span class="mono">books/_冷宫/</span>、未经过 <span class="mono">retired.tsv</span> 的原书目录。</p>
+      <ul>${extras.map((d) => `<li><b>${esc(d.name)}</b> <span class="mono small muted">${esc(d.path)}</span></li>`).join('')}</ul>
+    </div>` : ''}`;
+}
+
 function viewLedger() {
   const L = S.ledger;
   if (!L) {
-    return `<h1>账表</h1><div class="list"><p>账表还没加载。</p></div>`;
+    return `<h1>书目与分类</h1>${catalogSubtabs('ledger')}<div class="list"><p>账表还没加载。</p></div>`;
   }
   const rows = ledgerRowFiltered();
   const pendingRows = rows.filter(ledgerPending);
   const picked = pendingRows.filter((r) => S.ledgerPick.has(r.uid)).length;
   const allPicked = pendingRows.length > 0 && picked === pendingRows.length;
+  const stale = S.status && S.status.ledger && S.status.ledger.stale;
+  const staleBanner = stale
+    ? `<div class="banner warn"><div><b>人账比书目库新（可能由外部命令行修改）</b><div class="hint">在页面编辑保存时会自动同步；若从外部改过数据库，点右侧按钮立即同步。</div></div>
+        <button class="btn sm primary" data-write data-act="ledger-sync">立即同步元数据</button></div>` : '';
   const shown = rows.length !== L.ledger.length
     ? `<p class="hint">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '';
   return `
-    <h1>账表</h1>
+    <h1>书目与分类</h1>
+    ${catalogSubtabs('ledger')}
+    ${staleBanner}
     <div class="list">
       <div class="section card">
         <div class="card-head"><h2>分类表（${num(L.ledger.length)} 行 · ${esc(L.ledger_db || 'tables/ledger.db')}）</h2>
@@ -1875,11 +2215,11 @@ function viewLedger() {
             <button class="btn sm" data-act="ledger-load">刷新</button></span></div>
         ${shown}
         <div class="tw"><table class="ledger-table">
-          <thead><tr><th style="width:28px"></th><th>编号</th><th>一级</th><th>二级</th><th>作者层</th><th>保留</th><th>正式书名</th><th>备注</th><th style="width:170px"></th></tr></thead>
+          <thead><tr><th style="width:28px"></th><th>编号</th><th>一级</th><th>二级</th><th>作者层</th><th>保留</th><th>正式书名</th><th>备注</th><th style="width:140px"></th></tr></thead>
           <tbody>${rows.length ? rows.map(ledgerRowHtml).join('')
     : `<tr><td colspan="9" class="hint">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的行。'}</td></tr>`}</tbody>
         </table></div>
-        <p class="hint">编号行是入库给的，加书走「新书导入」；这里改的是已有行——顺序、保留与分类。改完人账，去「维护」跑一次收尾，书目库与总表才会跟上。备注里带「待复核」的行多一个「同意」：点了把这三个字改成「分类确认 日期」，其余照旧；表头「只看待复核」一勾，已确认的行就不在表里了。</p>
+        <p class="hint">保存编辑或点「同意」后会自动同步书目库与该书 book.json（秒级），无需手动去维护页收尾；要将书移出流程，把保留改为「不留」后在「待退库与删书」子页执行。</p>
       </div>
     </div>`;
 }
@@ -2159,6 +2499,7 @@ async function loadLatestPlan() {
   if (S.plan || S.legacyPlan) return;
   try {
     const body = await api('/api/import/latest');
+    S.nextUid = (body && body.next_uid) || S.nextUid || '';
     if (body && body.legacy) {
       S.legacyPlan = true;
       S.planJob = body.job_id || null;
@@ -2231,26 +2572,60 @@ async function loadPdfBooks() {
   });
 }
 
+async function loadCold() {
+  try {
+    S.cold = await api('/api/cold');
+  } catch (err) {
+    S.cold = { items: [], extra_dirs: [] };
+  }
+}
+
+async function loadSettings() {
+  try {
+    const body = await api('/api/settings');
+    S.settings = { auto_embed: body.auto_embed !== false };
+  } catch (err) {
+    S.settings = { auto_embed: true };
+  }
+}
+
+async function loadServices() {
+  try {
+    const body = await api('/api/services');
+    S.services = body.services || [];
+  } catch (err) {
+    S.services = [];
+  }
+}
+
 async function refreshTab() {
   if (S.tab === 'overview') {
-    await Promise.all([loadStatus(), loadJobs(), loadPending()]);
+    await Promise.all([loadStatus(), loadJobs(), loadPending(), loadServices()]);
   } else if (S.tab === 'import') {
-    S.inbox = (await api('/api/inbox')).items || [];
+    const inboxBody = await api('/api/inbox');
+    S.inbox = inboxBody.items || [];
+    S.inboxIgnored = inboxBody.ignored || [];
     await loadLatestPlan();
     await loadDocs();
   } else if (S.tab === 'split') {
     await Promise.all([loadStatus(), loadJobs(), loadPending()]);
     await loadSplitBooks();
+  } else if (S.tab === 'docs') {
+    await Promise.all([loadStatus(), loadJobs(), loadPending(), loadDocs()]);
+  } else if (S.tab === 'manual') {
+    await Promise.all([loadStatus(), loadJobs(), loadPending()]);
   } else if (S.tab === 'pdf') {
     await Promise.all([loadJobs(), loadPdf(), loadPdfBooks()]);
   } else if (S.tab === 'pdf-list') {
     await Promise.all([loadJobs(), loadPdfBooks()]);
   } else if (S.tab === 'ledger') {
-    await loadLedger();
+    await Promise.all([loadLedger(), loadStatus(), loadRetireDrop()]);
   } else if (S.tab === 'maintain') {
-    await Promise.all([loadStatus(), loadJobs()]);
+    await Promise.all([loadStatus(), loadJobs(), loadSettings()]);
   } else if (S.tab === 'retire') {
     await Promise.all([loadStatus(), loadJobs(), loadRetireDrop()]);
+  } else if (S.tab === 'cold') {
+    await Promise.all([loadStatus(), loadCold(), loadRetireDrop()]);
   } else if (S.tab === 'logs') {
     await loadJobs();
   }
@@ -2364,7 +2739,7 @@ async function runMaintain(steps) {
       render();
       return;
     }
-    await Promise.all([loadStatus(true), loadJobs(), loadPending()]);
+    await Promise.all([loadStatus(steps.indexOf('audit') < 0), loadJobs(), loadPending()]);
     render();
   } catch (err) {
     toast(err.message, true);
@@ -2393,10 +2768,11 @@ async function confirmLedgerRows(uids) {
     const n = body.confirmed || 0;
     const skipped = (body.skipped || []).length;
     uids.forEach((uid) => S.ledgerPick.delete(uid));
-    await loadLedger();
+    await Promise.all([loadLedger(), loadStatus(true)]);
     render();
+    const syncWord = body.synced ? '并已自动同步书目库' : '';
     toast(n
-      ? '同意了 ' + n + ' 行' + (skipped ? '，跳过 ' + skipped + ' 行（没有「待复核」或已不在账上）' : '')
+      ? '同意了 ' + n + ' 行' + syncWord + (skipped ? '，跳过 ' + skipped + ' 行（没有「待复核」或已不在账上）' : '')
       : '这些行没有「待复核」，没改');
   } finally {
     setBusy(false);
@@ -2428,12 +2804,13 @@ const actions = {
       正式书名: val('led-f-正式书名'),
       备注: val('led-f-备注'),
     };
+    setBusy(true);
     try {
-      await post('/api/ledger/row', { row });
+      const body = await post('/api/ledger/row', { row });
       S.ledgerEdit = null;
-      await loadLedger();
+      await Promise.all([loadLedger(), loadStatus(true), loadRetireDrop()]);
       render();
-      toast('已存 ' + uid);
+      toast(body && body.synced ? ('已保存 ' + uid + ' 并自动同步书目库') : ('已存 ' + uid));
     } finally {
       setBusy(false);
     }
@@ -2469,17 +2846,10 @@ const actions = {
     await confirmLedgerRows(uids);
   },
 
-  async 'ledger-row-delete'(el) {
-    const uid = el.dataset.uid;
-    if (!window.confirm('把 ' + uid + ' 从人账里移出？这句只删账行，不动书目录；删书请走「删书」。')) return;
-    try {
-      const body = await post('/api/ledger/rows/delete', { uids: [uid] });
-      toast('删了 ' + (body.deleted || 0) + ' 行');
-      await loadLedger();
-      render();
-    } finally {
-      setBusy(false);
-    }
+  async 'ledger-sync'() {
+    await runMaintain(['db', 'catalog']);
+    await Promise.all([loadLedger(), loadStatus()]);
+    render();
   },
 
   async 'ledger-edit-clear'() {
@@ -2520,7 +2890,9 @@ const actions = {
   },
 
   async 'inbox-refresh'() {
-    S.inbox = (await api('/api/inbox')).items || [];
+    const body = await api('/api/inbox');
+    S.inbox = body.items || [];
+    S.inboxIgnored = body.ignored || [];
     render();
   },
 
@@ -2535,6 +2907,11 @@ const actions = {
         await loadPlan(body.job_id);
         S.legacyPlan = false;
         toast('清单好了，核对后入库');
+      } else if (detail && detail.job.state === 'succeeded') {
+        S.plan = null;
+        S.planJob = null;
+        S.legacyPlan = false;
+        toast(summaryText(detail.job.summary) || '收件箱里没有可入库的书');
       } else {
         toast(summaryText(detail && detail.job.summary) || '扫描没过', true);
       }
@@ -2685,7 +3062,7 @@ const actions = {
     setBusy(true);
     try {
       const body = await post('/api/split/run',
-        { uids: [el.dataset.uid], only: el.dataset.uid, batch: S.batch, workers: 1 });
+        { uids: [el.dataset.uid], only: el.dataset.uid, batch: S.batch, workers: 1, replace: true });
       toast('重拆 ' + el.dataset.uid + '：' + body.job_id);
       watchJob(body.job_id, afterJob).then(async (detail) => {
         if (detail) toast(jobNote(detail.job), jobBad(detail.job));
@@ -2742,6 +3119,32 @@ const actions = {
     S.review = null;
     S.reviewJob = null;
     render();
+  },
+
+  async 'split-accept'(el) {
+    if (!S.batch) return;
+    const uid = el.dataset.uid;
+    const reason = String((document.getElementById('split-accept-reason') || {}).value || '').trim();
+    if (!reason) {
+      toast('先写受理原因', true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await post('/api/split/accept', { uid, batch: S.batch, reason });
+      toast('已写受理原因，开始重新检查 ' + uid);
+      const body = await post('/api/split/recheck', { uid, batch: S.batch });
+      const detail = await watchJob(body.job_id, afterJob);
+      if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+      S.review = null;
+      S.reviewJob = null;
+      await Promise.all([loadSplitBooks(), loadPending(), loadJobs(), loadStatus()]);
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      setBusy(false);
+    }
   },
 
   async 'goto'(el) {
@@ -2825,7 +3228,40 @@ const actions = {
     const row = S.books.find((item) => item.uid === el.dataset.uid);
     if (!row) return;
     S.settle = row;
+    S.triageInfo = { loading: true };
     $('#modal').innerHTML = settleModal(row);
+    try {
+      const info = await api('/api/pdf/triage-info?uid=' + encodeURIComponent(row.uid));
+      if (S.settle && S.settle.uid === row.uid) {
+        S.triageInfo = info;
+        $('#modal').innerHTML = settleModal(row);
+      }
+    } catch (err) {
+      if (S.settle && S.settle.uid === row.uid) {
+        S.triageInfo = null;
+        $('#modal').innerHTML = settleModal(row);
+      }
+    }
+  },
+
+  async 'pdf-accept'(el) {
+    const uid = el.dataset.uid;
+    const reason = String((document.getElementById('pdf-accept-reason') || {}).value || '').trim();
+    if (!reason) {
+      toast('先写受理原因', true);
+      return;
+    }
+    try {
+      await post('/api/pdf/accept', { uid, reason });
+      toast('已写受理原因：' + uid + '，请点「开始转写」重新入库复审');
+      S.settle = null;
+      S.triageInfo = null;
+      $('#modal').innerHTML = '';
+      await loadPdfBooks();
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
   },
 
   async 'settle-submit'(el) {
@@ -2903,7 +3339,9 @@ const actions = {
     }
     setBusy(true);
     try {
-      const body = await post('/api/pdf/run', { uids: picked, limit, workers, force });
+      const body = await post('/api/pdf/run', {
+        uids: picked, limit, workers, force, replace: !!S.pdfReplace,
+      });
       S.pick.clear();
       syncPdfLimit();
       if (body.job_id) {
@@ -2930,6 +3368,117 @@ const actions = {
 
   async 'maintain-run-default'() {
     await runMaintain(FINISH_DEFAULT.slice());
+  },
+
+  async 'toggle-auto-embed'(el) {
+    try {
+      const body = await post('/api/settings', { auto_embed: !!el.checked });
+      S.settings = { auto_embed: body.auto_embed !== false };
+      toast(S.settings.auto_embed ? '已开启：正文落地后自动增量同步向量库' : '已暂停自动向量同步（可在维护页手动补齐）');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  },
+
+  async 'sync-reconcile'() {
+    const steps = ['meta', 'fts', 'embed', 'audit'].concat(Array.from(S.reconcileExtra));
+    setBusy(true);
+    try {
+      const body = await post('/api/sync/reconcile', { steps });
+      toast('增量同步已排队：' + body.job_id);
+      const detail = await watchJob(body.job_id, afterJob, MAINTAIN_LOOPS);
+      if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+      await Promise.all([loadStatus(true), loadJobs(), loadPending()]);
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'sync-expand'() {
+    if (!window.confirm('对所有未覆盖的章节运行 LLM 主题扩展？此操作会调用外部模型 API 并产生费用。')) return;
+    setBusy(true);
+    try {
+      const body = await post('/api/sync/expand', {});
+      toast('主题扩展已排队：' + body.job_id);
+      const detail = await watchJob(body.job_id, afterJob, MAINTAIN_LOOPS);
+      if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+      await Promise.all([loadStatus(true), loadJobs()]);
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'adv-action'(el) {
+    const op = el.dataset.op;
+    const asks = {
+      embed_init: '启动全库首次向量构建？约需 6–7 小时（支持中途取消与断点续跑）。建成后新书会自动增量补嵌。',
+      embed_compact: '执行向量库零推理压缩？约需 10–30 秒，仅重编 active=1 块并回收垃圾空间。',
+      fts_rebuild: '全量重建词法索引 index.db？全库约需 40–70 分钟，确认只在数据库损坏或规则升级时运行。',
+      embed_rebuild: '强制全量重嵌所有章节向量？全库约需 6–7 小时，确认只在更换模型时运行。',
+      deep_verify: '运行深度全库体检（audit --deep）与四箱结构验收（verify_phase）？',
+    };
+    if (asks[op] && !window.confirm(asks[op])) return;
+    setBusy(true);
+    try {
+      const body = await post('/api/maintain/advanced', { action: op });
+      toast('高级任务已排队：' + body.job_id);
+      const detail = await watchJob(body.job_id, afterJob, MAINTAIN_LOOPS);
+      if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+      await Promise.all([loadStatus(true), loadJobs()]);
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'manual-rescan'() {
+    setBusy(true);
+    try {
+      const body = await post('/api/manual/rescan', {});
+      toast('正在扫描手工正文并同步索引：' + body.job_id);
+      const detail = await watchJob(body.job_id, afterJob);
+      if (detail) toast(jobNote(detail.job), jobBad(detail.job));
+      await Promise.all([loadStatus(true), loadJobs(), loadPending()]);
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      setBusy(false);
+    }
+  },
+
+  async 'cold-refresh'() {
+    await loadCold();
+    render();
+  },
+
+  async 'services-refresh'() {
+    await loadServices();
+    render();
+  },
+
+  async 'service-start'(el) {
+    const key = el.dataset.key;
+    try {
+      const body = await post('/api/services/start', { key });
+      if (body.ok) {
+        toast((body.name || key) + (body.already ? ' 已在运行' : ' 已启动'));
+      } else {
+        toast(body.error || '启动失败', true);
+      }
+      await loadServices();
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
   },
 
   async 'jobs-clean'() {
@@ -3033,6 +3582,7 @@ const actions = {
   async 'close-modal'() {
     S.preview = null;
     S.settle = null;
+    S.triageInfo = null;
     $('#modal').innerHTML = '';
   },
 
@@ -3125,6 +3675,10 @@ document.addEventListener('change', (ev) => {
     S.replaceMd = el.checked;
     return;
   }
+  if (el.id === 'pdf-replace') {
+    S.pdfReplace = el.checked;
+    return;
+  }
   if (el.id === 'split-workers') {
     S.splitWorkers = Number(el.value) || 0;
     return;
@@ -3150,6 +3704,11 @@ document.addEventListener('change', (ev) => {
   if (el.dataset && el.dataset.step) {
     if (el.checked) S.maintainSteps.add(el.dataset.step);
     else S.maintainSteps.delete(el.dataset.step);
+    return;
+  }
+  if (el.dataset && el.dataset.reconcile) {
+    if (el.checked) S.reconcileExtra.add(el.dataset.reconcile);
+    else S.reconcileExtra.delete(el.dataset.reconcile);
     return;
   }
   if (el.dataset && el.dataset.field && S.plan) {
@@ -3226,8 +3785,9 @@ function uploadFiles(files) {
         if (box) box.hidden = true;
         if (note) note.textContent = '';
       }, bad.length ? 6000 : 1800);
-      api('/api/inbox').then((body) => {
+      Promise.all([api('/api/inbox'), loadStatus()]).then(([body]) => {
         S.inbox = body.items || [];
+        S.inboxIgnored = body.ignored || [];
         render();
       }).catch(() => {});
       return;
@@ -3307,7 +3867,7 @@ async function boot() {
             : '分诊跑完了，但没有模型建议') : '分诊没过，去日志看', !ok || !made);
         }
       }
-      if (S.tab === 'import') {
+      if (S.tab === 'import' || S.tab === 'docs') {
         // docs 卡片：跑着就 2.5 秒刷一次；没任务时 loadDocs 自己会短路，不会每跳打 404
         await loadDocs();
         paintDocs();

@@ -775,9 +775,10 @@ def journal_keys(root):
     return keys
 
 
-def rebuild():
+def rebuild(root=ROOT):
+    env = dict(os.environ, BOOKS_ROOT=os.path.abspath(root))
     cmd = [sys.executable, os.path.join(HERE, "build_library.py"), "--emit-json"]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if r.returncode != 0:
         raise SystemExit("重建失败：\n" + (r.stdout + r.stderr)[-1500:])
     return r.stdout.strip().splitlines()[-1] if r.stdout.strip() else ""
@@ -921,7 +922,7 @@ def main():
     if failed:
         print("\n%d 行失败，修好后可重跑（已处理的行会跳过）。" % len(failed), file=sys.stderr)
     if done and any(r["action"] in ("add", "replace") for r in done) and not a.no_rebuild:
-        print(rebuild())
+        print(rebuild(a.root))
     if a.result:
         write_result(a.result, a.root, done, failed)
     return 1 if failed else 0

@@ -162,7 +162,7 @@ def plan(root, job_dir, applied_path="", only=""):
         for row in doc.get("applied") or []:
             fmt = (row.get("format") or "").lower()
             uid = (row.get("uid") or "").strip()
-            if row.get("action") != "add" or fmt not in L.DOC_FORMATS or not uid:
+            if row.get("action") not in ("add", "replace") or fmt not in L.DOC_FORMATS or not uid:
                 continue
             items[uid] = worklist_item({"uid": uid, "title": "", "format": fmt, "sha256": "", "file": ""}, "new")
         missing = [uid for uid, it in items.items() if it["reason"] == "new" and not it["path"]]

@@ -114,10 +114,9 @@ PDF_DISPOSITIONS = ("convert", "gallery", "ja", "untriaged")
 PDF_CONVERT_ROUTES = ("OCR", "本地抽文本")
 PDF_METRIC_FILES = ("census.jsonl", "text.jsonl", "scan.jsonl")
 PENDING_PDF_SQL = (
-    "SELECT b.uid, b.title, b.subject1, b.subject2, s.file FROM book b"
-    " JOIN source s ON s.uid = b.uid AND s.primary_src = 1"
-    " WHERE s.format = 'pdf' AND NOT EXISTS (SELECT 1 FROM derived d"
-    " WHERE d.uid = b.uid AND d.kind = 'md' AND d.status = 'done')"
+    "SELECT p.uid, p.title, p.subject1, p.subject2, s.file FROM v_pending_md p"
+    " JOIN source s ON s.uid = p.uid AND s.primary_src = 1"
+    " WHERE lower(coalesce(p.format, '')) = 'pdf'"
 )
 PROBE_TEXT_MIN_CHARS = 100
 PDF_PAGE_SCRIPT = (
@@ -387,12 +386,14 @@ class Env:
         self.batches = os.path.join(self.root, "工作区", "批次")
         self.lib = os.path.join(self.root, "books")
         self.inbox = os.path.join(self.lib, "_收件箱")
+        self.cold = os.path.join(self.lib, "_冷宫")
         self.cat = os.path.join(self.root, "tables")
         self.views = os.path.join(self.root, "build", "views")
         self.libdb = os.path.join(self.root, "build", "library.db")
         self.indexdb = os.path.join(self.root, "build", "检索", "index.db")
         self.catalog_csv = os.path.join(self.root, "build", "书目总表.csv")
         self.ops_db = os.path.join(self.ops, "ops.db")
+        self.settings = os.path.join(self.ops, "settings.json")
         self.lock = os.path.join(self.ops, ".writer.lock")
         self.reader_lock = os.path.join(self.ops, ".reader.lock")
         self.search_log = os.path.join(self.ops, "search.log")
@@ -412,6 +413,12 @@ class Env:
             return os.path.relpath(path, self.root)
         except ValueError:
             return path
+
+    def child_env(self):
+        """确保不带 --root 的子脚本也落在当前工作区，不被仓库 .env 抢回活库。"""
+        env = dict(os.environ)
+        env["BOOKS_ROOT"] = self.root
+        return env
 
 
 class Store:
@@ -561,6 +568,8 @@ def gate_import_scan(ctx):
         return "failed", "计划文件没写出来（jobs/<id>/plan.json）"
     if not isinstance(plan, list):
         return "failed", "计划不是数组"
+    if not plan:
+        return "succeeded", "收件箱里没有可入库的书"
     counts = collections.Counter(str(i.get("action") or "?") for i in plan)
     summary = "计划待确认：add %d / replace %d / delete %d / review %d" % (
         counts.get("add", 0),
@@ -850,6 +859,12 @@ KINDS = {
     "pdf.run": {"label": "PDF 转 md", "readonly": False, "gate": gate_pdf},
     "docs.run": {"label": "文档转 md", "readonly": False, "gate": gate_docs},
     "maintain": {"label": "维护收尾", "readonly": False, "gate": gate_maintain},
+    "sync.fts": {"label": "同步词法索引", "readonly": False, "gate": gate_rc},
+    "sync.embed": {"label": "增量向量同步", "readonly": False, "gate": gate_rc},
+    "sync.reconcile": {"label": "补齐偏差", "readonly": False, "gate": gate_maintain},
+    "sync.expand": {"label": "主题扩展", "readonly": False, "gate": gate_rc},
+    "embed.compact": {"label": "向量库压缩", "readonly": False, "gate": gate_rc},
+    "manual.rescan": {"label": "扫描手工正文", "readonly": False, "gate": gate_rc},
     "delete.dry-run": {"label": "删书预览", "readonly": True, "gate": gate_dryrun},
     "delete.apply": {"label": "删书应用", "readonly": False, "gate": gate_rc},
 }
@@ -1188,6 +1203,7 @@ class Runner:
             proc = subprocess.Popen(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
                 argv,
                 cwd=self.env.root,
+                env=self.env.child_env(),
                 stdout=fh,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
@@ -1224,14 +1240,88 @@ class Runner:
             summary += "；接管：%s 的退出码拿不到" % "、".join(unknown)
             if state == "succeeded":
                 state = "awaiting_review"
+        if job["kind"] in ("maintain", "sync.reconcile") and ("audit", 0) in rcs:
+            # 只要 audit 步跑过（即便后续 verify/doc 失败），先同步刷新 last-audit.json，
+            # 既不丢体检结果，也避免之后页面状态刷新与后台线程双跑 audit_state。
+            self._refresh_audit(job_id)
         self.store.update(
             job_id, state=state, ended=now_iso(), summary=summary, exit_code=(rcs[-1][1] if rcs else None)
         )
         self._log(job_id, "\n---- 判定 %s：%s ----\n" % (state, summary))
+        self._resolve_reviews(job_id, job, state)
         if job["kind"] == "import.apply" and state == "succeeded":
             self._chain_docs(job_id)
-        if job["kind"] == "maintain" and state in ("succeeded", "awaiting_review"):
-            threading.Thread(target=self._refresh_audit, args=(job_id,), daemon=True).start()
+        if job["kind"] in ("split.run", "docs.run", "pdf.run", "manual.rescan") and state in (
+            "succeeded",
+            "awaiting_review",
+        ):
+            self._chain_auto_sync(job_id, job["kind"])
+
+    def _resolve_reviews(self, job_id, job, state):
+        """下游任务结束后收口关联的 awaiting_review，避免「待确认」队列只增不减。"""
+        if state != "succeeded":
+            return
+        kind = job.get("kind")
+        now = now_iso()
+        if kind == "import.apply":
+            for old in self.store.list(state="awaiting_review", limit=100):
+                if old.get("kind") != "import.scan":
+                    continue
+                if old["id"] == job_id:
+                    continue
+                plan = read_json(os.path.join(self.env.job_dir(old["id"]), "plan.json"))
+                # 只收口已经入库清空（文件不在收件箱）或哈希匹配本次 apply 的扫描计划
+                if isinstance(plan, list) and all(
+                    not os.path.isfile(os.path.join(self.env.inbox, os.path.basename(str(it.get("file") or ""))))
+                    for it in plan
+                ):
+                    self.store.update(
+                        old["id"], state="succeeded", ended=now, summary=(old.get("summary") or "") + "；已入库"
+                    )
+        elif kind == "split.run" and job.get("batch_dir"):
+            batch_name = os.path.basename(str(job["batch_dir"]).rstrip("/"))
+            logs_dir = os.path.join(self.env.batches, batch_name, "logs")
+            if os.path.isdir(logs_dir):
+                pending_statuses = ("staged", "staged-review", "split-failed", "convert-failed", "error", "no-stage")
+                still_pending = False
+                for fn in os.listdir(logs_dir):
+                    if not fn.endswith(".json"):
+                        continue
+                    row = read_json(os.path.join(logs_dir, fn))
+                    if isinstance(row, dict) and row.get("status") in pending_statuses:
+                        still_pending = True
+                        break
+                if not still_pending:
+                    for old in self.store.list(state="awaiting_review", limit=100):
+                        if old.get("kind") == "split.run" and old.get("batch_dir") == job.get("batch_dir"):
+                            self.store.update(
+                                old["id"],
+                                state="succeeded",
+                                ended=now,
+                                summary=(old.get("summary") or "") + "；已复核落地",
+                            )
+        elif kind == "pdf.confirm":
+            app_ref = getattr(Handler, "app", None)
+            if app_ref is None or app_ref.env.root != self.env.root:
+                return
+            untriaged = {u for u, row in app_ref.pdf_books_index().items() if row["disposition"] == "untriaged"}
+            for old in self.store.list(state="awaiting_review", limit=100):
+                if old.get("kind") != "pdf.triage":
+                    continue
+                jdir = self.env.job_dir(old["id"])
+                uids = []
+                single = read_json(os.path.join(jdir, "result.json"))
+                if isinstance(single, dict) and single.get("uid"):
+                    uids.append(single["uid"])
+                with suppress(OSError):
+                    for name in os.listdir(jdir):
+                        sub = read_json(os.path.join(jdir, name, "result.json"))
+                        if isinstance(sub, dict) and sub.get("uid") == name:
+                            uids.append(name)
+                if uids and all(u not in untriaged for u in uids):
+                    self.store.update(
+                        old["id"], state="succeeded", ended=now, summary=(old.get("summary") or "") + "；已确认"
+                    )
 
     def _chain_docs(self, job_id):
         """导入入库成功后自动接一轮文档转 md。docs-seed.json 已在就不重发（幂等）。"""
@@ -1266,12 +1356,90 @@ class Runner:
         write_json_atomic(seed, {"docs_job": new_id})
         self._log(job_id, "\n[docs] %d 本 doc 格式自动接转：job %s\n" % (len(hits), new_id))
 
+    def _script_supports(self, script_name, flag):
+        path = os.path.join(self.env.scripts, script_name)
+        if not os.path.isfile(path):
+            return False
+        try:
+            with open(path, encoding="utf-8", errors="ignore") as fh:
+                return flag in fh.read()
+        except OSError:
+            return False
+
+    def _has_queued_kind(self, kind):
+        return any(j.get("kind") == kind for j in self.store.queued(limit=50))
+
+    def _chain_auto_sync(self, job_id, source_kind):
+        """正文落地后自动接力：秒级 FTS5 增量同步 + 合并去重队列异步向量增量同步。"""
+        base = self.env.job_dir(job_id)
+        seed = os.path.join(base, "auto-sync.json")
+        if os.path.exists(seed):
+            return
+        queued = {}
+        scripts = self.env.scripts
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+
+        if self._script_supports("build_para_index.py", "--sync"):
+            try:
+                import build_para_index as BPI
+
+                delta = BPI.diff_index(self.env.indexdb, root=self.env.root)
+                n_fts = len(delta["added"]) + len(delta["modified"]) + len(delta["removed"])
+                if n_fts > 0 and not self._has_queued_kind("sync.fts"):
+                    cmd = make_cmd(
+                        self.env,
+                        "sync fts",
+                        "build_para_index.py",
+                        ["--sync"],
+                        accepts_root=True,
+                    )
+                    fts_id = self.submit("sync.fts", "自动同步词法索引（%d 本）" % n_fts, [cmd])
+                    queued["fts_job_id"] = fts_id
+                    self._log(job_id, "\n[sync] 自动接力词法索引增量同步：job %s\n" % fts_id)
+            except Exception as exc:
+                self._log(job_id, "\n[sync] 自动词法同步探测跳过：%s\n" % exc)
+
+        settings = read_json(self.env.settings)
+        auto_embed = True if not isinstance(settings, dict) else bool(settings.get("auto_embed", True))
+        if auto_embed and self._script_supports("embed_corpus.py", "--sync"):
+            try:
+                import embed_corpus as EC
+
+                ediff = EC.diff_embed(self.env.root, check_network=False)
+                # 防线：只有 emb.db 已完成首次构建（有效块 > 0）才自动增量接力，
+                # 防止空向量库在新书落地时静默拉起 6-7 小时全库首次嵌入。
+                emb_initialized = bool(ediff.get("has_db") and (ediff.get("chunks") or 0) > 0)
+                if not emb_initialized:
+                    self._log(job_id, "\n[sync] 向量库尚未首次构建（有效块 0），跳过自动向量同步\n")
+                else:
+                    need_embed = bool(ediff["orphan"]) or (
+                        ediff["engine_ready"] and bool(ediff["added"] or ediff["modified"])
+                    )
+                    if need_embed and not self._has_queued_kind("sync.embed"):
+                        n_emb = len(ediff["added"]) + len(ediff["modified"]) + len(ediff["orphan"])
+                        cmd = make_cmd(
+                            self.env,
+                            "sync embed",
+                            "embed_corpus.py",
+                            ["--sync", "--allow-missing-engine"],
+                            accepts_root=True,
+                        )
+                        emb_id = self.submit("sync.embed", "自动增量向量同步（%d 本）" % n_emb, [cmd])
+                        queued["embed_job_id"] = emb_id
+                        self._log(job_id, "\n[sync] 自动接力向量增量同步：job %s\n" % emb_id)
+            except Exception as exc:
+                self._log(job_id, "\n[sync] 自动向量同步探测跳过：%s\n" % exc)
+
+        if queued:
+            write_json_atomic(seed, {**queued, "source": source_kind, "at": now_iso()})
+
     def _refresh_audit(self, job_id):
         """收尾跑完就重写体检缓存。页面关着也照样刷新，下次打开不再显示跑之前的读数。"""
         argv = [sys.executable, self.env.status_script, "--json", "--deep", "--root", self.env.root]
         try:
             proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
-                argv, cwd=self.env.root, capture_output=True, text=True, timeout=180
+                argv, cwd=self.env.root, env=self.env.child_env(), capture_output=True, text=True, timeout=180
             )
         except (OSError, subprocess.SubprocessError) as exc:
             self._log(job_id, "[体检缓存] 刷新失败：%s\n" % exc)
@@ -1424,7 +1592,7 @@ class App:
                 argv.append("--deep")
             try:
                 proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
-                    argv, cwd=self.env.root, capture_output=True, text=True, timeout=120
+                    argv, cwd=self.env.root, env=self.env.child_env(), capture_output=True, text=True, timeout=120
                 )
                 if proc.returncode == 0:
                     blob = last_json_blob(proc.stdout)
@@ -1511,6 +1679,20 @@ class App:
             "ja": sum(1 for row in archived if row["disposition"] == "ja"),
         }
         payload["convertible"] = max(0, int(payload.get("pending", {}).get("total") or 0) - len(archived))
+        groups = dict(payload.get("pending_groups") or {})
+        if not groups:
+            pend = payload.get("pending") or {}
+            ebooks = ("epub", "mobi", "azw3", "azw")
+            docs = lib_common_module().DOC_FORMATS
+            groups = {
+                "ebook": sum(int(pend.get(k) or 0) for k in ebooks),
+                "doc": sum(int(pend.get(k) or 0) for k in docs),
+                "pdf": int(pend.get("pdf") or 0),
+                "other": sum(int(pend.get(k) or 0) for k in pend if k not in (*ebooks, *docs, "pdf", "total")),
+            }
+        groups["pdf"] = max(0, int(groups.get("pdf") or 0) - len(archived))
+        payload["convertible_groups"] = groups
+        payload["prefill_ready"] = os.path.isfile(os.path.join(self.env.cat, "分类预填.csv"))
         payload["jobs"] = {
             "queued": counts.get("queued", 0),
             "running": counts.get("running", 0),
@@ -1603,31 +1785,35 @@ class App:
             " ORDER BY p.uid"
         )
 
-    def inbox(self):
-        out = []
+    def _scan_inbox(self):
+        items, ignored = [], []
         accept = lib_common_module().ACCEPT_EXTS
         if os.path.isdir(self.env.inbox):
             for name in sorted(os.listdir(self.env.inbox)):
                 path = os.path.join(self.env.inbox, name)
                 if not os.path.isfile(path) or name.startswith(".") or name.endswith(".part"):
                     continue
-                if os.path.splitext(name)[1].lower() not in accept:
-                    # 收件箱里本来就躺着的旧文件（.doc/.djvu/说明文档）不列出来，
-                    # 否则页面上会给一个点了必错的“入库”按钮
-                    continue
                 if name.lower() in ("readme.md", "readme.txt"):
                     # 与 ingest scan 的跳过规则一致：说明文件不是书
                     continue
                 st = os.stat(path)
-                out.append(
-                    {
-                        "name": name,
-                        "bytes": st.st_size,
-                        "format": os.path.splitext(name)[1].lstrip(".").lower(),
-                        "mtime": datetime.fromtimestamp(st.st_mtime).astimezone().isoformat(timespec="seconds"),
-                    }
-                )
-        return out
+                entry = {
+                    "name": name,
+                    "bytes": st.st_size,
+                    "format": os.path.splitext(name)[1].lstrip(".").lower(),
+                    "mtime": datetime.fromtimestamp(st.st_mtime).astimezone().isoformat(timespec="seconds"),
+                }
+                if os.path.splitext(name)[1].lower() not in accept:
+                    ignored.append(entry)
+                    continue
+                items.append(entry)
+        return items, ignored
+
+    def inbox(self):
+        return self._scan_inbox()[0]
+
+    def inbox_ignored(self):
+        return self._scan_inbox()[1]
 
     def split_books(self, batch):
         # 批次名直接来自查询串：点段与路径分隔符一律不收，且必须真的是
@@ -1641,6 +1827,7 @@ class App:
         out = []
         if not os.path.isdir(logs):
             return out
+
         for name in sorted(os.listdir(logs)):
             if not name.endswith(".json"):
                 continue
@@ -1801,20 +1988,24 @@ class App:
                     todo.append((uid, rel, stamp))
         if not todo:
             return out
+
         # 探针失败过就安静 30 秒：已缓存的命中照常返回，未命中的先留空，
         # 别让每次 /api/status 都再起一次注定失败的子进程。
         if time.time() < self.pdf_probe_down_until:
             return out
+
         interpreter = pdf_interpreter(self.env)
         if not os.path.isfile(interpreter):
             self.pdf_probe_down_until = time.time() + PDF_PROBE_RETRY
             return out
+
         payload = json.dumps([{"uid": uid, "path": rel} for uid, rel, _stamp in todo], ensure_ascii=False)
         try:
             proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
                 [interpreter, "-c", PDF_PAGE_SCRIPT],
                 input=payload,
                 cwd=self.env.root,
+                env=self.env.child_env(),
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -1822,9 +2013,11 @@ class App:
         except (OSError, subprocess.SubprocessError):
             self.pdf_probe_down_until = time.time() + PDF_PROBE_RETRY
             return out
+
         if proc.returncode != 0:
             self.pdf_probe_down_until = time.time() + PDF_PROBE_RETRY
             return out
+
         # 成功一次就恢复：解释器补上或临时故障过去，下一次请求立刻重试
         self.pdf_probe_down_until = 0.0
         blob = {}
@@ -1888,11 +2081,16 @@ class App:
         books = {}
         for row in pending:
             uid = row["uid"]
-            if route.get(uid) in PDF_CONVERT_ROUTES:
+            r = route.get(uid)
+            if r in PDF_CONVERT_ROUTES:
                 disposition = "convert"
-            elif route.get(uid) == "不转-记图册" or uid in skipped:
+            elif r == "不转-记图册":
                 disposition = "gallery"
-            elif route.get(uid) == "日文暂缓" or uid in japanese:
+            elif r == "日文暂缓":
+                disposition = "ja"
+            elif uid in skipped:
+                disposition = "gallery"
+            elif uid in japanese:
                 disposition = "ja"
             else:
                 disposition = "untriaged"
@@ -1927,6 +2125,7 @@ class App:
                 "recheck": disposition == "gallery" and recheck_row(skipped.get(uid)),
                 "why": (skipped.get(uid) or {}).get("why") if disposition == "gallery" else None,
                 "last": last.get(uid),
+                "has_md": os.path.isdir(os.path.join(self.env.lib, uid, "md")),
             }
         todo = [
             (row["uid"], row.get("file") or "")
@@ -2022,6 +2221,38 @@ class App:
                     "manual": route == "人工确认",
                 }
         return out
+
+    def pdf_triage_info(self, uid):
+        """取最新分诊结果、指标与缩略图相对路径（支持单本和批量分诊）。"""
+        for job in self.pdf_triage_jobs():
+            jdir = self.env.job_dir(job["id"])
+            for sub in (uid, ""):
+                base = os.path.join(jdir, sub) if sub else jdir
+                res = read_json(os.path.join(base, "result.json"))
+                if not isinstance(res, dict) or res.get("uid") != uid:
+                    continue
+                thumbs = []
+                for rel in res.get("thumbs") or []:
+                    cand = os.path.join(base, str(rel))
+                    if os.path.isfile(cand):
+                        thumbs.append(self.env.rel(cand))
+                return {"job_id": job["id"], "result": res, "thumbs": thumbs}
+        return None
+
+    def next_uid(self):
+        """基于现有人账与 library.db 算下一个可用 Bxxxx。"""
+        nums = []
+        with suppress(Exception):
+            for r in self._ledger_mod().categories(root=self.env.root, create=False):
+                m = re.match(r"^B(\d+)$", str(r.get("uid") or ""))
+                if m:
+                    nums.append(int(m.group(1)))
+        with suppress(Exception):
+            for r in self.db_rows("SELECT uid FROM book"):
+                m = re.match(r"^B(\d+)$", str(r.get("uid") or ""))
+                if m:
+                    nums.append(int(m.group(1)))
+        return "B%04d" % (max(nums) + 1 if nums else 1)
 
     def pdf_triage_row(self, uid, index):
         for job in self.pdf_triage_jobs():
@@ -2227,7 +2458,8 @@ class App:
             if not clean["一级"]:
                 raise ValueError("一级不能为空")
             stamp = LC.category_put(clean, updated_by="ops", root=self.env.root)
-        return {"ok": True, "uid": uid, "updated_at": stamp}
+        sync_res = self.sync_metadata_fast()
+        return {"ok": True, "uid": uid, "updated_at": stamp, **sync_res}
 
     def ledger_rows_delete(self, payload):
         LC = self._ledger_mod()
@@ -2275,7 +2507,143 @@ class App:
                 done.append(uid)
             if rows:
                 LC.category_put_many(rows, updated_by="ops", root=self.env.root)
-        return {"ok": True, "confirmed": len(done), "uids": done, "skipped": skipped}
+        sync_res = self.sync_metadata_fast() if done else {"synced": True}
+        return {"ok": True, "confirmed": len(done), "uids": done, "skipped": skipped, **sync_res}
+
+    def sync_metadata_fast(self):
+        """人账修改后立即同步轻量元数据（library.db + 差量 book.json + 奖项视图），耗时 <1s。"""
+        lib_script = os.path.join(self.env.scripts, "build_library.py")
+        views_script = os.path.join(self.env.scripts, "build_views.py")
+        if not os.path.isfile(lib_script):
+            return {"synced": False, "sync_note": "缺 build_library.py"}
+        try:
+            proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本
+                [sys.executable, lib_script, "--emit-json"],
+                cwd=self.env.root,
+                env=self.env.child_env(),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if proc.returncode != 0:
+                msg = (proc.stderr or proc.stdout or "").strip().splitlines()[-1:]
+                return {"synced": False, "sync_note": (msg[0] if msg else "build_library 失败")[:160]}
+            if os.path.isfile(views_script):
+                subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本
+                    [sys.executable, views_script],
+                    cwd=self.env.root,
+                    env=self.env.child_env(),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+        except Exception as exc:
+            return {"synced": False, "sync_note": str(exc)[:160]}
+        lock = getattr(self, "status_lock", None)
+        if lock is not None:
+            with lock:
+                self.status_cache = (0.0, None)
+        return {"synced": True}
+
+    def get_settings(self):
+        raw = read_json(self.env.settings)
+        auto_embed = True if not isinstance(raw, dict) else bool(raw.get("auto_embed", True))
+        return {"auto_embed": auto_embed}
+
+    def save_settings(self, payload):
+        cur = self.get_settings()
+        if "auto_embed" in payload:
+            cur["auto_embed"] = bool(payload["auto_embed"])
+        write_json_atomic(self.env.settings, cur)
+        return {"ok": True, **cur}
+
+    def cold_records(self):
+        """只读冷宫归档视图：仅读 retired.tsv 与 books/_冷宫/，绝不混入活库与检索。"""
+        items = []
+        seen_dirs = set()
+        if os.path.isdir(self.env.batches):
+            for name in sorted(os.listdir(self.env.batches), reverse=True):
+                if not name.startswith("移出-"):
+                    continue
+                tsv = os.path.join(self.env.batches, name, "retired.tsv")
+                if not os.path.isfile(tsv):
+                    continue
+                try:
+                    with open(tsv, encoding="utf-8", newline="") as fh:
+                        for row in csv.DictReader(fh, delimiter="\t"):
+                            if (row.get("note") or "").strip():
+                                continue
+                            cold_path = row.get("cold_path") or ""
+                            if cold_path:
+                                parts = cold_path.split("/")
+                                if len(parts) >= 3:
+                                    seen_dirs.add(parts[2])
+                            items.append(
+                                {
+                                    "retired_at": row.get("retired_at") or "",
+                                    "uid": row.get("uid") or "",
+                                    "title": row.get("title") or "",
+                                    "old_path": row.get("old_path") or "",
+                                    "cold_path": cold_path,
+                                    "format": row.get("format") or "",
+                                    "bytes": int(row.get("bytes") or 0) if str(row.get("bytes") or "").isdigit() else 0,
+                                    "reason": row.get("reason") or "",
+                                    "batch": name,
+                                }
+                            )
+                except OSError:
+                    continue
+        extra_dirs = []
+        if os.path.isdir(self.env.cold):
+            for name in sorted(os.listdir(self.env.cold)):
+                if name.startswith(".") or name == "README.md" or name in seen_dirs:
+                    continue
+                full = os.path.join(self.env.cold, name)
+                if os.path.isdir(full):
+                    extra_dirs.append({"name": name, "path": self.env.rel(full)})
+        return {"ok": True, "items": items, "extra_dirs": extra_dirs, "cold_dir": "books/_冷宫"}
+
+    def _app_links_mod(self):
+        src_dir = os.path.join(REAL_ROOT, "src")
+        if os.path.isdir(src_dir) and src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+        from bookcorpus import app_links
+
+        return app_links
+
+    def services_status(self):
+        """探测本机其它 4 个书库应用（首页/找一段/翻开书/日课）状态。"""
+        al = self._app_links_mod()
+        out = []
+        for key in ("home", "search", "reading", "daily"):
+            svc = al.SERVICES[key]
+            out.append(
+                {
+                    "key": key,
+                    "name": svc.name,
+                    "port": svc.port,
+                    "url": "http://127.0.0.1:%d/" % svc.port,
+                    "running": bool(al.port_open(svc.port)),
+                }
+            )
+        return out
+
+    def service_start(self, key):
+        key = str(key or "").strip()
+        if key not in ("home", "search", "reading", "daily"):
+            raise ValueError("不支持的服务：%s" % key)
+        al = self._app_links_mod()
+        res = al.ensure(key, self.env.root)
+        svc = al.SERVICES[key]
+        return {
+            "ok": bool(res.get("ok")),
+            "key": key,
+            "name": svc.name,
+            "port": svc.port,
+            "url": "http://127.0.0.1:%d/" % svc.port,
+            "already": res.get("state") == "already",
+            "error": res.get("error"),
+        }
 
     def _retired(self, uid):
         batch_root = os.path.join(self.env.batches)
@@ -2346,11 +2714,11 @@ def json_bytes(value):
 JOB_ID_SEG = r"(?!\.{1,2}/)[A-Za-z0-9._-]+"
 FILE_ALLOW = (
     re.compile(
-        r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/(log\.txt|plan\.json|commands\.json|"
+        r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/(?:[A-Za-z0-9._-]+/)?(log\.txt|plan\.json|commands\.json|"
         r"result\.json|review\.json|dry-run\.json|report\.json|status\.json)$"
     ),
     re.compile(r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/review/[A-Za-z0-9._-]+\.json$"),
-    re.compile(r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/thumbs/[A-Za-z0-9._-]+\.png$"),
+    re.compile(r"^工作区/运维/jobs/" + JOB_ID_SEG + r"/(?:[A-Za-z0-9._-]+/)?thumbs/[A-Za-z0-9._-]+\.png$"),
     re.compile(r"^(build/(书目总表\.xlsx|书目总表\.csv)|tables/分类预填\.csv)$"),
 )
 CONTENT_TYPES = {
@@ -2493,7 +2861,17 @@ class Handler(BaseHTTPRequestHandler):
             elif re.match(r"^/api/jobs/[^/]+$", route):
                 self.api_job(route.split("/")[3])
             elif route == "/api/inbox":
-                self.send_json(200, {"ok": True, "items": self.app.inbox()})
+                items, ignored = self.app._scan_inbox()
+                self.send_json(200, {"ok": True, "items": items, "ignored": ignored})
+            elif route == "/api/pdf/triage-info":
+                uid = (query.get("uid") or [""])[0].strip()
+                if not re.match(r"^B\d{4}$", uid):
+                    self.fail(400, "uid 形如 B1234")
+                else:
+                    info = self.app.pdf_triage_info(uid)
+                    self.send_json(
+                        200, {"ok": True, "uid": uid, **(info or {"job_id": None, "result": None, "thumbs": []})}
+                    )
             elif route == "/api/import/latest":
                 self.api_import_latest()
             elif route == "/api/pending":
@@ -2532,6 +2910,12 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(200, {"ok": True, "books": self.app.retire_search(q)})
             elif route == "/api/search/health":
                 self.send_json(200, self.app.search_health())
+            elif route == "/api/cold":
+                self.send_json(200, self.app.cold_records())
+            elif route == "/api/settings":
+                self.send_json(200, {"ok": True, **self.app.get_settings()})
+            elif route == "/api/services":
+                self.send_json(200, {"ok": True, "services": self.app.services_status()})
             elif route == "/api/file":
                 self.api_file((query.get("path") or [""])[0])
             elif route.startswith("/api/"):
@@ -2711,13 +3095,23 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/split/run": lambda: self.api_split_run(payload),
                 "/api/split/recheck": lambda: self.api_split_recheck(payload),
                 "/api/split/inspect": lambda: self.api_split_inspect(payload),
+                "/api/split/accept": lambda: self.api_batch_accept(payload),
                 "/api/pdf/triage": lambda: self.api_pdf_triage(payload),
                 "/api/pdf/triage-batch": lambda: self.api_pdf_triage_batch(payload),
                 "/api/pdf/settle": lambda: self.api_pdf_settle(payload),
                 "/api/pdf/confirm": lambda: self.api_pdf_confirm(payload),
                 "/api/pdf/run": lambda: self.api_pdf_run(payload),
+                "/api/pdf/accept": lambda: self.api_batch_accept(
+                    payload, default_batch=TRIAGE_BATCH_PREFIX + time.strftime("%Y-%m-%d")
+                ),
                 "/api/docs/run": lambda: self.api_docs_run(payload),
                 "/api/maintain": lambda: self.api_maintain(payload),
+                "/api/sync/reconcile": lambda: self.api_sync_reconcile(payload),
+                "/api/sync/expand": lambda: self.api_sync_expand(payload),
+                "/api/maintain/advanced": lambda: self.api_maintain_advanced(payload),
+                "/api/manual/rescan": lambda: self.api_manual_rescan(payload),
+                "/api/settings": lambda: self.send_json(200, self.app.save_settings(payload)),
+                "/api/services/start": lambda: self.send_json(200, self.app.service_start(payload.get("key"))),
                 "/api/delete/dry-run": lambda: self.api_delete_dry(payload),
                 "/api/delete/apply": lambda: self.api_delete_apply(payload),
                 "/api/jobs/clean": lambda: self.api_clean(payload),
@@ -2911,24 +3305,41 @@ class Handler(BaseHTTPRequestHandler):
         plan = None
         if job is not None:
             plan = read_json(os.path.join(self.app.env.job_dir(job["id"]), "plan.json"))
-        if not isinstance(plan, list):
-            self.send_json(200, {"ok": True, "job_id": None, "plan": None, "legacy": False})
+        next_uid = self.app.next_uid()
+        if not isinstance(plan, list) or not plan:
+            self.send_json(200, {"ok": True, "job_id": None, "plan": None, "legacy": False, "next_uid": next_uid})
             return
         # 旧计划的 conflict/skip 没有对应按钮，也不再入库；让页面提示重新扫描。
         if any(not isinstance(i, dict) or i.get("plan_version") != 2 for i in plan) or any(
             i.get("action") not in ("add", "replace", "delete", "review") for i in plan
         ):
             self.send_json(
-                200, {"ok": True, "job_id": job["id"], "created": job.get("created"), "plan": None, "legacy": True}
+                200,
+                {
+                    "ok": True,
+                    "job_id": job["id"],
+                    "created": job.get("created"),
+                    "plan": None,
+                    "legacy": True,
+                    "next_uid": next_uid,
+                },
             )
             return
         for item in plan:
             name = os.path.basename(str(item.get("file") or ""))
             if not name or not os.path.isfile(os.path.join(self.app.env.inbox, name)):
-                self.send_json(200, {"ok": True, "job_id": None, "plan": None, "legacy": False})
+                self.send_json(200, {"ok": True, "job_id": None, "plan": None, "legacy": False, "next_uid": next_uid})
                 return
         self.send_json(
-            200, {"ok": True, "job_id": job["id"], "created": job.get("created"), "plan": plan, "legacy": False}
+            200,
+            {
+                "ok": True,
+                "job_id": job["id"],
+                "created": job.get("created"),
+                "plan": plan,
+                "legacy": False,
+                "next_uid": next_uid,
+            },
         )
 
     def api_import_apply(self, payload):
@@ -2936,6 +3347,9 @@ class Handler(BaseHTTPRequestHandler):
         items = read_json(plan)
         if not isinstance(items, list):
             self.fail(409, "计划不存在")
+            return
+        if not items:
+            self.fail(400, "清单是空的，没有要入库的书")
             return
         if any(not isinstance(i, dict) or i.get("plan_version") != 2 for i in items):
             self.fail(409, "旧清单，先重新生成入库清单")
@@ -3123,6 +3537,37 @@ class Handler(BaseHTTPRequestHandler):
 
         job_id = self.app.runner.submit("split.inspect", "查看问题 %s" % uid, build)
         self.send_json(200, {"ok": True, "job_id": job_id})
+
+    def api_batch_accept(self, payload, default_batch=None):
+        """给 staged-review 写入 overrides/<uid>.json（accept 理由），拆章与 PDF 共用。"""
+        uid = (payload.get("uid") or "").strip()
+        batch = (payload.get("batch") or default_batch or "").strip()
+        reason = (payload.get("reason") or "").strip()
+        if not re.match(r"^B\d{4}$", uid):
+            self.fail(400, "uid 形如 B1234")
+            return
+        if not batch or not re.match(r"^(?!\.{1,2}$)[A-Za-z0-9._-]+$", batch):
+            self.fail(400, "批次名不合法")
+            return
+        batch_dir = os.path.join(self.app.env.batches, batch)
+        if os.path.realpath(batch_dir) != os.path.join(os.path.realpath(self.app.env.batches), batch):
+            self.fail(404, "批次不合法：%s" % batch)
+            return
+        if default_batch and batch == default_batch:
+            os.makedirs(batch_dir, exist_ok=True)
+        elif not os.path.isdir(batch_dir):
+            self.fail(404, "批次不存在：%s" % batch)
+            return
+        if not reason:
+            self.fail(400, "受理理由不能空")
+            return
+        ov_path = os.path.join(batch_dir, "overrides", uid + ".json")
+        existing = read_json(ov_path)
+        doc = dict(existing) if isinstance(existing, dict) else {}
+        doc["accept"] = reason
+        with ledger_lock(self.app.env):
+            write_json_atomic(ov_path, doc)
+        self.send_json(200, {"ok": True, "path": self.app.env.rel(ov_path), "accept": reason})
 
     def api_pdf_triage(self, payload):
         uid = (payload.get("uid") or "").strip()
@@ -3361,6 +3806,7 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             workers = 3
         force = payload.get("force") is True
+        replace = payload.get("replace") is True
         index = self.app.pdf_books_index()
         unknown = [uid for uid in uids if uid not in index]
         if unknown:
@@ -3444,6 +3890,9 @@ class Handler(BaseHTTPRequestHandler):
                 triage,
                 "--report-json",
             ]
+            if replace or any((index.get(u) or {}).get("has_md") for u in group):
+                # 换源后待转的书磁盘已有旧 md/，不带 --replace 会直接 skipped-has-md
+                args.append("--replace")
             commands.append(make_cmd(self.app.env, "pdf %s" % name, "pdf_md_batch.py", args))
         triage_jobs = []
         for uid in untriaged:
@@ -3526,6 +3975,118 @@ class Handler(BaseHTTPRequestHandler):
             commands.append(make_cmd(self.app.env, key, spec["script"], spec["args"], marker=spec.get("marker")))
         job_id = self.app.runner.submit("maintain", "收尾 %d 步" % len(ordered), commands)
         self.send_json(200, {"ok": True, "job_id": job_id, "steps": ordered})
+
+    def api_sync_reconcile(self, payload):
+        """偏差兜底增量同步：按需仅跑增量元数据、FTS5 --sync、向量 --sync、快速体检与可选导出。"""
+        allowed = ("meta", "fts", "embed", "expand", "catalog", "doc", "audit")
+        steps = payload.get("steps")
+        if steps is None:
+            steps = ["meta", "fts", "embed", "audit"]
+        if not isinstance(steps, list) or not steps:
+            self.fail(400, "steps 不能为空")
+            return
+        bad = [s for s in steps if s not in allowed]
+        if bad:
+            self.fail(400, "不支持的增量步骤：%s" % "、".join(map(str, bad)))
+            return
+        ordered = [s for s in allowed if s in steps]
+        commands = []
+        for key in ordered:
+            if key == "meta":
+                commands.append(
+                    make_cmd(
+                        self.app.env,
+                        "db",
+                        "build_library.py",
+                        ["--emit-json"],
+                        marker=r'"conflicts":\s*0',
+                    )
+                )
+                commands.append(make_cmd(self.app.env, "awards", "build_views.py", []))
+            elif key == "fts":
+                commands.append(
+                    make_cmd(self.app.env, "fts sync", "build_para_index.py", ["--sync"], accepts_root=True)
+                )
+            elif key == "embed":
+                # 向量库尚未首次建库时，日常「补齐偏差」不顺带触发 6-7 小时全库建库（除非显式 force_embed）
+                run_embed = bool(payload.get("force_embed"))
+                if not run_embed:
+                    try:
+                        scripts = self.app.env.scripts
+                        if scripts not in sys.path:
+                            sys.path.insert(0, scripts)
+                        import embed_corpus as EC
+
+                        ediff = EC.diff_embed(self.app.env.root, check_network=False)
+                        run_embed = bool(ediff.get("orphan")) or bool(
+                            ediff.get("has_db") and (ediff.get("chunks") or 0) > 0
+                        )
+                    except Exception:
+                        run_embed = False
+                if run_embed:
+                    commands.append(
+                        make_cmd(
+                            self.app.env,
+                            "embed sync",
+                            "embed_corpus.py",
+                            ["--sync", "--allow-missing-engine"],
+                            accepts_root=True,
+                        )
+                    )
+            elif key == "expand":
+                commands.append(make_cmd(self.app.env, "expand", "build_expand.py", ["--all", "--workers", "6"]))
+            elif key == "catalog":
+                commands.append(make_cmd(self.app.env, "catalog", "gen_book_catalog.py", [], marker=r"未匹配 0 条"))
+            elif key == "doc":
+                commands.append(make_cmd(self.app.env, "doc", "build_index.py", []))
+            elif key == "audit":
+                commands.append(make_cmd(self.app.env, "audit", "audit_state.py", [], marker=r"FAIL 0 项"))
+        job_id = self.app.runner.submit("sync.reconcile", "增量同步 %d 步" % len(ordered), commands)
+        self.send_json(200, {"ok": True, "job_id": job_id, "steps": ordered})
+
+    def api_sync_expand(self, payload):
+        """付费可选：按指定书或全库未覆盖章节增量跑 LLM 章级主题扩展。"""
+        uids = uid_list(payload.get("uids"))
+        args = ["--books", ",".join(uids), "--workers", "6"] if uids else ["--all", "--workers", "6"]
+        cmd = make_cmd(self.app.env, "expand", "build_expand.py", args)
+        title = "主题扩展 %d 本" % len(uids) if uids else "增量主题扩展（未覆盖章节）"
+        job_id = self.app.runner.submit("sync.expand", title, [cmd])
+        self.send_json(200, {"ok": True, "job_id": job_id})
+
+    def api_maintain_advanced(self, payload):
+        """低频高级运维与灾备：向量零推理压缩、词法全量重建、向量全量重嵌、深度体检+四箱验收。"""
+        action = str(payload.get("action") or "").strip()
+        if action == "embed_init":
+            cmd = make_cmd(self.app.env, "embed init", "embed_corpus.py", ["--sync"], accepts_root=True)
+            job_id = self.app.runner.submit("sync.embed", "首次构建全库向量索引", [cmd])
+        elif action == "embed_compact":
+            cmd = make_cmd(self.app.env, "embed compact", "embed_corpus.py", ["--compact"], accepts_root=True)
+            job_id = self.app.runner.submit("embed.compact", "向量库零推理压缩", [cmd])
+        elif action == "fts_rebuild":
+            cmd = make_cmd(self.app.env, "index", "build_para_index.py", ["--rebuild"], accepts_root=True)
+            job_id = self.app.runner.submit("maintain", "全量重建词法索引 index.db", [cmd])
+        elif action == "embed_rebuild":
+            cmd = make_cmd(self.app.env, "embed rebuild", "embed_corpus.py", ["--force"], accepts_root=True)
+            job_id = self.app.runner.submit("sync.embed", "全量重嵌向量库", [cmd])
+        elif action == "deep_verify":
+            cmds = [
+                make_cmd(self.app.env, "audit", "audit_state.py", ["--deep"], marker=r"FAIL 0 项"),
+                make_cmd(self.app.env, "verify", "verify_phase.py", [], marker=r"(?m)^全过：\d+ 项\s*$"),
+            ]
+            job_id = self.app.runner.submit("maintain", "深度体检与四箱验收", cmds)
+        else:
+            self.fail(400, "不支持的高级动作：%s" % action)
+            return
+        self.send_json(200, {"ok": True, "job_id": job_id, "action": action})
+
+    def api_manual_rescan(self, _payload=None):
+        """手工格式（djvu/csv 等）把转好的 md 放进 books/<uid>/md/ 后，扫描落位并自动触发增量检索同步。"""
+        cmds = [
+            make_cmd(self.app.env, "build_library", "build_library.py", ["--emit-json"], marker=r'"conflicts":\s*0'),
+            make_cmd(self.app.env, "gen_book_catalog", "gen_book_catalog.py", [], marker=r"未匹配 0 条"),
+        ]
+        job_id = self.app.runner.submit("manual.rescan", "扫描手工正文落位", cmds)
+        self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_delete_dry(self, payload):
         uid = (payload.get("uid") or "").strip()
@@ -3647,11 +4208,17 @@ WRITE_ROUTES = (
     "/api/import/apply",
     "/api/split/run",
     "/api/split/recheck",
+    "/api/split/accept",
     "/api/pdf/settle",
     "/api/pdf/confirm",
     "/api/pdf/run",
+    "/api/pdf/accept",
     "/api/docs/run",
     "/api/maintain",
+    "/api/sync/reconcile",
+    "/api/sync/expand",
+    "/api/maintain/advanced",
+    "/api/manual/rescan",
     "/api/delete/apply",
     "/api/ledger/row",
     "/api/ledger/rows/delete",
@@ -3810,6 +4377,9 @@ def main(argv=None):
             ap.error("未配置工作区根：请在仓库根 .env 中设置 BOOKS_ROOT，或传 --root <目录>")
         root = os.path.abspath(os.path.expanduser(raw))
     _bind_batches(root)
+    if args.root:
+        # 显式传入 --root 时同步覆盖当前进程的 BOOKS_ROOT，免得子脚本读回仓库 .env
+        os.environ["BOOKS_ROOT"] = root
 
     env = Env(root, args.scripts)
     app = App(env)

@@ -332,7 +332,15 @@ def emit_book_json(con):
             srcs,
             awards,
         )
-        L.write_json_atomic(os.path.join(dest, "book.json"), doc)
+        target = os.path.join(dest, "book.json")
+        rendered = json.dumps(doc, ensure_ascii=False, indent=1) + "\n"
+        try:
+            with open(target, encoding="utf-8") as fh:
+                if fh.read() == rendered:
+                    continue
+        except OSError:
+            pass
+        L.write_json_atomic(target, doc)
         written += 1
     return written
 

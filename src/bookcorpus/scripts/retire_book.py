@@ -190,6 +190,20 @@ def index_counts(ctx, rel_dir):
     return expand, paras
 
 
+def embed_count(ctx, uid):
+    """emb.db 里该书当前 active=1 的向量块数；无库或读不了返回 0。"""
+    emb_db = os.path.join(ctx.root, "build", "检索", "embeddings", "emb.db")
+    if not os.path.isfile(emb_db):
+        return 0
+    con = sqlite3.connect("file:%s?mode=ro" % emb_db, uri=True)
+    try:
+        return con.execute("SELECT count(*) FROM chunk WHERE book=? AND active=1", (uid,)).fetchone()[0]
+    except sqlite3.Error:
+        return 0
+    finally:
+        con.close()
+
+
 def db_facts(ctx, uid):
     """(库里有这本的 DB 行, 奖项名列表)。"""
     if not os.path.isfile(ctx.db):
@@ -397,6 +411,7 @@ def build_preview(ctx, uid):
     md_dir = os.path.join(book_dir, "md")
     chapters, md_bytes = L.count_md_dir(md_dir) if os.path.isdir(md_dir) else (0, 0)
     expand_rows, index_rows = index_counts(ctx, rel_dir)
+    embed_chunks = embed_count(ctx, uid)
     expand_md = os.path.join(ctx.expand_dir, uid + ".md")
     awards = [a for a in (doc.get("awards") or []) if isinstance(a, str)] or db_awards
 
@@ -436,6 +451,7 @@ def build_preview(ctx, uid):
         "expand_rows": expand_rows,
         "expand_md": ctx.rel(expand_md) if os.path.isfile(expand_md) else "",
         "index_rows": index_rows,
+        "embed_chunks": embed_chunks,
         "cold_path": cold_source_rel,
         "cold_dir": cold_rel,
         "snapshot": ctx.rel(ctx.snapshot),
@@ -634,29 +650,23 @@ def retired_row(preview, reason, snapshot, note=""):
 
 
 def rebuild_derived(ctx, preview, run):
-    """DB、书目表、expand 行、检索层行、软链视图。只在真库上跑。"""
+    """DB、书目表、expand 行、检索层行、向量块失活、软链视图。只在真库上跑。"""
     done = []
+    uid = preview["uid"]
     rel_dir = preview["book_dir"]
     book_key = rel_dir.split("/", 1)[1] if "/" in rel_dir else rel_dir
     if os.path.isfile(ctx.index):
-        con = sqlite3.connect(ctx.index)
-        try:
-            # 旧索引可能没建概念剖面，缺表就跳过，不能让整本移出卡在这里
-            have = {r[0] for r in con.execute("SELECT name FROM sqlite_master")}
-            if "expand" in have:
-                con.execute("DELETE FROM expand WHERE path LIKE ? ESCAPE '\\'", (like_prefix(rel_dir),))
-                if "expand_fts" in have:
-                    con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
-                done.append("expand rows")
-            if "para" in have:
-                para = con.execute("DELETE FROM para WHERE book=?", (book_key,)).rowcount
-                # para 是 para_fts 的 content 表，删完必须重建倒排，否则旧行还留在索引里
-                if "para_fts" in have:
-                    con.execute("INSERT INTO para_fts(para_fts) VALUES('rebuild')")
-                done.append("para rows %d" % max(para, 0))
-            con.commit()
-        finally:
-            con.close()
+        import build_para_index
+
+        res = build_para_index.delete_books(ctx.index, [book_key], include_expand=True, root=ctx.root)
+        done.append("para rows %d" % res["deleted_paras"])
+        if res["deleted_expand"]:
+            done.append("expand rows %d" % res["deleted_expand"])
+    import embed_corpus
+
+    emb_res = embed_corpus.deactivate_books_at(ctx.root, [uid])
+    if emb_res["chunks"] or emb_res["books"]:
+        done.append("embed chunks %d deactivated" % emb_res["chunks"])
     if preview["expand_md"]:
         path = os.path.join(ctx.root, preview["expand_md"])
         if os.path.isfile(path):

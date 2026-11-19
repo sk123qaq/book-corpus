@@ -150,3 +150,19 @@ def test_plan_refuses_bad_only_uid(workspace):
     r = run_cli("--root", workspace, "run", "docs_to_md", "plan", "--job-dir", str(job), "--only", "B1")
     assert r.returncode != 0
     assert "uid 不像 B0001" in r.stderr + r.stdout
+
+
+def test_applied_replace_is_selected(workspace):
+    _fixture(workspace)
+    job = workspace.joinpath(*DOCS_JOB)
+    applied = _set_applied(
+        job,
+        [
+            {"uid": "B0006", "file": "己书.docx", "format": "docx", "action": "replace"},
+        ],
+    )
+    items, _r = _plan(workspace, job, "--applied", str(applied))
+    uids = [i["uid"] for i in items]
+    assert uids == ["B0003", "B0004", "B0006"]
+    row = next(i for i in items if i["uid"] == "B0006")
+    assert row["reason"] == "new"

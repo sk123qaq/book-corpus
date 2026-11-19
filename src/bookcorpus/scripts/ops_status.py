@@ -16,6 +16,7 @@ import csv
 import datetime
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -101,20 +102,41 @@ def library(p, state):
     pending = {k: counts.pop(k, 0) for k in PENDING_KEYS}
     pending.update(sorted(counts.items()))
     pending["total"] = sum(n for k, n in pending.items())
+    ebooks = ("epub", "mobi", "azw3", "azw")
+    docs = L.DOC_FORMATS
     state["pending"] = pending
+    state["pending_groups"] = {
+        "ebook": sum(n for fmt, n in pending.items() if fmt in ebooks),
+        "doc": sum(n for fmt, n in pending.items() if fmt in docs),
+        "pdf": pending.get("pdf", 0),
+        "other": sum(n for fmt, n in pending.items() if fmt not in (*ebooks, *docs, "pdf", "total")),
+    }
     state["library"] = {"db": p.libdb, "ok": True}
 
 
 def inbox(p, state):
-    items = []
+    items, ignored = [], []
+    accept = L.ACCEPT_EXTS
     if os.path.isdir(p.inbox):
         for name in sorted(os.listdir(p.inbox)):
             fp = os.path.join(p.inbox, name)
             if name.startswith(".") or name.endswith(".part") or not os.path.isfile(fp):
                 continue
+            if name.lower() in ("readme.md", "readme.txt"):
+                # 与 ingest.py / 操作台收件箱同口径：说明文件不算书
+                continue
             st = os.stat(fp)
-            items.append({"name": name, "bytes": st.st_size, "mtime": iso(st.st_mtime)})
-    state["inbox"] = {"files": len(items), "items": items[:INBOX_ITEMS_CAP]}
+            entry = {"name": name, "bytes": st.st_size, "mtime": iso(st.st_mtime)}
+            if os.path.splitext(name)[1].lower() not in accept:
+                ignored.append(entry)
+                continue
+            items.append(entry)
+    state["inbox"] = {
+        "files": len(items),
+        "items": items[:INBOX_ITEMS_CAP],
+        "ignored_count": len(ignored),
+        "ignored": ignored[:INBOX_ITEMS_CAP],
+    }
 
 
 def ledger(p, state):
@@ -124,11 +146,18 @@ def ledger(p, state):
         rows = L.categories_count(root=p.root)
     except SystemExit as exc:
         state["problems"].append(str(exc))
+    stale = False
+    if os.path.isfile(db) and os.path.isfile(p.libdb):
+        try:
+            stale = os.path.getmtime(db) > os.path.getmtime(p.libdb) + 1
+        except OSError:
+            stale = False
     state["ledger"] = {
         "rows": rows,
         "mtime": mtime_of(db) if os.path.isfile(db) else mtime_of(p.class_csv),
         "db": db if os.path.isfile(db) else None,
         "legacy_csv": p.class_csv if os.path.isfile(p.class_csv) else None,
+        "stale": stale,
     }
 
 
@@ -405,6 +434,20 @@ def audit(p, state, cache):
         state["audit"]["items"].append("…另 %d 项" % (len(items) - AUDIT_ITEMS_CAP))
 
 
+def _latest_batch_file(batches_dir, prefix, *parts):
+    """找 工作区/批次/<prefix>YYYY-MM-DD 下最近一个存在指定相对文件的目录。"""
+    if not os.path.isdir(batches_dir):
+        return ""
+    pat = re.compile(r"^%s\d{4}-\d{2}-\d{2}$" % re.escape(prefix))
+    for name in sorted(os.listdir(batches_dir), reverse=True):
+        if not pat.match(name):
+            continue
+        cand = os.path.join(batches_dir, name, *parts)
+        if os.path.isfile(cand):
+            return cand
+    return ""
+
+
 def ocr(p, state):
     batch = None
     if os.path.isdir(p.batches):
@@ -427,8 +470,8 @@ def ocr(p, state):
         "quota": OCR_QUOTA,
     }
     skip_rows = []
-    skip_path = os.path.join(p.batches, "pdf-普查-2026-10-19", "skip_list.tsv")
-    if os.path.isfile(skip_path):
+    skip_path = _latest_batch_file(p.batches, "pdf-普查-", "skip_list.tsv")
+    if skip_path and os.path.isfile(skip_path):
         with open(skip_path, encoding="utf-8-sig") as fh:
             skip_rows = [r for r in csv.DictReader(fh, delimiter="\t") if r.get("uid")]
     skip_uids = {r["uid"] for r in skip_rows}
@@ -446,8 +489,8 @@ def ocr(p, state):
     result["skip_books"] = len(skip_uids)
     result["skip_pages"] = sum(int(float(r.get("pages") or 0)) for r in skip_rows if r["uid"] in skip_uids)
     defer_uids = set()
-    defer_path = os.path.join(p.batches, "pdf-ocr-2026-10-19", "defer", "lang.tsv")
-    if os.path.isfile(defer_path):
+    defer_path = _latest_batch_file(p.batches, "pdf-ocr-", "defer", "lang.tsv")
+    if defer_path and os.path.isfile(defer_path):
         with open(defer_path, encoding="utf-8-sig") as fh:
             defer_uids.update(
                 r.get("uid")
@@ -503,6 +546,174 @@ def jobs(p, state):
     state["jobs"] = result
 
 
+def embed_status(p, state):
+    db = os.path.join(p.root, "build", "检索", "embeddings", "emb.db")
+    try:
+        import embed_corpus as EC
+
+        diff = EC.diff_embed(p.root, db_path=db, check_network=False)
+        state["embed"] = {
+            "ok": diff["has_db"],
+            "engine_ready": diff["engine_ready"],
+            "books": diff["unchanged"] + len(diff["modified"]),
+            "chunks": diff["chunks"],
+            "garbage": diff["garbage"],
+            "garbage_ratio": diff["garbage_ratio"],
+            "added": diff["added"],
+            "modified": diff["modified"],
+            "orphan": diff["orphan"],
+        }
+    except (ImportError, OSError, sqlite3.Error, ValueError):
+        diff = None
+    if diff is not None:
+        return
+    if not os.path.isfile(db):
+        state["embed"] = {
+            "ok": False,
+            "engine_ready": False,
+            "books": 0,
+            "chunks": 0,
+            "garbage": 0,
+            "garbage_ratio": 0.0,
+            "added": [],
+            "modified": [],
+            "orphan": [],
+        }
+        return
+    try:
+        con = ro(db)
+        try:
+            chunks = con.execute("SELECT count(*) FROM chunk WHERE active=1").fetchone()[0]
+            books = con.execute("SELECT count(DISTINCT book) FROM chunk WHERE active=1").fetchone()[0]
+            state["embed"] = {
+                "ok": True,
+                "engine_ready": False,
+                "books": books,
+                "chunks": chunks,
+                "garbage": 0,
+                "garbage_ratio": 0.0,
+                "added": [],
+                "modified": [],
+                "orphan": [],
+            }
+        finally:
+            con.close()
+    except sqlite3.Error:
+        state["embed"] = {
+            "ok": False,
+            "engine_ready": False,
+            "books": 0,
+            "chunks": 0,
+            "garbage": 0,
+            "garbage_ratio": 0.0,
+            "added": [],
+            "modified": [],
+            "orphan": [],
+        }
+
+
+def sync_delta(p, state):
+    """只读计算各派生层相对活库的精确增量差集（绝不写盘、绝不把冷宫混入活库）。"""
+    fts = {
+        "has_db": os.path.isfile(p.indexdb),
+        "has_tracking": False,
+        "added": [],
+        "modified": [],
+        "removed": [],
+        "unchanged": 0,
+    }
+    try:
+        import build_para_index as BPI
+
+        fts = BPI.diff_index(p.indexdb, root=p.root)
+    except (ImportError, OSError, sqlite3.Error, ValueError):
+        fts["has_db"] = os.path.isfile(p.indexdb)
+
+    expand_covered = 0
+    if os.path.isfile(p.indexdb):
+        try:
+            con = ro(p.indexdb)
+            try:
+                tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                if "expand" in tables:
+                    # path 形如 books/B0001/md/...
+                    expand_covered = con.execute(
+                        "SELECT count(DISTINCT substr(path, 7, instr(substr(path, 7), '/') - 1)) "
+                        "FROM expand WHERE path LIKE 'books/%/%'"
+                    ).fetchone()[0]
+            finally:
+                con.close()
+        except sqlite3.Error:
+            expand_covered = 0
+
+    cold_count = 0
+    if os.path.isdir(p.batches):
+        seen_cold = set()
+        for name in sorted(os.listdir(p.batches)):
+            if not name.startswith("移出-"):
+                continue
+            tsv = os.path.join(p.batches, name, "retired.tsv")
+            if not os.path.isfile(tsv):
+                continue
+            try:
+                with open(tsv, encoding="utf-8", newline="") as fh:
+                    for row in csv.DictReader(fh, delimiter="\t"):
+                        if row.get("uid") and not (row.get("note") or "").strip():
+                            seen_cold.add((row["uid"], row.get("retired_at") or ""))
+            except OSError:
+                continue
+        cold_count = len(seen_cold)
+
+    emb = state.get("embed") or {}
+    fts_drift = len(fts.get("added") or []) + len(fts.get("modified") or []) + len(fts.get("removed") or [])
+    emb_pending = len(emb.get("added") or []) + len(emb.get("modified") or [])
+    emb_orphan = len(emb.get("orphan") or [])
+    emb_initialized = bool(emb.get("ok") and (emb.get("chunks") or 0) > 0)
+    ledger_stale = bool((state.get("ledger") or {}).get("stale"))
+    # 向量库尚未首次初始化（有效块为 0）不算「增量偏差」，避免误导用户或自动拉起 6-7 小时全库建库
+    has_drift = bool(
+        ledger_stale
+        or fts_drift > 0
+        or emb_orphan > 0
+        or (emb_initialized and emb.get("engine_ready") and emb_pending > 0)
+    )
+    uncovered_books = max(0, (state.get("md_indexable") or 0) - expand_covered)
+    state["sync_delta"] = {
+        "has_drift": has_drift,
+        "meta": {
+            "ledger_stale": ledger_stale,
+            "catalog_missing": not os.path.isfile(p.catalog_csv),
+            "views_missing": not os.path.isdir(os.path.join(p.views, "奖项")),
+        },
+        "fts": {
+            "has_db": bool(fts.get("has_db")),
+            "has_tracking": bool(fts.get("has_tracking")),
+            "added": fts.get("added") or [],
+            "modified": fts.get("modified") or [],
+            "removed": fts.get("removed") or [],
+            "unchanged": fts.get("unchanged") or 0,
+            "drift_count": fts_drift,
+        },
+        "embed": {
+            "ok": bool(emb.get("ok")),
+            "initialized": emb_initialized,
+            "engine_ready": bool(emb.get("engine_ready")),
+            "added": emb.get("added") or [],
+            "modified": emb.get("modified") or [],
+            "orphan": emb.get("orphan") or [],
+            "chunks": emb.get("chunks") or 0,
+            "garbage": emb.get("garbage") or 0,
+            "garbage_ratio": emb.get("garbage_ratio") or 0.0,
+            "compact_recommended": (emb.get("garbage") or 0) > 0 and (emb.get("garbage_ratio") or 0.0) >= 0.1,
+        },
+        "expand": {
+            "covered_books": expand_covered,
+            "uncovered_books": uncovered_books,
+        },
+        "cold_count": cold_count,
+    }
+
+
 def collect(p, deep=False):
     state = {
         "at": now_iso(),
@@ -512,8 +723,9 @@ def collect(p, deep=False):
         "md_chapters": 0,
         "md_indexable": 0,
         "pending": dict.fromkeys((*PENDING_KEYS, "total"), 0),
-        "inbox": {"files": 0, "items": []},
-        "ledger": {"rows": 0, "mtime": None, "db": None, "legacy_csv": None},
+        "pending_groups": {"ebook": 0, "doc": 0, "pdf": 0, "other": 0},
+        "inbox": {"files": 0, "items": [], "ignored_count": 0, "ignored": []},
+        "ledger": {"rows": 0, "mtime": None, "db": None, "legacy_csv": None, "stale": False},
         "catalog": {"mtime": None, "unmatched": None},
         "index": {
             "built_at": None,
@@ -546,7 +758,9 @@ def collect(p, deep=False):
     ledger(p, state)
     catalog(p, state)
     index(p, state, deep)
+    embed_status(p, state)
     views(p, state)
+    sync_delta(p, state)
     cache = read_cache(p, state)
     if deep:
         fresh = refresh_audit(p, state)
