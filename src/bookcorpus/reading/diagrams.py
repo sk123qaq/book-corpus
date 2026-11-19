@@ -335,26 +335,66 @@ def _node_svg(figure):
 
 
 def render_assist_figure(figure):
-    """将划词生成的图结构（nodes/edges/matrix/quantity）渲染为内联图卡 HTML。"""
+    """将划词生成的图结构（蓝图 JSON 或旧版 family 结构）渲染为兼容 HTML/SVG 兜底卡。"""
     if not isinstance(figure, dict):
         return ""
-    family = str(figure.get("family") or "flow")
+    blueprint = str(figure.get("blueprint") or "").strip()
+    bp_to_family = {
+        "argument_map": "argument",
+        "lineage_dag": "tree",
+        "power_hierarchy": "tree",
+        "spatial_route": "network",
+        "relation_graph": "network",
+        "flow_swimlane": "flow",
+        "decision_tree": "tree",
+        "derivation_dag": "tree",
+        "system_flow": "flow",
+        "causal_loop": "network",
+        "term_contrast": "matrix",
+        "concept_matrix": "matrix",
+        "element_matrix": "matrix",
+        "parallel_timeline": "matrix",
+        "quadrant_matrix": "matrix",
+        "tension_curve": "quantity",
+        "sensitivity_chart": "quantity",
+        "metric_chart": "quantity",
+    }
+    family = str(figure.get("family") or bp_to_family.get(blueprint) or "flow")
     if family not in FIGURE_FAMILIES:
         family = "flow"
     caption = str(figure.get("caption") or "段落图解")
     reading_note = str(figure.get("reading_note") or "")
     body = ""
-    if family in NODE_FAMILIES:
+    raw_data = figure.get("data") if isinstance(figure.get("data"), dict) else {}
+    if family in NODE_FAMILIES and isinstance(raw_data.get("nodes"), list):
         body = _node_svg(figure)
     elif family == "matrix":
-        body = _matrix_body(figure, {}, [])
+        if isinstance(raw_data.get("columns"), list):
+            compat_rows = []
+            for r in raw_data.get("rows") or []:
+                if isinstance(r, dict):
+                    compat_rows.append([r.get("key", ""), r.get("everyday", ""), r.get("author", "")])
+                elif isinstance(r, list):
+                    compat_rows.append(r)
+            compat = dict(figure, data={"columns": raw_data["columns"], "rows": compat_rows})
+            body = _matrix_body(compat, {}, [])
     elif family == "quantity":
-        body = _quantity_body(figure, {}, [])
+        if isinstance(raw_data.get("points"), list):
+            compat_items = [
+                {"label": p.get("beat", ""), "value": p.get("tension", 0)}
+                for p in raw_data["points"]
+                if isinstance(p, dict)
+            ]
+            compat = dict(figure, data={"items": compat_items})
+            body = _quantity_body(compat, {}, [])
+        else:
+            body = _quantity_body(figure, {}, [])
     if not body:
-        body = _fallback(figure, "暂缺可视化数据，以要点呈现。", {}, [])
+        body = _fallback(figure, "由前端蓝图引擎或要点清单渲染。", {}, [])
     return (
-        f'<figure class="assist-figure" data-family="{html.escape(family, quote=True)}">'
-        f"<figcaption><b>{html.escape(caption)}</b>"
+        f'<figure class="assist-figure" data-family="{html.escape(family, quote=True)}"'
+        + (f' data-blueprint="{html.escape(blueprint, quote=True)}"' if blueprint else "")
+        + f"><figcaption><b>{html.escape(caption)}</b>"
         + (f"<span>{html.escape(reading_note)}</span>" if reading_note else "")
         + f"</figcaption>{body}</figure>"
     )

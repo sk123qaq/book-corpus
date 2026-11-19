@@ -80,6 +80,13 @@
     translate: '翻译原意',
     critique: '拆解前提',
     ask: '自由追问',
+    checklist: '行动自检清单',
+    imagery: '意象与舞台词典',
+    compare_context: '多史家视角对照',
+    boundary_check: '演进与适用边界',
+    sparring_dossier: '学术交锋档案',
+    method_audit: '方法与样本局限',
+    craft_notes: '工艺流派考据',
     pin: '钉住旁批',
     unpin: '移除旁批',
   };

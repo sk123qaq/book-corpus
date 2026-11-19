@@ -7,13 +7,15 @@ import time
 import uuid
 
 from .. import preflight as env_preflight
-from . import chapmap, diagrams, events
+from . import book_types, chapmap, diagram_audit, diagrams, events
 from .library import Library
-from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient, _loads_content
+from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient
 from .preflight import chapter_map_gate, evaluate
 from .store import Store
 
 ASSIST_ACTIONS = ("diagram", "explain", "translate", "critique", "ask")
+EXTENSION_ACTIONS = tuple(diagram_audit.EXTENSION_PROMPT_SPECS.keys())
+ALL_ASSIST_ACTIONS = ASSIST_ACTIONS + EXTENSION_ACTIONS
 ACTION_LABELS = {
     "chapter_map": "知识地图",
     "diagram": "图解此段",
@@ -21,6 +23,13 @@ ACTION_LABELS = {
     "translate": "翻译原意",
     "critique": "拆解前提",
     "ask": "自由追问",
+    "checklist": "行动自检清单",
+    "imagery": "意象与舞台词典",
+    "compare_context": "多史家视角对照",
+    "boundary_check": "演进与适用边界",
+    "sparring_dossier": "学术交锋档案",
+    "method_audit": "方法与样本局限",
+    "craft_notes": "工艺流派考据",
     "pin": "钉住旁批",
     "unpin": "移除旁批",
 }
@@ -141,7 +150,22 @@ def _default_toolbar():
     return [{"action": act, "label": ACTION_LABELS[act]} for act in DEFAULT_TOOLBAR]
 
 
-def _assist_prompts(action, *, book, chapter, selected_text, block_ids, context_text, question=""):
+def _assist_prompts(
+    action,
+    *,
+    book,
+    chapter,
+    selected_text,
+    block_ids,
+    context_text,
+    question="",
+    blueprint="",
+    read_type="",
+    sub_kind="",
+    scope="selection",
+    covered_blocks=0,
+    sampled=False,
+):
     book_title = (book or {}).get("title") or ""
     chapter_title = (chapter or {}).get("title") or ""
     loc = f"《{book_title}》· {chapter_title}（段落 {', '.join(block_ids) or '整章'}）"
@@ -149,21 +173,31 @@ def _assist_prompts(action, *, book, chapter, selected_text, block_ids, context_
     focus_block = f"读者选中的原文：\n{selected_text}" if selected_text else "读者针对当前章节提问。"
 
     if action == "diagram":
-        system = (
-            "你是阅读伴读助手，擅长把复杂文字转成清晰的关系图。"
-            "只输出一个 JSON 对象，不要 markdown 代码围栏，不要多余解释。\n"
-            "JSON 字段：\n"
-            '{"caption":"简短图题（≤18字）","family":"flow|tree|matrix|quantity|timeline|network|argument",'
-            '"reading_note":"一句话读图要点（≤40字）",'
-            '"summary":"2-3句简明文字说明（区分 [原文] 与 [补充]）",'
-            '"data":{...}}\n'
-            "- flow/tree/timeline/network/argument：data 为 "
-            '{"nodes":[{"id":"N1","label":"节点名(≤14字)","note":"简注(≤16字)"}],"edges":[{"from":"N1","to":"N2","label":"关系"}]}\n'
-            '- matrix：data 为 {"columns":["维度","A","B"],"rows":[["行名","值1","值2"]]}\n'
-            '- quantity：data 为 {"items":[{"label":"项名","value":12.5}]}'
+        return diagram_audit.prompt_for_diagram(
+            blueprint=blueprint,
+            read_type=read_type,
+            book=book,
+            chapter=chapter,
+            selected_text=selected_text,
+            block_ids=block_ids,
+            context_text=context_text,
+            scope=scope,
+            covered_blocks=covered_blocks,
+            sampled=sampled,
         )
-        user = f"{loc}\n\n{context_block}{focus_block}"
-        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    if action in EXTENSION_ACTIONS:
+        return diagram_audit.prompt_for_extension(
+            action,
+            sub_kind=sub_kind,
+            book=book,
+            chapter=chapter,
+            selected_text=selected_text,
+            block_ids=block_ids,
+            context_text=context_text,
+            scope=scope,
+            covered_blocks=covered_blocks,
+            sampled=sampled,
+        )
 
     if action == "explain":
         system = (
@@ -337,11 +371,13 @@ class ReadingService:
         ch_view["n"] = "%02d" % int(chapter["n"])
         ch_view["minutes"] = max(1, round(chapter.get("chars", 0) / WORDS_PER_MINUTE))
         ch_view["source_sha256"] = source_sha
+        profile = book_types.resolve_read_profile(book.get("subjects"), title=book.get("title") or "")
         return {
             "book": self._book_view(book),
             "chapter": ch_view,
             "blocks": blocks,
             "toolbar": _default_toolbar(),
+            "reading_profile": profile,
             "preflight": {"chapter_map": map_gate, "capacity": cap_gate},
             "assist_notes": notes,
             "chapter_map": cmap,
@@ -367,6 +403,82 @@ class ReadingService:
                 parts.append(f"[{bid}] {txt[:240]}")
         return "\n".join(parts)[:1800]
 
+    def _chapter_scope_context(self, uid, n, blocks, *, source_sha="", budget=12000):
+        """构造全章作用域下的带块号文本（中小章全量、超长章均匀骨架覆盖）。"""
+        semantic = []
+        for blk in blocks or []:
+            bid = blk.get("id") or ""
+            txt = _block_preview_text(blk)
+            if bid and txt:
+                semantic.append((bid, blk.get("kind") or "paragraph", txt))
+        if not semantic:
+            return "", 0, False
+
+        total_chars = sum(len(t) for _, _, t in semantic)
+        if total_chars <= budget:
+            lines = [f"[{bid}] {txt[:600]}" for bid, _, txt in semantic]
+            return "\n".join(lines), len(semantic), False
+
+        parts = []
+        used_chars = 0
+        cmap = self.store.chapter_map(uid, n, source_sha=source_sha)
+        if isinstance(cmap, dict) and not cmap.get("stale") and cmap.get("sections"):
+            parts.append("【已缓存全章结构节拍】")
+            for sec in cmap.get("sections") or []:
+                sec_title = sec.get("title") or ""
+                sec_sum = sec.get("summary") or ""
+                node_hints = "；".join(
+                    f"{nd.get('summary') or ''}({','.join(nd.get('block_ids') or [])})"
+                    for nd in (sec.get("nodes") or [])[:6]
+                )
+                line = f"- {sec_title}：{sec_sum} {node_hints}".strip()
+                parts.append(line)
+                used_chars += len(line) + 1
+
+        # 按整章均匀抽样代表块（保留全部小标题 + 首尾 + 等步长采样），保证覆盖 B01..Bnn 全程。
+        headings = {idx for idx, (_, kind, _) in enumerate(semantic) if kind == "heading"}
+        picked_idx = set(headings) | {0, min(1, len(semantic) - 1), max(0, len(semantic) - 2), len(semantic) - 1}
+        non_head = [idx for idx in range(len(semantic)) if idx not in picked_idx]
+        target_slots = 36
+        if non_head:
+            step = max(1, len(non_head) / target_slots)
+            pos = 0.0
+            while int(pos) < len(non_head):
+                picked_idx.add(non_head[int(pos)])
+                pos += step
+
+        parts.append("【全章代表段落节选（均布覆盖）】")
+        per_block_cap = max(180, min(380, (14000 - used_chars) // max(1, len(picked_idx))))
+        for idx in sorted(picked_idx):
+            bid, _, txt = semantic[idx]
+            line = f"[{bid}] {txt[:per_block_cap]}"
+            if used_chars + len(line) > 14500:
+                break
+            parts.append(line)
+            used_chars += len(line) + 1
+        return "\n".join(parts), len(semantic), True
+
+    def _chapter_tool_cache_key(self, read_type, action, blueprint):
+        key_part = blueprint if action == "diagram" and blueprint else action
+        return f"{read_type or 'social'}_{action}_{key_part}"
+
+    def cached_chapter_tool(self, uid, n, *, action, blueprint="", read_type=""):
+        """若命中未过期的全章缓存则返回缓存条目，否则返回 None。"""
+        book = self.library.book(uid)
+        raw = self.library.read_chapter(uid, n)
+        if not book or not raw:
+            return None
+        profile = book_types.resolve_read_profile(book.get("subjects"), title=book.get("title") or "")
+        effective_rt = str(read_type or profile.get("read_type") or "").strip()
+        effective_bp = str(blueprint or "").strip()
+        if action == "diagram" and not effective_bp and profile.get("blueprints"):
+            effective_bp = profile["blueprints"][0]["blueprint"]
+        key = self._chapter_tool_cache_key(effective_rt, action, effective_bp)
+        cached = self.store.chapter_tool(uid, n, key, source_sha=raw.get("source_sha256") or "")
+        if isinstance(cached, dict) and not cached.get("stale"):
+            return dict(cached, cached=True, scope="chapter")
+        return None
+
     def assist(
         self,
         uid,
@@ -376,21 +488,32 @@ class ReadingService:
         block_ids=None,
         selected_text="",
         question="",
+        blueprint="",
+        read_type="",
+        sub_kind="",
+        scope=None,
+        force=False,
         model=None,
         effort=None,
         on_delta=None,
     ):
         action = str(action or "").strip().lower()
-        if action not in ASSIST_ACTIONS:
-            raise ValueError("action 必须是 %s" % "/".join(ASSIST_ACTIONS))
+        if action not in ALL_ASSIST_ACTIONS:
+            raise ValueError("action 必须是 %s" % "/".join(ALL_ASSIST_ACTIONS))
+        effective_scope = str(scope or "").strip().lower()
+        if effective_scope and effective_scope not in ("selection", "chapter"):
+            raise ValueError("scope 必须是 selection 或 chapter")
+        if not effective_scope:
+            effective_scope = "selection"
+
         book = self.library.book(uid)
         chapter = self.library.chapter(uid, n)
         raw = self.library.read_chapter(uid, n)
         if not book or not chapter or not raw:
             raise FileNotFoundError("找不到章节")
-        self._require_model_client()
 
         blocks = raw["blocks"]
+        source_sha = raw.get("source_sha256") or ""
         valid_ids = {b.get("id") for b in blocks if b.get("id")}
         clean_blocks = [str(bid).strip() for bid in (block_ids or []) if str(bid).strip()]
         invalid = [bid for bid in clean_blocks if bid not in valid_ids]
@@ -398,25 +521,72 @@ class ReadingService:
             raise ValueError("block_ids 引用了不存在的段落：" + ", ".join(invalid))
         clean_text = str(selected_text or "").strip()
         clean_q = str(question or "").strip()
-        if not clean_text and clean_blocks:
-            blk_map = {b.get("id"): b for b in blocks if b.get("id")}
-            clean_text = "\n\n".join(
-                _block_preview_text(blk_map[bid]) for bid in clean_blocks if bid in blk_map
-            ).strip()
-        if not clean_text and not clean_q:
-            raise ValueError("请先选中一段正文，或输入具体问题")
 
+        profile = book_types.resolve_read_profile(book.get("subjects"), title=book.get("title") or "")
+        effective_rt = str(read_type or profile.get("read_type") or "").strip()
+        effective_sub = str(sub_kind or profile.get("sub_kind") or "").strip()
+        effective_bp = str(blueprint or "").strip()
+        if action == "diagram" and not effective_bp:
+            bps = profile.get("blueprints") or []
+            if bps:
+                effective_bp = bps[0]["blueprint"]
+
+        if effective_scope == "chapter":
+            clean_blocks = []
+            if not force and not clean_q:
+                cache_key = self._chapter_tool_cache_key(effective_rt, action, effective_bp)
+                cached = self.store.chapter_tool(uid, n, cache_key, source_sha=source_sha)
+                if isinstance(cached, dict) and not cached.get("stale"):
+                    return dict(cached, cached=True, scope="chapter")
+            if not blocks:
+                raise ValueError("本章暂无可用正文块")
+        else:
+            if not clean_text and clean_blocks:
+                blk_map = {b.get("id"): b for b in blocks if b.get("id")}
+                clean_text = "\n\n".join(
+                    _block_preview_text(blk_map[bid]) for bid in clean_blocks if bid in blk_map
+                ).strip()
+            if not clean_text and not clean_q:
+                raise ValueError("请先选中一段正文，或输入具体问题")
+
+        self._require_model_client()
         requested_model = str(model or getattr(self.client, "model", None) or DEFAULT_MODEL).strip()
         requested_effort = str(effort or getattr(self.client, "effort", None) or DEFAULT_EFFORT).strip().lower()
-        context_text = self._context_for_blocks(blocks, clean_blocks)
+
+        sampled = False
+        if effective_scope == "chapter":
+            context_text, covered_blocks, sampled = self._chapter_scope_context(uid, n, blocks, source_sha=source_sha)
+            ch_label = f"《{book.get('title') or ''}》「{chapter.get('title') or ''}」"
+            prompt_text = clean_q or f"请围绕{ch_label}整章内容提取核心结构。"
+        else:
+            context_text = self._context_for_blocks(blocks, clean_blocks)
+            covered_blocks = len(clean_blocks)
+            if len(clean_blocks) > 1:
+                blk_map = {b.get("id"): b for b in blocks if b.get("id")}
+                labeled = [
+                    f"[{bid}] {_block_preview_text(blk_map[bid])}"
+                    for bid in clean_blocks
+                    if bid in blk_map and _block_preview_text(blk_map[bid])
+                ]
+                prompt_text = "\n\n".join(labeled) if labeled else clean_text
+            else:
+                prompt_text = clean_text
+
+        is_structured = action == "diagram" or action in EXTENSION_ACTIONS
         messages = _assist_prompts(
             action,
             book=book,
             chapter=chapter,
-            selected_text=clean_text,
+            selected_text=prompt_text,
             block_ids=clean_blocks,
             context_text=context_text,
             question=clean_q,
+            blueprint=effective_bp,
+            read_type=effective_rt,
+            sub_kind=effective_sub,
+            scope=effective_scope,
+            covered_blocks=covered_blocks,
+            sampled=sampled,
         )
 
         op_id = f"op-{uuid.uuid4().hex[:10]}"
@@ -425,13 +595,13 @@ class ReadingService:
         try:
             with events.job_scope(log_dir, op_id):
                 try:
-                    # diagram 需要严格 JSON 来渲染 SVG/表格，因此不直接把原始 JSON 字符推给用户正文区。
+                    # diagram 与结构化扩展需要严格 JSON，不直接向正文流推送原始 JSON 字符。
                     raw_content, usage = self.client.complete(
                         messages,
                         model=requested_model,
                         effort=requested_effort,
-                        json_mode=(action == "diagram"),
-                        on_delta=None if action == "diagram" else on_delta,
+                        json_mode=is_structured,
+                        on_delta=None if is_structured else on_delta,
                     )
                 except Exception as exc:
                     events.record_exception(exc, layer=action)
@@ -450,7 +620,7 @@ class ReadingService:
                     "model": requested_model,
                     "tokens": 0,
                     "elapsed_ms": _elapsed_ms(started),
-                    "summary": (clean_q or clean_text)[:120],
+                    "summary": (clean_q or clean_text or "全章分析")[:120],
                     "error": str(exc),
                 }
             )
@@ -461,21 +631,39 @@ class ReadingService:
         diagram_html = ""
         figure = None
         content = str(raw_content or "").strip()
+        default_anchor = [b["id"] for b in blocks[:1] if b.get("id")] if effective_scope == "chapter" else clean_blocks
         if action == "diagram":
-            try:
-                parsed = _loads_content(content)
-                if isinstance(parsed, dict) and parsed.get("data"):
-                    figure = parsed
-                    diagram_html = diagrams.render_assist_figure(parsed)
-                    content = str(parsed.get("summary") or parsed.get("reading_note") or "").strip()
-            except ValueError:
-                # 模型偶尔没吐出合法 JSON 时直接保留其可读文字，不报错丢内容。
+            parsed = diagram_audit.parse_json_payload(content)
+            if isinstance(parsed, dict) and (parsed.get("data") or parsed.get("items")):
+                audited = diagram_audit.audit_blueprint_payload(
+                    parsed,
+                    valid_ids,
+                    fallback_block_ids=default_anchor,
+                    requested_blueprint=effective_bp,
+                )
+                figure = audited
+                diagram_html = diagrams.render_assist_figure(audited)
+                content = str(audited.get("summary") or audited.get("reading_note") or "").strip()
+            else:
                 figure = None
                 diagram_html = ""
+        elif action in EXTENSION_ACTIONS:
+            ext_bp = diagram_audit.EXTENSION_PROMPT_SPECS[action]["blueprint"]
+            audited = diagram_audit.audit_blueprint_payload(
+                content,
+                valid_ids,
+                fallback_block_ids=default_anchor,
+                requested_blueprint=ext_bp,
+            )
+            figure = audited
+            diagram_html = diagrams.render_assist_figure(audited)
+            content = str(audited.get("summary") or audited.get("reading_note") or "").strip()
 
-        summary = (clean_q or clean_text).replace("\n", " ")[:90]
+        summary_prefix = "全章 · " if effective_scope == "chapter" else ""
+        summary_base = (clean_q or clean_text or chapter.get("title") or "").replace("\n", " ")[:90]
+        summary = summary_prefix + summary_base
         if diagram_html and isinstance(figure, dict) and figure.get("caption"):
-            summary = f"{figure['caption']}（{summary[:50]}）"
+            summary = f"{summary_prefix}{figure['caption']}（{summary_base[:42]}）"
         op = self.store.append_op(
             {
                 "id": op_id,
@@ -492,12 +680,18 @@ class ReadingService:
                 "summary": summary,
             }
         )
-        return {
+        result = {
             "id": op_id,
             "uid": uid,
             "n": "%02d" % int(n),
+            "source_sha256": source_sha,
+            "scope": effective_scope,
+            "covered_blocks": covered_blocks,
+            "sampled": sampled,
+            "cached": False,
             "action": action,
-            "action_label": ACTION_LABELS[action],
+            "action_label": ACTION_LABELS.get(action, action),
+            "blueprint": (figure or {}).get("blueprint") or effective_bp,
             "block_ids": clean_blocks,
             "selected_text": clean_text,
             "question": clean_q,
@@ -510,6 +704,10 @@ class ReadingService:
             "elapsed_ms": elapsed_ms,
             "op": op,
         }
+        if effective_scope == "chapter" and not clean_q and figure is not None:
+            cache_key = self._chapter_tool_cache_key(effective_rt, action, effective_bp)
+            self.store.save_chapter_tool(uid, n, cache_key, result)
+        return result
 
     # ---- 旁批钉住 / 删除 ---------------------------------------------
     def pin_assist_note(self, uid, n, payload):
@@ -697,7 +895,7 @@ class ReadingService:
                 pin_count += 1
             elif act == "chapter_map":
                 map_count += 1
-            elif act in ASSIST_ACTIONS:
+            elif act in ALL_ASSIST_ACTIONS:
                 assist_count += 1
 
             key = (item.get("uid") or "", item.get("n") or "")

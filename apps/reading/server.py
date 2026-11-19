@@ -24,7 +24,7 @@ from bookcorpus.preflight import MissingConfigError
 from bookcorpus.reading.locator import resolve_open_target
 from bookcorpus.reading.model import DEFAULT_EFFORT, DEFAULT_MODEL, EFFORTS
 from bookcorpus.reading.preflight import SourceTooLarge
-from bookcorpus.reading.service import ASSIST_ACTIONS, ReadingService
+from bookcorpus.reading.service import ALL_ASSIST_ACTIONS, ReadingService
 from bookcorpus.reading.store import UID_RE
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -308,13 +308,20 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("uid 非法")
             n = int(data.get("n"))
             action = str(data.get("action") or "").strip().lower()
-            if action not in ASSIST_ACTIONS:
-                raise ValueError("action 必须是 %s" % "/".join(ASSIST_ACTIONS))
+            if action not in ALL_ASSIST_ACTIONS:
+                raise ValueError("action 必须是 %s" % "/".join(ALL_ASSIST_ACTIONS))
             block_ids = data.get("block_ids") or []
             if not isinstance(block_ids, list) or not all(isinstance(x, str) for x in block_ids):
                 raise ValueError("block_ids 必须是字符串数组")
             selected_text = str(data.get("selected_text") or "")
             question = str(data.get("question") or "")
+            blueprint = str(data.get("blueprint") or "").strip()
+            read_type = str(data.get("read_type") or "").strip()
+            sub_kind = str(data.get("sub_kind") or "").strip()
+            scope = str(data.get("scope") or "").strip().lower()
+            if scope and scope not in ("selection", "chapter"):
+                raise ValueError("scope 必须是 selection 或 chapter")
+            force = bool(data.get("force", False))
             model = str(data.get("model") or DEFAULT_MODEL).strip()
             effort = str(data.get("effort") or DEFAULT_EFFORT).strip().lower()
             stream = data.get("stream", True)
@@ -324,10 +331,18 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("模型名非法")
             if effort not in EFFORTS:
                 raise ValueError("reasoning_effort 只能是 %s" % "/".join(EFFORTS))
-            # 先过存在性与凭据门控，错误仍回 404/400 JSON。
+            # 先过存在性与凭据门控，错误仍回 404/400 JSON；若全章缓存命中则免模型直出。
             if not self.service.library.book(uid) or not self.service.library.read_chapter(uid, n):
                 raise FileNotFoundError("找不到章节")
-            self.service._require_model_client()
+            has_cached = (
+                scope == "chapter"
+                and not force
+                and not question.strip()
+                and self.service.cached_chapter_tool(uid, n, action=action, blueprint=blueprint, read_type=read_type)
+                is not None
+            )
+            if not has_cached:
+                self.service._require_model_client()
         except FileNotFoundError:
             self._json(404, {"error": "找不到章节"})
             return
@@ -350,6 +365,11 @@ class Handler(BaseHTTPRequestHandler):
                     block_ids=block_ids,
                     selected_text=selected_text,
                     question=question,
+                    blueprint=blueprint,
+                    read_type=read_type,
+                    sub_kind=sub_kind,
+                    scope=scope or None,
+                    force=force,
                     model=model,
                     effort=effort,
                 )
@@ -377,6 +397,11 @@ class Handler(BaseHTTPRequestHandler):
                 block_ids=block_ids,
                 selected_text=selected_text,
                 question=question,
+                blueprint=blueprint,
+                read_type=read_type,
+                sub_kind=sub_kind,
+                scope=scope or None,
+                force=force,
                 model=model,
                 effort=effort,
                 on_delta=emit_delta,

@@ -104,7 +104,8 @@ class Store:
                 raise ValueError("旁批引用了不存在的正文块：" + ", ".join(missing))
         content = str(note.get("content") or "").strip()
         diagram_html = str(note.get("diagram_html") or "").strip()
-        if not content and not diagram_html:
+        figure = note.get("figure") if isinstance(note.get("figure"), dict) else None
+        if not content and not diagram_html and not figure:
             raise ValueError("旁批内容不能为空")
 
         existing = self.assist_notes(uid, n)
@@ -121,6 +122,8 @@ class Store:
             "created_at": str(note.get("created_at") or _now_iso()),
             "updated_at": _now_iso(),
         }
+        if figure is not None:
+            clean["figure"] = figure
         updated = False
         new_notes = []
         for item in existing:
@@ -169,6 +172,25 @@ class Store:
 
     def save_chapter_map(self, uid, n, payload):
         self._write(self.chapter_map_path(uid, n), json.dumps(payload, ensure_ascii=False, indent=1))
+        return payload
+
+    # ---- 全章书型工具缓存（chapter_tools/<key>.json） ------------------
+    def chapter_tool_path(self, uid, n, key):
+        safe_key = re.sub(r"[^A-Za-z0-9_-]", "_", str(key or "tool")).strip("_") or "tool"
+        return os.path.join(self.pack_dir(uid, n), "chapter_tools", f"{safe_key}.json")
+
+    def chapter_tool(self, uid, n, key, source_sha=None):
+        doc = self._read_json(self.chapter_tool_path(uid, n, key))
+        if not isinstance(doc, dict):
+            return None
+        if source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha:
+            copy = dict(doc)
+            copy["stale"] = True
+            return copy
+        return doc
+
+    def save_chapter_tool(self, uid, n, key, payload):
+        self._write(self.chapter_tool_path(uid, n, key), json.dumps(payload, ensure_ascii=False, indent=1))
         return payload
 
     # ---- 全章活跃度统计（供书架/书页只读计数） -------------------------

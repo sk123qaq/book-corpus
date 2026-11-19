@@ -28,6 +28,100 @@
   let lastResult = null;
   let abortCtrl = null;
 
+  const FALLBACK_PROFILES = {
+    practical: {
+      read_type: 'practical', name: '实用型书', adler_category: '1. 实用型书',
+      goal: '锁定「目的 → 手段 → 成立条件」，并转化为可执行动作',
+      blueprints: [
+        { blueprint: 'flow_swimlane', label: 'SOP 流程图' },
+        { blueprint: 'decision_tree', label: '条件决策树' },
+        { blueprint: 'quadrant_matrix', label: '优先级四象限' },
+      ],
+      extensions: [{ action: 'checklist', label: '行动自检清单', cross_search: false }],
+    },
+    literature: {
+      read_type: 'literature', name: '想象文学', adler_category: '2. 想象文学',
+      goal: '重沉浸与体验：把握人物关系、情绪张力、舞台调度或意象节奏',
+      blueprints: [
+        { blueprint: 'tension_curve', label: '叙事张力曲线' },
+        { blueprint: 'relation_graph', label: '人物阵营图谱' },
+        { blueprint: 'spatial_route', label: '空间动线地图' },
+      ],
+      extensions: [{ action: 'imagery', label: '意象与舞台词典', cross_search: false }],
+    },
+    history: {
+      read_type: 'history', name: '历史书', adler_category: '3. 历史书',
+      goal: '多线并行时空对照、权力结构拆解，以及跨史家视角交叉比对',
+      blueprints: [
+        { blueprint: 'parallel_timeline', label: '多线平行时间轴' },
+        { blueprint: 'power_hierarchy', label: '权力结构树' },
+        { blueprint: 'spatial_route', label: '战役疆域拓扑' },
+      ],
+      extensions: [{ action: 'compare_context', label: '多史家视角对照', cross_search: true }],
+    },
+    science: {
+      read_type: 'science', name: '科学与数学', adler_category: '4. 科学与数学',
+      goal: '理清核心问题、公理/实验前提、推导依赖与成立边界',
+      blueprints: [
+        { blueprint: 'derivation_dag', label: '公理-定理推导图' },
+        { blueprint: 'sensitivity_chart', label: '变量敏感度曲线' },
+        { blueprint: 'system_flow', label: '机制与装置流图' },
+      ],
+      extensions: [{ action: 'boundary_check', label: '演进与适用边界', cross_search: false }],
+    },
+    philosophy: {
+      read_type: 'philosophy', name: '哲学书', adler_category: '5. 哲学书',
+      goal: '抠紧作者专属词义边界，剥离核心前提 → 推论 → 结论与反驳对象',
+      blueprints: [
+        { blueprint: 'argument_map', label: '论证逻辑树' },
+        { blueprint: 'term_contrast', label: '词义辨析双栏表' },
+        { blueprint: 'lineage_dag', label: '批判谱系图' },
+      ],
+      extensions: [{ action: 'sparring_dossier', label: '学术交锋档案', cross_search: false }],
+    },
+    social: {
+      read_type: 'social', name: '社会科学', adler_category: '6. 社会科学',
+      goal: '以议题为中心：厘清混杂术语、多变量因果反馈与跨作者对照',
+      blueprints: [
+        { blueprint: 'causal_loop', label: '因果反馈回路图' },
+        { blueprint: 'concept_matrix', label: '跨学派概念矩阵' },
+        { blueprint: 'metric_chart', label: '实证趋势图' },
+      ],
+      extensions: [{ action: 'method_audit', label: '方法与样本局限', cross_search: true }],
+    },
+    visual: {
+      read_type: 'visual', name: '图册与视觉', adler_category: '补充类（图册与设定集）',
+      goal: '建立构图元素、文物/工艺原型与时代流派索引',
+      blueprints: [{ blueprint: 'element_matrix', label: '构图元素索引表' }],
+      extensions: [{ action: 'craft_notes', label: '工艺流派考据', cross_search: false }],
+    },
+  };
+
+  function getStoredReadType() {
+    try {
+      return localStorage.getItem('reading-profile:' + UID) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function setStoredReadType(rt) {
+    try {
+      const def = (data && data.reading_profile && data.reading_profile.read_type) || '';
+      if (!rt || rt === def) localStorage.removeItem('reading-profile:' + UID);
+      else localStorage.setItem('reading-profile:' + UID, rt);
+    } catch (e) {}
+  }
+
+  function activeProfile() {
+    const serverProf = (data && data.reading_profile) || FALLBACK_PROFILES.social;
+    const override = getStoredReadType();
+    if (override && override !== serverProf.read_type && FALLBACK_PROFILES[override]) {
+      return Object.assign({}, serverProf, FALLBACK_PROFILES[override], { overridden: true });
+    }
+    return Object.assign({}, serverProf, { overridden: false });
+  }
+
   function buildSearchHref(queryText, bookOnly) {
     const targetParams = new URLSearchParams();
     if (queryText) targetParams.set('q', queryText);
@@ -168,6 +262,9 @@
     const pinCount = (data.assist_notes || []).length;
     const mapReady = Boolean(data.chapter_map && data.chapter_map.supported !== false);
     const blockCount = (data.blocks || []).length;
+    const prof = activeProfile();
+    const avail = (data.reading_profile && data.reading_profile.available_profiles) ||
+      Object.values(FALLBACK_PROFILES).map((p) => ({ read_type: p.read_type, name: p.name, adler_category: p.adler_category }));
 
     RD.mount('crumb').innerHTML =
       '<a href="/">书架</a><i>/</i>' +
@@ -175,11 +272,35 @@
       '<span>第 ' + RD.esc(ch.n) + ' 章</span>';
     document.title = ch.title + ' · ' + (book.title_short || book.title);
 
+    const profileOpts = avail.map((item) =>
+      '<option value="' + RD.esc(item.read_type) + '"' + (item.read_type === prof.read_type ? ' selected' : '') + '>' +
+      RD.esc(item.name) + '（' + RD.esc(item.adler_category) + '）</option>'
+    ).join('');
+
+    const hintNote = prof.boundary_hint || prof.sub_kind_hint || '';
+    const bpButtons = (prof.blueprints || []).map((bp, idx) =>
+      '<button type="button" class="wb-btn bp-rec" data-run-blueprint="' + RD.esc(bp.blueprint) + '" title="' + RD.esc(bp.description || '') + '">' +
+      RD.esc(bp.label) + (idx === 0 ? ' <span class="mini-tag">书型置顶</span>' : '') + '</button>'
+    ).join('');
+    const extButtons = (prof.extensions || []).map((ext) =>
+      '<button type="button" class="wb-btn bp-ext" data-run-ext="' + RD.esc(ext.action) + '" title="' + RD.esc(ext.hint || '') + '">' +
+      RD.esc(ext.label) + '</button>' +
+      (ext.cross_search ? '<button type="button" class="wb-btn" data-cross-book>跨书对照 ↗</button>' : '')
+    ).join('');
+
     RD.mount('wb-root').innerHTML =
       '<section class="wb-head">' +
-        '<div><div class="eyebrow">' + RD.esc(book.title) + (book.subject ? ' · ' + RD.esc(book.subject) : '') + '</div>' +
+        '<div><div class="eyebrow-row">' +
+          '<span class="eyebrow">' + RD.esc(book.title) + (book.subject ? ' · ' + RD.esc(book.subject) : '') + '</span>' +
+          '<span class="profile-control" title="仅影响当前浏览器阅读视角，不修改底层人账">' +
+            '<span>阅读视角：</span><select id="profile-select" aria-label="切换阅读视角">' + profileOpts + '</select>' +
+          '</span>' +
+          (prof.overridden ? '<span class="override-badge">已临时切换</span>' : '') +
+        '</div>' +
         '<h1>' + RD.esc(ch.title) + '</h1>' +
-        '<div class="wb-sub">' + RD.fmt(ch.chars) + ' 字 · ' + RD.fmt(blockCount) + ' 个原文块 · 约 ' + RD.fmt(ch.minutes) + ' 分钟 · 100% 完整正文直出</div></div>' +
+        '<div class="wb-sub">' + RD.fmt(ch.chars) + ' 字 · ' + RD.fmt(blockCount) + ' 个原文块 · 约 ' + RD.fmt(ch.minutes) + ' 分钟 · 100% 完整正文直出 · ' + RD.esc(prof.goal || '') + '</div>' +
+        (hintNote ? '<div class="boundary-note">' + RD.esc(hintNote) + '</div>' : '') +
+        '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
           '<a class="btn btn-ghost" href="' + buildSearchHref('', true) + '" target="_blank" rel="noopener">本书内检索 ↗</a>' +
           '<a class="btn btn-ghost" href="/records?uid=' + encodeURIComponent(UID) + '">本章日志 →</a>' +
@@ -199,6 +320,14 @@
         '<button type="button" class="wb-btn" id="btn-drawer" aria-pressed="' + drawerOpen + '">伴读抽屉</button>' +
       '</div>' +
 
+      (bpButtons || extButtons
+        ? '<div class="wb-profile-strip" id="wb-profile-strip">' +
+            '<span class="wb-profile-strip-lbl">' + RD.esc(prof.name) + '工具：</span>' +
+            '<span class="scope-pill" id="strip-scope-pill"></span>' +
+            bpButtons + extButtons +
+          '</div>'
+        : '') +
+
       '<div class="wb-top-drawer" id="model-box" hidden>' + RD.modelSettingsHtml() + '</div>' +
       '<div class="wb-top-drawer" id="map-drawer" hidden></div>' +
 
@@ -212,8 +341,9 @@
               '<button type="button" class="wb-btn" id="btn-drawer-close" aria-label="关闭抽屉">×</button>' +
             '</div>' +
           '</div>' +
+          '<div class="drawer-scope-bar" id="drawer-scope-bar" hidden></div>' +
           '<div class="drawer-body" id="drawer-body">' +
-            '<div class="empty" id="drawer-empty">在左侧正文中拖选一段文字，或点段落右上角 <b>✦</b>，即可流式图解、举例、翻译、拆解前提或跨书检索。</div>' +
+            '<div class="empty" id="drawer-empty">在左侧正文中拖选一段或多段文字，或点段尾 <b>✦</b>；不选段落直接点上方书型工具，则默认针对<b>全章</b>分析。</div>' +
             '<div class="drawer-quote" id="drawer-quote" hidden></div>' +
             '<div class="drawer-diagram" id="drawer-diagram"></div>' +
             '<div class="drawer-answer" id="drawer-answer"></div>' +
@@ -229,7 +359,55 @@
       '</div>';
 
     RD.bindModelSettings();
+    const profSel = RD.mount('profile-select');
+    if (profSel) {
+      profSel.addEventListener('change', () => {
+        setStoredReadType(profSel.value);
+        renderShell();
+        renderMapDrawer();
+        renderBlocks();
+        renderSelectionBarButtons();
+        bindEvents();
+        RD.toast('已切换阅读视角为「' + (FALLBACK_PROFILES[profSel.value] ? FALLBACK_PROFILES[profSel.value].name : profSel.value) + '」');
+      });
+    }
+    updateScopeIndicator();
     renderArrivalBanner();
+  }
+
+  function formatSelectionSpan(ids) {
+    if (!ids || !ids.length) return '';
+    return ids.length === 1 ? ids[0] : (ids[0] + '–' + ids[ids.length - 1] + ' (' + ids.length + '段)');
+  }
+
+  function updateScopeIndicator() {
+    const pill = RD.mount('strip-scope-pill');
+    if (!pill) return;
+    const ids = (currentSelection && currentSelection.block_ids) || [];
+    const total = (data && data.blocks && data.blocks.length) || 0;
+    if (ids.length) {
+      pill.className = 'scope-pill is-sel';
+      pill.innerHTML = '作用域：已选 ' + RD.esc(formatSelectionSpan(ids)) +
+        ' <button type="button" class="scope-reset" id="btn-clear-scope" title="清除选段并切回针对全章">切回全章 ×</button>';
+      const clr = RD.mount('btn-clear-scope');
+      if (clr) {
+        clr.addEventListener('click', (e) => {
+          e.stopPropagation();
+          clearSelectionScope();
+        });
+      }
+    } else {
+      pill.className = 'scope-pill';
+      pill.textContent = '作用域：全章（' + RD.fmt(total) + ' 段）';
+    }
+  }
+
+  function clearSelectionScope() {
+    currentSelection = { block_ids: [], text: '' };
+    const reader = RD.mount('reader-body');
+    if (reader) reader.querySelectorAll('.reader-block.active').forEach((n) => n.classList.remove('active'));
+    hideSelectionBar();
+    updateScopeIndicator();
   }
 
   function renderBlockHtml(blk) {
@@ -291,7 +469,7 @@
                   (note.stale ? ' · 原文已变' : '') + '</span>' +
                 '<button type="button" class="pin-del" data-del-pin="' + RD.esc(note.id) + '">移除</button>' +
               '</div>' +
-              (note.diagram_html ? '<div>' + note.diagram_html + '</div>' : '') +
+              (note.figure ? '<div class="pin-figure-mount" data-pin-figure="' + RD.esc(note.id) + '"></div>' : (note.diagram_html ? '<div>' + note.diagram_html + '</div>' : '')) +
               (note.content ? '<div class="drawer-answer">' + RD.renderMarkdown(note.content) + '</div>' : '') +
             '</div>'
           ).join('') + '</div>'
@@ -302,6 +480,16 @@
         pinsHtml +
       '</div>';
     }).join('');
+
+    if (RD.diagrams) {
+      const noteById = new Map((data.assist_notes || []).map((n) => [n.id, n]));
+      RD.mount('reader-body').querySelectorAll('[data-pin-figure]').forEach((mountEl) => {
+        const note = noteById.get(mountEl.getAttribute('data-pin-figure'));
+        if (note && note.figure) {
+          RD.diagrams.renderBlueprintCard(mountEl, note.figure, { onFocusBlock: focusBlock, compact: true });
+        }
+      });
+    }
 
     const countEl = RD.mount('pin-count');
     if (countEl) countEl.textContent = String((data.assist_notes || []).length);
@@ -355,16 +543,20 @@
     '</div>';
 
     if (showMap && (cmap.sections || []).length) {
-      html += '<div class="map-sections">' + cmap.sections.map((sec) =>
-        '<div class="map-card"><h4>' + RD.esc(sec.title) + '</h4>' +
-        (sec.summary ? '<p>' + RD.esc(sec.summary) + '</p>' : '') +
-        '<div class="map-nodes">' + (sec.nodes || []).map((node) => {
-          const target = (node.block_ids || sec.block_ids || [])[0] || '';
-          return '<button type="button" class="map-node" data-jump="' + RD.esc(target) + '">' +
-            RD.esc(node.summary || node.id) +
-            (target ? ' <span class="wb-sub">[' + RD.esc(target) + ']</span>' : '') + '</button>';
-        }).join('') + '</div></div>'
-      ).join('') + '</div>';
+      if (RD.diagrams && RD.diagrams.renderChapterMapTree) {
+        html += RD.diagrams.renderChapterMapTree(cmap);
+      } else {
+        html += '<div class="map-sections">' + cmap.sections.map((sec) =>
+          '<div class="map-card"><h4>' + RD.esc(sec.title) + '</h4>' +
+          (sec.summary ? '<p>' + RD.esc(sec.summary) + '</p>' : '') +
+          '<div class="map-nodes">' + (sec.nodes || []).map((node) => {
+            const target = (node.block_ids || sec.block_ids || [])[0] || '';
+            return '<button type="button" class="map-node" data-jump="' + RD.esc(target) + '">' +
+              RD.esc(node.summary || node.id) +
+              (target ? ' <span class="wb-sub">[' + RD.esc(target) + ']</span>' : '') + '</button>';
+          }).join('') + '</div></div>'
+        ).join('') + '</div>';
+      }
     }
     if (showTerms) {
       const terms = cmap.terms || [];
@@ -425,6 +617,10 @@
 
   function renderSelectionBarButtons() {
     const bar = RD.mount('selection-bar');
+    const prof = activeProfile();
+    const bps = prof.blueprints || [];
+    const exts = prof.extensions || [];
+    const defaultBp = bps[0] || null;
     const toolbar = (data && data.toolbar) || [
       { action: 'diagram', label: '图解此段' },
       { action: 'explain', label: '讲人话举例' },
@@ -432,12 +628,36 @@
       { action: 'critique', label: '拆解前提' },
       { action: 'ask', label: '问这句' },
     ];
-    bar.innerHTML =
-      toolbar.map((item) =>
-        '<button type="button" data-action="' + RD.esc(item.action) + '">' + RD.esc(item.label) + '</button>'
-      ).join('') +
-      '<span class="selection-bar-sep" aria-hidden="true"></span>' +
-      '<button type="button" data-action="search-related" title="在其他书中找相关内容，并按阈值选书回答">跨书找相关 ↗</button>';
+
+    const otherTools = toolbar.filter((item) => item.action !== 'diagram');
+    const bpRow =
+      '<div class="selection-bar-row">' +
+        '<span class="selection-bar-lbl">' + RD.esc(prof.name) + '：</span>' +
+        (defaultBp
+          ? '<button type="button" class="sel-bp" data-action="diagram" data-blueprint="' + RD.esc(defaultBp.blueprint) +
+              '" title="' + RD.esc(defaultBp.description || '') + '">图解·' + RD.esc(defaultBp.label) + '</button>'
+          : '<button type="button" class="sel-bp" data-action="diagram">图解此段</button>') +
+        bps.slice(1).map((bp) =>
+          '<button type="button" class="sel-bp" data-action="diagram" data-blueprint="' + RD.esc(bp.blueprint) +
+          '" title="' + RD.esc(bp.description || '') + '">' + RD.esc(bp.label) + '</button>'
+        ).join('') +
+        exts.map((ext) =>
+          '<button type="button" class="sel-ext" data-action="' + RD.esc(ext.action) +
+          '" title="' + RD.esc(ext.hint || '') + '">' + RD.esc(ext.label) + '</button>'
+        ).join('') +
+      '</div>';
+
+    const commonRow =
+      '<div class="selection-bar-row">' +
+        '<span class="selection-bar-lbl">细读：</span>' +
+        otherTools.map((item) =>
+          '<button type="button" data-action="' + RD.esc(item.action) + '">' + RD.esc(item.label) + '</button>'
+        ).join('') +
+        '<span class="selection-bar-sep" aria-hidden="true"></span>' +
+        '<button type="button" data-action="search-related" title="在其他书中找相关内容，并按阈值选书回答">跨书找相关 ↗</button>' +
+      '</div>';
+
+    bar.innerHTML = bpRow + commonRow;
   }
 
   function setDrawerOpen(open) {
@@ -528,16 +748,40 @@
     RD.mount('btn-drawer-close').addEventListener('click', () => setDrawerOpen(false));
     RD.mount('btn-pin').addEventListener('click', pinCurrentResult);
 
+    const strip = RD.mount('wb-profile-strip');
+    if (strip) {
+      strip.addEventListener('click', (e) => {
+        const activeScope = (currentSelection.block_ids && currentSelection.block_ids.length) ? 'selection' : 'chapter';
+        const bpBtn = e.target.closest('[data-run-blueprint]');
+        if (bpBtn) {
+          runAssist('diagram', '', bpBtn.getAttribute('data-run-blueprint'), activeScope, false);
+          return;
+        }
+        const extBtn = e.target.closest('[data-run-ext]');
+        if (extBtn) {
+          runAssist(extBtn.getAttribute('data-run-ext'), '', '', activeScope, false);
+          return;
+        }
+        if (e.target.closest('[data-cross-book]')) {
+          const fallbackText = (data.chapter && data.chapter.title) || ((data.blocks && data.blocks[0] && data.blocks[0].text) || '');
+          const probe = clipSearchProbe((activeScope === 'selection' ? currentSelection.text : '') || fallbackText);
+          const firstBid = activeScope === 'selection' ? ((currentSelection.block_ids || [])[0] || '') : '';
+          const blk = ((data && data.blocks) || []).find((b) => b.id === firstBid);
+          const srcPath = (blk && blk.source_file) ? ('books/' + UID + '/md/' + blk.source_file) : '';
+          const srcLine = (blk && blk.start_line) ? blk.start_line : 0;
+          window.open(buildRelatedHref(probe, srcPath, srcLine), '_blank', 'noopener');
+        }
+      });
+    }
+
     RD.mount('drawer-ask-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const input = RD.mount('drawer-ask-input');
       const q = (input.value || '').trim();
       if (!q) return;
-      if (!currentSelection.block_ids.length && data.blocks && data.blocks.length) {
-        currentSelection = { block_ids: [data.blocks[0].id], text: data.blocks[0].text || '' };
-      }
+      const askScope = (currentSelection.block_ids && currentSelection.block_ids.length) ? 'selection' : 'chapter';
       input.value = '';
-      runAssist('ask', q);
+      runAssist('ask', q, '', askScope, false);
     });
 
     const reader = RD.mount('reader-body');
@@ -546,6 +790,7 @@
         const cap = captureSelection();
         if (!cap) return;
         currentSelection = { block_ids: cap.block_ids, text: cap.text };
+        updateScopeIndicator();
         positionSelectionBar(cap.rect);
       }, 10);
     });
@@ -566,6 +811,7 @@
         currentSelection = { block_ids: [bid], text: (blk && blk.text) || '' };
         reader.querySelectorAll('.reader-block.active').forEach((n) => n.classList.remove('active'));
         trig.closest('.reader-block').classList.add('active');
+        updateScopeIndicator();
         positionSelectionBar(trig.getBoundingClientRect());
       }
     });
@@ -581,6 +827,7 @@
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
       const action = btn.getAttribute('data-action');
+      const bp = btn.getAttribute('data-blueprint') || '';
       hideSelectionBar();
       if (action === 'search-related') {
         const probe = clipSearchProbe(currentSelection.text);
@@ -604,22 +851,103 @@
         RD.mount('drawer-quote').textContent = currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', '));
         return;
       }
-      runAssist(action, '');
+      runAssist(action, '', bp, 'selection', false);
     });
   }
 
-  async function runAssist(action, question) {
+  function renderDrawerScopeBar(opts) {
+    const bar = RD.mount('drawer-scope-bar');
+    if (!bar) return;
+    const scope = opts.scope || 'selection';
+    const action = opts.action || 'diagram';
+    const blueprint = opts.blueprint || '';
+    const covered = opts.covered_blocks || ((data && data.blocks && data.blocks.length) || 0);
+    const sampled = Boolean(opts.sampled);
+    const cached = Boolean(opts.cached);
+    const selIds = (opts.block_ids && opts.block_ids.length) ? opts.block_ids : ((currentSelection && currentSelection.block_ids) || []);
+    const prof = activeProfile();
+
+    bar.hidden = false;
+    const scopeTag = scope === 'chapter'
+      ? '<span class="scope-pill">作用范围：全章（' + RD.fmt(covered) + ' 段' + (sampled ? ' · 均匀骨架' : '') + '）</span>'
+      : '<span class="scope-pill is-sel">作用范围：已选 ' + RD.esc(formatSelectionSpan(selIds) || '片段') + '</span>';
+
+    const switchScopeBtn = scope === 'selection'
+      ? '<button type="button" class="drawer-bp-pill" data-switch-scope="chapter">改按全章生成</button>'
+      : (currentSelection.block_ids && currentSelection.block_ids.length
+          ? '<button type="button" class="drawer-bp-pill" data-switch-scope="selection">仅针对所选段</button>'
+          : '');
+
+    const bpPills = (action === 'diagram' && (prof.blueprints || []).length > 1)
+      ? prof.blueprints.map((item) =>
+          '<button type="button" class="drawer-bp-pill' + (item.blueprint === blueprint ? ' active' : '') +
+          '" data-switch-bp="' + RD.esc(item.blueprint) + '">' + RD.esc(item.label) + '</button>'
+        ).join('')
+      : '';
+
+    const regenBtn = (scope === 'chapter' || cached)
+      ? '<button type="button" class="drawer-bp-pill" data-regen-chapter title="忽略缓存重新调用模型">' +
+        (cached ? '命中全章缓存 · ↻ 重生成' : '↻ 重新生成') + '</button>'
+      : '';
+
+    bar.innerHTML = scopeTag + switchScopeBtn + bpPills + regenBtn;
+
+    const swBtn = bar.querySelector('[data-switch-scope]');
+    if (swBtn) {
+      swBtn.addEventListener('click', () => {
+        const nextScope = swBtn.getAttribute('data-switch-scope');
+        if (nextScope === 'chapter') clearSelectionScope();
+        runAssist(action, (lastResult && lastResult.question) || '', blueprint, nextScope, false);
+      });
+    }
+    bar.querySelectorAll('[data-switch-bp]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const nextBp = el.getAttribute('data-switch-bp');
+        if (nextBp && nextBp !== blueprint) {
+          runAssist('diagram', '', nextBp, scope, false);
+        }
+      });
+    });
+    const rBtn = bar.querySelector('[data-regen-chapter]');
+    if (rBtn) {
+      rBtn.addEventListener('click', () => {
+        runAssist(action, (lastResult && lastResult.question) || '', blueprint, scope, true);
+      });
+    }
+  }
+
+  async function runAssist(action, question, blueprint, scopeOverride, force) {
     if (abortCtrl) abortCtrl.abort();
     abortCtrl = new AbortController();
     const settings = RD.modelSettings();
+    const prof = activeProfile();
+    const scope = scopeOverride || ((currentSelection.block_ids && currentSelection.block_ids.length) ? 'selection' : 'chapter');
+    const chosenBp = blueprint || (action === 'diagram' && prof.blueprints && prof.blueprints[0] ? prof.blueprints[0].blueprint : '');
+    const bpMeta = (prof.blueprints || []).find((b) => b.blueprint === chosenBp);
     lastResult = null;
     setDrawerOpen(true);
     RD.mount('btn-pin').disabled = true;
     RD.mount('drawer-empty').hidden = true;
-    RD.mount('drawer-title').textContent = (RD.actionNames[action] || action) +
-      (currentSelection.block_ids.length ? ' · ' + currentSelection.block_ids.join('-') : '');
+
+    const titleBase = (action === 'diagram' && bpMeta) ? bpMeta.label : (RD.actionNames[action] || action);
+    const spanText = scope === 'chapter'
+      ? '全章'
+      : formatSelectionSpan(currentSelection.block_ids);
+    RD.mount('drawer-title').textContent = titleBase + (spanText ? ' · ' + spanText : '');
+    renderDrawerScopeBar({
+      scope,
+      action,
+      blueprint: chosenBp,
+      block_ids: scope === 'chapter' ? [] : currentSelection.block_ids,
+      covered_blocks: (data && data.blocks && data.blocks.length) || 0,
+      sampled: false,
+      cached: false,
+    });
+
     RD.mount('drawer-quote').hidden = false;
-    RD.mount('drawer-quote').textContent = currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', '));
+    RD.mount('drawer-quote').textContent = scope === 'chapter'
+      ? ('作用范围：全章正文（共 ' + RD.fmt((data && data.blocks && data.blocks.length) || 0) + ' 个原文块，涵盖全章脉络）')
+      : (currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', ')));
     RD.mount('drawer-diagram').innerHTML = '';
     RD.mount('drawer-answer').innerHTML = '<span class="wb-sub">正在思考与生成…</span>';
     RD.mount('drawer-meta').textContent = '';
@@ -634,8 +962,13 @@
           uid: UID,
           n: N,
           action,
-          block_ids: currentSelection.block_ids,
-          selected_text: currentSelection.text,
+          scope,
+          force: Boolean(force),
+          blueprint: chosenBp,
+          read_type: prof.read_type || '',
+          sub_kind: prof.sub_kind || '',
+          block_ids: scope === 'chapter' ? [] : currentSelection.block_ids,
+          selected_text: scope === 'chapter' ? '' : currentSelection.text,
           question,
           model: settings.model,
           effort: settings.effort,
@@ -675,7 +1008,11 @@
             streamBuf += payload.text || '';
             RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(streamBuf);
           } else if (evName === 'diagram') {
-            RD.mount('drawer-diagram').innerHTML = payload.html || '';
+            if (payload.figure && RD.diagrams && RD.diagrams.renderBlueprintCard) {
+              RD.diagrams.renderBlueprintCard(RD.mount('drawer-diagram'), payload.figure, { onFocusBlock: focusBlock });
+            } else {
+              RD.mount('drawer-diagram').innerHTML = payload.html || '';
+            }
           } else if (evName === 'done') {
             applyDoneResult(payload);
           } else if (evName === 'error') {
@@ -692,13 +1029,27 @@
 
   function applyDoneResult(payload) {
     lastResult = payload;
-    if (payload.diagram_html) {
+    renderDrawerScopeBar({
+      scope: payload.scope || 'selection',
+      action: payload.action || 'diagram',
+      blueprint: payload.blueprint || '',
+      block_ids: payload.block_ids || [],
+      covered_blocks: payload.covered_blocks || ((data && data.blocks && data.blocks.length) || 0),
+      sampled: Boolean(payload.sampled),
+      cached: Boolean(payload.cached),
+    });
+    if (payload.figure && RD.diagrams && RD.diagrams.renderBlueprintCard) {
+      RD.diagrams.renderBlueprintCard(RD.mount('drawer-diagram'), payload.figure, { onFocusBlock: focusBlock });
+    } else if (payload.diagram_html) {
       RD.mount('drawer-diagram').innerHTML = payload.diagram_html;
     }
     if (payload.content) {
       RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(payload.content);
+    } else if (payload.figure) {
+      RD.mount('drawer-answer').innerHTML = '';
     }
     const metaParts = [];
+    if (payload.cached) metaParts.push('全章缓存');
     if (payload.model) metaParts.push(payload.model);
     if (payload.tokens) metaParts.push(RD.fmt(payload.tokens) + ' tokens');
     if (payload.elapsed_ms) metaParts.push(RD.elapsed(payload.elapsed_ms));
@@ -706,12 +1057,34 @@
     RD.mount('btn-pin').disabled = false;
   }
 
+  function firstValidAnchorForFigure(fig) {
+    const valid = new Set(((data && data.blocks) || []).map((b) => b.id).filter(Boolean));
+    const pick = (arr) => (Array.isArray(arr) ? arr.find((b) => valid.has(b)) : '');
+    if (fig && fig.data) {
+      for (const nd of (fig.data.nodes || [])) { const hit = pick(nd.blocks); if (hit) return hit; }
+      for (const pt of (fig.data.points || [])) { const hit = pick(pt.blocks); if (hit) return hit; }
+      for (const rw of (fig.data.rows || [])) { const hit = pick(rw.blocks); if (hit) return hit; }
+      for (const qd of (fig.data.quadrants || [])) {
+        for (const it of (qd.items || [])) { const hit = pick(it.blocks); if (hit) return hit; }
+      }
+    }
+    if (fig && Array.isArray(fig.items)) {
+      for (const it of fig.items) { const hit = pick(it.blocks); if (hit) return hit; }
+    }
+    return (data && data.blocks && data.blocks[0] && data.blocks[0].id) || 'B01';
+  }
+
   async function pinCurrentResult() {
     if (!lastResult) return;
     const btn = RD.mount('btn-pin');
     btn.disabled = true;
     try {
-      const title = (lastResult.figure && lastResult.figure.caption) || '';
+      const rawTitle = (lastResult.figure && lastResult.figure.caption) || '';
+      const isChapter = lastResult.scope === 'chapter';
+      const title = isChapter && rawTitle && !rawTitle.startsWith('全章') ? ('全章 · ' + rawTitle) : rawTitle;
+      const pinBlocks = (lastResult.block_ids && lastResult.block_ids.length)
+        ? lastResult.block_ids
+        : (isChapter ? [firstValidAnchorForFigure(lastResult.figure)] : currentSelection.block_ids);
       const saved = await RD.api('/api/assist/pin', {
         method: 'POST',
         body: {
@@ -719,11 +1092,12 @@
           n: N,
           action: lastResult.action,
           title,
-          block_ids: lastResult.block_ids && lastResult.block_ids.length ? lastResult.block_ids : currentSelection.block_ids,
-          selected_text: lastResult.selected_text || currentSelection.text,
+          block_ids: pinBlocks,
+          selected_text: lastResult.selected_text || (isChapter ? '全章范围生成' : currentSelection.text),
           question: lastResult.question || '',
           content: lastResult.content || '',
           diagram_html: lastResult.diagram_html || '',
+          figure: lastResult.figure || null,
         },
       });
       data.assist_notes = (data.assist_notes || []).concat([saved]);
