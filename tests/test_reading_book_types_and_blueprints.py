@@ -305,8 +305,9 @@ def test_chapter_scope_full_context_caching_and_multi_block_selection(reading_ro
     assert "[B01]" in long_ctx
     assert "[B49]" in long_ctx
 
-    # 6. 多选区传入时，prompt 带上多段块号标记
+    # 6. 多选区传入时，prompt 带上多段块号标记；同时校验 chapter() 返回的 cached_tools 只含全章缓存
     ch_b2 = service.chapter("B0002", 1)
+    assert "social_diagram_causal_loop" in ch_b2["cached_tools"]
     all_ids = [b["id"] for b in ch_b2["blocks"]]
     sel_res = service.assist(
         "B0002",
@@ -319,3 +320,6 @@ def test_chapter_scope_full_context_caching_and_multi_block_selection(reading_ro
     )
     assert sel_res["scope"] == "selection"
     assert sel_res["figure"]["blueprint"] == "concept_matrix"
+    ch_b2_after = service.chapter("B0002", 1)
+    assert "social_diagram_causal_loop" in ch_b2_after["cached_tools"]
+    assert "social_diagram_concept_matrix" not in ch_b2_after["cached_tools"]

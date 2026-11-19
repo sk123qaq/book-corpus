@@ -732,7 +732,7 @@
           c.x +
           '" cy="' +
           c.y +
-          '" r="5" fill="var(--paper-card)" stroke="var(--cinnabar)" stroke-width="2.2"/><text x="' +
+          '" r="5" fill="var(--desk-card, var(--paper))" stroke="var(--cinnabar)" stroke-width="2.2"/><text x="' +
           c.x +
           '" y="' +
           lblY +
@@ -949,21 +949,21 @@
     const onFocusBlock = opts.onFocusBlock;
     const compact = Boolean(opts.compact);
     let viewMode = 'render';
+    let showInspect = false;
 
     const paint = () => {
-      const bpLabel = figure.blueprint || figure.family || 'flow';
       const auditLogs = figure.audit_log || [];
       let inner = '';
       if (viewMode === 'json') {
         inner = '<pre class="json-box">' + esc(JSON.stringify(figure, null, 2)) + '</pre>';
       } else if (viewMode === 'audit') {
         inner =
-          '<div class="pipe-step"><h5>后端审计日志（' +
+          '<div class="pipe-step"><h5>结构审计（' +
           auditLogs.length +
           ' 条）</h5><ul style="margin:4px 0 0;padding-left:18px">' +
           (auditLogs.length
             ? auditLogs.map((l) => '<li>' + esc(l) + '</li>').join('')
-            : '<li>字段与正文锚点均通过。</li>') +
+            : '<li>字段与正文锚点均已校验。</li>') +
           '</ul></div>';
       } else {
         inner = '<div class="bp-stage-inner">' + renderBlueprintBody(figure, { wide: false }) + '</div>';
@@ -976,35 +976,37 @@
         esc(figure.caption || '结构图解') +
         '</h4>' +
         '<div class="bp-head-right">' +
-        '<span class="bp-id-pill">' +
-        esc(bpLabel) +
-        '</span>' +
-        '<button type="button" class="bp-zoom-btn" data-bp-zoom>🔍 放大</button>' +
+        '<button type="button" class="bp-zoom-btn" data-bp-zoom title="宽屏展开查看">全览 ⤢</button>' +
         '</div></div>' +
         (figure.reading_note
-          ? '<div class="bp-note"><strong>阅读提示：</strong>' + esc(figure.reading_note) + '</div>'
+          ? '<div class="bp-note">' + esc(figure.reading_note) + '</div>'
           : '') +
-        (!compact
+        (!compact && showInspect
           ? '<div class="bp-mode-row"><div class="view-mode-tabs">' +
             '<button type="button" data-bp-mode="render" class="' +
             (viewMode === 'render' ? 'active' : '') +
-            '">渲染图</button>' +
+            '">图解</button>' +
             '<button type="button" data-bp-mode="audit" class="' +
             (viewMode === 'audit' ? 'active' : '') +
-            '">审计/质检</button>' +
+            '">审计</button>' +
             '<button type="button" data-bp-mode="json" class="' +
             (viewMode === 'json' ? 'active' : '') +
-            '">JSON</button>' +
-            '</div></div>'
+            '">原始数据</button>' +
+            '</div><span class="qa-badge" data-qa-pill></span></div>'
           : '') +
         inner +
-        (viewMode === 'render'
-          ? '<div class="bp-engine-foot"><span class="qa-badge" data-qa-pill>✓ 质检中…</span><span>' +
-            renderSrcTag('原文') +
-            ' 文内依据 · ' +
-            renderSrcTag('补充') +
-            ' 延伸</span></div>'
+        '<div class="bp-engine-foot">' +
+        '<span class="bp-foot-legend">' +
+        renderSrcTag('原文') +
+        ' 书中依据 · ' +
+        renderSrcTag('补充') +
+        ' 延伸</span>' +
+        (!compact
+          ? '<button type="button" class="bp-inspect-toggle" data-bp-inspect>' +
+            (showInspect ? '收起数据' : '数据与审计') +
+            '</button>'
           : '') +
+        '</div>' +
         '</div>';
 
       if (viewMode === 'render') {
@@ -1015,8 +1017,8 @@
           pill.className = 'qa-badge' + (qa.overlaps > 0 ? ' warn' : '');
           pill.textContent =
             qa.overlaps === 0
-              ? '✓ 实时质检：0 处重叠' + (qa.edgeFallbackCount ? '（' + qa.edgeFallbackCount + '条转图例）' : '')
-              : '⚠ 重叠：' + qa.details.join('；');
+              ? '排版无重叠' + (qa.edgeFallbackCount ? '（' + qa.edgeFallbackCount + '条转图例）' : '')
+              : '重叠：' + qa.details.join('；');
         }
         bindStageInteractions(stage, onFocusBlock);
       }
@@ -1026,6 +1028,15 @@
         zoomBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           openZoomModal(figure, onFocusBlock);
+        });
+      }
+      const inspectBtn = containerEl.querySelector('[data-bp-inspect]');
+      if (inspectBtn) {
+        inspectBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showInspect = !showInspect;
+          if (!showInspect) viewMode = 'render';
+          paint();
         });
       }
       containerEl.querySelectorAll('[data-bp-mode]').forEach((btn) => {
@@ -1045,17 +1056,20 @@
     const title = (sections[0] && sections[0].title) || '全章脉络';
     return (
       '<div class="map-tree-wrap"><div class="tree-root-row">' +
-      '<div class="tree-trunk">全章结构树<small>共 ' +
-      RD.fmt(sections.length) +
-      ' 节 · 点击分支定位正文</small></div>' +
       '<div class="tree-branches">' +
       sections
         .map(
-          (sec) =>
-            '<div class="tree-branch"><div class="tree-sec-title">' +
+          (sec, idx) =>
+            '<div class="tree-branch">' +
+            '<div class="tree-sec-head">' +
+            '<span class="tree-sec-num">' +
+            String(idx + 1).padStart(2, '0') +
+            '</span>' +
+            '<div class="tree-sec-title">' +
             esc(sec.title || title) +
             (sec.summary ? '<small>' + esc(sec.summary) + '</small>' : '') +
-            '</div><div class="tree-leaf-list">' +
+            '</div></div>' +
+            '<div class="tree-leaf-list">' +
             (sec.nodes || [])
               .map((node) => {
                 const target = (node.block_ids || sec.block_ids || [])[0] || '';
@@ -1063,8 +1077,10 @@
                   '<button type="button" class="tree-leaf" data-jump="' +
                   esc(target) +
                   '">' +
+                  '<span class="tree-leaf-txt">' +
                   esc(node.summary || node.id) +
-                  (target ? ' <span class="blk-anchor">' + esc(target) + '</span>' : '') +
+                  '</span>' +
+                  (target ? '<span class="tree-leaf-ref">' + esc(target) + '</span>' : '') +
                   '</button>'
                 );
               })

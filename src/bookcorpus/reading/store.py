@@ -193,6 +193,21 @@ class Store:
         self._write(self.chapter_tool_path(uid, n, key), json.dumps(payload, ensure_ascii=False, indent=1))
         return payload
 
+    def list_chapter_tools(self, uid, n, source_sha=None):
+        """列出当前章节未过期的全章工具缓存键（不含 .json 后缀）。"""
+        folder = os.path.join(self.pack_dir(uid, n), "chapter_tools")
+        if not os.path.isdir(folder):
+            return []
+        keys = []
+        for path in sorted(glob.glob(os.path.join(folder, "*.json"))):
+            doc = self._read_json(path)
+            if not isinstance(doc, dict):
+                continue
+            if source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha:
+                continue
+            keys.append(os.path.splitext(os.path.basename(path))[0])
+        return keys
+
     # ---- 全章活跃度统计（供书架/书页只读计数） -------------------------
     def activity_counts(self):
         """统计每本书已有旁批或知识地图的章数，以及总笔记/地图数。"""

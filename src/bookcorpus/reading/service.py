@@ -367,6 +367,7 @@ class ReadingService:
         cap_gate = evaluate(blocks, chapmap.plan_chunks(blocks, 18000, 100)).to_dict()
         notes = self.store.assist_notes(uid, n, source_sha=source_sha)
         cmap = self.store.chapter_map(uid, n, source_sha=source_sha)
+        cached_tools = self.store.list_chapter_tools(uid, n, source_sha=source_sha)
         ch_view = dict(chapter)
         ch_view["n"] = "%02d" % int(chapter["n"])
         ch_view["minutes"] = max(1, round(chapter.get("chars", 0) / WORDS_PER_MINUTE))
@@ -381,6 +382,7 @@ class ReadingService:
             "preflight": {"chapter_map": map_gate, "capacity": cap_gate},
             "assist_notes": notes,
             "chapter_map": cmap,
+            "cached_tools": cached_tools,
         }
 
     # ---- 划词局部伴读（POST /api/assist） ------------------------------

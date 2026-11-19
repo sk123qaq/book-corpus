@@ -19,22 +19,32 @@
   };
 
   let data = null;
+  let bookChapters = [];
   let showSpine = window.innerWidth >= 1180;
-  let showMap = false;
+  let spineTab = 'map'; // 'map' | 'terms' | 'toc'
+  let showMap = true;
   let showTerms = false;
   let showModelBox = false;
-  let drawerOpen = window.innerWidth >= 900;
+  let drawerOpen = window.innerWidth >= 960;
   let hidePins = false;
   let scopeMode = 'chapter';
   let activeToolKey = '';
+  let loadingToolKey = '';
+  let cachedToolKeys = new Set();
   let globalBound = false;
   let currentSelection = { block_ids: [], text: '' };
   let lastResult = null;
   let abortCtrl = null;
+  let mapLoading = false;
+  let mapStartedAt = 0;
+  let mapTimer = 0;
+  let mapError = '';
+  let mapAbortCtrl = null;
+  let scrollRaf = 0;
 
   const FALLBACK_PROFILES = {
     practical: {
-      read_type: 'practical', name: '实用型书', adler_category: '1. 实用型书',
+      read_type: 'practical', name: '实用型书', adler_category: '实用型书',
       goal: '锁定「目的 → 手段 → 成立条件」，并转化为可执行动作',
       blueprints: [
         { blueprint: 'flow_swimlane', label: 'SOP 流程图' },
@@ -44,8 +54,8 @@
       extensions: [{ action: 'checklist', label: '行动自检清单', cross_search: false }],
     },
     literature: {
-      read_type: 'literature', name: '想象文学', adler_category: '2. 想象文学',
-      goal: '重沉浸与体验：把握人物关系、情绪张力、舞台调度或意象节奏',
+      read_type: 'literature', name: '想象文学', adler_category: '想象文学',
+      goal: '把握人物关系、情绪张力、舞台调度与意象节奏',
       blueprints: [
         { blueprint: 'tension_curve', label: '叙事张力曲线' },
         { blueprint: 'relation_graph', label: '人物阵营图谱' },
@@ -54,8 +64,8 @@
       extensions: [{ action: 'imagery', label: '意象与舞台词典', cross_search: false }],
     },
     history: {
-      read_type: 'history', name: '历史书', adler_category: '3. 历史书',
-      goal: '多线并行时空对照、权力结构拆解，以及跨史家视角交叉比对',
+      read_type: 'history', name: '历史书', adler_category: '历史书',
+      goal: '多线并行时空对照、权力结构拆解与跨史家视角比对',
       blueprints: [
         { blueprint: 'parallel_timeline', label: '多线平行时间轴' },
         { blueprint: 'power_hierarchy', label: '权力结构树' },
@@ -64,8 +74,8 @@
       extensions: [{ action: 'compare_context', label: '多史家视角对照', cross_search: true }],
     },
     science: {
-      read_type: 'science', name: '科学与数学', adler_category: '4. 科学与数学',
-      goal: '理清核心问题、公理/实验前提、推导依赖与成立边界',
+      read_type: 'science', name: '科学与数学', adler_category: '科学与数学',
+      goal: '理清核心问题、公理前提、推导依赖与成立边界',
       blueprints: [
         { blueprint: 'derivation_dag', label: '公理-定理推导图' },
         { blueprint: 'sensitivity_chart', label: '变量敏感度曲线' },
@@ -74,8 +84,8 @@
       extensions: [{ action: 'boundary_check', label: '演进与适用边界', cross_search: false }],
     },
     philosophy: {
-      read_type: 'philosophy', name: '哲学书', adler_category: '5. 哲学书',
-      goal: '抠紧作者专属词义边界，剥离核心前提 → 推论 → 结论与反驳对象',
+      read_type: 'philosophy', name: '哲学书', adler_category: '哲学书',
+      goal: '抠紧作者专属词义边界，剥离前提 → 推论 → 结论与反驳',
       blueprints: [
         { blueprint: 'argument_map', label: '论证逻辑树' },
         { blueprint: 'term_contrast', label: '词义辨析双栏表' },
@@ -84,8 +94,8 @@
       extensions: [{ action: 'sparring_dossier', label: '学术交锋档案', cross_search: false }],
     },
     social: {
-      read_type: 'social', name: '社会科学', adler_category: '6. 社会科学',
-      goal: '以议题为中心：厘清混杂术语、多变量因果反馈与跨作者对照',
+      read_type: 'social', name: '社会科学', adler_category: '社会科学',
+      goal: '厘清混杂术语、多变量因果反馈与跨作者对照',
       blueprints: [
         { blueprint: 'causal_loop', label: '因果反馈回路图' },
         { blueprint: 'concept_matrix', label: '跨学派概念矩阵' },
@@ -94,27 +104,49 @@
       extensions: [{ action: 'method_audit', label: '方法与样本局限', cross_search: true }],
     },
     visual: {
-      read_type: 'visual', name: '图册与视觉', adler_category: '补充类（图册与设定集）',
-      goal: '建立构图元素、文物/工艺原型与时代流派索引',
+      read_type: 'visual', name: '图册与视觉', adler_category: '图册与设定集',
+      goal: '建立构图元素、工艺原型与时代流派索引',
       blueprints: [{ blueprint: 'element_matrix', label: '构图元素索引表' }],
       extensions: [{ action: 'craft_notes', label: '工艺流派考据', cross_search: false }],
     },
   };
 
-  function getStoredReadType() {
+  function getPref(key, fallback) {
     try {
-      return localStorage.getItem('reading-profile:' + UID) || '';
+      return localStorage.getItem(key) || fallback;
     } catch (e) {
-      return '';
+      return fallback;
     }
   }
 
-  function setStoredReadType(rt) {
+  function setPref(key, val) {
     try {
-      const def = (data && data.reading_profile && data.reading_profile.read_type) || '';
-      if (!rt || rt === def) localStorage.removeItem('reading-profile:' + UID);
-      else localStorage.setItem('reading-profile:' + UID, rt);
+      if (val == null || val === '') localStorage.removeItem(key);
+      else localStorage.setItem(key, String(val));
     } catch (e) {}
+  }
+
+  function applyTypographyPrefs() {
+    const size = getPref('reading-font-size', '18');
+    const measure = getPref('reading-measure', '680');
+    document.documentElement.style.setProperty('--reader-size', size + 'px');
+    document.documentElement.style.setProperty('--reader-measure', measure + 'px');
+    document.querySelectorAll('[data-font-size]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(btn.getAttribute('data-font-size') === size));
+    });
+    document.querySelectorAll('[data-measure]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(btn.getAttribute('data-measure') === measure));
+    });
+  }
+
+  function getStoredReadType() {
+    return getPref('reading-profile:' + UID, '');
+  }
+
+  function setStoredReadType(rt) {
+    const def = (data && data.reading_profile && data.reading_profile.read_type) || '';
+    if (!rt || rt === def) setPref('reading-profile:' + UID, '');
+    else setPref('reading-profile:' + UID, rt);
   }
 
   function activeProfile() {
@@ -205,7 +237,7 @@
       '<div class="arrival-row">' +
         '<div class="arrival-info">' +
           '<span class="arrival-badge">' + RD.esc(sourceLabel) + '</span>' +
-          (arrival.query ? '<span class="arrival-query">原问题：「' + RD.esc(arrival.query) + '」</span>' : '') +
+          (arrival.query ? '<span class="arrival-query">「' + RD.esc(arrival.query) + '」</span>' : '') +
           (bidLabel && primaryBid
             ? '<button type="button" class="wb-btn arrival-loc" id="btn-arrival-focus">定位到 ' + RD.esc(bidLabel) + '</button>'
             : '') +
@@ -218,7 +250,7 @@
           (arrival.from === 'search'
             ? '<a class="wb-btn" href="' + buildSearchHref(arrival.query, false) + '" target="_blank" rel="noopener">去书库重搜 ↗</a>'
             : '') +
-          '<button type="button" class="wb-btn" id="btn-arrival-close" aria-label="收起提示">×</button>' +
+          '<button type="button" class="wb-btn arrival-close" id="btn-arrival-close" aria-label="收起提示">×</button>' +
         '</div>' +
       '</div>';
 
@@ -260,6 +292,86 @@
     }
   }
 
+  function syncBackdrop() {
+    const bd = RD.mount('desk-backdrop');
+    if (!bd) return;
+    const narrowSpine = window.innerWidth <= 1180 && showSpine;
+    const narrowDrawer = window.innerWidth <= 920 && drawerOpen;
+    bd.hidden = !(narrowSpine || narrowDrawer);
+  }
+
+  function toolCacheKey(readType, action, blueprint) {
+    const keyPart = (action === 'diagram' && blueprint) ? blueprint : action;
+    return String(readType || 'social') + '_' + String(action || '') + '_' + String(keyPart || '');
+  }
+
+  function renderToolButtonsHtml(prof) {
+    const bps = prof.blueprints || [];
+    const exts = prof.extensions || [];
+    const checkSvg = '<svg class="tool-cache-ico" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8.4 6.5 11.7 12.8 4.6"/></svg>';
+    const bpButtons = bps.map((bp) => {
+      const key = 'diagram:' + bp.blueprint;
+      const ckey = toolCacheKey(prof.read_type, 'diagram', bp.blueprint);
+      const isCached = cachedToolKeys.has(ckey);
+      const isAct = activeToolKey === key;
+      const isLoad = loadingToolKey === key;
+      const cls = 'marg-tool-btn' +
+        (isCached ? ' is-cached' : ' is-uncached') +
+        (isAct ? ' active' : '') +
+        (isLoad ? ' is-loading' : '');
+      const tip = (bp.description ? bp.description + ' · ' : '') +
+        (scopeMode === 'selection'
+          ? (isCached ? '已有全章缓存；当前针对所选段即时生成，不覆盖缓存' : '当前针对所选段即时生成')
+          : (isCached ? '已有全章缓存，点击立即查看' : '尚未生成全章缓存，点击调用模型'));
+      return '<button type="button" class="' + cls + '"' +
+        ' data-run-blueprint="' + RD.esc(bp.blueprint) + '"' +
+        ' data-tool-key="' + RD.esc(key) + '"' +
+        ' data-cache-key="' + RD.esc(ckey) + '"' +
+        ' aria-pressed="' + String(isAct) + '"' +
+        ' title="' + RD.esc(tip) + '">' +
+        (isLoad ? '<span class="tool-spin-dot" aria-hidden="true"></span>' : (isCached ? checkSvg : '')) +
+        '<span>' + RD.esc(bp.label) + '</span>' +
+        '</button>';
+    }).join('');
+    const extButtons = exts.map((ext) => {
+      const key = 'ext:' + ext.action;
+      const ckey = toolCacheKey(prof.read_type, ext.action, '');
+      const isCached = cachedToolKeys.has(ckey);
+      const isAct = activeToolKey === key;
+      const isLoad = loadingToolKey === key;
+      const cls = 'marg-tool-btn' +
+        (isCached ? ' is-cached' : ' is-uncached') +
+        (isAct ? ' active' : '') +
+        (isLoad ? ' is-loading' : '');
+      const tip = (ext.hint ? ext.hint + ' · ' : '') +
+        (scopeMode === 'selection'
+          ? (isCached ? '已有全章缓存；当前针对所选段即时生成，不覆盖缓存' : '当前针对所选段即时生成')
+          : (isCached ? '已有全章缓存，点击立即查看' : '尚未生成全章缓存，点击调用模型'));
+      return '<button type="button" class="' + cls + '"' +
+        ' data-run-ext="' + RD.esc(ext.action) + '"' +
+        ' data-tool-key="' + RD.esc(key) + '"' +
+        ' data-cache-key="' + RD.esc(ckey) + '"' +
+        ' aria-pressed="' + String(isAct) + '"' +
+        ' title="' + RD.esc(tip) + '">' +
+        (isLoad ? '<span class="tool-spin-dot" aria-hidden="true"></span>' : (isCached ? checkSvg : '')) +
+        '<span>' + RD.esc(ext.label) + '</span>' +
+        '</button>' +
+        (ext.cross_search ? '<button type="button" class="marg-tool-btn is-link" data-cross-book title="在书库其他书中查找相关论述">跨书对照 ↗</button>' : '');
+    }).join('');
+    return bpButtons + extButtons;
+  }
+
+  function syncToolButtons() {
+    const strip = RD.mount('wb-profile-strip');
+    if (!strip) return;
+    const prof = activeProfile();
+    const btnsWrap = strip.querySelector('.marg-ribbon-btns');
+    if (btnsWrap) {
+      btnsWrap.innerHTML = renderToolButtonsHtml(prof);
+    }
+    updateScopeIndicator();
+  }
+
   function renderShell() {
     const book = data.book;
     const ch = data.chapter;
@@ -271,69 +383,88 @@
       Object.values(FALLBACK_PROFILES).map((p) => ({ read_type: p.read_type, name: p.name, adler_category: p.adler_category }));
 
     RD.mount('crumb').innerHTML =
-      '<a href="/">书架</a><i>/</i>' +
-      '<a href="' + RD.bookHref(book.uid) + '">' + RD.esc(book.title_short || book.title) + '</a><i>/</i>' +
-      '<span>第 ' + RD.esc(ch.n) + ' 章</span>';
+      '<a class="crumb-book" href="' + RD.bookHref(book.uid) + '" title="' + RD.esc(book.title) + '">' +
+        RD.esc(book.title_short || book.title) +
+      '</a><i>/</i>' +
+      '<span class="crumb-ch">第 ' + RD.esc(ch.n) + ' 章</span>';
     document.title = ch.title + ' · ' + (book.title_short || book.title);
 
     const profileOpts = avail.map((item) =>
       '<option value="' + RD.esc(item.read_type) + '"' + (item.read_type === prof.read_type ? ' selected' : '') + '>' +
-      RD.esc(item.name) + '（' + RD.esc(item.adler_category) + '）</option>'
+      RD.esc(item.name) + '</option>'
     ).join('');
 
     const hintNote = prof.boundary_hint || prof.sub_kind_hint || '';
     const bps = prof.blueprints || [];
-    const exts = prof.extensions || [];
-    const bpButtons = bps.map((bp, idx) => {
-      const key = 'diagram:' + bp.blueprint;
-      const isAct = activeToolKey === key ? ' active' : '';
-      return '<button type="button" class="wb-btn marg-tool-btn bp-rec' + isAct + '" data-run-blueprint="' + RD.esc(bp.blueprint) +
-        '" title="' + RD.esc(bp.description || '') + '">' +
-        RD.esc(bp.label) + (idx === 0 ? ' <span class="mini-tag">推荐</span>' : '') + '</button>';
-    }).join('');
-    const extButtons = exts.map((ext) => {
-      const key = 'ext:' + ext.action;
-      const isAct = activeToolKey === key ? ' active' : '';
-      return '<button type="button" class="wb-btn marg-tool-btn bp-ext' + isAct + '" data-run-ext="' + RD.esc(ext.action) +
-        '" title="' + RD.esc(ext.hint || '') + '">' + RD.esc(ext.label) + '</button>' +
-        (ext.cross_search ? '<button type="button" class="wb-btn marg-tool-btn" data-cross-book>跨书对照 ↗</button>' : '');
-    }).join('');
+    const toolButtonsHtml = renderToolButtonsHtml(prof);
 
     const spineBtn = RD.mount('btn-spine');
     if (spineBtn) spineBtn.setAttribute('aria-pressed', String(showSpine));
+    const drawerTopBtn = RD.mount('btn-drawer-top');
+    if (drawerTopBtn) drawerTopBtn.setAttribute('aria-pressed', String(drawerOpen));
 
     const firstBp = bps[0] || null;
+    const bookColor = book.color || '#1E3A36';
     const gridCls = 'wb-grid folio-grid' + (drawerOpen ? ' has-drawer' : '') + (showSpine ? '' : ' hide-spine');
 
     RD.mount('wb-root').innerHTML =
       '<div class="' + gridCls + '" id="wb-grid">' +
-        '<aside class="left-spine" id="left-spine">' +
-          '<div class="spine-section">' +
-            '<div class="spine-label">阅读视角（不改人账）</div>' +
-            '<select class="spine-select" id="profile-select" aria-label="切换阅读视角">' + profileOpts + '</select>' +
-            (prof.overridden ? '<div style="margin-top:6px"><span class="override-badge">已临时切换</span></div>' : '') +
-            (prof.goal ? '<div class="spine-goal">' + RD.esc(prof.goal) + '</div>' : '') +
-            (hintNote ? '<div class="boundary-note">' + RD.esc(hintNote) + '</div>' : '') +
+        '<aside class="left-spine" id="left-spine" aria-label="章节导览">' +
+          '<div class="spine-book-head" style="--book-cloth:' + RD.esc(bookColor) + '">' +
+            '<a class="spine-book-link" href="' + RD.bookHref(book.uid) + '">' +
+              '<span class="spine-cloth-bar" aria-hidden="true"></span>' +
+              '<span class="spine-book-meta">' +
+                '<strong class="spine-book-title">' + RD.esc(book.title_short || book.title) + '</strong>' +
+                '<small class="spine-book-sub" id="spine-book-sub">' +
+                  RD.esc(book.author_display || book.author || '') +
+                  (book.subject ? ' · ' + RD.esc(book.subject) : '') +
+                '</small>' +
+              '</span>' +
+            '</a>' +
           '</div>' +
 
-          '<div class="spine-section">' +
-            '<div class="spine-label">全章工作台</div>' +
-            '<div class="wb-toolbar" id="wb-toolbar">' +
-              '<button type="button" class="wb-btn" id="btn-map" aria-pressed="' + showMap + '">知识地图' + (mapReady ? '（已缓存）' : '') + '</button>' +
-              '<button type="button" class="wb-btn" id="btn-terms" aria-pressed="' + showTerms + '">核心术语</button>' +
-              '<button type="button" class="wb-btn" id="btn-toggle-pins" aria-pressed="' + (!hidePins) + '">旁批 <b id="pin-count">' + pinCount + '</b></button>' +
-              '<button type="button" class="wb-btn" id="btn-model-box" aria-pressed="' + showModelBox + '">模型设置</button>' +
-              '<button type="button" class="wb-btn" id="btn-drawer" aria-pressed="' + drawerOpen + '">伴读抽屉</button>' +
+          '<div class="spine-tabs wb-toolbar" id="wb-toolbar" role="tablist" aria-label="导览视图">' +
+            '<button type="button" class="spine-tab" id="btn-map" role="tab" aria-pressed="' + (spineTab === 'map') + '">' +
+              mapTabInnerHtml(mapReady) +
+            '</button>' +
+            '<button type="button" class="spine-tab" id="btn-terms" role="tab" aria-pressed="' + (spineTab === 'terms') + '">核心术语</button>' +
+            '<button type="button" class="spine-tab" id="btn-toc" role="tab" aria-pressed="' + (spineTab === 'toc') + '">全书目录</button>' +
+          '</div>' +
+
+          '<div class="spine-scroll" id="spine-scroll">' +
+            '<div class="spine-panel" id="map-drawer"' + (spineTab === 'toc' ? ' hidden' : '') + '></div>' +
+            '<div class="spine-panel" id="toc-drawer"' + (spineTab === 'toc' ? '' : ' hidden') + '>' +
+              '<div class="spine-muted-empty">正在载入全书目录…</div>' +
             '</div>' +
-            '<div class="wb-top-drawer" id="model-box"' + (showModelBox ? '' : ' hidden') + '>' + RD.modelSettingsHtml() + '</div>' +
-            '<div class="wb-top-drawer" id="map-drawer" hidden></div>' +
           '</div>' +
 
-          '<div class="spine-section">' +
-            '<div class="spine-label">书库跳转</div>' +
-            '<div class="spine-links">' +
-              '<a href="' + RD.bookHref(book.uid) + '">← 回《' + RD.esc(book.title_short || book.title) + '》书页</a>' +
+          '<div class="spine-foot">' +
+            '<div class="spine-model-wrap" id="model-box"' + (showModelBox ? '' : ' hidden') + '>' +
+              '<div class="spine-model-head"><span>伴读模型配置</span></div>' +
+              RD.modelSettingsHtml() +
+            '</div>' +
+
+            '<div class="spine-perspective-row">' +
+              '<label class="spine-persp-lbl" for="profile-select" title="仅调整本章伴读工具视角，不改动书库人账分类">视角</label>' +
+              '<div class="spine-select-wrap">' +
+                '<select class="spine-select" id="profile-select" aria-label="切换阅读视角">' + profileOpts + '</select>' +
+                '<svg class="spine-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>' +
+              '</div>' +
+              (prof.overridden ? '<span class="override-dot" title="已临时切换阅读视角">已切换</span>' : '') +
+            '</div>' +
+            (hintNote ? '<p class="spine-persp-note">' + RD.esc(hintNote) + '</p>' : '') +
+
+            '<div class="spine-util-row">' +
+              '<button type="button" class="spine-util-btn" id="btn-toggle-pins" aria-pressed="' + (!hidePins) + '" title="显示或隐藏正文内钉住的旁批">' +
+                '旁批 <b id="pin-count">' + pinCount + '</b>' +
+              '</button>' +
+              '<button type="button" class="spine-util-btn" id="btn-model-box" aria-pressed="' + showModelBox + '" title="模型与推理深度设置">模型</button>' +
+              '<button type="button" class="spine-util-btn" id="btn-drawer" aria-pressed="' + drawerOpen + '" title="展开或收起右侧伴读">伴读</button>' +
+            '</div>' +
+
+            '<div class="spine-quick-links">' +
               '<a href="' + buildSearchHref('', true) + '" target="_blank" rel="noopener">本书内检索 ↗</a>' +
+              '<span aria-hidden="true">·</span>' +
               '<a href="/records?uid=' + encodeURIComponent(UID) + '">本章日志 →</a>' +
             '</div>' +
           '</div>' +
@@ -341,55 +472,79 @@
 
         '<section class="center-page" id="center-page">' +
           '<div class="page-inner">' +
-            '<div class="wb-top-drawer arrival-banner" id="arrival-banner" hidden></div>' +
+            '<div class="arrival-banner" id="arrival-banner" hidden></div>' +
             '<header class="book-chapter-title">' +
-              '<div class="kicker">' + RD.esc(book.title) + (book.subject ? ' · ' + RD.esc(book.subject) : '') + ' · ' + RD.esc(prof.name) + '视角</div>' +
+              '<div class="kicker">' +
+                '<span>' + RD.esc(book.title) + '</span>' +
+                (book.subject ? '<span class="kicker-sep">·</span><span>' + RD.esc(book.subject) + '</span>' : '') +
+                '<span class="kicker-sep">·</span><span class="kicker-persp">' + RD.esc(prof.name) + '</span>' +
+              '</div>' +
               '<h1>' + RD.esc(ch.title) + '</h1>' +
               '<div class="colophon">' +
-                '<span>' + RD.fmt(ch.chars) + ' 字 · ' + RD.fmt(blockCount) + ' 个原文块 · 约 ' + RD.fmt(ch.minutes) + ' 分钟 · 100% 完整正文直出</span>' +
-                '<button type="button" class="colophon-drawer-btn" id="btn-drawer-reopen"' + (drawerOpen ? ' hidden' : '') + '>展开右侧伴读签栏 →</button>' +
+                '<span class="colophon-stats">' +
+                  RD.fmt(ch.chars) + ' 字' +
+                  '<em>·</em>约 ' + RD.fmt(ch.minutes) + ' 分钟' +
+                  '<em>·</em>' + RD.fmt(blockCount) + ' 段' +
+                  '<em>·</em>100% 完整正文直出' +
+                '</span>' +
+                '<button type="button" class="colophon-drawer-btn" id="btn-drawer-reopen"' + (drawerOpen ? ' hidden' : '') + '>打开伴读 →</button>' +
               '</div>' +
             '</header>' +
             '<article class="reader-column"><div class="reader-body" id="reader-body"></div></article>' +
+            '<nav class="chapter-pager" id="chapter-pager" aria-label="章节翻页"></nav>' +
           '</div>' +
         '</section>' +
 
-        '<aside class="assist-drawer right-marginalia" id="assist-drawer"' + (drawerOpen ? '' : ' hidden') + '>' +
-          '<div class="marg-tabs">' +
-            '<button type="button" id="tab-scope-chapter" data-scope-tab="chapter">全章工具（' + RD.fmt(blockCount) + ' 段）</button>' +
-            '<button type="button" id="tab-scope-selection" data-scope-tab="selection">选段精读（未选）</button>' +
-          '</div>' +
-          (bpButtons || extButtons
-            ? '<div class="wb-profile-strip marg-tool-ribbon" id="wb-profile-strip">' +
-                '<div class="marg-ribbon-meta">' +
-                  '<span class="wb-profile-strip-lbl">' + RD.esc(prof.name) + '工具</span>' +
-                  '<span class="scope-pill" id="strip-scope-pill"></span>' +
-                '</div>' +
-                '<div class="marg-ribbon-btns">' + bpButtons + extButtons + '</div>' +
-              '</div>'
-            : '') +
+        '<aside class="assist-drawer right-marginalia" id="assist-drawer"' + (drawerOpen ? '' : ' hidden') + ' aria-label="朱批伴读">' +
           '<div class="drawer-head">' +
-            '<h3 id="drawer-title">朱批伴读</h3>' +
-            '<div style="display:flex;gap:6px">' +
-              '<button type="button" class="wb-btn" id="btn-pin" disabled>钉住到段落</button>' +
-              '<button type="button" class="wb-btn" id="btn-drawer-close" aria-label="收起抽屉">×</button>' +
+            '<div class="drawer-head-left">' +
+              '<span class="drawer-seal" aria-hidden="true">批</span>' +
+              '<h3 id="drawer-title">伴读</h3>' +
+            '</div>' +
+            '<div class="drawer-head-actions">' +
+              '<button type="button" class="desk-ghost-btn" id="btn-pin" disabled title="将当前回答固定到对应段落下方">钉住到段落</button>' +
+              '<button type="button" class="desk-icon-btn sm" id="btn-drawer-close" aria-label="收起抽屉" title="收起伴读（]）">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+              '</button>' +
             '</div>' +
           '</div>' +
+
+          '<div class="marg-deck">' +
+            '<div class="marg-scope-row">' +
+              '<div class="marg-tabs" role="tablist">' +
+                '<button type="button" id="tab-scope-chapter" data-scope-tab="chapter">全章 · ' + RD.fmt(blockCount) + '段</button>' +
+                '<button type="button" id="tab-scope-selection" data-scope-tab="selection">选段精读</button>' +
+              '</div>' +
+              '<span class="scope-pill" id="strip-scope-pill"></span>' +
+            '</div>' +
+            (toolButtonsHtml
+              ? '<div class="marg-tool-ribbon" id="wb-profile-strip">' +
+                  '<div class="marg-ribbon-btns">' + toolButtonsHtml + '</div>' +
+                '</div>'
+              : '') +
+          '</div>' +
+
           '<div class="drawer-scope-bar" id="drawer-scope-bar" hidden></div>' +
+
           '<div class="drawer-body" id="drawer-body">' +
-            '<div class="empty" id="drawer-empty">' +
-              '<p style="margin:0 0 10px">不选段落时点上方工具，默认基于<b>全章（' + RD.fmt(blockCount) + ' 段）</b>生成；在中间正文中拖选单段或多段文字，或点段尾 <b>✦</b>，即可切到选段精读。</p>' +
-              (firstBp ? '<button type="button" class="wb-btn primary" id="btn-quick-first-bp">用「' + RD.esc(firstBp.label) + '」总览全章 →</button>' : '') +
+            '<div class="marg-empty" id="drawer-empty">' +
+              '<div class="marg-empty-kicker">' + RD.esc(prof.name) + ' · 随文伴读</div>' +
+              '<p class="marg-empty-lead">在正文里划选任意句子，或点击段尾 <b>✦</b>，即可对局部精读、讲人话或拆解前提；未选段时，上方工具直接分析全章。</p>' +
+              (prof.goal ? '<p class="marg-empty-goal">' + RD.esc(prof.goal) + '</p>' : '') +
+              '<div class="marg-empty-actions">' +
+                (firstBp ? '<button type="button" class="desk-primary-btn" id="btn-quick-first-bp">用「' + RD.esc(firstBp.label) + '」总览全章 →</button>' : '') +
+              '</div>' +
             '</div>' +
             '<div class="drawer-quote" id="drawer-quote" hidden></div>' +
             '<div class="drawer-diagram" id="drawer-diagram"></div>' +
             '<div class="drawer-answer" id="drawer-answer"></div>' +
-            '<div class="wb-sub" id="drawer-meta" style="margin-top:10px;font-size:11.5px"></div>' +
+            '<div class="drawer-meta" id="drawer-meta"></div>' +
           '</div>' +
+
           '<div class="drawer-foot">' +
             '<form class="drawer-ask" id="drawer-ask-form">' +
-              '<input id="drawer-ask-input" placeholder="针对当前作用域或选中段落继续追问…" aria-label="追问内容">' +
-              '<button type="submit" class="wb-btn primary">追问</button>' +
+              '<input id="drawer-ask-input" placeholder="对全章或所选段落提问…" aria-label="追问内容">' +
+              '<button type="submit" class="drawer-send-btn">追问</button>' +
             '</form>' +
           '</div>' +
         '</aside>' +
@@ -403,6 +558,8 @@
         activeToolKey = '';
         renderShell();
         renderMapDrawer();
+        renderTocDrawer();
+        renderChapterPager();
         renderBlocks();
         renderSelectionBarButtons();
         bindEvents();
@@ -411,11 +568,12 @@
     }
     updateScopeIndicator();
     renderArrivalBanner();
+    syncBackdrop();
   }
 
   function formatSelectionSpan(ids) {
     if (!ids || !ids.length) return '';
-    return ids.length === 1 ? ids[0] : (ids[0] + '–' + ids[ids.length - 1] + ' (' + ids.length + '段)');
+    return ids.length === 1 ? ids[0] : (ids[0] + '–' + ids[ids.length - 1] + '（' + ids.length + '段）');
   }
 
   function updateScopeIndicator() {
@@ -427,20 +585,20 @@
     const tabSel = RD.mount('tab-scope-selection');
     if (tabCh) {
       tabCh.classList.toggle('active', scopeMode === 'chapter');
-      tabCh.textContent = '全章工具（' + RD.fmt(total) + ' 段）';
+      tabCh.textContent = '全章 · ' + RD.fmt(total) + '段';
     }
     if (tabSel) {
       tabSel.classList.toggle('active', scopeMode === 'selection' && ids.length > 0);
-      tabSel.textContent = ids.length ? ('选段精读（' + formatSelectionSpan(ids) + '）') : '选段精读（未选）';
+      tabSel.textContent = ids.length ? ('选段 · ' + formatSelectionSpan(ids)) : '选段精读';
       tabSel.disabled = ids.length === 0;
     }
 
     const pill = RD.mount('strip-scope-pill');
     if (!pill) return;
     if (scopeMode === 'selection' && ids.length) {
+      pill.hidden = false;
       pill.className = 'scope-pill is-sel';
-      pill.innerHTML = '已选 ' + RD.esc(formatSelectionSpan(ids)) +
-        ' <button type="button" class="scope-reset" id="btn-clear-scope" title="清除选段并切回针对全章">切回全章 ×</button>';
+      pill.innerHTML = '<button type="button" class="scope-reset" id="btn-clear-scope" title="清除选段并切回全章">切回全章 ×</button>';
       const clr = RD.mount('btn-clear-scope');
       if (clr) {
         clr.addEventListener('click', (e) => {
@@ -449,8 +607,22 @@
         });
       }
     } else {
-      pill.className = 'scope-pill';
-      pill.textContent = '全章范围（' + RD.fmt(total) + ' 段）';
+      const prof = activeProfile();
+      const allKeys = []
+        .concat((prof.blueprints || []).map((bp) => toolCacheKey(prof.read_type, 'diagram', bp.blueprint)))
+        .concat((prof.extensions || []).map((ext) => toolCacheKey(prof.read_type, ext.action, '')));
+      const hitCount = allKeys.filter((k) => cachedToolKeys.has(k)).length;
+      if (allKeys.length) {
+        pill.hidden = false;
+        pill.className = 'scope-pill cache-legend';
+        pill.title = '实线带 ✓ 标记的工具已有全章缓存，点击立即可看；虚线框工具尚未缓存，点击将调用模型';
+        pill.innerHTML =
+          '<span class="cache-legend-mark" aria-hidden="true">✓</span>' +
+          '<span>已缓存 ' + hitCount + '/' + allKeys.length + '</span>';
+      } else {
+        pill.hidden = true;
+        pill.innerHTML = '';
+      }
     }
   }
 
@@ -483,7 +655,7 @@
       const head = (blk.head || []).length
         ? '<thead><tr>' + blk.head.map((c) => '<th>' + highlightEscaped(c, probe) + '</th>').join('') + '</tr></thead>' : '';
       const rows = (blk.rows || []).map((r) => '<tr>' + (r || []).map((c) => '<td>' + highlightEscaped(c, probe) + '</td>').join('') + '</tr>').join('');
-      return '<table>' + head + '<tbody>' + rows + '</tbody></table>';
+      return '<div class="reader-table-wrap"><table>' + head + '<tbody>' + rows + '</tbody></table></div>';
     }
     if (kind === 'image') {
       const rel = blk.rel || '';
@@ -493,7 +665,7 @@
           (text ? '<figcaption class="wb-sub">' + RD.esc(text) + '</figcaption>' : '') + '</figure>'
         : '<p class="wb-sub">[图片] ' + RD.esc(text) + '</p>';
     }
-    if (kind === 'footnote') return '<p class="wb-sub">' + highlightEscaped(text, probe) + '</p>';
+    if (kind === 'footnote') return '<p class="reader-footnote">' + highlightEscaped(text, probe) + '</p>';
     return '<p>' + highlightEscaped(text, probe) + '</p>';
   }
 
@@ -514,22 +686,26 @@
       const pinned = notesByAnchor.get(bid) || [];
       const pinsHtml = pinned.length
         ? '<div class="pinned-notes">' + pinned.map((note) =>
-            '<div class="pin-card" data-note-id="' + RD.esc(note.id) + '">' +
+            '<aside class="pin-card" data-note-id="' + RD.esc(note.id) + '">' +
               '<div class="pin-card-head">' +
-                '<b>' + RD.esc(RD.actionNames[note.action] || note.action || '旁批') +
-                  (note.title ? ' · ' + RD.esc(note.title) : '') + '</b>' +
-                '<span>' + RD.esc((note.block_ids || []).join(', ')) +
-                  (note.stale ? ' · 原文已变' : '') + '</span>' +
-                '<button type="button" class="pin-del" data-del-pin="' + RD.esc(note.id) + '">移除</button>' +
+                '<div class="pin-card-title">' +
+                  '<span class="pin-kind">' + RD.esc(RD.actionNames[note.action] || note.action || '旁批') + '</span>' +
+                  (note.title ? '<b>' + RD.esc(note.title) + '</b>' : '') +
+                '</div>' +
+                '<div class="pin-card-meta">' +
+                  '<span>' + RD.esc((note.block_ids || []).join(', ')) +
+                    (note.stale ? ' · 原文已变' : '') + '</span>' +
+                  '<button type="button" class="pin-del" data-del-pin="' + RD.esc(note.id) + '">移除</button>' +
+                '</div>' +
               '</div>' +
               (note.figure ? '<div class="pin-figure-mount" data-pin-figure="' + RD.esc(note.id) + '"></div>' : (note.diagram_html ? '<div>' + note.diagram_html + '</div>' : '')) +
               (note.content ? '<div class="drawer-answer">' + RD.renderMarkdown(note.content) + '</div>' : '') +
-            '</div>'
+            '</aside>'
           ).join('') + '</div>'
         : '';
       return '<div class="reader-block' + (isHit ? ' hit' : '') + '" id="blk-' + RD.esc(bid) + '" data-block="' + RD.esc(bid) + '" data-kind="' + RD.esc(blk.kind || 'paragraph') + '">' +
         renderBlockHtml(blk) +
-        '<button type="button" class="blk-trigger" data-trigger="' + RD.esc(bid) + '" title="对第 ' + RD.esc(bid) + ' 段伴读">✦</button>' +
+        '<button type="button" class="blk-trigger" data-trigger="' + RD.esc(bid) + '" title="对 ' + RD.esc(bid) + ' 伴读">✦</button>' +
         pinsHtml +
       '</div>';
     }).join('');
@@ -548,29 +724,87 @@
     if (countEl) countEl.textContent = String((data.assist_notes || []).length);
   }
 
+  function renderLocalHeadingsFallback() {
+    const headings = ((data && data.blocks) || []).filter((b) => b.kind === 'heading' && b.text);
+    if (!headings.length) return '';
+    return (
+      '<div class="local-headings">' +
+        '<div class="local-headings-lbl">正文小节</div>' +
+        headings.map((h) =>
+          '<button type="button" class="tree-leaf" data-jump="' + RD.esc(h.id) + '">' +
+            '<span class="tree-leaf-txt">' + RD.esc(h.text) + '</span>' +
+            '<span class="tree-leaf-ref">' + RD.esc(h.id) + '</span>' +
+          '</button>'
+        ).join('') +
+      '</div>'
+    );
+  }
+
+  function mapTabInnerHtml(mapReady) {
+    if (mapLoading) return '知识地图<span class="tab-loading">（生成中…）</span>';
+    if (mapReady) return '知识地图<span class="tab-cached">（已缓存）</span>';
+    return '知识地图';
+  }
+
+  function syncMapTabLabel() {
+    const btn = RD.mount('btn-map');
+    if (!btn) return;
+    const mapReady = Boolean(data && data.chapter_map && data.chapter_map.supported !== false);
+    btn.innerHTML = mapTabInnerHtml(mapReady);
+  }
+
+  function mapElapsedText() {
+    const secs = Math.max(0, Math.floor((Date.now() - mapStartedAt) / 1000));
+    return secs > 0 ? ('已用时 ' + secs + ' 秒') : '正在请求模型…';
+  }
+
   function renderMapDrawer() {
     const box = RD.mount('map-drawer');
-    if (!showMap && !showTerms) {
+    const tocBox = RD.mount('toc-drawer');
+    if (!box) return;
+    if (spineTab === 'toc') {
       box.hidden = true;
+      if (tocBox) tocBox.hidden = false;
       return;
     }
+    if (tocBox) tocBox.hidden = true;
     box.hidden = false;
+
+    if (mapLoading) {
+      box.innerHTML =
+        '<div class="spine-cta-card spine-loading-card" aria-busy="true">' +
+          '<div class="spine-loading-head">' +
+            '<span class="spine-pulse-dot" aria-hidden="true"></span>' +
+            '<strong>正在提炼全章脉络与术语…</strong>' +
+          '</div>' +
+          '<p class="spine-loading-sub"><span id="map-elapsed">' + RD.esc(mapElapsedText()) + '</span> · 切换目录或继续阅读不会中断任务</p>' +
+          '<button type="button" class="desk-ghost-btn" id="btn-cancel-map">取消生成</button>' +
+        '</div>' + renderLocalHeadingsFallback();
+      bindMapButtons();
+      return;
+    }
+
     const cmap = data.chapter_map;
     const gate = (data.preflight && data.preflight.chapter_map) || { supported: true, reason: '' };
+    const errHtml = mapError ? '<p class="spine-error-note">' + RD.esc(mapError) + '</p>' : '';
 
     if (!cmap) {
       if (!gate.supported) {
         box.innerHTML =
-          '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
-            '<div><b>无需强行展开导图</b> · <span class="wb-sub">' + RD.esc(gate.reason) + '</span></div>' +
-            '<button type="button" class="wb-btn" id="btn-gen-map-force">仍要展开简图（调用模型）</button>' +
-          '</div>';
+          '<div class="spine-cta-card">' +
+            '<strong>无需强行展开导图</strong>' +
+            '<p>' + RD.esc(gate.reason) + '</p>' +
+            errHtml +
+            '<button type="button" class="desk-ghost-btn" id="btn-gen-map-force">仍要展开简图</button>' +
+          '</div>' + renderLocalHeadingsFallback();
       } else {
         box.innerHTML =
-          '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
-            '<div><b>按需生成全章知识地图与术语</b> · <span class="wb-sub">点击后一次性提取结构节拍与核心概念，并缓存供后续复用。</span></div>' +
-            '<button type="button" class="wb-btn primary" id="btn-gen-map">生成知识地图 →</button>' +
-          '</div>';
+          '<div class="spine-cta-card">' +
+            '<strong>全章知识地图与术语</strong>' +
+            '<p>按需提取本章的结构节拍与关键概念，生成后自动缓存以便随时跳转。</p>' +
+            errHtml +
+            '<button type="button" class="desk-primary-btn" id="btn-gen-map">生成知识地图 →</button>' +
+          '</div>' + renderLocalHeadingsFallback();
       }
       bindMapButtons();
       return;
@@ -578,54 +812,124 @@
 
     if (cmap.supported === false) {
       box.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
-          '<div><b>直读建议</b> · <span class="wb-sub">' + RD.esc(cmap.reason) + '</span></div>' +
-          '<button type="button" class="wb-btn" id="btn-gen-map-force">仍要展开简图</button>' +
-        '</div>';
+        '<div class="spine-cta-card">' +
+          '<strong>直读建议</strong>' +
+          '<p>' + RD.esc(cmap.reason) + '</p>' +
+          '<button type="button" class="desk-ghost-btn" id="btn-gen-map-force">仍要展开简图</button>' +
+        '</div>' + renderLocalHeadingsFallback();
       bindMapButtons();
       return;
     }
 
-    let html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
-      '<div><b>全章知识地图</b> · <span class="wb-sub">' +
-        RD.fmt((cmap.sections || []).length) + ' 节 · ' +
-        RD.fmt((cmap.terms || []).length) + ' 个术语' +
-        (cmap.stale ? ' · 原文已更新，建议重生成' : '') +
-      '</span></div>' +
-      '<button type="button" class="wb-btn" id="btn-gen-map-force">重新生成</button>' +
-    '</div>';
+    let html =
+      '<div class="spine-map-bar">' +
+        '<span class="spine-map-stat">' +
+          RD.fmt((cmap.sections || []).length) + ' 节 · ' +
+          RD.fmt((cmap.terms || []).length) + ' 术语' +
+          (cmap.stale ? ' · 原文已变' : '') +
+        '</span>' +
+        '<button type="button" class="spine-text-btn" id="btn-gen-map-force" title="忽略缓存重新生成">↻ 更新</button>' +
+      '</div>';
 
-    if (showMap && (cmap.sections || []).length) {
-      if (RD.diagrams && RD.diagrams.renderChapterMapTree) {
-        html += RD.diagrams.renderChapterMapTree(cmap);
-      } else {
-        html += '<div class="map-sections">' + cmap.sections.map((sec) =>
-          '<div class="map-card"><h4>' + RD.esc(sec.title) + '</h4>' +
-          (sec.summary ? '<p>' + RD.esc(sec.summary) + '</p>' : '') +
-          '<div class="map-nodes">' + (sec.nodes || []).map((node) => {
-            const target = (node.block_ids || sec.block_ids || [])[0] || '';
-            return '<button type="button" class="map-node" data-jump="' + RD.esc(target) + '">' +
-              RD.esc(node.summary || node.id) +
-              (target ? ' <span class="wb-sub">[' + RD.esc(target) + ']</span>' : '') + '</button>';
-          }).join('') + '</div></div>'
-        ).join('') + '</div>';
+    if (spineTab === 'map') {
+      if ((cmap.sections || []).length) {
+        if (RD.diagrams && RD.diagrams.renderChapterMapTree) {
+          html += RD.diagrams.renderChapterMapTree(cmap);
+        } else {
+          html += '<div class="map-sections">' + cmap.sections.map((sec) =>
+            '<div class="map-card"><h4>' + RD.esc(sec.title) + '</h4>' +
+            (sec.summary ? '<p>' + RD.esc(sec.summary) + '</p>' : '') +
+            '<div class="map-nodes">' + (sec.nodes || []).map((node) => {
+              const target = (node.block_ids || sec.block_ids || [])[0] || '';
+              return '<button type="button" class="map-node" data-jump="' + RD.esc(target) + '">' +
+                RD.esc(node.summary || node.id) +
+                (target ? ' <span class="wb-sub">[' + RD.esc(target) + ']</span>' : '') + '</button>';
+            }).join('') + '</div></div>'
+          ).join('') + '</div>';
+        }
       }
-    }
-    if (showTerms) {
+      if ((cmap.figures || []).length) {
+        html += cmap.figures.map((fig) => fig.html || '').join('');
+      }
+    } else if (spineTab === 'terms') {
       const terms = cmap.terms || [];
       html += terms.length
         ? '<div class="term-pills">' + terms.map((t) =>
             '<button type="button" class="term-pill" data-jump="' + RD.esc(t.source_block || '') + '">' +
-              '<b>' + RD.esc(t.term) + '</b>：' + RD.esc(t.definition) +
+              '<div class="term-pill-head"><b>' + RD.esc(t.term) + '</b>' +
+              (t.source_block ? '<span class="tree-leaf-ref">' + RD.esc(t.source_block) + '</span>' : '') +
+              '</div>' +
+              '<div class="term-pill-def">' + RD.esc(t.definition) + '</div>' +
             '</button>'
           ).join('') + '</div>'
-        : '<p class="wb-sub" style="margin:10px 0 0">本章未提取出独立术语。</p>';
-    }
-    if (showMap && (cmap.figures || []).length) {
-      html += cmap.figures.map((fig) => fig.html || '').join('');
+        : '<div class="spine-muted-empty">本章未提取出独立术语。</div>';
     }
     box.innerHTML = html;
     bindMapButtons();
+  }
+
+  function renderTocDrawer() {
+    const box = RD.mount('toc-drawer');
+    if (!box) return;
+    if (!bookChapters.length) {
+      box.innerHTML = '<div class="spine-muted-empty">暂无章节目录</div>';
+      return;
+    }
+    const curNum = Number(data && data.chapter && data.chapter.n);
+    const subEl = RD.mount('spine-book-sub');
+    if (subEl && data && data.book) {
+      const curIdx = bookChapters.findIndex((c) => Number(c.n) === curNum);
+      const posTxt = curIdx >= 0 ? ('第 ' + (curIdx + 1) + ' / ' + bookChapters.length + ' 章') : (bookChapters.length + ' 章');
+      const author = data.book.author_display || data.book.author || '';
+      subEl.textContent = (author ? author + ' · ' : '') + posTxt;
+    }
+    box.innerHTML =
+      '<div class="toc-list">' +
+      bookChapters.map((c) => {
+        const active = Number(c.n) === curNum;
+        const marks = (c.has_map ? '<i class="toc-dot map" title="已建导图"></i>' : '') +
+          (c.note_count ? '<i class="toc-dot pin" title="' + c.note_count + ' 条旁批"></i>' : '');
+        return (
+          '<a class="toc-item' + (active ? ' active' : '') + '" href="' + RD.chapterHref(UID, c.n) + '"' +
+          (active ? ' aria-current="page"' : '') + '>' +
+            '<span class="toc-n">' + RD.esc(String(c.n).padStart(2, '0')) + '</span>' +
+            '<span class="toc-t">' + RD.esc(c.title) + '</span>' +
+            (marks ? '<span class="toc-marks">' + marks + '</span>' : '') +
+          '</a>'
+        );
+      }).join('') +
+      '</div>';
+    const actEl = box.querySelector('.toc-item.active');
+    if (actEl && spineTab === 'toc') {
+      actEl.scrollIntoView({ block: 'center' });
+    }
+  }
+
+  function renderChapterPager() {
+    const pager = RD.mount('chapter-pager');
+    if (!pager || !bookChapters.length) return;
+    const curNum = Number(data && data.chapter && data.chapter.n);
+    const idx = bookChapters.findIndex((c) => Number(c.n) === curNum);
+    if (idx < 0) return;
+    const prev = idx > 0 ? bookChapters[idx - 1] : null;
+    const next = idx < bookChapters.length - 1 ? bookChapters[idx + 1] : null;
+
+    pager.innerHTML =
+      '<div class="ch-pager-grid">' +
+        (prev
+          ? '<a class="ch-pager-card prev" href="' + RD.chapterHref(UID, prev.n) + '">' +
+              '<span class="ch-pager-dir">← 上一章</span>' +
+              '<strong>' + RD.esc(prev.title) + '</strong>' +
+            '</a>'
+          : '<div class="ch-pager-card empty-slot"></div>') +
+        '<a class="ch-pager-mid" href="' + RD.bookHref(UID) + '">全部章目（' + bookChapters.length + '）</a>' +
+        (next
+          ? '<a class="ch-pager-card next" href="' + RD.chapterHref(UID, next.n) + '">' +
+              '<span class="ch-pager-dir">下一章 →</span>' +
+              '<strong>' + RD.esc(next.title) + '</strong>' +
+            '</a>'
+          : '<div class="ch-pager-card empty-slot"></div>') +
+      '</div>';
   }
 
   function bindMapButtons() {
@@ -633,37 +937,83 @@
     if (genBtn) genBtn.addEventListener('click', () => requestChapterMap(false));
     const forceBtn = RD.mount('btn-gen-map-force');
     if (forceBtn) forceBtn.addEventListener('click', () => requestChapterMap(true));
-    RD.mount('map-drawer').querySelectorAll('[data-jump]').forEach((el) => {
+    const cancelBtn = RD.mount('btn-cancel-map');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        if (mapAbortCtrl) mapAbortCtrl.abort();
+      });
+    }
+    const drawer = RD.mount('map-drawer');
+    if (!drawer) return;
+    drawer.querySelectorAll('[data-jump]').forEach((el) => {
       el.addEventListener('click', () => {
         const bid = el.getAttribute('data-jump');
-        if (bid) focusBlock(bid);
+        if (bid) {
+          focusBlock(bid);
+          if (window.innerWidth <= 1180) setSpineOpen(false);
+        }
       });
     });
   }
 
+  function stopMapTimer() {
+    if (mapTimer) {
+      clearInterval(mapTimer);
+      mapTimer = 0;
+    }
+  }
+
   async function requestChapterMap(force) {
+    if (mapLoading) return;
     const settings = RD.modelSettings();
-    const box = RD.mount('map-drawer');
-    box.innerHTML = '<div class="wb-sub">正在生成全章知识地图与术语…</div>';
+    mapLoading = true;
+    mapError = '';
+    mapStartedAt = Date.now();
+    mapAbortCtrl = new AbortController();
+    syncMapTabLabel();
+    renderMapDrawer();
+    stopMapTimer();
+    mapTimer = setInterval(() => {
+      const el = RD.mount('map-elapsed');
+      if (el) el.textContent = mapElapsedText();
+    }, 1000);
+
     try {
       const res = await RD.api('/api/chapter-map/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N), {
         method: 'POST',
+        signal: mapAbortCtrl.signal,
         body: { force: Boolean(force), model: settings.model, effort: settings.effort },
       });
+      mapLoading = false;
+      mapAbortCtrl = null;
+      stopMapTimer();
       data.chapter_map = res;
+
+      const curNum = Number(data && data.chapter && data.chapter.n);
+      const tocEntry = bookChapters.find((c) => Number(c.n) === curNum);
+      if (tocEntry && res.supported !== false) tocEntry.has_map = true;
+
+      syncMapTabLabel();
+      renderMapDrawer();
+      renderTocDrawer();
       if (res.supported === false) {
         RD.toast(res.reason || '篇幅较短，建议直读原文');
+      } else if (spineTab === 'toc') {
+        RD.toast('知识地图已就绪，点击左侧「知识地图」查看');
       } else {
-        showMap = true;
         RD.toast('知识地图已就绪');
       }
-      renderShell();
-      renderMapDrawer();
-      renderBlocks();
-      renderSelectionBarButtons();
-      bindEvents();
     } catch (err) {
-      RD.toast(err.message, true);
+      mapLoading = false;
+      mapAbortCtrl = null;
+      stopMapTimer();
+      syncMapTabLabel();
+      if (err && err.name === 'AbortError') {
+        RD.toast('已取消生成知识地图');
+      } else {
+        mapError = (err && err.message) || '知识地图生成失败';
+        RD.toast(mapError, true);
+      }
       renderMapDrawer();
     }
   }
@@ -683,12 +1033,22 @@
     ];
 
     const otherTools = toolbar.filter((item) => item.action !== 'diagram');
-    const bpRow =
+    const commonRow =
       '<div class="selection-bar-row">' +
-        '<span class="selection-bar-lbl">' + RD.esc(prof.name) + '：</span>' +
+        '<span class="selection-bar-lbl">细读</span>' +
+        otherTools.map((item) =>
+          '<button type="button" data-action="' + RD.esc(item.action) + '">' + RD.esc(item.label) + '</button>'
+        ).join('') +
+        '<span class="selection-bar-sep" aria-hidden="true"></span>' +
+        '<button type="button" data-action="search-related" title="在其他书中找相关内容，并按阈值选书回答">跨书找相关 ↗</button>' +
+      '</div>';
+
+    const bpRow =
+      '<div class="selection-bar-row selection-bar-sub">' +
+        '<span class="selection-bar-lbl">' + RD.esc(prof.name) + '</span>' +
         (defaultBp
           ? '<button type="button" class="sel-bp" data-action="diagram" data-blueprint="' + RD.esc(defaultBp.blueprint) +
-              '" title="' + RD.esc(defaultBp.description || '') + '">图解·' + RD.esc(defaultBp.label) + '</button>'
+              '" title="' + RD.esc(defaultBp.description || '') + '">' + RD.esc(defaultBp.label) + '</button>'
           : '<button type="button" class="sel-bp" data-action="diagram">图解此段</button>') +
         bps.slice(1).map((bp) =>
           '<button type="button" class="sel-bp" data-action="diagram" data-blueprint="' + RD.esc(bp.blueprint) +
@@ -700,17 +1060,7 @@
         ).join('') +
       '</div>';
 
-    const commonRow =
-      '<div class="selection-bar-row">' +
-        '<span class="selection-bar-lbl">细读：</span>' +
-        otherTools.map((item) =>
-          '<button type="button" data-action="' + RD.esc(item.action) + '">' + RD.esc(item.label) + '</button>'
-        ).join('') +
-        '<span class="selection-bar-sep" aria-hidden="true"></span>' +
-        '<button type="button" data-action="search-related" title="在其他书中找相关内容，并按阈值选书回答">跨书找相关 ↗</button>' +
-      '</div>';
-
-    bar.innerHTML = bpRow + commonRow;
+    bar.innerHTML = commonRow + bpRow;
   }
 
   function setDrawerOpen(open) {
@@ -718,11 +1068,14 @@
     const drawer = RD.mount('assist-drawer');
     const grid = RD.mount('wb-grid');
     const btn = RD.mount('btn-drawer');
+    const topBtn = RD.mount('btn-drawer-top');
     const reopenBtn = RD.mount('btn-drawer-reopen');
     if (drawer) drawer.hidden = !drawerOpen;
     if (grid) grid.classList.toggle('has-drawer', drawerOpen);
     if (btn) btn.setAttribute('aria-pressed', String(drawerOpen));
+    if (topBtn) topBtn.setAttribute('aria-pressed', String(drawerOpen));
     if (reopenBtn) reopenBtn.hidden = drawerOpen;
+    syncBackdrop();
   }
 
   function setSpineOpen(open) {
@@ -731,17 +1084,38 @@
     const btn = RD.mount('btn-spine');
     if (grid) grid.classList.toggle('hide-spine', !showSpine);
     if (btn) btn.setAttribute('aria-pressed', String(showSpine));
+    syncBackdrop();
+  }
+
+  function toggleFocusMode() {
+    const isFocused = !showSpine && !drawerOpen;
+    if (isFocused) {
+      setSpineOpen(window.innerWidth >= 1180);
+      setDrawerOpen(window.innerWidth >= 960);
+    } else {
+      setSpineOpen(false);
+      setDrawerOpen(false);
+    }
+    const fBtn = RD.mount('btn-focus-mode');
+    if (fBtn) fBtn.textContent = (!showSpine && !drawerOpen) ? '退出专注模式（恢复双栏）' : '专注阅读（收起双栏）';
+  }
+
+  function setSpineTab(tab) {
+    spineTab = tab;
+    showMap = tab === 'map';
+    showTerms = tab === 'terms';
+    const bMap = RD.mount('btn-map');
+    const bTerms = RD.mount('btn-terms');
+    const bToc = RD.mount('btn-toc');
+    if (bMap) bMap.setAttribute('aria-pressed', String(tab === 'map'));
+    if (bTerms) bTerms.setAttribute('aria-pressed', String(tab === 'terms'));
+    if (bToc) bToc.setAttribute('aria-pressed', String(tab === 'toc'));
+    renderMapDrawer();
+    if (tab === 'toc') renderTocDrawer();
   }
 
   function highlightActiveTool() {
-    const strip = RD.mount('wb-profile-strip');
-    if (!strip) return;
-    strip.querySelectorAll('.marg-tool-btn').forEach((btn) => {
-      const bp = btn.getAttribute('data-run-blueprint');
-      const ext = btn.getAttribute('data-run-ext');
-      const key = bp ? ('diagram:' + bp) : (ext ? ('ext:' + ext) : '');
-      btn.classList.toggle('active', Boolean(key && key === activeToolKey));
-    });
+    syncToolButtons();
   }
 
   function focusBlock(bid) {
@@ -754,7 +1128,46 @@
 
   function jumpToHash() {
     const h = (location.hash || '').replace(/^#/, '');
-    if (h.startsWith('blk-')) focusBlock(h.slice(4));
+    if (!h.startsWith('blk-')) return;
+    const bid = h.slice(4);
+    const blocks = (data && data.blocks) || [];
+    const idx = blocks.findIndex((b) => b.id === bid);
+    if (arrivalActive() && idx >= 0 && idx <= 1) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const el = document.getElementById('blk-' + bid);
+      if (el) {
+        el.classList.add('flash');
+        setTimeout(() => el.classList.remove('flash'), 2000);
+      }
+      return;
+    }
+    focusBlock(bid);
+  }
+
+  function updateScrollProgress() {
+    scrollRaf = 0;
+    const bar = RD.mount('reading-progress-bar');
+    if (bar) {
+      const doc = document.documentElement;
+      const max = Math.max(1, doc.scrollHeight - window.innerHeight);
+      const pct = Math.min(100, Math.max(0, (window.scrollY / max) * 100));
+      bar.style.width = pct.toFixed(1) + '%';
+    }
+    const mapBox = RD.mount('map-drawer');
+    if (!mapBox || mapBox.hidden) return;
+    const leaves = mapBox.querySelectorAll('.tree-leaf[data-jump]');
+    if (!leaves.length) return;
+    let activeBid = '';
+    const mid = window.innerHeight * 0.34;
+    for (const leaf of leaves) {
+      const bid = leaf.getAttribute('data-jump');
+      const blk = bid ? document.getElementById('blk-' + bid) : null;
+      if (!blk) continue;
+      if (blk.getBoundingClientRect().top <= mid) activeBid = bid;
+    }
+    leaves.forEach((leaf) => {
+      leaf.classList.toggle('is-reading', Boolean(activeBid && leaf.getAttribute('data-jump') === activeBid));
+    });
   }
 
   function blockOfNode(node) {
@@ -786,9 +1199,11 @@
   function positionSelectionBar(rect) {
     const bar = RD.mount('selection-bar');
     bar.classList.add('show');
-    const top = Math.max(66, rect.top - 48);
-    const left = Math.min(window.innerWidth - bar.offsetWidth - 16, Math.max(12, rect.left));
-    bar.style.top = top + 'px';
+    const barH = bar.offsetHeight || 72;
+    const barW = bar.offsetWidth || 380;
+    const top = rect.top > barH + 72 ? (rect.top - barH - 10) : Math.min(window.innerHeight - barH - 12, rect.bottom + 10);
+    const left = Math.min(window.innerWidth - barW - 14, Math.max(12, rect.left + (rect.width - barW) / 2));
+    bar.style.top = Math.max(58, top) + 'px';
     bar.style.left = left + 'px';
   }
 
@@ -797,17 +1212,11 @@
   }
 
   function bindEvents() {
-    RD.mount('btn-map').addEventListener('click', () => {
-      showMap = !showMap;
-      RD.mount('btn-map').setAttribute('aria-pressed', String(showMap));
-      renderMapDrawer();
-    });
-    RD.mount('btn-terms').addEventListener('click', () => {
-      showTerms = !showTerms;
-      RD.mount('btn-terms').setAttribute('aria-pressed', String(showTerms));
-      if (showTerms) showMap = true;
-      renderMapDrawer();
-    });
+    RD.mount('btn-map').addEventListener('click', () => setSpineTab('map'));
+    RD.mount('btn-terms').addEventListener('click', () => setSpineTab('terms'));
+    const tocBtn = RD.mount('btn-toc');
+    if (tocBtn) tocBtn.addEventListener('click', () => setSpineTab('toc'));
+
     RD.mount('btn-toggle-pins').addEventListener('click', () => {
       hidePins = !hidePins;
       document.body.classList.toggle('hide-pins', hidePins);
@@ -841,7 +1250,7 @@
     if (tabCh) {
       tabCh.addEventListener('click', () => {
         scopeMode = 'chapter';
-        updateScopeIndicator();
+        syncToolButtons();
       });
     }
     const tabSel = RD.mount('tab-scope-selection');
@@ -849,9 +1258,9 @@
       tabSel.addEventListener('click', () => {
         if (currentSelection.block_ids && currentSelection.block_ids.length) {
           scopeMode = 'selection';
-          updateScopeIndicator();
+          syncToolButtons();
         } else {
-          RD.toast('请先在中间正文拖选段落或点击段尾 ✦');
+          RD.toast('请先在正文划选段落或点击段尾 ✦');
         }
       });
     }
@@ -931,17 +1340,88 @@
     if (!globalBound) {
       globalBound = true;
       const spineBtn = RD.mount('btn-spine');
-      if (spineBtn) {
-        spineBtn.addEventListener('click', () => setSpineOpen(!showSpine));
+      if (spineBtn) spineBtn.addEventListener('click', () => setSpineOpen(!showSpine));
+
+      const drawerTopBtn = RD.mount('btn-drawer-top');
+      if (drawerTopBtn) drawerTopBtn.addEventListener('click', () => setDrawerOpen(!drawerOpen));
+
+      const backdrop = RD.mount('desk-backdrop');
+      if (backdrop) {
+        backdrop.addEventListener('click', () => {
+          if (window.innerWidth <= 1180) setSpineOpen(false);
+          if (window.innerWidth <= 920) setDrawerOpen(false);
+        });
+      }
+
+      const typoBtn = RD.mount('btn-typo');
+      const typoPop = RD.mount('typo-popover');
+      if (typoBtn && typoPop) {
+        typoBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const willOpen = typoPop.hidden;
+          typoPop.hidden = !willOpen;
+          typoBtn.setAttribute('aria-expanded', String(willOpen));
+        });
+        typoPop.addEventListener('click', (e) => {
+          const fsBtn = e.target.closest('[data-font-size]');
+          if (fsBtn) {
+            setPref('reading-font-size', fsBtn.getAttribute('data-font-size'));
+            applyTypographyPrefs();
+            return;
+          }
+          const msBtn = e.target.closest('[data-measure]');
+          if (msBtn) {
+            setPref('reading-measure', msBtn.getAttribute('data-measure'));
+            applyTypographyPrefs();
+            return;
+          }
+          if (e.target.closest('#btn-focus-mode')) {
+            toggleFocusMode();
+            typoPop.hidden = true;
+            typoBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
       }
 
       document.addEventListener('mousedown', (e) => {
+        if (typoPop && !typoPop.hidden && !typoPop.contains(e.target) && e.target !== typoBtn) {
+          typoPop.hidden = true;
+          if (typoBtn) typoBtn.setAttribute('aria-expanded', 'false');
+        }
         const bar = RD.mount('selection-bar');
         const curReader = RD.mount('reader-body');
         if (bar.contains(e.target) || e.target.closest('[data-trigger]')) return;
         if (!curReader || !curReader.contains(e.target)) hideSelectionBar();
         else setTimeout(() => { if (!window.getSelection() || window.getSelection().isCollapsed) hideSelectionBar(); }, 10);
       });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          hideSelectionBar();
+          if (typoPop && !typoPop.hidden) {
+            typoPop.hidden = true;
+            if (typoBtn) typoBtn.setAttribute('aria-expanded', 'false');
+          }
+          return;
+        }
+        if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === '[') {
+          e.preventDefault();
+          setSpineOpen(!showSpine);
+        } else if (e.key === ']') {
+          e.preventDefault();
+          setDrawerOpen(!drawerOpen);
+        } else if (e.key === 'f' || e.key === 'F') {
+          e.preventDefault();
+          toggleFocusMode();
+        }
+      });
+
+      window.addEventListener('scroll', () => {
+        if (!scrollRaf) scrollRaf = requestAnimationFrame(updateScrollProgress);
+      }, { passive: true });
+
+      window.addEventListener('resize', syncBackdrop);
 
       RD.mount('selection-bar').addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-action]');
@@ -988,32 +1468,25 @@
     const sampled = Boolean(opts.sampled);
     const cached = Boolean(opts.cached);
     const selIds = (opts.block_ids && opts.block_ids.length) ? opts.block_ids : ((currentSelection && currentSelection.block_ids) || []);
-    const prof = activeProfile();
 
     bar.hidden = false;
-    const scopeTag = scope === 'chapter'
-      ? '<span class="scope-pill">作用范围：全章（' + RD.fmt(covered) + ' 段' + (sampled ? ' · 均匀骨架' : '') + '）</span>'
-      : '<span class="scope-pill is-sel">作用范围：已选 ' + RD.esc(formatSelectionSpan(selIds) || '片段') + '</span>';
+    const scopeText = scope === 'chapter'
+      ? ('全章 ' + RD.fmt(covered) + ' 段' + (sampled ? ' · 均匀骨架' : '') + (cached ? ' · 已缓存' : ''))
+      : ('已选 ' + (formatSelectionSpan(selIds) || '片段'));
 
     const switchScopeBtn = scope === 'selection'
-      ? '<button type="button" class="drawer-bp-pill" data-switch-scope="chapter">改按全章生成</button>'
+      ? '<button type="button" class="drawer-inline-act" data-switch-scope="chapter">改按全章</button>'
       : (currentSelection.block_ids && currentSelection.block_ids.length
-          ? '<button type="button" class="drawer-bp-pill" data-switch-scope="selection">仅针对所选段</button>'
+          ? '<button type="button" class="drawer-inline-act" data-switch-scope="selection">仅看所选段</button>'
           : '');
 
-    const bpPills = (action === 'diagram' && (prof.blueprints || []).length > 1)
-      ? prof.blueprints.map((item) =>
-          '<button type="button" class="drawer-bp-pill' + (item.blueprint === blueprint ? ' active' : '') +
-          '" data-switch-bp="' + RD.esc(item.blueprint) + '">' + RD.esc(item.label) + '</button>'
-        ).join('')
-      : '';
-
     const regenBtn = (scope === 'chapter' || cached)
-      ? '<button type="button" class="drawer-bp-pill" data-regen-chapter title="忽略缓存重新调用模型">' +
-        (cached ? '命中全章缓存 · ↻ 重生成' : '↻ 重新生成') + '</button>'
+      ? '<button type="button" class="drawer-inline-act" data-regen-chapter title="忽略缓存重新生成">↻ 重生成</button>'
       : '';
 
-    bar.innerHTML = scopeTag + switchScopeBtn + bpPills + regenBtn;
+    bar.innerHTML =
+      '<span class="drawer-scope-txt' + (scope === 'selection' ? ' is-sel' : '') + '">' + RD.esc(scopeText) + '</span>' +
+      '<span class="drawer-scope-acts">' + switchScopeBtn + regenBtn + '</span>';
 
     const swBtn = bar.querySelector('[data-switch-scope]');
     if (swBtn) {
@@ -1023,14 +1496,6 @@
         runAssist(action, (lastResult && lastResult.question) || '', blueprint, nextScope, false);
       });
     }
-    bar.querySelectorAll('[data-switch-bp]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const nextBp = el.getAttribute('data-switch-bp');
-        if (nextBp && nextBp !== blueprint) {
-          runAssist('diagram', '', nextBp, scope, false);
-        }
-      });
-    });
     const rBtn = bar.querySelector('[data-regen-chapter]');
     if (rBtn) {
       rBtn.addEventListener('click', () => {
@@ -1049,18 +1514,16 @@
     const bpMeta = (prof.blueprints || []).find((b) => b.blueprint === chosenBp);
     scopeMode = scope;
     activeToolKey = action === 'diagram' && chosenBp ? ('diagram:' + chosenBp) : ('ext:' + action);
-    highlightActiveTool();
-    updateScopeIndicator();
+    loadingToolKey = activeToolKey;
+    const requestedCacheKey = toolCacheKey(prof.read_type, action, chosenBp);
+    syncToolButtons();
     lastResult = null;
     setDrawerOpen(true);
     RD.mount('btn-pin').disabled = true;
     RD.mount('drawer-empty').hidden = true;
 
     const titleBase = (action === 'diagram' && bpMeta) ? bpMeta.label : (RD.actionNames[action] || action);
-    const spanText = scope === 'chapter'
-      ? '全章'
-      : formatSelectionSpan(currentSelection.block_ids);
-    RD.mount('drawer-title').textContent = titleBase + (spanText ? ' · ' + spanText : '');
+    RD.mount('drawer-title').textContent = titleBase;
     renderDrawerScopeBar({
       scope,
       action,
@@ -1071,12 +1534,16 @@
       cached: false,
     });
 
-    RD.mount('drawer-quote').hidden = false;
-    RD.mount('drawer-quote').textContent = scope === 'chapter'
-      ? ('作用范围：全章正文（共 ' + RD.fmt((data && data.blocks && data.blocks.length) || 0) + ' 个原文块，涵盖全章脉络）')
-      : (currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', ')));
+    const quoteEl = RD.mount('drawer-quote');
+    if (scope === 'chapter') {
+      quoteEl.hidden = true;
+      quoteEl.textContent = '';
+    } else {
+      quoteEl.hidden = false;
+      quoteEl.textContent = currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', '));
+    }
     RD.mount('drawer-diagram').innerHTML = '';
-    RD.mount('drawer-answer').innerHTML = '<span class="wb-sub">正在思考与生成…</span>';
+    RD.mount('drawer-answer').innerHTML = '<div class="drawer-thinking">正在细读与组织回答…</div>';
     RD.mount('drawer-meta').textContent = '';
 
     let streamBuf = '';
@@ -1109,7 +1576,7 @@
       const ctype = res.headers.get('Content-Type') || '';
       if (!ctype.includes('text/event-stream')) {
         const json = await res.json();
-        applyDoneResult(json);
+        applyDoneResult(json, requestedCacheKey);
         return;
       }
       const reader = res.body.getReader();
@@ -1141,21 +1608,40 @@
               RD.mount('drawer-diagram').innerHTML = payload.html || '';
             }
           } else if (evName === 'done') {
-            applyDoneResult(payload);
+            applyDoneResult(payload, requestedCacheKey);
           } else if (evName === 'error') {
             throw new Error(payload.error || '伴读调用失败');
           }
         }
       }
+      if (loadingToolKey === activeToolKey) {
+        loadingToolKey = '';
+        syncToolButtons();
+      }
     } catch (err) {
       if (err.name === 'AbortError') return;
+      loadingToolKey = '';
+      syncToolButtons();
       RD.mount('drawer-answer').innerHTML = '<p class="job-error">' + RD.esc(err.message) + '</p>';
       RD.toast(err.message, true);
     }
   }
 
-  function applyDoneResult(payload) {
+  function applyDoneResult(payload, requestedCacheKey) {
     lastResult = payload;
+    loadingToolKey = '';
+    if (
+      payload &&
+      payload.scope === 'chapter' &&
+      !payload.question &&
+      (payload.figure || payload.cached)
+    ) {
+      const prof = activeProfile();
+      if (requestedCacheKey) cachedToolKeys.add(requestedCacheKey);
+      const derivedKey = toolCacheKey(prof.read_type, payload.action, payload.blueprint);
+      if (derivedKey) cachedToolKeys.add(derivedKey);
+    }
+    syncToolButtons();
     renderDrawerScopeBar({
       scope: payload.scope || 'selection',
       action: payload.action || 'diagram',
@@ -1176,7 +1662,7 @@
       RD.mount('drawer-answer').innerHTML = '';
     }
     const metaParts = [];
-    if (payload.cached) metaParts.push('全章缓存');
+    if (payload.cached) metaParts.push('命中全章缓存');
     if (payload.model) metaParts.push(payload.model);
     if (payload.tokens) metaParts.push(RD.fmt(payload.tokens) + ' tokens');
     if (payload.elapsed_ms) metaParts.push(RD.elapsed(payload.elapsed_ms));
@@ -1250,24 +1736,41 @@
     }
   }
 
+  async function loadBookToc() {
+    try {
+      const res = await RD.api('/api/book/' + encodeURIComponent(UID));
+      bookChapters = (res && res.chapters) || [];
+      renderTocDrawer();
+      renderChapterPager();
+    } catch (e) {
+      // Non-critical enhancement; ignore quietly if book TOC unavailable.
+    }
+  }
+
   RD.ready(async () => {
     RD.night();
+    applyTypographyPrefs();
     try {
       data = await RD.api('/api/chapter/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N));
     } catch (err) {
       RD.fail(RD.mount('wb-root'), err.message);
       return;
     }
+    cachedToolKeys = new Set(Array.isArray(data && data.cached_tools) ? data.cached_tools : []);
     const cmap = data && data.chapter_map;
-    if (showSpine && cmap && cmap.supported !== false && (cmap.sections || []).length) {
-      showMap = true;
-    }
+    const hasMap = Boolean(cmap && cmap.supported !== false && (cmap.sections || []).length);
+    spineTab = hasMap ? 'map' : 'toc';
+    showMap = spineTab === 'map';
+    showTerms = false;
+
     renderShell();
     renderMapDrawer();
     renderBlocks();
     renderSelectionBarButtons();
     bindEvents();
     jumpToHash();
+    updateScrollProgress();
     window.addEventListener('hashchange', jumpToHash);
+    loadBookToc();
   });
 })();
