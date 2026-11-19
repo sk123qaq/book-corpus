@@ -1357,7 +1357,7 @@ body.chapter-desk .wb-spine-toggle {
 }
 
 body.chapter-desk .wb-shell {
-  max-width: 1580px;
+  max-width: 1720px;
   margin: 0 auto;
   padding: 0;
 }
@@ -1379,14 +1379,14 @@ body.chapter-desk .crumb {
 
 body.chapter-desk .folio-grid {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-columns: 330px minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
   min-height: calc(100vh - 82px);
 }
 
 body.chapter-desk .folio-grid.has-drawer {
-  grid-template-columns: 264px minmax(0, 1fr) 440px;
+  grid-template-columns: 330px minmax(0, 1fr) 430px;
 }
 
 body.chapter-desk .folio-grid.hide-spine {
@@ -1394,7 +1394,7 @@ body.chapter-desk .folio-grid.hide-spine {
 }
 
 body.chapter-desk .folio-grid.hide-spine.has-drawer {
-  grid-template-columns: 0px minmax(0, 1fr) 440px;
+  grid-template-columns: 0px minmax(0, 1fr) 430px;
 }
 
 body.chapter-desk .folio-grid.hide-spine .left-spine {
@@ -1479,6 +1479,8 @@ body.chapter-desk .folio-grid.hide-spine .left-spine {
   margin: 10px 0 0;
   padding: 10px;
   border-radius: 4px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--pine);
   background: var(--paper);
   font-size: 12px;
 }
@@ -1578,15 +1580,15 @@ body.chapter-desk .folio-grid.hide-spine .left-spine {
   color: var(--pine);
 }
 
-/* 中栏：纯洁纸页（上方零按钮条） */
+/* 中栏：纯洁纸页（上方零按钮条，左右完全对称、留白宽裕） */
 .center-page {
   background: var(--paper);
-  padding: 32px clamp(26px, 4.2vw, 54px) 84px;
+  padding: 38px clamp(50px, 4.8vw, 88px) 88px;
   min-width: 0;
 }
 
 .page-inner {
-  max-width: 680px;
+  max-width: 620px;
   margin: 0 auto;
 }
 
@@ -1637,16 +1639,18 @@ body.chapter-desk .reader-column {
 
 body.chapter-desk .reader-block {
   position: relative;
+  padding: 9px 12px;
+  margin: 0 -12px 14px;
 }
 
 body.chapter-desk .reader-block::before {
   content: attr(data-block);
   position: absolute;
-  left: -34px;
-  top: 11px;
+  left: -26px;
+  top: 12px;
   font: 600 9.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--ink-3);
-  opacity: .52;
+  opacity: .5;
   pointer-events: none;
   user-select: none;
 }
@@ -1655,6 +1659,12 @@ body.chapter-desk .reader-block:hover::before,
 body.chapter-desk .reader-block.active::before {
   opacity: 1;
   color: var(--cinnabar);
+}
+
+body.chapter-desk .blk-trigger {
+  right: -28px;
+  top: 10px;
+  opacity: .26;
 }
 
 /* 右栏：朱批伴读工作台 */
@@ -1822,9 +1832,19 @@ body.night.chapter-desk .drawer-bp-pill.active {
     border-radius: 8px;
     box-shadow: 0 16px 40px rgba(0, 0, 0, .3);
   }
+  body.chapter-desk .center-page {
+    padding: 24px 18px 80px;
+  }
+  body.chapter-desk .reader-block {
+    padding: 8px 34px 8px 10px;
+    margin: 0 -10px 10px;
+  }
   body.chapter-desk .reader-block::before {
     position: static;
     display: inline-block;
     margin-right: 6px;
+  }
+  body.chapter-desk .blk-trigger {
+    right: 6px;
   }
 }
