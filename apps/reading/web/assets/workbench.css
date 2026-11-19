@@ -1363,8 +1363,14 @@ body.chapter-desk .wb-shell {
 }
 
 body.chapter-desk .crumb {
+  position: sticky;
+  top: 52px;
+  z-index: 28;
+  height: 30px;
+  display: flex;
+  align-items: center;
   margin: 0;
-  padding: 7px 20px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--rule);
   background: var(--paper-2, var(--paper));
   font: 11.5px/1.3 var(--sans);
@@ -1376,7 +1382,7 @@ body.chapter-desk .folio-grid {
   grid-template-columns: 264px minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
-  min-height: calc(100vh - 84px);
+  min-height: calc(100vh - 82px);
 }
 
 body.chapter-desk .folio-grid.has-drawer {
@@ -1406,8 +1412,8 @@ body.chapter-desk .folio-grid.hide-spine .left-spine {
   border-right: 1px solid var(--rule-strong);
   padding: 16px 14px 36px;
   position: sticky;
-  top: 52px;
-  height: calc(100vh - 52px);
+  top: 82px;
+  height: calc(100vh - 82px);
   overflow-y: auto;
   min-width: 0;
 }
@@ -1497,12 +1503,22 @@ body.chapter-desk .folio-grid.hide-spine .left-spine {
 }
 
 .left-spine .tree-branches {
+  border-left: 0;
+  padding-left: 0;
   gap: 7px;
 }
 
 .left-spine .tree-branch {
-  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 9px;
   border-left: 2px solid var(--cinnabar);
+}
+
+.left-spine .tree-branch::before {
+  display: none;
 }
 
 .left-spine .tree-sec-title {
@@ -1510,6 +1526,7 @@ body.chapter-desk .folio-grid.hide-spine .left-spine {
 }
 
 .left-spine .tree-leaf-list {
+  flex-direction: column;
   gap: 4px;
 }
 
@@ -1643,8 +1660,8 @@ body.chapter-desk .reader-block.active::before {
 /* 右栏：朱批伴读工作台 */
 body.chapter-desk .right-marginalia {
   position: sticky;
-  top: 52px;
-  height: calc(100vh - 52px);
+  top: 82px;
+  height: calc(100vh - 82px);
   max-height: none;
   border: 0;
   border-left: 1px solid var(--rule-strong);
@@ -1739,6 +1756,21 @@ body.chapter-desk .right-marginalia .drawer-body {
   background: var(--paper-2, var(--paper));
   flex: 1 1 auto;
   overflow-y: auto;
+}
+
+body.chapter-desk .right-marginalia .drawer-body .empty {
+  margin-top: 6px;
+  padding: 24px 16px;
+  text-align: left;
+  line-height: 1.75;
+}
+
+body.chapter-desk .right-marginalia .drawer-body .empty b {
+  display: inline;
+  font: inherit;
+  font-weight: 700;
+  color: var(--cinnabar);
+  margin: 0;
 }
 
 body.chapter-desk .right-marginalia .drawer-foot {
