@@ -13,6 +13,7 @@
 | [docs/design/全库embedding.md](design/全库embedding.md) | implemented | 2026-11-14 | 全库 md embedding |
 | [docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md](design/阅读页重构-正文伴读与工具台-2026-11-15.md) | implemented | 2026-11-16 | 分层读阅读页重构：正文伴读、工具台与旧体系清理方案 |
 | [docs/design/检索与分层读联动方案-2026-11-17.md](design/检索与分层读联动方案-2026-11-17.md) | implemented | 2026-11-17 | 书库检索与分层读联动重构方案 |
+| [docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md](design/操作台重构-事件驱动全自动同步方案-2026-11-19.md) | implemented | 2026-11-19 | 书库操作台重新规划方案（V2 · 事件驱动全自动同步版） |
 | [docs/design/窗口参数-决策记录-2026-11-02.md](design/窗口参数-决策记录-2026-11-02.md) | accepted | 2026-11-02 | 窗口参数决策记录（2026-11-02） |
 | [docs/design/研究检索配置.md](design/研究检索配置.md) | accepted | 2026-11-09 | 研究检索配置 |
 | [docs/design/分层读书型工具与图表框架-方案-2026-11-19.md](design/分层读书型工具与图表框架-方案-2026-11-19.md) | proposed | 2026-11-19 | 分层读书型工具与图表框架方案 |
