@@ -24,6 +24,7 @@ import contextlib
 import json
 import os
 import select
+import shutil
 import socket
 import struct
 import subprocess
@@ -35,7 +36,20 @@ import urllib.parse
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CHROME = "google-chrome-stable"
+
+
+def find_chrome():
+    env = os.environ.get("CHROME_BIN")
+    if env:
+        return env
+    for name in ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return "google-chrome-stable"
+
+
+CHROME = find_chrome()
 DEFAULT_URL = "http://127.0.0.1:8765/classic"
 QUESTION = "《三体》里为什么程心刚成为执剑人没多久三体就入侵了地球"
 

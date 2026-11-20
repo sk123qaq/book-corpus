@@ -170,7 +170,7 @@ def render_facts(repo: Path) -> str:
         "|---|---|---|",
     ]
     for app, port in app_ports(repo).items():
-        lines.append(f"| `{app}` | {port} | `python3 apps/{app}/server.py` |")
+        lines.append(f"| `{app}` | {port} | `uv run --frozen python apps/{app}/server.py` |")
     lines.extend(["", "## 脚本与别名", "", "| 脚本 | 别名 | 说明 |", "|---|---|---|"])
     for name in script_names(repo):
         aliases_for = " ".join(f"`{a}`" for a in reverse.get(name, [])) or "—"

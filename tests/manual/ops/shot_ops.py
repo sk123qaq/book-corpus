@@ -4,8 +4,8 @@
   python3 tests/manual/ops/shot_ops.py
   python3 tests/manual/ops/shot_ops.py --url http://127.0.0.1:8770
 
-自己起一个临时根的服务（stub 脚本 + fixture 状态），把七个页签都点一遍收
-console.error 与异常，最后出 1440x900 与 390x844 两张图。末行 SHOT PASS。
+自己起一个临时根的服务（stub 脚本 + fixture 状态），把六个主导航页签与五个子页签
+都点一遍收 console.error 与异常，最后出 1440x900 与 390x844 两张图。末行 SHOT PASS。
 """
 
 import argparse
@@ -14,6 +14,7 @@ import json
 import os
 import re
 import select
+import shutil
 import socket
 import struct
 import subprocess
@@ -26,23 +27,42 @@ import urllib.request
 sys.dont_write_bytecode = True
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(REPO, "tests", "acceptance", "ops"))
 
 import contextlib
 
 import check_ops
 
-CHROME = os.environ.get("CHROME_BIN") or "google-chrome-stable"
+
+def find_chrome():
+    env = os.environ.get("CHROME_BIN")
+    if env:
+        return env
+    for name in ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return "google-chrome-stable"
+
+
+CHROME = find_chrome()
 VIEWPORTS = ((1440, 900), (390, 844))
 TABS = (
     ("overview", "总览"),
     ("import", "新书导入"),
-    ("split", "电子书出正文"),
-    ("pdf", "PDF 出正文"),
-    ("maintain", "维护"),
-    ("ledger", "账表"),
-    ("retire", "删书"),
+    ("ledger", "书目与分类"),
+    ("split", "正文生产 · 电子书"),
+    ("maintain", "同步与维护"),
     ("logs", "日志"),
+)
+SUBTABS = (
+    ("retire", "书目与分类 · 待退库与删书"),
+    ("cold", "书目与分类 · 冷宫（只读专区）"),
+    ("docs", "正文生产 · 文档"),
+    ("pdf", "正文生产 · PDF"),
+    ("manual", "正文生产 · 手工格式"),
 )
 
 
@@ -256,6 +276,25 @@ new Promise((resolve) => {
 })
 """
 
+VISIT_SUBTAB = """
+new Promise((resolve) => {
+  const link = document.querySelector('.subtabs a[href="#%s"]');
+  if (link) link.click();
+  else location.hash = '#%s';
+  const t0 = Date.now();
+  const tick = () => {
+    const h1 = document.querySelector('#view h1');
+    const title = h1 ? h1.textContent.trim() : '';
+    if (title === '%s' || Date.now() - t0 > 8000) {
+      resolve({tab: '%s', ok: title === '%s', title: title, ms: Date.now() - t0});
+    } else {
+      setTimeout(tick, 100);
+    }
+  };
+  tick();
+})
+"""
+
 
 IMPORT_PLAN = """
 (() => {
@@ -435,7 +474,7 @@ PDF_LIST = """
   const out = {open: !!q('[data-act="pdf-pick-open"]'), legacy: !!q('#pdf-uids')};
   if (!out.open) return out;
   q('[data-act="pdf-pick-open"]').click();
-  out.jumped = await until(() => location.hash === '#pdf-list' && title() === '待转 PDF 清单', 12000);
+  out.jumped = await until(() => location.hash === '#pdf-list' && title() === '正文生产 · 待转 PDF 清单', 12000);
   out.title = title();
   out.filters = {q: !!q('#pick-q'), tags: document.querySelectorAll('[data-act="pick-tag"]').length,
                  subject: !!q('#pick-subject'), sort: !!q('#pick-sort'),
@@ -460,11 +499,13 @@ PDF_LIST = """
   await sleep(150);
   out.picked = rows.filter((r) => r.checked).length;
   out.summary = (q('#pick-bar') || {}).textContent || '';
-  document.querySelector('#nav a[href="#pdf"]').click();
-  await until(() => title() === 'PDF 出正文', 8000);
+  const pdfTab = document.querySelector('.subtabs a[href="#pdf"]');
+  if (pdfTab) pdfTab.click();
+  else location.hash = '#pdf';
+  await until(() => title() === '正文生产 · PDF', 8000);
   out.back = title();
   location.hash = '#pdf-list';
-  await until(() => title() === '待转 PDF 清单', 12000);
+  await until(() => title() === '正文生产 · 待转 PDF 清单', 12000);
   await sleep(200);
   out.keptTitle = title();
   out.keptQ = q('#pick-q') ? q('#pick-q').value : null;
@@ -503,8 +544,9 @@ new Promise((resolve) => {
   const bar = () => (box() ? box().textContent.replace(/\\s+/g, ' ').trim() : '');
   const btn = () => document.querySelector('[data-act="pdf-triage-batch"]');
   const out = {label: '', empty: true, bar: '', disabled: null, ms: 0};
-  const link = document.querySelector('#nav a[href="#pdf"]');
+  const link = document.querySelector('.subtabs a[href="#pdf"]');
   if (link) link.click();
+  else location.hash = '#pdf';
   const t0 = Date.now();
   const start = () => {
     if (!btn() && Date.now() - t0 < 10000) { setTimeout(start, 100); return; }
@@ -531,8 +573,9 @@ new Promise((resolve) => {
 
 TRIAGE_BACK = """
 new Promise((resolve) => {
-  const link = document.querySelector('#nav a[href="#pdf"]');
+  const link = document.querySelector('.subtabs a[href="#pdf"]');
   if (link) link.click();
+  else if (location.hash !== '#pdf') location.hash = '#pdf';
   const box = () => document.querySelector('#triage-progress');
   const bar = () => (box() ? box().textContent.replace(/\\s+/g, ' ').trim() : '');
   const btn = () => document.querySelector('[data-act="pdf-triage-batch"]');
@@ -596,10 +639,10 @@ MAINTAIN_LAYOUT = """
   const view = q('#view');
   const text = view ? view.textContent : '';
   const adv = q('#view details.adv');
-  return {button: !!q('[data-act="maintain-run-default"]'),
+  return {button: !!q('[data-act="sync-reconcile"]'),
           open: adv ? adv.open : null,
           steps: document.querySelectorAll('[data-step]').length,
-          leaks: text.indexOf('.py') >= 0 || text.indexOf('--') >= 0};
+          leaks: text.indexOf('.py') >= 0};
 })()
 """
 
@@ -610,15 +653,15 @@ MAINTAIN_PRODUCT = """
   const view = q('#view');
   const text = view ? view.textContent : '';
   const adv = q('#view details.adv');
-  const btn = q('[data-act="maintain-run-default"]');
+  const btn = q('[data-act="sync-reconcile"]');
   if (!btn) return {button: false};
   const out = {button: true, open: adv ? adv.open : null,
                steps: document.querySelectorAll('[data-step]').length,
-               leaks: text.indexOf('.py') >= 0 || text.indexOf('--') >= 0};
+               leaks: text.indexOf('.py') >= 0};
   btn.click();
   for (let i = 0; i < 200; i += 1) {
     await sleep(200);
-    const b = q('[data-act="maintain-run-default"]');
+    const b = q('[data-act="sync-reconcile"]');
     if (b && !b.disabled) break;
   }
   await sleep(500);
@@ -661,18 +704,23 @@ LOG_CANCEL = """
 })()
 """
 
-# 日志页是诊断面，命令行与门槛原文留在那里；其余页不得出现实现细节。
+# 日志页是诊断面，命令行与门槛原文留在那里；账表与同步维护页按设计展示台账/索引文件名，其余页不得出现实现细节。
 COPY_LEAKS = """
-(() => {
+((tab) => {
   const bad = ['.py', '--', 'ops.db', 'library.db', 'book.json', 'index.db', 'ingest',
                'build_library', 'gen_book_catalog', 'ops_status', 'worklist', 'triage_final',
                'review.json', 'quota', 'conflicts', '未匹配', 'sha256', 'route', 'fixture',
                'plan_hash', '快照', 'replaced', 'pending_review',
                'stub', 'S1 ', 'S2 ', 'S3 ', 'S4 ', 'S5 ', 'S6 ', 'G3 ', 'G4 ', 'G5 ',
                'G10', 'G11'];
-  const text = (document.querySelector('#view') || {}).textContent || '';
-  return bad.filter((w) => text.indexOf(w) >= 0);
-})()
+  const allow = {
+    ledger: ['library.db', 'book.json'],
+    cold: ['book.json'],
+    maintain: ['--', 'library.db', 'book.json', 'index.db'],
+  }[tab] || [];
+  const text = ((document.querySelector('#view') || {}).textContent || '').replace(/FTS5/g, 'FTS');
+  return bad.filter((w) => allow.indexOf(w) < 0 && text.indexOf(w) >= 0);
+})(%s)
 """
 
 
@@ -753,10 +801,32 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             if tab_overflow:
                 widest[0] = tab
             if tab != "logs":
-                leaks = eval_js(cdp, COPY_LEAKS)
+                leaks = eval_js(cdp, COPY_LEAKS % json.dumps(tab))
                 if leaks:
                     notes.append("页签 %-9s 文案残留 %s" % (tab, "、".join(leaks)))
                     failed_tabs.append(tab + "-copy")
+            cdp.drain(0.4)
+            if not info.get("ok"):
+                failed_tabs.append(tab)
+        for tab, title in SUBTABS:
+            info = eval_js(cdp, VISIT_SUBTAB % (tab, tab, title, tab, title), await_promise=True, timeout=30)
+            tab_overflow = eval_js(cdp, "document.documentElement.scrollWidth > window.innerWidth")
+            notes.append(
+                "子页 %-9s %s %r %s ms%s"
+                % (
+                    tab,
+                    "通" if info.get("ok") else "缺",
+                    info.get("title"),
+                    info.get("ms"),
+                    " 溢出！" if tab_overflow else "",
+                )
+            )
+            if tab_overflow:
+                widest[0] = tab
+            leaks = eval_js(cdp, COPY_LEAKS % json.dumps(tab))
+            if leaks:
+                notes.append("子页 %-9s 文案残留 %s" % (tab, "、".join(leaks)))
+                failed_tabs.append(tab + "-copy")
             cdp.drain(0.4)
             if not info.get("ok"):
                 failed_tabs.append(tab)
@@ -778,7 +848,10 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         if plan3["rows"] < 1:
             failed_tabs.append("import-plan-reload")
         eval_js(
-            cdp, VISIT_TAB % ("split", "split", "电子书出正文", "split", "电子书出正文"), await_promise=True, timeout=30
+            cdp,
+            VISIT_TAB % ("split", "split", "正文生产 · 电子书", "split", "正文生产 · 电子书"),
+            await_promise=True,
+            timeout=30,
         )
         split = eval_js(cdp, SPLIT_CHECKS)
         notes.append(
@@ -814,7 +887,12 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         if edited["title"] != "改过的名" or edited["subjects"] != "文学/类型小说":
             failed_tabs.append("import-edit-kept")
         retire_uid = edited.get("uid") or split.get("start", {}).get("uid") or ""
-        eval_js(cdp, VISIT_TAB % ("retire", "retire", "删书", "retire", "删书"), await_promise=True, timeout=30)
+        eval_js(
+            cdp,
+            VISIT_SUBTAB % ("retire", "retire", "书目与分类 · 待退库与删书", "retire", "书目与分类 · 待退库与删书"),
+            await_promise=True,
+            timeout=30,
+        )
         if not retire_uid:
             notes.append("没有可预览的 uid，跳过删书弹窗检查")
             modal = {"opened": True, "afterInput": True, "afterOk": True, "checked": True, "closed": True}
@@ -823,7 +901,12 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         notes.append("删书弹窗 %s" % (modal,))
         if not (modal["opened"] and modal["afterInput"] and modal["afterOk"] and modal["checked"] and modal["closed"]):
             failed_tabs.append("retire-modal")
-        eval_js(cdp, VISIT_TAB % ("pdf", "pdf", "PDF 出正文", "pdf", "PDF 出正文"), await_promise=True, timeout=30)
+        eval_js(
+            cdp,
+            VISIT_SUBTAB % ("pdf", "pdf", "正文生产 · PDF", "pdf", "正文生产 · PDF"),
+            await_promise=True,
+            timeout=30,
+        )
         pdfin = eval_js(cdp, PDF_INPUTS, await_promise=True, timeout=40)
         notes.append("PDF 刷新前后 %s → %s" % (pdfin["before"], pdfin["after"]))
         if pdfin["before"] != pdfin["after"]:
@@ -843,7 +926,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         filters = pdflist.get("filters") or {}
         settle = pdflist.get("settle") or {}
         for name, ok in (
-            ("pdf-list-jump", pdflist.get("jumped") and pdflist.get("title") == "待转 PDF 清单"),
+            ("pdf-list-jump", pdflist.get("jumped") and pdflist.get("title") == "正文生产 · 待转 PDF 清单"),
             (
                 "pdf-list-filters",
                 filters.get("q") and filters.get("subject") and filters.get("sort") and filters.get("tags") == 4,
@@ -913,14 +996,23 @@ def run_viewport(base, width, height, out_dir, port, live=False):
                 ):
                     if not ok:
                         failed_tabs.append(name)
-        eval_js(cdp, VISIT_TAB % ("maintain", "maintain", "维护", "maintain", "维护"), await_promise=True, timeout=30)
+        eval_js(
+            cdp,
+            VISIT_TAB % ("maintain", "maintain", "同步与维护", "maintain", "同步与维护"),
+            await_promise=True,
+            timeout=30,
+        )
         maint = eval_js(cdp, MAINTAIN_CHECKS)
         notes.append("维护勾选 render 前后 %s → %s" % (maint["afterClick"], maint["afterRender"]))
         if maint["afterClick"] != maint["afterRender"]:
             failed_tabs.append("maintain-steps-kept")
         issues = eval_js(cdp, STATUS_ISSUES)
         notes.append("维护体检提醒 %s" % (issues,))
-        issues_ok = issues.get("box") and issues.get("prev") == "库的状态" and issues.get("next") == "一键收尾"
+        issues_ok = (
+            issues.get("box")
+            and issues.get("prev") == "自动同步与偏差对齐"
+            and issues.get("next") == "LLM 章级主题扩展（可选）"
+        )
         if not live:
             issue_text = issues.get("text") or ""
             issues_ok = (

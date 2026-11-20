@@ -11,7 +11,7 @@
 ## 起
 
 ```bash
-python3 apps/demo/server.py
+uv run --frozen python apps/demo/server.py
 ```
 
 打开 http://127.0.0.1:8765 。默认只监听 127.0.0.1:8765，`--port` 可换。

@@ -130,7 +130,7 @@ uv run book-corpus --version
 
 ### 3. Python 环境
 
-核心流程基本只用标准库；EPUB 拆章走 `ebook-to-md`，需要 `beautifulsoup4`，已列进 `pyproject.toml` 的核心依赖。`qsearch.py`、`book_query.py`、`build_library.py`、`build_para_index.py`、`lq.py` 不需要装第三方包。
+核心流程基本只用标准库；`pyproject.toml` 的核心依赖包含 `beautifulsoup4`（供 `ebook-to-md` 拆章）与 `numpy`（供向量检索与 `book_query.py` / `apps/demo/server.py`）。`qsearch.py`、`build_library.py`、`build_para_index.py`、`lq.py` 不需要装第三方包。
 
 PDF 路线与重排实验共用一个虚拟环境 `工作区/.venv-pdf/`。`book-corpus init` 已经建好并装好了 `requirements.txt`，不用再动手。要查它在不在、包全不全：
 
@@ -323,16 +323,16 @@ book-corpus query 关键词 关键词 --no-cards
 在工具仓里跑。五个页面服务默认都从 `.env`（或环境变量）读取 `BOOKS_ROOT`，不设其它兜底路径，也可用 `--root <实例根>` 临时覆盖（`<实例根>` 是有 `books.toml` 的那层）。默认只启动入口页一个进程：
 
 ```bash
-python3 apps/home/server.py                       # http://127.0.0.1:8773
+uv run --frozen python apps/home/server.py        # http://127.0.0.1:8773
 ```
 
 其他页面按需再起，不随默认启动：
 
 ```bash
-python3 apps/demo/server.py                       # http://127.0.0.1:8765
-python3 apps/ops/server.py                        # http://127.0.0.1:8770
-python3 apps/reading/server.py                    # http://127.0.0.1:8771
-python3 apps/daily/server.py                      # http://127.0.0.1:8772
+uv run --frozen python apps/demo/server.py        # http://127.0.0.1:8765
+uv run --frozen python apps/ops/server.py         # http://127.0.0.1:8770
+uv run --frozen python apps/reading/server.py     # http://127.0.0.1:8771
+uv run --frozen python apps/daily/server.py       # http://127.0.0.1:8772
 ```
 
 上面五条在未传 `--root` 时统一读 `.env` 里的 `BOOKS_ROOT`；需要临时切换实例时统一加 `--root <实例根>`。首页读 `books.toml`、`books/` 与 `日课/`；点入口时如果对应服务没起，会代起并等端口就绪，已经在跑就直接跳转。页脚的「管理」也走同一条路，进入 8770。演示页只读索引与 `books/**.md`，会话、切词、回答与运行记录写到 `<实例根>/工作区/检索/`（可重建，不进工具仓）。操作台读 `ops_status.py` 的 JSON 与 `ops.db`，按钮排队调 `src/bookcorpus/scripts/` 里的脚本。日课页只读 `日课/*.json`，一期一份，文件名就是日期。生成用 `book-corpus daily --root <实例根>`，每天 07:00 的定时器用 `book-corpus daily install-timer` 安装。

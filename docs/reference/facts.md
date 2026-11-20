@@ -12,11 +12,11 @@
 
 | 应用 | 默认端口 | 入口 |
 |---|---|---|
-| `daily` | 8772 | `python3 apps/daily/server.py` |
-| `demo` | 8765 | `python3 apps/demo/server.py` |
-| `home` | 8773 | `python3 apps/home/server.py` |
-| `ops` | 8770 | `python3 apps/ops/server.py` |
-| `reading` | 8771 | `python3 apps/reading/server.py` |
+| `daily` | 8772 | `uv run --frozen python apps/daily/server.py` |
+| `demo` | 8765 | `uv run --frozen python apps/demo/server.py` |
+| `home` | 8773 | `uv run --frozen python apps/home/server.py` |
+| `ops` | 8770 | `uv run --frozen python apps/ops/server.py` |
+| `reading` | 8771 | `uv run --frozen python apps/reading/server.py` |
 
 ## 脚本与别名
 
