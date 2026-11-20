@@ -157,6 +157,13 @@ def main() -> int:
                         detail = msg["params"]["exceptionDetails"]
                         desc = (detail.get("exception") or {}).get("description", "")
                         errors.append("EXC " + str(detail.get("text") or "") + " " + str(desc)[:200])
+                    elif msg.get("method") == "Runtime.consoleAPICalled":
+                        params = msg.get("params") or {}
+                        if params.get("type") in ("error", "assert"):
+                            txt = " ".join(
+                                str(a.get("value", a.get("description", ""))) for a in params.get("args") or []
+                            )
+                            errors.append("CONSOLE " + txt[:200])
                     elif msg.get("method") == "Log.entryAdded":
                         entry = msg["params"]["entry"]
                         if entry.get("level") == "error":

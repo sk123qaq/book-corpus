@@ -89,9 +89,15 @@ const S = {
   ledger: null,
   ledgerQ: '',
   ledgerPendingOnly: false,
+  ledgerLimit: 100,
   ledgerEdit: null,
   ledgerPick: new Set(),
   tab: 'overview',
+  tabSeq: 0,
+  statusAt: 0,
+  pollBusy: false,
+  pollTimer: null,
+  ledgerDebounce: null,
   payload: null, status: {}, health: null,
   jobs: [], pending: [], inbox: [], inboxIgnored: [], pdf: null,
   plan: null, planJob: null, planDirty: false, legacyPlan: false, nextUid: '',
@@ -294,6 +300,30 @@ function renderNav() {
 }
 
 // 三态由服务端给（ok / degraded / unknown）；老 payload 没有 state 时按 error 退化，保持兼容
+function parseHash(raw) {
+  const clean = String(raw || '').replace(/^#/, '');
+  const qIdx = clean.indexOf('?');
+  const tabRaw = (qIdx >= 0 ? clean.slice(0, qIdx) : clean) || 'overview';
+  const tab = ALL_TABS.indexOf(tabRaw) >= 0 ? tabRaw : 'overview';
+  const params = {};
+  if (qIdx >= 0) {
+    new URLSearchParams(clean.slice(qIdx + 1)).forEach((val, key) => {
+      params[key] = val;
+    });
+  }
+  return { tab, params };
+}
+
+function applyHashParams(tab, params) {
+  if (tab === 'logs') {
+    if (params && Object.prototype.hasOwnProperty.call(params, 'state')) {
+      S.filter = params.state || '';
+    } else {
+      S.filter = '';
+    }
+  }
+}
+
 function statusState() {
   const p = S.payload || {};
   if (p.state === 'ok' || p.state === 'degraded' || p.state === 'unknown') return p.state;
@@ -382,6 +412,8 @@ function statusIssues() {
 }
 
 function issueList(info) {
+  const auditRefreshing = !!dig(S.payload, 'ops.audit_refreshing', false);
+  const refreshingNote = auditRefreshing ? '<p class="hint">后台正在自动刷新体检结果，稍候自动更新…</p>' : '';
   const list = info.rows.length ? `<ul class="issues">${info.rows.map((row) => `<li class="issue">
     ${row.level === 'note' ? ''
     : `<span class="pill ${row.level === 'fail' ? 'miss' : 'half'}">${
@@ -390,19 +422,23 @@ function issueList(info) {
   </li>`).join('')}</ul>` : '';
   if (statusState() === 'unknown') {
     return (list || '<p class="hint">状态读不到。</p>')
-      + '<p class="hint">点「刷新状态」重试；读数未知时不能当没有问题。</p>';
+      + '<p class="hint">点「刷新状态」重试；读数未知时不能当没有问题。</p>' + refreshingNote;
   }
   if (!info.rows.length) {
-    if (info.stale) return '<p class="hint">体检结果已过期：最近一次入库或索引更新晚于体检，重跑收尾后再判断。</p>';
-    return info.at && statusState() === 'ok'
+    if (info.stale) {
+      return (auditRefreshing
+        ? refreshingNote
+        : '<p class="hint">体检结果已过期：最近一次入库或索引更新晚于体检，重跑收尾后再判断。</p>');
+    }
+    return (info.at && statusState() === 'ok'
       ? '<p class="pass">体检全部通过。</p>'
-      : '<p class="hint">体检没有报问题，但状态还不完整。</p>';
+      : '<p class="hint">体检没有报问题，但状态还不完整。</p>') + refreshingNote;
   }
-  const expired = info.at && info.stale
+  const expired = info.at && info.stale && !auditRefreshing
     ? '<p class="hint">体检结果已过期：最近一次入库或索引更新晚于体检，重跑收尾后再判断。</p>'
     : '';
-  return info.at ? list + expired
-    : list + '<p class="hint">体检未运行：上面是从书库现状读出来的问题，还没有体检记录。</p>';
+  return info.at ? list + expired + refreshingNote
+    : list + '<p class="hint">体检未运行：上面是从书库现状读出来的问题，还没有体检记录。</p>' + refreshingNote;
 }
 
 function statsReadable() {
@@ -569,7 +605,7 @@ function todoItems(c) {
   if (c.awaiting) {
     items.push({
       title: num(c.awaiting) + ' 个任务待确认',
-      note: '有结果等人看过才算完。', href: '#logs', label: '去确认',
+      note: '有结果等人看过才算完。', href: '#logs?state=awaiting_review', label: '去确认',
     });
   }
   const ebooks = c.ebooksToConvert || ebookCount();
@@ -646,7 +682,7 @@ function heroNote(c) {
 function heroAction(c) {
   if (statusState() === 'unknown' || !c.libKnown || !c.indexKnown) return ['去维护', '#maintain'];
   if (c.inbox) return ['导入新书', '#import'];
-  if (c.awaiting) return ['查看待确认', '#logs'];
+  if (c.awaiting) return ['查看待确认', '#logs?state=awaiting_review'];
   if (c.ebooksToConvert || ebookCount()) return ['去拆章', '#split'];
   if (c.pdfsToConvert) return ['去分诊 PDF', '#pdf'];
   if (c.docsToConvert) return ['去转文档', '#import'];
@@ -779,10 +815,38 @@ function contentSubtabs(active) {
 
 function reviewHref(job) {
   if (!job || job.state !== 'awaiting_review') return '';
-  if (job.kind === 'import.scan') return '#import';
   if (job.kind === 'split.run') return '#split';
+  if (job.kind === 'pdf.run') return '#pdf-list';
+  if (job.kind === 'import.scan') return '#import';
   if (job.kind === 'pdf.triage') return '#pdf-list';
   return '';
+}
+
+function jobReviewHint(job) {
+  if (!job) return '';
+  if (job.kind === 'split.run') {
+    return '该拆章批次有待复核书目（已暂存）。可去「正文生产 · 电子书」查看问题、受理或重拆，也可在核对后直接人工收口：';
+  }
+  if (job.kind === 'pdf.run') {
+    return '该 PDF 批次有待复核书目（已暂存）。可去「待转 PDF 清单」受理或改处置，也可在核对后直接人工收口：';
+  }
+  return '该任务停在「待确认」（例如服务重启接管导致退出码未知）。请核对下方步骤与日志后人工收口或重跑：';
+}
+
+function jobReviewBox(job) {
+  if (!job || job.state !== 'awaiting_review') return '';
+  const rhref = reviewHref(job);
+  const jumpLabel = job.kind === 'split.run' ? '去正文生产处理' : (job.kind === 'pdf.run' ? '去 PDF 清单处理' : '去对应页面处理');
+  return `<div class="review-box" id="job-review-box">
+    <p class="small">${esc(jobReviewHint(job))}</p>
+    <div class="toolbar">
+      ${rhref ? `<button class="btn sm" data-act="job-handle" data-id="${esc(job.id)}">${esc(jumpLabel)}</button>` : ''}
+      <input type="text" id="job-resolve-note" placeholder="处理说明 / 确认备注（可选）" size="28">
+      <button class="btn sm primary" data-act="job-resolve" data-id="${esc(job.id)}" data-res="succeeded">确认已处理</button>
+      <button class="btn sm" data-act="job-resolve" data-id="${esc(job.id)}" data-res="failed">标为失败</button>
+      <button class="btn sm" data-act="job-resolve" data-id="${esc(job.id)}" data-res="dismissed">忽略关闭</button>
+    </div>
+  </div>`;
 }
 
 function jobLine(job) {
@@ -2185,9 +2249,10 @@ function viewCold() {
 function viewLedger() {
   const L = S.ledger;
   if (!L) {
-    return `<h1>书目与分类</h1>${catalogSubtabs('ledger')}<div class="list"><p>账表还没加载。</p></div>`;
+    return `<h1>书目与分类</h1>${catalogSubtabs('ledger')}<div class="list"><p class="hint">正在载入账表…</p></div>`;
   }
   const rows = ledgerRowFiltered();
+  const visible = rows.slice(0, S.ledgerLimit);
   const pendingRows = rows.filter(ledgerPending);
   const picked = pendingRows.filter((r) => S.ledgerPick.has(r.uid)).length;
   const allPicked = pendingRows.length > 0 && picked === pendingRows.length;
@@ -2196,7 +2261,14 @@ function viewLedger() {
     ? `<div class="banner warn"><div><b>人账比书目库新（可能由外部命令行修改）</b><div class="hint">在页面编辑保存时会自动同步；若从外部改过数据库，点右侧按钮立即同步。</div></div>
         <button class="btn sm primary" data-write data-act="ledger-sync">立即同步元数据</button></div>` : '';
   const shown = rows.length !== L.ledger.length
-    ? `<p class="hint">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '';
+    ? `<p class="hint" id="ledger-shown">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '<p class="hint" id="ledger-shown" hidden></p>';
+  const pager = rows.length > visible.length
+    ? `<div class="toolbar" id="ledger-pager">
+        <span class="hint">已显示 ${num(visible.length)} / ${num(rows.length)} 行</span>
+        <button class="btn sm" data-act="ledger-more">加载更多 100 行</button>
+        <button class="btn sm" data-act="ledger-show-all">显示全部 ${num(rows.length)} 行</button>
+      </div>`
+    : '<div class="toolbar" id="ledger-pager" hidden></div>';
   return `
     <h1>书目与分类</h1>
     ${catalogSubtabs('ledger')}
@@ -2213,10 +2285,11 @@ function viewLedger() {
         ${shown}
         <div class="tw"><table class="ledger-table">
           <thead><tr><th style="width:28px"></th><th>编号</th><th>一级</th><th>二级</th><th>作者层</th><th>保留</th><th>正式书名</th><th>备注</th><th style="width:140px"></th></tr></thead>
-          <tbody>${rows.length ? rows.map(ledgerRowHtml).join('')
+          <tbody>${visible.length ? visible.map(ledgerRowHtml).join('')
     : `<tr><td colspan="9" class="hint">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的行。'}</td></tr>`}</tbody>
         </table></div>
-        <p class="hint">保存编辑或点「同意」后会自动同步书目库与该书 book.json（秒级），无需手动去维护页收尾；要将书移出流程，把保留改为「不留」后在「待退库与删书」子页执行。</p>
+        ${pager}
+        <p class="hint">保存编辑或点「同意」后会自动同步书目库与该书元数据（秒级），无需手动去维护页收尾；要将书移出流程，把保留改为「不留」后在「待退库与删书」子页执行。</p>
       </div>
     </div>`;
 }
@@ -2226,15 +2299,18 @@ function logRows() {
 }
 
 function logRowsHtml(rows) {
-  return rows.length ? rows.map((j) => `<tr>
+  return rows.length ? rows.map((j) => {
+    const rhref = reviewHref(j);
+    return `<tr>
         <td class="nowrap">${esc(fmtTime(j.created))}</td>
         <td class="nowrap">${esc(KIND_WORD[j.kind] || j.kind)}</td>
         <td class="wrap">${esc(summaryText(j.title))}</td>
         <td><span class="pill">${esc(JOB_WORD[j.state] || j.state)}</span></td>
         <td class="num">${j.started && j.ended ? esc(seconds(j.started, j.ended)) : '—'}</td>
         <td class="wrap small">${esc(summaryText(j.summary))}</td>
-        <td><button class="btn sm" data-act="job-open" data-id="${esc(j.id)}">详情</button></td>
-      </tr>`).join('') : '<tr><td colspan="7" class="empty">没有任务。</td></tr>';
+        <td class="nowrap">${rhref ? `<button class="btn sm primary" data-act="job-handle" data-id="${esc(j.id)}">去处理</button> ` : ''}<button class="btn sm" data-act="job-open" data-id="${esc(j.id)}">详情</button></td>
+      </tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">没有任务。</td></tr>';
 }
 
 function viewLogs() {
@@ -2300,6 +2376,7 @@ function jobDetail() {
       </span></div>
     <p class="hint" id="job-meta">任务号 ${esc(job.id)} · ${esc(fmtTime(job.started))} → ${esc(fmtTime(job.ended))}</p>
     <p class="small" id="job-summary">${esc(summaryText(job.summary))}</p>
+    ${jobReviewBox(job)}
     <details class="adv" id="job-commands">
       <summary>运行命令</summary>
       ${commandsHtml(detail)}
@@ -2363,6 +2440,12 @@ function paintJobDetail() {
     const text = summaryText(job.summary);
     if (sumEl.textContent !== text) sumEl.textContent = text;
   }
+  const revBox = box.querySelector('#job-review-box');
+  if (job.state === 'awaiting_review') {
+    if (!revBox && sumEl) sumEl.insertAdjacentHTML('afterend', jobReviewBox(job));
+  } else if (revBox) {
+    revBox.remove();
+  }
   const steps = box.querySelector('#job-steps');
   const stepsBody = stepsHtml(detail);
   if (steps && S.logStepsFp !== stepsBody) {
@@ -2403,12 +2486,18 @@ async function loadStatus(deep) {
   try {
     S.payload = await api('/api/status' + (deep ? '?refresh=1&deep=1' : ''));
     S.status = S.payload.status || {};
+    S.statusAt = Date.now();
   } catch (err) {
     S.payload = { ok: false, error: err.message, status: {} };
     S.status = {};
   }
   renderStats();
   renderNav();
+}
+
+async function loadStatusIfStale(maxAgeMs = 5000) {
+  if (S.payload && S.statusAt && Date.now() - S.statusAt < maxAgeMs) return;
+  await loadStatus();
 }
 
 async function loadJobs() {
@@ -2595,48 +2684,69 @@ async function loadServices() {
   }
 }
 
-async function refreshTab() {
+async function refreshTab(allowStaleStatus) {
+  const statusTask = () => (allowStaleStatus ? loadStatusIfStale() : loadStatus());
   if (S.tab === 'overview') {
-    await Promise.all([loadStatus(), loadJobs(), loadPending(), loadServices()]);
+    await Promise.all([statusTask(), loadJobs(), loadPending(), loadServices()]);
   } else if (S.tab === 'import') {
-    const inboxBody = await api('/api/inbox');
-    S.inbox = inboxBody.items || [];
-    S.inboxIgnored = inboxBody.ignored || [];
-    await loadLatestPlan();
-    await loadDocs();
+    await Promise.all([
+      api('/api/inbox').then((inboxBody) => {
+        S.inbox = inboxBody.items || [];
+        S.inboxIgnored = inboxBody.ignored || [];
+      }),
+      loadLatestPlan(),
+      loadDocs(),
+    ]);
   } else if (S.tab === 'split') {
-    await Promise.all([loadStatus(), loadJobs(), loadPending()]);
-    await loadSplitBooks();
+    await Promise.all([
+      statusTask(),
+      loadJobs(),
+      loadPending(),
+      S.batch ? loadSplitBooks() : Promise.resolve(),
+    ]);
+    if (!S.batch) await loadSplitBooks();
   } else if (S.tab === 'docs') {
-    await Promise.all([loadStatus(), loadJobs(), loadPending(), loadDocs()]);
+    await Promise.all([statusTask(), loadJobs(), loadPending(), loadDocs()]);
   } else if (S.tab === 'manual') {
-    await Promise.all([loadStatus(), loadJobs(), loadPending()]);
+    await Promise.all([statusTask(), loadJobs(), loadPending()]);
   } else if (S.tab === 'pdf') {
     await Promise.all([loadJobs(), loadPdf(), loadPdfBooks()]);
   } else if (S.tab === 'pdf-list') {
     await Promise.all([loadJobs(), loadPdfBooks()]);
   } else if (S.tab === 'ledger') {
-    await Promise.all([loadLedger(), loadStatus(), loadRetireDrop()]);
+    await Promise.all([loadLedger(), statusTask(), loadRetireDrop()]);
   } else if (S.tab === 'maintain') {
-    await Promise.all([loadStatus(), loadJobs(), loadSettings()]);
+    await Promise.all([statusTask(), loadJobs(), loadSettings()]);
   } else if (S.tab === 'retire') {
-    await Promise.all([loadStatus(), loadJobs(), loadRetireDrop()]);
+    await Promise.all([statusTask(), loadJobs(), loadRetireDrop()]);
   } else if (S.tab === 'cold') {
-    await Promise.all([loadStatus(), loadCold(), loadRetireDrop()]);
+    await Promise.all([statusTask(), loadCold(), loadRetireDrop()]);
   } else if (S.tab === 'logs') {
     await loadJobs();
   }
 }
 
-async function go(tab) {
-  S.tab = ALL_TABS.indexOf(tab) >= 0 ? tab : 'overview';
+async function go(tab, params) {
+  const target = ALL_TABS.indexOf(tab) >= 0 ? tab : 'overview';
+  const seq = ++S.tabSeq;
+  S.tab = target;
+  applyHashParams(target, params || {});
+  render();
   try {
-    await refreshTab();
+    await refreshTab(true);
   } catch (err) {
     toast(err.message, true);
   }
+  if (seq !== S.tabSeq) return;
+  if (S.tab === 'logs' && S.filter === 'awaiting_review') {
+    const rows = logRows();
+    if (rows.length && (!S.logJob || S.logJob.state !== 'awaiting_review')) {
+      S.logJob = rows[0];
+      S.logOpenId = null;
+    }
+  }
   render();
-  if (S.tab === 'logs' && S.logJob) openLog(S.logJob.id);
+  if (S.tab === 'logs' && S.logJob) openLog(S.logJob.id, true);
 }
 
 // ---- 任务轮询 -----------------------------------------------------
@@ -2821,6 +2931,17 @@ const actions = {
 
   async 'ledger-pending-only'(el) {
     S.ledgerPendingOnly = !!el.checked;
+    S.ledgerLimit = 100;
+    render();
+  },
+
+  async 'ledger-more'() {
+    S.ledgerLimit += 100;
+    render();
+  },
+
+  async 'ledger-show-all'() {
+    S.ledgerLimit = (S.ledger && S.ledger.ledger ? S.ledger.ledger.length : 10000);
     render();
   },
 
@@ -2899,16 +3020,17 @@ const actions = {
       const body = await post('/api/import/scan');
       toast('开始识别，好了会出现在下面');
       const detail = await watchJob(body.job_id, afterJob, 600);
-      if (detail && detail.job.state === 'awaiting_review') {
+      if (detail && (detail.job.state === 'awaiting_review' || detail.job.state === 'succeeded')) {
         S.planJob = body.job_id;
         await loadPlan(body.job_id);
         S.legacyPlan = false;
-        toast('清单好了，核对后入库');
-      } else if (detail && detail.job.state === 'succeeded') {
-        S.plan = null;
-        S.planJob = null;
-        S.legacyPlan = false;
-        toast(summaryText(detail.job.summary) || '收件箱里没有可入库的书');
+        if (S.plan && S.plan.length) {
+          toast('清单好了，核对后入库');
+        } else {
+          S.plan = null;
+          S.planJob = null;
+          toast(summaryText(detail.job.summary) || '收件箱里没有可入库的书');
+        }
       } else {
         toast(summaryText(detail && detail.job.summary) || '扫描没过', true);
       }
@@ -3583,10 +3705,54 @@ const actions = {
     S.logJob = { id: el.dataset.id, title: '载入中', state: 'running', kind: '', created: '' };
     // 换了任务就要从头画：不重置的话 paintJobDetail 会以为还在看上一个
     if (S.logOpenId !== el.dataset.id) S.logOpenId = null;
-    if (location.hash !== '#logs') location.hash = '#logs';
+    if (parseHash(location.hash).tab !== 'logs') location.hash = '#logs';
     await loadJobs();
     render();
     await openLog(el.dataset.id);
+  },
+
+  async 'job-handle'(el) {
+    const id = el.dataset.id;
+    const job = (S.jobs || []).find((j) => j.id === id) || (S.logJob && S.logJob.id === id ? S.logJob : null);
+    if (!job) return;
+    if (job.kind === 'split.run') {
+      if (job.batch_dir) S.batch = baseName(job.batch_dir);
+      if (location.hash !== '#split') location.hash = '#split';
+      else await go('split');
+      return;
+    }
+    if (job.kind === 'pdf.run') {
+      S.pickTags = new Set(['convert', 'untriaged', 'gallery', 'ja']);
+      S.pickProgress = new Set(['staged']);
+      S.pickRecheck = false;
+      if (location.hash !== '#pdf-list') location.hash = '#pdf-list';
+      else await go('pdf-list');
+      return;
+    }
+    const href = reviewHref(job);
+    if (href) {
+      if (location.hash !== href) location.hash = href;
+      else await go(href.slice(1));
+    }
+  },
+
+  async 'job-resolve'(el) {
+    const id = el.dataset.id;
+    const res = el.dataset.res || 'succeeded';
+    const note = String((document.getElementById('job-resolve-note') || {}).value || '').trim();
+    setBusy(true);
+    try {
+      const body = await post('/api/jobs/' + encodeURIComponent(id) + '/resolve', { resolution: res, note });
+      if (body && body.job) S.logJob = body.job;
+      await Promise.all([loadJobs(), loadStatus()]);
+      if (S.logJob && S.logJob.id === id) await openLog(id, true);
+      render();
+      toast('已收口：' + summaryText((body && body.job && body.job.summary) || res));
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      setBusy(false);
+    }
   },
 
   async 'job-cancel'(el) {
@@ -3638,17 +3804,44 @@ document.addEventListener('keydown', (ev) => {
 document.addEventListener('dragover', (ev) => ev.preventDefault());
 document.addEventListener('drop', (ev) => ev.preventDefault());
 
+function paintLedgerTable() {
+  const L = S.ledger;
+  if (!L) return;
+  const tbody = document.querySelector('#view .ledger-table tbody');
+  if (!tbody || !tbody.closest('.card')) return;
+  const rows = ledgerRowFiltered();
+  const visible = rows.slice(0, S.ledgerLimit);
+  tbody.innerHTML = visible.length ? visible.map(ledgerRowHtml).join('')
+    : `<tr><td colspan="9" class="hint">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的行。'}</td></tr>`;
+  const shown = document.querySelector('#ledger-shown');
+  if (shown) {
+    const showFilter = rows.length !== L.ledger.length;
+    shown.hidden = !showFilter;
+    if (showFilter) shown.textContent = '筛选到 ' + num(rows.length) + ' / ' + num(L.ledger.length) + ' 行。';
+  }
+  const pager = document.querySelector('#ledger-pager');
+  if (pager) {
+    if (rows.length > visible.length) {
+      pager.hidden = false;
+      pager.innerHTML = `<span class="hint">已显示 ${num(visible.length)} / ${num(rows.length)} 行</span>
+        <button class="btn sm" data-act="ledger-more">加载更多 100 行</button>
+        <button class="btn sm" data-act="ledger-show-all">显示全部 ${num(rows.length)} 行</button>`;
+    } else {
+      pager.hidden = true;
+      pager.innerHTML = '';
+    }
+  }
+  paintLedgerPick();
+}
+
 document.addEventListener('input', (ev) => {
   const el = ev.target;
   if (!el) return;
   if (el.id === 'ledger-q') {
     S.ledgerQ = el.value;
-    const tbody = document.querySelector('#view .ledger-table tbody');
-    const rows = ledgerRowFiltered();
-    if (tbody && tbody.closest('.card')) {
-      // 只刷分类表那一段正文，不整页重绘（不打断输入）
-      tbody.innerHTML = rows.map(ledgerRowHtml).join('');
-    }
+    S.ledgerLimit = 100;
+    clearTimeout(S.ledgerDebounce);
+    S.ledgerDebounce = setTimeout(paintLedgerTable, 80);
     return;
   }
   if (el.id !== 'pick-q') return;
@@ -3820,36 +4013,42 @@ function uploadFiles(files) {
 }
 
 window.addEventListener('hashchange', () => {
-  const tab = (location.hash || '#overview').slice(1);
-  if (tab !== S.tab) go(tab);
+  const parsed = parseHash(location.hash);
+  if (parsed.tab !== S.tab || (parsed.tab === 'logs' && Object.prototype.hasOwnProperty.call(parsed.params, 'state'))) {
+    go(parsed.tab, parsed.params);
+  }
 });
 
-async function boot() {
-  S.tab = (location.hash || '#overview').slice(1) || 'overview';
-  try {
-    await Promise.all([loadStatus(), loadJobs(), loadPending(), loadHealth()]);
-    await refreshTab();
-  } catch (err) {
-    toast(err.message, true);
+function pollIntervalMs() {
+  const counts = (S.payload && S.payload.state_counts) || {};
+  const ops = (S.payload && S.payload.ops) || {};
+  const active = (counts.running || 0) + (counts.queued || 0);
+  if (active > 0 || ops.writer || ops.audit_refreshing || S.triageSeen) return 2500;
+  return 10000;
+}
+
+async function pollTick() {
+  if (document.hidden) return;
+  if (S.pollBusy) {
+    schedulePoll();
+    return;
   }
-  render();
-  setInterval(async () => {
-    try {
-      await loadStatus();
-      await loadJobs();
-      if (S.tab === 'split') {
-        await loadSplitBooks();
-        const box = document.querySelector('[data-live="split-batch"]');
-        if (box) box.innerHTML = batchCard();
-      }
-      if (S.tab === 'pdf') {
-        const live = liveTriage();
-        if (live) {
-          S.triageSeen = live.id;
-          paintTriageProgress();
-        } else if (S.triageSeen) {
-          const job = S.jobs.find((row) => row.id === S.triageSeen);
-          if (!job) return;
+  S.pollBusy = true;
+  try {
+    await Promise.all([loadStatus(), loadJobs()]);
+    if (S.tab === 'split') {
+      await loadSplitBooks();
+      const box = document.querySelector('[data-live="split-batch"]');
+      if (box) box.innerHTML = batchCard();
+    }
+    if (S.tab === 'pdf') {
+      const live = liveTriage();
+      if (live) {
+        S.triageSeen = live.id;
+        paintTriageProgress();
+      } else if (S.triageSeen) {
+        const job = S.jobs.find((row) => row.id === S.triageSeen);
+        if (job) {
           const made = (job.steps || []).filter((s) => s.state === 'ok').length;
           const ok = job.state === 'awaiting_review' || job.state === 'succeeded';
           S.triageSeen = null;
@@ -3859,25 +4058,71 @@ async function boot() {
             : '分诊跑完了，但没有模型建议') : '分诊没过，去日志看', !ok || !made);
         }
       }
-      if (S.tab === 'import' || S.tab === 'docs') {
-        // docs 卡片：跑着就 2.5 秒刷一次；没任务时 loadDocs 自己会短路，不会每跳打 404
-        await loadDocs();
-        paintDocs();
-      }
-      if (S.tab === 'overview') {
-        // 只在内容真变了才写：无条件写会把焦点、选区、滚动位置每 2.5 秒清一次
-        const html = viewOverview();
-        if (html !== S.overviewHtml) {
-          S.overviewHtml = html;
-          const view = document.querySelector('#view');
-          if (view) view.innerHTML = html;
-        }
-      }
-    } catch (err) {
-      /* 轮询失败不打扰页面，状态条会显示缺 */
     }
-  }, 2500);
-  setInterval(loadHealth, 12000);
+    if (S.tab === 'import' || S.tab === 'docs') {
+      // docs 卡片：跑着就 2.5 秒刷一次；没任务时 loadDocs 自己会短路，不会每跳打 404
+      await loadDocs();
+      paintDocs();
+    }
+    if (S.tab === 'overview') {
+      // 只在内容真变了才写：无条件写会把焦点、选区、滚动位置清一次
+      const html = viewOverview();
+      if (html !== S.overviewHtml) {
+        S.overviewHtml = html;
+        const view = document.querySelector('#view');
+        if (view) view.innerHTML = html;
+      }
+    }
+  } catch (err) {
+    /* 轮询失败不打扰页面，状态条会显示缺 */
+  } finally {
+    S.pollBusy = false;
+    schedulePoll();
+  }
+}
+
+function schedulePoll(delayMs) {
+  clearTimeout(S.pollTimer);
+  if (document.hidden) return;
+  S.pollTimer = setTimeout(pollTick, delayMs === undefined ? pollIntervalMs() : delayMs);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !S.pollBusy) schedulePoll(50);
+});
+
+async function boot() {
+  const parsed = parseHash(location.hash);
+  S.tab = parsed.tab;
+  applyHashParams(parsed.tab, parsed.params);
+  try {
+    const baseTasks = [loadStatus(), loadJobs(), loadPending(), loadHealth()];
+    if (S.tab === 'overview') baseTasks.push(loadServices());
+    else if (S.tab === 'import') {
+      baseTasks.push(api('/api/inbox').then((body) => {
+        S.inbox = body.items || [];
+        S.inboxIgnored = body.ignored || [];
+      }));
+      baseTasks.push(loadLatestPlan(), loadDocs());
+    } else if (S.tab === 'docs') baseTasks.push(loadDocs());
+    else if (S.tab === 'pdf') baseTasks.push(loadPdf(), loadPdfBooks());
+    else if (S.tab === 'pdf-list') baseTasks.push(loadPdfBooks());
+    else if (S.tab === 'ledger') baseTasks.push(loadLedger(), loadRetireDrop());
+    else if (S.tab === 'maintain') baseTasks.push(loadSettings());
+    else if (S.tab === 'retire') baseTasks.push(loadRetireDrop());
+    else if (S.tab === 'cold') baseTasks.push(loadCold(), loadRetireDrop());
+    await Promise.all(baseTasks);
+    if (S.tab === 'split') await loadSplitBooks();
+    if (S.tab === 'logs' && S.filter === 'awaiting_review') {
+      const rows = logRows();
+      if (rows.length) S.logJob = rows[0];
+    }
+  } catch (err) {
+    toast(err.message, true);
+  }
+  render();
+  schedulePoll();
+  setInterval(() => { if (!document.hidden) loadHealth(); }, 12000);
 }
 
 boot();

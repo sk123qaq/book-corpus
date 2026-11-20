@@ -781,24 +781,24 @@ def run_checks(root, ops, port, fixture):
     code, body = post(port, "/api/import/scan")
     scan_id = body.get("job_id")
     check("扫描返回 job_id", code == 200 and bool(scan_id))
-    detail = wait_job(port, scan_id, ("awaiting_review", "failed"))
+    detail = wait_job(port, scan_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check(
-        "扫描落到 awaiting_review",
-        job.get("state") == "awaiting_review",
+        "扫描落到 succeeded",
+        job.get("state") == "succeeded",
         "%s · %s" % (job.get("state"), job.get("summary")),
     )
     check(
         "扫描门槛读计划",
-        (job.get("summary") or "").startswith("计划待确认：add 1 / replace 1 / delete 1 / review 0"),
+        (job.get("summary") or "").startswith("扫描完成：add 1 / replace 1 / delete 1 / review 0"),
         str(job.get("summary")),
     )
     check("步骤都跑完", all(s["state"] == "ok" for s in (detail or {}).get("steps", [])))
     plan_rel = "工作区/运维/jobs/%s/plan.json" % scan_id
     code, plan = get(port, "/api/file?path=" + urllib.request.quote(plan_rel))
     check("计划文件可读且三行", code == 200 and isinstance(plan, list) and len(plan) == 3)
-    code, body = get(port, "/api/jobs?state=awaiting_review")
-    check("待确认队列能查到", any(j["id"] == scan_id for j in body.get("jobs", [])))
+    code, body = get(port, "/api/jobs?state=succeeded")
+    check("扫描任务在 succeeded 队列能查到", any(j["id"] == scan_id for j in body.get("jobs", [])))
     check("日志接口有内容", "add 1 replace 1 delete 1" in job_log(port, scan_id))
     check(
         "一个任务只派发一次",
@@ -829,11 +829,11 @@ def run_checks(root, ops, port, fixture):
     finally:
         os.replace(inbox_a + ".away", inbox_a)
     code, _ = post(port, "/api/jobs/%s/cancel" % scan_id)
-    check("待确认任务不能停止", code == 409)
+    check("已结束的扫描任务不能停止", code == 409)
     code, body = get(port, "/api/jobs/%s" % scan_id)
     check(
-        "拒绝停止后仍是待确认",
-        (body.get("job") or {}).get("state") == "awaiting_review",
+        "拒绝停止后仍是 succeeded",
+        (body.get("job") or {}).get("state") == "succeeded",
         str((body.get("job") or {}).get("state")),
     )
 
@@ -1054,12 +1054,27 @@ def run_checks(root, ops, port, fixture):
     )
 
     code, body = post(port, "/api/split/run", {"uids": ["B0005"], "only": "B0005", "batch": slow_batch, "workers": 1})
-    detail = wait_job(port, body.get("job_id"), ("awaiting_review", "succeeded", "failed"))
+    staged_split_id = body.get("job_id")
+    detail = wait_job(port, staged_split_id, ("awaiting_review", "succeeded", "failed"))
     job = (detail or {}).get("job") or {}
     check(
         "暂存区有产物时停在待复核",
         job.get("state") == "awaiting_review" and "待复核" in (job.get("summary") or ""),
         "%s · %s" % (job.get("state"), job.get("summary")),
+    )
+    code, body = get(port, "/api/jobs?state=awaiting_review")
+    check("待确认队列能查到暂存拆章", any(j["id"] == staged_split_id for j in body.get("jobs", [])))
+    code, _ = post(port, "/api/jobs/%s/cancel" % staged_split_id)
+    check("待确认任务不能停止", code == 409)
+    code, res_body = post(
+        port, "/api/jobs/%s/resolve" % staged_split_id, {"resolution": "succeeded", "note": "人工验收通过"}
+    )
+    check(
+        "待确认任务可人工收口",
+        code == 200
+        and (res_body.get("job") or {}).get("state") == "succeeded"
+        and "人工验收通过" in ((res_body.get("job") or {}).get("summary") or ""),
+        str(res_body),
     )
 
     code, body = post(port, "/api/split/inspect", {"uid": "B0004", "batch": slow_batch})
@@ -1105,9 +1120,9 @@ def run_checks(root, ops, port, fixture):
     # ---- PDF 分诊 --------------------------------------------------
     code, body = post(port, "/api/pdf/triage", {"uid": "B0001"})
     triage_id = body.get("job_id")
-    detail = wait_job(port, triage_id, ("awaiting_review", "failed"))
+    detail = wait_job(port, triage_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("分诊落到 awaiting_review", job.get("state") == "awaiting_review")
+    check("分诊落到 succeeded", job.get("state") == "succeeded")
     check("分诊摘要带模型建议", "OCR" in (job.get("summary") or ""), str(job.get("summary")))
     triage_dir = os.path.join(ops, "jobs", triage_id)
     check(
@@ -1282,7 +1297,7 @@ def run_checks(root, ops, port, fixture):
     )
     code, body = post(port, "/api/pdf/run", {"uids": ["B0004"]})
     triage_id = (body.get("triage_jobs") or [None])[0]
-    detail = wait_job(port, triage_id, ("awaiting_review", "failed")) if triage_id else None
+    detail = wait_job(port, triage_id, ("succeeded", "failed")) if triage_id else None
     argv = (((detail or {}).get("commands") or [{}])[0] or {}).get("argv") or []
     check(
         "未分诊的书只送分诊不建转写任务",
@@ -1305,7 +1320,7 @@ def run_checks(root, ops, port, fixture):
     )
     code, body = post(port, "/api/pdf/triage-batch", {"uids": untriaged})
     batch_id = body.get("job_id")
-    detail = wait_job(port, batch_id, ("awaiting_review", "failed"))
+    detail = wait_job(port, batch_id, ("succeeded", "failed"))
     steps = (detail or {}).get("steps") or []
     argvs = [c.get("argv") or [] for c in ((detail or {}).get("commands") or [])]
     check(
@@ -1322,8 +1337,8 @@ def run_checks(root, ops, port, fixture):
     job = (detail or {}).get("job") or {}
     summary = job.get("summary") or ""
     check(
-        "批量分诊停在待确认，摘要写本数与建议",
-        job.get("state") == "awaiting_review" and "本" in summary and "建议" in summary,
+        "批量分诊停在完成，摘要写本数与建议",
+        job.get("state") == "succeeded" and "本" in summary and "建议" in summary,
         str(summary),
     )
     code, body = get(port, "/api/pdf/books")
@@ -1369,7 +1384,7 @@ def run_checks(root, ops, port, fixture):
         (review.get("model") or {}).get("route") == "OCR" and "批次标记" in line,
         "review=%s 行=%s" % ((review.get("model") or {}).get("route"), line.strip()[:80]),
     )
-    set_job_state(ops_db, batch_id, "awaiting_review")
+    set_job_state(ops_db, batch_id, "succeeded")
     code, body = post(port, "/api/pdf/settle", {"items": [{"uid": target, "route": "本地抽文本"}]})
     settle_id = body.get("job_id")
     detail = wait_job(port, settle_id, ("succeeded", "failed"))

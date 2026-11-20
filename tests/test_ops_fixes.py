@@ -510,3 +510,237 @@ def test_stage2_chain_auto_sync_coalesces_fts_jobs(workspace):
     assert st_clean["sync_delta"]["embed"]["engine_ready"] is True
     assert st_clean["sync_delta"]["embed"]["initialized"] is False
     assert st_clean["sync_delta"]["has_drift"] is False
+
+
+def test_awaiting_review_narrowed_gates_and_reconcile(workspace):
+    write_book(workspace, "B0004", "文学", "待分诊PDF", None, fmt="pdf")
+    write_ledger(workspace, [("B0004", "文学", "待分诊PDF", "")])
+    r = run_cli("--root", workspace, "library")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    app = _make_app(workspace)
+
+    # 1) gate_import_scan returns succeeded & api_import_latest still loads it
+    inbox_file = workspace / "books" / "_收件箱" / "新书测试.epub"
+    inbox_file.parent.mkdir(parents=True, exist_ok=True)
+    inbox_file.write_bytes(b"epub")
+    scan_dir = Path(app.env.job_dir("job-scan-succ"))
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    plan = [{"plan_version": 2, "file": "新书测试.epub", "action": "add", "subjects": ["文学"], "title": "新书测试"}]
+    (scan_dir / "plan.json").write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+    st, msg = server.gate_import_scan(server.Ctx(app.env, {"id": "job-scan-succ"}, [], [("scan", 0)]))
+    assert st == "succeeded"
+    assert "add 1" in msg
+    _insert_job(app.store, "job-scan-succ", "import.scan", "succeeded", title="扫收件箱", summary=msg)
+    with _http_server(app) as base:
+        code, latest = _http_json(base + "/api/import/latest")
+        assert code == 200
+        assert latest["job_id"] == "job-scan-succ"
+        assert len(latest["plan"]) == 1
+
+    # 2) gate_triage & gate_triage_batch return succeeded
+    tr_dir = Path(app.env.job_dir("job-tr-single"))
+    tr_dir.mkdir(parents=True, exist_ok=True)
+    (tr_dir / "result.json").write_text(
+        json.dumps({"uid": "B0004", "model": {"route": "OCR", "confidence": 0.9}, "thumbs": ["a.png"]}),
+        encoding="utf-8",
+    )
+    st_t, _ = server.gate_triage(server.Ctx(app.env, {"id": "job-tr-single"}, [], [("triage", 0)]))
+    assert st_t == "succeeded"
+
+    trb_dir = Path(app.env.job_dir("job-tr-batch"))
+    (trb_dir / "B0004").mkdir(parents=True, exist_ok=True)
+    (trb_dir / "B0004" / "result.json").write_text(
+        json.dumps({"uid": "B0004", "model": {"route": "OCR", "confidence": 0.9}, "thumbs": []}),
+        encoding="utf-8",
+    )
+    st_tb, _ = server.gate_triage_batch(server.Ctx(app.env, {"id": "job-tr-batch"}, [], [("triage B0004", 0)]))
+    assert st_tb == "succeeded"
+
+    # 3) gate_split: hard fail -> failed; staged-review -> awaiting_review; landed -> succeeded
+    sp_fail = Path(app.env.job_dir("job-sp-fail"))
+    sp_fail.mkdir(parents=True, exist_ok=True)
+    (sp_fail / "report.json").write_text(
+        json.dumps({"batch": "b1", "status_counts": {"split-failed": 1}, "pending_review": ["B0004"]}),
+        encoding="utf-8",
+    )
+    assert server.gate_split(server.Ctx(app.env, {"id": "job-sp-fail"}, [], [("split", 0)]))[0] == "failed"
+
+    sp_staged = Path(app.env.job_dir("job-sp-staged"))
+    sp_staged.mkdir(parents=True, exist_ok=True)
+    (sp_staged / "report.json").write_text(
+        json.dumps({"batch": "b2", "status_counts": {"staged-review": 1}, "pending_review": ["B0004"]}),
+        encoding="utf-8",
+    )
+    assert server.gate_split(server.Ctx(app.env, {"id": "job-sp-staged"}, [], [("split", 0)]))[0] == "awaiting_review"
+
+    # 4) gate_pdf: deferred / remaining without hard/staged -> succeeded; staged-review -> awaiting_review
+    pdf_def = Path(app.env.job_dir("job-pdf-def"))
+    pdf_def.mkdir(parents=True, exist_ok=True)
+    (pdf_def / "report.json").write_text(
+        json.dumps({"landed": 1, "remaining_books": 1, "remaining_pages": 50, "status_counts": {"deferred": 1}}),
+        encoding="utf-8",
+    )
+    assert server.gate_pdf(server.Ctx(app.env, {"id": "job-pdf-def"}, [], [("pdf ocr", 0)]))[0] == "succeeded"
+
+    pdf_stg = Path(app.env.job_dir("job-pdf-stg"))
+    pdf_stg.mkdir(parents=True, exist_ok=True)
+    (pdf_stg / "report.json").write_text(
+        json.dumps({"landed": 0, "remaining_books": 1, "remaining_pages": 50, "status_counts": {"staged-review": 1}}),
+        encoding="utf-8",
+    )
+    assert server.gate_pdf(server.Ctx(app.env, {"id": "job-pdf-stg"}, [], [("pdf ocr", 0)]))[0] == "awaiting_review"
+
+    # 5) reconcile_stale_reviews cleans legacy rows while keeping real staged-review and unknown-rc jobs
+    b_landed = Path(app.env.batches) / "split-ops-20261120-0001" / "logs"
+    b_landed.mkdir(parents=True, exist_ok=True)
+    (b_landed / "B0001.json").write_text(json.dumps({"uid": "B0001", "status": "landed"}), encoding="utf-8")
+    b_staged = Path(app.env.batches) / "split-ops-20261120-0002" / "logs"
+    b_staged.mkdir(parents=True, exist_ok=True)
+    (b_staged / "B0004.json").write_text(json.dumps({"uid": "B0004", "status": "staged-review"}), encoding="utf-8")
+
+    _insert_job(app.store, "old-scan", "import.scan", "awaiting_review", title="扫收件箱", summary="旧扫描")
+    _insert_job(app.store, "old-triage", "pdf.triage", "awaiting_review", title="分诊 B0004", summary="旧分诊")
+    _insert_job(
+        app.store,
+        "old-split-landed",
+        "split.run",
+        "awaiting_review",
+        title="拆章",
+        summary="旧拆章",
+        batch_dir="工作区/批次/split-ops-20261120-0001",
+    )
+    _insert_job(
+        app.store,
+        "keep-split-staged",
+        "split.run",
+        "awaiting_review",
+        title="拆章",
+        summary="待复核",
+        batch_dir="工作区/批次/split-ops-20261120-0002",
+    )
+    _insert_job(app.store, "keep-adopted", "maintain", "awaiting_review", title="维护", summary="接管：退出码拿不到")
+
+    app.reconcile_stale_reviews()
+    assert app.store.get("old-scan")["state"] == "succeeded"
+    assert app.store.get("old-triage")["state"] == "succeeded"
+    assert app.store.get("old-split-landed")["state"] == "succeeded"
+    assert app.store.get("keep-split-staged")["state"] == "awaiting_review"
+    assert app.store.get("keep-adopted")["state"] == "awaiting_review"
+
+
+def test_job_resolve_endpoint(workspace):
+    app = _make_app(workspace)
+    _insert_job(app.store, "job-rev-1", "split.run", "awaiting_review", title="拆章", summary="待复核 1 本")
+    _insert_job(app.store, "job-rev-2", "split.run", "awaiting_review", title="拆章", summary="待复核 1 本")
+    _insert_job(app.store, "job-done-1", "split.run", "succeeded", title="拆章", summary="完成")
+
+    with _http_server(app) as base:
+        code, body = _http_json(base + "/api/jobs/job-rev-1/resolve", {"resolution": "succeeded", "note": "人工核对ok"})
+        assert code == 200
+        assert body["job"]["state"] == "succeeded"
+        assert "人工核对ok" in body["job"]["summary"]
+
+        code2, body2 = _http_json(base + "/api/jobs/job-rev-2/resolve", {"resolution": "dismissed", "note": "跳过"})
+        assert code2 == 200
+        assert body2["job"]["state"] == "cancelled"
+
+        code3, _ = _http_json(base + "/api/jobs/job-done-1/resolve", {"resolution": "succeeded"})
+        assert code3 == 409
+
+        code4, _ = _http_json(base + "/api/jobs/no-such-job/resolve", {"resolution": "succeeded"})
+        assert code4 == 404
+
+
+def test_auto_audit_refresh_after_writes_and_swr_cache(workspace):
+    (workspace / "books" / "B0001" / "source" / "甲书.epub").write_bytes(b"epub")
+    (workspace / "books" / "B0002" / "source" / "乙书.epub").write_bytes(b"epub")
+    (workspace / "books" / "B0003" / "source" / "丙书.txt").write_bytes(b"txt")
+    r = run_cli("--root", workspace, "library", "--emit-json")
+    assert r.returncode == 0, r.stdout + r.stderr
+    r_idx = run_cli("--root", workspace, "run", "build_para_index", "--rebuild", "--root", str(workspace))
+    assert r_idx.returncode == 0, r_idx.stdout + r_idx.stderr
+    r_cat = run_cli("--root", workspace, "catalog")
+    assert r_cat.returncode == 0, r_cat.stdout + r_cat.stderr
+    r_views = run_cli("--root", workspace, "run", "build_views", "--root", str(workspace))
+    assert r_views.returncode == 0, r_views.stdout + r_views.stderr
+
+    app = _make_app(workspace)
+    # 1) Ledger update triggers background audit refresh and clears audit.stale
+    with _http_server(app) as base:
+        code, res = _http_json(base + "/api/ledger/row", {"row": {"uid": "B0001", "正式书名": "甲书体检自动刷新"}})
+        assert code == 200
+        assert res["synced"] is True
+        assert app.wait_audit_refresh(timeout=15.0)
+        audit_file = workspace / "工作区" / "运维" / "last-audit.json"
+        assert audit_file.is_file()
+        cache = json.loads(audit_file.read_text(encoding="utf-8"))
+        assert cache["deep"] is True
+        assert cache["fail"] == []
+        p = _paths(workspace)
+        st = ops_status.collect(p, deep=False)
+        assert st["audit"]["ran"] is True
+        assert st["audit"]["stale"] is False
+
+        # 2) SWR cache window returns cached value immediately while refreshing in background
+        code_s, st_live = _http_json(base + "/api/status")
+        assert code_s == 200
+        assert st_live["ok"] is True
+        with app.status_lock:
+            at_old, val_old = app.status_cache
+            app.status_cache = (time.time() - (server.STATUS_TTL + 5.0), val_old)
+            gen_before = app.status_gen
+        st_swr = app.status(refresh=False)
+        assert st_swr["ok"] is True
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            with app.status_lock:
+                if app.status_gen > gen_before and not app._swr_running and app.status_cache[0] > at_old:
+                    break
+            time.sleep(0.02)
+        with app.status_lock:
+            assert app.status_cache[0] > at_old
+
+
+def test_diff_embed_loose_scan_and_pruned_catalog_audit(workspace):
+    import embed_corpus as ec
+    import gen_book_catalog as gbc
+    import lib_common as lc
+
+    # 1) diff_embed detects orphan active chunk even if book table marked 'removed'
+    emb_dir = workspace / "build" / "检索" / "embeddings"
+    store = ec.Store(emb_dir / "emb.db", emb_dir / "vectors.f16", dim=4, model="t")
+    store.append_book(
+        "B0001",
+        "甲书",
+        ec.sig_of(ec.chapter_paths(workspace, "B0001")),
+        [{"path": "books/B0001/md/001.md", "seq": 0, "line": 1, "chars": 10, "text": "甲块"}],
+        ec.pack_f16([[1.0, 0.0, 0.0, 0.0]], 4),
+        10,
+    )
+    store.db.execute(
+        "INSERT INTO chunk(id, book, path, seq, line, chars, text, active) "
+        "VALUES(99, 'B9999', 'x', 0, 1, 5, 'orphan', 1)"
+    )
+    store.db.commit()
+    store.db.close()
+
+    diff = ec.diff_embed(workspace, db_path=emb_dir / "emb.db", check_network=False)
+    assert "B9999" in diff["orphan"]
+    assert diff["chunks"] == 2
+
+    # 2) pruned gen_book_catalog.audit still detects orphan source file
+    r = run_cli("--root", workspace, "library")
+    assert r.returncode == 0, r.stdout + r.stderr
+    (workspace / "books" / "B0001" / "source" / "extra_orphan.epub").write_bytes(b"x")
+    saved = (lc.ROOT, lc.BOOKS, lc.TABLES)
+    lc.ROOT, lc.BOOKS, lc.TABLES = str(workspace), str(workspace / "books"), str(workspace / "tables")
+    import sqlite3
+
+    con = sqlite3.connect(f"file:{workspace / 'build' / 'library.db'}?mode=ro", uri=True)
+    try:
+        probs, _cnts = gbc.audit(con)
+    finally:
+        con.close()
+        lc.ROOT, lc.BOOKS, lc.TABLES = saved
+    assert any("extra_orphan.epub" in p for p in probs)

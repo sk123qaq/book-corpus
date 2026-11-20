@@ -570,6 +570,16 @@ pre.log {
   margin: 10px 0 0;
 }
 
+.review-box {
+  border: 1px solid var(--amber);
+  background: var(--amber-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0 12px;
+}
+.review-box p { margin: 0 0 8px; color: var(--ink); }
+.review-box .toolbar { margin: 0; }
+
 .empty { color: var(--muted); font-size: 13px; padding: 8px 0; margin: 0; }
 td.empty { text-align: center; padding: 16px 9px; }
 .plan-table { table-layout: fixed; }

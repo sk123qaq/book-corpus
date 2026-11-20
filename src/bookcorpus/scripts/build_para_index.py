@@ -262,11 +262,59 @@ def _table_names(con):
     return {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")}
 
 
-def diff_index(db, only_books=None, root=None):
+def _md_dir_sig(md_dir):
+    """用 os.scandir 单遍统计 md 目录的章节数与 SHA-256 前 16 位签名。"""
+    try:
+        with os.scandir(md_dir) as it:
+            entries = [e for e in it if e.name.endswith(".md") and e.name.lower() != "readme.md" and e.is_file()]
+    except OSError:
+        return None
+    if not entries:
+        return None
+    entries.sort(key=lambda e: e.name)
+    h = hashlib.sha256()
+    for e in entries:
+        st = e.stat()
+        h.update(f"{e.name}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+    return h.hexdigest()[:16], len(entries)
+
+
+def scan_md_sigs(corpus=None):
+    """单遍扫描活库 md 签名：{book_rel: (sig16, chapter_count)}，跳过 _ 收件箱/冷宫。"""
+    base = corpus or CORPUS
+    out = {}
+    if not os.path.isdir(base):
+        return out
+    try:
+        with os.scandir(base) as it:
+            top_dirs = sorted((e for e in it if not e.name.startswith("_") and e.is_dir()), key=lambda e: e.name)
+    except OSError:
+        return out
+    for e in top_dirs:
+        md_dir = os.path.join(e.path, "md")
+        res = _md_dir_sig(md_dir)
+        if res is not None:
+            out[e.name] = res
+            continue
+        if os.path.isdir(md_dir) or os.path.isfile(os.path.join(e.path, "book.json")):
+            continue
+        # 兼容极少数测试把书放在子分类目录下的情形
+        for dirpath, dirnames, _filenames in os.walk(e.path):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith("_") and d not in ("html", "source", "images"))
+            if os.path.basename(dirpath) == "md":
+                book_rel = os.path.relpath(os.path.dirname(dirpath), base)
+                sub = _md_dir_sig(dirpath)
+                if sub is not None:
+                    out[book_rel] = sub
+                dirnames[:] = []
+    return out
+
+
+def diff_index(db, only_books=None, root=None, disk_sigs=None):
     """只读计算磁盘 md 与 index.db 的书级差集：added / modified / removed。"""
     base_root = os.path.abspath(root) if root else ROOT
     corpus = os.path.join(base_root, "books")
-    disk_map = dict(chapters(0, corpus=corpus))
+    disk_map = disk_sigs if disk_sigs is not None else scan_md_sigs(corpus=corpus)
     want = set(only_books) if only_books else None
 
     if not os.path.isfile(db):
@@ -298,12 +346,12 @@ def diff_index(db, only_books=None, root=None):
             }
             added, modified, removed = [], [], []
             unchanged = 0
-            for book, paths in sorted(disk_map.items()):
+            for book, (_sig, ch_cnt) in sorted(disk_map.items()):
                 if want is not None and book not in want:
                     continue
                 if book not in para_stats:
                     added.append(book)
-                elif para_stats[book] != len(paths):
+                elif para_stats[book] != ch_cnt:
                     modified.append(book)
                 else:
                     unchanged += 1
@@ -326,10 +374,9 @@ def diff_index(db, only_books=None, root=None):
 
     added, modified, removed = [], [], []
     unchanged = 0
-    for book, paths in sorted(disk_map.items()):
+    for book, (cur_sig, _ch_cnt) in sorted(disk_map.items()):
         if want is not None and book not in want:
             continue
-        cur_sig = sig_of(paths)
         if book not in tracked:
             added.append(book)
         elif tracked[book][0] != cur_sig:

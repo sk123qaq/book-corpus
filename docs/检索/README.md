@@ -31,7 +31,7 @@
 
 ## 日常同步与增量维护
 
-日常通过操作台完成入库、拆章、文档转换、PDF 落地或退库时，服务端自动接力 `build_para_index.py --sync` 与异步 `embed_corpus.py --sync`（向量库未初始化时跳过）；详见 [操作台重构方案](../design/操作台重构-事件驱动全自动同步方案-2026-11-19.md)。
+日常通过操作台完成入库、拆章、文档转换、PDF 落地或退库时，服务端自动接力 `build_para_index.py --sync` 与异步 `embed_corpus.py --sync`（向量库未初始化时跳过）；只读差集采集（`ops_status` / `diff_index` / `diff_embed`）复用单遍 `os.scandir` 签名扫描并通过 `chunk_book` 松散索引探测失活残留块；详见 [操作台重构方案](../design/操作台重构-事件驱动全自动同步方案-2026-11-19.md)。
 
 ## 相关文档
 

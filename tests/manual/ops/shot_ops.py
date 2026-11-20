@@ -704,7 +704,9 @@ LOG_CANCEL = """
   for (let i = 0; i < 50 && !document.querySelector('#job-detail h2'); i += 1) await sleep(150);
   return {found: true, state: row.state,
           cancel: !!document.querySelector('#job-detail [data-act="job-cancel"]'),
-          rerun: !!document.querySelector('#job-detail [data-act="job-rerun"]')};
+          rerun: !!document.querySelector('#job-detail [data-act="job-rerun"]'),
+          reviewBox: !!document.querySelector('#job-review-box'),
+          resolveBtn: !!document.querySelector('#job-review-box [data-act="job-resolve"]')};
 })()
 """
 
@@ -739,7 +741,7 @@ def seed(port, root=""):
     batch = ""
     for path, payload in (
         ("/api/import/scan", {}),
-        ("/api/split/run", {"uids": ["B0001", "B0002"], "workers": 2}),
+        ("/api/split/run", {"uids": ["B0001", "B0002", "B0005"], "workers": 2}),
         ("/api/pdf/triage", {"uid": "B0001"}),
     ):
         try:
@@ -1057,7 +1059,13 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         eval_js(cdp, VISIT_TAB % ("logs", "logs", "日志", "logs", "日志"), await_promise=True, timeout=30)
         logchk = eval_js(cdp, LOG_CANCEL, await_promise=True, timeout=30)
         notes.append("日志待确认 %s" % (logchk,))
-        if not (logchk.get("found") and logchk.get("rerun") and not logchk.get("cancel")):
+        if not (
+            logchk.get("found")
+            and logchk.get("rerun")
+            and not logchk.get("cancel")
+            and logchk.get("reviewBox")
+            and logchk.get("resolveBtn")
+        ):
             failed_tabs.append("log-cancel-hidden")
         eval_js(cdp, "document.querySelector('#nav a[href=\"#overview\"]').click(); true")
         cdp.drain(0.6)

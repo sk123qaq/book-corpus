@@ -5,7 +5,7 @@ description: >
   8772 往期日课、8770 操作台），以及 CLI 的 `book-corpus embed`、`search`、`query`；验证用户可见行为、
   留下可复核的证据，然后清理实例。找一段包含 SSE 流式与暂停续答。
   当需要验证 book-corpus 的一个改动、复现别人报的页面问题、或按功能地图跑端到端检查时使用。
-  Drive the disposable stack, never the operator's live library on 8765/8771/8772/8773.
+  Drive the disposable stack, never the operator's live library on 8765/8770/8771/8772/8773.
 argument-hint: "[feature] [run-id]"
 ---
 
@@ -15,7 +15,7 @@ argument-hint: "[feature] [run-id]"
 
 这套服务是本地 stdlib Python 进程，全部读写一个「工作区」目录（`books/` + `build/` + `tables/` + `日课/`）。
 验证的前提是：**自己造工作区、自己起服务、自己杀**。操作员有一个 41G 的真实实例常驻在
-8765 / 8771 / 8772 / 8773 上，指向操作员的真实库 `~/书库`；那不是验证目标，误连会写进真库。
+8765 / 8770 / 8771 / 8772 / 8773 上，指向操作员的真实库 `~/书库`；那不是验证目标，误连会写进真库。
 
 功能地图在本技能目录的 `features/`：先读 [features/README.md](features/README.md)，再按被验功能的
 文件拿逐条命令。本文件只讲启动、体检、证据与清理。
@@ -109,8 +109,8 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 四种驱动方式，按功能文件里写的用，不要自创：
 
 - **curl** 验服务端渲染页与各应用 JSON 接口契约：`features/library-home.md` 的首页为服务端渲染，可直接取 HTML 断言稳定标记；`features/daily-lessons.md`、`features/manage-library.md` 与 `features/layered-reads.md` 均为客户端渲染的静态壳，接口走 `curl` 断言 JSON，用户可见页面状态用 `--dump-dom` 或 CDP 验。
-- **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
-- **直接跑脚本**验端到端：`uv run --frozen python tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
+- **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py`、`tests/test_ops_*.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
+- **直接跑脚本**验端到端：`uv run --frozen python tests/acceptance/ops/check_ops.py`（末行 `171 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
 - **CLI** 验用户命令：`book-corpus embed` 在一次性根里跑，断言 stdout/stderr、退出码与磁盘产物，逐条见 `features/embed.md`；`book-corpus search` / `query` 的词法、混合、降级与书卡逐条见 `features/search-query.md`。`embed` 默认 `--server`（优先读 `BOOKS_EMBED_URL`）与 `query` 默认 `BOOKS_EMBED_URL` 都是操作员的 18080，必须改 18780（`query` 还需 `BOOKS_RERANK_URL=off` 以防命中常驻 18081）。
 - **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读各页、日课、找一段 trace）；章页模板已移到 `assets/chapter.js`，DOM 里不再有内联模板字符串，剥不剥 `<script>` 都不会多算，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。浏览器用 `CHROME_BIN` 指定，本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84）；`google-chrome-stable` 已不存在，旧文档里「默认找 google-chrome-stable」的说法作废。
   - `"${CHROME_BIN:-/usr/bin/chromium}" --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，数 `id="btn-map"`、`id="profile-select"`、`id="wb-toolbar"`、`blk-B01`，并断言 `id="depth-panel"` 不在；模板在外链 `assets/chapter.js` 里，DOM 不含模板字符串。详细片段见 `features/layered-reads.md`。
@@ -118,7 +118,7 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
   - `uv run --frozen python tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，读 `CHROME_BIN` 并自动探测 `chromium`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败（已知红与时限细节统一见 `features/README.md`）。
   - `uv run --frozen python .agents/skills/verify-book-corpus/scripts/drive_sse_pause.py --base http://127.0.0.1:18765 --out "$EV/sse-pause-resume.json"`，末行 `RESUMED ... done_ok=True`，exit 0；它真打一次模型，先读完离线合同再决定跑不跑。
   - `uv run --frozen python tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机 11 条会话仍没有 3 轮样本，就属于这一支）。
-  - 操作台浏览器验收：全量交互用 `uv run --frozen python tests/manual/ops/shot_ops.py`（已内置 `sys.path` 无需 `PYTHONPATH`，适配六模块与子页签，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`）；仅查十二个导航 hash 可用 `uv run --frozen python .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"`（退出时自动清理 `/tmp/ops-tabs-*`）。当前已知红统一登记在 [features/README.md](features/README.md)，本文件不重复。
+  - 操作台浏览器验收：全量交互用 `uv run --frozen python tests/manual/ops/shot_ops.py`（已内置 `sys.path` 无需 `PYTHONPATH`，适配六模块与子页签，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`）；仅查十二个导航 hash（`1440×900` 全页签 + `#overview` `390×844` 溢出，捕获 `exceptionThrown` / `consoleAPICalled` / `Log.entryAdded`）可用 `uv run --frozen python .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"`（退出时自动清理 `/tmp/ops-tabs-*`）。当前已知红统一登记在 [features/README.md](features/README.md)，本文件不重复。
 - **本地模型 stub** 验分层读的 SSE 与知识地图生成：`python3 .agents/skills/verify-book-corpus/scripts/mock_reading_model.py --port 18790`，阅读服务带 `OPENCODE_GO_API_KEY=sk-mock`，并把 `READING_MODEL_URL` 指向这个 stub 起。它只返回可渲染的固定形状，不评价模型质量；逐条命令见 `features/layered-reads.md`。
 
 硬规则：
@@ -149,17 +149,17 @@ curl -s -X POST http://127.0.0.1:18765/api/sessions/delete \
 for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 ```
 
-- 拉起过的服务（首页自动起的操作台）不在 `run/*.pid` 里：`ss -ltnp | grep :8770` 拿到 PID，记进 `$ROOT/run/autostart.pid` 再杀。
-- 杀完确认 `ss -ltnp | grep -E ':(18765|18770|18771|18772|18773|18774|18775)\b'` 为空；`uv run` 与首页拉起的那类子进程会随父进程一起退出，但端口空才是判据。
+- 拉起过的服务（首页自动起的操作台）不在 `run/*.pid` 里：先用 `ss -ltnp | grep :8770` 与 `ps -fp <pid>` 核对 `--root "$ROOT"` 确实指向本轮临时根，确认后记进 `$ROOT/run/autostart.pid` 再杀（绝不误杀操作员的 `~/书库` 常驻 `8770`）。
+- 杀完确认 `ss -ltnp | grep -E ':(18765|18770|18771|18772|18773|18774|18775)\b'` 为空（本机常驻占用除外）；`uv run` 与首页拉起的那类子进程会随父进程一起退出，但端口空才是判据。
 - embed 的 llama-server 在 `18780`：`ss -ltnp | grep ':18780 '` 为空，且 `pgrep -af "$ROOT"` 无输出，才算收干净。跑过 embed 的轮次必查。
 - 删工作区：`rm -rf "$ROOT"`。**不要**删 `artifacts/`，清理只删实例与临时根。
 - 确认仓库 `.env` 没被本轮改写：先记下它原有的 `BOOKS_ROOT`（操作员实例可能就指向 `~/书库`），只检查它没有变成 `$ROOT`；`init` 一律带 `BOOK_CORPUS_ENV=$ROOT/run/env`，不要动 `.env`。
 - 删完 `ls artifacts/verify/<RUN_ID>/<feature>/` 还在，才算这轮收干净。
-- 绝不碰 8765 / 8771 / 8772 / 8773 上的任何进程，哪怕它看起来卡住了。
+- 绝不碰 8765 / 8770 / 8771 / 8772 / 8773 上的任何操作员常驻进程，哪怕它看起来卡住了。
 
 ## Helpers
 
-启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；随技能附带三个脚本：`scripts/drive_sse_pause.py`（SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来）、`scripts/drive_ops_tabs.py`（操作台六模块 + 六个子页签、控制台错误与 1440/390 溢出轻量巡检）与 `scripts/mock_reading_model.py`（分层读离线模型 stub）。
+启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；随技能附带三个脚本：`scripts/drive_sse_pause.py`（SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来）、`scripts/drive_ops_tabs.py`（操作台六模块 + 六个子页签、控制台错误与 `1440×900` 全页签 / `#overview` `390×844` 溢出轻量巡检）与 `scripts/mock_reading_model.py`（分层读离线模型 stub）。
 
 ## Feature map
 

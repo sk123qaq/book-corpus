@@ -546,12 +546,12 @@ def jobs(p, state):
     state["jobs"] = result
 
 
-def embed_status(p, state):
+def embed_status(p, state, disk_sigs=None):
     db = os.path.join(p.root, "build", "检索", "embeddings", "emb.db")
     try:
         import embed_corpus as EC
 
-        diff = EC.diff_embed(p.root, db_path=db, check_network=False)
+        diff = EC.diff_embed(p.root, db_path=db, check_network=False, disk_sigs=disk_sigs)
         state["embed"] = {
             "ok": diff["has_db"],
             "engine_ready": diff["engine_ready"],
@@ -612,7 +612,7 @@ def embed_status(p, state):
         }
 
 
-def sync_delta(p, state):
+def sync_delta(p, state, disk_sigs=None):
     """只读计算各派生层相对活库的精确增量差集（绝不写盘、绝不把冷宫混入活库）。"""
     fts = {
         "has_db": os.path.isfile(p.indexdb),
@@ -625,7 +625,7 @@ def sync_delta(p, state):
     try:
         import build_para_index as BPI
 
-        fts = BPI.diff_index(p.indexdb, root=p.root)
+        fts = BPI.diff_index(p.indexdb, root=p.root, disk_sigs=disk_sigs)
     except (ImportError, OSError, sqlite3.Error, ValueError):
         fts["has_db"] = os.path.isfile(p.indexdb)
 
@@ -758,9 +758,16 @@ def collect(p, deep=False):
     ledger(p, state)
     catalog(p, state)
     index(p, state, deep)
-    embed_status(p, state)
+    disk_sigs = None
+    try:
+        import build_para_index as BPI
+
+        disk_sigs = BPI.scan_md_sigs(corpus=p.lib)
+    except (ImportError, OSError):
+        disk_sigs = None
+    embed_status(p, state, disk_sigs=disk_sigs)
     views(p, state)
-    sync_delta(p, state)
+    sync_delta(p, state, disk_sigs=disk_sigs)
     cache = read_cache(p, state)
     if deep:
         fresh = refresh_audit(p, state)

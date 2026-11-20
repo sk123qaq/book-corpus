@@ -73,7 +73,8 @@ DONE_STATES = ("succeeded", "failed", "cancelled", "orphaned")
 READ_SLOTS = 2
 JSON_MAX = 1024 * 1024
 UPLOAD_MAX = 2 * 1024**3
-STATUS_TTL = 6.0
+STATUS_TTL = 15.0
+STATUS_SWR_TTL = 60.0
 PDF_PROBE_RETRY = 30.0
 KILL_WAIT = 10
 LOG_TAIL_LINES = 200
@@ -81,6 +82,21 @@ SEARCH_URL = "http://127.0.0.1:8765"
 TRIAGE_BATCH_PREFIX = "pdf-ocr-ops-"
 CENSUS_BATCH_PREFIX = "pdf-普查-"
 OCR_BATCH_PREFIX = "pdf-ocr-"
+_INPROC_STATUS_LOCK = threading.Lock()
+_OPS_STATUS_MOD = None
+
+
+def _ops_status_module():
+    global _OPS_STATUS_MOD
+    if _OPS_STATUS_MOD is not None:
+        return _OPS_STATUS_MOD
+    scripts = _package_scripts()
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import ops_status as OS
+
+    _OPS_STATUS_MOD = OS
+    return OS
 
 
 def _latest_batch(root, prefix):
@@ -165,6 +181,9 @@ PDF_DEFER_STATUSES = frozenset({"deferred", "interrupted", "quota"})
 PDF_STAGED_STATUSES = frozenset({"staged-review"})
 PDF_OK_STATUSES = frozenset({"landed", "skipped-has-md", "accepted", "replaced"})
 PDF_MANIFEST_STATUSES = frozenset({"landed", "replaced", "accepted"})
+SPLIT_FAIL_STATUSES = frozenset({"split-failed", "convert-failed", "error", "no-stage"})
+SPLIT_STAGED_STATUSES = frozenset({"staged", "staged-review"})
+SPLIT_OK_STATUSES = frozenset({"landed", "replaced", "accepted", "skipped-has-md"})
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS job (
@@ -507,6 +526,20 @@ class Store:
             "SELECT seq, name, state, detail, started, ended FROM step WHERE job_id=? ORDER BY seq", (job_id,)
         )
 
+    def steps_for_jobs(self, job_ids):
+        if not job_ids:
+            return {}
+        rows = self._rows(
+            "SELECT job_id, seq, name, state, detail, started, ended FROM step "
+            "WHERE job_id IN (SELECT value FROM json_each(?)) ORDER BY job_id, seq",
+            (json.dumps(list(job_ids)),),
+        )
+        out = {jid: [] for jid in job_ids}
+        for row in rows:
+            jid = row.pop("job_id")
+            out.setdefault(jid, []).append(row)
+        return out
+
     def delete(self, job_id):
         self._exec("DELETE FROM step WHERE job_id=?", (job_id,))
         self._exec("DELETE FROM job WHERE id=?", (job_id,))
@@ -571,7 +604,7 @@ def gate_import_scan(ctx):
     if not plan:
         return "succeeded", "收件箱里没有可入库的书"
     counts = collections.Counter(str(i.get("action") or "?") for i in plan)
-    summary = "计划待确认：add %d / replace %d / delete %d / review %d" % (
+    summary = "扫描完成：add %d / replace %d / delete %d / review %d" % (
         counts.get("add", 0),
         counts.get("replace", 0),
         counts.get("delete", 0),
@@ -581,7 +614,7 @@ def gate_import_scan(ctx):
         summary += "；有 %d 行待核" % counts["review"]
     elif counts.get("replace"):
         summary += "；有 %d 行换源" % counts["replace"]
-    return "awaiting_review", summary
+    return "succeeded", summary
 
 
 def gate_import_apply(ctx):
@@ -617,7 +650,14 @@ def gate_split(ctx):
         report.get("batch") or "?",
         "，".join("%s %d" % (k, v) for k, v in sorted(counts.items())),
     )
-    if pending:
+    hard = sum(int(n or 0) for st, n in counts.items() if st in SPLIT_FAIL_STATUSES)
+    staged = sum(int(n or 0) for st, n in counts.items() if st in SPLIT_STAGED_STATUSES)
+    if hard > 0:
+        detail = "、".join(
+            "%s %d" % (st, counts[st]) for st in sorted(counts) if st in SPLIT_FAIL_STATUSES and counts[st]
+        )
+        return "failed", summary + "；失败 %d 本（%s）" % (hard, detail or "、".join(pending[:6]))
+    if staged > 0 or pending:
         return "awaiting_review", summary + "；待复核 %d 本（%s）" % (len(pending), "、".join(pending[:6]))
     return "succeeded", summary
 
@@ -692,12 +732,12 @@ def gate_pdf(ctx):
             "%s %d" % (status, counts[status]) for status in sorted(counts) if status in PDF_FAIL_STATUSES
         )
         return "failed", summary + "；硬失败 %d 本（%s）" % (hard, detail)
-    if deferred:
-        return "awaiting_review", summary + "；%d 本暂缓（额度/中断），改天续跑" % deferred
     if staged:
         return "awaiting_review", summary + "；%d 本待复核（staged-review）" % staged
+    if deferred:
+        return "succeeded", summary + "；%d 本暂缓（额度/中断），改天续跑" % deferred
     if remaining:
-        return "awaiting_review", summary
+        return "succeeded", summary + "；剩余下次续跑"
     return "succeeded", summary
 
 
@@ -738,11 +778,11 @@ def gate_triage(ctx):
     model = result.get("model") or {}
     thumbs = result.get("thumbs") or []
     if model.get("route"):
-        summary = "模型建议 %s（%s）待人工确认" % (model["route"], format_conf(model.get("confidence")))
+        summary = "模型建议 %s（%s）" % (model["route"], format_conf(model.get("confidence")))
     else:
         summary = "无模型建议，待人工判断"
     summary += "；缩略图 %d 张" % len(thumbs)
-    return "awaiting_review", summary
+    return "succeeded", summary
 
 
 def gate_triage_batch(ctx):
@@ -759,7 +799,7 @@ def gate_triage_batch(ctx):
         return "failed", "分诊没有结果文件 result.json"
     routed = sum(1 for one in results if (one.get("model") or {}).get("route"))
     thumbs = sum(len(one.get("thumbs") or []) for one in results)
-    return "awaiting_review", "%d 本出建议，%d 本有模型路线；缩略图共 %d 张" % (len(results), routed, thumbs)
+    return "succeeded", "%d 本出建议，%d 本有模型路线；缩略图共 %d 张" % (len(results), routed, thumbs)
 
 
 def gate_dryrun(ctx):
@@ -945,9 +985,10 @@ class Runner:
     """写任务互斥于批次账读改写（.writer.lock 独占）；只读任务共用 .reader.lock，
     与写任务互不阻塞，最多 READ_SLOTS 个并行。"""
 
-    def __init__(self, env, store):
+    def __init__(self, env, store, app=None):
         self.env = env
         self.store = store
+        self.app_ref = app
         self.cv = threading.Condition()
         self.active = {}
         self.active_read = 0
@@ -1218,6 +1259,14 @@ class Runner:
         if blob is not None:
             write_json_atomic(os.path.join(self.env.job_dir(job_id), name), blob)
 
+    def _app(self):
+        if getattr(self, "app_ref", None) is not None:
+            return self.app_ref
+        app_ref = getattr(Handler, "app", None)
+        if app_ref is not None and getattr(getattr(app_ref, "env", None), "root", None) == self.env.root:
+            return app_ref
+        return None
+
     def _finalize(self, job_id, job, commands, rcs, spec=None):
         spec = spec or KINDS.get(job["kind"]) or {"gate": gate_rc}
         current = (self.store.get(job_id) or {}).get("state")
@@ -1247,13 +1296,49 @@ class Runner:
         )
         self._log(job_id, "\n---- 判定 %s：%s ----\n" % (state, summary))
         self._resolve_reviews(job_id, job, state)
+        app_ref = self._app()
         if job["kind"] == "import.apply" and state == "succeeded":
-            self._chain_docs(job_id)
-        if job["kind"] in ("split.run", "docs.run", "pdf.run", "manual.rescan") and state in (
+            if os.path.realpath(self.env.scripts) == os.path.realpath(_package_scripts()):
+                views_script = os.path.join(self.env.scripts, "build_views.py")
+                if os.path.isfile(views_script):
+                    with suppress(OSError, subprocess.SubprocessError):
+                        subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本
+                            [sys.executable, views_script],
+                            cwd=self.env.root,
+                            env=self.env.child_env(),
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                        )
+            chained_docs = self._chain_docs(job_id)
+            if not chained_docs and app_ref is not None:
+                app_ref.schedule_audit_refresh()
+        elif job["kind"] in ("split.run", "docs.run", "pdf.run", "manual.rescan") and state in (
             "succeeded",
             "awaiting_review",
         ):
-            self._chain_auto_sync(job_id, job["kind"])
+            chained = self._chain_auto_sync(job_id, job["kind"])
+            if not chained.get("fts_job_id") and app_ref is not None:
+                app_ref.schedule_audit_refresh()
+        elif (job["kind"] in ("sync.fts", "sync.expand", "delete.apply") and state == "succeeded") or (
+            job["kind"] in ("maintain", "sync.reconcile") and state == "succeeded" and ("audit", 0) not in rcs
+        ):
+            if app_ref is not None:
+                app_ref.schedule_audit_refresh()
+        if app_ref is not None and not spec.get("readonly"):
+            app_ref.invalidate_status()
+
+    def _landed_uids(self):
+        if not os.path.isfile(self.env.libdb):
+            return set()
+        try:
+            con = sqlite3.connect("file:%s?mode=ro" % self.env.libdb, uri=True, timeout=5)
+            try:
+                return {r[0] for r in con.execute("SELECT uid FROM derived WHERE kind='md' AND status='done'")}
+            finally:
+                con.close()
+        except sqlite3.Error:
+            return set()
 
     def _resolve_reviews(self, job_id, job, state):
         """下游任务结束后收口关联的 awaiting_review，避免「待确认」队列只增不减。"""
@@ -1280,6 +1365,7 @@ class Runner:
             batch_name = os.path.basename(str(job["batch_dir"]).rstrip("/"))
             logs_dir = os.path.join(self.env.batches, batch_name, "logs")
             if os.path.isdir(logs_dir):
+                landed_uids = self._landed_uids()
                 pending_statuses = ("staged", "staged-review", "split-failed", "convert-failed", "error", "no-stage")
                 still_pending = False
                 for fn in os.listdir(logs_dir):
@@ -1287,8 +1373,10 @@ class Runner:
                         continue
                     row = read_json(os.path.join(logs_dir, fn))
                     if isinstance(row, dict) and row.get("status") in pending_statuses:
-                        still_pending = True
-                        break
+                        uid = row.get("uid") or fn[:-5]
+                        if uid not in landed_uids:
+                            still_pending = True
+                            break
                 if not still_pending:
                     for old in self.store.list(state="awaiting_review", limit=100):
                         if old.get("kind") == "split.run" and old.get("batch_dir") == job.get("batch_dir"):
@@ -1298,9 +1386,33 @@ class Runner:
                                 ended=now,
                                 summary=(old.get("summary") or "") + "；已复核落地",
                             )
+        elif kind == "pdf.run" and job.get("batch_dir"):
+            batch_name = os.path.basename(str(job["batch_dir"]).rstrip("/"))
+            logs_dir = os.path.join(self.env.batches, batch_name, "logs")
+            if os.path.isdir(logs_dir):
+                landed_uids = self._landed_uids()
+                still_staged = False
+                for fn in os.listdir(logs_dir):
+                    if not fn.endswith(".json"):
+                        continue
+                    row = read_json(os.path.join(logs_dir, fn))
+                    if isinstance(row, dict) and row.get("status") in PDF_STAGED_STATUSES:
+                        uid = row.get("uid") or fn[:-5]
+                        if uid not in landed_uids:
+                            still_staged = True
+                            break
+                if not still_staged:
+                    for old in self.store.list(state="awaiting_review", limit=100):
+                        if old.get("kind") == "pdf.run" and old.get("batch_dir") == job.get("batch_dir"):
+                            self.store.update(
+                                old["id"],
+                                state="succeeded",
+                                ended=now,
+                                summary=(old.get("summary") or "") + "；已复核落地",
+                            )
         elif kind == "pdf.confirm":
-            app_ref = getattr(Handler, "app", None)
-            if app_ref is None or app_ref.env.root != self.env.root:
+            app_ref = self._app()
+            if app_ref is None:
                 return
             untriaged = {u for u, row in app_ref.pdf_books_index().items() if row["disposition"] == "untriaged"}
             for old in self.store.list(state="awaiting_review", limit=100):
@@ -1328,7 +1440,7 @@ class Runner:
         if os.path.exists(seed):
             prev = read_json(seed, {}) or {}
             self._log(job_id, "\n[docs] 已派过文档转 md（%s），不重复提交\n" % prev.get("docs_job"))
-            return
+            return False
         applied = read_json(os.path.join(base, "applied.json"))
         rows = applied.get("applied") if isinstance(applied, dict) else None
         doc_formats = lib_common_module().DOC_FORMATS
@@ -1340,7 +1452,7 @@ class Runner:
             and str(r.get("format") or "").lower() in doc_formats
         ]
         if not hits:
-            return
+            return False
         applied_path = os.path.join(base, "applied.json")
         try:
             new_id = self.submit(
@@ -1350,9 +1462,10 @@ class Runner:
             )
         except Exception as exc:
             self._log(job_id, "\n[docs] 接转提交失败：%s: %s\n" % (type(exc).__name__, exc))
-            return
+            return False
         write_json_atomic(seed, {"docs_job": new_id})
         self._log(job_id, "\n[docs] %d 本 doc 格式自动接转：job %s\n" % (len(hits), new_id))
+        return True
 
     def _script_supports(self, script_name, flag):
         path = os.path.join(self.env.scripts, script_name)
@@ -1372,7 +1485,7 @@ class Runner:
         base = self.env.job_dir(job_id)
         seed = os.path.join(base, "auto-sync.json")
         if os.path.exists(seed):
-            return
+            return read_json(seed, {}) or {}
         queued = {}
         scripts = self.env.scripts
         if scripts not in sys.path:
@@ -1431,9 +1544,14 @@ class Runner:
 
         if queued:
             write_json_atomic(seed, {**queued, "source": source_kind, "at": now_iso()})
+        return queued
 
     def _refresh_audit(self, job_id):
         """收尾跑完就重写体检缓存。页面关着也照样刷新，下次打开不再显示跑之前的读数。"""
+        app_ref = self._app()
+        if app_ref is not None:
+            app_ref._run_audit_refresh(job_id=job_id)
+            return
         argv = [sys.executable, self.env.status_script, "--json", "--deep", "--root", self.env.root]
         try:
             proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
@@ -1548,43 +1666,315 @@ class App:
         self.env = env
         env.prepare()
         self.store = Store(env.ops_db)
-        self.runner = Runner(env, self.store)
+        self.runner = Runner(env, self.store, app=self)
         self.status_cache = (0.0, None)
         self.status_lock = threading.Lock()
         self.status_gen = 0
+        self._swr_running = False
+        self._cold_event = None
+        self._audit_lock = threading.Lock()
+        self._audit_running = False
+        self._audit_pending = False
+        self._audit_done = threading.Event()
+        self._audit_done.set()
         self.pdf_probe_down_until = 0.0
         self.pdf_page_cache = {}
         self.pdf_page_lock = threading.Lock()
         # 先接管再起调度：接管来的写任务不受 flock 保护，调度器抢在前面就会
         # 有第二个写者
         self.runner.adopt()
+        self.reconcile_stale_reviews()
         self.runner.start()
+
+    # ---- awaiting_review reconciliation & auto audit ----------------
+    def reconcile_stale_reviews(self):
+        """启动时幂等收口历史残留与非阻塞型的 awaiting_review 任务。"""
+        now = now_iso()
+        rows = self.store.list(state="awaiting_review", limit=200)
+        if not rows:
+            return
+        landed_uids = self.runner._landed_uids()
+        pdf_idx = None
+        for old in rows:
+            kind = old.get("kind")
+            summary = old.get("summary") or ""
+            ended = old.get("ended") or now
+            if kind == "import.scan":
+                plan = read_json(os.path.join(self.env.job_dir(old["id"]), "plan.json"))
+                any_in_inbox = isinstance(plan, list) and any(
+                    os.path.isfile(os.path.join(self.env.inbox, os.path.basename(str(it.get("file") or ""))))
+                    for it in plan
+                )
+                suffix = "；扫描已完成" if any_in_inbox else "；扫描计划已收口"
+                self.store.update(old["id"], state="succeeded", ended=ended, summary=summary + suffix)
+            elif kind == "pdf.triage":
+                self.store.update(old["id"], state="succeeded", ended=ended, summary=summary + "；分诊建议已生成")
+            elif kind == "split.run":
+                batch_dir = old.get("batch_dir")
+                if not batch_dir:
+                    continue
+                logs_dir = os.path.join(self.env.root, str(batch_dir), "logs")
+                if not os.path.isdir(logs_dir):
+                    continue
+                entries = []
+                for fn in os.listdir(logs_dir):
+                    if not fn.endswith(".json"):
+                        continue
+                    row = read_json(os.path.join(logs_dir, fn))
+                    if isinstance(row, dict):
+                        entries.append((row.get("uid") or fn[:-5], row.get("status") or ""))
+                if not entries:
+                    continue
+                still_staged = any(st in SPLIT_STAGED_STATUSES and uid not in landed_uids for uid, st in entries)
+                if still_staged:
+                    continue
+                any_failed = any(st in SPLIT_FAIL_STATUSES and uid not in landed_uids for uid, st in entries)
+                if any_failed:
+                    self.store.update(old["id"], state="failed", ended=ended, summary=summary + "；已核：含失败书目")
+                else:
+                    self.store.update(old["id"], state="succeeded", ended=ended, summary=summary + "；已复核落地")
+            elif kind == "pdf.run":
+                if "staged-review" not in summary:
+                    self.store.update(old["id"], state="succeeded", ended=ended, summary=summary + "；已收口")
+                    continue
+                batch_dir = old.get("batch_dir")
+                if not batch_dir:
+                    continue
+                logs_dir = os.path.join(self.env.root, str(batch_dir), "logs")
+                if not os.path.isdir(logs_dir):
+                    continue
+                if pdf_idx is None:
+                    pdf_idx = self.pdf_books_index()
+                staged_uids = []
+                for fn in os.listdir(logs_dir):
+                    if not fn.endswith(".json"):
+                        continue
+                    row = read_json(os.path.join(logs_dir, fn))
+                    if isinstance(row, dict) and row.get("status") in PDF_STAGED_STATUSES:
+                        uid = row.get("uid") or fn[:-5]
+                        if uid not in landed_uids and (pdf_idx.get(uid) or {}).get("progress") == "staged":
+                            staged_uids.append(uid)
+                if not staged_uids:
+                    self.store.update(old["id"], state="succeeded", ended=ended, summary=summary + "；已复核落地")
+
+    def _ensure_audit_sync_state(self):
+        lock = getattr(self, "_audit_lock", None)
+        if lock is None:
+            lock = threading.Lock()
+            self._audit_lock = lock
+            self._audit_running = False
+            self._audit_pending = False
+            self._audit_done = threading.Event()
+            self._audit_done.set()
+        return lock
+
+    def _run_audit_refresh(self, job_id=None):
+        """直接刷新 last-audit.json；真实脚本走 audit_state --json --deep，测试 stub 走 ops_status --deep。"""
+        use_direct = os.path.realpath(self.env.scripts) == os.path.realpath(_package_scripts())
+        audit_script = os.path.join(self.env.scripts, "audit_state.py")
+        try:
+            if use_direct and os.path.isfile(audit_script):
+                proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量
+                    [sys.executable, audit_script, "--json", "--deep", "--root", self.env.root],
+                    cwd=self.env.root,
+                    env=self.env.child_env(),
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+                try:
+                    data = json.loads(proc.stdout)
+                except ValueError as exc:
+                    if job_id and hasattr(self, "runner"):
+                        self.runner._log(job_id, "[体检缓存] audit_state 输出解析失败：%s\n" % exc)
+                    return
+                if not isinstance(data, dict):
+                    return
+                cache = {
+                    "at": datetime.now().astimezone().replace(microsecond=0).isoformat(),
+                    "root": self.env.root,
+                    "deep": True,
+                    "fail": data.get("fail") or [],
+                    "warn": data.get("warn") or [],
+                    "ok": data.get("ok") or [],
+                }
+                with suppress(OSError):
+                    write_json_atomic(self.env.audit_cache, cache)
+            elif os.path.isfile(self.env.status_script):
+                proc = subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本/常量
+                    [sys.executable, self.env.status_script, "--json", "--deep", "--root", self.env.root],
+                    cwd=self.env.root,
+                    env=self.env.child_env(),
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+                if proc.returncode != 0 and job_id and hasattr(self, "runner"):
+                    self.runner._log(
+                        job_id,
+                        "[体检缓存] ops_status rc=%d：%s\n"
+                        % (proc.returncode, (proc.stderr or proc.stdout).strip()[-200:]),
+                    )
+        except (OSError, subprocess.SubprocessError) as exc:
+            if job_id and hasattr(self, "runner"):
+                self.runner._log(job_id, "[体检缓存] 刷新失败：%s\n" % exc)
+        finally:
+            self.invalidate_status()
+
+    def _audit_worker(self):
+        lock = self._ensure_audit_sync_state()
+        try:
+            while True:
+                with lock:
+                    if not self._audit_pending:
+                        self._audit_running = False
+                        self._audit_done.set()
+                        break
+                    self._audit_pending = False
+                if os.path.isdir(self.env.root) and os.path.exists(self.env.libdb):
+                    self._run_audit_refresh()
+        finally:
+            with lock:
+                self._audit_running = False
+                self._audit_done.set()
+            self.invalidate_status()
+
+    def schedule_audit_refresh(self):
+        """合并去重后台刷新体检缓存，避免写入后「体检提醒」亮过期警告。"""
+        if not os.path.exists(self.env.libdb):
+            return False
+        lock = self._ensure_audit_sync_state()
+        with lock:
+            self._audit_pending = True
+            if self._audit_running:
+                return False
+            self._audit_running = True
+            self._audit_done.clear()
+        threading.Thread(target=self._audit_worker, daemon=True).start()
+        return True
+
+    def wait_audit_refresh(self, timeout=15.0):
+        lock = self._ensure_audit_sync_state()
+        with lock:
+            ev = self._audit_done
+        return ev.wait(timeout)
+
+    def invalidate_status(self):
+        lock = getattr(self, "status_lock", None)
+        if lock is None:
+            return
+        with lock:
+            self.status_gen = getattr(self, "status_gen", 0) + 1
+            self.status_cache = (0.0, None)
+
+    def _patch_live_status(self, value):
+        if not isinstance(value, dict) or not hasattr(self, "store") or not hasattr(self, "runner"):
+            return value
+        out = dict(value)
+        counts = self.store.counts()
+        snap = self.runner.snapshot()
+        snap["audit_refreshing"] = bool(getattr(self, "_audit_running", False))
+        out["ops"] = snap
+        out["state_counts"] = counts
+        if isinstance(out.get("status"), dict):
+            st = dict(out["status"])
+            jobs = dict(st.get("jobs") or {})
+            jobs["queued"] = counts.get("queued", 0)
+            jobs["running"] = counts.get("running", 0)
+            jobs["awaiting_review"] = counts.get("awaiting_review", 0)
+            jobs["failed"] = counts.get("failed", 0)
+            st["jobs"] = jobs
+            out["status"] = st
+        return out
+
+    def _swr_refresh(self, gen):
+        lock = self.status_lock
+        try:
+            value = self._load_status(deep=False)
+            with lock:
+                if gen + 1 == self.status_gen:
+                    self.status_cache = (time.time(), value)
+        except Exception:
+            traceback.print_exc()
+        finally:
+            with lock:
+                self._swr_running = False
 
     # ---- status ----------------------------------------------------
     def status(self, refresh=False, deep=False):
         if deep:
             refresh = True
-        with self.status_lock:
+        lock = self.status_lock
+        cold_ev = None
+        wait_ev = None
+        gen = 0
+        with lock:
             at, value = self.status_cache
-            if not refresh and value is not None and time.time() - at < STATUS_TTL:
-                return value
-            gen = self.status_gen
-            self.status_gen += 1
-        # _load_status 最长跑 120 秒，必须在锁外跑：一次刷新不该把别的状态请求
-        # 一起堵住。gen 保证先发起的慢刷新不能盖掉后发起的新结果；
-        # refresh/deep 与 STATUS_TTL 的语义不变。
-        value = self._load_status(deep=deep)
-        with self.status_lock:
-            # status_gen 在发起时自增；只有最后发起的那次（gen+1 == 当前值）
-            # 能写缓存，先发起的慢请求不能盖掉新结果。
-            if gen + 1 == self.status_gen:
-                self.status_cache = (time.time(), value)
-        return value
+            age = time.time() - at
+            if not refresh and value is not None:
+                if age < STATUS_TTL:
+                    return self._patch_live_status(value)
+                if age < STATUS_SWR_TTL:
+                    if not getattr(self, "_swr_running", False):
+                        self._swr_running = True
+                        gen = self.status_gen
+                        self.status_gen += 1
+                        threading.Thread(target=self._swr_refresh, args=(gen,), daemon=True).start()
+                    return self._patch_live_status(value)
+            if not refresh:
+                existing = getattr(self, "_cold_event", None)
+                if existing is not None:
+                    wait_ev = existing
+                else:
+                    cold_ev = threading.Event()
+                    self._cold_event = cold_ev
+                    gen = self.status_gen
+                    self.status_gen += 1
+            else:
+                gen = self.status_gen
+                self.status_gen += 1
+        if wait_ev is not None:
+            wait_ev.wait(timeout=30.0)
+            with lock:
+                _, cached = self.status_cache
+            if cached is not None:
+                return self._patch_live_status(cached)
+            with lock:
+                gen = self.status_gen
+                self.status_gen += 1
+        try:
+            # _load_status 必须在锁外跑：一次刷新不该把别的状态请求一起堵住。
+            # gen 保证先发起的慢刷新不能盖掉后发起的新结果。
+            value = self._load_status(deep=deep)
+            with lock:
+                if gen + 1 == self.status_gen:
+                    self.status_cache = (time.time(), value)
+            return value
+        finally:
+            if cold_ev is not None:
+                with lock:
+                    if getattr(self, "_cold_event", None) is cold_ev:
+                        self._cold_event = None
+                cold_ev.set()
 
     def _load_status(self, deep=False):
         script = self.env.status_script
         source, payload, error = "missing", None, None
-        if os.path.exists(script):
+        fixture = os.environ.get("OPS_STATUS_FIXTURE")
+        use_inproc = (
+            not fixture
+            and os.path.realpath(self.env.scripts) == os.path.realpath(_package_scripts())
+            and os.path.exists(script)
+        )
+        if use_inproc:
+            try:
+                os_mod = _ops_status_module()
+                with _INPROC_STATUS_LOCK:
+                    payload = os_mod.collect(os_mod.Paths(self.env.root), deep=deep)
+                source = "script"
+            except Exception as exc:
+                error = "ops_status.py 出错：%s" % exc
+        elif os.path.exists(script):
             argv = [sys.executable, script, "--json", "--root", self.env.root]
             if deep:
                 argv.append("--deep")
@@ -1604,7 +1994,6 @@ class App:
                 error = "ops_status.py 超时"
             except OSError as exc:
                 error = "ops_status.py 起不来：%s" % exc
-        fixture = os.environ.get("OPS_STATUS_FIXTURE")
         if payload is None and fixture:
             blob = read_json(fixture)
             if isinstance(blob, dict):
@@ -1699,6 +2088,7 @@ class App:
             "last": (self.store.list(limit=1) or [None])[0],
         }
         snap = self.runner.snapshot()
+        snap["audit_refreshing"] = bool(getattr(self, "_audit_running", False))
         return {
             "ok": error is None,
             "state": state,
@@ -2537,10 +2927,8 @@ class App:
                 )
         except Exception as exc:
             return {"synced": False, "sync_note": str(exc)[:160]}
-        lock = getattr(self, "status_lock", None)
-        if lock is not None:
-            with lock:
-                self.status_cache = (0.0, None)
+        self.invalidate_status()
+        self.schedule_audit_refresh()
         return {"synced": True}
 
     def get_settings(self):
@@ -2553,6 +2941,7 @@ class App:
         if "auto_embed" in payload:
             cur["auto_embed"] = bool(payload["auto_embed"])
         write_json_atomic(self.env.settings, cur)
+        self.invalidate_status()
         return {"ok": True, **cur}
 
     def cold_records(self):
@@ -2939,8 +3328,9 @@ class Handler(BaseHTTPRequestHandler):
             limit = 200
         limit = max(1, min(limit, 1000))
         jobs = self.app.store.list(state=state, limit=limit)
+        steps_map = self.app.store.steps_for_jobs([job["id"] for job in jobs])
         for job in jobs:
-            job["steps"] = self.app.store.steps(job["id"])
+            job["steps"] = steps_map.get(job["id"], [])
         self.send_json(200, {"ok": True, "jobs": jobs, "counts": self.app.store.counts()})
 
     def api_job(self, job_id):
@@ -3136,6 +3526,9 @@ class Handler(BaseHTTPRequestHandler):
             if re.match(r"^/api/jobs/[^/]+/rerun$", route):
                 self.api_rerun(route.split("/")[3])
                 return
+            if re.match(r"^/api/jobs/[^/]+/resolve$", route):
+                self.api_resolve(route.split("/")[3], payload)
+                return
             self.fail(404, "没有这个接口")
         except ValueError as exc:
             self.fail(400, str(exc))
@@ -3198,6 +3591,7 @@ class Handler(BaseHTTPRequestHandler):
             self.fail(400, "上传中断：收到 %d / %d" % (got, length))
             return
         os.replace(part, target)
+        self.app.invalidate_status()
         self.send_json(
             200, {"ok": True, "name": os.path.basename(target), "path": self.app.env.rel(target), "bytes": got}
         )
@@ -3298,8 +3692,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "items": len(merged), "plan_path": self.app.env.rel(path)})
 
     def api_import_latest(self):
-        jobs = self.app.store.list(state="awaiting_review", limit=50)
-        job = next((j for j in jobs if j.get("kind") == "import.scan"), None)
+        jobs = self.app.store.list(limit=100)
+        job = next(
+            (j for j in jobs if j.get("kind") == "import.scan" and j.get("state") in ("succeeded", "awaiting_review")),
+            None,
+        )
         plan = None
         if job is not None:
             plan = read_json(os.path.join(self.app.env.job_dir(job["id"]), "plan.json"))
@@ -4153,7 +4550,36 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_clean(self, payload):
-        return self.send_json(200, dict(ok=True, **self.app.clean()))
+        res = self.app.clean()
+        self.app.invalidate_status()
+        return self.send_json(200, dict(ok=True, **res))
+
+    def api_resolve(self, job_id, payload):
+        job = self.app.store.get(job_id)
+        if not job:
+            self.fail(404, "没有这个任务")
+            return
+        if job["state"] != "awaiting_review":
+            self.fail(409, "只有待确认的任务可以人工收口：%s" % job["state"])
+            return
+        resolution = str(payload.get("resolution") or "succeeded").strip()
+        spec = {
+            "succeeded": ("succeeded", "人工确认完成"),
+            "failed": ("failed", "人工标为失败"),
+            "dismissed": ("cancelled", "人工忽略关闭"),
+        }.get(resolution)
+        if not spec:
+            self.fail(400, "resolution 只收 succeeded / failed / dismissed")
+            return
+        new_state, label = spec
+        note = str(payload.get("note") or "").strip()[:200]
+        suffix = "；%s%s" % (label, ("：" + note) if note else "")
+        summary = (job.get("summary") or "") + suffix
+        self.app.store.update(job_id, state=new_state, ended=now_iso(), summary=summary)
+        os.makedirs(self.app.env.job_dir(job_id), exist_ok=True)
+        self.app.runner._log(job_id, "\n---- 人工收口 %s：%s ----\n" % (new_state, suffix.lstrip("；")))
+        self.app.invalidate_status()
+        self.send_json(200, {"ok": True, "job": self.app.store.get(job_id)})
 
     def api_cancel(self, job_id, payload):
         job = self.app.store.get(job_id)

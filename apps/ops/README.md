@@ -29,7 +29,7 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 | `工作区/运维/jobs/<id>/` | `log.txt`、`commands.json`、`pid`、`plan.json`、`result.json`、`dry-run.json`、`report.json`、`thumbs/*.png` |
 | `工作区/运维/.writer.lock` | 写任务互斥与批次账读改写用的 `fcntl.flock` 文件 |
 | `工作区/运维/.reader.lock` | 只读任务共用锁（最多两个并行，与写任务互不阻塞） |
-| `工作区/运维/last-audit.json` | 审计缓存，由 `ops_status.py --deep` 写，页面只读 |
+| `工作区/运维/last-audit.json` | 审计缓存，由写入后后台自动刷新（或 `ops_status.py --deep`），页面只读 |
 | `tests/acceptance/ops/check_ops.py` | 服务与任务离线自检，末行 `ALL PASS` |
 | `tests/manual/ops/shot_ops.py` | headless Chromium 交互与截图自检，末行 `SHOT PASS` |
 
@@ -63,6 +63,7 @@ GET  /api/jobs/<id>                    # 任务详情：steps、commands、log_t
 GET  /api/jobs/<id>/log?offset=        # {offset,next,size,eof,text}，text 已脱敏
 POST /api/jobs/<id>/cancel             # SIGTERM 进程组，10 秒后 SIGKILL
 POST /api/jobs/<id>/rerun              # 用 jobs/<id>/commands.json 再排一个
+POST /api/jobs/<id>/resolve            # {resolution, note}：待确认任务人工收口
 POST /api/jobs/clean                   # 清理旧日志与缩略图
 GET  /api/inbox                        # 收件箱清单
 GET  /api/import/latest                # 最近一份可用计划（源文件仍在收件箱）
@@ -112,7 +113,8 @@ GET  /api/file?path=...                # 白名单文件下载（文本产物脱
 
 ## 任务、锁与取消
 
-- 状态流转：`queued` → `running` → `succeeded` / `failed` / `cancelled`；扫描与分诊等需人工确认的任务停在 `awaiting_review`；重启后 PID 核对不上的 `running` 标 `orphaned`。
+- 状态流转：`queued` → `running` → `succeeded` / `failed` / `cancelled`；仅真正需人工裁决的任务（暂存区待复核、`adopt()` 接管后退出码未知）停在 `awaiting_review`，可通过操作台「去处理 / 确认已处理 / 标为失败 / 忽略关闭」（`POST /api/jobs/<id>/resolve`）收口；扫描计划与分诊建议直接落 `succeeded`；重启后 PID 核对不上的 `running` 标 `orphaned`。
+- 自动体检刷新：入库、拆章、文档/PDF 落位、词法同步、退库与人账保存后，服务端自动合并队列在后台刷新 `工作区/运维/last-audit.json`，保持「同步与维护 → 体检提醒」不误亮过期警告。
 - 写互斥：写任务与 HTTP 账表写操作共用 `工作区/运维/.writer.lock`（`LOCK_EX`），有写任务在跑时接口返 409。
 - 读共享：只读任务共用 `工作区/运维/.reader.lock`（`LOCK_SH`），最多两个并行，不阻塞写任务。
 - 取消：对子进程组发 `SIGTERM`，10 秒后仍有活口则 `SIGKILL`；已结束与 `awaiting_review` 任务不可取消（409）。

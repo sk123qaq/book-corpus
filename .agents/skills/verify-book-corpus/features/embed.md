@@ -8,15 +8,15 @@ f16 追加写到工作区的 `build/检索/embeddings/`。断点续跑，同一�
 
 ## Sub-features
 
-- `embed-dry-run` 只切块：报块数、字数、估算 token 与耗时，不请求服务（加 `--json` 纯只读不建库）。
-- `embed-run` 逐本嵌入：进度行带块数、字数、token、速率与剩余时间；每本结束即提交，可带 `--chunk-chars` / `--overlap` 调切块参数。
-- `embed-resume` 断点续跑：章文件名、大小、mtime 不变的书跳过；`--force` 重嵌并留下垃圾块；`--sync` 对已退库或失活书标失活。
+- `embed-dry-run` 只切块或只读估算：不加 `--json` 时在本地切块并统计块数、字数、估算 token 与耗时，不请求推理服务（但会构造 `Store` 创建空 `emb.db` 与 0 字节 `vectors.f16`）；加 `--json` 时跳过切块直接调只读 `diff_embed()`（返回 `has_db/engine_ready/added/modified/orphan/unchanged/chunks/garbage/garbage_ratio`，**不建任何文件**，忽略 `--books`/`--limit`，但会探测 `GET <server>/health`）。
+- `embed-run` 逐本嵌入：进度行带块数、字数、token、速率与剩余时间；每本结束即提交，可带 `--chunk-chars` / `--overlap` 调切块参数；`--keep-server` 可在嵌完后保留服务不关闭；无本地 `llama-server`/GGUF 模型时加 `--allow-missing-engine`（常与 `--sync` 合用）可在跳过前平滑返回退出码 `0`。
+- `embed-resume` 断点续跑：章文件名、大小、mtime 不变的书跳过；`--force` 重嵌并把旧块标成 `active=0` 垃圾块；`--sync` 仅在**未传 `--books`** 时先调用 `prune_orphans` 对已退库或失活书标失活，再增量嵌入新增或变更书（若同时带 `--limit N` 且无 `--books`，`prune_orphans` 也只保留前 N 本）。
 - `embed-books` 选书：`--books B0001,B0002`、`--limit N` 缩小范围，默认全部有 md 的书。
 - `embed-status` 看库：书状态计数、有效块、垃圾块、last_id、向量体积、累计吞吐。
-- `embed-verify` 校验：向量文件长度、chunk 行数与 last_id、抽样范数、sqlite integrity。
-- `embed-maintenance` 回收整理：`--prune` 清理失活书残块；`--compact` 压缩 `vectors.f16` 剔除垃圾块。
-- `embed-serve` 前台只起 llama-server，供手工请求 `/v1/embeddings`；搭配 `--keep-server` 可在嵌完后保留服务不关闭。
-- `embed-lock` 单写者：第二个写者在拿锁时退出，退出码 1，不碰向量文件（无引擎只跑 `--dry-run` 时仅 `--allow-missing-engine` 允许跳过引擎探测）。
+- `embed-verify` 校验：向量文件长度、chunk 行数与 last_id、抽样范数、sqlite integrity（空库同样通过）。
+- `embed-maintenance` 回收整理：`--prune` 将已不存在的书标成 `removed` 并把其活跃 chunk 标 `active=0`（产生垃圾块、不缩减 `vectors.f16`）；`--compact` 真正清除 `active=0` 垃圾块与 `removed` 书记录并原子重写压缩 `vectors.f16` / `emb.db`；两者均拿写锁且支持 `--json`。
+- `embed-serve` 前台只起 `llama-server`，供手工请求 `/v1/embeddings`（纯启动服务，一直阻塞直到被终止）。
+- `embed-lock` 单写者：写分支（`run_embedding`、`--prune`、`--compact`）拿非阻塞 `emb.db.lock`，第二个写者在拿锁失败时退出码 `1`，不追加向量也不启动 `llama-server`（注意：`main()` 在拿锁前先构造 `Store`，会更新 `meta.updated_at` 并按 `last_id` 截断未提交尾部字节）。
 
 ## How to get to it (user POV)
 
@@ -46,11 +46,19 @@ Preconditions:
   并删掉未提交的 chunk 行；只在没有写者时跑。
 - 首跑含模型加载，约 5 到 20 秒；之后同一台机器几秒。`--batch 8` 足够小样书。
 
+- **dry-run --json（纯只读差集）。**
+  `uv run --frozen book-corpus embed --root "$ROOT" --dry-run --json --server http://127.0.0.1:18780`。
+  走只读 `diff_embed()`，输出 JSON（含 `has_db:false`、`engine_ready:false`、`added:["B0001"]`、`chunks:0`），退出码 `0` 且**不创建** `emb.db` / `vectors.f16`。必须显式带 `--server http://127.0.0.1:18780`，否则会去探默认 `18080/health`。
+- **--sync --allow-missing-engine（无引擎平滑退场）。**
+  `uv run --frozen book-corpus embed --root "$ROOT" --sync --allow-missing-engine --server http://127.0.0.1:18780`。
+  无 `llama-server`/GGUF 模型时打印 `未配置本地向量引擎（llama-server / GGUF 模型），跳过 1 本待嵌书`，退出码 `0`（不启服务）。
 - **dry-run。**
   `uv run --frozen book-corpus embed --root "$ROOT" --books B0001 --dry-run`。
-  stdout 首行是 `书 1 本，块 34，字 21,690，估算 token 14,467`，随后一行耗时估算（含首跑与后续两个参考数字），
+  stdout 首行是 `书 1 本，块 34，字 21,690，估算 token 14,467`，随后一行耗时估算（`按 24,800 tok/s 纯计算约 ..., 含 25% 开销约 ...`），
   最后 `块数前 5：` 与 `B0001  阿Q正传  34 块 21,690 字`；退出码 0。
   副作用：仅 `--dry-run` 会走 `Store` 创建 `emb.db` 与 0 字节 `vectors.f16`；而加 `--json`（`--dry-run --json`）直接走 `diff_embed`，**纯只读不建任何文件**。
+- **维护命令（空库/离线可验）。**
+  `uv run --frozen book-corpus embed --root "$ROOT" --status`、`--verify`、`--prune --json` 与 `--compact --json` 在仅含空库时均可离线性验证：`--verify` 打印 `全过：0 块，0 本 done，0 B 向量，抽样 0 条正常` 且退出码 `0`；`--prune --json` 输出 `{"books": 0, "chunks": 0}`；`--compact --json` 输出 `removed_garbage: 0`。
 - **首跑。**
   `uv run --frozen book-corpus embed --root "$ROOT" --books B0001 --server http://127.0.0.1:18780 --batch 8 --timeout 120`。
   stderr 一行 `起 llama-server pid <pid>，日志 <ROOT>/工作区/中间态/embed/llama-server.log`。
@@ -89,7 +97,9 @@ Preconditions:
 - 不传 `--server` 时默认 `os.environ.get("BOOKS_EMBED_URL", "http://127.0.0.1:18080")`。操作员的服务正健康，脚本会复用它并在跑完后**不关**，验证看起来「通过」但用的不是本轮的库。本技能一律显式传 `--server` / `BOOKS_EMBED_URL` 指到 18780。
 - 模型和 binary 用软链进一次性根；用环境变量指到 `~/书库` 时，`ensure_server` 把日志追加到
   binary 上级目录，会写进操作员的 `llama-server.log`。
-- 不带 `--json` 的 `--dry-run` 会建库（`emb.db` 与空 `vectors.f16`），而 `--dry-run --json` 走 `diff_embed` 不写任何文件；别在「干净库」断言里把 `--dry-run` 当成纯只读。
+- 不带 `--json` 的 `--dry-run` 会建库（`emb.db` 与空 `vectors.f16`），而 `--dry-run --json` 走 `diff_embed` 不写任何文件但会探测 `GET <server>/health`（未传 `--server` 会探操作员的 `18080`）；别在「干净库」断言里把 `--dry-run` 当成纯只读，也别在无隔离端口时漏传 `--server`。
+- `main()` 先构造 `Store` 再调用 `acquire_write_lock()`：即使写锁争用退出 `1`，`Store.__init__` 也已写 `meta.updated_at` 并把超出 `last_id` 的尾部字节截回；真实保证是不追加向量、不拉起 `llama-server`。
+- `--sync` 传 `--books` 时会跳过 `prune_orphans`；未传 `--books` 但传 `--limit N` 时，`prune_orphans` 只保留 `books[:N]`。
 - `--force` 不删旧向量，只把旧 chunk 标 `active=0`；`--status` 的 `垃圾块` 才会涨。
   `--verify` 只查文件长度与 id 对账，**不会**把垃圾块报成问题，设计文档里那句是错的。
 - 向量是否 L2 归一化取决于 llama-server 默认行为，脚本没有 `--embd-normalize`，也不自己归一化；

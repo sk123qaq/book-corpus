@@ -744,8 +744,11 @@ def iter_book_json():
     for dirpath, dirnames, filenames in os.walk(BOOKS):
         if dirpath == BOOKS:
             dirnames[:] = [d for d in dirnames if not d.startswith("_")]
+        else:
+            dirnames[:] = [d for d in dirnames if not d.startswith("_") and d not in ("md", "html", "source", "images")]
         if "book.json" not in filenames:
             continue
+        dirnames[:] = []
         uid = os.path.basename(dirpath)
         try:
             with open(os.path.join(dirpath, "book.json"), encoding="utf-8") as fh:

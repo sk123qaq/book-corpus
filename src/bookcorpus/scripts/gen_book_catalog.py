@@ -9,6 +9,7 @@ md、html 都收在 books/**，书与产物的对应关系由 book.json 与 DB �
 门槛: 末行必须是「未匹配 0 条」，否则以非零码退出。
 """
 
+import json
 import os
 import sqlite3
 import sys
@@ -134,42 +135,53 @@ def audit(con):
         kinds.setdefault(uid, set()).add(kind)
 
     n_disk_src = 0
-    for dirpath, dirnames, filenames in os.walk(L.BOOKS):
-        # 下划线目录不是账上的书（_收件箱 是新书入口，_冷宫 是移出流程的书）
-        dirnames[:] = [d for d in dirnames if not d.startswith("_")]
-        if os.path.basename(dirpath) == "source":
-            for fn in filenames:
-                n_disk_src += 1
-                p = os.path.normpath(os.path.join(dirpath, fn))
-                if p not in db_src:
-                    problems.append("盘上源文件不在账: " + os.path.relpath(p, L.ROOT))
-
-    books = L.iter_book_json()
     seen_paths = set()
     all_db_paths = set(db_paths.values())
     n_md = n_html = 0
-    for rel, doc in books:
-        seen_paths.add(rel)
-        if rel not in all_db_paths:
-            problems.append("book.json 不在 DB: " + rel)
-        if doc.get("path") and doc["path"] != rel:
-            problems.append("book.json 的 path 与目录不符: %s vs %s" % (doc["path"], rel))
-        uid = doc.get("uid") or ""
-        has = kinds.get(uid, set())
-        md_dir = os.path.join(L.BOOKS, rel, "md")
-        html_dir = os.path.join(L.BOOKS, rel, "html")
-        if os.path.isdir(md_dir):
-            n_md += 1
-            if "md" not in has:
-                problems.append("md/ 在盘上但 DB 没记: " + rel)
-        elif "md" in has:
-            problems.append("DB 记了 md 但目录不在: " + rel)
-        if os.path.isdir(html_dir):
-            n_html += 1
-            if "html" not in has:
-                problems.append("html/ 在盘上但 DB 没记: " + rel)
-        elif "html" in has:
-            problems.append("DB 记了 html 但目录不在: " + rel)
+    if os.path.isdir(L.BOOKS):
+        for dirpath, dirnames, filenames in os.walk(L.BOOKS):
+            # 下划线目录不是账上的书（_收件箱 是新书入口，_冷宫 是移出流程的书）；
+            # md/html/images 里只有正文章节与图片，剪枝避免遍历十万个章节文件。
+            if os.path.basename(dirpath) == "source":
+                for fn in filenames:
+                    n_disk_src += 1
+                    p = os.path.normpath(os.path.join(dirpath, fn))
+                    if p not in db_src:
+                        problems.append("盘上源文件不在账: " + os.path.relpath(p, L.ROOT))
+                dirnames[:] = []
+                continue
+            dirnames[:] = [d for d in dirnames if not d.startswith("_") and d not in ("md", "html", "images")]
+            if "book.json" not in filenames:
+                continue
+            rel = os.path.basename(dirpath)
+            bj_path = os.path.join(dirpath, "book.json")
+            try:
+                with open(bj_path, encoding="utf-8") as fh:
+                    doc = json.load(fh)
+            except (OSError, json.JSONDecodeError) as e:
+                raise SystemExit("book.json 读不了: %s (%s)" % (bj_path, e)) from None
+            seen_paths.add(rel)
+            if rel not in all_db_paths:
+                problems.append("book.json 不在 DB: " + rel)
+            if doc.get("path") and doc["path"] != rel:
+                problems.append("book.json 的 path 与目录不符: %s vs %s" % (doc["path"], rel))
+            uid = doc.get("uid") or ""
+            has = kinds.get(uid, set())
+            md_dir = os.path.join(dirpath, "md")
+            html_dir = os.path.join(dirpath, "html")
+            if os.path.isdir(md_dir):
+                n_md += 1
+                if "md" not in has:
+                    problems.append("md/ 在盘上但 DB 没记: " + rel)
+            elif "md" in has:
+                problems.append("DB 记了 md 但目录不在: " + rel)
+            if os.path.isdir(html_dir):
+                n_html += 1
+                if "html" not in has:
+                    problems.append("html/ 在盘上但 DB 没记: " + rel)
+            elif "html" in has:
+                problems.append("DB 记了 html 但目录不在: " + rel)
+            dirnames[:] = [d for d in dirnames if d == "source"]
     for uid, path in db_paths.items():
         if path not in seen_paths:
             problems.append("DB 里的书没有 book.json: %s %s" % (uid, path))

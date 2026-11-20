@@ -726,7 +726,23 @@ def cmd_serve(root, args):
     return subprocess.call(cmd, cwd=str(binary.parent))
 
 
-def diff_embed(root, db_path=None, server_url=None, check_network=True):
+def _md_sig_dir(md_dir):
+    try:
+        with os.scandir(md_dir) as it:
+            entries = [e for e in it if e.name.endswith(".md") and e.name.lower() != "readme.md" and e.is_file()]
+    except OSError:
+        return None
+    if not entries:
+        return None
+    entries.sort(key=lambda e: e.name)
+    h = hashlib.sha256()
+    for e in entries:
+        st = e.stat()
+        h.update(f"{e.name}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+    return h.hexdigest()[:16]
+
+
+def diff_embed(root, db_path=None, server_url=None, check_network=True, disk_sigs=None):
     """只读计算向量库与活库 md 的增量差集（不建库、不启 llama-server）。"""
     root = Path(root)
     db = Path(db_path) if db_path else (root / "build" / "检索" / "embeddings" / "emb.db")
@@ -735,9 +751,14 @@ def diff_embed(root, db_path=None, server_url=None, check_network=True):
     live_books = md_books(root)
     live_map = {}
     for uid, path, _title in live_books:
-        paths = chapter_paths(root, path)
-        if paths:
-            live_map[uid] = sig_of(paths)
+        if disk_sigs is not None:
+            rec = disk_sigs.get(path) or disk_sigs.get(uid)
+            if rec is not None:
+                live_map[uid] = rec[0] if isinstance(rec, tuple) else rec
+        else:
+            sig = _md_sig_dir(root / "books" / path / "md")
+            if sig is not None:
+                live_map[uid] = sig
 
     if not db.is_file():
         return {
@@ -756,8 +777,24 @@ def diff_embed(root, db_path=None, server_url=None, check_network=True):
     try:
         con.row_factory = sqlite3.Row
         book_rows = {r["uid"]: (r["status"], r["sig"]) for r in con.execute("SELECT uid, status, sig FROM book")}
-        active_books = {r[0] for r in con.execute("SELECT DISTINCT book FROM chunk WHERE active=1")}
-        active_chunks = con.execute("SELECT count(*) FROM chunk WHERE active=1").fetchone()[0]
+        db_live = {u for u, (st, _) in book_rows.items() if st != "removed"}
+        # 用 chunk_book 索引做松散索引扫描拿全部 book，只对不在 db_live 里的检查 active=1，避免全表扫 110 万行
+        chunk_books = {
+            r[0]
+            for r in con.execute(
+                "WITH RECURSIVE db(b) AS ("
+                "  SELECT min(book) FROM chunk"
+                "  UNION ALL"
+                "  SELECT (SELECT min(book) FROM chunk WHERE book > b) FROM db WHERE b IS NOT NULL"
+                ") SELECT b FROM db WHERE b IS NOT NULL"
+            )
+        }
+        for u in chunk_books - db_live:
+            if con.execute("SELECT 1 FROM chunk WHERE book=? AND active=1 LIMIT 1", (u,)).fetchone():
+                db_live.add(u)
+        total_chunks = con.execute("SELECT count(*) FROM chunk").fetchone()[0]
+        inactive_chunks = con.execute("SELECT count(*) FROM chunk WHERE active=0").fetchone()[0]
+        active_chunks = total_chunks - inactive_chunks
         m_row = con.execute("SELECT value FROM meta WHERE key='last_id'").fetchone()
         last_id = int(m_row[0]) if m_row else active_chunks
     finally:
@@ -773,7 +810,6 @@ def diff_embed(root, db_path=None, server_url=None, check_network=True):
             unchanged += 1
         else:
             modified.append(uid)
-    db_live = {u for u, (st, _) in book_rows.items() if st != "removed"} | active_books
     orphan = sorted(db_live - set(live_map))
     garbage = max(0, last_id - active_chunks)
     garbage_ratio = round(garbage / last_id, 4) if last_id > 0 else 0.0

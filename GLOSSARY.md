@@ -30,7 +30,7 @@
 
 - **书级规划（`book-corpus query`）**：`book_query.py` 的默认书级入口，采用 `best_support` 与 B2.5 最多 5 轮词法循环，触发时默认弹 5–8 张书卡（`--no-cards` 关闭）。`book-corpus search --book` 保留旧 `mix` 口径作对照。
 - **混合检索（Hybrid Retrieval）**：在 FTS5 CJK bigram 词法召回之上叠加 `book-corpus embed` 产出的块向量（`emb.db` + `vectors.f16`）与本地 embedding 服务，做书/章/段三层 RRF 融合（`fusion:"hybrid"`）；索引或服务缺失时静默退回 `bm25_only`。有 GPU 且精排服务在线时可叠加 `bge-reranker-v2-m3`。
-- **事件驱动增量同步（`sync_delta`）**：操作台在入库、改分类、拆章、文档转换、PDF 落地或退库完成后，自动接力元数据重建、FTS5 增量同步（`build_para_index.py --sync`）与异步合并去重的向量同步（`embed_corpus.py --sync`）；向量库未初始化时跳过向量步骤。`/api/status` 通过 `sync_delta` 暴露各层偏差供「同步与维护」兜底。
+- **事件驱动增量同步（`sync_delta`）**：操作台在入库、改分类、拆章、文档转换、PDF 落地或退库完成后，自动接力元数据重建、FTS5 增量同步（`build_para_index.py --sync`）、异步合并去重的向量同步（`embed_corpus.py --sync`）与后台 `last-audit.json` 体检刷新；向量库未初始化时跳过向量步骤。仅暂存复核与重启未知退出码停在 `awaiting_review`（可经 `POST /api/jobs/<id>/resolve` 人工收口）。`/api/status` 通过 `sync_delta` 暴露各层偏差供「同步与维护」兜底。
 
 ## 已退役术语
 
