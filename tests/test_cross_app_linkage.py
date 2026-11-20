@@ -121,6 +121,8 @@ def test_app_links_safe_rel_path_and_redirect():
     )
     assert disabled_status == 503
     assert "8771" in html
+    assert "uv run --frozen python apps/reading/server.py" in html
+    assert "python3 apps/" not in html
 
 
 def test_home_go_forwards_to_query_and_fixes_stale_copy(reading_root: Path):

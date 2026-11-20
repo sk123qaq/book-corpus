@@ -42,7 +42,7 @@ Preconditions:
 
 - 工作区按 [README](./README.md) 建好，`$ROOT/build/检索/index.db` 与 `$ROOT/build/library.db` 都存在。
 - 演示页由本轮起：`BOOKS_ROOT=$ROOT uv run --frozen python apps/demo/server.py --root "$ROOT" --port 18765 --reading-url http://127.0.0.1:18771 --home-url http://127.0.0.1:18773`，启动行是 `书库检索演示：http://127.0.0.1:18765 · root=<ROOT>`。
-- `--root` 优先级最高，决定书目库、索引、会话、terms、answers、related 与运行记录的位置；不传时按 `resolve_books_root()` 依次看 shell `BOOKS_ROOT` → `$BOOK_CORPUS_ENV`/仓库 `.env`（不向上找 `books.toml`，未配置则报缺根退出）。只有 `apps/demo/runlog.py:607` 的 `bundle` 子命令仍硬编码读仓库 `apps/demo/缓存/sessions/`。仓库 `.env` 常指向操作员的 `~/书库`，所以本轮既传 `--root` 又显式 `BOOKS_ROOT=$ROOT`。
+- `--root` 优先级最高，决定书目库、索引、会话、terms、answers、related 与运行记录的位置；不传时按 `resolve_books_root()` 依次看 shell `BOOKS_ROOT` → `$BOOK_CORPUS_ENV`/仓库 `.env`（不向上找 `books.toml`，未配置则报缺根退出）。仓库 `.env` 常指向操作员的 `~/书库`，所以本轮既传 `--root` 又显式 `BOOKS_ROOT=$ROOT`。
 - 启动时必打印 `启动恢复：N 轮…`（没有要恢复的也打 0）。健康降级有三种形状：`db: missing` 是索引没建，`db: empty` 是索引为空，`library: missing` 是书目库没建；后两种 `meta` 里的计数可能是 `null`。
 - 真实作答要模型：先试直连 HTTP（`books.toml` / 环境 → `~/.pi/agent/models.json` + `settings.json` → `~/.pi/agent/auth.json`），`direct_llm.resolve_config` 无可用配置返回 `None` 时自动回退 `pi` 子进程（错误带 `模型调用失败（rc=%d）`）；`ANSWER_MODEL` 可指定模型，`ANSWER_BACKEND=pi` 可强制走 `pi`。`trace.py` 与 `related.py` 走 `model_call.invoke`。直连失败（有配置但请求/认证失败）才没有 `rc=`，前缀为 `模型调用失败：`。
 - 时间按本轮实测：单本 `low` 一次完整回答 34–42 秒（2026-11-15，`done.data.ms=34218.8/42227.8`），别再抄 225 秒；`apps/demo/README.md` 的 15-40 秒也未复核。SSE 的 300 秒是硬上限，直连单次调用 240 秒、chunk 读 90 秒；暂停 checkpoint 只活在进程内，重启即失效。
@@ -63,7 +63,7 @@ Preconditions:
 - **暂停路由的边界。** `curl -s -X POST http://127.0.0.1:18765/api/answer/pause -H 'Content-Type: application/json' -d '{}'` → 400 `{"ok":false,"error":"缺少 session_id+turn 或 stream_id"}`；对一个不存在的 `stream_id` 发同一请求 → 200 `{"ok":true,"paused":false,"already_done":false}`。这两条不需要模型。
 - **真实作答 UI。** `uv run --frozen python tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=阿Q为什么挨打&instant=1&top=1' --scroll stage4 --out "$EV/classic-shot-1440x900.png"`。脚本只等 25 秒（`tests/manual/demo/shot.py:247` 的 `WAIT_READY`），流式期间就会截到「暂停」按钮、「正在生成回答正文…」和半截正文，并常先报 `answer ready=False cites=0 wait=25069 ms`；服务端随后才完成。末行仍应是 `CONSOLE ERROR 0`、`overflow=False`。2026-11-15 实测 `ready=False` 但流式正文已可见，别把 `ready=False` 判成页面坏。
 - **导出。** 先拿一个已存在的 `id`（`/api/sessions` 任一 12 位 hex；没有就 `POST /api/run` 不带 `stateless` 建一个，验完删）。服务端先查 `id` 是否存在（不存在直接 `404 {"ok":false,"error":"会话不存在"}`），再校验 `format`：已知会话配 `format=pdf` → `400 format 只支持 md 或 docx`；`format=md` → `200 Content-Type: text/markdown; charset=utf-8`。DOCX 走同一路由，`Content-Type` 是 `application/vnd.openxmlformats-officedocument.wordprocessingml.document`。
-- **运行记录。** `uv run --frozen python apps/demo/runlog.py --root "$ROOT/工作区/检索/运行记录" doctor` 逐行 `[过] root` / `runs` / `index` / `blobs` / `refs`；`list` 在无记录时静默空输出。跑过一次后 `timeline <run-id> --full` 应含 `answer.request`、`prompt.built`、`model.start`、`answer.citations`、`answer.result`、`run.end`。传 `--root` 时默认目录就是 `$ROOT/工作区/检索/运行记录/`；不传 `--root` 时也按 `resolve_books_root()` 读 `$BOOKS_ROOT/.env`，再读 `WORK/运行记录`（仅 `bundle` 子命令仍硬编码仓库 `apps/demo/缓存/sessions/`）。
+- **运行记录。** `uv run --frozen python apps/demo/runlog.py --root "$ROOT/工作区/检索/运行记录" doctor` 逐行 `[过] root` / `runs` / `index` / `blobs` / `refs`；`list` 在无记录时静默空输出。跑过一次后 `timeline <run-id> --full` 应含 `answer.request`、`prompt.built`、`model.start`、`answer.citations`、`answer.result`、`run.end`。传 `--root` 时默认目录就是 `$ROOT/工作区/检索/运行记录/`；不传 `--root` 时也按 `resolve_books_root()` 读 `$BOOKS_ROOT/.env`，再读 `WORK/运行记录`。
 - **历史 UI。** `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765` 逐项打「过/败」，末行 `ALL PASS`。它按 `/api/sessions` 里「3 轮会话」和「最后一轮带多书 sources」动态选样本；找不到时分别是 `没有找到可用的 3 轮会话；先用 check_session.py 生成一轮` 与 `没有找到带 2 本以上 sources 的多书会话…`（exit 1），这是样本缺失，不是页面坏了。
 - **候选书多选。** 需要 ≥2 本候选书才会出现可多选的书卡；内置 `sample` 只有 `B0001`，所以本机临时根只验到单书结果。要做多选 UI，先往 `$ROOT` 装第二本书再跑；否则记 `ui-unverified`，原因写「样书 1 本，候选书多选前置不满足」。
 - **不留外部请求。** `check_session_ui.py` 同时断言控制台 0 错误、页面不向外域发请求。
@@ -78,7 +78,7 @@ Preconditions:
 - `/classic` 现在发 `stateless:true`：`/api/run` 不建会话（`apps/demo/server.py:972-974`），`/api/answer`（`:731`）落到 `answer_once`，用 `stream_id` 存暂停 checkpoint。旧 Gotcha「经典页建隐藏会话、turn 永远 pending」已作废；经典页的 turn 不进历史，也不能导出，这是设计。
 - `tests/manual/demo/shot.py` 的 `--out` 写相对路径时会落在 `tests/manual/` 下，不是仓库根；截图后先确认文件在哪。25 秒的答案等待上限也在这里（`shot.py:247` `WAIT_READY`），流式时代会截到半截正文，不要据 `ready=False` 判失败。
 - `turn["run"]` 只出现在单会话接口 `/api/session`，列表接口 `/api/sessions` 不返回它；要找某轮的 runlog id 得先拿会话。
-- 传 `--root` 时 `terms/`、`answers/`、`related/` 都在 `$ROOT/工作区/检索/` 下，不再跨实例命中；不传 `--root` 时 `server.py` 仍走 `resolve_books_root()` 解析根（只有 `runlog.py:607` 的 `bundle` 子命令仍硬编码读 `apps/demo/缓存/sessions/`）。暂停 checkpoint 另在进程内（`PAUSED_CHECKPOINTS`，TTL 1800 秒），重启服务即丢。
+- 传 `--root` 时 `terms/`、`answers/`、`related/` 都在 `$ROOT/工作区/检索/` 下，不再跨实例命中；不传 `--root` 时 `server.py` 仍走 `resolve_books_root()` 解析根。暂停 checkpoint 另在进程内（`PAUSED_CHECKPOINTS`，TTL 1800 秒），重启服务即丢。
 - `tests/manual/demo/shot.py` 默认打 `http://127.0.0.1:8765/classic`，也就是操作员实例。必须显式 `--url` 指到本轮端口。
 - `apps/demo/runlog.py` 在传 `--root` 的实例上默认读 `$ROOT/工作区/检索/运行记录/`；不传 `--root` 时也按 `resolve_books_root()` 查根下 `工作区/检索/运行记录/`，`BOOKS_RUNLOG_ROOT` 仍可单独覆盖。验证时不要对操作员目录跑 `prune --apply`。
 - `tests/manual/demo/check_session_ui.py` 的 `SESSION` / `SESSION_MULTI` 常量每次运行都会被覆盖，不是「优先用环境变量」；没有匹配会话时报的是「找不到会话」，不是页面坏了。

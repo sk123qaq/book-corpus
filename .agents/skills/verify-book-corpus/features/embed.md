@@ -89,7 +89,7 @@ Preconditions:
 - 不传 `--server` 时默认 `os.environ.get("BOOKS_EMBED_URL", "http://127.0.0.1:18080")`。操作员的服务正健康，脚本会复用它并在跑完后**不关**，验证看起来「通过」但用的不是本轮的库。本技能一律显式传 `--server` / `BOOKS_EMBED_URL` 指到 18780。
 - 模型和 binary 用软链进一次性根；用环境变量指到 `~/书库` 时，`ensure_server` 把日志追加到
   binary 上级目录，会写进操作员的 `llama-server.log`。
-- 不带 `--json` 的 `--dry-run` 会建库（`emb.db` 与空 `vectors.f16`），而 `--dry-run --json` 走 `diff_embed` 不写任何文件；别在「干净库」断言里把 `--dry-run` 当成纯只读。且刚跑完 `--dry-run` 的空库（`last_id=0`）直接跑 `--verify` 会因 `chunk` 表 `max(id)` 为 `None` 失败退出 1（`chunk 最大 id None != last_id 0`）。
+- 不带 `--json` 的 `--dry-run` 会建库（`emb.db` 与空 `vectors.f16`），而 `--dry-run --json` 走 `diff_embed` 不写任何文件；别在「干净库」断言里把 `--dry-run` 当成纯只读。
 - `--force` 不删旧向量，只把旧 chunk 标 `active=0`；`--status` 的 `垃圾块` 才会涨。
   `--verify` 只查文件长度与 id 对账，**不会**把垃圾块报成问题，设计文档里那句是错的。
 - 向量是否 L2 归一化取决于 llama-server 默认行为，脚本没有 `--embd-normalize`，也不自己归一化；

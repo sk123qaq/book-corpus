@@ -9,7 +9,7 @@
 
 - `daily-list` 往期列表：按期倒排，行里是 `MM.DD`、类别、书名、标题（**不带期号**）。页面首屏是最新一期，往期是页底 `<section id="past">`（标题「目录」）；首屏渲染后地址栏会变成 `/#<date>`。
 - `daily-issue` 单期页：期号、正文、引用、为什么挑它；研究记录不是独立区块，只是页脚一行 `路径 · N 字 · 查证 X · 联网 N 次`（`apps/daily/web/app.js:135-143`）。
-- `daily-open` 在分层读打开：`feed.py` 把 `chapter.path` 列为必填（省略或 `null` 直接进 `errors`；填 `""` 经 `Path("").as_posix()` 变成 `"."`，在前端仍为 truthy），因此实际前端 `#open-reading` 仅在 `book.uid` 为空时隐藏；正常有 uid/path 时链接为 `<reading_url>/open?uid=&path=&line=&q=&from=daily`，`q` 取引用前 120 字，`line` 只在有引用行时带。
+- `daily-open` 在分层读打开：`feed.py` 校验 `chapter.path` 必须为非空相对路径（省略、`null`、空串或 `"."` 均进 `errors`），实际前端 `#open-reading` 仅在 `book.uid` 为空时隐藏；正常有 uid/path 时链接为 `<reading_url>/open?uid=&path=&line=&q=&from=daily`，`q` 取引用前 120 字，`line` 只在有引用行时带。
 - `daily-empty` 空目录的空状态。
 - `daily-skip-bad` 坏文件跳过，不整页失败。
 - `daily-contract` 文件名必须等于文件里的 `date`。
@@ -68,7 +68,7 @@ Preconditions:
 - 期号在 `/api/feed` 与单期页 masthead 里，**列表行里没有**；要验「带期号」得看当前期，别看列表行。
 - 目录里只有坏文件时页面是空状态加错误，不是 500；断言要看 `errors`，别只看 `issues.length`。
 - 引用里的 `line` 只在**生成时**按原文复核改正；服务端读盘时只校验它是 >= 1 的整数。手写 seed 填错行，页面照原样显示错行，不会让整期失效——所以别用 `line` 去验「引用对得上原文」。`/open` 链接的 `line` 只是定位提示，真正高亮靠 `q`。
-- 分层读链接仅在 `book.uid` 非空时出现（`chapter.path` 为必填校验字段，不接受省略/null）；没有 `#open-reading` 时先看 `book.uid` 是否为空。`reading_url` 只影响链接前缀，不影响日课正文。
+- 分层读链接仅在 `book.uid` 非空时出现（`chapter.path` 必须为非空相对路径，省略/`null`/空串/`"."` 均进 `errors`）；没有 `#open-reading` 时先看 `book.uid` 是否为空。`reading_url` 只影响链接前缀，不影响日课正文。
 - 研究记录只显示 `research.chapters` 与 `research.web`；`queries`、`note` 会过校验但不渲染。
 - 300–500 字由 `src/bookcorpus/daily.py` 的 `check()` 在**生成落盘前**校验，服务端读盘 `feed.py` 不校正文长度；手写 seed 一两个字也照发。
 - 静态路由只有 `/`、`/index.html`、`/style.css`、`/app.js`；没有 `/issue/2026-11-10` 这种页面路径，单期内容走 `/api/issue/<date>`。

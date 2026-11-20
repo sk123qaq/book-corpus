@@ -53,9 +53,11 @@ def _clean_dict(value: Any, field: str) -> dict[str, Any]:
 
 
 def _clean_md_path(value: Any, field: str) -> str:
-    text = _clean_text(value, field)
+    text = _clean_text(value, field).strip()
+    if not text:
+        raise ValueError(f"{field} 必须是书库内的相对路径。")
     path = Path(text)
-    if path.is_absolute() or ".." in path.parts:
+    if path.is_absolute() or ".." in path.parts or not path.parts:
         raise ValueError(f"{field} 必须是书库内的相对路径。")
     return path.as_posix()
 

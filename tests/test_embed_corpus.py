@@ -119,3 +119,17 @@ def test_sig_changes_with_content(tmp_path):
     os.utime(p, (1, 1))
     b = mod.sig_of([p])
     assert a != b
+
+
+def test_verify_empty_store_and_mismatch(tmp_path):
+    db = tmp_path / "emb.db"
+    vec = tmp_path / "vectors.f16"
+    s = mod.Store(str(db), str(vec), dim=4, model="t")
+    try:
+        assert mod.cmd_verify(s) == 0
+        s.set_meta("last_id", 2)
+        s.db.commit()
+        s.last_id = 2
+        assert mod.cmd_verify(s) == 1
+    finally:
+        s.close()

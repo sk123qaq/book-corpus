@@ -290,7 +290,7 @@ def resolve_go_redirect(
         return 302, join_target(target, clean_to), ""
 
     err_text = str(result.get("error") or f"服务「{service.name}」未就绪")
-    hint_cmd = f"python3 {service.script} --root {root} --port {service.port}"
+    hint_cmd = f"uv run --frozen python {service.script} --root {root} --port {service.port}"
     return 503, "", render_bridge_error(f"无法打开「{service.name}」", f"{err_text}\n可手动运行：{hint_cmd}")
 
 

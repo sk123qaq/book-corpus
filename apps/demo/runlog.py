@@ -37,7 +37,8 @@ if str(HERE) not in sys.path:
 
 from context import build_paths as _build_demo_paths
 
-DEFAULT_ROOT = _build_demo_paths().runlog_dir
+_DEFAULT_PATHS = _build_demo_paths()
+DEFAULT_ROOT = _DEFAULT_PATHS.runlog_dir
 APP_VERSION = "demo-runlog-1"
 RUN_ID_RE = re.compile(r"^[0-9A-Za-z._-]+$")
 SESSION_ID_RE = re.compile(r"^[a-f0-9]{12}$")
@@ -50,6 +51,7 @@ _PI_VERSION = None
 _WARNED = set()
 
 ROOT = DEFAULT_ROOT
+SESSIONS_DIR = _DEFAULT_PATHS.sessions_dir
 RUNS_DIR = ROOT / "runs"
 BLOBS_DIR = ROOT / "blobs"
 INDEX_PATH = ROOT / "index.jsonl"
@@ -58,10 +60,26 @@ LOCK_PATH = ROOT / ".index.lock"
 _EXPORTS = ROOT / "exports"
 
 
-def configure(root=None):
+def configure(root=None, sessions_dir=None):
     """测试或临时实例换根。传空恢复默认。"""
-    global ROOT, RUNS_DIR, BLOBS_DIR, INDEX_PATH, SERVICE_PATH, LOCK_PATH, _EXPORTS
-    ROOT = Path(root or os.environ.get("BOOKS_RUNLOG_ROOT") or DEFAULT_ROOT).expanduser().resolve()
+    global ROOT, RUNS_DIR, BLOBS_DIR, INDEX_PATH, SERVICE_PATH, LOCK_PATH, _EXPORTS, SESSIONS_DIR
+    env_root = os.environ.get("BOOKS_RUNLOG_ROOT")
+    if root:
+        ROOT = Path(root).expanduser().resolve()
+        SESSIONS_DIR = Path(sessions_dir).expanduser().resolve() if sessions_dir else ROOT.parent / "sessions"
+    elif env_root:
+        ROOT = Path(env_root).expanduser().resolve()
+        if sessions_dir:
+            SESSIONS_DIR = Path(sessions_dir).expanduser().resolve()
+        else:
+            sibling = ROOT.parent / "sessions"
+            SESSIONS_DIR = sibling if sibling.is_dir() else _build_demo_paths().sessions_dir.expanduser().resolve()
+    else:
+        paths = _build_demo_paths()
+        ROOT = paths.runlog_dir.expanduser().resolve()
+        SESSIONS_DIR = (
+            Path(sessions_dir).expanduser().resolve() if sessions_dir else paths.sessions_dir.expanduser().resolve()
+        )
     RUNS_DIR = ROOT / "runs"
     BLOBS_DIR = ROOT / "blobs"
     INDEX_PATH = ROOT / "index.jsonl"
@@ -604,7 +622,7 @@ def bundle(session_id, out=None):
         raise FileNotFoundError("没有这个会话的运行记录")
     out = Path(out) if out else _EXPORTS / f"session-{session_id}-{time.strftime('%Y%m%dT%H%M%S')}.zip"
     out.parent.mkdir(parents=True, exist_ok=True)
-    session_path = HERE / "缓存" / "sessions" / f"{session_id}.json"
+    session_path = SESSIONS_DIR / f"{session_id}.json"
     blobs = set()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         if session_path.is_file():

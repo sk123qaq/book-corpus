@@ -134,3 +134,17 @@ def test_empty_directory_returns_empty_feed(tmp_path):
 
     assert feed["issues"] == []
     assert feed["errors"] == []
+
+
+def test_empty_or_dot_chapter_path_is_skipped(tmp_path):
+    directory = make_day_dir(tmp_path)
+    for index, bad_path in enumerate(("", "   ", ".", "./"), start=1):
+        payload = make_issue(f"2026-11-0{index}")
+        payload["chapter"]["path"] = bad_path
+        (directory / f"2026-11-0{index}.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    feed = load_feed(tmp_path)
+
+    assert feed["issues"] == []
+    assert len(feed["errors"]) == 4
+    assert all("chapter.path" in item["reason"] for item in feed["errors"])

@@ -667,7 +667,7 @@ def cmd_verify(store):
     expect = store.last_id * store.dim * 2
     if s["vec_bytes"] != expect:
         problems.append(f"向量文件 {s['vec_bytes']} 字节，应为 {expect}")
-    row = store.db.execute("SELECT count(*) AS n, max(id) AS m FROM chunk").fetchone()
+    row = store.db.execute("SELECT count(*) AS n, COALESCE(max(id), 0) AS m FROM chunk").fetchone()
     if row["m"] != store.last_id:
         problems.append(f"chunk 最大 id {row['m']} != last_id {store.last_id}")
     if row["n"] != store.last_id:

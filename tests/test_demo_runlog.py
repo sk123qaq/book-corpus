@@ -83,3 +83,28 @@ def test_replay_rebuilds_prompt(tmp_path):
     answer.build_prompt("问", "B1", [window], [], rec=rec)
     rec.finish("ok")
     assert runlog.replay(rec.id) == 0
+
+
+def test_bundle_reads_workspace_sessions_dir(tmp_path):
+    ws = tmp_path / "工作区" / "检索"
+    sessions_dir = ws / "sessions"
+    sessions_dir.mkdir(parents=True)
+    session_payload = '{"id": "abcdefabcdef", "turns": [{"question": "问"}]}\n'
+    (sessions_dir / "abcdefabcdef.json").write_text(session_payload, encoding="utf-8")
+
+    runlog.configure(str(ws / "运行记录"))
+    rec = runlog.start("turn", session="abcdefabcdef", turn=1, question="问")
+    rec.finish("ok")
+    out1 = Path(runlog.bundle("abcdefabcdef", out=tmp_path / "bundle1.zip"))
+    with zipfile.ZipFile(out1) as zf:
+        assert "session.json" in zf.namelist()
+        assert zf.read("session.json").decode("utf-8") == session_payload
+
+    custom_logs = tmp_path / "custom_logs"
+    runlog.configure(str(custom_logs), sessions_dir=str(sessions_dir))
+    rec2 = runlog.start("turn", session="abcdefabcdef", turn=2, question="再问")
+    rec2.finish("ok")
+    out2 = Path(runlog.bundle("abcdefabcdef", out=tmp_path / "bundle2.zip"))
+    with zipfile.ZipFile(out2) as zf:
+        assert "session.json" in zf.namelist()
+        assert zf.read("session.json").decode("utf-8") == session_payload

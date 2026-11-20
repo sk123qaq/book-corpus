@@ -113,5 +113,5 @@ def configure_runtime(root: str | Path | None = None) -> DemoPaths:
     runlog_mod = sys.modules.get("runlog")
     if runlog_mod is not None:
         env_runlog = os.environ.get("BOOKS_RUNLOG_ROOT")
-        runlog_mod.configure(env_runlog or str(paths.runlog_dir))
+        runlog_mod.configure(env_runlog or str(paths.runlog_dir), sessions_dir=str(paths.sessions_dir))
     return paths
