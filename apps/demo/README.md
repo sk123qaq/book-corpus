@@ -1,7 +1,6 @@
 # 检索流程演示页
 
-> **布局说明（2026-11-02）**：本文写于 v1 布局。旧示例里的 `库/…` 现在对应 `books/<uid>/…`，`目录/library.db` 对应 `build/library.db`，`目录/检索/` 对应 `build/检索/`，`视图/` 对应 `build/views/`，`工作区/脚本/` 对应 `src/bookcorpus/scripts/` 或 `book-corpus` 子命令。正文保留当时写法，按此表读。
-
+失效源：apps/demo/**
 
 一句话问题进去，五个阶段出来，最后落到书库里某一章的原文段落；结果阶段再接一次「回答」：
 检索层先取同书多段原文（命中段带 700 字前置上下文），交给 `book-corpus-qa` 技能的 agent 归纳，
@@ -34,9 +33,7 @@ uv run --frozen python apps/demo/server.py
 
 全部跑完后五个阶段默认展开，点阶段头可收起；左栏流程轨可跳转。播放中「跳过动画」直接到终态。
 
-## 回答阶段（设计见 `ANSWER-BRIEF.md`）
-
-段、章、窗口的数量关系图解：`图解-段-章-窗口.html`（浏览器直接打开）。
+## 回答阶段（历史设计见 `docs/briefs/ANSWER-BRIEF.md`）
 
 1. 切词同一次调用还给出 3 到 5 组同义说法（`extract.groups`），随问题缓存。
 2. `qsearch.search(..., 100, ...)` 取同书前 100 段，按章聚类出前 30 章候选地图。
@@ -55,7 +52,7 @@ uv run --frozen python apps/demo/server.py
 6. 解析第一个括号配平的 JSON 对象（去代码块围栏）。单书与多书都读 `lead`、`sections`、`dissent`、`gap`
    并拼出 `answer`；全空时退回模型给的 `answer`，再空就是 `not_found=true`。
 7. 回查引文：`quote` 去空白后的前 20 字，在对应章文件逐行找；找不到再整章找；
-   行号一律改成文件实际行号，仍找不到就丢掉这条。`path` 必须 realpath 在 `库/` 下且 `.md`。
+   行号一律改成文件实际行号，仍找不到就丢掉这条。`path` 必须 realpath 在 `books/` 下且 `.md`。
 8. 通过 ≥ 2 条保留模型给的 `confidence`，0 到 1 条降到 `low` 并在 `error` 写「引文回查不足」。
    依据按「离命中行的距离」排序，只留 10 条；整份 Answer 缓存到 `缓存/answers/<sha1>.json`
    （键含 question、book、path、line、terms、groups、`PROMPT_VERSION`、思考等级），原子写。
@@ -78,7 +75,7 @@ uv run --frozen python apps/demo/server.py
    分歧与缺口不另开段。不写成文献综述，也不写成「甲说……乙说……」的清单。
    模型只输出一个 `answer` 字符串，服务端按 `##` 拆成 `lead/sections/dissent/gap`，外层 JSON 不嵌数组。
    库级覆盖由 `para_fts` 算，跳过命中超过 200 段的常见词，最多三行，写明「不是答案证据」。
-6. 回查时 citation 的 path 必须 realpath 在 `库/` 下且推出的书在本次书单内，不做跨书同名文件兜底。
+6. 回查时 citation 的 path 必须 realpath 在 `books/` 下且推出的书在本次书单内，不做跨书同名文件兜底。
    排序是书单顺序（点名书在前），每本内按离该书命中行的距离，先每本一条再第二轮，最多 10 条。
    通过 ≥ 2 条但只盖住 1 本书时 `error` 写「引文只覆盖 1 本书」，`confidence` 不降。
 7. 缓存键换成 `answer-v20-multi`，含书单顺序与点名书；单书（含点名一本）用 `answer-v14`。
@@ -130,7 +127,7 @@ uv run --frozen python apps/demo/server.py
 ## 接口
 
 - `GET /api/health` → 书库规模与索引构建时间。索引未建时仍返 200，带 `degraded:true` 与 `message:"未建索引"`；此时 `meta.books/paras/chapters` 为 `null`，会话页与 `/classic` 页头显示 `—` 和「索引未建／为空，先跑索引」，不把占位 0 当规模。真正的库错误才返 500。
-- `POST /api/run` `{"question":"...","thinking":"high","fresh":false}` → 五阶段 trace（结构见 `BRIEF.md` 的「数据契约」）。
+- `POST /api/run` `{"question":"...","thinking":"high","fresh":false}` → 五阶段 trace（历史数据契约见 `docs/briefs/BRIEF.md`，现行行为见 `.agents/skills/verify-book-corpus/features/find-a-passage.md`）。
   `stateless:true` 且没带 `session_id` 时不新建会话，响应 `session_id` 为空；`/classic` 用它，会话页不传。
   `thinking` 取 `off/minimal/low/medium/high/xhigh/max`（默认 `high`），进切词缓存键；
   `fresh=true` 跳过切词缓存重新调模型，本次结果仍写回。trace 顶层与 `extract` 都带 `thinking`。
@@ -138,14 +135,14 @@ uv run --frozen python apps/demo/server.py
   `exact` 会把该书的 `ranking[0]`、`chapters[0]` 和 `result` 钉在这本书上（`pinned:true`），
   `cards.trigger` 为 `false`；`ambiguous` 触发书卡；`missing` 不拿别的书冒充，继续普通检索。
   点名书没有可用正文时 `result.path` 为空、`result.focus_empty` 为 `true`。
-- `GET /api/chapter?path=库/...md&line=16&chars=900&before=700` → 从 1-based 行起截原文，命中整行保留，前置 700 字，YAML 前置块跳过。
-  路径必须 realpath 在 `库/` 下且以 `.md` 结尾，否则 400。返回除 `text`/`title`/`html`/`ms` 外还有：
+- `GET /api/chapter?path=books/<uid>/md/...md&line=16&chars=900&before=700` → 从 1-based 行起截原文，命中整行保留，前置 700 字，YAML 前置块跳过。
+  路径必须 realpath 在 `books/` 下且以 `.md` 结尾，否则 400。返回除 `text`/`title`/`html`/`ms` 外还有：
   `hit_line`、`hit_start`、`hit_end`、`hit_text`、`before`（请求的前置预算）、`before_chars`（实际前置字数）、
   `total_lines`、`window_chars`，且恒有 `text[hit_start:hit_end] == hit_text`。
 - `POST /api/answer`
   ```json
-  {"question": "...", "book": "文学/类型小说/刘慈欣/三体/死神永生",
-   "path": "库/.../03_第二部....md", "line": 1180,
+  {"question": "...", "book": "B0001",
+   "path": "books/B0001/md/03_第二部....md", "line": 1180,
    "terms": ["程心","执剑人","三体"],
    "groups": [{"name": "冰封封印", "variants": ["冰封","冰壁","封印","封魂咒"]}]}
   ```
@@ -153,9 +150,9 @@ uv run --frozen python apps/demo/server.py
   否则 400）。点名书时再给 `focus`（`/api/run` 返回的对象）；`sources` 第一项应是点名书，
   其余书作为补充。所有书由同一个写手一次写成，点名书在前，其他书只补它没有的角度：
   ```json
-  {"question": "...", "path": "库/...md", "line": 1180, "terms": [], "groups": [],
+  {"question": "...", "path": "books/B0001/md/...md", "line": 1180, "terms": [], "groups": [],
    "thinking": "high", "fresh": false,
-   "sources": [{"book": "人文社科/教育/...", "title": "...", "path": "库/...md", "line": 31}]}
+   "sources": [{"book": "B0002", "title": "...", "path": "books/B0002/md/...md", "line": 31}]}
   ```
   可选 `thinking` 与 `fresh`：思考和切词共用同一套档位并进答案缓存键；`fresh=true` 跳过答案缓存重新调模型。
   返回 Answer：`ok`、`cached`、`ms`、`model`、`thinking`、`answer`、`citations[{path,line,quote,chapter,verified}]`、
@@ -211,10 +208,10 @@ uv run --frozen python apps/demo/server.py
 
 ## 只读与边界
 
-- 只读 `目录/检索/index.db`、`目录/library.db`、`库/**.md`。
+- 只读 `build/检索/index.db`、`build/library.db`、`books/<uid>/md/*.md`。
 - 只写 `<root>/工作区/检索/` 下的 `terms/`、`answers/`、`related/`、`sessions/` 与 `运行记录/`，按 sha1 或会话 id 分文件，原子替换；启动时支持 `--root` 指定工作区实例。
 - 支持 `POST /api/run` 传入 `scope: {"books": [...]}` 做显式书目定界，前端支持 `?q=&books=&mode=trace|prefill`、`GET /api/books/meta` 与 `/go/reading?to=...` 跳向分层读。
-- 不跑 B4、不写 expand、不改 `库/` 与 `工作区/脚本/`。
+- 不跑 B4、不写 expand、不改 `books/` 与 `src/bookcorpus/scripts/`。
 - `/api/run` 有一把锁；`/api/answer` 不加整段锁，长回答不挡换卡与下一次检索；同一轮只在第一个请求里调模型。
 
 ## 验收

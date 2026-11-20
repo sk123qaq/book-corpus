@@ -1,97 +1,44 @@
-# 视觉读本 术语表（GLOSSARY）
+# 书库术语表（GLOSSARY）
 
-配合 `docs/视觉读本.md` 与 `docs/design/视觉读本-决策记录-2026-11-07.md` 使用。本文只定义视觉读本链路的术语；
-分层读、注释层、编辑层等概念沿用既有文档，这里仅在易混处澄清。
+状态：living · 2026-11-20
+失效源：.agents/skills/verify-book-corpus/features/*.md src/bookcorpus/reading/book_types.py apps/reading/server.py apps/ops/server.py apps/demo/server.py
 
-> 范围：本表只覆盖阅读层（视觉读本、分层读、读法、面板）。书库数据与流程的词
-> （book、uid、人账、机账、批次、拆章、存档）见 `AGENTS.md`「文件地图」与 `docs/adr/`。
+本表定义 `book-corpus` 五个本地应用与阅读/检索/运维链路的现行术语，口径以 `.agents/skills/verify-book-corpus/features/*.md` 为准。书库目录与账本词（`uid`、人账、机账、批次、拆章、存档、冷宫）另见 `AGENTS.md`「文件地图」。
 
-## 载体与档位
+## 五个本地应用
 
-**视觉读本（visual edition）**
-每章独立生成的"结构增强 HTML 页"，正文逐字保留，叠加目录、要点、图示、
-流程、回看等编辑组件。产物固定为一个目录 `pack/edition/`，入口是 `edition/index.html`，
-路由 `/reader/<uid>/<n>/edition`。不替换分层读任何档位。
+- **书库首页（`apps/home`，127.0.0.1:8773）**：默认唯一常驻入口，服务端渲染三张入口卡（找一段 / 翻开书 / 往期日课）、右栏最新一期与页脚「管理」，通过 `/go/<key>` 按需拉起其余四个服务。
+- **找一段（`apps/demo`，127.0.0.1:8765）**：书库检索与流式问答页。默认 `/` 是多轮会话页，`/classic` 是无状态五阶段过程页（发 `stateless:true`，不建会话）。支持 SSE 流式输出、进程内 checkpoint 暂停/续答、会话导出（MD / DOCX）与 `mode=trace|prefill|related` 跨页入口。
+- **分层读（`apps/reading`，127.0.0.1:8771）**：正文伴读工作台。包含书架（`/`）、书目（`/catalog`）、书页（`/book/<uid>`）、章页（`/chapter/<uid>/<n>`）与操作日志（`/records`），外加跨页定位入口 `/open`。
+- **往期日课（`apps/daily`，127.0.0.1:8772）**：每日一章的只读阅读页，读取 `<root>/日课/<YYYY-MM-DD>.json`，提供「在分层读打开这一章」跳转。
+- **统一操作台（`apps/ops`，127.0.0.1:8770）**：本地运维控制台，收口为六个主模块（总览、新书入库、书目与分类、正文生产、同步与维护、任务与日志）及六个兼容子页签（`docs` / `pdf` / `pdf-list` / `manual` / `retire` / `cold`）。
 
-**分层读（tiered reading）**
-频道体系 `skim / standard / deep`，走 `tiers.py` 投影。原 `research` 档与
-`citations` 层已于 2026-11-11 退役，不再出现在 reader、工单、导出与生成链。
-视觉读本是**独立第五产物**，不是第四档：不进分层读任务、不进档位勾选框。
+## 阅读工作台（分层读）
 
-**读法（reading mode）**
-书级默认 + 章级覆写的 `narrative / argument / practical / reference`。读法只决定
-注解类型、面板类型与建议入口，不是档位；三个档位仍由读者按精力与兴趣自选。
-书级默认存 `tables/ledger.db` 的 `读法` 表（`chapter='*'`），`build_library.py --emit-json`
-派生 `books/<uid>/reading.json`；章级覆写必须带 `source_sha256`，源文变化后失效。
+- **正文工作台**：章页打开即 0 秒直出 100% 原文，不设阻塞阅读的工单或审批。正文经 `mdparse` 切分为带稳定编号 `B%02d`（DOM `#blk-B01`）与原文件行号（`start_line`/`end_line`）的块。
+- **阅读视角（`reading_profile`）**：由 `src/bookcorpus/reading/book_types.py` 按人账学科（`book.json` 的 `subjects`）即时推导出的 7 类阅读策略：`practical`（实用型书）、`literature`（想象文学，含 `fiction/drama/poetry` 子类）、`history`（历史书）、`science`（科学与数学）、`philosophy`（哲学书）、`social`（社会科学，兼兜底）、`visual`（图册与视觉）。读者可在章页 `#profile-select` 临时切换（存浏览器 `localStorage`，不写回 `tables/ledger.db`）。
+- **结构蓝图（Blueprint）**：跨 7 类阅读视角共 18 种强类型图表骨架（DAG / 矩阵 / 曲线三家族），走五步防重叠流水线（蓝图 Schema 约束 → 模型填纯语义 JSON → `diagram_audit.py` 审计与超长分流 → `diagram_renderer.js` 离屏测量与正交避障渲染 → 实时几何碰撞质检）。所有节点带 `Bxx` 原文锚点，点击可回跳正文；支持 `#zoom-modal` 宽屏全览。全章缓存落 `工作区/阅读/<uid>/ch/<nn>/chapter_tools/`。
+- **视角扩展（Extension Action）**：按阅读视角置顶的 7 个专属伴读动作（`checklist`、`imagery`、`compare_context`、`boundary_check`、`sparring_dossier`、`method_audit`、`craft_notes`），复用 `POST /api/assist`。其中 `compare_context` 与 `method_audit` 带 `cross_search:true`，在工具条提供「跨书对照 ↗」跳往 8765。
+- **按需知识地图（Chapter Map）**：经 `POST /api/chapter-map/<uid>/<n>` 按需生成的章节结构树与核心术语，落 `工作区/阅读/<uid>/ch/<nn>/chapter_map.json`。源文件哈希变化时只在读取时标内存态 `stale:true`，不覆盖原文件。
+- **短章门控与容量预检（Preflight）**：`/api/chapter` 返回两套独立预检。`preflight.chapter_map` 拦截过短章节（支持 `force:true` 强制生成）；`preflight.capacity` 在超长章节触发 422 `source_too_large`，只影响知识地图生成，不阻断直读正文。
+- **划词伴读（Assist）**：`POST /api/assist`，支持 `selection` / `chapter` 两种作用域、5 个基础动作（`explain` / `translate` / `diagram` / `critique` / `ask`）与 7 个视角扩展动作；默认 SSE 流式返回（`delta` / `diagram` / `done` / `error`）。划词条另附「跨书找相关 ↗」直达 8765 的 `mode=related`。
+- **旁批与钉住（Pins）**：经 `POST /api/assist/pin` 将伴读结果锚定到段落末尾，持久化在 `工作区/阅读/<uid>/ch/<nn>/assist_notes.json`；删除走 `DELETE /api/assist/pin/<uid>/<n>/<id>`。
+- **跨页定位（`/open`）**：从 8765 找一段或 8772 往期日课携带 `uid`、`path`、`line`、`q`、`from` 跳转到对应章页，渲染顶部来源条 `#arrival-banner` 并高亮命中块（`.reader-block.hit`、`mark.hl-hit`）。
+- **操作日志（Records）**：追加写入 `工作区/阅读/ops_log.jsonl`，在 `/records` 按全部、知识地图、划词伴读、旁批变更、失败五个页签检索，支持「定位 →」回跳段落。
 
-**面板（panels）**
-每章一次抽取的结构层，按读法产出人物、时间线、场景节拍、论证图、证据表、步骤、
-检查清单、图版、术语等卡片。每条 item 必须落到块锚点；人名、年份、数字、图注
-必须能在原文找到。空章节允许 `panels: []` 并显示提示，不阻塞正文。
+## 检索与同步
 
-**场景速览（scene skim）**
-叙事书的速览形态：`skim.json` 的 `kind` 为 `scenes`，3–10 个有效场景节拍（目标
-5–10），每个 scene 有块锚点；正文合计不超过源文 25%，不要求命题链。论证/实用/
-资料书仍走 `claims` 速览。
+- **书级规划（`book-corpus query`）**：`book_query.py` 的默认书级入口，采用 `best_support` 与 B2.5 最多 5 轮词法循环，触发时默认弹 5–8 张书卡（`--no-cards` 关闭）。`book-corpus search --book` 保留旧 `mix` 口径作对照。
+- **混合检索（Hybrid Retrieval）**：在 FTS5 CJK bigram 词法召回之上叠加 `book-corpus embed` 产出的块向量（`emb.db` + `vectors.f16`）与本地 embedding 服务，做书/章/段三层 RRF 融合（`fusion:"hybrid"`）；索引或服务缺失时静默退回 `bm25_only`。有 GPU 且精排服务在线时可叠加 `bge-reranker-v2-m3`。
+- **事件驱动增量同步（`sync_delta`）**：操作台在入库、改分类、拆章、文档转换、PDF 落地或退库完成后，自动接力元数据重建、FTS5 增量同步（`build_para_index.py --sync`）与异步合并去重的向量同步（`embed_corpus.py --sync`）；向量库未初始化时跳过向量步骤。`/api/status` 通过 `sync_delta` 暴露各层偏差供「同步与维护」兜底。
 
-**节导语（section lead）**
-标准档每节开头的一句摘要。生成器先读 `chapter_model.sections[].lead`，为空时确定性
-回退到该节首个 core unit 的首句（再退到首个 unit 的首句），截到 80 字；不重跑
-chapter_model。无源注的节保持 0 条标准注。
+## 已退役术语
 
-**Agent 标准档（agent standard）**
-`agent_standard.py` 的直出 HTML 实验入口（`/reader/<uid>/<n>/agent`）。
-视觉读本上线后它保持实验性质，不作为正式入口，也不合并。
+下列概念与路由均已下线，不在现行代码与页面中存在；历史背景见对应文档，退役词表由 `docs/reference/retired.toml` 守卫：
 
-## 内容与结构
-
-**SourceDocument（源文档模型）**
-统一的章节解析产物：front matter + 有序块 + 正文全文。
-所有入库走 `books/<uid>/md/` 的 Markdown，由解析器成块
-（`paragraph / heading / image / quote / list / table / code / footnote`），
-块 ID沿用分层读的 `B%02d` 稳定编号。视觉读本与分层读共享同一解析结果，
-保证 `content.json` 的锚点与分层读的锚点可互查。
-
-**结（section）**
-两个二级标题（H2，`## `）之间的连续块序列，含首个 H2 前的开头块。
-长章折页的单位。结有 ID `S%02d`，由块 ID 推导，不单独落盘。
-通篇无 H2 的章节视为单"结"，不打折页。
-
-**content.json（视觉内容 JSON）**
-视觉读本的编辑层数据，per-chapter 存 `pack/edition/content.json`。
-只包含"叠加物"（章节要点、结引言、图示 spec、流程/对照/回看等），
-**不含正文**。渲染时正文由 SourceDocument 按 `anchor`（结或块锚点）
-插入，保证逐字与分层读一致。结构沿用分层读编辑层 `editorial.json` 的写法
-（`beats / visuals / takeaways / claims`），并在其上扩展段落级结位。
-
-**图示（plate）**
-HTML/SVG 生成的示意、流程、对照、图表组件，对应 editorial 的 `kind`。
-"图 N" 标题遵循分层读 `fig-kicker/fig-cap` 合并规则。
-
-## 生成链路
-
-**简报（brief）**
-生成 `content.json` 前的结构摘要：章节题材信号、结构形态、图版候选。
-仅作模型输入与日志，不落 pack 目录（区别于 editorial 的 brief）。
-
-**模板适配（template fit）**
-信号式模板选择：按题材/结构/图类型/阅读模式/推荐确定
-视觉方向（目前仅 `xerox` 可用，其余为参考）。
-分数在阶段日志展示并确认，未通过的不生成。
-
-**视觉任务（generation job）**
-`JobQueue` 中的 `kind=edition` 任务：brief+适配 → content 生成 →
-门禁 → 渲染 `edition/index.html`。与分层读任务分列，允许并发。
-
-**门禁（gates）**
-发布前检查集合：G1–G9（分层读原有）+ V 系列（视觉读本）：
-- V1: 无外部资源/脚本/样式；
-- V2: 原文覆盖（每个块的文本在页面字面出现，含表格行、脚注序）；
-- V3: 结标题次序正确、折页控制条无 JS 不渲染；
-- V4: content.json 可解析、锚点合法，拿不到SourceDocument的锚点拒绝。
-
-## 状态词
-
-**结构不变（structural）**
-解析到的块序与块 ID 在书库更新后不变，视觉读本的内容锚点继续有效。
-分块稳定性由块 ID 决定，折页控制条不替换原文文字。
+- **四读 / 三档分层读（`skim` / `standard` / `deep`）/ `research` 档与 `citations` 层**：已退役（2026-11-11、2026-11-16），替代见 [阅读页重构方案](docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md) 与 [ADR 0001](docs/adr/0001-four-reads-two-body.md)、[ADR 0002](docs/adr/0002-three-tier-reading.md)。
+- **视觉读本（visual edition）与 `/reader/<uid>/<n>/edition`**：已退役（2026-11-16），历史说明见 [视觉读本](docs/design/视觉读本.md)。
+- **读法（reading mode）与 `tables/ledger.db` 的 `读法` 表、面板（panels）、场景速览（scene skim）**：已退役（2026-11-16），旧阻塞式工单已移除；按书型差异化工具改由不改人账的「阅读视角」承接，见 [分层读书型工具与图表框架方案](docs/design/分层读书型工具与图表框架-方案-2026-11-19.md) 与 [ADR 0003](docs/adr/0003-reading-modes-and-panels.md)。
+- **读本页、`/reader/...`、`/api/depth/...` 与阅读侧工单队列 `/api/jobs`**：已退役（2026-11-16），路由一律 404。
+- **研究档外部搜索配置（`READING_SEARCH_PROVIDER` / `READING_FETCH_PROVIDER`）**：已退役（2026-11-16），原文档 [研究检索配置](docs/design/研究检索配置.md) 已标 `superseded`。
+- **操作台旧七页签 / 八页签导航与手动「一键收尾」主流程**：已退役（2026-11-19），替代见 [操作台重构方案](docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md)。

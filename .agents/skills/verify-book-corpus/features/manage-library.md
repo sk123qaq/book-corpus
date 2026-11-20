@@ -1,5 +1,7 @@
 # 管理
 
+失效源：apps/ops/** src/bookcorpus/scripts/ops_status.py
+
 操作台把书库的维护动作收在六个模块：总览、新书入库、书目与分类、正文生产、同步与维护、任务与日志。
 `doc` / `pdf` / `pdf-list` / `manual` / `retire` / `cold` 是兼容子页签（`EXTRA_TABS`），hash 直达仍可用，但不再占左侧主导航。
 批次任务走队列，真正干活的是 `src/bookcorpus/scripts/` 下的脚本；账表改行（`category_put`/`category_put_many`）与上传在服务进程内直接写，不走队列。
@@ -38,14 +40,14 @@ Preconditions:
 - **接口在。** `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18770/api/status` 输出 `200`；`/api/jobs`、`/api/inbox`、`/api/pending`、`/api/ledger`、`/api/pdf/books` 都在；`/api/maintain` 只收 POST，GET 是 `404`。
 - **状态的形状。** `/api/status` 顶层有 `ok`、`state`（空库里是 `degraded`）、`complete`、`stale`、`missing`、`source`、`error`、`status`、`ops`、`state_counts`、`at`；`status` 下有 `books/md_done/md_chapters/md_indexable`、`pending`、`pending_groups`、`inbox`、`ledger`、`catalog`、`index`、`views`、`audit`、`ocr`、`jobs`、`problems`、`library`、`embed`、`sync_delta`。样书根常见 `state=degraded`、`missing=["catalog"]`、`problems=["没有 build/书目总表.csv"]`；跑完「复核并增量对齐」后 `stale` 转 `false`，`catalog_missing` 仍在。**没有 `status.health`**：健康检查在独立接口 `GET /api/search/health`。8765 没起时它回 `{"ok":true,"running":false,"url":"http://127.0.0.1:8765","pid":null,"meta":null,"error":"[Errno 111] Connection refused"}`；`error` 非空，不是 `null`，`ok` 仍是 `true`（只表示接口答得出，不表示搜索在跑）。8765 起着时 `running:true`，并可能多出 `degraded`/`db`/`message`。`extra_books` 是磁盘有、索引没有的书，别把它读成书目总数。
 - **主导航与子页签都点得开。** `python3 .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"` 起自己的 headless Chromium，切 `overview/import/ledger/split/maintain/logs` 与 `retire/cold/docs/pdf/pdf-list/manual` 十二个 hash，断言每个有 `<h1>/<h2>`、无横向溢出、无控制台错误，出 `ops-overview-1440x900.png`，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`。`apps/ops/web/app.js:3-10` 的 `TABS` 是六条，`EXTRA_TABS` 是 `docs` / `pdf` / `pdf-list` / `manual` / `retire` / `cold`；`#nav` 只有六条链接。
-- **旧的 `shot_ops.py` 已跟不上页面。** `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py` 仍按八页签流程点 `retire`，在 1440x900 会死在 `RETIRE_MODAL`：`RuntimeError: … TypeError: Cannot set properties of null (setting 'value')`。这是产品测试漂移（`retire` 现在是「书目与分类」的子页签），不是页面坏；主导航回归改用上面的 `drive_ops_tabs.py`，别再拿 `SHOT PASS` 当判据。
+- **全量浏览器交互验收。** `PYTHONPATH=$PWD/tests/acceptance/ops uv run --frozen python tests/manual/ops/shot_ops.py`（`28d18cb` 起已适配六模块与 `RETIRE_MODAL`），自建临时根跑完六模块、五子页签、导入/分诊/删书弹窗与 1440x900 / 390x844 两档布局，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`。
 - **上传。** 在「新书导入」选一个文件上传。`curl -s http://127.0.0.1:18770/api/inbox` 里出现该文件，磁盘上落在 `$ROOT/books/_收件箱/`。
 - **删书两步。** 先 dry-run 再 apply。`curl -s -X POST http://127.0.0.1:18770/api/delete/dry-run ...` 只出计划，`apply` 才动树；本次未跑（会删临时根里的书）。
 
 ## Gotchas
 
 - 页面是 JS 壳，`curl` 拿到的 HTML 只有约 900 字节，搜不到页签文字；页签断言要靠 CDP，不是 `grep`。
-- `tests/manual/ops/shot_ops.py` 的裸命令会 `ModuleNotFoundError: No module named 'check_ops'`，必须带 `PYTHONPATH=$PWD/tests/acceptance/ops`；但它现在按旧八页签流程点 `retire`，会死在上面的 `RETIRE_MODAL`，别再把它当主导航回归。
+- `tests/manual/ops/shot_ops.py` 的裸命令会 `ModuleNotFoundError: No module named 'check_ops'`，必须带 `PYTHONPATH=$PWD/tests/acceptance/ops`。
 - `google-chrome-stable` 已不在本机；本技能脚本用 `CHROME_BIN`（缺省 `/usr/bin/chromium`）。要显式指定就 `CHROME_BIN=/usr/bin/chromium`，别去装 Chrome。
 - `drive_ops_tabs.py` 自己起 Chromium、自己关；失败会留下 `/tmp/ops-tabs-*` 配置目录，验证完清掉。它只断言 heading / 控制台 / 横向溢出，不覆盖逐行改账这类写入动作；账表数据仍验 `/api/ledger`。
 - `check_ops.py` 与 `drive_ops_tabs.py` 用的都是临时根；真实队列会调 `src/bookcorpus/scripts/` 里的东西，用临时根跑才安全。

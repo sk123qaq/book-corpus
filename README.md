@@ -1,5 +1,7 @@
 # 书库
 
+<!-- 失效源：src/bookcorpus/cli.py pyproject.toml .agents/skills/*/SKILL.md -->
+
 本地电子书库的工具箱。每本书一个 `books/<uid>/` 目录，正文拆成章节 Markdown，另有可视化阅读版 HTML。SQLite 保存书目与检索索引，全库正文可以按词、按书检索，也可以交给 pi agent 按原文回答问题，答案带逐字引文。
 
 仓库只放工具、文档与模板，不放任何人的书。克隆下来是**空的工具仓**；用 `book-corpus init` 建工作区，再把自己的书放进 `books/_收件箱/`。本机的书目账在私有工作区 `~/书库`，见下文。
@@ -362,10 +364,11 @@ book-corpus remap --map <对照表-0002.csv> --old-db <旧 index.db> --apply
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
 | 任何代码 | `uv run --frozen pytest` | 全部通过 |
+| 任何代码（lint 与文档闸门） | `uv run --frozen pre-commit run --all-files` | 全部 `Passed` |
 | 人账 `tables/ledger.db` | `book-corpus library` | `conflicts=0`，`books` 等于人账行数 |
 | 结构、脚本 | `book-corpus doctor` | 无 `fail` |
 | 结构、检索层 | `book-corpus verify` | 末行「全过：N 项」 |
-| 文档、端口、脚本清单 | `book-corpus docs check --data-root <实例根>` | 末行「全过」；改端口或脚本后先 `book-corpus docs write` |
+| 文档、端口、脚本清单 | `book-corpus docs check --data-root <实例根>` 与 `uv run --frozen python tools/check_docs_sync.py --strict` | 末行「全过」；改端口或脚本后先 `book-corpus docs write` |
 | 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
 | 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |
 
@@ -463,12 +466,13 @@ MIT，见 `LICENSE`。
 
 ## 更多文档
 
-- `AGENTS.md`：作者本机实例的运行手册，含批次账与脚本表。新克隆的仓库没有那些批次数据。
-- `docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md`：正文伴读工作台、工具与操作日志的现行设计方案。
-- `docs/design/设计方案-书目结构.md`：权威方案，L0 到 L5 门槛与目标结构。
+- `docs/INDEX.md` 与 `docs/reference/facts.md`：全仓设计/决定/报告状态索引，以及自动生成的端口、脚本与版本事实表。
+- `.agents/skills/verify-book-corpus/features/README.md`：五个页面与 CLI 用户可见行为的验证地图（产品现行行为的事实源）。
+- `GLOSSARY.md`：现行术语表与已退役概念对照。
+- `AGENTS.md`：作者本机实例的运行手册、权威顺序与写入纪律。新克隆的仓库没有那些批次数据。
 - `CONTRIBUTING.md`：改代码、跑测试与提交的约定。
-- `docs/检索/README.md`：检索层方案与实测基线。
-- `docs/检索/踩坑记录.md`：检索层按类型分的踩坑账。改检索脚本前先查。
-- `apps/ops/README.md` 与 `apps/ops/CONTRACT.md`：操作台的起停、接口与文件归属。
-- `docs/briefs/BRIEF.md`：演示页的任务书。
-- `reports/运维验收-2026-10-25/`：七页交互审计与证据。
+- `apps/ops/README.md`、`apps/demo/README.md`、`apps/home/README.md`、`apps/daily/README.md`：各应用服务的起停、参数与接口。
+- `docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md` 与 `docs/design/分层读书型工具与图表框架-方案-2026-11-19.md`：分层读正文伴读工作台与书型蓝图工具的已落地设计方案。
+- `docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md`：操作台六模块与事件驱动增量同步的已落地设计方案。
+- `docs/检索/README.md` 与 `docs/检索/踩坑记录.md`：检索层现行链路、口径与踩坑账（改检索脚本前先查）。
+- 历史留档：`docs/design/设计方案-书目结构.md`（v1 重构原文）、`docs/briefs/BRIEF.md`（演示页任务书）、`reports/运维验收-2026-10-25/`（早期审计与证据）。

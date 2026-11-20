@@ -1,5 +1,7 @@
 # 书库项目
 
+<!-- 失效源：src/bookcorpus/cli.py .agents/skills/*/SKILL.md .pre-commit-config.yaml -->
+
 `~/书库` 是个人电子书库的工作区实例。2026-10 按 `docs/design/设计方案-书目结构.md` 重构完毕。书、拆章 md、阅读版 html 收进每本书一个目录，奖项降为字段，SQLite 做可重建索引。
 
 新会话先读本文件，再按「文件地图」与 `book-corpus list` 按需深入。方案 §8 开头有两段执行修订，正文里写死的原型数字按修订块读。
@@ -11,18 +13,19 @@
 冲突时从上往下赢；低层与高层矛盾算低层的 bug，只删或改成链接。
 
 1. 代码与测试（能跑的）
-2. `docs/reference/facts.md`（`book-corpus docs write` 生成）
-3. `docs/adr/` 里 accepted 的决定
-4. README / CONTRIBUTING / 本文件的正文
-5. `docs/design/` 带日期的方案、`docs/briefs/`
-6. 复盘、踩坑记录、历史数字
+2. 生成物：`docs/reference/facts.md`、`docs/INDEX.md`（`book-corpus docs write`）、本文件「现状」块（`book-corpus numbers --write`）
+3. 验证地图：`.agents/skills/verify-book-corpus/features/*.md`（产品**现在做什么**、怎么证明）
+4. `docs/adr/` 里 accepted 的决定（**为什么**这样做）
+5. 活文档正文：`README.md`、`CONTRIBUTING.md`、`AGENTS.md`、`GLOSSARY.md`、`apps/*/README.md`、`docs/检索/README.md`
+6. `docs/design/` 带日期的方案、`docs/briefs/`（按状态头读）
+7. 记录：复盘、`reports/`、`artifacts/verify/`、踩坑账
 
-事实不手抄：端口、脚本、版本、书目数都从代码或库生成。判断只写一处，其他文件链接。
+事实不手抄：端口、脚本、版本、书目数都从代码或库生成。判断只写一处，其他文件链接。退役名词与路由登记在 `docs/reference/retired.toml`，活文档命中即报错。
 
-**状态契约**：`docs/design|briefs` 与 `docs/adr` 的第一屏必须有一行
-`状态：<draft|accepted|proposed|implemented|superseded|historical> · YYYY-MM-DD`。
-`implemented` 再写 `验收：<命令或测试路径>`；`superseded` 再写 `替代：<路径>`。
-历史正文不改，标 `historical` 或加「布局说明」即可。`book-corpus docs check` 查这些。
+**状态契约**：`docs/**`（除 `docs/INDEX.md`、`docs/reference/`、`docs/agents/`）与 `reports/**` 的第一屏必须有一行
+`状态：<living|draft|accepted|proposed|implemented|superseded|historical> · YYYY-MM-DD`。
+`living` 必须写 `失效源：<glob 路径...>`；`implemented` 再写 `验收：<命令或测试路径>`；`superseded` 再写 `替代：<路径>`。
+历史正文不改，标 `historical` 或 `superseded` 即可（不再靠「布局说明」豁免检查）。`book-corpus docs check` 与 `tools/check_docs_sync.py --strict` 查这些。
 
 ## 这台机器上的两处目录（2026-11-13 起）
 
@@ -63,7 +66,7 @@ As of 2026-11-16：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf�
 | `books/_收件箱/` | 新书先落这里，入库走 `book-corpus ingest`：`scan` 出计划，`apply` 落文件与账；换源用 `replace` |
 | `books/_冷宫/` | 移出处理流程的书，只留原书文件。无 `book.json`、不在人账、不进检索与扩展。规则与账见 `books/_冷宫/README.md` |
 | `collections/<Cuid>/source/` | 拆书前的合集原书；书的 `book.json` 用 `sources[].collection` 引用 |
-| `tables/ledger.db` | **唯一人账**（SQLite）：`分类` 1,956 行（uid、一级、二级、作者层、保留、正式书名、备注、updated_at）、`概念` 127 条、`概念broad` 10 条（宽词层实验，未并入生产）、`动作词` 15 条、`ledger_meta`。人在操作台「账表」页或直接 SQL 改；旧 CSV 只在 `archive/账切换-2026-11-03/` 留档，脚本只把它当缺库兜底 |
+| `tables/ledger.db` | **唯一人账**（SQLite）：`分类`（uid、一级、二级、作者层、保留、正式书名、备注、updated_at）、`概念`、`概念broad`（宽词层实验，未并入生产）、`动作词`、`ledger_meta`。书目与行数以「现状」生成块为准。人在操作台「书目与分类」页或直接 SQL 改；旧 CSV 只在 `archive/账切换-2026-11-03/` 留档，脚本只把它当缺库兜底 |
 | `tables/系列/` | 21 份合集的卷序说明 |
 | `tables/对照表.csv`、`搬迁计划.csv`、`标注样本.csv`、`书目录清单.csv`、`源文件清单.csv` | v1 目录结构与 L0–L2 的过程账，历史留档 |
 | `build/library.db` | 全库书目，SQLite。产物，可重建。查询用 `lq.py` 只读打开 |
@@ -78,12 +81,14 @@ As of 2026-11-16：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf�
 | `apps/ops/` | 统一操作台服务、web 与运维文档，按需启动，127.0.0.1:8770；验收在 `tests/acceptance/ops/` 与 `tests/manual/ops/` |
 | `apps/demo/` | 检索流程演示页、回答与会话实现，按需启动，127.0.0.1:8765；验收在 `tests/acceptance/demo/` 与 `tests/manual/demo/` |
 | `apps/reading/` | 正文伴读工作台的书架、书目、正文与操作日志，按需启动，127.0.0.1:8771；验收在 `tests/test_reading_*.py` |
+| `apps/daily/` | 每日一章的只读阅读页，按需启动，127.0.0.1:8772；验收在 `tests/test_daily.py` 与 `tests/acceptance/daily/` |
 | `apps/home/` | 统一入口首页，项目默认只启动这一项，127.0.0.1:8773；服务端渲染，读 `books.toml`、`books/` 与 `日课/`，点击时按需代起四个页面服务，验收在 `tests/test_home_*.py` |
 | `docs/design/` | 带日期的方案与决策记录；状态头区分现行/历史，过期方案标 `historical` 或 `superseded` |
-| `docs/briefs/` | 已完成任务书，标注完成日期 |
+| `docs/briefs/` | 已完成任务书与历史施工契约，标注状态与日期 |
 | `docs/adr/` | 决定记录（`proposed` / `accepted` / `superseded`），替代链在这里 |
 | `docs/reference/facts.md` | 生成的事实：版本、五个应用默认端口、脚本与别名清单。`book-corpus docs write` 重写 |
-| `docs/INDEX.md` | 文档索引：`docs/adr`、`docs/design`、`docs/briefs` 的状态与日期，生成物 |
+| `docs/reference/retired.toml` | 已退役概念与路由清单；`tools/check_docs_sync.py` 用来拦截活文档回流旧词 |
+| `docs/INDEX.md` | 文档索引：`docs/**` 与 `reports/**` 的状态与日期，生成物 |
 | `~/书库/工作区/批次/` | 只在工作区实例；工具仓不再保留 |
 | `~/书库/工作区/中间态/` | 只在实例磁盘上，派生或可再生，不进任何仓 |
 
@@ -105,6 +110,13 @@ As of 2026-11-16：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf�
 - 开工第一天就 `git init`，先提交账本、脚本与方案，不跟正文。
 - 每个验证单元结束时在回复里给一行状态：完成了什么、下一个是什么、卡在哪。
 - 界面或交互改动先有能点、能截图、能断言的验收，再交付。判据是操作人不能在一分钟内点出问题。
+- **文档同步纪律**：
+  1. 改代码前先跑 `book-corpus docs check --since HEAD`，看这次改动会命中哪些文档的 `失效源：`。
+  2. 文档与代码在同一个提交里改；`pre-commit` 的 `docs-coupling` 钩子会在漏改对应文档时给出提醒。
+  3. 改了用户可见行为：先改 `.agents/skills/verify-book-corpus/features/<x>.md`，按验证地图跑一遍，再把 `features/README.md`「证明与跳过」里对应行就地更新为本轮 `RUN_ID`。
+  4. 方案落地的同一提交把状态改为 `implemented` 并补 `验收：`；方案被推翻时改为 `superseded` 并补 `替代：`，同时往 `docs/reference/retired.toml` 追加退役词。
+  5. 历史文档（`historical` / `superseded` / `implemented`）正文不改，只改状态行。
+  6. 迭代收尾跑 `sync-docs` 技能并写入 `docs/.last-doc-sync`。
 
 ## 写入规则
 
@@ -136,19 +148,18 @@ book-corpus run lq -H "SELECT uid,title,author,path FROM book WHERE title LIKE '
 book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土中国'"
 ```
 
-内容问答用 `book-corpus-qa` 技能，语料边界与实测数据在 `~/.agents/skills/book-corpus-qa/references/corpus-map.md`。只有 epub、没有 md 的书搜不到正文，先看 `build/书目总表.csv` 的 `md状态` 列。
+内容问答用 `book-corpus-qa` 技能，语料边界与实测数据在 `.agents/skills/book-corpus-qa/references/corpus-map.md`。只有 epub、没有 md 的书搜不到正文，先看 `build/书目总表.csv` 的 `md状态` 列。
 
 ## 改完跑什么
 
+通用检查清单见 `README.md`「改完跑什么」；这里只列作者本机实例专属与完整提交闸门：
+
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
+| 任何代码（全部提交闸门） | `uv run --frozen pre-commit run --all-files` | 全部 `Passed`；CI 的 `lint` 与 `docs` job 跑同一套 |
+| 文档与本机数字对账 | `uv run --frozen book-corpus docs check --data-root ~/书库 --since HEAD` | 末行「全过」且无未处理 `[since]` 警告；改端口/脚本后先 `book-corpus docs write` |
+| 活文档一致性与退役词 | `uv run --frozen python tools/check_docs_sync.py --strict` | 末行「全过」 |
 | 人账 `tables/ledger.db` | `book-corpus library --emit-json` | 输出里 `conflicts=0`，`books` 等于人账行数 |
-| 任何代码 | `uv run --frozen pytest`（在工具仓） | 全部通过 |
-| 任何代码（lint 四道闸） | `uv run --frozen pre-commit run --all-files` | 四行都 `Passed`；CI 的 `lint` job 跑同一套 |
-| 文档、端口、脚本清单 | `book-corpus docs check --data-root ~/书库` | 末行「全过」；改端口/脚本后先 `book-corpus docs write` |
-| 结构、脚本、html | `book-corpus verify` | 末行「全过：N 项」 |
-| 书目或人账 | `book-corpus catalog` | 末行「未匹配 0 条」 |
-| 自己的检索题集（可选） | `book-corpus run check_p1 --gold <题集>/gold.tsv` | 「全过：P1 N 项」；没有题集返回 2，算没跑 |
 | 书级默认值或书卡 | `python3 ~/书库/工作区/批次/qa-检索-2026-10-22-书级融合/probe_b6.py --lanes --gate --perf` | 末行 `ALL PASS`；gate 证据为 `drop`，默认卡是产品决定 |
 
 ## Agent skills

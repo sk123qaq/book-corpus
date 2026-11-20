@@ -1,13 +1,15 @@
 # 书库日课
 
+失效源：apps/daily/** src/bookcorpus/scripts/daily.py
+
 每日一章的只读阅读页。数据来自数据工作区的 `日课/*.json`，这一页只读，不写书、不写账。
 
 ## 启动
 
 ```bash
-python3 apps/daily/server.py --port 8772 --root /home/colaqaq/书库
+uv run --frozen python apps/daily/server.py --port 8772 --root /home/colaqaq/书库
 # 或在仓库根 .env 设置 BOOKS_ROOT 后直接启动
-python3 apps/daily/server.py
+uv run --frozen python apps/daily/server.py
 ```
 
 打开 <http://127.0.0.1:8772>。端口默认 8772，`--root` 默认只从 `.env`（或环境变量）读 `BOOKS_ROOT`，不设其它回退路径。

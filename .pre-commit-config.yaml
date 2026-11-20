@@ -3,7 +3,7 @@
 # 全员用同一个 gate，所以 hook 走本地 venv（uv run），不需要联网拉 hook 环境：
 #   uv sync && uv run pre-commit install
 #
-# 六道闸：
+# 七道闸：
 #   1. ruff-check   —— 全仓规则，等于 `ruff check`，自动修能修的（修过即失败，重跑即可）
 #   2. ruff-format  —— 格式化，等于 `ruff format`
 #   3. ruff-strict  —— 「新代码」严格档：不在 .ruff-legacy-files.txt 里的文件额外禁止
@@ -11,9 +11,11 @@
 #   4. mypy         —— 核心包 src/bookcorpus 的类型检查（口径见 pyproject.toml 的 [tool.mypy]）
 #   5. docs-check   —— 文档对账：生成块是否落后于代码、状态头、旧路径、相对链接、端口
 #   6. living-docs-sync —— 活文档一致性：.agents/skills 清单、正文反引号路径、
-#                      ops 契约路由与 CLI 子命令，见 tools/check_docs_sync.py
+#                      ops 路由、CLI 子命令与退役词守卫，见 tools/check_docs_sync.py
+#   7. docs-coupling —— 代码→文档失效源耦合提醒：暂存区代码命中某文档的 `失效源：`
+#                      但文档未一起暂存时打印提醒（先警告不阻断），见 tools/check_docs_coupling.py
 #
-# CI（.github/workflows/ci.yml）的 lint job 跑前四道，docs job 跑后两道；本地不通、线上必红。
+# CI（.github/workflows/ci.yml）的 lint job 跑前四道，docs job 跑第 5、6 道；本地不通、线上必红。
 #
 # 紧急绕过：SKIP=ruff-strict git commit -m "..."（只跳过严格档）
 
@@ -54,11 +56,19 @@ repos:
         pass_filenames: false
         files: \.(md|py|toml)$
         require_serial: true
-      # 活文档与技能目录一致性。`docs check` 不管 .agents/ 与正文里的仓库路径，这层补上。
+      # 活文档与技能目录一致性。`docs check` 不管 .agents/、退役词与正文里的仓库路径，这层补上。
       - id: living-docs-sync
-        name: living docs sync (skills & paths)
+        name: living docs sync (skills, paths & retired terms)
         entry: uv run python tools/check_docs_sync.py --strict
         language: system
         pass_filenames: false
         files: \.(md|py|toml)$
+        require_serial: true
+      # 提交级耦合提醒：暂存区代码命中某文档的 `失效源：` 但文档未同步修改时打印提醒（不阻断提交）。
+      - id: docs-coupling
+        name: docs coupling (source-to-doc reminder)
+        entry: uv run python tools/check_docs_coupling.py
+        language: system
+        pass_filenames: false
+        verbose: true
         require_serial: true

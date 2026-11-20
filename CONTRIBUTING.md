@@ -1,5 +1,7 @@
 # 改代码
 
+<!-- 失效源：pyproject.toml ruff-strict.toml .pre-commit-config.yaml tools/ruff_strict_new.py -->
+
 给要改这个仓的人。克隆与日常用法看 `README.md`；本机实例的账与约束看 `AGENTS.md`，那些数字不对克隆成立。
 
 ## 先跑起来
@@ -15,7 +17,7 @@ Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库�
 
 ## 目录约定
 
-- `apps/ops/`：操作台服务与 web。`apps/demo/`：检索演示与回答。两个应用都从实例根读数据（操作台 `--root`，演示页 `BOOKS_ROOT`），代码路径按自身位置推导。
+- `apps/ops/`：操作台服务与 web。`apps/demo/`：检索演示与回答。应用都从实例根读数据（支持 `--root` 与 `BOOKS_ROOT`），代码路径按自身位置推导。
 - `src/bookcorpus/scripts/`：全部可复跑脚本。批次的一次性脚本不进本仓，放数据仓的批次目录。
 - `tests/acceptance/`：pytest 收集的离线验收。`tests/manual/`：手工验收。测试产物写临时目录，不写仓库。
 - `docs/design/`：方案与决策记录。`docs/briefs/`：已完成的任务书。`docs/检索/`：检索层口径与踩坑账。`reports/`：一次性审计与证据。
@@ -28,7 +30,7 @@ Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库�
 - 搬文件用 `git mv`，保留历史。改路径时同一波改完所有调用方，不留兼容别名。
 - 不顺手改行为。搬目录、改引用、删可再生成的产物可以一个提交；逻辑变化单独提交，并带能判红绿的测试。
 - 可再生成的 HTML/PNG/缓存不提交；留生成脚本，并在脚本头写一行怎么重跑。
-- 文档里的路径必须能落到磁盘。历史文档保留原文时，在开头加布局说明，不要留下看似可用的旧路径。
+- 文档里的路径必须能落到磁盘。历史或被替代的文档保留原文时，首屏标 `状态：historical · YYYY-MM-DD` 或 `状态：superseded · YYYY-MM-DD`（配 `替代：`），不再靠「布局说明」豁免检查。
 
 ## 提交
 
@@ -42,19 +44,20 @@ uv run --frozen ruff check .
 uv run --frozen ruff format --check .
 uv run --frozen python tools/ruff_strict_new.py
 uv run --frozen mypy
-uv run --frozen book-corpus docs check
+uv run --frozen book-corpus docs check --since HEAD
+uv run --frozen python tools/check_docs_sync.py --strict
 git status --short
 ```
 
-这六步也可以交给 git hook：
+这些检查也可以交给 git hook：
 
 ```bash
 uv sync                       # 装上 pre-commit
 uv run pre-commit install     # 之后每次提交自动跑
 ```
 
-hook 跑五道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`、`docs check`。
-CI（`.github/workflows/ci.yml`）的 `lint` job 跑同一套，`test` job 在 3.11/3.12/3.13 上跑 pytest 与命令行冒烟：本地闸门过不了的，push 上去必红。
+hook 跑七道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`、`docs check`、`living-docs-sync`（技能清单、路径、ops 路由、CLI 子命令与退役词）、`docs-coupling`（改代码漏改对应 `失效源：` 文档时给出警告）。
+CI（`.github/workflows/ci.yml`）的 `lint` job 跑前四道、`docs` job 跑 `docs check` 与 `living-docs-sync`，`test` job 在 3.11/3.12/3.13 上跑 pytest 与命令行冒烟：本地闸门过不了的，push 上去必红。
 
 ### ruff 严格档：新代码不许 os.path 拼接和 % 格式化
 

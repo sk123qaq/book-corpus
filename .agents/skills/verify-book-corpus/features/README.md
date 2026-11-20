@@ -31,13 +31,14 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 - 每个服务由本轮自己起、自己按 PID 杀，不按进程名杀。
 - 服务端渲染页（首页、日课、操作台）用 `curl` 取 HTML 断言稳定标记；接口一律 `curl` 取 JSON 断言字段。分层读章页与记录页是客户端渲染，`curl` 只证明模板/js 在，用户可见状态必须用 headless Chrome `--dump-dom` 取渲染后的 DOM；章页模板已在外链 `assets/chapter.js`，DOM 不含模板字符串，剥不剥 `<script>` 都一样。点击、键盘才用 CDP 脚本。具体命令见 [layered-reads.md](./layered-reads.md)。
-- CDP 脚本用 `CHROME_BIN` 指定浏览器；本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84），`google-chrome-stable` 已不存在。技能脚本缺省就用 `/usr/bin/chromium`；仓库里的 `tests/manual/demo/shot.py` 仍写死 `google-chrome-stable`，跑它要另装或改脚本，缺浏览器不是页面问题。
+- CDP 脚本用 `CHROME_BIN` 指定浏览器；本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84），`google-chrome-stable` 已不存在。技能脚本、`tests/manual/ops/shot_ops.py` 与 `tests/manual/demo/shot.py`（自 `28d18cb`）均读 `CHROME_BIN` 并自动探测 `chromium`。
 - 命令逐字复制，不改引号、不改参数。
 - 证据写 `artifacts/verify/$RUN_ID/<feature>/`；清理只删实例与临时根，不删证据。
 - 五个服务（首页 8773 / 分层读 8771 / 日课 8772 / 操作台 8770 / 演示页 8765）都只认 `127.0.0.1` / `localhost` 的 Host 头，别的 Host 回 403。演示页直到 2026-11-12 晚才补上这道检查（`apps/demo/server.py` 的 `ALLOWED_HOST`），旧脚本里「演示页不校验 Host」的说法已作废。
 
 ## 证明与跳过
 
+- 2026-11-20 文档治理复核（`28d18cb` 之后）：实跑 `PYTHONPATH=$PWD/tests/acceptance/ops uv run --frozen python tests/manual/ops/shot_ops.py`，1440x900 与 390x844 两档六模块 + 五子页签 + 导入/分诊/删书弹窗全部通过（`CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`）；确认 `tests/manual/demo/shot.py` 自动解析 `CHROME=/usr/bin/chromium`、`README.md` 与 `apps/demo/README.md` 已统一 `uv run`。原三条已知红已关闭。
 - 2026-11-20 技能维护轮 `RUN_ID=20261120-skill`：分层读验了七视角切换（literature→history 只改本地，不发请求）、蓝图与扩展（本地 stub）、钉住与刷新持久化、选择条与按选区出图、知识地图树跳转、缩放质检、主题/字号；操作台验了六模块 + 六兼容子页签（`scripts/drive_ops_tabs.py`：`CONSOLE ERROR 0` / `overflow=false` / 1440 与 390 无溢出）、`check_ops.py` 168 项全过、新 `status.sync_delta` 与「复核并增量对齐」5 步全过；首页三卡/键盘/`/go` 直连；日课 feed/单期/坏文件/Host 403；找一段 `/api/run` 范围下推、trace DOM、stateless、导出 md；embed dry-run → run → verify → hybrid → serve。真模型额度 429（`resets in 1d 10h`）、演示页 SSE/暂停续答与多书 scope 记 `unexercised`。证据在 `artifacts/verify/20261120-skill/`（分层读为 `reading/notes.md`，其余为 DOM/JSON/截图）。
 - 2026-11-16 分层读局部复核 `RUN_ID=20261116-layered`：书架/书目/书页/章页/记录页走 curl + `--dump-dom`，并用 CDP 点了知识地图、模型设置与伴读抽屉；短章门控、stub 生成/缓存、SSE 图解/讲人话、旁批钉住/移除、Host 403 与退役路由 404 都有证据，`CONSOLE ERROR 0`。真模型未跑，模型分支由 `scripts/mock_reading_model.py` 本地 stub 驱动；容量 422 未 live 演练。证据在 `artifacts/verify/20261116-layered/layered-reads/`。下一轮跑完请就地更新这一行。
 - 2026-11-17 跨页联动复核 `RUN_ID=20261117-linkage`：`find-a-passage` 验了 `/api/books/meta`、`scope.books` 排除范围外书名、`?q=&books=&mode=trace` 不触发回答、`/go/reading?to=` 302；`layered-reads` 验了 `/open` 到章页的 302、未知 uid 404、非章节 path 转书目、arrival banner/`mark.hl-hit`/`.hit`/selection bar；`daily-lessons` 验了 `reading_url` 与 `from=daily` 链接；`library-home` 验了 `/go` 直连 302、未知 key 404、坏 `to` 400；`manage-library` 验了 `/api/search/health` 仍探测 8765、`search/start` 返回 already。503/自动拉起未 live 演练（默认端口都被常驻实例占着，不能停操作员 8770），记 `unexercised`。证据在 `artifacts/verify/20261117-linkage/`。
@@ -52,13 +53,16 @@ uv run --frozen book-corpus doctor --root "$ROOT"
 
 ## 本次已知红（2026-11-20 复核）
 
-- `tests/manual/ops/shot_ops.py` 已跟不上六模块 IA：它仍按八页签流程点 `retire`，2026-11-20 在 1440x900 死在 `RETIRE_MODAL`（`TypeError: Cannot set properties of null (setting 'value')`）。这是产品测试漂移，不是页面坏；主导航回归用本技能 `scripts/drive_ops_tabs.py`（十二个 hash，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`）。
-- `drive_ops_tabs.py` 读 `CHROME_BIN`（缺省 `/usr/bin/chromium`），自己起/关 Chromium；失败会留 `/tmp/ops-tabs-*` 配置目录，手工清。旧的 `shot_ops.py` 仍需要 `PYTHONPATH=$PWD/tests/acceptance/ops`，裸命令会 `ModuleNotFoundError: No module named 'check_ops'`。
-- `verification/chapter_path/check_paths.py` 用 `uv run --frozen python verification/chapter_path/check_paths.py`，不要传 `--root`：脚本自己造临时根，也不读 `sys.argv`。裸 `python3` 会 `ModuleNotFoundError: No module named 'bookcorpus'`。输出 `checked 128 disk states; 24 reachable by the model`，`128` = 4 种状态 × 32 个布尔组合，`24` 是 `reachable()` 认为可服务的组合，别拿 128 当可服务数。
-- 演示页传 `--root` 时会话库在 `$ROOT/工作区/检索/sessions/`；只有不传 `--root` 的旧实例才落仓库 `apps/demo/缓存/sessions/` 并照样列出操作员的会话。2026-11-14 的「不随 BOOKS_ROOT 隔离」是旧行为，别再用它判断新实例。见 [find-a-passage.md](./find-a-passage.md) 的 Gotchas。
-- `/classic` 自 `de5e792` 起发 `stateless:true`，不建会话（`apps/demo/server.py:873`），旧记录里的「经典页 turn 永远 pending」已作废。经典页的 turn 不进历史、不能导出，这是设计；要验导出或历史必须走 `/` 的会话页。
-- `tests/manual/demo/shot.py` 只等 25 秒（`tests/manual/demo/shot.py:233`）。单本回答 2026-11-15 实测 34–42 秒，流式期间脚本会先报 `answer ready=False cites=0`，但正文已在上屏；不能把 `ready=False` 当失败，慢回答另轮询 `/api/session` 或看 SSE 的 `done`。
-- 分层读已经没有读法、三档/五层、读本页或工单系统；`/reader/...`、`/api/depth/...`、`/api/jobs` 等退役路由一律 404。`--no-annotate` 只是兼容开关，不再关任何生成；模型只在划词伴读与知识地图生成时按需调用。离线可验书架、书目、书页、章页、容量/短章门控、缓存地图、旁批与日志；真生成与真伴读用 `scripts/mock_reading_model.py` 的本地 stub，或明确记 `ui-unverified`。没有环境 key 也不等于离线：`ModelClient` 还会读 `~/.pi/agent/auth.json` 的 opencode-go 登录。
+本表是全仓已知红的唯一登记处；每行声明「失效源」，对应文件改动时 `book-corpus docs check --since` 会自动点名复核。
+
+| 条目 | 现状与判据 | 失效源 |
+|---|---|---|
+| `shot_ops.py` 需 `PYTHONPATH` | `28d18cb` 已修六模块与 `RETIRE_MODAL` 并实测 `SHOT PASS`，但直接跑仍需 `PYTHONPATH=$PWD/tests/acceptance/ops`，裸命令报 `No module named 'check_ops'` | `tests/manual/ops/shot_ops.py` |
+| `drive_ops_tabs.py` 失败残留 | 读 `CHROME_BIN`（缺省 `/usr/bin/chromium`）并自启/关 Chromium；异常退出会留 `/tmp/ops-tabs-*`，需手工清 | `.agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py` |
+| `check_paths.py` 跑法与口径 | 必须 `uv run --frozen python verification/chapter_path/check_paths.py` 且不传 `--root`（脚本自建临时根，不读 `sys.argv`）；`checked 128 disk states; 24 reachable by the model` 里 24 才是可服务组合数 | `verification/chapter_path/check_paths.py` |
+| `shot.py` 25 秒等待上限 | `tests/manual/demo/shot.py` 只等 25 秒，流式单本回答常需 34–42 秒；脚本会先报 `answer ready=False cites=0` 但正文已在上屏，不能据此判失败，慢回答需轮询 `/api/session` 或看 SSE `done` | `tests/manual/demo/shot.py` |
+| 演示页默认根与 `/classic` 无状态 | 传 `--root` 时会话落 `$ROOT/工作区/检索/sessions/`，不传才落仓库；`/classic` 发 `stateless:true` 不建会话、不能导出，验导出或历史必须走 `/` | `apps/demo/server.py` |
+| 分层读退役路由与模型调用 | 读法、三档/五层、读本页与工单已退役（`/reader/...`、`/api/depth/...`、`/api/jobs` 一律 404）；`--no-annotate` 是兼容开关不关模型，无环境 key 时仍会读 `~/.pi/agent/auth.json`，离线验证一律起 `scripts/mock_reading_model.py` | `apps/reading/server.py`, `src/bookcorpus/reading/model.py` |
 
 ## 功能入口契约
 

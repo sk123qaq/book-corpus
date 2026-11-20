@@ -1,5 +1,7 @@
 # 书库检索（CLI）
 
+失效源：src/bookcorpus/scripts/qsearch.py src/bookcorpus/scripts/book_query.py src/bookcorpus/scripts/vec_search.py src/bookcorpus/scripts/book_cards.py
+
 两个命令回答「哪一段/哪一章/哪本书」：`book-corpus search` 直接给命中段，`book-corpus query`
 先做书级规划再选章。两者都只读 `build/检索/index.db` 与 `build/library.db`，不写库；混合检索
 在向量索引与 embedding 服务都可用时自动叠加，否则静默退回 BM25。

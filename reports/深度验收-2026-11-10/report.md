@@ -1,5 +1,7 @@
 # 20 章深度路径验收
 
+状态：historical · 2026-11-10
+
 - 根：`/home/colaqaq/书库`
 - 模型：`deepseek-v4.1-flash` / effort `max` / 并行 4
 - 生成时间：2026-11-10T03:29:16+00:00，总耗时 4115.4s

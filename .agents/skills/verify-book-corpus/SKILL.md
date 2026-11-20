@@ -11,6 +11,8 @@ argument-hint: "[feature] [run-id]"
 
 # 验证 book-corpus
 
+失效源：apps/*/server.py src/bookcorpus/app_links.py src/bookcorpus/scripts/layout.py
+
 这套服务是本地 stdlib Python 进程，全部读写一个「工作区」目录（`books/` + `build/` + `tables/` + `日课/`）。
 验证的前提是：**自己造工作区、自己起服务、自己杀**。操作员有一个 41G 的真实实例常驻在
 8765 / 8771 / 8772 / 8773 上，指向操作员的真实库 `~/书库`；那不是验证目标，误连会写进真库。
@@ -76,7 +78,7 @@ setsid env BOOKS_ROOT="$ROOT" \
 | 操作台 | 18770 | `统一操作台：http://127.0.0.1:18770  root=<ROOT>` | `--port 0` 会打印实际端口 |
 
 - 分层读要读 `build/library.db`，必须在 `sample` 之后起。章页按书的一级分类给阅读视角、结构蓝图与扩展动作（`features/layered-reads.md`）；不带 `--search-url` / `--home-url` 时章页的「跨书找相关」「首页」会指向 8765/8773 的常驻实例。
-- 找一段必须用 `uv run --frozen python apps/demo/server.py` 起：`trace.py` 经 `book_query.py` → `vec_search.py` 导入 `numpy`，裸 `python3` 会 `ModuleNotFoundError: No module named 'numpy'`（2026-11-20 实测；README 与 `apps/demo/README.md` 仍是旧写法）。
+- 找一段必须用 `uv run --frozen python apps/demo/server.py` 起：`trace.py` 经 `book_query.py` → `vec_search.py` 导入 `numpy`，裸 `python3` 会 `ModuleNotFoundError: No module named 'numpy'`。
 - 日课要验「有内容」时，先按 [features/daily-lessons.md](features/daily-lessons.md) 手写一期 `$ROOT/日课/<date>.json`；`book-corpus daily --dry-run` 打选书、模型/思考/工具、`----- 提示词 -----` 与提示词四块，不落盘。
 - 首页若用默认地址起（不带 `--*-url`），点卡片会拉起目标服务，拉起命令由 `src/bookcorpus/app_links.py` 生成，带目标服务的默认 `--port` 与本轮 `--root`，会话/运行记录随根隔离。默认地址都占用时，用 `--search-url` 等显式指到 18765/18771/18772/18770，`/go` 会直接 302，不触发自动拉起；要验 503 必须让某个默认端口空着，别停操作员的常驻实例。
 - 拆服务时就别并行起：同一工作区只能有一个写者（`.writer.lock`）。
@@ -113,10 +115,10 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 - **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读章页、记录页）；章页模板已移到 `assets/chapter.js`，DOM 里不再有内联模板字符串，剥不剥 `<script>` 都不会多算，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。浏览器用 `CHROME_BIN` 指定，本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84）；`google-chrome-stable` 已不存在，旧文档里「默认找 google-chrome-stable」的说法作废。
   - `"${CHROME_BIN:-/usr/bin/chromium}" --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，数 `id="btn-map"`、`id="profile-select"`、`id="wb-toolbar"`、`blk-B01`，并断言 `id="depth-panel"` 不在；模板在外链 `assets/chapter.js` 里，DOM 不含模板字符串。详细片段见 `features/layered-reads.md`。
   - 跨页定位链：先取 `/open?uid=B0001&path=...&line=...&q=...&from=search` 的 302，再 `--dump-dom` 跟随章页，断言 `id="arrival-banner"`、`mark.hl-hit`、`reader-block hit` 与 `id="selection-bar"`；检索页用 `?q=...&books=B0001&mode=trace`，断言 `trace-hit-card` 与 `/go/reading?to=` 链接，且不出现回答轮询。
-  - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败。该脚本写死 `google-chrome-stable`、不读 `CHROME_BIN`，本机已没有它；跑不了时改用 `${CHROME_BIN:-/usr/bin/chromium} --headless=new --dump-dom` 取首屏。
+  - `uv run --frozen python tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，读 `CHROME_BIN` 并自动探测 `chromium`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败（已知红与时限细节统一见 `features/README.md`）。
   - `python3 .agents/skills/verify-book-corpus/scripts/drive_sse_pause.py --base http://127.0.0.1:18765 --out "$EV/sse-pause-resume.json"`，末行 `RESUMED ... done_ok=True`，exit 0；它真打一次模型，先读完离线合同再决定跑不跑。
   - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机 11 条会话仍没有 3 轮样本，就属于这一支）。
-  - `python3 .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"`，切六个主导航与六个兼容子页签，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`；旧的 `tests/manual/ops/shot_ops.py` 仍按八页签流程，会死在 `RETIRE_MODAL`，别再用它判主导航。
+  - 操作台浏览器验收：全量交互用 `PYTHONPATH=$PWD/tests/acceptance/ops uv run --frozen python tests/manual/ops/shot_ops.py`（已适配六模块与子页签，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`）；仅查十二个导航 hash 可用 `python3 .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"`。当前已知红统一登记在 [features/README.md](features/README.md)，本文件不重复。
 - **本地模型 stub** 验分层读的 SSE 与知识地图生成：`python3 .agents/skills/verify-book-corpus/scripts/mock_reading_model.py --port 18790`，阅读服务带 `OPENCODE_GO_API_KEY=sk-mock`，并把 `READING_MODEL_URL` 指向这个 stub 起。它只返回可渲染的固定形状，不评价模型质量；逐条命令见 `features/layered-reads.md`。
 
 硬规则：
@@ -157,7 +159,7 @@ for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 
 ## Helpers
 
-启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；随技能附带两个脚本：`scripts/drive_sse_pause.py`（SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来）与 `scripts/drive_ops_tabs.py`（操作台六模块 + 六个子页签、控制台错误与 1440/390 溢出；旧 `shot_ops.py` 已跟不上六模块 IA）。
+启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；随技能附带三个脚本：`scripts/drive_sse_pause.py`（SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来）、`scripts/drive_ops_tabs.py`（操作台六模块 + 六个子页签、控制台错误与 1440/390 溢出轻量巡检）与 `scripts/mock_reading_model.py`（分层读离线模型 stub）。
 
 ## Feature map
 

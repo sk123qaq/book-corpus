@@ -88,8 +88,66 @@ def test_retired_path_exemptions(tmp_path):
     assert any("工作区/脚本/" in f for f in docfacts.check_repo(repo).fails)
     (repo / "CONTRIBUTING.md").write_text("状态：historical · 2026-01-01\n\n" + body, encoding="utf-8")
     assert docfacts.check_repo(repo).fails == []
+    # 布局说明不再豁免检查，避免 draft 文档被悄悄跳过
     (repo / "CONTRIBUTING.md").write_text("> 布局说明：历史写法。\n\n" + body, encoding="utf-8")
-    assert docfacts.check_repo(repo).fails == []
+    assert any("工作区/脚本/" in f for f in docfacts.check_repo(repo).fails)
+
+
+def test_status_scope_living_and_reports(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / "docs/sub").mkdir(parents=True)
+    (repo / "docs/sub/guide.md").write_text("# 指南\n\n状态：living · 2026-01-04\n", encoding="utf-8")
+    (repo / "reports").mkdir(parents=True)
+    (repo / "reports/audit.md").write_text("# 审计\n\n正文。\n", encoding="utf-8")
+    fails = docfacts.check_status(repo)
+    assert any("guide.md" in f and "失效源" in f for f in fails), fails
+    assert any("audit.md" in f and "缺 `状态：" in f for f in fails), fails
+
+    (repo / "docs/sub/guide.md").write_text(
+        "# 指南\n\n状态：living · 2026-01-04\n失效源：apps/demo/**\n", encoding="utf-8"
+    )
+    (repo / "reports/audit.md").write_text("# 审计\n\n状态：historical · 2026-01-04\n", encoding="utf-8")
+    docfacts.write(repo)
+    report = docfacts.check_repo(repo)
+    assert report.fails == [], report.fails
+    index_text = (repo / docfacts.INDEX).read_text(encoding="utf-8")
+    assert "[reports/audit.md](../reports/audit.md)" in index_text
+
+
+def test_changed_files_tracks_living_docs_and_known_reds(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / "README.md").write_text(
+        "# R\n\n<!-- 失效源：src/bookcorpus/cli.py -->\n\n服务在 `127.0.0.1:9999`。\n", encoding="utf-8"
+    )
+    feat_dir = repo / ".agents/skills/verify-book-corpus/features"
+    feat_dir.mkdir(parents=True)
+    (feat_dir / "layered-reads.md").write_text("# 分层读\n\n失效源：apps/reading/**\n", encoding="utf-8")
+    (feat_dir / "README.md").write_text(
+        "# 验证地图\n\n| 条目 | 现状 | 失效源 |\n|---|---|---|\n"
+        "| `shot_ops.py` 死在 RETIRE_MODAL | 漂移 | `tests/manual/ops/shot_ops.py` |\n"
+        "| `shot.py` 写死 chrome | 缺浏览器 | `tests/manual/demo/shot.py` |\n"
+        "| README 仍旧写法 | 缺 uv run | `README.md`, `apps/demo/README.md` |\n",
+        encoding="utf-8",
+    )
+    warns = docfacts.check_changed_files(
+        repo,
+        {
+            "apps/reading/server.py",
+            "tests/manual/ops/shot_ops.py",
+            "tests/manual/demo/shot.py",
+            "README.md",
+        },
+    )
+    assert any("layered-reads.md" in w for w in warns), warns
+    assert any("shot_ops.py 死在 RETIRE_MODAL" in w for w in warns), warns
+    assert any("shot.py 写死 chrome" in w for w in warns), warns
+    assert any("README 仍旧写法" in w for w in warns), warns
+    # 同一改动同时改了文档本身时，不再重复提醒该文档
+    warns_synced = docfacts.check_changed_files(
+        repo,
+        {"apps/reading/server.py", ".agents/skills/verify-book-corpus/features/layered-reads.md"},
+    )
+    assert not any("layered-reads.md" in w for w in warns_synced), warns_synced
 
 
 def test_links_skip_fences_and_workspace_paths(tmp_path):

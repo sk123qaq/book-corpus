@@ -1,5 +1,7 @@
 # 全库 embedding
 
+失效源：src/bookcorpus/scripts/embed_corpus.py
+
 `book-corpus embed` 把每本有 md 的书的章节切块，交给本机 llama-server 算向量，
 f16 追加写到工作区的 `build/检索/embeddings/`。断点续跑，同一份向量只允许一个写者。
 这是 CLI 面，没有浏览器页面。产物已由 `book_query.py` / `vec_search.py` 与演示页的混合检索消费；端到端验证见 [search-query.md](./search-query.md) 与 [find-a-passage.md](./find-a-passage.md)。

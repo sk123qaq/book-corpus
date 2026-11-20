@@ -1,0 +1,72 @@
+# 已退役的概念与路由清单。
+# tools/check_docs_sync.py 扫描全部活文档（排除 historical / superseded / implemented 冻结正文），
+# 命中下表词条且该行不含退役豁免标记时即报错。
+# 将方案或 ADR 改为 superseded 时，在同一提交里把退役名词或路由追加到此表。
+
+allow_line_markers = [
+    "退役",
+    "已作废",
+    "作废",
+    "已删",
+    "已下线",
+    "下线",
+    "旧",
+    "历史",
+    "不再",
+    "没有",
+    "移除",
+    "替代",
+    "取代",
+    "不是",
+    "404",
+]
+
+[[terms]]
+term = "视觉读本"
+retired = "2026-11-16"
+replacement = "docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md"
+
+[[terms]]
+term = "四读"
+retired = "2026-11-16"
+replacement = "docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md"
+
+[[terms]]
+term = "三档分层读"
+retired = "2026-11-16"
+replacement = "docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md"
+
+[[terms]]
+term = "读法（reading mode）"
+retired = "2026-11-16"
+replacement = "docs/design/分层读书型工具与图表框架-方案-2026-11-19.md"
+
+[[terms]]
+term = "读本页"
+retired = "2026-11-16"
+replacement = "docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md"
+
+[[terms]]
+term = "/reader/"
+retired = "2026-11-16"
+replacement = "apps/reading/server.py（现行路由 /chapter/<uid>/<n>）"
+
+[[terms]]
+term = "/api/depth/"
+retired = "2026-11-16"
+replacement = "apps/reading/server.py（现行路由 /api/chapter-map 与 /api/assist）"
+
+[[terms]]
+term = "READING_SEARCH_PROVIDER"
+retired = "2026-11-16"
+replacement = "docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md"
+
+[[terms]]
+term = "七页签"
+retired = "2026-11-19"
+replacement = "docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md"
+
+[[terms]]
+term = "八页签"
+retired = "2026-11-19"
+replacement = "docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md"

@@ -5,8 +5,9 @@
                            给了 --data-root 再比 AGENTS「现状」数字
 
 唯一约定的一处事实在这里生成：脚本清单、别名、端口、版本都从代码读，
-文档只引用，不手抄。历史文档（状态：historical）或带「布局说明」的文件
-跳过旧路径检查，正文不改。`.agents/` 不归本模块管。
+文档只引用，不手抄。历史/被替代/已落地文档（状态：historical/superseded/implemented）
+跳过旧路径检查，正文不改。`--since` 同时扫描活文档与 `.agents/skills/` 中的 `失效源：`
+声明以及带「失效源」列的已知红表。
 """
 
 from __future__ import annotations
@@ -28,18 +29,22 @@ FACTS_END = "<!-- facts:end -->"
 INDEX_START = "<!-- docs:index:start -->"
 INDEX_END = "<!-- docs:index:end -->"
 
-STATUS_VALUES = ("draft", "accepted", "proposed", "implemented", "superseded", "historical")
+STATUS_VALUES = ("living", "draft", "accepted", "proposed", "implemented", "superseded", "historical")
 STATUS_RE = re.compile(
-    r"^状态：\s*(draft|accepted|proposed|implemented|superseded|historical)\b(?:\s*[·・]\s*(\d{4}-\d{2}-\d{2}))?"
+    r"^状态：\s*(living|draft|accepted|proposed|implemented|superseded|historical)\b(?:\s*[·・]\s*(\d{4}-\d{2}-\d{2}))?"
 )
 VERIFY_RE = re.compile(r"^验收：\s*(.+)$", re.MULTILINE)
 REPLACE_RE = re.compile(r"^(?:替代|取代)：\s*(.+)$", re.MULTILINE)
-SOURCE_RE = re.compile(r"^失效源：\s*(.+)$", re.MULTILINE)
+SOURCE_RE = re.compile(r"^(?:<!--\s*)?失效源：\s*(.+?)(?:\s*-->)?$", re.MULTILINE)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)")
 PORT_RE = re.compile(r"127\.0\.0\.1:(\d{2,5})")
 LEGACY_PATH_RE = re.compile(r"(?<!书)库/(?!索引)[0-9A-Za-z_\u4e00-\u9fff]")
 FENCE_RE = re.compile(r"^\s*```")
+TABLE_SEP_RE = re.compile(r"^\s*\|?(?:\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$")
+
+#: 正文已冻结的状态：跳过旧路径检查，不要求回改历史正文。
+FROZEN_STATUSES = frozenset({"historical", "superseded", "implemented"})
 
 #: v2 已不存在的路径。分类表.csv 仍作兜底种子存在，不算退役。
 RETIRED_TOKENS = (
@@ -56,7 +61,15 @@ RETIRED_TOKENS = (
 TOKEN_ALLOW = {"AGENTS.md": {"~/文档/book-corpus-data", "book-corpus-data/"}}
 #: 这些前缀在工具仓里没有、在实例里有，链接检查不追。
 WORKSPACE_PREFIXES = ("工作区/", "books/", "build/", "tables/", "collections/", "archive/", "日课/", "缓存/")
-STATUS_ORDER = {"implemented": 0, "accepted": 1, "proposed": 2, "draft": 3, "superseded": 4, "historical": 5}
+STATUS_ORDER = {
+    "living": 0,
+    "implemented": 1,
+    "accepted": 2,
+    "proposed": 3,
+    "draft": 4,
+    "superseded": 5,
+    "historical": 6,
+}
 
 
 @dataclass
@@ -182,9 +195,71 @@ def render_facts(repo: Path) -> str:
 
 def status_docs(repo: Path) -> list[Path]:
     docs: list[Path] = []
-    for folder in ("adr", "design", "briefs"):
-        docs.extend(sorted((repo / "docs" / folder).glob("*.md")))
-    return docs
+    docs_root = repo / "docs"
+    if docs_root.exists():
+        skip_dirs = {docs_root / "reference", docs_root / "agents"}
+        for path in sorted(docs_root.rglob("*.md")):
+            if path == repo / INDEX:
+                continue
+            if any(parent in skip_dirs for parent in path.parents):
+                continue
+            docs.append(path)
+    reports_root = repo / "reports"
+    if reports_root.exists():
+        docs.extend(sorted(reports_root.rglob("*.md")))
+    return sorted(docs, key=lambda p: p.relative_to(repo).as_posix())
+
+
+def source_tracked_docs(repo: Path) -> list[Path]:
+    """返回所有可声明 `失效源：` 或已知红表的文档（含活文档与技能文档）。"""
+    seen: dict[str, Path] = {}
+    candidates: list[Path] = list(status_docs(repo))
+    candidates.extend(p for p in repo.glob("*.md") if p.is_file())
+    if (repo / "apps").exists():
+        candidates.extend((repo / "apps").glob("*/README.md"))
+    if (repo / ".agents/skills").exists():
+        candidates.extend((repo / ".agents/skills").rglob("*.md"))
+    for path in candidates:
+        rel = path.relative_to(repo).as_posix()
+        seen.setdefault(rel, path)
+    return [seen[k] for k in sorted(seen)]
+
+
+def _split_patterns(raw: str) -> list[str]:
+    return [p.strip("` ") for p in re.split(r"[,，、\s]+", raw) if p.strip(" `")]
+
+
+def parse_known_red_sources(text: str) -> list[tuple[str, list[str]]]:
+    """解析 Markdown 表格中带「失效源」列的条目，返回 [(条目名, [glob...]), ...]。"""
+    items: list[tuple[str, list[str]]] = []
+    lines = text.splitlines()
+    in_fence = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            i += 1
+            continue
+        if in_fence or "|" not in line:
+            i += 1
+            continue
+        if i + 1 < len(lines) and TABLE_SEP_RE.match(lines[i + 1]):
+            headers = [c.strip(" `*") for c in line.strip().strip("|").split("|")]
+            src_col = next((idx for idx, h in enumerate(headers) if h == "失效源"), None)
+            i += 2
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                if src_col is not None:
+                    cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                    if src_col < len(cells):
+                        patterns = _split_patterns(cells[src_col])
+                        if patterns:
+                            label = cells[0].replace("`", "").replace("*", "").strip() if cells else ""
+                            items.append((label or patterns[0], patterns))
+                i += 1
+            continue
+        i += 1
+    return items
 
 
 def parse_status(text: str, rel: str) -> DocStatus:
@@ -204,7 +279,7 @@ def parse_status(text: str, rel: str) -> DocStatus:
     doc.replaces = replace.group(1).strip() if replace else None
     source = SOURCE_RE.search(text)
     if source:
-        doc.sources = [p.strip("` ") for p in re.split(r"[,，、\s]+", source.group(1)) if p.strip(" `")]
+        doc.sources = _split_patterns(source.group(1))
     return doc
 
 
@@ -245,7 +320,8 @@ def render_index(repo: Path) -> str:
     rows.sort(key=lambda r: (STATUS_ORDER.get(r[1], 9), r[2], r[0]))
     lines = [INDEX_START, "| 文档 | 状态 | 日期 | 标题 |", "|---|---|---|---|"]
     for rel, status, date, title in rows:
-        link = Path(rel).relative_to("docs").as_posix()
+        rel_path = Path(rel)
+        link = rel_path.relative_to("docs").as_posix() if rel_path.parts[:1] == ("docs",) else f"../{rel}"
         lines.append(f"| [{rel}]({link}) | {status} | {date} | {_cell(title)} |")
     lines.append(INDEX_END)
     return "\n".join(lines) + "\n"
@@ -289,6 +365,8 @@ def check_status(repo: Path) -> list[str]:
                         problems.append(f"{rel}: 替代目标不存在：{ref}")
         if doc.status == "implemented" and not doc.verify:
             problems.append(f"{rel}: implemented 必须写 `验收：<命令或测试路径>`")
+        if doc.status == "living" and not doc.sources:
+            problems.append(f"{rel}: living 必须写 `失效源：<glob 路径...>`")
     return problems
 
 
@@ -311,9 +389,8 @@ def check_tokens(repo: Path) -> list[str]:
             continue
         rel = path.relative_to(repo).as_posix()
         text = _read(path)
-        head = "\n".join(text.splitlines()[:40])
         doc = parse_status(text, rel)
-        if doc.status == "historical" or re.search(r"布局(说明|迁移)", head):
+        if doc.status in FROZEN_STATUSES:
             continue
         allowed = TOKEN_ALLOW.get(rel, set())
         for i, line in enumerate(text.splitlines(), 1):
@@ -396,6 +473,34 @@ def _matches(rel: str, pattern: str) -> bool:
     return fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(rel, pattern.replace("**", "*"))
 
 
+def check_changed_files(repo: Path, changed: set[str]) -> list[str]:
+    """根据变更文件集合，点名命中 `失效源：` 或已知红表但未同步修改的文档。"""
+    if not changed:
+        return []
+    warns: list[str] = []
+    for path in source_tracked_docs(repo):
+        rel = path.relative_to(repo).as_posix()
+        if rel in changed:
+            continue
+        text = _read(path)
+        doc = parse_status(text, rel)
+        if doc.status in {"historical", "superseded"}:
+            continue
+        for pattern in doc.sources:
+            hits = sorted(c for c in changed if _matches(c, pattern))
+            if hits:
+                warns.append(f"{rel}: 失效源 {pattern} 有改动（{hits[0]} 等 {len(hits)} 个），复核后更新文档")
+        for item, patterns in parse_known_red_sources(text):
+            for pattern in patterns:
+                hits = sorted(c for c in changed if _matches(c, pattern))
+                if hits:
+                    warns.append(
+                        f"{rel}: 已知红「{item}」的失效源 {pattern} 有改动"
+                        f"（{hits[0]} 等 {len(hits)} 个），复核该条是否已修复"
+                    )
+    return warns
+
+
 def check_since(repo: Path, rev: str) -> tuple[list[str], list[str]]:
     try:
         out = subprocess.run(
@@ -406,17 +511,7 @@ def check_since(repo: Path, rev: str) -> tuple[list[str], list[str]]:
     if out.returncode != 0:
         return [], [f"git diff {rev} 失败，跳过 --since：{out.stderr.strip()[:160]}"]
     changed = {line.strip() for line in out.stdout.splitlines() if line.strip()}
-    warns: list[str] = []
-    for path in status_docs(repo):
-        rel = path.relative_to(repo).as_posix()
-        if rel in changed:
-            continue
-        doc = parse_status(_read(path), rel)
-        for pattern in doc.sources:
-            hits = [c for c in changed if _matches(c, pattern)]
-            if hits:
-                warns.append(f"{rel}: 失效源 {pattern} 有改动（{hits[0]} 等 {len(hits)} 个），复核后更新状态日期")
-    return warns, []
+    return check_changed_files(repo, changed), []
 
 
 def check_repo(repo: Path = REPO_ROOT, data_root: Path | None = None, since: str | None = None) -> Report:
@@ -463,7 +558,8 @@ def write(repo: Path = REPO_ROOT) -> list[str]:
     repo = Path(repo)
     facts_intro = "# 事实（生成）\n\n脚本、别名、端口与版本都从代码读；本文件由 `book-corpus docs write` 重写。\n\n"
     index_intro = (
-        "# 文档索引\n\n`docs/adr`、`docs/design`、`docs/briefs` 的状态与日期；\n由 `book-corpus docs write` 重写。\n\n"
+        "# 文档索引\n\n`docs/**`（除 `reference/`、`agents/`）与 `reports/**` 的状态与日期；\n"
+        "由 `book-corpus docs write` 重写。\n\n"
     )
     _replace_block(repo / FACTS, render_facts(repo), facts_intro, FACTS_START, FACTS_END)
     _replace_block(repo / INDEX, render_index(repo), index_intro, INDEX_START, INDEX_END)

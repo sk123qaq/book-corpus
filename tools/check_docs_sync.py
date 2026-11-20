@@ -2,8 +2,9 @@
 """补齐 `book-corpus docs check` 之外的活文档一致性校验。
 
 既有 `src/bookcorpus/docfacts.py` 已负责 `docs/reference/facts.md`、`docs/INDEX.md`、
-`docs/{adr,design,briefs}` 状态头与 `docs/` 相对链接，但明确不管 `.agents/`，
-也不校验正文中的反引号仓库路径、技能清单与 `apps/ops/CONTRACT.md` 接口契约。
+状态头、`失效源：` 与 `docs/` 相对链接；本脚本补齐 `.agents/skills/` 技能清单与链接、
+正文反引号仓库路径、`apps/ops/README.md` HTTP 路由、CLI 子命令，以及
+`docs/reference/retired.toml` 退役词守卫。
 
 用法：
     python3 tools/check_docs_sync.py [--strict]
@@ -15,6 +16,7 @@ import argparse
 import ast
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -34,7 +36,6 @@ REPO_PREFIXES = (
     "tools/",
     ".agents/",
     "docs/",
-    "showcase/",
     "pyproject.toml",
     "ruff-strict.toml",
     ".pre-commit-config.yaml",
@@ -85,10 +86,9 @@ HISTORICAL_SUBCOMMANDS = {"migrate", "remap"}
 
 
 def _is_historical(text: str) -> bool:
-    head = "\n".join(text.splitlines()[:35])
-    if re.search(r"^状态：\s*(?:historical|superseded)\b", head, re.MULTILINE):
-        return True
-    return bool(re.search(r"布局(说明|迁移)", head))
+    """只认首屏状态行（historical / superseded / implemented 冻结正文），不再认「布局说明」。"""
+    head = "\n".join(text.splitlines()[:25])
+    return bool(re.search(r"^状态：\s*(?:historical|superseded|implemented)\b", head, re.MULTILINE))
 
 
 def iter_living_docs(repo: Path) -> list[Path]:
@@ -234,17 +234,52 @@ def check_skill_links_and_ports(repo: Path) -> list[str]:
 
 
 def check_ops_contract(repo: Path) -> list[str]:
-    """核对 apps/ops/CONTRACT.md 声明的 /api/* 路由是否在 apps/ops/server.py 中存在。"""
-    contract = repo / "apps/ops/CONTRACT.md"
+    """核对 apps/ops/README.md 声明的 /api/* 路由是否在 apps/ops/server.py 中存在。"""
+    ops_readme = repo / "apps/ops/README.md"
     server = repo / "apps/ops/server.py"
-    if not contract.exists() or not server.exists():
+    if not ops_readme.exists() or not server.exists():
         return []
-    contract_routes = {r.rstrip("/") for r in CONTRACT_ROUTE_RE.findall(contract.read_text(encoding="utf-8"))}
+    doc_routes = {r.rstrip("/") for r in CONTRACT_ROUTE_RE.findall(ops_readme.read_text(encoding="utf-8"))}
     server_routes = {r.rstrip("/") for r in SERVER_ROUTE_RE.findall(server.read_text(encoding="utf-8"))}
     return [
-        f"apps/ops/CONTRACT.md 声明了路由 `{route}`，但 apps/ops/server.py 中未找到"
-        for route in sorted(contract_routes - server_routes)
+        f"apps/ops/README.md 声明了路由 `{route}`，但 apps/ops/server.py 中未找到"
+        for route in sorted(doc_routes - server_routes)
     ]
+
+
+def check_retired_terms(repo: Path) -> list[str]:
+    """核对活文档是否回流了 docs/reference/retired.toml 登记的退役概念或路由。"""
+    cfg_path = repo / "docs/reference/retired.toml"
+    if not cfg_path.exists():
+        return []
+    data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
+    allow_markers = [str(m) for m in data.get("allow_line_markers", []) if str(m)]
+    terms = [
+        (str(item["term"]), str(item.get("retired", "")), str(item.get("replacement", "")))
+        for item in data.get("terms", [])
+        if isinstance(item, dict) and item.get("term")
+    ]
+    if not terms:
+        return []
+    compiled: list[tuple[str, re.Pattern[str] | None, str, str]] = []
+    for term, retired_date, replacement in terms:
+        pat = re.compile(rf"(?<![A-Za-z_]){re.escape(term)}") if term.startswith("/") else None
+        compiled.append((term, pat, retired_date, replacement))
+    problems: list[str] = []
+    for doc in iter_living_docs(repo):
+        rel = doc.relative_to(repo).as_posix()
+        text = doc.read_text(encoding="utf-8")
+        if _is_historical(text):
+            continue
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if any(marker in line for marker in allow_markers):
+                continue
+            for term, pat, retired_date, replacement in compiled:
+                matched = bool(pat.search(line)) if pat is not None else (term in line)
+                if matched:
+                    when = f"{retired_date} 退役，" if retired_date else "已退役，"
+                    problems.append(f"{rel}:{lineno} 出现已退役词 `{term}`（{when}替代：{replacement}）")
+    return problems
 
 
 def _valid_cli_subcommands(repo: Path) -> set[str]:
@@ -286,13 +321,14 @@ def run(repo: Path = REPO_ROOT, strict: bool = False) -> int:
         ("skills", check_skills_inventory(repo)),
         ("paths", check_backtick_paths(repo)),
         ("skill-links", check_skill_links_and_ports(repo)),
-        ("ops-contract", check_ops_contract(repo)),
+        ("ops-routes", check_ops_contract(repo)),
         ("cli", check_cli_commands(repo)),
+        ("retired", check_retired_terms(repo)),
     )
     issues = [f"[{label}] {prob}" for label, probs in checks for prob in probs]
 
     if not issues:
-        print("全过：skills/paths/skill-links/ops-contract/cli")
+        print("全过：skills/paths/skill-links/ops-routes/cli/retired")
         return 0
 
     tag = "fail" if strict else "warn"
