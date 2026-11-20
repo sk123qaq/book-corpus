@@ -47,6 +47,7 @@ setsid env BOOKS_ROOT="$ROOT" \
 
 setsid env BOOKS_ROOT="$ROOT" \
   uv run --frozen python apps/reading/server.py --root "$ROOT" --port 18771 \
+  --no-start --search-url http://127.0.0.1:18765 --home-url http://127.0.0.1:18773 \
   --no-annotate --quiet >>"$ROOT/run/reading.log" 2>&1 & echo $! > "$ROOT/run/reading.pid"
 
 setsid env BOOKS_ROOT="$ROOT" \
@@ -55,7 +56,7 @@ setsid env BOOKS_ROOT="$ROOT" \
   >>"$ROOT/run/daily.log" 2>&1 & echo $! > "$ROOT/run/daily.pid"
 
 setsid env BOOKS_ROOT="$ROOT" BOOKS_EMBED_URL=http://127.0.0.1:18780 \
-  python3 apps/demo/server.py --root "$ROOT" --port 18765 \
+  uv run --frozen python apps/demo/server.py --root "$ROOT" --port 18765 \
   --reading-url http://127.0.0.1:18771 --home-url http://127.0.0.1:18773 \
   >>"$ROOT/run/demo.log" 2>&1 & echo $! > "$ROOT/run/demo.pid"
 
@@ -69,12 +70,13 @@ setsid env BOOKS_ROOT="$ROOT" \
 | 服务 | 端口 | 就绪行 | 备注 |
 |---|---|---|---|
 | 首页 | 18773 | `书库首页 http://127.0.0.1:18773 · root=<ROOT>` | 只读 `books/`、`日课/` 与仓库模板；`books.toml` 必需，缺了 exit 2。`Library` 仍优先读 `BOOKS_ROOT`，启动时显式带上，否则仓库 `.env` 的活库路径会盖掉 `--root`。可以最先起 |
-| 分层读 | 18771 | `阅读工作台 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 不带 `--quiet` 时 stderr 还会打「配置提示：…」，是云端 key 常态，不是故障。章页展示完整正文工作台与工具栏，`/api/chapter` 带知识地图与容量预检；`--no-annotate` 只是兼容开关，不关伴读/地图的模型调用。同样受 `BOOKS_ROOT` 优先影响 |
+| 分层读 | 18771 | `阅读工作台 8771 · root=<ROOT> · http://127.0.0.1:18771/` | 不带 `--quiet` 时 stderr 还会打「配置提示：…」，是云端 key 常态，不是故障。章页展示完整正文工作台、阅读视角与结构蓝图，`/api/chapter` 带知识地图、缓存工具与容量预检；`--no-annotate` 只是兼容开关，不关伴读/地图的模型调用。`--search-url` / `--home-url` 决定章页出站链接，不指到 18765/18773 就会跳操作员的 8765/8773。同样受 `BOOKS_ROOT` 优先影响 |
 | 日课 | 18772 | `http://127.0.0.1:18772` | 单行输出，没有别的就绪信号。`--reading-url` 决定 `/api/feed` 的 `reading_url` 与「在分层读打开」链接 |
 | 找一段 | 18765 | `书库检索演示：http://127.0.0.1:18765` | 接 `--root`，会话、terms、answers、related、运行记录都落 `<root>/工作区/检索/`；启动必打印 `启动恢复：N 轮…`（0 也打）。`BOOKS_RUNLOG_ROOT` 仍可单独覆盖运行记录 |
 | 操作台 | 18770 | `统一操作台：http://127.0.0.1:18770  root=<ROOT>` | `--port 0` 会打印实际端口 |
 
-- 分层读要读 `build/library.db`，必须在 `sample` 之后起。
+- 分层读要读 `build/library.db`，必须在 `sample` 之后起。章页按书的一级分类给阅读视角、结构蓝图与扩展动作（`features/layered-reads.md`）；不带 `--search-url` / `--home-url` 时章页的「跨书找相关」「首页」会指向 8765/8773 的常驻实例。
+- 找一段必须用 `uv run --frozen python apps/demo/server.py` 起：`trace.py` 经 `book_query.py` → `vec_search.py` 导入 `numpy`，裸 `python3` 会 `ModuleNotFoundError: No module named 'numpy'`（2026-11-20 实测；README 与 `apps/demo/README.md` 仍是旧写法）。
 - 日课要验「有内容」时，先按 [features/daily-lessons.md](features/daily-lessons.md) 手写一期 `$ROOT/日课/<date>.json`；`book-corpus daily --dry-run` 打选书、模型/思考/工具、`----- 提示词 -----` 与提示词四块，不落盘。
 - 首页若用默认地址起（不带 `--*-url`），点卡片会拉起目标服务，拉起命令由 `src/bookcorpus/app_links.py` 生成，带目标服务的默认 `--port` 与本轮 `--root`，会话/运行记录随根隔离。默认地址都占用时，用 `--search-url` 等显式指到 18765/18771/18772/18770，`/go` 会直接 302，不触发自动拉起；要验 503 必须让某个默认端口空着，别停操作员的常驻实例。
 - 拆服务时就别并行起：同一工作区只能有一个写者（`.writer.lock`）。
@@ -91,7 +93,7 @@ curl -s http://127.0.0.1:18765/api/health
 ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 ```
 
-- `doctor` 逐行 `ok`/`warn`。允许的 `warn` 只有两类：环境类（`PDF 环境`、`文档环境`）与云端 key 缺失（`配置·MinerU OCR`、`配置·PaddleOCR 云端 OCR`、`配置·MiMo 扩展生成`）。落在工作区、清单、账、库上的 `warn` 才是问题，先解释再继续。
+- `doctor` 逐行 `ok`/`warn`。允许的 `warn` 只有两类：环境类（`PDF 环境`、`文档环境`、`精排环境`——没有可用 GPU 时自动降级为 BM25+向量，不影响页面）与云端 key 缺失（`配置·MinerU OCR`、`配置·PaddleOCR 云端 OCR`、`配置·MiMo 扩展生成`）。落在工作区、清单、账、库上的 `warn` 才是问题，先解释再继续。
 - 演示页健康必须 `{"ok": true, "db": "ok", ...}` 且 `meta.books` 为 `1`、`meta.paras` 为 `123`。三种降级形状要分清：索引没建是 `db: missing`，索引为空是 `db: empty`，书目库没建是 `library: missing`；后两种 `meta` 里的计数可能是 `null`。`meta.embed` 必须存在，字段是 `vectors` / `server` / `ready` / `chunks` / `books` / `url`；`ready:false` 是混合检索降级，不是页面坏。
 - 端口清单里每个监听者的命令行必须带 `--root $ROOT` 或 `BOOKS_ROOT=$ROOT`；不属于本轮的监听者停：可能是上一轮没清干净。不要按 PID 比：`uv run --frozen python` 起的服务，监听的是它派生的子进程，不是 `run/*.pid` 里那个包装进程。
 - 页面根路径回 403 说明 Host 头不是 `127.0.0.1`/`localhost`，不是服务坏了。
@@ -108,13 +110,13 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 - **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
 - **直接跑脚本**验端到端：`python3 tests/acceptance/ops/check_ops.py`（末行 `168 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
 - **CLI** 验用户命令：`book-corpus embed` 在一次性根里跑，断言 stdout/stderr、退出码与磁盘产物，逐条见 `features/embed.md`；`book-corpus search` / `query` 的词法、混合、降级与书卡逐条见 `features/search-query.md`。两者都只认 `--root` 指到的一次性根；`embed` 默认 `--server` 与 `search/query` 默认 `BOOKS_EMBED_URL` 都是操作员的 18080，必须改 18780。
-- **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读章页、记录页）；章页模板已移到 `assets/chapter.js`，DOM 里不再有内联模板字符串，剥不剥 `<script>` 都不会多算，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。默认找 `google-chrome-stable`；本机有（2026-11-14 实测 155.0.8059.79），不设 `CHROME_BIN` 也能跑。`/usr/bin/chromium` 与 `/usr/bin/microsoft-edge-stable` 都不存在；要显式指定时用 `/usr/bin/google-chrome-stable` 或 `/usr/bin/microsoft-edge`。
-  - `google-chrome-stable --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，数 `id="btn-map"`、`id="wb-toolbar"`、`blk-B01`，并断言 `id="depth-panel"` 不在；模板在外链 `assets/chapter.js` 里，DOM 不含模板字符串。详细片段见 `features/layered-reads.md`。
+- **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读章页、记录页）；章页模板已移到 `assets/chapter.js`，DOM 里不再有内联模板字符串，剥不剥 `<script>` 都不会多算，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。浏览器用 `CHROME_BIN` 指定，本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84）；`google-chrome-stable` 已不存在，旧文档里「默认找 google-chrome-stable」的说法作废。
+  - `"${CHROME_BIN:-/usr/bin/chromium}" --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，数 `id="btn-map"`、`id="profile-select"`、`id="wb-toolbar"`、`blk-B01`，并断言 `id="depth-panel"` 不在；模板在外链 `assets/chapter.js` 里，DOM 不含模板字符串。详细片段见 `features/layered-reads.md`。
   - 跨页定位链：先取 `/open?uid=B0001&path=...&line=...&q=...&from=search` 的 302，再 `--dump-dom` 跟随章页，断言 `id="arrival-banner"`、`mark.hl-hit`、`reader-block hit` 与 `id="selection-bar"`；检索页用 `?q=...&books=B0001&mode=trace`，断言 `trace-hit-card` 与 `/go/reading?to=` 链接，且不出现回答轮询。
-  - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败。
+  - `python3 tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败。该脚本写死 `google-chrome-stable`、不读 `CHROME_BIN`，本机已没有它；跑不了时改用 `${CHROME_BIN:-/usr/bin/chromium} --headless=new --dump-dom` 取首屏。
   - `python3 .agents/skills/verify-book-corpus/scripts/drive_sse_pause.py --base http://127.0.0.1:18765 --out "$EV/sse-pause-resume.json"`，末行 `RESUMED ... done_ok=True`，exit 0；它真打一次模型，先读完离线合同再决定跑不跑。
   - `python3 tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机 11 条会话仍没有 3 轮样本，就属于这一支）。
-  - `PYTHONPATH=$PWD/tests/acceptance/ops python3 tests/manual/ops/shot_ops.py`，自己起临时根；末行 `SHOT PASS`、`CONSOLE ERROR 0`，八个页签含账表（2026-11-13 实测）。
+  - `python3 .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"`，切六个主导航与六个兼容子页签，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`；旧的 `tests/manual/ops/shot_ops.py` 仍按八页签流程，会死在 `RETIRE_MODAL`，别再用它判主导航。
 - **本地模型 stub** 验分层读的 SSE 与知识地图生成：`python3 .agents/skills/verify-book-corpus/scripts/mock_reading_model.py --port 18790`，阅读服务带 `OPENCODE_GO_API_KEY=sk-mock`，并把 `READING_MODEL_URL` 指向这个 stub 起。它只返回可渲染的固定形状，不评价模型质量；逐条命令见 `features/layered-reads.md`。
 
 硬规则：
@@ -155,7 +157,7 @@ for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 
 ## Helpers
 
-启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；唯一随技能附带的脚本是 `scripts/drive_sse_pause.py`，因为 SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来。
+启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；随技能附带两个脚本：`scripts/drive_sse_pause.py`（SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来）与 `scripts/drive_ops_tabs.py`（操作台六模块 + 六个子页签、控制台错误与 1440/390 溢出；旧 `shot_ops.py` 已跟不上六模块 IA）。
 
 ## Feature map
 

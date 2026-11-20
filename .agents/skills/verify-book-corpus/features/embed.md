@@ -33,7 +33,7 @@ Preconditions:
   本文实测口径是 34 块、21,690 字、16,602 token；样书或切块参数变了，数字跟着变，别当常量。
 - 需要 llama-server 与 GGUF 模型。本机只读引用操作员的中间态，不复制、不写：
   `mkdir -p "$ROOT/工作区/中间态/embed"`，再把
-  `/home/shike/书库/工作区/中间态/embed/llama-b12377` 与 `.../embed/models` 两个目录软链进
+  `~/书库/工作区/中间态/embed/llama-b12377` 与 `~/书库/工作区/中间态/embed/models` 两个目录软链进（2026-11-20 实测；旧文里的 `/home/shike/...` 是搬迁前路径）
   `$ROOT/工作区/中间态/embed/`。脚本按 `llama*/llama-server` 与 `models/*.gguf` 找；
   也可用 `BOOKS_LLAMA_SERVER`、`BOOKS_EMBED_MODEL` 指定，但日志会写到 binary 的上级目录，
   容易写进操作员的 `llama-server.log`，优先软链。
