@@ -121,7 +121,7 @@ As of 2026-11-16：1,956 本书，1,823 本有 md，133 本待拆章（125 pdf�
 ## 写入规则
 
 - 改已有书的分类、书名、保留策略改人账 `tables/ledger.db` 的 `分类` 表（操作台「账表」页，或 `lib_common.category_put`），然后跑 `build_library.py --emit-json` 重建 DB 与 `book.json`。新书不要手填人账，走 `ingest.py` 的 `add` 或 `apply`。v2 的目录名是 uid，改书名不动目录。2026-11-03 起活账 CSV 已停：旧账（分类、概念）只在 `archive/账切换-2026-11-03/` 留档，脚本只把它当缺库兜底。
-- 写文件用 tmp 加 `os.replace`。库里的旧文件与 `../books.snapshot-2026-10-18` 共享 inode，截断式原地写会同时改掉快照。
+- 写文件用 tmp 加 `os.replace`，避免中断留下半截文件，也避免原地改写破坏共享源硬链接。
 - 一个账本一个写者。人账的已有行只由人改；新行由 `ingest.py` 与 `classify_books.py --add-new` 追加，写 `tables/ledger.db`（写者走 `.writer.lock` 互斥）。脚本写产物（`library.db`、`book.json`、`tables/` 下的导出），批次机账只追加。
 - 拆章产物落 `books/<uid>/md/` 才算落地，`v_pending_md` 视图只认这个目录。
 - 把一本书移出流程：删 `md/`，`book.json` 改名 `book.json.归档`，书目录移入 `books/_冷宫/`，从人账 `tables/ledger.db` 删行，跑 `build_library.py --emit-json`，再重建 `index.db` 与 `build/views/`。步骤与理由见 `books/_冷宫/README.md`。

@@ -448,7 +448,7 @@ MinerU 两种写法都认：`MINERU_API_KEY`（可以放 `.env`）或 `~/.config
 ## 写入规则
 
 - 一个账本一个写者。人账的已有行只由人改。新行由 `ingest.py` 与 `classify_books.py --add-new` 追加，同一时刻只跑一个。
-- 写文件用 tmp 加 `os.replace`。库里的旧文件可能与快照共享 inode，截断式原地写会同时改掉快照。
+- 写文件用 tmp 加 `os.replace`，避免中断留下半截文件，也避免原地改写破坏共享源硬链接。
 - 拆章产物落 `books/<uid>/md/` 才算落地。`v_pending_md` 视图只认这个目录。
 - 把一本书移出流程：删 `md/`，`book.json` 改名 `book.json.归档`，书目录移入 `books/_冷宫/`，从 `tables/ledger.db` 删行（`book-corpus run retire_book` 会做这一步），再重建 DB、检索索引与视图。
 - 批次机账只追加。`worklist.tsv` 一旦生成就以它为准，不重写。

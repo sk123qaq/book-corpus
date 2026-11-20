@@ -392,8 +392,8 @@ def test_stage2_ledger_auto_sync_cold_settings_and_reconcile(workspace):
         ret_dir = workspace / "工作区" / "批次" / "移出-2026-11-19"
         ret_dir.mkdir(parents=True, exist_ok=True)
         (ret_dir / "retired.tsv").write_text(
-            "retired_at\tuid\ttitle\told_path\tcold_path\tsources\tsource_sha256\tformat\tbytes\tmd_chapters\tmd_bytes\treason\tsnapshot\tshared_with\tseries_docs\tnote\n"
-            "2026-11-19T10:00:00\tB9001\t退库样本\tbooks/B9001\tbooks/_冷宫/退库样本/source\t1\tabc\tepub\t100\t1\t50\t测试\tsnap\t0\t\t\n",
+            "retired_at\tuid\ttitle\told_path\tcold_path\tsources\tsource_sha256\tformat\tbytes\tmd_chapters\tmd_bytes\treason\tshared_with\tseries_docs\tnote\n"
+            "2026-11-19T10:00:00\tB9001\t退库样本\tbooks/B9001\tbooks/_冷宫/退库样本/source\t1\tabc\tepub\t100\t1\t50\t测试\t0\t\t\n",
             encoding="utf-8",
         )
         code_c, cold = _http_json(base + "/api/cold")

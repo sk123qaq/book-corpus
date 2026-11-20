@@ -70,3 +70,18 @@ replacement = "docs/design/操作台重构-事件驱动全自动同步方案-202
 term = "八页签"
 retired = "2026-11-19"
 replacement = "docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md"
+
+[[terms]]
+term = "books.snapshot-"
+retired = "2026-11-20"
+replacement = "books/_冷宫/ 与 retired.tsv（退库不再要求库外硬链接快照目录）"
+
+[[terms]]
+term = "--no-snapshot"
+retired = "2026-11-20"
+replacement = "src/bookcorpus/scripts/retire_book.py（快照门槛已移除）"
+
+[[terms]]
+term = "回滚副本"
+retired = "2026-11-20"
+replacement = "books/_冷宫/ 与 retired.tsv（操作台删书不再检查库外回滚副本）"

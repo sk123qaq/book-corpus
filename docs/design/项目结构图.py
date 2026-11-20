@@ -51,18 +51,6 @@ NODES = {
         badge="46 个 py",
         lines=["每个动作都是可重跑脚本，不手改产物", "一个账本一个写者：人写人账，脚本写产物"],
     ),
-    "L4": dict(
-        col=1,
-        y=556,
-        tone="slate",
-        title="../books.snapshot-2026-10-18",
-        badge="47916 文件",
-        lines=[
-            "L0 硬链接快照，与库里的文件共享 inode",
-            "所以库内文件走 tmp 加 os.replace",
-            "截断式原地写会同时改掉快照",
-        ],
-    ),
     "L3": dict(
         col=1,
         y=760,
@@ -212,7 +200,6 @@ EDGES = [
     ([(cx(E["S3"]), E["S3"]["y2"]), (cx(E["S3"]), E["S4"]["y"])], "路径是分类表的投影", cx(E["S3"]) + 10, 584, False),
     ([(cx(E["S4"]), E["S4"]["y2"]), (cx(E["S4"]), E["S5"]["y"])], "source/ 里的文件", cx(E["S4"]) + 10, 798, False),
     ([(E["L5"]["x"] + CW, 362), (E["S2"]["x"], 362)], "重跑", 486, 354, True),
-    ([(E["S4"]["x"], 650), (E["L4"]["x"] + CW, 650)], "搬错删错回滚", 482, 642, True),
     ([(E["S5"]["x"], 840), (E["L3"]["x"] + CW, 840)], "每批留账", 482, 832, True),
     ([(E["S3"]["x"] + CW, 462), (E["R1"]["x"], 462)], "导出", 1040, 454, False),
     ([(E["S3"]["x"] + CW, 500), (1080, 500), (1080, 583), (E["R2"]["x"], 583)], "奖项记录", 1088, 575, False),
@@ -246,7 +233,7 @@ out = [
     f'<rect width="{W}" height="{H}" fill="#ffffff"/>',
 ]
 
-for col, label in ((1, "源文件、机账、回滚副本"), (2, "人账、索引与内容"), (3, "派生产物")):
+for col, label in ((1, "源文件与机账"), (2, "人账、索引与内容"), (3, "派生产物")):
     out.append(f'<text x="{COLS[col]}" y="34" font-size="14" font-weight="700" fill="#94a3b8">{esc(label)}</text>')
 
 for pts, label, lx, ly, dashed in EDGES:
@@ -332,7 +319,7 @@ html = f"""<!doctype html>
   <span class="chip"><span class="sw" style="background:#eff6ff;border-color:#1d4ed8"></span>内容区与索引（产物）</span>
   <span class="chip"><span class="sw" style="background:#ecfeff;border-color:#0e7490"></span>转换器</span>
   <span class="chip"><span class="sw" style="background:#f5f3ff;border-color:#6d28d9"></span>派生视图与导出</span>
-  <span class="chip"><span class="sw" style="background:#f8fafc;border-color:#475569"></span>源文件、机账、快照</span>
+  <span class="chip"><span class="sw" style="background:#f8fafc;border-color:#475569"></span>源文件与机账</span>
   <span class="chip">实线是写入流向，虚线是留账、回滚或事后检查</span>
 </div>
 <div class="wrap">

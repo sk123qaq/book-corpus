@@ -1254,9 +1254,9 @@
     <div class="edge"><span class="edge-label">uid + reason</span></div>
 
     <article class="node">
-      <div class="node-head"><span class="no">02</span><h3>七层预览</h3><code>retire_book.py:387 build_preview</code></div>
+      <div class="node-head"><span class="no">02</span><h3>七层预览</h3><code>retire_book.py build_preview</code></div>
       <div class="node-body">
-        <p><code>--dry-run --json</code> 只读算出七层：书目录与要删、源文件与共享动作、人账与 DB、expand、奖项、主题/奖项视图、书目表与系列文档；另附冷宫目标、快照、blockers/warnings 与 <code>plan_hash</code>。</p>
+        <p><code>--dry-run --json</code> 只读算出七层：书目录与要删、源文件与共享动作、人账与 DB、expand、奖项、主题/奖项视图、书目表与系列文档；另附冷宫目标、blockers/warnings 与 <code>plan_hash</code>。</p>
         <div class="ann">
           <div><b>决策</b><p>预览和落地用同一份 <code>build_preview</code>：落地时重算，哈希不一致就拒绝。哈希只收决定破坏范围的字段，索引行数/时间这些派生读数不进哈希。</p></div>
           <div class="data"><b>读数</b><p>源动作按共享本数选：独占源 <code>move</code>，共享源 <code>hardlink</code>；跨文件系统才退回复制。</p></div>
@@ -1267,12 +1267,12 @@
     <div class="edge"><span class="edge-label">preview + hash</span></div>
 
     <article class="node gate">
-      <div class="node-head"><span class="no">03</span><h3>预览闸</h3><span class="gate-badge">判定</span><code>server.py:3601 api_delete_dry</code></div>
+      <div class="node-head"><span class="no">03</span><h3>预览闸</h3><span class="gate-badge">判定</span><code>server.py api_delete_dry</code></div>
       <div class="node-body">
-        <p>uid 形如 <code>B1234</code>、理由不能空；job 成功必须落 <code>dry-run.json</code> 且含 <code>plan_hash</code>。页面展示七层清单、冷宫路径、快照是否就绪。</p>
+        <p>uid 形如 <code>B1234</code>、理由不能空；job 成功必须落 <code>dry-run.json</code> 且含 <code>plan_hash</code>。页面展示七层清单与冷宫路径。</p>
         <div class="ann">
           <div><b>决策</b><p>没有哈希就不给落地按钮。预览不是「看一眼」，而是这次删除的契约；库变了，旧预览作废。</p></div>
-          <div class="data"><b>读数</b><p>快照目录 <code>books.snapshot-YYYY-MM-DD</code> 缺失会挡住 apply（<code>--no-snapshot</code> 只给测试）。</p></div>
+          <div class="data"><b>读数</b><p>预览存在 blockers 或落地时 <code>plan_hash</code> 变化都会挡住 apply。</p></div>
         </div>
       </div>
     </article>
@@ -1280,7 +1280,7 @@
     <div class="edge"><span class="edge-label">uid + hash + 勾选</span></div>
 
     <article class="node gate">
-      <div class="node-head"><span class="no">04</span><h3>落地闸</h3><span class="gate-badge">判定</span><code>server.py:3626 api_delete_apply</code></div>
+      <div class="node-head"><span class="no">04</span><h3>落地闸</h3><span class="gate-badge">判定</span><code>server.py api_delete_apply</code></div>
       <div class="node-body">
         <p>服务端要求：uid 格式、<code>confirm_uid</code> 与 uid 完全一致、<code>plan_hash</code>、理由、<code>confirm is True</code>、当前无写任务。命令带 <code>--plan-hash</code>；脚本重算预览，不一致直接拒绝。</p>
         <div class="ann">
@@ -1293,7 +1293,7 @@
     <div class="edge"><span class="edge-label">--apply</span></div>
 
     <article class="node">
-      <div class="node-head"><span class="no">05</span><h3>移出与清理</h3><code>retire_book.py:688 apply</code></div>
+      <div class="node-head"><span class="no">05</span><h3>移出与清理</h3><code>retire_book.py apply</code></div>
       <div class="node-body">
         <p>独占源移动、共享源硬链接到 <code>books/_冷宫/&lt;书名&gt;/source/</code>；删 md/html/json；删索引里的 expand、para、book_concept 行并重建 FTS；删 expand md；写 <code>retired.tsv</code> 与冷宫 README。</p>
         <div class="ann">
@@ -1306,7 +1306,7 @@
     <div class="edge"><span class="edge-label">重建</span></div>
 
     <article class="node">
-      <div class="node-head"><span class="no">06</span><h3>重建派生</h3><code>retire_book.py:640 rebuild_derived</code></div>
+      <div class="node-head"><span class="no">06</span><h3>重建派生</h3><code>retire_book.py rebuild_derived</code></div>
       <div class="node-body">
         <p>直接删索引行后依次跑 <code>build_library.py --emit-json</code>、<code>gen_book_catalog.py</code>、<code>build_views.py</code>；如果删了 html，再跑 <code>build_index.py</code>。任一步 rc 非 0 抛错，不留「删了一半还说成功」。</p>
         <div class="ann">
@@ -1321,9 +1321,9 @@
     <article class="node stop">
       <div class="node-head"><span class="no">07</span><h3>结果</h3><code>books/_冷宫/ + 工作区/批次/移出-*/</code></div>
       <div class="node-body">
-        <p>书从人账、书目库、索引、视图里消失；原书在冷宫；<code>retired.tsv</code> 记 uid、理由、时间、快照、冷宫路径。顶栏藏书与可读在下一个状态周期更新。</p>
+        <p>书从人账、书目库、索引、视图里消失；原书在冷宫；<code>retired.tsv</code> 记 uid、理由、时间与冷宫路径。顶栏藏书与可读在下一个状态周期更新。</p>
         <div class="ann">
-          <div><b>决策</b><p>删书 = 移出流程，不是物理销毁。要恢复，从冷宫 source 和 <code>retired.tsv</code> 反向操作；回滚副本与快照是最后一道保险。</p></div>
+          <div><b>决策</b><p>删书 = 移出流程，不是物理销毁。要恢复，从冷宫 source 和 <code>retired.tsv</code> 反向操作。</p></div>
           <div class="data"><b>读数</b><p>本机 <code>ops.db</code> 里删书任务不在最近 15 条；验收脚本覆盖 dry-run/apply 两条路径。</p></div>
         </div>
       </div>

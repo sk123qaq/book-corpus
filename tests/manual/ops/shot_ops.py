@@ -421,7 +421,11 @@ RETIRE_MODAL = """
   hit.click();
   for (let i = 0; i < 120 && !q('#modal .modal'); i += 1) await sleep(150);
   const opened = !!q('#modal .modal');
-  if (!opened) return {opened: false, afterInput: false, afterOk: false, checked: null, closed: false};
+  if (!opened) {
+    return {opened: false, afterInput: false, afterOk: false, checked: null, closed: false, legacyLeak: false};
+  }
+  const modalText = (q('#modal .modal') || {}).textContent || '';
+  const legacyLeak = modalText.indexOf('回滚副本') >= 0 || modalText.indexOf('books.snapshot') >= 0;
   q('#apply-uid').click();
   await sleep(80);
   const afterInput = !!q('#modal .modal');
@@ -432,7 +436,7 @@ RETIRE_MODAL = """
   if (q('#modal [data-act="close-modal"]')) q('#modal [data-act="close-modal"]').click();
   await sleep(80);
   return {opened: opened, afterInput: afterInput, afterOk: afterOk,
-          checked: checked, closed: !q('#modal .modal')};
+          checked: checked, closed: !q('#modal .modal'), legacyLeak: legacyLeak};
 })()
 """
 
@@ -710,7 +714,7 @@ COPY_LEAKS = """
   const bad = ['.py', '--', 'ops.db', 'library.db', 'book.json', 'index.db', 'ingest',
                'build_library', 'gen_book_catalog', 'ops_status', 'worklist', 'triage_final',
                'review.json', 'quota', 'conflicts', '未匹配', 'sha256', 'route', 'fixture',
-               'plan_hash', '快照', 'replaced', 'pending_review',
+               'plan_hash', '快照', '回滚副本', 'replaced', 'pending_review',
                'stub', 'S1 ', 'S2 ', 'S3 ', 'S4 ', 'S5 ', 'S6 ', 'G3 ', 'G4 ', 'G5 ',
                'G10', 'G11'];
   const allow = {
@@ -895,11 +899,25 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         )
         if not retire_uid:
             notes.append("没有可预览的 uid，跳过删书弹窗检查")
-            modal = {"opened": True, "afterInput": True, "afterOk": True, "checked": True, "closed": True}
+            modal = {
+                "opened": True,
+                "afterInput": True,
+                "afterOk": True,
+                "checked": True,
+                "closed": True,
+                "legacyLeak": False,
+            }
         else:
             modal = eval_js(cdp, RETIRE_MODAL % json.dumps(retire_uid), await_promise=True, timeout=40)
         notes.append("删书弹窗 %s" % (modal,))
-        if not (modal["opened"] and modal["afterInput"] and modal["afterOk"] and modal["checked"] and modal["closed"]):
+        if not (
+            modal["opened"]
+            and modal["afterInput"]
+            and modal["afterOk"]
+            and modal["checked"]
+            and modal["closed"]
+            and not modal.get("legacyLeak")
+        ):
             failed_tabs.append("retire-modal")
         eval_js(
             cdp,

@@ -95,7 +95,7 @@ POST /api/ledger/rows/delete           # 批量删除指定人账行（兼容入
 GET  /api/retire/drop                  # retention=drop 的待退库清单
 GET  /api/retire/search?q=             # 按 uid 或书名查删书预览对象
 POST /api/delete/dry-run               # {uid, reason}：七层退库预览与 plan_hash
-POST /api/delete/apply                 # {uid, reason, plan_hash, confirm_uid}：执行退库并清理检索层
+POST /api/delete/apply                 # {uid, reason, plan_hash, confirm_uid, confirm}：执行退库并清理检索层
 GET  /api/cold                         # 冷宫只读清单（books/_冷宫/ 与 retired.tsv）
 POST /api/sync/reconcile               # 复核并增量对齐（元数据 / FTS5 / 向量 / 体检）
 POST /api/sync/expand                  # 按需 LLM 章级主题扩展

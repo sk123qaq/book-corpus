@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""retire_book.py 的验收：临时根里两本书，一本独占源、一本共享源，外加拒绝路径。
-
-不碰真库，不重建派生数据（一律 --no-rebuild 或 --no-snapshot）。跑完删临时根。
-"""
 
 import datetime
 import hashlib
@@ -67,7 +63,7 @@ def write_book(book_dir, uid, title, source_rel, series=None):
 ROOT_PLACEHOLDER = [""]
 
 
-def make_fixture(base, with_snapshot=True):
+def make_fixture(base):
     root = os.path.join(base, "books")
     os.makedirs(root)
     ROOT_PLACEHOLDER[0] = root
@@ -158,10 +154,7 @@ def make_fixture(base, with_snapshot=True):
             "| 2026-10-21 | B1359 | 旧书 | books/B1359 | `a.epub` 1 字节 | 无 md | 试 |\n"
         )
 
-    snapshot = os.path.join(base, "books.snapshot-" + TODAY)
-    if with_snapshot:
-        os.makedirs(snapshot)
-    return root, books, unique_src, shared_src, snapshot
+    return root, books, unique_src, shared_src
 
 
 def ledger_rows(root):
@@ -198,7 +191,7 @@ def cold_json(root):
 def test_preview_and_apply():
     base = tempfile.mkdtemp(prefix="retire-a-")
     try:
-        root, books, unique_src, shared_src, snapshot = make_fixture(base, with_snapshot=True)
+        root, books, unique_src, shared_src = make_fixture(base)
         rc, out, err = run(["--uid", "B0001", "--reason", "测试移出", "--dry-run", "--json", "--root", root])
         check(rc == 0, "dry-run 退出码 0（stderr: %s）" % err.strip())
         preview = json.loads(out)
@@ -221,10 +214,13 @@ def test_preview_and_apply():
         check(preview["expand_md"].endswith("expand/B0001.md"), "expand 账文件标出")
         check(preview["cold_path"] == "books/_冷宫/独本/source", "冷宫 source 目录")
         check(src["cold"] == "books/_冷宫/独本/source/独本.epub", "冷宫里每个源的目标文件")
-        check(preview["snapshot"].endswith("books.snapshot-" + TODAY) and preview["snapshot_ok"], "快照路径与就绪态")
+        check("snapshot" not in preview and "snapshot_ok" not in preview, "预览 JSON 不再包含 snapshot 字段")
         check(len(preview["plan_hash"]) == 64, "plan_hash 是 sha256")
         check(preview["blockers"] == [], "预览没有挡住项")
         hash_a = preview["plan_hash"]
+
+        rc_txt, out_txt, _ = run(["--uid", "B0001", "--reason", "测试移出", "--dry-run", "--root", root])
+        check(rc_txt == 0 and "快照" not in out_txt and "books.snapshot" not in out_txt, "文本预览不含快照行")
 
         rc, out2, _ = run(["--uid", "B0001", "--reason", "测试移出", "--dry-run", "--json", "--root", root])
         check(json.loads(out2)["plan_hash"] == hash_a, "两次 dry-run 的 plan_hash 一致")
@@ -244,13 +240,6 @@ def test_preview_and_apply():
         check(rc == 2 and "不一致" in (out4 + err4), "哈希不一致拒绝")
         check(os.path.isfile(os.path.join(books["B0001"][0], "book.json")), "拒绝后书目录没动")
         check(len(ledger_rows(root)) == 3, "拒绝后人账没动")
-        os.rename(snapshot, snapshot + ".off")
-        rc, out5, err5 = run(
-            ["--uid", "B0001", "--reason", "测试移出", "--apply", "--plan-hash", hash_a, "--json", "--root", root]
-        )
-        check(rc == 2 and "快照" in (out5 + err5), "快照缺失拒绝")
-        check(os.path.isfile(os.path.join(books["B0001"][0], "book.json")), "快照拒绝后书目录没动")
-        os.rename(snapshot + ".off", snapshot)
 
         rc, out6, err6 = run(
             [
@@ -287,7 +276,10 @@ def test_preview_and_apply():
 
             body = list(csv.DictReader(fh, delimiter="\t"))
         check(len(body) == 1 and body[0]["uid"] == "B0001", "retired.tsv 一行一条")
-        check(len(body[0]) == 16 and body[0]["note"] == "", "retired.tsv 16 列，note 空")
+        check(
+            len(body[0]) == 15 and "snapshot" not in body[0] and body[0]["note"] == "",
+            "retired.tsv 15 列，无 snapshot 列，note 空",
+        )
         check(body[0]["shared_with"] == "0" and body[0]["format"] == "epub", "retired.tsv 记了共享本数与格式")
         with open(os.path.join(root, "books", "_冷宫", "README.md"), encoding="utf-8") as fh:
             readme = fh.read().splitlines()
@@ -346,19 +338,25 @@ def test_preview_and_apply():
         shutil.rmtree(base, ignore_errors=True)
 
 
-def test_snapshot_override():
+def test_apply_guards():
     base = tempfile.mkdtemp(prefix="retire-b-")
     try:
-        root, books, _unique, _shared, _snapshot = make_fixture(base, with_snapshot=False)
-        rc, out, _err = run(["--uid", "B0001", "--reason", "无快照测试", "--dry-run", "--json", "--root", root])
+        root, books, _unique, _shared = make_fixture(base)
+        rc, out, _err = run(["--uid", "B0001", "--reason", "守卫测试", "--dry-run", "--json", "--root", root])
         preview = json.loads(out)
-        check(preview["snapshot_ok"] is False, "没有快照时 preview 标缺失")
-        rc, out2, err2 = run(
+        check(rc == 0 and "snapshot" not in preview and "snapshot_ok" not in preview, "无外部快照目录也能正常预览")
+
+        rc_bad, _out_bad, err_bad = run(
+            ["--uid", "B0001", "--reason", "守卫测试", "--dry-run", "--no-snapshot", "--root", root]
+        )
+        check(rc_bad == 2 and "--no-snapshot" in err_bad, "已移除的 --no-snapshot 参数被 CLI 拒绝")
+
+        rc2, out2, err2 = run(
             [
                 "--uid",
                 "B0001",
                 "--reason",
-                "无快照测试",
+                "守卫测试",
                 "--apply",
                 "--plan-hash",
                 preview["plan_hash"],
@@ -368,27 +366,10 @@ def test_snapshot_override():
                 "--no-rebuild",
             ]
         )
-        check(rc == 2 and "快照" in (out2 + err2), "默认门槛拒绝无快照落地")
-        rc, out3, err3 = run(
-            [
-                "--uid",
-                "B0001",
-                "--reason",
-                "无快照测试",
-                "--apply",
-                "--plan-hash",
-                preview["plan_hash"],
-                "--json",
-                "--root",
-                root,
-                "--no-rebuild",
-                "--no-snapshot",
-            ]
-        )
-        check(rc == 0 and json.loads(out3)["ok"] is True, "--no-snapshot 放行（stderr: %s）" % err3.strip())
+        check(rc2 == 0 and json.loads(out2)["ok"] is True, "无外部快照目录直接落地成功（stderr: %s）" % err2.strip())
         check(
             os.path.isfile(os.path.join(root, "books", "_冷宫", "独本", "source", "独本.epub")),
-            "--no-snapshot 落地后冷宫有源",
+            "落地后冷宫有源",
         )
         rc, out4, _err4 = run(["--uid", "B0002", "--reason", "守卫测试", "--dry-run", "--json", "--root", root])
         preview2 = json.loads(out4)
@@ -404,7 +385,6 @@ def test_snapshot_override():
                 "--json",
                 "--root",
                 root,
-                "--no-snapshot",
             ]
         )
         check(rc == 2 and "重建派生数据" in (out5 + err5), "临时根要重建派生数据时拒绝")
@@ -439,7 +419,7 @@ def test_copy_fallback():
 
 def main():
     test_preview_and_apply()
-    test_snapshot_override()
+    test_apply_guards()
     test_copy_fallback()
     print("ALL PASS")
     return 0

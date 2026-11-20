@@ -258,12 +258,13 @@ def test_retire_cleans_fts_and_deactivates_embed(workspace):
         "测试退库",
         "--dry-run",
         "--json",
-        "--no-snapshot",
     )
     assert r_prev.returncode == 0, r_prev.stdout + r_prev.stderr
     preview = json.loads(r_prev.stdout)
     assert preview["embed_chunks"] == 1
     assert preview["index_rows"] > 0
+    assert "snapshot" not in preview
+    assert "snapshot_ok" not in preview
 
     # 执行退库
     r_app = run_cli(
@@ -278,7 +279,6 @@ def test_retire_cleans_fts_and_deactivates_embed(workspace):
         preview["plan_hash"],
         "--reason",
         "测试退库",
-        "--no-snapshot",
     )
     assert r_app.returncode == 0, r_app.stdout + r_app.stderr
 

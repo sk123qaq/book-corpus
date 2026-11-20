@@ -204,8 +204,6 @@ const SUMMARY_FIX = [
   }],
   [/plan_hash\s*与现库不一致/g, '校验码与现库不一致'],
   [/，?\s*plan_hash\s+[^\s，,；;]+(?=[；;，,]|$)/g, ''],
-  [/快照不可用，不能应用/g, '回滚副本不可用，不能移出'],
-  [/快照就绪/g, '回滚副本就绪'],
   [/，?\s*md (\d+) 章/g, '，Markdown $1 章'],
   [SPLIT_COUNT,
     (match, word, count) => SPLIT_WORD[word] + ' ' + count + ' 本'],
@@ -2069,7 +2067,6 @@ function previewModal(p) {
         <tr><th>入口</th><td class="wrap">${esc((p.views || []).join('、') || '无')}</td></tr>
         <tr><th>系列文档</th><td class="wrap">${esc((p.series_docs || []).join('、') || '无')}</td></tr>
         <tr><th>移到</th><td class="wrap mono small">${esc(p.cold_path || '')}</td></tr>
-        <tr><th>回滚副本</th><td class="wrap small">${p.snapshot_ok ? '<span class="pass">就绪</span>' : '<span class="fail">不可用</span>'} ${esc(p.snapshot || '')}</td></tr>
         <tr><th>校验码</th><td class="mono small">${esc(p.plan_hash || '')}</td></tr>
       </tbody></table></div>
       <h3>源文件</h3>
@@ -3543,7 +3540,6 @@ const actions = {
   },
 
   async 'retire-apply'(el) {
-    const p = S.preview || {};
     const uid = el.dataset.uid;
     const typed = (($('#apply-uid') || {}).value || '').trim();
     const reason = (($('#apply-reason') || {}).value || '').trim();
@@ -3554,10 +3550,6 @@ const actions = {
     }
     if (!ok) {
       toast('先勾确认框', true);
-      return;
-    }
-    if (!p.snapshot_ok) {
-      toast('回滚副本不可用，不能移出', true);
       return;
     }
     setBusy(true);

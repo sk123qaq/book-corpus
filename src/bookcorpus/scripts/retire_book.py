@@ -4,8 +4,8 @@
   book-corpus run retire_book --uid B1234 --reason "..." --dry-run --json
   book-corpus run retire_book --uid B1234 --reason "..." --plan-hash <sha> --apply
 
---dry-run 只读，算一份预览与 plan_hash。--apply 重算预览，哈希不一致、快照没就绪、
-预览有挡住项都拒绝，避免预览后库变了。冷宫只留 source/，元数据进
+--dry-run 只读，算一份预览与 plan_hash。--apply 重算预览，哈希不一致、预览有挡住项
+都拒绝，避免预览后库变了。冷宫只留 source/，元数据进
 工作区/批次/移出-<日期>/retired.tsv 与 books/_冷宫/README.md。
 """
 
@@ -44,7 +44,6 @@ RETIRED_HEADER = [
     "md_chapters",
     "md_bytes",
     "reason",
-    "snapshot",
     "shared_with",
     "series_docs",
     "note",
@@ -69,8 +68,6 @@ class Ctx:
         self.index = os.path.join(self.root, "build", "检索", "index.db")
         self.expand_dir = os.path.join(self.root, "build", "检索", "expand")
         self.series_dir = os.path.join(self.cat, "系列")
-        self.snapshot_name = "books.snapshot-" + datetime.date.today().isoformat()
-        self.snapshot = os.path.join(os.path.dirname(self.root), self.snapshot_name)
         self._source_index = None
 
     def rel(self, path):
@@ -454,8 +451,6 @@ def build_preview(ctx, uid):
         "embed_chunks": embed_chunks,
         "cold_path": cold_source_rel,
         "cold_dir": cold_rel,
-        "snapshot": ctx.rel(ctx.snapshot),
-        "snapshot_ok": os.path.isdir(ctx.snapshot),
         "blockers": blockers,
         "warnings": warnings,
     }
@@ -498,7 +493,6 @@ def format_preview(preview):
         % (preview["expand_rows"], preview["expand_md"] or "无", preview["index_rows"])
     )
     lines.append("  冷宫    %s" % preview["cold_path"])
-    lines.append("  快照    %s  %s" % (preview["snapshot"], "就绪" if preview["snapshot_ok"] else "缺失"))
     lines.append("  计划    %s" % preview["plan_hash"])
     for b in preview["blockers"]:
         lines.append("  挡住    " + b)
@@ -555,11 +549,13 @@ def append_retired_tsv(ctx, row):
             old = fh.read()
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="") as fh:
-        if old:
+        if old.strip():
             fh.write(old if old.endswith("\n") else old + "\n")
+            cols = old.splitlines()[0].split("\t")
         else:
-            fh.write("\t".join(RETIRED_HEADER) + "\n")
-        fh.write("\t".join(_cell(row.get(k, "")) for k in RETIRED_HEADER) + "\n")
+            cols = RETIRED_HEADER
+            fh.write("\t".join(cols) + "\n")
+        fh.write("\t".join(_cell(row.get(k, "")) for k in cols) + "\n")
     os.replace(tmp, path)
     return ctx.rel(path)
 
@@ -627,7 +623,7 @@ def append_cold_readme(ctx, preview, reason):
     return ctx.rel(path), True
 
 
-def retired_row(preview, reason, snapshot, note=""):
+def retired_row(preview, reason, note=""):
     sources = preview["sources"]
     return {
         "retired_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -642,7 +638,6 @@ def retired_row(preview, reason, snapshot, note=""):
         "md_chapters": preview["md_chapters"],
         "md_bytes": preview["md_bytes"],
         "reason": reason,
-        "snapshot": snapshot,
         "shared_with": ";".join(str(s["shared_with"]) for s in sources),
         "series_docs": ";".join(preview["series_docs"]),
         "note": note,
@@ -688,7 +683,7 @@ def rebuild_derived(ctx, preview, run):
     return done
 
 
-def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
+def apply(ctx, preview, reason, rebuild, run):
     uid = preview["uid"]
     book_dir = os.path.join(ctx.root, preview["book_dir"])
     cold_source = os.path.join(ctx.root, preview["cold_path"])
@@ -704,11 +699,6 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
         steps.append({"step": name, "detail": detail})
 
     try:
-        current = "snapshot"
-        if snapshot_gate and not preview["snapshot_ok"]:
-            raise RuntimeError("当天快照不在: %s" % preview["snapshot"])
-        note("snapshot", preview["snapshot"] if snapshot_gate else "跳过（--no-snapshot）")
-
         # 动文件之前先落 pending 快照：中途失败/被杀时重跑能接着补重建。
         # 不在 retired.tsv 里额外写 pending 行：一次落地只应该有一条账，
         # 失败时下面补的是带 note 的失败行（被 retired_record 忽略）。
@@ -767,16 +757,14 @@ def apply(ctx, preview, reason, snapshot_gate, rebuild, run):
         # README 成功而 TSV 失败时，重跑 README 幂等返回 added=false，再补 TSV。
         current = "records"
         readme, added = append_cold_readme(ctx, preview, reason)
-        tsv = append_retired_tsv(ctx, retired_row(preview, reason, preview["snapshot"]))
+        tsv = append_retired_tsv(ctx, retired_row(preview, reason))
         note("records", "%s；%s%s" % (readme, tsv, "" if added else "（已有该行）"))
         clear_pending(ctx, uid)
     except Exception as e:
         with contextlib.suppress(Exception):
             write_pending(ctx, preview, reason, status="failed: %s" % current)
         try:
-            tsv = append_retired_tsv(
-                ctx, retired_row(preview, reason, preview["snapshot"], note="failed at %s: %s" % (current, e))
-            )
+            tsv = append_retired_tsv(ctx, retired_row(preview, reason, note="failed at %s: %s" % (current, e)))
         except Exception:
             tsv = ""
         return {
@@ -823,7 +811,6 @@ def resume_rebuild(ctx, uid, last, rebuild, run):
     with open(pending, encoding="utf-8") as fh:
         preview = json.load(fh)
     reason = (last.get("reason") or preview.get("reason") or "").strip()
-    snapshot = preview.get("snapshot") or (last.get("snapshot") or "")
     steps.append({"step": "resume", "detail": "按 %s 续跑" % ctx.rel(pending)})
     try:
         if preview.get("uid") != uid:
@@ -845,14 +832,14 @@ def resume_rebuild(ctx, uid, last, rebuild, run):
 
         current = "records"
         readme, added = append_cold_readme(ctx, preview, reason)
-        tsv = append_retired_tsv(ctx, retired_row(preview, reason, snapshot))
+        tsv = append_retired_tsv(ctx, retired_row(preview, reason))
         steps.append({"step": "records", "detail": "%s；%s%s" % (readme, tsv, "" if added else "（已有该行）")})
         clear_pending(ctx, uid)
     except Exception as e:
         with contextlib.suppress(Exception):
             write_pending(ctx, preview, reason, status="failed: %s" % current)
         with contextlib.suppress(Exception):
-            append_retired_tsv(ctx, retired_row(preview, reason, snapshot, note="failed at %s: %s" % (current, e)))
+            append_retired_tsv(ctx, retired_row(preview, reason, note="failed at %s: %s" % (current, e)))
         return {"ok": False, "uid": uid, "failed_step": current, "error": str(e), "steps": steps, "resumed": True}
     return {
         "ok": True,
@@ -936,7 +923,6 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true", help="stdout 只打 JSON")
     ap.add_argument("--plan-hash", default="")
     ap.add_argument("--root", default=ROOT)
-    ap.add_argument("--no-snapshot", action="store_true", help="跳过快照门槛，只给测试用")
     ap.add_argument("--no-rebuild", action="store_true", help="不重建 DB、书目表、视图与 expand，留给收尾")
     args = ap.parse_args(argv)
     ctx = Ctx(args.root)
@@ -1015,8 +1001,6 @@ def main(argv=None):
             args.plan_hash,
             preview["plan_hash"],
         )
-    elif not args.no_snapshot and not preview["snapshot_ok"]:
-        refuse = "当天快照不在: %s（只给测试用 --no-snapshot）" % preview["snapshot"]
     elif not args.no_rebuild and ctx.root != ROOT:
         refuse = "--root 不是真库却要重建派生数据，测试请加 --no-rebuild"
     if refuse:
@@ -1030,7 +1014,7 @@ def main(argv=None):
         )
         return 2
 
-    report = apply(ctx, preview, args.reason, not args.no_snapshot, not args.no_rebuild, _run)
+    report = apply(ctx, preview, args.reason, not args.no_rebuild, _run)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=1))
     else:

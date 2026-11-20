@@ -235,7 +235,6 @@ preview = {"uid": uid, "title": "书 " + uid, "path": uid,
            "awards": [], "views": [], "series_docs": [], "md_chapters": 12,
            "md_bytes": 4096, "expand_rows": 3, "index_rows": 0,
            "cold_path": "books/_冷宫/" + uid + "/source/a.epub",
-           "snapshot": "../books.snapshot-2026-10-24", "snapshot_ok": True,
            "plan_hash": (opt("--plan-hash") or "hash-" + uid)}
 if "--apply" in args:
     if opt("--plan-hash") == "bad":
@@ -1524,11 +1523,19 @@ def run_checks(root, ops, port, fixture):
     dry_id = body.get("job_id")
     detail = wait_job(port, dry_id, ("succeeded", "failed"))
     job = (detail or {}).get("job") or {}
-    check("删书预览成功", job.get("state") == "succeeded", str(job.get("summary")))
+    check(
+        "删书预览成功",
+        job.get("state") == "succeeded" and "快照" not in (job.get("summary") or ""),
+        str(job.get("summary")),
+    )
     code, preview = get(port, "/api/file?path=" + urllib.request.quote("工作区/运维/jobs/%s/dry-run.json" % dry_id))
     check(
-        "预览 JSON 落盘",
-        code == 200 and preview.get("plan_hash") == "hash-B0002" and preview.get("sources"),
+        "预览 JSON 落盘且不含快照字段",
+        code == 200
+        and preview.get("plan_hash") == "hash-B0002"
+        and preview.get("sources")
+        and "snapshot" not in preview
+        and "snapshot_ok" not in preview,
         str(preview.get("plan_hash")),
     )
     code, body = post(

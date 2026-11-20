@@ -778,8 +778,6 @@ def gate_dryrun(ctx):
         blob.get("md_chapters"),
         str(blob.get("plan_hash") or "")[:12],
     )
-    if blob.get("snapshot_ok") is False:
-        summary += "；快照不可用，不能应用"
     return "succeeded", summary
 
 
