@@ -8,14 +8,15 @@ f16 追加写到工作区的 `build/检索/embeddings/`。断点续跑，同一�
 
 ## Sub-features
 
-- `embed-dry-run` 只切块：报块数、字数、估算 token 与耗时，不请求服务。
-- `embed-run` 逐本嵌入：进度行带块数、字数、token、速率与剩余时间；每本结束即提交。
-- `embed-resume` 断点续跑：章文件名、大小、mtime 不变的书跳过；`--force` 重嵌并留下垃圾块。
+- `embed-dry-run` 只切块：报块数、字数、估算 token 与耗时，不请求服务（加 `--json` 纯只读不建库）。
+- `embed-run` 逐本嵌入：进度行带块数、字数、token、速率与剩余时间；每本结束即提交，可带 `--chunk-chars` / `--overlap` 调切块参数。
+- `embed-resume` 断点续跑：章文件名、大小、mtime 不变的书跳过；`--force` 重嵌并留下垃圾块；`--sync` 对已退库或失活书标失活。
 - `embed-books` 选书：`--books B0001,B0002`、`--limit N` 缩小范围，默认全部有 md 的书。
 - `embed-status` 看库：书状态计数、有效块、垃圾块、last_id、向量体积、累计吞吐。
 - `embed-verify` 校验：向量文件长度、chunk 行数与 last_id、抽样范数、sqlite integrity。
-- `embed-serve` 前台只起 llama-server，供手工请求 `/v1/embeddings`。
-- `embed-lock` 单写者：第二个写者在拿锁时退出，退出码 1，不碰向量文件。
+- `embed-maintenance` 回收整理：`--prune` 清理失活书残块；`--compact` 压缩 `vectors.f16` 剔除垃圾块。
+- `embed-serve` 前台只起 llama-server，供手工请求 `/v1/embeddings`；搭配 `--keep-server` 可在嵌完后保留服务不关闭。
+- `embed-lock` 单写者：第二个写者在拿锁时退出，退出码 1，不碰向量文件（无引擎只跑 `--dry-run` 时仅 `--allow-missing-engine` 允许跳过引擎探测）。
 
 ## How to get to it (user POV)
 
@@ -47,24 +48,24 @@ Preconditions:
 
 - **dry-run。**
   `uv run --frozen book-corpus embed --root "$ROOT" --books B0001 --dry-run`。
-  stdout 首行是 `书 1 本，块 34，字 21,690，估算 token 14,467`，随后两行耗时估算，
+  stdout 首行是 `书 1 本，块 34，字 21,690，估算 token 14,467`，随后一行耗时估算（含首跑与后续两个参考数字），
   最后 `块数前 5：` 与 `B0001  阿Q正传  34 块 21,690 字`；退出码 0。
-  副作用：建出 `emb.db`（32KB）与 0 字节的 `vectors.f16`，不是纯只读。
+  副作用：仅 `--dry-run` 会走 `Store` 创建 `emb.db` 与 0 字节 `vectors.f16`；而加 `--json`（`--dry-run --json`）直接走 `diff_embed`，**纯只读不建任何文件**。
 - **首跑。**
   `uv run --frozen book-corpus embed --root "$ROOT" --books B0001 --server http://127.0.0.1:18780 --batch 8 --timeout 120`。
   stderr 一行 `起 llama-server pid <pid>，日志 <ROOT>/工作区/中间态/embed/llama-server.log`。
   stdout 是 `[1/1] B0001 阿Q正传 | 34 块 21,690 字 | 16,602 tok | <速率>k tok/s | 剩 0m00s`
-  与 `本次：新嵌 1 本，跳过 0 本，失败 0 本；库内 34 块，68.0 KB`；退出码 0。
+  与 `本次：新嵌 1 本，跳过 0 本，失活 0 本，失败 0 本；库内 34 块，68.0 KB`；退出码 0。
   跑完 `ss -ltn | grep ':18780 '` 应为空，服务随进程退出。
 - **断点续跑。**
-  同一条首跑命令再跑一次，stdout 只有 `本次：新嵌 0 本，跳过 1 本，失败 0 本；库内 34 块，68.0 KB`；
-  stderr 仍会打印一行起服务，因为服务在进书循环之前起。
+  同一条首跑命令再跑一次，stdout 是 `本次：新嵌 0 本，跳过 1 本，失活 0 本，失败 0 本；库内 34 块，68.0 KB`；
+  当所有选中的书都跳过时，`run_embedding` 会在 `ensure_server()` 之前直接返回 0，因此不会启动服务，`stderr` 也为空。
 - **status。**
   `uv run --frozen book-corpus embed --root "$ROOT" --status` 输出七行：
   库路径、`模型 qwen3-embed  维度 1024  dtype float16`、`书 done=1`、
   `有效块 34  垃圾块 0  last_id 34`、`正文字符 21,690  向量 68.0 KB`、
   `累计 16,602 token / 0m01s，8569 tok/s`，末行 `估算 token 14,467`；退出码 0。
-  `累计` 只除嵌书耗时，不含起服务与切块，小样本的 tok/s 不能当整库吞吐。
+  `累计` 记录 `seconds` 不含 `ensure_server()` 启动耗时，但包含每本书的切块、嵌入调用与写 DB/`vectors.f16` 时间，小样本的 tok/s 不能当整库吞吐。
 - **verify。**
   `uv run --frozen book-corpus embed --root "$ROOT" --verify` 输出
   `全过：34 块，1 本 done，68.0 KB 向量，抽样 32 条正常`；退出码 0。
@@ -85,21 +86,17 @@ Preconditions:
 
 ## Gotchas
 
-- 不传 `--server` 时默认 `http://127.0.0.1:18080`。操作员的服务正健康，脚本会复用它并在跑完后
-  **不关**，验证看起来「通过」但用的不是本轮的库。本技能一律传 18780。
+- 不传 `--server` 时默认 `os.environ.get("BOOKS_EMBED_URL", "http://127.0.0.1:18080")`。操作员的服务正健康，脚本会复用它并在跑完后**不关**，验证看起来「通过」但用的不是本轮的库。本技能一律显式传 `--server` / `BOOKS_EMBED_URL` 指到 18780。
 - 模型和 binary 用软链进一次性根；用环境变量指到 `~/书库` 时，`ensure_server` 把日志追加到
   binary 上级目录，会写进操作员的 `llama-server.log`。
-- dry-run 会建库（`emb.db` 与空 `vectors.f16`），因为 `main` 先构造 Store 再分派。别在「干净库」
-  断言里把它当没发生。
+- 不带 `--json` 的 `--dry-run` 会建库（`emb.db` 与空 `vectors.f16`），而 `--dry-run --json` 走 `diff_embed` 不写任何文件；别在「干净库」断言里把 `--dry-run` 当成纯只读。且刚跑完 `--dry-run` 的空库（`last_id=0`）直接跑 `--verify` 会因 `chunk` 表 `max(id)` 为 `None` 失败退出 1（`chunk 最大 id None != last_id 0`）。
 - `--force` 不删旧向量，只把旧 chunk 标 `active=0`；`--status` 的 `垃圾块` 才会涨。
   `--verify` 只查文件长度与 id 对账，**不会**把垃圾块报成问题，设计文档里那句是错的。
 - 向量是否 L2 归一化取决于 llama-server 默认行为，脚本没有 `--embd-normalize`，也不自己归一化；
   `--verify` 只拒绝范数小于 `1e-6` 的向量，不能证明单位范数。
 - 只验接口不等于验用户路径：这里用户路径就是命令本身，断言必须看 stdout/stderr 与退出码，
   不能只看 `emb.db` 里有行。
-- 只跑跳过时也会先起一次服务。2026-11-14 首次实测留下过一个加载中的 `llama-server`，
-  一分钟后仍活着；复跑一次没重现。每轮收尾都查 `ss -ltnp | grep ':18780 '` 与
-  `pgrep -af "$ROOT"`，有残留就按 pid 杀，再删根。
-- `--verify` 的「块数」只数全部 chunk，不区分 active；`有效块` 与 `垃圾块` 只在 `--status` 里。
+- 当全部书籍都跳过时，`run_embedding` 直接在起服务之前返回 0；但一旦有书重嵌、或中断/复用旧服务时仍可能有残留。每轮收尾都查 `ss -ltnp | grep ':18780 '` 与 `pgrep -af "$ROOT"`，有残留就按 pid 杀，再删根。
+- `--verify` 首行打印的是有效块数（`s['chunks']`，即 `active=1`），而内部对账会把 `chunk` 表全部行（含 `active=0` 垃圾块）与 `last_id`、`vectors.f16` 字节数比对；区分垃圾块细节仍看 `--status`。
 - 产物已有消费者：`vec_search.py` 读 `emb.db` 与 `vectors.f16`，`book_query.py` 用它做书/章/段三层 RRF，演示页用 `plan.fusion` 暴露是否命中。
   验证分两层：embed 只证「向量落盘且自洽」，语义召回与降级走 [search-query.md](./search-query.md) 或 `tests/test_vec_search_hybrid.py`。

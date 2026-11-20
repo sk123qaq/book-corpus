@@ -18,6 +18,7 @@ import argparse
 import base64
 import json
 import os
+import shutil
 import socket
 import struct
 import subprocess
@@ -226,6 +227,7 @@ def main() -> int:
             proc.wait(5)
         except Exception:
             proc.kill()
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 if __name__ == "__main__":
