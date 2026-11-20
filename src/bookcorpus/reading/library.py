@@ -6,6 +6,7 @@ import json
 import os
 import re
 import threading
+import time
 import unicodedata
 
 from ..scripts.layout import Layout, find_root
@@ -18,6 +19,17 @@ CLOTHES = ("#1E3A36", "#2C4056", "#6B2B2B", "#A87A3E", "#4A5839", "#3F4E5A", "#5
 # 叠加层默认关闭：不读旧数据仓的叠加层，需要时由调用方显式传 overlay_root。
 # 需要时由调用方显式传 overlay_root，不读环境变量。
 DEFAULT_OVERLAY = ""
+DEFAULT_SHELF_TTL = 2.0
+
+
+def _shelf_ttl():
+    raw = os.environ.get("READING_SHELF_TTL", "").strip()
+    if not raw:
+        return DEFAULT_SHELF_TTL
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return DEFAULT_SHELF_TTL
 
 
 def _nkey(text):
@@ -54,6 +66,9 @@ class Library:
         self.overlay_root = overlay_root
         self._books = None
         self._books_lock = threading.Lock()
+        self._books_sig = None
+        self._books_checked = 0.0
+        self._books_ttl = _shelf_ttl()
         self._index = None
         self._index_lock = threading.Lock()
         self._chapters = {}
@@ -103,23 +118,67 @@ class Library:
             "dir": self.layout.book(uid),
         }
 
+    def _books_signature(self):
+        """书架签名：每本 book.json 与 md 目录的 stat。"""
+        try:
+            entries = list(os.scandir(self.layout.books))
+        except OSError:
+            return None
+        parts = []
+        for entry in entries:
+            if not entry.is_dir() or entry.name.startswith("_"):
+                continue
+            try:
+                meta = os.stat(os.path.join(entry.path, "book.json"))
+                try:
+                    md = os.stat(os.path.join(entry.path, "md"))
+                    md_sig = (md.st_mtime_ns, md.st_ino)
+                except OSError:
+                    md_sig = (0, 0)
+            except OSError:
+                continue
+            parts.append((entry.name, md_sig, meta.st_mtime_ns, meta.st_size))
+        return tuple(sorted(parts))
+
+    def _shelf_outdated(self):
+        return time.monotonic() - self._books_checked >= self._books_ttl
+
     def _load_books(self):
-        if self._books is not None:
-            return self._books
+        cached = self._books
+        if cached is not None and not self._shelf_outdated():
+            return cached
         with self._books_lock:
-            if self._books is not None:
+            if self._books is not None and not self._shelf_outdated():
                 return self._books
-            stats = self._shelf_index().book_stats()
-            books = []
-            for path in sorted(glob.glob(os.path.join(self.layout.books, "*", "book.json"))):
-                uid = os.path.basename(os.path.dirname(path))
-                if uid.startswith("_"):
-                    continue
-                entry = self._book_entry(uid, stats.get(uid))
-                if entry is not None:
-                    books.append(entry)
-            self._books = books
-            return books
+            signature = self._books_signature()
+            if self._books is not None and (signature is None or signature == self._books_sig):
+                self._books_checked = time.monotonic()
+                return self._books
+            self._books_checked = time.monotonic()
+        books = self._rebuild_books()
+        with self._books_lock:
+            if books is not None:
+                self._books = books
+                self._books_sig = signature
+            self._books_checked = time.monotonic()
+            return self._books if self._books is not None else []
+
+    def _rebuild_books(self):
+        """重建书单；索引被别的写者占着时返回 None，旧列表与旧签名都留着。"""
+        index = self._shelf_index()
+        result = index.ensure()
+        if result.get("mode") == "busy":
+            return None
+        stats = index.book_stats()
+        books = []
+        for path in sorted(glob.glob(os.path.join(self.layout.books, "*", "book.json"))):
+            uid = os.path.basename(os.path.dirname(path))
+            if uid.startswith("_"):
+                continue
+            entry = self._book_entry(uid, stats.get(uid))
+            if entry is not None:
+                books.append(entry)
+        return books
 
     def books(self):
         return self._load_books()

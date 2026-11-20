@@ -422,7 +422,7 @@ OPENCODE_GO_API_KEY=sk-...
 
 不填也行，只要 pi 里 `/login` 选过 `opencode-go`——项目会读 `~/.pi/agent/auth.json`。
 `READING_MODEL_NAME`、`READING_MODEL_URL`、`READING_MODEL_EFFORT`、`READING_MODEL_TIMEOUT`、
-`READING_MODEL_MAX_TOKENS` 可以覆盖默认模型与端点。
+`READING_MODEL_MAX_TOKENS` 可以覆盖默认模型与端点。`READING_SHELF_TTL` 控制分层读与首页核对书架的间隔，默认 2 秒，`0` 表示每次请求都核，只用于调试。
 
 
 ### OCR 与扩展生成的 key

@@ -9,7 +9,7 @@
 
 ## Sub-features
 
-- `read-shelf` 书架：`/` 调 `/api/shelf`，渲染书墙、目录表与「最近阅读」。统计是 `readable` / `chapters` / `chars` / `packs` / `notes` / `maps`；`packs` 现在指有旁批或有知识地图的章数，不是旧读本包。`recent` 取最近 40 条操作按 `(uid,n)` 去重、最多 4 条；没有操作时回退到第一本书的第一章，动作写作「开始阅读」、`updated_at: null`。
+- `read-shelf` 书架：`/` 调 `/api/shelf`，渲染书墙、目录表与「最近阅读」。统计是 `readable` / `chapters` / `chars` / `packs` / `notes` / `maps`；`packs` 现在指有旁批或有知识地图的章数，不是旧读本包。`recent` 取最近 40 条操作按 `(uid,n)` 去重、最多 4 条；没有操作时回退到第一本书的第一章，动作写作「开始阅读」、`updated_at: null`。书架按 `READING_SHELF_TTL` 重新核对盘上，默认 2 秒；新落地或删掉的书自动出现或消失，不用重启，`0` 只用于调试。
 - `read-catalog` 书目与搜索：`/catalog` 调 `/api/catalog?q=&subject=`，按书名、作者、分类、章名搜；结果分书、元数据、章节、作者几组。`q` 为空时 `metadata` / `chapters` / `authors` / `subjects` 都是空数组，只靠 `subject` 也能筛。页内写明「段落级全文检索不在本期」，别拿它当全库检索。
 - `read-book` 书页：`/book/<uid>` 调 `/api/book/<uid>`，首屏是封面、作者、章数/字数、分类与「翻开第 NN 章」，下面是章表（每章分钟数、是否有导图、旁批数、直读全文）和「随文阅读工具」。书页没有阅读视角选择器，`/api/book` 也没有 mode 字段；阅读视角选择器只在章页（见 `read-profile`）。未知 uid 返回 404。
 - `read-open` 跨页定位：`GET /open?uid=<uid>&path=<books/.../md/...>&line=<int>&q=<引用>&from=search|daily|reading&query=<原问题>` 解析到章，302 到 `/chapter/<uid>/<nn>?from=...&query=...&hl=...&blocks=B01#blk-B01`；`q` 用来高亮，`line` 用来选块；`path` 可省略（落本书第一章），给了就必须是本书 `md/` 下的章节文件。`line` 不是纯数字时静默当没给，不报 400。未知 uid 404；非章节 path 或 `read_chapter` 返回 `None` 时均 302 到 `/book/<uid>?notice=...`（`locator.py:208-210`），不返 404。

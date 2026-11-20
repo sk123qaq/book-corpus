@@ -7,7 +7,7 @@
 
 ## Sub-features
 
-- `home-open` 打开即用：只读 `books/`、`日课/` 与仓库模板，不依赖别的服务在线；`books.toml` 必需。根解析分两步：`apps/home/server.py` 先用 `envfile.resolve_books_root(args.root)`（显式 `--root` > `BOOKS_ROOT` > `$BOOK_CORPUS_ENV`/仓库 `.env`，不再回退 `~/书库` 或已忽略的旧环境变量）；`Library(root)` 再调用 `find_root(root, ignore_env=True)`，因此显式 `--root` 优先级高于 `BOOKS_ROOT`。
+- `home-open` 打开即用：只读 `books/`、`日课/` 与仓库模板，不依赖别的服务在线；`books.toml` 必需。根解析分两步：`apps/home/server.py` 先用 `envfile.resolve_books_root(args.root)`（显式 `--root` > `BOOKS_ROOT` > `$BOOK_CORPUS_ENV`/仓库 `.env`，不再回退 `~/书库` 或已忽略的旧环境变量）；`Library(root)` 再调用 `find_root(root, ignore_env=True)`，因此显式 `--root` 优先级高于 `BOOKS_ROOT`。书架统计与书目直接来自 `Library.books()`，按 `READING_SHELF_TTL` 重新核对盘上（默认 2 秒），新落地或删掉的书不重启首页就会跟。
 - `home-entry-search` 「找一段」卡。
 - `home-entry-reading` 「翻开书」卡。
 - `home-entry-daily` 「往期日课」卡。
