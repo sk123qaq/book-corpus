@@ -1146,6 +1146,8 @@ class Runner:
 
     def _release(self, job_id, spec):
         with self.cv:
+            if job_id not in self.active:
+                return
             self.active.pop(job_id, None)
             if spec.get("readonly"):
                 self.active_read = max(0, self.active_read - 1)
@@ -1157,6 +1159,22 @@ class Runner:
         job_id = job["id"]
         spec = KINDS.get(job["kind"]) or {"readonly": False, "gate": gate_rc}
         lock_fd = None
+
+        def release():
+            nonlocal lock_fd
+            if lock_fd is not None:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                    os.close(lock_fd)
+                except OSError:
+                    pass
+                lock_fd = None
+            with self.cv:
+                self.procs.pop(job_id, None)
+            self._release(job_id, spec)
+            with suppress(OSError):
+                os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
+
         try:
             commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
             lock_fd = os.open(self._lock_file(self.env, spec), os.O_CREAT | os.O_RDWR, 0o644)
@@ -1165,31 +1183,24 @@ class Runner:
             # 不能拿内存集合当唯一依据，更不能把 cancelled 回写成 running
             state = (self.store.get(job_id) or {}).get("state")
             if state == "cancelled" or job_id in self.cancels:
-                self.store.update(job_id, state="cancelled", ended=now_iso(), summary="已取消（拿锁前）")
                 self.cancels.discard(job_id)
+                release()
+                self.store.update(job_id, state="cancelled", ended=now_iso(), summary="已取消（拿锁前）")
                 return
             self.store.update(job_id, state="running", started=now_iso(), summary="")
             self._log(job_id, "=== %s %s %s\n" % (job_id, job["kind"], job["title"]), truncate=True)
             rcs = self._play(job_id, commands)
-            self._finalize(job_id, job, commands, rcs, spec=spec)
+            self._finalize(job_id, job, commands, rcs, spec=spec, release=release)
         except Exception:
             detail = traceback.format_exc(limit=4)
-            self._log(job_id, "[服务异常]\n" + detail + "\n")
+            with suppress(OSError):
+                self._log(job_id, "[服务异常]\n" + detail + "\n")
+            release()
             self.store.update(
                 job_id, state="failed", ended=now_iso(), summary="服务端异常：" + detail.strip().splitlines()[-1][:160]
             )
         finally:
-            if lock_fd is not None:
-                try:
-                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                    os.close(lock_fd)
-                except OSError:
-                    pass
-            with self.cv:
-                self.procs.pop(job_id, None)
-            self._release(job_id, spec)
-            with suppress(OSError):
-                os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
+            release()
 
     def _play(self, job_id, commands, start=0, rcs=None):
         """从 start 开始按顺序跑命令，逐步记状态；rcs 里是前面几步已经知道的退出码。"""
@@ -1227,7 +1238,9 @@ class Runner:
         return text[start:] if nxt < 0 else text[start:nxt]
 
     def _log(self, job_id, text, truncate=False):
-        path = os.path.join(self.env.job_dir(job_id), "log.txt")
+        job_dir = self.env.job_dir(job_id)
+        os.makedirs(job_dir, exist_ok=True)
+        path = os.path.join(job_dir, "log.txt")
         with open(path, "wb" if truncate else "ab") as fh:
             fh.write(text.encode("utf-8", "replace"))
 
@@ -1277,15 +1290,17 @@ class Runner:
             return app_ref
         return None
 
-    def _finalize(self, job_id, job, commands, rcs, spec=None):
+    def _finalize(self, job_id, job, commands, rcs, spec=None, release=None):
         spec = spec or KINDS.get(job["kind"]) or {"gate": gate_rc}
         current = (self.store.get(job_id) or {}).get("state")
         if job_id in self.cancels or current == "cancelled":
             # 取消赢过门槛：进程被 SIGTERM 打断时产物本来就残缺，不能因为它
             # 「读起来像失败/成功」就把 cancelled 覆盖掉
             self.cancels.discard(job_id)
-            self.store.update(job_id, state="cancelled", ended=now_iso(), summary="已取消")
             self._log(job_id, "\n---- 已取消 ----\n")
+            if release is not None:
+                release()
+            self.store.update(job_id, state="cancelled", ended=now_iso(), summary="已取消")
             return
         ctx = Ctx(self.env, job, commands, rcs)
         try:
@@ -1301,9 +1316,6 @@ class Runner:
             # 只要 audit 步跑过（即便后续 verify/doc 失败），先同步刷新 last-audit.json，
             # 既不丢体检结果，也避免之后页面状态刷新与后台线程双跑 audit_state。
             self._refresh_audit(job_id)
-        self.store.update(
-            job_id, state=state, ended=now_iso(), summary=summary, exit_code=(rcs[-1][1] if rcs else None)
-        )
         self._log(job_id, "\n---- 判定 %s：%s ----\n" % (state, summary))
         self._resolve_reviews(job_id, job, state)
         app_ref = self._app()
@@ -1335,6 +1347,13 @@ class Runner:
         ):
             if app_ref is not None:
                 app_ref.schedule_audit_refresh()
+        # 先释放写锁与 active 槽位再把终态写入 DB：任何轮询者一旦看见 succeeded/failed，
+        # 紧接着发起的下一个写请求绝不会因 active_write 尚未减零而撞 409。
+        if release is not None:
+            release()
+        self.store.update(
+            job_id, state=state, ended=now_iso(), summary=summary, exit_code=(rcs[-1][1] if rcs else None)
+        )
         if app_ref is not None and not spec.get("readonly"):
             app_ref.invalidate_status()
 
@@ -1580,15 +1599,23 @@ class Runner:
         """等接管来的进程退出，再把剩下的步骤跑完，最后按产物收尾。"""
         row = self.store.get(job_id) or {}
         spec = KINDS.get(row.get("kind")) or {}
+
+        def release():
+            self._release(job_id, spec)
+            with suppress(OSError):
+                os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
+
         try:
             while pid_alive(pid):
                 if job_id in self.cancels:
                     self._terminate(job_id, pid)
                 time.sleep(0.15)
-            self.resume(job_id, spec)
+            self.resume(job_id, spec, release=release)
         except Exception:
             detail = traceback.format_exc(limit=4)
-            self._log(job_id, "[接管异常]\n" + detail + "\n")
+            with suppress(OSError):
+                self._log(job_id, "[接管异常]\n" + detail + "\n")
+            release()
             self.store.update(
                 job_id,
                 state="failed",
@@ -1596,35 +1623,41 @@ class Runner:
                 summary="接管后收尾失败：" + detail.strip().splitlines()[-1][:160],
             )
         finally:
-            self._release(job_id, spec)
-            with suppress(OSError):
-                os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
+            release()
 
-    def resume(self, job_id, spec):
+    def resume(self, job_id, spec, release=None):
         """接管后的续跑：跑到一半的那一步没人知道退出码，记 unknown；剩下的命令接着跑。"""
         job = self.store.get(job_id)
         if not job:
             return
         lock_fd = None
-        try:
-            commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
-            lock_fd = os.open(self._lock_file(self.env, spec), os.O_CREAT | os.O_RDWR, 0o644)
-            fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly") else fcntl.LOCK_EX)
-            rcs, start = self._adopted_rcs(job_id)
-            if job_id in self.cancels:
-                self._finalize(job_id, job, commands, rcs, spec=spec or None)
-                return
-            if start < len(commands):
-                self._log(job_id, "\n[接管] 服务重启过，剩下的 %d 步接着跑\n" % (len(commands) - start))
-            rcs = self._play(job_id, commands, start, rcs)
-            self._finalize(job_id, job, commands, rcs, spec=spec or None)
-        finally:
+
+        def release_all():
+            nonlocal lock_fd
             if lock_fd is not None:
                 try:
                     fcntl.flock(lock_fd, fcntl.LOCK_UN)
                     os.close(lock_fd)
                 except OSError:
                     pass
+                lock_fd = None
+            if release is not None:
+                release()
+
+        try:
+            commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
+            lock_fd = os.open(self._lock_file(self.env, spec), os.O_CREAT | os.O_RDWR, 0o644)
+            fcntl.flock(lock_fd, fcntl.LOCK_SH if spec.get("readonly") else fcntl.LOCK_EX)
+            rcs, start = self._adopted_rcs(job_id)
+            if job_id in self.cancels:
+                self._finalize(job_id, job, commands, rcs, spec=spec or None, release=release_all)
+                return
+            if start < len(commands):
+                self._log(job_id, "\n[接管] 服务重启过，剩下的 %d 步接着跑\n" % (len(commands) - start))
+            rcs = self._play(job_id, commands, start, rcs)
+            self._finalize(job_id, job, commands, rcs, spec=spec or None, release=release_all)
+        finally:
+            release_all()
 
     def _adopted_rcs(self, job_id):
         """接管前那几步的结果从步骤表还原；跑到一半的那步记 None，没人知道它的退出码。"""

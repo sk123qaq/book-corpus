@@ -70,7 +70,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/bin/pi"
           echo "PI_BIN=$RUNNER_TEMP/bin/pi" >> "$GITHUB_ENV"
       - name: 单元与端到端
-        run: uv run --frozen pytest -m "not real_corpus"
+        run: uv run --frozen pytest -o addopts="" -n auto --dist worksteal -m "not real_corpus" --durations=10
       - name: 命令行冒烟
         # 不在冒烟里建 工作区/.venv-pdf 与 .venv-docs：要联网、要几十秒，与冒烟无关。
         env:

@@ -6,6 +6,31 @@ import sys
 
 import pytest
 
+_GUARDED_ENV_PREFIXES = ("BOOKS_", "BOOK_CORPUS_", "READING_", "PI_")
+
+
+def _guarded_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if k.startswith(_GUARDED_ENV_PREFIXES)}
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    item._guarded_env_before = _guarded_env()
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_teardown(item, nextitem):
+    yield
+    before = getattr(item, "_guarded_env_before", None)
+    if before is None:
+        return
+    after = _guarded_env()
+    if after != before:
+        changed = {
+            k: (before.get(k), after.get(k)) for k in sorted(set(before) | set(after)) if before.get(k) != after.get(k)
+        }
+        raise AssertionError(f"测试 {item.nodeid} 泄漏了受保护环境变量（请改用 monkeypatch）：{changed}")
+
 
 @pytest.fixture(autouse=True)
 def _isolate_user_dotenv(tmp_path, monkeypatch):
