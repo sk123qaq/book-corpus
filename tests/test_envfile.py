@@ -170,3 +170,16 @@ def test_all_app_servers_reject_missing_books_root_without_fallback(tmp_path, sc
     )
     assert proc.returncode != 0
     assert "BOOKS_ROOT" in (proc.stdout + proc.stderr)
+
+
+def test_env_guard_allows_monkeypatch_and_catches_direct_os_environ(tmp_path, monkeypatch):
+    """monkeypatch 改受保护前缀不会触发泄漏告警；resolve_books_root 写 os.environ 后也应自动清理。"""
+    env_path = tmp_path / "guard.env"
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    env_path.write_text(f"BOOKS_ROOT={ws}\n", encoding="utf-8")
+
+    monkeypatch.setenv("BOOK_CORPUS_ENV", str(env_path))
+    monkeypatch.setenv("BOOKS_EXTRA_FLAG", "temp")
+    assert envfile.resolve_books_root() == ws.resolve()
+    assert os.environ["BOOKS_ROOT"] == str(ws)
