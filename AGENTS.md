@@ -156,7 +156,7 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
-| 任何代码（全部提交闸门） | `uv run --frozen pre-commit run --all-files` | 全部 `Passed`；CI 的 `lint` 与 `docs` job 跑同一套 |
+| 任何代码（全部提交闸门） | `uv run --frozen pre-commit run --all-files` | 全部 `Passed`；CI 的 `checks` job 跑同一套（含 JS 语法检查）；推送前建议安装 `pre-push` 钩子自动跑并行快测 |
 | 文档与本机数字对账 | `uv run --frozen book-corpus docs check --data-root ~/书库 --since HEAD` | 末行「全过」且无未处理 `[since]` 警告；改端口/脚本后先 `book-corpus docs write` |
 | 活文档一致性与退役词 | `uv run --frozen python tools/check_docs_sync.py --strict` | 末行「全过」 |
 | 人账 `tables/ledger.db` | `book-corpus library --emit-json` | 输出里 `conflicts=0`，`books` 等于人账行数 |
