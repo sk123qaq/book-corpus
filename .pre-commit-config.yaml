@@ -1,9 +1,9 @@
-# pre-commit：提交前自动跑 ruff。
+# pre-commit / pre-push：提交前跑代码与文档检查，推送前自动跑并行快测。
 #
 # 全员用同一个 gate，所以 hook 走本地 venv（uv run），不需要联网拉 hook 环境：
-#   uv sync && uv run pre-commit install
+#   uv sync && uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 #
-# 七道闸：
+# 提交前八道闸（pre-commit）：
 #   1. ruff-check   —— 全仓规则，等于 `ruff check`，自动修能修的（修过即失败，重跑即可）
 #   2. ruff-format  —— 格式化，等于 `ruff format`
 #   3. ruff-strict  —— 「新代码」严格档：不在 .ruff-legacy-files.txt 里的文件额外禁止
@@ -14,10 +14,16 @@
 #                      ops 路由、CLI 子命令与退役词守卫，见 tools/check_docs_sync.py
 #   7. docs-coupling —— 代码→文档失效源耦合提醒：暂存区代码命中某文档的 `失效源：`
 #                      但文档未一起暂存时打印提醒（先警告不阻断），见 tools/check_docs_coupling.py
+#   8. js-syntax    —— 前端脚本 `node --check` 语法校验
 #
-# CI（.github/workflows/ci.yml）的 lint job 跑前四道，docs job 跑第 5、6 道；本地不通、线上必红。
+# 推送前（pre-push）：
+#   9. pytest-fast  —— 离线并行快测（`-n auto --dist worksteal -m "not real_corpus" --maxfail=5`）
+#
+# CI（.github/workflows/ci.yml）的 checks job 跑第 1–6、8 道；test job 跑第 9 道全量与冒烟；本地不通、线上必红。
 #
 # 紧急绕过：SKIP=ruff-strict git commit -m "..."（只跳过严格档）
+
+default_stages: [pre-commit]
 
 repos:
   - repo: local
@@ -71,4 +77,20 @@ repos:
         language: system
         pass_filenames: false
         verbose: true
+        require_serial: true
+      # 前端原生 JS 语法检查：node --check 只检查第一个参数，因此逐个文件检查。
+      - id: js-syntax
+        name: js syntax (node --check)
+        entry: bash -c 'for f in "$@"; do node --check "$f" || exit 1; done' --
+        language: system
+        files: ^(apps|tests/acceptance/ops)/.*\.js$
+        require_serial: true
+      # 推送前自动跑离线并行全量快测，防跳过本地检查把坏提交推上远程。
+      - id: pytest-fast
+        name: pytest fast (pre-push)
+        entry: uv run --frozen pytest -n auto --dist worksteal -m "not real_corpus" --maxfail=5
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
         require_serial: true

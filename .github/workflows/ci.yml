@@ -2,62 +2,85 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # 与本地 pre-commit 的规则闸同一套：规则检查、格式、新代码严格档、类型检查。
-  # 单独一个 job：只跑一次，不用等 3 个 Python 版本。
-  lint:
+  # 合并全部快检查（ruff 规则/格式/严格档、mypy、docs 对账、活文档同步、前端 JS 语法），
+  # 遇错不短路、一次列出全部失败项，并与 test job 完全并行。
+  checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - name: 记录起始时间
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           python-version: "3.12"
           enable-cache: true
-      - name: 安装
-        run: uv sync --frozen
-      - name: ruff check
-        run: uv run --frozen ruff check --output-format=github .
-      - name: ruff format
-        run: uv run --frozen ruff format --check .
-      - name: ruff strict（新代码禁 os.path 拼接与 % 格式化）
-        run: uv run --frozen python tools/ruff_strict_new.py
-      - name: mypy（核心包 src/bookcorpus）
-        run: uv run --frozen mypy
-
-  # 文档对账：生成块、状态头、旧路径、相对链接、端口。
-  # 数字块要 --data-root，CI 没有实例库，脚本自动 skip 这一项。
-  # 第二步补 `docs check` 不管的那层：.agents/skills 清单与正文里的仓库路径。
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - name: 缓存 mypy 增量状态
+        uses: actions/cache@v6
         with:
-          python-version: "3.12"
-          enable-cache: true
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-py3.12-${{ hashFiles('pyproject.toml', 'uv.lock', 'src/bookcorpus/**/*.py') }}
+          restore-keys: mypy-${{ runner.os }}-py3.12-
       - name: 安装
         run: uv sync --frozen
-      - name: 文档与代码对账（facts / status / index / links / ports）
-        run: uv run --frozen book-corpus docs check
-      - name: 活文档与技能目录一致性校验
-        run: uv run --frozen python tools/check_docs_sync.py --strict
+      - name: 全量静态、文档与 JS 语法检查（不短路）
+        run: uv run --frozen python tools/run_ci_checks.py
+      - name: checks 耗时预算校验（<= 35s）
+        run: |
+          elapsed=$(( $(date +%s) - JOB_START ))
+          echo "checks active elapsed: ${elapsed}s (budget: 35s)"
+          if [ "$elapsed" -gt 35 ]; then
+            echo "::error::checks job exceeded 35s budget (${elapsed}s)"
+            exit 1
+          fi
 
+  # PR 跑单版本 3.12 快速反馈；合入 main 前（merge_group）与 main push 跑 3.11/3.12/3.13 全矩阵。
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - name: 记录起始时间
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+      - name: 缓存 poppler-utils 安装包
+        id: poppler-cache
+        uses: actions/cache@v6
+        with:
+          path: /tmp/poppler-debs
+          key: poppler-debs-${{ runner.os }}-${{ runner.arch }}-ubuntu24-v1
       - name: 安装 poppler-utils（PDF 分诊依赖）
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils
+        run: |
+          if [ "${{ steps.poppler-cache.outputs.cache-hit }}" = "true" ] && ls /tmp/poppler-debs/*.deb >/dev/null 2>&1; then
+            sudo dpkg -i /tmp/poppler-debs/*.deb && exit 0
+            sudo rm -rf /tmp/poppler-debs/*
+          fi
+          mkdir -p /tmp/poppler-debs/partial
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends -o dir::cache::archives=/tmp/poppler-debs poppler-utils
+          sudo rm -rf /tmp/poppler-debs/partial /tmp/poppler-debs/lock
+          sudo chmod -R a+rX /tmp/poppler-debs
       - name: 安装
         run: uv sync --frozen --extra pdf
       # 跑 ingest / 分类 / 拆章修复的用例要先过 preflight 的 books.model：
@@ -69,8 +92,16 @@ jobs:
           printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/bin/pi"
           chmod +x "$RUNNER_TEMP/bin/pi"
           echo "PI_BIN=$RUNNER_TEMP/bin/pi" >> "$GITHUB_ENV"
-      - name: 单元与端到端
-        run: uv run --frozen pytest -o addopts="" -n auto --dist worksteal -m "not real_corpus" --durations=10
+      - name: 单元与端到端（<= 35s 预算）
+        run: |
+          t0=$(date +%s)
+          uv run --frozen pytest -o addopts="" -n auto --dist worksteal -m "not real_corpus" --durations=10
+          elapsed=$(( $(date +%s) - t0 ))
+          echo "pytest elapsed: ${elapsed}s (budget: 35s)"
+          if [ "$elapsed" -gt 35 ]; then
+            echo "::error::pytest step exceeded 35s budget (${elapsed}s)"
+            exit 1
+          fi
       - name: 命令行冒烟
         # 不在冒烟里建 工作区/.venv-pdf 与 .venv-docs：要联网、要几十秒，与冒烟无关。
         env:
@@ -81,3 +112,11 @@ jobs:
           uv run --frozen book-corpus list > /dev/null
           uv run --frozen book-corpus init /tmp/ws
           uv run --frozen book-corpus doctor --root /tmp/ws
+      - name: test 耗时预算校验（<= 60s）
+        run: |
+          elapsed=$(( $(date +%s) - JOB_START ))
+          echo "test (${{ matrix.python-version }}) active elapsed: ${elapsed}s (budget: 60s)"
+          if [ "$elapsed" -gt 60 ]; then
+            echo "::error::test job exceeded 60s budget (${elapsed}s)"
+            exit 1
+          fi

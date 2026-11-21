@@ -55,12 +55,12 @@ git status --short
 这些检查也可以交给 git hook：
 
 ```bash
-uv sync                       # 装上 pre-commit
-uv run pre-commit install     # 之后每次提交自动跑
+uv sync                                                                   # 装上 pre-commit
+uv run pre-commit install --hook-type pre-commit --hook-type pre-push     # 提交前检查 + 推送前自动跑快测
 ```
 
-hook 跑七道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`、`docs check`、`living-docs-sync`（技能清单、路径、ops 路由、CLI 子命令与退役词）、`docs-coupling`（改代码漏改对应 `失效源：` 文档时给出警告）。
-CI（`.github/workflows/ci.yml`）的 `lint` job 跑前四道、`docs` job 跑 `docs check` 与 `living-docs-sync`，`test` job 在 3.11/3.12/3.13 上跑 pytest 与命令行冒烟：本地闸门过不了的，push 上去必红。
+`pre-commit` 跑八道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`、`docs check`、`living-docs-sync`（技能清单、路径、ops 路由、CLI 子命令与退役词）、`docs-coupling`（改代码漏改对应 `失效源：` 文档时给出警告）、`js-syntax`（`node --check`）；`pre-push` 跑离线并行全量快测（`pytest -n auto --dist worksteal -m "not real_corpus" --maxfail=5`）。
+CI（`.github/workflows/ci.yml`）的 `checks` job 跑前六道加 JS 语法检查（不短路一次列出全部失败），`test` job 在 PR 上跑 Python 3.12 快速反馈、合入 `main` 前及 `main` 上跑 3.11/3.12/3.13 全矩阵与命令行冒烟：本地闸门过不了的，push 上去必红。
 
 ### ruff 严格档：新代码不许 os.path 拼接和 % 格式化
 
