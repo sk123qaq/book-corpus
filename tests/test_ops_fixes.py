@@ -781,3 +781,36 @@ def test_cancel_during_spawn_terminates_process_promptly(workspace, monkeypatch)
     assert done is not None
     assert done["state"] == "cancelled"
     assert not server.pid_alive(spawned_pids[0])
+
+
+def test_terminal_state_published_after_writer_release(workspace, monkeypatch):
+    """终态写入 DB 时写锁与活跃写槽位必须已释放，避免轮询看到 succeeded 后紧接着发写请求撞 409。"""
+    app = _make_app(workspace)
+    noop = workspace / "noop_write.py"
+    noop.write_text("print('ok')\n", encoding="utf-8")
+
+    commands = [{"name": "noop", "script": "noop_write.py", "argv": [sys.executable, str(noop)]}]
+    job_id = app.runner.submit("pdf.confirm", "终态释放顺序回归", commands)
+    job = app.store.get(job_id)
+
+    snapshots_at_terminal: list[dict] = []
+    real_update = app.store.update
+
+    def spy_update(jid, **fields):
+        if jid == job_id and fields.get("state") in server.DONE_STATES:
+            snapshots_at_terminal.append(app.runner.snapshot())
+        return real_update(jid, **fields)
+
+    monkeypatch.setattr(app.store, "update", spy_update)
+    with app.runner.cv:
+        app.runner.active[job_id] = "pdf.confirm"
+        app.runner.active_write += 1
+    app.runner._run(job)
+
+    assert len(snapshots_at_terminal) == 1
+    snap = snapshots_at_terminal[0]
+    assert snap["writer"] is False
+    assert job_id not in snap["active"]
+    done = app.store.get(job_id)
+    assert done is not None
+    assert done["state"] == "succeeded"
