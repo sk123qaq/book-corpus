@@ -744,3 +744,40 @@ def test_diff_embed_loose_scan_and_pruned_catalog_audit(workspace):
         con.close()
         lc.ROOT, lc.BOOKS, lc.TABLES = saved
     assert any("extra_orphan.epub" in p for p in probs)
+
+
+def test_cancel_during_spawn_terminates_process_promptly(workspace, monkeypatch):
+    """在 Popen 返回、procs 登记前收到 cancel，子进程必须被立刻终止而不是等跑完。"""
+    app = _make_app(workspace)
+    slow_script = workspace / "slow_sleep.py"
+    slow_script.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+
+    commands = [{"name": "slow", "script": "slow_sleep.py", "argv": [sys.executable, str(slow_script)]}]
+    job_id = app.runner.submit("split.inspect", "竞态取消回归", commands)
+    job = app.store.get(job_id)
+
+    spawned_pids: list[int] = []
+    real_popen = server.subprocess.Popen
+    cancel_results: list[bool] = []
+
+    def racing_popen(*args, **kwargs):
+        proc = real_popen(*args, **kwargs)
+        spawned_pids.append(proc.pid)
+        cancel_results.append(app.runner.cancel(job_id))
+        return proc
+
+    monkeypatch.setattr(server.subprocess, "Popen", racing_popen)
+    t0 = time.monotonic()
+    with app.runner.cv:
+        app.runner.active[job_id] = "split.inspect"
+        app.runner.active_read += 1
+    app.runner._run(job)
+    elapsed = time.monotonic() - t0
+
+    assert cancel_results == [True]
+    assert len(spawned_pids) == 1
+    assert elapsed < 3.0, f"cancel during spawn stalled for {elapsed:.2f}s"
+    done = app.store.get(job_id)
+    assert done is not None
+    assert done["state"] == "cancelled"
+    assert not server.pid_alive(spawned_pids[0])

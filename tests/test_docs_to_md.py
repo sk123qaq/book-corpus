@@ -362,7 +362,7 @@ def test_worker_timeout_kills_process_group(tmp_path, worker_cmd, monkeypatch):
         os.kill(pid, 0)
 
 
-def test_source_missing_and_changed_are_reported(tmp_path):
+def test_source_missing_and_changed_are_reported(tmp_path, worker_cmd):
     root = _root(tmp_path)
     missing = {
         "uid": "B0013",

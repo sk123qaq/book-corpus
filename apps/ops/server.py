@@ -1047,16 +1047,18 @@ class Runner:
         if not job or job["state"] in DONE_STATES:
             return False
         with self.cv:
-            # 与 _loop 拣任务同一把锁：拣走的任务已经在 active 里，_run 会消费
-            # 下面这个 cancels 标记；没拣走的写进 DB 就够了，_loop 不会再拣。
+            # 与 _loop / _spawn 同一把锁：原子读取 active 与 procs，避免 Popen 返回前读到 pid=None
+            # 而漏杀正在启动中的子进程。
             picked = job_id in self.active
-        self.cancels.add(job_id)
-        pid = self.procs[job_id].pid if job_id in self.procs else job.get("pid")
+            self.cancels.add(job_id)
+            proc = self.procs.get(job_id)
+        pid = proc.pid if proc is not None else job.get("pid")
         if not pid:
             self.store.update(job_id, state="cancelled", summary="已取消（还没起进程）", ended=now_iso())
-            if not picked:
-                # 没人会再消费这个标记：DB 已是 cancelled，别让集合无限长
-                self.cancels.discard(job_id)
+            with self.cv:
+                if not picked and job_id not in self.active:
+                    # 没人会再消费这个标记：DB 已是 cancelled，别让集合无限长
+                    self.cancels.discard(job_id)
             return True
         threading.Thread(target=self._terminate, args=(job_id, int(pid)), daemon=True).start()
         return True
@@ -1183,7 +1185,8 @@ class Runner:
                     os.close(lock_fd)
                 except OSError:
                     pass
-            self.procs.pop(job_id, None)
+            with self.cv:
+                self.procs.pop(job_id, None)
             self._release(job_id, spec)
             with suppress(OSError):
                 os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
@@ -1237,6 +1240,9 @@ class Runner:
         if not os.path.exists(argv[1]):
             self._log(job_id, "[缺] 脚本不存在：%s\n" % argv[1])
             return 127
+        with self.cv:
+            if job_id in self.cancels:
+                return -signal.SIGTERM
         path = os.path.join(self.env.job_dir(job_id), "log.txt")
         with open(path, "ab") as fh:
             proc = subprocess.Popen(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
@@ -1248,9 +1254,13 @@ class Runner:
                 stdin=subprocess.DEVNULL,
                 start_new_session=True,
             )
-        self.procs[job_id] = proc
+        with self.cv:
+            self.procs[job_id] = proc
+            already_cancelled = job_id in self.cancels
         self.store.update(job_id, pid=proc.pid)
         write_text_atomic(os.path.join(self.env.job_dir(job_id), "pid"), "%d\n" % proc.pid)
+        if already_cancelled:
+            threading.Thread(target=self._terminate, args=(job_id, proc.pid), daemon=True).start()
         return proc.wait()
 
     def _capture(self, job_id, name):
@@ -1645,10 +1655,10 @@ class Runner:
                 pgid = os.getpgid(pid)
             except OSError:
                 pgid = None
-        for _ in range(KILL_WAIT * 4):
+        for _ in range(KILL_WAIT * 20):
             if not pid_alive(pid):
                 break
-            time.sleep(0.25)
+            time.sleep(0.05)
         if pgid is None:
             return
         # 组长退了不等于组空了：孙进程可能吞了 SIGTERM 还在写日志/烧额度。

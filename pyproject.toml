@@ -40,6 +40,9 @@ packages = ["src/bookcorpus"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "real_corpus: 需要本机 ~/书库 实例语料的只读核对用例（CI 用 -m 'not real_corpus' 排除）",
+]
 
 # ---- Ruff：静态检查 + 格式化 ----
 # 跑法：uv run ruff check --fix .  /  uv run ruff format .

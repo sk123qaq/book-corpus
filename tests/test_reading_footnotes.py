@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from bookcorpus.reading.library import Library
 from bookcorpus.reading.mdparse import parse_markdown
 from bookcorpus.reading.service import ReadingService
@@ -289,10 +291,10 @@ def test_colon_marker_and_multi_chapter_backlink_disambiguation(tmp_path):
     assert by_id[refs[1]["target_chapter"]["block_id"]]["text"] == "第二章注二。"
 
 
+@pytest.mark.real_corpus
 def test_real_corpus_cross_file_target_blocks():
     root = Path("~/书库").expanduser()
-    if not (root / "books.toml").exists():
-        return
+    assert (root / "books.toml").exists(), f"需要本机语料：{root}"
     svc = ReadingService(str(root), annotate=False)
 
     ch_1786 = svc.chapter("B1786", 12)
@@ -324,10 +326,10 @@ def test_real_corpus_cross_file_target_blocks():
     assert ref_0022["target_chapter"] == {"n": "37", "title": "脚注", "file": "37_脚注.md", "block_id": "B01"}
 
 
+@pytest.mark.real_corpus
 def test_real_corpus_b0019_ch08_footnotes():
     path = Path("~/书库/books/B0019/md/08_第三章世间已无张居正.md").expanduser()
-    if not path.exists():
-        return
+    assert path.exists(), f"需要本机语料：{path}"
     parsed = parse_markdown(path.read_text(encoding="utf-8"))
     blocks = parsed["blocks"]
     assert len(blocks) == 158
