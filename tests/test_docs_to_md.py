@@ -339,7 +339,7 @@ def test_worker_timeout_kills_process_group(tmp_path, worker_cmd, monkeypatch):
     pid_file = tmp_path / "worker.pid"
     monkeypatch.setenv("FAKE_MODE", "sleep")
     monkeypatch.setenv("FAKE_PID_FILE", str(pid_file))
-    monkeypatch.setattr(_mod(), "WORKER_TIMEOUT", 2)
+    monkeypatch.setattr(_mod(), "WORKER_TIMEOUT", 0.5)
 
     root = _root(tmp_path)
     item = _book(root, "B0012", "慢书", "docx", b"PK-slow")
@@ -357,7 +357,7 @@ def test_worker_timeout_kills_process_group(tmp_path, worker_cmd, monkeypatch):
             os.kill(pid, 0)
         except ProcessLookupError:
             break
-        time.sleep(0.1)
+        time.sleep(0.03)
     with pytest.raises(ProcessLookupError):
         os.kill(pid, 0)
 

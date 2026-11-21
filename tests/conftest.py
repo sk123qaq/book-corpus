@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -148,10 +149,12 @@ def write_ledger(root, rows):
         )
 
 
-@pytest.fixture
-def workspace(tmp_path):
-    root = tmp_path / "ws"
-    r = run_cli("init", root)
+@pytest.fixture(scope="session")
+def _workspace_template(tmp_path_factory):
+    """Build the clean initialized + ledgered workspace once per test worker process."""
+    base = tmp_path_factory.mktemp("ws-template")
+    root = base / "ws"
+    r = run_cli("init", root, env={"BOOK_CORPUS_ENV": str(base / "template.env")})
     assert r.returncode == 0, r.stdout + r.stderr
     rows = []
     for uid, subject, title, paragraphs in BOOKS:
@@ -160,6 +163,14 @@ def workspace(tmp_path):
     write_book(root, "B0003", "写作与编剧", "丙书", None, fmt="txt")
     rows.append(("B0003", "写作与编剧", "丙书", "无正文"))
     write_ledger(root, rows)
+    return root
+
+
+@pytest.fixture
+def workspace(tmp_path, _workspace_template):
+    root = tmp_path / "ws"
+    shutil.copytree(_workspace_template, root)
+    (tmp_path / "missing.env").write_text(f"BOOKS_ROOT={root}\n", encoding="utf-8")
     return root
 
 

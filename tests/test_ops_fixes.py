@@ -57,7 +57,7 @@ def _http_server(app: server.App):
     TestHandler.app = app
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), TestHandler)
     port = httpd.server_address[1]
-    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     t.start()
     try:
         yield f"http://127.0.0.1:{port}"

@@ -98,7 +98,7 @@ def _serve(respond):
     server.recorder = _Recorder(respond)
     server.bodies = []
     server.received_headers = []
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     host, port = server.server_address[:2]
     try:

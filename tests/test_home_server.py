@@ -90,7 +90,7 @@ def _start_server(root: Path, extra_args=()):
                 return proc, base
         except Exception as exc:
             last_error = exc
-        time.sleep(0.1)
+        time.sleep(0.02)
     _stop_server(proc)
     raise AssertionError(f"home server did not become ready: {last_error}")
 

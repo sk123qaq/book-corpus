@@ -61,7 +61,7 @@ def _start_app(script: str, args: list[str], ready_path: str = "/", env: dict[st
                 if resp.status == 200:
                     return proc, base
         except Exception:
-            time.sleep(0.1)
+            time.sleep(0.02)
     proc.terminate()
     proc.wait(timeout=5)
     raise AssertionError(f"{script} did not become ready")

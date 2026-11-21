@@ -251,7 +251,7 @@ print(json.dumps(preview, ensure_ascii=False))
 STUB_VERIFY = """#!/usr/bin/env python3
 import os, sys, time
 if os.path.exists(".verify-slow"):
-    time.sleep(2)
+    time.sleep(0.4)
 if os.path.exists(".verify-bad"):
     print("门槛不过：1 项")
     sys.exit(1)
@@ -500,7 +500,7 @@ def wait_ready(port, timeout=20):
                 return True
         except (urllib.error.URLError, ConnectionError, OSError):
             pass
-        time.sleep(0.15)
+        time.sleep(0.03)
     return False
 
 
@@ -558,7 +558,7 @@ def wait_job(port, job_id, states, timeout=60):
         last = body
         if body["job"]["state"] in states:
             return body
-        time.sleep(0.15)
+        time.sleep(0.03)
     return last
 
 
@@ -989,7 +989,7 @@ def run_checks(root, ops, port, fixture):
     state = ((detail or {}).get("job") or {}).get("state")
     check("立刻取消的任务终态是 cancelled", state == "cancelled", str(state))
     # finalize 是异步的：等它跑完再读一次，确认没被门槛覆盖
-    time.sleep(0.8)
+    time.sleep(0.25)
     again = (get(port, "/api/jobs/%s" % quick_id)[1] or {}).get("job") or {}
     check("取消不会被门槛回写", again.get("state") == "cancelled", str(again.get("state")))
     body = get(port, "/api/jobs")[1] or {}
@@ -1217,7 +1217,7 @@ def run_checks(root, ops, port, fixture):
         code, body = post(port, "/api/jobs/%s/rerun" % pdf_id)
         if code == 200 or time.time() > deadline:
             break
-        time.sleep(0.2)
+        time.sleep(0.05)
     rerun_id = body.get("job_id")
     check("PDF 重跑开新任务", code == 200 and rerun_id not in (None, pdf_id), str(body))
     detail = wait_job(port, rerun_id, ("succeeded", "failed"))
@@ -1659,7 +1659,7 @@ def adoption_checks(root, fixture):
     argv = [sys.executable, script, "--batch", "adopt-probe", "--uids", "B0001"]
     matched = subprocess.Popen(argv, cwd=root, start_new_session=True, stdout=subprocess.DEVNULL)
     try:
-        time.sleep(0.8)
+        time.sleep(0.2)
         ensure_ops_db(ops_db).close()
         conn = sqlite3.connect(ops_db)
         for job_id, pid, cmd_argv in (
@@ -1710,7 +1710,7 @@ def adoption_checks(root, fixture):
                 state = (body.get("job") or {}).get("state")
                 if state in ("cancelled", "failed", "orphaned"):
                     break
-                time.sleep(0.3)
+                time.sleep(0.05)
             check("停止后状态是 cancelled", state == "cancelled", str(state))
             check("停止真的退了进程", wait_exit(matched, 10))
         finally:
@@ -1730,9 +1730,18 @@ def adoption_resume_check(root, fixture):
     """接管后续跑：跑到一半那一步记 unknown，剩下的步骤接着跑，拿不到退出码就不冒充成功。"""
     ops_db = os.path.join(root, "工作区", "运维", "ops.db")
     scripts = os.path.join(root, "工作区", "脚本")
+    release_flag = os.path.join(scripts, ".adopt-release")
+    if os.path.exists(release_flag):
+        os.remove(release_flag)
     probe = os.path.join(scripts, "adopt-probe.py")
     with open(probe, "w", encoding="utf-8") as fh:
-        fh.write("import time\ntime.sleep(10)\n")
+        fh.write(
+            "import os, time\n"
+            "flag = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.adopt-release')\n"
+            "end = time.monotonic() + 10\n"
+            "while time.monotonic() < end and not os.path.exists(flag):\n"
+            "    time.sleep(0.05)\n"
+        )
     finish = os.path.join(scripts, "adopt-finish.py")
     with open(finish, "w", encoding="utf-8") as fh:
         fh.write(
@@ -1762,7 +1771,7 @@ def adoption_resume_check(root, fixture):
         json.dump(commands, fh, ensure_ascii=False)
     child = subprocess.Popen(commands[0]["argv"], cwd=root, start_new_session=True, stdout=subprocess.DEVNULL)
     try:
-        time.sleep(0.3)
+        time.sleep(0.1)
         conn = ensure_ops_db(ops_db)
         conn.execute(
             "INSERT OR REPLACE INTO job (id, kind, title, argv, state, pid,"
@@ -1794,6 +1803,14 @@ def adoption_resume_check(root, fixture):
         conn.close()
         proc, port = start(root, fixture)
         try:
+            _, adopted_body = get(port, "/api/jobs/" + job_id)
+            adopted_job = (adopted_body or {}).get("job") or {}
+            check(
+                "接管时仍在跑并登记接管状态",
+                adopted_job.get("state") == "running" and "接管" in (adopted_job.get("summary") or ""),
+                "%s · %s" % (adopted_job.get("state"), adopted_job.get("summary")),
+            )
+            open(release_flag, "w").close()
             detail = wait_job(port, job_id, ("succeeded", "failed", "awaiting_review"), timeout=40)
             job = (detail or {}).get("job") or {}
             steps = {s["seq"]: s for s in (detail or {}).get("steps") or []}
@@ -1824,7 +1841,7 @@ def adoption_resume_check(root, fixture):
                 os.killpg(os.getpgid(child.pid), 9)
             except OSError:
                 child.kill()
-        for name in ("adopt-probe.py", "adopt-finish.py", ".adopt-ran"):
+        for name in ("adopt-probe.py", "adopt-finish.py", ".adopt-ran", ".adopt-release"):
             path = os.path.join(scripts, name)
             if os.path.exists(path):
                 os.remove(path)
@@ -1993,7 +2010,7 @@ def wait_exit(proc, seconds):
     while time.time() < deadline:
         if proc.poll() is not None:
             return True
-        time.sleep(0.2)
+        time.sleep(0.05)
     return False
 
 

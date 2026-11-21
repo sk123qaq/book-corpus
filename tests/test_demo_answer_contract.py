@@ -554,7 +554,7 @@ def test_server_api_answer_sse_and_json_compat(monkeypatch):
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
     import threading
 
-    th = threading.Thread(target=httpd.serve_forever, daemon=True)
+    th = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     th.start()
     try:
         port = httpd.server_address[1]
@@ -725,7 +725,7 @@ def test_server_api_answer_pause_and_resume_sse(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "_fill_citations", lambda info: info)
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
-    th = threading.Thread(target=httpd.serve_forever, daemon=True)
+    th = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     th.start()
     try:
         port = httpd.server_address[1]
