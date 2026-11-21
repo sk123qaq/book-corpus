@@ -693,20 +693,108 @@ STATUS_ISSUES = """
 LOG_CANCEL = """
 (async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const rows = Array.from(document.querySelectorAll('#view tbody tr')).map((r) => {
+  const inView = () => {
+    const box = document.querySelector('#job-detail');
+    if (!box) return false;
+    const r = box.getBoundingClientRect();
+    return r.top >= -2 && (r.top <= 32 || r.bottom <= window.innerHeight + 2);
+  };
+  const waitJob = async (id, wantView) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 8000) {
+      const m = document.querySelector('#job-meta');
+      const h2 = document.querySelector('#job-detail h2');
+      if (m && h2 && m.textContent.indexOf(id) >= 0 && (!wantView || inView())) break;
+      await sleep(100);
+    }
+    await sleep(150);
+  };
+  const rows = Array.from(document.querySelectorAll('#log-rows tr')).map((r) => {
     const b = r.querySelector('[data-act="job-open"]');
     const p = r.querySelector('.pill');
-    return {id: b ? b.dataset.id : '', state: p ? p.textContent : ''};
+    const tds = r.querySelectorAll('td');
+    return {
+      id: b ? b.dataset.id : '',
+      state: p ? p.textContent : '',
+      title: tds[2] ? tds[2].textContent.trim() : '',
+    };
   });
   const row = rows.find((r) => r.state === '待确认');
   if (!row) return {found: false};
-  document.querySelector('[data-act="job-open"][data-id="' + row.id + '"]').click();
-  for (let i = 0; i < 50 && !document.querySelector('#job-detail h2'); i += 1) await sleep(150);
-  return {found: true, state: row.state,
-          cancel: !!document.querySelector('#job-detail [data-act="job-cancel"]'),
-          rerun: !!document.querySelector('#job-detail [data-act="job-rerun"]'),
-          reviewBox: !!document.querySelector('#job-review-box'),
-          resolveBtn: !!document.querySelector('#job-review-box [data-act="job-resolve"]')};
+  document.querySelector('#log-rows [data-act="job-open"][data-id="' + row.id + '"]').click();
+  await waitJob(row.id, true);
+  const firstMeta = (document.querySelector('#job-meta') || {}).textContent || '';
+  const firstActive = (document.querySelector('#log-rows tr.active') || {}).dataset || {};
+  const out = {
+    found: true,
+    state: row.state,
+    cancel: !!document.querySelector('#job-detail [data-act="job-cancel"]'),
+    rerun: !!document.querySelector('#job-detail [data-act="job-rerun"]'),
+    reviewBox: !!document.querySelector('#job-review-box'),
+    resolveBtn: !!document.querySelector('#job-review-box [data-act="job-resolve"]'),
+    firstMetaOk: firstMeta.indexOf(row.id) >= 0,
+    firstActiveOk: firstActive.jobId === row.id,
+    firstInView: inView(),
+    hasSecond: false,
+    secondSwitched: false,
+  };
+  const second = rows.find((r) => r.id && r.id !== row.id);
+  if (second) {
+    out.hasSecond = true;
+    window.scrollTo(0, 0);
+    await sleep(80);
+    document.querySelector('#log-rows [data-act="job-open"][data-id="' + second.id + '"]').click();
+    await waitJob(second.id, true);
+    const meta2 = (document.querySelector('#job-meta') || {}).textContent || '';
+    const h22 = ((document.querySelector('#job-detail h2') || {}).textContent || '').trim();
+    const act2 = (document.querySelector('#log-rows tr.active') || {}).dataset || {};
+    out.secondSwitched = (
+      meta2.indexOf(second.id) >= 0
+      && (!second.title || h22 === second.title)
+      && act2.jobId === second.id
+      && inView()
+    );
+  }
+  return out;
+})()
+"""
+
+LOG_OVERVIEW_JUMP = """
+(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const inView = () => {
+    const box = document.querySelector('#job-detail');
+    if (!box) return false;
+    const r = box.getBoundingClientRect();
+    return r.top >= -2 && (r.top <= 32 || r.bottom <= window.innerHeight + 2);
+  };
+  const link = document.querySelector('#nav a[href="#overview"]');
+  if (link) link.click();
+  for (let i = 0; i < 60; i += 1) {
+    const h1 = document.querySelector('#view h1');
+    if (h1 && h1.textContent.trim() === '总览' && document.querySelector('#view [data-act="job-open"]')) break;
+    await sleep(100);
+  }
+  const btn = document.querySelector('#view [data-act="job-open"]');
+  if (!btn) return {found: false};
+  const id = btn.dataset.id || '';
+  btn.click();
+  for (let i = 0; i < 80; i += 1) {
+    const m = document.querySelector('#job-meta');
+    if (location.hash === '#logs' && m && m.textContent.indexOf(id) >= 0 && inView()) break;
+    await sleep(100);
+  }
+  await sleep(150);
+  const meta = (document.querySelector('#job-meta') || {}).textContent || '';
+  const act = (document.querySelector('#log-rows tr.active') || {}).dataset || {};
+  return {
+    found: true,
+    id: id,
+    hashOk: location.hash === '#logs',
+    metaOk: meta.indexOf(id) >= 0,
+    activeOk: act.jobId === id,
+    inView: inView(),
+  };
 })()
 """
 
@@ -1065,9 +1153,24 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             and not logchk.get("cancel")
             and logchk.get("reviewBox")
             and logchk.get("resolveBtn")
+            and logchk.get("firstMetaOk")
+            and logchk.get("firstActiveOk")
+            and logchk.get("firstInView")
+            and (live or logchk.get("hasSecond"))
+            and (not logchk.get("hasSecond") or logchk.get("secondSwitched"))
         ):
             failed_tabs.append("log-cancel-hidden")
-        eval_js(cdp, "document.querySelector('#nav a[href=\"#overview\"]').click(); true")
+        ov_jump = eval_js(cdp, LOG_OVERVIEW_JUMP, await_promise=True, timeout=30)
+        notes.append("总览跳详情 %s" % (ov_jump,))
+        if not (
+            ov_jump.get("found")
+            and ov_jump.get("hashOk")
+            and ov_jump.get("metaOk")
+            and ov_jump.get("activeOk")
+            and ov_jump.get("inView")
+        ):
+            failed_tabs.append("log-overview-jump")
+        eval_js(cdp, VISIT_TAB % ("overview", "overview", "总览", "overview", "总览"), await_promise=True, timeout=30)
         cdp.drain(0.6)
         overflow = bool(widest[0]) or eval_js(cdp, "document.documentElement.scrollWidth > window.innerWidth")
         width_doc = eval_js(cdp, "document.documentElement.scrollWidth")
