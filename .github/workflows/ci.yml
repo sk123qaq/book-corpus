@@ -56,6 +56,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+      - name: 安装 poppler-utils（PDF 分诊依赖）
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils
       - name: 安装
         run: uv sync --frozen --extra pdf
       # 跑 ingest / 分类 / 拆章修复的用例要先过 preflight 的 books.model：
