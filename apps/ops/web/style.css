@@ -205,6 +205,16 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .04
 td.wrap { white-space: normal; min-width: 140px; }
 tbody tr:hover { background: var(--soft); }
 tbody tr.low { background: var(--amber-soft); }
+tbody tr.active, tbody tr.active:hover { background: var(--red-soft); }
+
+#job-detail {
+  scroll-margin-top: 16px;
+  transition: border-color .45s ease, box-shadow .45s ease;
+}
+#job-detail.detail-focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
 
 .next { margin: 0 0 10px; padding-left: 18px; }
 .next li { margin: 3px 0; }

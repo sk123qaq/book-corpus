@@ -106,7 +106,8 @@ const S = {
   retireHits: [], retireDrop: [], retireQuery: '', preview: null,
   logJob: null, logDetail: null, follow: true, importDone: null, importDocsJob: '',
   docs: null, docsNone: false, docsOpen: false, docsSig: '',
-  logOpenId: null, logScroll: 0, logStick: true, logRowsHtml: '',
+  logOpenId: null, logJumpSeq: 0, logSkipAfterRender: false,
+  logScroll: 0, logStick: true, logRowsHtml: '',
   logStepsFp: '', logCmdFp: '',
   overviewHtml: '',
   filter: '', selected: new Set(), busy: false,
@@ -520,6 +521,10 @@ function render() {
 
 function afterRender() {
   wireDrop();
+  if (S.logSkipAfterRender) {
+    S.logSkipAfterRender = false;
+    return;
+  }
   if (S.tab === 'logs' && S.logJob && S.logJob.id) openLog(S.logJob.id, true);
 }
 
@@ -1215,7 +1220,9 @@ function docsCard() {
     : (pending ? `<p class="hint">库里还有 ${num(pending)} 本 doc 格式没转 md。</p>` : '');
   const badBanner = state === 'failed' && !rep
     ? `<div class="banner bad"><span>转换没过：${esc(summaryText(job && job.summary) || '看任务日志')}</span>
-        <button class="btn sm" data-act="goto" data-tab="logs">看日志</button></div>`
+        ${body && body.job_id
+    ? `<button class="btn sm" data-act="job-open" data-id="${esc(body.job_id)}">看日志</button>`
+    : '<button class="btn sm" data-act="goto" data-tab="logs">看日志</button>'}</div>`
     : '';
   const failTable = failed.length ? `<div class="tw"><table>
       <thead><tr><th>编号</th><th>书名</th><th>格式</th><th>原因</th><th></th></tr></thead>
@@ -2301,7 +2308,8 @@ function logRows() {
 function logRowsHtml(rows) {
   return rows.length ? rows.map((j) => {
     const rhref = reviewHref(j);
-    return `<tr>
+    const selected = !!(S.logJob && S.logJob.id === j.id);
+    return `<tr data-job-id="${esc(j.id)}"${selected ? ' class="active"' : ''}>
         <td class="nowrap">${esc(fmtTime(j.created))}</td>
         <td class="nowrap">${esc(KIND_WORD[j.kind] || j.kind)}</td>
         <td class="wrap">${esc(summaryText(j.title))}</td>
@@ -2481,6 +2489,25 @@ function paintLogRows() {
   if (count) count.textContent = '共 ' + num(rows.length) + ' 个任务';
 }
 
+function scrollJobDetail(instant) {
+  const box = document.querySelector('#job-detail');
+  if (!box) return;
+  const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (typeof box.scrollIntoView === 'function') {
+    box.scrollIntoView({ block: 'start', behavior: (instant || reduced) ? 'auto' : 'smooth' });
+  }
+  if (box.classList) {
+    box.classList.remove('detail-focus');
+    void box.offsetWidth;
+    box.classList.add('detail-focus');
+    clearTimeout(scrollJobDetail.timer);
+    scrollJobDetail.timer = setTimeout(() => {
+      const cur = document.querySelector('#job-detail');
+      if (cur && cur.classList) cur.classList.remove('detail-focus');
+    }, 1200);
+  }
+}
+
 // ---- 数据加载 -----------------------------------------------------
 async function loadStatus(deep) {
   try {
@@ -2500,12 +2527,12 @@ async function loadStatusIfStale(maxAgeMs = 5000) {
   await loadStatus();
 }
 
-async function loadJobs() {
+async function loadJobs(opts) {
   const body = await api('/api/jobs?limit=200');
   S.jobs = body.jobs || [];
   if (S.payload) S.payload.state_counts = body.counts || {};
   renderNav();
-  if (S.tab !== 'logs') return;
+  if (S.tab !== 'logs' || (opts && opts.quiet)) return;
   const sel = S.logJob && S.logJob.id
     ? S.jobs.filter((row) => row.id === S.logJob.id)[0] : null;
   if (sel && S.logJob.state && sel.state !== S.logJob.state) {
@@ -2754,9 +2781,9 @@ async function openLog(jobId, quiet) {
   try {
     const body = await api('/api/jobs/' + encodeURIComponent(jobId));
     if (!body || !body.job) return;
+    if (S.logJob && S.logJob.id && S.logJob.id !== jobId) return;
     S.logJob = body.job;
     S.logDetail = body;
-    if (S.logOpenId !== body.job.id) S.logOpenId = body.job.id;
     paintJobDetail();
   } catch (err) {
     if (!quiet) toast(err.message, true);
@@ -3701,14 +3728,38 @@ const actions = {
   },
 
   async 'job-open'(el) {
-    S.tab = 'logs';
-    S.logJob = { id: el.dataset.id, title: '载入中', state: 'running', kind: '', created: '' };
+    const id = String((el && el.dataset && el.dataset.id) || '').trim();
+    if (!id) return;
+    const seq = ++S.logJumpSeq;
+    const fromOtherTab = S.tab !== 'logs';
+    if (fromOtherTab) {
+      S.filter = '';
+      S.tab = 'logs';
+    }
+    const existing = (S.jobs || []).find((j) => j.id === id);
+    S.logJob = existing
+      ? Object.assign({}, existing)
+      : { id, title: '载入中', state: '', kind: '', created: '' };
     // 换了任务就要从头画：不重置的话 paintJobDetail 会以为还在看上一个
-    if (S.logOpenId !== el.dataset.id) S.logOpenId = null;
+    if (S.logOpenId !== id) {
+      S.logOpenId = null;
+      S.logDetail = null;
+    }
     if (parseHash(location.hash).tab !== 'logs') location.hash = '#logs';
-    await loadJobs();
-    render();
-    await openLog(el.dataset.id);
+    if (fromOtherTab) {
+      await Promise.all([loadJobs({ quiet: true }), openLog(id)]);
+      if (seq !== S.logJumpSeq || S.tab !== 'logs') return;
+      S.logSkipAfterRender = true;
+      render();
+      paintJobDetail();
+      scrollJobDetail(true);
+      return;
+    }
+    paintLogRows();
+    await openLog(id);
+    if (seq !== S.logJumpSeq || S.tab !== 'logs') return;
+    paintLogRows();
+    scrollJobDetail(false);
   },
 
   async 'job-handle'(el) {
