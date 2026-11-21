@@ -457,6 +457,7 @@ def real_checks():
 
 
 def main():
+    fixture_only = "--fixture-only" in sys.argv[1:]
     for path in (OPS_STATUS, AUDIT):
         if not os.path.isfile(path):
             print("缺 %s" % path)
@@ -467,7 +468,8 @@ def main():
         fixture_checks(root)
     finally:
         shutil.rmtree(root)
-    real_checks()
+    if not fixture_only:
+        real_checks()
     print()
     if FAILS:
         print("FAILED %d 项: %s" % (len(FAILS), ", ".join(FAILS)))

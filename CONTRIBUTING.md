@@ -8,7 +8,9 @@
 
 ```bash
 uv sync --frozen
-uv run --frozen pytest
+uv run --frozen pytest                      # 全量（含需要 ~/书库 的只读核对）
+uv run --frozen pytest -m "not real_corpus" # 纯离线（无本机 ~/书库 时的完整回归，与 CI 一致）
+uv run --frozen pytest -m real_corpus       # 仅跑本机 ~/书库 只读核对
 ```
 
 Python 3.11+，SQLite 要带 FTS5。测试默认只跑 `tests/`，不碰真库；`tests/acceptance/` 用临时根和 `pi` stub，离线可跑。

@@ -2,6 +2,8 @@
 
 import os
 
+import pytest
+
 from bookcorpus.reading.mdparse import parse_markdown
 
 
@@ -84,11 +86,11 @@ def test_table_not_confused_with_paragraph():
     assert parsed["blocks"][0]["kind"] == "paragraph"
 
 
+@pytest.mark.real_corpus
 def test_golden_ch04_block_ids_stable():
-    """B0003/04 的编辑层锚点依赖现有块序；表格/代码不能改变无此内容的章。"""
-    path = os.path.expanduser("~/书库/books/B0003/md/04_第2章机会成本和禀赋效应.md")
-    if not os.path.exists(path):
-        return  # 数据实例不在本机时跳过
+    """B1759/04 的编辑层锚点依赖现有块序；表格/代码不能改变无此内容的章。"""
+    path = os.path.expanduser("~/书库/books/B1759/md/04_第2章机会成本和禀赋效应.md")
+    assert os.path.exists(path), "需要本机 ~/书库 语料：%s" % path
     with open(path, encoding="utf-8") as fh:
         parsed = parse_markdown(fh.read())
     ids = {block["id"] for block in parsed["blocks"]}

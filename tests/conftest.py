@@ -10,6 +10,12 @@ import pytest
 def _isolate_user_dotenv(tmp_path, monkeypatch):
     """Never let the test suite read a developer's real ~/.config file."""
     monkeypatch.setenv("BOOK_CORPUS_ENV", str(tmp_path / "missing.env"))
+    # Ensure BOOKS_ROOT never leaks across tests even if a test writes os.environ directly.
+    monkeypatch.setenv("BOOKS_ROOT", "")
+    os.environ.pop("BOOKS_ROOT", None)
+    monkeypatch.setenv("BOOKS_NO_DOCS_VENV", "1")
+    monkeypatch.setenv("BOOKS_NO_PDF_VENV", "1")
+    monkeypatch.setenv("BOOKS_NO_RERANK_VENV", "1")
     for key in (
         "READING_DEPTH",
         "READING_AGENT_STANDARD",

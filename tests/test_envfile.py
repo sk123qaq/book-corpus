@@ -12,6 +12,13 @@ from conftest import run_cli
 REPO = Path(__file__).resolve().parents[1]
 
 
+def _clear_env(monkeypatch, *keys: str) -> None:
+    """Clear env keys now and record their pre-test state for teardown restore."""
+    for key in keys:
+        monkeypatch.setenv(key, "")
+        os.environ.pop(key, None)
+
+
 def test_project_env_beats_cwd_and_user_file(tmp_path, monkeypatch):
     project = tmp_path / "project"
     project.mkdir()
@@ -20,11 +27,9 @@ def test_project_env_beats_cwd_and_user_file(tmp_path, monkeypatch):
     work.mkdir()
     (work / ".env").write_text("B=cwd\nC=cwd\n", encoding="utf-8")
 
-    monkeypatch.delenv("BOOK_CORPUS_ENV", raising=False)
+    _clear_env(monkeypatch, "BOOK_CORPUS_ENV", "A", "B", "C", "D")
     monkeypatch.chdir(work)
     monkeypatch.setenv("HOME", str(tmp_path))
-    for key in ("A", "B", "C", "D"):
-        monkeypatch.delenv(key, raising=False)
 
     assert envfile.load(repo_root=project) == project / ".env"
     # 只读生效的那一个文件：仓库根存在时，cwd 的 .env 不参与。
@@ -32,8 +37,8 @@ def test_project_env_beats_cwd_and_user_file(tmp_path, monkeypatch):
     assert os.environ["B"] == "project"
     assert "C" not in os.environ
 
-    monkeypatch.delenv("A", raising=False)
-    monkeypatch.delenv("B", raising=False)
+    os.environ.pop("A", None)
+    os.environ.pop("B", None)
     assert envfile.load(repo_root=tmp_path / "absent") == work / ".env"
     assert os.environ["C"] == "cwd"
 
@@ -45,7 +50,7 @@ def test_explicit_override_is_authoritative(tmp_path, monkeypatch):
     project.mkdir()
     (project / ".env").write_text("X=from-project\n", encoding="utf-8")
     monkeypatch.setenv("BOOK_CORPUS_ENV", str(target))
-    monkeypatch.delenv("X", raising=False)
+    _clear_env(monkeypatch, "X")
 
     assert envfile.load(repo_root=project) == target
     assert os.environ["X"] == "from-custom"
@@ -124,7 +129,7 @@ def test_resolve_books_root_reads_env_only_without_fallbacks(tmp_path, monkeypat
     env_path = tmp_path / "app.env"
     env_path.write_text(f"BOOKS_ROOT={ws}\n", encoding="utf-8")
 
-    monkeypatch.delenv("BOOKS_ROOT", raising=False)
+    _clear_env(monkeypatch, "BOOKS_ROOT")
     monkeypatch.setenv("BOOK_CORPUS_DATA", str(tmp_path / "legacy-data"))
     monkeypatch.setenv("BOOK_CORPUS_ENV", str(env_path))
     assert envfile.resolve_books_root() == ws.resolve()
@@ -132,7 +137,7 @@ def test_resolve_books_root_reads_env_only_without_fallbacks(tmp_path, monkeypat
     explicit = tmp_path / "explicit"
     assert envfile.resolve_books_root(explicit) == explicit.resolve()
 
-    monkeypatch.delenv("BOOKS_ROOT", raising=False)
+    os.environ.pop("BOOKS_ROOT", None)
     monkeypatch.setenv("BOOK_CORPUS_ENV", str(tmp_path / "absent.env"))
     with pytest.raises(SystemExit):
         envfile.resolve_books_root()

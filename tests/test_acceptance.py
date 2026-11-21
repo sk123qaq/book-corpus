@@ -18,15 +18,19 @@ DEMO = REPO / "tests" / "acceptance" / "demo"
 INSTANCE = Path(os.environ.get("BOOKS_ROOT") or (Path.home() / "书库"))
 
 OFFLINE = [
-    (OPS / "check_ops.py", 300),
-    (OPS / "test_status.py", 180),
-    (OPS / "test_status_state.py", 240),
-    (OPS / "test_classify.py", 180),
-    (OPS / "test_doc_numbers.py", 180),
-    (OPS / "test_split.py", 180),
-    (OPS / "test_retire.py", 180),
-    (OPS / "test_pdf.py", 300),
-    (DEMO / "test_answer_retry.py", 180),
+    (OPS / "check_ops.py", 300, ()),
+    (OPS / "test_status.py", 180, ("--fixture-only",)),
+    (OPS / "test_status_state.py", 240, ()),
+    (OPS / "test_classify.py", 180, ()),
+    (OPS / "test_doc_numbers.py", 180, ()),
+    (OPS / "test_split.py", 180, ()),
+    (OPS / "test_retire.py", 180, ()),
+    (OPS / "test_pdf.py", 300, ()),
+]
+
+REAL_CORPUS = [
+    (OPS / "test_status.py", 180, ()),
+    (DEMO / "test_answer_retry.py", 180, ()),
 ]
 
 
@@ -62,20 +66,40 @@ def acceptance_env():
     return env
 
 
-@pytest.mark.parametrize(("script", "timeout"), OFFLINE, ids=[p.name for p, _ in OFFLINE])
-def test_offline_acceptance(script, timeout):
+@pytest.mark.parametrize(("script", "timeout", "extra_args"), OFFLINE, ids=[p.name for p, _, _ in OFFLINE])
+def test_offline_acceptance(script, timeout, extra_args):
     if not script.is_file():
-        pytest.skip("缺验收脚本 %s" % script)
-    if script.name == "test_status.py" and not INSTANCE.is_dir():
-        pytest.skip("没有实例 %s，跳过真库只读段" % INSTANCE)
+        pytest.fail("缺验收脚本 %s" % script)
+    if script.name == "test_pdf.py" and not pdf_python():
+        if os.environ.get("CI"):
+            pytest.fail("CI 环境缺少带 pymupdf 的解释器，拒绝静默跳过 test_pdf.py")
+        pytest.skip("没有带 pymupdf 的解释器；设 BOOKS_PDF_PY 后重跑")
+    proc = subprocess.run(
+        [sys.executable, str(script), *extra_args],
+        cwd=str(REPO),
+        env=acceptance_env(),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr)[-4000:]
+        pytest.fail("%s 退出码 %d\n%s" % (script.name, proc.returncode, tail))
+
+
+@pytest.mark.real_corpus
+@pytest.mark.parametrize(("script", "timeout", "extra_args"), REAL_CORPUS, ids=[p.name for p, _, _ in REAL_CORPUS])
+def test_real_corpus_acceptance(script, timeout, extra_args):
+    if not script.is_file():
+        pytest.fail("缺验收脚本 %s" % script)
+    if not INSTANCE.is_dir():
+        pytest.fail("缺少实例目录 %s" % INSTANCE)
     if script.name == "test_answer_retry.py":
         chapter = INSTANCE / "books" / "B0210" / "md" / "05_序幕黑洞之旅.md"
         if not chapter.is_file():
-            pytest.skip("实例里没有 B0210 的章节，跳过演示离线验收")
-    if script.name == "test_pdf.py" and not pdf_python():
-        pytest.skip("没有带 pymupdf 的解释器；设 BOOKS_PDF_PY 后重跑")
+            pytest.fail("实例里缺少 B0210 章节 %s" % chapter)
     proc = subprocess.run(
-        [sys.executable, str(script)],
+        [sys.executable, str(script), *extra_args],
         cwd=str(REPO),
         env=acceptance_env(),
         capture_output=True,
