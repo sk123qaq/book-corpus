@@ -14,6 +14,8 @@
     from: (urlParams.get('from') || '').trim(),
     query: (urlParams.get('query') || '').trim(),
     hl: (urlParams.get('hl') || '').trim(),
+    fn: (urlParams.get('fn') || '').trim(),
+    srcN: (urlParams.get('src_n') || '').trim(),
     blockIds: blocksParam.length ? blocksParam : (hashBid ? [hashBid] : []),
     dismissed: false,
   };
@@ -41,6 +43,7 @@
   let mapError = '';
   let mapAbortCtrl = null;
   let scrollRaf = 0;
+  let footnoteReturn = null;
 
   const FALLBACK_PROFILES = {
     practical: {
@@ -187,11 +190,10 @@
     return (punct >= 48 ? cut.slice(0, punct) : cut).trim();
   }
 
-  function highlightEscaped(text, probe) {
-    const raw = String(text || '');
-    if (!probe || arrival.dismissed) return RD.esc(raw);
+  function findHighlightRange(raw, probe) {
+    if (!probe || arrival.dismissed) return null;
     const cleanProbe = probe.trim();
-    if (!cleanProbe) return RD.esc(raw);
+    if (!cleanProbe) return null;
 
     const candidates = [cleanProbe];
     if (cleanProbe.length > 32) candidates.push(cleanProbe.slice(0, 32));
@@ -199,15 +201,94 @@
 
     for (const cand of candidates) {
       const idx = raw.indexOf(cand);
-      if (idx >= 0) {
-        return (
-          RD.esc(raw.slice(0, idx)) +
-          '<mark class="hl-hit">' + RD.esc(raw.slice(idx, idx + cand.length)) + '</mark>' +
-          RD.esc(raw.slice(idx + cand.length))
-        );
+      if (idx >= 0) return [idx, idx + cand.length];
+    }
+    return null;
+  }
+
+  function highlightEscaped(text, probe) {
+    const raw = String(text || '');
+    const range = findHighlightRange(raw, probe);
+    if (!range) return RD.esc(raw);
+    return (
+      RD.esc(raw.slice(0, range[0])) +
+      '<mark class="hl-hit">' + RD.esc(raw.slice(range[0], range[1])) + '</mark>' +
+      RD.esc(raw.slice(range[1]))
+    );
+  }
+
+  function buildExternalFootnoteHref(chN, blockId, marker) {
+    if (blockId) {
+      const targetParams = new URLSearchParams();
+      targetParams.set('from', 'footnote');
+      if (marker) targetParams.set('fn', marker);
+      targetParams.set('src_n', String(N).padStart(2, '0'));
+      return RD.chapterHref(UID, chN) + '?' + targetParams.toString() + '#blk-' + encodeURIComponent(blockId);
+    }
+    return RD.chapterHref(UID, chN);
+  }
+
+  function renderFnRefButton(ref) {
+    const marker = String(ref.marker || '');
+    const isLocal = Boolean(ref.target_block);
+    const cls = 'fn-ref' + (isLocal ? '' : ' is-external');
+    const ch = ref.target_chapter || null;
+    const title = isLocal
+      ? ('查看注释 [' + marker + ']')
+      : ('注释 [' + marker + '] 不在本章正文，点击查看提示');
+    return (
+      '<sup class="fn-ref-wrap">' +
+        '<button type="button" class="' + cls + '"' +
+          ' id="' + RD.esc(ref.id || '') + '"' +
+          ' data-fn-ref="' + RD.esc(ref.id || '') + '"' +
+          ' data-fn-marker="' + RD.esc(marker) + '"' +
+          (isLocal ? ' data-fn-target="' + RD.esc(ref.target_block) + '"' : '') +
+          ' data-fn-status="' + RD.esc(ref.status || (isLocal ? 'local' : 'unresolved')) + '"' +
+          (ref.target_file ? ' data-fn-target-file="' + RD.esc(ref.target_file) + '"' : '') +
+          (ch ? ' data-fn-target-ch-n="' + RD.esc(ch.n) + '" data-fn-target-ch-title="' + RD.esc(ch.title || '') + '"' : '') +
+          (ch && ch.block_id ? ' data-fn-target-block="' + RD.esc(ch.block_id) + '"' : '') +
+          ' title="' + RD.esc(title) + '"' +
+          ' aria-label="注释 ' + RD.esc(marker) + '">' +
+          RD.esc(marker) +
+        '</button>' +
+      '</sup>'
+    );
+  }
+
+  function renderRichText(text, probe, fnRefs) {
+    if (!fnRefs || !fnRefs.length) return highlightEscaped(text, probe);
+    const raw = String(text || '');
+    const hl = findHighlightRange(raw, probe);
+    const byPos = new Map();
+    const pts = new Set([0, raw.length]);
+    if (hl) {
+      pts.add(hl[0]);
+      pts.add(hl[1]);
+    }
+    for (const ref of fnRefs) {
+      const p = Math.max(0, Math.min(raw.length, Number(ref.pos || 0)));
+      pts.add(p);
+      if (!byPos.has(p)) byPos.set(p, []);
+      byPos.get(p).push(ref);
+    }
+    const sorted = Array.from(pts).sort((a, b) => a - b);
+    let out = '';
+    if (byPos.has(0)) {
+      out += byPos.get(0).map(renderFnRefButton).join('');
+    }
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i];
+      const b = sorted[i + 1];
+      if (b > a) {
+        const chunk = RD.esc(raw.slice(a, b));
+        const inHl = Boolean(hl && a >= hl[0] && b <= hl[1]);
+        out += inHl ? ('<mark class="hl-hit">' + chunk + '</mark>') : chunk;
+      }
+      if (byPos.has(b)) {
+        out += byPos.get(b).map(renderFnRefButton).join('');
       }
     }
-    return RD.esc(raw);
+    return out;
   }
 
   function arrivalBlockText() {
@@ -230,14 +311,19 @@
       return;
     }
     el.hidden = false;
-    const sourceLabel = arrival.from === 'daily' ? '来自往期日课' : '来自书库检索';
+    const sourceLabel = arrival.from === 'daily'
+      ? '来自往期日课'
+      : (arrival.from === 'footnote' ? '来自正文注释' : '来自书库检索');
     const bidLabel = arrival.blockIds.length ? arrival.blockIds.join(', ') : '';
     const primaryBid = arrival.blockIds[0] || '';
+    const queryOrFn = arrival.query
+      ? '<span class="arrival-query">「' + RD.esc(arrival.query) + '」</span>'
+      : (arrival.fn ? '<span class="arrival-query">注 [' + RD.esc(arrival.fn) + ']</span>' : '');
     el.innerHTML =
       '<div class="arrival-row">' +
         '<div class="arrival-info">' +
           '<span class="arrival-badge">' + RD.esc(sourceLabel) + '</span>' +
-          (arrival.query ? '<span class="arrival-query">「' + RD.esc(arrival.query) + '」</span>' : '') +
+          queryOrFn +
           (bidLabel && primaryBid
             ? '<button type="button" class="wb-btn arrival-loc" id="btn-arrival-focus">定位到 ' + RD.esc(bidLabel) + '</button>'
             : '') +
@@ -249,6 +335,9 @@
             : '') +
           (arrival.from === 'search'
             ? '<a class="wb-btn" href="' + buildSearchHref(arrival.query, false) + '" target="_blank" rel="noopener">去书库重搜 ↗</a>'
+            : '') +
+          (arrival.from === 'footnote' && arrival.srcN
+            ? '<a class="wb-btn" href="' + RD.chapterHref(UID, arrival.srcN) + '">回到第 ' + RD.esc(arrival.srcN) + ' 章</a>'
             : '') +
           '<button type="button" class="wb-btn arrival-close" id="btn-arrival-close" aria-label="收起提示">×</button>' +
         '</div>' +
@@ -285,9 +374,11 @@
     const closeBtn = RD.mount('btn-arrival-close');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
+        const wasFn = arrival.from === 'footnote';
         arrival.dismissed = true;
         renderArrivalBanner();
         renderBlocks();
+        if (wasFn) clearActiveFootnoteDef();
       });
     }
   }
@@ -642,13 +733,14 @@
     const probe = isHit ? arrival.hl : '';
     if (kind === 'heading') {
       const lvl = Math.min(4, Math.max(1, Number(blk.level || 2)));
-      return '<h' + lvl + '>' + highlightEscaped(text, probe) + '</h' + lvl + '>';
+      return '<h' + lvl + '>' + renderRichText(text, probe, blk.fn_refs) + '</h' + lvl + '>';
     }
-    if (kind === 'quote') return '<blockquote>' + highlightEscaped(text, probe) + '</blockquote>';
+    if (kind === 'quote') return '<blockquote>' + renderRichText(text, probe, blk.fn_refs) + '</blockquote>';
     if (kind === 'code') return '<pre><code>' + highlightEscaped(text, probe) + '</code></pre>';
     if (kind === 'list') {
       const tag = blk.ordered ? 'ol' : 'ul';
-      const items = (blk.items || []).map((x) => '<li>' + highlightEscaped(x, probe) + '</li>').join('');
+      const itemRefs = blk.item_fn_refs || [];
+      const items = (blk.items || []).map((x, idx) => '<li>' + renderRichText(x, probe, itemRefs[idx]) + '</li>').join('');
       return '<' + tag + '>' + items + '</' + tag + '>';
     }
     if (kind === 'table') {
@@ -665,8 +757,23 @@
           (text ? '<figcaption class="wb-sub">' + RD.esc(text) + '</figcaption>' : '') + '</figure>'
         : '<p class="wb-sub">[图片] ' + RD.esc(text) + '</p>';
     }
-    if (kind === 'footnote') return '<p class="reader-footnote">' + highlightEscaped(text, probe) + '</p>';
-    return '<p>' + highlightEscaped(text, probe) + '</p>';
+    if (kind === 'footnote') {
+      if (blk.marker) {
+        const backRefs = blk.ref_blocks || [];
+        const backBtn = backRefs.length
+          ? '<button type="button" class="fn-back-inline" data-fn-back-block="' + RD.esc(backRefs[0]) + '" title="返回正文注释点">↩ 返回正文</button>'
+          : '';
+        return (
+          '<div class="reader-footnote-item" data-fn-def-marker="' + RD.esc(blk.marker) + '">' +
+            '<span class="fn-def-num">[' + RD.esc(blk.marker) + ']</span>' +
+            '<p class="reader-footnote">' + renderRichText(text, probe, blk.fn_refs) + '</p>' +
+            backBtn +
+          '</div>'
+        );
+      }
+      return '<p class="reader-footnote">' + renderRichText(text, probe, blk.fn_refs) + '</p>';
+    }
+    return '<p>' + renderRichText(text, probe, blk.fn_refs) + '</p>';
   }
 
   function renderBlocks() {
@@ -1118,30 +1225,176 @@
     syncToolButtons();
   }
 
-  function focusBlock(bid) {
+  function focusBlock(bid, instant) {
     const el = document.getElementById('blk-' + bid);
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'center' });
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 2000);
   }
 
-  function jumpToHash() {
+  function renderFootnoteReturnBar() {
+    const bar = RD.mount('fn-return-bar');
+    if (!bar) return;
+    if (!footnoteReturn) {
+      bar.hidden = true;
+      bar.innerHTML = '';
+      return;
+    }
+    bar.hidden = false;
+    bar.innerHTML =
+      '<span class="fn-ret-label">正在查看注 <b>[' + RD.esc(footnoteReturn.marker || '') + ']</b></span>' +
+      '<button type="button" class="fn-ret-btn" id="btn-fn-return">↩ 返回正文</button>' +
+      '<button type="button" class="fn-ret-close" id="btn-fn-return-close" aria-label="关闭返回条" title="关闭">×</button>';
+  }
+
+  function hideFootnoteTip() {
+    const pop = RD.mount('fn-tip-popover');
+    if (!pop) return;
+    pop.hidden = true;
+    pop.innerHTML = '';
+  }
+
+  function clearActiveFootnoteDef() {
+    const reader = RD.mount('reader-body');
+    if (reader) reader.querySelectorAll('.reader-block.fn-active-def').forEach((n) => n.classList.remove('fn-active-def'));
+  }
+
+  function jumpToFootnote(refBtn) {
+    hideFootnoteTip();
+    const refId = refBtn.getAttribute('data-fn-ref') || '';
+    const marker = refBtn.getAttribute('data-fn-marker') || '';
+    const targetBid = refBtn.getAttribute('data-fn-target') || '';
+    const sourceBlk = refBtn.closest('.reader-block[data-block]');
+    const sourceBid = sourceBlk ? sourceBlk.getAttribute('data-block') : '';
+    if (!targetBid) {
+      showFootnoteTip(refBtn);
+      return;
+    }
+    clearActiveFootnoteDef();
+    const targetEl = document.getElementById('blk-' + targetBid);
+    if (targetEl) targetEl.classList.add('fn-active-def');
+    footnoteReturn = { refId, sourceBlockId: sourceBid, targetBlockId: targetBid, marker };
+    renderFootnoteReturnBar();
+    focusBlock(targetBid);
+  }
+
+  function returnFromFootnote(defBlockId) {
+    let refEl = null;
+    let blkEl = null;
+    if (footnoteReturn && (!defBlockId || footnoteReturn.targetBlockId === defBlockId)) {
+      refEl = footnoteReturn.refId ? document.getElementById(footnoteReturn.refId) : null;
+      blkEl = footnoteReturn.sourceBlockId ? document.getElementById('blk-' + footnoteReturn.sourceBlockId) : null;
+    } else if (defBlockId) {
+      const reader = RD.mount('reader-body');
+      if (reader) {
+        refEl = Array.from(reader.querySelectorAll('.fn-ref[data-fn-target]'))
+          .find((el) => el.getAttribute('data-fn-target') === defBlockId) || null;
+      }
+      const defEl = document.getElementById('blk-' + defBlockId);
+      const backBtn = defEl ? defEl.querySelector('[data-fn-back-block]') : null;
+      const fallbackBid = backBtn ? backBtn.getAttribute('data-fn-back-block') : '';
+      blkEl = (refEl && refEl.closest('.reader-block')) || (fallbackBid ? document.getElementById('blk-' + fallbackBid) : null);
+    }
+    const scrollTarget = refEl || blkEl;
+    if (scrollTarget) {
+      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (blkEl) {
+      blkEl.classList.add('flash');
+      setTimeout(() => blkEl.classList.remove('flash'), 2000);
+    }
+    if (refEl) {
+      refEl.classList.add('fn-return-flash');
+      setTimeout(() => refEl.classList.remove('fn-return-flash'), 2200);
+    }
+    clearActiveFootnoteDef();
+    footnoteReturn = null;
+    renderFootnoteReturnBar();
+  }
+
+  function showFootnoteTip(refBtn) {
+    const pop = RD.mount('fn-tip-popover');
+    if (!pop) return;
+    const marker = refBtn.getAttribute('data-fn-marker') || '';
+    const status = refBtn.getAttribute('data-fn-status') || 'unresolved';
+    const targetFile = refBtn.getAttribute('data-fn-target-file') || '';
+    const targetChN = refBtn.getAttribute('data-fn-target-ch-n') || '';
+    const targetChTitle = refBtn.getAttribute('data-fn-target-ch-title') || '';
+    const targetBlock = refBtn.getAttribute('data-fn-target-block') || '';
+    const noteChapters = (data && data.footnotes && data.footnotes.note_chapters) || [];
+
+    let bodyHtml = '';
+    let actionsHtml = '';
+    if (status === 'external_chapter' && targetChN) {
+      bodyHtml = '<p>该条注释位于本书另一章节「第 ' + RD.esc(targetChN) + ' 章 · ' + RD.esc(targetChTitle || '注释') + '」。</p>';
+      const href = buildExternalFootnoteHref(targetChN, targetBlock, marker);
+      const label = targetBlock
+        ? ('新标签直达注 [' + marker + '] ↗')
+        : ('打开第 ' + targetChN + ' 章 · ' + (targetChTitle || '注释') + ' ↗');
+      actionsHtml = '<a class="fn-tip-link" href="' + href + '" target="_blank" rel="noopener">' + RD.esc(label) + '</a>';
+    } else if (status === 'external_candidate' && (noteChapters.length || (targetChN && targetBlock))) {
+      if (targetChN && targetBlock) {
+        bodyHtml = '<p>正文与注释分属不同文件，已在「第 ' + RD.esc(targetChN) + ' 章 · ' + RD.esc(targetChTitle || '注释') + '」中定位到对应注文：</p>';
+        const href = buildExternalFootnoteHref(targetChN, targetBlock, marker);
+        actionsHtml =
+          '<a class="fn-tip-link" href="' + href + '" target="_blank" rel="noopener">' +
+            RD.esc('新标签直达注 [' + marker + ']（第 ' + targetChN + ' 章）↗') +
+          '</a>';
+      } else {
+        bodyHtml = '<p>当前章节未包含该条注文，正文与注释可能分属两个文件。可在以下注释章节中查看：</p>';
+        actionsHtml = noteChapters.slice(0, 3).map((ch) =>
+          '<a class="fn-tip-link" href="' + RD.chapterHref(UID, ch.n) + '" target="_blank" rel="noopener">' +
+            '查看第 ' + RD.esc(ch.n) + ' 章 · ' + RD.esc(ch.title) + ' ↗' +
+          '</a>'
+        ).join('');
+      }
+    } else {
+      bodyHtml =
+        '<p>当前章节末尾未找到对应注释，正文与注释可能分属不同文件（例如汇总在后续小节末尾或全书注释页），或原书转档时未保留。</p>' +
+        (targetFile ? '<p class="fn-tip-meta">原链接指向：<code>' + RD.esc(targetFile) + '</code></p>' : '');
+      actionsHtml = '<button type="button" class="fn-tip-toc" data-fn-open-toc>查看全书目录</button>';
+    }
+
+    pop.innerHTML =
+      '<div class="fn-tip-head">' +
+        '<strong>注 [' + RD.esc(marker) + '] 不在本章中</strong>' +
+        '<button type="button" class="fn-tip-close" id="btn-fn-tip-close" aria-label="关闭提示">×</button>' +
+      '</div>' +
+      '<div class="fn-tip-body">' + bodyHtml + '</div>' +
+      '<div class="fn-tip-actions">' + actionsHtml + '</div>';
+
+    pop.hidden = false;
+    const rect = refBtn.getBoundingClientRect();
+    const popW = pop.offsetWidth || 320;
+    const popH = pop.offsetHeight || 130;
+    const left = Math.min(window.innerWidth - popW - 12, Math.max(12, rect.left + rect.width / 2 - popW / 2));
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= popH + 16 ? (rect.bottom + 8) : Math.max(64, rect.top - popH - 8);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+
+  function jumpToHash(initial) {
     const h = (location.hash || '').replace(/^#/, '');
     if (!h.startsWith('blk-')) return;
     const bid = h.slice(4);
     const blocks = (data && data.blocks) || [];
     const idx = blocks.findIndex((b) => b.id === bid);
+    const targetEl = document.getElementById('blk-' + bid);
+    if (arrival.from === 'footnote' && !arrival.dismissed && targetEl) {
+      clearActiveFootnoteDef();
+      targetEl.classList.add('fn-active-def');
+    }
     if (arrivalActive() && idx >= 0 && idx <= 1) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      const el = document.getElementById('blk-' + bid);
-      if (el) {
-        el.classList.add('flash');
-        setTimeout(() => el.classList.remove('flash'), 2000);
+      window.scrollTo({ top: 0, behavior: initial ? 'auto' : 'smooth' });
+      if (targetEl) {
+        targetEl.classList.add('flash');
+        setTimeout(() => targetEl.classList.remove('flash'), 2000);
       }
       return;
     }
-    focusBlock(bid);
+    focusBlock(bid, Boolean(initial));
   }
 
   function updateScrollProgress() {
@@ -1304,7 +1557,8 @@
     });
 
     const reader = RD.mount('reader-body');
-    reader.addEventListener('mouseup', () => {
+    reader.addEventListener('mouseup', (e) => {
+      if (e.target && e.target.closest('.fn-ref, .fn-back-inline')) return;
       setTimeout(() => {
         const cap = captureSelection();
         if (!cap) return;
@@ -1316,6 +1570,25 @@
     });
 
     reader.addEventListener('click', async (e) => {
+      const fnRefBtn = e.target.closest('.fn-ref');
+      if (fnRefBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        hideSelectionBar();
+        if (fnRefBtn.getAttribute('data-fn-target')) {
+          jumpToFootnote(fnRefBtn);
+        } else {
+          showFootnoteTip(fnRefBtn);
+        }
+        return;
+      }
+      const fnBackBtn = e.target.closest('.fn-back-inline');
+      if (fnBackBtn) {
+        e.stopPropagation();
+        const defBlk = fnBackBtn.closest('.reader-block[data-block]');
+        returnFromFootnote(defBlk ? defBlk.getAttribute('data-block') : '');
+        return;
+      }
       const delBtn = e.target.closest('[data-del-pin]');
       if (delBtn) {
         e.stopPropagation();
@@ -1388,6 +1661,10 @@
           typoPop.hidden = true;
           if (typoBtn) typoBtn.setAttribute('aria-expanded', 'false');
         }
+        const fnPop = RD.mount('fn-tip-popover');
+        if (fnPop && !fnPop.hidden && !fnPop.contains(e.target) && !e.target.closest('.fn-ref')) {
+          hideFootnoteTip();
+        }
         const bar = RD.mount('selection-bar');
         const curReader = RD.mount('reader-body');
         if (bar.contains(e.target) || e.target.closest('[data-trigger]')) return;
@@ -1398,6 +1675,12 @@
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           hideSelectionBar();
+          hideFootnoteTip();
+          if (footnoteReturn) {
+            clearActiveFootnoteDef();
+            footnoteReturn = null;
+            renderFootnoteReturnBar();
+          }
           if (typoPop && !typoPop.hidden) {
             typoPop.hidden = true;
             if (typoBtn) typoBtn.setAttribute('aria-expanded', 'false');
@@ -1416,6 +1699,36 @@
           toggleFocusMode();
         }
       });
+
+      const fnRetBar = RD.mount('fn-return-bar');
+      if (fnRetBar) {
+        fnRetBar.addEventListener('click', (e) => {
+          if (e.target.closest('#btn-fn-return')) {
+            returnFromFootnote(footnoteReturn ? footnoteReturn.targetBlockId : '');
+            return;
+          }
+          if (e.target.closest('#btn-fn-return-close')) {
+            clearActiveFootnoteDef();
+            footnoteReturn = null;
+            renderFootnoteReturnBar();
+          }
+        });
+      }
+
+      const fnTipPop = RD.mount('fn-tip-popover');
+      if (fnTipPop) {
+        fnTipPop.addEventListener('click', (e) => {
+          if (e.target.closest('#btn-fn-tip-close')) {
+            hideFootnoteTip();
+            return;
+          }
+          if (e.target.closest('[data-fn-open-toc]')) {
+            hideFootnoteTip();
+            setSpineOpen(true);
+            setSpineTab('toc');
+          }
+        });
+      }
 
       window.addEventListener('scroll', () => {
         if (!scrollRaf) scrollRaf = requestAnimationFrame(updateScrollProgress);
@@ -1768,9 +2081,9 @@
     renderBlocks();
     renderSelectionBarButtons();
     bindEvents();
-    jumpToHash();
+    jumpToHash(true);
     updateScrollProgress();
-    window.addEventListener('hashchange', jumpToHash);
+    window.addEventListener('hashchange', () => jumpToHash(false));
     loadBookToc();
   });
 })();

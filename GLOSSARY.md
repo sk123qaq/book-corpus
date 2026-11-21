@@ -1,6 +1,6 @@
 # 书库术语表（GLOSSARY）
 
-状态：living · 2026-11-20
+状态：living · 2026-11-21
 失效源：.agents/skills/verify-book-corpus/features/*.md src/bookcorpus/reading/book_types.py apps/reading/server.py apps/ops/server.py apps/demo/server.py
 
 本表定义 `book-corpus` 五个本地应用与阅读/检索/运维链路的现行术语，口径以 `.agents/skills/verify-book-corpus/features/*.md` 为准。书库目录与账本词（`uid`、人账、机账、批次、拆章、存档、冷宫）另见 `AGENTS.md`「文件地图」。
@@ -16,6 +16,7 @@
 ## 阅读工作台（分层读）
 
 - **正文工作台**：章页打开即 0 秒直出 100% 原文，不设阻塞阅读的工单或审批。正文经 `mdparse` 切分为带稳定编号 `B%02d`（DOM `#blk-B01`）与原文件行号（`start_line`/`end_line`）的块。
+- **脚注跳转与跨文件直达**：`mdparse` 与 `src/bookcorpus/reading/footnotes.py` 解析 EPUB/PDF 转档残留的各类行内注标与注释定义，在 `/api/chapter` 返回块内 `fn_refs` / `item_fn_refs` 与章级 `footnotes`。章内注点击上标滚至对应注文（`.reader-footnote-item`），经底部浮条（`#fn-return-bar`）或注段内「↩ 返回正文」回到原注释点；正文与注释分属不同文件时弹出 `#fn-tip-popover`，可定位具体注释块时经 `?from=footnote&fn=...&src_n=...#blk-<id>` 新标签直达目标块并显示「来自正文注释」来源条。
 - **阅读视角（`reading_profile`）**：由 `src/bookcorpus/reading/book_types.py` 按人账学科（`book.json` 的 `subjects`）即时推导出的 7 类阅读策略：`practical`（实用型书）、`literature`（想象文学，含 `fiction/drama/poetry` 子类）、`history`（历史书）、`science`（科学与数学）、`philosophy`（哲学书）、`social`（社会科学，兼兜底）、`visual`（图册与视觉）。读者可在章页 `#profile-select` 临时切换（存浏览器 `localStorage`，不写回 `tables/ledger.db`）。
 - **结构蓝图（Blueprint）**：跨 7 类阅读视角共 18 种强类型图表骨架（DAG / 矩阵 / 曲线三家族），走五步防重叠流水线（蓝图 Schema 约束 → 模型填纯语义 JSON → `diagram_audit.py` 审计与超长分流 → `diagram_renderer.js` 离屏测量与正交避障渲染 → 实时几何碰撞质检）。所有节点带 `Bxx` 原文锚点，点击可回跳正文；支持 `#zoom-modal` 宽屏全览。全章缓存落 `工作区/阅读/<uid>/ch/<nn>/chapter_tools/`。
 - **视角扩展（Extension Action）**：按阅读视角置顶的 7 个专属伴读动作（`checklist`、`imagery`、`compare_context`、`boundary_check`、`sparring_dossier`、`method_audit`、`craft_notes`），复用 `POST /api/assist`。其中 `compare_context` 与 `method_audit` 带 `cross_search:true`，在工具条提供「跨书对照 ↗」跳往 8765。

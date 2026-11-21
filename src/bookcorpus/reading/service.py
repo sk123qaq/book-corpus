@@ -7,7 +7,7 @@ import time
 import uuid
 
 from .. import preflight as env_preflight
-from . import book_types, chapmap, diagram_audit, diagrams, events
+from . import book_types, chapmap, diagram_audit, diagrams, events, footnotes
 from .library import Library
 from .model import DEFAULT_EFFORT, DEFAULT_MODEL, ModelClient
 from .preflight import chapter_map_gate, evaluate
@@ -373,6 +373,14 @@ class ReadingService:
         ch_view["minutes"] = max(1, round(chapter.get("chars", 0) / WORDS_PER_MINUTE))
         ch_view["source_sha256"] = source_sha
         profile = book_types.resolve_read_profile(book.get("subjects"), title=book.get("title") or "")
+        fn_meta = footnotes.enrich_cross_file_footnotes(
+            blocks,
+            self.library.chapters(uid),
+            int(chapter["n"]),
+            raw.get("source_files") or (),
+            chapter_reader=lambda target_n: self.library.read_chapter(uid, target_n),
+            source_title=chapter.get("title") or "",
+        )
         return {
             "book": self._book_view(book),
             "chapter": ch_view,
@@ -383,6 +391,7 @@ class ReadingService:
             "assist_notes": notes,
             "chapter_map": cmap,
             "cached_tools": cached_tools,
+            "footnotes": fn_meta,
         }
 
     # ---- 划词局部伴读（POST /api/assist） ------------------------------

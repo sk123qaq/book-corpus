@@ -11,7 +11,8 @@ import unicodedata
 
 from ..scripts.layout import Layout, find_root
 from .chapters import merge_title_pages
-from .mdparse import parse_markdown
+from .footnotes import resolve_chapter_footnotes
+from .mdparse import non_space_count, parse_markdown
 from .shelf_index import ShelfIndex
 
 AUTHOR_NOISE_RE = re.compile(r"(?:z-library(?:\.sk)?|1lib\.sk|z-lib\.sk)", re.I)
@@ -285,6 +286,9 @@ class Library:
         parsed["file"] = os.path.basename(paths[0])
         parsed["source_files"] = [os.path.basename(path) for path in paths]
         parsed["source_sha256"] = hashlib.sha256(raw_bytes).hexdigest()
+        resolve_chapter_footnotes(parsed["blocks"], source_files=parsed["source_files"])
+        parsed["body_han"] = sum(block["chars"] for block in parsed["blocks"])
+        parsed["body_chars"] = sum(non_space_count(block["text"]) for block in parsed["blocks"])
         return parsed
 
     # ---- 全库检索 -----------------------------------------------------

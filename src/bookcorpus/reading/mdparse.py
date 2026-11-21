@@ -10,6 +10,8 @@ import re
 import struct
 from urllib.parse import unquote
 
+from .footnotes import extract_inline_footnotes, parse_explicit_footnote_def, resolve_chapter_footnotes
+
 HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 INLINE_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
@@ -116,9 +118,15 @@ def _clean_inline(text):
     return re.sub(r"`([^`]+)`", r"\1", text)
 
 
+def _clean_list_item(text):
+    return _clean_inline(text).replace("**", "").lstrip("*").strip()
+
+
 def _append(blocks, kind, text, **extra):
-    text = _clean_inline(text.strip())
-    block = {"id": "B%02d" % (len(blocks) + 1), "kind": kind, "text": text, "chars": han_count(text)}
+    cleaned, fn_refs = extract_inline_footnotes(text.strip(), _clean_inline)
+    block = {"id": "B%02d" % (len(blocks) + 1), "kind": kind, "text": cleaned, "chars": han_count(cleaned)}
+    if fn_refs:
+        block["fn_refs"] = fn_refs
     block.update(extra)
     blocks.append(block)
 
@@ -306,7 +314,21 @@ def _parse_chunk(blocks, chunk, base_dir=None, *, start_line=0, end_line=0):
 
     footnote = FOOTNOTE_RE.match(lines[0].strip())
     if footnote:
-        _append(blocks, "footnote", footnote.group(2), marker=footnote.group(1), **span)
+        rest = " ".join([footnote.group(2).strip()] + [ln.strip() for ln in lines[1:]]).strip()
+        _append(blocks, "footnote", rest, marker=footnote.group(1), **span)
+        return
+
+    joined = " ".join(line.strip() for line in lines)
+    explicit_def = parse_explicit_footnote_def(joined)
+    if explicit_def:
+        extra = {
+            "marker": explicit_def["display"],
+            "_key": explicit_def["key"],
+            "_def_kind": explicit_def["def_kind"],
+        }
+        if explicit_def["back_file"]:
+            extra["back_file"] = explicit_def["back_file"]
+        _append(blocks, "footnote", explicit_def["body"], **extra, **span)
         return
 
     if all(QUOTE_RE.match(line.strip()) for line in lines):
@@ -318,11 +340,17 @@ def _parse_chunk(blocks, chunk, base_dir=None, *, start_line=0, end_line=0):
         return
 
     if all(LIST_RE.match(line.strip()) for line in lines):
-        items = [
-            _clean_inline(LIST_RE.match(line.strip()).group(1).strip()).replace("**", "").lstrip("*").strip()
-            for line in lines
-        ]
-        _append(blocks, "list", " ".join(items), items=items, **span)
+        items = []
+        item_fn_refs = []
+        for line in lines:
+            raw_item = LIST_RE.match(line.strip()).group(1).strip()
+            cleaned_item, refs = extract_inline_footnotes(raw_item, _clean_list_item)
+            items.append(cleaned_item)
+            item_fn_refs.append(refs)
+        extra = {"items": items}
+        if any(item_fn_refs):
+            extra["item_fn_refs"] = item_fn_refs
+        _append_raw(blocks, "list", " ".join(items), **extra, **span)
         return
 
     rows = [line for line in lines if TABLE_ROW_RE.match(line)]
@@ -419,7 +447,11 @@ def _attach_orphan_footnotes(blocks):
     解析器会先得到若干空 footnote 块。若末尾列表条目数与空脚注数
     完全一致，就按顺序回填并移除该列表。
     """
-    orphans = [block for block in blocks if block["kind"] == "footnote" and not block["text"].strip()]
+    orphans = [
+        block
+        for block in blocks
+        if block["kind"] == "footnote" and not block["text"].strip() and not block.get("marker")
+    ]
     if not orphans or not blocks or blocks[-1]["kind"] != "list":
         return
     items = blocks[-1].get("items") or []
@@ -451,6 +483,7 @@ def parse_markdown(raw, stem="", meta=None, base_dir=None):
             for chunk, chunk_start, chunk_end in _iter_md_chunks(seg, seg_start):
                 _parse_chunk(blocks, chunk, base_dir, start_line=chunk_start, end_line=chunk_end)
     _attach_orphan_footnotes(blocks)
+    resolve_chapter_footnotes(blocks)
     title = (merged.get("title") or h1 or stem or "").strip()
     body_han = sum(block["chars"] for block in blocks)
     body_chars = sum(non_space_count(block["text"]) for block in blocks)
