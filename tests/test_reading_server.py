@@ -192,7 +192,7 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
             return
 
     upstream = ThreadingHTTPServer(("127.0.0.1", mock_http_port), _MockUpstream)
-    t = threading.Thread(target=upstream.serve_forever, daemon=True)
+    t = threading.Thread(target=upstream.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     t.start()
     try:
         proc, base = _start_server(

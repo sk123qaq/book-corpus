@@ -117,7 +117,7 @@ def test_embed_query_http_and_graceful_fallback(tmp_path):
 
     srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
     port = srv.server_address[1]
-    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     t.start()
     try:
         url = f"http://127.0.0.1:{port}"

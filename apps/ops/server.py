@@ -1584,7 +1584,7 @@ class Runner:
             while pid_alive(pid):
                 if job_id in self.cancels:
                     self._terminate(job_id, pid)
-                time.sleep(1.0)
+                time.sleep(0.15)
             self.resume(job_id, spec)
         except Exception:
             detail = traceback.format_exc(limit=4)
