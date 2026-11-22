@@ -79,6 +79,7 @@ PDF_PROBE_RETRY = 30.0
 KILL_WAIT = 10
 LOG_TAIL_LINES = 200
 SEARCH_URL = "http://127.0.0.1:8765"
+DEMO_SERVER = os.path.join(REAL_ROOT, "apps", "demo", "server.py")
 TRIAGE_BATCH_PREFIX = "pdf-ocr-ops-"
 CENSUS_BATCH_PREFIX = "pdf-普查-"
 OCR_BATCH_PREFIX = "pdf-ocr-"
@@ -397,8 +398,14 @@ def rc_of_detail(detail):
 class Env:
     """一个数据根下的全部路径。--root 换根，代码目录仍指本文件所在处。"""
 
-    def __init__(self, root, scripts=None):
+    def __init__(self, root, scripts=None, search_url=None, demo_server=None):
         self.root = os.path.abspath(root)
+        # 搜索地址与演示页脚本可注入（离线验收用假服务），不设时就是本机 8765 与仓库里的
+        # apps/demo/server.py，真实运行行为不变。构造参数优先于环境变量。
+        url = search_url or os.environ.get("BOOK_CORPUS_SEARCH_URL") or SEARCH_URL
+        self.search_url = str(url).rstrip("/")
+        script = demo_server or os.environ.get("BOOK_CORPUS_DEMO_SERVER") or DEMO_SERVER
+        self.demo_server = os.path.abspath(os.path.expanduser(str(script)))
         self.ops = os.path.join(self.root, "工作区", "运维")
         self.jobs = os.path.join(self.ops, "jobs")
         self.scripts = os.path.abspath(scripts) if scripts else _package_scripts()
@@ -2153,13 +2160,13 @@ class App:
 
     # ---- search ----------------------------------------------------
     def search_health(self):
-        out = {"ok": True, "running": False, "url": SEARCH_URL, "pid": None, "meta": None, "error": None}
+        out = {"ok": True, "running": False, "url": self.env.search_url, "pid": None, "meta": None, "error": None}
         pid_file = read_json(self.env.search_pid)
         if isinstance(pid_file, dict):
             out["pid"] = pid_file.get("pid")
         try:
-            with urllib.request.urlopen(  # noqa: S310 SEARCH_URL 是模块常量（http://127.0.0.1:8765）
-                SEARCH_URL + "/api/health", timeout=1.5
+            with urllib.request.urlopen(  # noqa: S310 地址来自 Env，默认 http://127.0.0.1:8765
+                self.env.search_url + "/api/health", timeout=1.5
             ) as r:
                 blob = json.loads(r.read().decode("utf-8"))
             out["running"] = True
@@ -2176,9 +2183,12 @@ class App:
         health = self.search_health()
         if health["running"]:
             return {"ok": True, "already": True, "health": health}
-        script = os.path.join(REAL_ROOT, "apps", "demo", "server.py")
+        script = self.env.demo_server
         if not os.path.exists(script):
             return {"ok": False, "error": "演示页脚本不存在：%s" % self.env.rel(script)}
+        if os.path.abspath(script) != os.path.abspath(DEMO_SERVER):
+            # 演示页脚本被注入（离线验收）：按注入地址的端口直接拉起它，不碰真 8765。
+            return self._start_injected_search(script)
         src_dir = os.path.join(REAL_ROOT, "src")
         if src_dir not in sys.path:
             sys.path.insert(0, src_dir)
@@ -2199,6 +2209,34 @@ class App:
                 "pid": result.get("pid"),
             }
         return {"ok": False, "error": str(result.get("error") or "演示页启动失败"), "pid": result.get("pid")}
+
+    def _start_injected_search(self, script):
+        """注入模式：拉起注入的演示页脚本并在注入地址上等健康；只给离线验收用。"""
+        port = urlparse(self.env.search_url).port or 80
+        os.makedirs(self.env.ops, exist_ok=True)
+        cmd = [sys.executable, script, "--port", str(port), "--root", self.env.root]
+        with open(self.env.search_log, "ab") as fh:
+            fh.write(("\n=== start %s %s ===\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), " ".join(cmd))).encode())
+            fh.flush()
+            proc = subprocess.Popen(  # noqa: S603 argv 固定为解释器+注入的本地演示页脚本，不含外部输入
+                cmd,
+                cwd=self.env.root,
+                stdin=subprocess.DEVNULL,
+                stdout=fh,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            if self.search_health()["running"]:
+                write_json_atomic(self.env.search_pid, {"pid": proc.pid, "at": now_iso(), "argv": cmd})
+                return {"ok": True, "started": True, "pid": proc.pid}
+            if proc.poll() is not None:
+                break
+            time.sleep(0.05)
+        with suppress(OSError):
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        return {"ok": False, "error": "演示页没起来：%s" % self.env.rel(self.env.search_log), "pid": proc.pid}
 
     # ---- read-only data --------------------------------------------
     def db_rows(self, sql, args=()):
