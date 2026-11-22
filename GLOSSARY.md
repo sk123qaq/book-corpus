@@ -48,4 +48,4 @@
 - **读本页、`/reader/...`、`/api/depth/...` 与阅读侧工单队列 `/api/jobs`**：已退役（2026-11-16），路由一律 404。
 - **研究档外部搜索配置（`READING_SEARCH_PROVIDER` / `READING_FETCH_PROVIDER`）**：已退役（2026-11-16），原文档 [研究检索配置](docs/design/研究检索配置.md) 已标 `superseded`。
 - **操作台旧七页签 / 八页签导航与手动「一键收尾」主流程**：已退役（2026-11-19），替代见 [操作台重构方案](docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md)。
-- **删书硬链接快照门槛（`books.snapshot-<日期>`、`--no-snapshot`、「回滚副本」）**：已退役（2026-11-20），退库改以冷宫 `books/_冷宫/` 与 `retired.tsv` 留档，不再依赖库外硬链接快照目录。
+- **删书硬链接快照门槛（`books.snapshot-<日期>`、`--no-snapshot`、「回滚副本」）**：已退役（2026-11-20），退库改以冷宫 `books/_冷宫/` 与 `retired.tsv` 留档，不再依赖库外硬链接快照目录；两者是否对齐由 `GET /api/cold` 核验、`POST /api/cold/reconcile` 按实物校正（缺失行保留并记 `last_checked`）。

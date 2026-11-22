@@ -49,7 +49,7 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 
 - **1. 总览（`#overview`）**：当前焦点判定与可读率进度条、流水线六环节、下一步待办列表、多端服务状态栏；任务统一在「任务与日志」查看，本页不重复展示最近任务。
 - **2. 新书入库（`#import`）**：自上而下全宽流（全宽投递条 → 收件箱清单 → 入库核对清单，可逐行改书名/分类/动作并确认入库）；文档转换进度与明细移至「正文生产 · 文档转正文」。
-- **3. 书目与分类（`#ledger`）**：含子页签 `ledger`（两行清爽工具栏 + 全库书目台账，去除磁盘路径与文件名，保存即自动同步）、`retire`（按编号/书名搜索移出 + 已标「不留」清单 + 原生确认弹窗，不放最近任务）、`cold`（冷宫只读归档表）。
+- **3. 书目与分类（`#ledger`）**：含子页签 `ledger`（两行清爽工具栏 + 全库书目台账，去除磁盘路径与文件名，保存即自动同步）、`retire`（按编号/书名搜索移出 + 已标「不留」清单 + 原生确认弹窗，不放最近任务）、`cold`（退库台账 + 冷宫实物核验：表格带「实物状态」三态，页面「刷新」会按 `books/_冷宫` 实际文件校正台账）。
 - **4. 正文生产（`#split`）**：含子页签 `split`（电子书拆章/重拆/重检/查看问题/受理）、`docs`（文档转正文四格概览、补转、失败重试与最近一批折叠明细）、`pdf`（四格状态筛查、今日额度、批量分诊、内嵌待转清单与改处置弹窗；子页 `#pdf-list` 为完整多维筛选清单）、`manual`（手工格式扫描落位）；各子页均不重复展示最近任务卡片。
 - **5. 同步与维护（`#maintain`）**：四格同步健康总览（书目与视图 / 全文检索 / 语义检索 / 体检状态）、自动同步开关与「复核并增量对齐」、体检提醒折叠详情、章节主题增强、导出书目总表与低频高级运维重建；不重复展示最近同步记录。
 - **6. 任务与日志（`#logs`）**：全库后台任务的唯一查看与人工收口中心，含状态快速分段筛选、待确认提示条、步骤表、脱敏日志、取消、重跑与重启接管；从各模块点击详情或去确认直达并滚动定位 `#job-detail`。
@@ -101,7 +101,8 @@ GET  /api/retire/drop                  # retention=drop 的待退库清单
 GET  /api/retire/search?q=             # 按 uid 或书名查删书预览对象
 POST /api/delete/dry-run               # {uid, reason}：七层退库预览与 plan_hash
 POST /api/delete/apply                 # {uid, reason, plan_hash, confirm_uid, confirm}：执行退库并清理检索层
-GET  /api/cold                         # 冷宫只读清单（books/_冷宫/ 与 retired.tsv）
+GET  /api/cold                         # 退库台账 × books/_冷宫 实物核验（items 带 state，另有 counts/checked_at）
+POST /api/cold/reconcile               # 按 books/_冷宫 实际文件校正 retired.tsv（保留缺失行、补登未登记实物），返回同 GET 视图 + changed/backups
 POST /api/sync/reconcile               # 复核并增量对齐（元数据 / FTS5 / 向量 / 体检）
 POST /api/sync/expand                  # 按需 LLM 章级主题扩展
 POST /api/maintain                     # {steps:[db,index,awards,audit,verify,catalog,doc]}
