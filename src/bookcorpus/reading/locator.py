@@ -1,4 +1,4 @@
-"""源码路径 / 行号 / 引文探针到分层读规范章节与原文块的解析器。"""
+"""源码路径 / 行号 / 引文探针到伴读规范章节与原文块的解析器。"""
 
 from __future__ import annotations
 
@@ -174,7 +174,7 @@ def resolve_open_target(
     line: int | None = None,
     quote: str = "",
 ) -> OpenTarget:
-    """将外部来源的 ``(uid, path, line, quote)`` 解析为分层读规范跳转目标。"""
+    """将外部来源的 ``(uid, path, line, quote)`` 解析为伴读规范跳转目标。"""
     clean_uid = (uid or "").strip() or extract_uid_from_path(path)
     if not clean_uid or not UID_RE.match(clean_uid):
         return OpenTarget(kind="not_found", uid="", notice="缺少或非法的书目编号。")

@@ -44,6 +44,65 @@
   let mapAbortCtrl = null;
   let scrollRaf = 0;
   let footnoteReturn = null;
+  let lastFnTrigger = null;
+  const justPinnedIds = new Set();
+  let supportsDisplayTransition;
+
+  function canTransitionDisplay() {
+    if (supportsDisplayTransition !== undefined) return supportsDisplayTransition;
+    if (!window.CSS?.supports?.('transition-behavior', 'allow-discrete') || !document.body) {
+      return false;
+    }
+    const probe = document.createElement('div');
+    probe.style.cssText = 'transition: display 1s allow-discrete !important; display: block;';
+    document.body.appendChild(probe);
+    getComputedStyle(probe).display;
+    probe.style.display = 'none';
+    supportsDisplayTransition = getComputedStyle(probe).display === 'block';
+    probe.remove();
+    return supportsDisplayTransition;
+  }
+
+  function supportsTopLayerExit() {
+    return Boolean(window.CSS?.supports?.('overlay', 'auto') && canTransitionDisplay());
+  }
+
+  function openPopoverSafe(pop) {
+    if (!pop) return;
+    pop.removeAttribute('data-closing');
+    if (typeof pop.showPopover === 'function') {
+      try {
+        if (!pop.matches(':popover-open')) pop.showPopover();
+        return;
+      } catch (e) {}
+    }
+    pop.classList.add(':popover-open');
+    pop.style.display = 'block';
+  }
+
+  async function closePopoverSafe(pop) {
+    if (!pop) return;
+    if (!supportsTopLayerExit()) {
+      pop.setAttribute('data-closing', '');
+      const animations = pop.getAnimations ? pop.getAnimations({ subtree: true }) : [];
+      if (animations.length > 0) {
+        await Promise.race([
+          Promise.allSettled(animations.map((a) => a.finished)),
+          new Promise((r) => setTimeout(r, 360)),
+        ]);
+      }
+      if (!pop.hasAttribute('data-closing')) return;
+      pop.removeAttribute('data-closing');
+    }
+    if (typeof pop.hidePopover === 'function') {
+      try {
+        if (pop.matches(':popover-open')) pop.hidePopover();
+        return;
+      } catch (e) {}
+    }
+    pop.classList.remove(':popover-open');
+    pop.style.display = 'none';
+  }
 
   const FALLBACK_PROFILES = {
     practical: {
@@ -792,23 +851,26 @@
       const isHit = arrivalActive() && arrival.blockIds.includes(bid);
       const pinned = notesByAnchor.get(bid) || [];
       const pinsHtml = pinned.length
-        ? '<div class="pinned-notes">' + pinned.map((note) =>
-            '<aside class="pin-card" data-note-id="' + RD.esc(note.id) + '">' +
-              '<div class="pin-card-head">' +
-                '<div class="pin-card-title">' +
-                  '<span class="pin-kind">' + RD.esc(RD.actionNames[note.action] || note.action || '旁批') + '</span>' +
-                  (note.title ? '<b>' + RD.esc(note.title) + '</b>' : '') +
-                '</div>' +
-                '<div class="pin-card-meta">' +
-                  '<span>' + RD.esc((note.block_ids || []).join(', ')) +
-                    (note.stale ? ' · 原文已变' : '') + '</span>' +
+        ? '<div class="pinned-notes">' + pinned.map((note) => {
+            const kindLabel = RD.actionNames[note.action] || note.action || '旁批';
+            const rawExcerpt = String(note.title || note.selected_text || note.content || '').replace(/\s+/g, ' ').trim();
+            const excerpt = rawExcerpt.length > 44 ? rawExcerpt.slice(0, 44) + '…' : rawExcerpt;
+            const metaLabel = (note.block_ids || []).join(', ') + (note.stale ? ' · 原文已变' : '');
+            return '<details class="pin-card pin-note" data-note-id="' + RD.esc(note.id) + '"' + (justPinnedIds.has(note.id) ? ' open' : '') + '>' +
+              '<summary class="pin-note-sum">' +
+                '<span class="pin-sum-tag">批注 · ' + RD.esc(kindLabel) + '</span>' +
+                '<span class="pin-sum-excerpt">' + RD.esc(excerpt || '点击展开查看旁批') + '</span>' +
+                (metaLabel ? '<span class="pin-sum-meta">' + RD.esc(metaLabel) + '</span>' : '') +
+              '</summary>' +
+              '<div class="pin-note-body">' +
+                (note.figure ? '<div class="pin-figure-mount" data-pin-figure="' + RD.esc(note.id) + '"></div>' : (note.diagram_html ? '<div>' + note.diagram_html + '</div>' : '')) +
+                (note.content ? '<div class="drawer-answer">' + RD.renderMarkdown(note.content) + '</div>' : '') +
+                '<div class="pin-note-foot">' +
                   '<button type="button" class="pin-del" data-del-pin="' + RD.esc(note.id) + '">移除</button>' +
                 '</div>' +
               '</div>' +
-              (note.figure ? '<div class="pin-figure-mount" data-pin-figure="' + RD.esc(note.id) + '"></div>' : (note.diagram_html ? '<div>' + note.diagram_html + '</div>' : '')) +
-              (note.content ? '<div class="drawer-answer">' + RD.renderMarkdown(note.content) + '</div>' : '') +
-            '</aside>'
-          ).join('') + '</div>'
+            '</details>';
+          }).join('') + '</div>'
         : '';
       return '<div class="reader-block' + (isHit ? ' hit' : '') + '" id="blk-' + RD.esc(bid) + '" data-block="' + RD.esc(bid) + '" data-kind="' + RD.esc(blk.kind || 'paragraph') + '">' +
         renderBlockHtml(blk) +
@@ -1203,8 +1265,12 @@
       setSpineOpen(false);
       setDrawerOpen(false);
     }
+    const focused = !showSpine && !drawerOpen;
     const fBtn = RD.mount('btn-focus-mode');
-    if (fBtn) fBtn.textContent = (!showSpine && !drawerOpen) ? '退出专注模式（恢复双栏）' : '专注阅读（收起双栏）';
+    if (fBtn) {
+      fBtn.setAttribute('aria-pressed', String(focused));
+      fBtn.textContent = focused ? '退出专注模式（恢复双栏）' : '专注阅读（隐藏左右栏）';
+    }
   }
 
   function setSpineTab(tab) {
@@ -1251,8 +1317,7 @@
   function hideFootnoteTip() {
     const pop = RD.mount('fn-tip-popover');
     if (!pop) return;
-    pop.hidden = true;
-    pop.innerHTML = '';
+    closePopoverSafe(pop);
   }
 
   function clearActiveFootnoteDef() {
@@ -1316,6 +1381,7 @@
   function showFootnoteTip(refBtn) {
     const pop = RD.mount('fn-tip-popover');
     if (!pop) return;
+    lastFnTrigger = refBtn;
     const marker = refBtn.getAttribute('data-fn-marker') || '';
     const status = refBtn.getAttribute('data-fn-status') || 'unresolved';
     const targetFile = refBtn.getAttribute('data-fn-target-file') || '';
@@ -1364,7 +1430,7 @@
       '<div class="fn-tip-body">' + bodyHtml + '</div>' +
       '<div class="fn-tip-actions">' + actionsHtml + '</div>';
 
-    pop.hidden = false;
+    openPopoverSafe(pop);
     const rect = refBtn.getBoundingClientRect();
     const popW = pop.offsetWidth || 320;
     const popH = pop.offsetHeight || 130;
@@ -1399,12 +1465,14 @@
 
   function updateScrollProgress() {
     scrollRaf = 0;
-    const bar = RD.mount('reading-progress-bar');
-    if (bar) {
-      const doc = document.documentElement;
-      const max = Math.max(1, doc.scrollHeight - window.innerHeight);
-      const pct = Math.min(100, Math.max(0, (window.scrollY / max) * 100));
-      bar.style.width = pct.toFixed(1) + '%';
+    if (!window.CSS?.supports?.('animation-timeline', 'scroll()')) {
+      const bar = RD.mount('reading-progress-bar');
+      if (bar) {
+        const doc = document.documentElement;
+        const max = Math.max(1, doc.scrollHeight - window.innerHeight);
+        const ratio = Math.min(1, Math.max(0, window.scrollY / max));
+        bar.style.transform = 'scaleX(' + ratio.toFixed(4) + ')';
+      }
     }
     const mapBox = RD.mount('map-drawer');
     if (!mapBox || mapBox.hidden) return;
@@ -1626,15 +1694,23 @@
         });
       }
 
+      const supportsPopover = Object.hasOwn(HTMLElement.prototype, 'popover');
       const typoBtn = RD.mount('btn-typo');
       const typoPop = RD.mount('typo-popover');
       if (typoBtn && typoPop) {
-        typoBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const willOpen = typoPop.hidden;
-          typoPop.hidden = !willOpen;
-          typoBtn.setAttribute('aria-expanded', String(willOpen));
-        });
+        if (supportsPopover) {
+          typoPop.addEventListener('toggle', (e) => {
+            typoBtn.setAttribute('aria-expanded', String(e.newState === 'open'));
+          });
+        } else {
+          typoBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = typoPop.classList.contains(':popover-open');
+            if (isOpen) closePopoverSafe(typoPop);
+            else openPopoverSafe(typoPop);
+            typoBtn.setAttribute('aria-expanded', String(!isOpen));
+          });
+        }
         typoPop.addEventListener('click', (e) => {
           const fsBtn = e.target.closest('[data-font-size]');
           if (fsBtn) {
@@ -1650,20 +1726,22 @@
           }
           if (e.target.closest('#btn-focus-mode')) {
             toggleFocusMode();
-            typoPop.hidden = true;
+            closePopoverSafe(typoPop);
             typoBtn.setAttribute('aria-expanded', 'false');
           }
         });
       }
 
       document.addEventListener('mousedown', (e) => {
-        if (typoPop && !typoPop.hidden && !typoPop.contains(e.target) && e.target !== typoBtn) {
-          typoPop.hidden = true;
-          if (typoBtn) typoBtn.setAttribute('aria-expanded', 'false');
-        }
-        const fnPop = RD.mount('fn-tip-popover');
-        if (fnPop && !fnPop.hidden && !fnPop.contains(e.target) && !e.target.closest('.fn-ref')) {
-          hideFootnoteTip();
+        if (!supportsPopover) {
+          if (typoPop && typoPop.classList.contains(':popover-open') && !typoPop.contains(e.target) && !e.target.closest('#btn-typo')) {
+            closePopoverSafe(typoPop);
+            if (typoBtn) typoBtn.setAttribute('aria-expanded', 'false');
+          }
+          const fnPop = RD.mount('fn-tip-popover');
+          if (fnPop && fnPop.classList.contains(':popover-open') && !fnPop.contains(e.target) && !e.target.closest('.fn-ref')) {
+            hideFootnoteTip();
+          }
         }
         const bar = RD.mount('selection-bar');
         const curReader = RD.mount('reader-body');
@@ -1675,15 +1753,23 @@
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           hideSelectionBar();
-          hideFootnoteTip();
+          if (!supportsPopover) {
+            const fnPop = RD.mount('fn-tip-popover');
+            const fnWasOpen = fnPop && fnPop.classList.contains(':popover-open');
+            hideFootnoteTip();
+            if (fnWasOpen && lastFnTrigger && typeof lastFnTrigger.focus === 'function') lastFnTrigger.focus();
+            if (typoPop && typoPop.classList.contains(':popover-open')) {
+              closePopoverSafe(typoPop);
+              if (typoBtn) {
+                typoBtn.setAttribute('aria-expanded', 'false');
+                typoBtn.focus();
+              }
+            }
+          }
           if (footnoteReturn) {
             clearActiveFootnoteDef();
             footnoteReturn = null;
             renderFootnoteReturnBar();
-          }
-          if (typoPop && !typoPop.hidden) {
-            typoPop.hidden = true;
-            if (typoBtn) typoBtn.setAttribute('aria-expanded', 'false');
           }
           return;
         }
@@ -1720,6 +1806,7 @@
         fnTipPop.addEventListener('click', (e) => {
           if (e.target.closest('#btn-fn-tip-close')) {
             hideFootnoteTip();
+            if (lastFnTrigger && typeof lastFnTrigger.focus === 'function') lastFnTrigger.focus();
             return;
           }
           if (e.target.closest('[data-fn-open-toc]')) {
@@ -2026,6 +2113,7 @@
           figure: lastResult.figure || null,
         },
       });
+      justPinnedIds.add(saved.id);
       data.assist_notes = (data.assist_notes || []).concat([saved]);
       renderBlocks();
       RD.toast('已钉住到正文旁');

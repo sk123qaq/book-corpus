@@ -57,7 +57,7 @@ ANSWER_WAIT_SECONDS = 300
 ANSWER_JOB_TTL = 60
 PAUSED_CHECKPOINT_TTL = 1800
 MAX_DELETE = 100
-# 与首页 / 日课 / 分层读 / 操作台同一道门口：只服务本机页面，别让浏览器里的
+# 与首页 / 日课 / 伴读 / 操作台同一道门口：只服务本机页面，别让浏览器里的
 # 其它站点借 DNS rebinding 打到本机的书库 API。
 ALLOWED_HOST = re.compile(r"(?:127\.0\.0\.1|localhost)(?::\d{1,5})?", re.IGNORECASE)
 
@@ -1582,7 +1582,7 @@ def main(argv=None):
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--root", default=None, help="实例根，含 books.toml；默认读 .env 里的 BOOKS_ROOT")
-    ap.add_argument("--reading-url", default=None, help="「分层读」地址覆盖")
+    ap.add_argument("--reading-url", default=None, help="「伴读」地址覆盖")
     ap.add_argument("--home-url", default=None, help="「首页」地址覆盖")
     ap.add_argument("--no-start", action="store_true", help="目标服务未起时不代起")
     ap.add_argument("--start-timeout", type=float, default=12.0, help="等待服务就绪秒数")

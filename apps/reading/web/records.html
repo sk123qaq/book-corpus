@@ -3,38 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
-<title>阅读工作台 · 操作日志</title>
+<meta name="theme-color" id="meta-theme-color" content="#F4F1E8">
+<script>(function(){try{var r=document.documentElement,sp=new URLSearchParams(location.search),q=sp.get("theme"),n=localStorage.getItem("reading-night")==="1",t=localStorage.getItem("reading-theme");if(q==="cold"||q==="warm"){t=q;n=false;}if(n){r.setAttribute("data-theme","night");r.dataset.bootNight="1";}else if(t==="cold"){r.classList.add("cold");r.setAttribute("data-theme","cold");}else{r.setAttribute("data-theme","warm");}}catch(e){}})();</script>
+<title>伴读 · 操作日志</title>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/pages.css">
 <link rel="stylesheet" href="/assets/theme.css">
-<link rel="stylesheet" href="/assets/workbench.css">
 </head>
 <body>
-<header class="topbar">
-  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i></span>分层读</a>
-  <label class="search">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
-    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
-    <span class="kbd">/</span>
-  </label>
-  <nav class="nav">
-    <a href="/">书架</a>
-    <a href="/catalog">书目</a>
-    <a href="/records" aria-current="page">操作日志</a>
-  </nav>
-  <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
-    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
-  </button>
-  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/></svg>
-  </button>
+<a class="skip-link" href="#main-content">跳至主要内容</a>
+<header class="topbar" id="topbar">
+  <div class="top-left">
+    <a class="brand" href="/"><span class="brand-seal" aria-hidden="true">伴</span><span class="brand-name" translate="no">伴读</span></a>
+  </div>
+  <div class="top-right">
+    <label class="top-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+      <input id="top-q" type="search" autocomplete="off" placeholder="搜书名、作者或章名…" aria-label="快速搜索书目">
+      <span class="kbd" aria-hidden="true">/</span>
+    </label>
+    <nav class="main-nav" aria-label="伴读主导航">
+      <a class="nav-tab" href="/">书架</a>
+      <a class="nav-tab" href="/catalog">书目</a>
+      <a class="nav-tab" href="/records" aria-current="page">日志</a>
+    </nav>
+    <div class="theme-seg" role="group" aria-label="纸色主题">
+      <button type="button" data-theme-choice="warm" aria-pressed="true">暖纸</button>
+      <button type="button" data-theme-choice="cold" data-theme-toggle aria-pressed="false">冷纸</button>
+      <button type="button" id="night" data-theme-choice="night" aria-pressed="false" aria-label="切换夜读" title="夜读模式">夜读</button>
+    </div>
+  </div>
 </header>
 
-<main class="page">
+<main class="page" id="main-content">
   <div class="page-head">
-    <div class="eyebrow">append-only · 工作区/阅读/ops_log.jsonl</div>
+    <div class="eyebrow mono">append-only · 工作区/阅读/ops_log.jsonl</div>
     <h1>章节伴读操作日志</h1>
     <p class="lede">记录你在各章使用知识地图、划词图解、讲人话举例、翻译原意、拆前提、追问与旁批钉住的每次操作，点击即可跳回对应正文段落。</p>
     <div class="stats" id="stats"></div>
@@ -43,7 +47,7 @@
   <section class="recs">
     <div class="section-head">
       <div><div class="eyebrow">按章汇总</div><h2>有伴读足迹的章节</h2></div>
-      <span class="lbl" id="chapter-count"></span>
+      <span class="count" id="chapter-count"></span>
     </div>
     <div id="chapters"><div class="empty">正在读取日志…</div></div>
   </section>
@@ -123,7 +127,7 @@ function renderChapters() {
     mount.innerHTML = '<div class="empty">还没有功能操作记录。先从<a href="/">书架</a>翻开一章阅读吧。</div>';
     return;
   }
-  mount.innerHTML = '<table class="ops-table"><thead><tr><th>章节</th><th>书名</th><th>产物</th><th>功能足迹</th><th>最近操作</th><th></th></tr></thead><tbody>' +
+  mount.innerHTML = '<div class="data-card"><div class="data-table-wrap"><table class="ops-table ops-chapters-table"><thead><tr><th>章节</th><th>书名</th><th>产物</th><th>功能足迹</th><th>最近操作</th><th class="ops-go-head"></th></tr></thead><tbody>' +
     list.map((ch) => {
       const badges = [];
       if (ch.has_map) badges.push('导图');
@@ -133,17 +137,17 @@ function renderChapters() {
         '<td>' + RD.esc(ch.book_title) + '</td>' +
         '<td>' + (badges.length ? badges.map((b) => '<span class="ops-badge ok">' + RD.esc(b) + '</span>').join(' ') : '<span class="wb-sub">仅日志</span>') + '</td>' +
         '<td>' + (ch.actions || []).map((a) => RD.esc(RD.actionNames[a] || a)).join(' · ') + '（' + RD.fmt(ch.ops) + '）</td>' +
-        '<td>' + RD.esc(formatTs(ch.last_ts)) + '</td>' +
-        '<td><a class="wb-btn" href="' + RD.chapterHref(ch.uid, ch.n) + '">翻开 →</a></td>' +
+        '<td class="ops-ts">' + RD.esc(formatTs(ch.last_ts)) + '</td>' +
+        '<td class="ops-go-cell"><a class="wb-btn ops-go" href="' + RD.chapterHref(ch.uid, ch.n) + '">翻开 →</a></td>' +
       '</tr>';
-    }).join('') + '</tbody></table>';
+    }).join('') + '</tbody></table></div></div>';
 }
 
 function renderTabs() {
   const logs = data.logs || [];
   RD.mount('tabs').innerHTML = TABS.map((tab) => {
     const count = logs.filter(tab.match).length;
-    return '<button data-filter="' + tab.key + '" aria-pressed="' + (filter === tab.key) + '">' +
+    return '<button type="button" data-filter="' + tab.key + '" aria-pressed="' + (filter === tab.key) + '">' +
       RD.esc(tab.name) + '<span class="count">' + RD.fmt(count) + '</span></button>';
   }).join('');
   RD.mount('tabs').onclick = (e) => {
@@ -170,7 +174,7 @@ function renderLogs() {
     mount.innerHTML = '<div class="empty">当前筛选下没有操作日志。</div>';
     return;
   }
-  mount.innerHTML = '<table class="ops-table"><thead><tr><th>时间</th><th>章节</th><th>功能</th><th>段落</th><th>结果 / 用量</th><th>摘要</th><th></th></tr></thead><tbody>' +
+  mount.innerHTML = '<div class="data-card"><div class="data-table-wrap"><table class="ops-table ops-logs-table"><thead><tr><th>时间</th><th>章节</th><th>功能</th><th>段落</th><th>结果 / 用量</th><th>摘要</th><th class="ops-go-head"></th></tr></thead><tbody>' +
     rows.map((item) => {
       const blocks = (item.block_ids || []).join(', ');
       const firstBlk = (item.block_ids || [])[0] || '';
@@ -179,17 +183,17 @@ function renderLogs() {
       if (item.tokens) usageParts.push(RD.fmt(item.tokens) + ' tok');
       if (item.elapsed_ms) usageParts.push(RD.elapsed(item.elapsed_ms));
       return '<tr>' +
-        '<td style="white-space:nowrap">' + RD.esc(formatTs(item.ts)) + '</td>' +
-        '<td><a href="' + RD.chapterHref(item.uid, item.n, firstBlk) + '"><b>' + RD.esc(item.uid) + '-' + RD.esc(item.n) + '</b> ' +
+        '<td class="ops-ts">' + RD.esc(formatTs(item.ts)) + '</td>' +
+        '<td class="ops-ch-cell"><a class="ops-ch-link" href="' + RD.chapterHref(item.uid, item.n, firstBlk) + '"><b>' + RD.esc(item.uid) + '-' + RD.esc(item.n) + '</b> ' +
           RD.esc(item.chapter_title || '') + '</a><div class="wb-sub">' + RD.esc(item.book_title || '') + '</div></td>' +
-        '<td><span class="ops-badge">' + RD.esc(RD.actionNames[item.action] || item.action) + '</span></td>' +
-        '<td>' + RD.esc(blocks || '整章') + '</td>' +
-        '<td><span class="ops-badge ' + (ok ? 'ok' : 'err') + '">' + (ok ? '完成' : '失败') + '</span>' +
+        '<td class="ops-act-cell"><span class="ops-badge">' + RD.esc(RD.actionNames[item.action] || item.action) + '</span></td>' +
+        '<td class="ops-blk-cell">' + RD.esc(blocks || '整章') + '</td>' +
+        '<td class="ops-stat-cell"><span class="ops-badge ' + (ok ? 'ok' : 'err') + '">' + (ok ? '完成' : '失败') + '</span>' +
           (usageParts.length ? '<div class="wb-sub">' + RD.esc(usageParts.join(' · ')) + '</div>' : '') + '</td>' +
-        '<td>' + RD.esc(ok ? (item.summary || '—') : (item.error || item.summary || '失败')) + '</td>' +
-        '<td><a href="' + RD.chapterHref(item.uid, item.n, firstBlk) + '">定位 →</a></td>' +
+        '<td class="ops-sum-cell">' + RD.esc(ok ? (item.summary || '—') : (item.error || item.summary || '失败')) + '</td>' +
+        '<td class="ops-go-cell"><a class="ops-go" href="' + RD.chapterHref(item.uid, item.n, firstBlk) + '">定位 →</a></td>' +
       '</tr>';
-    }).join('') + '</tbody></table>';
+    }).join('') + '</tbody></table></div></div>';
 }
 </script>
 </body>

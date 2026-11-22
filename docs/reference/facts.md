@@ -76,7 +76,7 @@
 | `qsearch.py` | `search` | 词法检索：段落倒排 + 组覆盖度重排，书级聚合。 |
 | `qsearch_plan.py` | — | 按检索计划跑查：多组词分开检索，章级 RRF 融合，再用组覆盖与原词加权。 |
 | `query_expand.py` | — | 查询侧扩展：把用户的口语问法换成 4 条书里可能出现的话，再并回段落倒排。 |
-| `reading_index.py` | — | 分层读的章表索引：看状态或整库重建。 |
+| `reading_index.py` | — | 伴读的章表索引：看状态或整库重建。 |
 | `redo_compare.py` | — | 重拆批次的验收闸门：逐个比「旧 md」与「暂存新 md」的源页覆盖率。 |
 | `rerank.py` | — | 交叉编码器精排封装与常驻 HTTP 服务：Reranker().score(query, texts) 按入参顺序返回打分。 |
 | `rerank_client.py` | — | 交叉编码器精排 HTTP 客户端（纯标准库，主环境零 torch 依赖）。 |

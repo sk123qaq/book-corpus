@@ -1,4 +1,4 @@
-"""书库检索、分层读、首页、日课跨应用联动契约与隔离测试。"""
+"""书库检索、伴读、首页、日课跨应用联动契约与隔离测试。"""
 
 from __future__ import annotations
 
@@ -523,7 +523,7 @@ def test_other_apps_read_books_root_from_dotenv_without_cli_flag(reading_root: P
     finally:
         _stop(proc)
 
-    # 8771 分层读
+    # 8771 伴读
     proc, base = _start_app("apps/reading/server.py", ["--no-annotate", "--quiet"], ready_path="/api/shelf", env=env)
     try:
         with urllib.request.urlopen(f"{base}/api/shelf", timeout=5) as resp:

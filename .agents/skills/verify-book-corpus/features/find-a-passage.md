@@ -5,7 +5,7 @@
 演示页拿一句人话去书库里找段落：先拆词、换词循环、给书打分，再把候选书和命中章递给用户，
 最后给出带依据、流式上屏的回答。默认打开 `/` 多轮会话页（宣纸日间/墨夜双色主题），
 五阶段检索进度已内联为问题下方可展开卡片，页头已移除「完整流程」跳转按钮；`/classic`
-路由仍保留给自动化回归与直达对照。回答可以随时暂停，再从 checkpoint 续答。结果里的书卡和命中卡可以带到分层读的
+路由仍保留给自动化回归与直达对照。回答可以随时暂停，再从 checkpoint 续答。结果里的书卡和命中卡可以带到伴读的
 `/open`，直接落到原文章节与行。
 
 ## Sub-features
@@ -15,7 +15,7 @@
 - `ask-history` 历史页签：使用原生 `popover` 菜单（导出 `.md` / `.docx`、多选管理、删除）与原生 `<dialog>` 确认弹窗，支持按问题筛选与多选删除。
 - `ask-scope` 书目范围下推：`?books=` URL 参数写入 `scope.books` 并下推给 `/api/run`（最多 16 本）；检索命中后点选候选书卡片 `.book-pick` 则写入 `sources` 并在点「由模型归纳回答」时发给 `/api/answer`（最多 10 本）。两者均不靠前端结果后过滤。
 - `ask-books-meta` `GET /api/books/meta?uids=B0001,B0002` 用 `build/library.db` 补书名与作者，最多 16 本，缺的 uid 用 uid 当标题。
-- `ask-cross-open` `?q=&books=&mode=trace` 只跑检索不生成回答；会话页命中卡「在分层读中打开」链到 `/go/reading?to=/open...`，`.bp-open` 链到 `/go/reading?to=/book/<uid>`（`/classic` 没有 `/go/reading` 链接），`mode=prefill` 只预填问题。`mode=related&exclude=<uid>&src_path=...&src_line=...&threshold=0.45` 走跨书找相关：排除来源书与原段（含几乎相同的复本段），前后端均先按 `relevance` 严格降序排列（#1..#N）再按 `0..1` 阈值筛选（最多 10 本、最少 1 本或 0 本），滑块与预设档位可原地实时调阈值后再由模型归纳回答。
+- `ask-cross-open` `?q=&books=&mode=trace` 只跑检索不生成回答；会话页命中卡「在伴读中打开」链到 `/go/reading?to=/open...`，`.bp-open` 链到 `/go/reading?to=/book/<uid>`（`/classic` 没有 `/go/reading` 链接），`mode=prefill` 只预填问题。`mode=related&exclude=<uid>&src_path=...&src_line=...&threshold=0.45` 走跨书找相关：排除来源书与原段（含几乎相同的复本段），前后端均先按 `relevance` 严格降序排列（#1..#N）再按 `0..1` 阈值筛选（最多 10 本、最少 1 本或 0 本），滑块与预设档位可原地实时调阈值后再由模型归纳回答。
 - `ask-thinking` 思考等级（off / low / medium / high）在会话页 `/` 与经典检索页 `/classic` 均通过 `think-select` 下拉切换（持久化到 `localStorage['booksearch.thinking']`，前端默认 `low`；后端 `/api/answer` 缺省仍兼容 `high`）。
 - `ask-trace` 依据与落点：回答里的书卡、章节锚点、命中段原文。
 - `ask-classic` `/classic` 五阶段：理解问题 → 词法循环 → 打分与选章 → 书卡 → 结果；经典页发 `stateless:true`，不建会话，也不进历史。
@@ -34,8 +34,8 @@
 - 点「暂停」后卡片显示「已暂停」，点「继续问答」从当前进度续答。
 - 如需访问独立经典演示页：手动打开 `http://127.0.0.1:18765/classic`；**示例问句只在这个页面上**（会话页 `/` 不设跳转链接）。
 - 点结果里的书卡，或点历史页签翻旧会话；历史会话的悬浮菜单可导出 MD / DOCX 或删除。
-- 带书目前提打开 `http://127.0.0.1:18765/?q=你那里配姓赵&books=B0001&mode=trace`，页面只停在检索命中，不发起回答；点命中卡的「在分层读中打开」跳到 18771 的章页。
-- 从每日日课或分层读的「去书库重搜」也能带 `from=reading` / `from=daily` 回来，检索页保留来源。
+- 带书目前提打开 `http://127.0.0.1:18765/?q=你那里配姓赵&books=B0001&mode=trace`，页面只停在检索命中，不发起回答；点命中卡的「在伴读中打开」跳到 18771 的章页。
+- 从每日日课或伴读的「去书库重搜」也能带 `from=reading` / `from=daily` 回来，检索页保留来源。
 
 ## Driving it with curl + tests/manual/demo 的 CDP 脚本与技能脚本
 
@@ -57,7 +57,7 @@ Preconditions:
 - **会话列表。** `curl -s http://127.0.0.1:18765/api/sessions` 返回 `{"ok": true, "count": N, "sessions": [...]}`；每条带 `id`、`turns`、`question`、`answer_state`、`answer_error`、`books`、`last_question`、`updated_at`。传 `--root` 的新根上 N 应为 0；本轮自己建的会话才会出现，磁盘落在 `$ROOT/工作区/检索/sessions/`。
 - **书目元数据。** `curl -s 'http://127.0.0.1:18765/api/books/meta?uids=B0001,B0002'` 返回 `{"ok":true,"books":[{"uid":"B0001","title":"阿Q正传",...}]}`；只装样书时 B0002 也回一条、标题回退成 uid，不是 404。
 - **书目范围下推。** `curl -s -X POST http://127.0.0.1:18765/api/run -H 'Content-Type: application/json' -d '{"question":"你那里配姓赵","scope":{"books":["B0001"]},"stateless":true}'`，响应 `scope.books==["B0001"]`、`focus.status=="exact"`、`result.uid=="B0001"`，`plan.chapters` 与 `cards` 里不出现别的书（样书 `B0001` 跑 `礼治社会靠什么维持秩序` 会 0 命中且 `focus_empty:true`，改用样书真有命中的问题）。多书 scope 要装第二本；只有样书时记 `ui-unverified`，原因写「只有 B0001，无法验多选范围」。
-- **trace 不答题。** `${CHROME_BIN:-/usr/bin/chromium} --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-demo" --virtual-time-budget=12000 --dump-dom 'http://127.0.0.1:18765/?q=你那里配姓赵&books=B0001&mode=trace' > "$EV/trace-dom.html"`，剥脚本后数 `trace-hit-card` 与 `scope-pill` 各 1、`由模型归纳回答` 1、`在分层读中打开` ≥1、`answer-pending-note` 1，且没有回答轮询；链接形如 `/go/reading?to=%2Fopen...`。
+- **trace 不答题。** `${CHROME_BIN:-/usr/bin/chromium} --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-demo" --virtual-time-budget=12000 --dump-dom 'http://127.0.0.1:18765/?q=你那里配姓赵&books=B0001&mode=trace' > "$EV/trace-dom.html"`，剥脚本后数 `trace-hit-card` 与 `scope-pill` 各 1、`由模型归纳回答` 1、`在伴读中打开` ≥1、`answer-pending-note` 1，且没有回答轮询；链接形如 `/go/reading?to=%2Fopen...`。
 - **跨页跳转。** 取上一步的 `/go/reading?to=...` 发给 18765，`curl -s -o /dev/null -w '%{http_code}\n%{redirect_url}\n'` 应为 `302`，Location 是 18771 的 `/open?uid=B0001&path=...&line=...&q=...`。`to=//evil.com` 应 `400`。
 - **SSE 流式。** `curl -sN -X POST http://127.0.0.1:18765/api/answer -H 'Content-Type: application/json' -d '{"question":"阿Q为什么挨打","book":"B0001","path":"books/B0001/md/06_第六章从中兴到末路.md","line":75,"terms":["阿Q","精神胜利法","未庄","赵太爷","闲人"],"thinking":"low","stream":true,"stream_id":"probe-sse","fresh":true}'`。响应头应是 `Content-Type: text/event-stream; charset=utf-8`、`Cache-Control: no-store`、`X-Accel-Buffering: no`、`Connection: close`；事件流先 `stage` / `thinking`，再 `answer_delta`，最后 `done`（内层 `data.ok:true`、`data.answer`）。不落盘也能看到前几个 delta；断开后服务端仍会写完这次作答。
 - **暂停与续答。** 用技能脚本跑完整一轮：`python3 .agents/skills/verify-book-corpus/scripts/drive_sse_pause.py --base http://127.0.0.1:18765 --out "$EV/sse-pause-resume.json"`。它读到第一个 `answer_delta` 就 `POST /api/answer/pause`，然后带 `resume:true` 再开一条流；末三行应是 `STREAM content_type=text/event-stream; charset=utf-8 ...`、`PAUSED partial_chars=<非0> pause_ok=True`、`RESUMED status=200 events=<N> done_ok=True final_chars=<N>`，exit 0。2026-11-15 两次实测 `partial_chars=3/5`、`done.data.ms=34218.8/42227.8`、resume 事件 369/384 条；这些数随模型输出变，断言只看非零与 `done_ok=True`。

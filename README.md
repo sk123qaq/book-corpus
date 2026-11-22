@@ -12,7 +12,7 @@
 - 查原文：段落级倒排检索（BM25 + 向量混合），返回 `books/<uid>/md/章节.md:行号`。
 - 问书：`book-corpus query` 定位书与章。要成段回答并带逐字引文，用 `book-corpus-qa` 技能或演示页。
 - 管书：入库、分类、拆章、出 HTML 阅读版、PDF 转 Markdown、删书与冷宫。
-- 看库：项目默认只启动统一入口（8773）；分层读（8771）、操作台（8770）、检索演示页（8765）与日课页（8772）按需启动，全部只绑 `127.0.0.1`。
+- 看库：项目默认只启动统一入口（8773）；伴读（8771）、操作台（8770）、检索演示页（8765）与日课页（8772）按需启动，全部只绑 `127.0.0.1`。
 
 ## 实例结构
 
@@ -388,7 +388,7 @@ chmod 600 .env
 
 真实环境变量永远优先；配置文件只读第一个存在的：仓库根 `.env` > 当前目录 `.env` > `~/.config/book-corpus/.env`。
 `BOOK_CORPUS_ENV=/path/to/file` 可以整个换成另一个文件（指了就不回退）。
-改完 `.env` 要重启对应服务（8765 找一段、8770 操作台、8771 分层读、8772 日课、8773 首页）才会读到。
+改完 `.env` 要重启对应服务（8765 找一段、8770 操作台、8771 伴读、8772 日课、8773 首页）才会读到。
 
 ### 缺配置会怎样
 
@@ -406,14 +406,14 @@ book-corpus doctor
 
 | 能力 | 什么时候要 | 变量 / 文件 | 缺了会怎样 |
 |---|---|---|---|
-| 分层读·伴读/地图模型 | 生成知识地图、划词伴读与旁批解释 | `OPENCODE_GO_API_KEY`，或 pi 已登录 `opencode-go`（`~/.pi/agent/auth.json`） | 返回缺 key 提示，正文阅读仍可用 |
+| 伴读·地图模型 | 生成知识地图、划词伴读与旁批解释 | `OPENCODE_GO_API_KEY`，或 pi 已登录 `opencode-go`（`~/.pi/agent/auth.json`） | 返回缺 key 提示，正文阅读仍可用 |
 | 书库·模型 | `ingest`、分类、拆章修复、问答归纳 | 工作区 `books.toml` 的 `[model]` + 可执行的 `pi` | 脚本启动前报缺 |
 | MinerU | PDF 读不出字、OCR 兜底 | `MINERU_API_KEY`，或 `~/.config/mineru/api_key` | `doctor` 标缺；OCR 任务自己也会报 |
 | PaddleOCR | 扫描件逐页 OCR | `~/.config/PaddleOCR/api_key` | 跑之前报缺 |
 | MiMo | `build_expand.py --provider mimo` | `~/.config/mimo/api_key` | 跑之前报缺 |
 | pi 账号 | `build_expand.py` 用 commandcode / opencode | `~/.pi/agent/auth.json` 里有对应登录 | 跑之前报缺 |
 
-### 分层读的模型 key
+### 伴读的模型 key
 
 ```bash
 # .env
@@ -422,7 +422,7 @@ OPENCODE_GO_API_KEY=sk-...
 
 不填也行，只要 pi 里 `/login` 选过 `opencode-go`——项目会读 `~/.pi/agent/auth.json`。
 `READING_MODEL_NAME`、`READING_MODEL_URL`、`READING_MODEL_EFFORT`、`READING_MODEL_TIMEOUT`、
-`READING_MODEL_MAX_TOKENS` 可以覆盖默认模型与端点。`READING_SHELF_TTL` 控制分层读与首页核对书架的间隔，默认 2 秒，`0` 表示每次请求都核，只用于调试。
+`READING_MODEL_MAX_TOKENS` 可以覆盖默认模型与端点。`READING_SHELF_TTL` 控制伴读与首页核对书架的间隔，默认 2 秒，`0` 表示每次请求都核，只用于调试。
 
 
 ### OCR 与扩展生成的 key
@@ -472,7 +472,7 @@ MIT，见 `LICENSE`。
 - `AGENTS.md`：作者本机实例的运行手册、权威顺序与写入纪律。新克隆的仓库没有那些批次数据。
 - `CONTRIBUTING.md`：改代码、跑测试与提交的约定。
 - `apps/ops/README.md`、`apps/demo/README.md`、`apps/home/README.md`、`apps/daily/README.md`：各应用服务的起停、参数与接口。
-- `docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md` 与 `docs/design/分层读书型工具与图表框架-方案-2026-11-19.md`：分层读正文伴读工作台与书型蓝图工具的已落地设计方案。
+- `docs/design/阅读页重构-正文伴读与工具台-2026-11-15.md` 与 `docs/design/分层读书型工具与图表框架-方案-2026-11-19.md`：伴读正文工作台与书型蓝图工具的已落地设计方案。
 - `docs/design/操作台重构-事件驱动全自动同步方案-2026-11-19.md`：操作台六模块与事件驱动增量同步的已落地设计方案。
 - `docs/检索/README.md` 与 `docs/检索/踩坑记录.md`：检索层现行链路、口径与踩坑账（改检索脚本前先查）。
 - 历史留档：`docs/design/设计方案-书目结构.md`（v1 重构原文）、`docs/briefs/BRIEF.md`（演示页任务书）、`reports/运维验收-2026-10-25/`（早期审计与证据）。

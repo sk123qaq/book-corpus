@@ -135,7 +135,7 @@ def main(argv=None):
     parser.add_argument(
         "--reading-url",
         default=None,
-        help="「分层读」地址（仅用于生成只读跳转链接，不拉起进程）",
+        help="「伴读」地址（仅用于生成只读跳转链接，不拉起进程）",
     )
     args = parser.parse_args(argv)
 

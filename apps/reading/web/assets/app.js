@@ -57,6 +57,8 @@
       node = document.createElement('div');
       node.id = 'rd-toast';
       node.className = 'toast';
+      node.setAttribute('role', 'status');
+      node.setAttribute('aria-live', 'polite');
       document.body.appendChild(node);
     }
     node.textContent = message;
@@ -196,6 +198,10 @@
   };
 
   RD.night = () => {
+    if (typeof window.__banduSyncTheme === 'function') {
+      window.__banduSyncTheme();
+      return;
+    }
     const KEY = 'reading-night';
     let on = false;
     try { on = localStorage.getItem(KEY) === '1'; } catch (e) {}

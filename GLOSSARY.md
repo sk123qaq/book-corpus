@@ -9,11 +9,11 @@
 
 - **书库首页（`apps/home`，127.0.0.1:8773）**：默认唯一常驻入口，服务端渲染三张入口卡（找一段 / 翻开书 / 往期日课）、右栏最新一期与页脚「管理」，通过 `/go/<key>` 按需拉起其余四个服务。
 - **找一段（`apps/demo`，127.0.0.1:8765）**：书库检索与流式问答页。默认 `/` 是多轮会话页（纸昼/墨夜双主题，不设 `/classic` 入口），手动访问 `/classic` 保留无状态五阶段过程页（发 `stateless:true`，不建会话）。支持 SSE 流式输出、进程内 checkpoint 暂停/续答、会话导出（MD / DOCX）与 `mode=trace|prefill|related`（跨书按相关性降序再按阈值筛选）跨页入口。
-- **分层读（`apps/reading`，127.0.0.1:8771）**：正文伴读工作台。包含书架（`/`）、书目（`/catalog`）、书页（`/book/<uid>`）、章页（`/chapter/<uid>/<n>`）与操作日志（`/records`），外加跨页定位入口 `/open`。书架与首页书目按 `READING_SHELF_TTL` 重新核对盘上（默认 2 秒），新落地的书不用重启。
-- **往期日课（`apps/daily`，127.0.0.1:8772）**：每日一章的只读阅读页，读取 `<root>/日课/<YYYY-MM-DD>.json`，提供「在分层读打开这一章」跳转。
+- **伴读（`apps/reading`，127.0.0.1:8771，原称「分层读」）**：正文伴读工作台。包含书架（`/`）、书目（`/catalog`）、书页（`/book/<uid>`）、章页（`/chapter/<uid>/<n>`）与操作日志（`/records`），外加跨页定位入口 `/open`。书架与首页书目按 `READING_SHELF_TTL` 重新核对盘上（默认 2 秒），新落地的书不用重启。
+- **往期日课（`apps/daily`，127.0.0.1:8772）**：每日一章的只读阅读页，读取 `<root>/日课/<YYYY-MM-DD>.json`，提供「在伴读打开这一章」跳转。
 - **统一操作台（`apps/ops`，127.0.0.1:8770）**：本地运维控制台，收口为六个主模块（总览、新书入库、书目与分类、正文生产、同步与维护、任务与日志）及六个兼容子页签（`docs` / `pdf` / `pdf-list` / `manual` / `retire` / `cold`）。
 
-## 阅读工作台（分层读）
+## 阅读工作台（伴读）
 
 - **正文工作台**：章页打开即 0 秒直出 100% 原文，不设阻塞阅读的工单或审批。正文经 `mdparse` 切分为带稳定编号 `B%02d`（DOM `#blk-B01`）与原文件行号（`start_line`/`end_line`）的块。
 - **脚注跳转与跨文件直达**：`mdparse` 与 `src/bookcorpus/reading/footnotes.py` 解析 EPUB/PDF 转档残留的各类行内注标与注释定义，在 `/api/chapter` 返回块内 `fn_refs` / `item_fn_refs` 与章级 `footnotes`。章内注点击上标滚至对应注文（`.reader-footnote-item`），经底部浮条（`#fn-return-bar`）或注段内「↩ 返回正文」回到原注释点；正文与注释分属不同文件时弹出 `#fn-tip-popover`，可定位具体注释块时经 `?from=footnote&fn=...&src_n=...#blk-<id>` 新标签直达目标块并显示「来自正文注释」来源条。
