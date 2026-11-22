@@ -133,7 +133,8 @@ def test_title_page_merge_shared_by_index_and_library(reading_root):
     assert chapters[0]["merged"] is True
     assert chapters[0]["body_n"] == 2
     assert lib.redirect_target(uid, 2) == 1
-    assert lib.book(uid)["chapters"] == 1
+    # 2026-11-22 统一对齐：逐书章数改为 md 文件视角（导航仍是合并后的 1 章）。
+    assert lib.book(uid)["chapters"] == 2
     raw = lib.chapters(uid)
     assert book_totals(raw)[0] == 1
 
@@ -239,3 +240,18 @@ def test_shelf_payload_carries_total(reading_root):
     assert shelf["total"] == 2
     assert shelf["stats"]["readable"] == 2
     assert service.catalog()["total"] == 2
+
+
+def test_noop_ensure_keeps_built_at(reading_root):
+    """空转 ensure 不刷新 built_at：戳只在数据变化时前进（统计层把它当数据时刻）。"""
+    import time
+
+    index = ShelfIndex(Library(reading_root).layout)
+    first = index.ensure()
+    assert first["mode"] in ("fresh", "rebuild")
+    stamp = index.stats()["meta"]["built_at"]
+    assert stamp
+    time.sleep(0.05)  # 不用隔秒：空转 ensure 根本不写 meta，戳必然不动
+    second = index.ensure()
+    assert second["mode"] == "incremental"
+    assert index.stats()["meta"]["built_at"] == stamp

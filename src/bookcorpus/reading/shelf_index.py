@@ -14,12 +14,13 @@ import threading
 import time
 from pathlib import Path
 
-from .chapters import CHAPTER_RE, book_totals
+from .chapters import CHAPTER_RE
 from .mdparse import lean_meta
 
 SCHEMA_VERSION = 1
-# lean_meta 的口径变了就递增，下次启动整库重建。
-PARSER_VERSION = 1
+# lean_meta 或逐书章数口径变了就递增，下次启动整库重建。
+# 2：book 表从「合并标题页后的导航章数」改成「md 文件数」（统计对齐 2026-11-22）。
+PARSER_VERSION = 2
 DB_DIR = "阅读"
 DB_NAME = "shelf-index.db"
 
@@ -127,9 +128,13 @@ class ShelfIndex:
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('parser_version', ?)", (str(PARSER_VERSION),)
             )
-            conn.execute(
-                "INSERT OR REPLACE INTO meta (key, value) VALUES ('built_at', ?)", (time.strftime("%Y-%m-%d %H:%M:%S"),)
-            )
+            # built_at 是「数据上次变化」的时刻：空转的 ensure（没扫到任何变化）不刷新，
+            # 否则首用自建后的每次 ensure 都会把戳挪到当下，统计层的 built_at 就不是数据时刻了。
+            if parsed or removed or mode == "rebuild":
+                conn.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES ('built_at', ?)",
+                    (time.strftime("%Y-%m-%d %H:%M:%S"),),
+                )
             conn.commit()
             return {
                 "mode": mode,
@@ -278,7 +283,10 @@ class ShelfIndex:
             {"file": row[0], "n": row[1], "stem": row[2], "title": row[3], "chars": row[4], "full_chars": row[5]}
             for row in rows
         ]
-        count, chars = book_totals(chapters)
+        # 章与字都走 md 文件视角：合并标题页是导航行为，不改文件数，
+        # full_chars 每文件恰计一次（含标题页、非空白）。
+        count = len(chapters)
+        chars = sum(row["full_chars"] for row in chapters)
         if count:
             conn.execute(
                 "INSERT INTO book (uid, chapters, chars) VALUES (?, ?, ?) "

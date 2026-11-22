@@ -2046,7 +2046,12 @@ class App:
         if payload is None:
             payload = {
                 "at": now_iso(),
-                "books": 0,
+                # 脚本没跑起来时计数一律 None（未知），别拿 0 冒充读数；前端按「—」渲染。
+                "books": None,
+                "books_readable": None,
+                "stats_chapters": None,
+                "stats_chars": None,
+                "stats_built_at": "",
                 "md_done": 0,
                 "pending": {"pdf": 0, "txt": 0, "djvu": 0},
                 "inbox": {"files": 0, "items": []},

@@ -234,6 +234,11 @@ def fixture_checks(root):
         (state["md_done"], state["md_chapters"], state["md_indexable"]) == (3, 4, 2),
         (state["md_done"], state["md_chapters"], state["md_indexable"]),
     )
+    # 快照口径：可读不含 0 章 md（EMPTY_MD 那本不算）；章 = md 文件视角
+    check("快照 books_readable 2 本", state["books_readable"] == 2, state.get("books_readable"))
+    check("快照 stats_chapters 4 章", state["stats_chapters"] == 4, state.get("stats_chapters"))
+    check("快照 books 4 本", state["books"] == 4, state.get("books"))
+    check("快照 built_at 有值", bool(state.get("stats_built_at")), state.get("stats_built_at"))
     check("待转 pdf 1 本", state["pending"]["pdf"] == 1, state["pending"])
     check("待转 txt/djvu 0", state["pending"]["txt"] == 0 and state["pending"]["djvu"] == 0, state["pending"])
     check(
@@ -417,6 +422,10 @@ def real_checks():
         state["md_indexable"] == indexable,
         (state["md_indexable"], indexable),
     )
+    check(
+        "真库快照可读 = 可索引 md 本数", state["books_readable"] == indexable, (state.get("books_readable"), indexable)
+    )
+    check("真库快照章数与 derived 一致", state["stats_chapters"] == chapters, (state.get("stats_chapters"), chapters))
     check(
         "真库索引落后 = 可索引 md 本数 - 索引书数",
         state["index"]["lag_books"] == indexable - int(meta["books"]),

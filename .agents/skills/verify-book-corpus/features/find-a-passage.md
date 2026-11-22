@@ -50,7 +50,7 @@ Preconditions:
 - 混合检索要向量索引与 embedding 服务：先按 [embed.md](./embed.md) 对 `B0001` 建索引并起 18780，再给演示页设 `BOOKS_EMBED_URL=http://127.0.0.1:18780`。没建索引或服务不在时 `meta.embed.ready=false`，`/api/run` 仍是 `bm25_only`，不是页面坏。
 - 证据目录先定：`EV="$PWD/artifacts/verify/$RUN_ID/find-a-passage"; mkdir -p "$EV"`。
 
-- **服务就绪。** `curl -s http://127.0.0.1:18765/api/health` 输出 `{"ok": true, "db": "ok", "meta": {"books": 1, "paras": 123, ..., "embed": {"vectors": "ok", "server": "ok", "ready": true, "chunks": 34, "books": 1, "url": "http://127.0.0.1:18780"}}}`。`vectors` / `server` 也可分别是 `missing` / `offline`，此时 `ready:false`。
+- **服务就绪。** `curl -s http://127.0.0.1:18765/api/health` 输出 `{"ok": true, "db": "ok", "meta": {"books": 1, "books_total": 2, "paras": 123, "chapters": 9, "chars": ..., "built_at": ..., ..., "embed": {"vectors": "ok", "server": "ok", "ready": true, "chunks": 34, "books": 1, "url": "http://127.0.0.1:18780"}}}`。`meta` 四个计数（`books` 可读 / `books_total` 藏书 / `paras` 索引段 / `chapters` md 文件）来自统一快照（`src/bookcorpus/corpus_snapshot.py`），8771 / 8770 同源；`books` 只算 md 目录存在且至少 1 章的书，`books_total` 含无正文书，页头两格分开标。`vectors` / `server` 也可分别是 `missing` / `offline`，此时 `ready:false`。
 - **两个页面都在。** `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18765/` 与同一命令打 `/classic`，都是 `200`。
 - **示例问句只在经典页。** `curl -s http://127.0.0.1:18765/ | grep -c 'class="sample"'` 输出 `0`；`curl -s http://127.0.0.1:18765/classic | grep -c 'data-q='` 输出 `3`，三条是 `礼治社会靠什么维持秩序`、`内卷和教育之间是什么关系`、`乡土中国 差序格局`。
 - **五阶段骨架。** `curl -s http://127.0.0.1:18765/classic | grep -c 'data-stage='` 输出 `5`，五段标题依次是「理解问题」「词法循环」「打分与选章」「书卡」「结果」。

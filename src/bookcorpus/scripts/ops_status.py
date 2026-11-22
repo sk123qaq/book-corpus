@@ -23,7 +23,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+_SRC = os.path.dirname(HERE)
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 from lib_common import ROOT, L
+
+from bookcorpus import corpus_snapshot
 
 AUDIT = os.path.join(HERE, "audit_state.py")
 AUDIT_TIMEOUT = 1800
@@ -78,11 +83,25 @@ def library(p, state):
     if not os.path.isfile(p.libdb):
         state["problems"].append("没有 build/library.db")
         state["library"] = {"db": None, "ok": False}
+        # 快照键补齐，值全部 None（未知）：前端按「—」渲染，不退 0。
+        state["books"] = None
+        state["books_readable"] = None
+        state["stats_chapters"] = None
+        state["stats_chars"] = None
+        state["stats_built_at"] = ""
         return
+    # 页头四数从统一快照来（与 8765 / 8771 同源）：books=藏书、books_readable=可读
+    # （不含 0 章 md，图片书不算可读）、stats_chapters=章（md 文件视角）。
+    # 快照读不出来（坏库、锁库）时值是 None：保留，让前端显示「—」，不降成 0。
+    snap = corpus_snapshot.snapshot(p.root)
+    state["books"] = snap["books_total"]
+    state["books_readable"] = snap["books_readable"]
+    state["stats_chapters"] = snap["chapters"]
+    state["stats_chars"] = snap["chars"]
+    state["stats_built_at"] = snap["built_at"]
     try:
         con = ro(p.libdb)
         try:
-            state["books"] = con.execute("SELECT count(*) FROM book").fetchone()[0]
             state["md_done"] = con.execute("SELECT count(*) FROM derived WHERE kind='md' AND status='done'").fetchone()[
                 0
             ]

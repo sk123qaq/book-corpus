@@ -15,6 +15,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 OPS = REPO / "tests" / "acceptance" / "ops"
 DEMO = REPO / "tests" / "acceptance" / "demo"
+READING = REPO / "tests" / "acceptance" / "reading"
 INSTANCE = Path(os.environ.get("BOOKS_ROOT") or (Path.home() / "书库"))
 
 OFFLINE = [
@@ -26,6 +27,7 @@ OFFLINE = [
     (OPS / "test_split.py", 180, ()),
     (OPS / "test_retire.py", 180, ()),
     (OPS / "test_pdf.py", 300, ()),
+    (READING / "test_merge_note.py", 180, ()),
 ]
 
 REAL_CORPUS = [

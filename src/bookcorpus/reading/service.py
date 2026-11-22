@@ -6,6 +6,7 @@ import os
 import time
 import uuid
 
+from .. import corpus_snapshot
 from .. import preflight as env_preflight
 from . import book_types, chapmap, diagram_audit, diagrams, events, footnotes
 from .library import Library
@@ -246,6 +247,7 @@ class ReadingService:
 
     def __init__(self, root=None, annotate=None, client=None):
         self.library = Library(root)
+        self.root = str(self.library.root)
         self.store = Store(self.library.layout)
         if annotate is None:
             annotate = os.environ.get("READING_ANNOTATE", "1") != "0"
@@ -269,8 +271,20 @@ class ReadingService:
     def shelf(self):
         counts = self.store.activity_counts()
         books = [self._book_view(book, counts) for book in self.library.books()]
-        chapters = sum(book["chapters"] for book in books)
-        chars = sum(book["chars"] for book in books)
+        # 页头四个数从统一快照来：与 8765 / 8770 同一时刻同一组数。
+        # 快照缺源（如盘上还没建 library.db）才退回逐本求和——那只能数到
+        # 能解析的书，缺库时页头先给「—」比给小一号的数诚实。
+        snap = corpus_snapshot.snapshot(self.root)
+        readable = snap["books_readable"]
+        if readable is None:
+            readable = len(books)
+        chapters = snap["chapters"]
+        if chapters is None:
+            chapters = sum(book["chapters"] for book in books)
+        chars = snap["chars"]
+        if chars is None:
+            chars = sum(book["chars"] for book in books)
+        built_at = snap["built_at"]
         recent = []
         seen_chapters = set()
         for op in self.store.ops_logs(limit=40):
@@ -309,14 +323,18 @@ class ReadingService:
                 )
         return {
             "stats": {
-                "readable": len(books),
+                "readable": readable,
                 "chapters": chapters,
                 "chars": chars,
+                "paras": snap["paras"],
                 "packs": counts["chapters"],
                 "notes": counts["notes"],
                 "maps": counts["maps"],
+                "built_at": built_at,
             },
-            "total": self.library.total(),
+            # 「全部书目」= 藏书（library.db 全库），不是伴读能解析的书数。
+            # 快照缺 library.db 时才退回 library.total()（只能数到能解析的书）。
+            "total": snap["books_total"] if snap["books_total"] is not None else self.library.total(),
             "books": books,
             "recent": recent,
         }
@@ -324,8 +342,15 @@ class ReadingService:
     def catalog(self, q="", subject=""):
         counts = self.store.activity_counts()
         data = self.library.catalog(q, subject)
+        snap = corpus_snapshot.snapshot(self.root)
         data["readable"] = [self._book_view(book, counts) for book in data.get("readable", [])]
         data["books"] = data["readable"]
+        # 数从快照来（与书架 / 8765 / 8770 同源）；缺 library.db 时保留逐本口径。
+        if snap["books_total"] is not None:
+            data["total"] = snap["books_total"]
+        if snap["books_readable"] is not None:
+            data["readable_count"] = snap["books_readable"]
+        data["stats"] = {"built_at": snap["built_at"]}
         return data
 
     def book(self, uid):

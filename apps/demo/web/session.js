@@ -1055,9 +1055,11 @@
     return {
       values: {
         books: count(libraryReady, meta.books),
+        books_total: count(libraryReady, meta.books_total),
         paras: count(indexReady, meta.paras),
         chapters: count(indexReady, meta.chapters),
       },
+      builtAt: meta.built_at || '',
       note,
       embedReady: Boolean(indexReady && meta.embed && meta.embed.ready),
     };
@@ -1069,6 +1071,12 @@
       const value = stats.values[el.dataset.stat];
       el.textContent = typeof value === 'number' ? fmtInt(value) : '—';
     });
+    const builtEl = document.querySelector('[data-stat-built-at]');
+    if (builtEl) {
+      builtEl.textContent = stats.builtAt ? '统计于 ' + stats.builtAt : '';
+      builtEl.title = stats.builtAt ? '与本页数字同一份快照；书库更新后下一分钟刷新' : '';
+      builtEl.hidden = !stats.builtAt;
+    }
     const fusionEl = $('#fusion-pill');
     if (fusionEl) fusionEl.hidden = !stats.embedReady;
     const box = $('#stats');

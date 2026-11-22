@@ -155,6 +155,16 @@ function dig(obj, path, dflt) {
   return cur === null || cur === undefined ? dflt : cur;
 }
 
+// 快照键：服务端显式 null = 读数未知（缺库/坏库），返回 null 让页面显示「—」，
+// 不能落到默认 0；旧 payload 没这个键时才走 legacy 键兜底。
+function snapNum(st, key, legacyKey, legacyDflt) {
+  if (st && key in st) {
+    const v = st[key];
+    return v == null ? null : Number(v) || 0;
+  }
+  return dig(st, legacyKey, legacyDflt);
+}
+
 function num(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value === undefined || value === null ? '0' : value);
@@ -361,9 +371,12 @@ function bookCounts() {
     ? (Number(cg.pdf) || 0)
     : Math.max(0, (convertible != null ? convertible : 0) - ebooksToConvert - docsToConvert - otherToConvert);
   return {
-    books: dig(st, 'books', 0),
-    readable: dig(st, 'md_done', 0),
-    chapters: dig(st, 'md_chapters', 0),
+    books: snapNum(st, 'books', 'books', 0),
+    // 可读=快照 books_readable：md 目录存在且章数>0；不再用 md_done（会把 0 章 md（图片书）算成可读）。
+    // 旧 payload（无 books_readable）退 md_indexable，口径相同；显式 null（未知）保留，页面显示「—」。
+    readable: snapNum(st, 'books_readable', 'md_indexable', 0),
+    chapters: snapNum(st, 'stats_chapters', 'md_chapters', 0),
+    builtAt: dig(st, 'stats_built_at', ''),
     // 待转口径在服务端：无 md 的书里去掉已定存档的。缺口径时退回旧公式
     toConvert: convertible != null ? convertible
       : (pending.pdf || 0) + (pending.txt || 0) + (pending.djvu || 0),
@@ -463,8 +476,8 @@ function ebookCount() {
 function renderStats() {
   const c = bookCounts();
   const items = [
-    ['藏书', c.libKnown ? num(c.books) : '—', ''],
-    ['可读', c.libKnown ? num(c.readable) : '—', c.libKnown ? 'ok' : ''],
+    ['藏书', c.libKnown && c.books != null ? num(c.books) : '—', ''],
+    ['可读', c.libKnown && c.readable != null ? num(c.readable) : '—', c.libKnown && c.readable != null ? 'ok' : ''],
     ['待转', c.libKnown ? num(c.toConvert) : '—', c.libKnown && c.toConvert ? 'warn' : ''],
     ['索引', !c.indexKnown ? '未知'
       : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
@@ -479,6 +492,10 @@ function renderStats() {
   }
   const ops = (S.payload && S.payload.ops) || {};
   if (ops.writer) html += '<span class="stat warn">写任务<b>在跑</b></span>';
+  const builtAt = c.builtAt || (S.payload && S.payload.stats_built_at) || '';
+  if (builtAt) {
+    html += '<span class="stat" title="四个数来自同一份快照；与 8765 检索、8771 伴读同源">统计于<b>' + esc(builtAt) + '</b></span>';
+  }
   $('#stats').innerHTML = html;
 }
 

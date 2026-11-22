@@ -169,7 +169,11 @@ def scenario_missing_build(node_ok=True):
             missing,
         )
         status = body.get("status") or {}
-        check("计数是 0 但标了未知", status.get("books") == 0 and (status.get("library") or {}).get("ok") is False)
+        check(
+            "缺库计数保持未知（None），标了未知",
+            status.get("books") is None and (status.get("library") or {}).get("ok") is False,
+        )
+        check("缺库时快照键在且为 None", "books_readable" in status and "stats_chapters" in status, sorted(status)[:20])
         check("index.ok=False", (status.get("index") or {}).get("ok") is False)
         check("audit.ran=False", (status.get("audit") or {}).get("ran") is False)
         problems = status.get("problems") or []

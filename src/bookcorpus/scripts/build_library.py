@@ -11,6 +11,7 @@
 """
 
 import argparse
+import datetime
 import json
 import os
 import sqlite3
@@ -121,6 +122,12 @@ def finalize(con, t0, emit_json):
         "build_sec": round(time.time() - t0, 3),
         "db_bytes": 0,
     }
+    # 数据时刻：corpus_snapshot 取页头「统计于」用；每次重建都盖一个新戳。
+    con.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+    con.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('built_at', ?)",
+        (datetime.datetime.now().astimezone().replace(microsecond=0).isoformat(),),
+    )
     con.commit()
     # 换名前把 WAL 收干净：-wal/-shm 是按 .building 的名字开的，换名后会变孤儿
     try:

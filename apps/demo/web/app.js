@@ -332,9 +332,11 @@
     return {
       values: {
         books: count(libraryReady, meta.books),
+        books_total: count(libraryReady, meta.books_total),
         paras: count(indexReady, meta.paras),
         chapters: count(indexReady, meta.chapters),
       },
+      builtAt: meta.built_at || '',
       note,
     };
   }
@@ -342,10 +344,16 @@
   function renderStats(stats) {
     const box = $('#stats');
     const values = stats.values || {};
-    ['books', 'paras', 'chapters'].forEach((key) => {
+    ['books', 'books_total', 'paras', 'chapters'].forEach((key) => {
       const value = values[key];
       setStat(key, typeof value === 'number' ? fmtInt(value) : '—');
     });
+    const builtEl = box ? box.querySelector('[data-stat-built-at]') : null;
+    if (builtEl) {
+      builtEl.textContent = stats.builtAt ? '统计于 ' + stats.builtAt : '';
+      builtEl.title = stats.builtAt ? '与本页数字同一份快照；书库更新后下一分钟刷新' : '';
+      builtEl.hidden = !stats.builtAt;
+    }
     let noteEl = box ? box.querySelector('[data-stat-note]') : null;
     if (!noteEl && box) {
       noteEl = document.createElement('span');
