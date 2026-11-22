@@ -23,6 +23,7 @@ import base64
 import contextlib
 import json
 import os
+import random
 import select
 import shutil
 import socket
@@ -182,27 +183,121 @@ class CDP:
         return out
 
 
-def page_ws(port, timeout=30):
-    """拿页面 target 的 ws 地址（/json/version 给的是浏览器级，不能调 Runtime）。"""
-    deadline = time.time() + timeout
+DEFAULT_ATTEMPTS = 3
+DEFAULT_LAUNCH_TIMEOUT = 30.0
+
+
+class ChromeLaunchError(RuntimeError):
+    """Chrome 没起来：进程退出、调试口没打开、没有 page target，或页面 WS 握手失败。
+
+    与页面/断言错误分开：断言失败仍是 AssertionError，CDP 调用失败仍是 RuntimeError。
+    看到这个异常就说明问题在浏览器启动，不用再猜是页面坏了。
+    """
+
+
+def _stderr_tail(path, limit=6):
+    """Chrome 的 stderr 尾部（stdout 丢弃，stderr 落在 profile 下的 chrome.log）。"""
+    try:
+        with open(path, "rb") as fh:
+            raw = fh.read()[-8192:]
+    except OSError:
+        return ""
+    lines = [ln.strip() for ln in raw.decode("utf-8", "replace").splitlines() if ln.strip()]
+    return " | ".join(lines[-limit:])
+
+
+def _backoff(attempt):
+    """失败尝试之间退避 0.25s/0.5s/...（带抖动，上限 1s）；测试里替换掉以不等真实时钟。"""
+    time.sleep(min(1.0, 0.25 * 2 ** (attempt - 1)) * (1.0 + random.random() * 0.2))
+
+
+def _terminate(proc):
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=5)
+
+
+def _debug_port_serving(port):
+    """调试口是否已经在应答；只用于把失败原因说清楚。"""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%d/json/version" % port, timeout=1) as r:
+            return r.status == 200
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def _wait_devtools_port(profile, proc, deadline):
+    """--remote-debugging-port=0 时 Chrome 把实际端口写进 <profile>/DevToolsActivePort。"""
+    path = os.path.join(profile, "DevToolsActivePort")
+    delay = 0.02
     while time.time() < deadline:
+        if proc.poll() is not None:
+            return None
         try:
-            with urllib.request.urlopen("http://127.0.0.1:%d/json/list" % port, timeout=2) as r:
+            with open(path, encoding="utf-8") as fh:
+                first = fh.readline().strip()
+        except OSError:
+            first = ""
+        if first.isdigit():
+            return int(first)
+        time.sleep(delay)
+        delay = min(delay * 1.5, 0.25)
+    return None
+
+
+def page_ws(port, timeout=30, proc=None, deadline=None):
+    """拿页面 target 的 ws 地址（/json/version 给的是浏览器级，不能调 Runtime）。
+
+    proc 传进来时进程一旦退出就立刻返回 None，不再空等满 timeout；
+    deadline 与 launch 的总预算共用一个截止时间。
+    """
+    end = deadline if deadline is not None else time.time() + timeout
+    delay = 0.05
+    while time.time() < end:
+        if proc is not None and proc.poll() is not None:
+            return None
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:%d/json/list" % port, timeout=1) as r:
                 for target in json.load(r):
                     if target.get("type") == "page" and target.get("webSocketDebuggerUrl"):
                         return target["webSocketDebuggerUrl"]
         except (urllib.error.URLError, ValueError, OSError):
             pass
-        time.sleep(0.3)
+        time.sleep(delay)
+        delay = min(delay * 1.5, 0.25)
     return None
 
 
-def launch(width, height, url, port):
+def _launch_failure(debug_port, proc, log_path, timeout):
+    rc = proc.poll()
+    if rc is not None:
+        state = "Chrome 进程已退出 rc=%s" % rc
+    else:
+        state = "Chrome 进程还在，但 %.1fs 内没给出 page target" % timeout
+    if debug_port and _debug_port_serving(debug_port):
+        port_state = "调试口 %d 在应答，只是没有 page target" % debug_port
+    elif debug_port:
+        port_state = "调试口 %d 不应答 /json/version" % debug_port
+    else:
+        port_state = "Chrome 没写出 DevToolsActivePort，调试口从未打开"
+    return "%s；%s；stderr: %s" % (state, port_state, _stderr_tail(log_path) or "(空)")
+
+
+def _launch_once(width, height, url, port, timeout):
     profile = tempfile.mkdtemp(prefix="shot-profile-")
+    log_path = os.path.join(profile, "chrome.log")
     cmd = [
         CHROME,
         "--headless=new",
         "--disable-gpu",
+        # 容器与 CI 上 /dev/shm 常常只有 64M，不关掉 headless 会起不来或半途崩。
+        "--disable-dev-shm-usage",
         "--no-sandbox",
         "--no-first-run",
         "--no-default-browser-check",
@@ -212,12 +307,59 @@ def launch(width, height, url, port):
         "--window-size=%d,%d" % (width, height),
         "about:blank",
     ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    ws_url = page_ws(port)
-    if not ws_url:
-        proc.kill()
-        raise RuntimeError("连不上 Chrome 调试口")
-    return proc, profile, ws_url
+    # stderr 落到 profile 里而不是 DEVNULL：起不来时这几行是唯一能分清原因的线索。
+    with open(log_path, "wb") as log:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=log)
+    deadline = time.time() + timeout
+    debug_port = port
+    try:
+        if not debug_port:
+            debug_port = _wait_devtools_port(profile, proc, deadline)
+        ws_url = page_ws(debug_port, proc=proc, deadline=deadline) if debug_port else None
+        if not ws_url:
+            raise ChromeLaunchError(_launch_failure(debug_port, proc, log_path, timeout))
+        return proc, profile, ws_url
+    except BaseException:
+        _terminate(proc)
+        shutil.rmtree(profile, ignore_errors=True)
+        raise
+
+
+def launch(width, height, url, port, attempts=DEFAULT_ATTEMPTS, timeout=DEFAULT_LAUNCH_TIMEOUT):
+    """起 headless Chrome，返回 (proc, profile, 页面 ws 地址)。
+
+    port=0 时让内核分配调试端口（Chrome 写进 <profile>/DevToolsActivePort），避开
+    _free_port() 先 bind 再 close 留下的抢占窗口；显式端口照旧使用。
+    每次尝试用独立 profile，失败按 0.25s/0.5s 退避重试；timeout 是整次 launch 的总预算、
+    按尝试次数均分，所以健康路径不变慢，调试口真起不来时最坏耗时也不超过改动前。
+    """
+    attempts = max(1, int(attempts))
+    per_attempt = max(0.2, float(timeout) / attempts)
+    failures = []
+    for n in range(1, attempts + 1):
+        try:
+            return _launch_once(width, height, url, port, per_attempt)
+        except ChromeLaunchError as exc:
+            failures.append("attempt %d/%d: %s" % (n, attempts, exc))
+            if n < attempts:
+                _backoff(n)
+    raise ChromeLaunchError("Chrome 没起来（%s，%d 次尝试）：%s" % (CHROME, attempts, "；".join(failures)))
+
+
+def connect_cdp(ws_url, attempts=DEFAULT_ATTEMPTS, handshake_timeout=8.0, sock_timeout=30):
+    """连上页面 WS。握手失败按退避重试，最终仍失败算 ChromeLaunchError，不算页面错误。"""
+    attempts = max(1, int(attempts))
+    last = None
+    for n in range(1, attempts + 1):
+        try:
+            ws = WS(ws_url, timeout=handshake_timeout)
+            ws.sock.settimeout(sock_timeout)
+            return CDP(ws)
+        except (OSError, RuntimeError) as exc:
+            last = exc
+            if n < attempts:
+                _backoff(n)
+    raise ChromeLaunchError("连不上页面 WS（%d 次尝试）：%s；%s" % (attempts, ws_url, last))
 
 
 def eval_js(cdp, expr, await_promise=False, timeout=40):
@@ -301,11 +443,11 @@ def main(argv=None):
     url = a.url
     if not url:
         url = DEFAULT_URL + "?q=" + urllib.parse.quote(a.question) + "&instant=1&top=1"
-    proc, _profile, ws_url = launch(a.width, a.height, url, a.port)
+    proc, profile, ws_url = launch(a.width, a.height, url, a.port)
     errors, notes = [], []
     all_fail = False
     try:
-        cdp = CDP(WS(ws_url))
+        cdp = connect_cdp(ws_url)
         cdp.call("Runtime.enable")
         cdp.call("Log.enable")
         cdp.call("Page.enable")
@@ -388,11 +530,8 @@ def main(argv=None):
         errors = cdp.errors()
         cdp.ws.close()
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        _terminate(proc)
+        shutil.rmtree(profile, ignore_errors=True)
     for line in notes:
         print(line)
     for err in errors:

@@ -95,9 +95,9 @@ def main(argv=None):
     proc, profile, ws_url = shot.launch(1440, 900, url, args.port)
     ws = None
     try:
-        ws = shot.WS(ws_url, timeout=260)
-        ws.sock.settimeout(260)
-        cdp = shot.CDP(ws)
+        # 这个脚本要等长回答，握手与后续读写超时都比 e2e 长。
+        cdp = shot.connect_cdp(ws_url, handshake_timeout=260, sock_timeout=260)
+        ws = cdp.ws
         cdp.call("Runtime.enable")
         cdp.call("Log.enable")
         cdp.call("Page.enable")

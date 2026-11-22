@@ -358,8 +358,10 @@ def test_session_ui_redesign_e2e_chromium(tmp_path: Path):
             assert resp.status == 200
             assert "ask-form" in resp.read().decode("utf-8")
 
-        chrome, profile, ws_url = shot.launch(1440, 900, "about:blank", _free_port())
-        cdp = shot.CDP(shot.WS(ws_url))
+        # port=0 让内核分配调试口，避开 _free_port() 先 bind 再 close 的抢占窗口；
+        # launch 内部已带退避重试，起不来时抛 ChromeLaunchError 并附 chrome 的 stderr。
+        chrome, profile, ws_url = shot.launch(1440, 900, "about:blank", 0)
+        cdp = shot.connect_cdp(ws_url)
         for method in ("Runtime.enable", "Log.enable", "Page.enable", "Network.enable"):
             cdp.call(method)
         cdp.call(
@@ -450,19 +452,21 @@ def test_session_ui_redesign_e2e_chromium(tmp_path: Path):
         assert snap["below"] == sorted(snap["below"], reverse=True)
         assert snap["ranks"] == list(range(1, len(snap["ranks"]) + 1))
 
-        # Slider keeps focus while updating in-place and raising to 95% auto-opens <details>
-        shot.eval_js(
-            cdp,
-            """(() => {
-              const el = document.querySelector('.related-thr-range');
-              el.focus();
-              el.value = '95';
-              el.dispatchEvent(new Event('input', { bubbles: true }));
-              return true;
-            })()""",
-        )
-        thr_focused = "document.activeElement && document.activeElement.classList.contains('related-thr-range')"
-        assert shot.eval_js(cdp, thr_focused) is True
+        # Slider keeps focus while updating in-place and raising to 95% auto-opens <details>.
+        # focus+input+断言必须在同一次 Runtime.evaluate 里：分两次往返时，页面若在两者之间
+        # render()（mainEl.innerHTML 整体重建），被 focus 的节点已被换掉，activeElement 落回 body。
+        focus_js = """(() => {
+          const el = document.querySelector('.related-thr-range');
+          if (!el) return 'no range';
+          el.focus();
+          if (document.activeElement !== el) return 'focus refused: ' + (document.activeElement || {}).className;
+          el.value = '95';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          if (!el.isConnected) return 'range replaced during update';
+          if (document.activeElement !== el) return 'focus lost: ' + ((document.activeElement || {}).className || '');
+          return true;
+        })()"""
+        assert shot.eval_js(cdp, focus_js) is True
         assert shot.eval_js(cdp, "!!document.querySelector('.related-lower-btn')") is True
         assert shot.eval_js(cdp, "document.querySelector('.related-below').open") is True
         shot.eval_js(cdp, "document.querySelector('.related-lower-btn').click(); true")

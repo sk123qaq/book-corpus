@@ -83,8 +83,8 @@ def test_health_reports_unknown_counts(bare_server):
 
 def header_snapshot(port, path="/"):
     url = f"http://127.0.0.1:{port}{path}"
-    chrome, profile, ws_url = shot.launch(1200, 900, "about:blank", free_port())
-    cdp = shot.CDP(shot.WS(ws_url))
+    chrome, profile, ws_url = shot.launch(1200, 900, "about:blank", 0)
+    cdp = shot.connect_cdp(ws_url)
     try:
         cdp.call("Runtime.enable")
         cdp.call("Log.enable")
