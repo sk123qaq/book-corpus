@@ -3,57 +3,73 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q!=="warm"&&(q==="cold"||localStorage.getItem("reading-theme")==="cold"))document.documentElement.classList.add("cold")}catch(e){}})();</script>
-<title>分层读 · 书架</title>
+<meta name="theme-color" id="meta-theme-color" content="#F4F1E8">
+<script>(function(){try{var r=document.documentElement,sp=new URLSearchParams(location.search),q=sp.get("theme"),n=localStorage.getItem("reading-night")==="1",t=localStorage.getItem("reading-theme");if(q==="cold"||q==="warm"){t=q;n=false;}if(n){r.setAttribute("data-theme","night");r.dataset.bootNight="1";}else if(t==="cold"){r.classList.add("cold");r.setAttribute("data-theme","cold");}else{r.setAttribute("data-theme","warm");}}catch(e){}})();</script>
+<title>伴读 · 书架</title>
 <link rel="stylesheet" href="/assets/tokens.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/pages.css">
 <link rel="stylesheet" href="/assets/theme.css">
 </head>
 <body>
-<header class="topbar">
-  <a class="brand" href="/"><span class="marks"><i></i><i></i><i></i></span>分层读</a>
-  <label class="search">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
-    <input id="top-q" placeholder="搜书名、作者、分类或章名" aria-label="搜索">
-    <span class="kbd">/</span>
-  </label>
-  <nav class="nav">
-    <a href="/" aria-current="page">书架</a>
-    <a href="/catalog">书目</a>
-    <a href="/records">操作日志</a>
-  </nav>
-  <button class="icon-btn theme-btn" data-theme-toggle aria-label="切换冷纸版" title="切换暖纸/冷纸">
-    <span class="when-warm">冷纸</span><span class="when-cold">暖纸</span>
-  </button>
-  <button class="icon-btn" id="night" aria-label="切换夜读" title="夜读">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/></svg>
-  </button>
+<a class="skip-link" href="#main-content">跳至主要内容</a>
+<header class="topbar" id="topbar">
+  <div class="top-left">
+    <a class="brand" href="/"><span class="brand-seal" aria-hidden="true">伴</span><span class="brand-name" translate="no">伴读</span></a>
+  </div>
+  <div class="top-right">
+    <label class="top-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+      <input id="top-q" type="search" autocomplete="off" placeholder="搜书名、作者或章名…" aria-label="快速搜索书目">
+      <span class="kbd" aria-hidden="true">/</span>
+    </label>
+    <nav class="main-nav" aria-label="伴读主导航">
+      <a class="nav-tab" href="/" aria-current="page">书架</a>
+      <a class="nav-tab" href="/catalog">书目</a>
+      <a class="nav-tab" href="/records">日志</a>
+    </nav>
+    <div class="theme-seg" role="group" aria-label="纸色主题">
+      <button type="button" data-theme-choice="warm" aria-pressed="true">暖纸</button>
+      <button type="button" data-theme-choice="cold" data-theme-toggle aria-pressed="false">冷纸</button>
+      <button type="button" id="night" data-theme-choice="night" aria-pressed="false" aria-label="切换夜读" title="夜读模式">夜读</button>
+    </div>
+  </div>
 </header>
 
-<main class="page">
+<main class="page" id="main-content">
   <section class="hero">
     <div class="eyebrow" id="eyebrow">私人书库 · 本地实例</div>
     <h1>打开即读，随手伴读。</h1>
-    <p class="lede">点开任一章直接看 100% 完整正文；需要时再按需展开知识地图，或划词图解、讲人话、翻译、拆前提。</p>
+    <p class="lede">点击任一书脊或近期章目，即刻直出 100% 完整正文；需要理清脉络时再按需展开知识地图、结构蓝图与划词旁批。</p>
     <div class="meta" id="hero-meta"></div>
+  </section>
+
+  <section class="recent-sec" id="recent-sec" hidden>
+    <div class="section-head">
+      <h2>近期在读</h2>
+      <span class="hint">上次停留在正文位置，点击一键续读</span>
+    </div>
+    <div class="recent-grid" id="recent-grid"></div>
   </section>
 
   <div class="shelf-head">
     <div>
-      <div class="eyebrow" style="color:var(--ink-3)">可读 · 有正文</div>
-      <div class="hint" style="margin-top:6px">点击书脊翻开；高度按章数排，厚度按字数。</div>
+      <h2>书墙</h2>
+      <div class="hint">点击书脊翻开；高度按章数排，厚度按字数。</div>
       <div class="shelf-mobile-hint">← 左右滑动，还有书 →</div>
     </div>
-    <div class="view-toggle" role="group" aria-label="视图">
-      <button aria-pressed="true">书墙</button>
-      <button aria-pressed="false">目录</button>
+    <div class="view-toggle" role="group" aria-label="书墙视图">
+      <button type="button" aria-pressed="true">书墙</button>
+      <button type="button" aria-pressed="false">目录</button>
     </div>
   </div>
 
   <div class="shelf-wrap" id="shelf-wrap">
     <div class="shelf" id="shelf" aria-label="可读的书"></div>
-    <div class="shelf-line"></div>
+    <div class="shelf-inspector" id="shelf-inspector" hidden>
+      <span id="shelf-inspector-text"></span>
+      <a class="btn btn-surface btn-sm" id="shelf-inspector-link" href="#">翻开书页 →</a>
+    </div>
     <div class="shelf-foot" id="shelf-foot"></div>
   </div>
 
@@ -64,11 +80,15 @@
       <h2>全部书目</h2>
       <span class="count" id="cat-count">…</span>
     </div>
-    <div class="filters" role="group" aria-label="筛选" id="filters"></div>
-    <table class="table">
-      <thead><tr><th>书名</th><th>作者</th><th class="hide-m">分类</th><th class="hide-m">章</th><th>状态</th></tr></thead>
-      <tbody id="cat-body"><tr><td colspan="5" class="empty">正在读账…</td></tr></tbody>
-    </table>
+    <div class="filters" role="group" aria-label="按学科筛选" id="filters"></div>
+    <div class="data-card">
+      <div class="data-table-wrap">
+        <table class="table">
+          <thead><tr><th>书名</th><th>作者</th><th class="hide-m">分类</th><th class="hide-m num">章</th><th>状态</th></tr></thead>
+          <tbody id="cat-body"><tr><td colspan="5" class="empty">正在读账…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
     <p class="note" id="cat-note">只有有正文的书能进选章与生成；其余是书目层，导入正文后才上书墙。</p>
   </section>
 </main>
@@ -81,17 +101,16 @@ RD.ready(async () => {
   RD.night();
   const shelfMount = RD.mount('shelf');
   try {
-    // 首屏只等书架本身：/api/catalog 会把同样的数据再算一遍，翻页时另有页面用。
     const shelf = await RD.api('/api/shelf');
     const books = shelf.books || [];
     const stats = shelf.stats || {};
     const totals = { total: shelf.total || books.length, readable_count: books.length };
     RD.mount('eyebrow').textContent = '私人书库 · ' + RD.fmt(totals.total) + ' 本';
     RD.mount('hero-meta').innerHTML =
-      '<span><b>' + RD.fmt(stats.readable) + '</b> 本可读</span>' +
-      '<span><b>' + RD.fmt(stats.chapters) + '</b> 章原文</span>' +
-      '<span><b>' + RD.wan(stats.chars) + '</b> 万字</span>' +
-      '<span><b>' + RD.fmt(stats.notes || 0) + '</b> 条旁批 · ' + RD.fmt(stats.maps || 0) + ' 导图</span>';
+      '<span><b>' + RD.fmt(stats.readable) + '</b>本可读正文</span>' +
+      '<span><b>' + RD.fmt(stats.chapters) + '</b>章原文</span>' +
+      '<span><b>' + RD.wan(stats.chars) + '</b>万字</span>' +
+      '<span><b>' + RD.fmt(stats.notes || 0) + '</b>条旁批 · ' + RD.fmt(stats.maps || 0) + ' 导图</span>';
 
     renderShelf(books, shelf.recent || []);
 
@@ -99,7 +118,6 @@ RD.ready(async () => {
       '<span>' + RD.fmt(books.length) + ' 本有正文 · 共 ' + RD.fmt(stats.chapters) + ' 章 · 约 ' +
       RD.wan(stats.chars) + ' 万字</span><a href="/catalog">全部书目 ' + RD.fmt(totals.total) + ' 本 →</a>';
 
-    // 目录与书目表都在首屏之外：目录首次展开时再建，书目表等第一批绘制完成。
     let directoryDrawn = false;
     const drawDirectory = () => {
       if (directoryDrawn) return;
@@ -139,34 +157,66 @@ RD.ready(async () => {
 });
 
 function spineHeight(book) {
-  return Math.max(205, Math.min(358, 190 + Number(book.chapters || 0) * 2.4));
+  return Math.max(176, Math.min(232, 168 + Number(book.chapters || 0) * 1.4));
 }
 
 function spineWidth(book) {
-  return Math.max(64, Math.min(138, 58 + Number(book.chars || 0) / 26000));
+  return Math.max(44, Math.min(68, 42 + Number(book.chars || 0) / 38000));
+}
+
+function updateInspector(book) {
+  const box = RD.mount('shelf-inspector');
+  const txt = RD.mount('shelf-inspector-text');
+  const link = RD.mount('shelf-inspector-link');
+  if (!box || !txt || !link || !book) return;
+  box.hidden = false;
+  txt.innerHTML = '<strong>' + RD.esc(book.title) + '</strong> · ' + RD.esc(book.author_display) +
+    ' · ' + RD.fmt(book.chapters) + ' 章 · ' + RD.wan(book.chars) + ' 万字';
+  link.href = RD.bookHref(book.uid);
 }
 
 function renderShelf(books, recent) {
+  const recentSec = RD.mount('recent-sec');
+  const recentGrid = RD.mount('recent-grid');
+  if (recentSec && recentGrid) {
+    if (recent.length) {
+      recentSec.hidden = false;
+      recentGrid.innerHTML = recent.slice(0, 3).map(readingCard).join('');
+    } else {
+      recentSec.hidden = true;
+    }
+  }
+
   const mount = RD.mount('shelf');
   mount.innerHTML = books.map((book) => {
     const dots = [0, 1, 2, 3].map((i) => '<i class="' + (book.packs > 0 && i < Math.min(4, book.packs) ? 'on' : '') + '"></i>').join('');
-    return '<a class="spine" href="' + RD.bookHref(book.uid) + '" style="--cloth:' + RD.esc(book.color || '#1E3A36') +
+    return '<a class="spine" href="' + RD.bookHref(book.uid) + '" data-uid="' + RD.esc(book.uid) +
+      '" style="--cloth:' + RD.esc(book.color || '#1E3A36') +
       ';--h:' + spineHeight(book).toFixed(0) + 'px;--w:' + spineWidth(book).toFixed(0) + 'px" ' +
       'aria-label="' + RD.esc(book.title) + '，' + RD.esc(book.author_display) + '，' + RD.fmt(book.chapters) + ' 章">' +
-      '<span class="n">' + String(book.chapters).padStart(2, '0') + ' 章</span>' +
+      '<span class="n">' + String(book.chapters).padStart(2, '0') + '章</span>' +
       '<span class="t">' + RD.esc(book.title_short || book.title) + '</span>' +
       '<span class="a">' + RD.esc(book.author_display) + '</span>' +
-      (book.packs ? '<span class="stamp" title="已伴读 ' + RD.fmt(book.packs) + ' 章"></span>' : '') +
       '<span class="edge" aria-hidden="true">' + dots + '</span></a>';
-  }).join('') + (recent.length ? readingCard(recent[0]) : '');
+  }).join('');
+
+  if (books.length) updateInspector(books[0]);
+  const byUid = new Map(books.map((b) => [b.uid, b]));
+  mount.addEventListener('mouseover', (e) => {
+    const sp = e.target.closest('.spine');
+    if (sp && byUid.has(sp.dataset.uid)) updateInspector(byUid.get(sp.dataset.uid));
+  });
+  mount.addEventListener('focusin', (e) => {
+    const sp = e.target.closest('.spine');
+    if (sp && byUid.has(sp.dataset.uid)) updateInspector(byUid.get(sp.dataset.uid));
+  });
 }
 
 function readingCard(item) {
   return '<a class="reading-card" href="' + RD.chapterHref(item.uid, item.n) + '">' +
-    '<span class="rc-eyebrow">最近阅读</span><span class="rc-book">' + RD.esc(item.uid) + ' · 第 ' +
-    String(item.n).replace(/^0/, '') + ' 章</span>' +
-    '<span class="rc-title">' + RD.esc(item.title) + '</span>' +
-    '<span class="rc-foot"><span>' + RD.esc(item.action || '打开正文') + '</span><span>直接阅读 →</span></span></a>';
+    '<span class="rc-eyebrow">近期阅读 · ' + RD.esc(item.uid) + ' · 第 ' + String(item.n).replace(/^0/, '') + ' 章</span>' +
+    '<span class="rc-book">' + RD.esc(item.title) + '</span>' +
+    '<span class="rc-foot"><span>' + RD.esc(item.action || '打开正文') + '</span><span>直接续读 →</span></span></a>';
 }
 
 function renderDirectory(books) {
@@ -180,7 +230,7 @@ function renderDirectory(books) {
 
 function renderFilters(items) {
   RD.mount('filters').innerHTML = items.map((name, i) =>
-    '<button data-filter="' + RD.esc(i === 0 ? 'all' : name) + '" aria-pressed="' + (i === 0) + '">' + RD.esc(name) + '</button>'
+    '<button type="button" data-filter="' + RD.esc(i === 0 ? 'all' : name) + '" aria-pressed="' + (i === 0) + '">' + RD.esc(name) + '</button>'
   ).join('');
 }
 
@@ -191,7 +241,7 @@ function renderCatalog(books, totals, filter) {
   RD.mount('cat-count').textContent = '显示 ' + rows.length + ' / ' + RD.fmt(totals.total);
   RD.mount('cat-body').innerHTML = rows.length ? rows.map((book) =>
     '<tr><td><span class="dot" style="background:' + RD.esc(book.color || '#1E3A36') + '"></span>' +
-    '<a class="title title-link" href="' + RD.bookHref(book.uid) + '">' + RD.esc(book.title_short || book.title) +
+    '<a class="title-link" href="' + RD.bookHref(book.uid) + '">' + RD.esc(book.title_short || book.title) +
     '<small>' + RD.esc(book.title) + '</small></a></td>' +
     '<td class="author">' + RD.esc(book.author_display) + '</td>' +
     '<td class="subject hide-m">' + RD.esc((book.subjects || []).join(' / ')) + '</td>' +
