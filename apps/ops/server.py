@@ -2047,6 +2047,9 @@ class App:
             payload = {
                 "at": now_iso(),
                 "books": 0,
+                "books_readable": 0,
+                "stats_chapters": 0,
+                "stats_built_at": "",
                 "md_done": 0,
                 "pending": {"pdf": 0, "txt": 0, "djvu": 0},
                 "inbox": {"files": 0, "items": []},

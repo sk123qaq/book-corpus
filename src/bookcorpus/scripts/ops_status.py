@@ -23,7 +23,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+_SRC = os.path.dirname(HERE)
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 from lib_common import ROOT, L
+
+from bookcorpus import corpus_snapshot
 
 AUDIT = os.path.join(HERE, "audit_state.py")
 AUDIT_TIMEOUT = 1800
@@ -79,10 +84,17 @@ def library(p, state):
         state["problems"].append("没有 build/library.db")
         state["library"] = {"db": None, "ok": False}
         return
+    # 页头四数从统一快照来（与 8765 / 8771 同源）：books=藏书、books_readable=可读
+    # （不含 0 章 md，图片书不算可读）、stats_chapters=章（md 文件视角）。
+    snap = corpus_snapshot.snapshot(p.root)
+    state["books"] = snap["books_total"] if snap["books_total"] is not None else 0
+    state["books_readable"] = snap["books_readable"] if snap["books_readable"] is not None else 0
+    state["stats_chapters"] = snap["chapters"] if snap["chapters"] is not None else 0
+    state["stats_chars"] = snap["chars"]
+    state["stats_built_at"] = snap["built_at"]
     try:
         con = ro(p.libdb)
         try:
-            state["books"] = con.execute("SELECT count(*) FROM book").fetchone()[0]
             state["md_done"] = con.execute("SELECT count(*) FROM derived WHERE kind='md' AND status='done'").fetchone()[
                 0
             ]

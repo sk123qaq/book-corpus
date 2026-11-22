@@ -362,8 +362,11 @@ function bookCounts() {
     : Math.max(0, (convertible != null ? convertible : 0) - ebooksToConvert - docsToConvert - otherToConvert);
   return {
     books: dig(st, 'books', 0),
-    readable: dig(st, 'md_done', 0),
-    chapters: dig(st, 'md_chapters', 0),
+    // 可读=快照 books_readable：md 目录存在且章数>0；不再用 md_done（会把 0 章 md（图片书）算成可读）。
+    // 旧 payload（无 books_readable）退 md_indexable，口径相同。
+    readable: dig(st, 'books_readable', dig(st, 'md_indexable', 0)),
+    chapters: dig(st, 'stats_chapters', dig(st, 'md_chapters', 0)),
+    builtAt: dig(st, 'stats_built_at', ''),
     // 待转口径在服务端：无 md 的书里去掉已定存档的。缺口径时退回旧公式
     toConvert: convertible != null ? convertible
       : (pending.pdf || 0) + (pending.txt || 0) + (pending.djvu || 0),
@@ -479,6 +482,10 @@ function renderStats() {
   }
   const ops = (S.payload && S.payload.ops) || {};
   if (ops.writer) html += '<span class="stat warn">写任务<b>在跑</b></span>';
+  const builtAt = c.builtAt || (S.payload && S.payload.stats_built_at) || '';
+  if (builtAt) {
+    html += '<span class="stat" title="四个数来自同一份快照；与 8765 检索、8771 伴读同源">统计于<b>' + esc(builtAt) + '</b></span>';
+  }
   $('#stats').innerHTML = html;
 }
 
