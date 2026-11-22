@@ -32,7 +32,7 @@
 Preconditions:
 
 - 工作区按 [README](./README.md) 建好；`check_ops.py` 自己造临时根，不需要样书。
-- 操作台起在本轮端口：`BOOKS_ROOT=$ROOT uv run --frozen python apps/ops/server.py --root $ROOT --port 18770`，启动行是 `统一操作台：http://127.0.0.1:18770  root=<ROOT>`；`--port 0` 会自己挑一个空闲端口并打印实际值。**产品默认端口是 8770**（`apps/ops/server.py:4789`；`:4787` 是 description），18770 只是本技能传 `--port` 的结果；操作员的常驻实例在 8770，不要照抄 18770 去连他。
+- 操作台起在本轮端口：`BOOKS_ROOT=$ROOT uv run --frozen python apps/ops/server.py --root $ROOT --port 18770`，启动行是 `统一操作台：http://127.0.0.1:18770  root=<ROOT>`；`--port 0` 会自己挑一个空闲端口并打印实际值。**产品默认端口是 8770**（`apps/ops/server.py` 里 `--port` 参数写的是 `default=8770`，模块 docstring 与 argparse description 也标着 8770；这里按符号指路、不写行号，行号会随文件增长漂移），18770 只是本技能传 `--port` 的结果；操作员的常驻实例在 8770，不要照抄 18770 去连他。
 - CDP 脚本要一个 Chrome 系浏览器：用 `CHROME_BIN` 指定，本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84）；`google-chrome-stable` 已不存在。本技能的 `scripts/drive_ops_tabs.py` 读 `CHROME_BIN`，缺省 `/usr/bin/chromium`。
 - 只对临时根操作：上传写 `books/_收件箱/`，任务写 `jobs/<id>/`，状态写 `ops.db`。绝不指向 `~/书库`。
 
