@@ -129,7 +129,7 @@ const S = {
   pickSubject: '', pickSort: 'pages', settle: null, triageInfo: null,
   pdfInlineTag: 'all', pdfInlineQ: '',
   maintainSteps: new Set(FINISH_DEFAULT),
-  cold: null, settings: { auto_embed: true }, services: [],
+  cold: null, coldError: '', coldRun: null, coldBusy: false, settings: { auto_embed: true }, services: [],
   reconcileExtra: new Set(),
 };
 
@@ -934,7 +934,7 @@ function catalogSubtabs(active) {
   return subtabsBar([
     ['ledger', '分类与全库台账', 0],
     ['retire', '待退库与删书', dropCount],
-    ['cold', '冷宫（只读专区）', coldCount],
+    ['cold', '退库台账与冷宫', coldCount],
   ], active);
 }
 
@@ -2633,28 +2633,41 @@ function ledgerRowHtml(row) {
   </tr>`;
 }
 
+const COLD_STATE_UI = {
+  in_cold: { word: '在库', mark: '✓', pill: 'ok' },
+  missing: { word: '缺失', mark: '✕', pill: 'miss' },
+  unregistered: { word: '未登记', mark: '＋', pill: 'half' },
+};
+
+function coldStateCell(r) {
+  const ui = COLD_STATE_UI[r.state] || COLD_STATE_UI.missing;
+  const word = r.backfilled ? `${ui.word} · 补登` : ui.word;
+  const checked = r.state === 'missing' && r.last_checked
+    ? `<div class="small muted" style="margin-top:4px">核对 ${esc(fmtTime(r.last_checked))}</div>`
+    : '';
+  return `<span class="pill ${ui.pill}"><span aria-hidden="true">${ui.mark}</span>${esc(word)}</span>${checked}`;
+}
+
 function viewCold() {
   const data = S.cold;
   const items = (data && data.items) || [];
-  const extras = (data && data.extra_dirs) || [];
-  const rows = [
-    ...items.map((r) => ({
-      title: r.title || r.uid,
-      uid: r.uid || '—',
-      source: '流程退库',
-      fmtSize: `${esc(r.format || '原书')} · ${fmtBytes(r.bytes)}`,
-      reason: r.reason || '移出流程',
-      retiredAt: fmtTime(r.retired_at),
-    })),
-    ...extras.map((d) => ({
-      title: d.name || '历史归档',
-      uid: d.uid || '—',
-      source: '历史归档',
-      fmtSize: esc(d.format || '合集原书'),
-      reason: d.reason || '历史归档移出日常处理',
-      retiredAt: d.retired_at ? fmtTime(d.retired_at) : '—',
-    })),
-  ];
+  const counts = (data && data.counts) || {};
+  const err = S.coldError;
+  const run = S.coldRun;
+  const busy = S.coldBusy;
+  const notices = [];
+  if (err) {
+    notices.push(`<div class="banner bad"><span>冷宫台账读取失败：${esc(err)}</span><span class="small">检查操作台的书库根是否指向带 books/_冷宫 与 工作区/批次 的目录。</span></div>`);
+  }
+  if (data && !data.cold_dir_exists) {
+    notices.push(`<div class="banner warn"><span>书库目录不存在：没找到 ${esc(data.cold_dir)}。</span><span class="small">台账仍可核对，但实物一律按缺失算。</span></div>`);
+  }
+  if (data && !data.batches_exists) {
+    notices.push('<div class="banner warn"><span>还没有退库批次目录（工作区/批次）。</span><span class="small">刷新会把 books/_冷宫 里的实物补登成第一条台账。</span></div>');
+  }
+  if (data && (data.errors || []).length) {
+    notices.push(`<div class="banner warn"><span>台账有问题：${esc(data.errors.join('；'))}</span></div>`);
+  }
   return `<div class="page-head">
       <div>
         <h1>书目与分类</h1>
@@ -2662,30 +2675,39 @@ function viewCold() {
       </div>
     </div>
     ${catalogSubtabs('cold')}
-    <section class="card" aria-label="冷宫只读归档">
+    <section class="card" aria-label="退库台账与冷宫实物核验">
       <div class="card-head">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <h2>冷宫归档书目（只读）</h2>
-          <span class="pill">${num(rows.length)} 本</span>
+          <h2>退库台账</h2>
+          <span class="pill">${num(items.length)} 条</span>
         </div>
         <div class="row tight">
-          <span class="small muted">与活库完全隔离，不进检索与推荐</span>
-          <button type="button" class="btn sm" data-act="cold-refresh">刷新</button>
+          <button type="button" class="btn sm" data-act="cold-refresh"${busy ? ' disabled aria-busy="true"' : ''}>${busy ? '核对中…' : '刷新'}</button>
         </div>
       </div>
-      ${rows.length ? `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="冷宫归档表"><table>
-        <thead><tr><th>书名</th><th>编号</th><th>来源</th><th>格式与体积</th><th>移出原因</th><th>归档时间</th></tr></thead>
-        <tbody>${rows.map((c) => `<tr>
-          <td data-label="书名" class="wrap">${esc(c.title)}</td>
-          <td data-label="编号" class="mono" translate="no">${esc(c.uid)}</td>
-          <td data-label="来源"><span class="pill ${c.source === '历史归档' ? 'half' : ''}">${esc(c.source)}</span></td>
-          <td data-label="格式与体积" class="small tnum"><span class="mono">${c.fmtSize}</span></td>
-          <td data-label="移出原因" class="wrap small muted">${esc(c.reason)}</td>
-          <td data-label="归档时间" class="mono small muted">${esc(c.retiredAt)}</td>
+      <p class="hint">这里显示退库台账；刷新会把台账按 <code>books/_冷宫</code> 实际文件校正：实物在记「在库」，实物没了记「缺失」（行保留），实物有台账没有就补登一行。冷宫与活库完全隔离，不进检索与推荐。</p>
+      ${notices.join('')}
+      ${data ? `<div class="stats" role="status" aria-label="核验汇总">
+        <span class="stat">在库 <b>${num(counts.in_cold)}</b></span>
+        <span class="stat">缺失 <b>${num(counts.missing)}</b></span>
+        <span class="stat">补登 <b>${num(counts.backfilled)}</b></span>
+        <span class="stat">未登记 <b>${num(counts.unregistered)}</b></span>
+        ${run ? `<span class="stat ${run.changed ? 'warn' : 'ok'}">本次改动 <b>${num(run.changed)}</b></span>` : ''}
+      </div>` : ''}
+      ${items.length ? `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="退库台账"><table>
+        <thead><tr><th>书名</th><th>编号</th><th>实物状态</th><th>批次</th><th>格式与体积</th><th>移出原因</th><th>归档时间</th></tr></thead>
+        <tbody>${items.map((r) => `<tr>
+          <td data-label="书名" class="wrap">${esc(r.title || r.uid || '—')}</td>
+          <td data-label="编号" class="mono" translate="no">${esc(r.uid || '—')}</td>
+          <td data-label="实物状态">${coldStateCell(r)}</td>
+          <td data-label="批次" class="small muted" translate="no">${esc(r.batch || '—')}</td>
+          <td data-label="格式与体积" class="small tnum"><span class="mono">${r.format ? `${esc(r.format)} · ${fmtBytes(r.bytes)}` : '—'}</span></td>
+          <td data-label="移出原因" class="wrap small muted">${esc(r.reason || '移出流程')}</td>
+          <td data-label="归档时间" class="mono small muted">${r.retired_at ? esc(fmtTime(r.retired_at)) : '—'}</td>
         </tr>`).join('')}</tbody></table></div>`
       : `<div class="empty-state"><div>
-          <div class="empty-state-title">冷宫归档区暂无记录</div>
-          <div class="empty-state-sub">在「待退库与删书」确认移出的书目会保留在这里供只读查验。</div>
+          <div class="empty-state-title">台账与冷宫都是空的</div>
+          <div class="empty-state-sub">在「待退库与删书」确认移出的书目会记到这里；冷宫里放了没人登记的东西也能被刷新补登。</div>
         </div></div>`}
     </section>`;
 }
@@ -3175,8 +3197,10 @@ async function loadPdfBooks() {
 async function loadCold() {
   try {
     S.cold = await api('/api/cold');
+    S.coldError = '';
   } catch (err) {
-    S.cold = { items: [], extra_dirs: [] };
+    S.cold = null;
+    S.coldError = err.message || '未知错误';
   }
 }
 
@@ -4141,8 +4165,23 @@ const actions = {
   },
 
   async 'cold-refresh'() {
-    await loadCold();
+    if (S.coldBusy) return;
+    S.coldBusy = true;
     render();
+    try {
+      const body = await post('/api/cold/reconcile', {});
+      S.cold = body;
+      S.coldError = '';
+      S.coldRun = { changed: body.changed || 0, backups: body.backups || [] };
+      const c = body.counts || {};
+      toast(`核对完成：在库 ${c.in_cold || 0}，缺失 ${c.missing || 0}，未登记 ${c.unregistered || 0}，本次改动 ${body.changed || 0}${(body.backups || []).length ? `（备份 ${body.backups.join('、')}）` : ''}`);
+    } catch (err) {
+      S.coldError = err.message || '校正失败';
+      toast(`核对失败：${S.coldError}`, true);
+    } finally {
+      S.coldBusy = false;
+      render();
+    }
   },
 
   async 'services-refresh'() {
