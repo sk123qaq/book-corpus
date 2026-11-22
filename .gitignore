@@ -86,5 +86,9 @@ __pycache__/
 /.pytest_cache/
 /.mypy_cache/
 
+# ---- 本地原型页（不入库，只留在本机）----
+# 设计原型是临时草图，从不参与构建与测试；需要对比时在本机临时放回。
+/docs/design/prototypes/*.html
+
 # ---- 验收报告的证据图片 ----
 !/reports/**/*.png
