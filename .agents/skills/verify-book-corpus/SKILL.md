@@ -112,14 +112,14 @@ ss -ltnp | grep -E ':(18765|18770|18771|18772|18773)\b'
 - **pytest** 验离线契约：`uv run --frozen pytest tests/test_home_*.py`、`tests/test_reading_*.py`、`tests/test_ops_*.py`、`tests/test_daily.py tests/acceptance/daily/test_feed.py`。
 - **直接跑脚本**验端到端：`uv run --frozen python tests/acceptance/ops/check_ops.py`（末行 `171 项检查，失败 0 项` 与 `ALL PASS`）。它不是 pytest 模块（零个 `def test_`），用 `pytest` 跑会 `no tests ran` 并以退出码 5 失败，那是跑法错不是产品坏。
 - **CLI** 验用户命令：`book-corpus embed` 在一次性根里跑，断言 stdout/stderr、退出码与磁盘产物，逐条见 `features/embed.md`；`book-corpus search` / `query` 的词法、混合、降级与书卡逐条见 `features/search-query.md`。`embed` 默认 `--server`（优先读 `BOOKS_EMBED_URL`）与 `query` 默认 `BOOKS_EMBED_URL` 都是操作员的 18080，必须改 18780（`query` 还需 `BOOKS_RERANK_URL=off` 以防命中常驻 18081）。
-- **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（分层读各页、日课、找一段 trace）；章页模板已移到 `assets/chapter.js`，DOM 里不再有内联模板字符串，剥不剥 `<script>` 都不会多算，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。浏览器用 `CHROME_BIN` 指定，本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84）；`google-chrome-stable` 已不存在，旧文档里「默认找 google-chrome-stable」的说法作废。
+- **headless Chrome** 验客户端渲染页、点击、键盘、截图。`--dump-dom` 取渲染后的 DOM（伴读各页、日课、找一段 trace）；章页模板已移到 `assets/chapter.js`，DOM 里不再有内联模板字符串，剥不剥 `<script>` 都不会多算，交互与截图才用仓库自带的 CDP 脚本；没有 Playwright。浏览器用 `CHROME_BIN` 指定，本机是 `/usr/bin/chromium`（2026-11-20 实测 155.0.8059.84）；`google-chrome-stable` 已不存在，旧文档里「默认找 google-chrome-stable」的说法作废。
   - `"${CHROME_BIN:-/usr/bin/chromium}" --headless=new --disable-gpu --no-sandbox --user-data-dir="$ROOT/run/chrome-chapter" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:18771/chapter/B0001/01 > "$ROOT/run/chapter-dom.html"`，数 `id="btn-map"`、`id="profile-select"`、`id="wb-toolbar"`、`blk-B01`，并断言 `id="depth-panel"` 不在；模板在外链 `assets/chapter.js` 里，DOM 不含模板字符串。详细片段见 `features/layered-reads.md`。
   - 跨页定位链：先取 `/open?uid=B0001&path=...&line=...&q=...&from=search` 的 302，再 `--dump-dom` 跟随章页，断言 `id="arrival-banner"`、`mark.hl-hit`、`reader-block hit` 与 `id="selection-bar"`；检索页用 `?q=你那里配姓赵&books=B0001&mode=trace`（样书 `B0001` 为《阿Q正传》，该词可命中），断言 `trace-hit-card` 与 `/go/reading?to=` 链接，且不出现回答轮询。
   - `uv run --frozen python tests/manual/demo/shot.py --url 'http://127.0.0.1:18765/classic?q=...&instant=1&top=1'`，读 `CHROME_BIN` 并自动探测 `chromium`，末行 `CONSOLE ERROR 0`；流式回答会先截到半截正文，`answer ready=False` 不等于失败（已知红与时限细节统一见 `features/README.md`）。
   - `uv run --frozen python .agents/skills/verify-book-corpus/scripts/drive_sse_pause.py --base http://127.0.0.1:18765 --out "$EV/sse-pause-resume.json"`，末行 `RESUMED ... done_ok=True`，exit 0；它真打一次模型，先读完离线合同再决定跑不跑。
   - `uv run --frozen python tests/manual/demo/check_session_ui.py --base http://127.0.0.1:18765`，有匹配的 3 轮/多书会话时末行 `ALL PASS`；没有时止于 `没有找到可用的 3 轮会话`，这是样本缺失不是页面坏（2026-11-14 本机 11 条会话仍没有 3 轮样本，就属于这一支）。
   - 操作台浏览器验收：全量交互用 `uv run --frozen python tests/manual/ops/shot_ops.py`（已内置 `sys.path` 无需 `PYTHONPATH`，适配六模块与子页签，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`）；仅查十二个导航 hash（`1440×900` 全页签 + `#overview` `390×844` 溢出，捕获 `exceptionThrown` / `consoleAPICalled` / `Log.entryAdded`）可用 `uv run --frozen python .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"`（退出时自动清理 `/tmp/ops-tabs-*`）。当前已知红统一登记在 [features/README.md](features/README.md)，本文件不重复。
-- **本地模型 stub** 验分层读的 SSE 与知识地图生成：`python3 .agents/skills/verify-book-corpus/scripts/mock_reading_model.py --port 18790`，阅读服务带 `OPENCODE_GO_API_KEY=sk-mock`，并把 `READING_MODEL_URL` 指向这个 stub 起。它只返回可渲染的固定形状，不评价模型质量；逐条命令见 `features/layered-reads.md`。
+- **本地模型 stub** 验伴读的 SSE 与知识地图生成：`python3 .agents/skills/verify-book-corpus/scripts/mock_reading_model.py --port 18790`，阅读服务带 `OPENCODE_GO_API_KEY=sk-mock`，并把 `READING_MODEL_URL` 指向这个 stub 起。它只返回可渲染的固定形状，不评价模型质量；逐条命令见 `features/layered-reads.md`。
 
 硬规则：
 
@@ -159,12 +159,12 @@ for f in "$ROOT"/run/*.pid; do kill "$(cat "$f")" 2>/dev/null; done
 
 ## Helpers
 
-启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；随技能附带三个脚本：`scripts/drive_sse_pause.py`（SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来）、`scripts/drive_ops_tabs.py`（操作台六模块 + 六个子页签、控制台错误与 `1440×900` 全页签 / `#overview` `390×844` 溢出轻量巡检）与 `scripts/mock_reading_model.py`（分层读离线模型 stub）。
+启动、体检、驱动、清理的命令都内联在上面或功能文件里，直接复制执行。功能性驱动优先复用仓库自带的 `tests/manual/**` 与 `tests/acceptance/**`；随技能附带三个脚本：`scripts/drive_sse_pause.py`（SSE + 暂停 + 续答需要同时读两条流并在一段中途发暂停请求，curl 拼不出来）、`scripts/drive_ops_tabs.py`（操作台六模块 + 六个子页签、控制台错误与 `1440×900` 全页签 / `#overview` `390×844` 溢出轻量巡检）与 `scripts/mock_reading_model.py`（伴读离线模型 stub）。
 
 ## Feature map
 
 五个页面各一份：`features/library-home.md`、`find-a-passage.md`、`layered-reads.md`、`daily-lessons.md`、`manage-library.md`；
 CLI 的 `features/embed.md` 与 `features/search-query.md` 是第六、第七份。
-地图是维护目标：行为变了先改地图，再改这条验证；`features/README.md` 记着当前已知红与未映射的 CLI 面。分层读五页、往期日课、操作台均为客户端渲染，地图里的页面断言以 `--dump-dom` 或 CDP 为准。
+地图是维护目标：行为变了先改地图，再改这条验证；`features/README.md` 记着当前已知红与未映射的 CLI 面。伴读五页、往期日课、操作台均为客户端渲染，地图里的页面断言以 `--dump-dom` 或 CDP 为准。
 
 改动本文件后，在 Pi 里 `/reload` 让技能重新加载；Pi 只在从仓库目录（或其子目录）启动时才发现项目 `.agents/skills/`。

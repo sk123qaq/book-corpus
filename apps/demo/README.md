@@ -215,7 +215,7 @@ uv run --frozen python apps/demo/server.py
 
 - 只读 `build/检索/index.db`、`build/library.db`、`books/<uid>/md/*.md`。
 - 只写 `<root>/工作区/检索/` 下的 `terms/`、`answers/`、`related/`、`sessions/` 与 `运行记录/`，按 sha1 或会话 id 分文件，原子替换；启动时支持 `--root` 指定工作区实例。
-- 支持 `POST /api/run` 传入 `scope: {"books": [...]}` 做显式书目定界，前端支持 `?q=&books=&mode=trace|prefill`、`GET /api/books/meta` 与 `/go/reading?to=...` 跳向分层读。
+- 支持 `POST /api/run` 传入 `scope: {"books": [...]}` 做显式书目定界，前端支持 `?q=&books=&mode=trace|prefill`、`GET /api/books/meta` 与 `/go/reading?to=...` 跳向伴读。
 - 不跑 B4、不写 expand、不改 `books/` 与 `src/bookcorpus/scripts/`。
 - `/api/run` 有一把锁；`/api/answer` 不加整段锁，长回答不挡换卡与下一次检索；同一轮只在第一个请求里调模型。
 

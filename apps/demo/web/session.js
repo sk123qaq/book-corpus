@@ -1614,7 +1614,7 @@
         + '</button>'
         + (uid
           ? '<a class="bp-open" href="' + readingBookHref(uid) + '" target="_blank" rel="noopener"'
-            + ' data-stop="1" title="在分层读查看书目与章节" aria-label="在分层读查看《' + esc(row.source.title || row.source.book) + '》">' + ICON_OUT + '</a>'
+            + ' data-stop="1" title="在伴读查看书目与章节" aria-label="在伴读查看《' + esc(row.source.title || row.source.book) + '》">' + ICON_OUT + '</a>'
           : '')
         + '</span>';
     }).join('');
@@ -1894,7 +1894,7 @@
             line: hit.line,
             quote: hit.hit_text || '',
             question: turn.question,
-          }) + '" target="_blank" rel="noopener">在分层读中打开 ↗</a>'
+          }) + '" target="_blank" rel="noopener">在伴读中打开 ↗</a>'
         : '';
       const actionLabel = interrupted ? '重试回答' : (hit ? '由模型归纳回答' : '重试回答');
       return '<p class="' + (interrupted ? 'answer-error' : 'answer-pending-note') + '">' + esc(text) + '</p>'
@@ -1949,7 +1949,7 @@
         + '<span class="ev-quote pretty">' + esc(cite.quote || '') + '</span></span>'
         + '</button>'
         + '<div class="ev-ops">'
-        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener" data-stop="1" title="在分层读直达这段正文"><span>精读</span>' + ICON_OUT + '</a>'
+        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener" data-stop="1" title="在伴读直达这段正文"><span>精读</span>' + ICON_OUT + '</a>'
         + '<span class="ev-go">' + (on ? '落点' : '原文') + '</span>'
         + '</div></div>';
     }).join('');
@@ -2050,7 +2050,7 @@
       + '<svg class="icon-a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'
       + '<svg class="icon-b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
       + '</span><span>复制路径</span></button>'
-      + '<a class="btn sm primary btn-primary has-icon-right" href="' + openHref + '" target="_blank" rel="noopener"><span>在分层读中打开</span>' + ICON_OUT + '</a>'
+      + '<a class="btn sm primary btn-primary has-icon-right" href="' + openHref + '" target="_blank" rel="noopener"><span>在伴读中打开</span>' + ICON_OUT + '</a>'
       + '</div></div>';
   }
 

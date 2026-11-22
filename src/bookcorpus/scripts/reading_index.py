@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""分层读的章表索引：看状态或整库重建。
+"""伴读的章表索引：看状态或整库重建。
 
 书架只需要每本多少章、多少字。索引把逐文件读全文换成一次 scandir + stat，
 改一章只重读那个文件。库在 build/阅读/shelf-index.db，删掉可重建。
@@ -21,7 +21,7 @@ from bookcorpus.reading.shelf_index import PARSER_VERSION, SCHEMA_VERSION, Shelf
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="分层读章表索引")
+    parser = argparse.ArgumentParser(description="伴读章表索引")
     parser.add_argument("--status", action="store_true", help="只打印索引状态，不建库")
     parser.add_argument("--rebuild", action="store_true", help="删掉现有索引，从磁盘整库重建")
     args = parser.parse_args(argv)
