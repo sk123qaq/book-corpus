@@ -19,6 +19,10 @@ uv run --frozen python apps/ops/server.py --root /tmp/x   # 换数据根，代�
 
 Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已经在跑的子进程。
 
+## 验收用的可注入点
+
+搜索地址与演示页脚本可注入：环境变量 `BOOK_CORPUS_SEARCH_URL`、`BOOK_CORPUS_DEMO_SERVER`，或 `Env(search_url=..., demo_server=...)` 构造参数。默认值就是本机 `http://127.0.0.1:8765` 和仓库里的 `apps/demo/server.py`，不设时真实运行行为不变。离线验收靠它把两者指向假服务：`check_ops.py` 每轮都跑「已在跑 → 幂等 / 不在跑 → 启动 / 演示页脚本缺失 → 报错」三条分支，既不依赖跑测试的机器上有没有常驻 8765，也不改名仓库里的真实文件。
+
 ## 文件
 
 | 路径 | 内容 |

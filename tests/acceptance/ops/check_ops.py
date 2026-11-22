@@ -504,10 +504,12 @@ def wait_ready(port, timeout=20):
     return False
 
 
-def start(root, fixture, port=0):
+def start(root, fixture, port=0, extra_env=None):
     env = dict(os.environ)
     env["OPS_STATUS_FIXTURE"] = fixture
     env.pop("OPS_HTTP_LOG", None)
+    for key, value in (extra_env or {}).items():
+        env[key] = value
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -613,6 +615,7 @@ def main(argv=None):
             print("保留临时根：%s" % adopt_root)
         else:
             shutil.rmtree(adopt_root, ignore_errors=True)
+    search_checks()
     hard_root, hard_fixture = build_root()
     try:
         hardening_checks(hard_root, hard_fixture)
@@ -1608,36 +1611,6 @@ def run_checks(root, ops, port, fixture):
     code, _ = get(port, "/api/jobs/nope")
     check("未知任务 404", code == 404)
 
-    # ---- 搜索入口 --------------------------------------------------
-    code, health = get(port, "/api/search/health")
-    check(
-        "搜索健康点可查",
-        code == 200 and isinstance(health.get("running"), bool) and "8765" in (health.get("url") or ""),
-        "running=%s" % health.get("running"),
-    )
-    if health.get("running"):
-        code, body = post(port, "/api/search/start")
-        check("已在跑时启动幂等", code == 200 and body.get("ok") is True and body.get("already") is True)
-    else:
-        # v2 布局里演示页就在 apps/demo/。这条要验的是「演示页不在时报错」，
-        # 请求前把脚本临时挪开，请求后无论成败都放回。
-        demo = os.path.join(REPO, "apps", "demo", "server.py")
-        hidden = demo + ".check-hidden-%d" % os.getpid()
-        moved = False
-        try:
-            if os.path.exists(demo):
-                os.replace(demo, hidden)
-                moved = True
-            code, body = post(port, "/api/search/start")
-            check(
-                "演示页不在时报错",
-                code == 200 and body.get("ok") is False and "演示页" in (body.get("error") or ""),
-                str(body.get("error")),
-            )
-        finally:
-            if moved:
-                os.replace(hidden, demo)
-
     # ---- 状态脚本优先级 --------------------------------------------
     with open(os.path.join(root, "工作区", "脚本", "ops_status.py"), "w", encoding="utf-8") as fh:
         fh.write(STUB_STATUS)
@@ -1647,6 +1620,181 @@ def run_checks(root, ops, port, fixture):
         body.get("source") == "script" and body["status"].get("books") == 42,
         "source=%s books=%s" % (body.get("source"), (body.get("status") or {}).get("books")),
     )
+
+
+FAKE_DEMO_SERVER = '''#!/usr/bin/env python3
+"""假检索演示页：只回 /api/health，给 check_ops 验启动分支用。"""
+import argparse
+import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path != "/api/health":
+            self.send_error(404)
+            return
+        body = json.dumps({"ok": True, "degraded": False, "db": "ok", "meta": {"fake": "demo"}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        return
+
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--port", type=int, required=True)
+ap.add_argument("--root", default=None)
+args = ap.parse_args()
+ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+'''
+
+
+class FakeSearch:
+    """测试自管的假 search 服务：running 由本进程起停控制，不占用真 8765。"""
+
+    def __init__(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path != "/api/health":
+                    self.send_error(404)
+                    return
+                body = json.dumps({"ok": True, "degraded": False, "db": "ok", "meta": {"fake": "search"}}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, fmt, *args):
+                return
+
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = "http://127.0.0.1:%d" % self.httpd.server_address[1]
+        self.closed = False
+        threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+def free_port():
+    import socket
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+def search_checks():
+    """搜索入口：地址与演示页脚本都注入到假服务，两种分支每轮都跑。
+
+    不探也不占用本机真 8765，不改名仓库里的 apps/demo/server.py；跑测试的机器上
+    有没有常驻 8765 都不影响结果。
+    """
+    missing_script = os.path.join("no-such-demo", "server.py")
+    fake = FakeSearch()
+    root, fixture = build_root()
+    proc, port = start(
+        root,
+        fixture,
+        extra_env={
+            "BOOK_CORPUS_SEARCH_URL": fake.url,
+            "BOOK_CORPUS_DEMO_SERVER": os.path.join(root, missing_script),
+        },
+    )
+    try:
+        code, health = get(port, "/api/search/health")
+        check(
+            "搜索健康点用注入地址",
+            code == 200 and health.get("url") == fake.url and health.get("running") is True,
+            "url=%s running=%s" % (health.get("url"), health.get("running")),
+        )
+        check("注入地址探活读 meta", (health.get("meta") or {}).get("fake") == "search", str(health.get("meta")))
+        code, body = post(port, "/api/search/start")
+        check(
+            "已在跑时启动幂等",
+            code == 200
+            and body.get("ok") is True
+            and body.get("already") is True
+            and (body.get("health") or {}).get("running") is True,
+            str(body),
+        )
+        fake.close()
+        code, health = get(port, "/api/search/health")
+        check(
+            "不在跑时健康点报未运行",
+            code == 200
+            and health.get("running") is False
+            and health.get("url") == fake.url
+            and bool(health.get("error")),
+            "error=%s" % health.get("error"),
+        )
+        code, body = post(port, "/api/search/start")
+        check(
+            "演示页脚本不存在报错",
+            code == 200 and body.get("ok") is False and body.get("error") == "演示页脚本不存在：%s" % missing_script,
+            str(body.get("error")),
+        )
+        check("脚本不存在时不写 pid", not os.path.exists(os.path.join(root, "工作区", "运维", "search.pid")))
+    finally:
+        fake.close()
+        stop(proc)
+        shutil.rmtree(root, ignore_errors=True)
+
+    # 不在跑 → 启动：注入的演示页脚本自己起在注入地址的端口上
+    root, fixture = build_root()
+    demo = os.path.join(root, ".fake-demo-server.py")
+    with open(demo, "w", encoding="utf-8") as fh:
+        fh.write(FAKE_DEMO_SERVER)
+    url = "http://127.0.0.1:%d" % free_port()
+    proc, port = start(
+        root,
+        fixture,
+        extra_env={"BOOK_CORPUS_SEARCH_URL": url, "BOOK_CORPUS_DEMO_SERVER": demo},
+    )
+    spawned = None
+    try:
+        code, body = post(port, "/api/search/start")
+        spawned = body.get("pid")
+        check(
+            "不在跑时启动成功",
+            code == 200 and body.get("ok") is True and body.get("started") is True and isinstance(spawned, int),
+            str(body),
+        )
+        code, health = get(port, "/api/search/health")
+        check(
+            "启动后注入地址可探活",
+            health.get("running") is True
+            and health.get("url") == url
+            and (health.get("meta") or {}).get("fake") == "demo",
+            "url=%s running=%s" % (health.get("url"), health.get("running")),
+        )
+        pid_file = os.path.join(root, "工作区", "运维", "search.pid")
+        with open(pid_file, encoding="utf-8") as fh:
+            saved = json.load(fh)
+        check(
+            "启动后记 pid 到 search.pid",
+            saved.get("pid") == spawned and demo in (saved.get("argv") or []),
+            str(saved.get("argv")),
+        )
+    finally:
+        if isinstance(spawned, int):
+            with contextlib.suppress(OSError):
+                os.killpg(os.getpgid(spawned), 15)
+        stop(proc)
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def adoption_checks(root, fixture):

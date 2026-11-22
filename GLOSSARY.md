@@ -33,6 +33,11 @@
 - **混合检索（Hybrid Retrieval）**：在 FTS5 CJK bigram 词法召回之上叠加 `book-corpus embed` 产出的块向量（`emb.db` + `vectors.f16`）与本地 embedding 服务，做书/章/段三层 RRF 融合（`fusion:"hybrid"`）；索引或服务缺失时静默退回 `bm25_only`。有 GPU 且精排服务在线时可叠加 `bge-reranker-v2-m3`。
 - **事件驱动增量同步（`sync_delta`）**：操作台在入库、改分类、拆章、文档转换、PDF 落地或退库完成后，自动接力元数据重建、FTS5 增量同步（`build_para_index.py --sync`）、异步合并去重的向量同步（`embed_corpus.py --sync`）与后台 `last-audit.json` 体检刷新；向量库未初始化时跳过向量步骤。仅暂存复核与重启未知退出码停在 `awaiting_review`（可经 `POST /api/jobs/<id>/resolve` 人工收口）。`/api/status` 通过 `sync_delta` 暴露各层偏差供「同步与维护」兜底。
 
+## 退库与冷宫
+
+- **冷宫（`books/_冷宫/`）**：移出流程的书只留原书文件，明细记在批次的 `移出-<日期>/retired.tsv`（uid、旧路径、冷宫路径、原因、备注，`state`/`last_checked` 两列由核验追加）。操作台 `#cold` 页显示的是这份台账加 `books/_冷宫` 的实物核验结果（实物状态：在库 / 缺失 / 未登记），页面「刷新」等于核对并按实物校正台账。
+- **退库失败行（`retired.tsv` 里 `note` 以 `failed` 开头的行）**：是退库没做成的记录，书还在原处、人账行也还在，不算已移出。所以 `#cold` 页看不到它，`GET /api/cold` 核验与 `POST /api/cold/reconcile` 校正也都跳过它；这类行的 `state` / `last_checked` 留空是正常现象，不是数据丢了。要重试就按同一本书重新发起退库，成功后会另记一条成功行。
+
 ## 已退役术语
 
 下列概念与路由均已下线，不在现行代码与页面中存在；历史背景见对应文档，退役词表由 `docs/reference/retired.toml` 守卫：
