@@ -1519,6 +1519,9 @@
 
   function positionSelectionBar(rect) {
     const bar = RD.mount('selection-bar');
+    // 预渲染隐藏靠 .selection-bar { display: none }，不靠 [hidden]；
+    // [hidden] { display: none !important } 会压过 .selection-bar.show，必须显式清掉。
+    bar.hidden = false;
     bar.classList.add('show');
     const barH = bar.offsetHeight || 72;
     const barW = bar.offsetWidth || 380;
@@ -1529,7 +1532,9 @@
   }
 
   function hideSelectionBar() {
-    RD.mount('selection-bar').classList.remove('show');
+    const bar = RD.mount('selection-bar');
+    bar.classList.remove('show');
+    bar.hidden = true;
   }
 
   function bindEvents() {
