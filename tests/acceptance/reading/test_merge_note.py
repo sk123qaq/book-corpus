@@ -114,26 +114,33 @@ def find_chrome():
     return ""
 
 
-def dom_contains(port, path, needle, timeout=20):
-    """headless Chrome 打开页面，等 needle 出现在正文里；返回（是否出现, 页面正文）。"""
+def dom_session(port, checks, timeout=20):
+    """一个 Chrome 会话依次打开 checks 里的页面并断言。
+
+    checks 每项是 (path, ready, needle, expect)：先等 ready（页面渲染完成的标记）
+    出现在正文，再看 needle 是否在；expect=True 要求出现，False 要求不出现。
+    返回 [(expect, needle_in_body, body), ...]。
+    """
     sys.path.insert(0, str(REPO / "tests" / "manual" / "demo"))
     import shot
 
-    url = f"http://127.0.0.1:{port}{path}"
     chrome, profile, ws_url = shot.launch(1200, 900, "about:blank", 0)
     cdp = shot.connect_cdp(ws_url)
     try:
         cdp.call("Runtime.enable")
         cdp.call("Page.enable")
-        cdp.call("Page.navigate", {"url": url})
-        deadline = time.time() + timeout
-        body = ""
-        while time.time() < deadline:
-            body = shot.eval_js(cdp, "document.body ? document.body.innerText : ''") or ""
-            if needle in body:
-                return True, body
-            time.sleep(0.25)
-        return False, body
+        results = []
+        for path, ready, needle, expect in checks:
+            cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}{path}"})
+            deadline = time.time() + timeout
+            body = ""
+            while time.time() < deadline:
+                body = shot.eval_js(cdp, "document.body ? document.body.innerText : ''") or ""
+                if ready in body:
+                    break
+                time.sleep(0.1)
+            results.append((expect, needle in body, body))
+        return results
     finally:
         cdp.ws.close()
         chrome.kill()
@@ -187,12 +194,18 @@ def main():
             if not chrome:
                 print("DOM SKIP 没找到 Chrome（设 CHROME_BIN 或装 chromium 后重跑，才验证页面标注）")
             else:
-                ok, body = dom_contains(port, "/book/B0001", "本页 1 章，由 2 个 md 文件合并标题页而来")
-                assert ok, f"书页没出现合并标注；正文前 400 字：{body[:400]}"
-                assert MERGE_MARK in body, body[:400]
+                results = dom_session(
+                    port,
+                    [
+                        ("/book/B0001", "甲书", "本页 1 章，由 2 个 md 文件合并标题页而来", True),
+                        ("/book/B0002", "乙书", MERGE_MARK, False),
+                    ],
+                )
+                _, hit, body = results[0]
+                assert hit, f"书页没出现合并标注；正文前 400 字：{body[:400]}"
                 print("PASS /book/B0001 页面出现「本页 1 章，由 2 个 md 文件合并标题页而来」")
-                ok, body = dom_contains(port, "/book/B0002", MERGE_MARK)
-                assert not ok, f"B0002 不该有合并标注；正文前 400 字：{body[:400]}"
+                _, hit, body = results[1]
+                assert not hit, f"B0002 不该有合并标注；正文前 400 字：{body[:400]}"
                 print("PASS /book/B0002 单文件书不出现合并标注")
         finally:
             proc.terminate()

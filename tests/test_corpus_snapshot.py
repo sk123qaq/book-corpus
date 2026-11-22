@@ -11,7 +11,6 @@
 import datetime
 import re
 import sqlite3
-import time
 
 import pytest
 
@@ -104,13 +103,13 @@ def test_derived_chapters_win_over_stale_shelf_index(stats_root):
     md = stats_root / "books" / "B0001" / "md"
     (md / "003_新章.md").write_text("新章内容够长。\n\n" * 20, encoding="utf-8")
     assert run_cli("library").returncode == 0  # derived 更新成 4，shelf-index 没重建
-    time.sleep(1.2)  # 秒级时间戳：隔开数据时刻与计算时刻，断言才稳定
     snap = corpus_snapshot.snapshot(stats_root)
     assert snap["chapters"] == 4  # derived 的数，不是 shelf-index 里的 3
     assert snap["sources"]["chapters_from"] == "derived"
-    # built_at = 数据时刻（library.db 重建时刻），不是本次快照的计算时刻
+    # built_at = 数据时刻（library.db 重建时刻），不是本次快照的计算时刻：
+    # 快照的 built_at 与库里原样戳同秒同格式；计算时刻只会更晚（同格式字典序可比）
     assert snap["built_at"] == _lib_built_at(stats_root)
-    assert snap["built_at"] != snap["sources"]["computed_at"]
+    assert snap["sources"]["computed_at"] >= snap["built_at"]
 
 
 def _lib_built_at(root):

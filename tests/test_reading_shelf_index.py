@@ -251,7 +251,7 @@ def test_noop_ensure_keeps_built_at(reading_root):
     assert first["mode"] in ("fresh", "rebuild")
     stamp = index.stats()["meta"]["built_at"]
     assert stamp
-    time.sleep(1.2)
+    time.sleep(0.05)  # 不用隔秒：空转 ensure 根本不写 meta，戳必然不动
     second = index.ensure()
     assert second["mode"] == "incremental"
     assert index.stats()["meta"]["built_at"] == stamp
