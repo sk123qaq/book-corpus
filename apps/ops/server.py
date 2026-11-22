@@ -2992,51 +2992,234 @@ class App:
         self.invalidate_status()
         return {"ok": True, **cur}
 
-    def cold_records(self):
-        """只读冷宫归档视图：仅读 retired.tsv 与 books/_冷宫/，绝不混入活库与检索。"""
+    def _cold_tsvs(self):
+        """退库台账清单：最新批次在前。"""
+        out = []
+        if not os.path.isdir(self.env.batches):
+            return out
+        for name in sorted(os.listdir(self.env.batches), reverse=True):
+            if not name.startswith("移出-"):
+                continue
+            path = os.path.join(self.env.batches, name, "retired.tsv")
+            if os.path.isfile(path):
+                out.append((name, path))
+        return out
+
+    def _cold_abs(self, cold_path):
+        """把台账里的 cold_path 解析成绝对路径；空值或越出 books/_冷宫 的返回 None。"""
+        rel = (cold_path or "").strip().replace("\\", "/")
+        if not rel:
+            return None
+        full = os.path.normpath(os.path.join(self.env.root, rel))
+        cold = os.path.normpath(self.env.cold)
+        if full != cold and not full.startswith(cold + os.sep):
+            return None
+        return full
+
+    def _cold_physical(self):
+        """books/_冷宫 顶层实物：{名字: 绝对路径}，跳过 README 与点文件。"""
+        out = {}
+        if not os.path.isdir(self.env.cold):
+            return out
+        for name in sorted(os.listdir(self.env.cold)):
+            if name.startswith(".") or name == "README.md":
+                continue
+            out[name] = os.path.join(self.env.cold, name)
+        return out
+
+    def _cold_item(self, row, batch, state, checked_at):
+        note = (row.get("note") or "").strip()
+        return {
+            "batch": batch,
+            "retired_at": row.get("retired_at") or "",
+            "uid": (row.get("uid") or "").strip(),
+            "title": row.get("title") or "",
+            "old_path": row.get("old_path") or "",
+            "cold_path": row.get("cold_path") or "",
+            "format": row.get("format") or "",
+            "bytes": int(row["bytes"]) if str(row.get("bytes") or "").isdigit() else 0,
+            "reason": row.get("reason") or "",
+            "note": note,
+            "backfilled": note.startswith(COLD_BACKFILL_REASON),
+            "last_checked": (row.get("last_checked") or "").strip(),
+            "state": state,
+            "checked_at": checked_at,
+        }
+
+    def _cold_extra_item(self, name, full, checked_at):
+        meta = cold_name_meta(name, full)
+        return {
+            "batch": "",
+            "retired_at": "",
+            "uid": meta["uid"],
+            "title": meta["title"],
+            "old_path": "",
+            "cold_path": self.env.rel(full),
+            "format": meta["format"],
+            "bytes": meta["bytes"],
+            "reason": "未登记",
+            "note": "",
+            "backfilled": False,
+            "last_checked": "",
+            "state": "unregistered",
+            "checked_at": checked_at,
+        }
+
+    def cold_view(self):
+        """冷宫统一视图（只读）：台账每行按 books/_冷宫 实物判三态，再补未登记实物。
+
+        in_cold      台账有记录、实物在
+        missing      台账有记录、实物已不在
+        unregistered 实物在、台账没记录
+        旧 retired.tsv 没有 state 列也照常按实物推断，不因缺列报错。
+        """
         items = []
-        seen_dirs = set()
-        if os.path.isdir(self.env.batches):
-            for name in sorted(os.listdir(self.env.batches), reverse=True):
-                if not name.startswith("移出-"):
+        errors = []
+        checked_at = now_iso()
+        registered = []
+        for batch, path in self._cold_tsvs():
+            header, rows, _text = read_retired_tsv(path)
+            if not header:
+                errors.append("%s：读不出台账表头" % batch)
+                continue
+            for row in rows:
+                if retired_row_failed(row):
                     continue
-                tsv = os.path.join(self.env.batches, name, "retired.tsv")
-                if not os.path.isfile(tsv):
+                full = self._cold_abs(row.get("cold_path"))
+                if full:
+                    registered.append(full)
+                state = "in_cold" if (full and os.path.exists(full)) else "missing"
+                items.append(self._cold_item(row, batch, state, checked_at))
+        for name, full in self._cold_physical().items():
+            if any(p == full or p.startswith(full + os.sep) for p in registered):
+                continue
+            items.append(self._cold_extra_item(name, full, checked_at))
+        counts = {key: sum(1 for item in items if item["state"] == key) for key in COLD_STATES}
+        counts["backfilled"] = sum(1 for item in items if item["backfilled"])
+        counts["total"] = len(items)
+        return {
+            "ok": True,
+            "items": items,
+            "counts": counts,
+            "checked_at": checked_at,
+            "cold_dir": self.env.rel(self.env.cold),
+            "cold_dir_exists": os.path.isdir(self.env.cold),
+            "batches_exists": os.path.isdir(self.env.batches),
+            "errors": errors,
+        }
+
+    def _cold_new_batch(self, now):
+        """没有历史批次可挂补登行时，新开今天的批次日。"""
+        batch = "移出-" + now[:10]
+        return {
+            "batch": batch,
+            "path": os.path.join(self.env.batches, batch, "retired.tsv"),
+            "header": list(RETIRED_COLUMNS) + list(RETIRED_EXTRA_COLUMNS),
+            "rows": [],
+            "text": None,
+            "dirty": True,
+        }
+
+    def cold_reconcile(self):
+        """按 books/_冷宫 实物校正退库台账，返回校正后的视图与本次改动。
+
+        实物在 → in_cold；实物缺失 → missing 且留行记 last_checked（删行丢审计）；
+        实物在但台账没记录 → 追加补登行到最新批次。写盘与退库/删书共用
+        .writer.lock，只在内容真变了才写，所以连点两次第二次 changed=0。
+        """
+        now = now_iso()
+        changed = 0
+        checked = 0
+        appended = 0
+        marked_missing = 0
+        backups = []
+        with ledger_lock(self.env):
+            files = []
+            registered = []
+            for batch, path in self._cold_tsvs():
+                header, rows, text = read_retired_tsv(path)
+                files.append(
+                    {
+                        "batch": batch,
+                        "path": path,
+                        "header": header or list(RETIRED_COLUMNS),
+                        "rows": rows,
+                        "text": text,
+                        "dirty": not header,
+                    }
+                )
+            for item in files:
+                for col in RETIRED_EXTRA_COLUMNS:
+                    if col not in item["header"]:
+                        item["header"].append(col)
+                        item["dirty"] = True
+                for row in item["rows"]:
+                    if retired_row_failed(row):
+                        continue
+                    checked += 1
+                    full = self._cold_abs(row.get("cold_path"))
+                    if full:
+                        registered.append(full)
+                    state = "in_cold" if (full and os.path.exists(full)) else "missing"
+                    if row.get("state") == state and not (
+                        state == "missing" and not (row.get("last_checked") or "").strip()
+                    ):
+                        continue
+                    row["state"] = state
+                    if state == "missing":
+                        row["last_checked"] = now
+                        marked_missing += 1
+                    item["dirty"] = True
+                    changed += 1
+            extra = [
+                (name, full)
+                for name, full in self._cold_physical().items()
+                if not any(p == full or p.startswith(full + os.sep) for p in registered)
+            ]
+            if extra:
+                if files:
+                    target = files[0]
+                else:
+                    target = self._cold_new_batch(now)
+                    files.append(target)
+                for name, full in extra:
+                    meta = cold_name_meta(name, full)
+                    row = dict.fromkeys(target["header"], "")
+                    row.update(
+                        {
+                            "retired_at": now,
+                            "uid": meta["uid"],
+                            "title": meta["title"],
+                            "cold_path": self.env.rel(full),
+                            "format": meta["format"],
+                            "bytes": str(meta["bytes"]) if meta["bytes"] else "",
+                            "reason": COLD_BACKFILL_REASON,
+                            "note": COLD_BACKFILL_NOTE,
+                            "state": "in_cold",
+                        }
+                    )
+                    target["rows"].append(row)
+                    appended += 1
+                    changed += 1
+                target["dirty"] = True
+            for item in files:
+                if not item["dirty"]:
                     continue
-                try:
-                    with open(tsv, encoding="utf-8", newline="") as fh:
-                        for row in csv.DictReader(fh, delimiter="\t"):
-                            if (row.get("note") or "").strip():
-                                continue
-                            cold_path = row.get("cold_path") or ""
-                            if cold_path:
-                                parts = cold_path.split("/")
-                                if len(parts) >= 3:
-                                    seen_dirs.add(parts[2])
-                            items.append(
-                                {
-                                    "retired_at": row.get("retired_at") or "",
-                                    "uid": row.get("uid") or "",
-                                    "title": row.get("title") or "",
-                                    "old_path": row.get("old_path") or "",
-                                    "cold_path": cold_path,
-                                    "format": row.get("format") or "",
-                                    "bytes": int(row.get("bytes") or 0) if str(row.get("bytes") or "").isdigit() else 0,
-                                    "reason": row.get("reason") or "",
-                                    "batch": name,
-                                }
-                            )
-                except OSError:
+                text = render_retired_tsv(item["header"], item["rows"])
+                if text == item["text"]:
                     continue
-        extra_dirs = []
-        if os.path.isdir(self.env.cold):
-            for name in sorted(os.listdir(self.env.cold)):
-                if name.startswith(".") or name == "README.md" or name in seen_dirs:
-                    continue
-                full = os.path.join(self.env.cold, name)
-                if os.path.isdir(full):
-                    extra_dirs.append({"name": name, "path": self.env.rel(full)})
-        return {"ok": True, "items": items, "extra_dirs": extra_dirs, "cold_dir": "books/_冷宫"}
+                if os.path.isfile(item["path"]):
+                    backups.append(backup_retired_tsv(item["path"]))
+                write_text_atomic(item["path"], text)
+        view = self.cold_view()
+        view.update(
+            {
+                "changed": changed,
+                "backups": backups,
+                "reconcile": {"checked": checked, "appended": appended, "marked_missing": marked_missing},
+            }
+        )
+        return view
 
     def _app_links_mod(self):
         src_dir = os.path.join(REAL_ROOT, "src")
@@ -3091,9 +3274,9 @@ class App:
             try:
                 with open(path, encoding="utf-8", newline="") as fh:
                     for row in csv.DictReader(fh, delimiter="\t"):
-                        # note 非空的行是失败记录（retire_book 写「failed at …」），
-                        # 书还在原处，不是移出账
-                        if (row.get("note") or "").strip():
+                        # 退库失败记录（retire_book 写「failed at …」）的书还在原处，
+                        # 不算移出账；补登行的 note 不是失败标记，见 retired_row_failed
+                        if retired_row_failed(row):
                             continue
                         if (row.get("uid") or "").strip() == uid:
                             return True
@@ -3346,7 +3529,7 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/api/search/health":
                 self.send_json(200, self.app.search_health())
             elif route == "/api/cold":
-                self.send_json(200, self.app.cold_records())
+                self.send_json(200, self.app.cold_view())
             elif route == "/api/settings":
                 self.send_json(200, {"ok": True, **self.app.get_settings()})
             elif route == "/api/services":
@@ -3555,6 +3738,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/ledger/row": lambda: self.send_json(200, self.app.ledger_row_put(payload)),
                 "/api/ledger/rows/delete": lambda: self.send_json(200, self.app.ledger_rows_delete(payload)),
                 "/api/ledger/rows/confirm": lambda: self.send_json(200, self.app.ledger_rows_confirm(payload)),
+                "/api/cold/reconcile": lambda: self.send_json(200, self.app.cold_reconcile()),
             }.get(route)
             if handler:
                 if route in WRITE_ROUTES:
@@ -4695,6 +4879,7 @@ WRITE_ROUTES = (
     "/api/ledger/row",
     "/api/ledger/rows/delete",
     "/api/ledger/rows/confirm",
+    "/api/cold/reconcile",
 )
 PDF_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
 
@@ -4771,6 +4956,103 @@ def ledger_lock(env):
             fcntl.flock(fd, fcntl.LOCK_UN)
         finally:
             os.close(fd)
+
+
+# ---- 冷宫台账（retired.tsv）-----------------------------------------
+# 台账列序：老列含义不变，新列一律追加在末尾。
+RETIRED_COLUMNS = (
+    "retired_at",
+    "uid",
+    "title",
+    "old_path",
+    "cold_path",
+    "sources",
+    "source_sha256",
+    "format",
+    "bytes",
+    "md_chapters",
+    "md_bytes",
+    "reason",
+    "shared_with",
+    "series_docs",
+    "note",
+)
+RETIRED_EXTRA_COLUMNS = ("state", "last_checked")
+COLD_STATES = ("in_cold", "missing", "unregistered")
+COLD_BACKFILL_REASON = "补登"
+COLD_BACKFILL_NOTE = "补登：刷新时发现实物无台账"
+COLD_FAIL_NOTE_PREFIX = "failed"
+COLD_UID_RE = re.compile(r"^(B\d{4,})[\s_\-·．.]*(.*)$")
+
+
+def retired_row_failed(row):
+    """note 以 failed 开头的行是退库失败记录（书还在原处），不是移出账。
+
+    只认 `failed` 前缀、不认「note 非空」：补登行的 note 写「补登：…」，
+    不能因为附带说明就从视图和退库判定里消失。
+    """
+    return (row.get("note") or "").strip().startswith(COLD_FAIL_NOTE_PREFIX)
+
+
+def read_retired_tsv(path):
+    """读一份 retired.tsv，返回 (表头, 行, 原文)。缺文件返回 ([], [], None)。"""
+    try:
+        with open(path, encoding="utf-8", newline="") as fh:
+            text = fh.read()
+    except OSError:
+        return [], [], None
+    reader = csv.DictReader(text.splitlines(), delimiter="\t")
+    header = [c for c in (reader.fieldnames or []) if c]
+    if not header:
+        return [], [], text
+    rows = [{k: (v or "") for k, v in row.items() if k is not None} for row in reader]
+    return header, rows, text
+
+
+def render_retired_tsv(header, rows):
+    """按统一列序渲染台账文本；值里的 tab/换行压成空格，保持一行一条。"""
+
+    def cell(value):
+        return str(value if value is not None else "").replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+    lines = ["\t".join(cell(col) for col in header)]
+    for row in rows:
+        lines.append("\t".join(cell(row.get(col, "")) for col in header))
+    return "\n".join(lines) + "\n"
+
+
+def backup_retired_tsv(path, keep=3):
+    """写回台账前留一份同目录备份，最多保留最新 keep 份；返回备份文件名。"""
+    dst = "%s.bak-%s" % (path, time.strftime("%Y%m%d-%H%M%S"))
+    shutil.copy2(path, dst)
+    folder = os.path.dirname(path) or "."
+    prefix = os.path.basename(path) + ".bak-"
+    for name in sorted(n for n in os.listdir(folder) if n.startswith(prefix))[:-keep]:
+        with suppress(OSError):
+            os.remove(os.path.join(folder, name))
+    return os.path.basename(dst)
+
+
+def cold_name_meta(name, full):
+    """从冷宫实物名／目录里的 book.json 推断 uid、书名、格式与体积；推断不到留空。"""
+    uid, title = "", name
+    match = COLD_UID_RE.match(name)
+    if match:
+        uid = match.group(1)
+        title = match.group(2) or name
+    fmt, size = "", 0
+    if os.path.isfile(full):
+        fmt = os.path.splitext(name)[1].lstrip(".").lower()
+        with suppress(OSError):
+            size = os.path.getsize(full)
+    elif os.path.isdir(full):
+        for cand in ("book.json.归档", "book.json"):
+            doc = read_json(os.path.join(full, cand))
+            if isinstance(doc, dict):
+                uid = uid or str(doc.get("uid") or "")
+                title = str(doc.get("title") or title)
+                break
+    return {"uid": uid, "title": title, "format": fmt, "bytes": size}
 
 
 def upsert_csv(path, row, cols):

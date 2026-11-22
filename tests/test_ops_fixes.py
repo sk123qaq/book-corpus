@@ -399,9 +399,10 @@ def test_stage2_ledger_auto_sync_cold_settings_and_reconcile(workspace):
         code_c, cold = _http_json(base + "/api/cold")
         assert code_c == 200
         assert cold["ok"] is True
-        assert len(cold["items"]) == 1
-        assert cold["items"][0]["uid"] == "B9001"
-        assert [d["name"] for d in cold["extra_dirs"]] == ["历史冷宫书"]
+        assert len(cold["items"]) == 2
+        assert [i["uid"] for i in cold["items"] if i["state"] == "missing"] == ["B9001"]
+        assert [i["title"] for i in cold["items"] if i["state"] == "unregistered"] == ["历史冷宫书"]
+        assert cold["counts"] == {"in_cold": 0, "missing": 1, "unregistered": 1, "backfilled": 0, "total": 2}
 
         # 3) settings auto_embed 读写
         code_s, s0 = _http_json(base + "/api/settings")
