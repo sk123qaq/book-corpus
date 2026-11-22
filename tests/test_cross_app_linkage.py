@@ -330,6 +330,8 @@ def test_demo_related_mode_excludes_source_and_applies_threshold(tmp_path: Path)
             }
         )
         uids = [r["uid"] for r in res["plan"]["ranking"]]
+        rels = [r["relevance"] for r in res["plan"]["ranking"]]
+        assert rels == sorted(rels, reverse=True), f"related ranking must be descending: {rels}"
         assert "B0001" not in uids
         assert "B0002" not in uids
         assert res["related_search"]["active"] is True

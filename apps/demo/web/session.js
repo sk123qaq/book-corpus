@@ -15,12 +15,19 @@
   const THINKING_LEVELS = ['off', 'low', 'medium', 'high'];
   const THINKING_DEFAULT = 'low';
   const THINKING_KEY = 'booksearch.thinking';
+  const THEME_STORAGE_KEY = 'booksearch-color-scheme';
   const ALL_DONE = ['done', 'done', 'done', 'done', 'done'];
   const ALL_PENDING = ['pending', 'pending', 'pending', 'pending', 'pending'];
   const REPLAY_MS = 900;
   const HISTORY_PAGE = 10;
   const ANSWER_POLL_MS = 2000;
   const ANSWER_POLL_MAX = 5 * 60 * 1000;
+  const PRESET_THRESHOLDS = [0.35, 0.45, 0.60, 0.75];
+  const INT_FMT = new Intl.NumberFormat('zh-CN');
+
+  const ICON_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+  const ICON_PLUS = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+  const ICON_OUT = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>';
 
   const state = {
     sessionId: '',
@@ -45,7 +52,6 @@
     historyVisible: [],
     historyDeleting: false,
     historySelectMode: false,
-    histMenu: null,
     scopeBooks: [],
     scopeOrigin: '',
     excludeBooks: [],
@@ -66,14 +72,17 @@
   const histListEl = $('#hist-list');
   const histFilterEl = $('#hist-filter');
   const histBarEl = $('#hist-selbar');
-  const histMenuEl = $('#hist-menu');
   const railSubEl = $('#rail-sub');
   const railEmptyEl = $('#rail-empty');
   const field = $('#q');
   const sendBtn = $('#send');
   const thinkSelectEl = $('#think-select');
+  const railEl = $('#rail');
   const drawerEl = $('#drawer');
+  const scrimEl = $('#drawer-scrim');
+  const composerEl = document.querySelector('.composer-dock');
   const toastEl = $('#toast');
+  const confirmDialogEl = $('#confirm-dialog');
 
   function normalizeThinking(v) {
     const raw = String(v || '').trim().toLowerCase();
@@ -100,6 +109,162 @@
   }
   let railShown = 0;
 
+  /* ---- 主题切换 (Modern Web Guidance dark-mode-toggle) ------------ */
+
+  const colorMeta = document.querySelector('meta[name="color-scheme"]');
+  const themeMeta = document.getElementById('meta-theme-color');
+  const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function currentRenderedTheme() {
+    const content = colorMeta ? colorMeta.getAttribute('content') : 'light dark';
+    if (content === 'dark') return 'dark';
+    if (content === 'light') return 'light';
+    return darkQuery.matches ? 'dark' : 'light';
+  }
+
+  function syncThemeUI() {
+    const rendered = currentRenderedTheme();
+    if (themeMeta) themeMeta.setAttribute('content', rendered === 'dark' ? '#161716' : '#F4F1E8');
+    const btn = $('#theme-toggle');
+    if (btn) {
+      const nextLabel = rendered === 'dark' ? '切换宣纸日间主题' : '切换墨夜主题';
+      btn.setAttribute('aria-label', nextLabel);
+      btn.setAttribute('title', nextLabel);
+    }
+  }
+
+  function applyStoredScheme(value) {
+    if (!colorMeta) return;
+    colorMeta.setAttribute('content', value === 'light' || value === 'dark' ? value : 'light dark');
+    syncThemeUI();
+  }
+
+  const themeBtn = $('#theme-toggle');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', () => {
+      const target = currentRenderedTheme() === 'dark' ? 'light' : 'dark';
+      const osScheme = darkQuery.matches ? 'dark' : 'light';
+      document.documentElement.classList.add('theme-switching');
+      try {
+        if (target !== osScheme) {
+          localStorage.setItem(THEME_STORAGE_KEY, target);
+        } else {
+          localStorage.removeItem(THEME_STORAGE_KEY);
+        }
+      } catch (err) {
+        // 隐私模式下忽略 storage 错误
+      }
+      applyStoredScheme(target !== osScheme ? target : 'light dark');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => document.documentElement.classList.remove('theme-switching'));
+      });
+      toast(target === 'dark' ? '已切换至墨夜主题' : '已切换至宣纸日间主题');
+    });
+  }
+
+  darkQuery.addEventListener('change', syncThemeUI);
+  window.addEventListener('storage', (e) => {
+    if (e.key === THEME_STORAGE_KEY) applyStoredScheme(e.newValue);
+  });
+  syncThemeUI();
+
+  /* ---- 原生确认弹窗 (Modern Web Guidance dialog) ------------------ */
+
+  let confirmResolver = null;
+
+  function openConfirmDialog({ title, desc, okLabel = '确认', danger = true }) {
+    if (!confirmDialogEl || typeof confirmDialogEl.showModal !== 'function') {
+      return Promise.resolve(window.confirm(title + (desc ? '\n' + desc : '')));
+    }
+    const titleEl = $('#confirm-dlg-title');
+    const descEl = $('#confirm-dlg-desc');
+    const okEl = $('#confirm-dlg-ok');
+    if (titleEl) titleEl.textContent = title || '确认操作？';
+    if (descEl) descEl.textContent = desc || '';
+    if (okEl) {
+      okEl.textContent = okLabel;
+      okEl.className = 'btn ' + (danger ? 'danger' : 'primary');
+    }
+    if (confirmResolver) {
+      const prev = confirmResolver;
+      confirmResolver = null;
+      prev(false);
+    }
+    return new Promise((resolve) => {
+      confirmResolver = resolve;
+      confirmDialogEl.showModal();
+    });
+  }
+
+  if (confirmDialogEl) {
+    confirmDialogEl.addEventListener('close', () => {
+      const val = confirmDialogEl.returnValue;
+      confirmDialogEl.returnValue = '';
+      if (confirmResolver) {
+        const resolve = confirmResolver;
+        confirmResolver = null;
+        resolve(val === 'confirm');
+      }
+    });
+    if (!('closedBy' in HTMLDialogElement.prototype)) {
+      const outside = (e) => {
+        const r = confirmDialogEl.getBoundingClientRect();
+        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      };
+      let pressedOutside = false;
+      confirmDialogEl.addEventListener('pointerdown', (e) => { pressedOutside = outside(e); });
+      confirmDialogEl.addEventListener('pointerup', (e) => {
+        if (pressedOutside && outside(e)) confirmDialogEl.close('cancel');
+      });
+    }
+  }
+
+  /* ---- 移动端抽屉与 inert 管理 ----------------------------------- */
+
+  let lastDrawerTrigger = null;
+
+  function setBackgroundInert(isInert) {
+    [mainEl, composerEl].forEach((el) => {
+      if (el) el.inert = isInert;
+    });
+  }
+
+  function closeDrawers(restoreFocus = false) {
+    const wasOpen = (railEl && railEl.classList.contains('is-open'))
+      || (drawerEl && drawerEl.classList.contains('is-open'));
+    if (railEl) railEl.classList.remove('is-open');
+    if (drawerEl) drawerEl.classList.remove('is-open');
+    document.body.classList.remove('drawer-is-open');
+    if (scrimEl) {
+      scrimEl.classList.remove('is-open');
+      scrimEl.hidden = true;
+    }
+    setBackgroundInert(false);
+    if (restoreFocus && wasOpen && lastDrawerTrigger && lastDrawerTrigger.isConnected) {
+      lastDrawerTrigger.focus();
+      lastDrawerTrigger = null;
+    }
+  }
+
+  function openMobileDrawer(target, triggerEl) {
+    if (!target) return;
+    closeDrawers(false);
+    lastDrawerTrigger = triggerEl || document.activeElement;
+    if (scrimEl) {
+      scrimEl.hidden = false;
+      requestAnimationFrame(() => scrimEl.classList.add('is-open'));
+    }
+    target.classList.add('is-open');
+    if (target === drawerEl) document.body.classList.add('drawer-is-open');
+    setBackgroundInert(true);
+    const firstFocusable = target.querySelector('button:not([disabled]), input, a[href]');
+    if (firstFocusable) firstFocusable.focus({ preventScroll: true });
+  }
+
+  const openRailBtn = $('#btn-open-rail');
+  if (openRailBtn) openRailBtn.addEventListener('click', (e) => openMobileDrawer(railEl, e.currentTarget));
+  if (scrimEl) scrimEl.addEventListener('click', () => closeDrawers(true));
+
   /* ---- 小工具 ---------------------------------------------------- */
 
   function esc(value) {
@@ -118,7 +283,9 @@
   }
 
   function fmtInt(value) {
-    return String(value == null ? '' : value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const n = Number(value);
+    if (!Number.isFinite(n)) return String(value == null ? '' : value);
+    return INT_FMT.format(n);
   }
 
   function fmtSec(ms) {
@@ -365,7 +532,7 @@
     render();
   }
 
-  /* ---- 回答范围：一本书或几本书 ---------------------------------- */
+  /* ---- 回答范围 & 相关性降序先排再筛 ----------------------------- */
 
   const MAX_SOURCES = 10;
   const MAX_SUPPLEMENTS = 3;
@@ -375,6 +542,25 @@
     const n = Number(v);
     if (!Number.isFinite(n)) return fallback;
     return Math.round(Math.max(0, Math.min(1, n)) * 100) / 100;
+  }
+
+  function sortRelatedDescending(candidates) {
+    return (candidates || []).slice().sort((a, b) => {
+      if (b.relevance !== a.relevance) return b.relevance - a.relevance;
+      if (b.score !== a.score) return b.score - a.score;
+      return String(a.book || '').localeCompare(String(b.book || ''));
+    });
+  }
+
+  function filterRelatedByThreshold(sortedList, threshold) {
+    const thr = clampThreshold(threshold);
+    const qualified = [];
+    const below = [];
+    for (const item of sortedList) {
+      if (item.relevance >= thr) qualified.push(item);
+      else below.push(item);
+    }
+    return { qualified, below, threshold: thr };
   }
 
   function sourceFromAnchor(anchor) {
@@ -458,8 +644,6 @@
   function focusOf(turn) {
     const focus = turn && turn.trace && turn.trace.focus;
     if (!focus || typeof focus !== 'object' || !focus.status) return null;
-    // 普通问题没有点名书：resolve_title 返回 missing 且 query_title 为空，
-    // 这不是“书库没找到《》”，按无 focus 处理。
     if (focus.status === 'missing'
         && !(focus.title || focus.query_title || focus.book)) return null;
     return focus;
@@ -588,12 +772,11 @@
         snippet: (sel && sel.snippet) || row.best_text || '',
       });
     });
-    return out;
+    return sortRelatedDescending(out);
   }
 
   function relatedQualified(turn) {
-    const thr = clampThreshold(turn && turn.relatedThreshold);
-    return relatedCandidates(turn).filter((c) => c.relevance >= thr);
+    return filterRelatedByThreshold(relatedCandidates(turn), turn && turn.relatedThreshold).qualified;
   }
 
   function relatedDefaultSources(turn) {
@@ -754,7 +937,6 @@
 
   function savedStatusOf(saved) {
     const answer = saved.answer && typeof saved.answer === 'object' ? saved.answer : null;
-    // 显式状态优先：重试失败时后端会保留旧 answer，不能据此报 ready。
     const name = String(saved.answer_state || '');
     if (name === 'running') return { status: 'answering', error: '' };
     if (name === 'paused') {
@@ -773,7 +955,6 @@
     }
     if (name === 'pending' || name === 'incomplete') return { status: 'answer-incomplete', error: '' };
     if (name === 'ready') return { status: 'answer-incomplete', error: '' };
-    // 旧会话没有 answer_state：有 trace 只说明检索完成，不能当回答失败。
     const trace = saved.trace && typeof saved.trace === 'object' ? saved.trace : null;
     return { status: trace ? 'answer-incomplete' : 'run-error', error: '' };
   }
@@ -804,8 +985,6 @@
     return row;
   }
 
-  // 会话详情里最后一轮还在跑时，用 /api/session 每 2 秒看一眼；
-  // epoch 变了（切会话/新会话）就作废，后台请求本身不取消。
   function startAnswerPoll(sessionId, n, epoch) {
     stopAnswerPoll();
     if (!sessionId || !n) return;
@@ -855,12 +1034,11 @@
       const data = await fetchJSON('/api/health');
       state.stats = statsFromHealth(data);
     } catch (err) {
-      state.stats = { values: { books: null, paras: null, chapters: null }, note: '' };
+      state.stats = { values: { books: null, paras: null, chapters: null }, note: '', embedReady: false };
     }
     renderStats();
   }
 
-  /* 计数只在对应库真的可读时才算数：缺索引／空索引的 0 是占位，不是规模。 */
   function statsFromHealth(data) {
     const meta = data.meta || {};
     const indexReady = meta.index === 'ok';
@@ -881,23 +1059,25 @@
         chapters: count(indexReady, meta.chapters),
       },
       note,
+      embedReady: Boolean(indexReady && meta.embed && meta.embed.ready),
     };
   }
 
   function renderStats() {
-    const stats = state.stats || { values: {}, note: '' };
+    const stats = state.stats || { values: {}, note: '', embedReady: false };
     document.querySelectorAll('[data-stat]').forEach((el) => {
       const value = stats.values[el.dataset.stat];
       el.textContent = typeof value === 'number' ? fmtInt(value) : '—';
     });
+    const fusionEl = $('#fusion-pill');
+    if (fusionEl) fusionEl.hidden = !stats.embedReady;
     const box = $('#stats');
     let noteEl = box ? box.querySelector('[data-stat-note]') : null;
     if (!noteEl && box) {
       noteEl = document.createElement('span');
       noteEl.dataset.statNote = '';
+      noteEl.className = 'stat-note';
       noteEl.setAttribute('role', 'status');
-      noteEl.style.cssText = 'color:var(--red-ink);border-left:1px solid var(--line);'
-        + 'padding-left:10px;font-size:11px;line-height:1.4;white-space:normal;max-width:220px;';
       box.appendChild(noteEl);
     }
     if (noteEl) {
@@ -939,14 +1119,15 @@
     const ids = citesOf(turn).map((c, i) =>
       '<i class="' + (usedLater(turn, i + 1) ? 'on' : '') + '">[' + (i + 1) + ']</i>').join('');
     return '<li class="round' + (current ? ' is-current' : '') + '" data-turn="' + turn.n + '">'
+      + '<button class="round-btn" type="button">'
       + '<span class="no">' + pad(turn.n) + (current ? ' · 当前' : '') + '</span>'
       + railRel(turn)
-      + '<p class="q">' + esc(turn.question) + '</p>'
-      + '<div class="meta">'
+      + '<span class="q">' + esc(turn.question) + '</span>'
+      + '<span class="meta">'
       + (book ? '<span class="chip">' + esc(book) + '</span>' : '')
       + (ids ? '<span class="ids">' + ids + '</span>' : '')
       + (status ? '<span class="round-status">' + status + caret + '</span>' : '')
-      + '</div></li>';
+      + '</span></button></li>';
   }
 
   /* ---- 中栏 ------------------------------------------------------ */
@@ -968,7 +1149,7 @@
     return '<section class="start">'
       + '<p class="start-kicker mono">会话追问 · 书库检索</p>'
       + '<h1>问一句，<br>找到原文</h1>'
-      + '<p class="start-lead">先问第一问，它会把命中的原文与依据递到你面前。'
+      + '<p class="start-lead pretty">先问第一问，它会把命中的原文与依据递到你面前。'
       + '之后点一条依据当落点，接着问。</p>'
       + card + '</section>' + error;
   }
@@ -1167,7 +1348,7 @@
       + '<span class="v3-name stage-name">' + STAGE_NAMES[i] + '</span>'
       + '<span class="v3-val">' + esc(detail.value) + '</span>'
       + '<span class="v3-ms mono">' + stageMsOf(turn.trace, i) + '</span>'
-      + '<span class="scaret" aria-hidden="true">' + (open ? '⌃' : '⌄') + '</span>'
+      + '<svg class="scaret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'
       + '</button>'
       + '<div class="stage-row-body v3-body">'
       + '<div class="stage-body-done">' + done + '</div>'
@@ -1188,14 +1369,14 @@
     const rows = STAGE_NAMES.map((name, i) =>
       stageRowHTML(turn, details[i], i, states[i] || 'pending')).join('');
     return '<section class="stages' + (open ? ' is-open' : '')
-      + '" id="stages" aria-label="检索进度">'
+      + '" id="stages" aria-label="五阶段检索进度">'
       + '<div class="strip"><button class="strip-bar" type="button" aria-expanded="'
       + open + '">'
       + '<span class="steps">' + steps + '</span>'
-      + '<span class="strip-toggle"><span class="t-open">展开</span>'
-      + '<span class="t-close">收起</span>'
-      + '<span class="strip-caret" aria-hidden="true">⌄</span></span>'
-      + '</button></div>'
+      + '<span class="strip-toggle"><span class="t-open">展开链路</span>'
+      + '<span class="t-close">收起链路</span>'
+      + '<svg class="strip-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'
+      + '</span></button></div>'
       + '<div class="stage-stack v3">' + rows + '</div></section>';
   }
 
@@ -1221,43 +1402,35 @@
       + '<span class="quote">' + text + '</span></div>';
   }
 
-  function relatedPanelHTML(turn) {
-    if (!turn || !turn.trace) return '';
+  function buildRelatedDynamic(turn) {
     const last = lastTurn();
     const readonly = !last || last.n !== turn.n;
-    const thr = clampThreshold(turn.relatedThreshold);
-    const thrPct = Math.round(thr * 100);
     const candidates = relatedCandidates(turn);
-    const qualified = candidates.filter((c) => c.relevance >= thr);
-    const below = candidates.filter((c) => c.relevance < thr);
+    const { qualified, below, threshold } = filterRelatedByThreshold(candidates, turn.relatedThreshold);
+    const thrPct = Math.round(threshold * 100);
     const chosen = turn.sources || [];
     const picked = new Set(chosen.map(sourceKey));
-    const exclList = (Array.isArray(turn.excludeBookMeta) && turn.excludeBookMeta.length
-      ? turn.excludeBookMeta
-      : (turn.excludeBooks || []).map((uid) => ({ uid, title: uid })));
-    const exclText = exclList.length
-      ? '已排除' + exclList.map((b) => '《' + esc(b.title || b.uid) + '》').join('、') + '及原段'
-      : '已排除原段落';
     const maxPct = candidates.length
-      ? Math.floor(Math.max(...candidates.map((c) => c.relevance)) * 100 / 5) * 5
+      ? Math.floor(candidates[0].relevance * 100 / 5) * 5
       : 0;
 
     let countMsg = '';
     if (!candidates.length) {
       countMsg = '全库其他书中没有命中相关内容';
     } else if (!qualified.length) {
-      countMsg = '当前阈值 ≥ ' + thrPct + '% 下命中 0 本（候选共 ' + candidates.length + ' 本，最高 '
+      countMsg = '当前阈值 ≥ ' + thrPct + '% 下筛出 0 本达标（候选共 ' + candidates.length + ' 本，最高相关性 '
         + Math.round(candidates[0].relevance * 100) + '%）';
     } else if (qualified.length > MAX_SOURCES) {
-      countMsg = '命中 ' + qualified.length + ' 本（超过 ' + MAX_SOURCES + ' 本上限），已选前 '
-        + chosen.length + ' 本参与回答';
+      countMsg = '已按相关性从高到低降序排列，当前阈值 ≥ ' + thrPct + '% 筛出 ' + qualified.length
+        + ' 本 · 已选前 ' + chosen.length + ' 本参与回答（上限 ' + MAX_SOURCES + ' 本）';
     } else if (qualified.length === 1) {
-      countMsg = '命中 1 本 · 将从这 1 本书回答';
+      countMsg = '已按相关性降序排列，当前阈值 ≥ ' + thrPct + '% 筛出 1 本 · 将从这 1 本书回答';
     } else {
-      countMsg = '命中 ' + qualified.length + ' 本 · 已选 ' + chosen.length + ' 本参与回答';
+      countMsg = '已按相关性从高到低降序排列，当前阈值 ≥ ' + thrPct + '% 筛出 ' + qualified.length
+        + ' 本 · 已选 ' + chosen.length + ' 本参与回答';
     }
 
-    const renderCard = (c, isBelow) => {
+    const renderCard = (c, rankNum, isBelow) => {
       const on = !isBelow && picked.has(c.book);
       const pct = Math.round(c.relevance * 100);
       const readHref = readingOpenHref({
@@ -1267,28 +1440,40 @@
         quote: c.snippet || '',
         question: turn.question,
       });
-      return '<div class="related-card' + (on ? ' is-on' : '') + (isBelow ? ' is-below' : '') + '">'
-        + '<div class="related-card-top">'
-        + (isBelow
-          ? '<span class="related-card-title">《' + esc(c.title) + '》</span>'
+      return '<article class="related-card' + (on ? ' is-on' : '') + (isBelow ? ' is-below' : '') + '">'
+        + (isBelow ? ''
           : '<button class="related-card-pick' + (on ? ' is-on' : '') + '" type="button"'
             + ' data-related-pick="' + esc(c.book) + '" data-from="' + turn.n + '"'
+            + ' aria-pressed="' + on + '"'
             + (readonly ? ' disabled' : '') + '>'
-            + '<span class="rc-check" aria-hidden="true">' + (on ? '✓' : '+') + '</span>'
-            + '<span class="rc-title">《' + esc(c.title) + '》</span>'
+            + (on ? ICON_CHECK : ICON_PLUS)
+            + '<span>' + (on ? '已选' : '纳入') + '</span>'
             + '</button>')
-        + '<span class="related-score mono">' + pct + '%</span>'
-        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener">精读 ↗</a>'
+        + '<div class="related-main">'
+        + '<div class="related-book-line">'
+        + '<span class="rank-badge" aria-label="相关性第 ' + rankNum + ' 名">#' + rankNum + '</span>'
+        + '<span class="related-card-title">《' + esc(c.title) + '》</span>'
+        + '<span class="related-card-sub">' + esc(c.chapter || '')
+        + (c.chapter ? ' · ' : '') + '<span class="mono" translate="no">L' + esc(c.line) + '</span></span>'
         + '</div>'
-        + '<div class="related-card-sub">' + esc(c.chapter || '')
-        + ' <span class="mono">L' + esc(c.line) + '</span></div>'
-        + (c.snippet ? '<p class="related-card-snip">' + esc(cut(c.snippet, 120)) + '</p>' : '')
-        + '</div>';
+        + (c.snippet ? '<p class="related-card-snip pretty">' + esc(cut(c.snippet, 120)) + '</p>' : '')
+        + '</div>'
+        + '<div class="related-right">'
+        + '<div class="rel-score-wrap" aria-label="相关性 ' + pct + '%">'
+        + '<div class="rel-bar-track" aria-hidden="true"><div class="rel-bar-fill" style="width:' + pct + '%"></div></div>'
+        + '<span class="related-score mono">' + pct + '%</span>'
+        + '</div>'
+        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener"><span>精读</span>' + ICON_OUT + '</a>'
+        + '</div>'
+        + '</article>';
     };
 
-    const quickLower = (!readonly && !qualified.length && candidates.length)
-      ? '<button class="btn related-lower-btn" type="button" data-related-threshold-set="'
+    const recovery = (!readonly && !qualified.length && candidates.length)
+      ? '<div class="related-empty-recovery">'
+        + '<span class="pretty" style="font-size:13px">当前阈值过高（≥ ' + thrPct + '%），所有候选书均在折叠区。</span>'
+        + '<button class="btn sm primary related-lower-btn" type="button" data-related-threshold-set="'
         + (maxPct / 100) + '" data-from="' + turn.n + '">调低阈值到 ' + maxPct + '%</button>'
+        + '</div>'
       : '';
 
     const act = !readonly && turn.answer && staleSources(turn) && chosen.length
@@ -1298,30 +1483,92 @@
         + (state.busy ? ' disabled' : '') + '>用这 ' + chosen.length + ' 本重新回答</button></div>'
       : '';
 
-    return '<section class="books related-panel" data-related-panel="' + turn.n + '">'
-      + '<div class="related-head">'
-      + '<span class="t">跨书找相关</span>'
-      + '<span class="h">' + esc(exclText) + '</span>'
-      + '</div>'
-      + '<div class="related-threshold-row">'
-      + '<label class="related-thr-lbl" for="rel-thr-' + turn.n + '">相关性阈值</label>'
-      + '<input class="related-thr-range" id="rel-thr-' + turn.n + '" type="range"'
-      + ' min="0" max="95" step="5" value="' + thrPct + '"'
-      + ' data-related-threshold="' + turn.n + '"' + (readonly ? ' disabled' : '') + '>'
-      + '<span class="related-thr-val mono" data-threshold-label="' + turn.n + '">≥ ' + thrPct + '%</span>'
-      + quickLower
-      + '</div>'
-      + '<p class="related-summary">' + esc(countMsg) + '</p>'
+    const html = '<p class="related-summary" aria-live="polite">' + esc(countMsg) + '</p>'
+      + recovery
       + (qualified.length
-        ? '<div class="related-list">' + qualified.map((c) => renderCard(c, false)).join('') + '</div>'
+        ? '<div class="related-list">' + qualified.map((c, i) => renderCard(c, i + 1, false)).join('') + '</div>'
         : '')
       + (below.length
         ? '<details class="related-below"' + (!qualified.length ? ' open' : '') + '>'
-          + '<summary>低于当前阈值（' + below.length + ' 本不参与回答）</summary>'
-          + '<div class="related-list">' + below.map((c) => renderCard(c, true)).join('') + '</div>'
+          + '<summary>低于当前阈值（' + below.length + ' 本不参与回答 · 仍保持降序排列）</summary>'
+          + '<div class="related-list">' + below.map((c, i) => renderCard(c, qualified.length + i + 1, true)).join('') + '</div>'
           + '</details>'
         : '')
-      + act
+      + act;
+
+    return { candidates, qualified, below, thrPct, readonly, html };
+  }
+
+  function updateRelatedInPlace(n) {
+    const turn = state.turns.find((t) => t.n === n);
+    if (!turn || !turn.relatedMode) return;
+    const res = buildRelatedDynamic(turn);
+    const panel = mainEl.querySelector('[data-related-panel="' + n + '"]');
+    if (!panel) {
+      render();
+      return;
+    }
+    const lbl = panel.querySelector('[data-threshold-label="' + n + '"]');
+    if (lbl) lbl.textContent = '≥ ' + res.thrPct + '%';
+    const range = panel.querySelector('[data-related-threshold="' + n + '"]');
+    if (range) {
+      range.value = String(res.thrPct);
+      range.style.setProperty('--progress', Math.round((res.thrPct / 95) * 100) + '%');
+    }
+    panel.querySelectorAll('.preset-chip[data-related-threshold-set]').forEach((btn) => {
+      const p = Math.round(Number(btn.dataset.relatedThresholdSet) * 100);
+      btn.setAttribute('aria-pressed', String(p === res.thrPct));
+    });
+    const dyn = panel.querySelector('[data-related-dynamic="' + n + '"]');
+    if (dyn) dyn.innerHTML = res.html;
+    const bodyWrap = mainEl.querySelector('[data-related-body="' + n + '"]');
+    if (bodyWrap) bodyWrap.innerHTML = relatedPendingHTML(turn);
+  }
+
+  function relatedPanelHTML(turn) {
+    if (!turn || !turn.trace) return '';
+    const res = buildRelatedDynamic(turn);
+    const exclList = (Array.isArray(turn.excludeBookMeta) && turn.excludeBookMeta.length
+      ? turn.excludeBookMeta
+      : (turn.excludeBooks || []).map((uid) => ({ uid, title: uid })));
+    const exclText = exclList.length
+      ? '已排除' + exclList.map((b) => '《' + esc(b.title || b.uid) + '》').join('、') + '及原段'
+      : '已排除原段落';
+
+    return '<section class="books related-panel" data-related-panel="' + turn.n + '" aria-label="相关性降序排列与阈值筛选">'
+      + '<div class="related-head">'
+      + '<div class="related-title-wrap">'
+      + '<div class="related-title-row">'
+      + '<span class="t">跨书找相关</span>'
+      + '<span class="sort-badge">'
+      + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>'
+      + '<span>先按相关性降序排列 · 再按阈值筛选</span>'
+      + '</span>'
+      + '</div>'
+      + '<span class="h">' + esc(exclText) + '</span>'
+      + '</div>'
+      + '</div>'
+      + '<div class="threshold-box">'
+      + '<div class="related-threshold-row">'
+      + '<label class="related-thr-lbl" for="rel-thr-' + turn.n + '">相关性阈值</label>'
+      + '<input class="related-thr-range" id="rel-thr-' + turn.n + '" name="related_threshold" type="range"'
+      + ' min="0" max="95" step="5" value="' + res.thrPct + '"'
+      + ' style="--progress:' + Math.round((res.thrPct / 95) * 100) + '%"'
+      + ' data-related-threshold="' + turn.n + '"' + (res.readonly ? ' disabled' : '') + '>'
+      + '<span class="related-thr-val mono" data-threshold-label="' + turn.n + '">≥ ' + res.thrPct + '%</span>'
+      + '</div>'
+      + '<div class="preset-row">'
+      + '<div class="preset-chips" role="group" aria-label="常用阈值预设">'
+      + PRESET_THRESHOLDS.map((v) => {
+        const p = Math.round(v * 100);
+        return '<button type="button" class="preset-chip" data-related-threshold-set="' + v
+          + '" data-from="' + turn.n + '" aria-pressed="' + (p === res.thrPct) + '"'
+          + (res.readonly ? ' disabled' : '') + '>≥&nbsp;' + p + '%</button>';
+      }).join('')
+      + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div data-related-dynamic="' + turn.n + '">' + res.html + '</div>'
       + '</section>';
   }
 
@@ -1361,12 +1608,13 @@
         + '<button class="' + cls + '" type="button" data-book-pick="' + esc(key) + '"'
         + ' data-from="' + turn.n + '" title="' + esc(fullTitle) + '"'
         + (readonly || full ? ' disabled' : '') + '>'
+        + (on ? ICON_CHECK : ICON_PLUS)
         + '<span class="bp-title">《' + esc(cut(row.source.title || row.source.book, 18)) + '》</span>'
         + (tagText ? '<span class="bp-tag">' + esc(tagText) + '</span>' : '')
         + '</button>'
         + (uid
           ? '<a class="bp-open" href="' + readingBookHref(uid) + '" target="_blank" rel="noopener"'
-            + ' data-stop="1" title="在分层读查看书目与章节">↗</a>'
+            + ' data-stop="1" title="在分层读查看书目与章节" aria-label="在分层读查看《' + esc(row.source.title || row.source.book) + '》">' + ICON_OUT + '</a>'
           : '')
         + '</span>';
     }).join('');
@@ -1481,7 +1729,7 @@
   function reanswerHTML(turn) {
     if (!turn.answer || turn.answer.ok === false) return '';
     return '<div class="turn-actions">'
-      + '<button class="btn turn-reanswer" type="button" data-reanswer-turn="' + turn.n + '"'
+      + '<button class="btn sm turn-reanswer" type="button" data-reanswer-turn="' + turn.n + '"'
       + ' title="清掉当前回答，重新检索并回答"'
       + (state.busy ? ' disabled' : '') + '>重新回答</button></div>';
   }
@@ -1490,7 +1738,6 @@
     const raw = String(text || '').replace(/\r\n?/g, '\n');
     if (!raw.trim()) return null;
     const lines = raw.split('\n');
-    // 末尾尚未跟上空格和标题文本的孤立 # 标记暂不渲染，避免流式吐字时闪烁出裸 ##
     if (lines.length && /^\s*#{1,4}\s*$/.test(lines[lines.length - 1])) lines.pop();
     const leadLines = [];
     const sections = [];
@@ -1543,11 +1790,30 @@
     bodyEl.innerHTML = preview;
   }
 
+  function relatedPendingHTML(turn) {
+    const last = lastTurn();
+    const canRetry = last && last.n === turn.n;
+    const count = (turn.sources || []).length;
+    if (!count) {
+      return '<p class="answer-pending-note">当前阈值下没有找到符合条件的其他书籍，无法生成回答。</p>'
+        + '<p class="answer-meta">可调低上方相关性阈值查看较弱关联书目，或直接在下方输入新问题。</p>';
+    }
+    const label = count === 1 ? '由模型从这 1 本回答' : '由模型跨这 ' + count + ' 本回答';
+    return '<p class="answer-pending-note">已按阈值筛选出 ' + count + ' 本跨书相关书目（上限 '
+      + MAX_SOURCES + ' 本），可直接点选精读或由模型归纳回答。</p>'
+      + '<div class="trace-pending-actions">'
+      + (canRetry
+        ? '<button class="btn btn-primary" type="button" data-retry-answer="' + turn.n + '">'
+          + label + '</button>'
+        : '')
+      + '</div>';
+  }
+
   function bodyHTML(turn) {
     if (turn.status === 'retrieving') {
-      return '<p class="loading-card"><span class="loading-text"><span class="dot-pulse"></span>正在检索，通常 20 到 60 秒 · '
-        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></span>'
-        + '<button class="btn stream-pause-btn" type="button" data-toggle-pause="' + turn.n + '">暂停</button></p>';
+      return '<div class="loading-card"><span class="loading-text"><span class="dot-pulse" aria-hidden="true"></span><span>正在检索，通常 20 到 60 秒 · '
+        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></span></span>'
+        + '<button class="btn sm stream-pause-btn" type="button" data-toggle-pause="' + turn.n + '">暂停</button></div>';
     }
     if (turn.status === 'answering') {
       const focus = focusExact(turn);
@@ -1555,10 +1821,10 @@
         ? '先取指定书的原文，再取其他书补充，最长约 2 分钟…'
         : '正在组织回答，通常 40 到 90 秒…';
       const line = turn.streamStatus || fallback;
-      const head = '<p class="loading-card"><span class="loading-text"><span class="dot-pulse"></span>'
-        + '<span data-stream-status>' + esc(line) + '</span> · '
-        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></span>'
-        + '<button class="btn stream-pause-btn" type="button" data-toggle-pause="' + turn.n + '">暂停</button></p>';
+      const head = '<div class="loading-card"><span class="loading-text"><span class="dot-pulse" aria-hidden="true"></span>'
+        + '<span><span data-stream-status>' + esc(line) + '</span> · '
+        + '<span class="elapsed mono" data-elapsed>' + clockText() + '</span></span></span>'
+        + '<button class="btn sm stream-pause-btn" type="button" data-toggle-pause="' + turn.n + '">暂停</button></div>';
       const preview = streamPreviewHTML(turn.streamText);
       return head + (preview
         ? '<div class="answer stream-preview" data-stream-body>' + preview + '</div>'
@@ -1571,9 +1837,9 @@
       const elapsedTag = turn.pausedElapsed
         ? ' · <span class="elapsed mono">已用 ' + turn.pausedElapsed + 's</span>'
         : '';
-      const head = '<p class="loading-card is-paused"><span class="loading-text"><span class="pause-dot"></span>'
-        + '<span data-stream-status>' + esc(line) + '</span>' + elapsedTag + '</span>'
-        + '<button class="btn stream-pause-btn is-resume" type="button" data-toggle-pause="' + turn.n + '">继续问答</button></p>';
+      const head = '<div class="loading-card is-paused"><span class="loading-text"><span class="pause-dot" aria-hidden="true"></span>'
+        + '<span><span data-stream-status>' + esc(line) + '</span>' + elapsedTag + '</span></span>'
+        + '<button class="btn sm stream-pause-btn is-resume" type="button" data-toggle-pause="' + turn.n + '">继续问答</button></div>';
       const preview = streamPreviewHTML(turn.streamText);
       return head + (preview
         ? '<div class="answer stream-preview" data-stream-body>' + preview + '</div>'
@@ -1605,20 +1871,7 @@
       const canRetry = last && last.n === turn.n;
       const interrupted = turn.status === 'answer-interrupted';
       if (turn.relatedMode && !interrupted) {
-        const count = (turn.sources || []).length;
-        if (!count) {
-          return '<p class="answer-pending-note">当前阈值下没有找到符合条件的其他书籍，无法生成回答。</p>'
-            + '<p class="answer-meta">可调低上方相关性阈值查看较弱关联书目，或直接在下方输入新问题。</p>';
-        }
-        const label = count === 1 ? '由模型从这 1 本回答' : '由模型跨这 ' + count + ' 本回答';
-        return '<p class="answer-pending-note">已按阈值筛选出 ' + count + ' 本跨书相关书目（上限 '
-          + MAX_SOURCES + ' 本），可直接点选精读或由模型归纳回答。</p>'
-          + '<div class="trace-pending-actions">'
-          + (canRetry
-            ? '<button class="btn btn-primary" type="button" data-retry-answer="' + turn.n + '">'
-              + label + '</button>'
-            : '')
-          + '</div>';
+        return '<div data-related-body="' + turn.n + '">' + relatedPendingHTML(turn) + '</div>';
       }
       const hit = turn.trace && turn.trace.result && turn.trace.result.path ? turn.trace.result : null;
       let text = hit ? '已完成检索定位，可直达原文精读或按需生成模型回答' : '上次只完成检索，还没有生成回答';
@@ -1687,16 +1940,18 @@
         quote: cite.quote || '',
         question: turn.question,
       });
-      return '<button class="ev' + (on ? ' is-on' : '') + (pinned ? ' is-anchor' : '')
+      return '<div class="ev-card' + (on ? ' is-on' : '') + (pinned ? ' is-anchor' : '') + '">'
+        + '<button class="ev' + (on ? ' is-on' : '') + (pinned ? ' is-anchor' : '')
         + '" type="button" data-cite="' + k + '" data-from="' + turn.n + '">'
         + '<span class="cite' + (on ? ' is-on' : '') + '">[' + k + ']</span>'
-        + '<span><span class="ev-src">《' + esc(bookOf(cite)) + '》· ' + esc(chapterOf(cite))
+        + '<span class="ev-text-col"><span class="ev-src">《' + esc(bookOf(cite)) + '》· ' + esc(chapterOf(cite))
         + (pinned ? '<span class="pin-tag">落点</span>' : '') + '</span>'
-        + '<span class="ev-quote">' + esc(cite.quote || '') + '</span></span>'
-        + '<span class="ev-ops">'
-        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener" data-stop="1" title="在分层读直达这段正文">精读 ↗</a>'
+        + '<span class="ev-quote pretty">' + esc(cite.quote || '') + '</span></span>'
+        + '</button>'
+        + '<div class="ev-ops">'
+        + '<a class="ev-read" href="' + readHref + '" target="_blank" rel="noopener" data-stop="1" title="在分层读直达这段正文"><span>精读</span>' + ICON_OUT + '</a>'
         + '<span class="ev-go">' + (on ? '落点' : '原文') + '</span>'
-        + '</span></button>';
+        + '</div></div>';
     }).join('');
     return '<section class="evidences"><div class="ev-head">'
       + '<span class="t">本轮依据 · ' + list.length + ' 段</span>'
@@ -1769,8 +2024,8 @@
     else if (state.drawer.data) body = chapterHTML(state.drawer.data, cite, ref.fromN, ref.cite);
     const nav = list.length > 1
       ? '<div class="hop">'
-        + '<button type="button" data-step="-1"' + (pos <= 0 ? ' disabled' : '') + '>‹ 上一条依据</button>'
-        + '<button type="button" data-step="1"' + (pos >= list.length - 1 ? ' disabled' : '')
+        + '<button class="btn sm" type="button" data-step="-1"' + (pos <= 0 ? ' disabled' : '') + '>‹ 上一条依据</button>'
+        + '<button class="btn sm" type="button" data-step="1"' + (pos >= list.length - 1 ? ' disabled' : '')
         + '>下一条依据 ›</button></div>'
       : '';
     const openHref = readingOpenHref({
@@ -1782,13 +2037,20 @@
     });
     panelEl.innerHTML = '<div class="drawer-head"><div class="dh-top">'
       + '<span class="cite">[' + (ref.cite || '·') + ']</span>'
-      + '<span class="book">《' + esc(bookOf(cite)) + '》</span>' + tags + '</div>'
+      + '<span class="book">《' + esc(bookOf(cite)) + '》</span>' + tags
+      + '<button type="button" class="icon-btn mobile-toggle drawer-close-btn" id="btn-close-drawer" aria-label="关闭原文面板">'
+      + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>'
+      + '</button></div>'
       + '<p class="dh-sub">' + esc(chapterOf(cite)) + '</p></div>'
       + '<div class="drawer-body">' + body + nav + '</div>'
-      + '<div class="drawer-foot"><span class="path">' + esc(cite.path) + '</span>'
+      + '<div class="drawer-foot"><span class="path" title="' + esc(cite.path) + '">' + esc(cite.path) + '</span>'
       + '<div class="drawer-foot-actions">'
-      + '<button class="btn" type="button" data-copy="' + esc(cite.path) + '">复制路径</button>'
-      + '<a class="btn btn-primary" href="' + openHref + '" target="_blank" rel="noopener">在分层读中打开 ↗</a>'
+      + '<button class="btn sm has-icon-left" type="button" data-copy="' + esc(cite.path) + '">'
+      + '<span class="icon-swap" id="copy-icon-swap" aria-hidden="true">'
+      + '<svg class="icon-a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'
+      + '<svg class="icon-b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+      + '</span><span>复制路径</span></button>'
+      + '<a class="btn sm primary btn-primary has-icon-right" href="' + openHref + '" target="_blank" rel="noopener"><span>在分层读中打开</span>' + ICON_OUT + '</a>'
       + '</div></div>';
   }
 
@@ -1853,7 +2115,7 @@
   function scrollRail() {
     if (state.viewN === railShown) return;
     railShown = state.viewN;
-    if (window.innerWidth >= 1320) return;
+    if (window.innerWidth >= 1280) return;
     const cur = roundsEl.querySelector('.is-current');
     if (cur) roundsEl.scrollLeft = Math.max(0, cur.offsetLeft - 8);
   }
@@ -1861,10 +2123,9 @@
   window.addEventListener('resize', () => {
     railShown = 0;
     scrollRail();
-    if (state.histMenu) closeHistMenu();
   });
 
-  /* ---- 历史会话 -------------------------------------------------- */
+  /* ---- 历史会话 & Native Popover Menu ---------------------------- */
 
   function parseStamp(stamp) {
     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(String(stamp || ''));
@@ -1930,6 +2191,7 @@
     if (name === 'pending' || name === 'incomplete') return { text: '未回答', cls: 'is-incomplete' };
     if (name === 'interrupted') return { text: '已中断', cls: 'is-interrupted' };
     if (name === 'error') return { text: '失败', cls: 'is-error' };
+    if (name === 'paused') return { text: '已暂停', cls: 'is-paused' };
     if (name === 'running') return { text: '回答中', cls: 'is-running' };
     return null;
   }
@@ -1939,29 +2201,101 @@
     const known = state.history.some((item) => item.id === row.id);
     const picked = known && state.historySelected.has(row.id);
     const selecting = state.historySelectMode;
-    const menuOpen = !!(state.histMenu && state.histMenu.id === row.id);
     const tag = historyStatusTag(row);
+    const safeId = String(row.id || '').replace(/[^A-Za-z0-9_-]/g, '');
+    const menuId = 'hist-menu-' + safeId + (current ? '-cur' : '');
+    const trigId = 'hist-trig-' + safeId + (current ? '-cur' : '');
     const check = !selecting ? ''
       : known
-        ? '<input class="hist-check" type="checkbox" data-session-check="' + esc(row.id) + '"'
-          + (picked ? ' checked' : '') + ' aria-label="选择这个会话">'
+        ? '<label class="hist-check-label" aria-label="选择会话"><input class="hist-check" type="checkbox" data-session-check="' + esc(row.id) + '"'
+          + (picked ? ' checked' : '') + '></label>'
         : '<span class="hist-check-gap" aria-hidden="true"></span>';
     return '<div class="hist-item' + (current ? ' is-current' : '')
-      + (picked ? ' is-picked' : '')
-      + (menuOpen ? ' is-menu' : '') + '">' + check
+      + (picked ? ' is-picked' : '') + '">' + check
       + '<button class="hist-row' + (current ? ' is-current' : '') + '" type="button"'
       + ' data-open-session="' + esc(row.id) + '">'
       + '<span class="top"><span>' + esc(whenText(row.updated_at)) + '</span>'
       + '<span>' + (Number(row.turns) || 0) + ' 问'
       + (current ? ' <span class="pin">当前</span>' : '') + '</span></span>'
       + '<span class="q">' + esc(row.question || row.last_question || '') + '</span>'
-      + '<span class="meta">' + esc(books)
+      + '<span class="meta"><span class="hist-books">' + esc(books) + '</span>'
       + (tag ? '<span class="hist-state ' + tag.cls + '">' + tag.text + '</span>' : '')
       + '</span></button>'
-      + '<button class="hist-more-btn" type="button" data-hist-menu="' + esc(row.id) + '"'
-      + ' aria-haspopup="menu" aria-expanded="' + (menuOpen ? 'true' : 'false') + '"'
-      + ' aria-label="会话操作">…</button>'
-      + '</div>';
+      + '<button class="hist-more-btn" id="' + trigId + '" type="button" data-hist-menu="' + esc(row.id) + '"'
+      + ' aria-haspopup="menu" aria-expanded="false" aria-label="会话操作" commandfor="' + menuId + '" command="toggle-popover">'
+      + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">'
+      + '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'
+      + '</svg></button>'
+      + '<div id="' + menuId + '" class="menu-popover" popover="auto">'
+      + '<div focusgroup="menu nomemory" aria-labelledby="' + trigId + '">'
+      + '<button type="button" data-hist-format="md" data-id="' + esc(row.id) + '"><span>导出&nbsp;<span translate="no">Markdown</span></span><span class="hint" translate="no" aria-hidden="true">.md</span></button>'
+      + '<button type="button" data-hist-format="docx" data-id="' + esc(row.id) + '"><span>导出&nbsp;<span translate="no">Word</span></span><span class="hint" translate="no" aria-hidden="true">.docx</span></button>'
+      + '<button type="button" data-hist-act="multi" data-id="' + esc(row.id) + '"><span>多选管理</span></button>'
+      + '<hr>'
+      + '<button type="button" class="is-danger" data-hist-act="delete" data-id="' + esc(row.id) + '"><span>删除会话</span></button>'
+      + '</div></div></div>';
+  }
+
+  function installMenuFallbackIfNeeded() {
+    const supportsAnchor = CSS.supports && CSS.supports('position-area: block-end');
+    const supportsInvoker = 'commandForElement' in HTMLButtonElement.prototype;
+    const supportsFocusgroup = 'focusGroup' in HTMLElement.prototype;
+
+    document.querySelectorAll('.menu-popover').forEach((popover) => {
+      if (popover.dataset.wired) return;
+      popover.dataset.wired = '1';
+      const menuEl = popover.querySelector('[focusgroup~="menu"]');
+      const trigger = popover.previousElementSibling;
+
+      if (!supportsFocusgroup && menuEl) {
+        menuEl.setAttribute('role', 'menu');
+        menuEl.querySelectorAll('button').forEach((item) => item.setAttribute('role', 'menuitem'));
+        menuEl.addEventListener('keydown', (e) => {
+          if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+          const items = Array.from(menuEl.querySelectorAll('button:not([disabled])'));
+          const idx = items.indexOf(document.activeElement);
+          if (idx < 0) return;
+          e.preventDefault();
+          const next = e.key === 'Home' ? 0
+            : e.key === 'End' ? items.length - 1
+            : (idx + (e.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
+          items[next].focus({ preventScroll: true });
+        });
+      }
+
+      if (!supportsInvoker && trigger) {
+        trigger.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (popover.matches(':popover-open')) popover.hidePopover();
+          else popover.showPopover({ source: trigger });
+        });
+      }
+
+      popover.addEventListener('toggle', (e) => {
+        const isOpen = e.newState === 'open';
+        if (trigger) trigger.setAttribute('aria-expanded', String(isOpen));
+        const item = popover.closest('.hist-item');
+        if (item) item.classList.toggle('is-menu', isOpen);
+        if (!isOpen) return;
+
+        if (!supportsAnchor && trigger) {
+          const r = trigger.getBoundingClientRect();
+          const w = popover.offsetWidth || 176;
+          const h = popover.offsetHeight || 160;
+          const left = Math.min(window.innerWidth - w - 8, Math.max(8, r.right - w));
+          let top = r.bottom + 4;
+          if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+          popover.style.position = 'fixed';
+          popover.style.inset = 'auto';
+          popover.style.margin = '0';
+          popover.style.left = Math.round(left) + 'px';
+          popover.style.top = Math.round(top) + 'px';
+        }
+
+        const first = menuEl && menuEl.querySelector('button:not([disabled])');
+        if (first) first.focus({ preventScroll: true });
+      });
+    });
   }
 
   function histMatch(row, q) {
@@ -1987,19 +2321,22 @@
     const busy = state.historyDeleting;
     histBarEl.hidden = false;
     histBarEl.innerHTML =
-      '<span class="hist-sel-count">已选择 ' + state.historySelected.size + ' 个对话</span>'
-      + '<button class="hist-sel-all" type="button" data-hist-select-all'
+      '<span class="hist-sel-count">已选 ' + state.historySelected.size + ' 项</span>'
+      + '<button class="btn sm ghost" type="button" data-hist-select-all'
       + (!ids.length || busy ? ' disabled' : '') + '>' + (all ? '取消全选' : '全选') + '</button>'
-      + '<button class="hist-sel-del" type="button" data-hist-select-delete'
+      + '<button class="btn sm danger" type="button" data-hist-select-delete'
       + (state.historySelected.size === 0 || busy ? ' disabled' : '') + '>'
       + (busy ? '删除中…' : '删除选中') + '</button>'
-      + '<button class="hist-sel-cancel" type="button" data-hist-select-cancel'
-      + (busy ? ' disabled' : '') + ' aria-label="退出多选">×</button>';
+      + '<button class="icon-btn" type="button" data-hist-select-cancel'
+      + (busy ? ' disabled' : '') + ' aria-label="退出多选">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>'
+      + '</button>';
   }
 
-  function enterHistSelect() {
+  function enterHistSelect(initialId = '') {
     state.historySelectMode = true;
     state.historySelected.clear();
+    if (initialId) state.historySelected.add(initialId);
     renderHistory();
   }
 
@@ -2028,83 +2365,6 @@
     renderHistory();
   }
 
-  function histMenuHTML() {
-    const menu = state.histMenu;
-    if (!menu) return '';
-    const id = esc(menu.id);
-    if (menu.view === 'download') {
-      return '<button class="hist-menu-head" type="button" data-hist-back>‹ 下载</button>'
-        + '<button type="button" role="menuitem" data-hist-format="md" data-id="' + id + '">'
-        + 'Markdown<span class="hist-menu-ext">.md</span></button>'
-        + '<button type="button" role="menuitem" data-hist-format="docx" data-id="' + id + '">'
-        + 'Word<span class="hist-menu-ext">.docx</span></button>';
-    }
-    return '<button type="button" role="menuitem" data-hist-act="download" data-id="' + id + '">'
-      + '下载<span class="hist-menu-chev">›</span></button>'
-      + '<button type="button" role="menuitem" data-hist-act="multi" data-id="' + id + '">多选</button>'
-      + '<button type="button" role="menuitem" class="is-danger" data-hist-act="delete" data-id="'
-      + id + '">删除</button>';
-  }
-
-  function positionHistMenu() {
-    const menu = state.histMenu;
-    if (!menu || !histMenuEl) return;
-    const rect = menu.anchor.getBoundingClientRect();
-    histMenuEl.style.left = '0px';
-    histMenuEl.style.top = '0px';
-    const width = histMenuEl.offsetWidth;
-    const height = histMenuEl.offsetHeight;
-    let left = rect.right - width;
-    let top = rect.bottom + 6;
-    if (left < 8) left = 8;
-    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-    if (top + height > window.innerHeight - 8) top = rect.top - height - 6;
-    if (top < 8) top = 8;
-    histMenuEl.style.left = Math.round(left) + 'px';
-    histMenuEl.style.top = Math.round(top) + 'px';
-  }
-
-  function renderHistMenu() {
-    if (!histMenuEl || !state.histMenu) return;
-    histMenuEl.innerHTML = histMenuHTML();
-    histMenuEl.hidden = false;
-    positionHistMenu();
-    const first = histMenuEl.querySelector('button');
-    if (first) first.focus({ preventScroll: true });
-  }
-
-  function closeHistMenu(refocus) {
-    const menu = state.histMenu;
-    state.histMenu = null;
-    if (histMenuEl) {
-      histMenuEl.hidden = true;
-      histMenuEl.innerHTML = '';
-    }
-    document.querySelectorAll('.hist-item.is-menu').forEach((item) => {
-      item.classList.remove('is-menu');
-    });
-    document.querySelectorAll('[data-hist-menu][aria-expanded="true"]').forEach((btn) => {
-      btn.setAttribute('aria-expanded', 'false');
-    });
-    if (refocus && menu && menu.anchor && menu.anchor.isConnected) menu.anchor.focus();
-  }
-
-  function openHistMenu(id, anchor) {
-    if (!histMenuEl || !anchor) return;
-    if (state.histMenu) {
-      if (state.histMenu.id === id) {
-        closeHistMenu(true);
-        return;
-      }
-      closeHistMenu();
-    }
-    state.histMenu = { id, view: 'root', anchor };
-    const item = anchor.closest('.hist-item');
-    if (item) item.classList.add('is-menu');
-    anchor.setAttribute('aria-expanded', 'true');
-    renderHistMenu();
-  }
-
   function downloadSession(id, format) {
     if (format !== 'md' && format !== 'docx') return;
     const a = document.createElement('a');
@@ -2114,38 +2374,6 @@
     document.body.appendChild(a);
     a.click();
     a.remove();
-  }
-
-  function handleHistMenuClick(e) {
-    const menu = state.histMenu;
-    if (!menu) return;
-    if (e.target.closest('[data-hist-back]')) {
-      menu.view = 'root';
-      renderHistMenu();
-      return;
-    }
-    const format = e.target.closest('[data-hist-format]');
-    if (format) {
-      const id = format.dataset.id || menu.id;
-      const kind = format.dataset.histFormat;
-      closeHistMenu(true);
-      downloadSession(id, kind);
-      return;
-    }
-    const act = e.target.closest('[data-hist-act]');
-    if (!act) return;
-    const id = act.dataset.id || menu.id;
-    const kind = act.dataset.histAct;
-    if (kind === 'download') {
-      menu.view = 'download';
-      renderHistMenu();
-    } else if (kind === 'multi') {
-      closeHistMenu();
-      enterHistSelect();
-    } else if (kind === 'delete') {
-      closeHistMenu();
-      deleteSession(id);
-    }
   }
 
   function renderHistory() {
@@ -2188,8 +2416,8 @@
     }
     if (!html) html = '<p class="hist-empty">没有匹配的会话。</p>';
     state.historyVisible = visible;
-    closeHistMenu();
     histListEl.innerHTML = html;
+    installMenuFallbackIfNeeded();
     renderHistBar();
   }
 
@@ -2213,7 +2441,13 @@
   async function deleteSelectedSessions() {
     const ids = Array.from(state.historySelected);
     if (!ids.length || state.historyDeleting) return;
-    if (!window.confirm('删除 ' + ids.length + ' 个会话？删除后不可恢复')) return;
+    const confirmed = await openConfirmDialog({
+      title: '删除选中的 ' + ids.length + ' 个会话？',
+      desc: '删除后将清除对应本地记录，且不可撤销。',
+      okLabel: '确认删除',
+      danger: true,
+    });
+    if (!confirmed) return;
     state.historyDeleting = true;
     renderHistory();
     try {
@@ -2245,7 +2479,13 @@
     const row = state.history.find((item) => item.id === id);
     const q = String((row && (row.question || row.last_question)) || '').trim();
     const label = q ? q.slice(0, 20) : '这个会话';
-    if (!window.confirm('删除「' + label + '」？删除后不可恢复')) return;
+    const confirmed = await openConfirmDialog({
+      title: '删除「' + label + '」？',
+      desc: '删除后将清除对应本地记录，且不可撤销。',
+      okLabel: '确认删除',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await postJSON('/api/sessions/delete', { ids: [id] });
       const current = id === state.sessionId;
@@ -2264,16 +2504,72 @@
     }
   }
 
-  /* ---- 左栏渲染 -------------------------------------------------- */
+  /* ---- 左栏 Tabs 控制 (Modern Web Guidance tabs) ----------------- */
+
+  const tabBtns = [tabCurrentEl, tabHistoryEl];
+  const tabPanels = [panelCurrentEl, panelHistoryEl];
+
+  function applyRailTabDOM(moveFocus = false) {
+    const idx = state.rail === 'history' ? 1 : 0;
+    tabBtns.forEach((btn, i) => {
+      if (!btn) return;
+      const selected = i === idx;
+      btn.classList.toggle('is-on', selected);
+      btn.setAttribute('aria-selected', String(selected));
+      btn.toggleAttribute('focusgroupstart', selected);
+      if (!('focusGroup' in HTMLElement.prototype)) {
+        btn.setAttribute('tabindex', selected ? '0' : '-1');
+      }
+      if (selected && moveFocus) btn.focus();
+    });
+    tabPanels.forEach((panel, i) => {
+      if (!panel) return;
+      const selected = i === idx;
+      if (selected) {
+        panel.removeAttribute('hidden');
+        panel.setAttribute('tabindex', '0');
+      } else {
+        panel.setAttribute('hidden', 'until-found');
+        panel.removeAttribute('tabindex');
+      }
+    });
+  }
+
+  tabPanels.forEach((panel, i) => {
+    if (!panel) return;
+    panel.addEventListener('beforematch', () => {
+      state.rail = i === 0 ? 'current' : 'history';
+      applyRailTabDOM(false);
+    });
+  });
+
+  if (!('focusGroup' in HTMLElement.prototype)) {
+    const tablist = document.querySelector('.rail-tabs');
+    if (tablist) {
+      tablist.setAttribute('role', 'tablist');
+      tabBtns.forEach((btn, i) => {
+        if (!btn) return;
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('tabindex', (state.rail === 'history' ? i === 1 : i === 0) ? '0' : '-1');
+      });
+      tablist.addEventListener('keydown', (e) => {
+        const cur = tabBtns.indexOf(document.activeElement);
+        if (cur < 0) return;
+        let next = cur;
+        if (e.key === 'ArrowRight') next = (cur + 1) % tabBtns.length;
+        else if (e.key === 'ArrowLeft') next = (cur - 1 + tabBtns.length) % tabBtns.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = tabBtns.length - 1;
+        else return;
+        e.preventDefault();
+        state.rail = next === 0 ? 'current' : 'history';
+        applyRailTabDOM(true);
+      });
+    }
+  }
 
   function renderRail() {
-    const histOn = state.rail === 'history';
-    tabCurrentEl.classList.toggle('is-on', !histOn);
-    tabHistoryEl.classList.toggle('is-on', histOn);
-    tabCurrentEl.setAttribute('aria-selected', String(!histOn));
-    tabHistoryEl.setAttribute('aria-selected', String(histOn));
-    panelCurrentEl.hidden = histOn;
-    panelHistoryEl.hidden = !histOn;
+    applyRailTabDOM(false);
     turnCountEl.textContent = String(state.turns.length);
     if (historyCountEl) historyCountEl.textContent = String(historyCount());
     railSubEl.textContent = state.turns.length
@@ -2569,7 +2865,6 @@
         return;
       }
       if (networkError(err.message)) {
-        // 连接断了不代表服务端失败：先按中断展示，再轮询会话详情。
         turn.status = 'answer-interrupted';
         turn.answerError = '连接中断，回答可能仍在后台，刷新或稍后重试';
         if (state.sessionId) startAnswerPoll(state.sessionId, turn.n, epoch);
@@ -2740,16 +3035,17 @@
         line: cand.line,
       }]);
     }
-    render();
+    updateRelatedInPlace(n);
   }
 
-  function applyRelatedThreshold(n, val) {
+  function applyRelatedThreshold(n, val, inPlace = false) {
     const turn = state.turns.find((t) => t.n === n);
     const last = lastTurn();
     if (!turn || !last || last.n !== n || !turn.relatedMode) return;
     turn.relatedThreshold = clampThreshold(val);
     turn.sources = relatedDefaultSources(turn);
-    render();
+    if (inPlace) updateRelatedInPlace(n);
+    else render();
   }
 
   function toggleBook(n, key) {
@@ -2800,13 +3096,19 @@
     answerTurn(turn, { sources: turn.sources, fresh: false });
   }
 
-  function reanswerTurn(n) {
+  async function reanswerTurn(n) {
     const turn = state.turns.find((t) => t.n === n);
     if (!turn || !turn.answer || turn.answer.ok === false || state.busy) return;
     const later = state.turns.filter((t) => t.n > n);
-    if (later.length && !window.confirm(
-      '重新回答第 ' + n + ' 问会清掉它之后的 ' + later.length + ' 个问题，继续？'
-    )) return;
+    if (later.length) {
+      const ok = await openConfirmDialog({
+        title: '重新回答第 ' + n + ' 问？',
+        desc: '重新回答会清掉它之后的 ' + later.length + ' 个问题，且不可恢复。',
+        okLabel: '继续重答',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     state.viewN = n;
     state.epoch += 1;
     state.turns = state.turns.filter((t) => t.n <= n);
@@ -2841,6 +3143,7 @@
     if (histFilterEl) histFilterEl.value = '';
     field.value = '';
     field.closest('.ask-field').classList.remove('has-text');
+    closeDrawers(false);
     setUrl('');
     render();
     field.focus();
@@ -2875,11 +3178,14 @@
   function viewRound(n) {
     state.viewN = n;
     mainEl.scrollTop = 0;
+    closeDrawers(false);
     showCitation(defaultRef(viewTurn()));
   }
 
   function openDrawer() {
-    if (window.matchMedia('(max-width: 1319px)').matches) drawerEl.classList.add('is-open');
+    if (window.matchMedia('(max-width: 1279px)').matches) {
+      openMobileDrawer(drawerEl, $('#drawer-toggle'));
+    }
   }
 
   function pick(fromN, k) {
@@ -2913,6 +3219,11 @@
   async function copyPath(path) {
     try {
       await navigator.clipboard.writeText(path);
+      const swap = $('#copy-icon-swap');
+      if (swap) {
+        swap.classList.add('swapped');
+        setTimeout(() => swap.classList.remove('swapped'), 1400);
+      }
       toast('路径已复制');
     } catch (err) {
       const el = panelEl.querySelector('.drawer-foot .path');
@@ -2928,21 +3239,38 @@
   }
 
   document.addEventListener('click', (e) => {
+    if (e.target.closest('#brand-link')) {
+      e.preventDefault();
+      newSession();
+      return;
+    }
     if (e.target.closest('[data-stop]')) {
       return;
     }
-    const menuBtn = e.target.closest('[data-hist-menu]');
-    if (menuBtn) {
-      openHistMenu(menuBtn.dataset.histMenu, menuBtn);
+    const menuFormat = e.target.closest('[data-hist-format]');
+    if (menuFormat) {
+      const popover = menuFormat.closest('[popover]');
+      if (popover && popover.hidePopover) popover.hidePopover();
+      downloadSession(menuFormat.dataset.id, menuFormat.dataset.histFormat);
       return;
     }
-    if (histMenuEl && histMenuEl.contains(e.target)) {
-      handleHistMenuClick(e);
+    const menuAct = e.target.closest('[data-hist-act]');
+    if (menuAct) {
+      const id = menuAct.dataset.id;
+      const act = menuAct.dataset.histAct;
+      const popover = menuAct.closest('[popover]');
+      if (popover && popover.hidePopover) popover.hidePopover();
+      if (act === 'multi') enterHistSelect(id);
+      else if (act === 'delete') deleteSession(id);
       return;
     }
-    if (state.histMenu) closeHistMenu();
+    if (e.target.closest('#btn-close-drawer')) {
+      closeDrawers(true);
+      return;
+    }
     if (e.target.closest('#drawer-toggle')) {
-      drawerEl.classList.toggle('is-open');
+      if (drawerEl.classList.contains('is-open')) closeDrawers(true);
+      else openMobileDrawer(drawerEl, e.target.closest('#drawer-toggle'));
       return;
     }
     if (e.target.closest('[data-clear-scope]')) {
@@ -2970,7 +3298,8 @@
     if (relThrSet) {
       applyRelatedThreshold(
         Number(relThrSet.dataset.from),
-        Number(relThrSet.dataset.relatedThresholdSet)
+        Number(relThrSet.dataset.relatedThresholdSet),
+        true
       );
       return;
     }
@@ -3054,6 +3383,7 @@
         const last = lastTurn();
         state.rail = 'current';
         state.viewN = last ? last.n : state.viewN;
+        closeDrawers(false);
         render();
         return;
       }
@@ -3084,12 +3414,12 @@
     }
     if (e.target.closest('#tab-current')) {
       state.rail = 'current';
-      render();
+      applyRailTabDOM(false);
       return;
     }
     if (e.target.closest('#tab-history')) {
       state.rail = 'history';
-      render();
+      applyRailTabDOM(false);
       return;
     }
     const round = e.target.closest('[data-turn]');
@@ -3114,17 +3444,16 @@
     const range = e.target.closest('[data-related-threshold]');
     if (!range) return;
     const n = Number(range.dataset.relatedThreshold);
-    const pct = Math.max(0, Math.min(95, Math.round(Number(range.value) || 0)));
-    const lbl = mainEl.querySelector('[data-threshold-label="' + n + '"]');
-    if (lbl) lbl.textContent = '≥ ' + pct + '%';
+    const val = Math.max(0, Math.min(95, Math.round(Number(range.value) || 0))) / 100;
+    applyRelatedThreshold(n, val, true);
   });
 
   mainEl.addEventListener('change', (e) => {
     const range = e.target.closest('[data-related-threshold]');
     if (!range) return;
     const n = Number(range.dataset.relatedThreshold);
-    const val = (Number(range.value) || 0) / 100;
-    applyRelatedThreshold(n, val);
+    const val = Math.max(0, Math.min(95, Math.round(Number(range.value) || 0))) / 100;
+    applyRelatedThreshold(n, val, true);
   });
 
   if (histFilterEl) {
@@ -3142,17 +3471,12 @@
     });
   }
 
-  document.addEventListener('scroll', () => {
-    if (state.histMenu) closeHistMenu();
-  }, true);
-
   window.addEventListener('beforeunload', stopAnswerPoll);
   window.addEventListener('pagehide', stopAnswerPoll);
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && state.histMenu) {
-      e.preventDefault();
-      closeHistMenu(true);
+    if (e.key === 'Escape') {
+      closeDrawers(true);
       return;
     }
     if (e.key !== 'Enter' || e.isComposing) return;
@@ -3248,7 +3572,6 @@
   async function openSession(sessionId) {
     stopClock();
     stopAnswerPoll();
-    closeHistMenu();
     const epoch = ++state.epoch;
     try {
       const data = await fetchJSON('/api/session?id=' + encodeURIComponent(sessionId));
@@ -3264,6 +3587,7 @@
       state.error = '';
       state.rail = 'current';
       state.historyAll = false;
+      closeDrawers(false);
       setUrl(state.sessionId);
       syncBusy();
       if (state.busy) startClock();
