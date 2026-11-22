@@ -38,6 +38,11 @@ import book_cards
 import book_query
 import book_score
 import book_title
+
+try:  # 统计源；包不可用时退回 None（页面显示「—」）
+    from bookcorpus import corpus_snapshot
+except ImportError:  # pragma: no cover - 仅在包未安装的开发环境
+    corpus_snapshot = None
 import context as demo_context
 import lib_fts_cjk as cjk
 import model_call
@@ -947,41 +952,53 @@ def _int_or_none(value):
 
 
 def meta(refresh=False):
-    """书库规模。缺库或索引为空时计数是 None，不是 0：0 只表示真读到了 0 行。"""
+    """书库规模，取自统一快照（bookcorpus.corpus_snapshot）。
+
+    books = 可读（md 目录存在且至少 1 章）；books_total = 藏书（含无正文书）。
+    缺库或索引为空时计数是 None，不是 0：0 只表示真读到了 0 行。
+    60 秒缓存保留，built_at 随缓存透出。
+    """
     now = time.time()
     if not refresh and _META_CACHE["value"] and now - _META_CACHE["at"] < 60:
         cached = dict(_META_CACHE["value"])
         cached["embed"] = vec_search.health_info()
         cached["rerank"] = rerank_client.health_info(root=ROOT)
         return cached
+    snap = corpus_snapshot.snapshot(ROOT) if corpus_snapshot else None
+    if snap is None:
+        out = {
+            "books": None,
+            "books_total": None,
+            "paras": None,
+            "chapters": None,
+            "chars": None,
+            "built_at": "",
+            "index_built_at": "",
+            "library": "missing",
+            "index": "missing",
+        }
+        _META_CACHE.update(at=now, value=dict(out))
+        out["embed"] = vec_search.health_info()
+        out["rerank"] = rerank_client.health_info(root=ROOT)
+        return out
+    sources = snap["sources"]
+    paras = snap["paras"]
     out = {
-        "books": None,
-        "paras": None,
+        "books": snap["books_readable"],
+        "books_total": snap["books_total"],
+        "paras": paras if paras else None,
         "chapters": None,
-        "index_built_at": "",
-        "library": "missing",
+        "chars": snap["chars"],
+        "built_at": snap["built_at"],
+        "index_built_at": sources["index"]["built_at"] or "",
+        "library": "ok" if sources["library"]["ok"] else "missing",
         "index": "missing",
     }
-    if os.path.exists(LIB_DB):
-        lib = _ro(LIB_DB)
-        try:
-            out["books"] = lib.execute("SELECT count(*) FROM book").fetchone()[0]
-        finally:
-            lib.close()
-        out["library"] = "ok"
-    if os.path.exists(INDEX_DB):
-        con = _ro(INDEX_DB)
-        try:
-            vals = dict(con.execute("SELECT key,value FROM meta"))
-            paras = _int_or_none(vals.get("paras"))
-            if paras is None:
-                paras = con.execute("SELECT count(*) FROM para").fetchone()[0]
-            out["index_built_at"] = vals.get("built_at") or ""
-        finally:
-            con.close()
+    if sources["index"]["ok"]:
         if paras:
             out["paras"] = paras
-            out["chapters"] = _int_or_none(vals.get("chapters"))
+            # 章与段同源：索引按 md 文件计数（count(DISTINCT path)），与快照一致。
+            out["chapters"] = snap["chapters"]
         out["index"] = "ok" if paras else "empty"
     _META_CACHE.update(at=now, value=dict(out))
     out["embed"] = vec_search.health_info()

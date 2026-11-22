@@ -115,7 +115,8 @@ def header_snapshot(port, path="/"):
 
 def assert_header_degrades(snap):
     assert snap is not None, "page did not evaluate"
-    assert snap["stats"] == ["—", "—", "—"], snap
+    # 本 / 藏书 / 段 / 章 四格；缺库时全是「—」，不是 0。
+    assert snap["stats"] == ["—", "—", "—", "—"], snap
     assert "0 段" not in snap["body"], snap["body"][:400]
     assert snap["noteHidden"] is False, snap
     assert "先跑索引" in snap["note"], snap
