@@ -1,6 +1,50 @@
-/* 分层读 · 五步防重叠确定性蓝图渲染引擎与全章树形导图 */
+/* 伴读 · 五步防重叠确定性蓝图渲染引擎与全章树形导图 */
 (function () {
   const RD = (window.RD = window.RD || {});
+
+  let supportsDisplayTransition;
+  let lastZoomTrigger = null;
+
+  function canTransitionDisplay() {
+    if (supportsDisplayTransition !== undefined) return supportsDisplayTransition;
+    if (!window.CSS?.supports?.('transition-behavior', 'allow-discrete') || !document.body) {
+      return false;
+    }
+    const probe = document.createElement('div');
+    probe.style.cssText = 'transition: display 1s allow-discrete !important; display: block;';
+    document.body.appendChild(probe);
+    getComputedStyle(probe).display;
+    probe.style.display = 'none';
+    supportsDisplayTransition = getComputedStyle(probe).display === 'block';
+    probe.remove();
+    return supportsDisplayTransition;
+  }
+
+  function supportsTopLayerExit() {
+    return Boolean(window.CSS?.supports?.('overlay', 'auto') && canTransitionDisplay());
+  }
+
+  async function closeZoomModal(modal) {
+    if (!modal) return;
+    if (!supportsTopLayerExit()) {
+      modal.setAttribute('data-closing', '');
+      const animations = modal.getAnimations ? modal.getAnimations({ subtree: true }) : [];
+      if (animations.length > 0) {
+        await Promise.race([
+          Promise.allSettled(animations.map((a) => a.finished)),
+          new Promise((r) => setTimeout(r, 400)),
+        ]);
+      }
+      if (!modal.hasAttribute('data-closing')) return;
+      modal.removeAttribute('data-closing');
+    }
+    if (typeof modal.close === 'function') {
+      if (modal.open) modal.close();
+    } else {
+      modal.classList.remove('open');
+      if (lastZoomTrigger && typeof lastZoomTrigger.focus === 'function') lastZoomTrigger.focus();
+    }
+  }
 
   const ROLE_ZH = {
     premise: '前提',
@@ -159,46 +203,146 @@
     return d;
   }
 
-  function renderLayeredDagHtml(payload, options) {
-    const nodes = (payload.data && payload.data.nodes) || [];
-    const edges = (payload.data && payload.data.edges) || [];
-    if (!nodes.length) return '<div class="wb-sub">暂无图节点数据</div>';
+  let markerSeq = 0;
 
-    const wideMode = Boolean(options && options.wide);
-    const wantLR =
-      wideMode &&
-      ['flow_swimlane', 'lineage_dag', 'spatial_route', 'system_flow'].includes(payload.blueprint);
+  const DAG_ROOT_ROLES = new Set(['premise', 'axiom', 'condition']);
 
-    const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i, indeg: 0, rank: 0 })]));
-    const adj = new Map(nodes.map((n) => [n.id, []]));
-    edges.forEach((e) => {
-      if (idMap.has(e.from) && idMap.has(e.to)) {
-        adj.get(e.from).push(e.to);
-        idMap.get(e.to).indeg += 1;
+  function isNegativeEdgeLabel(lbl) {
+    if (!lbl) return false;
+    return (
+      lbl.startsWith('-') ||
+      lbl.includes('批') ||
+      lbl.includes('拒') ||
+      lbl.includes('排除') ||
+      lbl.includes('切断') ||
+      lbl.includes('削弱') ||
+      lbl.includes('阻碍') ||
+      lbl.includes('冲突')
+    );
+  }
+
+  function prepareDagEdges(rawEdges, idMap) {
+    const valid = (rawEdges || []).filter((e) => e && idMap.has(e.from) && idMap.has(e.to));
+    const merged = [];
+    const used = new Array(valid.length).fill(false);
+
+    for (let i = 0; i < valid.length; i++) {
+      if (used[i]) continue;
+      used[i] = true;
+      const e = valid[i];
+      let rev = null;
+      if (e.from !== e.to) {
+        for (let j = i + 1; j < valid.length; j++) {
+          if (!used[j] && valid[j].from === e.to && valid[j].to === e.from) {
+            used[j] = true;
+            rev = valid[j];
+            break;
+          }
+        }
+      }
+      const l1 = String(e.label || '').trim();
+      const l2 = rev ? String(rev.label || '').trim() : '';
+      const label = l2 && l2 !== l1 ? (l1 ? l1 + ' / ' + l2 : l2) : l1;
+      const notes = [e.note, rev && rev.note].filter(Boolean);
+      merged.push({
+        idx: merged.length,
+        from: e.from,
+        to: e.to,
+        label,
+        note: notes.join('；'),
+        bidirectional: Boolean(rev),
+        isSelfLoop: e.from === e.to,
+        isCycleBack: e.from === e.to,
+        isNeg: isNegativeEdgeLabel(l1) || isNegativeEdgeLabel(l2),
+      });
+    }
+    return merged;
+  }
+
+  function assignDagRanks(nodes, idMap, mergedEdges) {
+    const rawIn = new Map(nodes.map((n) => [n.id, 0]));
+    const rawOut = new Map(nodes.map((n) => [n.id, []]));
+    mergedEdges.forEach((e) => {
+      if (e.isSelfLoop) return;
+      rawOut.get(e.from).push(e);
+      rawIn.set(e.to, (rawIn.get(e.to) || 0) + 1);
+    });
+
+    const dfsOrder = nodes
+      .map((raw) => idMap.get(raw.id))
+      .sort((a, b) => {
+        const ai0 = (rawIn.get(a.id) || 0) === 0 ? 0 : 1;
+        const bi0 = (rawIn.get(b.id) || 0) === 0 ? 0 : 1;
+        if (ai0 !== bi0) return ai0 - bi0;
+        const ar = DAG_ROOT_ROLES.has(a.role) ? 0 : 1;
+        const br = DAG_ROOT_ROLES.has(b.role) ? 0 : 1;
+        if (ar !== br) return ar - br;
+        const ad = (rawIn.get(a.id) || 0) - rawOut.get(a.id).length;
+        const bd = (rawIn.get(b.id) || 0) - rawOut.get(b.id).length;
+        if (ad !== bd) return ad - bd;
+        return a.idx - b.idx;
+      });
+
+    // DFS cycle-breaking marks only genuine back-edges on the active call stack
+    const visitState = new Map(nodes.map((n) => [n.id, 0]));
+    function dfs(uId) {
+      visitState.set(uId, 1);
+      const edges = rawOut.get(uId) || [];
+      for (const e of edges) {
+        const st = visitState.get(e.to);
+        if (st === 1) {
+          e.isCycleBack = true;
+        } else if (st === 0) {
+          dfs(e.to);
+        }
+      }
+      visitState.set(uId, 2);
+    }
+    dfsOrder.forEach((n) => {
+      if (visitState.get(n.id) === 0) dfs(n.id);
+    });
+
+    const dagIn = new Map(nodes.map((n) => [n.id, 0]));
+    const dagChildren = new Map(nodes.map((n) => [n.id, []]));
+    const dagParents = new Map(nodes.map((n) => [n.id, []]));
+    mergedEdges.forEach((e) => {
+      if (e.isCycleBack || e.isSelfLoop) return;
+      dagChildren.get(e.from).push(e.to);
+      dagParents.get(e.to).push(e.from);
+      dagIn.set(e.to, (dagIn.get(e.to) || 0) + 1);
+    });
+
+    const indeg = new Map(dagIn);
+    const q = [];
+    indeg.forEach((deg, id) => {
+      if (deg === 0) q.push(id);
+    });
+    while (q.length) {
+      const u = q.shift();
+      const uRank = idMap.get(u).rank;
+      (dagChildren.get(u) || []).forEach((v) => {
+        const vn = idMap.get(v);
+        if (vn.rank <= uRank) vn.rank = uRank + 1;
+        indeg.set(v, indeg.get(v) - 1);
+        if (indeg.get(v) === 0) q.push(v);
+      });
+    }
+
+    // Pull standalone roots closer to their earliest child to prevent long top-to-bottom skips
+    nodes.forEach((raw) => {
+      const n = idMap.get(raw.id);
+      const kids = dagChildren.get(n.id) || [];
+      if ((dagIn.get(n.id) || 0) === 0 && kids.length) {
+        const minChildRank = Math.min(...kids.map((v) => idMap.get(v).rank));
+        n.rank = Math.max(0, minChildRank - 1);
       }
     });
 
-    const q = [];
+    // Compress any empty rank levels while keeping relative rank order intact
+    const usedRanks = Array.from(new Set(nodes.map((raw) => idMap.get(raw.id).rank))).sort((a, b) => a - b);
+    const rankRemap = new Map(usedRanks.map((r, i) => [r, i]));
     idMap.forEach((n) => {
-      if (n.indeg === 0) q.push(n.id);
-    });
-    const placed = new Set();
-    let guard = 0;
-    while (q.length && guard++ < 80) {
-      const u = q.shift();
-      placed.add(u);
-      const uNode = idMap.get(u);
-      (adj.get(u) || []).forEach((v) => {
-        const vNode = idMap.get(v);
-        if (vNode.rank <= uNode.rank) vNode.rank = uNode.rank + 1;
-        vNode.indeg -= 1;
-        if (vNode.indeg === 0) q.push(v);
-      });
-    }
-    let nextR = 0;
-    nodes.forEach((raw) => {
-      const n = idMap.get(raw.id);
-      if (!placed.has(n.id)) n.rank = nextR++;
+      n.rank = rankRemap.get(n.rank);
     });
 
     const ranks = new Map();
@@ -208,42 +352,230 @@
     });
     const sortedRanks = Array.from(ranks.keys()).sort((a, b) => a - b);
 
+    // 2-pass barycenter sweep across adjacent connected neighbors to untangle crossings
+    const allNbrs = new Map(nodes.map((n) => [n.id, new Set()]));
+    mergedEdges.forEach((e) => {
+      if (e.isSelfLoop) return;
+      allNbrs.get(e.from).add(e.to);
+      allNbrs.get(e.to).add(e.from);
+    });
+    const updateOrders = () => {
+      sortedRanks.forEach((r) => {
+        ranks.get(r).forEach((n, i) => {
+          n.order = i;
+        });
+      });
+    };
+    updateOrders();
+    for (let pass = 0; pass < 2; pass++) {
+      for (let ri = 1; ri < sortedRanks.length; ri++) {
+        const r = sortedRanks[ri];
+        const prevR = sortedRanks[ri - 1];
+        const list = ranks.get(r);
+        list.sort((a, b) => {
+          const score = (node) => {
+            const pts = [];
+            allNbrs.get(node.id).forEach((nid) => {
+              const nb = idMap.get(nid);
+              if (nb && nb.rank === prevR) pts.push(nb.order);
+            });
+            return pts.length ? pts.reduce((s, x) => s + x, 0) / pts.length : node.order;
+          };
+          return score(a) - score(b) || a.order - b.order;
+        });
+        updateOrders();
+      }
+      for (let ri = sortedRanks.length - 2; ri >= 0; ri--) {
+        const r = sortedRanks[ri];
+        const nextR = sortedRanks[ri + 1];
+        const list = ranks.get(r);
+        list.sort((a, b) => {
+          const score = (node) => {
+            const pts = [];
+            allNbrs.get(node.id).forEach((nid) => {
+              const nb = idMap.get(nid);
+              if (nb && nb.rank === nextR) pts.push(nb.order);
+            });
+            return pts.length ? pts.reduce((s, x) => s + x, 0) / pts.length : node.order;
+          };
+          return score(a) - score(b) || a.order - b.order;
+        });
+        updateOrders();
+      }
+    }
+    return { ranks, sortedRanks };
+  }
+
+  function renderLayeredDagHtml(payload, options) {
+    const nodes = (payload.data && payload.data.nodes) || [];
+    const rawEdges = (payload.data && payload.data.edges) || [];
+    if (!nodes.length) return '<div class="wb-sub">暂无图节点数据</div>';
+
+    const wideMode = Boolean(options && options.wide);
+    const wantLR =
+      wideMode &&
+      ['flow_swimlane', 'lineage_dag', 'spatial_route', 'system_flow'].includes(payload.blueprint);
+
+    const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i, rank: 0, order: 0 })]));
+    const mergedEdges = prepareDagEdges(rawEdges, idMap);
+    const { ranks, sortedRanks } = assignDagRanks(nodes, idMap, mergedEdges);
+
     let maxInRank = 1;
     sortedRanks.forEach((r) => {
       maxInRank = Math.max(maxInRank, ranks.get(r).length);
     });
-    const cardW = wantLR ? 204 : maxInRank >= 2 ? 156 : 236;
+    const cardW = wantLR ? 204 : maxInRank >= 4 ? 142 : maxInRank >= 2 ? 158 : 236;
     const sizes = measureNodeSizes(nodes, cardW);
 
-    const colGap = wantLR ? 84 : 20;
-    const rankGap = wantLR ? 24 : 60;
+    const colGap = wantLR ? 72 : 24;
+    const rowGap = wantLR ? 36 : 56;
+    const trackStep = 18;
+    const corridorStep = wideMode ? 34 : 26;
 
-    const skipEdges = edges.filter((e) => {
+    // Step 1: Plan every edge's route type, face attachments, and gap/corridor slot needs
+    const gapSegments = new Map();
+    const getGapList = (g) => {
+      if (!gapSegments.has(g)) gapSegments.set(g, []);
+      return gapSegments.get(g);
+    };
+    const sideA = [];
+    const sideB = [];
+    const edgePlans = [];
+
+    mergedEdges.forEach((e) => {
       const fn = idMap.get(e.from);
       const tn = idMap.get(e.to);
-      return fn && tn && (tn.rank - fn.rank > 1 || tn.rank <= fn.rank);
+      if (!fn || !tn) return;
+      const ar = fn.rank;
+      const br = tn.rank;
+      const aCnt = ranks.get(ar).length;
+      const bCnt = ranks.get(br).length;
+
+      if (e.isSelfLoop) {
+        edgePlans.push({
+          edge: e,
+          kind: 'self',
+          outFace: wantLR ? 'bottom' : 'right',
+          inFace: wantLR ? 'bottom' : 'right',
+        });
+        return;
+      }
+
+      if (br === ar + 1 && !e.isCycleBack) {
+        const plan = {
+          edge: e,
+          kind: 'adj',
+          gapIdx: ar,
+          outFace: wantLR ? 'right' : 'bottom',
+          inFace: wantLR ? 'left' : 'top',
+          trackIdx: 0,
+        };
+        getGapList(ar).push({ plan, role: 'adj', sortKey: fn.order * 100 + tn.order });
+        edgePlans.push(plan);
+        return;
+      }
+
+      // Outer corridor edge: pick side closer to endpoints, damped slightly by current load
+      const aRel = (fn.order + 0.5) / aCnt;
+      const bRel = (tn.order + 0.5) / bCnt;
+      const avgRel = (aRel + bRel) / 2;
+      const scoreA = avgRel + sideA.length * 0.14;
+      const scoreB = 1 - avgRel + sideB.length * 0.14;
+      const useA = scoreA <= scoreB;
+      const corridorSide = useA ? (wantLR ? 'top' : 'left') : wantLR ? 'bottom' : 'right';
+
+      const aIsOuter = useA ? fn.order === 0 : fn.order === aCnt - 1;
+      const bIsOuter = useA ? tn.order === 0 : tn.order === bCnt - 1;
+      const goingBack = br <= ar;
+
+      let outFace = corridorSide;
+      let exitGap = null;
+      if (!aIsOuter) {
+        if (wantLR) {
+          outFace = goingBack ? 'left' : 'right';
+          exitGap = goingBack ? ar - 1 : ar;
+        } else {
+          outFace = goingBack ? 'top' : 'bottom';
+          exitGap = goingBack ? ar - 1 : ar;
+        }
+      }
+
+      let inFace = corridorSide;
+      let enterGap = null;
+      if (!bIsOuter) {
+        inFace = wantLR ? 'left' : 'top';
+        enterGap = br - 1;
+      }
+
+      const plan = {
+        edge: e,
+        kind: 'corridor',
+        useA,
+        span: Math.abs(br - ar),
+        minRank: Math.min(ar, br),
+        corridorSide,
+        corridorLane: 0,
+        outFace,
+        inFace,
+        exitGap,
+        enterGap,
+        exitTrackIdx: 0,
+        enterTrackIdx: 0,
+      };
+      if (exitGap !== null) {
+        getGapList(exitGap).push({ plan, role: 'exit', sortKey: fn.order * 100 + (useA ? -10 : 10) });
+      }
+      if (enterGap !== null) {
+        getGapList(enterGap).push({ plan, role: 'enter', sortKey: tn.order * 100 + (useA ? -10 : 10) });
+      }
+      (useA ? sideA : sideB).push(plan);
+      edgePlans.push(plan);
     });
-    const leftCorridors = [];
-    const rightCorridors = [];
-    skipEdges.forEach((e, idx) => {
-      if (idx % 2 === 0) leftCorridors.push(e);
-      else rightCorridors.push(e);
+
+    // Order each gap's horizontal/vertical tracks and nest outer corridor lanes shortest-innermost
+    const gapTracksCount = new Map();
+    gapSegments.forEach((items, g) => {
+      items.sort((a, b) => a.sortKey - b.sortKey);
+      items.forEach((it, idx) => {
+        if (it.role === 'adj') it.plan.trackIdx = idx;
+        else if (it.role === 'exit') it.plan.exitTrackIdx = idx;
+        else it.plan.enterTrackIdx = idx;
+      });
+      gapTracksCount.set(g, items.length);
     });
-    const corridorStep = 54;
-    const leftPad = leftCorridors.length ? leftCorridors.length * corridorStep + 24 : 14;
-    const rightPad = rightCorridors.length ? rightCorridors.length * corridorStep + 24 : 14;
-    const topPad = wantLR ? Math.max(24, skipEdges.length * 32 + 16) : 22;
-    const botPad = wantLR ? Math.max(26, skipEdges.length * 38 + 22) : 24;
+
+    const sortCorridors = (arr) => {
+      arr.sort((a, b) => a.span - b.span || a.minRank - b.minRank || a.edge.idx - b.edge.idx);
+      arr.forEach((p, idx) => {
+        p.corridorLane = idx;
+      });
+    };
+    sortCorridors(sideA);
+    sortCorridors(sideB);
+
+    // Step 2: Compute node geometry with expanded per-gap and per-corridor gutters
+    const R = sortedRanks.length;
+    const gapSize = (g, base) => {
+      const n = gapTracksCount.get(g) || 0;
+      return n ? Math.max(base, 30 + n * trackStep) : base;
+    };
+
+    const sideAPad = (sideA.length ? sideA.length * corridorStep + 28 : 20) + ((wantLR ? 0 : gapTracksCount.get(-1) || 0) * trackStep);
+    const sideBPad = sideB.length ? sideB.length * corridorStep + 28 : 20;
+    const preGap = gapTracksCount.get(-1) ? 26 + gapTracksCount.get(-1) * trackStep : 22;
+    const postGap = gapTracksCount.get(R - 1) ? 26 + gapTracksCount.get(R - 1) * trackStep : 24;
 
     const pos = new Map();
-    const layerTop = new Map();
-    const layerBottom = new Map();
-    const layerLeft = new Map();
-    const layerRight = new Map();
-    let maxW = 0;
-    let maxH = 0;
+    const gapBounds = new Map();
+    let rawGraphLeft = 0;
+    let rawGraphRight = 0;
+    let rawGraphTop = 0;
+    let rawGraphBottom = 0;
 
     if (!wantLR) {
+      const leftPad = sideAPad;
+      const rightPad = sideBPad;
+      const topPad = preGap;
       const layerHeights = sortedRanks.map((r) => Math.max(...ranks.get(r).map((n) => sizes.get(n.id).h)));
       const maxRowW = Math.max(
         ...sortedRanks.map((r) => {
@@ -253,188 +585,391 @@
       );
       const innerWidth = Math.max(240, maxRowW);
       let curY = topPad;
+      gapBounds.set(-1, { start: 8, end: topPad });
       sortedRanks.forEach((r, ri) => {
         const list = ranks.get(r);
         const rowW = list.reduce((acc, n) => acc + sizes.get(n.id).w, 0) + (list.length - 1) * colGap;
         let curX = leftPad + (innerWidth - rowW) / 2;
-        layerTop.set(r, Math.round(curY));
-        layerBottom.set(r, Math.round(curY + layerHeights[ri]));
         list.forEach((n) => {
           const sz = sizes.get(n.id);
           pos.set(n.id, { x: Math.round(curX), y: Math.round(curY), w: sz.w, h: sz.h, rank: r });
           curX += sz.w + colGap;
         });
-        curY += layerHeights[ri] + rankGap;
+        const layerBottom = Math.round(curY + layerHeights[ri]);
+        const gSpan = ri < R - 1 ? gapSize(r, rowGap) : postGap;
+        gapBounds.set(r, { start: layerBottom, end: layerBottom + gSpan });
+        curY = layerBottom + gSpan;
       });
-      maxW = leftPad + innerWidth + rightPad;
-      maxH = curY - rankGap + botPad;
+      rawGraphLeft = leftPad;
+      rawGraphRight = leftPad + innerWidth;
+      rawGraphTop = topPad;
+      rawGraphBottom = curY - postGap;
     } else {
+      const topPad = sideAPad;
+      const botPad = sideBPad;
+      const leftPad = preGap;
       const colWidths = sortedRanks.map((r) => Math.max(...ranks.get(r).map((n) => sizes.get(n.id).w)));
       const colHeights = sortedRanks.map((r) => {
         const list = ranks.get(r);
-        return list.reduce((acc, n) => acc + sizes.get(n.id).h, 0) + (list.length - 1) * rankGap;
+        return list.reduce((acc, n) => acc + sizes.get(n.id).h, 0) + (list.length - 1) * rowGap;
       });
       const maxColH = Math.max(190, ...colHeights);
       let curX = leftPad;
+      gapBounds.set(-1, { start: 8, end: leftPad });
       sortedRanks.forEach((r, ri) => {
         const list = ranks.get(r);
         let curY = topPad + (maxColH - colHeights[ri]) / 2;
-        layerLeft.set(r, Math.round(curX));
-        layerRight.set(r, Math.round(curX + colWidths[ri]));
         list.forEach((n) => {
           const sz = sizes.get(n.id);
           pos.set(n.id, { x: Math.round(curX), y: Math.round(curY), w: sz.w, h: sz.h, rank: r });
-          curY += sz.h + rankGap;
+          curY += sz.h + rowGap;
         });
-        curX += colWidths[ri] + colGap;
+        const layerRight = Math.round(curX + colWidths[ri]);
+        const gSpan = ri < R - 1 ? gapSize(r, colGap) : postGap;
+        gapBounds.set(r, { start: layerRight, end: layerRight + gSpan });
+        curX = layerRight + gSpan;
       });
-      maxW = curX - colGap + rightPad;
-      maxH = topPad + maxColH + botPad;
+      rawGraphLeft = leftPad;
+      rawGraphRight = curX - postGap;
+      rawGraphTop = topPad;
+      rawGraphBottom = topPad + maxColH;
     }
+
+    const trackCoord = (gapIdx, trackIdx) => {
+      const b = gapBounds.get(gapIdx);
+      const count = gapTracksCount.get(gapIdx) || 1;
+      if (!b) return 12;
+      const mid = (b.start + b.end) / 2;
+      const first = mid - ((count - 1) * trackStep) / 2;
+      return Math.round(first + trackIdx * trackStep);
+    };
+
+    const corridorCoord = (plan) => {
+      if (wantLR) {
+        return plan.useA
+          ? Math.round(rawGraphTop - 26 - plan.corridorLane * corridorStep)
+          : Math.round(rawGraphBottom + 26 + plan.corridorLane * corridorStep);
+      }
+      return plan.useA
+        ? Math.round(rawGraphLeft - 28 - plan.corridorLane * corridorStep)
+        : Math.round(rawGraphRight + 28 + plan.corridorLane * corridorStep);
+    };
+
+    // Step 3: Distribute ports evenly along each node face sorted by peer position
+    const faceBuckets = new Map();
+    const addPortReq = (nodeId, face, edgeIdx, isStart, peerId) => {
+      const k = nodeId + '\0' + face;
+      if (!faceBuckets.has(k)) faceBuckets.set(k, []);
+      const peerBox = pos.get(peerId);
+      const peerCoord =
+        face === 'top' || face === 'bottom'
+          ? peerBox.x + peerBox.w / 2
+          : peerBox.y + peerBox.h / 2;
+      faceBuckets.get(k).push({ edgeIdx, isStart, peerCoord });
+    };
+    edgePlans.forEach((plan) => {
+      addPortReq(plan.edge.from, plan.outFace, plan.edge.idx, true, plan.edge.to);
+      if (!plan.edge.isSelfLoop) {
+        addPortReq(plan.edge.to, plan.inFace, plan.edge.idx, false, plan.edge.from);
+      }
+    });
+
+    const portCoords = new Map();
+    faceBuckets.forEach((items, key) => {
+      const sep = key.indexOf('\0');
+      const nodeId = key.slice(0, sep);
+      const face = key.slice(sep + 1);
+      const box = pos.get(nodeId);
+      items.sort((a, b) => a.peerCoord - b.peerCoord || (a.isStart ? -1 : 1) || a.edgeIdx - b.edgeIdx);
+      const span = face === 'top' || face === 'bottom' ? box.w : box.h;
+      const pad = Math.min(24, span * 0.2);
+      const usable = Math.max(8, span - 2 * pad);
+      items.forEach((item, i) => {
+        const offset = items.length === 1 ? span / 2 : pad + (i / (items.length - 1)) * usable;
+        let x = box.x;
+        let y = box.y;
+        if (face === 'top') {
+          x = Math.round(box.x + offset);
+          y = box.y;
+        } else if (face === 'bottom') {
+          x = Math.round(box.x + offset);
+          y = box.y + box.h;
+        } else if (face === 'left') {
+          x = box.x;
+          y = Math.round(box.y + offset);
+        } else {
+          x = box.x + box.w;
+          y = Math.round(box.y + offset);
+        }
+        portCoords.set(item.edgeIdx + ':' + (item.isStart ? 's' : 'e'), { x, y, face });
+      });
+    });
+
+    const offsetFromFace = (pt, face, dist) => {
+      if (face === 'top') return { x: pt.x, y: pt.y - dist };
+      if (face === 'bottom') return { x: pt.x, y: pt.y + dist };
+      if (face === 'left') return { x: pt.x - dist, y: pt.y };
+      return { x: pt.x + dist, y: pt.y };
+    };
+
+    // Step 4: Construct strictly orthogonal polylines for every edge
+    const routed = [];
+    edgePlans.forEach((plan) => {
+      const e = plan.edge;
+      const a = pos.get(e.from);
+      const b = pos.get(e.to);
+      let pts = [];
+
+      if (plan.kind === 'self') {
+        const sy = Math.round(a.y + a.h * 0.32);
+        const ey = Math.round(a.y + a.h * 0.68);
+        if (!wantLR) {
+          const sx = a.x + a.w;
+          const gx = sx + 28;
+          pts = [
+            { x: sx, y: sy },
+            { x: gx, y: sy },
+            { x: gx, y: ey },
+            { x: sx + 4, y: ey },
+          ];
+        } else {
+          const sx = Math.round(a.x + a.w * 0.35);
+          const ex = Math.round(a.x + a.w * 0.65);
+          const by = a.y + a.h;
+          const gy = by + 26;
+          pts = [
+            { x: sx, y: by },
+            { x: sx, y: gy },
+            { x: ex, y: gy },
+            { x: ex, y: by + 4 },
+          ];
+        }
+      } else {
+        const rawStart = portCoords.get(e.idx + ':s');
+        const rawEnd = portCoords.get(e.idx + ':e');
+        const p0 = e.bidirectional ? offsetFromFace(rawStart, plan.outFace, 4) : { x: rawStart.x, y: rawStart.y };
+        const pEnd = offsetFromFace(rawEnd, plan.inFace, 4);
+
+        if (plan.kind === 'adj') {
+          if (!wantLR) {
+            if (Math.abs(p0.x - pEnd.x) <= 2) {
+              pts = [p0, { x: p0.x, y: pEnd.y }];
+            } else {
+              const aisleY = trackCoord(plan.gapIdx, plan.trackIdx);
+              pts = [p0, { x: p0.x, y: aisleY }, { x: pEnd.x, y: aisleY }, pEnd];
+            }
+          } else if (Math.abs(p0.y - pEnd.y) <= 2) {
+            pts = [p0, { x: pEnd.x, y: p0.y }];
+          } else {
+            const aisleX = trackCoord(plan.gapIdx, plan.trackIdx);
+            pts = [p0, { x: aisleX, y: p0.y }, { x: aisleX, y: pEnd.y }, pEnd];
+          }
+        } else {
+          const gc = corridorCoord(plan);
+          pts = [p0];
+          if (!wantLR) {
+            let curY = p0.y;
+            if (plan.exitGap !== null) {
+              const exitY = trackCoord(plan.exitGap, plan.exitTrackIdx);
+              pts.push({ x: p0.x, y: exitY });
+              curY = exitY;
+            }
+            pts.push({ x: gc, y: curY });
+            if (plan.enterGap !== null) {
+              const enterY = trackCoord(plan.enterGap, plan.enterTrackIdx);
+              pts.push({ x: gc, y: enterY });
+              pts.push({ x: pEnd.x, y: enterY });
+            } else {
+              pts.push({ x: gc, y: pEnd.y });
+            }
+            pts.push(pEnd);
+          } else {
+            let curX = p0.x;
+            if (plan.exitGap !== null) {
+              const exitX = trackCoord(plan.exitGap, plan.exitTrackIdx);
+              pts.push({ x: exitX, y: p0.y });
+              curX = exitX;
+            }
+            pts.push({ x: curX, y: gc });
+            if (plan.enterGap !== null) {
+              const enterX = trackCoord(plan.enterGap, plan.enterTrackIdx);
+              pts.push({ x: enterX, y: gc });
+              pts.push({ x: enterX, y: pEnd.y });
+            } else {
+              pts.push({ x: pEnd.x, y: gc });
+            }
+            pts.push(pEnd);
+          }
+        }
+      }
+      routed.push({ edge: e, plan, pts });
+    });
+
+    // Step 5: Normalize coordinate space across ALL nodes and polyline points so nothing clips < 0
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    pos.forEach((p) => {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + p.w);
+      maxY = Math.max(maxY, p.y + p.h);
+    });
+    routed.forEach((r) => {
+      r.pts.forEach((pt) => {
+        minX = Math.min(minX, pt.x);
+        minY = Math.min(minY, pt.y);
+        maxX = Math.max(maxX, pt.x);
+        maxY = Math.max(maxY, pt.y);
+      });
+    });
+
+    const shiftX = Math.round(56 - minX);
+    const shiftY = Math.round(32 - minY);
+    pos.forEach((p) => {
+      p.x += shiftX;
+      p.y += shiftY;
+    });
+    routed.forEach((r) => {
+      r.pts.forEach((pt) => {
+        pt.x += shiftX;
+        pt.y += shiftY;
+      });
+    });
+
+    const maxW = Math.max(260, Math.ceil(maxX + shiftX + 58));
+    const maxH = Math.max(140, Math.ceil(maxY + shiftY + 34));
 
     const nodeRects = Array.from(pos.values()).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h }));
     const placedLabels = [];
     const fallbackLegend = [];
-    const uidSuffix = (wideMode ? 'w' : 'n') + '-' + Math.random().toString(36).slice(2, 6);
+
+    const uidSuffix = (wideMode ? 'w' : 'n') + '-' + ++markerSeq;
     const markerGreen = 'arr-g-' + uidSuffix;
     const markerRed = 'arr-r-' + uidSuffix;
+    const markerIndigo = 'arr-i-' + uidSuffix;
+    const markerAmber = 'arr-a-' + uidSuffix;
 
-    let leftIdx = 0;
-    let rightIdx = 0;
+    const buildLabelCandidates = (pts) => {
+      const segs = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const len = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+        if (len >= 24) {
+          segs.push({ p1: pts[i], p2: pts[i + 1], len, idx: i });
+        }
+      }
+      // Prefer outer corridor / middle aisle segment before terminal stubs
+      segs.sort((a, b) => {
+        const aMid = a.idx > 0 && a.idx < pts.length - 2 ? 1 : 0;
+        const bMid = b.idx > 0 && b.idx < pts.length - 2 ? 1 : 0;
+        if (aMid !== bMid) return bMid - aMid;
+        return b.len - a.len;
+      });
+      const cands = [];
+      segs.forEach((s) => {
+        [0.5, 0.32, 0.68].forEach((t) => {
+          cands.push({
+            x: Math.round(s.p1.x + (s.p2.x - s.p1.x) * t),
+            y: Math.round(s.p1.y + (s.p2.y - s.p1.y) * t),
+          });
+        });
+      });
+      if (!cands.length && pts.length) cands.push({ x: pts[0].x, y: pts[0].y });
+      return cands;
+    };
+
     const svgEdgePaths = [];
     const htmlEdgeLabels = [];
 
-    edges.forEach((e, idx) => {
-      const a = pos.get(e.from);
-      const b = pos.get(e.to);
-      if (!a || !b) return;
-      const isSkipOrBack = b.rank - a.rank > 1 || b.rank <= a.rank;
-      let pts = [];
-      let labelCandidates = [];
-
-      if (!wantLR) {
-        const outX = Math.round(a.x + a.w / 2);
-        const outY = a.y + a.h;
-        const inX = Math.round(b.x + b.w / 2);
-        const inY = b.y - 3;
-        if (!isSkipOrBack) {
-          const aisleY = Math.round((layerBottom.get(a.rank) + layerTop.get(b.rank)) / 2) + ((idx % 3) - 1) * 4;
-          pts =
-            outX === inX
-              ? [
-                  { x: outX, y: outY },
-                  { x: inX, y: inY },
-                ]
-              : [
-                  { x: outX, y: outY },
-                  { x: outX, y: aisleY },
-                  { x: inX, y: aisleY },
-                  { x: inX, y: inY },
-                ];
-          labelCandidates = [
-            { x: Math.round((outX + inX) / 2), y: aisleY },
-            { x: outX, y: Math.min(layerBottom.get(a.rank) + 18, aisleY) },
-            { x: inX, y: Math.max(layerTop.get(b.rank) - 18, aisleY) },
-          ];
-        } else {
-          const skipOrd = skipEdges.indexOf(e);
-          const useLeft = skipOrd % 2 === 0;
-          const gutterX = useLeft
-            ? Math.round(leftPad - 30 - leftIdx++ * corridorStep)
-            : Math.round(maxW - rightPad + 30 + rightIdx++ * corridorStep);
-          const exitAisleY = layerBottom.get(a.rank) + 14 + (skipOrd % 3) * 5;
-          const enterAisleY = layerTop.get(b.rank) - 16 - (skipOrd % 3) * 5;
-          pts = [
-            { x: outX, y: outY },
-            { x: outX, y: exitAisleY },
-            { x: gutterX, y: exitAisleY },
-            { x: gutterX, y: enterAisleY },
-            { x: inX, y: enterAisleY },
-            { x: inX, y: inY },
-          ];
-          labelCandidates = [
-            { x: gutterX, y: Math.round((exitAisleY + enterAisleY) / 2) },
-            { x: gutterX, y: Math.round((a.y + b.y) / 2) },
-            { x: Math.round((outX + gutterX) / 2), y: exitAisleY },
-          ];
-        }
-      } else {
-        const outX = a.x + a.w;
-        const outY = a.y + Math.round(a.h / 2);
-        const inX = b.x - 3;
-        const inY = b.y + Math.round(b.h / 2);
-        if (!isSkipOrBack) {
-          const aisleX = Math.round((layerRight.get(a.rank) + layerLeft.get(b.rank)) / 2) + ((idx % 3) - 1) * 5;
-          pts =
-            outY === inY
-              ? [
-                  { x: outX, y: outY },
-                  { x: inX, y: inY },
-                ]
-              : [
-                  { x: outX, y: outY },
-                  { x: aisleX, y: outY },
-                  { x: aisleX, y: inY },
-                  { x: inX, y: inY },
-                ];
-          labelCandidates = [
-            { x: aisleX, y: Math.round((outY + inY) / 2) },
-            { x: aisleX, y: outY - 14 },
-            { x: aisleX, y: inY + 14 },
-          ];
-        } else {
-          const skipOrd = skipEdges.indexOf(e);
-          const laneY = maxH - botPad + 12 + skipOrd * 24;
-          const exitAisleX = layerRight.get(a.rank) + 16;
-          const enterAisleX = layerLeft.get(b.rank) - 18;
-          pts = [
-            { x: outX, y: outY },
-            { x: exitAisleX, y: outY },
-            { x: exitAisleX, y: laneY },
-            { x: enterAisleX, y: laneY },
-            { x: enterAisleX, y: inY },
-            { x: inX, y: inY },
-          ];
-          labelCandidates = [{ x: Math.round((exitAisleX + enterAisleX) / 2), y: laneY }];
-        }
-      }
-
+    routed.forEach(({ edge: e, plan, pts }) => {
       const d = buildRoundedOrthogonalPath(pts, 9);
       const lbl = e.label || '';
-      const isNeg =
-        lbl.startsWith('-') ||
-        lbl.includes('批') ||
-        lbl.includes('拒') ||
-        lbl.includes('排除') ||
-        lbl.includes('切断');
-      const stroke = isNeg ? 'var(--cinnabar)' : 'var(--pine)';
-      const marker = isNeg ? markerRed : markerGreen;
+      const isBack = e.isCycleBack;
+      const isSkip = !isBack && plan.kind === 'corridor';
+      const isNeg = e.isNeg;
+
+      let stroke = 'var(--pine)';
+      let marker = markerGreen;
+      let dash = 'none';
+      let labelKindCls = 'edge-pos';
+
+      if (isNeg) {
+        stroke = 'var(--cinnabar)';
+        marker = markerRed;
+        labelKindCls = 'edge-neg';
+        if (isBack || isSkip) dash = '6 3';
+      } else if (isBack) {
+        stroke = 'var(--amber)';
+        marker = markerAmber;
+        dash = '4 3';
+        labelKindCls = 'edge-back';
+      } else if (isSkip) {
+        stroke = 'var(--indigo)';
+        marker = markerIndigo;
+        dash = '6 3';
+        labelKindCls = 'edge-skip';
+      }
+      if (e.bidirectional) labelKindCls += ' edge-bi';
+
+      const fromLabel = (idMap.get(e.from) && idMap.get(e.from).label) || e.from;
+      const toLabel = (idMap.get(e.to) && idMap.get(e.to).label) || e.to;
+      const arrowSym = e.bidirectional ? ' ↔ ' : ' → ';
+      const edgeDesc = fromLabel + arrowSym + toLabel + (lbl ? '：' + lbl : '') + (e.note ? '（' + e.note + '）' : '');
 
       svgEdgePaths.push(
-        '<path d="' +
+        '<g class="dag-edge-group" data-edge-idx="' +
+          e.idx +
+          '" data-from="' +
+          esc(e.from) +
+          '" data-to="' +
+          esc(e.to) +
+          '" data-edge-desc="' +
+          esc(edgeDesc) +
+          '">' +
+          '<path class="dag-edge-halo" d="' +
           d +
-          '" fill="none" stroke="' +
+          '"/>' +
+          '<path class="dag-edge-path" d="' +
+          d +
+          '" stroke="' +
           stroke +
-          '" stroke-width="1.7" stroke-dasharray="' +
-          (isSkipOrBack ? '5 3' : 'none') +
-          '" marker-end="url(#' +
+          '" stroke-dasharray="' +
+          dash +
+          '"' +
+          (e.bidirectional ? ' marker-start="url(#' + marker + ')"' : '') +
+          ' marker-end="url(#' +
           marker +
-          ')" opacity=".9"/>'
+          ')"/>' +
+          '<path class="dag-edge-hit" d="' +
+          d +
+          '"/>' +
+          '</g>'
       );
 
       if (lbl) {
         const lsz = measureLabelSize(lbl);
+        const labelCandidates = buildLabelCandidates(pts);
+        const offsets = [
+          { dx: 0, dy: 0 },
+          { dx: 0, dy: -13 },
+          { dx: 0, dy: 13 },
+          { dx: -18, dy: 0 },
+          { dx: 18, dy: 0 },
+          { dx: 0, dy: -24 },
+          { dx: 0, dy: 24 },
+        ];
         let chosenRect = null;
         for (const cand of labelCandidates) {
-          for (const dy of [0, -14, 14, -26, 26]) {
+          for (const off of offsets) {
             const box = {
-              x: Math.round(cand.x - lsz.w / 2),
-              y: Math.round(cand.y + dy - lsz.h / 2),
+              x: Math.round(cand.x + off.dx - lsz.w / 2),
+              y: Math.round(cand.y + off.dy - lsz.h / 2),
               w: lsz.w,
               h: lsz.h,
             };
-            if (box.x < 2 || box.x + box.w > maxW - 2 || box.y < 2 || box.y + box.h > maxH - 2) continue;
-            if (!nodeRects.some((nr) => rectsOverlap(box, nr, 5)) && !placedLabels.some((lr) => rectsOverlap(box, lr, 4))) {
+            if (box.x < 4 || box.x + box.w > maxW - 4 || box.y < 4 || box.y + box.h > maxH - 4) continue;
+            if (!nodeRects.some((nr) => rectsOverlap(box, nr, 5)) && !placedLabels.some((lr) => rectsOverlap(box, lr, 5))) {
               chosenRect = box;
               break;
             }
@@ -446,40 +981,60 @@
           placedLabels.push(chosenRect);
           htmlEdgeLabels.push(
             '<span class="dag-edge-label ' +
-              (isNeg ? 'neg' : 'pos') +
+              labelKindCls +
+              '" data-edge-idx="' +
+              e.idx +
               '" style="left:' +
               chosenRect.x +
               'px;top:' +
               chosenRect.y +
               'px" title="' +
-              esc(e.note || lbl) +
+              esc(edgeDesc) +
               '">' +
               esc(lbl) +
               '</span>'
           );
         } else {
           const badgeNum = fallbackLegend.length + 1;
-          const circ = '①②③④⑤⑥⑦⑧⑨⑩'[badgeNum - 1] || String(badgeNum);
-          fallbackLegend.push(circ + ' ' + e.from + '→' + e.to + '：' + (e.note || lbl));
-          const anchorPt = labelCandidates[0];
-          const badgeBox = {
-            x: Math.max(4, Math.min(maxW - 24, anchorPt.x - 10)),
-            y: Math.max(4, Math.min(maxH - 22, anchorPt.y - 9)),
-            w: 20,
-            h: 18,
-          };
-          placedLabels.push(badgeBox);
-          htmlEdgeLabels.push(
-            '<span class="dag-edge-label ' +
-              (isNeg ? 'neg' : 'pos') +
-              '" style="left:' +
-              badgeBox.x +
-              'px;top:' +
-              badgeBox.y +
-              'px">' +
-              circ +
-              '</span>'
-          );
+          const circ = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮'[badgeNum - 1] || String(badgeNum);
+          fallbackLegend.push({
+            idx: e.idx,
+            text: circ + ' ' + e.from + arrowSym + e.to + '：' + (e.note || lbl),
+          });
+          let badgeBox = null;
+          for (const cand of labelCandidates) {
+            for (const off of offsets) {
+              const bx = {
+                x: Math.max(4, Math.min(maxW - 24, Math.round(cand.x + off.dx - 10))),
+                y: Math.max(4, Math.min(maxH - 22, Math.round(cand.y + off.dy - 9))),
+                w: 20,
+                h: 18,
+              };
+              if (!nodeRects.some((nr) => rectsOverlap(bx, nr, 3)) && !placedLabels.some((lr) => rectsOverlap(bx, lr, 3))) {
+                badgeBox = bx;
+                break;
+              }
+            }
+            if (badgeBox) break;
+          }
+          if (badgeBox) {
+            placedLabels.push(badgeBox);
+            htmlEdgeLabels.push(
+              '<span class="dag-edge-label ' +
+                labelKindCls +
+                '" data-edge-idx="' +
+                e.idx +
+                '" style="left:' +
+                badgeBox.x +
+                'px;top:' +
+                badgeBox.y +
+                'px" title="' +
+                esc(edgeDesc) +
+                '">' +
+                circ +
+                '</span>'
+            );
+          }
         }
       }
     });
@@ -501,7 +1056,7 @@
           esc(firstBlk) +
           '" data-node-id="' +
           esc(n.id) +
-          '" title="点击节点跳转原文 ' +
+          '" title="悬停高亮关系 · 点击节点跳转原文 ' +
           esc(firstBlk) +
           '">' +
           '<div class="dag-node-role"><span>' +
@@ -526,9 +1081,25 @@
 
     const legendHtml = fallbackLegend.length
       ? '<div class="edge-legend">' +
-        fallbackLegend.map((x) => '<span class="edge-legend-pill">' + esc(x) + '</span>').join('') +
+        fallbackLegend
+          .map(
+            (item) =>
+              '<span class="edge-legend-pill" data-edge-idx="' +
+              item.idx +
+              '">' +
+              esc(item.text) +
+              '</span>'
+          )
+          .join('') +
         '</div>'
       : '';
+
+    const markerDef = (id, fill) =>
+      '<marker id="' +
+      id +
+      '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 10 5 L 0 9 z" fill="' +
+      fill +
+      '"/></marker>';
 
     return (
       '<div class="dag-viewport" data-qa-target="dag"><div class="dag-canvas" style="width:' +
@@ -539,19 +1110,22 @@
       maxW +
       '" height="' +
       maxH +
+      '" viewBox="0 0 ' +
+      maxW +
+      ' ' +
+      maxH +
       '"><defs>' +
-      '<marker id="' +
-      markerGreen +
-      '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 10 5 L 0 9 z" fill="var(--pine)"/></marker>' +
-      '<marker id="' +
-      markerRed +
-      '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 10 5 L 0 9 z" fill="var(--cinnabar)"/></marker>' +
+      markerDef(markerGreen, 'var(--pine)') +
+      markerDef(markerRed, 'var(--cinnabar)') +
+      markerDef(markerIndigo, 'var(--indigo)') +
+      markerDef(markerAmber, 'var(--amber)') +
       '</defs>' +
       svgEdgePaths.join('') +
       '</svg>' +
       cardsHtml +
       htmlEdgeLabels.join('') +
       '</div></div>' +
+      '<div class="dag-trace-tip" data-trace-tip>悬停节点或连线可高亮因果路径；点击节点跳转原文</div>' +
       legendHtml
     );
   }
@@ -910,37 +1484,234 @@
         if (bid && onFocusBlock) onFocusBlock(bid);
       });
     });
+
+    const canvas = rootEl.querySelector('.dag-canvas');
+    if (!canvas) return;
+    const tipEl = rootEl.querySelector('[data-trace-tip]');
+    const defaultTip = '悬停节点或连线可高亮因果路径；点击节点跳转原文';
+    const nodeEls = Array.from(canvas.querySelectorAll('.dag-node[data-node-id]'));
+    const edgeGroups = Array.from(canvas.querySelectorAll('.dag-edge-group[data-edge-idx]'));
+    const labelEls = Array.from(canvas.querySelectorAll('.dag-edge-label[data-edge-idx]'));
+    const legendEls = Array.from(rootEl.querySelectorAll('.edge-legend-pill[data-edge-idx]'));
+
+    const nodeById = new Map(nodeEls.map((el) => [el.dataset.nodeId, el]));
+    const clearTrace = () => {
+      canvas.classList.remove('is-tracing');
+      nodeEls.forEach((n) => n.classList.remove('is-hot', 'is-lit'));
+      edgeGroups.forEach((g) => g.classList.remove('is-lit'));
+      labelEls.forEach((l) => l.classList.remove('is-lit'));
+      legendEls.forEach((p) => p.classList.remove('is-lit'));
+      if (tipEl) {
+        tipEl.classList.remove('active');
+        tipEl.textContent = defaultTip;
+      }
+    };
+
+    const markEdgeIdx = (idx, lit) => {
+      edgeGroups.forEach((g) => {
+        if (g.dataset.edgeIdx === idx) g.classList.toggle('is-lit', lit);
+      });
+      labelEls.forEach((l) => {
+        if (l.dataset.edgeIdx === idx) l.classList.toggle('is-lit', lit);
+      });
+      legendEls.forEach((p) => {
+        if (p.dataset.edgeIdx === idx) p.classList.toggle('is-lit', lit);
+      });
+    };
+
+    const traceNode = (nodeId) => {
+      clearTrace();
+      const target = nodeById.get(nodeId);
+      if (!target) return;
+      canvas.classList.add('is-tracing');
+      target.classList.add('is-hot');
+      let inCnt = 0;
+      let outCnt = 0;
+      edgeGroups.forEach((g) => {
+        if (g.dataset.from === nodeId || g.dataset.to === nodeId) {
+          if (g.dataset.from === nodeId) outCnt += 1;
+          if (g.dataset.to === nodeId) inCnt += 1;
+          markEdgeIdx(g.dataset.edgeIdx, true);
+          const fEl = nodeById.get(g.dataset.from);
+          const tEl = nodeById.get(g.dataset.to);
+          if (fEl && g.dataset.from !== nodeId) fEl.classList.add('is-lit');
+          if (tEl && g.dataset.to !== nodeId) tEl.classList.add('is-lit');
+        }
+      });
+      if (tipEl) {
+        const titleEl = target.querySelector('.dag-node-label');
+        const labelTxt = titleEl ? titleEl.textContent.trim() : nodeId;
+        tipEl.classList.add('active');
+        tipEl.textContent = '节点「' + labelTxt + '」· 入线 ' + inCnt + ' · 出线 ' + outCnt + '（点击跳转原文）';
+      }
+    };
+
+    const traceEdge = (idx) => {
+      clearTrace();
+      const grp = edgeGroups.find((g) => g.dataset.edgeIdx === idx);
+      if (!grp) return;
+      canvas.classList.add('is-tracing');
+      markEdgeIdx(idx, true);
+      const fEl = nodeById.get(grp.dataset.from);
+      const tEl = nodeById.get(grp.dataset.to);
+      if (fEl) fEl.classList.add('is-hot');
+      if (tEl) tEl.classList.add('is-hot');
+      if (tipEl) {
+        tipEl.classList.add('active');
+        tipEl.textContent = '关系：' + (grp.dataset.edgeDesc || '');
+      }
+    };
+
+    nodeEls.forEach((n) => {
+      const nid = n.dataset.nodeId;
+      n.addEventListener('mouseenter', () => traceNode(nid));
+      n.addEventListener('focusin', () => traceNode(nid));
+      n.addEventListener('mouseleave', clearTrace);
+    });
+    edgeGroups.forEach((g) => {
+      const hit = g.querySelector('.dag-edge-hit');
+      if (hit) {
+        hit.addEventListener('mouseenter', () => traceEdge(g.dataset.edgeIdx));
+        hit.addEventListener('mouseleave', clearTrace);
+      }
+    });
+    labelEls.forEach((l) => {
+      l.addEventListener('mouseenter', () => traceEdge(l.dataset.edgeIdx));
+      l.addEventListener('mouseleave', clearTrace);
+    });
+    legendEls.forEach((p) => {
+      p.addEventListener('mouseenter', () => traceEdge(p.dataset.edgeIdx));
+      p.addEventListener('mouseleave', clearTrace);
+    });
+    if (rootEl._dagMouseLeave) {
+      rootEl.removeEventListener('mouseleave', rootEl._dagMouseLeave);
+    }
+    rootEl._dagMouseLeave = clearTrace;
+    rootEl.addEventListener('mouseleave', clearTrace);
   }
 
   function openZoomModal(figure, onFocusBlock) {
+    lastZoomTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let modal = document.getElementById('zoom-modal');
     if (!modal) {
-      modal = document.createElement('div');
+      modal = document.createElement('dialog');
       modal.id = 'zoom-modal';
-      modal.className = 'zoom-modal';
+      modal.className = 'zoom-modal zoom-dialog';
+      modal.setAttribute('closedby', 'any');
+      modal.setAttribute('aria-labelledby', 'zoom-title');
       modal.innerHTML =
-        '<div class="zoom-dialog"><div class="zoom-head"><h4 id="zoom-title">宽屏全览</h4>' +
-        '<div style="display:flex;gap:8px;align-items:center"><span id="zoom-qa" class="qa-badge">✓ 宽屏质检</span>' +
-        '<button type="button" class="wb-btn" id="btn-zoom-close">关闭 Esc</button></div></div>' +
-        '<div class="zoom-body" id="zoom-body"></div></div>';
+        '<div class="zoom-head"><h4 id="zoom-title">宽屏全览</h4>' +
+        '<div class="zoom-actions">' +
+        '<div class="zoom-controls" role="group" aria-label="画布缩放">' +
+        '<button type="button" class="zoom-btn" id="btn-zoom-out" title="缩小" aria-label="缩小画布">−</button>' +
+        '<button type="button" class="zoom-btn zoom-pct" id="btn-zoom-fit" title="切换适应画布 / 100%">100%</button>' +
+        '<button type="button" class="zoom-btn" id="btn-zoom-in" title="放大" aria-label="放大画布">+</button>' +
+        '</div>' +
+        '<span id="zoom-qa" class="qa-badge">✓ 宽屏质检</span>' +
+        '<button type="button" class="wb-btn" id="btn-zoom-close" commandfor="zoom-modal" command="close">关闭 Esc</button>' +
+        '</div></div>' +
+        '<div class="zoom-stage"><div class="zoom-body" id="zoom-body"></div></div>';
       document.body.appendChild(modal);
-      document.getElementById('btn-zoom-close').addEventListener('click', () => modal.classList.remove('open'));
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.classList.remove('open');
+
+      const closeBtn = document.getElementById('btn-zoom-close');
+      if (closeBtn && !('commandForElement' in HTMLButtonElement.prototype)) {
+        closeBtn.addEventListener('click', () => closeZoomModal(modal));
+      }
+      modal.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeZoomModal(modal);
       });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') modal.classList.remove('open');
+      if (!('closedBy' in HTMLDialogElement.prototype)) {
+        modal.addEventListener('click', (event) => {
+          if (event.target !== modal) return;
+          const rect = modal.getBoundingClientRect();
+          const inContent =
+            rect.top <= event.clientY &&
+            event.clientY <= rect.top + rect.height &&
+            rect.left <= event.clientX &&
+            event.clientX <= rect.left + rect.width;
+          if (!inContent) closeZoomModal(modal);
+        });
+      }
+      modal.addEventListener('close', () => {
+        modal.removeAttribute('data-closing');
+        if (lastZoomTrigger && typeof lastZoomTrigger.focus === 'function') {
+          lastZoomTrigger.focus();
+        }
       });
     }
+    modal.removeAttribute('data-closing');
     document.getElementById('zoom-title').textContent = (figure.caption || '图表全览') + '（宽屏画布 · 点击节点直跳原文）';
     const body = document.getElementById('zoom-body');
-    body.innerHTML = renderBlueprintBody(figure, { wide: true });
-    modal.classList.add('open');
+    const stage = modal.querySelector('.zoom-stage');
+    body.innerHTML = '<div class="zoom-canvas-wrap"><div class="zoom-canvas-scale">' + renderBlueprintBody(figure, { wide: true }) + '</div></div>';
+    if (typeof modal.showModal === 'function') {
+      if (!modal.open) modal.showModal();
+    } else {
+      modal.classList.add('open');
+    }
+
+    // Run audit unscaled first so coordinate bounds & collision numbers remain exact
     const qa = runCollisionAudit(body);
     const qaBadge = document.getElementById('zoom-qa');
     qaBadge.className = 'qa-badge' + (qa.overlaps > 0 ? ' warn' : '');
     qaBadge.textContent = qa.overlaps === 0 ? '✓ 宽屏质检：0 处重叠' : '⚠ 发现 ' + qa.overlaps + ' 处重叠';
     bindStageInteractions(body, onFocusBlock);
+
+    const wrap = body.querySelector('.zoom-canvas-wrap');
+    const scaler = body.querySelector('.zoom-canvas-scale');
+    const wideCanvas = body.querySelector('.dag-canvas, .lanes-head');
+    let natW = 0;
+    let natH = 0;
+    let fitScale = 1;
+    let curScale = 1;
+
+    if (wideCanvas && stage && scaler) {
+      natW = Math.max(scaler.scrollWidth, wideCanvas.scrollWidth + 8);
+      natH = Math.max(scaler.scrollHeight, 120);
+      const availW = Math.max(320, stage.clientWidth - 76);
+      const availH = Math.max(240, stage.clientHeight - 76);
+      fitScale = Math.max(0.32, Math.min(1, availW / natW, availH / natH));
+      if (fitScale < 0.96) curScale = Number(fitScale.toFixed(2));
+    }
+
+    const fitBtn = document.getElementById('btn-zoom-fit');
+    const outBtn = document.getElementById('btn-zoom-out');
+    const inBtn = document.getElementById('btn-zoom-in');
+
+    const applyScale = (next) => {
+      curScale = Math.max(0.3, Math.min(1.5, Number(next.toFixed(2))));
+      if (wrap && scaler) {
+        if (natW > 0) {
+          scaler.style.width = natW + 'px';
+          scaler.style.transform = curScale === 1 ? '' : 'scale(' + curScale + ')';
+          wrap.style.width = Math.ceil(natW * curScale) + 'px';
+          wrap.style.height = Math.ceil(natH * curScale) + 'px';
+        } else {
+          scaler.style.width = '';
+          scaler.style.transform = curScale === 1 ? '' : 'scale(' + curScale + ')';
+          wrap.style.width = '';
+          wrap.style.height = '';
+        }
+      }
+      if (fitBtn) {
+        const isFit = fitScale < 0.96 && Math.abs(curScale - fitScale) < 0.03;
+        fitBtn.classList.toggle('active', isFit);
+        fitBtn.textContent = isFit
+          ? Math.round(curScale * 100) + '% 适应'
+          : Math.round(curScale * 100) + '%';
+      }
+    };
+
+    if (outBtn) outBtn.onclick = () => applyScale(curScale - 0.15);
+    if (inBtn) inBtn.onclick = () => applyScale(curScale + 0.15);
+    if (fitBtn) {
+      fitBtn.onclick = () => {
+        if (fitScale < 0.96 && Math.abs(curScale - fitScale) >= 0.03) applyScale(fitScale);
+        else applyScale(1);
+      };
+    }
+    applyScale(curScale);
   }
 
   function renderBlueprintCard(containerEl, figure, options) {
