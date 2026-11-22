@@ -133,7 +133,8 @@ def test_title_page_merge_shared_by_index_and_library(reading_root):
     assert chapters[0]["merged"] is True
     assert chapters[0]["body_n"] == 2
     assert lib.redirect_target(uid, 2) == 1
-    assert lib.book(uid)["chapters"] == 1
+    # 2026-11-22 统一对齐：逐书章数改为 md 文件视角（导航仍是合并后的 1 章）。
+    assert lib.book(uid)["chapters"] == 2
     raw = lib.chapters(uid)
     assert book_totals(raw)[0] == 1
 

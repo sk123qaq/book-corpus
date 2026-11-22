@@ -66,6 +66,13 @@ function render() {
   const packs = book.packs || 0;
   const firstRead = chapters[0];
   const notice = (new URLSearchParams(location.search).get('notice') || '').trim();
+  // 页头章数与逐书统计走 md 文件视角（与书架同源）；页内章目是合并标题页后的导航章数。
+  // 两者不一致（有标题页合并）时必须就地说明，不许页头 65、页内 36 而无注。
+  const fileCount = book.chapters || chapters.length;
+  const navCount = chapters.length;
+  const mergeNote = fileCount !== navCount
+    ? '（本页 ' + RD.fmt(navCount) + ' 章，由 ' + RD.fmt(fileCount) + ' 个 md 文件合并标题页而来）'
+    : '';
 
   RD.mount('crumb').innerHTML = '<a href="/">书架</a><i>/</i><a href="/catalog?q=' +
     encodeURIComponent((book.subjects || [])[0] || '') + '">' + RD.esc((book.subjects || [])[0] || '未分类') +
@@ -82,9 +89,9 @@ function render() {
         '<span class="cv-stamp">可读</span></div>' +
       '<div class="book-copy"><div class="eyebrow">' + RD.esc((book.subjects || []).join(' · ') || '未分类') + '</div>' +
         '<h1>' + RD.esc(book.title) + '</h1>' +
-        '<p class="sub">' + RD.esc(book.author_display) + ' · ' + RD.fmt(chapters.length) + ' 章 · 打开章节即看完整正文</p>' +
-        '<div class="book-meta"><span><b>' + RD.fmt(chapters.length) + '</b>章</span>' +
-          '<span><b>' + RD.wan(chars) + '</b>万字</span>' +
+        '<p class="sub">' + RD.esc(book.author_display) + ' · ' + RD.fmt(fileCount) + ' 章' + mergeNote + ' · 打开章节即看完整正文</p>' +
+        '<div class="book-meta"><span title="md 文件：拆章后的 Markdown 文件数，未合并标题页"><b>' + RD.fmt(fileCount) + '</b>章</span>' +
+          '<span title="非空白正文字数，每个 md 文件恰计一次"><b>' + RD.wan(chars) + '</b>万字</span>' +
           '<span><b>' + RD.fmt(packs) + '</b>章有旁批/导图</span>' +
           '<span><b>' + RD.esc(book.uid) + '</b>书目号</span></div>' +
         '<div class="book-subjects">' + (book.subjects || []).map((s) => '<span>' + RD.esc(s) + '</span>').join('') +
@@ -94,7 +101,7 @@ function render() {
           '<a class="btn btn-ghost" href="/go/search?to=' + encodeURIComponent('/?books=' + encodeURIComponent(book.uid) + '&from=reading&mode=trace') + '" target="_blank" rel="noopener">在本书内检索 ↗</a>' +
         '</div></div></section>' +
     '<div class="work book-work">' +
-      '<section><div class="section-title"><h2>章目</h2><span class="lbl">' + RD.fmt(chapters.length) + ' 章 · 点击直接阅读全文</span></div>' +
+      '<section><div class="section-title"><h2>章目</h2><span class="lbl">' + RD.fmt(navCount) + ' 章 · 点击直接阅读全文' + mergeNote + '</span></div>' +
         '<div class="ch-list" id="ch-list"></div></section>' +
       '<aside class="ticket" id="book-notes-panel">' +
         '<div class="ticket-top"><span class="eyebrow">伴读工作台</span><span class="ticket-id">' + RD.esc(book.uid) + '</span></div>' +

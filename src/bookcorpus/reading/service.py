@@ -6,6 +6,7 @@ import os
 import time
 import uuid
 
+from .. import corpus_snapshot
 from .. import preflight as env_preflight
 from . import book_types, chapmap, diagram_audit, diagrams, events, footnotes
 from .library import Library
@@ -246,6 +247,7 @@ class ReadingService:
 
     def __init__(self, root=None, annotate=None, client=None):
         self.library = Library(root)
+        self.root = str(self.library.root)
         self.store = Store(self.library.layout)
         if annotate is None:
             annotate = os.environ.get("READING_ANNOTATE", "1") != "0"
@@ -269,8 +271,16 @@ class ReadingService:
     def shelf(self):
         counts = self.store.activity_counts()
         books = [self._book_view(book, counts) for book in self.library.books()]
-        chapters = sum(book["chapters"] for book in books)
-        chars = sum(book["chars"] for book in books)
+        # 页头章 / 字从统一快照来：与 8765 / 8770 同一时刻同一组数。
+        # 快照缺源（如盘上还没建 shelf-index）才退回逐本求和（同为文件视角）。
+        snap = corpus_snapshot.snapshot(self.root)
+        chapters = snap["chapters"]
+        if chapters is None:
+            chapters = sum(book["chapters"] for book in books)
+        chars = snap["chars"]
+        if chars is None:
+            chars = sum(book["chars"] for book in books)
+        built_at = snap["built_at"]
         recent = []
         seen_chapters = set()
         for op in self.store.ops_logs(limit=40):
@@ -312,9 +322,11 @@ class ReadingService:
                 "readable": len(books),
                 "chapters": chapters,
                 "chars": chars,
+                "paras": snap["paras"],
                 "packs": counts["chapters"],
                 "notes": counts["notes"],
                 "maps": counts["maps"],
+                "built_at": built_at,
             },
             "total": self.library.total(),
             "books": books,
@@ -326,6 +338,7 @@ class ReadingService:
         data = self.library.catalog(q, subject)
         data["readable"] = [self._book_view(book, counts) for book in data.get("readable", [])]
         data["books"] = data["readable"]
+        data["stats"] = {"built_at": corpus_snapshot.snapshot(self.root)["built_at"]}
         return data
 
     def book(self, uid):

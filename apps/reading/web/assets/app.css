@@ -415,3 +415,12 @@
   .res-t { white-space: normal; }
   .page { overflow-x: hidden; }
 }
+
+/* 统计于：轻量戳，与数字格同排但更低调 */
+.hero .meta .built-at,
+.page-head .stats .built-at {
+  min-width: 0;
+  justify-content: center;
+  padding: 10px 12px;
+  font-variant-numeric: tabular-nums;
+}

@@ -106,11 +106,13 @@ RD.ready(async () => {
     const stats = shelf.stats || {};
     const totals = { total: shelf.total || books.length, readable_count: books.length };
     RD.mount('eyebrow').textContent = '私人书库 · ' + RD.fmt(totals.total) + ' 本';
+    const builtAt = stats.built_at ? '统计于 ' + RD.esc(stats.built_at) : '';
     RD.mount('hero-meta').innerHTML =
-      '<span><b>' + RD.fmt(stats.readable) + '</b>本可读正文</span>' +
-      '<span><b>' + RD.fmt(stats.chapters) + '</b>章原文</span>' +
-      '<span><b>' + RD.wan(stats.chars) + '</b>万字</span>' +
-      '<span><b>' + RD.fmt(stats.notes || 0) + '</b>条旁批 · ' + RD.fmt(stats.maps || 0) + ' 导图</span>';
+      '<span title="有可读正文的书：md 目录存在且至少 1 章"><b>' + RD.fmt(stats.readable) + '</b>本可读正文</span>' +
+      '<span title="md 文件：拆章后的 Markdown 文件数，未合并标题页"><b>' + RD.fmt(stats.chapters) + '</b>章原文</span>' +
+      '<span title="非空白正文字数，每个 md 文件恰计一次"><b>' + RD.wan(stats.chars) + '</b>万字</span>' +
+      '<span><b>' + RD.fmt(stats.notes || 0) + '</b>条旁批 · ' + RD.fmt(stats.maps || 0) + ' 导图</span>' +
+      (builtAt ? '<span class="built-at" title="与本页数字同一份快照（8765 / 8770 同源）">' + builtAt + '</span>' : '');
 
     renderShelf(books, shelf.recent || []);
 

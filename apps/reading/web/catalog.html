@@ -73,10 +73,14 @@ RD.ready(async () => {
   try {
     catalog = await RD.api('/api/catalog');
     RD.mount('eyebrow').textContent = '书目 · ' + RD.fmt(catalog.total) + ' 本 · 其中 ' + RD.fmt(catalog.readable_count) + ' 本有正文';
+    // 逐书章数已是 md 文件视角，Σ 应与书架页头一致。
+    const chapterSum = (catalog.readable || []).reduce((sum, b) => sum + b.chapters, 0);
+    const builtAt = (catalog.stats && catalog.stats.built_at) ? '统计于 ' + RD.esc(catalog.stats.built_at) : '';
     RD.mount('stats').innerHTML =
-      '<span><b>' + RD.fmt(catalog.readable_count) + '</b>本可读</span>' +
-      '<span><b>' + RD.fmt((catalog.readable || []).reduce((sum, b) => sum + b.chapters, 0)) + '</b>章原文</span>' +
-      '<span><b>' + RD.fmt(catalog.total) + '</b>条书目</span>';
+      '<span title="有可读正文的书：md 目录存在且至少 1 章"><b>' + RD.fmt(catalog.readable_count) + '</b>本可读</span>' +
+      '<span title="md 文件：拆章后的 Markdown 文件数，未合并标题页"><b>' + RD.fmt(chapterSum) + '</b>章原文</span>' +
+      '<span><b>' + RD.fmt(catalog.total) + '</b>条书目</span>' +
+      (builtAt ? '<span class="built-at" title="与本页数字同一份快照（8765 / 8770 同源）">' + builtAt + '</span>' : '');
     renderChips(catalog.subjects || []);
     await search();
   } catch (err) {
