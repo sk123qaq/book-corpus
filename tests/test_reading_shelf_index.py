@@ -240,3 +240,18 @@ def test_shelf_payload_carries_total(reading_root):
     assert shelf["total"] == 2
     assert shelf["stats"]["readable"] == 2
     assert service.catalog()["total"] == 2
+
+
+def test_noop_ensure_keeps_built_at(reading_root):
+    """空转 ensure 不刷新 built_at：戳只在数据变化时前进（统计层把它当数据时刻）。"""
+    import time
+
+    index = ShelfIndex(Library(reading_root).layout)
+    first = index.ensure()
+    assert first["mode"] in ("fresh", "rebuild")
+    stamp = index.stats()["meta"]["built_at"]
+    assert stamp
+    time.sleep(1.2)
+    second = index.ensure()
+    assert second["mode"] == "incremental"
+    assert index.stats()["meta"]["built_at"] == stamp

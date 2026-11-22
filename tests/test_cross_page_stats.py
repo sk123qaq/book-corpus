@@ -94,7 +94,10 @@ def test_three_services_report_the_same_snapshot(aligned_root):
     assert meta["chars"] == stats["chars"] == state["stats_chars"], chars_triple
     assert (meta["chars"] or 0) > 0
 
-    # 三页都带快照时间（各页各自取数，只校验格式与有值）。
+    # built_at 是数据时刻（各库自身的更新戳，不是各自计算时刻）：库没变，三页必须同一秒。
+    assert meta["built_at"] == stats["built_at"] == state["stats_built_at"], (
+        meta["built_at"],
+        stats["built_at"],
+        state["stats_built_at"],
+    )
     assert STAMP_RE.match(meta["built_at"] or ""), meta["built_at"]
-    assert STAMP_RE.match(stats["built_at"] or ""), stats["built_at"]
-    assert STAMP_RE.match(state["stats_built_at"] or ""), state["stats_built_at"]

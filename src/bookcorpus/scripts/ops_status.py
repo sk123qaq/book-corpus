@@ -83,13 +83,20 @@ def library(p, state):
     if not os.path.isfile(p.libdb):
         state["problems"].append("没有 build/library.db")
         state["library"] = {"db": None, "ok": False}
+        # 快照键补齐，值全部 None（未知）：前端按「—」渲染，不退 0。
+        state["books"] = None
+        state["books_readable"] = None
+        state["stats_chapters"] = None
+        state["stats_chars"] = None
+        state["stats_built_at"] = ""
         return
     # 页头四数从统一快照来（与 8765 / 8771 同源）：books=藏书、books_readable=可读
     # （不含 0 章 md，图片书不算可读）、stats_chapters=章（md 文件视角）。
+    # 快照读不出来（坏库、锁库）时值是 None：保留，让前端显示「—」，不降成 0。
     snap = corpus_snapshot.snapshot(p.root)
-    state["books"] = snap["books_total"] if snap["books_total"] is not None else 0
-    state["books_readable"] = snap["books_readable"] if snap["books_readable"] is not None else 0
-    state["stats_chapters"] = snap["chapters"] if snap["chapters"] is not None else 0
+    state["books"] = snap["books_total"]
+    state["books_readable"] = snap["books_readable"]
+    state["stats_chapters"] = snap["chapters"]
     state["stats_chars"] = snap["chars"]
     state["stats_built_at"] = snap["built_at"]
     try:

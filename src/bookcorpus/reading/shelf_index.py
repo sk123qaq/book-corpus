@@ -128,9 +128,13 @@ class ShelfIndex:
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('parser_version', ?)", (str(PARSER_VERSION),)
             )
-            conn.execute(
-                "INSERT OR REPLACE INTO meta (key, value) VALUES ('built_at', ?)", (time.strftime("%Y-%m-%d %H:%M:%S"),)
-            )
+            # built_at 是「数据上次变化」的时刻：空转的 ensure（没扫到任何变化）不刷新，
+            # 否则首用自建后的每次 ensure 都会把戳挪到当下，统计层的 built_at 就不是数据时刻了。
+            if parsed or removed or mode == "rebuild":
+                conn.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES ('built_at', ?)",
+                    (time.strftime("%Y-%m-%d %H:%M:%S"),),
+                )
             conn.commit()
             return {
                 "mode": mode,

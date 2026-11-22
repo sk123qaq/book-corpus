@@ -944,13 +944,6 @@ def resolve_line(path, snippet):
     return 1
 
 
-def _int_or_none(value):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def meta(refresh=False):
     """书库规模，取自统一快照（bookcorpus.corpus_snapshot）。
 
@@ -987,7 +980,9 @@ def meta(refresh=False):
         "books": snap["books_readable"],
         "books_total": snap["books_total"],
         "paras": paras if paras else None,
-        "chapters": None,
+        # 章不依赖索引：derived md 文件求和（快照口径）。删掉 index.db 后
+        # 章照常显示，索引只决定 paras 与 index 状态。
+        "chapters": snap["chapters"],
         "chars": snap["chars"],
         "built_at": snap["built_at"],
         "index_built_at": sources["index"]["built_at"] or "",
@@ -997,8 +992,6 @@ def meta(refresh=False):
     if sources["index"]["ok"]:
         if paras:
             out["paras"] = paras
-            # 章与段同源：索引按 md 文件计数（count(DISTINCT path)），与快照一致。
-            out["chapters"] = snap["chapters"]
         out["index"] = "ok" if paras else "empty"
     _META_CACHE.update(at=now, value=dict(out))
     out["embed"] = vec_search.health_info()

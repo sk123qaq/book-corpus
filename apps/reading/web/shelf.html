@@ -104,7 +104,8 @@ RD.ready(async () => {
     const shelf = await RD.api('/api/shelf');
     const books = shelf.books || [];
     const stats = shelf.stats || {};
-    const totals = { total: shelf.total || books.length, readable_count: books.length };
+    // 总数与可读都走快照（服务端已从 snapshot 取）；books 数组只含能解析的书，坏 book.json 时比快照小一。
+    const totals = { total: shelf.total || books.length, readable_count: stats.readable || books.length };
     RD.mount('eyebrow').textContent = '私人书库 · ' + RD.fmt(totals.total) + ' 本';
     const builtAt = stats.built_at ? '统计于 ' + RD.esc(stats.built_at) : '';
     RD.mount('hero-meta').innerHTML =
@@ -117,7 +118,7 @@ RD.ready(async () => {
     renderShelf(books, shelf.recent || []);
 
     RD.mount('shelf-foot').innerHTML =
-      '<span>' + RD.fmt(books.length) + ' 本有正文 · 共 ' + RD.fmt(stats.chapters) + ' 章 · 约 ' +
+      '<span>' + RD.fmt(totals.readable_count) + ' 本有正文 · 共 ' + RD.fmt(stats.chapters) + ' 章 · 约 ' +
       RD.wan(stats.chars) + ' 万字</span><a href="/catalog">全部书目 ' + RD.fmt(totals.total) + ' 本 →</a>';
 
     let directoryDrawn = false;

@@ -8,8 +8,10 @@
 - 字 = 非空白正文（shelf-index full_chars 每文件恰计一次）
 """
 
+import datetime
 import re
 import sqlite3
+import time
 
 import pytest
 
@@ -59,20 +61,19 @@ def test_chapter_count_is_file_view_not_merged_nav(stats_root):
     md = stats_root / "books" / "B0001" / "md"
     (md / "02_前置页_正文.md").write_text("正文内容够长。\n\n" * 30, encoding="utf-8")
     assert run_cli("library").returncode == 0
-    assert run_cli("library").returncode == 0
     snap = corpus_snapshot.snapshot(stats_root)
     assert snap["chapters"] == 4  # 文件视角：B0001 三个文件 + B0002 一个
 
 
-def test_shelf_index_is_preferred_source_for_chapters_and_chars(stats_root):
-    """伴读自建 shelf-index 后，章与字都从它来；章仍是文件视角。"""
+def test_shelf_index_serves_chars_not_chapters(stats_root):
+    """伴读自建 shelf-index 后，只有「字」从它来；章永远取 derived，免得 shelf 懒扫描造成三页分叉。"""
     from bookcorpus.reading.shelf_index import ShelfIndex
 
     index = ShelfIndex(Layout(str(stats_root)))
     index.ensure()
     snap = corpus_snapshot.snapshot(stats_root)
     assert snap["chapters"] == 3
-    assert snap["sources"]["chapters_from"] == "shelf-index"
+    assert snap["sources"]["chapters_from"] == "derived"
     assert snap["chars"] > 0
     assert snap["sources"]["chars_from"] == "shelf-index"
     # 字 = 非空白：拿盘上正文手算一遍
@@ -89,6 +90,37 @@ def test_empty_workspace_reports_zeroes(stats_root):
     assert snap["books_readable"] == 0
     assert snap["chapters"] == 0
     assert snap["paras"] == 0
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", snap["built_at"])
+    # 空根仍有 init 建的空索引：built_at = 索引的数据时刻（不是快照计算时刻）
+    assert snap["sources"]["index"]["built_at"]
+    assert snap["sources"]["computed_at"]
+
+
+def test_derived_chapters_win_over_stale_shelf_index(stats_root):
+    """shelf-index 落后于盘上（懒扫描）时，章数必须仍取 derived，三页不分叉。"""
+    from bookcorpus.reading.shelf_index import ShelfIndex
+
+    ShelfIndex(Layout(str(stats_root))).ensure()  # 此时 shelf-index 记 B0001=2 + B0002=1
+    md = stats_root / "books" / "B0001" / "md"
+    (md / "003_新章.md").write_text("新章内容够长。\n\n" * 20, encoding="utf-8")
+    assert run_cli("library").returncode == 0  # derived 更新成 4，shelf-index 没重建
+    time.sleep(1.2)  # 秒级时间戳：隔开数据时刻与计算时刻，断言才稳定
+    snap = corpus_snapshot.snapshot(stats_root)
+    assert snap["chapters"] == 4  # derived 的数，不是 shelf-index 里的 3
+    assert snap["sources"]["chapters_from"] == "derived"
+    # built_at = 数据时刻（library.db 重建时刻），不是本次快照的计算时刻
+    assert snap["built_at"] == _lib_built_at(stats_root)
+    assert snap["built_at"] != snap["sources"]["computed_at"]
+
+
+def _lib_built_at(root):
+    """library.db 的 built_at（isoformat 原样），格式化成快照统一的「YYYY-MM-DD HH:MM:SS」。"""
+    con = sqlite3.connect(root / "build" / "library.db")
+    try:
+        raw = con.execute("SELECT value FROM meta WHERE key='built_at'").fetchone()[0]
+    finally:
+        con.close()
+    return datetime.datetime.fromisoformat(raw).astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def test_missing_root_gives_none_snapshot(tmp_path):
@@ -98,6 +130,8 @@ def test_missing_root_gives_none_snapshot(tmp_path):
     assert snap["chapters"] is None
     assert snap["paras"] is None
     assert snap["sources"]["library"]["ok"] is False
+    # 一个库都没有：built_at 只能是计算时刻
+    assert snap["built_at"] == snap["sources"]["computed_at"]
 
 
 def test_none_root_follows_books_root(stats_root, monkeypatch):
@@ -118,15 +152,11 @@ def test_snapshot_is_read_only(stats_root):
     assert not (stats_root / "build" / "阅读" / "shelf-index.db").exists()
 
 
-def test_locked_library_db_degrades_to_none(stats_root, monkeypatch):
-    """库打不开（坏库）时不抛异常，该数给 None。"""
-    lib_db = stats_root / "build" / "library.db"
-    lib_db.write_bytes(b"not a sqlite file")
-
-    def broken_connect(path, *args, **kwargs):
-        raise sqlite3.OperationalError("file is not a database")
-
-    monkeypatch.setattr(corpus_snapshot.sqlite3, "connect", broken_connect)
+def test_corrupt_library_db_degrades_to_none(stats_root):
+    """真坏库（文件损坏）时不抛异常，library 的数给 None。"""
+    (stats_root / "build" / "library.db").write_bytes(b"not a sqlite file at all")
     snap = corpus_snapshot.snapshot(stats_root)
     assert snap["books_total"] is None
     assert snap["books_readable"] is None
+    assert snap["chapters"] is None
+    assert snap["sources"]["library"]["ok"] is False
