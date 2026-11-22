@@ -8,6 +8,15 @@ const TABS = [
   ['maintain', '同步与维护'],
   ['logs', '任务与日志'],
 ];
+const NAV_ICONS = {
+  overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  import: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
+  ledger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+  split: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
+  maintain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>',
+  logs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg>',
+};
+const THEME_KEY = 'bookcorpus.ops-theme';
 // 子页不进左侧主导航，支持直接用 #hash 跳转并保持兼容
 const EXTRA_TABS = ['docs', 'pdf', 'pdf-list', 'manual', 'retire', 'cold'];
 const ALL_TABS = TABS.map(([key]) => key).concat(EXTRA_TABS);
@@ -118,6 +127,7 @@ const S = {
   pickTags: new Set(['convert', 'untriaged', 'gallery', 'ja']),
   pickProgress: new Set(['todo', 'running', 'failed', 'staged', 'deferred']), pickRecheck: false,
   pickSubject: '', pickSort: 'pages', settle: null, triageInfo: null,
+  pdfInlineTag: 'all', pdfInlineQ: '',
   maintainSteps: new Set(FINISH_DEFAULT),
   cold: null, settings: { auto_embed: true }, services: [],
   reconcileExtra: new Set(),
@@ -159,10 +169,10 @@ function fmtTime(value) {
 
 function fmtBytes(bytes) {
   const n = Number(bytes) || 0;
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  if (n < 1024 * 1024 * 1024) return (n / 1048576).toFixed(1) + ' MB';
-  return (n / 1073741824).toFixed(2) + ' GB';
+  if (n < 1024) return n + '\u00A0B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + '\u00A0KB';
+  if (n < 1024 * 1024 * 1024) return (n / 1048576).toFixed(1) + '\u00A0MB';
+  return (n / 1073741824).toFixed(2) + '\u00A0GB';
 }
 
 function status(cls, label) {
@@ -296,7 +306,7 @@ function renderNav() {
       if (active) badge = `<span class="badge">${active}</span>`;
       else if (counts.awaiting_review) badge = `<span class="badge">${counts.awaiting_review}</span>`;
     }
-    return `<a href="#${key}" class="${on === key ? 'on' : ''}">${esc(label)}${badge}</a>`;
+    return `<a href="#${key}" class="${on === key ? 'on' : ''}"${on === key ? ' aria-current="page"' : ''}>${NAV_ICONS[key] || ''}<span class="nav-label">${esc(label)}</span>${badge}</a>`;
   }).join('');
 }
 
@@ -453,16 +463,16 @@ function ebookCount() {
 function renderStats() {
   const c = bookCounts();
   const items = [
-    ['藏书', c.libKnown ? num(c.books) : '—'],
-    ['可读', c.libKnown ? num(c.readable) : '—'],
-    ['待转', c.libKnown ? num(c.toConvert) : '—'],
-    c.archive ? ['存档', num(c.archive.books)] : null,
+    ['藏书', c.libKnown ? num(c.books) : '—', ''],
+    ['可读', c.libKnown ? num(c.readable) : '—', c.libKnown ? 'ok' : ''],
+    ['待转', c.libKnown ? num(c.toConvert) : '—', c.libKnown && c.toConvert ? 'warn' : ''],
     ['索引', !c.indexKnown ? '未知'
       : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
-        : (statusState() === 'ok' ? '已同步' : '没有落后'))],
-    ['收件箱', num(c.inbox)],
+        : (statusState() === 'ok' ? '已同步' : '没有落后')),
+      !c.indexKnown || c.lagBooks ? 'warn' : (statusState() === 'ok' ? 'ok' : '')],
+    c.inbox ? ['收件箱', num(c.inbox), 'warn'] : null,
   ].filter(Boolean);
-  let html = items.map(([label, value]) => `<span class="stat">${esc(label)}<b>${esc(value)}</b></span>`).join('');
+  let html = items.map(([label, value, cls]) => `<span class="stat${cls ? ' ' + cls : ''}">${esc(label)}<b>${esc(value)}</b></span>`).join('');
   if (!statsReadable()) {
     const detail = (S.payload && S.payload.error) || '';
     html += `<span class="stat warn" title="${esc(detail)}">状态<b>读不到</b></span>`;
@@ -475,16 +485,68 @@ function renderStats() {
 function renderSearch() {
   const health = S.health || {};
   const dot = $('#search-dot');
-  dot.className = 'dot ' + (health.running ? 'on' : 'off');
-  dot.title = health.running
-    ? (health.degraded ? '阅读搜索在跑，索引未建或为空' : '阅读搜索在跑')
-    : '阅读搜索未启动';
-  $('#search-btn').textContent = '打开阅读搜索';
-  $('#search-btn').title = 'http://127.0.0.1:8765/';
-  $('#search-btn').hidden = !health.running;
-  $('#search-start').textContent = '启动阅读搜索';
-  $('#search-start').title = 'http://127.0.0.1:8765/';
-  $('#search-start').hidden = !!health.running;
+  const btn = $('#search-btn');
+  const start = $('#search-start');
+  const lbl = $('#search-btn-label');
+  if (dot) {
+    dot.className = 'dot ' + (health.running ? 'on' : 'off');
+    dot.title = health.running
+      ? (health.degraded ? '阅读搜索在跑，索引未建或为空' : '阅读搜索在跑')
+      : '阅读搜索未启动';
+  }
+  if (lbl) lbl.textContent = '打开阅读搜索';
+  else if (btn) btn.textContent = '打开阅读搜索';
+  if (btn) {
+    btn.title = 'http://127.0.0.1:8765/';
+    btn.hidden = !health.running;
+  }
+  if (start) {
+    start.title = 'http://127.0.0.1:8765/';
+    start.hidden = !!health.running;
+  }
+}
+
+function openModal(html) {
+  const host = $('#modal');
+  if (!host) return;
+  const existing = host.querySelector('dialog.modal[open]');
+  if (existing && html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const nextBody = tmp.querySelector('.dlg-body');
+    const curBody = existing.querySelector('.dlg-body');
+    if (nextBody && curBody) {
+      curBody.innerHTML = nextBody.innerHTML;
+      return;
+    }
+  }
+  host.innerHTML = html || '';
+  const dlg = host.querySelector('dialog.modal');
+  if (!dlg) return;
+  dlg.addEventListener('close', () => {
+    dlg.returnValue = '';
+    S.preview = null;
+    S.settle = null;
+    S.triageInfo = null;
+    if (host.contains(dlg)) host.innerHTML = '';
+  }, { once: true });
+  if (typeof dlg.showModal === 'function' && !dlg.open) {
+    dlg.showModal();
+  }
+}
+
+function closeModal() {
+  const host = $('#modal');
+  if (!host) return;
+  const dlg = host.querySelector('dialog.modal');
+  if (dlg && dlg.open && typeof dlg.close === 'function') {
+    dlg.close('');
+  } else {
+    S.preview = null;
+    S.settle = null;
+    S.triageInfo = null;
+    host.innerHTML = '';
+  }
 }
 
 // ---- 视图骨架 -----------------------------------------------------
@@ -519,8 +581,19 @@ function render() {
   afterRender();
 }
 
+function scrollTabIntoView(el) {
+  if (!el || typeof el.scrollIntoView !== 'function') return;
+  try {
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest', container: 'nearest' });
+  } catch (err) {
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+}
+
 function afterRender() {
   wireDrop();
+  scrollTabIntoView(document.querySelector('#nav a.on'));
+  scrollTabIntoView(document.querySelector('#view .subtabs a.on'));
   if (S.logSkipAfterRender) {
     S.logSkipAfterRender = false;
     return;
@@ -549,21 +622,21 @@ function todoItems(c) {
   const items = [];
   if (statusState() === 'unknown') {
     items.push({
-      title: '状态读不到，先修状态脚本',
-      note: '缺 build/library.db 或 build/检索/index.db 时，计数和体检都不可信。',
-      href: '#maintain', label: '去维护',
+      title: '状态读不到，先去同步与维护检查',
+      note: '书目库或检索索引未就绪时，计数和体检都不可信。',
+      href: '#maintain', label: '去维护', primary: true,
     });
   } else if (!c.libKnown || !c.indexKnown || !c.catalogKnown || !c.viewsKnown) {
     // 四段落缺哪补哪，合成一条待办：缺库、缺索引、缺书目总表、缺浏览入口都算状态不完整
     const lack = [];
-    if (!c.libKnown) lack.push('build/library.db');
+    if (!c.libKnown) lack.push('书目库');
     if (!c.indexKnown) lack.push('检索索引');
     if (!c.catalogKnown) lack.push('书目总表');
     if (!c.viewsKnown) lack.push('浏览入口（奖项）');
     items.push({
       title: '书库状态不完整',
       note: '缺 ' + lack.join('、') + '，计数和体检都不可信。',
-      href: '#maintain', label: '去维护',
+      href: '#maintain', label: '去维护', primary: true,
     });
   }
   if (statusState() !== 'unknown' && !c.auditRan) {
@@ -589,53 +662,53 @@ function todoItems(c) {
       note: '重出书目总表后就会消失。', href: '#maintain', label: '去维护',
     });
   }
+  if (c.awaiting) {
+    items.push({
+      title: num(c.awaiting) + ' 个任务待确认',
+      note: '有产物停在暂存区，需要人工核对收口。', href: '#logs?state=awaiting_review', label: '去确认', primary: true,
+    });
+  }
   if (c.inbox) {
     items.push({
-      title: '收件箱有 ' + num(c.inbox) + ' 本新书',
-      note: '核对书名和分类之后入库。', href: '#import', label: '去导入',
+      title: '核对收件箱 ' + num(c.inbox) + ' 本新书',
+      note: '核对书名与分类建议后即可一键入库。', href: '#import', label: '去入库', primary: !c.awaiting,
     });
   }
   if (c.inboxIgnored) {
     items.push({
       title: '收件箱有 ' + num(c.inboxIgnored) + ' 个不支持格式文件',
-      note: '不在白名单内（如 .doc/.djvu/.csv），不会自动入库。', href: '#import', label: '去查看',
+      note: '不在自动入库支持格式内（如 doc / djvu / csv）。', href: '#import', label: '去查看',
     });
   }
   if (c.ledgerStale) {
     items.push({
       title: '账表有修改，书目库尚未同步',
-      note: '改过分类、书名或保留策略，去维护跑重建后才会生效。', href: '#maintain', label: '去同步',
-    });
-  }
-  if (c.awaiting) {
-    items.push({
-      title: num(c.awaiting) + ' 个任务待确认',
-      note: '有结果等人看过才算完。', href: '#logs?state=awaiting_review', label: '去确认',
+      note: '改过分类、书名或保留策略，去同步与维护对齐后会生效。', href: '#maintain', label: '去同步',
     });
   }
   const ebooks = c.ebooksToConvert || ebookCount();
   if (ebooks) {
     items.push({
-      title: '有 ' + num(ebooks) + ' 本电子书待拆章',
-      note: '拆成按章的 Markdown 才能搜索。', href: '#split', label: '去拆章',
+      title: '拆章 ' + num(ebooks) + ' 本待处理电子书',
+      note: '切分成按章正文后自动更新搜索索引。', href: '#split', label: '去拆章',
     });
   }
   if (c.docsToConvert) {
     items.push({
-      title: '有 ' + num(c.docsToConvert) + ' 本文档待转 md',
-      note: 'TXT / DOCX / XLSX / PPTX 可在「正文生产 · 文档」一键补转，落地后自动同步检索。', href: '#docs', label: '去转文档',
+      title: '转换 ' + num(c.docsToConvert) + ' 本待补转文档',
+      note: '文本与 Office 文档可在「文档转正文」一键补转。', href: '#docs', label: '去转文档',
     });
   }
   if (c.pdfsToConvert) {
     items.push({
-      title: num(c.pdfsToConvert) + ' 本 PDF 还没有正文',
-      note: '先看分诊建议，确认处理方式再转。', href: '#pdf', label: '去分诊',
+      title: '排入 ' + num(c.pdfsToConvert) + ' 本已分诊或待诊 PDF',
+      note: '图册与非中英文已按政策归入存档，不占转写额度。', href: '#pdf', label: '去选书', primary: !c.awaiting && !c.inbox,
     });
   }
   if (c.otherToConvert) {
     items.push({
-      title: num(c.otherToConvert) + ' 本为手工格式（如 djvu/csv）',
-      note: '手工转出 md 放入书目录后，在「正文生产 · 手工格式」点扫描落位。', href: '#manual', label: '去查看',
+      title: num(c.otherToConvert) + ' 本为手工格式（djvu / csv）',
+      note: '在外部转为正文放回目录后，点扫描落位即可入库。', href: '#manual', label: '去查看',
     });
   }
   if (c.lagBooks) {
@@ -647,13 +720,13 @@ function todoItems(c) {
   if (c.indexExtra) {
     items.push({
       title: '检索索引比书库多 ' + num(c.indexExtra) + ' 本',
-      note: '索引里可能还有已移出的书，重建索引后再看。', href: '#maintain', label: '去维护',
+      note: '索引里可能还有已移出的书，去维护页增量对齐。', href: '#maintain', label: '去维护',
     });
   }
   if (c.warn) {
     items.push({
       title: '体检有 ' + num(c.warn) + ' 条提醒',
-      note: '不影响平时用，收尾时会再检查。', href: '#maintain', label: '去维护',
+      note: '不影响日常阅读与搜索，可在同步与维护查看明细。', href: '#maintain', label: '去查看',
     });
   }
   return items;
@@ -665,7 +738,7 @@ function verdictText(c, todos) {
   if (c.fail || c.broken) return '有几处需要处理';
   // 缺书目总表/浏览入口这类问题不在 fail/broken 里，state 非 ok 就不能说干净
   if (statusState() !== 'ok') return '状态不完整，先补齐再判断';
-  if (todos.length) return '库可用，有 ' + num(todos.length) + ' 件事待办';
+  if (todos.length) return '书库整体运转正常，有 ' + num(todos.length) + ' 项待关注。';
   return '库是干净的';
 }
 
@@ -678,34 +751,65 @@ function heroNote(c) {
       : (c.indexExtra
         ? '索引比书库多 ' + num(c.indexExtra) + ' 本。'
         : (statusState() === 'ok' ? '检索索引已同步。' : '检索索引没有落后。')));
+  const arch = c.archive && c.archive.books ? '，其中 ' + num(c.archive.books) + ' 本归入政策存档、只存不转' : '';
   const head = c.libKnown
-    ? num(c.books) + ' 本书，' + num(c.readable) + ' 本可读，共 ' + num(c.chapters) + ' 章。'
-    : '书库计数未知（缺 build/library.db）。';
+    ? '共收录 ' + num(c.books) + ' 本书（' + num(c.chapters) + ' 章），已有 ' + num(c.readable) + ' 本可读' + arch + '。'
+    : '书库计数未知（需去维护页检查）。';
   return head + tail;
 }
 
 function heroAction(c) {
   if (statusState() === 'unknown' || !c.libKnown || !c.indexKnown) return ['去维护', '#maintain'];
-  if (c.inbox) return ['导入新书', '#import'];
-  if (c.awaiting) return ['查看待确认', '#logs?state=awaiting_review'];
+  if (c.awaiting) return ['去任务中心确认', '#logs?state=awaiting_review'];
+  if (c.inbox) return ['核对收件箱 (' + num(c.inbox) + ')', '#import'];
   if (c.ebooksToConvert || ebookCount()) return ['去拆章', '#split'];
-  if (c.pdfsToConvert) return ['去分诊 PDF', '#pdf'];
-  if (c.docsToConvert) return ['去转文档', '#import'];
-  if (c.ledgerStale || c.lagBooks || c.warn || c.unmatched) return ['去维护', '#maintain'];
+  if (c.pdfsToConvert) return ['去处理 PDF (' + num(c.pdfsToConvert) + ')', '#pdf'];
+  if (c.docsToConvert) return ['去转文档', '#docs'];
+  if (c.ledgerStale || c.lagBooks || c.warn || c.unmatched || !c.auditRan || c.auditStale || c.fail || c.broken || statusState() !== 'ok') {
+    return ['去同步与维护', '#maintain'];
+  }
   return null;
 }
 
 function hero(c, todos) {
   const action = heroAction(c);
-  return `<div class="hero">
-    <h1>总览</h1>
-    <p class="verdict">${esc(verdictText(c, todos))}</p>
-    <p class="hero-note">${esc(heroNote(c))}</p>
-    <div class="hero-actions">
-      ${action ? `<a class="btn primary" href="${action[1]}">${esc(action[0])}</a>` : ''}
-      <button class="btn" data-act="status-refresh">刷新状态</button>
+  const readyShare = c.libKnown && c.books ? Math.min(100, Math.max(0, (c.readable / c.books) * 100)) : 0;
+  const pctLabel = c.libKnown && c.books ? readyShare.toFixed(1) + '%' : '—';
+  const warnShare = c.libKnown && c.books
+    ? Math.min(100 - readyShare, Math.max(0, (c.toConvert / c.books) * 100))
+    : 0;
+  return `<div class="page-head">
+      <div>
+        <h1>总览</h1>
+        <p class="page-lead">日常入库、分类与正文落地均自动增量同步，这里只聚焦当下需要处理的事。</p>
+      </div>
     </div>
-  </div>`;
+    <section class="hero-card section" aria-label="书库当前判断">
+      <div class="hero-main">
+        <div class="hero-eyebrow">当前工作焦点</div>
+        <p class="verdict">${esc(verdictText(c, todos))}</p>
+        <p class="hero-note">${esc(heroNote(c))}</p>
+        <div class="hero-actions">
+          ${action ? `<a class="btn primary has-icon-right" href="${action[1]}"><span>${esc(action[0])}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>` : ''}
+          <button type="button" class="btn" data-act="status-refresh">刷新状态</button>
+        </div>
+      </div>
+      <div class="hero-meter">
+        <div class="meter-top">
+          <span class="small muted">正文可读率</span>
+          <span class="meter-pct">${esc(pctLabel)}</span>
+        </div>
+        <div class="meter-bar" role="img" aria-label="正文可读率 ${esc(pctLabel)}">
+          <div class="meter-fill-ok" style="width:${readyShare.toFixed(1)}%"></div>
+          <div class="meter-fill-warn" style="width:${warnShare.toFixed(1)}%"></div>
+        </div>
+        <div class="meter-legend">
+          <div><span class="muted">已有正文</span><b>${esc(c.libKnown ? num(c.readable) : '—')}</b></div>
+          <div><span class="muted">待转正文</span><b>${esc(c.libKnown ? num(c.toConvert) : '—')}</b></div>
+          <div><span class="muted">政策存档</span><b>${esc(c.archive ? num(c.archive.books) : '—')}</b></div>
+        </div>
+      </div>
+    </section>`;
 }
 
 function pipeline(c) {
@@ -716,7 +820,7 @@ function pipeline(c) {
       name: '收书', href: '#import',
       state: unknown ? 'miss' : (c.inbox ? 'half' : 'ok'),
       word: unknown ? '未知' : (c.inbox ? '待处理' : '正常'),
-      read: unknown ? '状态读不到' : (c.inbox ? num(c.inbox) + ' 本待处理' : '收件箱是空的'),
+      read: unknown ? '状态读不到' : (c.inbox ? num(c.inbox) + ' 本待核对' : '收件箱已清空'),
     },
     {
       name: '入账', href: c.ledgerStale ? '#maintain' : '#ledger',
@@ -725,7 +829,7 @@ function pipeline(c) {
       read: !c.libKnown
         ? '书数未知'
         : (ledgerGap ? '差 ' + num(Math.abs(ledgerGap)) + ' 本'
-          : (c.ledgerStale ? '账表已改，待重建同步' : num(c.books) + ' 本已登记')),
+          : (c.ledgerStale ? '账表已改，待同步' : num(c.books) + ' 本已登记')),
     },
     {
       name: '上架', href: '#maintain',
@@ -740,12 +844,12 @@ function pipeline(c) {
     {
       name: '出正文',
       href: (c.ebooksToConvert || ebookCount()) ? '#split'
-        : (c.pdfsToConvert ? '#pdf' : (c.docsToConvert ? '#import' : '#split')),
+        : (c.pdfsToConvert ? '#pdf' : (c.docsToConvert ? '#docs' : '#split')),
       state: !c.libKnown ? 'miss' : (c.toConvert ? 'half' : 'ok'),
-      word: !c.libKnown ? '未知' : (c.toConvert ? '待处理' : '正常'),
+      word: !c.libKnown ? '未知' : (c.toConvert ? '待转写' : '正常'),
       read: !c.libKnown
         ? '计数未知'
-        : num(c.readable) + ' 本可读，' + num(c.toConvert) + ' 本待转',
+        : (c.toConvert ? num(c.toConvert) + ' 本可转' : num(c.readable) + ' 本全部就绪'),
     },
     {
       name: '可检索', href: '#maintain',
@@ -762,40 +866,49 @@ function pipeline(c) {
       state: !c.auditRan ? 'miss'
         : (c.auditStale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half')))),
       word: !c.auditRan ? '未运行'
-        : (c.auditStale ? '已过期' : (c.fail ? '需处理' : (c.warn ? '待处理' : (statusState() === 'ok' ? '正常' : '需注意')))),
+        : (c.auditStale ? '已过期' : (c.fail ? '需处理' : (c.warn ? num(c.warn) + ' 条提醒' : (statusState() === 'ok' ? '正常' : '需注意')))),
       read: !c.auditRan
         ? '还没有体检记录'
         : (c.auditStale ? '库或索引比体检新'
           : (c.fail ? num(c.fail) + ' 项失败'
-            : (c.warn ? num(c.warn) + ' 条提醒'
+            : (c.warn ? '核心检查通过'
               : (statusState() === 'ok' ? '全部通过' : '无失败项')))),
     },
   ];
-  return `<div class="pipeline">${cells.map((cell) => `<a class="pipe-cell" href="${cell.href}">
-    ${status(cell.state, cell.word)}
-    <div class="pipe-name">${esc(cell.name)}</div>
-    <div class="pipe-read">${esc(cell.read)}</div>
-  </a>`).join('')}</div>`;
+  return `<section class="section" aria-label="六步书库流水线">
+    <div class="card-head" style="margin-bottom:10px">
+      <h2>流水线六环节</h2>
+      <span class="small muted">点击任一环节直达处理</span>
+    </div>
+    <div class="pipeline">${cells.map((cell, idx) => `<a class="pipe-cell" href="${cell.href}">
+      <div class="pipe-head">
+        <span class="pipe-step" translate="no">${String(idx + 1).padStart(2, '0')}</span>
+        ${status(cell.state, cell.word)}
+      </div>
+      <div class="pipe-name">${esc(cell.name)}</div>
+      <div class="pipe-read">${esc(cell.read)}</div>
+    </a>`).join('')}</div>
+  </section>`;
 }
 
 function nextSteps(todos) {
   if (statusState() === 'unknown') return '<p class="empty">状态读不到，先点「刷新状态」。</p>';
   if (!todos.length) {
     return statusState() === 'ok'
-      ? '<p class="empty">没有待办，书库是干净的。</p>'
+      ? '<div class="empty-state"><div><div class="empty-state-title">没有待办，书库是干净的</div><div class="empty-state-sub">当前收件箱已清空，检索索引与书目均处于最新状态。</div></div></div>'
       : '<p class="empty">没有待办，但状态还不完整。</p>';
   }
-  return todos.slice(0, 4).map((item) => `<div class="rowline">
+  return todos.slice(0, 6).map((item, idx) => `<div class="rowline">
     <div class="rl-main">
       <div class="rl-title">${esc(item.title)}</div>
       <div class="rl-note">${esc(item.note)}</div>
     </div>
-    <a class="btn sm" href="${item.href}">${esc(item.label)}</a>
+    <a class="btn sm${idx === 0 ? ' primary' : ''}" href="${item.href}">${esc(item.label)}</a>
   </div>`).join('');
 }
 
 function subtabsBar(items, active) {
-  return `<div class="subtabs">${items.map(([key, label, count]) => `<a class="subtab${active === key ? ' on' : ''}" href="#${key}">${esc(label)}${count ? `<span class="badge">${num(count)}</span>` : ''}</a>`).join('')}</div>`;
+  return `<nav class="subtabs" aria-label="子视图切换">${items.map(([key, label, count]) => `<a class="subtab${active === key ? ' on' : ''}" href="#${key}"${active === key ? ' aria-current="page"' : ''}>${esc(label)}${count ? `<span class="badge">${num(count)}</span>` : ''}</a>`).join('')}</nav>`;
 }
 
 function catalogSubtabs(active) {
@@ -812,9 +925,9 @@ function contentSubtabs(active) {
   const c = bookCounts();
   return subtabsBar([
     ['split', '电子书', c.ebooksToConvert],
-    ['docs', '文档（TXT/Office）', c.docsToConvert],
+    ['docs', '文档转正文', c.docsToConvert],
     ['pdf', 'PDF 分诊与转写', c.pdfsToConvert],
-    ['manual', '手工格式（djvu/csv）', c.otherToConvert],
+    ['manual', '手工格式', c.otherToConvert],
   ], active);
 }
 
@@ -830,7 +943,7 @@ function reviewHref(job) {
 function jobReviewHint(job) {
   if (!job) return '';
   if (job.kind === 'split.run') {
-    return '该拆章批次有待复核书目（已暂存）。可去「正文生产 · 电子书」查看问题、受理或重拆，也可在核对后直接人工收口：';
+    return '该拆章批次有待复核书目（已暂存）。可去「正文生产」查看问题、受理或重拆，也可在核对后直接人工收口：';
   }
   if (job.kind === 'pdf.run') {
     return '该 PDF 批次有待复核书目（已暂存）。可去「待转 PDF 清单」受理或改处置，也可在核对后直接人工收口：';
@@ -844,7 +957,7 @@ function jobReviewBox(job) {
   const jumpLabel = job.kind === 'split.run' ? '去正文生产处理' : (job.kind === 'pdf.run' ? '去 PDF 清单处理' : '去对应页面处理');
   return `<div class="review-box" id="job-review-box">
     <p class="small">${esc(jobReviewHint(job))}</p>
-    <div class="toolbar">
+    <div class="toolbar" style="margin-bottom:0">
       ${rhref ? `<button class="btn sm" data-act="job-handle" data-id="${esc(job.id)}">${esc(jumpLabel)}</button>` : ''}
       <input type="text" id="job-resolve-note" placeholder="处理说明 / 确认备注（可选）" size="28">
       <button class="btn sm primary" data-act="job-resolve" data-id="${esc(job.id)}" data-res="succeeded">确认已处理</button>
@@ -872,31 +985,38 @@ function jobLine(job) {
 function servicesCard() {
   const list = S.services || [];
   if (!list.length) return '';
-  return `<div class="section card">
-    <div class="card-head"><h2>书库应用入口</h2><button class="btn sm" data-act="services-refresh">刷新</button></div>
+  return `<section class="card" aria-label="书库应用入口">
+    <div class="card-head">
+      <h2>书库应用入口</h2>
+      <div class="row tight">
+        <span class="small muted">本地四端服务状态</span>
+        <button class="btn sm" data-act="services-refresh">刷新</button>
+      </div>
+    </div>
     <div class="svc-bar">${list.map((svc) => `<div class="svc-item">
       <div class="svc-meta">
-        <span class="dot ${svc.running ? 'on' : 'off'}"></span>
-        <div><div class="svc-name">${esc(svc.name)}</div><div class="svc-port">:${esc(svc.port)}</div></div>
+        <span class="dot ${svc.running ? 'on' : 'off'}" aria-hidden="true"></span>
+        <div><div class="svc-name">${esc(svc.name)}</div><div class="svc-port" translate="no">:${esc(svc.port)}</div></div>
       </div>
       ${svc.running
         ? `<a class="btn sm" href="${esc(svc.url)}" target="_blank" rel="noopener">打开</a>`
         : `<button class="btn sm" data-act="service-start" data-key="${esc(svc.key)}">启动</button>`}
     </div>`).join('')}</div>
-  </div>`;
+  </section>`;
 }
 
 function viewOverview() {
   const c = bookCounts();
   const todos = todoItems(c);
-  const jobs = S.jobs.slice(0, 5);
   return `${hero(c, todos)}
-    <div class="section">${pipeline(c)}</div>
-    <div class="grid c2 section">
-      <div class="card"><h2>下一步</h2>${nextSteps(todos)}</div>
-      <div class="card"><h2>最近任务</h2>${jobs.length ? jobs.map(jobLine).join('') : '<p class="empty">还没有任务。</p>'}
-        <p><a class="btn sm" href="#logs">全部任务</a></p></div>
-    </div>
+    ${pipeline(c)}
+    <section class="card section" aria-label="下一步待办">
+      <div class="card-head">
+        <h2>下一步待办</h2>
+        <span class="pill${todos.length ? ' half' : ' ok'}">${num(todos.length)} 项</span>
+      </div>
+      ${nextSteps(todos)}
+    </section>
     ${servicesCard()}`;
 }
 
@@ -932,26 +1052,26 @@ function planRow(item, index) {
   const cls = isAdd ? (subjects || '其他') : (libSubjects || '其他');
   const rowClass = isDel ? ' class="del"' : (isRev ? ' class="review"' : (low ? ' class="low"' : ''));
   return `<tr data-row="${index}"${rowClass}>
-    <td><select data-field="action" data-idx="${index}">
+    <td data-label="动作"><select data-field="action" data-idx="${index}" aria-label="第 ${index + 1} 行动作">
       ${isRev ? '<option value="review" selected>待核</option>' : ''}
       ${['add', 'replace', 'delete'].map((a) => `<option value="${a}"${a === item.action ? ' selected' : ''}>${ACTION_WORD[a]}</option>`).join('')}
     </select></td>
-    <td class="wrap"><span class="${isDel ? 'strike' : ''}">${esc(item.file)}</span></td>
-    <td class="nowrap">${esc(item.format || '')}<span class="small"> · ${fmtBytes(item.bytes)}</span></td>
-    <td><input type="text" data-field="title" data-idx="${index}" value="${esc(title)}" size="18"${isAdd ? '' : ' readonly'}></td>
-    <td class="wrap small">${esc(author || '—')}</td>
-    <td>${isAdd
-      ? `<input type="text" data-field="subjects" data-idx="${index}" value="${esc(subjects)}" size="12" placeholder="一级/二级">`
+    <td data-label="原文件" class="wrap"><span class="${isDel ? 'strike' : ''}">${esc(item.file)}</span></td>
+    <td data-label="格式与体积" class="nowrap"><span>${esc(item.format || '')}<span class="small"> · ${fmtBytes(item.bytes)}</span></span></td>
+    <td data-label="正式书名"><input type="text" data-field="title" data-idx="${index}" aria-label="第 ${index + 1} 行书名" value="${esc(title)}" size="18" style="min-width:130px"${isAdd ? '' : ' readonly'}></td>
+    <td data-label="作者" class="wrap small">${esc(author || '—')}</td>
+    <td data-label="分类">${isAdd
+      ? `<input type="text" data-field="subjects" data-idx="${index}" aria-label="第 ${index + 1} 行分类" value="${esc(subjects)}" size="12" style="min-width:96px" placeholder="一级/二级">`
       : esc(cls || '—')}</td>
-    <td>${(isDel || isRev) ? '—' : `<select data-field="retention" data-idx="${index}">
+    <td data-label="长期保留">${(isDel || isRev) ? '—' : `<select data-field="retention" data-idx="${index}" aria-label="第 ${index + 1} 行保留策略">
       ${['keep', 'review', 'drop'].map((r) => `<option value="${r}"${r === (item.retention || 'keep') ? ' selected' : ''}>${RETENTION_WORD[r]}</option>`).join('')}
     </select>`}</td>
-    <td>${isAdd
-      ? `<input type="text" data-field="uid" data-idx="${index}" value="${esc(item.uid || '')}" size="6">`
+    <td data-label="编号">${isAdd
+      ? `<input type="text" data-field="uid" data-idx="${index}" aria-label="第 ${index + 1} 行编号" value="${esc(item.uid || '')}" size="6">`
       : (isRep
-        ? `<input type="text" data-field="uid" data-idx="${index}" value="${esc(item.uid || '')}" size="6" required>`
+        ? `<input type="text" data-field="uid" data-idx="${index}" aria-label="第 ${index + 1} 行编号" value="${esc(item.uid || '')}" size="6" required>`
         : esc(item.uid || '—'))}</td>
-    <td class="wrap small">${st[0] ? `<span class="pill ${st[1]}">${esc(st[0])}</span> ` : ''}${esc(note)}</td>
+    <td data-label="说明" class="wrap small"><span>${st[0] ? `<span class="pill ${st[1]}">${esc(st[0])}</span> ` : ''}${esc(note)}</span></td>
   </tr>`;
 }
 
@@ -970,72 +1090,94 @@ function planBlockers(plan) {
 function inboxCard(inbox, hasPlan) {
   const ignored = S.inboxIgnored || [];
   const ignoredHtml = ignored.length
-    ? `<p class="hint">另有 ${num(ignored.length)} 个非支持格式文件被跳过：${ignored.slice(0, 6).map((f) => esc(f.name)).join('、')}${ignored.length > 6 ? ' 等' : ''}（可在命令行手工处理）。</p>`
+    ? `<p class="hint" style="margin-top:10px">另有 ${num(ignored.length)} 个不支持格式文件（${ignored.slice(0, 6).map((f) => esc(f.name)).join('、')}${ignored.length > 6 ? ' 等' : ''}），暂不自动入库。</p>`
     : '';
-  return `<div class="card">
-    <div class="card-head"><h2>收件箱 <span class="hint">${num(inbox.length)} 本</span></h2>
-      <button class="btn sm" data-act="inbox-refresh">刷新</button></div>
-    ${inbox.length ? `<div class="tw"><table>
-      <thead><tr><th>文件</th><th>格式</th><th class="num">大小</th><th>放进来的时间</th></tr></thead>
-      <tbody>${inbox.map((f) => `<tr><td class="wrap">${esc(f.name)}</td>
-        <td>${esc(f.format)}</td><td class="num">${fmtBytes(f.bytes)}</td>
-        <td class="nowrap">${esc(fmtTime(f.mtime))}</td></tr>`).join('')}</tbody></table></div>`
-    : '<p class="empty">收件箱是空的。把新书拖到上面，它就会出现在这里。</p>'}
-    ${ignoredHtml}
-    <div class="toolbar">
-      <button class="btn${hasPlan ? '' : ' primary'}" data-write data-act="import-scan"${inbox.length ? '' : ' disabled'}>生成入库清单</button>
-      <span class="hint">会识别书名、作者和分类建议。</span>
+  return `<section class="card section" aria-label="收件箱清单">
+    <div class="card-head">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h2>收件箱</h2>
+        <span class="pill ${inbox.length ? 'half' : 'ok'}">${num(inbox.length)} 本</span>
+      </div>
+      <div class="row tight">
+        <button type="button" class="btn sm" data-act="inbox-refresh">刷新</button>
+        <button type="button" class="btn sm${inbox.length && !hasPlan ? ' primary' : ''}" data-write data-act="import-scan"${inbox.length ? '' : ' disabled'}>生成入库清单</button>
+      </div>
     </div>
-  </div>`;
+    ${inbox.length ? `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="收件箱文件表"><table>
+      <thead><tr><th>文件</th><th>格式</th><th class="num">大小</th><th>放进来的时间</th></tr></thead>
+      <tbody>${inbox.map((f) => `<tr><td data-label="文件" class="wrap">${esc(f.name)}</td>
+        <td data-label="格式" class="mono" translate="no">${esc(f.format)}</td><td data-label="大小" class="num">${fmtBytes(f.bytes)}</td>
+        <td data-label="放入时间" class="nowrap small muted">${esc(fmtTime(f.mtime))}</td></tr>`).join('')}</tbody></table></div>`
+    : `<div class="empty-state"><div>
+        <div class="empty-state-title">收件箱当前是空的</div>
+        <div class="empty-state-sub">点击上方「选择文件」或直接把电子书拖进投递条，即可准备入库。</div>
+      </div></div>`}
+    ${ignoredHtml}
+  </section>`;
 }
 
 function dropCard() {
-  return `<div class="card">
-    <h2>投递新书</h2>
-    <div class="drop" data-act="pick-files" tabindex="0" role="button">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
-      </svg>
-      <div class="drop-title">拖文件到这里，或点击选择</div>
-      <div class="drop-sub">EPUB、MOBI、AZW3、AZW、PDF、TXT、MD、DOCX、XLSX、XLS、PPTX，单个文件不超过 2 GB</div>
-      <div class="drop-sub">不收 .doc / .ppt / .csv / .djvu（转不出可用的 md）</div>
-    </div>
+  return `<section class="section" aria-label="投递新书">
+    <button type="button" class="drop drop-bar" data-act="pick-files" aria-label="拖文件到这里，或点击选择新书">
+      <span class="drop-bar-left">
+        <span class="drop-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+          </svg>
+        </span>
+        <span>
+          <strong style="display:block;font-size:14px">投递新书到收件箱</strong>
+          <span class="small muted">支持 EPUB、MOBI、AZW3、AZW、PDF、TXT、MD、DOCX、XLSX、XLS、PPTX，单文件不超过 2&nbsp;GB（不收 .doc / .ppt / .csv / .djvu）</span>
+        </span>
+      </span>
+      <span class="btn sm primary">选择文件</span>
+    </button>
     <input type="file" id="up-file" class="visually-hidden" multiple
       accept=".epub,.pdf,.mobi,.azw3,.azw,.txt,.md,.docx,.xlsx,.xls,.pptx">
     <div class="uploading" id="up-box" hidden>
       <div class="progress"><i id="up-bar"></i></div>
       <p class="hint" id="up-note"></p>
     </div>
-  </div>`;
+  </section>`;
 }
 
 function viewImport() {
   const inbox = S.inbox || [];
   const plan = S.plan;
   const bad = plan ? planBlockers(plan) : [];
-  const html = `<h1>新书导入</h1>
-    <p class="lead">收件箱里的文件先核对，再决定哪本进书库、哪本换源、哪本删掉。</p>
-    ${S.importDone ? `<div class="banner"><span>已入库，接下来按格式去拆章或分诊。${S.importDocsJob ? '已自动接转文档 md。' : ''}</span>
-      <button class="btn sm" data-act="goto" data-tab="split">去拆章</button>
-      <button class="btn sm" data-act="goto" data-tab="pdf">去分诊 PDF</button>
-      ${S.importDocsJob ? '<button class="btn sm" data-act="docs-goto">看转 md 进度</button>' : ''}</div>` : ''}
-    ${S.legacyPlan ? `<div class="banner bad"><span>这份清单是旧版（冲突/跳过），按钮对不上，不能直接入库。重新生成一份再核对。</span>
+  const docCount = (inbox || []).filter((f) => DOC_FMT.test(String(f.format || ''))).length + docsBackfill();
+  const html = `<div class="page-head">
+      <div>
+        <h1>新书入库</h1>
+        <p class="page-lead">上传新书到收件箱，核对书名与分类建议后一键入库。</p>
+      </div>
+    </div>
+    ${S.importDone ? `<div class="banner ok"><span>已入库，接下来按格式去拆章或分诊。${S.importDocsJob ? '已自动接转文档 md。' : ''}</span>
+      <div class="row tight">
+        <button class="btn sm" data-act="goto" data-tab="split">去拆章</button>
+        <button class="btn sm" data-act="goto" data-tab="pdf">去分诊 PDF</button>
+        ${S.importDocsJob ? '<button class="btn sm" data-act="docs-goto">查看文档转换 →</button>' : ''}
+      </div></div>`
+    : (docCount > 0 ? `<div class="banner ok"><span>后台提示：新入库的文本或 Office 文档会自动转为章节正文，可在「文档转正文」查看进度。</span>
+      <a class="btn sm" href="#docs">查看文档转换 →</a></div>` : '')}
+    ${S.legacyPlan ? `<div class="banner bad"><span>这份清单已过期（存在旧版格式冲突），请重新生成后再核对入库。</span>
       <button class="btn sm" data-write data-act="import-scan">重新生成</button></div>` : ''}
-    <div class="grid c2 section">
-      ${dropCard()}
-      ${inboxCard(inbox, !!plan)}
-    </div>
-    <div class="section card">
-      <div class="card-head"><h2>${esc(planHead())}</h2>
-        <span class="row tight">
-          <button class="btn sm" data-act="plan-defaults" ${plan && plan.length ? '' : 'disabled'}>采用建议分类</button>
-          <button class="btn sm${plan && plan.length && !bad.length ? ' primary' : ''}" data-write data-act="import-apply" ${plan && plan.length && !bad.length ? '' : 'disabled'}>确认入库</button>
-        </span></div>
-      ${plan && plan.length ? planTable(plan) : '<p class="empty">收件箱里有书时，点「生成入库清单」。</p>'}
-    </div>
-    <div class="section" data-live="docs" id="docs-slot">${docsCard()}</div>`;
-  // 刚整页画过，让 2.5 秒的重绘别白写一遍
+    ${dropCard()}
+    ${inboxCard(inbox, !!plan)}
+    <section class="card" aria-label="入库核对清单">
+      <div class="card-head">
+        <h2>${esc(planHead())}</h2>
+        <div class="row tight">
+          <button type="button" class="btn sm" data-act="plan-defaults" ${plan && plan.length ? '' : 'disabled'}>采用建议分类</button>
+          <button type="button" class="btn sm${plan && plan.length && !bad.length ? ' primary' : ''}" data-write data-act="import-apply" ${plan && plan.length && !bad.length ? '' : 'disabled'}>确认入库</button>
+        </div>
+      </div>
+      ${plan && plan.length ? planTable(plan) : `<div class="empty-state"><div>
+        <div class="empty-state-title">还没有待核对的入库清单</div>
+        <div class="empty-state-sub">收件箱放进新书后点「生成入库清单」，系统会自动识别书名、作者与分类建议。</div>
+      </div></div>`}
+    </section>`;
   S.docsSig = docsSig();
   return html;
 }
@@ -1046,29 +1188,28 @@ function planTable(plan) {
     return acc;
   }, {});
   const summary = ['add', 'replace', 'delete', 'review']
-    .map((key) => ACTION_WORD[key] + ' ' + num(counts[key] || 0)).join('，');
+    .map((key) => ACTION_WORD[key] + ' ' + num(counts[key] || 0)).join(' · ');
   const bad = planBlockers(plan);
   const sample = bad.slice(0, 3).join('；');
-  return `<p class="hint">${esc(summary)}</p>
+  return `<p class="hint" style="margin-bottom:8px">${esc(summary)}</p>
     <div class="legend">
       <span><b>新增</b> 收件箱 → 书库：建一本新书</span>
-      <span><b>换源</b> 收件箱 → 书库：只换已有书的主文件，书号不变</span>
+      <span><b>换源</b> 收件箱 → 书库：只换已有书主文件，书号不变</span>
       <span><b>删除</b> 收件箱 → 回收站：书库不动，可恢复</span>
       <span><b>待核</b> 先不动：决定后再入库</span>
     </div>
     ${bad.length ? `<div class="banner bad"><span>还有 ${num(bad.length)} 行没定：${esc(sample)}${bad.length > 3 ? ' …' : ''}</span></div>` : ''}
-    <div class="tw"><table class="plan-table">
-    <colgroup><col style="width:88px"><col style="width:23%"><col style="width:94px"><col style="width:17%">
-      <col style="width:9%"><col style="width:12%"><col style="width:88px"><col style="width:72px"><col></colgroup>
+    <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="入库核对表"><table class="plan-table">
+    <colgroup><col style="width:88px"><col style="width:22%"><col style="width:94px"><col style="width:18%">
+      <col style="width:10%"><col style="width:13%"><col style="width:88px"><col style="width:74px"><col></colgroup>
     <thead><tr class="group"><th></th><th colspan="2">收件箱</th><th colspan="5">书库（入库后）</th><th></th></tr>
-      <tr><th>动作</th><th>文件</th><th>格式 / 大小</th><th>书名</th><th>作者</th>
+      <tr><th>动作</th><th>文件</th><th>格式 / 大小</th><th>正式书名</th><th>作者</th>
       <th>分类</th><th>长期保留</th><th>编号</th><th>说明</th></tr></thead>
     <tbody>${plan.map(planRow).join('')}</tbody></table></div>
-    <p class="hint">「长期保留」说的是这本书在书库里长期怎么处理：选「不留」也照常入库，之后在删书页顶部的「不留的书」里处理。</p>
-    <p class="hint">删除只把收件箱文件移进回收站，书库里的书和正文都不动。</p>`;
+    <p class="hint" style="margin-top:10px">「不留」同样照常入库，之后可在「书目与分类 · 待退库与删书」统一处理；删除只把收件箱文件移进回收站。</p>`;
 }
 
-// ---- 文档转 md ---------------------------------------------------
+// ---- 文档转正文 ---------------------------------------------------
 // docx/xlsx/xls/pptx/txt 在入库后自动转成 md，md 原样复制。report.json 只有跑完才有，
 // 跑的过程中只有 progress.json（每本更新一次）。
 const DOC_FMT = /^(txt|md|docx|xlsx|xls|pptx)$/i;
@@ -1102,9 +1243,13 @@ function docsJobRemember(id) {
   }
 }
 
-// 库里还有多少 doc 格式没转 md：没有 docs 任务时，这张卡靠它决定露不露面
+// 库里还有多少 doc 格式没转正文：没有 docs 任务时，这张卡靠它决定露不露面
 function docsBackfill() {
   return (S.pending || []).filter((row) => DOC_FMT.test(String(row.format || ''))).length;
+}
+
+function docsPendingRows() {
+  return (S.pending || []).filter((row) => DOC_FMT.test(String(row.format || '')));
 }
 
 function docsTitle(uid, items) {
@@ -1175,7 +1320,57 @@ function paintDocs() {
   const sig = docsSig();
   if (sig === S.docsSig) return;
   S.docsSig = sig;
-  slot.innerHTML = docsCard();
+  slot.innerHTML = docsCard() || docsIdleView(docsPendingRows());
+}
+
+function docsPendingSection(pendingRows) {
+  return `<section class="card" aria-label="文档转换明细">
+    ${pendingRows.length ? `
+      <div class="card-head">
+        <h2>待转文档列表</h2>
+        <span class="pill half">${num(pendingRows.length)} 本</span>
+      </div>
+      <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="待转文档表">
+        <table>
+          <thead><tr><th>编号</th><th>书名</th><th>分类</th><th>格式</th><th class="num">大小</th></tr></thead>
+          <tbody>${pendingRows.map((r) => `<tr>
+            <td data-label="编号" class="mono" translate="no">${esc(r.uid)}</td>
+            <td data-label="书名" class="wrap">${esc(r.title)}</td>
+            <td data-label="分类" class="wrap small muted">${esc([r.subject1, r.subject2].filter(Boolean).join(' · ') || '其他')}</td>
+            <td data-label="格式" class="mono">${esc(r.format)}</td>
+            <td data-label="大小" class="num">${fmtBytes(r.bytes)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`
+    : `<div class="empty-state">
+        <div>
+          <div class="empty-state-title">全部文档类书目都已转为正文</div>
+          <div class="empty-state-sub">新入库文档会自动接力转换，一般无需手工介入。</div>
+        </div>
+      </div>`}
+  </section>`;
+}
+
+function docsIdleView(pendingRows) {
+  return `<section class="card section" aria-label="文档转正文状态">
+      <div class="card-head">
+        <div>
+          <h2>文档转正文</h2>
+          <p class="small muted">TXT、DOCX、XLSX、PPTX 入库后会自动转换；这里用于补转历史遗漏或核对转换结果。</p>
+        </div>
+        <div class="row tight">
+          <button type="button" class="btn sm" data-act="docs-refresh">刷新</button>
+          <button type="button" class="btn sm primary" data-write data-act="docs-backfill">扫描并补转遗漏</button>
+        </div>
+      </div>
+      <div class="strip">
+        <div class="strip-cell"><div class="strip-name">待补转文档</div><div class="strip-read">${num(pendingRows.length)} 本</div><div class="strip-note">${pendingRows.length ? '等待转换' : '当前无遗漏'}</div></div>
+        <div class="strip-cell"><div class="strip-name">最近一批完成</div><div class="strip-read">0 本</div><div class="strip-note">暂无近期批次</div></div>
+        <div class="strip-cell"><div class="strip-name">失败待重试</div><div class="strip-read">0 本</div><div class="strip-note">无异常文件</div></div>
+        <div class="strip-cell"><div class="strip-name">整体状态</div><div class="strip-read"><span class="status ${pendingRows.length ? 'half' : 'ok'}">${pendingRows.length ? '待处理' : '全部就绪'}</span></div><div class="strip-note">自动同步检索已启用</div></div>
+      </div>
+    </section>
+    ${docsPendingSection(pendingRows)}`;
 }
 
 function docsCard() {
@@ -1198,78 +1393,110 @@ function docsCard() {
   const share = total ? Math.min(100, Math.round(finished / total * 100)) : 0;
   const current = String(prog.current || '');
   const failed = items.filter((it) => it.status === 'failed');
-  const nfail = Number(sum.failed) || 0;
+  const ndone = Number(sum.done || 0) || items.filter((it) => it.status === 'done').length;
+  const nfail = Number(sum.failed) || failed.length;
   const nskip = Number(sum.skipped) || 0;
   const nnew = Number(scope.new) || 0;
   const nback = Number(scope.backfill) || 0;
+  const pendingRows = docsPendingRows();
 
   const bits = ['本次新书 ' + num(nnew)];
   if (nback) bits.push('库内补转 ' + num(nback));
   bits.push('跳过 ' + num(nskip), '失败 ' + num(nfail));
 
   const bar = total
-    ? `<div class="progress-label"><span>${esc(stateWord[0])} ${num(finished)} / ${num(total)} 本</span>
+    ? `<div class="progress-label" style="margin-top:12px"><span>${esc(stateWord[0])} ${num(finished)} / ${num(total)} 本</span>
         <span>${share}%</span></div>
       <div class="progress"><i style="width:${share}%"></i></div>`
-    : (running ? '<p class="hint">已排队，等前面的任务结束就开始。</p>' : '');
+    : (running ? '<p class="hint" style="margin-top:10px">已排队，等前面的任务结束就开始。</p>' : '');
   const now = current
-    ? `<p class="hint">正在转 <span class="mono">${esc(current)}</span>${docsTitle(current, items) ? ' · ' + esc(docsTitle(current, items)) : ''}</p>`
+    ? `<p class="hint" style="margin-top:8px">正在转 <span class="mono">${esc(current)}</span>${docsTitle(current, items) ? ' · ' + esc(docsTitle(current, items)) : ''}</p>`
     : '';
   const scopeLine = rep
-    ? `<p class="hint">${esc(bits.join(' · '))}</p>`
-    : (pending ? `<p class="hint">库里还有 ${num(pending)} 本 doc 格式没转 md。</p>` : '');
+    ? `<p class="hint" style="margin-top:10px">${esc(bits.join(' · '))}</p>`
+    : '';
   const badBanner = state === 'failed' && !rep
-    ? `<div class="banner bad"><span>转换没过：${esc(summaryText(job && job.summary) || '看任务日志')}</span>
+    ? `<div class="banner bad" style="margin-top:12px"><span>转换没过：${esc(summaryText(job && job.summary) || '看任务日志')}</span>
         ${body && body.job_id
     ? `<button class="btn sm" data-act="job-open" data-id="${esc(body.job_id)}">看日志</button>`
     : '<button class="btn sm" data-act="goto" data-tab="logs">看日志</button>'}</div>`
     : '';
-  const failTable = failed.length ? `<div class="tw"><table>
-      <thead><tr><th>编号</th><th>书名</th><th>格式</th><th>原因</th><th></th></tr></thead>
+  const failTable = failed.length ? `<div class="tw table-wrap stack-mobile" style="margin-top:12px" tabindex="0" role="region" aria-label="失败待重试列表"><table>
+      <thead><tr><th>编号</th><th>书名</th><th>格式</th><th>原因</th><th>操作</th></tr></thead>
       <tbody>${failed.map((it) => `<tr>
-        <td class="mono">${esc(it.uid)}</td>
-        <td class="wrap">${esc(it.title || docsTitle(it.uid, items) || '—')}</td>
-        <td>${esc(it.format || '')}</td>
-        <td class="wrap small">${esc(docsReason(it))}</td>
-        <td><button class="btn sm" data-write data-act="docs-retry" data-uid="${esc(it.uid)}">重试</button></td>
+        <td data-label="编号" class="mono" translate="no">${esc(it.uid)}</td>
+        <td data-label="书名" class="wrap">${esc(it.title || docsTitle(it.uid, items) || '—')}</td>
+        <td data-label="格式" class="mono">${esc(it.format || '')}</td>
+        <td data-label="原因" class="wrap small">${esc(docsReason(it))}</td>
+        <td data-label="操作"><button class="btn sm" data-write data-act="docs-retry" data-uid="${esc(it.uid)}">重试</button></td>
       </tr>`).join('')}</tbody></table></div>` : '';
-  const rows = items.length ? `<details class="adv" data-docs="items"${S.docsOpen ? ' open' : ''}>
-      <summary>逐本明细（${num(items.length)} 本）</summary>
-      <div class="tw"><table>
+  const rows = items.length ? `<details class="adv" style="margin-top:14px" data-docs="items"${S.docsOpen ? ' open' : ''}>
+      <summary>查看最近一次转换明细（${num(items.length)} 本）</summary>
+      <div class="tw table-wrap stack-mobile" style="margin-top:10px" tabindex="0" role="region" aria-label="最近转换明细表"><table>
         <thead><tr><th>编号</th><th>书名</th><th>格式</th><th>状态</th>
           <th class="num">耗时</th><th class="num">字数</th><th>说明</th></tr></thead>
         <tbody>${items.map((it) => {
           const st = DOCS_ITEM[it.status] || [it.status || '—', 'half'];
-          const why = it.status === 'failed' ? docsReason(it) : (it.md ? 'md 已落地' : '');
+          const why = it.status === 'failed' ? docsReason(it) : (it.md ? '已转为正文' : '');
           return `<tr>
-            <td class="mono">${esc(it.uid)}</td>
-            <td class="wrap">${esc(it.title || '—')}</td>
-            <td>${esc(it.format || '')}</td>
-            <td><span class="pill ${st[1]}">${esc(st[0])}</span></td>
-            <td class="num">${it.elapsed_ms ? (Number(it.elapsed_ms) / 1000).toFixed(1) + ' 秒' : '—'}</td>
-            <td class="num">${it.chars ? num(it.chars) : '—'}</td>
-            <td class="wrap small">${esc(why)}</td>
+            <td data-label="编号" class="mono" translate="no">${esc(it.uid)}</td>
+            <td data-label="书名" class="wrap">${esc(it.title || '—')}</td>
+            <td data-label="格式" class="mono">${esc(it.format || '')}</td>
+            <td data-label="状态"><span class="pill ${st[1]}">${esc(st[0])}</span></td>
+            <td data-label="耗时" class="num">${it.elapsed_ms ? (Number(it.elapsed_ms) / 1000).toFixed(1) + ' 秒' : '—'}</td>
+            <td data-label="字数" class="num">${it.chars ? num(it.chars) : '—'}</td>
+            <td data-label="说明" class="wrap small muted">${esc(why)}</td>
           </tr>`;
         }).join('')}</tbody></table></div>
     </details>` : '';
 
-  return `<div class="card" id="docs-card">
-    <div class="card-head"><h2>文档转 md <span class="pill ${stateWord[1]}">${esc(stateWord[0])}</span></h2>
-      <span class="row tight">
-        ${body && body.job_id ? `<span class="hint mono">${esc(body.job_id)}</span>` : ''}
-        <button class="btn sm" data-act="docs-refresh">刷新</button>
-      </span></div>
-    <p class="hint">TXT / DOCX / XLSX / XLS / PPTX 入库后转成 md，源文件是 md 的原样复制。</p>
-    ${badBanner}
-    ${bar}
-    ${now}
-    ${scopeLine}
-    ${failTable}
-    ${rows}
-    <div class="toolbar">
-      <button class="btn" data-write data-act="docs-backfill">补转库里遗漏的</button>
-      <span class="hint">把书库里 doc 格式还没转 md 的书整体补一遍，已经转好的不动。</span>
-    </div>
+  return `<div id="docs-card">
+    <section class="card section" aria-label="文档转正文状态">
+      <div class="card-head">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <h2>文档转正文</h2>
+            <span class="pill ${stateWord[1]}">${esc(stateWord[0])}</span>
+          </div>
+          <p class="small muted">TXT、DOCX、XLSX、PPTX 入库后会自动转换；这里用于补转历史遗漏或核对转换结果。</p>
+        </div>
+        <div class="row tight">
+          <button type="button" class="btn sm" data-act="docs-refresh">刷新</button>
+          <button type="button" class="btn sm primary" data-write data-act="docs-backfill">扫描并补转遗漏</button>
+        </div>
+      </div>
+      <div class="strip">
+        <div class="strip-cell"><div class="strip-name">待补转文档</div><div class="strip-read">${num(pending)} 本</div><div class="strip-note">${pending ? '等待转换' : '当前无遗漏'}</div></div>
+        <div class="strip-cell"><div class="strip-name">最近一批完成</div><div class="strip-read">${num(ndone)} 本</div><div class="strip-note">${nfail ? num(nfail) + ' 本异常' : '全部顺利通过'}</div></div>
+        <div class="strip-cell"><div class="strip-name">失败待重试</div><div class="strip-read">${num(nfail)} 本</div><div class="strip-note">${nfail ? '下方可直接重试' : '无异常文件'}</div></div>
+        <div class="strip-cell"><div class="strip-name">整体状态</div><div class="strip-read"><span class="status ${running || pending || nfail ? 'half' : 'ok'}">${running ? '转换中' : (pending || nfail ? '待处理' : '全部就绪')}</span></div><div class="strip-note">自动同步检索已启用</div></div>
+      </div>
+      ${badBanner}
+      ${bar}
+      ${now}
+      ${scopeLine}
+      ${failTable}
+    </section>
+    <section class="card" aria-label="文档转换明细">
+      ${pendingRows.length ? `
+        <div class="card-head"><h2>待转文档列表</h2><span class="pill half">${num(pendingRows.length)} 本</span></div>
+        <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="待转文档表"><table>
+          <thead><tr><th>编号</th><th>书名</th><th>分类</th><th>格式</th><th class="num">大小</th></tr></thead>
+          <tbody>${pendingRows.map((r) => `<tr>
+            <td data-label="编号" class="mono" translate="no">${esc(r.uid)}</td>
+            <td data-label="书名" class="wrap">${esc(r.title)}</td>
+            <td data-label="分类" class="wrap small muted">${esc([r.subject1, r.subject2].filter(Boolean).join(' · ') || '其他')}</td>
+            <td data-label="格式" class="mono">${esc(r.format)}</td>
+            <td data-label="大小" class="num">${fmtBytes(r.bytes)}</td>
+          </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty-state">
+          <div>
+            <div class="empty-state-title">全部文档类书目都已转为正文</div>
+            <div class="empty-state-sub">新入库文档会自动接力转换，一般无需手工介入。</div>
+          </div>
+        </div>`}
+      ${rows}
+    </section>
   </div>`;
 }
 
@@ -1297,68 +1524,81 @@ async function submitDocs(payload, note) {
 function viewSplit() {
   const ebooks = S.pending.filter((r) => EBOOK.test(r.format));
   const allPicked = ebooks.length > 0 && ebooks.every((r) => S.selected.has(r.uid));
-  return `<h1>正文生产 · 电子书</h1>
-    ${contentSubtabs('split')}
-    <p class="lead">把电子书拆成按章的 Markdown；落地后自动差量同步书目库、词法索引并排队增量向量同步。</p>
-    <div class="section card">
-      <div class="toolbar">
-        <span class="hint">待拆 ${num(ebooks.length)} 本</span>
-        <span class="row tight">
-          <label class="check"><input type="checkbox" data-act="split-all"${allPicked ? ' checked' : ''}> 全选</label>
-          <button class="btn primary" data-write data-act="split-run">开始拆章</button>
-        </span>
+  const stagedFlag = S.splitBooks && S.splitBooks.some((b) => INSPECT_STATUS.indexOf(b.status) >= 0);
+  return `<div class="page-head">
+      <div>
+        <h1>正文生产</h1>
+        <p class="page-lead">把电子书、文档与 PDF 转为章节正文；完成后自动更新书目与检索。</p>
       </div>
-      <details class="adv">
-        <summary>更多选项</summary>
-        <label class="check"><input type="checkbox" id="split-replace"${S.replaceMd ? ' checked' : ''}> 重拆已有 Markdown</label>
-        <p class="hint">现有 Markdown 会换成新版本，旧版留在批次目录里。</p>
-        <label class="check">同时处理 <input type="number" id="split-workers" value="${S.splitWorkers || 4}" min="1" max="16" style="width:64px"> 本</label>
-      </details>
-      ${ebooks.length ? `<div class="tw"><table><thead><tr><th></th><th>编号</th><th>书名</th><th>格式</th><th class="num">大小</th><th>源文件</th></tr></thead>
-      <tbody>${ebooks.map((row) => `<tr>
-        <td><input type="checkbox" data-act="split-pick" value="${esc(row.uid)}"${S.selected.has(row.uid) ? ' checked' : ''}></td>
-        <td class="mono">${esc(row.uid)}</td>
-        <td class="wrap">${esc(row.title)}</td>
-        <td>${esc(row.format || '')}</td>
-        <td class="num">${fmtBytes(row.bytes)}</td>
-        <td class="wrap small" title="${esc(row.file || '')}">${esc(baseName(row.file))}</td>
-      </tr>`).join('')}</tbody></table></div>` : '<p class="empty">没有待拆的电子书。</p>'}
     </div>
-    <div class="section card" data-live="split-batch">${batchCard()}</div>
-    ${S.review ? `<div class="section card">${reviewPanel()}</div>` : ''}
-    <div class="section card"><h2>最近的拆章任务</h2>${recentJobs('split.run')}</div>`;
+    ${contentSubtabs('split')}
+    <div data-live="split-batch">${batchCard()}</div>
+    ${S.review ? `<section class="card section" aria-label="问题复核详情">${reviewPanel()}</section>` : ''}
+    <section class="card" aria-label="待拆章节的电子书">
+      <div class="card-head">
+        <h2>待拆章节的电子书</h2>
+        <div class="row tight">
+          <span class="pill ${ebooks.length ? 'half' : 'ok'}">${num(ebooks.length)} 本待拆</span>
+          ${ebooks.length ? `<label class="check"><input type="checkbox" data-act="split-all"${allPicked ? ' checked' : ''}> 全选</label>
+            <button type="button" class="btn sm primary" data-write data-act="split-run">开始拆章 (${num(S.selected.size)})</button>` : ''}
+        </div>
+      </div>
+      ${ebooks.length ? `<details class="adv" style="margin-bottom:10px">
+          <summary>更多拆章选项</summary>
+          <label class="check"><input type="checkbox" id="split-replace"${S.replaceMd ? ' checked' : ''}> 重拆已有正文（覆盖现有章节）</label>
+          <label class="check">同时处理 <input type="number" id="split-workers" value="${S.splitWorkers || 4}" min="1" max="16" style="width:64px"> 本</label>
+        </details>
+        <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="待拆电子书表"><table>
+          <thead><tr><th style="width:36px">选</th><th>编号</th><th>书名</th><th>格式</th><th class="num">大小</th></tr></thead>
+          <tbody>${ebooks.map((row) => `<tr>
+            <td data-label="选"><input type="checkbox" aria-label="选择 ${esc(row.title)}" data-act="split-pick" value="${esc(row.uid)}"${S.selected.has(row.uid) ? ' checked' : ''}></td>
+            <td data-label="编号" class="mono" translate="no">${esc(row.uid)}</td>
+            <td data-label="书名" class="wrap">${esc(row.title)}</td>
+            <td data-label="格式" class="mono">${esc(row.format || '')}</td>
+            <td data-label="大小" class="num">${fmtBytes(row.bytes)}</td>
+          </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty-state"><div>
+          <div class="empty-state-title">全部电子书均已完成拆章</div>
+          <div class="empty-state-sub">新导入的 EPUB / MOBI / AZW3 会自动进入这里等待切分章节${stagedFlag ? '；当前上方暂存区仍有待复核书目' : ''}。</div>
+        </div></div>`}
+    </section>`;
 }
 
 function batchCard() {
-  return `<div class="card-head"><h2>${S.batch ? '批次 ' + esc(S.batch) : '还没有批次'}</h2>
-      <button class="btn sm" data-act="split-refresh"${S.batch ? '' : ' disabled'}>刷新状态</button></div>
-    ${splitBooks()}`;
+  if (!S.batch) return '';
+  return `<section class="card section" aria-label="最近拆章批次产物">
+    <div class="card-head">
+      <h2>批次核对 · ${esc(S.batch)}</h2>
+      <button type="button" class="btn sm" data-act="split-refresh">刷新状态</button>
+    </div>
+    ${splitBooks()}
+  </section>`;
 }
 
 const INSPECT_STATUS = ['staged', 'staged-review', 'split-failed', 'convert-failed', 'error'];
 
 function splitBooks() {
-  if (!S.batch) return '<p class="empty">还没开批次。选书后点「开始拆章」。</p>';
+  if (!S.batch) return '';
   if (!S.splitBooks.length) return '<p class="empty">批次刚开，还没有单本记录。跑起来后点「刷新状态」。</p>';
-  return `<div class="tw"><table><thead><tr><th>编号</th><th>状态</th><th>结构检查</th><th>内容检查</th>
-    <th class="num">文本量</th><th class="num">章</th><th class="num">修复</th><th>落地位置</th><th>原 Markdown</th><th></th></tr></thead>
+  return `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="拆章批次记录"><table><thead><tr><th>编号</th><th>状态</th><th>结构检查</th><th>内容检查</th>
+    <th class="num">文本量</th><th class="num">章数</th><th class="num">修复</th><th>操作</th></tr></thead>
     <tbody>${S.splitBooks.map((b) => `<tr>
-      <td class="mono">${esc(b.uid)}</td>
-      <td><span class="pill">${esc(SPLIT_WORD[b.status] || b.status || '—')}</span></td>
-      <td>${checkWord(b.verify_rc)}</td>
-      <td>${checkWord(b.audit_rc)}</td>
-      <td class="num">${b.audit_ratio ? pct(b.audit_ratio, 1) : '—'}</td>
-      <td class="num">${esc(b.chapters === null || b.chapters === undefined ? '—' : b.chapters)}</td>
-      <td class="num">${esc(b.fix || 0)}</td>
-      <td class="wrap small">${esc(b.dest || '')}</td>
-      <td class="wrap small" title="${esc(b.previous || '')}">${esc(baseName(b.previous))}</td>
-      <td class="row tight">
-        <button class="btn sm" data-act="split-one" data-uid="${esc(b.uid)}">重拆这本</button>
-        <button class="btn sm" data-act="split-recheck" data-uid="${esc(b.uid)}">重新检查</button>
-        ${INSPECT_STATUS.indexOf(b.status) >= 0 ? `<button class="btn sm" data-act="split-inspect" data-uid="${esc(b.uid)}">查看问题</button>` : ''}
+      <td data-label="编号" class="mono" translate="no">${esc(b.uid)}</td>
+      <td data-label="状态"><span class="pill ${b.status === 'staged-review' ? 'half' : (b.status === 'landed' || b.status === 'accepted' ? 'ok' : '')}">${esc(SPLIT_WORD[b.status] || b.status || '—')}</span></td>
+      <td data-label="结构检查">${checkWord(b.verify_rc)}</td>
+      <td data-label="内容检查">${checkWord(b.audit_rc)}</td>
+      <td data-label="文本量" class="num">${b.audit_ratio ? pct(b.audit_ratio, 1) : '—'}</td>
+      <td data-label="章数" class="num">${esc(b.chapters === null || b.chapters === undefined ? '—' : b.chapters)}</td>
+      <td data-label="修复" class="num">${esc(b.fix || 0)}</td>
+      <td data-label="操作" class="nowrap">
+        <div class="row tight">
+          <button type="button" class="btn sm" data-act="split-one" data-uid="${esc(b.uid)}">重拆这本</button>
+          <button type="button" class="btn sm" data-act="split-recheck" data-uid="${esc(b.uid)}">重新检查</button>
+          ${INSPECT_STATUS.indexOf(b.status) >= 0 ? `<button type="button" class="btn sm primary" data-act="split-inspect" data-uid="${esc(b.uid)}">查看问题</button>` : ''}
+        </div>
       </td>
     </tr>`).join('')}</tbody></table></div>
-    <p class="hint">重拆这本会从头再拆一遍；重新检查只复核暂存区里已有的正文，过关就直接进库；查看问题列出这本书差在哪。</p>`;
+    <p class="hint" style="margin-top:8px">重新检查只复核暂存区里已有的正文，过关后直接入库。</p>`;
 }
 
 function reviewPanel() {
@@ -1373,8 +1613,8 @@ function reviewPanel() {
   const reasonRows = Object.keys(excluded)
     .map((key) => stat(key, num(excluded[key]) + ' 页'));
   return `<div class="card-head"><h2>${esc(row.title || row.uid || '这本书')}</h2>
-      <button class="btn sm" data-act="review-close">关闭</button></div>
-    <p class="small">状态 <span class="pill">${esc(SPLIT_WORD[row.status] || row.status || '—')}</span>
+      <button type="button" class="btn sm" data-act="review-close">关闭</button></div>
+    <p class="small">状态 <span class="pill half">${esc(SPLIT_WORD[row.status] || row.status || '—')}</span>
       · 审计比 ${esc(row.ratio === null || row.ratio === undefined ? '—' : pct(row.ratio, 1))}</p>
     <div class="metrics">
       ${stat('正文字数', num(row.text_chars || 0))}
@@ -1386,26 +1626,12 @@ function reviewPanel() {
       ? '；前几个：' + uncovered.slice(0, 5).map((item) => esc(baseName(item[1]))).join('、') : ''}</p>
     <div class="metrics">${reasonRows.join('') || stat('未收录原因', '没有')}</div>
     <div class="metrics">${alarmRows.join('') || stat('结构报警', '没有')}</div>
-    <p class="hint">差在卷首卷尾或图版的，多半用章节映射调整后再重拆；确认本来就该少，就写受理原因后放进库。</p>
-    ${row.uid ? `<div class="toolbar">
+    <p class="hint">确认本来就该少（如卷首序言、版权页或插图页），填写受理原因后即可放行入库。</p>
+    ${row.uid ? `<div class="toolbar" style="margin-bottom:4px">
       <input type="text" id="split-accept-reason" placeholder="写受理原因（如：卷首序言/版权页无需收录）" size="34">
-      <button class="btn sm primary" data-write data-act="split-accept" data-uid="${esc(row.uid)}">受理并重新检查</button>
+      <button type="button" class="btn sm primary" data-write data-act="split-accept" data-uid="${esc(row.uid)}">受理并重新检查</button>
     </div>` : ''}
     <p class="hint">文本量低于原文 88% 或高于 115% 才会被标出。</p>`;
-}
-
-function recentJobs(kind, limit = 6) {
-  const rows = S.jobs.filter((j) => j.kind === kind).slice(0, limit);
-  if (!rows.length) return '<p class="empty">还没有这类任务。</p>';
-  return rows.map(jobLine).join('');
-}
-
-// 两类合成一份，空态只出一句
-function recentPdfJobs(limit = 3) {
-  const rows = S.jobs.filter((j) => j.kind === 'pdf.triage' || j.kind === 'pdf.run')
-    .slice(0, limit * 2);
-  if (!rows.length) return '<p class="empty">还没有这类任务。</p>';
-  return rows.map(jobLine).join('');
 }
 
 // ---- PDF ----------------------------------------------------------
@@ -1697,8 +1923,7 @@ async function applySettle(items, ask) {
   setBusy(true);
   try {
     const body = await post('/api/pdf/settle', { items });
-    S.settle = null;
-    $('#modal').innerHTML = '';
+    closeModal();
     const detail = await watchJob(body.job_id, afterJob);
     if (detail) toast(jobNote(detail.job), jobBad(detail.job));
     await Promise.all([loadJobs(), loadPdfBooks(), loadPdf()]);
@@ -1781,55 +2006,174 @@ function runCard() {
 }
 
 function viewDocs() {
-  const docRe = /^(txt|md|docx|xlsx|xls|pptx)$/i;
-  const rows = S.pending.filter((r) => docRe.test(String(r.format || '')));
-  return `<h1>正文生产 · 文档</h1>
+  return `<div class="page-head">
+      <div>
+        <h1>正文生产</h1>
+        <p class="page-lead">把电子书、文档与 PDF 转为章节正文；完成后自动更新书目与检索。</p>
+      </div>
+    </div>
     ${contentSubtabs('docs')}
-    <p class="lead">TXT / MD / DOCX / XLSX / XLS / PPTX 入库或换源后会自动转成 md，落地后自动同步检索；这里可补转历史遗漏或重试失败书。</p>
-    <div class="section">${docsCard()}</div>
-    <div class="section card">
-      <div class="card-head"><h2>当前待转文档 <span class="hint">${num(rows.length)} 本</span></h2>
-        <button class="btn sm" data-act="docs-refresh">刷新</button></div>
-      ${rows.length ? `<div class="tw"><table><thead><tr><th>编号</th><th>书名</th><th>分类</th><th>格式</th><th class="num">大小</th></tr></thead>
-        <tbody>${rows.map((r) => `<tr><td class="mono">${esc(r.uid)}</td><td class="wrap">${esc(r.title)}</td>
-          <td class="wrap small">${esc([r.subject1, r.subject2].filter(Boolean).join('/') || '其他')}</td>
-          <td>${esc(r.format)}</td><td class="num">${fmtBytes(r.bytes)}</td></tr>`).join('')}</tbody></table></div>`
-        : '<p class="empty">当前没有待转的文档类书。</p>'}
-    </div>`;
+    <div data-live="docs" id="docs-slot">${docsCard()}${(!S.docs && !docsBackfill()) ? docsIdleView(docsPendingRows()) : ''}</div>`;
 }
 
 function viewManual() {
   const autoRe = /^(epub|mobi|azw3|azw|pdf|txt|md|docx|xlsx|xls|pptx)$/i;
   const rows = S.pending.filter((r) => !autoRe.test(String(r.format || '')));
-  return `<h1>正文生产 · 手工格式</h1>
+  return `<div class="page-head">
+      <div>
+        <h1>正文生产</h1>
+        <p class="page-lead">把电子书、文档与 PDF 转为章节正文；完成后自动更新书目与检索。</p>
+      </div>
+    </div>
     ${contentSubtabs('manual')}
-    <p class="lead">.djvu / .csv 等暂不支持自动转换的书目。把外部转好的章节 Markdown 放进对应书的 <span class="mono">books/&lt;uid&gt;/md/</span> 后，点「扫描落位」即可入库并自动触发增量检索同步。</p>
-    <div class="section card">
-      <div class="card-head"><h2>手工待转书目 <span class="hint">${num(rows.length)} 本</span></h2>
-        <button class="btn primary sm" data-write data-act="manual-rescan">扫描落位</button></div>
-      ${rows.length ? `<div class="tw"><table><thead><tr><th>编号</th><th>书名</th><th>格式</th><th>源文件</th><th>正文放置目录</th></tr></thead>
-        <tbody>${rows.map((r) => `<tr><td class="mono">${esc(r.uid)}</td><td class="wrap">${esc(r.title)}</td>
-          <td>${esc(r.format || '未知')}</td><td class="wrap small">${esc(r.file || '')}</td>
-          <td class="mono small">books/${esc(r.uid)}/md/</td></tr>`).join('')}</tbody></table></div>`
-        : '<p class="empty">没有需要手工处理的格式书目。</p>'}
-    </div>`;
+    <section class="card" aria-label="手工格式处理">
+      <div class="card-head">
+        <h2>手工格式书目（djvu / csv）</h2>
+        <button type="button" class="btn sm primary" data-write data-act="manual-rescan">扫描落位</button>
+      </div>
+      ${rows.length ? `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="手工格式清单"><table>
+        <thead><tr><th>编号</th><th>书名</th><th>格式</th><th>状态</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr>
+          <td data-label="编号" class="mono" translate="no">${esc(r.uid)}</td>
+          <td data-label="书名" class="wrap">${esc(r.title)}</td>
+          <td data-label="格式" class="mono">${esc(r.format || '未知')}</td>
+          <td data-label="状态" class="small muted">待手工放回章节正文</td>
+        </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty-state"><div>
+          <div class="empty-state-title">没有需要手工处理的书目</div>
+          <div class="empty-state-sub">在外部转好章节正文并放回书目目录后，点击右上角「扫描落位」即可自动入库。</div>
+        </div></div>`}
+    </section>`;
+}
+
+function pdfInlineRows() {
+  const q = String(S.pdfInlineQ || '').trim().toLowerCase();
+  return (S.books || []).filter((row) => {
+    if (S.pdfInlineTag !== 'all' && row.disposition !== S.pdfInlineTag) return false;
+    if (!q) return true;
+    return String(row.uid || '').toLowerCase().indexOf(q) >= 0
+      || String(row.title || '').toLowerCase().indexOf(q) >= 0;
+  }).slice(0, 80);
 }
 
 function viewPdf() {
   const batch = (S.pdf && S.pdf.batch) || {};
-  return `<h1>正文生产 · PDF</h1>
+  const today = S.pdfToday || { used: 0, cap: 20000 };
+  const cap = Number(today.cap) || 20000;
+  const used = Number(today.used) || 0;
+  const quotaPct = cap > 0 && used > 0 ? Math.min(100, Math.max(1, Math.round(used / cap * 100))) : 0;
+  const counts = S.bookCounts || { convert: 0, untriaged: 0, gallery: 0, ja: 0 };
+  const stripMeta = [
+    ['convert', '可转', '已定路线，可直接转写'],
+    ['untriaged', '未分诊', '等待采样判断'],
+    ['gallery', '存档·图册', '政策只存不转'],
+    ['ja', '存档·非中英文', '政策只存不转'],
+  ];
+  const untriaged = S.books.filter((row) => row.disposition === 'untriaged');
+  const split = S.pdfUntriaged;
+  const totalUntriaged = split ? split.books : untriaged.length;
+  const haveSuggest = untriaged.filter((row) => row.suggestion).length;
+  const manualSuggest = untriaged.filter((row) => row.suggestion && row.suggestion.manual).length;
+  const autoSuggest = Math.max(0, haveSuggest - manualSuggest);
+  const todoTriage = Math.max(0, totalUntriaged - haveSuggest);
+  const live = liveTriage();
+  const part = batch.partition || {};
+  const day = /(\d{4}-\d{2}-\d{2})$/.exec(String(batch.name || ''));
+  const archived = !!batch.name && Number(batch.worklist) > 0;
+  const old = archived
+    ? `${esc(day ? day[1] : batch.name)} 已封存 · ${num(batch.worklist)} 本里 ${num(part.landed)} 落地、${num(part.left)} 未落地`
+    : '还没封存过批次';
+  const rows = pdfInlineRows();
+
+  return `<div class="page-head">
+      <div>
+        <h1>正文生产</h1>
+        <p class="page-lead">把电子书、文档与 PDF 转为章节正文；完成后自动更新书目与检索。</p>
+      </div>
+    </div>
     ${contentSubtabs('pdf')}
-    <p class="lead">待转的 PDF 先分诊定处置，再从清单里勾书转成 Markdown；落地后自动同步词法索引与增量向量。</p>
-    <div class="section card">
-      <div class="card-head"><h2>现在的状态</h2><span class="row tight"><button class="btn sm" data-act="pdf-refresh">刷新</button></span></div>
-      ${queueStrip()}
-      ${quotaLine(batch)}
-    </div>
-    <div class="grid c2 section">
-      ${triageCard()}
-      ${runCard()}
-    </div>
-    <div class="section card"><h2>最近的分诊与转 md</h2>${recentPdfJobs()}</div>`;
+    <section class="card section" aria-label="PDF 队列与今日额度">
+      <div class="card-head">
+        <h2>PDF 状态概览</h2>
+        <div class="row tight">
+          <span class="small muted tnum">今天额度 <b>${num(used)}</b> / ${num(cap)}&nbsp;页</span>
+          <button type="button" class="btn sm" data-act="pdf-refresh">刷新</button>
+        </div>
+      </div>
+      <div class="strip" style="margin-bottom:12px">
+        ${stripMeta.map(([key, label, note]) => `<button type="button" class="strip-cell" data-act="pdf-inline-tag" data-tag="${key}" aria-pressed="${S.pdfInlineTag === key}">
+          <span class="strip-name">${esc(label)}</span>
+          <span class="strip-read">${num(counts[key] || 0)} 本</span>
+          <span class="strip-note">${esc(note)}</span>
+        </button>`).join('')}
+      </div>
+      <div class="progress" aria-label="今日额度使用进度"><i style="width:${quotaPct}%"></i></div>
+      <div class="toolbar" style="margin-top:12px;margin-bottom:0">
+        <span class="small muted">${old}</span>
+        <span class="spacer"></span>
+        ${totalUntriaged > 0 || live ? `<button type="button" class="btn sm" data-act="pdf-triage-batch"${todoTriage && !live ? '' : ' disabled'}>开始分诊 ${num(todoTriage)} 本</button>` : `<button type="button" class="btn sm" data-act="pdf-triage-batch" disabled hidden>开始分诊 0 本</button>`}
+        <button type="button" class="btn sm" data-act="pdf-detail"${archived ? '' : ' disabled'}>失败明细</button>
+      </div>
+      ${haveSuggest > 0 ? `<p class="hint" style="margin-top:8px">${autoSuggest ? '其中 ' + num(autoSuggest) + ' 本已经出了建议，等你在清单里确认。' : ''}${manualSuggest ? '另有 ' + num(manualSuggest) + ' 本需人工判断。' : ''}</p>` : ''}
+      <div id="triage-progress" style="margin-top:${live ? '10px' : '0'}">${triageProgress()}</div>
+    </section>
+
+    <section class="card" aria-label="待转 PDF 清单">
+      <div class="card-head">
+        <h2>待转 PDF 清单</h2>
+        <div class="row tight">
+          <button type="button" class="btn sm" data-act="pdf-pick-open">去清单选书</button>
+          <button type="button" class="btn sm primary" data-write data-act="pdf-run">开始转写选中 (${num(S.pick.size)})</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="filter-group">
+          <label for="pdf-inline-q" class="small muted" style="padding-left:4px">搜索</label>
+          <input type="search" id="pdf-inline-q" autocomplete="off" spellcheck="false" value="${esc(S.pdfInlineQ)}" placeholder="编号或书名…" style="width:180px">
+        </div>
+        <label for="pdf-inline-disp" class="small muted">处置筛选</label>
+        <select id="pdf-inline-disp">
+          <option value="all"${S.pdfInlineTag === 'all' ? ' selected' : ''}>全部状态</option>
+          <option value="convert"${S.pdfInlineTag === 'convert' ? ' selected' : ''}>可转</option>
+          <option value="untriaged"${S.pdfInlineTag === 'untriaged' ? ' selected' : ''}>未分诊</option>
+          <option value="gallery"${S.pdfInlineTag === 'gallery' ? ' selected' : ''}>存档·图册</option>
+          <option value="ja"${S.pdfInlineTag === 'ja' ? ' selected' : ''}>存档·非中英文</option>
+        </select>
+        ${S.pdfInlineTag !== 'all' ? '<button type="button" class="btn sm" data-act="pdf-inline-reset">显示全部</button>' : ''}
+        <span class="spacer"></span>
+        <span class="small muted tnum">已选 ${num(S.pick.size)} 本</span>
+      </div>
+      <details class="adv" style="margin-bottom:12px">
+        <summary>转写批处理参数</summary>
+        <div class="row" style="margin-top:6px">
+          <label class="check">最多转几本（合计） <input type="number" id="pdf-limit" value="${S.pdfLimit}" min="0" style="width:72px"></label>
+          <label class="check">同时处理 <input type="number" id="pdf-workers" value="${S.pdfWorkers || 3}" min="1" max="8" style="width:64px"></label>
+          <label class="check"><input type="checkbox" id="pdf-replace"${S.pdfReplace ? ' checked' : ''}> 覆盖已有正文</label>
+        </div>
+      </details>
+      <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="PDF 清单表">
+        <table>
+          <thead><tr><th style="width:36px">选</th><th>编号</th><th>书名</th><th>处置</th><th class="num">页数</th><th>说明</th><th>操作</th></tr></thead>
+          <tbody>
+            ${rows.length ? rows.map((row) => {
+              const label = row.route ? routeWord(row.route) : (PICK_WORD[row.disposition] || row.disposition);
+              const pages = row.pages === null || row.pages === undefined ? '—' : num(row.pages);
+              const note = pickNote(row) || '—';
+              return `<tr>
+                <td data-label="选"><input type="checkbox" aria-label="选择 ${esc(row.title || row.uid)}" data-act="pick-one" value="${esc(row.uid)}"${S.pick.has(row.uid) ? ' checked' : ''}></td>
+                <td data-label="编号" class="mono" translate="no">${esc(row.uid)}</td>
+                <td data-label="书名" class="wrap">${esc(row.title || '')}</td>
+                <td data-label="处置"><span class="pill ${row.disposition === 'convert' ? 'ok' : ''}">${esc(label)}</span></td>
+                <td data-label="页数" class="num">${pages}</td>
+                <td data-label="说明" class="clip small muted" title="${esc(note)}">${esc(note)}</td>
+                <td data-label="操作"><button type="button" class="btn sm" data-act="pick-settle" data-uid="${esc(row.uid)}">改处置</button></td>
+              </tr>`;
+            }).join('') : '<tr><td colspan="7" class="empty">当前筛选条件下没有 PDF 书目。</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      ${S.books.length > 80 ? `<p class="hint" style="margin-top:8px">当前显示前 80 本，完整筛选与排序请点击右上角「去清单选书」。</p>` : ''}
+    </section>`;
 }
 
 function triagePreviewHtml(info) {
@@ -1848,11 +2192,11 @@ function triagePreviewHtml(info) {
     metricBits.push('图片占比 ' + pct(m.image_share, 0));
   }
   if (m.ink !== undefined && m.ink !== null) metricBits.push('墨迹 ' + m.ink);
-  if (m.img_ppi_median) metricBits.push('图分辨率 ' + num(m.img_ppi_median) + ' ppi');
-  const thumbs = thumbList.map((rel) => `<a href="/api/file?path=${encodeURIComponent(rel)}" target="_blank" rel="noopener"><img src="/api/file?path=${encodeURIComponent(rel)}" alt="thumb" style="max-height:140px;border:1px solid var(--line);border-radius:4px"></a>`).join('');
-  return `<div class="section">
+  if (m.img_ppi_median) metricBits.push('图分辨率 ' + num(m.img_ppi_median) + '\u00A0ppi');
+  const thumbs = thumbList.map((rel) => `<a href="/api/file?path=${encodeURIComponent(rel)}" target="_blank" rel="noopener"><img class="thumb-frame" src="/api/file?path=${encodeURIComponent(rel)}" alt="采样缩略图" style="max-height:140px"></a>`).join('');
+  return `<div class="section" style="margin-bottom:0">
     ${metricBits.length ? `<p class="hint">${esc(metricBits.join(' · '))}</p>` : ''}
-    ${thumbs ? `<div class="row" style="gap:8px;flex-wrap:wrap">${thumbs}</div>` : ''}
+    ${thumbs ? `<div class="thumbs">${thumbs}</div>` : ''}
   </div>`;
 }
 
@@ -1862,48 +2206,44 @@ function settleModal(row) {
     : (row.disposition === 'ja' ? '日文暂缓' : (row.suggestion || {}).route));
   const pages = row.pages === null || row.pages === undefined ? '' : ' · ' + num(row.pages) + ' 页';
   const acceptBox = row.progress === 'staged'
-    ? `<div class="section">
+    ? `<div>
         <p class="hint">这本书已转写但留在暂存区未过审，若确认可放行，写受理原因后放入待复核入口：</p>
-        <div class="toolbar">
+        <div class="toolbar" style="margin-bottom:0">
           <input type="text" id="pdf-accept-reason" placeholder="受理原因（如：扫图版页数吻合）" size="28">
-          <button class="btn sm" data-write data-act="pdf-accept" data-uid="${esc(row.uid)}">写入受理并重审</button>
+          <button type="button" class="btn sm" data-write data-act="pdf-accept" data-uid="${esc(row.uid)}">写入受理并重审</button>
         </div>
       </div>` : '';
-  return `<div class="overlay" data-act="close-modal">
-    <div class="modal" data-stop="1">
-      <h2>改处置：${esc(row.title || row.uid)}</h2>
-      <p class="hint">${esc(row.uid)}${esc(pages)}</p>
+  return `<dialog class="modal" closedby="any" aria-labelledby="settle-dlg-title">
+    <div class="dlg-head">
+      <div>
+        <h2 id="settle-dlg-title">改处置：${esc(row.title || row.uid)}</h2>
+        <p class="small muted mono" translate="no">${esc(row.uid)}${esc(pages)}</p>
+      </div>
+      <button type="button" class="icon-btn" data-act="close-modal" aria-label="关闭弹窗">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="dlg-body">
       ${triagePreviewHtml(S.triageInfo)}
-      <label class="field"><span>处置</span><select id="settle-route">
+      <label class="field"><span>处置方式</span><select id="settle-route">
         ${SETTLE_ROUTES.map((r) => `<option value="${esc(r)}"${r === current ? ' selected' : ''}>${esc(routeWord(r))}</option>`).join('')}
       </select></label>
-      <div class="row">
-        <button class="btn primary" data-write data-act="settle-submit" data-uid="${esc(row.uid)}">提交</button>
-        <button class="btn" data-act="close-modal">取消</button>
-        <span class="hint">改处置只写台账，不出正文。</span>
-      </div>
+      <p class="hint">改处置只写台账，不出正文。</p>
       ${acceptBox}
     </div>
-  </div>`;
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-act="close-modal">取消</button>
+      <button type="button" class="btn primary" data-write data-act="settle-submit" data-uid="${esc(row.uid)}">提交</button>
+    </div>
+  </dialog>`;
 }
 
-// ---- 维护 ---------------------------------------------------------
-function stateCell(name, cls, word, note) {
+// ---- 同步与维护 ---------------------------------------------------
+function maintainCardCell(name, cls, word, note) {
   return `<div class="strip-cell">
     <div class="strip-name">${esc(name)}</div>
-    ${status(cls, word)}
-    <div class="note">${esc(note)}</div>
-  </div>`;
-}
-
-function deltaBox(title, ok, word, detail, uids) {
-  const shown = (uids || []).slice(0, 12);
-  const more = (uids || []).length > 12 ? ` 等 ${num(uids.length)} 本` : '';
-  return `<div class="delta-box">
-    <div class="k">${esc(title)}</div>
-    <div class="v">${status(ok ? 'ok' : 'half', word)}</div>
-    <div class="small muted">${esc(detail)}</div>
-    ${shown.length ? `<div class="delta-uids">${esc(shown.join(', ') + more)}</div>` : ''}
+    <div class="strip-read">${status(cls, word)}</div>
+    <div class="strip-note">${esc(note)}</div>
   </div>`;
 }
 
@@ -1911,12 +2251,6 @@ function viewMaintain() {
   const c = bookCounts();
   const info = statusIssues();
   const delta = (S.status && S.status.sync_delta) || null;
-  const last = S.jobs.find((j) => j.kind === 'sync.reconcile' || j.kind === 'sync.fts' || j.kind === 'maintain') || null;
-  const lastCls = !last ? 'out' : (last.state === 'succeeded' ? 'ok'
-    : (last.state === 'failed' || last.state === 'orphaned' ? 'miss' : 'half'));
-  const lastWord = !last ? '还没有记录' : (JOB_WORD[last.state] || last.state);
-  const lastNote = last ? fmtTime(last.ended || last.created).slice(5) : '正文落地会自动增量同步';
-
   const fts = (delta && delta.fts) || { added: [], modified: [], removed: [], drift_count: 0 };
   const emb = (delta && delta.embed) || { ok: false, engine_ready: false, added: [], modified: [], orphan: [], chunks: 0, garbage: 0, garbage_ratio: 0, compact_recommended: false };
   const exp = (delta && delta.expand) || { covered_books: 0, uncovered_books: 0 };
@@ -1927,130 +2261,171 @@ function viewMaintain() {
   const hasDrift = delta ? !!delta.has_drift : (c.lagBooks > 0 || c.indexExtra > 0 || c.ledgerStale);
   const autoEmbed = !S.settings || S.settings.auto_embed !== false;
   const garbagePct = Math.round((Number(emb.garbage_ratio) || 0) * 100);
+  const isOk = statusState() === 'ok';
 
-  return `<h1>同步与维护</h1>
-    <p class="lead">日常在操作台入库、改分类、拆章、OCR 与退库后会自动增量同步；本页用于外部命令行改动的偏差兜底、异步补偿、付费扩展与低频灾备重建。</p>
-    <div class="section card">
-      <h2>库的状态</h2>
-      <div class="strip">
-        ${stateCell('检索索引', !c.indexKnown ? 'miss' : (c.lagBooks || c.indexExtra ? 'half' : 'ok'),
-    !c.indexKnown ? '未知' : (c.lagBooks ? '需注意' : (c.indexExtra ? '需重建' : '正常')),
-    !c.indexKnown ? '索引缺失或读不到'
-      : (c.lagBooks
-        ? '落后 ' + num(c.lagBooks) + ' 本' + (c.lagChapters ? ' · ' + num(c.lagChapters) + ' 章' : '')
-        : (c.indexExtra
-          ? '比书库多 ' + num(c.indexExtra) + ' 本' + (c.indexExtraChapters ? ' · ' + num(c.indexExtraChapters) + ' 章' : '')
-          : (statusState() === 'ok' ? '与书库同步' : '没有落后'))))}
-        ${stateCell('浏览入口', !c.viewsKnown ? 'miss' : (c.broken ? 'miss' : 'ok'),
-    !c.viewsKnown ? '未知' : (c.broken ? '需处理' : '正常'),
-    !c.viewsKnown ? '浏览入口缺失' : (c.broken ? num(c.broken) + ' 条失效' : '奖项入口都在'))}
-        ${stateCell('体检', !info.ran ? 'miss'
-    : (info.stale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half')))),
-    !info.ran ? '未运行'
-      : (info.stale ? '已过期' : (c.fail ? '需处理' : (c.warn ? '需注意' : (statusState() === 'ok' ? '正常' : '需注意')))),
-    !info.ran ? '还没有体检记录'
-      : (info.stale ? '库或索引比体检新'
-        : (c.fail ? num(c.fail) + ' 项失败'
-          : (c.warn ? num(c.warn) + ' 条提醒'
-            : (statusState() === 'ok' ? '全部通过' : '无失败项')))))}
-        ${stateCell('书目总表', !c.catalogKnown ? 'miss' : (c.unmatched ? 'half' : 'ok'),
-    !c.catalogKnown ? '未知' : (c.unmatched ? '需注意' : '正常'),
-    !c.catalogKnown ? '没有书目总表'
-      : (c.unmatched ? num(c.unmatched) + ' 条对不上文件' : '改于 ' + fmtTime(c.catalogAt).slice(5)))}
-        ${stateCell('上次同步', lastCls, lastWord, lastNote)}
+  // Cell 1: 书目与视图
+  let metaCls = 'ok';
+  let metaWord = '已对齐';
+  let metaNote = num(c.books) + ' 本 · ' + num(c.awards) + ' 条奖项';
+  if (!c.libKnown || !c.catalogKnown || !c.viewsKnown) {
+    metaCls = 'miss';
+    metaWord = '未知';
+    const lack = [];
+    if (!c.libKnown) lack.push('缺少书目库');
+    if (!c.viewsKnown) lack.push('浏览入口缺失');
+    if (!c.catalogKnown) lack.push('没有书目总表');
+    metaNote = lack.join(' · ');
+  } else if (c.broken) {
+    metaCls = 'miss';
+    metaWord = '需处理';
+    metaNote = num(c.broken) + ' 条入口失效';
+  } else if (meta.ledger_stale || meta.views_missing || c.unmatched) {
+    metaCls = 'half';
+    metaWord = '需注意';
+    metaNote = meta.ledger_stale ? '台账有新改动待对齐'
+      : (c.unmatched ? num(c.unmatched) + ' 条对不上文件' : '缺奖项入口');
+  }
+
+  // Cell 2: 全文检索
+  const ftsCls = !c.indexKnown ? 'miss' : (c.lagBooks || c.indexExtra || ftsUids.length ? 'half' : 'ok');
+  const ftsWord = !c.indexKnown ? '未知'
+    : (c.lagBooks ? '需注意'
+      : (c.indexExtra ? '需重建'
+        : (ftsUids.length ? '待增量 ' + num(ftsUids.length) + ' 本'
+          : (isOk ? '已同步' : '没有落后'))));
+  const ftsNote = !c.indexKnown ? '索引缺失或读不到'
+    : (c.lagBooks
+      ? '落后 ' + num(c.lagBooks) + ' 本' + (c.lagChapters ? ' · ' + num(c.lagChapters) + ' 章' : '')
+      : (c.indexExtra
+        ? '比书库多 ' + num(c.indexExtra) + ' 本' + (c.indexExtraChapters ? ' · ' + num(c.indexExtraChapters) + ' 章' : '')
+        : num(c.chapters) + ' 章无滞后'));
+
+  // Cell 3: 语义检索
+  const embCls = !emb.initialized ? (emb.engine_ready ? 'half' : 'out') : (embDrift || emb.compact_recommended ? 'half' : 'ok');
+  const embWord = !emb.engine_ready && !emb.initialized ? '未启用'
+    : (!emb.initialized ? '未首次构建'
+      : (embDrift ? '待处理 ' + num(embDrift) + ' 本'
+        : (isOk ? '已同步' : '正常')));
+  const embNote = !emb.initialized
+    ? (emb.engine_ready ? '可在高级运维启动首次构建' : '未配置本地向量引擎（不影响全文检索）')
+    : (!emb.engine_ready
+      ? num(emb.chunks) + ' 语块（未连接本地引擎）'
+      : (num(emb.chunks) + ' 语块 · ' + (emb.garbage ? num(emb.garbage) + ' 冗余（' + garbagePct + '%）' : '零冗余')));
+
+  // Cell 4: 体检状态
+  const auditCls = !info.ran ? 'miss' : (info.stale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (isOk ? 'ok' : 'half'))));
+  const auditWord = !info.ran ? '未运行'
+    : (info.stale ? '已过期' : (c.fail ? '需处理' : (c.warn ? num(c.warn) + ' 条提醒' : (isOk ? '正常' : '需注意'))));
+  const auditNote = !info.ran ? '还没有体检记录'
+    : (info.stale ? '库或索引比体检新'
+      : (c.fail ? num(c.fail) + ' 项失败'
+        : (c.warn ? '核心结构通过'
+          : (isOk ? '全部通过' : '无失败项'))));
+
+  const issuesSummary = info.rows.length
+    ? (isOk && !c.fail && !info.stale
+      ? `查看体检提醒（${num(info.rows.length)} 条 · 不影响日常使用）`
+      : `查看体检提醒（${num(info.rows.length)} 条）`)
+    : (info.stale ? '体检状态已过期，点击查看详情'
+      : (!info.ran ? '尚未运行体检，点击查看详情'
+        : (isOk ? '查看体检结果（全部通过）' : '查看体检说明')));
+  const issuesOpen = c.fail > 0 || info.stale || !info.ran || !isOk;
+  const driftUids = [];
+  if (ftsUids.length) driftUids.push('全文差集：' + ftsUids.slice(0, 12).join(', ') + (ftsUids.length > 12 ? ` 等 ${num(ftsUids.length)} 本` : ''));
+  if (emb.initialized && embUids.length) driftUids.push('向量差集：' + embUids.slice(0, 12).join(', ') + (embUids.length > 12 ? ` 等 ${num(embUids.length)} 本` : ''));
+
+  return `<div class="page-head">
+      <div>
+        <h1>同步与维护</h1>
+        <p class="page-lead">日常变更已自动差量同步；这里用于偏差兜底、主题增强与导出书目总表。</p>
       </div>
     </div>
-    <div class="section card">
+
+    <section class="card section" aria-label="同步健康总览">
       <div class="card-head">
-        <h2>自动同步与偏差对齐</h2>
-        <span class="row tight">
-          <label class="check"><input type="checkbox" data-act="toggle-auto-embed"${autoEmbed ? ' checked' : ''}> 正文落地后自动同步向量库</label>
-          <button class="btn${hasDrift ? ' primary' : ''}" data-write data-act="sync-reconcile">${hasDrift ? '补齐偏差（增量同步）' : '复核并增量对齐'}</button>
-        </span>
+        <h2>同步健康总览</h2>
+        <div class="row tight">
+          <label class="check"><input type="checkbox" data-act="toggle-auto-embed"${autoEmbed ? ' checked' : ''}> 正文落地后自动同步语义索引</label>
+          <button type="button" class="btn sm primary" data-write data-act="sync-reconcile">${hasDrift ? '补齐偏差（增量同步）' : '复核并增量对齐'}</button>
+        </div>
       </div>
-      <div class="delta-grid">
-        ${deltaBox('元数据（library.db / book.json）', !meta.ledger_stale && !meta.views_missing,
-    meta.ledger_stale ? '有改动未对齐' : (meta.views_missing ? '缺奖项入口' : '正常'),
-    meta.ledger_stale ? '人账新于书目库，增量对齐 <1 秒' : '人账保存时已自动差量同步', [])}
-        ${deltaBox('词法索引（index.db FTS5）', ftsUids.length === 0 && c.indexKnown,
-    !c.indexKnown ? '未知' : (ftsUids.length ? '待增量 ' + num(ftsUids.length) + ' 本' : '无差集'),
-    ftsUids.length ? '仅增删改差集书目（秒级，不重建全库）' : '与磁盘正文一致', ftsUids)}
-        ${deltaBox('向量索引（emb.db / vectors.f16）',
-    !emb.initialized ? true : (embDrift === 0 && !emb.compact_recommended),
-    !emb.engine_ready && !emb.initialized ? '未启用'
-      : (!emb.initialized ? '未首次构建' : (embDrift ? '待处理 ' + num(embDrift) + ' 本' : '正常')),
-    !emb.initialized
-      ? (emb.engine_ready
-        ? '尚未建库（全库约 6–7 小时，请在下方高级运维手动启动；建成后新书自动增量同步）'
-        : '未配置本地向量引擎（词法检索不受影响）')
-      : (!emb.engine_ready
-        ? '已存 ' + num(emb.chunks) + ' 块（未检测到本地 llama-server）'
-        : ('有效 ' + num(emb.chunks) + ' 块 · 垃圾块 ' + num(emb.garbage) + '（' + garbagePct + '%）')),
-    emb.initialized ? embUids : [])}
-        ${deltaBox('LLM 主题扩展（付费可选）', exp.uncovered_books === 0,
-    exp.uncovered_books ? '未覆盖 ' + num(exp.uncovered_books) + ' 本' : '全部覆盖',
-    '已覆盖 ' + num(exp.covered_books) + ' 本，消耗外部 API 额度，仅按需触发', [])}
+      <div class="strip" style="margin-bottom:12px">
+        ${maintainCardCell('书目与视图', metaCls, metaWord, metaNote)}
+        ${maintainCardCell('全文检索', ftsCls, ftsWord, ftsNote)}
+        ${maintainCardCell('语义检索', embCls, embWord, embNote)}
+        ${maintainCardCell('体检状态', auditCls, auditWord, auditNote)}
       </div>
-      <div class="toolbar">
-        <label class="check"><input type="checkbox" data-reconcile="catalog"${S.reconcileExtra.has('catalog') ? ' checked' : ''}> 同时更新书目总表（Excel/CSV）</label>
-        <label class="check"><input type="checkbox" data-reconcile="doc"${S.reconcileExtra.has('doc') ? ' checked' : ''}> 同时刷新阅读版 HTML 索引</label>
+      <div class="toolbar" style="margin-bottom:10px">
+        <label class="check"><input type="checkbox" data-reconcile="catalog"${S.reconcileExtra.has('catalog') ? ' checked' : ''}> 对齐时同时更新书目总表（Excel / CSV）</label>
+        <label class="check"><input type="checkbox" data-reconcile="doc"${S.reconcileExtra.has('doc') ? ' checked' : ''}> 同时刷新阅读版索引</label>
       </div>
-      <p class="hint">仅针对外部命令行改动或上次异步向量同步跳过/失败后的兜底补齐：先差量对齐元数据，再按书签名增量同步 FTS5 与向量库，最后跑一次快速体检。</p>
-    </div>
-    <div class="section card" id="status-issues">
-      <h2>体检提醒</h2>
-      ${issueList(info)}
-      ${info.at ? `<p class="hint">体检于 ${esc(fmtTime(info.at).slice(5))}</p>` : ''}
-    </div>
+      <details class="adv-issues" id="status-issues"${issuesOpen ? ' open' : ''}>
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink)">${esc(issuesSummary)}</summary>
+        <div style="margin-top:8px">
+          ${issueList(info)}
+          ${driftUids.map((line) => `<p class="hint mono" style="margin-top:4px">${esc(line)}</p>`).join('')}
+          ${info.at ? `<p class="hint" style="margin-top:6px">体检于 ${esc(fmtTime(info.at).slice(5))}</p>` : ''}
+        </div>
+      </details>
+    </section>
+
     <div class="grid c2 section">
-      <div class="card">
-        <div class="card-head"><h2>LLM 章级主题扩展（可选）</h2>
-          <button class="btn sm" data-write data-act="sync-expand"${exp.uncovered_books ? '' : ' disabled'}>扩展未覆盖书目</button></div>
-        <p class="small">给新书章节生成抽象主题前缀写入 <span class="mono">expand_fts</span>，提升概念型问题的召回率。</p>
-        <p class="hint">当前未覆盖 ${num(exp.uncovered_books)} 本。因调用外部模型 API 产生费用，不会在正文落地时静默扣费。</p>
-      </div>
-      <div class="card"><h2>导出与下载</h2>
-        <p><a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.xlsx')}">书目总表（Excel）</a>
-           <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.csv')}">书目总表（CSV）</a>
-           ${c.prefillReady
-             ? `<a class="btn sm" href="/api/file?path=${encodeURIComponent('tables/分类预填.csv')}">分类预填表</a>`
-             : '<button class="btn sm" disabled title="当前没有未分类新书的预填表">分类预填表</button>'}</p>
-        <p class="hint">书目总表改于 ${esc(fmtTime(c.catalogAt).slice(5))}，分类预填表只包含新书。</p>
-      </div>
+      <section class="card" aria-label="主题增强">
+        <div class="card-head">
+          <h2>章节主题增强（按需）</h2>
+          <button type="button" class="btn sm" data-write data-act="sync-expand"${exp.uncovered_books ? '' : ' disabled'}>扩展未覆盖 ${num(exp.uncovered_books)} 本</button>
+        </div>
+        <p class="small muted">为新书章节生成抽象主题提示，提升概念型提问的召回率；目前已有 ${num(exp.covered_books)} 本书完成覆盖。此项会调用外部模型额度，只在手动点击后运行。</p>
+      </section>
+      <section class="card" aria-label="导出书目总表">
+        <div class="card-head">
+          <h2>导出书目总表</h2>
+          <span class="small muted">${c.catalogKnown && c.catalogAt ? '更新于 ' + esc(fmtTime(c.catalogAt).slice(5)) : '与当前台账一致'}</span>
+        </div>
+        <p class="small muted" style="margin-bottom:12px">导出包含每本书的编号、书名、分类与正文就绪状态。</p>
+        <div class="row tight">
+          <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.xlsx')}">导出 Excel 表格</a>
+          <a class="btn sm" href="/api/file?path=${encodeURIComponent('build/书目总表.csv')}">导出 CSV 表格</a>
+          ${c.prefillReady
+            ? `<a class="btn sm" href="/api/file?path=${encodeURIComponent('tables/分类预填.csv')}">新书分类预填表</a>`
+            : '<button type="button" class="btn sm" disabled title="当前没有未分类新书的预填表">新书分类预填表</button>'}
+        </div>
+      </section>
     </div>
-    <div class="section card">
+
+    <section class="card" aria-label="高级运维与重建">
       <details class="adv">
-        <summary>高级运维与灾备重建（低频 · 仅异常或整理碎片时使用）</summary>
+        <summary>高级运维与重建（低频 · 仅整理碎片或异常排查时使用）</summary>
         <div class="adv-grid">
           ${!emb.initialized && emb.engine_ready ? `<div class="adv-item">
-            <div><b>首次构建全库向量索引</b> <span class="pill half">支持断点续跑</span>
-              <p class="hint">从零为全库正文建立语义向量索引（约 6–7 小时）。建完后，之后新增或修改的书才会自动秒级/分钟级增量补嵌。</p></div>
-            <button class="btn sm primary" data-write data-act="adv-action" data-op="embed_init">启动首次构建</button>
+            <div><b>首次构建全库语义索引</b> <span class="pill half">支持断点续跑</span>
+              <p class="hint">从零为全库正文建立语义向量索引（约 6–7 小时），建成后新书自动增量更新。</p></div>
+            <button type="button" class="btn sm primary" data-write data-act="adv-action" data-op="embed_init">启动首次构建</button>
           </div>` : ''}
           <div class="adv-item">
-            <div><b>向量库零推理压缩</b> ${emb.compact_recommended ? '<span class="pill half">建议运行</span>' : ''}
-              <p class="hint">回收退库与换源留下的 active=0 垃圾块（当前 ${num(emb.garbage)} 块，占比 ${garbagePct}%）。纯磁盘重编，不重跑 GPU 推理，约 10–30 秒。</p></div>
-            <button class="btn sm" data-write data-act="adv-action" data-op="embed_compact"${emb.garbage ? '' : ' disabled'}>压缩向量库</button>
+            <div><b>压缩冗余语块</b> ${emb.compact_recommended ? '<span class="pill half">建议运行</span>' : ''}
+              <p class="hint">回收退库与换源留下的旧向量碎片（当前 ${num(emb.garbage)} 块，占比 ${garbagePct}%），纯本地整理不重跑模型。</p></div>
+            <button type="button" class="btn sm" data-write data-act="adv-action" data-op="embed_compact"${emb.garbage ? '' : ' disabled'}>执行压缩</button>
           </div>
           <div class="adv-item">
-            <div><b>全量重建词法索引 index.db</b>
-              <p class="hint">从零扫描全库重建 6.7 GB 倒排索引（约 40–70 分钟）。仅在数据库损坏或分词规则升级时使用。</p></div>
-            <button class="btn sm" data-write data-act="adv-action" data-op="fts_rebuild">全量重建 index.db</button>
+            <div><b>重建全文检索</b>
+              <p class="hint">从零扫描全库重建全文倒排索引，耗时较长，仅在索引异常恢复时使用。</p></div>
+            <button type="button" class="btn sm" data-write data-act="adv-action" data-op="fts_rebuild">全量重建</button>
           </div>
           <div class="adv-item">
-            <div><b>向量库全量重嵌</b>
-              <p class="hint">强制重算全库所有章节向量（约 6–7 小时）。仅在更换 Embedding 模型时使用。</p></div>
-            <button class="btn sm" data-write data-act="adv-action" data-op="embed_rebuild">全量重嵌向量</button>
+            <div><b>重算全库语义索引</b>
+              <p class="hint">强制重算全库所有章节向量，仅在更换检索模型时使用。</p></div>
+            <button type="button" class="btn sm" data-write data-act="adv-action" data-op="embed_rebuild">全量重嵌</button>
           </div>
           <div class="adv-item">
-            <div><b>深度体检与四箱结构验收</b>
-              <p class="hint">运行 audit_state --deep 与 verify_phase 四箱不变量校验，适合大批量迁移或升级后核查。</p></div>
-            <button class="btn sm" data-write data-act="adv-action" data-op="deep_verify">深度体检 + 四箱验收</button>
+            <div><b>深度体检与结构核查</b>
+              <p class="hint">逐书核对源文件、正文与索引一致性，适合批量迁移后使用。</p></div>
+            <button type="button" class="btn sm" data-write data-act="adv-action" data-op="deep_verify">运行深度体检</button>
           </div>
           <div class="adv-item">
             <div><b>清理旧任务记录</b>
-              <p class="hint">删掉 90 天以前或第 200 个之后的运行记录与缩略图，不碰书和账。</p></div>
-            <button class="btn sm" data-act="jobs-clean">清理旧记录</button>
+              <p class="hint">清理 90 天以前的任务日志与临时预览图，不影响书目与正文。</p></div>
+            <button type="button" class="btn sm" data-act="jobs-clean">清理旧记录</button>
           </div>
         </div>
         <details class="adv" style="margin-top:12px">
@@ -2061,100 +2436,112 @@ function viewMaintain() {
               <span><span class="small">${esc(title)}</span>
               <span class="hint">${esc(text)}</span></span>
             </label>`).join('')}</div>
-          <p class="row"><button class="btn sm" data-write data-act="maintain-run">跑选中的步骤</button></p>
+          <p class="row"><button type="button" class="btn sm" data-write data-act="maintain-run">跑选中的步骤</button></p>
         </details>
       </details>
-    </div>
-    <div class="section card"><h2>最近的同步与维护记录</h2>${recentSyncJobs(6)}</div>`;
-}
-
-function recentSyncJobs(limit = 6) {
-  const kinds = new Set(['sync.reconcile', 'sync.fts', 'sync.embed', 'sync.expand', 'embed.compact', 'maintain']);
-  const rows = S.jobs.filter((j) => kinds.has(j.kind)).slice(0, limit);
-  if (!rows.length) return '<p class="empty">还没有同步或维护记录。</p>';
-  return rows.map(jobLine).join('');
+    </section>`;
 }
 
 // ---- 删书与冷宫 ---------------------------------------------------
 function viewRetire() {
   const drop = S.retireDrop || [];
-  return `<h1>书目与分类 · 待退库与删书</h1>
-    ${catalogSubtabs('retire')}
-    <p class="lead">删书是把书移出流程。原书进冷宫（仅冷宫专区只读可查，恢复靠手工），正文 Markdown、阅读版、词法索引与向量块会同步清理。</p>
-    <div class="section card">
-      <div class="card-head"><h2>不留的书 <span class="hint">${num(drop.length)} 本</span></h2>
-        <button class="btn sm" data-act="retire-drop-refresh">刷新</button></div>
-      <p class="hint">入库或账表里标成「不留」的书，书还在库里，只是等着移出。账表刚改完要先跑维护，这里才看得到。</p>
-      ${drop.length ? `<div class="tw"><table><thead><tr><th>编号</th><th>书名</th>
-        <th>分类</th><th class="num">章</th><th class="num">源文件</th><th class="num">奖项</th><th></th></tr></thead>
-        <tbody>${drop.map((b) => `<tr>
-          <td class="mono">${esc(b.uid)}</td>
-          <td class="wrap">${esc(b.title)}</td>
-          <td class="wrap small">${esc([b.subject1, b.subject2].filter(Boolean).join('/') || '其他')}</td>
-          <td class="num">${esc(b.md && b.md.chapters !== undefined ? b.md.chapters : 0)}</td>
-          <td class="num">${(b.sources || []).length}</td>
-          <td class="num">${(b.awards || []).length}</td>
-          <td><button class="btn sm" data-act="retire-preview" data-uid="${esc(b.uid)}">预览移出</button></td>
-        </tr>`).join('')}</tbody></table></div>` : '<p class="empty">没有标记为不留的书。入库时选「不留」，或在账表改保留再跑维护，这里就会出现。</p>'}
-    </div>
-    <div class="section card">
-      <h2>找书</h2>
-      <div class="toolbar">
-        <input type="text" id="retire-q" placeholder="编号或书名" value="${esc(S.retireQuery)}" size="24">
-        <button class="btn" data-act="retire-search">搜书</button>
+  const rq = String(S.retireQuery || '').trim();
+  const hits = S.retireHits || [];
+  return `<div class="page-head">
+      <div>
+        <h1>书目与分类</h1>
+        <p class="page-lead">修改书名、分类或保留策略后即刻生效，并自动同步阅读与检索。</p>
       </div>
-      ${S.retireHits.length ? `<div class="tw"><table><thead><tr><th>编号</th><th>书名</th>
-        <th>分类</th><th class="num">章</th><th class="num">源文件</th><th class="num">奖项</th><th></th></tr></thead>
-        <tbody>${S.retireHits.map((b) => `<tr>
-          <td class="mono">${esc(b.uid)}</td>
-          <td class="wrap">${esc(b.title)}</td>
-          <td class="wrap small">${esc([b.subject1, b.subject2].filter(Boolean).join('/') || '其他')}</td>
-          <td class="num">${esc(b.md && b.md.chapters !== undefined ? b.md.chapters : 0)}</td>
-          <td class="num">${(b.sources || []).length}</td>
-          <td class="num">${(b.awards || []).length}</td>
-          <td><button class="btn sm" data-act="retire-preview" data-uid="${esc(b.uid)}">预览移出</button></td>
-        </tr>`).join('')}</tbody></table></div>` : '<p class="empty">输入编号或书名，搜索结果显示在这里。</p>'}
     </div>
-    <div class="section card"><h2>最近的删书任务</h2>${recentJobs('delete.dry-run', 3)}${recentJobs('delete.apply', 3)}</div>`;
+    ${catalogSubtabs('retire')}
+    <section class="card section" aria-label="查找并移出书目">
+      <div class="card-head">
+        <h2>按编号或书名查找移出</h2>
+        <span class="small muted">移出后原书保留在冷宫，阅读版与检索记录同步清理</span>
+      </div>
+      <div class="toolbar" style="margin-bottom:${hits.length || rq ? '12px' : '0'}">
+        <div class="filter-group">
+          <label for="retire-q" class="small muted" style="padding-left:4px">查找</label>
+          <input type="search" id="retire-q" autocomplete="off" spellcheck="false" value="${esc(S.retireQuery)}" placeholder="输入编号或书名…" style="width:220px">
+        </div>
+        <button type="button" class="btn sm primary" data-act="retire-search">搜书</button>
+      </div>
+      ${hits.length ? `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="搜书结果表"><table>
+        <thead><tr><th>编号</th><th>书名</th><th>分类</th><th class="num">章数</th><th class="num">奖项</th><th>操作</th></tr></thead>
+        <tbody>${hits.map((b) => `<tr>
+          <td data-label="编号" class="mono" translate="no">${esc(b.uid)}</td>
+          <td data-label="书名" class="wrap">${esc(b.title)}</td>
+          <td data-label="分类" class="wrap small muted">${esc([b.subject1, b.subject2].filter(Boolean).join(' · ') || '其他')}</td>
+          <td data-label="章数" class="num">${esc(b.md && b.md.chapters !== undefined ? b.md.chapters : 0)}</td>
+          <td data-label="奖项" class="num">${(b.awards || []).length}</td>
+          <td data-label="操作"><button type="button" class="btn sm danger" data-act="retire-preview" data-uid="${esc(b.uid)}">预览移出</button></td>
+        </tr>`).join('')}</tbody></table></div>`
+      : (rq ? '<p class="small muted">没有找到匹配的书目，请换个编号或关键词。</p>' : '')}
+    </section>
+    <section class="card" aria-label="已标为不留的书目">
+      <div class="card-head">
+        <div style="display:flex;align-items:center;gap:8px">
+          <h2>已标为“不留”的书目</h2>
+          <span class="pill">${num(drop.length)} 本</span>
+        </div>
+        <button type="button" class="btn sm" data-act="retire-drop-refresh">刷新</button>
+      </div>
+      ${drop.length ? `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="待退库表"><table>
+        <thead><tr><th>编号</th><th>书名</th><th>分类</th><th class="num">章数</th><th class="num">奖项</th><th>操作</th></tr></thead>
+        <tbody>${drop.map((b) => `<tr>
+          <td data-label="编号" class="mono" translate="no">${esc(b.uid)}</td>
+          <td data-label="书名" class="wrap">${esc(b.title)}</td>
+          <td data-label="分类" class="wrap small muted">${esc([b.subject1, b.subject2].filter(Boolean).join(' · ') || '其他')}</td>
+          <td data-label="章数" class="num">${esc(b.md && b.md.chapters !== undefined ? b.md.chapters : 0)}</td>
+          <td data-label="奖项" class="num">${(b.awards || []).length}</td>
+          <td data-label="操作"><button type="button" class="btn sm danger" data-act="retire-preview" data-uid="${esc(b.uid)}">预览移出</button></td>
+        </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty-state"><div>
+          <div class="empty-state-title">当前没有标记为“不留”的书</div>
+          <div class="empty-state-sub">在全库台账里把某本书的保留策略改为「不留」，它会汇总到这里等待最终确认移出。</div>
+        </div></div>`}
+    </section>`;
 }
 
 function previewModal(p) {
   if (!p) return '';
-  const sources = (p.sources || []).map((s) => `<tr>
-    <td class="wrap small">${esc(s.path)}</td>
-    <td class="mono small">${esc(String(s.sha256 || '').slice(0, 12))}</td>
-    <td class="num">${fmtBytes(s.bytes)}</td>
-    <td class="num">${esc(s.shared_with || 0)}</td>
-    <td>${esc(SOURCE_WORD[s.action] || s.action || '')}</td></tr>`).join('');
-  return `<div class="overlay" data-act="close-modal">
-    <div class="modal" data-stop="1">
-      <h2>移出：${esc(p.title || p.uid)}</h2>
-      <div class="tw"><table><tbody>
-        <tr><th>书目录</th><td class="wrap">${esc(p.book_dir || p.path || '')}</td></tr>
-        <tr><th>会删掉</th><td class="wrap">${esc((p.delete || []).join('、'))}（Markdown ${num(p.md_chapters)} 章 / ${fmtBytes(p.md_bytes)}）</td></tr>
-        <tr><th>书目记录</th><td>${p.ledger ? '删掉这一行' : '无'}</td></tr>
-        <tr><th>检索清理</th><td>${num(p.expand_rows)} 行扩展 + ${num(p.index_rows)} 行词法 + ${num(p.embed_chunks || 0)} 块向量</td></tr>
-        <tr><th>奖项</th><td class="wrap">${esc((p.awards || []).map((a) => a.award || a).join('、') || '无')}</td></tr>
-        <tr><th>入口</th><td class="wrap">${esc((p.views || []).join('、') || '无')}</td></tr>
-        <tr><th>系列文档</th><td class="wrap">${esc((p.series_docs || []).join('、') || '无')}</td></tr>
-        <tr><th>移到</th><td class="wrap mono small">${esc(p.cold_path || '')}</td></tr>
-        <tr><th>校验码</th><td class="mono small">${esc(p.plan_hash || '')}</td></tr>
-      </tbody></table></div>
-      <h3>源文件</h3>
-      <div class="tw"><table><thead><tr><th>路径</th><th>指纹</th><th class="num">大小</th><th class="num">共享本数</th><th>动作</th></tr></thead>
-        <tbody>${sources || '<tr><td colspan="5" class="empty">没有源文件</td></tr>'}</tbody></table></div>
-      <div class="section">
-        <div class="toolbar">
-          <input type="text" id="apply-uid" placeholder="再输一遍编号" size="12">
-          <input type="text" id="apply-reason" placeholder="理由" size="24" value="移出流程">
-        </div>
-        <label class="check"><input type="checkbox" id="apply-confirm"> 我确认原书移到冷宫，阅读版与索引记录删除</label>
-        <div class="row"><button class="btn primary" data-write data-act="retire-apply" data-uid="${esc(p.uid)}" data-hash="${esc(p.plan_hash || '')}">确认移出</button>
-          <button class="btn" data-act="close-modal">取消</button>
-          <span class="hint">确认时会再核对一次，对不上就拒绝。</span></div>
+  const srcList = p.sources || [];
+  const sharedCount = srcList.filter((s) => Number(s.shared_with) > 0).length;
+  return `<dialog class="modal" closedby="any" aria-labelledby="retire-dlg-title">
+    <div class="dlg-head">
+      <div>
+        <h2 id="retire-dlg-title">移出流程预览：${esc(p.title || p.uid)}</h2>
+        <p class="small muted">原书将迁入冷宫只读区保存，正文、阅读版与检索记录同步移除。</p>
       </div>
+      <button type="button" class="icon-btn" data-act="close-modal" aria-label="关闭弹窗">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
     </div>
-  </div>`;
+    <div class="dlg-body">
+      <div class="tw table-wrap" tabindex="0" role="region" aria-label="退库影响明细"><table><tbody>
+        <tr><th>书目编号</th><td class="mono" translate="no">${esc(p.uid)}</td></tr>
+        <tr><th>将清理内容</th><td class="tnum">已拆 ${num(p.md_chapters)} 章正文（${fmtBytes(p.md_bytes)}）、阅读版与全部检索记录（扩展 ${num(p.expand_rows)} 条 · 词法 ${num(p.index_rows)} 条 · 向量 ${num(p.embed_chunks || 0)} 块）</td></tr>
+        <tr><th>源文件处理</th><td>${srcList.length ? num(srcList.length) + ' 个原始文件随书保留在冷宫归档区（' + (sharedCount ? num(sharedCount) + ' 个有合集共享' : '无共享冲突') + '）' : '原始文件随书移入冷宫归档区'}</td></tr>
+        <tr><th>奖项与分类</th><td>${p.ledger ? '同步移除分类台账与 ' : ''}${esc((p.awards || []).map((a) => a.award || a).join('、') || '无')}奖项入口记录</td></tr>
+      </tbody></table></div>
+      <div class="grid c2" style="gap:10px">
+        <div>
+          <label class="small muted" for="apply-uid" style="display:block;margin-bottom:4px">输入编号确认（<span class="mono" translate="no">${esc(p.uid)}</span>）</label>
+          <input type="text" id="apply-uid" placeholder="再输一遍编号" autocomplete="off" spellcheck="false" style="width:100%">
+        </div>
+        <div>
+          <label class="small muted" for="apply-reason" style="display:block;margin-bottom:4px">移出原因</label>
+          <input type="text" id="apply-reason" placeholder="移出原因" value="移出流程" autocomplete="off" style="width:100%">
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="apply-confirm"> <span>我确认将原书移入冷宫，并清除正文与检索记录</span></label>
+      <p class="hint">确认时会再核对一次校验结果，信息不一致则自动拒绝。</p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-act="close-modal" autofocus>取消</button>
+      <button type="button" class="btn danger" data-write data-act="retire-apply" data-uid="${esc(p.uid)}" data-hash="${esc(p.plan_hash || '')}">确认移出</button>
+    </div>
+  </dialog>`;
 }
 
 // ---- 日志 ---------------------------------------------------------
@@ -2191,35 +2578,41 @@ function ledgerRowFiltered() {
 
 function ledgerRowHtml(row) {
   const editing = S.ledgerEdit && S.ledgerEdit.type === 'row' && S.ledgerEdit.uid === row.uid;
+  const pending = ledgerPending(row);
   if (!editing) {
-    return `<tr>
-      <td><input type="checkbox" data-act="ledger-pick" value="${esc(row.uid)}"${S.ledgerPick.has(row.uid) ? ' checked' : ''}></td>
-      <td class="num">${esc(row.uid)}</td>
-      <td>${esc(row.一级)}</td>
-      <td>${esc(row.二级)}</td>
-      <td class="num">${esc(row.作者层)}</td>
-      <td>${esc(RETENTION_WORD[row.保留] || row.保留)}</td>
-      <td class="wrap">${esc(row.正式书名)}</td>
-      <td class="wrap small">${esc(row.备注)}</td>
-      <td class="nowrap">${ledgerPending(row)
-    ? `<button class="btn sm primary" data-write data-act="ledger-row-confirm" data-uid="${esc(row.uid)}">同意</button> ` : ''}<button class="btn sm" data-act="ledger-row-edit" data-uid="${esc(row.uid)}">改</button></td>
+    const keepWord = RETENTION_WORD[row.保留] || row.保留;
+    const keepCls = row.保留 === 'drop' ? 'miss' : (row.保留 === 'review' ? 'half' : 'ok');
+    const cat1 = esc(row.一级 || '未分类');
+    const cat2 = row.二级 ? ` · <span class="muted">${esc(row.二级)}</span>` : '';
+    return `<tr class="${pending ? 'row-review' : ''}">
+      <td data-label="选"><input type="checkbox" aria-label="选择 ${esc(row.正式书名 || row.uid)}" data-act="ledger-pick" value="${esc(row.uid)}"${S.ledgerPick.has(row.uid) ? ' checked' : ''}></td>
+      <td data-label="编号" class="mono" translate="no">${esc(row.uid)}</td>
+      <td data-label="正式书名" class="wrap">${esc(row.正式书名)}</td>
+      <td data-label="分类" class="small"><span>${cat1}${cat2}</span></td>
+      <td data-label="作者层" class="num">${esc(row.作者层)}</td>
+      <td data-label="保留"><span class="pill ${keepCls}">${esc(keepWord)}</span></td>
+      <td data-label="备注" class="clip small muted" title="${esc(row.备注)}">${esc(row.备注)}</td>
+      <td data-label="操作" class="nowrap"><span class="row tight">${pending
+    ? `<button type="button" class="btn sm primary" data-write data-act="ledger-row-confirm" data-uid="${esc(row.uid)}">同意</button>` : ''}<button type="button" class="btn sm" data-act="ledger-row-edit" data-uid="${esc(row.uid)}" aria-label="修改 ${esc(row.正式书名 || row.uid)}">改</button></span></td>
     </tr>`;
   }
-  const f = (name, label) => {
+  const f = (name) => {
     const v = row[name] == null ? '' : String(row[name]);
     if (name === '保留') {
-      return `<select id="led-f-保留">${
+      return `<select id="led-f-保留" aria-label="保留策略">${
         ['keep', 'review', 'drop'].map((k) => `<option value="${k}"${v === k ? ' selected' : ''}>${RETENTION_WORD[k]}</option>`).join('')}</select>`;
     }
-    return `<input id="led-f-${esc(name)}" value="${esc(v)}"${name === 'uid' ? ' readonly' : ''}>`;
+    return `<input type="text" id="led-f-${esc(name)}" value="${esc(v)}"${name === 'uid' ? ' readonly' : ''} autocomplete="off">`;
   };
   return `<tr class="editing">
     <td></td>
-    <td>${f('uid')}</td><td>${f('一级')}</td><td>${f('二级')}</td>
-    <td>${f('作者层')}</td><td>${f('保留')}</td>
-    <td>${f('正式书名')}</td><td class="wrap">${f('备注')}</td>
-    <td class="nowrap"><button class="btn sm primary" data-write data-act="ledger-row-save" data-uid="${esc(row.uid)}">存</button>
-      <button class="btn sm" data-act="ledger-edit-clear">取消</button></td>
+    <td data-label="编号">${f('uid')}</td>
+    <td data-label="正式书名">${f('正式书名')}</td>
+    <td data-label="分类"><div style="display:flex;gap:4px">${f('一级')}${f('二级')}</div></td>
+    <td data-label="作者层">${f('作者层')}</td>
+    <td data-label="保留">${f('保留')}</td>
+    <td data-label="备注" class="wrap">${f('备注')}</td>
+    <td data-label="操作" class="nowrap"><span class="row tight"><button type="button" class="btn sm primary" data-write data-act="ledger-row-save" data-uid="${esc(row.uid)}">保存</button><button type="button" class="btn sm" data-act="ledger-edit-clear">取消</button></span></td>
   </tr>`;
 }
 
@@ -2227,37 +2620,66 @@ function viewCold() {
   const data = S.cold;
   const items = (data && data.items) || [];
   const extras = (data && data.extra_dirs) || [];
-  return `<h1>书目与分类 · 冷宫（只读专区）</h1>
-    ${catalogSubtabs('cold')}
-    <p class="lead">冷宫严格与活库隔离：原书仅留存在 <span class="mono">books/_冷宫/</span>，不进入 <span class="mono">book.json</span>、<span class="mono">md/</span>、书目库与任何检索索引。此页面仅做只读归档查阅，恢复一律走手工流程。</p>
-    <div class="section card">
-      <div class="card-head"><h2>退库归档记录 <span class="hint">${num(items.length)} 条</span></h2>
-        <button class="btn sm" data-act="cold-refresh">刷新</button></div>
-      ${items.length ? `<div class="tw"><table>
-        <thead><tr><th>退库时间</th><th>编号</th><th>书名</th><th>格式</th><th class="num">大小</th><th>原因</th><th>冷宫路径</th></tr></thead>
-        <tbody>${items.map((r) => `<tr>
-          <td class="nowrap small">${esc(fmtTime(r.retired_at))}</td>
-          <td class="mono">${esc(r.uid)}</td>
-          <td class="wrap">${esc(r.title)}</td>
-          <td>${esc(r.format)}</td>
-          <td class="num">${fmtBytes(r.bytes)}</td>
-          <td class="wrap small">${esc(r.reason)}</td>
-          <td class="wrap mono small">${esc(r.cold_path)}</td>
-        </tr>`).join('')}</tbody></table></div>`
-        : '<p class="empty">目前没有通过退库流程记账的冷宫记录。</p>'}
+  const rows = [
+    ...items.map((r) => ({
+      title: r.title || r.uid,
+      uid: r.uid || '—',
+      source: '流程退库',
+      fmtSize: `${esc(r.format || '原书')} · ${fmtBytes(r.bytes)}`,
+      reason: r.reason || '移出流程',
+      retiredAt: fmtTime(r.retired_at),
+    })),
+    ...extras.map((d) => ({
+      title: d.name || '历史归档',
+      uid: d.uid || '—',
+      source: '历史归档',
+      fmtSize: esc(d.format || '合集原书'),
+      reason: d.reason || '历史归档移出日常处理',
+      retiredAt: d.retired_at ? fmtTime(d.retired_at) : '—',
+    })),
+  ];
+  return `<div class="page-head">
+      <div>
+        <h1>书目与分类</h1>
+        <p class="page-lead">修改书名、分类或保留策略后即刻生效，并自动同步阅读与检索。</p>
+      </div>
     </div>
-    ${extras.length ? `<div class="section card">
-      <h2>冷宫目录中的其他归档 <span class="hint">${num(extras.length)} 项</span></h2>
-      <p class="hint">历史上直接移入 <span class="mono">books/_冷宫/</span>、未经过 <span class="mono">retired.tsv</span> 的原书目录。</p>
-      <ul>${extras.map((d) => `<li><b>${esc(d.name)}</b> <span class="mono small muted">${esc(d.path)}</span></li>`).join('')}</ul>
-    </div>` : ''}`;
+    ${catalogSubtabs('cold')}
+    <section class="card" aria-label="冷宫只读归档">
+      <div class="card-head">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <h2>冷宫归档书目（只读）</h2>
+          <span class="pill">${num(rows.length)} 本</span>
+        </div>
+        <div class="row tight">
+          <span class="small muted">与活库完全隔离，不进检索与推荐</span>
+          <button type="button" class="btn sm" data-act="cold-refresh">刷新</button>
+        </div>
+      </div>
+      ${rows.length ? `<div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="冷宫归档表"><table>
+        <thead><tr><th>书名</th><th>编号</th><th>来源</th><th>格式与体积</th><th>移出原因</th><th>归档时间</th></tr></thead>
+        <tbody>${rows.map((c) => `<tr>
+          <td data-label="书名" class="wrap">${esc(c.title)}</td>
+          <td data-label="编号" class="mono" translate="no">${esc(c.uid)}</td>
+          <td data-label="来源"><span class="pill ${c.source === '历史归档' ? 'half' : ''}">${esc(c.source)}</span></td>
+          <td data-label="格式与体积" class="small tnum"><span class="mono">${c.fmtSize}</span></td>
+          <td data-label="移出原因" class="wrap small muted">${esc(c.reason)}</td>
+          <td data-label="归档时间" class="mono small muted">${esc(c.retiredAt)}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty-state"><div>
+          <div class="empty-state-title">冷宫归档区暂无记录</div>
+          <div class="empty-state-sub">在「待退库与删书」确认移出的书目会保留在这里供只读查验。</div>
+        </div></div>`}
+    </section>`;
 }
 
 function viewLedger() {
   const L = S.ledger;
   if (!L) {
-    return `<h1>书目与分类</h1>${catalogSubtabs('ledger')}<div class="list"><p class="hint">正在载入账表…</p></div>`;
+    return `<div class="page-head"><div><h1>书目与分类</h1><p class="page-lead">修改书名、分类或保留策略后即刻生效，并自动同步阅读与检索。</p></div></div>
+      ${catalogSubtabs('ledger')}<section class="card"><p class="hint">正在载入全库台账…</p></section>`;
   }
+  const totalPending = L.ledger.filter(ledgerPending).length;
   const rows = ledgerRowFiltered();
   const visible = rows.slice(0, S.ledgerLimit);
   const pendingRows = rows.filter(ledgerPending);
@@ -2265,83 +2687,116 @@ function viewLedger() {
   const allPicked = pendingRows.length > 0 && picked === pendingRows.length;
   const stale = S.status && S.status.ledger && S.status.ledger.stale;
   const staleBanner = stale
-    ? `<div class="banner warn"><div><b>人账比书目库新（可能由外部命令行修改）</b><div class="hint">在页面编辑保存时会自动同步；若从外部改过数据库，点右侧按钮立即同步。</div></div>
-        <button class="btn sm primary" data-write data-act="ledger-sync">立即同步元数据</button></div>` : '';
+    ? `<div class="banner warn"><div><b>台账有新改动尚未对齐书目</b><div class="hint">点右侧按钮立即同步元数据与浏览入口。</div></div>
+        <button type="button" class="btn sm primary" data-write data-act="ledger-sync">立即同步元数据</button></div>` : '';
   const shown = rows.length !== L.ledger.length
-    ? `<p class="hint" id="ledger-shown">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 行。</p>` : '<p class="hint" id="ledger-shown" hidden></p>';
+    ? `<p class="hint" id="ledger-shown" style="margin-bottom:8px">筛选到 ${num(rows.length)} / ${num(L.ledger.length)} 本。</p>` : '<p class="hint" id="ledger-shown" hidden></p>';
   const pager = rows.length > visible.length
-    ? `<div class="toolbar" id="ledger-pager">
-        <span class="hint">已显示 ${num(visible.length)} / ${num(rows.length)} 行</span>
-        <button class="btn sm" data-act="ledger-more">加载更多 100 行</button>
-        <button class="btn sm" data-act="ledger-show-all">显示全部 ${num(rows.length)} 行</button>
+    ? `<div class="toolbar" id="ledger-pager" style="margin-top:12px;margin-bottom:0">
+        <span class="hint">已显示 ${num(visible.length)} / ${num(rows.length)} 本</span>
+        <button type="button" class="btn sm" data-act="ledger-more">加载更多 100 行</button>
+        <button type="button" class="btn sm" data-act="ledger-show-all">显示全部 ${num(rows.length)} 本</button>
       </div>`
     : '<div class="toolbar" id="ledger-pager" hidden></div>';
-  return `
-    <h1>书目与分类</h1>
+  return `<div class="page-head">
+      <div>
+        <h1>书目与分类</h1>
+        <p class="page-lead">修改书名、分类或保留策略后即刻生效，并自动同步阅读与检索。</p>
+      </div>
+    </div>
     ${catalogSubtabs('ledger')}
     ${staleBanner}
-    <div class="list">
-      <div class="section card">
-        <div class="card-head"><h2>分类表（${num(L.ledger.length)} 行 · ${esc(L.ledger_db || 'tables/ledger.db')}）</h2>
-          <span class="row tight">
-            <input id="ledger-q" value="${esc(S.ledgerQ || '')}" placeholder="编号 / 书名 / 分类 / 备注">
-            <label class="check"><input type="checkbox" data-act="ledger-pending-only"${S.ledgerPendingOnly ? ' checked' : ''}> 只看待复核</label>
-            <label class="check"><input type="checkbox" data-act="ledger-pick-all"${allPicked ? ' checked' : ''}${pendingRows.length ? '' : ' disabled'}> 全选待复核</label>
-            <button class="btn sm primary" data-write data-act="ledger-confirm-pick"${picked ? '' : ' disabled'}>同意选中 ${num(picked)} 本</button>
-            <button class="btn sm" data-act="ledger-load">刷新</button></span></div>
-        ${shown}
-        <div class="tw"><table class="ledger-table">
-          <thead><tr><th style="width:28px"></th><th>编号</th><th>一级</th><th>二级</th><th>作者层</th><th>保留</th><th>正式书名</th><th>备注</th><th style="width:140px"></th></tr></thead>
-          <tbody>${visible.length ? visible.map(ledgerRowHtml).join('')
-    : `<tr><td colspan="9" class="hint">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的行。'}</td></tr>`}</tbody>
-        </table></div>
-        ${pager}
-        <p class="hint">保存编辑或点「同意」后会自动同步书目库与该书元数据（秒级），无需手动去维护页收尾；要将书移出流程，把保留改为「不留」后在「待退库与删书」子页执行。</p>
+    <section class="card" aria-label="全库书目台账">
+      <div class="card-head">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <h2>全库书目台账</h2>
+          <span class="pill">${num(L.ledger.length)} 本</span>
+          ${totalPending ? `<span class="pill half">${num(totalPending)} 本待复核</span>` : ''}
+        </div>
+        <button type="button" class="btn sm" data-act="ledger-load">刷新</button>
       </div>
-    </div>`;
+      <div class="toolbar">
+        <div class="filter-group">
+          <label for="ledger-q" class="small muted" style="padding-left:4px">搜索</label>
+          <input type="search" id="ledger-q" autocomplete="off" spellcheck="false" value="${esc(S.ledgerQ || '')}" placeholder="编号、书名、分类或备注…" style="width:210px">
+        </div>
+        <div class="seg" role="group" aria-label="复核状态筛选">
+          <button type="button" class="seg-btn" data-act="ledger-scope" data-scope="all" aria-pressed="${!S.ledgerPendingOnly}">全部书目</button>
+          <button type="button" class="seg-btn" data-act="ledger-scope" data-scope="pending" aria-pressed="${!!S.ledgerPendingOnly}">只看待复核</button>
+        </div>
+        <span class="spacer"></span>
+        <button type="button" class="btn sm" data-act="ledger-pick-all-btn"${pendingRows.length ? '' : ' disabled'}>${allPicked ? '取消全选待复核' : '全选当前页待复核'}</button>
+        <button type="button" class="btn sm primary" data-write data-act="ledger-confirm-pick"${picked ? '' : ' disabled'}>同意选中 ${num(picked)} 本</button>
+      </div>
+      ${shown}
+      <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="书目台账表"><table class="ledger-table">
+        <thead><tr><th style="width:36px">选</th><th>编号</th><th>正式书名</th><th>分类</th><th class="num">作者层</th><th>保留</th><th>备注</th><th>操作</th></tr></thead>
+        <tbody>${visible.length ? visible.map(ledgerRowHtml).join('')
+    : `<tr><td colspan="8" class="empty">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的书目。'}</td></tr>`}</tbody>
+      </table></div>
+      ${pager}
+    </section>`;
 }
 
 function logRows() {
   return S.jobs.filter((j) => !S.filter || j.state === S.filter);
 }
 
+function jobPillCls(state) {
+  if (state === 'succeeded') return 'ok';
+  if (state === 'awaiting_review' || state === 'running' || state === 'queued' || state === 'cancelling') return 'half';
+  if (state === 'failed' || state === 'orphaned' || state === 'cancelled') return 'miss';
+  return '';
+}
+
 function logRowsHtml(rows) {
   return rows.length ? rows.map((j) => {
     const rhref = reviewHref(j);
     const selected = !!(S.logJob && S.logJob.id === j.id);
-    return `<tr data-job-id="${esc(j.id)}"${selected ? ' class="active"' : ''}>
-        <td class="nowrap">${esc(fmtTime(j.created))}</td>
-        <td class="nowrap">${esc(KIND_WORD[j.kind] || j.kind)}</td>
-        <td class="wrap">${esc(summaryText(j.title))}</td>
-        <td><span class="pill">${esc(JOB_WORD[j.state] || j.state)}</span></td>
-        <td class="num">${j.started && j.ended ? esc(seconds(j.started, j.ended)) : '—'}</td>
-        <td class="wrap small">${esc(summaryText(j.summary))}</td>
-        <td class="nowrap">${rhref ? `<button class="btn sm primary" data-act="job-handle" data-id="${esc(j.id)}">去处理</button> ` : ''}<button class="btn sm" data-act="job-open" data-id="${esc(j.id)}">详情</button></td>
+    const pillCls = jobPillCls(j.state);
+    return `<tr data-job-id="${esc(j.id)}"${selected ? ' class="active row-active"' : ''}>
+        <td data-label="创建" class="nowrap mono small">${esc(fmtTime(j.created))}</td>
+        <td data-label="类型" class="nowrap small">${esc(KIND_WORD[j.kind] || j.kind)}</td>
+        <td data-label="任务" class="wrap">${esc(summaryText(j.title))}</td>
+        <td data-label="状态"><span class="pill ${pillCls}">${esc(JOB_WORD[j.state] || j.state)}</span></td>
+        <td data-label="耗时" class="num">${j.started && j.ended ? esc(seconds(j.started, j.ended)) : '—'}</td>
+        <td data-label="摘要" class="wrap small muted">${esc(summaryText(j.summary))}</td>
+        <td data-label="操作" class="nowrap"><span class="row tight">${rhref ? `<button type="button" class="btn sm primary" data-act="job-handle" data-id="${esc(j.id)}">去处理</button>` : ''}<button type="button" class="btn sm${selected ? ' primary' : ''}" data-act="job-open" data-id="${esc(j.id)}">详情</button></span></td>
       </tr>`;
-  }).join('') : '<tr><td colspan="7" class="empty">没有任务。</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="empty">该状态下暂无任务记录。</td></tr>';
 }
 
 function viewLogs() {
   const rows = logRows();
   const states = ['', 'queued', 'running', 'awaiting_review', 'succeeded', 'failed',
     'cancelled', 'orphaned'];
+  const quickStates = [['', '全部'], ['awaiting_review', '待确认'], ['running', '在跑'], ['succeeded', '已完成'], ['failed', '失败']];
   const body = logRowsHtml(rows);
   S.logRowsHtml = body;
-  return `<h1>日志</h1>
-    <p class="lead">每个任务按自己的检查判定成败，日志里的密钥会隐藏。</p>
-    <div class="section card">
-      <div class="toolbar">
-        <label class="check">状态 <select id="log-filter">
-          ${states.map((s) => `<option value="${s}"${s === S.filter ? ' selected' : ''}>${s ? JOB_WORD[s] : '全部'}</option>`).join('')}
-        </select></label>
-        <button class="btn sm" data-act="jobs-refresh">刷新</button>
-        <span class="hint" id="log-count">共 ${num(rows.length)} 个任务</span>
+  return `<div class="page-head">
+      <div>
+        <h1>任务与日志</h1>
+        <p class="page-lead">全库所有后台任务的唯一查看与人工收口中心。</p>
       </div>
-      <div class="tw"><table><thead><tr><th>创建</th><th>类型</th><th>标题</th><th>状态</th>
-        <th class="num">耗时</th><th>摘要</th><th></th></tr></thead>
-      <tbody id="log-rows">${body}</tbody></table></div>
     </div>
-    <div class="section${S.logJob ? ' card' : ''}" id="job-detail">${jobDetail()}</div>`;
+    <section class="card section" aria-label="任务列表">
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="任务状态筛选">
+          ${quickStates.map(([k, lbl]) => `<button type="button" class="seg-btn" data-act="log-seg" data-state="${k}" aria-pressed="${S.filter === k}">${esc(lbl)}</button>`).join('')}
+        </div>
+        <select id="log-filter" aria-label="全部任务状态筛选">
+          ${states.map((s) => `<option value="${s}"${s === S.filter ? ' selected' : ''}>${s ? JOB_WORD[s] : '全部状态'}</option>`).join('')}
+        </select>
+        <button type="button" class="btn sm" data-act="jobs-refresh">刷新</button>
+        <span class="spacer"></span>
+        <span class="small muted tnum" id="log-count">共 ${num(rows.length)} 个任务</span>
+      </div>
+      <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="任务列表"><table>
+        <thead><tr><th>创建</th><th>类型</th><th>标题</th><th>状态</th><th class="num">耗时</th><th>摘要</th><th>操作</th></tr></thead>
+        <tbody id="log-rows">${body}</tbody>
+      </table></div>
+    </section>
+    <section class="${S.logJob ? 'card' : 'card'}" id="job-detail" aria-label="任务详情">${jobDetail()}</section>`;
 }
 
 function seconds(start, end) {
@@ -2354,10 +2809,14 @@ function seconds(start, end) {
 
 function stepsHtml(detail) {
   const steps = (detail && detail.steps) || [];
-  return steps.length ? steps.map((s) => `<tr><td class="num">${s.seq + 1}</td>
-        <td>${esc(s.name)}</td><td>${esc(STEP_WORD[s.state] || s.state)}</td>
-        <td class="wrap small">${esc(stepNote(s.detail))}</td>
-        <td class="nowrap">${esc(fmtTime(s.started))}</td></tr>`).join('')
+  return steps.length ? steps.map((s) => {
+    const sCls = s.state === 'ok' ? 'ok' : (s.state === 'fail' ? 'miss' : 'half');
+    return `<tr><td data-label="#" class="num">${s.seq + 1}</td>
+        <td data-label="步骤">${esc(s.name)}</td>
+        <td data-label="状态"><span class="pill ${sCls}">${esc(STEP_WORD[s.state] || s.state)}</span></td>
+        <td data-label="说明" class="wrap small">${esc(stepNote(s.detail))}</td>
+        <td data-label="开始" class="nowrap mono small">${esc(fmtTime(s.started))}</td></tr>`;
+  }).join('')
     : '<tr><td colspan="5" class="empty">没有步骤</td></tr>';
 }
 
@@ -2375,24 +2834,32 @@ function jobDetail() {
   if (!job) return '<p class="empty">点上面表格里的「详情」，这里会显示步骤和日志。</p>';
   const detail = S.logDetail || {};
   const running = ['queued', 'running'].indexOf(job.state) >= 0;
-  return `<div class="card-head"><h2>${esc(summaryText(job.title))}</h2>
-      <span class="row tight">
-        <span class="pill" id="job-state">${esc(JOB_WORD[job.state] || job.state)}</span>
+  const diagOpen = running || job.state === 'failed' || job.state === 'orphaned';
+  const pillCls = jobPillCls(job.state);
+  return `<div class="card-head">
+      <div>
+        <h2>${esc(summaryText(job.title))}</h2>
+        <p class="small muted mono" id="job-meta" translate="no">任务号 ${esc(job.id)} · ${esc(fmtTime(job.started))} → ${esc(fmtTime(job.ended))}</p>
+      </div>
+      <div class="row tight">
+        <span class="pill ${pillCls}" id="job-state">${esc(JOB_WORD[job.state] || job.state)}</span>
         ${running ? cancelButton(job.id) : ''}
-        <button class="btn sm" data-write data-act="job-rerun" data-id="${esc(job.id)}">重跑</button>
+        <button type="button" class="btn sm" data-write data-act="job-rerun" data-id="${esc(job.id)}">重跑</button>
         <a class="btn sm" href="/api/file?path=${encodeURIComponent('工作区/运维/jobs/' + job.id + '/log.txt')}">下载日志</a>
-      </span></div>
-    <p class="hint" id="job-meta">任务号 ${esc(job.id)} · ${esc(fmtTime(job.started))} → ${esc(fmtTime(job.ended))}</p>
+      </div>
+    </div>
     <p class="small" id="job-summary">${esc(summaryText(job.summary))}</p>
     ${jobReviewBox(job)}
-    <details class="adv" id="job-commands">
-      <summary>运行命令</summary>
-      ${commandsHtml(detail)}
-    </details>
-    <div class="tw" id="job-steps"><table><thead><tr><th>#</th><th>步骤</th><th>状态</th><th>说明</th><th>开始</th></tr></thead>
-      <tbody>${stepsHtml(detail)}</tbody></table></div>
-    <h3 style="margin-top:14px">日志尾部 200 行</h3>
-    <pre class="log" id="job-log" data-painted="0">${esc(detail.log_tail || '')}</pre>`;
+    <div class="tw table-wrap stack-mobile" id="job-steps" style="margin-bottom:12px" tabindex="0" role="region" aria-label="任务步骤表"><table>
+      <thead><tr><th>#</th><th>步骤</th><th>状态</th><th>说明</th><th>开始</th></tr></thead>
+      <tbody>${stepsHtml(detail)}</tbody>
+    </table></div>
+    <details class="adv" id="job-diag"${diagOpen ? ' open' : ''}>
+      <summary>技术诊断：运行命令与日志尾部</summary>
+      <div id="job-commands" style="margin-top:8px">${commandsHtml(detail)}</div>
+      <h3 style="margin-top:12px;margin-bottom:6px">日志尾部 200 行</h3>
+      <pre class="log" id="job-log" data-painted="0">${esc(detail.log_tail || '')}</pre>
+    </details>`;
 }
 
 // ---- 日志页就地刷新 -------------------------------------------------
@@ -2411,7 +2878,7 @@ function paintJobDetail() {
   const fresh = !pre || pre.dataset.painted !== '1';
   if (fresh || S.logOpenId !== job.id) {
     const switched = S.logOpenId !== job.id;
-    box.className = 'section card';
+    box.className = 'card';
     box.innerHTML = jobDetail();
     pre = box.querySelector('#job-log');
     if (!pre) return;
@@ -2428,13 +2895,16 @@ function paintJobDetail() {
   // 结构已经在了：状态、摘要、步骤、命令、日志尾部一律就地改
   const stateEl = box.querySelector('#job-state');
   const word = JOB_WORD[job.state] || job.state;
-  if (stateEl && stateEl.textContent !== word) stateEl.textContent = word;
+  const pillCls = jobPillCls(job.state);
+  if (stateEl) {
+    if (stateEl.textContent !== word) stateEl.textContent = word;
+    stateEl.className = 'pill ' + pillCls;
+  }
   const cancel = box.querySelector('#job-cancel');
   if (cancel) {
     const running = ['queued', 'running'].indexOf(job.state) >= 0;
     if (!running) cancel.remove();
   } else if (['queued', 'running'].indexOf(job.state) >= 0) {
-    // 停止只在能停的时候出现在 DOM 里：人看不见就不该留下死按钮。
     const rerun = box.querySelector('[data-act="job-rerun"]');
     if (rerun) rerun.insertAdjacentHTML('beforebegin', cancelButton(job.id));
   }
@@ -2465,7 +2935,7 @@ function paintJobDetail() {
   const cmdBody = commandsHtml(detail);
   if (cmdBox && S.logCmdFp !== cmdBody) {
     S.logCmdFp = cmdBody;
-    cmdBox.innerHTML = '<summary>运行命令</summary>' + cmdBody;
+    cmdBox.innerHTML = cmdBody;
   }
   if (pre) {
     const stick = S.follow && logNearBottom(pre);
@@ -2765,15 +3235,23 @@ async function go(tab, params) {
     toast(err.message, true);
   }
   if (seq !== S.tabSeq) return;
-  if (S.tab === 'logs' && S.filter === 'awaiting_review') {
+  if (S.tab === 'logs') {
     const rows = logRows();
-    if (rows.length && (!S.logJob || S.logJob.state !== 'awaiting_review')) {
+    if (S.filter === 'awaiting_review') {
+      if (rows.length && (!S.logJob || S.logJob.state !== 'awaiting_review')) {
+        S.logJob = rows[0];
+        S.logOpenId = null;
+      }
+    } else if (!S.logJob && rows.length) {
       S.logJob = rows[0];
       S.logOpenId = null;
     }
   }
   render();
-  if (S.tab === 'logs' && S.logJob) openLog(S.logJob.id, true);
+  if (S.tab === 'logs' && S.logJob) {
+    await openLog(S.logJob.id, true);
+    if (S.filter === 'awaiting_review' && seq === S.tabSeq && S.tab === 'logs') scrollJobDetail(true);
+  }
 }
 
 // ---- 任务轮询 -----------------------------------------------------
@@ -2886,13 +3364,19 @@ async function runMaintain(steps) {
 function paintLedgerPick() {
   const rows = ledgerRowFiltered().filter(ledgerPending);
   const picked = rows.filter((r) => S.ledgerPick.has(r.uid)).length;
+  const allPicked = rows.length > 0 && picked === rows.length;
   const btn = document.querySelector('[data-act="ledger-confirm-pick"]');
   if (btn) {
     btn.textContent = '同意选中 ' + num(picked) + ' 本';
     btn.disabled = !picked;
   }
+  const btnAll = document.querySelector('[data-act="ledger-pick-all-btn"]');
+  if (btnAll) {
+    btnAll.textContent = allPicked ? '取消全选待复核' : '全选当前页待复核';
+    btnAll.disabled = !rows.length;
+  }
   const all = document.querySelector('[data-act="ledger-pick-all"]');
-  if (all) all.checked = rows.length > 0 && picked === rows.length;
+  if (all) all.checked = allPicked;
 }
 
 async function confirmLedgerRows(uids) {
@@ -2959,6 +3443,25 @@ const actions = {
   async 'ledger-pending-only'(el) {
     S.ledgerPendingOnly = !!el.checked;
     S.ledgerLimit = 100;
+    render();
+  },
+
+  async 'ledger-scope'(el) {
+    S.ledgerPendingOnly = el.dataset.scope === 'pending';
+    S.ledgerLimit = 100;
+    render();
+  },
+
+  async 'ledger-pick-all-btn'() {
+    const rows = ledgerRowFiltered().filter(ledgerPending);
+    const allPicked = rows.length > 0 && rows.every((r) => S.ledgerPick.has(r.uid));
+    if (allPicked) rows.forEach((r) => S.ledgerPick.delete(r.uid));
+    else rows.forEach((r) => S.ledgerPick.add(r.uid));
+    render();
+  },
+
+  async 'log-seg'(el) {
+    S.filter = el.dataset.state || '';
     render();
   },
 
@@ -3153,8 +3656,8 @@ const actions = {
   },
 
   async 'docs-goto'() {
-    const card = document.querySelector('#docs-card');
-    if (card) card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (location.hash !== '#docs') location.hash = '#docs';
+    else await go('docs');
   },
 
   async 'split-all'(el) {
@@ -3335,10 +3838,31 @@ const actions = {
     else await go('pdf-list');
   },
 
+  async 'pdf-inline-tag'(el) {
+    const tag = el.dataset.tag || 'all';
+    S.pdfInlineTag = S.pdfInlineTag === tag ? 'all' : tag;
+    render();
+  },
+
+  async 'pdf-inline-reset'() {
+    S.pdfInlineTag = 'all';
+    S.pdfInlineQ = '';
+    render();
+  },
+
   async 'pick-one'(el) {
     if (el.checked) S.pick.add(el.value);
     else S.pick.delete(el.value);
-    paintPick();
+    if (S.tab === 'pdf-list') {
+      paintPick();
+    } else {
+      syncPdfLimit();
+      const lim = document.querySelector('#pdf-limit');
+      if (lim) lim.value = String(S.pdfLimit);
+      const runBtn = document.querySelector('#view [data-act="pdf-run"]');
+      if (runBtn) runBtn.textContent = '开始转写选中 (' + num(S.pick.size) + ')';
+      render();
+    }
   },
 
   async 'pick-tag'(el) {
@@ -3375,17 +3899,17 @@ const actions = {
     if (!row) return;
     S.settle = row;
     S.triageInfo = { loading: true };
-    $('#modal').innerHTML = settleModal(row);
+    openModal(settleModal(row));
     try {
       const info = await api('/api/pdf/triage-info?uid=' + encodeURIComponent(row.uid));
       if (S.settle && S.settle.uid === row.uid) {
         S.triageInfo = info;
-        $('#modal').innerHTML = settleModal(row);
+        openModal(settleModal(row));
       }
     } catch (err) {
       if (S.settle && S.settle.uid === row.uid) {
         S.triageInfo = null;
-        $('#modal').innerHTML = settleModal(row);
+        openModal(settleModal(row));
       }
     }
   },
@@ -3400,9 +3924,7 @@ const actions = {
     try {
       await post('/api/pdf/accept', { uid, reason });
       toast('已写受理原因：' + uid + '，请点「开始转写」重新入库复审');
-      S.settle = null;
-      S.triageInfo = null;
-      $('#modal').innerHTML = '';
+      closeModal();
       await loadPdfBooks();
       render();
     } catch (err) {
@@ -3676,7 +4198,7 @@ const actions = {
       if (detail && detail.job.state === 'succeeded') {
         S.preview = await api('/api/file?path=' + encodeURIComponent(
           '工作区/运维/jobs/' + body.job_id + '/dry-run.json'));
-        $('#modal').innerHTML = previewModal(S.preview);
+        openModal(previewModal(S.preview));
       } else {
         toast(summaryText(detail && detail.job.summary) || '预览没过', true);
       }
@@ -3709,8 +4231,7 @@ const actions = {
       const detail = await watchJob(body.job_id, afterJob);
       if (detail) toast(summaryText(detail.job.summary) || detail.job.state,
         detail.job.state !== 'succeeded');
-      S.preview = null;
-      $('#modal').innerHTML = '';
+      closeModal();
       await Promise.all([loadStatus(), loadJobs(), loadPending(), loadRetireDrop()]);
       render();
     } catch (err) {
@@ -3721,10 +4242,12 @@ const actions = {
   },
 
   async 'close-modal'() {
-    S.preview = null;
-    S.settle = null;
-    S.triageInfo = null;
-    $('#modal').innerHTML = '';
+    closeModal();
+  },
+
+  async 'theme-toggle'() {
+    const isNight = document.documentElement.getAttribute('data-theme') === 'night';
+    applyTheme(isNight ? 'light' : 'night', true);
   },
 
   async 'job-open'(el) {
@@ -3838,12 +4361,21 @@ document.addEventListener('click', (ev) => {
   if (!actions[act]) return;
   // 勾选框与输入框交给 change，preventDefault 会把原生切换撤掉
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
-  if (act === 'close-modal' && el !== ev.target) return;
+  if (act === 'close-modal' && el.classList.contains('overlay') && el !== ev.target) return;
   if (act !== 'close-modal') ev.preventDefault();
   actions[act](el).catch((err) => toast(err.message, true));
 });
 
 document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && document.querySelector('#modal .modal')) {
+    actions['close-modal']();
+    return;
+  }
+  if (ev.key === 'Enter' && ev.target && ev.target.id === 'retire-q') {
+    ev.preventDefault();
+    actions['retire-search']().catch((err) => toast(err.message, true));
+    return;
+  }
   if (ev.key !== 'Enter' && ev.key !== ' ') return;
   const el = ev.target.closest && ev.target.closest('[data-act="pick-files"]');
   if (!el) return;
@@ -3855,6 +4387,26 @@ document.addEventListener('keydown', (ev) => {
 document.addEventListener('dragover', (ev) => ev.preventDefault());
 document.addEventListener('drop', (ev) => ev.preventDefault());
 
+function paintPdfInlineTable() {
+  const tb = document.querySelector('#view tbody');
+  if (!tb || S.tab !== 'pdf') return;
+  const rows = pdfInlineRows();
+  tb.innerHTML = rows.length ? rows.map((row) => {
+    const label = row.route ? routeWord(row.route) : (PICK_WORD[row.disposition] || row.disposition);
+    const pages = row.pages === null || row.pages === undefined ? '—' : num(row.pages);
+    const note = pickNote(row) || '—';
+    return `<tr>
+      <td data-label="选"><input type="checkbox" aria-label="选择 ${esc(row.title || row.uid)}" data-act="pick-one" value="${esc(row.uid)}"${S.pick.has(row.uid) ? ' checked' : ''}></td>
+      <td data-label="编号" class="mono" translate="no">${esc(row.uid)}</td>
+      <td data-label="书名" class="wrap">${esc(row.title || '')}</td>
+      <td data-label="处置"><span class="pill ${row.disposition === 'convert' ? 'ok' : ''}">${esc(label)}</span></td>
+      <td data-label="页数" class="num">${pages}</td>
+      <td data-label="说明" class="clip small muted" title="${esc(note)}">${esc(note)}</td>
+      <td data-label="操作"><button type="button" class="btn sm" data-act="pick-settle" data-uid="${esc(row.uid)}">改处置</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">当前筛选条件下没有 PDF 书目。</td></tr>';
+}
+
 function paintLedgerTable() {
   const L = S.ledger;
   if (!L) return;
@@ -3863,20 +4415,20 @@ function paintLedgerTable() {
   const rows = ledgerRowFiltered();
   const visible = rows.slice(0, S.ledgerLimit);
   tbody.innerHTML = visible.length ? visible.map(ledgerRowHtml).join('')
-    : `<tr><td colspan="9" class="hint">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的行。'}</td></tr>`;
+    : `<tr><td colspan="8" class="empty">${S.ledgerPendingOnly ? '没有备注带「待复核」的行了。' : '没有匹配的书目。'}</td></tr>`;
   const shown = document.querySelector('#ledger-shown');
   if (shown) {
     const showFilter = rows.length !== L.ledger.length;
     shown.hidden = !showFilter;
-    if (showFilter) shown.textContent = '筛选到 ' + num(rows.length) + ' / ' + num(L.ledger.length) + ' 行。';
+    if (showFilter) shown.textContent = '筛选到 ' + num(rows.length) + ' / ' + num(L.ledger.length) + ' 本。';
   }
   const pager = document.querySelector('#ledger-pager');
   if (pager) {
     if (rows.length > visible.length) {
       pager.hidden = false;
-      pager.innerHTML = `<span class="hint">已显示 ${num(visible.length)} / ${num(rows.length)} 行</span>
-        <button class="btn sm" data-act="ledger-more">加载更多 100 行</button>
-        <button class="btn sm" data-act="ledger-show-all">显示全部 ${num(rows.length)} 行</button>`;
+      pager.innerHTML = `<span class="hint">已显示 ${num(visible.length)} / ${num(rows.length)} 本</span>
+        <button type="button" class="btn sm" data-act="ledger-more">加载更多 100 行</button>
+        <button type="button" class="btn sm" data-act="ledger-show-all">显示全部 ${num(rows.length)} 本</button>`;
     } else {
       pager.hidden = true;
       pager.innerHTML = '';
@@ -3893,6 +4445,11 @@ document.addEventListener('input', (ev) => {
     S.ledgerLimit = 100;
     clearTimeout(S.ledgerDebounce);
     S.ledgerDebounce = setTimeout(paintLedgerTable, 80);
+    return;
+  }
+  if (el.id === 'pdf-inline-q') {
+    S.pdfInlineQ = el.value;
+    paintPdfInlineTable();
     return;
   }
   if (el.id !== 'pick-q') return;
@@ -3977,6 +4534,11 @@ document.addEventListener('change', (ev) => {
       item[field] = el.value;
     }
     S.planDirty = true;
+  }
+  if (el.id === 'pdf-inline-disp') {
+    S.pdfInlineTag = el.value || 'all';
+    render();
+    return;
   }
   if (el.id === 'log-filter') {
     S.filter = el.value;
@@ -4164,9 +4726,9 @@ async function boot() {
     else if (S.tab === 'cold') baseTasks.push(loadCold(), loadRetireDrop());
     await Promise.all(baseTasks);
     if (S.tab === 'split') await loadSplitBooks();
-    if (S.tab === 'logs' && S.filter === 'awaiting_review') {
+    if (S.tab === 'logs') {
       const rows = logRows();
-      if (rows.length) S.logJob = rows[0];
+      if (rows.length && !S.logJob) S.logJob = rows[0];
     }
   } catch (err) {
     toast(err.message, true);
@@ -4176,4 +4738,37 @@ async function boot() {
   setInterval(() => { if (!document.hidden) loadHealth(); }, 12000);
 }
 
+function applyTheme(theme, persist) {
+  const night = theme === 'night';
+  if (night) document.documentElement.setAttribute('data-theme', 'night');
+  else if (typeof document.documentElement.removeAttribute === 'function') document.documentElement.removeAttribute('data-theme');
+  const pressed = String(night);
+  const label = night ? '切换宣纸日间' : '切换墨夜主题';
+  const btn = document.getElementById('theme-toggle');
+  const btnMob = document.getElementById('theme-toggle-mobile');
+  const swap = document.getElementById('theme-icon-swap');
+  const swapMob = document.getElementById('theme-icon-swap-mobile');
+  const labelEl = document.getElementById('theme-label');
+  const meta = document.getElementById('meta-theme-color');
+  if (btn) btn.setAttribute('aria-pressed', pressed);
+  if (btnMob) {
+    btnMob.setAttribute('aria-pressed', pressed);
+    btnMob.setAttribute('aria-label', label);
+  }
+  if (swap) swap.classList.toggle('swapped', night);
+  if (swapMob) swapMob.classList.toggle('swapped', night);
+  if (labelEl) labelEl.textContent = label;
+  if (meta) meta.setAttribute('content', night ? '#161716' : '#F4F1E8');
+  if (persist) {
+    try { localStorage.setItem(THEME_KEY, night ? 'night' : 'light'); } catch (err) { /* ignore */ }
+  }
+}
+
+function initTheme() {
+  let saved = 'light';
+  try { saved = localStorage.getItem(THEME_KEY) || 'light'; } catch (err) { saved = 'light'; }
+  applyTheme(saved, false);
+}
+
+initTheme();
 boot();

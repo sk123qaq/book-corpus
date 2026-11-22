@@ -2,26 +2,52 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F4F1E8" id="meta-theme-color">
 <title>书库操作台</title>
 <link rel="stylesheet" href="/style.css?v=__V__">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand"><span class="brand-dot"></span>书库操作台</div>
-  <div class="stats" id="stats"></div>
-  <div class="search-box">
-    <button class="btn" id="search-btn" data-act="search-open">打开阅读搜索</button>
-    <span class="dot" id="search-dot"></span>
-    <button class="btn" id="search-start" data-act="search-start" hidden>启动阅读搜索</button>
+<a class="skip-link" href="#view">跳到主内容</a>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="主导航与工作区快捷入口">
+    <a class="brand" href="#overview">
+      <span class="brand-seal" aria-hidden="true">书</span>
+      <span class="brand-meta">
+        <span class="brand-title">书库操作台</span>
+        <span class="brand-sub">个人藏书工作区</span>
+      </span>
+    </a>
+    <nav class="side" id="nav" aria-label="操作台模块"></nav>
+    <div class="side-footer">
+      <button type="button" class="btn sm ghost has-icon-left" id="theme-toggle" data-act="theme-toggle" aria-pressed="false">
+        <span class="icon-swap" id="theme-icon-swap" aria-hidden="true">
+          <svg class="icon-a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          <svg class="icon-b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        </span>
+        <span id="theme-label">切换墨夜主题</span>
+      </button>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar">
+      <div class="stats" id="stats" aria-label="书库实时指标"></div>
+      <div class="search-box">
+        <button type="button" class="icon-btn mobile-only" id="theme-toggle-mobile" data-act="theme-toggle" aria-label="切换墨夜主题" aria-pressed="false">
+          <span class="icon-swap" id="theme-icon-swap-mobile" aria-hidden="true">
+            <svg class="icon-a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            <svg class="icon-b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          </span>
+        </button>
+        <button type="button" class="btn sm has-icon-left" id="search-btn" data-act="search-open"><span class="dot" id="search-dot" aria-hidden="true"></span><span id="search-btn-label">打开阅读搜索</span></button>
+        <button type="button" class="btn sm has-icon-left" id="search-start" data-act="search-start" hidden><span class="dot off" aria-hidden="true"></span><span>启动阅读搜索</span></button>
+      </div>
+    </header>
+    <main id="view" tabindex="-1"><p class="muted">载入中…</p></main>
   </div>
-</header>
-<div class="shell">
-  <nav class="side" id="nav"></nav>
-  <main id="view"><p class="muted">载入中…</p></main>
 </div>
 <div id="modal"></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/app.js?v=__V__"></script>
 </body>
 </html>

@@ -10,13 +10,13 @@
 
 ## Sub-features
 
-- `ops-overview` 总览：一句话状态、六段流水线漏斗、待办事项（有待确认任务时，卡片「去确认」与顶部主按钮「查看待确认」均跳 `#logs?state=awaiting_review`）、最近任务与多端服务状态。
-- `ops-import` 新书入库：扫描、计划、执行、上传到 `books/_收件箱/`。
-- `ops-split` 正文生产：子页签 `split` 电子书、`docs` 文档（TXT/Office）、`pdf` PDF、`manual` 手工格式（djvu/csv）；`pdf-list` 是 PDF 的隐藏子页签。
-- `ops-maintain` 同步与维护：五行库状态（检索索引/浏览入口/体检/书目总表/上次同步）+ 一键对齐按钮（`sync_delta.has_drift` 为真时文案为「补齐偏差（增量同步）」，无偏差时为「复核并增量对齐」；未建向量库时跑 4 步：`db`/`awards`/`fts sync`/`audit`，toast「4 步全过」；向量库已有块/孤儿或 `force_embed` 时含 `embed sync` 共 5 步）+ 元数据/FTS/向量/LLM 扩展四行 + 低频重建按钮（压缩向量库/全量重建 index.db/全量重嵌向量/深度体检+四箱验收/清理旧记录）。日常正文落地已自动同步并刷新体检缓存，这页是外部改动与异步失败的兜底。
-- `ops-ledger` 书目与分类：子页签 `ledger` 分类与全库台账（默认分批渲染前 100 行并带 `#ledger-q` 80ms 防抖筛选、`加载更多 100 行`/`显示全部`）、`retire` 待退库与删书、`cold` 冷宫（只读专区）。人账 `tables/ledger.db` 的浏览与改行在 `ledger`。
-- `ops-retire` 删书：现在是「书目与分类」的子页签，不再是主导航；dry-run 与 apply 两步，apply 侧还有三道闸（uid 复核、`plan_hash`、勾确认）。
-- `ops-logs` 任务与日志：查看排队/待确认/已完成批次，支持 `#logs?state=awaiting_review` 过滤直达并自动展开首条待确认任务详情；从任意模块（总览/正文生产/同步与维护/删书）或「任务与日志」表格行点击任一任务的「详情」时，打开该任务详情 `#job-detail`、高亮当前行（`tr.active`）并自动滚动定位到 `#job-detail`（跨页跳转重置过期状态筛选，页内切换保留当前筛选）；待确认任务行提供「去处理」及详情页 `#job-review-box`（「去正文生产处理」/「去 PDF 待转清单处理」+ 备注输入 `#job-resolve-note` + 「确认已处理 / 标为失败 / 忽略关闭」，调用 `POST /api/jobs/<id>/resolve`），重跑与日志下载；只有 `queued`/`running` 可取消（`awaiting_review` 取消回 409）。
+- `ops-overview` 总览：当前工作焦点与可读率进度条、六环节流水线、待办事项（有待确认任务时，卡片「去确认」与顶部主按钮「去任务中心确认」均跳 `#logs?state=awaiting_review`）与多端服务状态；去掉重复「最近任务」卡。
+- `ops-import` 新书入库：自上而下全宽流（投递新书条 → 收件箱清单 → 入库核对清单），去掉底部文档转换卡。
+- `ops-split` 正文生产：子页签 `split` 电子书、`docs` 文档转正文（四格状态卡与最近一批折叠明细）、`pdf` PDF 分诊与转写（四格可点筛查、今日额度、批量分诊与待转清单）、`manual` 手工格式（djvu/csv）；`pdf-list` 是 PDF 的完整多维筛选子页签。
+- `ops-maintain` 同步与维护：四格同步健康总览（书目与视图 / 全文检索 / 语义检索 / 体检状态）+ 一键对齐按钮（`sync_delta.has_drift` 为真时文案为「补齐偏差（增量同步）」，无偏差时为「复核并增量对齐」；未建向量库时跑 4 步：`db`/`awards`/`fts sync`/`audit`，向量库已有块/孤儿或 `force_embed` 时含 `embed sync` 共 5 步）+ 折叠 `#status-issues` 体检提醒 + 章节主题增强 + 导出下载 + 低频高级运维重建；去掉「最近的同步与维护记录」卡。
+- `ops-ledger` 书目与分类：子页签 `ledger` 全库书目台账（两行工具栏，去除路径文字，默认分批渲染前 100 行并带 `#ledger-q` 80ms 防抖筛选、`全部书目 / 只看待复核` 分段切换、`加载更多 100 行`/`显示全部`）、`retire` 待退库与删书、`cold` 冷宫（只读专区）。
+- `ops-retire` 删书：现在是「书目与分类」的子页签，不再是主导航；dry-run 与 apply 两步（原生 `<dialog>` 弹窗），apply 侧还有三道闸（uid 复核、`plan_hash`、勾确认）。
+- `ops-logs` 任务与日志：全站唯一查看排队/待确认/已完成批次的中心，支持快速分段筛选与 `#logs?state=awaiting_review` 过滤直达并自动展开首条待确认任务详情；从各模块或「任务与日志」表格行点击「详情」打开 `#job-detail`、高亮当前行（`tr.active`）并滚动定位到 `#job-detail`；待确认任务行提供「去处理」及详情页 `#job-review-box`（「去正文生产处理」/「去 PDF 清单处理」+ 备注输入 `#job-resolve-note` + 「确认已处理 / 标为失败 / 忽略关闭」，调用 `POST /api/jobs/<id>/resolve`），重跑与日志下载；只有 `queued`/`running` 可取消（`awaiting_review` 取消回 409）。
 - `ops-sync` 增量同步：`/api/status` 的 `status.sync_delta` 给出 `fts`（`has_db/has_tracking/added/modified/removed/unchanged/drift_count`）、`embed`（`ok/initialized/engine_ready/added/modified/orphan/chunks/garbage/garbage_ratio/compact_recommended`）、`expand`（`covered_books/uncovered_books`）与 `meta`（`ledger_stale/catalog_missing/views_missing`）。作业种类是 `sync.fts`、`sync.embed`、`sync.reconcile`、`sync.expand`；入库/拆章等作业结束会 `_chain_auto_sync`，向量库未初始化时跳过 embed。
 
 ## How to get to it (user POV)
