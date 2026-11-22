@@ -51,18 +51,18 @@ CHROME = find_chrome()
 VIEWPORTS = ((1440, 900), (390, 844))
 TABS = (
     ("overview", "总览"),
-    ("import", "新书导入"),
+    ("import", "新书入库"),
     ("ledger", "书目与分类"),
-    ("split", "正文生产 · 电子书"),
+    ("split", "正文生产"),
     ("maintain", "同步与维护"),
-    ("logs", "日志"),
+    ("logs", "任务与日志"),
 )
 SUBTABS = (
-    ("retire", "书目与分类 · 待退库与删书"),
-    ("cold", "书目与分类 · 冷宫（只读专区）"),
-    ("docs", "正文生产 · 文档"),
-    ("pdf", "正文生产 · PDF"),
-    ("manual", "正文生产 · 手工格式"),
+    ("retire", "书目与分类"),
+    ("cold", "书目与分类"),
+    ("docs", "正文生产"),
+    ("pdf", "正文生产"),
+    ("manual", "正文生产"),
 )
 
 
@@ -285,8 +285,12 @@ new Promise((resolve) => {
   const tick = () => {
     const h1 = document.querySelector('#view h1');
     const title = h1 ? h1.textContent.trim() : '';
-    if (title === '%s' || Date.now() - t0 > 8000) {
-      resolve({tab: '%s', ok: title === '%s', title: title, ms: Date.now() - t0});
+    const on = document.querySelector('.subtabs a.on[href="#%s"]');
+    if ((title === '%s' && !!on) || Date.now() - t0 > 8000) {
+      resolve({
+        tab: '%s', ok: title === '%s' && !!on,
+        title: title, sub: on ? on.textContent.trim() : '', ms: Date.now() - t0,
+      });
     } else {
       setTimeout(tick, 100);
     }
@@ -506,7 +510,7 @@ PDF_LIST = """
   const pdfTab = document.querySelector('.subtabs a[href="#pdf"]');
   if (pdfTab) pdfTab.click();
   else location.hash = '#pdf';
-  await until(() => title() === '正文生产 · PDF', 8000);
+  await until(() => title() === '正文生产' && !!document.querySelector('.subtabs a.on[href="#pdf"]'), 8000);
   out.back = title();
   location.hash = '#pdf-list';
   await until(() => title() === '正文生产 · 待转 PDF 清单', 12000);
@@ -637,6 +641,16 @@ MAINTAIN_CHECKS = """
 })()
 """
 
+IMPORT_LAYOUT = """
+(() => {
+  const hasDocsCard = !!document.querySelector('#docs-card');
+  const drop = document.querySelector('[aria-label="投递新书"]');
+  const inbox = document.querySelector('[aria-label="收件箱清单"]');
+  const stacked = !!(drop && inbox && drop.getBoundingClientRect().bottom <= inbox.getBoundingClientRect().top + 2);
+  return {hasDocsCard: hasDocsCard, stacked: stacked};
+})()
+"""
+
 MAINTAIN_LAYOUT = """
 (() => {
   const q = (s) => document.querySelector(s);
@@ -646,6 +660,7 @@ MAINTAIN_LAYOUT = """
   return {button: !!q('[data-act="sync-reconcile"]'),
           open: adv ? adv.open : null,
           steps: document.querySelectorAll('[data-step]').length,
+          recentCard: text.indexOf('最近的同步与维护记录') >= 0,
           leaks: text.indexOf('.py') >= 0};
 })()
 """
@@ -661,6 +676,7 @@ MAINTAIN_PRODUCT = """
   if (!btn) return {button: false};
   const out = {button: true, open: adv ? adv.open : null,
                steps: document.querySelectorAll('[data-step]').length,
+               recentCard: text.indexOf('最近的同步与维护记录') >= 0,
                leaks: text.indexOf('.py') >= 0};
   btn.click();
   for (let i = 0; i < 200; i += 1) {
@@ -668,9 +684,11 @@ MAINTAIN_PRODUCT = """
     const b = q('[data-act="sync-reconcile"]');
     if (b && !b.disabled) break;
   }
-  await sleep(500);
-  const line = q('#view .jobline');
-  out.last = line ? line.textContent.replace(/\\s+/g, ' ').trim() : '';
+  await sleep(400);
+  const r = await fetch('/api/jobs?limit=5');
+  const j = await r.json();
+  const last = (j.jobs || []).find((row) => row.kind === 'sync.reconcile') || {};
+  out.last = (last.state || '') + ' ' + (last.summary || '');
   return out;
 })()
 """
@@ -679,12 +697,7 @@ STATUS_ISSUES = """
 (() => {
   const box = document.querySelector('#status-issues');
   if (!box) return {box: false};
-  const head = (el) => {
-    const h = el && el.querySelector('h2');
-    return h ? h.textContent.replace(/\\s+/g, ' ').trim() : '';
-  };
-  return {box: true, prev: head(box.previousElementSibling),
-          next: head(box.nextElementSibling),
+  return {box: true,
           count: box.querySelectorAll('.issue').length,
           text: box.textContent.replace(/\\s+/g, ' ').trim()};
 })()
@@ -772,44 +785,47 @@ LOG_OVERVIEW_JUMP = """
   if (link) link.click();
   for (let i = 0; i < 60; i += 1) {
     const h1 = document.querySelector('#view h1');
-    if (h1 && h1.textContent.trim() === '总览' && document.querySelector('#view [data-act="job-open"]')) break;
+    if (h1 && h1.textContent.trim() === '总览') break;
     await sleep(100);
   }
-  const btn = document.querySelector('#view [data-act="job-open"]');
-  if (!btn) return {found: false};
-  const id = btn.dataset.id || '';
+  await sleep(200);
+  const hasRecentCard = Array.from(document.querySelectorAll('#view h2'))
+    .some((h) => h.textContent.indexOf('最近任务') >= 0);
+  const btn = document.querySelector('#view a[href="#logs?state=awaiting_review"]');
+  if (!btn) return {found: false, hasRecentCard: hasRecentCard};
   btn.click();
   for (let i = 0; i < 80; i += 1) {
     const m = document.querySelector('#job-meta');
-    if (location.hash === '#logs' && m && m.textContent.indexOf(id) >= 0 && inView()) break;
+    const rev = document.querySelector('#job-review-box');
+    if (location.hash.indexOf('#logs') === 0 && m && rev && inView()) break;
     await sleep(100);
   }
   await sleep(150);
-  const meta = (document.querySelector('#job-meta') || {}).textContent || '';
-  const act = (document.querySelector('#log-rows tr.active') || {}).dataset || {};
+  const sel = document.querySelector('#log-filter');
+  const act = document.querySelector('#log-rows tr.active');
   return {
     found: true,
-    id: id,
-    hashOk: location.hash === '#logs',
-    metaOk: meta.indexOf(id) >= 0,
-    activeOk: act.jobId === id,
+    hasRecentCard: hasRecentCard,
+    hashOk: location.hash.indexOf('#logs') === 0,
+    filterOk: sel ? sel.value === 'awaiting_review' : false,
+    metaOk: !!(document.querySelector('#job-meta') || {}).textContent,
+    activeOk: !!(act && act.dataset && act.dataset.jobId),
     inView: inView(),
   };
 })()
 """
 
-# 日志页是诊断面，命令行与门槛原文留在那里；账表与同步维护页按设计展示台账/索引文件名，其余页不得出现实现细节。
+# 日志页是诊断面，命令行与门槛原文留在那里；其余页面（除维护页允许服务端故障原文）不得出现实现细节。
 COPY_LEAKS = """
 ((tab) => {
-  const bad = ['.py', '--', 'ops.db', 'library.db', 'book.json', 'index.db', 'ingest',
+  const bad = ['.py', '--', 'ops.db', 'library.db', 'book.json', 'index.db', 'ledger.db',
+               'books/_冷宫/', 'retired.tsv', 'emb.db', 'expand_fts', 'ingest',
                'build_library', 'gen_book_catalog', 'ops_status', 'worklist', 'triage_final',
                'review.json', 'quota', 'conflicts', '未匹配', 'sha256', 'route', 'fixture',
                'plan_hash', '快照', '回滚副本', 'replaced', 'pending_review',
                'stub', 'S1 ', 'S2 ', 'S3 ', 'S4 ', 'S5 ', 'S6 ', 'G3 ', 'G4 ', 'G5 ',
                'G10', 'G11'];
   const allow = {
-    ledger: ['library.db', 'book.json'],
-    cold: ['book.json'],
     maintain: ['--', 'library.db', 'book.json', 'index.db'],
   }[tab] || [];
   const text = ((document.querySelector('#view') || {}).textContent || '').replace(/FTS5/g, 'FTS');
@@ -903,7 +919,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             if not info.get("ok"):
                 failed_tabs.append(tab)
         for tab, title in SUBTABS:
-            info = eval_js(cdp, VISIT_SUBTAB % (tab, tab, title, tab, title), await_promise=True, timeout=30)
+            info = eval_js(cdp, VISIT_SUBTAB % (tab, tab, tab, title, tab, title), await_promise=True, timeout=30)
             tab_overflow = eval_js(cdp, "document.documentElement.scrollWidth > window.innerWidth")
             notes.append(
                 "子页 %-9s %s %r %s ms%s"
@@ -926,6 +942,10 @@ def run_viewport(base, width, height, out_dir, port, live=False):
                 failed_tabs.append(tab)
         eval_js(cdp, "document.querySelector('#nav a[href=\"#import\"]').click(); true")
         cdp.drain(0.8)
+        implayout = eval_js(cdp, IMPORT_LAYOUT)
+        notes.append("导入页布局 %s" % (implayout,))
+        if implayout.get("hasDocsCard") or not implayout.get("stacked"):
+            failed_tabs.append("import-layout")
         plan = eval_js(cdp, IMPORT_PLAN)
         notes.append("导入页计划 rows=%s head=%r 按钮禁用=%s" % (plan["rows"], plan["head"], plan["disabled"]))
         eval_js(cdp, "document.querySelector('[data-act=\"import-scan\"]').click(); true")
@@ -943,7 +963,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             failed_tabs.append("import-plan-reload")
         eval_js(
             cdp,
-            VISIT_TAB % ("split", "split", "正文生产 · 电子书", "split", "正文生产 · 电子书"),
+            VISIT_TAB % ("split", "split", "正文生产", "split", "正文生产"),
             await_promise=True,
             timeout=30,
         )
@@ -975,7 +995,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             for name, ok in (("split-recheck-button", ops.get("recheck")), ("split-ops-hint", ops.get("hint"))):
                 if not ok:
                     failed_tabs.append(name)
-        eval_js(cdp, VISIT_TAB % ("import", "import", "新书导入", "import", "新书导入"), await_promise=True, timeout=30)
+        eval_js(cdp, VISIT_TAB % ("import", "import", "新书入库", "import", "新书入库"), await_promise=True, timeout=30)
         edited = eval_js(cdp, IMPORT_EDIT)
         notes.append("导入页改行后 title=%r subjects=%r" % (edited["title"], edited["subjects"]))
         if edited["title"] != "改过的名" or edited["subjects"] != "文学/类型小说":
@@ -983,7 +1003,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         retire_uid = edited.get("uid") or split.get("start", {}).get("uid") or ""
         eval_js(
             cdp,
-            VISIT_SUBTAB % ("retire", "retire", "书目与分类 · 待退库与删书", "retire", "书目与分类 · 待退库与删书"),
+            VISIT_SUBTAB % ("retire", "retire", "retire", "书目与分类", "retire", "书目与分类"),
             await_promise=True,
             timeout=30,
         )
@@ -1011,7 +1031,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             failed_tabs.append("retire-modal")
         eval_js(
             cdp,
-            VISIT_SUBTAB % ("pdf", "pdf", "正文生产 · PDF", "pdf", "正文生产 · PDF"),
+            VISIT_SUBTAB % ("pdf", "pdf", "pdf", "正文生产", "pdf", "正文生产"),
             await_promise=True,
             timeout=30,
         )
@@ -1116,11 +1136,7 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             failed_tabs.append("maintain-steps-kept")
         issues = eval_js(cdp, STATUS_ISSUES)
         notes.append("维护体检提醒 %s" % (issues,))
-        issues_ok = (
-            issues.get("box")
-            and issues.get("prev") == "自动同步与偏差对齐"
-            and issues.get("next") == "LLM 章级主题扩展（可选）"
-        )
+        issues_ok = bool(issues.get("box"))
         if not live:
             issue_text = issues.get("text") or ""
             issues_ok = (
@@ -1138,13 +1154,14 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             maint2.get("button")
             and maint2.get("open") is False
             and maint2.get("steps") == 7
+            and not maint2.get("recentCard")
             and not maint2.get("leaks")
         )
         if not live:
-            ok = ok and "完成" in (maint2.get("last") or "") and "步全过" in (maint2.get("last") or "")
+            ok = ok and "succeeded" in (maint2.get("last") or "") and "步全过" in (maint2.get("last") or "")
         if not ok:
             failed_tabs.append("maintain-product")
-        eval_js(cdp, VISIT_TAB % ("logs", "logs", "日志", "logs", "日志"), await_promise=True, timeout=30)
+        eval_js(cdp, VISIT_TAB % ("logs", "logs", "任务与日志", "logs", "任务与日志"), await_promise=True, timeout=30)
         logchk = eval_js(cdp, LOG_CANCEL, await_promise=True, timeout=30)
         notes.append("日志待确认 %s" % (logchk,))
         if not (
@@ -1164,7 +1181,9 @@ def run_viewport(base, width, height, out_dir, port, live=False):
         notes.append("总览跳详情 %s" % (ov_jump,))
         if not (
             ov_jump.get("found")
+            and not ov_jump.get("hasRecentCard")
             and ov_jump.get("hashOk")
+            and ov_jump.get("filterOk")
             and ov_jump.get("metaOk")
             and ov_jump.get("activeOk")
             and ov_jump.get("inView")

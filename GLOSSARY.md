@@ -1,6 +1,6 @@
 # 书库术语表（GLOSSARY）
 
-状态：living · 2026-11-21
+状态：living · 2026-11-22
 失效源：.agents/skills/verify-book-corpus/features/*.md src/bookcorpus/reading/book_types.py apps/reading/server.py apps/ops/server.py apps/demo/server.py
 
 本表定义 `book-corpus` 五个本地应用与阅读/检索/运维链路的现行术语，口径以 `.agents/skills/verify-book-corpus/features/*.md` 为准。书库目录与账本词（`uid`、人账、机账、批次、拆章、存档、冷宫）另见 `AGENTS.md`「文件地图」。
