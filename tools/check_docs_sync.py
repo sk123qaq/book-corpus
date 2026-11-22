@@ -59,6 +59,8 @@ IGNORED_PATH_PREFIXES = (
     "apps/demo/缓存/",
     "apps/demo/运行记录/",
     "artifacts/",
+    # 设计原型页被 .gitignore 排除，不入库；活文档保留路径只为说明“当初对照的原型”
+    "docs/design/prototypes/",
 )
 
 # verify-book-corpus 约定的私有验证端口与 embed/rerank 默认端口
