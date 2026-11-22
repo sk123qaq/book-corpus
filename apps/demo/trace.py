@@ -1375,6 +1375,44 @@ def build(
                 "terms": list(cardset.terms),
             }
 
+        raw_ranking = [
+            {
+                "uid": b.book,
+                "book": b.book,
+                "title": b.title,
+                "type": b.type,
+                "chapters": b.chapters,
+                "score": round(b.score, 4),
+                "relevance": _book_relevance(b),
+                "vec_best": round(float(getattr(b, "vec_best", 0.0) or 0.0), 4),
+                "coverage": round(b.coverage, 4),
+                "groups": list(b.groups),
+                "total_groups": b.total_groups,
+                "best_path": b.best_path,
+                "best_line": b.best_line,
+                "best_text": " ".join((b.best_text or "").split())[:300],
+                "support": b.support,
+                "pinned": b.pinned,
+            }
+            for b in plan.ranking
+            if not (related_mode and excl_text and book_query.is_duplicate_passage(b.best_text or "", excl_text))
+        ]
+        if related_mode:
+            raw_ranking.sort(key=lambda r: (-float(r["relevance"]), -float(r["score"]), str(r["uid"])))
+            ranking_rows = raw_ranking[:15]
+            rank_order = {r["uid"]: idx for idx, r in enumerate(ranking_rows)}
+            kept_uid_set = set(rank_order)
+            kept_ranking = [b for b in plan.ranking if b.book in kept_uid_set]
+            kept_chapters = sorted(
+                (c for c in plan.chapters if c["book"] in kept_uid_set),
+                key=lambda c: (rank_order.get(c["book"], len(rank_order)), c["book"]),
+            )[:15]
+        else:
+            kept_ranking = _pick_rows(plan.ranking, 8, focus.get("book"))
+            kept_uid_set = {b.book for b in kept_ranking}
+            ranking_rows = [r for r in raw_ranking if r["uid"] in kept_uid_set]
+            kept_chapters = _pick_rows(plan.chapters, 3, focus.get("book"))
+
         plan_dict = {
             "query": plan.query,
             "terms": list(plan.terms),
@@ -1412,28 +1450,7 @@ def build(
                 }
                 for r in plan.rounds
             ],
-            "ranking": [
-                {
-                    "uid": b.book,
-                    "book": b.book,
-                    "title": b.title,
-                    "type": b.type,
-                    "chapters": b.chapters,
-                    "score": round(b.score, 4),
-                    "relevance": _book_relevance(b),
-                    "vec_best": round(float(getattr(b, "vec_best", 0.0) or 0.0), 4),
-                    "coverage": round(b.coverage, 4),
-                    "groups": list(b.groups),
-                    "total_groups": b.total_groups,
-                    "best_path": b.best_path,
-                    "best_line": b.best_line,
-                    "best_text": " ".join((b.best_text or "").split())[:300],
-                    "support": b.support,
-                    "pinned": b.pinned,
-                }
-                for b in _pick_rows(plan.ranking, 15 if related_mode else 8, focus.get("book"))
-                if not (related_mode and excl_text and book_query.is_duplicate_passage(b.best_text or "", excl_text))
-            ],
+            "ranking": ranking_rows,
             "chapters": [
                 {
                     "uid": c["book"],
@@ -1457,11 +1474,9 @@ def build(
                         )
                     ],
                 }
-                for c in _pick_rows(plan.chapters, 15 if related_mode else 3, focus.get("book"))
+                for c in kept_chapters
             ],
         }
-        kept_ranking = _pick_rows(plan.ranking, 15 if related_mode else 8, focus.get("book"))
-        kept_chapters = _pick_rows(plan.chapters, 15 if related_mode else 3, focus.get("book"))
         rec.event(
             "search.trim",
             ranking_total=len(plan.ranking),

@@ -3,18 +3,19 @@
 失效源：apps/demo/**
 
 演示页拿一句人话去书库里找段落：先拆词、换词循环、给书打分，再把候选书和命中章递给用户，
-最后给出带依据、流式上屏的回答。页面有两个：默认打开的多轮会话页，和保留五阶段过程的
-`/classic`。回答可以随时暂停，再从 checkpoint 续答。结果里的书卡和命中卡可以带到分层读的
+最后给出带依据、流式上屏的回答。默认打开 `/` 多轮会话页（宣纸日间/墨夜双色主题），
+五阶段检索进度已内联为问题下方可展开卡片，页头已移除「完整流程」跳转按钮；`/classic`
+路由仍保留给自动化回归与直达对照。回答可以随时暂停，再从 checkpoint 续答。结果里的书卡和命中卡可以带到分层读的
 `/open`，直接落到原文章节与行。
 
 ## Sub-features
 
-- `ask-open` 打开会话页；上一轮没跑完的回答在**服务启动时**标为 `interrupted`（文案「服务重启，上次回答已中断」），页面只负责显示。
+- `ask-open` 打开会话页；页头支持 `#theme-toggle` 切换宣纸日间/墨夜主题且不渲染「完整流程」`/classic` 入口；上一轮没跑完的回答在**服务启动时**标为 `interrupted`（文案「服务重启，上次回答已中断」），页面只负责显示。
 - `ask-session` 新开会话、多轮追问、会话落盘；同一轮的迟到请求按 `(session_id, n, run_token)` 去重。
-- `ask-history` 历史页签：按问题筛选、多选删除。
+- `ask-history` 历史页签：使用原生 `popover` 菜单（导出 `.md` / `.docx`、多选管理、删除）与原生 `<dialog>` 确认弹窗，支持按问题筛选与多选删除。
 - `ask-scope` 书目范围下推：`?books=` URL 参数写入 `scope.books` 并下推给 `/api/run`（最多 16 本）；检索命中后点选候选书卡片 `.book-pick` 则写入 `sources` 并在点「由模型归纳回答」时发给 `/api/answer`（最多 10 本）。两者均不靠前端结果后过滤。
 - `ask-books-meta` `GET /api/books/meta?uids=B0001,B0002` 用 `build/library.db` 补书名与作者，最多 16 本，缺的 uid 用 uid 当标题。
-- `ask-cross-open` `?q=&books=&mode=trace` 只跑检索不生成回答；会话页命中卡「在分层读中打开」链到 `/go/reading?to=/open...`，`.bp-open` 链到 `/go/reading?to=/book/<uid>`（`/classic` 没有 `/go/reading` 链接），`mode=prefill` 只预填问题。`mode=related&exclude=<uid>&src_path=...&src_line=...&threshold=0.45` 走跨书找相关：排除来源书与原段（含几乎相同的复本段），按 `0..1` 相关性阈值筛选（最多 10 本、最少 1 本或 0 本），可滑块实时调阈值后再由模型归纳回答。
+- `ask-cross-open` `?q=&books=&mode=trace` 只跑检索不生成回答；会话页命中卡「在分层读中打开」链到 `/go/reading?to=/open...`，`.bp-open` 链到 `/go/reading?to=/book/<uid>`（`/classic` 没有 `/go/reading` 链接），`mode=prefill` 只预填问题。`mode=related&exclude=<uid>&src_path=...&src_line=...&threshold=0.45` 走跨书找相关：排除来源书与原段（含几乎相同的复本段），前后端均先按 `relevance` 严格降序排列（#1..#N）再按 `0..1` 阈值筛选（最多 10 本、最少 1 本或 0 本），滑块与预设档位可原地实时调阈值后再由模型归纳回答。
 - `ask-thinking` 思考等级（off / low / medium / high）在会话页 `/` 与经典检索页 `/classic` 均通过 `think-select` 下拉切换（持久化到 `localStorage['booksearch.thinking']`，前端默认 `low`；后端 `/api/answer` 缺省仍兼容 `high`）。
 - `ask-trace` 依据与落点：回答里的书卡、章节锚点、命中段原文。
 - `ask-classic` `/classic` 五阶段：理解问题 → 词法循环 → 打分与选章 → 书卡 → 结果；经典页发 `stateless:true`，不建会话，也不进历史。
@@ -29,9 +30,9 @@
 ## How to get to it (user POV)
 
 - 浏览器打开 `http://127.0.0.1:18765/`（多轮会话页）。
-- 在输入框敲问题，按回车或点发送；回答会流式出现，右上角有「暂停」。
+- 在输入框敲问题，按回车或点发送；回答会流式出现，右上角有「暂停」；问题下方可点「展开链路」就地查看五阶段进度与原始 JSON。
 - 点「暂停」后卡片显示「已暂停」，点「继续问答」从当前进度续答。
-- 想看过程：打开 `http://127.0.0.1:18765/classic`；**示例问句只在这个页面上**。
+- 如需访问独立经典演示页：手动打开 `http://127.0.0.1:18765/classic`；**示例问句只在这个页面上**（会话页 `/` 不设跳转链接）。
 - 点结果里的书卡，或点历史页签翻旧会话；历史会话的悬浮菜单可导出 MD / DOCX 或删除。
 - 带书目前提打开 `http://127.0.0.1:18765/?q=你那里配姓赵&books=B0001&mode=trace`，页面只停在检索命中，不发起回答；点命中卡的「在分层读中打开」跳到 18771 的章页。
 - 从每日日课或分层读的「去书库重搜」也能带 `from=reading` / `from=daily` 回来，检索页保留来源。

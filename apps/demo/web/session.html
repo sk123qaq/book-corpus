@@ -2,86 +2,171 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>会话追问 · 书库检索</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F4F1E8" id="meta-theme-color">
+<script>
+try {
+  const saved = localStorage.getItem('booksearch-color-scheme');
+  if (saved === 'light' || saved === 'dark') {
+    document.querySelector('meta[name="color-scheme"]').content = saved;
+    if (saved === 'dark') {
+      document.getElementById('meta-theme-color').content = '#161716';
+    }
+  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.getElementById('meta-theme-color').content = '#161716';
+  }
+} catch {}
+</script>
+<title>书库检索 · 会话追问</title>
 <link rel="stylesheet" href="/session.css">
 </head>
 <body>
-<header class="masthead">
-  <a class="brand" href="/">书库检索<span class="brand-dot"></span></a>
-  <div class="stats" id="stats" aria-label="书库规模">
-    <span><b class="mono" data-stat="books">—</b> 本</span>
-    <span><b class="mono" data-stat="paras">—</b> 段</span>
-    <span><b class="mono" data-stat="chapters">—</b> 章</span>
+<a class="skip-link" href="#main">跳至正文</a>
+
+<header class="topbar masthead">
+  <div class="topbar-inner">
+    <div class="topbar-left">
+      <button type="button" class="icon-btn mobile-toggle" id="btn-open-rail" aria-label="打开会话与历史">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/>
+        </svg>
+      </button>
+
+      <a class="brand" href="/" id="brand-link" aria-label="书库检索，返回首页">
+        <span class="brand-seal" aria-hidden="true">检</span>
+        <span class="brand-name">书库检索</span>
+        <span class="brand-dot" aria-hidden="true"></span>
+      </a>
+
+      <div class="stats-strip stats" id="stats" aria-label="书库实时规模">
+        <span><b class="mono" data-stat="books">—</b>&nbsp;本</span>
+        <span><b class="mono" data-stat="paras">—</b>&nbsp;段</span>
+        <span><b class="mono" data-stat="chapters">—</b>&nbsp;章</span>
+        <span class="fusion-pill" id="fusion-pill" title="已开启 BM25 与向量混合检索" hidden>
+          <span class="fusion-dot" aria-hidden="true"></span>
+          <span><span translate="no">BM25</span>&nbsp;+&nbsp;向量</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="切换配色主题">
+        <span class="icon-swap theme-swap" aria-hidden="true">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+          </svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+          </svg>
+        </span>
+      </button>
+
+      <button type="button" class="btn sm has-icon-left drawer-toggle mobile-toggle" id="drawer-toggle" aria-label="切换原文对照面板">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+        </svg>
+        <span class="when-closed">原文</span><span class="when-open">收起</span>
+      </button>
+    </div>
   </div>
-  <nav class="nav"><a href="/classic">完整流程 ↗</a></nav>
 </header>
 
-<main class="app">
-  <aside class="rail" aria-label="会话">
-    <div class="rail-tabs" role="tablist" aria-label="会话视图">
-      <button class="rail-tab" id="tab-current" type="button" role="tab"
-              aria-selected="false" aria-controls="panel-current">本次会话 <b id="turn-count">0</b></button>
-      <button class="rail-tab is-on" id="tab-history" type="button" role="tab"
-              aria-selected="true" aria-controls="panel-history">历史会话 <b id="history-count">0</b></button>
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+
+<div class="app-shell app">
+  <aside class="rail" id="rail" aria-label="会话与历史导航">
+    <div class="rail-tabs" focusgroup="tablist nomemory" aria-label="会话视图切换">
+      <button type="button" class="rail-tab" id="tab-current" aria-selected="false">
+        <span>本次会话</span>
+        <b id="turn-count">0</b>
+      </button>
+      <button type="button" class="rail-tab is-on" id="tab-history" aria-selected="true" focusgroupstart>
+        <span>历史会话</span>
+        <b id="history-count">0</b>
+      </button>
     </div>
+
     <div class="rail-panels">
-      <section class="rail-panel" id="panel-current" role="tabpanel"
-               aria-labelledby="tab-current" hidden>
-        <p class="rail-sub" id="rail-sub">还没有开始</p>
-        <div class="rail-scroll">
-          <div class="rail-empty" id="rail-empty">
-            <p>还没有开始。</p>
-            <p>问一句，本次会话的线索会出现在这里。</p>
+      <div class="rail-panel" id="panel-current" role="tabpanel" aria-labelledby="tab-current" hidden="until-found">
+        <div class="rail-panel-inner">
+          <p class="rail-head-note rail-sub" id="rail-sub">还没有开始</p>
+          <div class="rail-scroll">
+            <div class="rail-empty" id="rail-empty">
+              <p>还没有开始。</p>
+              <p>问一句，本次会话的线索会出现在这里。</p>
+            </div>
+            <ol class="rounds-list rounds" id="rounds"></ol>
           </div>
-          <ol class="rounds" id="rounds"></ol>
+          <div class="rail-foot">
+            <button type="button" class="btn has-icon-left" id="new-session">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14"/><path d="M5 12h14"/>
+              </svg>
+              <span>新会话</span>
+            </button>
+          </div>
         </div>
-        <button class="rail-foot" type="button" id="new-session"><span class="plus">+</span>新会话</button>
-      </section>
-      <section class="rail-panel" id="panel-history" role="tabpanel"
-               aria-labelledby="tab-history">
-        <div class="hist-search">
-          <span class="mag" aria-hidden="true">⌕</span>
-          <input id="hist-filter" type="text" autocomplete="off"
-                 placeholder="搜问题或书名" aria-label="搜索历史会话">
+      </div>
+
+      <div class="rail-panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history" tabindex="0">
+        <div class="rail-panel-inner">
+          <div class="hist-search-wrap hist-search">
+            <label class="sr-only" for="hist-filter">搜索历史会话</label>
+            <div class="hist-search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              <input id="hist-filter" name="hist_filter" type="search" autocomplete="off" spellcheck="false" placeholder="搜问题或书名…">
+            </div>
+          </div>
+
+          <div class="hist-selbar" id="hist-selbar" hidden></div>
+          <div class="rail-scroll hist-scroll" id="hist-list"></div>
+          <p class="rail-note hist-note pretty">切换只是换视图：正在跑的回答会在后台继续，可回来查看。</p>
         </div>
-        <div class="hist-selbar" id="hist-selbar" hidden></div>
-        <div class="rail-scroll hist-scroll" id="hist-list"></div>
-        <p class="hist-note">切换只是换视图：正在跑的回答会在后台继续，可回来查看。</p>
-      </section>
+      </div>
     </div>
   </aside>
 
-  <section class="main" id="main"></section>
+  <main class="main-canvas main" id="main" tabindex="-1"></main>
 
-  <div class="ask">
-    <div class="ask-hint" id="hint"></div>
-    <div class="ask-row">
-      <div class="ask-field" id="ask-field">
-        <input class="field" id="q" type="text" maxlength="300" autocomplete="off"
-               aria-label="接着问" placeholder="问一句，从书里找原文">
-        <span class="caret" aria-hidden="true"></span>
+  <section class="composer-dock ask" aria-label="提问与追问输入区">
+    <div class="composer-inner">
+      <div class="composer-hint ask-hint" id="hint" aria-live="polite"></div>
+      <div class="composer-shell ask-row">
+        <div class="ask-field" id="ask-field">
+          <label class="sr-only" for="q">输入你的问题或检索词</label>
+          <input class="field composer-input" id="q" name="question" type="text" maxlength="300" autocomplete="off" placeholder="问一句，从书里找原文…">
+          <span class="caret" aria-hidden="true"></span>
+        </div>
+        <label class="sr-only" for="think-select">模型思考深度</label>
+        <select class="think-select" id="think-select" name="thinking" title="模型思考深度">
+          <option value="off">思考 关</option>
+          <option value="low" selected>思考 低</option>
+          <option value="medium">思考 中</option>
+          <option value="high">思考 高</option>
+        </select>
+        <button type="button" class="btn primary btn-primary ask-send composer-send" id="send">提问</button>
       </div>
-      <select class="think-select" id="think-select" aria-label="模型思考等级" title="模型思考深度">
-        <option value="off">思考 关</option>
-        <option value="low" selected>思考 低</option>
-        <option value="medium">思考 中</option>
-        <option value="high">思考 高</option>
-      </select>
-      <button class="btn btn-primary ask-send" type="button" id="send">追问</button>
     </div>
-  </div>
+  </section>
 
-  <aside class="drawer" id="drawer">
-    <button class="drawer-toggle" type="button" id="drawer-toggle">
-      <span class="when-closed">原文</span><span class="when-open">收起</span>
-    </button>
+  <aside class="source-drawer drawer" id="drawer" aria-label="原文对照窗口">
     <section class="panel is-shown" id="panel"></section>
   </aside>
-</main>
+</div>
 
-<div class="hist-menu" id="hist-menu" role="menu" aria-label="会话操作" hidden></div>
-<div class="toast" id="toast" hidden></div>
+<dialog id="confirm-dialog" closedby="any" aria-labelledby="confirm-dlg-title">
+  <h2 class="dlg-title" id="confirm-dlg-title">确认操作？</h2>
+  <p class="dlg-desc pretty" id="confirm-dlg-desc"></p>
+  <form method="dialog" class="dlg-actions">
+    <button type="submit" class="btn" value="cancel" autofocus id="confirm-dlg-cancel">取消</button>
+    <button type="submit" class="btn danger" value="confirm" id="confirm-dlg-ok">确认</button>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="/session.js"></script>
 </body>
 </html>
