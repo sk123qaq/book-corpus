@@ -4,6 +4,8 @@
 # 1.28.2 上验证过；2.x 未验证，先别跨大版本
 pymupdf>=1.24,<2
 pypdf>=4
+# pypdf 解 AES 加密 PDF（V5/R6 等）必需，缺了会 DependencyError: cryptography>=3.1
+cryptography>=3.1
 requests>=2.31
 numpy>=1.26
 pillow>=10

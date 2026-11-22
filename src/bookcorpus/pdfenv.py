@@ -11,6 +11,7 @@ import sys
 REQUIREMENTS = (
     "pymupdf>=1.24,<2",
     "pypdf>=4",
+    "cryptography>=3.1",
     "requests>=2.31",
     "numpy>=1.26",
     "pillow>=10",
