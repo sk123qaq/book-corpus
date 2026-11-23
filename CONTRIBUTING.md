@@ -2,7 +2,7 @@
 
 <!-- 失效源：pyproject.toml ruff-strict.toml .pre-commit-config.yaml tools/ruff_strict_new.py -->
 
-给要改这个仓的人。克隆与日常用法看 `README.md`；本机实例的账与约束看 `AGENTS.md`，那些数字不对克隆成立。
+给要改这个仓的人。克隆、安装与日常用法看 `docs/使用指南.md`（项目简介见 `README.md`）；本机实例的账与约束看 `AGENTS.md`，那些数字不对克隆成立。
 
 ## 先跑起来
 
@@ -83,4 +83,4 @@ CI（`.github/workflows/ci.yml`）的 `checks` job 跑前六道加 JS 语法检�
 - `apps/`、`tools/`、`tests/` 不纳入：大量 `sys.path` 拼接与动态导入，噪音远大于收益。
 - 确有必要时写 `# type: ignore[错码]  # 中文理由`，但先想有没有真的改对类型。
 
-改了结构或脚本再跑 `book-corpus doctor` 与 `book-corpus verify`；改了检索层 `book-corpus verify --box 4`；有自己的检索题集时再跑 `book-corpus run check_p1 --gold <题集>/gold.tsv`。判据见 `README.md` 的「改完跑什么」。
+改了结构或脚本再跑 `book-corpus doctor` 与 `book-corpus verify`；改了检索层 `book-corpus verify --box 4`；有自己的检索题集时再跑 `book-corpus run check_p1 --gold <题集>/gold.tsv`。判据见 `docs/使用指南.md` 的「改完跑什么」。

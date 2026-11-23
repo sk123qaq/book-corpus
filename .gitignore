@@ -92,3 +92,6 @@ __pycache__/
 
 # ---- 验收报告的证据图片 ----
 !/reports/**/*.png
+
+# ---- README 展示动图 ----
+!/docs/assets/*.webp

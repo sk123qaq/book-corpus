@@ -1,7 +1,7 @@
 ---
 name: sync-docs
 description: >
-  对照仓库代码变更与活文档（README.md、AGENTS.md、CONTRIBUTING.md、GLOSSARY.md、
+  对照仓库代码变更与活文档（docs/使用指南.md、AGENTS.md、CONTRIBUTING.md、GLOSSARY.md、
   apps/*/README.md、docs/、reports/、.agents/skills/），自动生成事实表、
   按 `失效源：` 定位并修复路径/端口/命令/退役词/已知红漂移。
   当完成一轮功能迭代、重构目录、增删脚本或技能、或定期做文档巡检时使用。
@@ -16,7 +16,7 @@ argument-hint: "[since-rev]"
 2. 生成物（`docs/reference/facts.md`、`docs/INDEX.md`、`AGENTS.md`「现状」块）
 3. 验证地图（`.agents/skills/verify-book-corpus/features/*.md`：产品现在做什么、怎么证明）
 4. `docs/adr/` 中 `accepted` 的架构决定
-5. 活文档正文（`README.md`、`CONTRIBUTING.md`、`AGENTS.md`、`GLOSSARY.md`、`apps/*/README.md`、`docs/检索/README.md`）
+5. 活文档正文（`docs/使用指南.md`、`CONTRIBUTING.md`、`AGENTS.md`、`GLOSSARY.md`、`apps/*/README.md`、`docs/检索/README.md`）
 6. `docs/design/` 与 `docs/briefs/`（按状态头读）
 7. 记录（复盘、`reports/`、`artifacts/verify/`、踩坑账）
 
