@@ -138,7 +138,7 @@ html[data-theme="night"] {
 
 html {
   background: var(--paper);
-  overflow-x: hidden;
+  overflow-x: clip; /* 不可改 hidden：会令 body 成滚动容器导致 .sidebar sticky 失效 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -157,7 +157,7 @@ body {
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.58;
-  overflow-x: hidden;
+  overflow-x: clip;
   touch-action: manipulation;
 }
 
@@ -251,6 +251,7 @@ p { margin: 0 0 8px; text-wrap: pretty; }
 .sidebar {
   position: sticky;
   top: 0;
+  align-self: start;
   height: 100dvh;
   background: var(--surface);
   border-right: 1px solid var(--line);
@@ -1518,6 +1519,7 @@ dialog.modal[open] {
   .app-shell { grid-template-columns: minmax(0, 1fr); }
   .sidebar {
     position: static;
+    align-self: auto;
     height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--line);
