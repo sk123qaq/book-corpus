@@ -1,0 +1,4 @@
+out/
+*.bin
+*_TTrace_*.tla
+spec/states/

@@ -234,6 +234,7 @@ book-corpus model check
 | `sync-docs` | `.agents/skills/sync-docs/` | 迭代后对账活文档：刷新事实表、审计并修路径/端口/命令漂移 |
 | `typesafe-ai` | `.agents/skills/typesafe-ai/` | 旧分类后端，默认已改用模型 |
 | `verify-book-corpus` | `.agents/skills/verify-book-corpus/` | 一次性工作区起五个页面服务，验证用户可见行为并留证据 |
+| `verify-ops-write-lock` | `.agents/skills/verify-ops-write-lock/` | TLA+ 模型检查操作台写任务的写者互斥：改 Runner、接管、`.writer.lock` 后跑一遍 |
 
 脚本解析技能目录的顺序是：工作区 `.agents/skills/`、源码仓 `.agents/skills/`、`~/.agents/skills/`。可以用 `BOOKS_SKILLS_DIR` 指定别的根。
 
