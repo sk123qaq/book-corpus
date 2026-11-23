@@ -1184,7 +1184,6 @@
       if (state.answer && (state.answer.pausing || state.answer.paused)) return;
       state.answer = { key, locator: loc, loading: false, paused: false, pausing: false, data, error: '', controller: null, streamId };
       renderStage4(state.trace);
-      renderRaw(4, state.trace);
       const first = (data.citations || []).find((c) => c.verified && c.path);
       if (first) {
         const base = state.result || {};
@@ -1210,7 +1209,6 @@
       state.answer = { key, locator: loc, loading: false, paused: false, data: null,
         error: (err && err.message) || String(err), controller: null };
       renderStage4(state.trace);
-      renderRaw(4, state.trace);
     }
   }
 
@@ -1269,29 +1267,6 @@
     });
   }
 
-  function rawFor(i, trace) {
-    if (i === 0) return trace.extract;
-    if (i === 1) {
-      const p = trace.plan || {};
-      return { terms: p.terms, nouns: p.nouns, action_dropped: p.action_dropped, rounds: p.rounds, stop: p.stop, best_round: p.best_round, ms: p.ms };
-    }
-    if (i === 2) {
-      const p = trace.plan || {};
-      return { scheme: p.scheme, ranking: p.ranking, chapters: p.chapters };
-    }
-    if (i === 3) return trace.cards;
-    return { result: state.result || trace.result,
-             answer: (state.answer && state.answer.data) || null };
-  }
-
-  function renderRaw(i, trace) {
-    const pre = $('.raw pre', stages[i]);
-    if (!pre) return;
-    let text = '';
-    try { text = JSON.stringify(rawFor(i, trace), null, 1); } catch (err) { text = ''; }
-    pre.textContent = text.slice(0, 4096);
-  }
-
   function renderAll() {
     const trace = state.trace;
     if (!trace) return;
@@ -1314,9 +1289,7 @@
     renderStage2(trace);
     renderStage3(trace);
     renderStage4(trace);
-    [0, 1, 2, 3, 4].forEach((i) => renderRaw(i, trace));
     $$('.stage-summary').forEach((el) => { el.hidden = false; });
-    $$('.raw').forEach((el) => { el.style.display = ''; });
     railItems.forEach((li) => {
       li.classList.remove('done', 'active');
       const step = Number(li.dataset.step);
@@ -1435,7 +1408,6 @@
       $('.stage-body', s).innerHTML = '';
       $('.stage-summary', s).hidden = true;
       $('.stage-ms', s).textContent = '';
-      s.querySelectorAll('.raw').forEach((r) => { r.style.display = 'none'; });
     });
     railItems.forEach((li) => li.classList.remove('done', 'active'));
     stages[0].dataset.state = 'active';
@@ -1506,7 +1478,6 @@
       };
     }
     renderStage4(state.trace);
-    renderRaw(4, state.trace);
     bindSwitch();
   }
 
@@ -1807,7 +1778,6 @@
       state.result = state.trace.result;
       state.locator = locatorFromResult(state.trace.result);
       renderStage4(state.trace);
-      renderRaw(4, state.trace);
       bindSwitch();
       play();
     });
