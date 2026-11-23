@@ -815,6 +815,38 @@ LOG_OVERVIEW_JUMP = """
 })()
 """
 
+SIDEBAR_STICKY = """
+(() => {
+  const se = document.scrollingElement || document.documentElement;
+  window.scrollTo(0, se.scrollHeight);
+  const side = document.querySelector('.sidebar');
+  const brand = document.querySelector('.brand');
+  const toggle = document.querySelector('#theme-toggle');
+  if (!side || !brand || !toggle) return {ok: false, missing: true};
+  const sr = side.getBoundingClientRect();
+  const br = brand.getBoundingClientRect();
+  const tr = toggle.getBoundingClientRect();
+  const vh = window.innerHeight;
+  const scrollY = window.scrollY;
+  const ok = (
+    scrollY > 0
+    && Math.abs(sr.top) <= 1
+    && Math.abs(sr.bottom - vh) <= 1
+    && br.top >= 0 && br.bottom <= vh
+    && tr.top >= 0 && tr.bottom <= vh
+  );
+  return {
+    ok: ok,
+    scrollY: scrollY,
+    top: +sr.top.toFixed(1),
+    bottom: +sr.bottom.toFixed(1),
+    vh: vh,
+    brandTop: +br.top.toFixed(1),
+    toggleBottom: +tr.bottom.toFixed(1),
+  };
+})()
+"""
+
 # 日志页是诊断面，命令行与门槛原文留在那里；其余页面（除维护页允许服务端故障原文）不得出现实现细节。
 COPY_LEAKS = """
 ((tab) => {
@@ -1191,6 +1223,13 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             failed_tabs.append("log-overview-jump")
         eval_js(cdp, VISIT_TAB % ("overview", "overview", "总览", "overview", "总览"), await_promise=True, timeout=30)
         cdp.drain(0.6)
+        if width > 820:
+            sticky = eval_js(cdp, SIDEBAR_STICKY)
+            notes.append("侧栏固定 %s" % (sticky,))
+            if not sticky.get("ok"):
+                failed_tabs.append("sidebar-sticky")
+            eval_js(cdp, "window.scrollTo(0, 0); true")
+            cdp.drain(0.15)
         overflow = bool(widest[0]) or eval_js(cdp, "document.documentElement.scrollWidth > window.innerWidth")
         width_doc = eval_js(cdp, "document.documentElement.scrollWidth")
         inner = eval_js(cdp, "window.innerWidth")

@@ -27,6 +27,7 @@ OFFLINE = [
     (OPS / "test_split.py", 180, ()),
     (OPS / "test_retire.py", 180, ()),
     (OPS / "test_pdf.py", 300, ()),
+    (OPS / "test_sidebar_sticky.py", 180, ()),
     (READING / "test_merge_note.py", 180, ()),
     (READING / "test_selection_bar.py", 180, ()),
 ]
