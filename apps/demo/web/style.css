@@ -442,7 +442,6 @@ a { color: inherit; text-decoration: none; }
 .stage[data-state="pending"] .stage-head { opacity: .45; }
 .stage[data-state="pending"] .stage-body,
 .stage[data-state="pending"] .stage-summary { display: none; }
-.stage[data-state="pending"] .raw { display: none; }
 .stage[data-state="done"] .stage-body { display: none; }
 .stage[data-state="done"].is-open .stage-body { display: block; }
 .stage[data-state="done"].is-open .stage-summary { display: none; }
@@ -1220,24 +1219,6 @@ a { color: inherit; text-decoration: none; }
 
 .hit-para mark { background: #f0d2c8; }
 
-/* ---- raw data ---------------------------------------------------- */
-.raw {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14px;
-  font-size: 11px;
-}
-
-.raw summary {
-  cursor: pointer;
-  color: var(--muted);
-  list-style: none;
-  user-select: none;
-}
-
-.raw summary::-webkit-details-marker { display: none; }
-.raw summary::before { content: "{ } "; font-family: var(--mono); }
-
 .stage-loading {
   display: flex;
   align-items: center;
@@ -1268,22 +1249,6 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.raw summary:hover { color: var(--red); }
-
-.raw pre {
-  width: 100%;
-  margin: 8px 0 0;
-  padding: 10px 12px;
-  background: #f4efe4;
-  border-radius: 6px;
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 260px;
-  overflow: auto;
 }
 
 /* ---- footer ------------------------------------------------------ */
@@ -1316,7 +1281,6 @@ body.instant .bar i { transition: none; }
 body.instant .stage-summary { margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 body.instant .stage-summary .summary-line { margin: 0; }
 body.instant .stage-summary .summary-evidence { margin-top: 0; }
-body.instant .stage .raw { margin-top: 4px; font-size: 10px; }
 body.instant .question-bar { padding: 8px 0; }
 body.instant .question-text { font-size: 17px; }
 body.instant .summary-line { font-size: 13px; }

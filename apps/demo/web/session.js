@@ -1196,7 +1196,7 @@
   }
 
   function stageDetails(turn) {
-    const blank = { value: '—', lead: '', meta: '', field: null, raw: null };
+    const blank = { value: '—', lead: '', meta: '', field: null };
     const trace = turn.trace || null;
     if (!trace) return [blank, blank, blank, blank, blank];
     const extract = trace.extract || {};
@@ -1241,7 +1241,6 @@
           + (extract.source === 'model' ? '模型切词'
              : extract.source === 'cache' ? '命中切词缓存' : '切词'),
         field: null,
-        raw: trace.extract,
       },
       {
         value: rounds.length + ' 轮',
@@ -1251,10 +1250,6 @@
           label: '轮次',
           chips: rounds.map((row) => kindLabel(row.kind) + ' · ' + fmtInt(row.hits) + ' 段'
             + (row.n === plan.best_round ? ' · 采用' : '')),
-        },
-        raw: {
-          terms: plan.terms, nouns: plan.nouns, rounds: plan.rounds,
-          stop: plan.stop, best_round: plan.best_round, ms: plan.ms,
         },
       },
       {
@@ -1270,14 +1265,6 @@
           chips: ranking.slice(0, 3).map((row, i) => (i + 1) + '. '
             + (row.title || bookName(row.book)) + ' '
             + (isFinite(Number(row.score)) ? Number(row.score).toFixed(2) : '—')),
-        },
-        raw: {
-          scheme: plan.scheme,
-          fusion: plan.fusion || (plan.vec_used ? 'hybrid' : 'bm25_only'),
-          vec_used: !!plan.vec_used,
-          vec_ms: plan.vec_ms || 0,
-          ranking: plan.ranking,
-          chapters: plan.chapters,
         },
       },
       {
@@ -1296,7 +1283,6 @@
               ? focus.candidates.map((row) => '《' + (row.title || bookName(row.book)) + '》')
               : cardList.map((card) => '《' + (card.title || bookName(card.book)) + '》')),
         },
-        raw: trace.cards,
       },
       {
         value: scope.length > 1
@@ -1309,22 +1295,8 @@
           label: '命中',
           quote: cut(result.text || (cites[0] && cites[0].quote) || '', 80),
         },
-        raw: { result: trace.result || null, answer },
       },
     ];
-  }
-
-  function rawHTML(raw) {
-    if (raw == null) return '';
-    let text = '';
-    try {
-      text = JSON.stringify(raw, null, 1) || '';
-    } catch (err) {
-      text = '';
-    }
-    if (text.length > 4096) text = text.slice(0, 4096) + '…';
-    if (!text) return '';
-    return '<details class="raw"><summary>原始数据</summary><pre>' + esc(text) + '</pre></details>';
   }
 
   function fieldHTML(field) {
@@ -1361,7 +1333,6 @@
       + '<div class="stage-row-body v3-body">'
       + '<div class="stage-body-done">' + done + '</div>'
       + '<p class="stage-loading"><i class="blink-dot"></i>正在理解这句话…</p>'
-      + rawHTML(detail.raw)
       + '</div></article>';
   }
 
