@@ -28,14 +28,14 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 | 路径 | 内容 |
 |---|---|
 | `apps/ops/server.py` | 服务端逻辑：`ops.db`、任务队列与锁、门槛判定、自动增量同步接力、HTTP 接口 |
-| `apps/ops/web/index.html`、`app.js`、`style.css` | 六个主模块加六个兼容子页签的原生 JS 页面，无框架无 CDN，支持宣纸日间 / 墨夜主题切换；桌面端左侧导航固定吸顶（`<=820px` 窄屏回落顶部横栏） |
+| `apps/ops/web/index.html`、`app.js`、`style.css` | 六个主模块加六个兼容子页签的原生 JS 页面，无框架无 CDN，支持宣纸日间 / 墨夜主题切换；桌面端左侧导航固定吸顶（`<=820px` 窄屏回落顶部横栏），顶栏移除重复搜索按钮并与正文同宽（`1200px`）水平居中，左右顶部分隔线与满页末卡底端对齐（后端 `/api/search/health` 与 `/api/search/start` 接口保留） |
 | `工作区/运维/ops.db` | 任务与步骤（首次启动自建，可重建） |
 | `工作区/运维/jobs/<id>/` | `log.txt`、`commands.json`、`pid`、`plan.json`、`result.json`、`dry-run.json`、`report.json`、`thumbs/*.png` |
 | `工作区/运维/.writer.lock` | 写任务互斥与批次账读改写用的 `fcntl.flock` 文件 |
 | `工作区/运维/.reader.lock` | 只读任务共用锁（最多两个并行，与写任务互不阻塞） |
 | `工作区/运维/last-audit.json` | 审计缓存，由写入后后台自动刷新（或 `ops_status.py --deep`），页面只读 |
 | `tests/acceptance/ops/check_ops.py` | 服务与任务离线自检，末行 `ALL PASS` |
-| `tests/acceptance/ops/test_sidebar_sticky.py` | 桌面端左侧栏固定吸顶与窄屏回落回归验收，末行 `ALL PASS` |
+| `tests/acceptance/ops/test_sidebar_sticky.py` | 桌面端左侧栏吸顶、宽屏居中去搜索按钮、顶底对齐与窄屏回落回归验收，末行 `ALL PASS` |
 | `tests/manual/ops/shot_ops.py` | headless Chromium 交互与截图自检，末行 `SHOT PASS` |
 
 ## 三条只读数据源
@@ -134,7 +134,7 @@ PYTHONPATH=$PWD/tests/acceptance/ops uv run --frozen python tests/manual/ops/sho
 ```
 
 - `check_ops.py` 造临时根与 stub 脚本，不碰真库，末行 `ALL PASS`。
-- `test_sidebar_sticky.py` 校对 `html`/`body` `overflow-x: clip` 与 `.sidebar` sticky 规则，并用 headless Chromium 验桌面滚到底部左侧固定吸顶与 `390x844` 窄屏回落，末行 `ALL PASS`。
+- `test_sidebar_sticky.py` 校对 `html`/`body` `overflow-x: clip` 与 `.sidebar` sticky 规则，并用 headless Chromium 验 `1440x700` / `1440x900` 侧栏吸顶与末卡贴底、`1920x1080` 去顶栏搜索按钮 / `1200px` 限宽居中 / 顶部分隔线齐平与短页自然排布，以及 `390x844` 窄屏回落，末行 `ALL PASS`。
 - `shot_ops.py` 用 headless Chromium 走完六模块、兼容子页签、导入/分诊/删书弹窗与 1440x900 / 390x844 两档布局，末行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`（浏览器读 `CHROME_BIN`，缺省自动探测 `chromium`）。
 - 轻量导航回归亦可用 `.agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py`。
 

@@ -130,6 +130,7 @@ def _desktop_scroll_js(target_y: int | str) -> str:
   const tr = topbar.getBoundingClientRect();
   const br = brand.getBoundingClientRect();
   const fr = toggle.getBoundingClientRect();
+  const lastEl = document.querySelector('#view > :last-child');
   return {{
     htmlOx: html.overflowX,
     htmlOy: html.overflowY,
@@ -149,6 +150,7 @@ def _desktop_scroll_js(target_y: int | str) -> str:
     brandBottom: +br.bottom.toFixed(1),
     toggleTop: +fr.top.toFixed(1),
     toggleBottom: +fr.bottom.toFixed(1),
+    lastCardBottom: lastEl ? +lastEl.getBoundingClientRect().bottom.toFixed(1) : -1,
   }};
 }})({arg})
 """
@@ -157,6 +159,9 @@ def _desktop_scroll_js(target_y: int | str) -> str:
 def _mobile_scroll_js(y: int) -> str:
     return f"""
 ((y) => {{
+  const mobBtn = document.querySelector('#theme-toggle-mobile');
+  const mobCs = mobBtn ? getComputedStyle(mobBtn) : null;
+  const mobRect = mobBtn ? mobBtn.getBoundingClientRect() : null;
   window.scrollTo(0, y);
   const side = document.querySelector('.sidebar');
   const sc = getComputedStyle(side);
@@ -168,8 +173,43 @@ def _mobile_scroll_js(y: int) -> str:
     srBottom: +sr.bottom.toFixed(1),
     vw: window.innerWidth,
     scrollWidth: document.documentElement.scrollWidth,
+    mobDisplay: mobCs ? mobCs.display : '',
+    mobWidth: mobRect ? +mobRect.width.toFixed(1) : 0,
+    mobHeight: mobRect ? +mobRect.height.toFixed(1) : 0,
+    mobRight: mobRect ? +mobRect.right.toFixed(1) : -1,
   }};
 }})({y})
+"""
+
+
+WIDE_CENTER_PROBE = """
+(() => {
+  window.scrollTo(0, 0);
+  const ws = document.querySelector('.workspace').getBoundingClientRect();
+  const mn = document.querySelector('main').getBoundingClientRect();
+  const ti = document.querySelector('.topbar-inner').getBoundingClientRect();
+  const br = document.querySelector('.brand').getBoundingClientRect();
+  const tb = document.querySelector('.topbar').getBoundingClientRect();
+  const st = document.querySelector('#stats').getBoundingClientRect();
+  return {
+    hasSearchBtn: !!document.querySelector('#search-btn'),
+    hasSearchStart: !!document.querySelector('#search-start'),
+    mainLeft: +mn.left.toFixed(1),
+    mainWidth: +mn.width.toFixed(1),
+    topLeft: +ti.left.toFixed(1),
+    mainLeftGap: +(mn.left - ws.left).toFixed(1),
+    mainRightGap: +(ws.right - mn.right).toFixed(1),
+    topLeftGap: +(ti.left - ws.left).toFixed(1),
+    topRightGap: +(ws.right - ti.right).toFixed(1),
+    brandBottom: +br.bottom.toFixed(1),
+    topbarTop: +tb.top.toFixed(1),
+    topbarBottom: +tb.bottom.toFixed(1),
+    statsTop: +st.top.toFixed(1),
+    statsBottom: +st.bottom.toFixed(1),
+    vw: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  };
+})()
 """
 
 
@@ -215,6 +255,7 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
 
     at_bot = shot.eval_js(cdp, _desktop_scroll_js("bottom"))
     _assert_desktop_sticky(at_bot, 700, min_scroll=300, max_topbar_top=-200, label="1440x700 页底")
+    assert abs(at_bot["lastCardBottom"] - 700) <= 2.0, f"1440x700 末张卡片下端未贴齐页面下端：{at_bot}"
     _save_png(cdp, screenshot_dir, "ops-sidebar-scrolled-1440x700.png")
     print(
         f"PASS 1440x700 滚到底部（scrollY={at_bot['scrollY']}, topbarTop={at_bot['topbarTop']}）"
@@ -248,21 +289,62 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
     time.sleep(0.15)
     at_900 = shot.eval_js(cdp, _desktop_scroll_js("bottom"))
     _assert_desktop_sticky(at_900, 900, min_scroll=150, max_topbar_top=-150, label="1440x900 页底")
+    assert abs(at_900["lastCardBottom"] - 900) <= 2.0, f"1440x900 末张卡片下端未贴齐页面下端：{at_900}"
     _save_png(cdp, screenshot_dir, "ops-sidebar-scrolled-1440x900.png")
     print(
         f"PASS 1440x900 滚到底部（scrollY={at_900['scrollY']}, topbarTop={at_900['topbarTop']}）"
         f"后左侧栏固定 top={at_900['srTop']} bottom={at_900['srBottom']}"
     )
 
-    # 3) 窄屏 390x844：侧栏回落 static，随页面正常滚走且不溢出
+    # 3) 宽屏 1920x1080：无顶栏搜索按钮，main 与 .topbar-inner 限宽且在 .workspace 内水平居中对齐
+    cdp.call(
+        "Emulation.setDeviceMetricsOverride",
+        {"width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": False},
+    )
+    time.sleep(0.15)
+    wide = shot.eval_js(cdp, WIDE_CENTER_PROBE)
+    assert wide["hasSearchBtn"] is False, f"顶栏仍残留 #search-btn：{wide}"
+    assert wide["hasSearchStart"] is False, f"顶栏仍残留 #search-start：{wide}"
+    assert wide["mainWidth"] <= 1200.5, f"main 超过 1200px 上限：{wide}"
+    assert abs(wide["mainLeftGap"] - wide["mainRightGap"]) <= 2.0, f"main 未在工作区水平居中：{wide}"
+    assert abs(wide["topLeftGap"] - wide["topRightGap"]) <= 2.0, f".topbar-inner 未在工作区水平居中：{wide}"
+    assert abs(wide["mainLeft"] - wide["topLeft"]) <= 1.0, f"main 与 .topbar-inner 左缘未对齐：{wide}"
+    assert abs(wide["brandBottom"] - wide["topbarBottom"]) <= 1.0, f"左右两条顶部分隔线未对齐：{wide}"
+    top_gap = wide["statsTop"] - wide["topbarTop"]
+    bottom_gap = (wide["topbarBottom"] - 1.0) - wide["statsBottom"]
+    assert abs(top_gap - bottom_gap) <= 2.0, f"右侧顶栏文字未垂直居中：{wide}"
+    assert wide["scrollWidth"] <= wide["vw"], f"1920x1080 发生横向溢出：{wide}"
+    _save_png(cdp, screenshot_dir, "ops-centered-1920x1080.png")
+    print(
+        f"PASS 1920x1080 无搜索按钮，main 宽={wide['mainWidth']}px "
+        f"居中留白={wide['mainLeftGap']}/{wide['mainRightGap']}px"
+    )
+
+    # 3b) 宽屏 1920x1080 不满一屏页面（#manual）：自然排布在上方，不强行拉到底端
+    shot.eval_js(cdp, "location.hash = '#manual'; true")
+    _wait_ready(shot, cdp, "#view h1", "正文生产")
+    time.sleep(0.15)
+    short = shot.eval_js(cdp, _desktop_scroll_js(0))
+    assert short["scrollHeight"] <= 1080, f"1920x1080 #manual 不应超出视口高度：{short}"
+    assert short["lastCardBottom"] > 0, f"1920x1080 #manual 未渲染末张卡片：{short}"
+    assert short["lastCardBottom"] < 900, f"1920x1080 不满一屏卡片被意外拉到底端：{short}"
+    _save_png(cdp, screenshot_dir, "ops-short-page-1920x1080.png")
+    print(f"PASS 1920x1080 不满一屏页 #manual 末卡自然停在 y={short['lastCardBottom']}")
+
+    # 4) 窄屏 390x844：侧栏回落 static，随页面正常滚走且移动端主题按钮可见、零溢出
     cdp.call(
         "Emulation.setDeviceMetricsOverride",
         {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True},
     )
-    shot.eval_js(cdp, "window.scrollTo(0, 0); true")
+    shot.eval_js(cdp, "location.hash = '#overview'; window.scrollTo(0, 0); true")
+    _wait_ready(shot, cdp, "#view h1", "总览")
     time.sleep(0.2)
     mob = shot.eval_js(cdp, _mobile_scroll_js(300))
     assert mob["sidePos"] == "static", f"390x844 下 .sidebar 应回落 static：{mob}"
+    assert mob["mobDisplay"] != "none", f"390x844 下 #theme-toggle-mobile 不可见：{mob}"
+    assert mob["mobWidth"] > 0, f"390x844 下 #theme-toggle-mobile 宽度异常：{mob}"
+    assert mob["mobHeight"] > 0, f"390x844 下 #theme-toggle-mobile 高度异常：{mob}"
+    assert mob["mobRight"] <= mob["vw"], f"390x844 下 #theme-toggle-mobile 越出视口：{mob}"
     assert mob["scrollY"] >= 200, f"390x844 未滚下：{mob}"
     assert mob["srTop"] < -100, f"390x844 顶部导航未随页面滚走：{mob}"
     assert mob["scrollWidth"] <= mob["vw"], f"390x844 发生横向溢出：{mob}"

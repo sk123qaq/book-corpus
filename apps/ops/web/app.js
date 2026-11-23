@@ -107,7 +107,7 @@ const S = {
   pollBusy: false,
   pollTimer: null,
   ledgerDebounce: null,
-  payload: null, status: {}, health: null,
+  payload: null, status: {},
   jobs: [], pending: [], inbox: [], inboxIgnored: [], pdf: null,
   plan: null, planJob: null, planDirty: false, legacyPlan: false, nextUid: '',
   batch: null, splitBooks: [],
@@ -499,30 +499,6 @@ function renderStats() {
   $('#stats').innerHTML = html;
 }
 
-function renderSearch() {
-  const health = S.health || {};
-  const dot = $('#search-dot');
-  const btn = $('#search-btn');
-  const start = $('#search-start');
-  const lbl = $('#search-btn-label');
-  if (dot) {
-    dot.className = 'dot ' + (health.running ? 'on' : 'off');
-    dot.title = health.running
-      ? (health.degraded ? '阅读搜索在跑，索引未建或为空' : '阅读搜索在跑')
-      : '阅读搜索未启动';
-  }
-  if (lbl) lbl.textContent = '打开阅读搜索';
-  else if (btn) btn.textContent = '打开阅读搜索';
-  if (btn) {
-    btn.title = 'http://127.0.0.1:8765/';
-    btn.hidden = !health.running;
-  }
-  if (start) {
-    start.title = 'http://127.0.0.1:8765/';
-    start.hidden = !!health.running;
-  }
-}
-
 function openModal(html) {
   const host = $('#modal');
   if (!host) return;
@@ -570,7 +546,6 @@ function closeModal() {
 function render() {
   renderNav();
   renderStats();
-  renderSearch();
   const view = $('#view');
   const map = {
     overview: viewOverview,
@@ -3073,15 +3048,6 @@ async function loadPending() {
   });
 }
 
-async function loadHealth() {
-  try {
-    S.health = await api('/api/search/health');
-  } catch (err) {
-    S.health = { running: false };
-  }
-  renderSearch();
-}
-
 async function loadPlan(jobId) {
   const body = await api('/api/file?path=' + encodeURIComponent(
     '工作区/运维/jobs/' + jobId + '/plan.json'));
@@ -3555,27 +3521,6 @@ const actions = {
   async 'pick-files'(el) {
     const input = $('#up-file');
     if (input && el !== input) input.click();
-  },
-
-  async 'search-open'() {
-    await loadHealth();
-    if (!S.health || !S.health.running) {
-      toast('阅读搜索还没起来，先点「启动阅读搜索」');
-      return;
-    }
-    window.open('http://127.0.0.1:8765/', '_blank', 'noopener');
-  },
-
-  async 'search-start'() {
-    try {
-      const body = await post('/api/search/start');
-      if (body.already) toast('阅读搜索已经在跑');
-      else if (body.ok) toast('阅读搜索起来了');
-      else toast(body.error || '起不来', true);
-    } catch (err) {
-      toast(err.message, true);
-    }
-    await loadHealth();
   },
 
   async 'inbox-refresh'() {
@@ -4765,7 +4710,7 @@ async function boot() {
   S.tab = parsed.tab;
   applyHashParams(parsed.tab, parsed.params);
   try {
-    const baseTasks = [loadStatus(), loadJobs(), loadPending(), loadHealth()];
+    const baseTasks = [loadStatus(), loadJobs(), loadPending()];
     if (S.tab === 'overview') baseTasks.push(loadServices());
     else if (S.tab === 'import') {
       baseTasks.push(api('/api/inbox').then((body) => {
@@ -4791,7 +4736,6 @@ async function boot() {
   }
   render();
   schedulePoll();
-  setInterval(() => { if (!document.hidden) loadHealth(); }, 12000);
 }
 
 function applyTheme(theme, persist) {
