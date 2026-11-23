@@ -1,0 +1,58 @@
+---
+title: "操作台写任务 写者互斥与写锁"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: 正常
+    lg1: 中断
+    lg2: 违规
+    lg3: Breaks NoHttpWithChild or NoTwoWriteChildren or WriterHoldsLock
+    lg4: Breaks NoLiveOrphan in some cases
+    lg5: Path to the NoHttpWithChild or NoLiveOrphan or NoTwoWriteChildren or WriterHoldsLock bug
+  }
+  class lg0 teal
+  class lg1 orange
+  class lg2 pink
+  class lg3 breaks
+  class lg4 mayBreak
+  class lg5 bugPath
+  s0: 空闲
+  s1: 写任务排队
+  s2: 任务已置运行 还没起进程
+  s3: 写任务在跑 持锁
+  s4: 服务中断 孩子在跑
+  s5: 孤儿任务 孩子还在写 锁不在它手里
+  s6: 账表读改写中 孩子在写
+  s7: 两个写者同时在写
+  [*] --> s0
+  s0 --> s1: 操作人再提交一个写任务
+  s1 --> s1: 调度器起写任务 or 拿到工作区写锁
+  s1 --> s2: 任务开始跑
+  s2 --> s3: 拉起写进程
+  s3 --> s4: 服务进程死掉
+  s4 --> s5: 新服务启动 接管残留
+  s5 --> s5: 操作人再提交一个写任务 or 调度器起写任务 or 拿到工作区写锁 or 任务开始跑
+  s5 --> s6: 操作台写账表
+  s5 --> s7: 拉起写进程
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  classDef mayBreak fill:#fff3e6,stroke:#e8730c,stroke-width:2.5px,color:#b85a06
+  class s0 teal
+  class s0 bugPath
+  class s1 teal
+  class s1 bugPath
+  class s2 teal
+  class s2 bugPath
+  class s3 teal
+  class s3 bugPath
+  class s4 orange
+  class s4 breaks
+  class s4 bugPath
+  class s5 pink
+  class s5 mayBreak
+  class s5 bugPath
+  class s6 pink
+  class s6 breaks
+  class s6 bugPath
+  class s7 pink
+  class s7 breaks
+  class s7 bugPath
