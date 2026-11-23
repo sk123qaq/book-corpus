@@ -77,3 +77,28 @@ def test_docs_coupling_flags_reading_feature_map(capsys):
 
     rc_strict = coupling.run(REPO_ROOT, files=["apps/reading/server.py"], strict=True)
     assert rc_strict == 1
+
+
+def test_skills_inventory_checks_usage_guide(tmp_path: Path):
+    sync = _load_tool("check_docs_sync")
+    for name in ("alpha-skill", "beta-skill"):
+        skill_dir = tmp_path / ".agents/skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+
+    (tmp_path / "docs").mkdir(parents=True)
+    (tmp_path / "docs/使用指南.md").write_text(
+        "# 使用指南\n\n| 技能 | 路径 | 谁在用 |\n|---|---|---|\n"
+        "| `alpha-skill` | `.agents/skills/alpha-skill/` | 测试 |\n"
+        "| `ghost-skill` | `.agents/skills/ghost-skill/` | 测试 |\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "AGENTS.md").write_text(
+        "| `.agents/skills/` | `alpha-skill`、`beta-skill` |\n",
+        encoding="utf-8",
+    )
+
+    problems = sync.check_skills_inventory(tmp_path)
+    assert any("docs/使用指南.md" in p and "beta-skill" in p for p in problems), problems
+    assert any("docs/使用指南.md" in p and "ghost-skill" in p for p in problems), problems
+    assert not any("AGENTS.md" in p for p in problems), problems

@@ -117,7 +117,7 @@ def discover_skills(repo: Path) -> list[str]:
 
 
 def check_skills_inventory(repo: Path) -> list[str]:
-    """核对 .agents/skills/*/SKILL.md 与 AGENTS.md / README.md 的技能清单是否一致。"""
+    """核对 .agents/skills/*/SKILL.md 与 AGENTS.md / docs/使用指南.md 的技能清单是否一致。"""
     actual = set(discover_skills(repo))
     if not actual:
         return []
@@ -136,17 +136,17 @@ def check_skills_inventory(repo: Path) -> list[str]:
                     problems.append(f"AGENTS.md 文件地图 `.agents/skills/` 行包含不存在技能：{', '.join(extra)}")
                 break
 
-    readme_md = repo / "README.md"
-    if readme_md.exists():
-        text = readme_md.read_text(encoding="utf-8")
-        listed_in_readme = set(re.findall(r"\|\s*`([a-z0-9-]+)`\s*\|\s*`\.agents/skills/", text))
-        if listed_in_readme:
-            missing = sorted(actual - listed_in_readme)
-            extra = sorted(listed_in_readme - actual)
+    guide_md = repo / "docs/使用指南.md"
+    if guide_md.exists():
+        text = guide_md.read_text(encoding="utf-8")
+        listed_in_guide = set(re.findall(r"\|\s*`([a-z0-9-]+)`\s*\|\s*`\.agents/skills/", text))
+        if listed_in_guide:
+            missing = sorted(actual - listed_in_guide)
+            extra = sorted(listed_in_guide - actual)
             if missing:
-                problems.append(f"README.md「技能」表漏列技能：{', '.join(missing)}")
+                problems.append(f"docs/使用指南.md「技能」表漏列技能：{', '.join(missing)}")
             if extra:
-                problems.append(f"README.md「技能」表包含不存在技能：{', '.join(extra)}")
+                problems.append(f"docs/使用指南.md「技能」表包含不存在技能：{', '.join(extra)}")
 
     return problems
 

@@ -6,7 +6,7 @@
 
 新会话先读本文件，再按「文件地图」与 `book-corpus list` 按需深入。方案 §8 开头有两段执行修订，正文里写死的原型数字按修订块读。
 
-本文件记录作者本机的书库实例。批次账与现状数字只对那份语料成立；新克隆的仓库按 `README.md` 从零搭建。
+本文件记录作者本机的书库实例。批次账与现状数字只对那份语料成立；新克隆的仓库按 `docs/使用指南.md` 从零搭建。
 
 ## 文档权威顺序
 
@@ -16,7 +16,7 @@
 2. 生成物：`docs/reference/facts.md`、`docs/INDEX.md`（`book-corpus docs write`）、本文件「现状」块（`book-corpus numbers --write`）
 3. 验证地图：`.agents/skills/verify-book-corpus/features/*.md`（产品**现在做什么**、怎么证明）
 4. `docs/adr/` 里 accepted 的决定（**为什么**这样做）
-5. 活文档正文：`README.md`、`CONTRIBUTING.md`、`AGENTS.md`、`GLOSSARY.md`、`apps/*/README.md`、`docs/检索/README.md`
+5. 活文档正文：`docs/使用指南.md`、`CONTRIBUTING.md`、`AGENTS.md`、`GLOSSARY.md`、`apps/*/README.md`、`docs/检索/README.md`（`README.md` 为项目展示首页，不挂 `失效源：`）
 6. `docs/design/` 带日期的方案、`docs/briefs/`（按状态头读）
 7. 记录：复盘、`reports/`、`artifacts/verify/`、踩坑账
 
@@ -152,7 +152,7 @@ book-corpus run lq "SELECT 'books/'||path||'/md' FROM book WHERE title='乡土�
 
 ## 改完跑什么
 
-通用检查清单见 `README.md`「改完跑什么」；这里只列作者本机实例专属与完整提交闸门：
+通用检查清单见 `docs/使用指南.md`「改完跑什么」；这里只列作者本机实例专属与完整提交闸门：
 
 | 改了什么 | 命令 | 通过判据 |
 |---|---|---|
