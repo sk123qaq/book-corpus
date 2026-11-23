@@ -2292,10 +2292,8 @@ class App:
     def split_books(self, batch):
         # 批次名直接来自查询串：点段与路径分隔符一律不收，且必须真的是
         # 工作区/批次/ 下的一层目录（POST 侧 split_target 同一道门）
-        if not batch or not re.match(r"^(?!\.{1,2}$)[A-Za-z0-9._-]+$", batch):
-            return []
-        batch_dir = os.path.join(self.env.batches, batch)
-        if os.path.realpath(batch_dir) != os.path.join(os.path.realpath(self.env.batches), batch):
+        batch_dir = safe_batch_dir(self.env, batch)
+        if batch_dir is None:
             return []
         logs = os.path.join(batch_dir, "logs")
         out = []
@@ -4120,10 +4118,11 @@ class Handler(BaseHTTPRequestHandler):
             if not re.match(r"^B\d{4}$", only):
                 self.fail(400, "uid 形如 B1234")
                 return
-            if not re.match(r"^[A-Za-z0-9._-]+$", batch):
+            batch_dir = safe_batch_dir(self.app.env, batch)
+            if batch_dir is None:
                 self.fail(400, "只重跑一本要给已有批次名")
                 return
-            if not os.path.isdir(os.path.join(self.app.env.batches, batch)):
+            if not os.path.isdir(batch_dir):
                 self.fail(404, "批次不存在：%s" % batch)
                 return
             uids = [only]
@@ -4163,10 +4162,11 @@ class Handler(BaseHTTPRequestHandler):
         if not re.match(r"^B\d{4}$", uid):
             self.fail(400, "uid 形如 B1234")
             return None
-        if not re.match(r"^[A-Za-z0-9._-]+$", batch):
+        batch_dir = safe_batch_dir(self.app.env, batch)
+        if batch_dir is None:
             self.fail(400, "批次名不合法")
             return None
-        if not os.path.isdir(os.path.join(self.app.env.batches, batch, "logs")):
+        if not os.path.isdir(os.path.join(batch_dir, "logs")):
             self.fail(404, "这个批次没有记录")
             return None
         return batch, uid
@@ -4214,8 +4214,8 @@ class Handler(BaseHTTPRequestHandler):
         if not batch or not re.match(r"^(?!\.{1,2}$)[A-Za-z0-9._-]+$", batch):
             self.fail(400, "批次名不合法")
             return
-        batch_dir = os.path.join(self.app.env.batches, batch)
-        if os.path.realpath(batch_dir) != os.path.join(os.path.realpath(self.app.env.batches), batch):
+        batch_dir = safe_batch_dir(self.app.env, batch)
+        if batch_dir is None:
             self.fail(404, "批次不合法：%s" % batch)
             return
         if default_batch and batch == default_batch:
@@ -4920,6 +4920,18 @@ WRITE_ROUTES = (
     "/api/cold/reconcile",
 )
 PDF_ROUTES = ("OCR", "本地抽文本", "不转-记图册", "人工确认", "日文暂缓")
+
+BATCH_NAME_RE = re.compile(r"^(?!\.{1,2}$)[A-Za-z0-9._-]+$")
+
+
+def safe_batch_dir(env, batch):
+    """批次名转目录：点段与分隔符不收，真实路径必须正好落在 工作区/批次/ 下。"""
+    if not isinstance(batch, str) or not BATCH_NAME_RE.match(batch):
+        return None
+    path = os.path.join(env.batches, batch)
+    if os.path.realpath(path) != os.path.join(os.path.realpath(env.batches), batch):
+        return None
+    return path
 
 
 def plan_path(env, raw):

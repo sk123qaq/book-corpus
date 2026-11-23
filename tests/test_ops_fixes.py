@@ -339,6 +339,56 @@ def test_batch_accept_and_pdf_run_auto_replace(workspace):
         assert "--replace" in ocr_step["argv"]
 
 
+def test_split_routes_reject_dot_batch_names(workspace):
+    """批次名是路径：点段必须在排队或读 logs 前就被拒。"""
+    write_book(workspace, "B0004", "文学", "已有MD重转", ["段落"], fmt="pdf")
+    write_ledger(workspace, [("B0004", "文学", "已有MD重转", "")])
+    r = run_cli("--root", workspace, "library")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    batches = Path(_paths(workspace).batches)
+    valid_batch = "split-ops-20261119-0001"
+    (batches / valid_batch).mkdir(parents=True, exist_ok=True)
+
+    app = _make_app(workspace)
+    queued = []
+    app.runner.submit = lambda kind, title, cmds, **kwargs: (
+        queued.append(cmds("job-test-1") if callable(cmds) else cmds),
+        "job-test-1",
+    )[1]
+
+    with _http_server(app) as base:
+        for batch in (".", ".."):
+            code, res = _http_json(
+                base + "/api/split/run",
+                {"uids": ["B0004"], "only": "B0004", "batch": batch},
+            )
+            assert code == 400, (batch, code, res)
+        for route in ("/api/split/recheck", "/api/split/inspect"):
+            code, res = _http_json(base + route, {"uid": "B0004", "batch": ".."})
+            assert code == 400, (route, code, res)
+        code, res = _http_json(
+            base + "/api/split/accept",
+            {"uid": "B0004", "batch": "..", "reason": "x"},
+        )
+        assert code == 400
+        assert queued == []
+        work = Path(workspace) / "工作区"
+        assert not (work / "logs").exists()
+        assert not (work / "out").exists()
+        assert not (work / "tmp").exists()
+        assert not (work / "worklist.tsv").exists()
+
+        # 正常批次照旧受理，且 argv 里原样带着批次名
+        code, res = _http_json(
+            base + "/api/split/run",
+            {"uids": ["B0004"], "only": "B0004", "batch": valid_batch, "workers": 1},
+        )
+        assert code == 200, (code, res)
+        assert res["batch"] == valid_batch
+        assert valid_batch in queued[0][0]["argv"]
+
+
 def test_ledger_stale_and_pending_groups(workspace):
     write_book(workspace, "B0004", "文学", "待转docx", None, fmt="docx")
     write_book(workspace, "B0005", "文学", "待转pdf", None, fmt="pdf")
