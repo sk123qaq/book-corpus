@@ -942,7 +942,7 @@ def main(argv=None):
                     r["trigger"],
                     r["reasons"],
                     r["auto_hit"],
-                    r["card_hit"],
+                    r["card_top6"],
                     r["target_shown"],
                     r["long_auto"],
                     r["long_cards"],
