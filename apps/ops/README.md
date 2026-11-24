@@ -119,9 +119,9 @@ GET  /api/file?path=...                # 白名单文件下载（文本产物脱
 
 ## 任务、锁与取消
 
-- 状态流转：`queued` → `running` → `succeeded` / `failed` / `cancelled`；仅真正需人工裁决的任务（暂存区待复核、`adopt()` 接管后退出码未知）停在 `awaiting_review`，可通过操作台「去处理 / 确认已处理 / 标为失败 / 忽略关闭」（`POST /api/jobs/<id>/resolve`）收口；扫描计划与分诊建议直接落 `succeeded`；重启后 PID 核对不上的 `running` 标 `orphaned`。
+- 状态流转：`queued` → `running` → `succeeded` / `failed` / `cancelled`；仅真正需人工裁决的任务（暂存区待复核、`adopt()` 接管后退出码未知）停在 `awaiting_review`，可通过操作台「去处理 / 确认已处理 / 标为失败 / 忽略关闭」（`POST /api/jobs/<id>/resolve`）收口；扫描计划与分诊建议直接落 `succeeded`；重启后 `adopt()` 依次核对 `ops.db` `pid`、`jobs/<id>/pid`、`/proc` 任务环境与 `.writer.lock` 占用，确认进程已不在且写锁空闲才标 `orphaned`。
 - 自动体检刷新：入库、拆章、文档/PDF 落位、词法同步、退库与人账保存后，服务端自动合并队列在后台刷新 `工作区/运维/last-audit.json`，保持「同步与维护 → 体检提醒」不误亮过期警告。
-- 写互斥：写任务与 HTTP 账表写操作共用 `工作区/运维/.writer.lock`（`LOCK_EX`），有写任务在跑时接口返 409。
+- 写互斥：写任务与 HTTP 账表写操作共用 `工作区/运维/.writer.lock`（`LOCK_EX`），子进程通过继承锁 fd 在服务崩溃或重启接管期间继续持锁直至退出，有写任务在跑时接口返 409。
 - 读共享：只读任务共用 `工作区/运维/.reader.lock`（`LOCK_SH`），最多两个并行，不阻塞写任务。
 - 取消：对子进程组发 `SIGTERM`，10 秒后仍有活口则 `SIGKILL`；已结束与 `awaiting_review` 任务不可取消（409）。
 

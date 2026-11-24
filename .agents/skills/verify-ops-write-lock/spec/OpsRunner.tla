@@ -32,8 +32,9 @@ EXTENDS Naturals
 
 CONSTANTS
     Jobs,
-    \* FALSE = 今天的代码：锁由服务进程持有，进程一死锁就没了。
-    \* TRUE  = 建议的改法：写子进程自己打开 .writer.lock 并 flock，退出才放。
+    \* FALSE = 历史基线：锁由服务进程持有，进程一死锁就没了，且只看 ops.db 的 pid。
+    \* TRUE  = 当前实现：写子进程通过 pass_fds 继承已 flock 的 fd，退出才放；
+    \*         adopt() 回退查 jobs/<id>/pid、/proc 任务环境与写锁占用。
     ChildHoldsLock
 
 ASSUME Jobs # {}
@@ -67,7 +68,7 @@ Unchanged ==
 
 Children == {j ∈ Jobs : child[j]}
 WriterBusy == activeW # {} ∨ (∃ k ∈ Jobs : db[k] = "queued")
-IsAdoptable(j) == db[j] = "running" ∧ pid[j] = "pid" ∧ child[j]
+IsAdoptable(j) == db[j] = "running" ∧ child[j] ∧ (pid[j] = "pid" ∨ ChildHoldsLock)
 
 Init ==
     ∧ db       = [j ∈ Jobs |-> "new"]
@@ -81,7 +82,7 @@ Init ==
     ∧ flock    = "free"
     ∧ httpOn   = FALSE
 
-\* 操作人在页面上提交一个写任务。HTTP 层先查 writer_busy（server.py:3783-3786, 4802-4806）。
+\* 操作人在页面上提交一个写任务。HTTP 层先查 writer_busy（server.py:3925-3934, 3952-3957）。
 Submit(j) ==
     ∧ serverUp
     ∧ db[j] = "new"
@@ -89,7 +90,7 @@ Submit(j) ==
     ∧ db' = [db EXCEPT ![j] = "queued"]
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* 调度器挑一个 queued 的写任务，先占住 active_write 槽位再起线程（server.py:1116-1153）。
+\* 调度器挑一个 queued 的写任务，先占住 active_write 槽位再起线程（server.py:1230-1266）。
 Dispatch(j) ==
     ∧ serverUp
     ∧ db[j] = "queued"
@@ -97,7 +98,7 @@ Dispatch(j) ==
     ∧ activeW' = {j}
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* 写任务拿 .writer.lock 的 LOCK_EX（server.py:1155-1218）。锁被拿着就阻塞，
+\* 写任务拿 .writer.lock 的 LOCK_EX（server.py:1278-1322）。锁被拿着就阻塞，
 \* 这里表现为动作不可用。
 Acquire(j) ==
     ∧ serverUp
@@ -107,7 +108,7 @@ Acquire(j) ==
     ∧ flock' = j
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED httpOn
 
-\* 拿锁后回读 ops.db：还是 queued 才置 running（server.py:1176-1184）。
+\* 拿锁后回读 ops.db：还是 queued 才置 running（server.py:1299-1308）。
 MarkRunning(j) ==
     ∧ serverUp
     ∧ j ∈ activeW
@@ -116,19 +117,17 @@ MarkRunning(j) ==
     ∧ db' = [db EXCEPT ![j] = "running"]
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* 取消与启动撞车：cancel() 把 DB 置 cancelled，_run 拿锁回读后解锁退出（server.py:1176-1184）。
+\* 取消与启动撞车：cancel() 把 DB 置 cancelled，_run 拿锁回读后解锁退出（server.py:1299-1307）。
 AbortDispatched(j) ==
     ∧ serverUp
     ∧ j ∈ activeW
     ∧ db[j] = "cancelled"
     ∧ flock = j
-    ∧ (¬ChildHoldsLock ⇒ flock' = "free")
-    ∧ (ChildHoldsLock ⇒ UNCHANGED flock)
+    ∧ flock' = "free"
     ∧ activeW' = activeW \ {j}
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED httpOn
 
-\* _spawn：Popen 先返回，pid 后写进 ops.db（server.py:1270-1290）。
-\* Spawn 之后、RecordPid 之前崩溃，就是“活着的孩子 + DB 里 pid=NULL”。
+\* _spawn：Popen（pass_fds 继承锁 fd + env 记 job_id）先返回，pid 文件与 ops.db 后写（server.py:1366-1406）。
 Spawn(j) ==
     ∧ serverUp
     ∧ db[j] = "running"
@@ -162,15 +161,15 @@ CancelQueued(j) ==
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
 \* 取消在跑的任务：只加内存标记并 SIGTERM，DB 里的 running 要到 _finalize 才动
-\* （server.py:1052-1071）。
+\* （server.py:1052-1077）。
 CancelRunning(j) ==
     ∧ serverUp
     ∧ db[j] = "running"
     ∧ child[j]
     ∧ cancels' = cancels ∪ {j}
-    ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
+    ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* release()：先解锁、归还 active 槽位，终态后写（server.py:1196-1218, 1343-1352）。
+\* release()：先关锁 fd、归还 active 槽位，终态后写（server.py:1284-1293, 1473-1482）。
 Release(j) ==
     ∧ serverUp
     ∧ j ∈ activeW
@@ -180,8 +179,7 @@ Release(j) ==
     ∧ flock = j
     ∧ released' = [released EXCEPT ![j] = TRUE]
     ∧ activeW' = activeW \ {j}
-    ∧ (¬ChildHoldsLock ⇒ flock' = "free")
-    ∧ (ChildHoldsLock ⇒ UNCHANGED flock)
+    ∧ flock' = "free"
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED httpOn
 
 \* _finalize：取消赢过门槛（server.py:1343-1352）。终态写进 DB。
@@ -196,8 +194,8 @@ Finish(j) ==
     ∧ released' = [released EXCEPT ![j] = FALSE]
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* 接管来的任务：等在飞的孩子退出后才 resume，resume 先拿锁再补跑剩下的步骤；
-\* 单步任务直接 _finalize，拿不到退出码就 awaiting_review（server.py:1605-1665）。
+\* 接管来的任务：等在飞的孩子退出或写锁释放后才 resume，resume 先拿锁再补跑剩下的步骤；
+\* 单步任务直接 _finalize，拿不到退出码就 awaiting_review（server.py:1721-1815）。
 AdoptFinish(j) ==
     ∧ serverUp
     ∧ adopted[j]
@@ -208,10 +206,11 @@ AdoptFinish(j) ==
     ∧ cancels' = cancels \ {j}
     ∧ adopted' = [adopted EXCEPT ![j] = FALSE]
     ∧ activeW' = activeW \ {j}
-    ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED released ∧ UNCHANGED serverUp ∧ UNCHANGED flock ∧ UNCHANGED httpOn
+    ∧ flock' = "free"
+    ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED released ∧ UNCHANGED serverUp ∧ UNCHANGED httpOn
 
-\* HTTP 账表读改写：先查 writer_busy，再阻塞拿 .writer.lock（server.py:3780-3787,
-\* 2897-2947, 4995-5007）。
+\* HTTP 账表读改写：先查 writer_busy，再阻塞拿 .writer.lock（server.py:3925-3934,
+\* 2906-2983, 5142-5154）。
 HttpStart ==
     ∧ serverUp
     ∧ ¬httpOn
@@ -228,7 +227,7 @@ HttpEnd ==
     ∧ httpOn' = FALSE
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW
 
-\* 服务进程死掉：flock 随进程释放；active_write、接管表、取消标记、已放锁标记全丢。
+\* 服务进程死掉：ChildHoldsLock=FALSE 时 flock 随进程释放；TRUE 时在跑的孩子继续持有锁。
 Crash ==
     ∧ serverUp
     ∧ serverUp' = FALSE
@@ -241,8 +240,8 @@ Crash ==
     ∧ httpOn' = FALSE
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child
 
-\* 新进程启动：adopt() 只看 ops.db 的 pid（server.py:1073-1104）。
-\* pid 对得上且进程活着 → 接管，并把它算进 active_write；否则标 orphaned，且不杀进程。
+\* 新进程启动：adopt() 依次核对 ops.db pid、jobs/<id>/pid、/proc 任务环境与 .writer.lock 占用
+\* （server.py:1079-1215）。认得上 → 接管并占位 active_write；否则标 orphaned，且不杀进程。
 Start ==
     LET taken == {j ∈ Jobs : IsAdoptable(j)}
     IN

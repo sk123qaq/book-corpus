@@ -1008,8 +1008,8 @@ class Runner:
         self.submit_lock = threading.Lock()
 
     def start(self):
-        """起调度线程，幂等。必须晚于 adopt()：接管来的写任务不持 flock（旧进程
-        退出时锁就放了），调度器先跑就会再起一个写者，两个进程一起改人账。"""
+        """起调度线程，幂等。必须晚于 adopt()：先认下接管任务占位 active_write，
+        避免调度器抢先再派第二个写任务。"""
         with self.cv:
             if self._started:
                 return False
@@ -1061,6 +1061,12 @@ class Runner:
             proc = self.procs.get(job_id)
         pid = proc.pid if proc is not None else job.get("pid")
         if not pid:
+            pid = self._read_pid_file(job_id)
+        if not pid:
+            if picked and job["state"] == "running":
+                # 进程可能正在 _spawn 窗口内或靠写锁接管，先留 cancels 标记等收口，
+                # 避免写锁还在占用或子进程仍在跑时提前把状态改成 cancelled。
+                return True
             self.store.update(job_id, state="cancelled", summary="已取消（还没起进程）", ended=now_iso())
             with self.cv:
                 if not picked and job_id not in self.active:
@@ -1071,36 +1077,142 @@ class Runner:
         return True
 
     def adopt(self):
-        """服务重启后核对 running 任务：对得上就接管，对不上标孤儿，不杀进程。"""
+        """服务重启后核对 running 任务：先按 DB/pid 文件/进程环境认人，写锁仍占时绝不误标孤儿。"""
+        unmatched = []
+        adopted_write = False
         for row in self.store.list(state="running", limit=200):
-            argv = []
-            try:
-                argv = json.loads(row.get("argv") or "[]")
-            except ValueError:
-                argv = []
-            pid = row.get("pid")
-            if pid and pid_alive(pid) and self._matches(int(pid), argv):
-                spec = KINDS.get(row["kind"]) or {}
-                with self.cv:
-                    self.active[row["id"]] = row["kind"]
-                    if spec.get("readonly"):
-                        self.active_read += 1
-                    else:
-                        self.active_write += 1
-                    self.cv.notify_all()
-                self.store.update(row["id"], summary="接管：进程仍在跑")
-                threading.Thread(target=self._watch_adopted, args=(row["id"], int(pid)), daemon=True).start()
+            argv = self._parse_argv(row.get("argv"))
+            spec = KINDS.get(row["kind"]) or {}
+            pid = self._resolve_running_pid(row, argv)
+            if pid is not None:
+                self._register_adopted(row, spec, pid, "接管：进程仍在跑")
+                if not spec.get("readonly"):
+                    adopted_write = True
+                threading.Thread(target=self._watch_adopted, args=(row["id"], pid), daemon=True).start()
             else:
-                for step in self.store.steps(row["id"]):
-                    if step["state"] == "running":
-                        # 步骤表不能停在一个永远 running 的状态：被打断的那步
-                        # 退出码没人知道，记 unknown 交给 _finalize 降级
-                        self.store.step_state(row["id"], step["seq"], "unknown", "服务重启，进程已不在，退出码未知")
-                self.store.update(
-                    row["id"], state="orphaned", ended=now_iso(), summary="服务重启，PID 核对不上，已标孤儿"
-                )
+                unmatched.append((row, argv, spec))
+
+        for row, _argv, spec in unmatched:
+            if not spec.get("readonly") and not adopted_write and self._lock_held(self.env.lock):
+                adopted_write = True
+                self._register_adopted(row, spec, None, "接管：写锁仍在占用，等待写进程退出")
+                threading.Thread(target=self._watch_adopted_lock, args=(row["id"], spec), daemon=True).start()
+            else:
+                self._mark_orphaned(row)
 
     # ---- internals -------------------------------------------------
+    @staticmethod
+    def _parse_argv(raw):
+        try:
+            parsed = json.loads(raw or "[]")
+            return parsed if isinstance(parsed, list) else []
+        except ValueError:
+            return []
+
+    def _pid_file(self, job_id):
+        return os.path.join(self.env.job_dir(job_id), "pid")
+
+    def _read_pid_file(self, job_id):
+        try:
+            with open(self._pid_file(job_id), encoding="utf-8") as fh:
+                text = fh.read().strip()
+        except OSError:
+            return None
+        return int(text) if text.isdigit() and int(text) > 0 else None
+
+    @staticmethod
+    def _lock_held(path):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
+        except OSError:
+            return False
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True
+        else:
+            with suppress(OSError):
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            return False
+        finally:
+            with suppress(OSError):
+                os.close(fd)
+
+    def _find_proc_by_job_id(self, job_id, argv):
+        """仅在 DB 与 pid 文件都缺失/失效时兜底扫描 /proc，按子进程环境里的任务标记认领。"""
+        if not os.path.isdir("/proc"):
+            return None
+        uid = os.getuid()
+        root_real = os.path.realpath(self.env.root)
+        matches = []
+        try:
+            entries = os.listdir("/proc")
+        except OSError:
+            return None
+        for entry in entries:
+            if not entry.isdigit():
+                continue
+            pid = int(entry)
+            proc_dir = "/proc/%d" % pid
+            try:
+                if os.stat(proc_dir).st_uid != uid:
+                    continue
+                with open(proc_dir + "/environ", "rb") as fh:
+                    raw = fh.read()
+            except OSError:
+                continue
+            env_job = None
+            env_root = None
+            for item in raw.split(b"\0"):
+                if item.startswith(b"BOOK_CORPUS_OPS_JOB_ID="):
+                    env_job = item.split(b"=", 1)[1].decode("utf-8", "replace")
+                elif item.startswith(b"BOOKS_ROOT="):
+                    env_root = item.split(b"=", 1)[1].decode("utf-8", "replace")
+            if env_job != job_id:
+                continue
+            if env_root != self.env.root and os.path.realpath(env_root or "") != root_real:
+                continue
+            if pid_alive(pid) and self._matches(pid, argv):
+                matches.append(pid)
+        return min(matches) if matches else None
+
+    def _resolve_running_pid(self, row, argv):
+        db_pid = row.get("pid")
+        if db_pid and pid_alive(db_pid) and self._matches(int(db_pid), argv):
+            return int(db_pid)
+        file_pid = self._read_pid_file(row["id"])
+        if file_pid and file_pid != db_pid and pid_alive(file_pid) and self._matches(file_pid, argv):
+            self.store.update(row["id"], pid=file_pid)
+            return file_pid
+        proc_pid = self._find_proc_by_job_id(row["id"], argv)
+        if proc_pid is not None:
+            self.store.update(row["id"], pid=proc_pid)
+            with suppress(OSError):
+                write_text_atomic(self._pid_file(row["id"]), "%d\n" % proc_pid)
+            return proc_pid
+        return None
+
+    def _register_adopted(self, row, spec, pid, summary):
+        with self.cv:
+            self.active[row["id"]] = row["kind"]
+            if spec.get("readonly"):
+                self.active_read += 1
+            else:
+                self.active_write += 1
+            self.cv.notify_all()
+        fields = {"summary": summary}
+        if pid is not None and row.get("pid") != pid:
+            fields["pid"] = pid
+        self.store.update(row["id"], **fields)
+
+    def _mark_orphaned(self, row):
+        for step in self.store.steps(row["id"]):
+            if step["state"] == "running":
+                # 步骤表不能停在一个永远 running 的状态：被打断的那步
+                # 退出码没人知道，记 unknown 交给 _finalize 降级
+                self.store.step_state(row["id"], step["seq"], "unknown", "服务重启，进程已不在，退出码未知")
+        self.store.update(row["id"], state="orphaned", ended=now_iso(), summary="服务重启，PID 核对不上，已标孤儿")
+
     @staticmethod
     def _lock_file(env, spec):
         """读任务锁 .reader.lock（与写互不阻塞），写任务与批次账读改写锁 .writer.lock。"""
@@ -1170,17 +1282,16 @@ class Runner:
         def release():
             nonlocal lock_fd
             if lock_fd is not None:
-                try:
-                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                # 锁 fd 通过 pass_fds 继承给了子进程：只关闭父进程这一端而不调 LOCK_UN，
+                # 子进程已退出时关闭最后一个引用即释放锁；子进程若仍活着则会继续持锁。
+                with suppress(OSError):
                     os.close(lock_fd)
-                except OSError:
-                    pass
                 lock_fd = None
             with self.cv:
                 self.procs.pop(job_id, None)
             self._release(job_id, spec)
             with suppress(OSError):
-                os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
+                os.remove(self._pid_file(job_id))
 
         try:
             commands = read_json(os.path.join(self.env.job_dir(job_id), "commands.json")) or []
@@ -1196,7 +1307,7 @@ class Runner:
                 return
             self.store.update(job_id, state="running", started=now_iso(), summary="")
             self._log(job_id, "=== %s %s %s\n" % (job_id, job["kind"], job["title"]), truncate=True)
-            rcs = self._play(job_id, commands)
+            rcs = self._play(job_id, commands, lock_fd=lock_fd)
             self._finalize(job_id, job, commands, rcs, spec=spec, release=release)
         except Exception:
             detail = traceback.format_exc(limit=4)
@@ -1209,7 +1320,7 @@ class Runner:
         finally:
             release()
 
-    def _play(self, job_id, commands, start=0, rcs=None):
+    def _play(self, job_id, commands, start=0, rcs=None, lock_fd=None):
         """从 start 开始按顺序跑命令，逐步记状态；rcs 里是前面几步已经知道的退出码。"""
         rcs = list(rcs or [])
         for seq in range(start, len(commands)):
@@ -1219,7 +1330,7 @@ class Runner:
             cmd = commands[seq]
             self.store.add_step(job_id, seq, cmd["name"], "running")
             self.store.update(job_id, argv=json.dumps(cmd["argv"], ensure_ascii=False))
-            rc = self._spawn(job_id, cmd)
+            rc = self._spawn(job_id, cmd, lock_fd=lock_fd)
             rcs.append((cmd["name"], rc))
             self.store.step_state(job_id, seq, "ok" if rc == 0 else "fail", "rc=%d" % rc)
             if cmd.get("capture"):
@@ -1251,7 +1362,7 @@ class Runner:
         with open(path, "wb" if truncate else "ab") as fh:
             fh.write(text.encode("utf-8", "replace"))
 
-    def _spawn(self, job_id, cmd):
+    def _spawn(self, job_id, cmd, lock_fd=None):
         argv = cmd["argv"]
         self._log(job_id, "\n---- step %s ----\n$ %s\n" % (cmd["name"], " ".join(argv)))
         if not os.path.exists(argv[0]):
@@ -1264,21 +1375,25 @@ class Runner:
             if job_id in self.cancels:
                 return -signal.SIGTERM
         path = os.path.join(self.env.job_dir(job_id), "log.txt")
+        child_env = self.env.child_env()
+        child_env["BOOK_CORPUS_OPS_JOB_ID"] = job_id
+        pass_fds = (lock_fd,) if lock_fd is not None else ()
         with open(path, "ab") as fh:
             proc = subprocess.Popen(  # noqa: S603 argv 固定为解释器+本仓脚本/常量，不含外部输入
                 argv,
                 cwd=self.env.root,
-                env=self.env.child_env(),
+                env=child_env,
                 stdout=fh,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
                 start_new_session=True,
+                pass_fds=pass_fds,
             )
         with self.cv:
             self.procs[job_id] = proc
             already_cancelled = job_id in self.cancels
+        write_text_atomic(self._pid_file(job_id), "%d\n" % proc.pid)
         self.store.update(job_id, pid=proc.pid)
-        write_text_atomic(os.path.join(self.env.job_dir(job_id), "pid"), "%d\n" % proc.pid)
         if already_cancelled:
             threading.Thread(target=self._terminate, args=(job_id, proc.pid), daemon=True).start()
         return proc.wait()
@@ -1610,12 +1725,45 @@ class Runner:
         def release():
             self._release(job_id, spec)
             with suppress(OSError):
-                os.remove(os.path.join(self.env.job_dir(job_id), "pid"))
+                os.remove(self._pid_file(job_id))
 
         try:
             while pid_alive(pid):
                 if job_id in self.cancels:
                     self._terminate(job_id, pid)
+                time.sleep(0.15)
+            self.resume(job_id, spec, release=release)
+        except Exception:
+            detail = traceback.format_exc(limit=4)
+            with suppress(OSError):
+                self._log(job_id, "[接管异常]\n" + detail + "\n")
+            release()
+            self.store.update(
+                job_id,
+                state="failed",
+                ended=now_iso(),
+                summary="接管后收尾失败：" + detail.strip().splitlines()[-1][:160],
+            )
+        finally:
+            release()
+
+    def _watch_adopted_lock(self, job_id, spec):
+        """PID 没追到但写锁仍被占时，等写锁释放再收尾；若中途查到 PID 也可顺手取消。"""
+        row = self.store.get(job_id) or {}
+        argv = self._parse_argv(row.get("argv"))
+
+        def release():
+            self._release(job_id, spec)
+            with suppress(OSError):
+                os.remove(self._pid_file(job_id))
+
+        try:
+            while self._lock_held(self.env.lock):
+                if job_id in self.cancels:
+                    found = self._find_proc_by_job_id(job_id, argv)
+                    if found is not None:
+                        self._terminate(job_id, found)
+                        break
                 time.sleep(0.15)
             self.resume(job_id, spec, release=release)
         except Exception:
@@ -1642,11 +1790,8 @@ class Runner:
         def release_all():
             nonlocal lock_fd
             if lock_fd is not None:
-                try:
-                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                with suppress(OSError):
                     os.close(lock_fd)
-                except OSError:
-                    pass
                 lock_fd = None
             if release is not None:
                 release()
@@ -1661,7 +1806,7 @@ class Runner:
                 return
             if start < len(commands):
                 self._log(job_id, "\n[接管] 服务重启过，剩下的 %d 步接着跑\n" % (len(commands) - start))
-            rcs = self._play(job_id, commands, start, rcs)
+            rcs = self._play(job_id, commands, start, rcs, lock_fd=lock_fd)
             self._finalize(job_id, job, commands, rcs, spec=spec or None, release=release_all)
         finally:
             release_all()
@@ -1730,8 +1875,7 @@ class App:
         self.pdf_probe_down_until = 0.0
         self.pdf_page_cache = {}
         self.pdf_page_lock = threading.Lock()
-        # 先接管再起调度：接管来的写任务不受 flock 保护，调度器抢在前面就会
-        # 有第二个写者
+        # 先接管再起调度：把还在跑的写任务登记进 active_write，再启动调度循环
         self.runner.adopt()
         self.reconcile_stale_reviews()
         self.runner.start()

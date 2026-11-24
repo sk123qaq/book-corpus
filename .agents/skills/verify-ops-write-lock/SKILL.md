@@ -13,28 +13,20 @@ description: 用 TLA+ 模型检查操作台写任务调度器（apps/ops/server.
 
 承诺写在 `apps/ops/README.md`（「任务、锁与取消 → 写互斥」）和 `AGENTS.md`（「一个账本一个写者」）。实现是 `apps/ops/server.py` 的 `Runner`：写任务拿到 `.writer.lock` 的 `LOCK_EX` 才起子进程，HTTP 账表写走 `ledger_lock()` 拿同一把锁。
 
-## 当前读数（`ChildHoldsLock=FALSE`，即今天的代码）
+## 当前读数（`ChildHoldsLock=TRUE`，当前代码）
 
-| 规则 | 读数 | 一句话 |
-|---|---|---|
-| `WriterHoldsLock` | **破** | 服务进程一死，锁就没了，写子进程还在跑（6 步反例，最后一步是服务崩） |
-| `NoLiveOrphan` | **破** | 同一个坑的下一页：新进程把还活着的孩子标成 `orphaned`（7 步） |
-| `NoTwoWriteChildren` | **破** | 孤儿之后还能再派一个写任务，两个孩子一起写（12 步） |
-| `NoHttpWithChild` | **破** | 孤儿孩子在写时，HTTP 账表读改写照样拿到锁（8 步） |
-| `CancelledNeverRuns` | 通过 | 取消过的任务不会再起进程 |
+| 规则 | `TRUE`（当前代码） | `FALSE`（历史基线对照） | 一句话 |
+|---|---|---|---|
+| `WriterHoldsLock` | **通过**（736 状态） | 破（6 步） | 写子进程通过 `pass_fds` 继承已 `flock` 的 fd，服务崩了锁也在孩子手里 |
+| `NoLiveOrphan` | **通过**（736 状态） | 破（7 步） | `adopt()` 回退核对 `jobs/<id>/pid`、`/proc` 任务环境与 `.writer.lock` 占用，不误标 `orphaned` |
+| `NoTwoWriteChildren` | **通过**（736 状态） | 破（12 步） | 接管后 `active_write` 占位且 `.writer.lock` 仍被持有，不会再派第二个写者 |
+| `NoHttpWithChild` | **通过**（736 状态） | 破（8 步） | 接管期间 `writer_busy()` 挡住 HTTP 写，`.writer.lock` 也挡住外部进程 |
+| `CancelledNeverRuns` | **通过**（736 状态） | 通过（664 状态） | 取消过的任务不会再起进程，且有活锁/启动中窗口时不在退完前误写 `cancelled` |
 
-最短反例（`spec/report.md` 由模型检查器生成，`/statechart` 画成状态图）：
+历史问题说明（`ChildHoldsLock=FALSE` 曾检出两条真 bug，现已修复；完整反例路径仍留档于 `spec/report.md` 与 `spec/chart.mmd`）：
 
-```
-空闲 → 提交写任务 → 调度器起任务 → 拿到写锁 → 任务开始跑 → 拉起写进程（写任务在跑，持锁）
-     → 服务进程死掉（锁随进程消失，孩子在跑）
-     → 新服务启动，接管残留：孩子还活着，ops.db 里没有它的 pid → 任务标 orphaned
-```
-
-两条结论，都可以在真实服务上复现（复现方法见「现场证据」）：
-
-- **F1 接管来的写任务不持锁。** `adopt()` 认下任务后，`_watch_adopted()` 只是等孩子退出，锁在服务崩溃时就随进程释放了，整个剩余执行期间都没有锁。同进程的 HTTP 写被 `writer_busy()` 挡着（返 409），但另一个拿同一根目录的服务进程、或任何按文档用 `.writer.lock` 做互斥的写者，都不会被挡。
-- **F2 pid 没写进库的窗口。** `_spawn()` 先 `Popen` 再 `store.update(pid=...)`；服务在这中间死掉，就留下「活着的孩子 + 库里 pid 为空」。重启后 `adopt()` 只看 `row["pid"]`，于是标 `orphaned`，调度器随即可以再起一个写者——两个写者同时写。
+- **F1 接管来的写任务不持锁（已修）。** 过去 `Popen` 不传 `lock_fd` 且 `release()` 调 `LOCK_UN`，服务崩溃时内核立刻释放锁，整个接管期间 `.writer.lock` 都是空的。现在 `_spawn()` 通过 `pass_fds=(lock_fd,)` 把已 `flock` 的锁 fd 传给子进程，且 `release()` / `resume()` 只 `os.close(lock_fd)` 不调 `LOCK_UN`——子进程退出前锁一直都在。
+- **F2 pid 没写进库的窗口（已修）。** 过去 `_spawn()` 先 `Popen` 再 `store.update(pid=...)`，且 `adopt()` 只认 `row["pid"]`。现在 `_spawn()` 在 `child_env` 注入 `BOOK_CORPUS_OPS_JOB_ID` 并先原子写 `jobs/<id>/pid` 再落库；`adopt()` 依次核对 `ops.db` `pid`、`jobs/<id>/pid`、`/proc/<pid>/environ`，若写锁 `.writer.lock` 仍被占用则进入 `_watch_adopted_lock` 等锁释放，不再误标 `orphaned`。
 
 ## 怎么跑
 
@@ -42,10 +34,10 @@ description: 用 TLA+ 模型检查操作台写任务调度器（apps/ops/server.
 .agents/skills/verify-ops-write-lock/scripts/check.sh
 ```
 
-一条命令，5 条规则各跑一遍 TLC，约 5 秒，末行给通过/失败计数。默认 `CHILD_HOLDS_LOCK=FALSE`（今天的代码）。要检查「写子进程自己拿锁」的改法：
+一条命令，5 条规则各跑一遍 TLC，约 5 秒，末行给通过/失败计数。默认 `CHILD_HOLDS_LOCK=TRUE`（当前代码）。要回看历史基线的 4 条反例，可传：
 
 ```sh
-CHILD_HOLDS_LOCK=TRUE .agents/skills/verify-ops-write-lock/scripts/check.sh /tmp/ops-childlock
+CHILD_HOLDS_LOCK=FALSE .agents/skills/verify-ops-write-lock/scripts/check.sh /tmp/ops-baseline
 ```
 
 依赖：`java`（11+）与 `tla2tools.jar`。java 从 `PATH` 取（`command -v java`），不写死 JDK 路径；
@@ -81,15 +73,15 @@ CHILD_HOLDS_LOCK=TRUE .agents/skills/verify-ops-write-lock/scripts/check.sh /tmp
 |---|---|---|
 | `apps/ops/server.py` `Runner.submit` / `App` 的 `WRITE_ROUTES` 409 守卫（`writer_busy`） | `Submit` | 提交入口的互斥只在本进程内 |
 | `Runner._loop` | `Dispatch` | 占 `active_write` 槽位 |
-| `Runner._run`（`fcntl.flock`、拿锁后回读状态、`release`） | `Acquire` `MarkRunning` `AbortDispatched` `Release` | 锁的获取与释放顺序 |
-| `Runner._spawn`（`Popen` → `store.update(pid)` → 写 `jobs/<id>/pid`） | `Spawn` `RecordPid` | `Popen` 与记录 pid 之间是 F2 的窗口 |
+| `Runner._run`（`fcntl.flock`、拿锁后回读状态、`release` 只 close 不 LOCK_UN） | `Acquire` `MarkRunning` `AbortDispatched` `Release` | 锁的获取与释放顺序 |
+| `Runner._spawn`（`Popen(pass_fds=(lock_fd,))` + `BOOK_CORPUS_OPS_JOB_ID` → `jobs/<id>/pid` → `store.update(pid)`） | `Spawn` `RecordPid` | 子进程出生即持锁并带任务标记 |
 | `Runner.cancel` / `_terminate` | `CancelQueued` `CancelRunning` | 只建模「取消后不再起进程」这一格 |
 | `Runner._finalize`（先放锁再写终态） | `Release` `Finish` | |
-| `Runner.adopt` / `_watch_adopted` / `resume` | `Start` `AdoptFinish` | 只看 `ops.db` 的 pid；接管期间不拿锁 |
+| `Runner.adopt` / `_watch_adopted` / `_watch_adopted_lock` / `resume` | `Start` `AdoptFinish` | 按 DB/pid 文件/`/proc`/写锁四级认领并占位 |
 | `Runner.snapshot` / `writer_busy` / `ledger_lock` | `HttpStart` `HttpEnd` | HTTP 写与写任务不重叠 |
 | 任何改变「谁持有 `.writer.lock`」或「pid 何时落库」的改动 | `Crash` `Start` | |
 
-**同步提交：`e48718d`**（2026-11-23 核对，`apps/ops/server.py` 的 `Runner` 与上述注释行号一致）。覆盖的代码在那之后变了，就把上面的行号与读数重核一遍，再把这行改成新提交；没核对过不要往前推。
+**同步基线：2026-11-24（`fix/ops-write-lock` 分支核对，`apps/ops/server.py` 的 `Runner` 与上述注释行号一致）。** 覆盖的代码在那之后变了，就把上面的行号与读数重核一遍，再更新这里；没核对过不要往前推。
 
 ## 代码变了怎么更新
 
@@ -102,14 +94,10 @@ CHILD_HOLDS_LOCK=TRUE .agents/skills/verify-ops-write-lock/scripts/check.sh /tmp
    擦伤试验改过 `spec/OpsRunner.tla` 后一定要用 `git diff` 确认已还原，再继续。
 5. 规则本身不能为了通过而放松。放松了就不是「一个账本一个写者」了。
 
-## 建议的改法（未实施，只验证过模型）
+## 已落地修复要点
 
-`ChildHoldsLock=TRUE` 的读数是 **4 绿 1 红**（`NoLiveOrphan` 仍红，因为 `Popen` 到记录 pid 之间没有任何模型外的机制能识别这个孩子）。也就是说：
-
-- 让写子进程自己持有 `.writer.lock`（`Popen` 时把已 `flock` 的 fd 传下去，或子进程启动时自己开一次并 flock），能同时修掉 F1 与 F2 的写者互斥面；
-- 剩下的「orphaned 标记落在活着的孩子上」要靠 `adopt()` 在 `ops.db` 没有 pid 时回退读 `jobs/<id>/pid`，并且这个文件也写不成时不要断言孩子已死——把状态留在 `running`/`awaiting_review`，别标 `orphaned`。
-
-要不要改产品代码由你定；这个技能只负责把「改了会怎样」变成可跑的读数。
+- `Runner._spawn()` 通过 `pass_fds=(lock_fd,)` 把已 `flock` 的锁 fd 传给子进程，且 `_run()` / `resume()` 的释放只调用 `os.close(lock_fd)` 不调用 `LOCK_UN`，确保服务崩溃后写子进程继续持有 `.writer.lock`，直到子进程退出（修掉 F1 与 F2 的互斥面）。
+- `Runner._spawn()` 在 `child_env` 注入 `BOOK_CORPUS_OPS_JOB_ID` 并先原子写 `jobs/<id>/pid` 再更新 `ops.db`；`Runner.adopt()` 按 `ops.db` `pid` → `jobs/<id>/pid` → `/proc/<pid>/environ` → `.writer.lock` 占用顺序认领在跑任务，避免崩溃窗口内把活孩子误标成 `orphaned`（修掉 F2）。
 
 ## 不管什么
 

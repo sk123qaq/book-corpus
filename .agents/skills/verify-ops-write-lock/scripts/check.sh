@@ -19,8 +19,8 @@ if [ -z "$TLA2TOOLS" ]; then
     [ -f "$cand" ] && { TLA2TOOLS=$cand; break; }
   done
 fi
-# FALSE = 今天的代码（锁在服务进程手里）；TRUE = 建议改法（写子进程自己拿锁）。
-CHILD_HOLDS_LOCK=${CHILD_HOLDS_LOCK:-FALSE}
+# TRUE = 当前实现（写子进程通过 pass_fds 继承锁 fd）；FALSE = 历史基线对照（锁仅在服务进程手里）。
+CHILD_HOLDS_LOCK=${CHILD_HOLDS_LOCK:-TRUE}
 
 [ -n "$JAVA" ] && [ -x "$JAVA" ] || {
   echo "找不到 java：PATH 里没有（用 JAVA=/path/to/java 指定）" >&2; exit 2; }
@@ -65,8 +65,9 @@ echo
 echo "ChildHoldsLock=$CHILD_HOLDS_LOCK"
 if [ "$fail" -eq 0 ]; then
   echo "全部规则通过。"
+  exit 0
 else
   echo "$fail 条规则没通过（崩溃退出或违规）。逐条读 $out/<规则>.log，"
   echo "或用 pstack 的 /statechart 把每条反例画成状态图。"
+  exit 1
 fi
-exit 1

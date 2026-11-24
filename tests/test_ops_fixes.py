@@ -1,9 +1,12 @@
 """ops 服务端与 ops_status 修复项的回归单测。"""
 
 import csv
+import fcntl
 import importlib.util
 import json
 import os
+import signal
+import subprocess
 import sys
 import threading
 import time
@@ -865,3 +868,222 @@ def test_terminal_state_published_after_writer_release(workspace, monkeypatch):
     done = app.store.get(job_id)
     assert done is not None
     assert done["state"] == "succeeded"
+
+
+def _insert_running_write_job(app: server.App, job_id: str, argv: list[str], pid: int | None = None) -> None:
+    stamp = server.now_iso()
+    app.store.create(
+        {
+            "id": job_id,
+            "kind": "split.run",
+            "title": "接管测试",
+            "argv": json.dumps(argv, ensure_ascii=False),
+            "state": "running",
+            "pid": pid,
+            "created": stamp,
+            "started": stamp,
+            "log_path": app.env.rel(str(Path(app.env.job_dir(job_id)) / "log.txt")),
+        }
+    )
+
+
+def _kill_proc_group(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except OSError:
+        proc.kill()
+    proc.wait(timeout=5)
+
+
+def test_adopt_recovers_pid_from_file_when_db_pid_missing(workspace):
+    """ops.db 里 pid 为空但 jobs/<id>/pid 存在时，adopt 必须认领而不标 orphaned。"""
+    app = _make_app(workspace)
+    script = workspace / "adopt_file_probe.py"
+    script.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+    argv = [sys.executable, str(script)]
+    proc = subprocess.Popen(argv, cwd=workspace, start_new_session=True, stdout=subprocess.DEVNULL)
+    try:
+        job_id = "adopt-file-pid"
+        _insert_running_write_job(app, job_id, argv, pid=None)
+        server.write_text_atomic(str(Path(app.env.job_dir(job_id)) / "pid"), f"{proc.pid}\n")
+
+        app.runner.adopt()
+
+        row = app.store.get(job_id)
+        assert row is not None
+        assert row["state"] == "running"
+        assert row["pid"] == proc.pid
+        assert "接管" in (row["summary"] or "")
+        assert app.runner.snapshot()["writer"] is True
+        assert app.runner.cancel(job_id) is True
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            cur = app.store.get(job_id)
+            if cur and cur["state"] in server.DONE_STATES:
+                break
+            time.sleep(0.05)
+        assert app.store.get(job_id)["state"] == "cancelled"
+    finally:
+        _kill_proc_group(proc)
+
+
+def test_adopt_recovers_pid_from_proc_environ_when_both_pids_missing(workspace):
+    """ops.db 与 jobs/<id>/pid 都缺失时，adopt 靠 /proc 环境变量认出活孩子并写回 pid。"""
+    app = _make_app(workspace)
+    script = workspace / "adopt_env_probe.py"
+    script.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+    job_id = "adopt-env-pid"
+    argv = [sys.executable, str(script)]
+    child_env = app.env.child_env()
+    child_env["BOOK_CORPUS_OPS_JOB_ID"] = job_id
+    proc = subprocess.Popen(argv, cwd=workspace, env=child_env, start_new_session=True, stdout=subprocess.DEVNULL)
+    try:
+        time.sleep(0.1)
+        _insert_running_write_job(app, job_id, argv, pid=None)
+
+        app.runner.adopt()
+
+        row = app.store.get(job_id)
+        assert row is not None
+        assert row["state"] == "running"
+        assert row["pid"] == proc.pid
+        assert (Path(app.env.job_dir(job_id)) / "pid").is_file()
+        assert app.runner.snapshot()["writer"] is True
+    finally:
+        _kill_proc_group(proc)
+
+
+def test_adopt_holds_writer_slot_when_lock_held_without_pid(workspace):
+    """找不到 PID 但 .writer.lock 仍被占用时，adopt 保持 running 等锁释放，绝不标 orphaned。"""
+    app = _make_app(workspace)
+    flag = workspace / ".release-lock-child"
+    holder_script = workspace / "lock_holder.py"
+    holder_script.write_text(
+        "import fcntl, os, sys, time\n"
+        "fd = os.open(sys.argv[1], os.O_CREAT | os.O_RDWR, 0o644)\n"
+        "fcntl.flock(fd, fcntl.LOCK_EX)\n"
+        "open(sys.argv[2], 'w').close()\n"
+        "end = time.monotonic() + 10\n"
+        "while time.monotonic() < end and not os.path.exists(sys.argv[3]):\n"
+        "    time.sleep(0.05)\n",
+        encoding="utf-8",
+    )
+    ready = workspace / ".holder-ready"
+    proc = subprocess.Popen(
+        [sys.executable, str(holder_script), app.env.lock, str(ready), str(flag)],
+        cwd=workspace,
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not ready.exists():
+            time.sleep(0.02)
+        assert ready.exists()
+
+        job_id = "adopt-lock-only"
+        _insert_running_write_job(app, job_id, [sys.executable, str(workspace / "missing.py")], pid=None)
+        server.write_json_atomic(str(Path(app.env.job_dir(job_id)) / "commands.json"), [])
+        app.store.add_step(job_id, 0, "split", "running")
+
+        app.runner.adopt()
+
+        row = app.store.get(job_id)
+        assert row is not None
+        assert row["state"] == "running"
+        assert app.runner.snapshot()["writer"] is True
+        # 未知 PID 时调 cancel 也不能在写锁还占着的时候提前改写成 cancelled
+        assert app.runner.cancel(job_id) is True
+        assert app.store.get(job_id)["state"] == "running"
+
+        flag.write_text("go", encoding="utf-8")
+        proc.wait(timeout=5)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            cur = app.store.get(job_id)
+            if cur and cur["state"] in ("cancelled", "awaiting_review", "failed"):
+                break
+            time.sleep(0.05)
+        assert app.store.get(job_id)["state"] == "cancelled"
+        assert app.runner.snapshot()["writer"] is False
+    finally:
+        _kill_proc_group(proc)
+
+
+def test_spawn_inherits_writer_lock_across_parent_close(workspace):
+    """_spawn 通过 pass_fds 把 .writer.lock 传给子进程，父端关闭 fd 不影响子进程继续持锁。"""
+    app = _make_app(workspace)
+    ready = workspace / ".spawn-lock-ready"
+    release_flag = workspace / ".spawn-lock-release"
+    child_script = workspace / "child_lock_probe.py"
+    child_script.write_text(
+        "import os, sys, time\n"
+        "open(sys.argv[1], 'w').close()\n"
+        "end = time.monotonic() + 10\n"
+        "while time.monotonic() < end and not os.path.exists(sys.argv[2]):\n"
+        "    time.sleep(0.05)\n",
+        encoding="utf-8",
+    )
+    job_id = app.runner.submit(
+        "pdf.confirm",
+        "锁继承测试",
+        [
+            {
+                "name": "probe",
+                "script": "child_lock_probe.py",
+                "argv": [sys.executable, str(child_script), str(ready), str(release_flag)],
+            }
+        ],
+    )
+    lock_fd = os.open(app.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    holder = None
+    done = threading.Event()
+
+    def run_spawn():
+        try:
+            app.runner._spawn(
+                job_id,
+                {
+                    "name": "probe",
+                    "script": "child_lock_probe.py",
+                    "argv": [sys.executable, str(child_script), str(ready), str(release_flag)],
+                },
+                lock_fd=lock_fd,
+            )
+        finally:
+            done.set()
+
+    t = threading.Thread(target=run_spawn, daemon=True)
+    t.start()
+    try:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not ready.exists():
+            time.sleep(0.02)
+        assert ready.exists()
+        # 模拟服务进程崩溃：只关闭父进程的 lock_fd（系统收回 fd）
+        os.close(lock_fd)
+        lock_fd = -1
+
+        holder = os.open(app.env.lock, os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            held = False
+        except OSError:
+            held = True
+        assert held is True, "父进程关闭 fd 后，子进程仍必须持有 .writer.lock"
+
+        release_flag.write_text("go", encoding="utf-8")
+        assert done.wait(timeout=5)
+        # 子进程退出后，锁必须立刻释放
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(holder, fcntl.LOCK_UN)
+    finally:
+        release_flag.write_text("go", encoding="utf-8")
+        if lock_fd >= 0:
+            os.close(lock_fd)
+        if holder is not None:
+            os.close(holder)
+        t.join(timeout=5)
