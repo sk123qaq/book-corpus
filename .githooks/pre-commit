@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# 提交闸门入口（仓库跟踪，无绝对路径）。
+#
+# 换机器、换克隆目录、删掉 .venv 都不用重装钩子，因为解释器与 pre-commit 由 `uv run` 现场解析。
+# 每个克隆配置一次：tools/install_git_hooks.sh（即 git config core.hooksPath .githooks）。
+# 配好之后 `uv run pre-commit install` 会被 pre-commit 自己拒绝，不会覆盖这里。
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+exec uv run --frozen pre-commit hook-impl \
+    --config=.pre-commit-config.yaml \
+    --hook-type=pre-commit \
+    --hook-dir=.githooks \
+    -- "$@"
