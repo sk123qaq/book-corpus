@@ -14,6 +14,7 @@ import re
 import sqlite3
 import sys
 import time
+import unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -42,15 +43,12 @@ def group_in(g, low):
 
 def group_hits(text, groups, exclude):
     """单段组命中数。search 的热循环自己内联了这段（带预计算），这里留给外部调用。"""
-    if ASCII_ALPHA.search("".join(groups)):
-        body = text
-        if exclude:
-            body = re.sub("|".join(map(re.escape, exclude)), "", body)
-        low = body.lower()
-        return sum(1 for g in groups if group_in(g.lower(), low))
-    body = text
+    body = unicodedata.normalize("NFKC", text or "")
     if exclude:
         body = re.sub("|".join(map(re.escape, exclude)), "", body)
+    if ASCII_ALPHA.search("".join(groups)):
+        low = body.lower()
+        return sum(1 for g in groups if group_in(g.lower(), low))
     return sum(1 for g in groups if g in body)
 
 
@@ -99,7 +97,7 @@ def search(con, expr, groups, exclude, limit, min_chars, rerank=False, pool=400)
     ascii_groups = bool(ASCII_ALPHA.search("".join(groups)))
     low_groups = [g.lower() for g in groups] if ascii_groups else None
     for pid, path, book, line, text, score in rows:
-        body = text
+        body = unicodedata.normalize("NFKC", text or "")
         if exclude:
             body = re.sub("|".join(map(re.escape, exclude)), "", body)
         if ascii_groups:
