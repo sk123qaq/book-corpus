@@ -52,12 +52,18 @@ uv run --frozen python tools/check_docs_sync.py --strict
 git status --short
 ```
 
-这些检查也可以交给 git hook：
+这些检查也可以交给 git hook。钩子本体是仓库里的 `.githooks/`，每台机器、每个克隆配一次即可，
+之后换分支、换 worktree、重装 `.venv` 都不用再动：
 
 ```bash
-uv sync                                                                   # 装上 pre-commit
-uv run pre-commit install --hook-type pre-commit --hook-type pre-push     # 提交前检查 + 推送前自动跑快测
+uv sync --frozen                                                          # 装依赖
+tools/install_git_hooks.sh                                               # git config core.hooksPath .githooks
 ```
+
+钩子内部用 `uv run --frozen pre-commit hook-impl` 现场解析解释器，不写任何绝对路径。
+**不要再跑 `pre-commit install`**：它把当前 venv 的 python 绝对路径写死进 `.git/hooks/`，
+换一台机器就报 `pre-commit not found`（本仓踩过：钩子指向另一台机器的
+`/home/colaqaq/Work/book-corpus-ci/.venv/bin/python`）；配置了 `core.hooksPath` 后它也会拒绝安装。
 
 `pre-commit` 跑八道闸：`ruff check`（规则见 `pyproject.toml` 的 `[tool.ruff]`）、`ruff format`、`ruff-strict`、`mypy`、`docs check`、`living-docs-sync`（技能清单、路径、ops 路由、CLI 子命令与退役词）、`docs-coupling`（改代码漏改对应 `失效源：` 文档时给出警告）、`js-syntax`（`node --check`）；`pre-push` 跑离线并行全量快测（`pytest -n auto --dist worksteal -m "not real_corpus" --maxfail=5`）。
 CI（`.github/workflows/ci.yml`）的 `checks` job 跑前六道加 JS 语法检查（不短路一次列出全部失败），`test` job 在 PR 上跑 Python 3.12 快速反馈、合入 `main` 前及 `main` 上跑 3.11/3.12/3.13 全矩阵与命令行冒烟：本地闸门过不了的，push 上去必红。

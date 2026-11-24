@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# 推送闸门入口（仓库跟踪，无绝对路径）。取待推送提交的 ref 由 hook-impl 从 git 参数与 stdin 解析，
+# 所以这里必须走 hook-impl，不能换成 `pre-commit run --hook-stage pre-push`（那只按暂存区取文件）。
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+exec uv run --frozen pre-commit hook-impl \
+    --config=.pre-commit-config.yaml \
+    --hook-type=pre-push \
+    --hook-dir=.githooks \
+    -- "$@"
