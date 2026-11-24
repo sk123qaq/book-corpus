@@ -476,6 +476,9 @@ def _read_cached(cache_path, t0, thinking=DEFAULT_THINKING, rec=None, key=""):
     if not isinstance(cached, dict) or not cached.get("ok"):
         rec.event("cache.miss", key=key, path=cache_path, reason="invalid")
         return None
+    if cached.get("confidence") == "low":
+        rec.event("cache.miss", key=key, path=cache_path, reason="low_confidence")
+        return None
     cached = dict(cached)
     cached.setdefault("mode", "single")
     cached.setdefault("sources", [])
@@ -499,6 +502,25 @@ def _read_cached(cache_path, t0, thinking=DEFAULT_THINKING, rec=None, key=""):
     )
     rec.set_index(cache_hit=True, cache_key=key, cached_ms=original_ms)
     return cached
+
+
+def _write_cache_if_confident(cache_path, key, out, confidence, rec):
+    """低置信 / 引文不足的结果不写入缓存，避免污染后续同问命中。"""
+    if confidence == "low":
+        rec.event("cache.skip", key=key, path=cache_path, reason="low_confidence")
+        rec.set_index(cache_written=False)
+        return
+    try:
+        _write_json(cache_path, out)
+    except OSError as exc:
+        rec.event("cache.write_error", key=key, path=cache_path, error=exc.__class__.__name__)
+    else:
+        try:
+            size = os.path.getsize(cache_path)
+        except OSError:
+            size = None
+        rec.event("cache.write", key=key, path=cache_path, bytes=size)
+        rec.set_index(cache_written=True)
 
 
 # ---- 证据窗口 -------------------------------------------------------
@@ -2706,17 +2728,7 @@ def _answer_single(
         mode="single",
         cache_key=key,
     )
-    try:
-        _write_json(cache_path, out)
-    except OSError as exc:
-        rec.event("cache.write_error", key=key, path=cache_path, error=exc.__class__.__name__)
-    else:
-        try:
-            size = os.path.getsize(cache_path)
-        except OSError:
-            size = None
-        rec.event("cache.write", key=key, path=cache_path, bytes=size)
-        rec.set_index(cache_written=True)
+    _write_cache_if_confident(cache_path, key, out, confidence, rec)
     return out
 
 
@@ -2994,17 +3006,7 @@ def _answer_multi(
         mode="multi",
         cache_key=key,
     )
-    try:
-        _write_json(cache_path, out)
-    except OSError as exc:
-        rec.event("cache.write_error", key=key, path=cache_path, error=exc.__class__.__name__)
-    else:
-        try:
-            size = os.path.getsize(cache_path)
-        except OSError:
-            size = None
-        rec.event("cache.write", key=key, path=cache_path, bytes=size)
-        rec.set_index(cache_written=True)
+    _write_cache_if_confident(cache_path, key, out, confidence, rec)
     return out
 
 

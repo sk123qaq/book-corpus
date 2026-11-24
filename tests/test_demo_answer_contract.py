@@ -937,3 +937,82 @@ def test_preflight_terms_splits_zero_hit_compounds(tmp_path):
     )
     assert q_dropped == ["阿Q挨打", "挨打原因"]
     assert q_after == ["阿Q", "挨打", "精神胜利法"]
+
+
+def test_low_confidence_answer_is_not_cached(monkeypatch, tmp_path):
+    import json
+
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(answer, "CACHE_DIR", str(cache_dir))
+    monkeypatch.setattr(answer, "ROOT", str(tmp_path))
+    monkeypatch.setattr(answer, "_inside_library", lambda _rel: True)
+    monkeypatch.setattr(answer.defpass, "first_content_line", lambda _p: 1)
+    monkeypatch.setattr(answer, "_chapter_titles", lambda _b: ({}, {}))
+    monkeypatch.setattr(
+        answer,
+        "pick_passages",
+        lambda *_a, **_k: (
+            [{"book": "B0001", "path": "books/B0001/md/01.md", "start": 1, "end": 5, "line": 1, "chars": 20}],
+            [{"path": "books/B0001/md/01.md", "line": 1, "score": 1.0, "coverage": 1.0}],
+        ),
+    )
+    monkeypatch.setattr(
+        answer,
+        "build_windows",
+        lambda *_a, **_k: [
+            {
+                "book": "B0001",
+                "path": "books/B0001/md/01.md",
+                "start": 1,
+                "end": 5,
+                "chars": 20,
+                "title": "第一章",
+                "text": "正文。",
+            }
+        ],
+    )
+    monkeypatch.setattr(answer, "build_prompt", lambda *_a, **_k: "prompt")
+
+    class _DummyCon:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(answer.sqlite3, "connect", lambda *_a, **_k: _DummyCon())
+
+    stage = {"n": 0}
+
+    def fake_request_reply(*_a, **_k):
+        stage["n"] += 1
+        return {"answer": "回答正文。", "confidence": "high", "not_found": False, "citations": []}, "raw", ""
+
+    def fake_verify_citations(*_a, **_k):
+        if stage["n"] == 1:
+            return [], 1
+        return [
+            {"book": "B0001", "path": "books/B0001/md/01.md", "line": 1, "quote": "甲"},
+            {"book": "B0001", "path": "books/B0001/md/01.md", "line": 2, "quote": "乙"},
+        ], 0
+
+    monkeypatch.setattr(answer, "_request_reply", fake_request_reply)
+    monkeypatch.setattr(answer, "verify_citations", fake_verify_citations)
+
+    res1 = answer.answer_question("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"], use_cache=True)
+    assert res1["ok"] is True
+    assert res1["confidence"] == "low"
+    assert not list(cache_dir.glob("*.json"))
+
+    # 即使磁盘上残留旧版低置信缓存文件，读取侧也必须拒绝命中
+    key = answer.cache_key("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"])
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    stale_file = cache_dir / f"{key}.json"
+    stale_file.write_text(json.dumps(res1, ensure_ascii=False), encoding="utf-8")
+
+    res2 = answer.answer_question("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"], use_cache=True)
+    assert stage["n"] == 2
+    assert res2["confidence"] == "high"
+    assert res2["cached"] is False
+
+    res3 = answer.answer_question("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"], use_cache=True)
+    assert stage["n"] == 2
+    assert res3["cached"] is True
+    assert res3["confidence"] == "high"
