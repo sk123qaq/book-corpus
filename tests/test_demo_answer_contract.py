@@ -4,18 +4,41 @@ The old two-part anchored reply (primary + supplement) is gone; these tests pin
 the pieces that replaced it without calling a model or reading the real library.
 """
 
+import importlib.util
 import sqlite3
 import sys
 import threading
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "apps" / "demo"))
+DEMO = REPO / "apps" / "demo"
+DEMO_SERVER_MODULE = "demo_server_answer_contract_test"
+sys.path.insert(0, str(DEMO))
 
 import trace
 
 import answer
 import model_call
+
+
+def _load_demo_server():
+    cached = sys.modules.get(DEMO_SERVER_MODULE)
+    if cached is not None:
+        return cached
+    demo_dir = str(DEMO)
+    if demo_dir not in sys.path:
+        sys.path.insert(0, demo_dir)
+    spec = importlib.util.spec_from_file_location(DEMO_SERVER_MODULE, str(DEMO / "server.py"))
+    assert spec is not None
+    assert spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[DEMO_SERVER_MODULE] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        sys.modules.pop(DEMO_SERVER_MODULE, None)
+        raise
+    return mod
 
 
 def test_split_answer_folds_dissent_into_body():
@@ -530,7 +553,7 @@ def test_server_api_answer_sse_and_json_compat(monkeypatch):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    import server
+    server = _load_demo_server()
 
     def fake_answer_question(question, book, path, line, terms, **kwargs):
         cb = kwargs.get("on_event")
@@ -676,8 +699,9 @@ def test_server_api_answer_pause_and_resume_sse(monkeypatch, tmp_path):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    import server
     import session
+
+    server = _load_demo_server()
 
     monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
     sess = session.create()
@@ -1024,8 +1048,9 @@ def test_server_api_answer_completed_result_not_discarded_by_late_pause(monkeypa
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    import server
     import session
+
+    server = _load_demo_server()
 
     monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
     sess = session.create()
@@ -1104,8 +1129,9 @@ def test_server_api_answer_deleted_session_midflight_returns_404(monkeypatch, tm
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    import server
     import session
+
+    server = _load_demo_server()
 
     monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
     sess = session.create()
