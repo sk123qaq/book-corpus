@@ -204,12 +204,17 @@ def test_no_daily_directory_shows_empty_card(reading_root):
 
 
 def test_go_returns_503_html_when_ensure_raises_oserror(monkeypatch, reading_root):
+    import importlib.util
     import threading
     from http.server import ThreadingHTTPServer
     from typing import ClassVar
 
-    sys.path.insert(0, str(HOME))
-    import server as home_server
+    spec = importlib.util.spec_from_file_location("home_server_go_test", str(HOME / "server.py"))
+    assert spec is not None
+    assert spec.loader is not None
+    home_server = importlib.util.module_from_spec(spec)
+    sys.modules["home_server_go_test"] = home_server
+    spec.loader.exec_module(home_server)
 
     class TestHandler(home_server.Handler):
         root = str(reading_root)
