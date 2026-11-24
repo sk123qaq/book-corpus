@@ -746,10 +746,23 @@ def run(
             con.close()
 
 
+def _import_book_cards():
+    """延迟导入 book_cards，避免与 book_cards 顶层 import book_query 形成循环导入。"""
+    if __package__:
+        from . import book_cards
+
+        return book_cards
+    import book_cards
+
+    return book_cards
+
+
 def main(argv=None):
+    book_cards = _import_book_cards()
     ap = argparse.ArgumentParser()
     ap.add_argument("query", nargs="+")
-    ap.add_argument("-n", "--limit", type=int, default=5)
+    ap.add_argument("-n", "--limit", type=int, default=book_cards.DEFAULT_CARDS)
+    ap.add_argument("--card-count", type=int, default=None, help="弹卡张数（默认跟随 -n/--limit）")
     ap.add_argument("--max-chapters", type=int, default=3)
     ap.add_argument(
         "--book-score",
@@ -775,6 +788,12 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--explain", action="store_true")
     a = ap.parse_args(argv)
+    if a.limit <= 0:
+        ap.error("-n/--limit 必须为正整数")
+    if a.card_count is not None and a.card_count <= 0:
+        ap.error("--card-count 必须为正整数")
+    if a.max_chapters <= 0:
+        ap.error("--max-chapters 必须为正整数")
     terms = cjk.split_groups(" ".join(a.query))
     con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
     p = Planner(con, scheme=a.book_score, limit=a.limit)
@@ -782,23 +801,19 @@ def main(argv=None):
     res = p.plan(terms, max_rounds=a.max_rounds, chapter_selector=a.chapter_selector, max_chapters=a.max_chapters)
     cardset = None
     if a.cards:
-        import book_cards
-
-        cardset, _hits, _nouns, _ranking = book_cards.cards_for(p, terms, question, 6)
+        card_count = a.limit if a.card_count is None else a.card_count
+        cardset, _hits, _nouns, _ranking = book_cards.cards_for(p, terms, question, card_count)
         if cardset.trigger:
-            # 2026-10-23 操作人定：书卡展开六张卡（不再只展开前三本）。
             keep = {c.book for c in cardset.cards}
             res.chapters = [b for b in res.chapters if b["book"] in keep]
             have = {b["book"] for b in res.chapters}
             missing = [c for c in cardset.cards if c.book in keep and c.book not in have]
             if missing:
                 full_hits, _ = p.search(terms)
-                res.chapters += book_cards.next_books(missing, full_hits, terms, 3)
+                res.chapters += book_cards.next_books(missing, full_hits, terms, a.max_chapters)
             order = {c.book: i for i, c in enumerate(cardset.cards)}
-            res.chapters.sort(key=lambda b: order.get(b["book"], 99))
+            res.chapters.sort(key=lambda b: order.get(b["book"], len(cardset.cards)))
     if a.expand_on_demand and res.chapters:
-        import book_cards
-
         res.model_calls = book_cards.expand_selected(question, res.chapters[:3], None)
     if a.json:
         payload = asdict(res)
