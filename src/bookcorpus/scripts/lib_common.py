@@ -562,7 +562,7 @@ def batch_dir(prefix, root=None, create=False):
 
 
 def _ensure_ledger(root=None, create=False):
-    """DB 缺失或没 schema 时自举：有活账 CSV 就当种子导入，否则建空库。
+    """DB 缺失或没 schema 时自举：有分类表.csv 用它，否则从 books/*/book.json 恢复，空库建空表。
 
     root 给了就自举那个根（--root 场景、doctor、测试工作区），不给用 import 时的全局根。
     默认 create=False：只读场景不落盘，缺库时让调用方退回读 CSV。
@@ -576,29 +576,57 @@ def _ensure_ledger(root=None, create=False):
         return False
     tables = os.path.dirname(ledger_path(root))
     cat_csv = os.path.join(tables, "分类表.csv")
-    if not os.path.isfile(cat_csv):
-        # 没有种子可导：空 schema 就够了（init 后的全新工作区走这里）
+    csv_rows = read_csv(cat_csv) if os.path.isfile(cat_csv) else []
+    books = [] if csv_rows else iter_book_json(root)
+    if not csv_rows and not books:
+        # 没有种子也没有 book.json：空 schema 就够了（init 后的全新工作区走这里）
         return True
     try:
         con = sqlite3.connect(ledger_path(root), timeout=30)
         try:
             now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-            for row in read_csv(cat_csv):
-                con.execute(
-                    "INSERT OR IGNORE INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
-                    " VALUES(?,?,?,?,?,?,?,?)",
-                    (
-                        row.get("uid", ""),
-                        row.get("一级", ""),
-                        row.get("二级", ""),
-                        row.get("作者层", ""),
-                        row.get("保留", "keep"),
-                        row.get("正式书名", ""),
-                        row.get("备注", ""),
-                        now,
-                    ),
-                )
-            con.execute("INSERT OR REPLACE INTO ledger_meta VALUES('imported_from', ?)", (now,))
+            if csv_rows:
+                for row in csv_rows:
+                    con.execute(
+                        "INSERT OR IGNORE INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                        " VALUES(?,?,?,?,?,?,?,?)",
+                        (
+                            row.get("uid", ""),
+                            row.get("一级", ""),
+                            row.get("二级", ""),
+                            row.get("作者层", ""),
+                            row.get("保留", "keep"),
+                            row.get("正式书名", ""),
+                            row.get("备注", ""),
+                            now,
+                        ),
+                    )
+                con.execute("INSERT OR REPLACE INTO ledger_meta VALUES('imported_from', ?)", (now,))
+            else:
+                for uid, doc in books:
+                    raw_subs = doc.get("subjects")
+                    subs = raw_subs if isinstance(raw_subs, list) else []
+                    s1 = (str(subs[0]).strip() if len(subs) >= 1 and subs[0] else "") or "其他"
+                    s2 = str(subs[1]).strip() if len(subs) >= 2 and subs[1] else ""
+                    ret = str(doc.get("retention") or "").strip()
+                    if ret not in ("keep", "review", "drop"):
+                        ret = "keep"
+                    con.execute(
+                        "INSERT OR IGNORE INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                        " VALUES(?,?,?,?,?,?,?,?)",
+                        (
+                            uid,
+                            s1,
+                            s2,
+                            "0",
+                            ret,
+                            str(doc.get("title") or "").strip(),
+                            str(doc.get("notes") or "").strip(),
+                            now,
+                        ),
+                    )
+                con.execute("INSERT OR REPLACE INTO ledger_meta VALUES('imported_from', ?)", (now,))
+                con.execute("INSERT OR REPLACE INTO ledger_meta VALUES('recovered_from', ?)", ("book.json",))
             con.commit()
         finally:
             con.close()
@@ -799,13 +827,14 @@ def book_key(uid):
     return uid
 
 
-def iter_book_json():
+def iter_book_json(root=None):
     """books/**/book.json -> [(uid, doc)]。下划线开头的目录不算书。"""
+    books_dir = os.path.join(os.path.abspath(os.path.expanduser(root)), "books") if root else BOOKS
     out = []
-    if not os.path.isdir(BOOKS):
+    if not os.path.isdir(books_dir):
         return out
-    for dirpath, dirnames, filenames in os.walk(BOOKS):
-        if dirpath == BOOKS:
+    for dirpath, dirnames, filenames in os.walk(books_dir):
+        if dirpath == books_dir:
             dirnames[:] = [d for d in dirnames if not d.startswith("_")]
         else:
             dirnames[:] = [d for d in dirnames if not d.startswith("_") and d not in ("md", "html", "source", "images")]

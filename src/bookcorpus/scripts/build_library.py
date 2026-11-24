@@ -183,7 +183,7 @@ def award_roster():
 
 
 def build_from_library(books, emit_json=False):
-    ledger = {r["uid"]: r for r in L.categories()}
+    ledger = {r["uid"]: r for r in L.categories(create=True)}
     if not ledger and books:
         raise SystemExit("人账 ledger.db 是空的且 books/ 有书，查清楚再建")
     if not books:
