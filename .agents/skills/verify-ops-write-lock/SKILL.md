@@ -48,9 +48,10 @@ description: 用 TLA+ 模型检查操作台写任务调度器（apps/ops/server.
 CHILD_HOLDS_LOCK=TRUE .agents/skills/verify-ops-write-lock/scripts/check.sh /tmp/ops-childlock
 ```
 
-依赖：`java`（11+）与 `tla2tools.jar`。本机默认取
-`/usr/lib/jvm/java-25-openjdk/bin/java` 与 `~/.local/share/tlaplus/tla2tools.jar`（TLC 2026.11.06），
-可用 `JAVA=` / `TLA2TOOLS=` 覆盖。日志落在技能目录的 `out/`（已 ignore）或你给的第一参数目录。
+依赖：`java`（11+）与 `tla2tools.jar`。java 从 `PATH` 取（`command -v java`），不写死 JDK 路径；
+`tla2tools.jar` 不在 `PATH` 里，脚本按 `~/.local/share/tla2tools/`、`~/.local/share/tlaplus/`、
+`/usr/share/java/`、`/usr/local/share/tla2tools/`、`/opt/tla2tools/` 依次找。两处都能用 `JAVA=` /
+`TLA2TOOLS=` 覆盖；找不到时报错会给出下载地址。日志落在技能目录的 `out/`（已 ignore）或你给的第一参数目录。
 
 读结果用 pstack 的 `/statechart`：它把每条违规画成状态图，并按模型的动作名给最短路径；模型在
 `spec/OpsRunner.tla`，时序公式在 `spec/OpsRunnerSpec.tla`（`□[Next]_vars` 要变量元组，单独放一个模块），
