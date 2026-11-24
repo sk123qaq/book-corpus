@@ -777,6 +777,9 @@ def journal_keys(root):
 
 def rebuild(root=ROOT):
     env = dict(os.environ, BOOKS_ROOT=os.path.abspath(root))
+    lock_real = os.path.realpath(L.writer_lock_path(root))
+    if lock_real in L._writer_lock_held():
+        env["BOOK_CORPUS_WRITER_LOCK_PATH"] = lock_real
     cmd = [sys.executable, os.path.join(HERE, "build_library.py"), "--emit-json"]
     r = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if r.returncode != 0:
@@ -895,36 +898,37 @@ def main():
         print("\n未写盘。确认后加 --apply。")
         return 0
 
-    take_lock(a.root)
     done, failed = [], []
     done_keys = journal_keys(a.root)
-    try:
-        for it in todo:
-            src = os.path.join(a.root, "books", "_收件箱", it["file"])
-            if (it["action"], it["file"]) in done_keys and not os.path.isfile(src):
-                print("已处理，跳过：%s" % it["file"])
-                continue
-            try:
-                res = apply_one(a.root, it, shas)
-            except (SystemExit, OSError) as exc:
-                msg = str(exc) or type(exc).__name__
-                failed.append((it["file"], msg))
-                journal(a.root, [dict(it, action="failed", note=msg[:200])])
-                print("失败：%s：%s" % (it["file"], msg), file=sys.stderr)
-                continue
-            done.append(res)
-            journal(a.root, [res])
-            if res["action"] in ("add", "replace"):
-                shas.add(it["sha256"])
-    finally:
-        drop_lock(a.root)
-    print_plan(done)
-    if failed:
-        print("\n%d 行失败，修好后可重跑（已处理的行会跳过）。" % len(failed), file=sys.stderr)
-    if done and any(r["action"] in ("add", "replace") for r in done) and not a.no_rebuild:
-        print(rebuild(a.root))
-    if a.result:
-        write_result(a.result, a.root, done, failed)
+    with L.writer_lock(a.root):
+        take_lock(a.root)
+        try:
+            for it in todo:
+                src = os.path.join(a.root, "books", "_收件箱", it["file"])
+                if (it["action"], it["file"]) in done_keys and not os.path.isfile(src):
+                    print("已处理，跳过：%s" % it["file"])
+                    continue
+                try:
+                    res = apply_one(a.root, it, shas)
+                except (SystemExit, OSError) as exc:
+                    msg = str(exc) or type(exc).__name__
+                    failed.append((it["file"], msg))
+                    journal(a.root, [dict(it, action="failed", note=msg[:200])])
+                    print("失败：%s：%s" % (it["file"], msg), file=sys.stderr)
+                    continue
+                done.append(res)
+                journal(a.root, [res])
+                if res["action"] in ("add", "replace"):
+                    shas.add(it["sha256"])
+        finally:
+            drop_lock(a.root)
+        print_plan(done)
+        if failed:
+            print("\n%d 行失败，修好后可重跑（已处理的行会跳过）。" % len(failed), file=sys.stderr)
+        if done and any(r["action"] in ("add", "replace") for r in done) and not a.no_rebuild:
+            print(rebuild(a.root))
+        if a.result:
+            write_result(a.result, a.root, done, failed)
     return 1 if failed else 0
 
 
