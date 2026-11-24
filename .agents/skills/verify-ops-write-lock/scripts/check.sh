@@ -2,19 +2,31 @@
 # 逐条跑 OpsRunner 的规则。TLC 遇到第一条违规就停，所以每条规则单独跑一遍。
 #
 # 用法：.agents/skills/verify-ops-write-lock/scripts/check.sh [输出目录]
-# 需要 java 11+ 与 tla2tools.jar；默认取本机 pstack 记录的路径，可用
-# JAVA / TLA2TOOLS 覆盖。
+# 需要 java 11+ 与 tla2tools.jar。java 从 PATH 取；jar 按几个常见落点找。
+# 可用 JAVA / TLA2TOOLS 覆盖。
 set -u
 here=$(cd "$(dirname "$0")/.." && pwd)
 spec="$here/spec"
 out=${1:-"$here/out"}
-JAVA=${JAVA:-/usr/lib/jvm/java-25-openjdk/bin/java}
-TLA2TOOLS=${TLA2TOOLS:-$HOME/.local/share/tlaplus/tla2tools.jar}
+JAVA=${JAVA:-$(command -v java 2>/dev/null || true)}
+TLA2TOOLS=${TLA2TOOLS:-}
+if [ -z "$TLA2TOOLS" ]; then
+  for cand in "$HOME/.local/share/tla2tools/tla2tools.jar" \
+              "$HOME/.local/share/tlaplus/tla2tools.jar" \
+              /usr/share/java/tla2tools.jar \
+              /usr/local/share/tla2tools/tla2tools.jar \
+              /opt/tla2tools/tla2tools.jar; do
+    [ -f "$cand" ] && { TLA2TOOLS=$cand; break; }
+  done
+fi
 # FALSE = 今天的代码（锁在服务进程手里）；TRUE = 建议改法（写子进程自己拿锁）。
 CHILD_HOLDS_LOCK=${CHILD_HOLDS_LOCK:-FALSE}
 
-[ -x "$JAVA" ] || { echo "找不到 java：$JAVA（用 JAVA=... 指定）" >&2; exit 2; }
-[ -f "$TLA2TOOLS" ] || { echo "找不到 tla2tools.jar：$TLA2TOOLS（用 TLA2TOOLS=... 指定）" >&2; exit 2; }
+[ -n "$JAVA" ] && [ -x "$JAVA" ] || {
+  echo "找不到 java：PATH 里没有（用 JAVA=/path/to/java 指定）" >&2; exit 2; }
+[ -n "$TLA2TOOLS" ] && [ -f "$TLA2TOOLS" ] || {
+  echo "找不到 tla2tools.jar：用 TLA2TOOLS=/path/to/tla2tools.jar 指定" >&2
+  echo "（下载：https://github.com/tlaplus/tlaplus/releases）" >&2; exit 2; }
 mkdir -p "$out" || exit 2
 
 # 规则名 : 中文说明。两处都改，别只改一处。
