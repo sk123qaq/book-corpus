@@ -183,3 +183,38 @@ def test_env_guard_allows_monkeypatch_and_catches_direct_os_environ(tmp_path, mo
     monkeypatch.setenv("BOOKS_EXTRA_FLAG", "temp")
     assert envfile.resolve_books_root() == ws.resolve()
     assert os.environ["BOOKS_ROOT"] == str(ws)
+
+
+def test_init_preserves_existing_different_books_root(tmp_path):
+    """已有不同 BOOKS_ROOT 时，默认不覆盖既有配置；显式 --set-default 才改写。"""
+    env_path = tmp_path / "app.env"
+    ws1 = tmp_path / "ws1"
+    ws2 = tmp_path / "ws2"
+
+    r1 = run_cli("init", ws1, env={"BOOK_CORPUS_ENV": str(env_path)})
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+    assert envfile.parse(env_path.read_text(encoding="utf-8"))["BOOKS_ROOT"] == str(ws1)
+
+    r2 = run_cli("init", ws2, env={"BOOK_CORPUS_ENV": str(env_path)})
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+    assert "保留既有 BOOKS_ROOT" in r2.stdout
+    assert envfile.parse(env_path.read_text(encoding="utf-8"))["BOOKS_ROOT"] == str(ws1)
+
+    r3 = run_cli("init", ws2, "--set-default", "--force", env={"BOOK_CORPUS_ENV": str(env_path)})
+    assert r3.returncode == 0, r3.stdout + r3.stderr
+    assert envfile.parse(env_path.read_text(encoding="utf-8"))["BOOKS_ROOT"] == str(ws2)
+
+
+def test_init_no_env_skips_writing_env(tmp_path):
+    env_path = tmp_path / "custom.env"
+    ws1 = tmp_path / "ws1"
+    ws2 = tmp_path / "ws2"
+
+    r1 = run_cli("init", ws1, "--no-env", env={"BOOK_CORPUS_ENV": str(env_path)})
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+    assert not env_path.exists()
+
+    env_path.write_text(f"BOOKS_ROOT={ws1}\n", encoding="utf-8")
+    r2 = run_cli("init", ws2, "--no-env", env={"BOOK_CORPUS_ENV": str(env_path)})
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+    assert envfile.parse(env_path.read_text(encoding="utf-8"))["BOOKS_ROOT"] == str(ws1)

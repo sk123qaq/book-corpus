@@ -15,18 +15,19 @@ CJK = re.compile(r"^[\u3400-\u4dbf\u4e00-\u9fff]+$")
 SPLIT = re.compile(r"[\s,，、;；]+")
 
 
-def split_groups(text):
-    """查询侧的组切分：NFKC 把全角字母数字折成半角，再按分隔符切组。
+def normalize(text):
+    """索引侧与查询侧共用的 NFKC 归一，把全角英数等字符折成半角。"""
+    return unicodedata.normalize("NFKC", text or "")
 
-    只动查询侧，索引侧 index_text 不归一——语料里的全角字符本来就不进
-    RUN 正则（索引和查询两侧都不认），归一只是把查询词修成索引里有的形态。
-    """
-    return [g for g in SPLIT.split(unicodedata.normalize("NFKC", text or "")) if g]
+
+def split_groups(text):
+    """查询侧的组切分：NFKC 把全角字母数字折成半角，再按分隔符切组。"""
+    return [g for g in SPLIT.split(normalize(text)) if g]
 
 
 def tokens(text):
     out = []
-    for run in RUN.findall(text):
+    for run in RUN.findall(normalize(text)):
         if CJK.match(run):
             if len(run) == 1:
                 out.append(run)
@@ -49,7 +50,7 @@ def _quote(tok):
 def query_expr(q):
     """把用户输入的词变成一个 FTS5 MATCH 表达式；多段之间是 AND。"""
     parts = []
-    for run in RUN.findall(q):
+    for run in RUN.findall(normalize(q)):
         if CJK.match(run):
             if len(run) == 1:
                 parts.append("%s*" % run)
@@ -71,6 +72,7 @@ def selftest():
         "清华": ["清华"],
         "自由自在": ["自由", "由自", "自在"],
         "1984 自由": ["1984", "自由"],
+        "１９８４ ＡＢＣ": ["1984", "abc"],
         "㐀㐁㐂": ["㐀㐁", "㐁㐂"],
     }
     for text, want in cases.items():
@@ -80,6 +82,7 @@ def selftest():
     assert query_expr("礼") == "礼*"
     assert query_expr("现代的铁笼") == '"现代 代的 的铁 铁笼"'
     assert query_expr("COVID 19") == '"covid" AND "19"'
+    assert query_expr("ＡＢＣ １９８４") == '"abc" AND "1984"'
     assert query_expr("㐀㐁㐂") == '"㐀㐁 㐁㐂"'
     assert split_groups("自由，平等、博爱") == ["自由", "平等", "博爱"]
     assert split_groups("１９８４ ａｂｃ") == ["1984", "abc"]

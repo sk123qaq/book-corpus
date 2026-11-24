@@ -10,8 +10,8 @@
 journal、重建 DB。重复执行按 sha256 幂等，已在库的文件一律跳过。
 
 add 行的学科预填走 classify_model.classify，一次调用回一级与二级，模型默认
-opencode-go/deepseek-v4.1-flash；缓存默认 工作区/批次/ingest/classify.json，可用
---cache 指到别处，按 sha256 存，旧条目没有 model 与 prompt_version 也能读。
+opencode-go/deepseek-v4.1-flash；scan 默认只读已有缓存 工作区/批次/ingest/classify.json
+而不回写，显式传 --cache PATH 时才将新结果落盘，旧条目没有 model 与 prompt_version 也能读。
 """
 
 import argparse
@@ -405,8 +405,8 @@ def apply_class(item, rec):
     item["classify"] = dict(rec, needs_review=False)
 
 
-def classify_adds(items, cache_path, enabled=True):
-    cache = load_class_cache(cache_path)
+def classify_adds(items, cache_path, enabled=True, write_cache=True):
+    cache = load_class_cache(cache_path) if cache_path else {}
     todo = [i for i in items if i["action"] == "add" and i["sha256"] not in cache]
     if todo and enabled:
         try:
@@ -415,10 +415,11 @@ def classify_adds(items, cache_path, enabled=True):
                 cache[it["sha256"]] = dict(
                     rec, at=time.strftime("%Y-%m-%dT%H:%M:%S"), model=CLASSIFY_MODEL, prompt_version=CM.PROMPT_VERSION
                 )
-            parent = os.path.dirname(cache_path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            L.write_json_atomic(cache_path, cache)
+            if write_cache and cache_path:
+                parent = os.path.dirname(cache_path)
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
+                L.write_json_atomic(cache_path, cache)
         except (SystemExit, Exception) as exc:
             msg = (str(exc) or type(exc).__name__)[:90]
             print("分类失败：%s" % msg, file=sys.stderr)
@@ -798,7 +799,7 @@ def main():
     ap.add_argument("--uid")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--out")
-    ap.add_argument("--cache", help="分类缓存路径，默认 <root>/工作区/批次/ingest/classify.json")
+    ap.add_argument("--cache", help="分类缓存路径；不传时只读默认 <root>/工作区/批次/ingest/classify.json 不回写")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--no-rebuild", action="store_true")
     ap.add_argument("--no-classify", action="store_true", help="跳过 deepseek 分类预填")
@@ -811,8 +812,9 @@ def main():
 
     if a.cmd == "scan":
         items = scan(a.root)
-        cache = a.cache or os.path.join(a.root, "工作区", "批次", "ingest", "classify.json")
-        classify_adds(items, cache, enabled=not a.no_classify)
+        default_cache = os.path.join(a.root, "工作区", "批次", "ingest", "classify.json")
+        cache = a.cache or default_cache
+        classify_adds(items, cache, enabled=not a.no_classify, write_cache=bool(a.cache))
         if a.json or a.out:
             blob = json.dumps(items, ensure_ascii=False, indent=1)
             if a.out:

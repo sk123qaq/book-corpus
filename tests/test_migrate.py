@@ -122,3 +122,46 @@ def test_migrated_tree_builds_library(tmp_path):
     r = run_cli("--root", str(new), "doctor")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "fail" not in r.stdout
+
+
+def test_migrate_apply_collects_failures_without_marking_done(tmp_path):
+    from bookcorpus import migrate
+
+    ok_src = tmp_path / "ok.txt"
+    ok_src.write_text("ok", encoding="utf-8")
+    missing_src = tmp_path / "missing.txt"
+    items = [
+        migrate.Item("书", str(missing_src), str(tmp_path / "out" / "B0001"), uid="B0001"),
+        migrate.Item("书", str(ok_src), str(tmp_path / "out" / "B0002"), uid="B0002"),
+    ]
+
+    failures = migrate.apply(items, "copy")
+    assert len(failures) == 1
+    assert failures[0]["uid"] == "B0001"
+    assert items[0].done is False
+    assert items[1].done is True
+    assert (tmp_path / "out" / "B0002").read_text(encoding="utf-8") == "ok"
+
+
+def test_migrate_run_reports_failures_and_returns_nonzero(tmp_path, monkeypatch):
+    from bookcorpus import migrate
+
+    root = tmp_path / "old"
+    v1_workspace(str(root))
+    new = tmp_path / "new"
+    real_copytree = migrate.shutil.copytree
+
+    def flaky_copytree(src, dst, *args, **kwargs):
+        if "甲书" in str(src):
+            raise OSError("disk full")
+        return real_copytree(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(migrate.shutil, "copytree", flaky_copytree)
+    code, lines = migrate.run(str(root), str(new), "copy", True, str(tmp_path), "0.0.0")
+    report = "\n".join(lines)
+    assert code == 1
+    assert "搬运失败" in report
+    assert "disk full" in report
+    assert "落盘完成" not in report
+    assert not (new / "books.toml").exists()
+    assert (new / "books" / "B0002" / "book.json").exists()

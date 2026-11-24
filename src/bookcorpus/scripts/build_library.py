@@ -59,7 +59,16 @@ CREATE TABLE job(
   tool_version TEXT, started_at TEXT, finished_at TEXT, error TEXT, output_path TEXT,
   evidence TEXT, UNIQUE (uid, kind, batch, actor, attempt));
 CREATE VIEW v_path_conflict AS
-  SELECT path, count(*) n, group_concat(uid) uids FROM book GROUP BY path HAVING n > 1;
+  SELECT path, count(*) n, group_concat(uid) uids FROM book GROUP BY path HAVING n > 1
+  UNION ALL
+  SELECT file path, count(*) n, group_concat(uid) uids FROM source
+    WHERE file IS NOT NULL AND file != '' AND file NOT LIKE 'collections/%'
+    GROUP BY file
+    HAVING n > 1 OR sum(CASE WHEN uid IS NULL OR file NOT LIKE ('books/' || uid || '/%') THEN 1 ELSE 0 END) > 0
+  UNION ALL
+  SELECT file path, count(*) n, group_concat(uid) uids FROM source
+    WHERE file LIKE 'collections/%'
+    GROUP BY uid, file HAVING n > 1;
 CREATE VIEW v_pending_md AS
   SELECT b.uid, b.subject1, b.subject2, b.title, s.format, s.sha256
   FROM book b JOIN source s ON s.uid = b.uid AND s.primary_src = 1
@@ -174,7 +183,7 @@ def award_roster():
 
 
 def build_from_library(books, emit_json=False):
-    ledger = {r["uid"]: r for r in L.categories()}
+    ledger = {r["uid"]: r for r in L.categories(create=True)}
     if not ledger and books:
         raise SystemExit("人账 ledger.db 是空的且 books/ 有书，查清楚再建")
     if not books:
