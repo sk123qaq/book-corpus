@@ -195,9 +195,19 @@ def ensure(
             return {"ok": True, "state": "already", "service": service, "log": log_path(key)}
 
         log = log_path(key)
-        log.parent.mkdir(parents=True, exist_ok=True)
         lock_file = log.with_suffix(".lock")
-        with lock_file.open("a+", encoding="utf-8") as lock_fh:
+        try:
+            log.parent.mkdir(parents=True, exist_ok=True)
+            lock_fh = lock_file.open("a+", encoding="utf-8")
+        except OSError as exc:
+            return {
+                "ok": False,
+                "state": "failed",
+                "service": service,
+                "log": log,
+                "error": str(exc),
+            }
+        with lock_fh:
             fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
             try:
                 if probe(service.port):

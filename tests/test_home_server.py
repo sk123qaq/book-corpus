@@ -201,3 +201,46 @@ def test_no_daily_directory_shows_empty_card(reading_root):
         assert "去日课页看看" in body
     finally:
         _stop_server(proc)
+
+
+def test_go_returns_503_html_when_ensure_raises_oserror(monkeypatch, reading_root):
+    import importlib.util
+    import threading
+    from http.server import ThreadingHTTPServer
+    from typing import ClassVar
+
+    spec = importlib.util.spec_from_file_location("home_server_go_test", str(HOME / "server.py"))
+    assert spec is not None
+    assert spec.loader is not None
+    home_server = importlib.util.module_from_spec(spec)
+    sys.modules["home_server_go_test"] = home_server
+    spec.loader.exec_module(home_server)
+
+    class TestHandler(home_server.Handler):
+        root = str(reading_root)
+        library = home_server.Library(str(reading_root))
+        template = home_server.TEMPLATE_PATH.read_text(encoding="utf-8")
+        targets: ClassVar[dict[str, str]] = {"search": "http://127.0.0.1:8765"}
+        urls: ClassVar[dict[str, str]] = {"search": "http://127.0.0.1:8765"}
+        allow_start = True
+        start_timeout = 1.0
+        quiet = True
+
+    def broken_ensure(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(home_server, "ensure", broken_ensure)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), TestHandler)
+    th = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    th.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _get(base, "/go/search")
+        assert exc.value.code == 503
+        body = exc.value.read().decode("utf-8")
+        assert "服务没有起来" in body
+        assert "disk full" in body
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

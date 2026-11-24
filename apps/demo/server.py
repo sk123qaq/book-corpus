@@ -189,8 +189,7 @@ def publish_answer_job(job, result=None, error=None, paused=None):
         job["result"] = result
         job["error"] = error
         job["paused_data"] = paused
-        if paused is not None:
-            job["paused"] = True
+        job["paused"] = paused is not None
         job["expires"] = time.time() + ANSWER_JOB_TTL
         if error:
             job["events"].append({"type": "error", "data": {"ok": False, "status": error[0], "error": error[1]}})
@@ -200,6 +199,22 @@ def publish_answer_job(job, result=None, error=None, paused=None):
             job["events"].append({"type": "done", "data": result})
         job["event"].set()
         job["cond"].notify_all()
+
+
+def _is_paused_outcome(info, cancel_event):
+    """已完整拿到 ok=True 且未标记 paused 的回答，不被晚到的暂停信号丢弃。"""
+    if isinstance(info, dict) and info.get("paused"):
+        return True
+    if cancel_event is not None and cancel_event.is_set():
+        return not (isinstance(info, dict) and info.get("ok"))
+    return False
+
+
+def _stale_or_missing_session(sid):
+    """区分会话已删除（404）与同轮已重跑（409）。"""
+    if session.load(sid) is None:
+        return 404, "会话不存在", "answer.missing_session", "error"
+    return 409, "这一轮已重跑，本次回答作废", "answer.stale", "stale"
 
 
 def _session_id(value):
@@ -1287,12 +1302,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         token = meta["run_token"]
         if not session.begin_answer(sid, n, attempt, os.getpid(), token=token):
-            message = "这一轮已重跑，本次回答作废"
-            publish_answer_job(job, error=(409, message))
+            status, message, _ev, _fin = _stale_or_missing_session(sid)
+            publish_answer_job(job, error=(status, message))
             if stream:
                 self._stream_job(job)
             else:
-                self.fail(409, message)
+                self.fail(status, message)
             return
 
         def _worker():
@@ -1326,17 +1341,22 @@ class Handler(BaseHTTPRequestHandler):
                     checkpoint_out=job["checkpoint"],
                     resume_state=resume_state,
                 )
-                if (isinstance(info, dict) and info.get("paused")) or job["cancel_event"].is_set():
+                if _is_paused_outcome(info, job["cancel_event"]):
                     partial_text = str(
                         (info.get("partial_text") if isinstance(info, dict) else "")
                         or job["checkpoint"].get("partial_text")
                         or (resume_state or {}).get("partial_text")
                         or ""
                     )
+                    if not session.pause_answer(sid, n, attempt, partial=partial_text, token=token):
+                        status, message, ev_name, fin_state = _stale_or_missing_session(sid)
+                        rec.event(ev_name, error=message)
+                        rec.finish(fin_state, error=message)
+                        publish_answer_job(job, error=(status, message))
+                        return
                     cp = job["checkpoint"] or ({"partial_text": partial_text} if partial_text else {})
                     if cp:
                         _save_paused_checkpoint(key, cp)
-                    session.pause_answer(sid, n, attempt, partial=partial_text, token=token)
                     rec.event("answer.paused", partial_chars=len(partial_text))
                     rec.finish("paused")
                     paused_body = {
@@ -1353,11 +1373,11 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 _fill_citations(info)
                 if not session.finish_answer(sid, n, attempt, info, ctx, token=token, run=rec.id if rec else ""):
-                    # 这一轮在这期间被重跑了，结果不再落地，也不发给等待者。
-                    message = "这一轮已重跑，本次回答作废"
-                    rec.event("answer.stale", error=message)
-                    rec.finish("stale", error=message)
-                    publish_answer_job(job, error=(409, message))
+                    # 这一轮在这期间被重跑或会话已删除：结果不再落地。
+                    status, message, ev_name, fin_state = _stale_or_missing_session(sid)
+                    rec.event(ev_name, error=message)
+                    rec.finish(fin_state, error=message)
+                    publish_answer_job(job, error=(status, message))
                     return
                 rec.set_index(
                     answer_ok=bool(info.get("ok")),
@@ -1465,9 +1485,7 @@ class Handler(BaseHTTPRequestHandler):
                     checkpoint_out=job["checkpoint"] if job is not None else None,
                     resume_state=resume_state,
                 )
-                if (isinstance(info, dict) and info.get("paused")) or (
-                    job is not None and job["cancel_event"].is_set()
-                ):
+                if _is_paused_outcome(info, job["cancel_event"] if job is not None else None):
                     partial_text = str(
                         (info.get("partial_text") if isinstance(info, dict) else "")
                         or (job["checkpoint"].get("partial_text") if job is not None else "")

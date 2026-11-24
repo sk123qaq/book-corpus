@@ -3,6 +3,7 @@
 
 import contextlib
 import csv
+import fcntl
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import threading
 import time
 import unicodedata
 
@@ -644,44 +646,72 @@ def _resolve_writable_root(root):
     raise SystemExit("这不是书库工作区（缺 books.toml/books/tables），拒绝写人账：%s" % root)
 
 
+def writer_lock_path(root=None):
+    """写任务与人账写入共用的 .writer.lock 路径。"""
+    base = os.path.abspath(os.path.expanduser(root)) if root else ROOT
+    return os.path.join(base, "工作区", "运维", ".writer.lock")
+
+
+def _writer_lock_held():
+    """同一线程的 .writer.lock 重入计数；挂在 threading 上以兼容双别名导入。"""
+    tls = getattr(threading, "_book_corpus_writer_lock_tls", None)
+    if tls is None:
+        tls = threading.local()
+        threading._book_corpus_writer_lock_tls = tls
+    held = getattr(tls, "held", None)
+    if held is None:
+        held = {}
+        tls.held = held
+    return held
+
+
+@contextlib.contextmanager
+def writer_lock(root=None):
+    """与操作台 Runner / HTTP 账表写入共用 工作区/运维/.writer.lock（LOCK_EX）。
+
+    同线程重入直接计数放行；由 ops 写任务拉起的子进程若已在父进程持有同一把锁，
+    通过 BOOK_CORPUS_WRITER_LOCK_PATH 声明继承，避免子进程阻塞在父进程的 flock 上。
+    """
+    lock_path = writer_lock_path(root)
+    real_lock = os.path.realpath(lock_path)
+    env_lock = os.environ.get("BOOK_CORPUS_WRITER_LOCK_PATH") or ""
+    if env_lock and os.path.realpath(env_lock) == real_lock:
+        yield
+        return
+    held = _writer_lock_held()
+    depth = held.get(real_lock, 0)
+    if depth > 0:
+        held[real_lock] = depth + 1
+        try:
+            yield
+        finally:
+            if held.get(real_lock, 0) <= 1:
+                held.pop(real_lock, None)
+            else:
+                held[real_lock] -= 1
+        return
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        held[real_lock] = 1
+        try:
+            yield
+        finally:
+            held.pop(real_lock, None)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
 def category_put(row, updated_by="", root=None):
     """插入或整行更新一条人账。写时戳：操作时间；updated_by 只进日志不进库。"""
     root = _resolve_writable_root(root)
-    _ensure_ledger(root, create=True) or raise_systemexit_ledger()
-    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-    con = ledger_connect("rw", root)
-    try:
-        con.execute(
-            "INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
-            " VALUES(?,?,?,?,?,?,?,?)"
-            " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
-            " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
-            " 备注=excluded.备注, updated_at=excluded.updated_at",
-            (
-                row["uid"],
-                row.get("一级", ""),
-                row.get("二级", ""),
-                row.get("作者层", "0"),
-                row.get("保留", "keep") or "keep",
-                row.get("正式书名", ""),
-                row.get("备注", ""),
-                now,
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
-    return now
-
-
-def category_put_many(rows, updated_by="", root=None):
-    """整批 upsert，一个事务。返回写时戳。"""
-    root = _resolve_writable_root(root)
-    _ensure_ledger(root, create=True) or raise_systemexit_ledger()
-    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-    con = ledger_connect("rw", root)
-    try:
-        for row in rows:
+    with writer_lock(root):
+        _ensure_ledger(root, create=True) or raise_systemexit_ledger()
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        con = ledger_connect("rw", root)
+        try:
             con.execute(
                 "INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
                 " VALUES(?,?,?,?,?,?,?,?)"
@@ -699,28 +729,61 @@ def category_put_many(rows, updated_by="", root=None):
                     now,
                 ),
             )
-        con.commit()
-    finally:
-        con.close()
-    return now
+            con.commit()
+        finally:
+            con.close()
+        return now
+
+
+def category_put_many(rows, updated_by="", root=None):
+    """整批 upsert，一个事务。返回写时戳。"""
+    root = _resolve_writable_root(root)
+    with writer_lock(root):
+        _ensure_ledger(root, create=True) or raise_systemexit_ledger()
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        con = ledger_connect("rw", root)
+        try:
+            for row in rows:
+                con.execute(
+                    "INSERT INTO 分类(uid,一级,二级,作者层,保留,正式书名,备注,updated_at)"
+                    " VALUES(?,?,?,?,?,?,?,?)"
+                    " ON CONFLICT(uid) DO UPDATE SET 一级=excluded.一级, 二级=excluded.二级,"
+                    " 作者层=excluded.作者层, 保留=excluded.保留, 正式书名=excluded.正式书名,"
+                    " 备注=excluded.备注, updated_at=excluded.updated_at",
+                    (
+                        row["uid"],
+                        row.get("一级", ""),
+                        row.get("二级", ""),
+                        row.get("作者层", "0"),
+                        row.get("保留", "keep") or "keep",
+                        row.get("正式书名", ""),
+                        row.get("备注", ""),
+                        now,
+                    ),
+                )
+            con.commit()
+        finally:
+            con.close()
+        return now
 
 
 def categories_delete(uids, root=None):
     """整批删行，一个事务。返回删掉的行数。"""
     root = _resolve_writable_root(root)
-    _ensure_ledger(root, create=True) or raise_systemexit_ledger()
     uids = [(u or "").strip() for u in uids if (u or "").strip()]
     if not uids:
         return 0
-    con = ledger_connect("rw", root)
-    try:
-        n = 0
-        for uid in uids:
-            n += con.execute("DELETE FROM 分类 WHERE uid=?", (uid,)).rowcount
-        con.commit()
-    finally:
-        con.close()
-    return n
+    with writer_lock(root):
+        _ensure_ledger(root, create=True) or raise_systemexit_ledger()
+        con = ledger_connect("rw", root)
+        try:
+            n = 0
+            for uid in uids:
+                n += con.execute("DELETE FROM 分类 WHERE uid=?", (uid,)).rowcount
+            con.commit()
+        finally:
+            con.close()
+        return n
 
 
 def raise_systemexit_ledger():

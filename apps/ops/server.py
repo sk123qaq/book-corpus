@@ -440,10 +440,14 @@ class Env:
         except ValueError:
             return path
 
-    def child_env(self):
+    def child_env(self, writer_lock=False):
         """确保不带 --root 的子脚本也落在当前工作区，不被仓库 .env 抢回活库。"""
         env = dict(os.environ)
         env["BOOKS_ROOT"] = self.root
+        if writer_lock:
+            env["BOOK_CORPUS_WRITER_LOCK_PATH"] = os.path.realpath(self.lock)
+        else:
+            env.pop("BOOK_CORPUS_WRITER_LOCK_PATH", None)
         return env
 
 
@@ -1307,7 +1311,7 @@ class Runner:
                 return
             self.store.update(job_id, state="running", started=now_iso(), summary="")
             self._log(job_id, "=== %s %s %s\n" % (job_id, job["kind"], job["title"]), truncate=True)
-            rcs = self._play(job_id, commands, lock_fd=lock_fd)
+            rcs = self._play(job_id, commands, spec=spec, lock_fd=lock_fd)
             self._finalize(job_id, job, commands, rcs, spec=spec, release=release)
         except Exception:
             detail = traceback.format_exc(limit=4)
@@ -1320,7 +1324,7 @@ class Runner:
         finally:
             release()
 
-    def _play(self, job_id, commands, start=0, rcs=None, lock_fd=None):
+    def _play(self, job_id, commands, start=0, rcs=None, spec=None, lock_fd=None):
         """从 start 开始按顺序跑命令，逐步记状态；rcs 里是前面几步已经知道的退出码。"""
         rcs = list(rcs or [])
         for seq in range(start, len(commands)):
@@ -1330,7 +1334,7 @@ class Runner:
             cmd = commands[seq]
             self.store.add_step(job_id, seq, cmd["name"], "running")
             self.store.update(job_id, argv=json.dumps(cmd["argv"], ensure_ascii=False))
-            rc = self._spawn(job_id, cmd, lock_fd=lock_fd)
+            rc = self._spawn(job_id, cmd, spec=spec, lock_fd=lock_fd)
             rcs.append((cmd["name"], rc))
             self.store.step_state(job_id, seq, "ok" if rc == 0 else "fail", "rc=%d" % rc)
             if cmd.get("capture"):
@@ -1362,7 +1366,7 @@ class Runner:
         with open(path, "wb" if truncate else "ab") as fh:
             fh.write(text.encode("utf-8", "replace"))
 
-    def _spawn(self, job_id, cmd, lock_fd=None):
+    def _spawn(self, job_id, cmd, spec=None, lock_fd=None):
         argv = cmd["argv"]
         self._log(job_id, "\n---- step %s ----\n$ %s\n" % (cmd["name"], " ".join(argv)))
         if not os.path.exists(argv[0]):
@@ -1375,7 +1379,7 @@ class Runner:
             if job_id in self.cancels:
                 return -signal.SIGTERM
         path = os.path.join(self.env.job_dir(job_id), "log.txt")
-        child_env = self.env.child_env()
+        child_env = self.env.child_env(writer_lock=not (spec or {}).get("readonly"))
         child_env["BOOK_CORPUS_OPS_JOB_ID"] = job_id
         pass_fds = (lock_fd,) if lock_fd is not None else ()
         with open(path, "ab") as fh:
@@ -1449,7 +1453,7 @@ class Runner:
                         subprocess.run(  # noqa: S603 argv 固定为解释器+本仓脚本
                             [sys.executable, views_script],
                             cwd=self.env.root,
-                            env=self.env.child_env(),
+                            env=self.env.child_env(writer_lock=not spec.get("readonly")),
                             capture_output=True,
                             text=True,
                             timeout=30,
@@ -1806,7 +1810,7 @@ class Runner:
                 return
             if start < len(commands):
                 self._log(job_id, "\n[接管] 服务重启过，剩下的 %d 步接着跑\n" % (len(commands) - start))
-            rcs = self._play(job_id, commands, start, rcs, lock_fd=lock_fd)
+            rcs = self._play(job_id, commands, start, rcs, spec=spec, lock_fd=lock_fd)
             self._finalize(job_id, job, commands, rcs, spec=spec or None, release=release_all)
         finally:
             release_all()
@@ -5141,15 +5145,8 @@ def split_by_route(triage_path, uids):
 def ledger_lock(env):
     """批次账读改写的互斥锁：与写任务共用 .writer.lock。确认与改处置在
     HTTP 线程里直接改批次账，两个标签页并发时会互相抹行，必须串行。"""
-    fd = os.open(env.lock, os.O_CREAT | os.O_RDWR, 0o644)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+    with lib_common_module().writer_lock(env.root):
         yield
-    finally:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        finally:
-            os.close(fd)
 
 
 # ---- 冷宫台账（retired.tsv）-----------------------------------------

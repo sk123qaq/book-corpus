@@ -4,17 +4,41 @@ The old two-part anchored reply (primary + supplement) is gone; these tests pin
 the pieces that replaced it without calling a model or reading the real library.
 """
 
+import importlib.util
 import sqlite3
 import sys
+import threading
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "apps" / "demo"))
+DEMO = REPO / "apps" / "demo"
+DEMO_SERVER_MODULE = "demo_server_answer_contract_test"
+sys.path.insert(0, str(DEMO))
 
 import trace
 
 import answer
 import model_call
+
+
+def _load_demo_server():
+    cached = sys.modules.get(DEMO_SERVER_MODULE)
+    if cached is not None:
+        return cached
+    demo_dir = str(DEMO)
+    if demo_dir not in sys.path:
+        sys.path.insert(0, demo_dir)
+    spec = importlib.util.spec_from_file_location(DEMO_SERVER_MODULE, str(DEMO / "server.py"))
+    assert spec is not None
+    assert spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[DEMO_SERVER_MODULE] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        sys.modules.pop(DEMO_SERVER_MODULE, None)
+        raise
+    return mod
 
 
 def test_split_answer_folds_dissent_into_body():
@@ -529,7 +553,7 @@ def test_server_api_answer_sse_and_json_compat(monkeypatch):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    import server
+    server = _load_demo_server()
 
     def fake_answer_question(question, book, path, line, terms, **kwargs):
         cb = kwargs.get("on_event")
@@ -675,8 +699,9 @@ def test_server_api_answer_pause_and_resume_sse(monkeypatch, tmp_path):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    import server
     import session
+
+    server = _load_demo_server()
 
     monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
     sess = session.create()
@@ -937,3 +962,235 @@ def test_preflight_terms_splits_zero_hit_compounds(tmp_path):
     )
     assert q_dropped == ["阿Q挨打", "挨打原因"]
     assert q_after == ["阿Q", "挨打", "精神胜利法"]
+
+
+def test_low_confidence_answer_is_not_cached(monkeypatch, tmp_path):
+    import json
+
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(answer, "CACHE_DIR", str(cache_dir))
+    monkeypatch.setattr(answer, "ROOT", str(tmp_path))
+    monkeypatch.setattr(answer, "_inside_library", lambda _rel: True)
+    monkeypatch.setattr(answer.defpass, "first_content_line", lambda _p: 1)
+    monkeypatch.setattr(answer, "_chapter_titles", lambda _b: ({}, {}))
+    monkeypatch.setattr(
+        answer,
+        "pick_passages",
+        lambda *_a, **_k: (
+            [{"book": "B0001", "path": "books/B0001/md/01.md", "start": 1, "end": 5, "line": 1, "chars": 20}],
+            [{"path": "books/B0001/md/01.md", "line": 1, "score": 1.0, "coverage": 1.0}],
+        ),
+    )
+    monkeypatch.setattr(
+        answer,
+        "build_windows",
+        lambda *_a, **_k: [
+            {
+                "book": "B0001",
+                "path": "books/B0001/md/01.md",
+                "start": 1,
+                "end": 5,
+                "chars": 20,
+                "title": "第一章",
+                "text": "正文。",
+            }
+        ],
+    )
+    monkeypatch.setattr(answer, "build_prompt", lambda *_a, **_k: "prompt")
+
+    class _DummyCon:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(answer.sqlite3, "connect", lambda *_a, **_k: _DummyCon())
+
+    stage = {"n": 0}
+
+    def fake_request_reply(*_a, **_k):
+        stage["n"] += 1
+        return {"answer": "回答正文。", "confidence": "high", "not_found": False, "citations": []}, "raw", ""
+
+    def fake_verify_citations(*_a, **_k):
+        if stage["n"] == 1:
+            return [], 1
+        return [
+            {"book": "B0001", "path": "books/B0001/md/01.md", "line": 1, "quote": "甲"},
+            {"book": "B0001", "path": "books/B0001/md/01.md", "line": 2, "quote": "乙"},
+        ], 0
+
+    monkeypatch.setattr(answer, "_request_reply", fake_request_reply)
+    monkeypatch.setattr(answer, "verify_citations", fake_verify_citations)
+
+    res1 = answer.answer_question("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"], use_cache=True)
+    assert res1["ok"] is True
+    assert res1["confidence"] == "low"
+    assert not list(cache_dir.glob("*.json"))
+
+    # 即使磁盘上残留旧版低置信缓存文件，读取侧也必须拒绝命中
+    key = answer.cache_key("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"])
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    stale_file = cache_dir / f"{key}.json"
+    stale_file.write_text(json.dumps(res1, ensure_ascii=False), encoding="utf-8")
+
+    res2 = answer.answer_question("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"], use_cache=True)
+    assert stage["n"] == 2
+    assert res2["confidence"] == "high"
+    assert res2["cached"] is False
+
+    res3 = answer.answer_question("为什么？", "B0001", "books/B0001/md/01.md", 1, ["词"], use_cache=True)
+    assert stage["n"] == 2
+    assert res3["cached"] is True
+    assert res3["confidence"] == "high"
+
+
+def test_server_api_answer_completed_result_not_discarded_by_late_pause(monkeypatch, tmp_path):
+    import json
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    import session
+
+    server = _load_demo_server()
+
+    monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
+    sess = session.create()
+    sess["turns"].append(
+        {
+            "n": 1,
+            "question": "压哨暂停",
+            "run_token": "tok_late_pause",
+            "answer_attempt": 0,
+            "trace": {"result": {"book": "B1", "path": "books/B1/md/01.md", "line": 1}},
+        }
+    )
+    session.save(sess)
+
+    def fake_answer_question(question, book, path, line, terms, **kwargs):
+        cancel_ev = kwargs.get("cancel_event")
+        assert cancel_ev is not None
+        # 模拟生成刚完成的一瞬间，暂停请求刚好 set 了 cancel_event 与 job["paused"]
+        server.pause_active_answer(sid=sess["id"], n=1)
+        return {
+            "ok": True,
+            "mode": "single",
+            "answer": "已完整生成的答案",
+            "lead": "已完整生成的答案",
+            "sections": [],
+            "citations": [],
+            "passages": [],
+            "ms": 10.0,
+        }
+
+    monkeypatch.setattr(server.answerer, "answer_question", fake_answer_question)
+    monkeypatch.setattr(server, "_fill_citations", lambda info: info)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    th = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    th.start()
+    try:
+        port = httpd.server_address[1]
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/answer",
+            data=json.dumps(
+                {
+                    "question": "压哨暂停",
+                    "book": "B1",
+                    "path": "books/B1/md/01.md",
+                    "line": 1,
+                    "terms": ["暂停"],
+                    "session_id": sess["id"],
+                    "turn": 1,
+                    "stream": True,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8")
+        assert "event: done\n" in raw
+        assert "event: paused\n" not in raw
+        assert '"answer": "已完整生成的答案"' in raw
+        loaded = session.load(sess["id"])
+        assert loaded is not None
+        assert loaded["turns"][0]["answer_state"] == "ready"
+        key = server.answer_job_key(sess["id"], 1, "tok_late_pause")
+        with server.ANSWER_JOBS_LOCK:
+            job = server.ANSWER_JOBS[key]
+        assert job["paused"] is False
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_server_api_answer_deleted_session_midflight_returns_404(monkeypatch, tmp_path):
+    import json
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    import session
+
+    server = _load_demo_server()
+
+    monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
+    sess = session.create()
+    sess["turns"].append(
+        {
+            "n": 1,
+            "question": "中途删会话",
+            "run_token": "tok_del",
+            "answer_attempt": 0,
+            "trace": {"result": {"book": "B1", "path": "books/B1/md/01.md", "line": 1}},
+        }
+    )
+    session.save(sess)
+
+    def fake_answer_question(question, book, path, line, terms, **kwargs):
+        assert session.delete(sess["id"]) == "deleted"
+        return {
+            "ok": True,
+            "mode": "single",
+            "answer": "会话已删后完成的回答",
+            "lead": "会话已删后完成的回答",
+            "sections": [],
+            "citations": [],
+            "passages": [],
+            "ms": 10.0,
+        }
+
+    monkeypatch.setattr(server.answerer, "answer_question", fake_answer_question)
+    monkeypatch.setattr(server, "_fill_citations", lambda info: info)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    th = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    th.start()
+    try:
+        port = httpd.server_address[1]
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/answer",
+            data=json.dumps(
+                {
+                    "question": "中途删会话",
+                    "book": "B1",
+                    "path": "books/B1/md/01.md",
+                    "line": 1,
+                    "terms": ["删"],
+                    "session_id": sess["id"],
+                    "turn": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        import pytest
+
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(req, timeout=10)
+        assert exc_info.value.code == 404
+        body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert body["error"] == "会话不存在"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
