@@ -264,3 +264,68 @@ def test_unsubmitted_suspect_pages_block_landing(harness, monkeypatch):
     assert res["skipped_unreadable_pages"] == [1], "skipped 只含实际提交的页"
     assert res["mineru_unsubmitted_pages"] == [2]
     assert not (harness.root / "books" / "B0001" / "md").exists()
+
+
+def test_quota_abort_reports_reason_and_respects_fail_on_abort(tmp_path, monkeypatch, capsys):
+    import sqlite3
+
+    batch_dir = tmp_path / "batch"
+    db_path = tmp_path / "library.db"
+    sqlite3.connect(db_path).close()
+    triage = tmp_path / "triage.csv"
+    triage.write_text("uid,title,subject1,subject2,class,route,pages\n", encoding="utf-8")
+
+    monkeypatch.setattr(P, "DB", str(db_path))
+    monkeypatch.setattr(P, "VENV_PY", sys.executable)
+    monkeypatch.setattr(P, "tool_version", lambda: "test-v1")
+    monkeypatch.setattr(
+        P.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0] if a else [], 0, "", ""),
+    )
+    monkeypatch.setattr(
+        P,
+        "build_worklist",
+        lambda *_a, **_k: [
+            {"uid": "B0001", "title": "甲书", "format": "pdf", "pages": "10", "src": "books/B0001/source/a.pdf"},
+            {"uid": "B0002", "title": "乙书", "format": "pdf", "pages": "20", "src": "books/B0002/source/b.pdf"},
+        ],
+    )
+
+    def fake_run_one(row, ctx):
+        ctx["abort"] = "日额度用尽"
+        return {
+            "uid": row["uid"],
+            "title": row["title"],
+            "format": "pdf",
+            "pages": int(row["pages"]),
+            "status": "deferred",
+            "note": "HTTP 403 code 12001",
+        }
+
+    monkeypatch.setattr(P, "run_one", fake_run_one)
+
+    base_args = [
+        "--batch",
+        "quota-test",
+        "--batch-dir",
+        str(batch_dir),
+        "--triage",
+        str(triage),
+        "--workers",
+        "1",
+        "--report-json",
+    ]
+
+    rc_default = P.main(base_args)
+    assert rc_default == 0
+    captured = capsys.readouterr()
+    report = json.loads(captured.out.strip().splitlines()[-1])
+    assert report["abort"] == "日额度用尽"
+    assert report["quota"] == 1
+    assert report["status_counts"] == {"deferred": 1}
+
+    rc_strict = P.main([*base_args, "--fail-on-abort"])
+    assert rc_strict == 2
+    captured_strict = capsys.readouterr()
+    assert "日额度用尽" in captured_strict.err
