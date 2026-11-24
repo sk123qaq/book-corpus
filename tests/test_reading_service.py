@@ -209,3 +209,38 @@ def test_assist_prompts_have_no_reading_mode_injection(reading_root):
         joined = "\n".join(msg["content"] for msg in call["messages"])
         for banned in ("阅读偏好参考", "书型参考", "论证式", "读法提示", "命题、论据"):
             assert banned not in joined, f"call[{idx}] unexpectedly contained {banned!r}"
+
+
+def test_pin_and_unpin_assist_notes_serialize_concurrent_updates(reading_root, monkeypatch):
+    import concurrent.futures
+    import time
+
+    store = ReadingService(str(reading_root), client=_FakeAssistClient()).store
+    orig_read = store.assist_notes
+
+    def slow_read(uid, n, source_sha=None):
+        rows = orig_read(uid, n, source_sha=source_sha)
+        time.sleep(0.01)
+        return rows
+
+    monkeypatch.setattr(store, "assist_notes", slow_read)
+
+    def pin_one(idx):
+        return store.pin_assist_note(
+            "B0001",
+            1,
+            {"id": f"note-{idx:02d}", "block_ids": ["B01"], "content": f"批注 {idx}"},
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(pin_one, range(10)))
+
+    saved = orig_read("B0001", 1)
+    assert {item["id"] for item in saved} == {f"note-{i:02d}" for i in range(10)}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futs = [pool.submit(store.unpin_assist_note, "B0001", 1, f"note-{i:02d}") for i in range(5)]
+        assert all(f.result() is not None for f in futs)
+
+    remaining = orig_read("B0001", 1)
+    assert {item["id"] for item in remaining} == {f"note-{i:02d}" for i in range(5, 10)}

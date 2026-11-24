@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import glob
 import json
@@ -51,6 +52,19 @@ class Store:
         with open(tmp, "w", encoding="utf-8") as fh:
             fh.write(data)
         os.replace(tmp, path)
+
+    @contextlib.contextmanager
+    def _file_lock(self, path):
+        """串行化同一目标文件的读-改-写（进程内锁 + 跨进程 flock）。"""
+        lock_path = path + ".lock"
+        with self._op_lock:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(lock_path, "a+", encoding="utf-8") as lock_fh:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
 
     def _read_json(self, path):
         try:
@@ -108,49 +122,51 @@ class Store:
         if not content and not diagram_html and not figure:
             raise ValueError("旁批内容不能为空")
 
-        existing = self.assist_notes(uid, n)
-        note_id = str(note.get("id") or f"note-{uuid.uuid4().hex[:8]}")
-        clean = {
-            "id": note_id,
-            "action": str(note.get("action") or "explain"),
-            "title": str(note.get("title") or "").strip()[:120],
-            "block_ids": block_ids,
-            "selected_text": str(note.get("selected_text") or "").strip()[:1000],
-            "question": str(note.get("question") or "").strip()[:400],
-            "content": content,
-            "diagram_html": diagram_html,
-            "created_at": str(note.get("created_at") or _now_iso()),
-            "updated_at": _now_iso(),
-        }
-        if figure is not None:
-            clean["figure"] = figure
-        updated = False
-        new_notes = []
-        for item in existing:
-            if item.get("id") == note_id:
+        with self._file_lock(self.assist_notes_path(uid, n)):
+            existing = self.assist_notes(uid, n)
+            note_id = str(note.get("id") or f"note-{uuid.uuid4().hex[:8]}")
+            clean = {
+                "id": note_id,
+                "action": str(note.get("action") or "explain"),
+                "title": str(note.get("title") or "").strip()[:120],
+                "block_ids": block_ids,
+                "selected_text": str(note.get("selected_text") or "").strip()[:1000],
+                "question": str(note.get("question") or "").strip()[:400],
+                "content": content,
+                "diagram_html": diagram_html,
+                "created_at": str(note.get("created_at") or _now_iso()),
+                "updated_at": _now_iso(),
+            }
+            if figure is not None:
+                clean["figure"] = figure
+            updated = False
+            new_notes = []
+            for item in existing:
+                if item.get("id") == note_id:
+                    new_notes.append(clean)
+                    updated = True
+                else:
+                    item.pop("stale", None)
+                    new_notes.append(item)
+            if not updated:
                 new_notes.append(clean)
-                updated = True
-            else:
-                item.pop("stale", None)
-                new_notes.append(item)
-        if not updated:
-            new_notes.append(clean)
-        self.save_assist_notes(uid, n, new_notes, source_sha=source_sha)
+            self.save_assist_notes(uid, n, new_notes, source_sha=source_sha)
         return clean
 
     def unpin_assist_note(self, uid, n, note_id, *, source_sha=""):
-        existing = self.assist_notes(uid, n)
-        removed = None
-        kept = []
-        for item in existing:
-            if item.get("id") == note_id and removed is None:
-                removed = item
-            else:
-                item.pop("stale", None)
-                kept.append(item)
-        if removed is None:
-            return None
-        self.save_assist_notes(uid, n, kept, source_sha=source_sha)
+        with self._file_lock(self.assist_notes_path(uid, n)):
+            existing = self.assist_notes(uid, n)
+            removed = None
+            kept = []
+            for item in existing:
+                if item.get("id") == note_id and removed is None:
+                    removed = item
+                else:
+                    item.pop("stale", None)
+                    kept.append(item)
+            if removed is None:
+                return None
+            self.save_assist_notes(uid, n, kept, source_sha=source_sha)
         return removed
 
     # ---- 全章知识地图（chapter_map.json） -----------------------------
@@ -262,17 +278,9 @@ class Store:
             "error": str(entry.get("error") or "")[:500],
         }
         path = self.ops_log_path()
-        lock_path = path + ".lock"
         line = json.dumps(record, ensure_ascii=False)
-        with self._op_lock:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(lock_path, "a+", encoding="utf-8") as lock_fh:
-                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
-                try:
-                    with open(path, "a", encoding="utf-8") as fh:
-                        fh.write(line + "\n")
-                finally:
-                    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        with self._file_lock(path), open(path, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
         return record
 
     def ops_logs(self, *, limit=OPS_LOG_LIMIT, uid=None, n=None, action=None, status=None):
