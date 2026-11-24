@@ -50,7 +50,7 @@ def _count(root, uid):
 
 def install(root):
     """复制样书、写 book.json 与人账。返回 (uid, 章数, 字符数)。"""
-    rows = L.read_csv(os.path.join(root, "tables", "分类表.csv"))
+    rows = L.categories(root=root)
     uid = ING.next_uid(rows)
     dest = os.path.join(root, "books", uid)
     if os.path.exists(dest):

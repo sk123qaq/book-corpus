@@ -71,7 +71,7 @@ def main():
         if not os.path.isdir(folder):
             sys.exit("split output missing: %s" % folder)
         r = con.execute(
-            """SELECT b.path AS path, b.title AS title, s.file AS src, s.sha256 AS sha256,
+            """SELECT b.uid AS uid, b.path AS path, b.title AS title, s.file AS src, s.sha256 AS sha256,
                       s.format AS format
                FROM book b JOIN source s ON s.uid=b.uid AND s.primary_src=1
                WHERE b.uid=?""",
