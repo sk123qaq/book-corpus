@@ -69,7 +69,7 @@ GET  /api/jobs/<id>/log?offset=        # {offset,next,size,eof,text}，text 已�
 POST /api/jobs/<id>/cancel             # SIGTERM 进程组，10 秒后 SIGKILL
 POST /api/jobs/<id>/rerun              # 用 jobs/<id>/commands.json 再排一个
 POST /api/jobs/<id>/resolve            # {resolution, note}：待确认任务人工收口
-POST /api/jobs/clean                   # 清理旧日志与缩略图
+POST /api/jobs/clean                   # 清理旧日志与缩略图（支持 dry_run 预览）
 GET  /api/inbox                        # 收件箱清单
 GET  /api/import/latest                # 最近一份可用计划（源文件仍在收件箱）
 POST /api/import/upload                # 裸 body，X-Filename（URL 编码），上限 2 GB

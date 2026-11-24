@@ -1087,3 +1087,130 @@ def test_spawn_inherits_writer_lock_across_parent_close(workspace):
         if holder is not None:
             os.close(holder)
         t.join(timeout=5)
+
+
+def test_store_migrates_legacy_ops_db_idempotently(tmp_path):
+    """老版本 ops.db 缺 batch_dir/plan_hash 等可空列时，Store.__init__ 自动幂等迁移。"""
+    import sqlite3
+
+    db_path = tmp_path / "工作区" / "运维" / "ops.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(db_path))
+    con.execute(
+        """
+        CREATE TABLE job (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          title TEXT NOT NULL,
+          argv TEXT NOT NULL,
+          state TEXT NOT NULL,
+          created TEXT NOT NULL
+        )
+        """
+    )
+    con.execute(
+        "INSERT INTO job (id, kind, title, argv, state, created) VALUES (?,?,?,?,?,?)",
+        ("legacy-1", "maintain", "旧任务", "[]", "succeeded", "2026-10-01T12:00:00+08:00"),
+    )
+    con.commit()
+    con.close()
+
+    store = server.Store(str(db_path))
+    cols = {row["name"] for row in store.conn.execute("PRAGMA table_info(job)").fetchall()}
+    for name, _ in server.Store._JOB_MIGRATE_COLS:
+        assert name in cols
+
+    store.create(
+        {
+            "id": "new-1",
+            "kind": "delete.apply",
+            "title": "新任务",
+            "argv": "[]",
+            "state": "succeeded",
+            "created": "2026-11-24T12:00:00+08:00",
+            "batch_dir": "工作区/批次/b1",
+            "plan_hash": "abc123",
+        }
+    )
+    assert store.get("legacy-1")["title"] == "旧任务"
+    got = store.get("new-1")
+    assert got["batch_dir"] == "工作区/批次/b1"
+    assert got["plan_hash"] == "abc123"
+    assert {r["id"] for r in store.list()} == {"legacy-1", "new-1"}
+
+    # 重复初始化幂等且不破坏数据
+    store2 = server.Store(str(db_path))
+    assert store2.get("new-1")["plan_hash"] == "abc123"
+
+
+def test_clean_dry_run_preview_and_path_boundary(workspace):
+    """POST /api/jobs/clean 支持 dry_run=true 预览，并对 job_id 路径越界做防护。"""
+    app = _make_app(workspace)
+    jobs_root = Path(app.env.jobs)
+    old_mtime = time.time() - 100 * 86400
+
+    def add_job(jid, state, *, log_mtime=None, fresh_thumb=False, make_dir=True):
+        _insert_job(app.store, jid, "maintain", state, title=jid)
+        if not make_dir:
+            return
+        jdir = jobs_root / jid
+        jdir.mkdir(parents=True, exist_ok=True)
+        log = jdir / "log.txt"
+        log.write_text("done\n", encoding="utf-8")
+        if log_mtime is not None:
+            os.utime(log, (log_mtime, log_mtime))
+        if fresh_thumb:
+            tdir = jdir / "thumbs"
+            tdir.mkdir(exist_ok=True)
+            (tdir / "t.png").write_bytes(b"png")
+
+    add_job("clean-old", "succeeded", log_mtime=old_mtime)
+    add_job("clean-fresh", "succeeded")
+    add_job("clean-thumb", "succeeded", log_mtime=old_mtime, fresh_thumb=True)
+    add_job("clean-running", "running", log_mtime=old_mtime)
+
+    # 构造一个尝试逃逸 jobs/ 根目录的异常 job_id（没有 log.txt 时 ended=0，需靠超出 keep_jobs 或直接插最老记录触发？
+    # 给它一个落到 jobs/../outside/log.txt 的旧 mtime，确保它能进候选集并验证 rmtree 不会删到 outside）
+    outside_dir = Path(app.env.ops) / "outside"
+    outside_dir.mkdir(parents=True, exist_ok=True)
+    sentinel = outside_dir / "keep.txt"
+    sentinel.write_text("must-survive", encoding="utf-8")
+    outside_log = outside_dir / "log.txt"
+    outside_log.write_text("old", encoding="utf-8")
+    os.utime(outside_log, (old_mtime, old_mtime))
+    _insert_job(app.store, "../outside", "maintain", "succeeded", title="traversal")
+
+    with _http_server(app) as base:
+        gen_before = app.status_gen
+
+        code, bad = _http_json(f"{base}/api/jobs/clean", {"dry_run": "yes"})
+        assert code == 400
+        assert bad["ok"] is False
+
+        code, preview = _http_json(f"{base}/api/jobs/clean", {"dry_run": True})
+        assert code == 200
+        assert preview["ok"] is True
+        assert preview["dry_run"] is True
+        assert preview["removed"] == 0
+        assert preview["would_remove"] == 2
+        assert set(preview["ids"]) == {"clean-old", "../outside"}
+        assert preview["keep_days"] == 90
+        assert preview["keep_jobs"] == 200
+        assert preview["thumb_days"] == 30
+        assert (jobs_root / "clean-old").exists()
+        assert app.store.get("clean-old") is not None
+        assert sentinel.exists()
+        assert app.status_gen == gen_before
+
+        code, cleaned = _http_json(f"{base}/api/jobs/clean", {})
+        assert code == 200
+        assert cleaned["ok"] is True
+        assert cleaned["removed"] == 2
+        assert not (jobs_root / "clean-old").exists()
+        assert app.store.get("clean-old") is None
+        assert app.store.get("../outside") is None
+        assert sentinel.exists(), "越界路径绝对不能被 rmtree 删除"
+        assert (jobs_root / "clean-fresh").exists()
+        assert (jobs_root / "clean-thumb").exists()
+        assert (jobs_root / "clean-running").exists()
+        assert app.status_gen == gen_before + 1

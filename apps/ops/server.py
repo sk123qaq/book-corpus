@@ -452,13 +452,31 @@ class Env:
 
 
 class Store:
+    _JOB_MIGRATE_COLS = (
+        ("pid", "INTEGER"),
+        ("started", "TEXT"),
+        ("ended", "TEXT"),
+        ("exit_code", "INTEGER"),
+        ("summary", "TEXT"),
+        ("log_path", "TEXT"),
+        ("batch_dir", "TEXT"),
+        ("plan_hash", "TEXT"),
+    )
+
     def __init__(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         self.conn = sqlite3.connect(path, check_same_thread=False, timeout=15)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
         self.lock = threading.RLock()
+
+    def _migrate(self):
+        cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(job)").fetchall()}
+        for name, col_type in self._JOB_MIGRATE_COLS:
+            if name not in cols:
+                self.conn.execute(f"ALTER TABLE job ADD COLUMN {name} {col_type}")
 
     def _exec(self, sql, args=()):
         with self.lock:
@@ -3469,16 +3487,20 @@ class App:
         return False
 
     # ---- ops.db maintenance ----------------------------------------
-    def clean(self, keep_days=90, keep_jobs=200, thumb_days=30):
+    def clean(self, keep_days=90, keep_jobs=200, thumb_days=30, dry_run=False):
         jobs = self.store.list(limit=10000)
         keep = {j["id"] for j in jobs[:keep_jobs]}
-        cutoff = time.time() - keep_days * 86400
-        removed = []
+        now = time.time()
+        cutoff = now - keep_days * 86400
+        thresh = now - thumb_days * 86400
+        jobs_root = os.path.realpath(self.env.jobs)
+        candidates = []
         for job in jobs:
             if job["state"] not in DONE_STATES:
                 continue
+            job_dir = self.env.job_dir(job["id"])
             try:
-                ended = os.path.getmtime(os.path.join(self.env.job_dir(job["id"]), "log.txt"))
+                ended = os.path.getmtime(os.path.join(job_dir, "log.txt"))
             except OSError:
                 ended = 0
             stale = bool(ended) and ended <= cutoff
@@ -3486,14 +3508,29 @@ class App:
             # 之内的也要够老才清（不是无条件保 200 个）
             if job["id"] in keep and not stale:
                 continue
-            job_dir = self.env.job_dir(job["id"])
-            thresh = time.time() - thumb_days * 86400
             if self._has_fresh_thumbs(job_dir, thresh):
                 # 缩略图还在保留期：整本任务跳过，行与建议都留着，过期后再清
                 continue
-            shutil.rmtree(job_dir, ignore_errors=True)
-            self.store.delete(job["id"])
-            removed.append(job["id"])
+            real_dir = os.path.realpath(job_dir)
+            safe_dir = real_dir if real_dir.startswith(jobs_root + os.sep) else None
+            candidates.append((job["id"], safe_dir))
+        if dry_run:
+            ids = [jid for jid, _ in candidates]
+            return {
+                "dry_run": True,
+                "would_remove": len(ids),
+                "removed": 0,
+                "ids": ids[:20],
+                "keep_days": keep_days,
+                "keep_jobs": keep_jobs,
+                "thumb_days": thumb_days,
+            }
+        removed = []
+        for jid, safe_dir in candidates:
+            if safe_dir is not None:
+                shutil.rmtree(safe_dir, ignore_errors=True)
+            self.store.delete(jid)
+            removed.append(jid)
         return {"removed": len(removed), "ids": removed[:20]}
 
     @staticmethod
@@ -4968,8 +5005,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True, "job_id": job_id})
 
     def api_clean(self, payload):
-        res = self.app.clean()
-        self.app.invalidate_status()
+        dry_run = (payload or {}).get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise ValueError("dry_run 必须是布尔值")
+        res = self.app.clean(dry_run=dry_run)
+        if not dry_run:
+            self.app.invalidate_status()
         return self.send_json(200, dict(ok=True, **res))
 
     def api_resolve(self, job_id, payload):
