@@ -6,6 +6,7 @@ the pieces that replaced it without calling a model or reading the real library.
 
 import sqlite3
 import sys
+import threading
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -1016,3 +1017,154 @@ def test_low_confidence_answer_is_not_cached(monkeypatch, tmp_path):
     assert stage["n"] == 2
     assert res3["cached"] is True
     assert res3["confidence"] == "high"
+
+
+def test_server_api_answer_completed_result_not_discarded_by_late_pause(monkeypatch, tmp_path):
+    import json
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    import server
+    import session
+
+    monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
+    sess = session.create()
+    sess["turns"].append(
+        {
+            "n": 1,
+            "question": "压哨暂停",
+            "run_token": "tok_late_pause",
+            "answer_attempt": 0,
+            "trace": {"result": {"book": "B1", "path": "books/B1/md/01.md", "line": 1}},
+        }
+    )
+    session.save(sess)
+
+    def fake_answer_question(question, book, path, line, terms, **kwargs):
+        cancel_ev = kwargs.get("cancel_event")
+        assert cancel_ev is not None
+        # 模拟生成刚完成的一瞬间，暂停请求刚好 set 了 cancel_event 与 job["paused"]
+        server.pause_active_answer(sid=sess["id"], n=1)
+        return {
+            "ok": True,
+            "mode": "single",
+            "answer": "已完整生成的答案",
+            "lead": "已完整生成的答案",
+            "sections": [],
+            "citations": [],
+            "passages": [],
+            "ms": 10.0,
+        }
+
+    monkeypatch.setattr(server.answerer, "answer_question", fake_answer_question)
+    monkeypatch.setattr(server, "_fill_citations", lambda info: info)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    th = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    th.start()
+    try:
+        port = httpd.server_address[1]
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/answer",
+            data=json.dumps(
+                {
+                    "question": "压哨暂停",
+                    "book": "B1",
+                    "path": "books/B1/md/01.md",
+                    "line": 1,
+                    "terms": ["暂停"],
+                    "session_id": sess["id"],
+                    "turn": 1,
+                    "stream": True,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8")
+        assert "event: done\n" in raw
+        assert "event: paused\n" not in raw
+        assert '"answer": "已完整生成的答案"' in raw
+        loaded = session.load(sess["id"])
+        assert loaded is not None
+        assert loaded["turns"][0]["answer_state"] == "ready"
+        key = server.answer_job_key(sess["id"], 1, "tok_late_pause")
+        with server.ANSWER_JOBS_LOCK:
+            job = server.ANSWER_JOBS[key]
+        assert job["paused"] is False
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_server_api_answer_deleted_session_midflight_returns_404(monkeypatch, tmp_path):
+    import json
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    import server
+    import session
+
+    monkeypatch.setattr(session, "SESS_DIR", str(tmp_path / "sessions"))
+    sess = session.create()
+    sess["turns"].append(
+        {
+            "n": 1,
+            "question": "中途删会话",
+            "run_token": "tok_del",
+            "answer_attempt": 0,
+            "trace": {"result": {"book": "B1", "path": "books/B1/md/01.md", "line": 1}},
+        }
+    )
+    session.save(sess)
+
+    def fake_answer_question(question, book, path, line, terms, **kwargs):
+        assert session.delete(sess["id"]) == "deleted"
+        return {
+            "ok": True,
+            "mode": "single",
+            "answer": "会话已删后完成的回答",
+            "lead": "会话已删后完成的回答",
+            "sections": [],
+            "citations": [],
+            "passages": [],
+            "ms": 10.0,
+        }
+
+    monkeypatch.setattr(server.answerer, "answer_question", fake_answer_question)
+    monkeypatch.setattr(server, "_fill_citations", lambda info: info)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    th = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    th.start()
+    try:
+        port = httpd.server_address[1]
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/answer",
+            data=json.dumps(
+                {
+                    "question": "中途删会话",
+                    "book": "B1",
+                    "path": "books/B1/md/01.md",
+                    "line": 1,
+                    "terms": ["删"],
+                    "session_id": sess["id"],
+                    "turn": 1,
+                    "stream": False,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        import pytest
+
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(req, timeout=10)
+        assert exc_info.value.code == 404
+        body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert body["error"] == "会话不存在"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
