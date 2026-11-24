@@ -610,6 +610,7 @@ def main(argv=None):
     try:
         adoption_checks(adopt_root, adopt_fixture)
         adoption_resume_check(adopt_root, adopt_fixture)
+        crash_lock_and_adopt_checks(adopt_root, adopt_fixture)
     finally:
         if args.keep:
             print("保留临时根：%s" % adopt_root)
@@ -1993,6 +1994,94 @@ def adoption_resume_check(root, fixture):
             path = os.path.join(scripts, name)
             if os.path.exists(path):
                 os.remove(path)
+
+
+def _lock_is_held(lock_path):
+    import fcntl
+
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def crash_lock_and_adopt_checks(root, fixture):
+    """F1/F2 端到端回归：SIGKILL 服务后活孩子继续持 .writer.lock，重启无 pid 也能认领且挡写。"""
+    ops = os.path.join(root, "工作区", "运维")
+    ops_db = os.path.join(ops, "ops.db")
+    lock_path = os.path.join(ops, ".writer.lock")
+    slow = os.path.join(root, ".slow-split")
+    open(slow, "w").close()
+    proc, port = start(root, fixture)
+    child_pid = None
+    proc2 = None
+    try:
+        code, body = post(port, "/api/split/run", {"uids": ["B0001"], "workers": 1})
+        job_id = body.get("job_id")
+        check("崩溃演练写任务受理", code == 200 and bool(job_id), str(body))
+        detail = wait_job(port, job_id, ("running",))
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            cur = (get(port, "/api/jobs/" + job_id)[1] or {}).get("job") or {}
+            if cur.get("pid"):
+                child_pid = int(cur["pid"])
+                break
+            time.sleep(0.03)
+        check("崩溃演练记录了写子进程 pid", isinstance(child_pid, int) and child_pid > 0, str(child_pid))
+        check("崩溃前 .writer.lock 被占", _lock_is_held(lock_path))
+
+        # 模拟服务突然被 SIGKILL（子进程 start_new_session 跟着活）
+        proc.kill()
+        proc.wait(timeout=5)
+        proc = None
+
+        check("服务 SIGKILL 后活孩子仍持有 .writer.lock", _lock_is_held(lock_path))
+
+        # 抹掉 DB 里的 pid 与 jobs/<id>/pid（模拟 Popen 后、写 pid 前崩溃的 F2 窗口）
+        conn = sqlite3.connect(ops_db)
+        conn.execute("UPDATE job SET pid=NULL WHERE id=?", (job_id,))
+        conn.commit()
+        conn.close()
+        pid_file = os.path.join(ops, "jobs", job_id, "pid")
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+
+        proc2, port2 = start(root, fixture)
+        code, body = get(port2, "/api/jobs/" + job_id)
+        job = (body or {}).get("job") or {}
+        check(
+            "抹掉 pid 重启后仍认领为 running 而非 orphaned",
+            code == 200 and job.get("state") == "running" and job.get("pid") == child_pid,
+            "state=%s pid=%s expect=%s" % (job.get("state"), job.get("pid"), child_pid),
+        )
+        check("重启接管期间 .writer.lock 仍被持有", _lock_is_held(lock_path))
+        code, body = post(port2, "/api/split/run", {"uids": ["B0002"]})
+        check("重启接管期间第二个写请求返 409", code == 409, str(body.get("error")))
+
+        code, body = post(port2, "/api/jobs/%s/cancel" % job_id)
+        check("接管任务可取消", code == 200, str(body.get("error")))
+        detail = wait_job(port2, job_id, ("cancelled", "failed", "awaiting_review"), timeout=30)
+        check(
+            "取消后终态为 cancelled",
+            ((detail or {}).get("job") or {}).get("state") == "cancelled",
+            str(((detail or {}).get("job") or {}).get("state")),
+        )
+        check("写进程退出后 .writer.lock 已释放", not _lock_is_held(lock_path))
+    finally:
+        if os.path.exists(slow):
+            os.remove(slow)
+        if proc is not None:
+            stop(proc)
+        if proc2 is not None:
+            stop(proc2)
+        if isinstance(child_pid, int):
+            with contextlib.suppress(OSError):
+                os.killpg(os.getpgid(child_pid), 9)
 
 
 def insert_job(ops_db, job_id, kind="split.run", state="succeeded", pid=None):
