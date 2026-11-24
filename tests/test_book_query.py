@@ -186,3 +186,115 @@ def test_book_cards_gate_cli_prints_rows_and_writes_tsv(monkeypatch, tmp_path, c
     assert "card=1" in out
     assert gate_out.exists()
     assert "card_top6" in gate_out.read_text(encoding="utf-8")
+
+
+def test_book_query_main_limit_card_count_and_max_chapters(monkeypatch, tmp_path, capsys):
+    import json
+
+    import pytest
+
+    from bookcorpus.scripts import book_cards
+
+    db_path = tmp_path / "index.db"
+    sqlite3.connect(str(db_path)).close()
+    monkeypatch.setattr(book_query.book_score, "DB", str(db_path))
+
+    seen = {}
+
+    class FakePlanner:
+        def __init__(self, con, scheme="best_support", limit=10):
+            seen["planner_limit"] = limit
+            self.con = con
+            self.scheme = scheme
+            self.limit = limit
+
+        def plan(self, terms, max_rounds=5, chapter_selector="score", max_chapters=3):
+            seen["plan_max_chapters"] = max_chapters
+            return book_query.Plan(
+                query=" ".join(terms),
+                terms=list(terms),
+                nouns=list(terms),
+                action_dropped=[],
+                chapters=[{"book": "B0001", "book_score": 10.0, "selected": []}],
+            )
+
+        def search(self, terms):
+            return [{"book": "B0002", "path": "books/B0002/md/01.md", "line": 1, "text": "x", "score": 5.0}], 0.0
+
+    def fake_cards_for(planner, terms, question, n):
+        seen["cards_for_n"] = n
+        cards = [
+            book_cards.BookCard(
+                book=f"B{i:04d}",
+                rank=i,
+                title=f"书{i}",
+                type="社科",
+                chapters=1,
+                best_chapter=f"books/B{i:04d}/md/01.md",
+                best_chapter_title="第一章",
+                snippet="片段",
+                matched_groups=list(terms),
+                score=1.0,
+                reason="命中",
+                readme_status="ok",
+            )
+            for i in range(1, n + 1)
+        ]
+        cardset = book_cards.CardSet(
+            query=question,
+            terms=list(terms),
+            trigger=True,
+            reasons=["margin"],
+            hints={},
+            cards=cards,
+        )
+        return cardset, [], list(terms), []
+
+    def fake_next_books(missing, hits, terms, max_chapters):
+        seen["next_books_max_chapters"] = max_chapters
+        return [{"book": c.book, "book_score": 1.0, "selected": []} for c in missing]
+
+    monkeypatch.setattr(book_query, "Planner", FakePlanner)
+    monkeypatch.setattr(book_cards, "cards_for", fake_cards_for)
+    monkeypatch.setattr(book_cards, "next_books", fake_next_books)
+
+    # 1. 默认 -n/--limit 与 book_cards.DEFAULT_CARDS 对齐
+    assert book_query.main(["礼治", "秩序", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert seen["planner_limit"] == book_cards.DEFAULT_CARDS
+    assert seen["cards_for_n"] == book_cards.DEFAULT_CARDS
+    assert seen["next_books_max_chapters"] == 3
+    assert len(payload["cards"]["cards"]) == book_cards.DEFAULT_CARDS
+    assert len(payload["chapters"]) == book_cards.DEFAULT_CARDS
+
+    # 2. -n 3 主控弹卡与返回书数；--max-chapters 联动 next_books
+    seen.clear()
+    assert book_query.main(["礼治", "秩序", "-n", "3", "--max-chapters", "5", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert seen["planner_limit"] == 3
+    assert seen["cards_for_n"] == 3
+    assert seen["plan_max_chapters"] == 5
+    assert seen["next_books_max_chapters"] == 5
+    assert len(payload["cards"]["cards"]) == 3
+
+    # 3. -n 10 不再被硬编码截断为 6
+    seen.clear()
+    assert book_query.main(["礼治", "秩序", "-n", "10", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert seen["planner_limit"] == 10
+    assert seen["cards_for_n"] == 10
+    assert len(payload["cards"]["cards"]) == 10
+
+    # 4. --card-count 可独立控制弹卡张数
+    seen.clear()
+    assert book_query.main(["礼治", "秩序", "-n", "10", "--card-count", "4", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert seen["planner_limit"] == 10
+    assert seen["cards_for_n"] == 4
+    assert len(payload["cards"]["cards"]) == 4
+
+    # 5. 非法非正整数参数校验
+    for bad_args in (["-n", "0"], ["--card-count", "-2"], ["--max-chapters", "0"]):
+        with pytest.raises(SystemExit) as exc:
+            book_query.main(["礼治", *bad_args])
+        assert exc.value.code != 0

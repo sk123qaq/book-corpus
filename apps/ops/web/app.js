@@ -2416,7 +2416,7 @@ function viewMaintain() {
           </div>
           <div class="adv-item">
             <div><b>清理旧任务记录</b>
-              <p class="hint">清理 90 天以前的任务日志与临时预览图，不影响书目与正文。</p></div>
+              <p class="hint">清理超过 90 天或超出最近 200 条的已完成任务日志与临时预览图（跳过 30 天内有缩略图的任务），不影响书目与正文。</p></div>
             <button type="button" class="btn sm" data-act="jobs-clean">清理旧记录</button>
           </div>
         </div>
@@ -4152,6 +4152,14 @@ const actions = {
 
   async 'jobs-clean'() {
     try {
+      const preview = await post('/api/jobs/clean', { dry_run: true });
+      const count = Number(preview.would_remove || 0);
+      if (!count) {
+        toast('没有可清理的旧任务');
+        return;
+      }
+      const msg = `将永久删除 ${count} 个已完成旧任务记录及日志（规则：超过 ${preview.keep_days} 天或超出最近 ${preview.keep_jobs} 条，跳过 ${preview.thumb_days} 天内有缩略图的任务），不影响书目与正文，确认清理？`;
+      if (!window.confirm(msg)) return;
       const body = await post('/api/jobs/clean');
       toast('清掉 ' + body.removed + ' 个任务');
       await loadJobs();
