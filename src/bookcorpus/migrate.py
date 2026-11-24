@@ -180,18 +180,31 @@ def apply(items, mode):
     for item in items:
         if item.done:
             continue
-        os.makedirs(os.path.dirname(item.dst), exist_ok=True)
-        if mode == "move":
-            shutil.move(item.src, item.dst)
-        elif mode == "copy":
-            if os.path.isdir(item.src):
-                shutil.copytree(item.src, item.dst)
+        try:
+            os.makedirs(os.path.dirname(item.dst), exist_ok=True)
+            if mode == "move":
+                shutil.move(item.src, item.dst)
+            elif mode == "copy":
+                if os.path.isdir(item.src):
+                    shutil.copytree(item.src, item.dst)
+                else:
+                    shutil.copy2(item.src, item.dst)
+            elif os.path.isdir(item.src):
+                _link_tree(item.src, item.dst)
             else:
-                shutil.copy2(item.src, item.dst)
-        elif os.path.isdir(item.src):
-            _link_tree(item.src, item.dst)
-        else:
-            os.link(item.src, item.dst)
+                os.link(item.src, item.dst)
+        except (OSError, shutil.Error) as exc:
+            failures.append(
+                {
+                    "uid": item.uid,
+                    "kind": item.kind,
+                    "label": item.label,
+                    "src": item.src,
+                    "dst": item.dst,
+                    "error": str(exc),
+                }
+            )
+            continue
         item.done = True
     return failures
 
@@ -275,16 +288,34 @@ def run(root, dest, mode, apply_it, out, version):
         return 0, lines
 
     book_rows = v1_books(root)
-    apply(items, mode)
+    failures = apply(items, mode)
+    done_books = {i.uid for i in items if i.kind == "书" and i.done}
     touched = 0
     for uid, rel in book_rows:
+        if uid not in done_books:
+            continue
         for base in (os.path.join(dest, "books", uid), os.path.join(root, "books", uid)):
             doc = os.path.join(base, "book.json")
             if os.path.exists(doc):
                 touched += rewrite_book_json(doc, root, rel, owner)
                 break
+    mapping = write_map([i for i in items if i.done], os.path.abspath(out), root, dest)
+    if failures:
+        for fail in failures:
+            lines.append(
+                "搬运失败：%s %s %s -> %s（%s）"
+                % (
+                    fail["kind"],
+                    fail["label"],
+                    os.path.relpath(fail["src"], root),
+                    os.path.relpath(fail["dst"], dest),
+                    fail["error"],
+                )
+            )
+        lines.append("落盘未完成：%d 项失败，已改 %d 条成功书的源路径引用" % (len(failures), touched))
+        lines.append("对照表 %s" % mapping)
+        return 1, lines
     manifest = write_manifest(dest, version)
-    mapping = write_map(items, os.path.abspath(out), root, dest)
     lines.append("落盘完成，改了 %d 条源路径引用" % touched)
     lines.append("清单 %s" % manifest)
     lines.append("对照表 %s" % mapping)

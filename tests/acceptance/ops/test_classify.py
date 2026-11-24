@@ -144,7 +144,15 @@ def test_ingest_classify_adds(tmp):
     root = make_library(tmp, "ingest")
     with open(os.path.join(root, "books", "_收件箱", "新书 (张三).epub"), "wb") as fh:
         fh.write(b"epub bytes")
-    r = run("ingest.py", ["scan", "--root", root, "--json"], {"PI_STUB_JSON": one()})
+    shared_cache = os.path.join(root, "工作区", "批次", "ingest", "classify.json")
+    r_ro = run("ingest.py", ["scan", "--root", root, "--json"], {"PI_STUB_JSON": one()})
+    items_ro = json.loads(r_ro.stdout)
+    assert len(items_ro) == 1, items_ro
+    assert items_ro[0]["subjects"] == ["文学", "类型小说"], items_ro
+    assert not os.path.exists(shared_cache), "默认 scan 只读，不能写共享 classify.json"
+
+    cache_path = os.path.join(root, "job-classify.json")
+    r = run("ingest.py", ["scan", "--root", root, "--json", "--cache", cache_path], {"PI_STUB_JSON": one()})
     items = json.loads(r.stdout)
     assert len(items) == 1, items
     assert items[0]["action"] == "add", items
@@ -152,14 +160,13 @@ def test_ingest_classify_adds(tmp):
     assert add["subjects"] == ["文学", "类型小说"], add
     assert "自动分类" in add["note"], add
     assert add["classify"]["needs_review"] is False, add
-    cache_path = os.path.join(root, "工作区", "批次", "ingest", "classify.json")
     with open(cache_path, encoding="utf-8") as fh:
         rec = next(iter(json.load(fh).values()))
     assert rec["model"] == CM.DEFAULT_MODEL, rec
     assert rec["prompt_version"] == CM.PROMPT_VERSION, rec
     assert rec["level1"] == "文学", rec
     assert rec["confidence"] == 0.93, rec
-    print("ingest classify_adds ok（plan 形状不变，缓存带 model/prompt_version）")
+    print("ingest classify_adds ok（默认只读不写共享缓存；显式 --cache 带 model/prompt_version）")
 
     import ingest as I
 

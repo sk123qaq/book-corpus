@@ -22,6 +22,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 import context as demo_context
+import direct_llm
 import model_call
 import runlog
 
@@ -155,8 +156,46 @@ def _cache_path(question, previous):
     return os.path.join(CACHE_DIR, hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest() + ".json")
 
 
+SYSTEM_PROMPT = (
+    "你是追问相关性判定助手。判断用户的新问题是否承接上一轮对话继续追问，"
+    "只输出单个合法 JSON 对象，不要代码块、不要额外说明文字。"
+)
+
+
+def _result_to_reply(result):
+    if result.timed_out:
+        return None, "判定超时（%d 秒）" % PI_TIMEOUT
+    if result.exit_code not in (0, None):
+        return None, "模型调用失败（rc=%d）" % result.exit_code
+    if not (result.text or "").strip():
+        return None, "模型没有输出"
+    return result.text, ""
+
+
 def _call(prompt, thinking, rec=None):
-    """调 pi 判一次。返回 (stdout, error)；失败时 stdout 为 None。"""
+    """优先走 direct_llm 直连判定，未配直连或设了 ANSWER_BACKEND=pi 时退回 pi。"""
+    backend = (os.environ.get("ANSWER_BACKEND") or "auto").strip().lower()
+    cfg = direct_llm.resolve_config(ROOT, model_ref=MODEL, thinking=thinking, backend=backend)
+    if cfg is not None:
+        result = direct_llm.invoke_answer(
+            prompt,
+            [],
+            root=ROOT,
+            cfg=cfg,
+            kind="related",
+            parser="related",
+            rec=rec,
+            timeout=PI_TIMEOUT,
+            use_tools=False,
+            system_prompt=SYSTEM_PROMPT,
+        )
+        if not (
+            backend == "auto"
+            and result.exit_code not in (0, None)
+            and not (result.text or "").strip()
+            and "ConnectionRefusedError" in (result.stderr or result.error or "")
+        ):
+            return _result_to_reply(result)
     result = model_call.invoke(
         prompt,
         PI_JSON + pi_flags(thinking),
@@ -167,13 +206,7 @@ def _call(prompt, thinking, rec=None):
         cwd=ROOT,
         parser="related",
     )
-    if result.timed_out:
-        return None, "判定超时（%d 秒）" % PI_TIMEOUT
-    if result.exit_code not in (0, None):
-        return None, "模型调用失败（rc=%d）" % result.exit_code
-    if not (result.text or "").strip():
-        return None, "模型没有输出"
-    return result.text, ""
+    return _result_to_reply(result)
 
 
 def parse_reply(raw):

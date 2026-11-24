@@ -57,3 +57,40 @@ def test_search_reports_no_index(tmp_path, workspace):
     shutil.rmtree(workspace / "build" / "检索")
     r = run_cli("--root", workspace, "search", "铁笼", "--json")
     assert r.returncode != 0
+
+
+def test_library_v_path_conflict_catches_real_source_conflicts(workspace):
+    from conftest import write_book, write_collection, write_ledger
+
+    write_collection(workspace, "C0001", "合集.epub")
+    write_book(workspace, "B0101", "文学", "甲卷", collection="C0001", collection_file="合集.epub", sha="a" * 64)
+    write_book(workspace, "B0102", "文学", "乙卷", collection="C0001", collection_file="合集.epub", sha="a" * 64)
+    write_ledger(workspace, [("B0101", "文学", "甲卷", ""), ("B0102", "文学", "乙卷", "")])
+
+    r = run_cli("--root", workspace, "library")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads(r.stdout)["conflicts"] == 0
+
+    # 非合集源文件挂载到别的书目录下（如误填 collection="B0001"）或同书重复挂同一个源路径
+    b102_json = workspace / "books" / "B0102" / "book.json"
+    doc = json.loads(b102_json.read_text(encoding="utf-8"))
+    doc["sources"].append(
+        {"collection": "B0001", "file": "甲书.epub", "format": "epub", "bytes": 100, "sha256": "c" * 64}
+    )
+    doc["sources"].append(
+        {"collection": "C0001", "file": "合集.epub", "format": "epub", "bytes": 100, "sha256": "a" * 64}
+    )
+    b102_json.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    r2 = run_cli("--root", workspace, "library")
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+    stats = json.loads(r2.stdout)
+    assert stats["conflicts"] == 2, stats
+
+    con = sqlite3.connect(str(workspace / "build" / "library.db"))
+    rows = con.execute("SELECT path, n, uids FROM v_path_conflict ORDER BY path").fetchall()
+    con.close()
+    assert rows == [
+        ("books/B0001/source/甲书.epub", 2, "B0001,B0102"),
+        ("collections/C0001/source/合集.epub", 2, "B0102,B0102"),
+    ]
