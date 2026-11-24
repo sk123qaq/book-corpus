@@ -118,12 +118,15 @@ class Handler(BaseHTTPRequestHandler):
         if not is_local_target(key, target):
             self.redirect(join_target(target, clean_to))
             return
-        result = ensure(
-            key,
-            self.root,
-            timeout=self.start_timeout,
-            allow_start=self.allow_start,
-        )
+        try:
+            result = ensure(
+                key,
+                self.root,
+                timeout=self.start_timeout,
+                allow_start=self.allow_start,
+            )
+        except OSError as exc:
+            result = {"ok": False, "state": "failed", "error": str(exc)}
         if result["state"] in ("already", "started"):
             self.redirect(join_target(target, clean_to))
             return

@@ -94,3 +94,15 @@ def test_local_target_only_matches_service_port():
 def test_same_target_ignores_trailing_slash():
     assert same_target("http://127.0.0.1:8765", "http://127.0.0.1:8765/")
     assert not same_target("http://127.0.0.1:8765", "http://127.0.0.1:9999")
+
+
+def test_ensure_returns_failed_on_log_dir_oserror(monkeypatch, tmp_path):
+    not_a_dir = tmp_path / "log-blocker"
+    not_a_dir.write_text("occupied", encoding="utf-8")
+    monkeypatch.setenv("BOOK_CORPUS_HOME_LOG_DIR", str(not_a_dir))
+
+    result = ensure("search", tmp_path, probe=lambda _port: False)
+    assert result["ok"] is False
+    assert result["state"] == "failed"
+    assert result["service"] is SERVICES["search"]
+    assert result["error"]
