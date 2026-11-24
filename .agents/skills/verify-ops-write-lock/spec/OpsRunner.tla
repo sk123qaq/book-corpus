@@ -34,6 +34,8 @@ CONSTANTS
     Jobs,
     \* FALSE = 历史基线：锁由服务进程持有，进程一死锁就没了，且只看 ops.db 的 pid。
     \* TRUE  = 当前实现：写子进程通过 pass_fds 继承已 flock 的 fd，退出才放；
+    \*         写孩子的 env 里另带 BOOK_CORPUS_WRITER_LOCK_PATH，让 lib_common.writer_lock()
+    \*         不再重复拿同一把锁（只防自锁，不改变锁的归属，模型不建这一层）；
     \*         adopt() 回退查 jobs/<id>/pid、/proc 任务环境与写锁占用。
     ChildHoldsLock
 
@@ -82,7 +84,8 @@ Init ==
     ∧ flock    = "free"
     ∧ httpOn   = FALSE
 
-\* 操作人在页面上提交一个写任务。HTTP 层先查 writer_busy（server.py:3925-3934, 3952-3957）。
+\* 操作人在页面上提交一个写任务。HTTP 层先查 writer_busy（server.py:3965-3975, 3992-3997；
+\* Runner.submit 在 1044-1068）。
 Submit(j) ==
     ∧ serverUp
     ∧ db[j] = "new"
@@ -90,7 +93,7 @@ Submit(j) ==
     ∧ db' = [db EXCEPT ![j] = "queued"]
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* 调度器挑一个 queued 的写任务，先占住 active_write 槽位再起线程（server.py:1230-1266）。
+\* 调度器挑一个 queued 的写任务，先占住 active_write 槽位再起线程（server.py:1251-1286）。
 Dispatch(j) ==
     ∧ serverUp
     ∧ db[j] = "queued"
@@ -98,7 +101,7 @@ Dispatch(j) ==
     ∧ activeW' = {j}
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* 写任务拿 .writer.lock 的 LOCK_EX（server.py:1278-1322）。锁被拿着就阻塞，
+\* 写任务拿 .writer.lock 的 LOCK_EX（server.py:1299-1322）。锁被拿着就阻塞，
 \* 这里表现为动作不可用。
 Acquire(j) ==
     ∧ serverUp
@@ -108,7 +111,7 @@ Acquire(j) ==
     ∧ flock' = j
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED httpOn
 
-\* 拿锁后回读 ops.db：还是 queued 才置 running（server.py:1299-1308）。
+\* 拿锁后回读 ops.db：还是 queued 才置 running（server.py:1324-1330）。
 MarkRunning(j) ==
     ∧ serverUp
     ∧ j ∈ activeW
@@ -117,7 +120,7 @@ MarkRunning(j) ==
     ∧ db' = [db EXCEPT ![j] = "running"]
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* 取消与启动撞车：cancel() 把 DB 置 cancelled，_run 拿锁回读后解锁退出（server.py:1299-1307）。
+\* 取消与启动撞车：cancel() 把 DB 置 cancelled，_run 拿锁回读后解锁退出（server.py:1322-1329）。
 AbortDispatched(j) ==
     ∧ serverUp
     ∧ j ∈ activeW
@@ -127,7 +130,8 @@ AbortDispatched(j) ==
     ∧ activeW' = activeW \ {j}
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED httpOn
 
-\* _spawn：Popen（pass_fds 继承锁 fd + env 记 job_id）先返回，pid 文件与 ops.db 后写（server.py:1366-1406）。
+\* _spawn：Popen（pass_fds 继承锁 fd、env 记 job_id 与写锁继承声明）先返回，
+\* pid 文件与 ops.db 后写（server.py:1387-1421）。
 Spawn(j) ==
     ∧ serverUp
     ∧ db[j] = "running"
@@ -161,7 +165,7 @@ CancelQueued(j) ==
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
 \* 取消在跑的任务：只加内存标记并 SIGTERM，DB 里的 running 要到 _finalize 才动
-\* （server.py:1052-1077）。
+\* （server.py:1074-1098）。
 CancelRunning(j) ==
     ∧ serverUp
     ∧ db[j] = "running"
@@ -169,7 +173,8 @@ CancelRunning(j) ==
     ∧ cancels' = cancels ∪ {j}
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED released ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
-\* release()：先关锁 fd、归还 active 槽位，终态后写（server.py:1284-1293, 1473-1482）。
+\* release()：先关锁 fd、归还 active 槽位，终态后写（server.py:1288-1297, 1304-1316；
+\* _finalize 在 1494-1500 先 release 再写 state）。
 Release(j) ==
     ∧ serverUp
     ∧ j ∈ activeW
@@ -182,7 +187,7 @@ Release(j) ==
     ∧ flock' = "free"
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED cancels ∧ UNCHANGED serverUp ∧ UNCHANGED httpOn
 
-\* _finalize：取消赢过门槛（server.py:1343-1352）。终态写进 DB。
+\* _finalize：取消赢过门槛（server.py:1437-1502）。终态写进 DB。
 Finish(j) ==
     ∧ serverUp
     ∧ released[j]
@@ -195,7 +200,7 @@ Finish(j) ==
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED adopted ∧ UNCHANGED serverUp ∧ UNCHANGED activeW ∧ UNCHANGED flock ∧ UNCHANGED httpOn
 
 \* 接管来的任务：等在飞的孩子退出或写锁释放后才 resume，resume 先拿锁再补跑剩下的步骤；
-\* 单步任务直接 _finalize，拿不到退出码就 awaiting_review（server.py:1721-1815）。
+\* 单步任务直接 _finalize，拿不到退出码就 awaiting_review（server.py:1742-1770, 1805-1835）。
 AdoptFinish(j) ==
     ∧ serverUp
     ∧ adopted[j]
@@ -209,8 +214,9 @@ AdoptFinish(j) ==
     ∧ flock' = "free"
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED released ∧ UNCHANGED serverUp ∧ UNCHANGED httpOn
 
-\* HTTP 账表读改写：先查 writer_busy，再阻塞拿 .writer.lock（server.py:3925-3934,
-\* 2906-2983, 5142-5154）。
+\* HTTP 账表读改写：先查 writer_busy，再阻塞拿 .writer.lock（server.py:3965-3975,
+\* 3992-3997；ledger_lock 5186-5190 只是包一层 lib_common.writer_lock，
+\* 实现在 src/bookcorpus/scripts/lib_common.py:696-732）。
 HttpStart ==
     ∧ serverUp
     ∧ ¬httpOn
@@ -241,7 +247,7 @@ Crash ==
     ∧ UNCHANGED db ∧ UNCHANGED pid ∧ UNCHANGED child
 
 \* 新进程启动：adopt() 依次核对 ops.db pid、jobs/<id>/pid、/proc 任务环境与 .writer.lock 占用
-\* （server.py:1079-1215）。认得上 → 接管并占位 active_write；否则标 orphaned，且不杀进程。
+\* （server.py:1101-1123, 1201-1215）。认得上 → 接管并占位 active_write；否则标 orphaned，且不杀进程。
 Start ==
     LET taken == {j ∈ Jobs : IsAdoptable(j)}
     IN

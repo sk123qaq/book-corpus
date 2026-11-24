@@ -1,6 +1,6 @@
 # OpsRunnerSpec
 
-TLC reached 1,133 states, more than the chart budget of 500, so the chart draws only the bug paths: 8 states and 9 arrows.
+TLC reached 664 states, more than the chart budget of 500, so the chart draws only the bug paths: 8 states and 9 arrows.
 
 ## WriterHoldsLock breaks
 The shortest path has 6 steps:

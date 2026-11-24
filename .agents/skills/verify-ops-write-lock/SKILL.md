@@ -47,8 +47,23 @@ CHILD_HOLDS_LOCK=FALSE .agents/skills/verify-ops-write-lock/scripts/check.sh /tm
 
 读结果用 pstack 的 `/statechart`：它把每条违规画成状态图，并按模型的动作名给最短路径；模型在
 `spec/OpsRunner.tla`，时序公式在 `spec/OpsRunnerSpec.tla`（`□[Next]_vars` 要变量元组，单独放一个模块），
-读法视图在 `spec/view/view.ts`。先例：`spec/chart.mmd` 与 `spec/report.md` 是
-`ChildHoldsLock=FALSE` 那一版的图与报告，可直接对照。
+读法视图在 `spec/view/view.ts`。两版留档可直接对照：
+
+- `spec/chart-current.mmd` / `spec/report-current.md`：当前代码（`ChildHoldsLock=TRUE`）的单任务图，9 状态 / 27 箭头，五条规则全成立。
+- `spec/chart.mmd` / `spec/report.md`：`ChildHoldsLock=FALSE` 的历史反例，8 状态 / 9 箭头，四条规则破。
+
+全量两任务（`Jobs={J1,J2}`）是 736 状态，超过 statechart 的 500 状态预算，只出 report 不出图；
+当前代码图因此用 `spec/chart-current.cfg` 的单任务配置（53 状态 / 121 步）。复现（`<statechart>` 换成技能目录，
+`--out` 必须是新目录）：
+
+```sh
+TLA2TOOLS=~/.local/share/tla2tools/tla2tools.jar \
+  <statechart>/scripts/statechart spec/OpsRunnerSpec.tla \
+  --config spec/chart-current.cfg --view spec/view/view.ts --out /tmp/chart-current
+```
+
+本机 Node 26 直接跑 `node_modules` 里的脚本会报 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`；
+把 statechart 脚本复制到 `node_modules` 外再跑。
 
 ## 真 bug 还是建模错误
 
@@ -67,6 +82,8 @@ CHILD_HOLDS_LOCK=FALSE .agents/skills/verify-ops-write-lock/scripts/check.sh /tm
 
 `tests/acceptance/ops/check_ops.py` 的 `adoption_checks` / `adoption_resume_check` 覆盖了接管后的收尾与取消，但都不检查接管期间的锁，也没有 pid 为空那一格。
 
+2026-11-24 追加（`5f03ac9`）：`tests/test_writer_lock.py` 覆盖统一后的写锁——外部进程持 `.writer.lock` 时 CLI 的 `category_put` / `categories_delete` / `ingest apply` 都会等到锁释放才落盘；`ledger_lock` 与包路径导入的 `lib_common` 同线程重入不自锁；Runner 持锁拉起 `ingest apply` 子进程能正常跑完（`BOOK_CORPUS_WRITER_LOCK_PATH` 生效）。
+
 ## 覆盖范围：改到这些就必须重跑
 
 | 代码 | 模型里的动作 | 说明 |
@@ -75,29 +92,32 @@ CHILD_HOLDS_LOCK=FALSE .agents/skills/verify-ops-write-lock/scripts/check.sh /tm
 | `Runner._loop` | `Dispatch` | 占 `active_write` 槽位 |
 | `Runner._run`（`fcntl.flock`、拿锁后回读状态、`release` 只 close 不 LOCK_UN） | `Acquire` `MarkRunning` `AbortDispatched` `Release` | 锁的获取与释放顺序 |
 | `Runner._spawn`（`Popen(pass_fds=(lock_fd,))` + `BOOK_CORPUS_OPS_JOB_ID` → `jobs/<id>/pid` → `store.update(pid)`） | `Spawn` `RecordPid` | 子进程出生即持锁并带任务标记 |
+| `Env.child_env`（写孩子带 `BOOK_CORPUS_WRITER_LOCK_PATH`，只读孩子剔除） | `Spawn` | 继承声明只防子进程重复拿同一把锁，不改变锁的归属；真正生效见下一行的 `writer_lock()` |
 | `Runner.cancel` / `_terminate` | `CancelQueued` `CancelRunning` | 只建模「取消后不再起进程」这一格 |
-| `Runner._finalize`（先放锁再写终态） | `Release` `Finish` | |
+| `Runner._finalize`（先放锁再写终态；`build_views` 子进程也带继承声明） | `Release` `Finish` | |
 | `Runner.adopt` / `_watch_adopted` / `_watch_adopted_lock` / `resume` | `Start` `AdoptFinish` | 按 DB/pid 文件/`/proc`/写锁四级认领并占位 |
-| `Runner.snapshot` / `writer_busy` / `ledger_lock` | `HttpStart` `HttpEnd` | HTTP 写与写任务不重叠 |
+| `Runner.snapshot` / `writer_busy` / `ledger_lock` → `src/bookcorpus/scripts/lib_common.py` 的 `writer_lock_path` / `writer_lock`；`category_put` / `category_put_many` / `categories_delete`；`ingest.py` 的 `apply` 与 `rebuild` | `HttpStart` `HttpEnd` | HTTP 与 CLI 的人账写共用同一把 `.writer.lock`；同线程重入按计数放行，`BOOK_CORPUS_WRITER_LOCK_PATH` 命中时视为已继承 |
 | 任何改变「谁持有 `.writer.lock`」或「pid 何时落库」的改动 | `Crash` `Start` | |
 
-**同步基线：2026-11-24（`fix/ops-write-lock` 分支核对，`apps/ops/server.py` 的 `Runner` 与上述注释行号一致）。** 覆盖的代码在那之后变了，就把上面的行号与读数重核一遍，再更新这里；没核对过不要往前推。
+**同步基线：2026-11-24，`5f03ac9`（main）。** 已按这个提交重核 `Runner` 的动作注释行号与读数，并把 `ledger_lock` 的实现指向 `lib_common.writer_lock`。覆盖的代码在那之后变了，就把上面的行号与读数重核一遍，再更新这里；没核对过不要往前推。
 
 ## 代码变了怎么更新
 
 1. 先跑 `scripts/check.sh`，看哪几条翻红/翻绿。
 2. 改的是守卫或顺序：在 `spec/OpsRunner.tla` 找到对应动作，按代码改守卫，并在注释里更新 `server.py` 的行号。
-3. 改的是「谁持有锁」：`ChildHoldsLock` 这个常量就是为这种改动留的。它取 `FALSE` 时表示锁由服务进程持有、进程死即释放（今天的代码）；取 `TRUE` 时表示写子进程自己打开 `.writer.lock` 并 flock、退出才放。两种都跑一遍，读数写进上面的表。
+3. 改的是「谁持有锁」：`ChildHoldsLock` 这个常量就是为这种改动留的。`TRUE` 是今天的代码：写子进程通过 `pass_fds` 继承已 flock 的 fd，退出才放；`FALSE` 是历史基线：锁只在服务进程手里，进程死即释放。两种都跑一遍，读数写进上面的表。
 4. 想确认规则不是形同虚设：临时把一条守卫删掉（例如让 `Spawn` 不再要求 `flock = j`，相当于代码把 `flock` 挪到 `Popen` 之后），规则必须翻红，然后改回来。
-   做过一次这个擦伤试验：`ChildHoldsLock=TRUE` 下删掉 `Spawn` 的 `flock = j`，`WriterHoldsLock` 立刻给出
-   `… Spawn → ExitChild → Spawn` 的 3 步反例，四条规则齐红（1341 个状态）；还原后回到 4 绿 1 红（930 个状态）。
-   擦伤试验改过 `spec/OpsRunner.tla` 后一定要用 `git diff` 确认已还原，再继续。
+   2026-11-24（`5f03ac9`）复做：在副本里删掉 `Spawn` 的 `flock = j`，`WriterHoldsLock` 给出
+   `Submit → Dispatch → Acquire → MarkRunning → Spawn → ExitChild → Spawn` 的 7 步反例（848 个状态），
+   其余四条仍绿；还原后五条全绿（各 736 个状态）。擦伤试验改过 `spec/OpsRunner.tla` 后一定要用
+   `git diff` 确认已还原，再继续。
 5. 规则本身不能为了通过而放松。放松了就不是「一个账本一个写者」了。
 
 ## 已落地修复要点
 
 - `Runner._spawn()` 通过 `pass_fds=(lock_fd,)` 把已 `flock` 的锁 fd 传给子进程，且 `_run()` / `resume()` 的释放只调用 `os.close(lock_fd)` 不调用 `LOCK_UN`，确保服务崩溃后写子进程继续持有 `.writer.lock`，直到子进程退出（修掉 F1 与 F2 的互斥面）。
 - `Runner._spawn()` 在 `child_env` 注入 `BOOK_CORPUS_OPS_JOB_ID` 并先原子写 `jobs/<id>/pid` 再更新 `ops.db`；`Runner.adopt()` 按 `ops.db` `pid` → `jobs/<id>/pid` → `/proc/<pid>/environ` → `.writer.lock` 占用顺序认领在跑任务，避免崩溃窗口内把活孩子误标成 `orphaned`（修掉 F2）。
+- 2026-11-24（#44）：CLI 人账写入、`ingest apply` 与操作台 HTTP 账表写统一走 `lib_common.writer_lock(root)`，锁文件固定为 `工作区/运维/.writer.lock`；ops 写孩子通过 `BOOK_CORPUS_WRITER_LOCK_PATH` 声明已继承父进程的 flock，避免重复拿同一把锁自锁（`Runner._spawn` 与 `ingest.rebuild` 两处注入）。
 
 ## 不管什么
 
@@ -105,7 +125,9 @@ CHILD_HOLDS_LOCK=FALSE .agents/skills/verify-ops-write-lock/scripts/check.sh /tm
 - 取消的时序（`SIGTERM` 到进程真正退出之间的窗口）不建模；`CancelledNeverRuns` 只管「取消过的任务不会再起新进程」。
 - 一个进程内的 `self.cv` 竞争、`store` 的 SQLite 事务、`_finalize` 里各 kind 的门槛判定，都不建模。
 - 单机、单根目录、`Runner` 这一个实现。多机或多根不覆盖。
-- 模型只展开两个写任务（`Jobs = {J1, J2}`）。要更多，改 `OpsRunner.cfg` 的常量；三个任务的状态数会大一个量级，通常没必要——两个就够出「两个孩子」的反例。
+- `BOOK_CORPUS_WRITER_LOCK_PATH` 的继承声明：模型只建「孩子活着 ⇒ 锁在任务手里」，不建子进程内部对 `writer_lock()` 的重复调用，也不建孙进程。写脚本不要留下比任务活得久、又没继承锁 fd 的后台孙进程——它拿到了 env 声明却不持锁。
+- 同线程重入与 `ledger_lock` 嵌套（`category_put` 在 `with ledger_lock` 里再拿一次）不建模：重入按线程计数，第二次不再 flock，等同于同一次写。
+- 模型只展开两个写任务（`Jobs = {J1, J2}`）。要更多，改 `OpsRunner.cfg` 的常量；三个任务的状态数会大一个量级，通常没必要——两个就够出「两个孩子」的反例。当前代码图用 `spec/chart-current.cfg` 收窄到 `Jobs={J1}` 才落进 500 状态预算；单任务图里 `NoTwoWriteChildren` 平凡成立，互斥仍由 `WriterHoldsLock` 守着。
 
 ## 相关
 
