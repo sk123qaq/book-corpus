@@ -214,3 +214,100 @@ def test_api_run_pins_a_related_followup(monkeypatch, tmp_path):
     saved = server.session.load(sess["id"])
     assert saved["turns"][1]["related"]["related"] is True
     assert saved["turns"][1]["trace"]["result"]["book"] == "B0024"
+
+
+def test_related_call_prefers_direct_llm_when_configured(monkeypatch, tmp_path):
+    server.related.runlog.configure(str(tmp_path / "runlog"))
+    rec = server.related.runlog.start("related", question="继续讲")
+    seen = {}
+
+    monkeypatch.setenv("ANSWER_BACKEND", "auto")
+    monkeypatch.setattr(
+        server.related.direct_llm,
+        "resolve_config",
+        lambda root, model_ref="", thinking="low", backend=None: {
+            "provider": "opencode-go",
+            "model_ref": model_ref or "test/model",
+            "model": "test-model",
+            "url": "https://example.invalid/v1/chat/completions",
+            "api_key": "k",
+            "headers": {},
+            "send_session_affinity": False,
+            "reasoning_effort": None,
+            "thinking": thinking,
+        },
+    )
+
+    def fake_stream_turn(cfg, payload, **kwargs):
+        seen["payload"] = payload
+        return (
+            {
+                "content": '{"related": true, "reason": "直连命中"}',
+                "reasoning": "",
+                "tool_calls": [],
+                "usage": {"input": 10, "output": 5, "totalTokens": 15},
+                "duration_ms": 12.0,
+                "stop_reason": "stop",
+                "raw_stream": "",
+            },
+            "",
+        )
+
+    monkeypatch.setattr(server.related.direct_llm, "_http_stream_turn", fake_stream_turn)
+    monkeypatch.setattr(
+        server.related.model_call,
+        "invoke",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("直连可用时不应拉起 pi 子进程")),
+    )
+
+    out = server.related.check(
+        "再举例说明",
+        [{"n": 1, "question": "三体", "answer": "上一轮回答"}],
+        use_cache=False,
+        rec=rec,
+    )
+    rec.finish("ok")
+
+    assert out["related"] is True
+    assert out["source"] == "model"
+    assert out["reason"] == "直连命中"
+    assert "tools" not in seen["payload"]
+    assert seen["payload"]["messages"][0]["content"] == server.related.SYSTEM_PROMPT
+    events = server.related.runlog.read_run(rec.id)["events"]
+    start = next(ev for ev in events if ev["type"] == "model.start")
+    final = next(ev for ev in events if ev["type"] == "model.final")
+    assert start["mode"] == "direct"
+    assert start["parser"] == "related"
+    assert final["parser"] == "related"
+    assert final["parsed_sha256"]
+
+
+def test_related_call_falls_back_to_pi_when_answer_backend_is_pi(monkeypatch):
+    monkeypatch.setenv("ANSWER_BACKEND", "pi")
+    monkeypatch.setattr(
+        server.related.direct_llm,
+        "invoke_answer",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("ANSWER_BACKEND=pi 时不应走 direct_llm")),
+    )
+
+    res = server.related.model_call.Result()
+    res.exit_code = 0
+    res.text = '{"related": false, "reason": "pi 兜底"}'
+    seen = {}
+
+    def fake_invoke(*args, **kwargs):
+        seen["kind"] = kwargs.get("kind")
+        seen["parser"] = kwargs.get("parser")
+        return res
+
+    monkeypatch.setattr(server.related.model_call, "invoke", fake_invoke)
+
+    out = server.related.check(
+        "换一本书",
+        [{"n": 1, "question": "三体", "answer": "上一轮回答"}],
+        use_cache=False,
+    )
+    assert out["related"] is False
+    assert out["source"] == "model"
+    assert out["reason"] == "pi 兜底"
+    assert seen == {"kind": "related", "parser": "related"}

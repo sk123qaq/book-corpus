@@ -725,6 +725,7 @@ def invoke_answer(
     root: str | Path,
     cfg: dict[str, Any],
     kind: str = "answer",
+    parser: str = "answer",
     rec: Any = None,
     timeout: int = DEFAULT_TIMEOUT,
     use_tools: bool = True,
@@ -751,7 +752,7 @@ def invoke_answer(
         timeout=timeout,
         prompt_chars=len(prompt or ""),
         prompt_sha256=runlog.sha256(prompt or ""),
-        parser="answer",
+        parser=parser,
         executable="direct_llm",
         model=model_ref,
         provider=cfg.get("provider", ""),
@@ -1013,7 +1014,7 @@ def invoke_answer(
             "model.text",
             **result.text_blob,
             text_preview=runlog.short(result.text, 400),
-            parser="answer",
+            parser=parser,
         )
     rec.event(
         "model.end",
@@ -1029,11 +1030,11 @@ def invoke_answer(
         raw_info = rec.blob(result.text)
         rec.event(
             "model.final",
-            parser="answer",
+            parser=parser,
             mode="direct",
             raw_blob=raw_info,
             raw_sha256=raw_info["sha256"],
-            parsed_sha256=model_call._parsed_sha("answer", result.text),
+            parsed_sha256=model_call._parsed_sha(parser, result.text),
             chars=len(result.text),
         )
     total = model_call._sum_usage(result.usage)

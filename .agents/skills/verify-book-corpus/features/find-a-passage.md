@@ -25,7 +25,7 @@
 - `ask-export` 导出单个会话为 MD 或 DOCX：`GET /api/export?id=<12hex>&format=md|docx`，下载名 `会话-<时间>-<问题前12字>.<ext>`；页面入口在历史会话的悬浮菜单。没有 zip 导出。
 - `ask-retry` 同轮作答去重：键是 `(session_id, n, run_token)`，最多等 300 秒，结果再留 60 秒；`fresh:true` 重开，旧请求 409「这一轮已重跑，本次回答作废」，超时 504「回答仍在生成，请稍后刷新」。
 - `ask-runlog` 运行记录：每次提交在磁盘写 `run.jsonl`（`turn`/`answer`/`answer_once`），章读取、导出、删会话也写 `service.jsonl`；CLI `uv run --frozen python apps/demo/runlog.py {list,timeline,bundle,replay,prune,doctor}` 可查（`replay` 导入 `numpy`，需走 `uv run --frozen python`）。`bundle` 才产 zip，落 `exports/session-*.zip`；页面导出不走它。
-- `ask-degrade` 没有可用模型 key/endpoint 时：`direct_llm.resolve_config` 返回 `None` 并自动回退旧 `pi` 子进程（`answer.py:1476`），失败文案为 `模型调用失败（rc=%d）`；`trace.py` 与 `related.py` 走 `model_call.invoke`，失败时经典页标「降级」并改用直接词匹配。`ANSWER_BACKEND=pi` 可强制走同一条 `pi` 子进程路径。
+- `ask-degrade` 没有可用模型 key/endpoint 时：`direct_llm.resolve_config` 返回 `None` 并自动回退旧 `pi` 子进程（`answer.py`、`related.py` 共用该逻辑），失败文案为 `模型调用失败（rc=%d）`；`trace.py` 走 `model_call.invoke`，失败时经典页标「降级」并改用直接词匹配。`ANSWER_BACKEND=pi` 可强制走同一条 `pi` 子进程路径。
 
 ## How to get to it (user POV)
 
@@ -45,7 +45,7 @@ Preconditions:
 - 演示页由本轮起：`BOOKS_ROOT=$ROOT uv run --frozen python apps/demo/server.py --root "$ROOT" --port 18765 --reading-url http://127.0.0.1:18771 --home-url http://127.0.0.1:18773`，启动行是 `书库检索演示：http://127.0.0.1:18765 · root=<ROOT>`。
 - `--root` 优先级最高，决定书目库、索引、会话、terms、answers、related 与运行记录的位置；不传时按 `resolve_books_root()` 依次看 shell `BOOKS_ROOT` → `$BOOK_CORPUS_ENV`/仓库 `.env`（不向上找 `books.toml`，未配置则报缺根退出）。仓库 `.env` 常指向操作员的 `~/书库`，所以本轮既传 `--root` 又显式 `BOOKS_ROOT=$ROOT`。
 - 启动时必打印 `启动恢复：N 轮…`（没有要恢复的也打 0）。健康降级有三种形状：`db: missing` 是索引没建，`db: empty` 是索引为空，`library: missing` 是书目库没建；后两种 `meta` 里的计数可能是 `null`。
-- 真实作答要模型：先试直连 HTTP（`books.toml` / 环境 → `~/.pi/agent/models.json` + `settings.json` → `~/.pi/agent/auth.json`），`direct_llm.resolve_config` 无可用配置返回 `None` 时自动回退 `pi` 子进程（错误带 `模型调用失败（rc=%d）`）；`ANSWER_MODEL` 可指定模型，`ANSWER_BACKEND=pi` 可强制走 `pi`。`trace.py` 与 `related.py` 走 `model_call.invoke`。直连失败（有配置但请求/认证失败）才没有 `rc=`，前缀为 `模型调用失败：`。
+- 真实作答要模型：先试直连 HTTP（`books.toml` / 环境 → `~/.pi/agent/models.json` + `settings.json` → `~/.pi/agent/auth.json`），`direct_llm.resolve_config` 无可用配置返回 `None` 时自动回退 `pi` 子进程（错误带 `模型调用失败（rc=%d）`）；`ANSWER_MODEL` 可指定模型，`ANSWER_BACKEND=pi` 可强制走 `pi`。`related.py` 与 `answer.py` 共用 `direct_llm` 直连优先与 `pi` 回退；`trace.py` 走 `model_call.invoke`。直连失败（有配置但请求/认证失败）才没有 `rc=`，前缀为 `模型调用失败：`。
 - 时间按本轮实测：单本 `low` 一次完整回答 34–42 秒（2026-11-15，`done.data.ms=34218.8/42227.8`），别再抄 225 秒；`apps/demo/README.md` 的 15-40 秒也未复核。SSE 的 300 秒是硬上限，直连单次调用 240 秒、chunk 读 90 秒；暂停 checkpoint 只活在进程内，重启即失效。
 - 混合检索要向量索引与 embedding 服务：先按 [embed.md](./embed.md) 对 `B0001` 建索引并起 18780，再给演示页设 `BOOKS_EMBED_URL=http://127.0.0.1:18780`。没建索引或服务不在时 `meta.embed.ready=false`，`/api/run` 仍是 `bm25_only`，不是页面坏。
 - 证据目录先定：`EV="$PWD/artifacts/verify/$RUN_ID/find-a-passage"; mkdir -p "$EV"`。
