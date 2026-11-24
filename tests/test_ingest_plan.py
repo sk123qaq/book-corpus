@@ -236,6 +236,51 @@ def test_scan_cache_honours_given_path(workspace):
     assert not shared.exists(), "共享缓存不该被写：%s" % shared
 
 
+def test_scan_without_cache_is_readonly_and_reads_existing_shared_cache(workspace):
+    """未传 --cache 时，ingest scan 不回写共享 classify.json，但仍可读取其中已有条目。"""
+    import hashlib
+
+    _inbox(workspace, "庚书.epub", b"geng" * 30)
+    shared = workspace / "工作区" / "批次" / "ingest" / "classify.json"
+    payload = json.dumps(
+        [{"level1": "文学", "level2": "类型小说", "confidence": 0.91, "reason": "只读预填"}], ensure_ascii=False
+    )
+
+    r = run_cli(
+        "--root",
+        workspace,
+        "run",
+        "ingest",
+        "scan",
+        "--json",
+        env={"PI_BIN": STUB, "PI_STUB_JSON": payload},
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    row = next(i for i in json.loads(r.stdout) if i["file"] == "庚书.epub")
+    assert row["subjects"] == ["文学", "类型小说"]
+    assert not shared.exists(), "默认只读 scan 不应创建共享 classify.json"
+
+    # 已有共享缓存时，scan 应命中缓存而不调模型、也不改写共享缓存
+    sha = hashlib.sha256(b"geng" * 30).hexdigest()
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    cached_text = json.dumps({sha: {"level1": "人文社科", "conf1": 0.95, "level2": "历史", "conf2": 0.9}})
+    shared.write_text(cached_text, encoding="utf-8")
+
+    r2 = run_cli(
+        "--root",
+        workspace,
+        "run",
+        "ingest",
+        "scan",
+        "--json",
+        env={"PI_BIN": STUB, "PI_STUB_JSON": "不应调用模型"},
+    )
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+    row2 = next(i for i in json.loads(r2.stdout) if i["file"] == "庚书.epub")
+    assert row2["subjects"] == ["人文社科", "历史"]
+    assert shared.read_text(encoding="utf-8") == cached_text
+
+
 def test_empty_category_falls_back_to_other(workspace):
     _inbox(workspace, "戊书.epub", b"wu" * 30)
     items = _scan(workspace)
