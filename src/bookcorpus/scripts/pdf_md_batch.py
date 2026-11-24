@@ -1705,6 +1705,7 @@ def report_json(ctx):
         # 派生键：状态词是 chunk-failed/deferred 这类，没有裸 failed/quota
         "failed": sum(1 for r in results if r.get("status") in HARD_FAIL),
         "quota": sum(1 for r in results if r.get("status") in DEFER),
+        "abort": ctx.get("abort") or "",
         "pages": sum(int(r.get("pages") or 0) for r in rows),
         "remaining_books": len(left),
         "remaining_pages": sum(int(r.get("pages") or 0) for r in left),
@@ -1713,7 +1714,7 @@ def report_json(ctx):
     }
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--batch", required=True, help="批次目录名，在 工作区/批次/ 下")
     ap.add_argument(
@@ -1764,7 +1765,13 @@ def main():
         "--defer", metavar="TSV", help="语种账路径，默认 <批次>/%s；账里 lang=ja 的书本次不跑" % DEFER_LEDGER
     )
     ap.add_argument("--ignore-defer", dest="ignore_defer", action="store_true", help="忽略语种账，日文原版也跑")
-    a = ap.parse_args()
+    ap.add_argument(
+        "--fail-on-abort",
+        dest="fail_on_abort",
+        action="store_true",
+        help="日额度用尽或队列满中止整批时返回非零退出码（默认 0 以配合操作台把暂缓交给 gate_pdf 统计）",
+    )
+    a = ap.parse_args(argv)
 
     if a.route == "text" and a.assemble_only:
         sys.exit("--assemble-only 是 OCR 分片的路径；文本层路线直接抽文本，不用它")
@@ -1935,6 +1942,11 @@ def main():
             file=sys.stderr,
         )
         return 1
+    if a.fail_on_abort and ctx["abort"]:
+        print("\n批处理提前中止且启用了 --fail-on-abort：%s" % ctx["abort"], file=sys.stderr)
+        return 2
+    # 额度用尽/队列满等暂缓状态默认保持 rc=0：操作台 Runner 据此继续执行后续建库步，
+    # 再由 gate_pdf 读 --report-json 判 succeeded + 暂缓提示。
     return 0
 
 

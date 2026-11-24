@@ -128,3 +128,61 @@ def test_planner_excludes_source_book_spot_and_duplicate_passage():
     # B0001 excluded by book UID; B0002 suppressed as verbatim duplicate; B0003 commentary kept
     assert [row.book for row in plan.ranking] == ["B0003"]
     assert plan.chapters[0]["book"] == "B0003"
+
+
+def test_book_cards_gate_cli_prints_rows_and_writes_tsv(monkeypatch, tmp_path, capsys):
+    from bookcorpus.scripts import book_cards
+
+    monkeypatch.setattr(book_cards.vec_search, "search_text", lambda *a, **k: ([], {"used": False}))
+
+    db_path = tmp_path / "index.db"
+    con = sqlite3.connect(str(db_path))
+    con.execute(
+        "CREATE TABLE para (id INTEGER PRIMARY KEY, book TEXT, path TEXT, line INTEGER, text TEXT, chars INTEGER)"
+    )
+    con.execute(
+        "CREATE VIRTUAL TABLE para_fts USING fts5(text, content='para', content_rowid='id', tokenize='unicode61')"
+    )
+    con.execute("CREATE TABLE book_expand (book TEXT, path TEXT, line INTEGER, terms TEXT)")
+    text = (
+        "关于礼治秩序与乡土社会的讨论在这里展开，传统教化维系着熟人社会的行为规范，"
+        "这段正文超过四十个汉字以便通过最小长度过滤。"
+    )
+    con.execute("INSERT INTO para VALUES (1, 'B0001', 'books/B0001/md/01.md', 1, ?, ?)", (text, len(text)))
+    con.execute("INSERT INTO para_fts(rowid, text) VALUES (1, ?)", (book_cards.cjk.index_text(text),))
+    con.commit()
+    con.close()
+
+    gold_path = tmp_path / "gold.tsv"
+    gold_path.write_text(
+        "qid\tstratum\tquestion\tterms\ttarget_book\ttarget_chapters\n"
+        "Q01\t概念\t为什么探讨礼治秩序\t礼治,秩序\tB0001\tbooks/B0001/md/01.md\n",
+        encoding="utf-8",
+    )
+    gate_out = tmp_path / "gate.tsv"
+
+    monkeypatch.setattr(book_cards, "DB", str(db_path))
+    orig_gold_rows = book_cards.gold_rows
+    monkeypatch.setattr(book_cards, "gold_rows", lambda *_a, **_k: orig_gold_rows(gold_path))
+    monkeypatch.setattr(
+        book_cards,
+        "load_books",
+        lambda *_a, **_k: {"B0001": {"title": "乡土中国", "author": "费孝通"}},
+    )
+    monkeypatch.setattr(
+        book_cards.book_score,
+        "load_meta",
+        lambda *_a, **_k: {
+            "B0001": book_cards.book_score.Meta(title="乡土中国", subject1="社科", subject2="社会学", chapters=5)
+        },
+    )
+    monkeypatch.setattr(book_cards.book_score, "load_expand", lambda *_a, **_k: {})
+    monkeypatch.setattr(book_cards.book_readme, "readme_toc", lambda _b: ({}, "ok"))
+
+    rc = book_cards.main(["--gate", "--gate-out", str(gate_out)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Q01" in out
+    assert "card=1" in out
+    assert gate_out.exists()
+    assert "card_top6" in gate_out.read_text(encoding="utf-8")

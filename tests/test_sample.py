@@ -1,6 +1,6 @@
 import sqlite3
 
-from conftest import run_cli
+from conftest import run_cli, write_book, write_ledger
 
 
 def _books(root):
@@ -60,3 +60,29 @@ def test_audit_runs_on_fresh_library(tmp_path):
     assert r.returncode == 0, out
     assert "对照表" not in out
     assert "FAIL 0 项" in out
+
+
+def test_sample_allocates_next_uid_from_ledger_without_csv(tmp_path):
+    root = tmp_path / "ws"
+    assert run_cli("init", root).returncode == 0
+
+    csv_path = root / "tables" / "分类表.csv"
+    if csv_path.exists():
+        csv_path.unlink()
+
+    write_book(str(root), "B0001", "文学", "已有之书", ["已有正文。"])
+    write_ledger(str(root), [("B0001", "文学", "已有之书", "")])
+
+    r = run_cli("sample", "--root", root)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "B0002" in r.stdout
+    assert (root / "books" / "B0002" / "book.json").exists()
+
+    con = sqlite3.connect(root / "tables" / "ledger.db")
+    rows = con.execute("select uid, 正式书名 from 分类 order by uid").fetchall()
+    con.close()
+    assert rows == [("B0001", "已有之书"), ("B0002", "阿Q正传")]
+
+    again = run_cli("sample", "--root", root)
+    assert again.returncode == 0, again.stdout + again.stderr
+    assert "已在库：B0002" in again.stdout
