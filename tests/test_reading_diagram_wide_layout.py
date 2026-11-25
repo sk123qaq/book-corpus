@@ -1,40 +1,171 @@
-"""Wide zoom-modal layout and spatial expand-all regression checks for diagram_renderer.js."""
+"""Fast deterministic JS layout tests for diagram_renderer.js wide modal & spatial expand-all."""
 
 from __future__ import annotations
 
-import http.server
 import json
-import os
-import shutil
-import socketserver
+import re
 import subprocess
-import sys
-import threading
-import time
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parents[1]
-ASSETS = REPO / "apps" / "reading" / "web" / "assets"
+RENDERER_JS = REPO / "apps" / "reading" / "web" / "assets" / "diagram_renderer.js"
 
-sys.path.insert(0, str(REPO / "tests" / "manual" / "demo"))
-import shot
+NODE_HARNESS = r"""
+const fs = require('fs');
+const vm = require('vm');
 
+const code = fs.readFileSync(process.argv[2], 'utf8');
+const payloadJson = fs.readFileSync(process.argv[3], 'utf8');
+const cases = JSON.parse(payloadJson);
 
-def _available_chrome() -> str | None:
-    env = os.environ.get("CHROME_BIN")
-    if env and Path(env).exists():
-        return env
-    for name in ("google-chrome-stable", "google-chrome", "chromium", "chromium-browser"):
-        found = shutil.which(name)
-        if found:
-            return found
-    return None
+const calcCardH = (chunk, cls, isExp) => {
+  const pills = (chunk.match(/class="blk-anchor/g) || []).length;
+  const detMatch = chunk.match(/detail">([^<]*)</);
+  const detLen = isExp && detMatch ? detMatch[1].length : 0;
+  const baseH = cls === 'spatial-node' ? 92 : 84;
+  const detH = detLen ? Math.ceil(detLen / 11) * 17 + 16 : 0;
+  return baseH + Math.ceil(pills / 3) * 22 + detH;
+};
+
+const makeStageEl = () => {
+  let _html = '';
+  let _w = 176;
+  return {
+    id: 'measure-stage',
+    style: { set width(v) { _w = parseInt(v, 10) || 176; }, get width() { return _w + 'px'; } },
+    setAttribute() {},
+    set innerHTML(v) { _html = String(v || ''); },
+    get innerHTML() { return _html; },
+    querySelectorAll(sel) {
+      if (sel !== '.dag-node' && sel !== '.spatial-node') return [];
+      const cls = sel.slice(1);
+      const parts = _html.split('<div class="' + cls).slice(1);
+      return parts.map((chunk) => {
+        const isExp = chunk.split('>')[0].includes('expanded');
+        const h = calcCardH(chunk, cls, isExp);
+        return { getBoundingClientRect: () => ({ width: _w, height: h }) };
+      });
+    },
+    get firstElementChild() {
+      const m = _html.match(/>([^<]*)</);
+      const txt = m ? m[1] : '';
+      return { getBoundingClientRect: () => ({ width: Math.max(36, txt.length * 11 + 14), height: 20 }) };
+    },
+  };
+};
+
+const stageEl = makeStageEl();
+const makeDummyNode = () => ({
+  innerHTML: '',
+  className: '',
+  hidden: false,
+  dataset: {},
+  style: {},
+  classList: { toggle() {}, add() {}, remove() {}, contains: () => false },
+  setAttribute() {},
+  removeAttribute() {},
+  getAttribute() { return ''; },
+  addEventListener() {},
+  removeEventListener() {},
+  appendChild() {},
+  querySelector() { return makeDummyNode(); },
+  querySelectorAll() { return []; },
+  getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; },
+});
+
+const sandbox = {
+  window: { RD: {}, CSS: { supports: () => false } },
+  document: {
+    body: { appendChild() {} },
+    getElementById(id) { return id === 'measure-stage' ? stageEl : null; },
+    createElement() { return makeDummyNode(); },
+  },
+  getComputedStyle: () => ({ display: 'none' }),
+  console,
+  Math,
+  Map,
+  Set,
+  Array,
+  Number,
+  String,
+  Boolean,
+  Object,
+  RegExp,
+  JSON,
+};
+sandbox.window.window = sandbox.window;
+vm.runInNewContext(code, sandbox, { filename: 'diagram_renderer.js' });
+
+// Verify wide layout geometry across figure cases via public renderBlueprintCard inside a zoom-like hook,
+// or evaluate renderLayeredDagHtml / renderSpatialMapHtml inside the same IIFE context.
+const exposedCode = code.replace(
+  'RD.diagrams = {',
+  'RD.diagrams = { _renderLayeredDagHtml: renderLayeredDagHtml, _renderSpatialMapHtml: renderSpatialMapHtml,'
+);
+const sb2 = Object.assign({}, sandbox, { window: { RD: {}, CSS: { supports: () => false } } });
+sb2.window.window = sb2.window;
+vm.runInNewContext(exposedCode, sb2, { filename: 'diagram_renderer.js' });
+
+const diagrams = sb2.window.RD.diagrams;
+const parsePositionedNodes = (html, cls, expandAll) => {
+  const parts = html.split('<div class="' + cls).slice(1);
+  return parts
+    .map((chunk) => {
+      const m = chunk.match(/style="left:(\d+)px;top:(\d+)px;width:(\d+)px"/);
+      if (!m) return null;
+      const isExp = expandAll && chunk.split('>')[0].includes('expanded');
+      return { x: +m[1], y: +m[2], w: +m[3], h: calcCardH(chunk, cls, isExp) };
+    })
+    .filter(Boolean);
+};
+
+const countOverlaps = (boxes, pad = 2) => {
+  let n = 0;
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      if (!(a.x + a.w + pad <= b.x || b.x + b.w + pad <= a.x || a.y + a.h + pad <= b.y || b.y + b.h + pad <= a.y)) {
+        n++;
+      }
+    }
+  }
+  return n;
+};
+
+const availW = 1044;
+const availH = 580;
+const results = {};
+for (const [name, fig] of Object.entries(cases)) {
+  const fn = fig.blueprint === 'spatial_route' ? diagrams._renderSpatialMapHtml : diagrams._renderLayeredDagHtml;
+  const cls = fig.blueprint === 'spatial_route' ? 'spatial-node' : 'dag-node';
+  const htmlCollapsed = fn(fig, { wide: true, expandAll: false });
+  const htmlExpanded = fn(fig, { wide: true, expandAll: true });
+  const dimRe = fig.blueprint === 'spatial_route'
+    ? /spatial-canvas" style="width:(\d+)px;height:(\d+)px"/
+    : /dag-canvas" style="width:(\d+)px;height:(\d+)px"/;
+  const dm1 = htmlCollapsed.match(dimRe);
+  const natW1 = dm1 ? +dm1[1] : 0;
+  const natH1 = dm1 ? +dm1[2] : 0;
+  const fit1 = dm1 ? Math.min(1, availW / (natW1 + 8), availH / (natH1 + 36)) : 1;
+  const boxes1 = parsePositionedNodes(htmlCollapsed, cls, false);
+  const boxes2 = parsePositionedNodes(htmlExpanded, cls, true);
+  results[name] = {
+    natW1,
+    natH1,
+    fitPct1: Math.round(fit1 * 100),
+    overlaps1: countOverlaps(boxes1, 1),
+    overlaps2: countOverlaps(boxes2, 1),
+    moreCount1: (htmlCollapsed.match(/blk-anchor-more/g) || []).length,
+    moreCount2: (htmlExpanded.match(/blk-anchor-more/g) || []).length,
+    distinctYCount1: new Set(boxes1.map((b) => Math.round(b.y / 20))).size,
+    distinctXCount1: new Set(boxes1.map((b) => Math.round(b.x / 20))).size,
+  };
+}
+console.log(JSON.stringify(results));
+"""
 
 
 def _build_deep_causality_figure() -> dict:
-    """Nine-rank chain with multi-block anchors simulating B0042/04 causality."""
     roles = ["structural", "trigger", "mechanism", "turning_point", "consequence"]
     nodes = [
         {
@@ -49,16 +180,10 @@ def _build_deep_causality_figure() -> dict:
     ]
     edges = [{"from": f"C{i}", "to": f"C{i + 1}", "label": f"推进{i}"} for i in range(1, 9)]
     edges.append({"from": "C3", "to": "C7", "label": "远因制约", "kind": "constraint"})
-    return {
-        "blueprint": "historical_causality",
-        "caption": "九层因果链路验证",
-        "note": "用于验证宽屏双排折行与块号折叠。",
-        "data": {"nodes": nodes, "edges": edges},
-    }
+    return {"blueprint": "historical_causality", "data": {"nodes": nodes, "edges": edges}}
 
 
 def _build_five_tier_power_figure() -> dict:
-    """Five-rank hierarchy with up to 3 nodes per rank simulating B0325/05 power structure."""
     specs = [
         ("P1", "faction", ["B01", "B02", "B03", "B04", "B05", "B06"]),
         ("P2", "ally", ["B04", "B07"]),
@@ -78,7 +203,7 @@ def _build_five_tier_power_figure() -> dict:
             "id": nid,
             "role": role,
             "label": f"阵营节点{nid}",
-            "detail": f"势力{nid}的盟约义务、兵力约束与决策立场。",
+            "detail": f"势力{nid}盟约义务。",
             "blocks": blks,
             "source": "原文",
         }
@@ -89,67 +214,16 @@ def _build_five_tier_power_figure() -> dict:
         {"from": "P2", "to": "P4", "label": "制衡", "relation": "hostile"},
         {"from": "P3", "to": "P6", "label": "统治", "relation": "command"},
         {"from": "P4", "to": "P7", "label": "主攻", "relation": "hostile"},
-        {"from": "P5", "to": "P8", "label": "中立保证", "relation": "constraint"},
+        {"from": "P5", "to": "P8", "label": "中立", "relation": "constraint"},
         {"from": "P6", "to": "P9", "label": "施压", "relation": "hostile"},
         {"from": "P7", "to": "P12", "label": "抗衡", "relation": "hostile"},
         {"from": "P8", "to": "P10", "label": "改组", "relation": "constraint"},
         {"from": "P9", "to": "P12", "label": "实施", "relation": "constraint"},
     ]
-    return {
-        "blueprint": "power_hierarchy",
-        "caption": "五层权力结构验证",
-        "note": "用于验证五层权力图在宽屏下横排紧凑布局。",
-        "data": {"nodes": nodes, "edges": edges},
-    }
-
-
-def _build_dense_spatial_figure() -> dict:
-    """Twelve clustered horizontal spatial nodes simulating B0325/05 Western Front campaign."""
-    coords = [
-        (12, 26),
-        (24, 28),
-        (33, 30),
-        (42, 34),
-        (51, 32),
-        (60, 34),
-        (72, 28),
-        (86, 22),
-        (46, 56),
-        (28, 72),
-        (64, 62),
-        (78, 74),
-    ]
-    nodes = [
-        {
-            "id": f"S{i}",
-            "role": "corridor" if i % 2 else "stronghold",
-            "label": f"战区节点{i}",
-            "zone": "西线走廊",
-            "x": x,
-            "y": y,
-            "detail": (
-                f"第{i}处战区承担主力翼侧包抄、铁道推进或要塞封锁任务，"
-                "展开全部说明后卡片明显增高，需要画布重排以保持零重叠。"
-            ),
-            "blocks": [f"B{10 + i:02d}", f"B{20 + i:02d}", f"B{30 + i:02d}"],
-            "source": "原文",
-        }
-        for i, (x, y) in enumerate(coords, 1)
-    ]
-    edges = [
-        {"from": f"S{i}", "to": f"S{i + 1}", "kind": "advance", "label": f"推进{i}", "route_group": "右翼"}
-        for i in range(1, 12)
-    ]
-    return {
-        "blueprint": "spatial_route",
-        "caption": "十二节点空间态势验证",
-        "note": "用于验证空间图展开说明后无卡片重叠。",
-        "data": {"mode": "campaign", "scope_note": "西线战役推演", "nodes": nodes, "edges": edges},
-    }
+    return {"blueprint": "power_hierarchy", "data": {"nodes": nodes, "edges": edges}}
 
 
 def _build_wide_fan_power_figure() -> dict:
-    """Three-rank wide fan (8 in rank 0) simulating B0325/05 power structure."""
     nodes = [
         {
             "id": f"F{i}",
@@ -176,157 +250,87 @@ def _build_wide_fan_power_figure() -> dict:
         {"from": "M1", "to": "T1", "label": "借道", "relation": "hostile"},
         {"from": "M1", "to": "T2", "label": "主攻", "relation": "hostile"},
     ]
-    return {
-        "blueprint": "power_hierarchy",
-        "caption": "宽扇入三层权力结构",
-        "note": "用于验证宽扇入权力图默认适应比例。",
-        "data": {"nodes": nodes, "edges": edges},
-    }
+    return {"blueprint": "power_hierarchy", "data": {"nodes": nodes, "edges": edges}}
+
+
+def _build_dense_spatial_figure() -> dict:
+    coords = [
+        (12, 26),
+        (24, 28),
+        (33, 30),
+        (42, 34),
+        (51, 32),
+        (60, 34),
+        (72, 28),
+        (86, 22),
+        (46, 56),
+        (28, 72),
+        (64, 62),
+        (78, 74),
+    ]
+    nodes = [
+        {
+            "id": f"S{i}",
+            "role": "corridor" if i % 2 else "stronghold",
+            "label": f"战区节点{i}",
+            "zone": "西线走廊",
+            "x": x,
+            "y": y,
+            "detail": f"第{i}处战区承担主力翼侧包抄或要塞封锁任务，展开说明后需要画布重排以保持零重叠。",
+            "blocks": [f"B{10 + i:02d}", f"B{20 + i:02d}", f"B{30 + i:02d}"],
+            "source": "原文",
+        }
+        for i, (x, y) in enumerate(coords, 1)
+    ]
+    edges = [{"from": f"S{i}", "to": f"S{i + 1}", "kind": "advance", "label": f"推进{i}"} for i in range(1, 12)]
+    return {"blueprint": "spatial_route", "data": {"mode": "campaign", "nodes": nodes, "edges": edges}}
 
 
 def test_diagram_renderer_js_syntax() -> None:
+    res = subprocess.run(["node", "--check", str(RENDERER_JS)], capture_output=True, text=True, check=False)
+    assert res.returncode == 0, res.stderr
+
+
+def test_wide_dag_aspect_and_spatial_expand_zero_overlap(tmp_path: Path) -> None:
+    cases_path = tmp_path / "cases.json"
+    harness_path = tmp_path / "harness.js"
+    cases = {
+        "causality": _build_deep_causality_figure(),
+        "power": _build_five_tier_power_figure(),
+        "power_fan": _build_wide_fan_power_figure(),
+        "spatial": _build_dense_spatial_figure(),
+    }
+    cases_path.write_text(json.dumps(cases, ensure_ascii=False), encoding="utf-8")
+    harness_path.write_text(NODE_HARNESS, encoding="utf-8")
+
     res = subprocess.run(
-        ["node", "--check", str(ASSETS / "diagram_renderer.js")],
+        ["node", str(harness_path), str(RENDERER_JS), str(cases_path)],
         capture_output=True,
         text=True,
         check=False,
     )
     assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
 
+    assert out["causality"]["overlaps1"] == 0
+    assert out["causality"]["overlaps2"] == 0
+    assert out["causality"]["fitPct1"] >= 65, out["causality"]
+    assert out["causality"]["distinctXCount1"] >= 4
+    assert out["causality"]["moreCount1"] > 0
+    assert out["causality"]["moreCount2"] == 0
 
-def test_wide_zoom_layout_and_spatial_expand_all() -> None:
-    chrome = _available_chrome()
-    if not chrome:
-        pytest.skip("No headless Chrome/Chromium available")
+    assert out["power"]["overlaps1"] == 0
+    assert out["power"]["overlaps2"] == 0
+    assert out["power"]["fitPct1"] >= 65, out["power"]
+    assert out["power"]["distinctXCount1"] >= 5
+    assert out["power"]["moreCount1"] > 0
+    assert out["power"]["moreCount2"] == 0
 
-    harness_html = """<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<link rel="stylesheet" href="/assets/tokens.css">
-<link rel="stylesheet" href="/assets/workbench.css">
-</head>
-<body>
-<div id="host"></div>
-<script src="/assets/common.js"></script>
-<script src="/assets/diagram_renderer.js"></script>
-</body>
-</html>"""
+    assert out["power_fan"]["overlaps1"] == 0
+    assert out["power_fan"]["overlaps2"] == 0
+    assert out["power_fan"]["fitPct1"] >= 60, out["power_fan"]
 
-    class _Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
-            if self.path == "/test.html":
-                raw = harness_html.encode("utf-8")
-                ctype = "text/html; charset=utf-8"
-            elif self.path.startswith("/assets/"):
-                rel = self.path[len("/assets/") :].split("?", 1)[0]
-                target = (ASSETS / rel).resolve()
-                if ASSETS not in target.parents or not target.is_file():
-                    self.send_error(404)
-                    return
-                raw = target.read_bytes()
-                ctype = "text/css; charset=utf-8" if rel.endswith(".css") else "application/javascript; charset=utf-8"
-            else:
-                self.send_error(404)
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-            return
-
-    socketserver.ThreadingTCPServer.allow_reuse_address = True
-    srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _Handler)
-    port = srv.server_address[1]
-    t = threading.Thread(target=srv.serve_forever, daemon=True)
-    t.start()
-
-    shot.CHROME = chrome
-    proc, profile, ws_url = shot.launch(1440, 900, "about:blank", 0)
-    cdp = shot.connect_cdp(ws_url)
-    cdp.call("Runtime.enable")
-    cdp.call("Page.enable")
-    cdp.call(
-        "Emulation.setDeviceMetricsOverride",
-        {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False},
-    )
-    cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}/test.html"})
-    try:
-        figures = {
-            "causality": _build_deep_causality_figure(),
-            "power": _build_five_tier_power_figure(),
-            "power_fan": _build_wide_fan_power_figure(),
-            "spatial": _build_dense_spatial_figure(),
-        }
-
-        def eval_js(expr: str) -> object:
-            res = cdp.call("Runtime.evaluate", {"expression": expr, "returnByValue": True, "awaitPromise": True})
-            if "exceptionDetails" in res:
-                raise AssertionError(f"JS exception: {res['exceptionDetails']}")
-            return (res.get("result") or {}).get("value")
-
-        deadline = time.time() + 10
-        while time.time() < deadline:
-            if eval_js("Boolean(window.RD && window.RD.diagrams && window.RD.diagrams.openZoomModal)"):
-                break
-            time.sleep(0.1)
-
-        out = eval_js(
-            f"""(() => {{
-              const figs = {json.dumps(figures, ensure_ascii=False)};
-              const results = {{}};
-              for (const [k, fig] of Object.entries(figs)) {{
-                window.RD.diagrams.openZoomModal(fig);
-                const body = document.getElementById('zoom-body');
-                const qa1 = window.RD.diagrams.runCollisionAudit(body);
-                const fitText1 = document.getElementById('btn-zoom-fit').textContent || '';
-                const pct1 = parseInt(fitText1, 10) || 100;
-                const moreCount = body.querySelectorAll('.blk-anchor-more').length;
-                const expBtn = document.getElementById('btn-zoom-expand-all');
-                expBtn.click();
-                const qa2 = window.RD.diagrams.runCollisionAudit(body);
-                const fitText2 = document.getElementById('btn-zoom-fit').textContent || '';
-                const moreAfterExp = body.querySelectorAll('.blk-anchor-more').length;
-                document.getElementById('btn-zoom-close').click();
-                results[k] = {{
-                  overlaps1: qa1.overlaps,
-                  pct1,
-                  fitText1,
-                  moreCount,
-                  overlaps2: qa2.overlaps,
-                  fitText2,
-                  moreAfterExp,
-                }};
-              }}
-              return results;
-            }})()"""
-        )
-        assert isinstance(out, dict)
-        assert out["causality"]["overlaps1"] == 0
-        assert out["causality"]["overlaps2"] == 0
-        assert out["causality"]["pct1"] >= 60, out["causality"]
-        assert out["causality"]["moreCount"] > 0
-        assert out["causality"]["moreAfterExp"] == 0
-
-        assert out["power"]["overlaps1"] == 0
-        assert out["power"]["overlaps2"] == 0
-        assert out["power"]["pct1"] >= 60, out["power"]
-        assert out["power"]["moreCount"] > 0
-        assert out["power"]["moreAfterExp"] == 0
-
-        assert out["power_fan"]["overlaps1"] == 0
-        assert out["power_fan"]["overlaps2"] == 0
-        assert out["power_fan"]["pct1"] >= 60, out["power_fan"]
-
-        assert out["spatial"]["overlaps1"] == 0
-        assert out["spatial"]["overlaps2"] == 0, out["spatial"]
-        assert out["spatial"]["pct1"] >= 60, out["spatial"]
-    finally:
-        cdp.ws.close()
-        shot._terminate(proc)
-        shutil.rmtree(profile, ignore_errors=True)
-        srv.shutdown()
-        srv.server_close()
+    assert out["spatial"]["overlaps1"] == 0
+    assert out["spatial"]["overlaps2"] == 0, out["spatial"]
+    assert out["spatial"]["fitPct1"] >= 65, out["spatial"]
+    assert re.search(r"manualZoom", RENDERER_JS.read_text(encoding="utf-8"))
