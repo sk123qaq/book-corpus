@@ -117,13 +117,16 @@ READ_PROFILES: dict[str, ReadProfileMeta] = {
         read_type="philosophy",
         name="哲学书",
         adler_category="5. 哲学书",
-        goal="抠紧作者专属词义边界，剥离核心前提 → 推论 → 结论与反驳对象",
+        goal="抠紧作者专属词义边界，剥离前提 → 推论 → 结论、批判谱系、论战交锋与反例边界",
         blueprints=(
-            BlueprintHint("argument_map", "论证逻辑树", "剥离前提、推论、结论与潜在反驳"),
-            BlueprintHint("term_contrast", "词义辨析双栏表", "对比日常汉语直觉与作者专属定义"),
-            BlueprintHint("lineage_dag", "批判谱系图", "呈现思想流派的承接与批判关系"),
+            BlueprintHint("argument_map", "论证逻辑树", "剥离核心论点、并行前提、推论与潜在反驳"),
+            BlueprintHint("term_contrast", "词义辨析双栏表", "对比日常汉语直觉与作者专属定义（附原词）"),
+            BlueprintHint("lineage_dag", "批判谱系图", "呈现思想家、学派之间的继承、改造与批判关系"),
         ),
-        extensions=(ExtensionHint("sparring_dossier", "学术交锋档案", "识别隐含批驳的前辈/学派并对照经典思想实验"),),
+        extensions=(
+            ExtensionHint("sparring_dossier", "学术交锋档案", "拆解核心论战交锋并剖析经典思想实验与隐喻"),
+            ExtensionHint("counterexample_lab", "反例与现实检验", "揪出隐含前提、构造极端反例并检验当代适用边界"),
+        ),
     ),
     "social": ReadProfileMeta(
         read_type="social",

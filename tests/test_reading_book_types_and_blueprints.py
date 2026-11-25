@@ -16,7 +16,7 @@ from bookcorpus.reading.diagram_audit import (
     prompt_for_extension,
 )
 from bookcorpus.reading.diagrams import render_assist_figure
-from bookcorpus.reading.service import ReadingService
+from bookcorpus.reading.service import ACTION_LABELS, EXTENSION_ACTIONS, ReadingService
 
 
 class _FakeBlueprintClient:
@@ -108,13 +108,23 @@ def test_diagram_audit_normalizes_splits_overlong_and_degrades():
     assert len(audited["data"]["edges"][0]["label"]) == EDGE_LABEL_LIMIT + 1
     assert audited["audit_log"]
 
-    # Over-dense graph degrades cleanly AND preserves per-node original anchors without per-item warning spam
+    # 15 nodes pass under MAX_GRAPH_NODES=16; 17 nodes degrade cleanly and preserve per-node anchors
+    under_cap = {
+        "blueprint": "argument_map",
+        "caption": "十五节点图",
+        "data": {"nodes": [{"id": f"N{i}", "label": f"节点{i}", "blocks": ["B01"]} for i in range(15)], "edges": []},
+    }
+    assert MAX_GRAPH_NODES == 16
+    kept = audit_blueprint_payload(under_cap, {"B01"}, fallback_block_ids=["B01"])
+    assert kept["blueprint"] == "argument_map"
+    assert len(kept["data"]["nodes"]) == 15
+
     dense = {
         "blueprint": "argument_map",
         "caption": "过密图",
         "data": {
             "nodes": [
-                {"id": f"N{i}", "label": f"节点{i}", "blocks": [f"B{(i % 2) + 1:02d}"], "source": "原文"}
+                {"id": f"N{i}", "label": f"节点{i}", "blocks": ["B02" if i == 1 else "B01", "B99"]}
                 for i in range(MAX_GRAPH_NODES + 1)
             ],
             "edges": [],
@@ -125,7 +135,7 @@ def test_diagram_audit_normalizes_splits_overlong_and_degrades():
     assert degraded["fallback_notice"]
     assert degraded["items"][0]["blocks"] == ["B01"]
     assert degraded["items"][1]["blocks"] == ["B02"]
-    assert "warning" not in degraded["items"][0]
+    assert all("warning" not in item for item in degraded["items"])
 
     # Broken text degrades cleanly
     broken = audit_blueprint_payload("{broken json...", {"B01"}, fallback_block_ids=["B01"])
@@ -590,9 +600,10 @@ def test_chapter_scope_context_separates_body_and_cited_footnotes(reading_root):
     assert "[B01]" in ctx
     assert "[B02]" in ctx
     assert "[B04]" not in ctx
-    assert "【章末注释（仅供考证参考，勿喧宾夺主）】" in ctx
+    fn_header = "【本章自带脚注（属原文出处，不可作为独立论证节点）】"
+    assert fn_header in ctx
     assert "[B05]" in ctx
-    fn_part = ctx.split("【章末注释（仅供考证参考，勿喧宾夺主）】", 1)[1]
+    fn_part = ctx.split(fn_header, 1)[1]
     assert len(fn_part) <= 950  # <= 18% of 5000 + header margin
 
 
@@ -765,3 +776,206 @@ def test_literature_v2_five_tools_schemas_and_anti_spoiler(reading_root):
     assert ext["items"][0]["section"] == "叙事视角与时间结构"
     assert ext["items"][0]["title"] == "倒叙开篇"
     assert ext["items"][0]["body"].startswith("开篇先点出")
+
+
+def test_24k_full_context_no_truncation_and_footnote_isolation(reading_root):
+    service = ReadingService(str(reading_root), client=_FakeBlueprintClient([]))
+    long_p = "开头核心命题。" + ("论证展开" * 480) + "尾部认识论比喻。"
+    assert len(long_p) > 1900
+    blocks = [
+        {"id": "B01", "kind": "paragraph", "text": "引子。"},
+        {
+            "id": "B02",
+            "kind": "paragraph",
+            "text": long_p,
+            "fn_refs": [{"marker": "1", "target_block": "B06"}],
+        },
+        {
+            "id": "B03",
+            "kind": "paragraph",
+            "text": "后段引用卢梭。",
+            "fn_refs": [{"marker": "2", "target_block": "B08"}],
+        },
+        {"id": "B04", "kind": "heading", "text": "注释"},
+        {"id": "B05", "kind": "footnote", "text": "伊壁鸠鲁：古希腊哲学家。——译者", "ref_blocks": ["B01"]},
+        {"id": "B06", "kind": "footnote", "text": "贺拉斯：古罗马诗人。——译者", "ref_blocks": ["B02"]},
+        {"id": "B07", "kind": "footnote", "text": "Hobbes, Leviathan, p. 170.", "ref_blocks": ["B01"]},
+        {
+            "id": "B08",
+            "kind": "footnote",
+            "text": "这一表述出自卢梭《社会契约论》，魂对体之作用乃哲学的深渊（l'abyme de la philosophie）。",
+            "ref_blocks": ["B03"],
+        },
+    ]
+    ctx, covered, sampled = service._chapter_scope_context("B0002", 1, blocks)
+    assert covered == 3
+    assert sampled is False
+    assert "尾部认识论比喻。" in ctx
+    assert "伊壁鸠鲁" not in ctx
+    assert "贺拉斯" not in ctx
+    assert "Hobbes, Leviathan" not in ctx
+    assert "[B04]" not in ctx
+    assert "【本章自带脚注（属原文出处，不可作为独立论证节点）】" in ctx
+    assert "[B08]" in ctx
+    assert "[原文]" in ctx
+
+
+def test_philosophy_five_tools_schemas_audit_and_counterexample_lab(reading_root):
+    prof = resolve_read_profile(["人文社科", "思想与哲学"], title="人生的智慧")
+    assert prof["read_type"] == "philosophy"
+    assert [bp["blueprint"] for bp in prof["blueprints"]] == ["argument_map", "term_contrast", "lineage_dag"]
+    assert [ext["action"] for ext in prof["extensions"]] == ["sparring_dossier", "counterexample_lab"]
+    assert "counterexample_lab" in EXTENSION_ACTIONS
+    assert ACTION_LABELS["counterexample_lab"] == "反例与现实检验"
+
+    # 1. term_contrast original_term 透传与清洗
+    tc_raw = {
+        "blueprint": "term_contrast",
+        "caption": "核心哲学词典",
+        "reading_note": "聚焦专属术语",
+        "summary": "区分日常直觉与专义。",
+        "data": {
+            "columns": ["核心术语", "日常汉语直觉", "作者专属定义", "出处"],
+            "rows": [
+                {
+                    "key": "承认",
+                    "original_term": "Anerkennung / Recognition",
+                    "everyday": "口头认可",
+                    "author": "冒死挣得的独立自我意识",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                },
+                {
+                    "key": "幸福",
+                    "original_term": "无",
+                    "everyday": "顺心如意",
+                    "author": "内在拥有大于外在之物",
+                    "blocks": ["B01"],
+                    "source": "补充",
+                },
+            ],
+        },
+    }
+    tc_res = audit_blueprint_payload(tc_raw, {"B01"})
+    assert tc_res["data"]["rows"][0]["original_term"] == "Anerkennung / Recognition"
+    assert tc_res["data"]["rows"][1]["original_term"] == ""
+
+    # 2. lineage_dag 专属角色、关系类型与 not_applicable
+    lin_raw = {
+        "blueprint": "lineage_dag",
+        "caption": "哲学批判谱系",
+        "reading_note": "以作者立场为汇流中心",
+        "summary": "继承黑格尔并批驳霍布斯。",
+        "data": {
+            "mode": "lineage",
+            "nodes": [
+                {"id": "L1", "role": "predecessor", "label": "黑格尔", "blocks": ["B01"], "source": "原文"},
+                {"id": "L2", "role": "mediator", "label": "科耶夫", "blocks": ["B01"], "source": "原文"},
+                {"id": "L3", "role": "author", "label": "福山立场", "blocks": ["B01"], "source": "原文"},
+                {"id": "L4", "role": "target", "label": "霍布斯", "blocks": ["B01"], "source": "原文"},
+            ],
+            "edges": [
+                {"from": "L1", "to": "L2", "relation": "transform", "label": "改造"},
+                {"from": "L2", "to": "L3", "relation": "inherit", "label": "继承"},
+                {"from": "L3", "to": "L4", "relation": "critique", "label": "批驳"},
+            ],
+        },
+    }
+    lin_res = audit_blueprint_payload(lin_raw, {"B01"})
+    assert [n["role"] for n in lin_res["data"]["nodes"]] == ["predecessor", "mediator", "author", "target"]
+    assert [e["relation"] for e in lin_res["data"]["edges"]] == ["transform", "inherit", "critique"]
+
+    na_raw = {
+        "blueprint": "lineage_dag",
+        "caption": "纯对话录章节",
+        "reading_note": "聚焦文本内部推演",
+        "summary": "本章无外部学派谱系。",
+        "data": {
+            "mode": "not_applicable",
+            "reason": "本章仅为人物对话推演，未涉及外部思想史谱系。",
+            "nodes": [],
+            "edges": [],
+        },
+    }
+    na_res = audit_blueprint_payload(na_raw, {"B01"})
+    assert na_res["blueprint"] == "lineage_dag"
+    assert na_res["data"]["mode"] == "not_applicable"
+    assert "未涉及外部" in na_res["data"]["reason"]
+
+    # 3. sparring_dossier 占位句拦截与两分区、去冗余前缀
+    spar_raw = {
+        "blueprint": "extension_dossier",
+        "caption": "霍布斯与黑格尔交锋",
+        "reading_note": "先看清作者到底在反驳谁",
+        "summary": "两条路径并置。",
+        "items": [
+            {
+                "section": "debate",
+                "title": "霍布斯自然状态观",
+                "stance": "论战靶子",
+                "body": "补充对照：霍布斯把自我保存摆在首位，作者借黑格尔反驳其忽视承认欲。",
+                "blocks": ["B01"],
+                "source": "补充",
+            },
+            {
+                "section": "thought_experiment",
+                "title": "冒死决斗实验",
+                "stance": "思想实验",
+                "body": "最初的人甘愿冒死挣脱生物本能。",
+                "blocks": ["B01"],
+                "source": "原文",
+            },
+        ],
+    }
+    spar_res = audit_blueprint_payload(spar_raw, {"B01"}, requested_action="sparring_dossier")
+    assert "先看清作者到底在反驳谁" not in spar_res["reading_note"]
+    assert not spar_res["items"][0]["body"].startswith("补充对照：")
+    assert [s["id"] for s in spar_res["sections"]] == ["debate", "thought_experiment"]
+
+    # 4. counterexample_lab Prompt 与 Service 端到端全链路
+    ce_prompt = prompt_for_extension(
+        "counterexample_lab", read_type="philosophy", selected_text="测试原文", block_ids=["B01"]
+    )
+    assert "hidden_premise" in ce_prompt[0]["content"]
+    assert "counterexample" in ce_prompt[0]["content"]
+    assert "modern_boundary" in ce_prompt[0]["content"]
+
+    ce_resp = {
+        "blueprint": "extension_dossier",
+        "caption": "人性与名誉边界检验",
+        "reading_note": "检验先验人性假设的当代适用性",
+        "summary": "极端反例暴露先天决斗叙事的边界。",
+        "items": [
+            {
+                "section": "hidden_premise",
+                "title": "超越本能即自由",
+                "stance": "隐含前提",
+                "body": "默认脱离生存欲的行动皆属理性自由。",
+                "blocks": ["B01"],
+                "source": "原文",
+            },
+            {
+                "section": "counterexample",
+                "title": "荣誉谋杀与狂热",
+                "stance": "极端反例",
+                "body": "补充：群体狂热同样甘愿冒死，却并非自主。",
+                "blocks": ["B01"],
+                "source": "补充",
+            },
+            {
+                "section": "modern_boundary",
+                "title": "数字认可与算法荣誉",
+                "stance": "当代边界",
+                "body": "网络声誉博弈延续承认渴望，但失去生命冒险前提。",
+                "blocks": ["B01"],
+                "source": "补充",
+            },
+        ],
+    }
+    client = _FakeBlueprintClient([ce_resp])
+    service = ReadingService(str(reading_root), client=client)
+    res = service.assist("B0002", 1, "counterexample_lab", read_type="philosophy", scope="chapter")
+    assert res["action"] == "counterexample_lab"
+    assert res["action_label"] == "反例与现实检验"
+    assert [s["id"] for s in res["figure"]["sections"]] == ["hidden_premise", "counterexample", "modern_boundary"]
+    assert not res["figure"]["items"][1]["body"].startswith("补充：")

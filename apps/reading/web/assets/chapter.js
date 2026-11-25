@@ -154,13 +154,16 @@
     },
     philosophy: {
       read_type: 'philosophy', name: '哲学书', adler_category: '哲学书',
-      goal: '抠紧作者专属词义边界，剥离前提 → 推论 → 结论与反驳',
+      goal: '抠紧作者专属词义边界，剥离前提 → 推论 → 结论、批判谱系、论战交锋与反例边界',
       blueprints: [
         { blueprint: 'argument_map', label: '论证逻辑树' },
         { blueprint: 'term_contrast', label: '词义辨析双栏表' },
         { blueprint: 'lineage_dag', label: '批判谱系图' },
       ],
-      extensions: [{ action: 'sparring_dossier', label: '学术交锋档案', cross_search: false }],
+      extensions: [
+        { action: 'sparring_dossier', label: '学术交锋档案', cross_search: false },
+        { action: 'counterexample_lab', label: '反例与现实检验', cross_search: false },
+      ],
     },
     social: {
       read_type: 'social', name: '社会科学', adler_category: '社会科学',
@@ -2048,8 +2051,7 @@
     const b = clean(readingNote);
     if (!a) return true;
     if (!b) return false;
-    if (a === b) return true;
-    if (b.includes(a)) return true;
+    if (a === b || b.includes(a)) return true;
     if (a.includes(b) && a.length <= b.length * 1.45) return true;
     if (a.length < 4 || b.length < 4) return false;
     const bigrams = (str) => {
@@ -2133,7 +2135,7 @@
     }
     if (fig && Array.isArray(fig.sections)) {
       for (const sec of fig.sections) {
-        for (const it of (sec.items || [])) { const hit = pick(it.blocks); if (hit) return hit; }
+        for (const it of (sec && sec.items) || []) { const hit = pick(it.blocks); if (hit) return hit; }
       }
     }
     if (fig && Array.isArray(fig.items)) {
