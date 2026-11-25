@@ -344,6 +344,7 @@ def render_assist_figure(figure):
         "lineage_dag": "tree",
         "power_hierarchy": "tree",
         "spatial_route": "network",
+        "historical_causality": "network",
         "relation_graph": "network",
         "flow_swimlane": "flow",
         "decision_tree": "tree",
@@ -366,9 +367,13 @@ def render_assist_figure(figure):
     reading_note = str(figure.get("reading_note") or "")
     body = ""
     raw_data = figure.get("data") if isinstance(figure.get("data"), dict) else {}
-    if family in NODE_FAMILIES and isinstance(raw_data.get("nodes"), list):
+    bp_mode = str(raw_data.get("mode") or "").strip().lower()
+    if bp_mode == "not_applicable":
+        reason = str(raw_data.get("not_applicable_reason") or figure.get("summary") or "本章无显著空间格局约束。")
+        body = f'<p class="fig-fallback">{html.escape(reason)}</p>'
+    if not body and family in NODE_FAMILIES and isinstance(raw_data.get("nodes"), list):
         body = _node_svg(figure)
-    elif family == "matrix":
+    elif not body and family == "matrix":
         if isinstance(raw_data.get("columns"), list):
             compat_rows = []
             for r in raw_data.get("rows") or []:
@@ -378,7 +383,7 @@ def render_assist_figure(figure):
                     compat_rows.append(r)
             compat = dict(figure, data={"columns": raw_data["columns"], "rows": compat_rows})
             body = _matrix_body(compat, {}, [])
-    elif family == "quantity":
+    elif not body and family == "quantity":
         if isinstance(raw_data.get("points"), list):
             compat_items = [
                 {"label": p.get("beat", ""), "value": p.get("tension", 0)}
@@ -389,6 +394,20 @@ def render_assist_figure(figure):
             body = _quantity_body(compat, {}, [])
         else:
             body = _quantity_body(figure, {}, [])
+    if not body and isinstance(figure.get("sections"), list):
+        parts = ['<div class="fig-sections">']
+        for sec in figure["sections"]:
+            if not isinstance(sec, dict):
+                continue
+            parts.append(f"<h5>{html.escape(str(sec.get('title') or ''))}</h5><ul>")
+            for it in sec.get("items") or []:
+                if isinstance(it, dict):
+                    head = str(it.get("name") or it.get("title") or "").strip()
+                    txt = str(it.get("body") or it.get("detail") or "").strip()
+                    parts.append(f"<li><b>{html.escape(head)}</b>：{html.escape(txt)}</li>")
+            parts.append("</ul>")
+        parts.append("</div>")
+        body = "".join(parts)
     if not body:
         body = _fallback(figure, "由前端蓝图引擎或要点清单渲染。", {}, [])
     return (

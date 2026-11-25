@@ -26,6 +26,7 @@ ACTION_LABELS = {
     "ask": "自由追问",
     "checklist": "行动自检清单",
     "imagery": "意象与舞台词典",
+    "historical_dossier": "人物与名物档案",
     "compare_context": "多史家视角对照",
     "boundary_check": "演进与适用边界",
     "sparring_dossier": "学术交锋档案",
@@ -440,22 +441,80 @@ class ReadingService:
         return "\n".join(parts)[:1800]
 
     def _chapter_scope_context(self, uid, n, blocks, *, source_sha="", budget=12000):
-        """构造全章作用域下的带块号文本（中小章全量、超长章均匀骨架覆盖）。"""
-        semantic = []
+        """构造全章作用域下的带块号文本（正文优先全量/均布，章末被引用注释受预算隔离）。"""
+        body_semantic: list[tuple[str, str, str]] = []
+        fn_semantic: list[tuple[str, str, str]] = []
+        cited_fn_ids: set[str] = set()
+        body_has_fn_refs = False
+
         for blk in blocks or []:
             bid = blk.get("id") or ""
+            kind = blk.get("kind") or "paragraph"
             txt = _block_preview_text(blk)
+            if kind == "footnote":
+                if bid and txt:
+                    fn_semantic.append((bid, kind, txt))
+                for ref_bid in blk.get("ref_blocks") or []:
+                    if ref_bid:
+                        cited_fn_ids.add(bid)
+                        break
+                continue
+            for ref in blk.get("fn_refs") or []:
+                body_has_fn_refs = True
+                tbid = (ref or {}).get("target_block")
+                if tbid:
+                    cited_fn_ids.add(tbid)
+            for item_refs in blk.get("item_fn_refs") or []:
+                for ref in item_refs or []:
+                    body_has_fn_refs = True
+                    tbid = (ref or {}).get("target_block")
+                    if tbid:
+                        cited_fn_ids.add(tbid)
             if bid and txt:
-                semantic.append((bid, blk.get("kind") or "paragraph", txt))
-        if not semantic:
+                body_semantic.append((bid, kind, txt))
+
+        if not body_semantic:
+            body_semantic = fn_semantic
+            fn_semantic = []
+        if not body_semantic:
             return "", 0, False
 
-        total_chars = sum(len(t) for _, _, t in semantic)
-        if total_chars <= budget:
-            lines = [f"[{bid}] {txt[:600]}" for bid, _, txt in semantic]
-            return "\n".join(lines), len(semantic), False
+        if cited_fn_ids:
+            selected_fns = [item for item in fn_semantic if item[0] in cited_fn_ids]
+        elif not body_has_fn_refs:
+            selected_fns = fn_semantic
+        else:
+            selected_fns = []
 
-        parts = []
+        body_chars = sum(len(t) for _, _, t in body_semantic)
+        fn_budget = min(int(budget * 0.18), max(320, int(body_chars * 0.18)))
+
+        def _append_footnotes(out_lines: list[str], cap: int) -> None:
+            if not selected_fns or cap <= 0:
+                return
+            fn_lines: list[str] = []
+            fn_used = 0
+            for bid, _, txt in selected_fns:
+                entry = f"[{bid}] {txt[:240]}"
+                if fn_used + len(entry) > cap and fn_lines:
+                    break
+                if fn_used + len(entry) > cap:
+                    entry = entry[:cap]
+                fn_lines.append(entry)
+                fn_used += len(entry) + 1
+                if fn_used >= cap:
+                    break
+            if fn_lines:
+                out_lines.append("")
+                out_lines.append("【章末注释（仅供考证参考，勿喧宾夺主）】")
+                out_lines.extend(fn_lines)
+
+        if body_chars <= budget:
+            lines = [f"[{bid}] {txt[:600]}" for bid, _, txt in body_semantic]
+            _append_footnotes(lines, fn_budget)
+            return "\n".join(lines), len(body_semantic), False
+
+        parts: list[str] = []
         used_chars = 0
         cmap = self.store.chapter_map(uid, n, source_sha=source_sha)
         if isinstance(cmap, dict) and not cmap.get("stale") and cmap.get("sections"):
@@ -471,10 +530,15 @@ class ReadingService:
                 parts.append(line)
                 used_chars += len(line) + 1
 
-        # 按整章均匀抽样代表块（保留全部小标题 + 首尾 + 等步长采样），保证覆盖 B01..Bnn 全程。
-        headings = {idx for idx, (_, kind, _) in enumerate(semantic) if kind == "heading"}
-        picked_idx = set(headings) | {0, min(1, len(semantic) - 1), max(0, len(semantic) - 2), len(semantic) - 1}
-        non_head = [idx for idx in range(len(semantic)) if idx not in picked_idx]
+        # 按整章均匀抽样代表块（保留全部小标题 + 首尾 + 等步长采样），保证覆盖全章正文。
+        headings = {idx for idx, (_, kind, _) in enumerate(body_semantic) if kind == "heading"}
+        picked_idx = set(headings) | {
+            0,
+            min(1, len(body_semantic) - 1),
+            max(0, len(body_semantic) - 2),
+            len(body_semantic) - 1,
+        }
+        non_head = [idx for idx in range(len(body_semantic)) if idx not in picked_idx]
         target_slots = 36
         if non_head:
             step = max(1, len(non_head) / target_slots)
@@ -486,13 +550,14 @@ class ReadingService:
         parts.append("【全章代表段落节选（均布覆盖）】")
         per_block_cap = max(180, min(380, (14000 - used_chars) // max(1, len(picked_idx))))
         for idx in sorted(picked_idx):
-            bid, _, txt = semantic[idx]
+            bid, _, txt = body_semantic[idx]
             line = f"[{bid}] {txt[:per_block_cap]}"
             if used_chars + len(line) > 14500:
                 break
             parts.append(line)
             used_chars += len(line) + 1
-        return "\n".join(parts), len(semantic), True
+        _append_footnotes(parts, min(fn_budget, int(budget * 0.15)))
+        return "\n".join(parts), len(body_semantic), True
 
     def _chapter_tool_cache_key(self, read_type, action, blueprint):
         key_part = blueprint if action == "diagram" and blueprint else action
@@ -679,7 +744,7 @@ class ReadingService:
                 )
                 figure = audited
                 diagram_html = diagrams.render_assist_figure(audited)
-                content = str(audited.get("summary") or audited.get("reading_note") or "").strip()
+                content = str(audited.get("summary") or "").strip()
             else:
                 figure = None
                 diagram_html = ""
@@ -693,7 +758,7 @@ class ReadingService:
             )
             figure = audited
             diagram_html = diagrams.render_assist_figure(audited)
-            content = str(audited.get("summary") or audited.get("reading_note") or "").strip()
+            content = str(audited.get("summary") or "").strip()
 
         summary_prefix = "全章 · " if effective_scope == "chapter" else ""
         summary_base = (clean_q or clean_text or chapter.get("title") or "").replace("\n", " ")[:90]

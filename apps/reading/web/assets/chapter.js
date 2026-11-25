@@ -127,13 +127,17 @@
     },
     history: {
       read_type: 'history', name: '历史书', adler_category: '历史书',
-      goal: '多线并行时空对照、权力结构拆解与跨史家视角比对',
+      goal: '多线并行时空对照、权力阵营拆解、历史因果演进与跨史家视角比对',
       blueprints: [
         { blueprint: 'parallel_timeline', label: '多线平行时间轴' },
-        { blueprint: 'power_hierarchy', label: '权力结构树' },
-        { blueprint: 'spatial_route', label: '战役疆域拓扑' },
+        { blueprint: 'power_hierarchy', label: '权力与阵营结构' },
+        { blueprint: 'spatial_route', label: '地理与空间态势' },
+        { blueprint: 'historical_causality', label: '历史因果演进图' },
       ],
-      extensions: [{ action: 'compare_context', label: '多史家视角对照', cross_search: true }],
+      extensions: [
+        { action: 'historical_dossier', label: '人物与名物档案', cross_search: false },
+        { action: 'compare_context', label: '多史家视角对照', cross_search: true },
+      ],
     },
     science: {
       read_type: 'science', name: '科学与数学', adler_category: '科学与数学',
@@ -2032,6 +2036,37 @@
     }
   }
 
+  function isRedundantSummary(summary, readingNote) {
+    const clean = (s) => String(s || '')
+      .replace(/\[(原文|补充|举例)\]/g, '')
+      .replace(/[\s，。、；：！？“”"'‘’（）()·—\-]/g, '')
+      .toLowerCase();
+    const a = clean(summary);
+    const b = clean(readingNote);
+    if (!a) return true;
+    if (!b) return false;
+    if (a === b) return true;
+    if (b.includes(a)) return true;
+    if (a.includes(b) && a.length <= b.length * 1.45) return true;
+    if (a.length < 4 || b.length < 4) return false;
+    const bigrams = (str) => {
+      const counts = new Map();
+      for (let i = 0; i < str.length - 1; i++) {
+        const bg = str.slice(i, i + 2);
+        counts.set(bg, (counts.get(bg) || 0) + 1);
+      }
+      return counts;
+    };
+    const ma = bigrams(a);
+    const mb = bigrams(b);
+    let hit = 0;
+    ma.forEach((cnt, bg) => {
+      if (mb.has(bg)) hit += Math.min(cnt, mb.get(bg));
+    });
+    const dice = (2 * hit) / ((a.length - 1) + (b.length - 1));
+    return dice >= 0.68 && a.length <= b.length * 1.65;
+  }
+
   function applyDoneResult(payload, requestedCacheKey) {
     lastResult = payload;
     loadingToolKey = '';
@@ -2061,7 +2096,8 @@
     } else if (payload.diagram_html) {
       RD.mount('drawer-diagram').innerHTML = payload.diagram_html;
     }
-    if (payload.content) {
+    const noteText = payload.figure && payload.figure.reading_note;
+    if (payload.content && !(payload.figure && isRedundantSummary(payload.content, noteText))) {
       RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(payload.content);
     } else if (payload.figure) {
       RD.mount('drawer-answer').innerHTML = '';
@@ -2081,9 +2117,19 @@
     if (fig && fig.data) {
       for (const nd of (fig.data.nodes || [])) { const hit = pick(nd.blocks); if (hit) return hit; }
       for (const pt of (fig.data.points || [])) { const hit = pick(pt.blocks); if (hit) return hit; }
-      for (const rw of (fig.data.rows || [])) { const hit = pick(rw.blocks); if (hit) return hit; }
+      for (const rw of (fig.data.rows || [])) {
+        const hit = pick(rw.blocks);
+        if (hit) return hit;
+        for (const cl of (rw.cells || [])) { if (cl) { const ch = pick(cl.blocks); if (ch) return ch; } }
+      }
+      for (const af of (fig.data.aftermath || [])) { const hit = pick(af.blocks); if (hit) return hit; }
       for (const qd of (fig.data.quadrants || [])) {
         for (const it of (qd.items || [])) { const hit = pick(it.blocks); if (hit) return hit; }
+      }
+    }
+    if (fig && Array.isArray(fig.sections)) {
+      for (const sec of fig.sections) {
+        for (const it of (sec.items || [])) { const hit = pick(it.blocks); if (hit) return hit; }
       }
     }
     if (fig && Array.isArray(fig.items)) {
