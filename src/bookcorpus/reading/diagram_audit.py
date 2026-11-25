@@ -12,7 +12,28 @@ SPATIAL_EDGE_LABEL_LIMIT = 14
 MAX_GRAPH_NODES = 16
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
-_SOURCE_PREFIX_RE = re.compile(r"^(?:【(?:原文|补充)】\s*|\[(?:原文|补充)\]\s*|(?:原文|补充)\s*[:：]\s*)+")
+_SOURCE_PREFIX_RE = re.compile(
+    r"^(?:【(?:原文|补充)】\s*|\[(?:原文|补充)\]\s*|(?:原文|补充对照|补充|延伸)\s*[:：]\s*)+"
+)
+_EMPTY_TERM_VALUES = frozenset({"无", "暂无", "无对应", "无原词", "none", "n/a", "na", "-", "—", "/"})
+_SPARRING_PLACEHOLDER_NOTE = "先看清作者到底在反驳谁"
+
+ARGUMENT_ROLES = frozenset({"premise", "inference", "rebuttal", "conclusion", "condition"})
+LINEAGE_ROLES = frozenset({"predecessor", "ally", "mediator", "target", "author"})
+LINEAGE_RELATIONS = frozenset({"inherit", "transform", "critique", "contrast"})
+
+EXTENSION_SECTION_META: dict[str, tuple[tuple[str, str], ...]] = {
+    "sparring_dossier": (
+        ("debate", "核心论战交锋"),
+        ("thought_experiment", "思想实验与核心隐喻"),
+    ),
+    "counterexample_lab": (
+        ("hidden_premise", "隐含未言明前提"),
+        ("counterexample", "哲学反例与极端压力测试"),
+        ("modern_boundary", "当代现实映射与适用边界"),
+    ),
+}
+
 _TIME_BC_RE = re.compile(r"(?:公元前|前)\s*(\d{1,4})\s*年?")
 _TIME_AD_RE = re.compile(r"(-?\d{1,4})\s*年")
 _LITERATURE_ANTI_SPOILER = (
@@ -85,21 +106,22 @@ LEGACY_FAMILY_TO_BLUEPRINT = {
 
 BLUEPRINT_SCHEMA_HINTS: dict[str, str] = {
     "argument_map": (
-        '"blueprint":"argument_map","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"A1","role":"premise|inference|rebuttal|conclusion","label":"≤16字短标题",'
-        '"detail":"≤45字展开说明","blocks":["B01"],"source":"原文|补充"}],'
-        '"edges":[{"from":"A1","to":"A2","label":"≤5字关系"}]}'
+        '"blueprint":"argument_map","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读（勿复读reading_note）",'
+        '"data":{"nodes":[{"id":"A1","role":"premise|inference|rebuttal|conclusion|condition","label":"≤16字短标题",'
+        '"detail":"≤55字展开论证与依据","blocks":["B01"],"source":"原文|补充"}],'
+        '"edges":[{"from":"A1","to":"A2","label":"≤5字逻辑关系"}]}'
     ),
     "term_contrast": (
-        '"blueprint":"term_contrast","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
+        '"blueprint":"term_contrast","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读（勿复读reading_note）",'
         '"data":{"columns":["核心术语","日常汉语直觉","作者专属定义","出处"],'
-        '"rows":[{"key":"术语","everyday":"日常义","author":"作者专义","blocks":["B01"],"source":"原文|补充"}]}'
+        '"rows":[{"key":"术语","original_term":"原文外文或古文原词(无则留空)","everyday":"日常义","author":"作者专义","blocks":["B01"],"source":"原文|补充"}]}'
     ),
     "lineage_dag": (
-        '"blueprint":"lineage_dag","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"L1","role":"rebuttal|inference|conclusion","label":"≤16字学者或流派",'
-        '"detail":"≤45字观点演变","blocks":["B01"],"source":"原文|补充"}],'
-        '"edges":[{"from":"L1","to":"L2","label":"≤5字批判/继承"}]}'
+        '"blueprint":"lineage_dag","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读（勿复读reading_note）",'
+        '"data":{"mode":"lineage|not_applicable","not_applicable_reason":"仅当mode为not_applicable时写2句说明",'
+        '"nodes":[{"id":"L1","role":"predecessor|ally|mediator|target|author","label":"≤16字学者/学派/作者立场",'
+        '"detail":"≤55字思想关联与张力","blocks":["B01"],"source":"原文|补充"}],'
+        '"edges":[{"from":"L1","to":"L2","relation":"inherit|transform|critique|contrast","label":"≤5字关系"}]}'
     ),
     "parallel_timeline": (
         '"blueprint":"parallel_timeline","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
@@ -288,10 +310,48 @@ EXTENSION_PROMPT_SPECS: dict[str, dict[str, str]] = {
     "sparring_dossier": {
         "blueprint": "extension_dossier",
         "title": "学术交锋档案",
+        "guidance": (
+            "结构与口径要求（两分区、共 6–8 条）：\n"
+            "1. reading_note 必须针对本章具体论战对象与思想脉络定制"
+            "（例如点出反驳谁、核心张力何在），严禁照抄泛泛占位句！\n"
+            '2. 第一区 section="debate"（核心论战交锋，3–4 条）：'
+            "按「论敌/靶子观点 → 作者反击 → 未决张力」高密度拆解；\n"
+            '3. 第二区 section="thought_experiment"（思想实验与核心隐喻，2–4 条）：'
+            "专拆本章推动论证的经典思想实验或核心隐喻，讲清实验设定与所证命题；\n"
+            '4. 严格区分来源：出自本章正文与章末自带脚注的内容 source 标 "原文"；'
+            '仅跨书对比或外部思想史参照标 "补充"，且 body 开头禁止写"补充对照："或"补充："。\n'
+            "5. summary 须提炼 2 句总评，不得机械复读 reading_note。"
+        ),
         "instruction": (
             '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字思想交锋题",'
-            '"reading_note":"先看清作者到底在反驳谁","summary":"2句立场综述","items":[{"title":"≤20字论敌或思想实验",'
-            '"body":"≤70字反驳目标与跨学派对照","blocks":["B01"],"source":"原文|补充"}]}'
+            '"reading_note":"≤40字本章定制导读（点出具体交锋对象，勿抄占位句）",'
+            '"summary":"2句总评（勿复读reading_note）",'
+            '"items":[{"section":"debate|thought_experiment","title":"≤20字论战对象或思想实验名",'
+            '"stance":"≤8字标签(如 论战靶子/思想实验/核心隐喻)",'
+            '"body":"≤90字高密度拆解（靶子观点→作者反击→未决张力，或实验设定→所证命题）",'
+            '"blocks":["B01"],"source":"原文|补充"}]}'
+        ),
+    },
+    "counterexample_lab": {
+        "blueprint": "extension_dossier",
+        "title": "反例与现实检验",
+        "guidance": (
+            "结构与口径要求（三分区、共 5–7 条）：\n"
+            '1. 第一区 section="hidden_premise"（隐含未言明前提，2 条）：'
+            '揭示作者论证默认成立但未明说的前提假设，锚定原文块号（source 标 "原文"）；\n'
+            '2. 第二区 section="counterexample"（哲学反例与极端压力测试，2–3 条）：'
+            '构造直击论证薄弱点的极端反例或反直觉场景（source 标 "补充"，blocks 锚定被检验的原文段落）；\n'
+            '3. 第三区 section="modern_boundary"（当代现实映射与适用边界，1–2 条）：'
+            '界定该论证在当代科技、制度与伦理语境下仍有效之处与失效边界（source 标 "补充"）；\n'
+            "4. reading_note 须针对本章核心命题定制；summary 须与卡片正文、reading_note 错位互补，"
+            '严禁机械复读；body 开头禁止写"补充对照："或"补充："。'
+        ),
+        "instruction": (
+            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字反例检验题",'
+            '"reading_note":"≤40字本章定制导读","summary":"2句检验结论（勿复读reading_note或正文）",'
+            '"items":[{"section":"hidden_premise|counterexample|modern_boundary","title":"≤20字前提/反例/边界名",'
+            '"stance":"≤8字标签(如 隐含前提/极端反例/当代边界)","body":"≤95字具体分析（勿加补充前缀）",'
+            '"blocks":["B01"],"source":"原文|补充"}]}'
         ),
     },
     "method_audit": {
@@ -366,6 +426,35 @@ BLUEPRINT_GUIDANCE: dict[str, str] = {
         "与 1–3 个最关键代表块号 blocks。\n"
         "- 每条边填写 rel_kind：bond(亲情/爱恋)、conflict(冲突/对抗)、asymmetry(隐瞒/错位/不平等)、family(血缘/姻亲)。"
     ),
+    "argument_map": (
+        "专项约束（论证逻辑树）：\n"
+        "- 必须按「核心论点/结论 ← 多条并行前提/理由 ← 潜在质疑与作者回应」的广度汇流树抽取"
+        "（建议 6–10 节点，硬上限 16 个）。\n"
+        "- 严禁按自然段顺序串成 9–10 层单链“段落大纲”，"
+        "严禁把译者注、编者注或纯文献出处注画成正式论证节点。\n"
+        "- 每节点 blocks 精选 1–3 个最直接支撑段落（禁止把连续多句诗行或整页块号全堆成一串）。\n"
+        "- 节点 role 仅限 premise（前提）、inference（推论）、"
+        "rebuttal（质疑/反驳）、conclusion（核心结论）、condition（限定条件）。"
+    ),
+    "term_contrast": (
+        "专项约束（词义辨析双栏表）：\n"
+        "- 严格收录 6–9 个核心哲学概念或作者专属术语，明确过滤普通观点句、结论句或生活格言。\n"
+        "- original_term 填写原文明确出现或哲学史公认的外文/古文原词"
+        "（如 Bourgeois、Anerkennung / Recognition、L'abyme de la philosophie）；"
+        '若原文未出现且无公认对应原词则留空 ""，严禁杜撰。\n'
+        "- 突出「日常汉语直觉」与「作者专属定义」之间的语义张力，每条配 1–3 个最直接出处块号。"
+    ),
+    "lineage_dag": (
+        "专项约束（批判谱系图 — 与论证大纲彻底解耦）：\n"
+        "- 每个节点必须是具体的思想家、哲学学派、思潮或作者自身立场"
+        "（建议 6–12 节点，硬上限 16 个），严禁出现章节大纲句或一般命题摘要！\n"
+        "- 节点 role 仅限 predecessor（前辈渊源）、ally（同调佐证）、"
+        "mediator（转译改造）、target（批驳靶子）、author（作者立场）。\n"
+        "- 每条边必须填 relation（inherit 继承 / transform 改造 / critique 批驳 / contrast 对照）"
+        "及 ≤5 字简短 label（避免冗余交叉边）。\n"
+        '- 若本章完全不涉及任何外部思想家、哲学学派或思潮对话，请设 data.mode="not_applicable" '
+        "并用 2 句 not_applicable_reason 说明，绝不强行编造或拿章节大纲充数。"
+    ),
 }
 
 _LITERATURE_SPATIAL_GUIDANCE = (
@@ -423,7 +512,7 @@ def prompt_for_diagram(
         else "2. 严禁输出任何像素坐标、宽高、颜色或 HTML/SVG 代码。\n"
     )
     edge_limit_hint = "12 字以内" if (chosen == "spatial_route" and not is_lit_spatial) else "5 字以内"
-    node_cap_hint = f"（图节点上限 {MAX_GRAPH_NODES} 个，建议 6–12 个）" if chosen in DAG_BLUEPRINTS else ""
+    node_cap_hint = f"（图节点上限 {MAX_GRAPH_NODES} 个，建议见专项约束或 6–12 个）" if chosen in DAG_BLUEPRINTS else ""
     system = (
         f"你是阅读伴读助手，擅长把复杂文字转成清晰的关系图与结构化蓝图{type_hint}。\n"
         f"{scope_hint}\n"
@@ -433,7 +522,7 @@ def prompt_for_diagram(
         f"{coord_rule}"
         f"3. 每个节点主标题严格控制在 16 字以内，详细解释放到 detail；边标签控制在 {edge_limit_hint}{node_cap_hint}。\n"
         '4. 每个节点或要点都必须填写来源于本段实际编号的 blocks 数组（例如 ["B02"]），'
-        '并注明 source（"原文" 或 "补充"）；source 为 "补充" 时正文开头勿写"补充："。\n'
+        '并注明 source（"原文" 或 "补充"）；source 为 "补充" 时正文开头勿写"补充："，summary 勿复读 reading_note。\n'
         f"请按以下 JSON 槽位输出：{{{schema_hint}}}"
     )
     book_title = (book or {}).get("title") or ""
@@ -466,9 +555,10 @@ def prompt_for_extension(
     """构建书型专属扩展动作的 JSON 结构化 Prompt。"""
     spec = EXTENSION_PROMPT_SPECS[action]
     sub_hint = f"（文学子类侧重点：{sub_kind}）" if sub_kind else ""
+    type_hint = f"（阅读视角：{read_type}）" if read_type else ""
     scope_hint = (
-        f"作用范围：整章全局（涵盖全章 {covered_blocks or '全部'} 个段落"
-        + ("，已按连续场景窗口覆盖" if sampled else "")
+        f"作用范围：整章全局（涵盖全章 {covered_blocks or '全部'} 个正文段落"
+        + ("，已连续场景窗口覆盖" if sampled else "")
         + "）。请归纳全章而不只看开头。"
         if scope == "chapter"
         else f"作用范围：读者选中的段落（{', '.join(block_ids or []) or '局部'}）。"
@@ -479,11 +569,15 @@ def prompt_for_extension(
         and _LITERATURE_ANTI_SPOILER not in spec["instruction"]
         else ""
     )
+    guidance = spec.get("guidance") or ""
+    guidance_block = f"{guidance}\n" if guidance else ""
     system = (
-        f"你是阅读伴读专家，负责生成「{spec['title']}」结构卡片{sub_hint}。\n"
+        f"你是阅读伴读专家，负责生成「{spec['title']}」结构卡片{type_hint}{sub_hint}。\n"
         f"{scope_hint}\n"
         f"{spoiler_rule}"
-        "严格区分 [原文] 与 [补充]，严禁输出坐标或样式，只输出一个严格 JSON 对象（不要围栏）：\n"
+        f"{guidance_block}"
+        '严格区分 [原文] 与 [补充]（source 为 "补充" 时 body 开头禁止写"补充对照："或"补充："），'
+        "严禁输出坐标或样式，只输出一个严格 JSON 对象（不要围栏）：\n"
         f"{spec['instruction']}"
     )
     book_title = (book or {}).get("title") or ""
@@ -580,6 +674,36 @@ def _parse_sort_year(raw_val: Any, time_lbl: str) -> int | None:
     return None
 
 
+def _norm_lineage_role(raw_role: Any) -> str:
+    role = str(raw_role or "").strip().lower()
+    if role in LINEAGE_ROLES:
+        return role
+    mapping = {
+        "premise": "predecessor",
+        "axiom": "predecessor",
+        "condition": "mediator",
+        "inference": "mediator",
+        "rebuttal": "target",
+        "rival": "target",
+        "conclusion": "author",
+    }
+    return mapping.get(role, "mediator")
+
+
+def _norm_lineage_relation(raw_rel: Any, label: str) -> str:
+    rel = str(raw_rel or "").strip().lower()
+    if rel in LINEAGE_RELATIONS:
+        return rel
+    lbl = str(label or "")
+    if any(k in lbl for k in ("批", "驳", "反", "敌", "拒", "破")):
+        return "critique"
+    if any(k in lbl for k in ("改", "转", "修", "重", "化", "发展")):
+        return "transform"
+    if any(k in lbl for k in ("对", "比", "异", "分", "参")):
+        return "contrast"
+    return "inherit"
+
+
 def _audit_dag_data(
     raw_data: dict[str, Any],
     *,
@@ -588,6 +712,21 @@ def _audit_dag_data(
     logs: list[str],
     blueprint: str = "",
 ) -> dict[str, Any] | None:
+    if blueprint == "lineage_dag" and str(raw_data.get("mode") or "").strip().lower() == "not_applicable":
+        reason = str(
+            raw_data.get("not_applicable_reason")
+            or raw_data.get("reason")
+            or "本章集中展开内部论证或对话，未涉及外部思想家或学派谱系。"
+        ).strip()
+        logs.append("当前章节未涉及外部思想家或学派对话，已返回 not_applicable 提示")
+        return {
+            "mode": "not_applicable",
+            "reason": reason,
+            "not_applicable_reason": reason,
+            "nodes": [],
+            "edges": [],
+        }
+
     raw_nodes = raw_data.get("nodes")
     if not isinstance(raw_nodes, list) or not raw_nodes:
         return None
@@ -618,10 +757,16 @@ def _audit_dag_data(
             hint=label,
             logs=logs,
         )
-        node_ids.add(nid)
-        role = str(item.get("role") or fallback_role).strip()
-        if blueprint == "power_hierarchy" and role not in POWER_ROLES:
+        raw_role = str(item.get("role") or fallback_role).strip()
+        if blueprint == "argument_map":
+            role = raw_role.lower() if raw_role.lower() in ARGUMENT_ROLES else "inference"
+        elif blueprint == "lineage_dag":
+            role = _norm_lineage_role(raw_role)
+        elif blueprint == "power_hierarchy" and raw_role not in POWER_ROLES:
             role = fallback_role
+        else:
+            role = raw_role or fallback_role
+        node_ids.add(nid)
         node_entry: dict[str, Any] = {
             "id": nid,
             "role": role,
@@ -663,9 +808,24 @@ def _audit_dag_data(
         rel_kind = str(edge.get("rel_kind") or "").strip()
         if rel_kind:
             entry["rel_kind"] = rel_kind
+        if blueprint == "lineage_dag":
+            entry["relation"] = _norm_lineage_relation(
+                edge.get("relation") or edge.get("relation_type"),
+                short_lbl,
+            )
         edges.append(entry)
 
-    return {"nodes": nodes, "edges": edges}
+    out: dict[str, Any] = {"nodes": nodes, "edges": edges}
+    if blueprint == "lineage_dag":
+        out["mode"] = "lineage"
+    return out
+
+
+def _clean_original_term(val: Any) -> str:
+    txt = str(val or "").strip()
+    if not txt or txt.lower() in _EMPTY_TERM_VALUES:
+        return ""
+    return txt[:80]
 
 
 def _clamp_pct(val: Any, default: float = 50.0) -> float:
@@ -851,22 +1011,24 @@ def _audit_matrix_data(
         if isinstance(row, dict):
             source = _norm_source(row.get("source"))
             key = _strip_source_prefix(str(row.get("key") or row.get("term") or ""), source)
+            original_term = _clean_original_term(row.get("original_term") or row.get("orig_term"))
             everyday = _strip_source_prefix(str(row.get("everyday") or row.get("col1") or ""), source)
             author = _strip_source_prefix(str(row.get("author") or row.get("col2") or ""), source)
             extra = _strip_source_prefix(str(row.get("extra") or row.get("col3") or ""), source)
             blocks = _clean_blocks(
                 row.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=key or "矩阵行", logs=logs
             )
-            rows.append(
-                {
-                    "key": key,
-                    "everyday": everyday,
-                    "author": author,
-                    "extra": extra,
-                    "blocks": blocks,
-                    "source": source,
-                }
-            )
+            entry: dict[str, Any] = {
+                "key": key,
+                "everyday": everyday,
+                "author": author,
+                "extra": extra,
+                "blocks": blocks,
+                "source": source,
+            }
+            if original_term or "original_term" in row or "orig_term" in row:
+                entry["original_term"] = original_term
+            rows.append(entry)
         elif isinstance(row, list) and row:
             cells = [str(c) for c in row]
             rows.append(
@@ -1140,7 +1302,12 @@ def _build_fallback_payload(
             if not label:
                 continue
             detail = _strip_source_prefix(
-                str(entry.get("detail") or entry.get("note") or entry.get("emotion") or ""),
+                str(
+                    entry.get("detail")
+                    or entry.get("note")
+                    or entry.get("emotion")
+                    or " · ".join(p for p in (str(entry.get("everyday") or ""), str(entry.get("author") or "")) if p)
+                ),
                 source,
             )
             blocks = _clean_blocks(
@@ -1171,7 +1338,8 @@ def _build_fallback_payload(
                 "source": "原文",
             }
         )
-    logs.append("已触发 fallback_list 安全降级，确保不白屏且保留原文块锚点")
+    notice = "由于原图节点超限或字段不完整，系统已自动降级为保留原段落锚点的结构化清单。"
+    logs.append("已触发 fallback_list 安全降级，确保不白屏且保留各条原文块锚点")
     return {
         "blueprint": "fallback_list",
         "caption": caption or "结构化阅读要点（已安全降级）",
@@ -1183,12 +1351,53 @@ def _build_fallback_payload(
     }
 
 
+def _tailor_reading_note(
+    reading_note: str, *, action: str, caption: str, items: list[dict[str, Any]], logs: list[str]
+) -> str:
+    note = reading_note.strip()
+    if (action == "sparring_dossier" or _SPARRING_PLACEHOLDER_NOTE in note) and (
+        not note or _SPARRING_PLACEHOLDER_NOTE in note
+    ):
+        titles = [str(it.get("title") or "").strip() for it in items[:2] if str(it.get("title") or "").strip()]
+        if titles:
+            custom = f"围绕「{' / '.join(titles)}」把握本章论战靶子与思想实验"[:40]
+        else:
+            custom = f"聚焦「{caption}」拆解论战交锋与核心隐喻"[:40]
+        if _SPARRING_PLACEHOLDER_NOTE in note:
+            logs.append("检测到泛泛占位 reading_note，已按本章交锋对象定制替换")
+        return custom
+    return note
+
+
+def _group_extension_sections(items: list[dict[str, Any]], *, requested_action: str) -> list[dict[str, Any]]:
+    meta = EXTENSION_SECTION_META.get(requested_action)
+    if not meta:
+        item_secs = {str(it.get("section") or "").strip() for it in items if it.get("section")}
+        for act_meta in EXTENSION_SECTION_META.values():
+            known = {sid for sid, _ in act_meta}
+            if item_secs & known:
+                meta = act_meta
+                break
+    if not meta:
+        return []
+    title_by_id = dict(meta)
+    buckets: dict[str, list[dict[str, Any]]] = {sid: [] for sid, _ in meta}
+    fallback_sid = meta[0][0]
+    for it in items:
+        sid = str(it.get("section") or "").strip()
+        if sid not in buckets:
+            sid = fallback_sid
+        buckets[sid].append(it)
+    return [{"id": sid, "title": title_by_id[sid], "items": buckets[sid]} for sid, _ in meta if buckets[sid]]
+
+
 def audit_blueprint_payload(
     raw_or_parsed: Any,
     valid_block_ids: set[str] | list[str] | tuple[str, ...],
     *,
     fallback_block_ids: list[str] | None = None,
     requested_blueprint: str = "",
+    requested_action: str = "",
 ) -> dict[str, Any]:
     """审计、清洗并规范化图解/扩展 JSON；严重残缺时返回 fallback_list。"""
     valid_ids = {str(b) for b in valid_block_ids if str(b)}
@@ -1239,6 +1448,7 @@ def audit_blueprint_payload(
 
         if isinstance(raw_sections, list):
             sections: list[dict[str, Any]] = []
+            flat_items: list[dict[str, Any]] = []
             for s_idx, sec in enumerate(raw_sections):
                 if not isinstance(sec, dict):
                     continue
@@ -1250,6 +1460,7 @@ def audit_blueprint_payload(
                     logs=logs,
                 )
                 if sec_items:
+                    flat_items.extend(sec_items)
                     sections.append(
                         {
                             "id": str(sec.get("id") or f"sec-{s_idx + 1}").strip(),
@@ -1267,6 +1478,9 @@ def audit_blueprint_payload(
                     default_blocks=default_blocks,
                     logs=logs,
                 )
+            reading_note = _tailor_reading_note(
+                reading_note, action=requested_action, caption=caption, items=flat_items, logs=logs
+            )
             if not logs:
                 logs.append("扩展分区卡片校验通过。")
             return {
@@ -1295,9 +1509,12 @@ def audit_blueprint_payload(
                 default_blocks=default_blocks,
                 logs=logs,
             )
+        reading_note = _tailor_reading_note(
+            reading_note, action=requested_action, caption=caption, items=items, logs=logs
+        )
         if not logs:
             logs.append("扩展卡片校验通过。")
-        return {
+        ext_res: dict[str, Any] = {
             "blueprint": bp or "extension_dossier",
             "caption": caption,
             "reading_note": reading_note,
@@ -1305,6 +1522,10 @@ def audit_blueprint_payload(
             "audit_log": logs,
             "items": items,
         }
+        sections = _group_extension_sections(items, requested_action=requested_action)
+        if sections:
+            ext_res["sections"] = sections
+        return ext_res
 
     raw_data = parsed.get("data")
     if not isinstance(raw_data, dict):
@@ -1335,7 +1556,9 @@ def audit_blueprint_payload(
         audited_data = _audit_quadrant_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
     else:
         # Unknown blueprint name -> try DAG first
-        audited_data = _audit_dag_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
+        audited_data = _audit_dag_data(
+            raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs, blueprint=bp
+        )
         if audited_data is not None:
             bp = "flow_swimlane"
 

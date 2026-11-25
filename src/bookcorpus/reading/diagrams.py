@@ -370,7 +370,10 @@ def render_assist_figure(figure):
     bp_mode = str(raw_data.get("mode") or "").strip().lower()
     if bp_mode == "not_applicable":
         reason = str(
-            raw_data.get("not_applicable_reason") or figure.get("summary") or "本章无显著空间动线或格局约束。"
+            raw_data.get("not_applicable_reason")
+            or raw_data.get("reason")
+            or figure.get("summary")
+            or "本章无显著空间动线或外部学派谱系。"
         ).strip()
         body = f'<p class="fig-fallback">{html.escape(reason)}</p>'
     if not body and family in NODE_FAMILIES and isinstance(raw_data.get("nodes"), list):
@@ -416,7 +419,7 @@ def render_assist_figure(figure):
             parts.append(f"<h5>{html.escape(str(sec.get('title') or ''))}</h5><ul>")
             for it in sec.get("items") or []:
                 if isinstance(it, dict):
-                    head = str(it.get("name") or it.get("title") or "").strip()
+                    head = str(it.get("name") or it.get("title") or it.get("text") or "").strip()
                     txt = str(it.get("body") or it.get("detail") or "").strip()
                     parts.append(f"<li><b>{html.escape(head)}</b>：{html.escape(txt)}</li>")
             parts.append("</ul>")

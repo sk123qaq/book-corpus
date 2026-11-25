@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 import uuid
 
@@ -31,6 +32,7 @@ ACTION_LABELS = {
     "compare_context": "多史家视角对照",
     "boundary_check": "演进与适用边界",
     "sparring_dossier": "学术交锋档案",
+    "counterexample_lab": "反例与现实检验",
     "method_audit": "方法与样本局限",
     "craft_notes": "工艺流派考据",
     "pin": "钉住旁批",
@@ -57,6 +59,25 @@ def _usage_tokens(usage):
     return int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0) + int(
         usage.get("completion_tokens") or usage.get("output_tokens") or 0
     )
+
+
+_TRANSLATOR_END_RE = re.compile(r"(?:——|—|--)\s*(?:译者|编者|校者|译注|编按)\s*$")
+_TRANSLATOR_HEAD_RE = re.compile(r"^\s*(?:译者?注|编者?注|校者?注|编按|译注)\s*[:：]")
+_TRANSLATOR_MID_RE = re.compile(r"(?:中译文[采参]?自|译文稍?有改动|编按\s*[:：])")
+_BIB_REF_HEAD_RE = re.compile(
+    r"^\s*(?:参见|另见|见|这一观点见|关于.{1,36}?的说明[，,]\s*见|对.{1,36}?的(?:一个)?(?:当代)?例子[，,]\s*见)\b"
+)
+_BIB_PURE_CIT_RE = re.compile(r"^\s*[A-Z][A-Za-zÀ-ÿ\s.,'\":;()&—–-]{2,120}(?:pp?\.\s*\d+|vol\.\s*\d+)\s*\.?\s*$")
+
+
+def _is_translator_or_bib_note(text: str) -> bool:
+    """识别译者注、编者注或纯文献出处尾注，避免喂入论证树/谱系图。"""
+    txt = (text or "").strip()
+    if not txt:
+        return True
+    if _TRANSLATOR_END_RE.search(txt) or _TRANSLATOR_HEAD_RE.match(txt) or _TRANSLATOR_MID_RE.search(txt):
+        return True
+    return bool(_BIB_REF_HEAD_RE.match(txt) or _BIB_PURE_CIT_RE.match(txt))
 
 
 def _block_preview_text(block):
@@ -443,7 +464,7 @@ class ReadingService:
         return "\n".join(parts)[:1800]
 
     def _chapter_scope_context(self, uid, n, blocks, *, source_sha="", budget=24000):
-        """构造全章作用域下的带块号文本（24k 字内正文全量直出，超阈按连续场景窗口采样，章末被引用注释受预算隔离）。"""
+        """构造全章作用域下的带块号文本（24k 内全量不截断、超长章连续窗口采样、译者注与尾注隔离）。"""
         body_semantic: list[tuple[str, str, str]] = []
         fn_semantic: list[tuple[str, str, str]] = []
         cited_fn_ids: set[str] = set()
@@ -474,6 +495,18 @@ class ReadingService:
             if bid and txt:
                 body_semantic.append((bid, kind, txt))
 
+        # 剥离文末「注释/译注」小标题与未被标成 footnote 的文末译者注/编者注
+        while body_semantic:
+            last_bid, last_kind, last_txt = body_semantic[-1]
+            if last_kind == "heading" and footnotes.NOTE_HEADING_RE.match(last_txt):
+                body_semantic.pop()
+                continue
+            if _TRANSLATOR_END_RE.search(last_txt) or _TRANSLATOR_HEAD_RE.match(last_txt):
+                fn_semantic.append((last_bid, "footnote", last_txt))
+                body_semantic.pop()
+                continue
+            break
+
         if not body_semantic:
             body_semantic = fn_semantic
             fn_semantic = []
@@ -481,14 +514,16 @@ class ReadingService:
             return "", 0, False
 
         if cited_fn_ids:
-            selected_fns = [item for item in fn_semantic if item[0] in cited_fn_ids]
+            candidate_fns = [item for item in fn_semantic if item[0] in cited_fn_ids]
         elif not body_has_fn_refs:
-            selected_fns = fn_semantic
+            candidate_fns = fn_semantic
         else:
-            selected_fns = []
+            candidate_fns = []
+        # 过滤掉纯译者注、编按与纯文献页码出处注，只保留作者/正文实质引用的脚注
+        selected_fns = [item for item in candidate_fns if not _is_translator_or_bib_note(item[2])]
 
         body_chars = sum(len(t) for _, _, t in body_semantic)
-        fn_budget = min(int(budget * 0.18), max(320, int(body_chars * 0.18)))
+        fn_budget = min(int(budget * 0.18), max(400, int(body_chars * 0.18)))
 
         def _append_footnotes(out_lines: list[str], cap: int) -> None:
             if not selected_fns or cap <= 0:
@@ -496,7 +531,7 @@ class ReadingService:
             fn_lines: list[str] = []
             fn_used = 0
             for bid, _, txt in selected_fns:
-                entry = f"[{bid}] {txt[:240]}"
+                entry = f"[{bid}] {txt[:500]}"
                 if fn_used + len(entry) > cap and fn_lines:
                     break
                 if fn_used + len(entry) > cap:
@@ -507,7 +542,10 @@ class ReadingService:
                     break
             if fn_lines:
                 out_lines.append("")
-                out_lines.append("【章末注释（仅供考证参考，勿喧宾夺主）】")
+                out_lines.append("【本章自带脚注（属原文出处，不可作为独立论证节点）】")
+                out_lines.append(
+                    "（注：以下脚注属于 [原文] 而非 [补充]，仅用于出处与概念核对，不可单独画作论证树节点。）"
+                )
                 out_lines.extend(fn_lines)
 
         if body_chars <= budget:
@@ -566,7 +604,7 @@ class ReadingService:
         close_start = min(close_indices) if close_indices else total_len
 
         # 3) 中段连续场景窗口（每窗口保留相邻多块上下文，避免对话体散点割裂）
-        reserved_chars = used_chars + _window_chars(picked_idx)
+        reserved_chars = used_chars + _window_chars(picked_idx) + (fn_budget if selected_fns else 0)
         mid_budget = max(4000, budget - reserved_chars)
         if close_start > open_end:
             span = close_start - open_end
@@ -777,7 +815,12 @@ class ReadingService:
         diagram_html = ""
         figure = None
         content = str(raw_content or "").strip()
-        default_anchor = [b["id"] for b in blocks[:1] if b.get("id")] if effective_scope == "chapter" else clean_blocks
+        default_anchor = (
+            [b["id"] for b in blocks if b.get("id") and b.get("kind") != "footnote"][:1]
+            or [b["id"] for b in blocks[:1] if b.get("id")]
+            if effective_scope == "chapter"
+            else clean_blocks
+        )
         if action == "diagram":
             parsed = diagram_audit.parse_json_payload(content)
             if isinstance(parsed, dict) and (parsed.get("data") or parsed.get("items")):
@@ -786,6 +829,7 @@ class ReadingService:
                     valid_ids,
                     fallback_block_ids=default_anchor,
                     requested_blueprint=effective_bp,
+                    requested_action=action,
                 )
                 figure = audited
                 diagram_html = diagrams.render_assist_figure(audited)
@@ -800,6 +844,7 @@ class ReadingService:
                 valid_ids,
                 fallback_block_ids=default_anchor,
                 requested_blueprint=ext_bp,
+                requested_action=action,
             )
             figure = audited
             diagram_html = diagrams.render_assist_figure(audited)
