@@ -4032,6 +4032,7 @@
   function bindStageInteractions(rootEl, onFocusBlock, optsOrZoom) {
     if (!rootEl) return;
     const opts = typeof optsOrZoom === 'function' ? { onZoomRequest: optsOrZoom } : optsOrZoom || {};
+    const onZoomRequest = opts.onZoomRequest;
     const onExpandNode = opts.onExpandNode;
     const onExpandAnchors = opts.onExpandAnchors;
 
