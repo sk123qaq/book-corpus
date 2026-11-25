@@ -1476,8 +1476,19 @@ def test_social_five_tools_layout_cards_metric_modes_and_actor_cards(tmp_path: P
     assert "3.7" in res["metric_series_wide"]["html"]
     assert "metric-legend" in res["metric_series_wide"]["html"]
     assert "metric-line" in res["metric_series_wide"]["html"]
+    assert 'stroke-width="1.2"' in res["metric_series_wide"]["html"]
     assert "metric-bar" in res["metric_comparison_wide"]["html"]
     assert "22" in res["metric_comparison_wide"]["html"]
+    assert 'class="metric-tick">0</text>' in res["metric_comparison_wide"]["html"]
+    assert 'class="metric-tick">-' not in res["metric_comparison_wide"]["html"]
+    assert (
+        'x="205.5" y="238" text-anchor="middle" class="metric-xlabel">1994</text>'
+        in res["metric_comparison_wide"]["html"]
+    )
+    assert (
+        'x="504.5" y="238" text-anchor="middle" class="metric-xlabel">2003</text>'
+        in res["metric_comparison_wide"]["html"]
+    )
     assert "metric-na" in res["metric_na_narrow"]["html"]
     assert "未提供量化统计序列" in res["metric_na_narrow"]["html"]
     assert "metric-svg" not in res["metric_na_narrow"]["html"]

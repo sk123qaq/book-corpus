@@ -5085,17 +5085,20 @@
     const plotH = H - padT - padB;
     const values = [];
     series.forEach((s) => s.points.forEach((p) => values.push(Number(p.value))));
-    let lo = Math.min(0, ...values);
-    let hi = Math.max(0, ...values);
-    if (!isFinite(lo) || !isFinite(hi)) return '';
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    if (!isFinite(minVal) || !isFinite(maxVal)) return '';
+    let lo = minVal >= 0 ? 0 : minVal;
+    let hi = maxVal <= 0 ? 0 : maxVal;
     if (hi === lo) hi = lo + 1;
     const span = hi - lo;
-    lo -= span * 0.08;
+    if (minVal < 0) lo -= span * 0.08;
     hi += span * 0.08;
     const yOf = (v) => padT + ((hi - v) / (hi - lo)) * plotH;
     const xs = series.reduce((acc, s) => (s.points.length > acc.length ? s.points : acc), []);
     const count = Math.max(1, xs.length);
     const xOf = (i) => padL + (count === 1 ? plotW / 2 : (plotW * i) / (count - 1));
+    const xCenter = (i) => (mode === 'comparison' ? padL + (plotW / count) * (i + 0.5) : xOf(i));
     const palette = ['var(--cinnabar)', 'var(--pine)', 'var(--indigo)', '#7c4d2b'];
     const ticks = 4;
     const grid = [];
@@ -5159,7 +5162,7 @@
     const xLabels = xs
       .map(
         (p, i) =>
-          '<text x="' + xOf(i) + '" y="' + (H - padB + 18) + '" text-anchor="middle" class="metric-xlabel">' + esc(p.x || '') + '</text>'
+          '<text x="' + xCenter(i) + '" y="' + (H - padB + 18) + '" text-anchor="middle" class="metric-xlabel">' + esc(p.x || '') + '</text>'
       )
       .join('');
     const legend =
