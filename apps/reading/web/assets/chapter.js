@@ -107,13 +107,16 @@
   const FALLBACK_PROFILES = {
     practical: {
       read_type: 'practical', name: '实用型书', adler_category: '实用型书',
-      goal: '锁定「目的 → 手段 → 成立条件」，并转化为可执行动作',
+      goal: '锁定「目的 → 手段 → 成立条件 → 避坑边界」，提炼可执行 SOP、条件决策与失效复盘',
       blueprints: [
         { blueprint: 'flow_swimlane', label: 'SOP 流程图' },
         { blueprint: 'decision_tree', label: '条件决策树' },
         { blueprint: 'quadrant_matrix', label: '优先级四象限' },
       ],
-      extensions: [{ action: 'checklist', label: '行动自检清单', cross_search: false }],
+      extensions: [
+        { action: 'checklist', label: '行动自检清单', cross_search: false },
+        { action: 'failure_postmortem', label: '反例与失效复盘', cross_search: false },
+      ],
     },
     literature: {
       read_type: 'literature', name: '想象文学', adler_category: '想象文学',

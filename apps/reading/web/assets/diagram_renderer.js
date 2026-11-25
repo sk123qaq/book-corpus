@@ -79,6 +79,16 @@
     corridor: '通道平原',
     neutral: '中立缓冲',
     front: '外线战区',
+    // 实用·SOP 流程
+    input: '前置输入',
+    action: '核心动作',
+    gate: '检查门禁',
+    pitfall: '避坑警报',
+    output: '阶段产出',
+    // 实用·条件决策树
+    diagnosis: '场景诊断',
+    strategy: '推荐动作',
+    fallback: '止损/替代',
     // 文学·人物与空间
     protagonist: '核心人物',
     antagonist: '对立/施压',
@@ -94,8 +104,9 @@
     outside: '窗外/场外',
   };
 
-  function roleLabel(role, isLineage) {
-    if (isLineage && role === 'ally') return '同调佐证';
+  function roleLabel(role, bpOrLineage) {
+    if ((bpOrLineage === true || bpOrLineage === 'lineage_dag') && role === 'ally') return '同调佐证';
+    if (bpOrLineage === 'decision_tree' && role === 'condition') return '判断条件';
     return ROLE_ZH[role] || role || '节点';
   }
 
@@ -214,7 +225,7 @@
     const maxAnchors = opts.maxAnchors !== undefined ? opts.maxAnchors : 3;
     const showArc = Boolean(opts.showArc);
     const showZone = Boolean(opts.showZone);
-    const isLineage = Boolean(opts.isLineage);
+    const roleCtx = opts.blueprint || opts.isLineage;
     stage.style.width = cardWidth + 'px';
     stage.innerHTML = nodes
       .map((n) => {
@@ -228,7 +239,7 @@
           cardWidth +
           'px">' +
           '<div class="dag-node-role"><span>' +
-          esc(roleLabel(n.role, isLineage)) +
+          esc(roleLabel(n.role, roleCtx)) +
           (showZone && n.zone ? ' · ' + esc(n.zone) : '') +
           '</span>' +
           renderSrcTag(n.source) +
@@ -311,7 +322,17 @@
 
   let markerSeq = 0;
 
-  const DAG_ROOT_ROLES = new Set(['premise', 'axiom', 'condition', 'sovereign', 'structural', 'trigger', 'capital']);
+  const DAG_ROOT_ROLES = new Set([
+    'premise',
+    'axiom',
+    'condition',
+    'sovereign',
+    'structural',
+    'trigger',
+    'capital',
+    'input',
+    'diagnosis',
+  ]);
 
   function isNegativeEdgeLabel(lbl) {
     if (!lbl) return false;
@@ -615,6 +636,195 @@
     );
   }
 
+  function renderFlowNarrowHtml(payload, nodes, rawEdges) {
+    const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i, rank: 0, order: 0 })]));
+    const mergedEdges = prepareDagEdges(rawEdges, idMap);
+    assignDagRanks(nodes, idMap, mergedEdges);
+    const ordered = Array.from(idMap.values()).sort((a, b) => a.rank - b.rank || a.order - b.order || a.idx - b.idx);
+    const outEdges = new Map(ordered.map((n) => [n.id, []]));
+    mergedEdges.forEach((e) => {
+      if (e.isSelfLoop) return;
+      const dst = idMap.get(e.to);
+      if (outEdges.has(e.from) && dst) {
+        outEdges.get(e.from).push({ label: e.label || '流转', target: dst.label || e.to, isNeg: e.isNeg });
+      }
+    });
+
+    const header =
+      '<div class="sop-narrow-head">' +
+      '<span class="sop-narrow-meta">共 ' + ordered.length + ' 步可执行流程</span>' +
+      '<button type="button" class="lineage-zoom-inline" data-bp-zoom title="宽屏全览 SOP 流程图">全览图谱 ⤢</button>' +
+      '</div>';
+
+    const cards = ordered
+      .map((n, idx) => {
+        const stepNo = String(idx + 1).padStart(2, '0');
+        const nexts = outEdges.get(n.id) || [];
+        const edgeChips = nexts.length
+          ? '<div class="sop-step-edges">' +
+            nexts
+              .slice(0, 3)
+              .map(
+                (nx) =>
+                  '<span class="sop-edge-chip' +
+                  (nx.isNeg ? ' is-neg' : '') +
+                  '">→ ' +
+                  esc(nx.label) +
+                  ' · ' +
+                  esc(nx.target) +
+                  '</span>'
+              )
+              .join('') +
+            '</div>'
+          : '';
+        const firstBlk = (n.blocks && n.blocks[0]) || '';
+        return (
+          '<div class="sop-step-card role-' +
+          esc(n.role || 'action') +
+          '" data-jump="' +
+          esc(firstBlk) +
+          '">' +
+          '<div class="sop-step-head">' +
+          '<div class="sop-step-left">' +
+          '<span class="sop-step-num">' +
+          stepNo +
+          '</span>' +
+          '<span class="sop-role-badge">' +
+          esc(roleLabel(n.role, 'flow_swimlane')) +
+          '</span>' +
+          '</div>' +
+          renderSrcTag(n.source) +
+          '</div>' +
+          '<div class="sop-step-title">' +
+          esc(n.label) +
+          '</div>' +
+          (n.detail ? '<div class="sop-step-detail">' + esc(n.detail) + '</div>' : '') +
+          edgeChips +
+          '<div class="sop-step-foot">' +
+          renderAnchorPills(n.blocks, 3) +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    return (
+      '<div class="sop-narrow-shell" data-qa-target="flow-cards">' +
+      header +
+      '<div class="sop-step-list">' +
+      cards +
+      '</div></div>'
+    );
+  }
+
+  function renderDecisionNarrowHtml(payload, nodes, rawEdges) {
+    const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i, rank: 0, order: 0 })]));
+    const mergedEdges = prepareDagEdges(rawEdges, idMap);
+    assignDagRanks(nodes, idMap, mergedEdges);
+    const ordered = Array.from(idMap.values()).sort((a, b) => a.rank - b.rank || a.order - b.order || a.idx - b.idx);
+
+    const groupOf = (role) => {
+      if (role === 'strategy') return 'strategy';
+      if (role === 'fallback') return 'fallback';
+      return 'condition';
+    };
+    const condCnt = ordered.filter((n) => groupOf(n.role) === 'condition').length;
+    const stratCnt = ordered.filter((n) => groupOf(n.role) === 'strategy').length;
+    const fallCnt = ordered.filter((n) => groupOf(n.role) === 'fallback').length;
+
+    const inEdges = new Map(ordered.map((n) => [n.id, []]));
+    const outEdges = new Map(ordered.map((n) => [n.id, []]));
+    mergedEdges.forEach((e) => {
+      if (e.isSelfLoop) return;
+      const src = idMap.get(e.from);
+      const dst = idMap.get(e.to);
+      if (!src || !dst) return;
+      inEdges.get(e.to).push({ label: e.label || '条件', peer: src.label || e.from });
+      outEdges.get(e.from).push({
+        label: e.label || '分支',
+        peer: dst.label || e.to,
+        role: dst.role || 'strategy',
+      });
+    });
+
+    const filterBar =
+      '<div class="decision-filter-bar" data-decision-bar>' +
+      '<div class="lineage-filter-tabs" role="tablist" aria-label="决策节点筛选">' +
+      '<button type="button" class="lineage-tab active" data-decision-filter="all">全部 (' + ordered.length + ')</button>' +
+      '<button type="button" class="lineage-tab" data-decision-filter="condition"' + (condCnt ? '' : ' disabled') + '>诊断与条件 (' + condCnt + ')</button>' +
+      '<button type="button" class="lineage-tab" data-decision-filter="strategy"' + (stratCnt ? '' : ' disabled') + '>推荐动作 (' + stratCnt + ')</button>' +
+      '<button type="button" class="lineage-tab" data-decision-filter="fallback"' + (fallCnt ? '' : ' disabled') + '>止损红线 (' + fallCnt + ')</button>' +
+      '</div>' +
+      '<button type="button" class="lineage-zoom-inline" data-bp-zoom title="宽屏全览条件决策树">全览图谱 ⤢</button>' +
+      '</div>';
+
+    const cards = ordered
+      .map((n) => {
+        const grp = groupOf(n.role);
+        const ins = inEdges.get(n.id) || [];
+        const outs = outEdges.get(n.id) || [];
+        const inHtml = ins.length
+          ? '<div class="decision-cond-in">' +
+            ins
+              .slice(0, 2)
+              .map((ic) => '<span class="decision-if-pill">如果「' + esc(ic.label) + '」← ' + esc(ic.peer) + '</span>')
+              .join('') +
+            '</div>'
+          : '';
+        const outHtml = outs.length
+          ? '<div class="decision-branches">' +
+            outs
+              .slice(0, 4)
+              .map(
+                (oc) =>
+                  '<span class="decision-branch-pill role-' +
+                  esc(oc.role) +
+                  '">若「' +
+                  esc(oc.label) +
+                  '」→ ' +
+                  esc(oc.peer) +
+                  '</span>'
+              )
+              .join('') +
+            '</div>'
+          : '';
+        const firstBlk = (n.blocks && n.blocks[0]) || '';
+        return (
+          '<div class="decision-card role-' +
+          esc(n.role || 'condition') +
+          '" data-decision-group="' +
+          esc(grp) +
+          '" data-jump="' +
+          esc(firstBlk) +
+          '">' +
+          '<div class="lineage-card-head">' +
+          '<span class="lineage-role-badge">' +
+          esc(roleLabel(n.role, 'decision_tree')) +
+          '</span>' +
+          renderSrcTag(n.source) +
+          '</div>' +
+          inHtml +
+          '<div class="lineage-card-title">' +
+          esc(n.label) +
+          '</div>' +
+          (n.detail ? '<div class="lineage-card-detail">' + esc(n.detail) + '</div>' : '') +
+          outHtml +
+          '<div class="sop-step-foot">' +
+          renderAnchorPills(n.blocks, 3) +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    return (
+      '<div class="decision-narrow-shell" data-qa-target="decision-cards">' +
+      filterBar +
+      '<div class="lineage-card-list">' +
+      cards +
+      '<div class="lineage-filter-empty" hidden>当前分组暂无条目。</div>' +
+      '</div></div>'
+    );
+  }
+
   function assignDagRanks(nodes, idMap, mergedEdges) {
     const rawIn = new Map(nodes.map((n) => [n.id, 0]));
     const rawOut = new Map(nodes.map((n) => [n.id, []]));
@@ -764,11 +974,22 @@
 
   function renderLayeredDagHtml(payload, options) {
     const rawData = (payload && payload.data) || {};
-    if (payload.blueprint === 'lineage_dag' && String(rawData.mode || '').toLowerCase() === 'not_applicable') {
-      const reason = rawData.not_applicable_reason || rawData.reason || payload.summary || '本章主要展开内部推演或文学对话，未直接涉及外部思想家或学派谱系。';
+    const isLineage = payload.blueprint === 'lineage_dag';
+    const isFlow = payload.blueprint === 'flow_swimlane';
+    const isDecision = payload.blueprint === 'decision_tree';
+    const isPracticalDag = isFlow || isDecision;
+    if ((isLineage || isFlow) && String(rawData.mode || '').toLowerCase() === 'not_applicable') {
+      const defaultReason = isFlow
+        ? '本章属理念阐发或原则讨论，未包含可复用的先后执行流程。'
+        : '本章主要展开内部推演或文学对话，未直接涉及外部思想家或学派谱系。';
+      const reason = rawData.not_applicable_reason || rawData.reason || payload.summary || defaultReason;
       return (
-        '<div class="lineage-na" data-qa-target="lineage-na">' +
-        '<strong>本章未展开外部思想谱系图</strong>' +
+        '<div class="lineage-na" data-qa-target="' +
+        (isFlow ? 'flow-na' : 'lineage-na') +
+        '">' +
+        '<strong>' +
+        (isFlow ? '本章未展开 SOP 流程图' : '本章未展开外部思想谱系图') +
+        '</strong>' +
         '<p>' +
         esc(reason) +
         '</p></div>'
@@ -783,9 +1004,14 @@
     const expandAll = Boolean(options && options.expandAll);
     const expandedIds = (options && options.expandedIds) || null;
     const expandedAnchorIds = (options && options.expandedAnchorIds) || null;
-    const isLineage = payload.blueprint === 'lineage_dag';
     if (isLineage && !wideMode) {
       return renderLineageNarrowHtml(payload, nodes, rawEdges);
+    }
+    if (isFlow && !wideMode) {
+      return renderFlowNarrowHtml(payload, nodes, rawEdges);
+    }
+    if (isDecision && !wideMode) {
+      return renderDecisionNarrowHtml(payload, nodes, rawEdges);
     }
     const isHistoryDag = ['historical_causality', 'power_hierarchy'].includes(payload.blueprint);
     const maxAnchors =
@@ -814,10 +1040,13 @@
       wideMode &&
       ((isHistoryDag && (R === 5 || (R === 6 && maxInRank >= 3))) ||
         (isArgument && (R === 6 || R === 5 || (R === 4 && maxInRank <= 2))) ||
-        ['flow_swimlane', 'system_flow'].includes(payload.blueprint) ||
+        ['flow_swimlane', 'decision_tree', 'system_flow'].includes(payload.blueprint) ||
         isLineage);
     const useBandedLR =
-      wideMode && (isHistoryDag || isArgument) && (R >= 7 || (R === 6 && maxInRank <= 2));
+      wideMode &&
+      (((isHistoryDag || isArgument) && (R >= 7 || (R === 6 && maxInRank <= 2))) ||
+        (isFlow && R >= 5) ||
+        (isDecision && R >= 6));
     const wantLR = !useBandedLR && wantCompactLR;
     const splitIdx = useBandedLR ? Math.ceil(R / 2) : R;
     idMap.forEach((n) => {
@@ -831,17 +1060,25 @@
         ? 172
         : 186
       : useBandedLR
-        ? isHistoryDag
-          ? 176
-          : 182
+        ? isPracticalDag
+          ? R >= 9
+            ? 164
+            : 174
+          : isHistoryDag
+            ? 176
+            : 182
         : wantLR
-          ? isHistoryDag
-            ? R >= 6
-              ? 162
-              : 174
-            : R >= 6
-              ? 166
-              : 186
+          ? isPracticalDag
+            ? R >= 5
+              ? 168
+              : 182
+            : isHistoryDag
+              ? R >= 6
+                ? 162
+                : 174
+              : R >= 6
+                ? 166
+                : 186
           : wideMode
             ? maxInRank >= 6
               ? 150
@@ -861,25 +1098,28 @@
       expandedAnchorIds,
       maxAnchors,
       isLineage,
+      blueprint: payload.blueprint,
     });
 
     const colGap = isLineage
       ? R >= 5
         ? 88
         : 104
-      : useBandedLR
-        ? 56
-        : wantLR
-          ? isHistoryDag
-            ? R >= 6
-              ? 46
-              : 54
-            : R >= 6
-              ? 56
-              : 74
-          : wideMode && maxInRank >= 6
-            ? 18
-            : 24;
+      : isPracticalDag && (useBandedLR || wantLR)
+        ? 88
+        : useBandedLR
+          ? 56
+          : wantLR
+            ? isHistoryDag
+              ? R >= 6
+                ? 46
+                : 54
+              : R >= 6
+                ? 56
+                : 74
+            : wideMode && maxInRank >= 6
+              ? 18
+              : 24;
     const rowGap = isLineage ? 22 : useBandedLR || (wideMode && wantLR) ? 24 : wideMode ? 36 : 56;
     const trackStep = isLineage ? 22 : wideMode && (!wantLR || wantCompactLR) ? 15 : wideMode ? 16 : 18;
     const corridorStep = isLineage ? 36 : wideMode ? 32 : 26;
@@ -1146,7 +1386,9 @@
       const b0H = Math.max(120, ...b0PreMetrics);
       b0Bottom = b0Top + b0H;
       const b0BotCorrH = sideB[0].length ? sideB[0].length * corridorStep + 24 : 16;
-      const midTracksH = midCrossPlans.length ? midCrossPlans.length * trackStep + 28 : 20;
+      const midTracksH = midCrossPlans.length
+        ? Math.max(isPracticalDag ? 46 : 0, midCrossPlans.length * trackStep + (isPracticalDag ? 34 : 28))
+        : 20;
       const b1TopCorrH = sideA[1].length ? sideA[1].length * corridorStep + 24 : 16;
       midZoneTop = b0Bottom + b0BotCorrH;
       midZoneBottom = midZoneTop + midTracksH;
@@ -1723,7 +1965,7 @@
           esc(firstBlk) +
           '">' +
           '<div class="dag-node-role"><span>' +
-          esc(roleLabel(n.role, isLineage)) +
+          esc(roleLabel(n.role, payload.blueprint || isLineage)) +
           '</span>' +
           renderSrcTag(n.source) +
           '</div>' +
@@ -1905,17 +2147,100 @@
     );
   }
 
-  function renderQuadrantHtml(payload) {
-    const qs = (payload.data && payload.data.quadrants) || [];
+  const QUAD_POS_META = {
+    'q-top-right': { label: '高纵 · 高横', order: 0 },
+    'q-top-left': { label: '高纵 · 低横', order: 1 },
+    'q-bot-right': { label: '低纵 · 高横', order: 2 },
+    'q-bot-left': { label: '低纵 · 低横', order: 3 },
+  };
+
+  function renderQuadrantHtml(payload, options) {
+    const data = (payload && payload.data) || {};
+    const qs = data.quadrants || [];
+    const xAxis = data.xAxis || '横轴（低 → 高）';
+    const yAxis = data.yAxis || '纵轴（低 → 高）';
+    const wideMode = Boolean(options && options.wide);
     const byPos = new Map(qs.map((q) => [q.pos, q]));
+
+    if (!wideMode) {
+      const ordered = qs
+        .slice()
+        .sort((a, b) => ((QUAD_POS_META[a.pos] && QUAD_POS_META[a.pos].order) ?? 9) - ((QUAD_POS_META[b.pos] && QUAD_POS_META[b.pos].order) ?? 9));
+      const coordHead =
+        '<div class="quad-coord-head">' +
+        '<div><span class="quad-coord-k">纵轴 ↑</span><b>' + esc(yAxis) + '</b></div>' +
+        '<div><span class="quad-coord-k">横轴 →</span><b>' + esc(xAxis) + '</b></div>' +
+        '</div>';
+      const filterBar =
+        '<div class="quad-filter-bar" data-quad-bar>' +
+        '<div class="lineage-filter-tabs" role="tablist" aria-label="象限切换">' +
+        '<button type="button" class="lineage-tab active" data-quad-filter="all">全部 (' + ordered.length + ')</button>' +
+        ordered
+          .map(
+            (q) =>
+              '<button type="button" class="lineage-tab" data-quad-filter="' +
+              esc(q.pos) +
+              '">' +
+              esc(q.title) +
+              '</button>'
+          )
+          .join('') +
+        '</div>' +
+        '<button type="button" class="lineage-zoom-inline" data-bp-zoom title="宽屏全览四象限矩阵">全览图谱 ⤢</button>' +
+        '</div>';
+      const cards = ordered
+        .map((q) => {
+          const posMeta = QUAD_POS_META[q.pos] || { label: '' };
+          return (
+            '<div class="quad-narrow-card ' +
+            esc(q.pos || '') +
+            '" data-quad-pos="' +
+            esc(q.pos || '') +
+            '">' +
+            '<div class="quad-narrow-head">' +
+            '<b class="quad-cell-title">' +
+            esc(q.title) +
+            '</b>' +
+            (posMeta.label ? '<span class="quad-pos-tag">' + esc(posMeta.label) + '</span>' : '') +
+            '</div>' +
+            (q.action_hint ? '<div class="quad-action-hint">口诀：' + esc(q.action_hint) + '</div>' : '') +
+            '<div class="quad-narrow-items">' +
+            (q.items || [])
+              .map(
+                (it) =>
+                  '<div class="quad-item"><div>' +
+                  renderSrcTag(it.source) +
+                  ' ' +
+                  esc(it.text) +
+                  '</div><div class="quad-item-foot">' +
+                  renderAnchorPills(it.blocks, 3) +
+                  '</div></div>'
+              )
+              .join('') +
+            '</div></div>'
+          );
+        })
+        .join('');
+      return (
+        '<div class="quad-narrow-shell" data-qa-target="quadrant-narrow">' +
+        coordHead +
+        filterBar +
+        '<div class="quad-narrow-list">' +
+        cards +
+        '</div></div>'
+      );
+    }
+
     const cell = (cls) => {
       const q = byPos.get(cls);
       if (!q) return '<div class="quad-cell ' + cls + '"></div>';
       return (
         '<div class="quad-cell ' +
         cls +
-        '"><div class="quad-cell-title">' +
+        '"><div class="quad-cell-head"><div class="quad-cell-title">' +
         esc(q.title) +
+        '</div>' +
+        (q.action_hint ? '<span class="quad-action-hint">' + esc(q.action_hint) + '</span>' : '') +
         '</div>' +
         (q.items || [])
           .map(
@@ -1924,8 +2249,8 @@
               renderSrcTag(it.source) +
               ' ' +
               esc(it.text) +
-              '</div><div>' +
-              renderAnchorPills(it.blocks) +
+              '</div><div class="quad-item-foot">' +
+              renderAnchorPills(it.blocks, 3) +
               '</div></div>'
           )
           .join('') +
@@ -1934,8 +2259,11 @@
     };
     return (
       '<div class="quad-grid-shell" data-qa-target="quadrant">' +
-      '<div class="quad-axis-y">↑ ' +
-      esc((payload.data && payload.data.yAxis) || '纵轴（低 → 高）') +
+      '<div class="quad-axis-y">' +
+      '<span class="quad-axis-y-arrow" aria-hidden="true">↑</span>' +
+      '<span class="quad-axis-y-label">' +
+      esc(yAxis) +
+      '</span>' +
       '</div>' +
       '<div class="quad-matrix-area">' +
       cell('q-top-left') +
@@ -1946,7 +2274,7 @@
       cell('q-bot-right') +
       '</div>' +
       '<div class="quad-axis-x">→ ' +
-      esc((payload.data && payload.data.xAxis) || '横轴（低 → 高）') +
+      esc(xAxis) +
       '</div></div>'
     );
   }
@@ -3841,8 +4169,21 @@
   function renderExtensionItemHtml(it, maxAnchors) {
     const headTxt = it.name || it.title || it.label || it.text || '';
     const badge = it.stance || it.role_badge || '';
+    const isPostmortem = Boolean(it.pitfall || it.case || it.root_cause || it.fix);
+    const bodyHtml = isPostmortem
+      ? '<div class="pm-grid">' +
+        (it.pitfall ? '<div class="pm-row pm-pitfall"><span class="pm-lbl">误区行为</span><span>' + esc(it.pitfall) + '</span></div>' : '') +
+        (it.case ? '<div class="pm-row pm-case"><span class="pm-lbl">反例/后果</span><span>' + esc(it.case) + '</span></div>' : '') +
+        (it.root_cause ? '<div class="pm-row pm-cause"><span class="pm-lbl">失效根因</span><span>' + esc(it.root_cause) + '</span></div>' : '') +
+        (it.fix ? '<div class="pm-row pm-fix"><span class="pm-lbl">纠偏动作</span><span>' + esc(it.fix) + '</span></div>' : '') +
+        '</div>'
+      : it.body || it.detail
+        ? '<div class="ext-sub">' + esc(it.body || it.detail) + '</div>'
+        : '';
     return (
-      '<div class="ext-item">' +
+      '<div class="ext-item' +
+      (isPostmortem ? ' ext-postmortem-item' : '') +
+      '">' +
       (headTxt || badge || it.source
         ? '<div class="ext-item-head">' +
           '<div class="ext-item-title-wrap">' +
@@ -3853,10 +4194,26 @@
           '</div>'
         : '') +
       (it.title && it.name && it.title !== it.name ? '<div class="ext-item-subhead">' + esc(it.title) + '</div>' : '') +
-      (it.body || it.detail ? '<div class="ext-sub">' + esc(it.body || it.detail) + '</div>' : '') +
+      bodyHtml +
       (it.warning ? '<div class="ext-sub" style="color:var(--ochre)">提示：' + esc(it.warning) + '</div>' : '') +
       '<div class="ext-item-foot">' +
-      renderAnchorPills(it.blocks, maxAnchors || 3) +
+      renderAnchorPills(it.blocks, isPostmortem ? 3 : maxAnchors || 3) +
+      '</div></div>'
+    );
+  }
+
+  function renderChecklistItemHtml(it) {
+    return (
+      '<div class="ext-item ext-check-item"><label class="ext-check-label"><input type="checkbox"' +
+      (it.checked ? ' checked' : '') +
+      '><span>' +
+      esc(it.text || it.title) +
+      '</span></label>' +
+      (it.detail || it.body ? '<div class="ext-sub">' + esc(it.detail || it.body) + '</div>' : '') +
+      '<div class="ext-item-foot">' +
+      renderSrcTag(it.source) +
+      ' ' +
+      renderAnchorPills(it.blocks, 3) +
       '</div></div>'
     );
   }
@@ -3869,6 +4226,31 @@
     const firstWarning = items.map((it) => it && it.warning).find(Boolean) || '';
     const noticeTxt = payload.fallback_notice || (isFallback ? firstWarning : '');
     const noticeHtml = noticeTxt ? '<div class="bp-fallback-banner">' + esc(noticeTxt) + '</div>' : '';
+
+    if (payload.blueprint === 'extension_checklist') {
+      if (Array.isArray(payload.sections) && payload.sections.length) {
+        return (
+          noticeHtml +
+          '<div class="ext-sections">' +
+          payload.sections
+            .map(
+              (sec) =>
+                '<div class="ext-section" data-section-id="' +
+                esc(sec.id || '') +
+                '">' +
+                '<h5 class="ext-sec-title">' +
+                esc(sec.title) +
+                '</h5>' +
+                '<div class="ext-list">' +
+                (sec.items || []).map((it) => renderChecklistItemHtml(it)).join('') +
+                '</div></div>'
+            )
+            .join('') +
+          '</div>'
+        );
+      }
+      return noticeHtml + '<div class="ext-list">' + items.map((it) => renderChecklistItemHtml(it)).join('') + '</div>';
+    }
 
     if (Array.isArray(payload.sections) && payload.sections.length) {
       return (
@@ -3885,30 +4267,6 @@
               '</h5>' +
               '<div class="ext-list">' +
               (sec.items || []).map((it) => renderExtensionItemHtml(it, maxAnchors)).join('') +
-              '</div></div>'
-          )
-          .join('') +
-        '</div>'
-      );
-    }
-
-    if (payload.blueprint === 'extension_checklist') {
-      return (
-        noticeHtml +
-        '<div class="ext-list">' +
-        items
-          .map(
-            (it) =>
-              '<div class="ext-item"><label class="ext-check-label"><input type="checkbox"' +
-              (it.checked ? ' checked' : '') +
-              '><span>' +
-              esc(it.text || it.title) +
-              '</span></label>' +
-              (it.detail || it.body ? '<div class="ext-sub">' + esc(it.detail || it.body) + '</div>' : '') +
-              '<div style="display:flex;justify-content:space-between;align-items:center">' +
-              renderSrcTag(it.source) +
-              ' ' +
-              renderAnchorPills(it.blocks, maxAnchors) +
               '</div></div>'
           )
           .join('') +
@@ -3954,7 +4312,7 @@
     const bp = payload.blueprint || 'flow_swimlane';
     if (bp === 'parallel_timeline') return renderTimelineHtml(payload, options);
     if (MATRIX_BLUEPRINTS.has(bp)) return renderMatrixTableHtml(payload, options);
-    if (bp === 'quadrant_matrix') return renderQuadrantHtml(payload);
+    if (bp === 'quadrant_matrix') return renderQuadrantHtml(payload, options);
     if (CURVE_BLUEPRINTS.has(bp)) return renderSplineChartHtml(payload, options);
     if (bp === 'relation_graph') return renderRelationGraphHtml(payload, options);
     if (bp === 'spatial_route') {
@@ -4051,27 +4409,31 @@
       });
     });
 
-    const lineageBar = rootEl.querySelector('[data-lineage-bar]');
-    if (lineageBar) {
-      const cards = Array.from(rootEl.querySelectorAll('.lineage-card[data-lineage-group]'));
-      const emptyEl = rootEl.querySelector('.lineage-filter-empty');
-      lineageBar.querySelectorAll('[data-lineage-filter]').forEach((tab) => {
+    const bindCardFilter = (barSel, btnAttr, cardSel, cardAttr, emptySel) => {
+      const bar = rootEl.querySelector(barSel);
+      if (!bar) return;
+      const cards = Array.from(rootEl.querySelectorAll(cardSel));
+      const emptyEl = emptySel ? rootEl.querySelector(emptySel) : null;
+      bar.querySelectorAll('[' + btnAttr + ']').forEach((tab) => {
         tab.addEventListener('click', (e) => {
           e.stopPropagation();
-          const filter = tab.getAttribute('data-lineage-filter') || 'all';
-          lineageBar.querySelectorAll('[data-lineage-filter]').forEach((b) => {
+          const filter = tab.getAttribute(btnAttr) || 'all';
+          bar.querySelectorAll('[' + btnAttr + ']').forEach((b) => {
             b.classList.toggle('active', b === tab);
           });
           let shown = 0;
           cards.forEach((c) => {
-            const match = filter === 'all' || c.getAttribute('data-lineage-group') === filter;
+            const match = filter === 'all' || c.getAttribute(cardAttr) === filter;
             c.hidden = !match;
             if (match) shown += 1;
           });
           if (emptyEl) emptyEl.hidden = shown > 0;
         });
       });
-    }
+    };
+    bindCardFilter('[data-lineage-bar]', 'data-lineage-filter', '.lineage-card[data-lineage-group]', 'data-lineage-group', '.lineage-filter-empty');
+    bindCardFilter('[data-decision-bar]', 'data-decision-filter', '.decision-card[data-decision-group]', 'data-decision-group', '.lineage-filter-empty');
+    bindCardFilter('[data-quad-bar]', 'data-quad-filter', '.quad-narrow-card[data-quad-pos]', 'data-quad-pos', '');
 
     rootEl.querySelectorAll('[data-jump]').forEach((el) => {
       el.addEventListener('click', (e) => {

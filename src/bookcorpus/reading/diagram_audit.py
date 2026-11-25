@@ -21,8 +21,18 @@ _SPARRING_PLACEHOLDER_NOTE = "先看清作者到底在反驳谁"
 ARGUMENT_ROLES = frozenset({"premise", "inference", "rebuttal", "conclusion", "condition"})
 LINEAGE_ROLES = frozenset({"predecessor", "ally", "mediator", "target", "author"})
 LINEAGE_RELATIONS = frozenset({"inherit", "transform", "critique", "contrast"})
+FLOW_ROLES = frozenset({"input", "action", "gate", "pitfall", "output"})
+DECISION_ROLES = frozenset({"diagnosis", "condition", "strategy", "fallback"})
+QUADRANT_MAX_ITEMS = 4
+_CHECKLIST_PLACEHOLDER_NOTES = ("适用前置条件", "动作转化", "行动自检清单")
+_POSTMORTEM_PLACEHOLDER_NOTES = ("避坑指南", "拆解反面案例", "反例与失效复盘")
 
 EXTENSION_SECTION_META: dict[str, tuple[tuple[str, str], ...]] = {
+    "checklist": (
+        ("before", "启动前准备"),
+        ("during", "执行与核验"),
+        ("redline", "失效边界与踩坑红线"),
+    ),
     "sparring_dossier": (
         ("debate", "核心论战交锋"),
         ("thought_experiment", "思想实验与核心隐喻"),
@@ -71,6 +81,8 @@ CURVE_BLUEPRINTS = frozenset({"tension_curve", "sensitivity_chart", "metric_char
 DEFAULT_NODE_ROLE: dict[str, str] = {
     "power_hierarchy": "faction",
     "historical_causality": "mechanism",
+    "flow_swimlane": "action",
+    "decision_tree": "condition",
 }
 
 POWER_ROLES = frozenset({"sovereign", "faction", "ally", "rival", "constraint"})
@@ -162,22 +174,27 @@ BLUEPRINT_SCHEMA_HINTS: dict[str, str] = {
         '"emotion":"≤12字情绪状态","note":"25–45字解释这一拍为何拉高或压低张力","blocks":["B01"],"source":"原文"}]}'
     ),
     "flow_swimlane": (
-        '"blueprint":"flow_swimlane","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"F1","role":"premise|inference|condition|conclusion","label":"≤16字步骤",'
-        '"detail":"≤45字做法细节","blocks":["B01"],"source":"原文|补充"}],'
+        '"blueprint":"flow_swimlane","caption":"≤18字SOP图题","reading_note":"≤40字实操导读(点出适用场景与前提)",'
+        '"summary":"2句实操总评（勿复读reading_note）",'
+        '"data":{"mode":"flow|not_applicable","not_applicable_reason":"仅当mode为not_applicable时写2句原因，否则留空",'
+        '"nodes":[{"id":"F1","role":"input|action|gate|pitfall|output","label":"≤16字动作步骤",'
+        '"detail":"≤55字具体做法、工具或判断标准","blocks":["B01"],"source":"原文|补充"}],'
         '"edges":[{"from":"F1","to":"F2","label":"≤5字流转"}]}'
     ),
     "decision_tree": (
-        '"blueprint":"decision_tree","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"D1","role":"condition|inference|rebuttal|conclusion","label":"≤16字条件或动作",'
-        '"detail":"≤45字判断依据","blocks":["B01"],"source":"原文|补充"}],'
-        '"edges":[{"from":"D1","to":"D2","label":"≤5字分支条件"}]}'
+        '"blueprint":"decision_tree","caption":"≤18字决策树题","reading_note":"≤40字决策场景导读",'
+        '"summary":"2句决策总括（勿复读reading_note）",'
+        '"data":{"nodes":[{"id":"D1","role":"diagnosis|condition|strategy|fallback","label":"≤16字诊断问题或策略动作",'
+        '"detail":"≤55字判断标准、适用条件或止损阈值","blocks":["B01"],"source":"原文|补充"}],'
+        '"edges":[{"from":"D1","to":"D2","label":"≤5字判断条件"}]}'
     ),
     "quadrant_matrix": (
-        '"blueprint":"quadrant_matrix","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"xAxis":"横轴（低 → 高）","yAxis":"纵轴（低 → 高）",'
-        '"quadrants":[{"pos":"q-top-left|q-top-right|q-bot-left|q-bot-right","title":"象限名称",'
-        '"items":[{"text":"≤26字条目","blocks":["B01"],"source":"原文|补充"}]}]}'
+        '"blueprint":"quadrant_matrix","caption":"≤18字四象限图题","reading_note":"≤40字坐标取舍导读",'
+        '"summary":"2句取舍总评（勿复读reading_note）",'
+        '"data":{"xAxis":"横轴维度（低 → 高）","yAxis":"纵轴维度（低 → 高）",'
+        '"quadrants":[{"pos":"q-top-left|q-top-right|q-bot-left|q-bot-right","title":"≤10字象限名称",'
+        '"action_hint":"≤14字行动口诀(如 立即重仓投入)",'
+        '"items":[{"text":"≤26字高杠杆条目","blocks":["B01"],"source":"原文|补充"}]}]}'
     ),
     "derivation_dag": (
         '"blueprint":"derivation_dag","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
@@ -223,10 +240,41 @@ EXTENSION_PROMPT_SPECS: dict[str, dict[str, str]] = {
     "checklist": {
         "blueprint": "extension_checklist",
         "title": "行动自检清单",
+        "guidance": (
+            "结构与口径要求（三分区、共 8–12 条高密度可勾选清单）：\n"
+            '1. 第一区 section="before"（启动前准备，2–3 条）：动手前必须确认的前提条件、数据或资源准备；\n'
+            '2. 第二区 section="during"（执行与核验，4–5 条）：关键操作动作与过程中的核验标准；\n'
+            '3. 第三区 section="redline"（失效边界与踩坑红线，2–4 条）：何时立即止损停手、常见误用与失效红线；\n'
+            "4. 每条 blocks 精选 1–3 个最直接块号；"
+            "reading_note 必须针对本章主题定制（严禁照抄「适用前置条件」占位句）；\n"
+            "5. summary 与卡片正文互补，禁止机械复读 reading_note；detail 开头禁止写「原文：」「补充：」。"
+        ),
         "instruction": (
-            '输出严格 JSON：{"blueprint":"extension_checklist","caption":"≤18字清单名","reading_note":"适用前置条件",'
-            '"summary":"2句总体行动建议","items":[{"text":"≤26字可执行检查项","detail":"≤45字避坑或边界说明",'
-            '"checked":false,"blocks":["B01"],"source":"原文|补充"}]}'
+            '输出严格 JSON：{"blueprint":"extension_checklist","caption":"≤18字清单名",'
+            '"reading_note":"≤40字本章定制导读（勿抄占位句）","summary":"2句落地总评（勿复读reading_note）",'
+            '"items":[{"section":"before|during|redline","text":"≤26字可执行检查项",'
+            '"detail":"≤45字核验标准或踩坑边界","checked":false,"blocks":["B01"],"source":"原文|补充"}]}'
+        ),
+    },
+    "failure_postmortem": {
+        "blueprint": "extension_dossier",
+        "title": "反例与失效复盘",
+        "guidance": (
+            "结构与口径要求（4–6 张高密度结构化复盘卡）：\n"
+            "1. 专拆书内真实反面案例、常见执行误区、失效根因与可执行纠偏动作，严禁泛泛而谈或复述成功做法；\n"
+            "2. 每张卡必须同时填写四个结构化字段：pitfall（常见误区行为，≤35 字）、case（真实反例与后果，≤55 字）、"
+            "root_cause（底层失效根因，≤45 字）、fix（纠偏动作，≤45 字），并保留 body 简要汇总；\n"
+            "3. 每张卡 blocks 精选 1–3 个最直接原文块号；\n"
+            "4. reading_note 必须点出本章最致命的一类失效陷阱（勿抄占位句），"
+            "summary 须与卡片、reading_note 错位互补；\n"
+            '5. 严格区分来源，source 为 "补充" 时字段开头禁止写「补充：」「补充对照：」。'
+        ),
+        "instruction": (
+            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字失效复盘题",'
+            '"reading_note":"≤40字本章定制警示导读","summary":"2句总括规律（勿复读reading_note或卡片）",'
+            '"items":[{"title":"≤20字失效模式标签","pitfall":"≤35字常见误区行为",'
+            '"case":"≤55字书内反例与直接后果","root_cause":"≤45字底层失效根因","fix":"≤45字纠偏动作",'
+            '"body":"≤75字兼容摘要","blocks":["B01"],"source":"原文|补充"}]}'
         ),
     },
     "narrative_clues": {
@@ -454,6 +502,34 @@ BLUEPRINT_GUIDANCE: dict[str, str] = {
         "及 ≤5 字简短 label（避免冗余交叉边）。\n"
         '- 若本章完全不涉及任何外部思想家、哲学学派或思潮对话，请设 data.mode="not_applicable" '
         "并用 2 句 not_applicable_reason 说明，绝不强行编造或拿章节大纲充数。"
+    ),
+    "flow_swimlane": (
+        "专项约束（SOP 流程图 — 严禁画成章节大纲流水账）：\n"
+        "- 必须从全章提炼可复用的先后执行 SOP 步骤（建议 6–10 个节点，硬上限 16 个），"
+        "严禁按自然段顺序复述案例剧情或“第1节→第2节”大纲！\n"
+        "- 节点 role 仅限 input（前置输入/材料）、action（核心动作）、"
+        "gate（检查/分流门禁）、pitfall（避坑警报）、output（阶段产出）。\n"
+        "- 每节点 blocks 精选 1–3 个最直接支撑该步骤的块号；边标签严格 ≤5 字。\n"
+        '- 若全章纯粹属于理念探讨或无任何可复用的先后操作流程，请设 data.mode="not_applicable" '
+        "并用 2 句 not_applicable_reason 说明，绝不硬编伪步骤。"
+    ),
+    "decision_tree": (
+        "专项约束（条件决策树 — 必须呈真正树形分叉）：\n"
+        "- 建议 6–12 个节点（硬上限 16 个）：根节点（diagnosis）为本章「核心决策场景 / 诊断问题」，"
+        "必须分叉出 ≥2 条明确判断路径（condition），"
+        "叶节点落到具体「推荐动作/策略（strategy）」或「止损/回退红线（fallback）」。\n"
+        "- 严禁画成 10+ 层无分叉单链叙事或案例流水账！把“某公司/某设计发生了什么”转化为读者可直接套用的"
+        "“若满足 X → 用 Y；否则 → Z 止损”。\n"
+        "- 每条分叉出边 label 必须是 ≤5 字明确判断条件（如 若低成本、破坏性技术、缺失率低、已越红线）。\n"
+        "- 每节点 blocks 精选 1–3 个最直接支撑块号。"
+    ),
+    "quadrant_matrix": (
+        "专项约束（优先级四象限 — 严禁注水堆砌）：\n"
+        "- 每个象限严格精选 2–4 条最高杠杆动作或决策（全图合计严格控制在 8–14 条），"
+        "严禁把全章每段知识点塞满四象限！\n"
+        "- 每个象限必须给出 action_hint（≤14 字行动口诀，如 立即重仓投入 / 小步试点验证 / 坚决舍弃）。\n"
+        "- xAxis 与 yAxis 用清晰可比对的双维度（如 实施成本（低 → 高）、战略杠杆（低 → 高））；"
+        "每条目精选 1–3 个最核心块号。"
     ),
 }
 
@@ -704,6 +780,57 @@ def _norm_lineage_relation(raw_rel: Any, label: str) -> str:
     return "inherit"
 
 
+def _norm_flow_role(raw_role: Any) -> str:
+    role = str(raw_role or "").strip().lower()
+    if role in FLOW_ROLES:
+        return role
+    mapping = {
+        "premise": "input",
+        "axiom": "input",
+        "structural": "input",
+        "step": "action",
+        "inference": "action",
+        "lemma": "action",
+        "condition": "gate",
+        "mediator": "gate",
+        "rebuttal": "pitfall",
+        "risk": "pitfall",
+        "target": "pitfall",
+        "conclusion": "output",
+        "theorem": "output",
+        "outcome": "output",
+        "author": "output",
+    }
+    return mapping.get(role, "action")
+
+
+def _norm_decision_role(raw_role: Any) -> str:
+    role = str(raw_role or "").strip().lower()
+    if role in DECISION_ROLES:
+        return role
+    mapping = {
+        "premise": "diagnosis",
+        "axiom": "diagnosis",
+        "sovereign": "diagnosis",
+        "structural": "diagnosis",
+        "input": "diagnosis",
+        "condition": "condition",
+        "inference": "condition",
+        "gate": "condition",
+        "mediator": "condition",
+        "conclusion": "strategy",
+        "theorem": "strategy",
+        "action": "strategy",
+        "output": "strategy",
+        "author": "strategy",
+        "rebuttal": "fallback",
+        "risk": "fallback",
+        "pitfall": "fallback",
+        "target": "fallback",
+    }
+    return mapping.get(role, "condition")
+
+
 def _audit_dag_data(
     raw_data: dict[str, Any],
     *,
@@ -712,13 +839,17 @@ def _audit_dag_data(
     logs: list[str],
     blueprint: str = "",
 ) -> dict[str, Any] | None:
-    if blueprint == "lineage_dag" and str(raw_data.get("mode") or "").strip().lower() == "not_applicable":
-        reason = str(
-            raw_data.get("not_applicable_reason")
-            or raw_data.get("reason")
-            or "本章集中展开内部论证或对话，未涉及外部思想家或学派谱系。"
-        ).strip()
-        logs.append("当前章节未涉及外部思想家或学派对话，已返回 not_applicable 提示")
+    if (
+        blueprint in {"lineage_dag", "flow_swimlane"}
+        and str(raw_data.get("mode") or "").strip().lower() == "not_applicable"
+    ):
+        default_na = (
+            "本章属理念综述或概念阐发，未包含可复用的先后操作步骤。"
+            if blueprint == "flow_swimlane"
+            else "本章集中展开内部论证或对话，未涉及外部思想家或学派谱系。"
+        )
+        reason = str(raw_data.get("not_applicable_reason") or raw_data.get("reason") or default_na).strip()
+        logs.append(f"{blueprint} 判定当前章节不适用该流程模型，已返回 not_applicable 提示")
         return {
             "mode": "not_applicable",
             "reason": reason,
@@ -762,6 +893,10 @@ def _audit_dag_data(
             role = raw_role.lower() if raw_role.lower() in ARGUMENT_ROLES else "inference"
         elif blueprint == "lineage_dag":
             role = _norm_lineage_role(raw_role)
+        elif blueprint == "flow_swimlane":
+            role = _norm_flow_role(raw_role)
+        elif blueprint == "decision_tree":
+            role = _norm_decision_role(raw_role)
         elif blueprint == "power_hierarchy" and raw_role not in POWER_ROLES:
             role = fallback_role
         else:
@@ -815,9 +950,18 @@ def _audit_dag_data(
             )
         edges.append(entry)
 
+    if blueprint == "decision_tree" and len(nodes) >= 5:
+        out_deg: dict[str, int] = {}
+        for ed in edges:
+            out_deg[ed["from"]] = out_deg.get(ed["from"], 0) + 1
+        if not any(cnt >= 2 for cnt in out_deg.values()):
+            logs.append("决策树未检出多分支条件节点，已保留结构供核对")
+
     out: dict[str, Any] = {"nodes": nodes, "edges": edges}
     if blueprint == "lineage_dag":
         out["mode"] = "lineage"
+    elif blueprint == "flow_swimlane":
+        out["mode"] = "flow"
     return out
 
 
@@ -1210,6 +1354,8 @@ def _audit_quadrant_data(
         pos = str(q.get("pos") or valid_pos[idx])
         if pos not in valid_pos:
             pos = valid_pos[idx]
+        title = str(q.get("title") or pos).strip()
+        action_hint = _strip_source_prefix(str(q.get("action_hint") or q.get("action") or ""), "")[:20]
         items: list[dict[str, Any]] = []
         for it in q.get("items") or []:
             if not isinstance(it, dict):
@@ -1222,12 +1368,33 @@ def _audit_quadrant_data(
                 it.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=txt[:10], logs=logs
             )
             items.append({"text": txt, "blocks": blocks, "source": source})
-        quads.append({"pos": pos, "title": str(q.get("title") or pos), "items": items})
+        if len(items) > QUADRANT_MAX_ITEMS:
+            logs.append(f'象限 "{title}" 原有 {len(items)} 条，已精简截断为最高杠杆前 {QUADRANT_MAX_ITEMS} 条')
+            items = items[:QUADRANT_MAX_ITEMS]
+        q_entry: dict[str, Any] = {"pos": pos, "title": title, "items": items}
+        if action_hint:
+            q_entry["action_hint"] = action_hint
+        quads.append(q_entry)
     return {
         "xAxis": str(raw_data.get("xAxis") or "横轴（低 → 高）"),
         "yAxis": str(raw_data.get("yAxis") or "纵轴（低 → 高）"),
         "quadrants": quads,
     }
+
+
+def _norm_checklist_section(raw_section: str) -> str:
+    sec = raw_section.strip().lower()
+    if not sec:
+        return ""
+    if sec in {"before", "during", "redline"}:
+        return sec
+    if any(k in sec for k in ("前", "准备", "启动", "prereq", "pre")):
+        return "before"
+    if any(k in sec for k in ("红线", "失效", "避坑", "边界", "警告", "stop", "risk", "pitfall")):
+        return "redline"
+    if any(k in sec for k in ("中", "执行", "核验", "步骤", "操作", "check", "exec")):
+        return "during"
+    return "during"
 
 
 def _audit_extension_items(
@@ -1245,8 +1412,23 @@ def _audit_extension_items(
         source = _norm_source(it.get("source"))
         name = _strip_source_prefix(str(it.get("name") or ""), source)
         title = _strip_source_prefix(str(it.get("title") or it.get("text") or name), source)
+        pitfall = _strip_source_prefix(str(it.get("pitfall") or ""), source)
+        case = _strip_source_prefix(str(it.get("case") or ""), source)
+        root_cause = _strip_source_prefix(str(it.get("root_cause") or ""), source)
+        fix = _strip_source_prefix(str(it.get("fix") or ""), source)
         body = _strip_source_prefix(str(it.get("body") or it.get("detail") or ""), source)
-        if not title and not body:
+        if not body and (pitfall or case or root_cause or fix):
+            summary_parts = []
+            if pitfall:
+                summary_parts.append(f"误区：{pitfall}")
+            if case:
+                summary_parts.append(f"反例：{case}")
+            if root_cause:
+                summary_parts.append(f"根因：{root_cause}")
+            if fix:
+                summary_parts.append(f"纠偏：{fix}")
+            body = " · ".join(summary_parts)
+        if not title and not body and not (pitfall or case or root_cause or fix):
             continue
         blocks = _clean_blocks(
             it.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=title or "扩展项", logs=logs
@@ -1261,13 +1443,22 @@ def _audit_extension_items(
         }
         if name:
             entry["name"] = name
+        if pitfall:
+            entry["pitfall"] = pitfall
+        if case:
+            entry["case"] = case
+        if root_cause:
+            entry["root_cause"] = root_cause
+        if fix:
+            entry["fix"] = fix
         role_badge = str(it.get("role_badge") or "").strip()
         if role_badge:
             entry["role_badge"] = role_badge
         stance = str(it.get("stance") or "").strip()
         if stance:
             entry["stance"] = stance
-        section = str(it.get("section") or it.get("group") or "").strip()[:24]
+        raw_section = str(it.get("section") or it.get("group") or "").strip()[:24]
+        section = _norm_checklist_section(raw_section) if bp == "extension_checklist" else raw_section
         if section:
             entry["section"] = section
         if bp == "extension_checklist":
@@ -1355,21 +1546,46 @@ def _tailor_reading_note(
     reading_note: str, *, action: str, caption: str, items: list[dict[str, Any]], logs: list[str]
 ) -> str:
     note = reading_note.strip()
+    titles = [
+        str(it.get("title") or it.get("text") or "").strip()
+        for it in items[:2]
+        if str(it.get("title") or it.get("text") or "").strip()
+    ]
     if (action == "sparring_dossier" or _SPARRING_PLACEHOLDER_NOTE in note) and (
         not note or _SPARRING_PLACEHOLDER_NOTE in note
     ):
-        titles = [str(it.get("title") or "").strip() for it in items[:2] if str(it.get("title") or "").strip()]
-        if titles:
-            custom = f"围绕「{' / '.join(titles)}」把握本章论战靶子与思想实验"[:40]
-        else:
-            custom = f"聚焦「{caption}」拆解论战交锋与核心隐喻"[:40]
+        custom = (
+            f"围绕「{' / '.join(titles)}」把握本章论战靶子与思想实验"[:40]
+            if titles
+            else f"聚焦「{caption}」拆解论战交锋与核心隐喻"[:40]
+        )
         if _SPARRING_PLACEHOLDER_NOTE in note:
             logs.append("检测到泛泛占位 reading_note，已按本章交锋对象定制替换")
+        return custom
+    if action == "checklist" and (not note or any(ph in note for ph in _CHECKLIST_PLACEHOLDER_NOTES)):
+        custom = (
+            f"围绕「{' / '.join(titles)}」核验启动条件与踩坑红线"[:40]
+            if titles
+            else f"对照「{caption}」逐项核验落地前置条件与红线"[:40]
+        )
+        if note:
+            logs.append("检测到模板占位 reading_note，已按本章自检重点定制替换")
+        return custom
+    if action == "failure_postmortem" and (not note or any(ph in note for ph in _POSTMORTEM_PLACEHOLDER_NOTES)):
+        custom = (
+            f"聚焦「{' / '.join(titles)}」反例，先排查常见误区再行动"[:40]
+            if titles
+            else f"对照「{caption}」反例定位失效根因与纠偏动作"[:40]
+        )
+        if note:
+            logs.append("检测到模板占位 reading_note，已按本章失效案例定制替换")
         return custom
     return note
 
 
 def _group_extension_sections(items: list[dict[str, Any]], *, requested_action: str) -> list[dict[str, Any]]:
+    if requested_action == "checklist" and not any(str(it.get("section") or "").strip() for it in items):
+        return []
     meta = EXTENSION_SECTION_META.get(requested_action)
     if not meta:
         item_secs = {str(it.get("section") or "").strip() for it in items if it.get("section")}

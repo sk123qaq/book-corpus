@@ -26,6 +26,7 @@ ACTION_LABELS = {
     "critique": "拆解前提",
     "ask": "自由追问",
     "checklist": "行动自检清单",
+    "failure_postmortem": "反例与失效复盘",
     "narrative_clues": "叙事视角与伏笔线索",
     "imagery": "意象、潜台词与细读",
     "historical_dossier": "人物与名物档案",

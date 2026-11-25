@@ -636,3 +636,298 @@ def test_philosophy_wide_layout_and_narrow_views_regression(tmp_path: Path) -> N
 
     assert 'data-section-id="hidden_premise"' in res["ext_sections"]["html"]
     assert 'data-section-id="counterexample"' in res["ext_sections"]["html"]
+
+
+def test_practical_wide_layout_and_narrow_views_regression(tmp_path: Path) -> None:
+    flow_fig = {
+        "blueprint": "flow_swimlane",
+        "caption": "数据清洗与缺失值处理 SOP",
+        "reading_note": "先探查缺失机制再选填补策略",
+        "data": {
+            "mode": "flow",
+            "nodes": [
+                {
+                    "id": "F1",
+                    "role": "input",
+                    "label": "导入原始数据集",
+                    "detail": "读入 CSV 并核验字段类型与样本量。",
+                    "blocks": ["B01", "B02", "B03", "B04"],
+                },
+                {
+                    "id": "F2",
+                    "role": "action",
+                    "label": "统计各列缺失率",
+                    "detail": "计算缺失占比与分布位置。",
+                    "blocks": ["B05"],
+                },
+                {
+                    "id": "F3",
+                    "role": "gate",
+                    "label": "判断缺失机制",
+                    "detail": "区分完全随机缺失与非随机缺失。",
+                    "blocks": ["B08"],
+                },
+                {
+                    "id": "F4",
+                    "role": "action",
+                    "label": "分类执行填充",
+                    "detail": "低缺失用均值/中位数或插值填充。",
+                    "blocks": ["B12"],
+                },
+                {
+                    "id": "F5",
+                    "role": "pitfall",
+                    "label": "警惕直接 dropna",
+                    "detail": "盲目丢弃含缺失行会严重扭曲样本分布。",
+                    "blocks": ["B15"],
+                },
+                {
+                    "id": "F6",
+                    "role": "action",
+                    "label": "清理重复与异常值",
+                    "detail": "按业务规则去重并处理离群点。",
+                    "blocks": ["B20"],
+                },
+                {
+                    "id": "F7",
+                    "role": "gate",
+                    "label": "交叉核验分布",
+                    "detail": "对比清洗前后的均值与方差偏移。",
+                    "blocks": ["B25"],
+                },
+                {
+                    "id": "F8",
+                    "role": "output",
+                    "label": "输出可用特征表",
+                    "detail": "固化清洗脚本并留存审计日志。",
+                    "blocks": ["B30"],
+                },
+            ],
+            "edges": [
+                {"from": "F1", "to": "F2", "label": "统计缺失"},
+                {"from": "F2", "to": "F3", "label": "判定机制"},
+                {"from": "F3", "to": "F4", "label": "随机缺失"},
+                {"from": "F3", "to": "F5", "label": "勿直接删"},
+                {"from": "F4", "to": "F6", "label": "进入去重"},
+                {"from": "F6", "to": "F7", "label": "分布校验"},
+                {"from": "F7", "to": "F8", "label": "达标交付"},
+            ],
+        },
+    }
+    flow_na = {
+        "blueprint": "flow_swimlane",
+        "caption": "纯原则讨论",
+        "data": {"mode": "not_applicable", "not_applicable_reason": "本章只讨论心法原则。", "nodes": [], "edges": []},
+    }
+    decision_fig = {
+        "blueprint": "decision_tree",
+        "caption": "破坏性技术应对决策树",
+        "reading_note": "先判断技术性质与市场规模匹配度",
+        "data": {
+            "nodes": [
+                {
+                    "id": "D1",
+                    "role": "diagnosis",
+                    "label": "遭遇新兴技术冲击",
+                    "detail": "判断技术属于延续性还是破坏性。",
+                    "blocks": ["B01"],
+                },
+                {
+                    "id": "D2",
+                    "role": "condition",
+                    "label": "当前主流客户是否买单",
+                    "detail": "核查主流客户早期性能需求。",
+                    "blocks": ["B05", "B06", "B07", "B08"],
+                },
+                {
+                    "id": "D3",
+                    "role": "strategy",
+                    "label": "并入主业常规迭代",
+                    "detail": "按既有价值网络持续升级性能。",
+                    "blocks": ["B10"],
+                },
+                {
+                    "id": "D4",
+                    "role": "condition",
+                    "label": "新市场规模是否够大",
+                    "detail": "评估小市场能否支撑母公司增速。",
+                    "blocks": ["B14"],
+                },
+                {
+                    "id": "D5",
+                    "role": "strategy",
+                    "label": "设立独立小型机构",
+                    "detail": "匹配小市场利润率与独立资源。",
+                    "blocks": ["B18"],
+                },
+                {
+                    "id": "D6",
+                    "role": "fallback",
+                    "label": "严禁塞回大部门考核",
+                    "detail": "大部门考核会扼杀早期破坏性项目。",
+                    "blocks": ["B22"],
+                },
+            ],
+            "edges": [
+                {"from": "D1", "to": "D2", "label": "评估需求"},
+                {"from": "D2", "to": "D3", "label": "主流需要"},
+                {"from": "D2", "to": "D4", "label": "暂不买单"},
+                {"from": "D4", "to": "D5", "label": "独立孵化"},
+                {"from": "D4", "to": "D6", "label": "强留主部"},
+            ],
+        },
+    }
+    quad_fig = {
+        "blueprint": "quadrant_matrix",
+        "caption": "体验设计杠杆四象限",
+        "data": {
+            "xAxis": "开发实现成本（低 → 高）",
+            "yAxis": "玩家直觉响应（低 → 高）",
+            "quadrants": [
+                {
+                    "pos": "q-top-left",
+                    "title": "低成本高响应",
+                    "action_hint": "优先立即落地",
+                    "items": [{"text": "利用既定常识线索引导动作", "blocks": ["B01", "B02", "B03", "B04"]}],
+                },
+                {
+                    "pos": "q-top-right",
+                    "title": "高投入高回报",
+                    "action_hint": "聚焦核心关卡打磨",
+                    "items": [{"text": "打磨手眼同步的交互反馈", "blocks": ["B10"]}],
+                },
+                {
+                    "pos": "q-bot-left",
+                    "title": "低成本低回报",
+                    "action_hint": "按需精简保留",
+                    "items": [{"text": "补充基础操作文字提示", "blocks": ["B15"]}],
+                },
+                {
+                    "pos": "q-bot-right",
+                    "title": "高成本低响应",
+                    "action_hint": "坚决舍弃减负",
+                    "items": [{"text": "堆砌长篇开场说明书教程", "blocks": ["B20"]}],
+                },
+            ],
+        },
+    }
+    chk_sections_fig = {
+        "blueprint": "extension_checklist",
+        "caption": "三段自检清单",
+        "sections": [
+            {
+                "id": "before",
+                "title": "启动前准备",
+                "items": [
+                    {
+                        "text": "确认数据源",
+                        "detail": "核对口径",
+                        "checked": False,
+                        "blocks": ["B01", "B02", "B03", "B04"],
+                    }
+                ],
+            },
+            {
+                "id": "during",
+                "title": "执行与核验",
+                "items": [{"text": "抽样回查", "detail": "核对分布", "checked": False, "blocks": ["B05"]}],
+            },
+            {
+                "id": "redline",
+                "title": "失效边界与踩坑红线",
+                "items": [{"text": "禁止全量丢弃", "detail": "防止偏差", "checked": False, "blocks": ["B09"]}],
+            },
+        ],
+        "items": [],
+    }
+    chk_legacy_fig = {
+        "blueprint": "extension_checklist",
+        "caption": "旧版扁平清单",
+        "items": [{"text": "老条文", "detail": "无分区", "checked": True, "blocks": ["B01"]}],
+    }
+    pm_fig = {
+        "blueprint": "extension_dossier",
+        "caption": "失效复盘卡",
+        "items": [
+            {
+                "title": "希捷错失 3.5 英寸市场",
+                "pitfall": "用主流大客户的利润指标否决低端新产品",
+                "case": "技术已成型却被内部流程搁置，错过桌面计算机浪潮",
+                "root_cause": "价值网络与财务考核机制锁定现有高毛利市场",
+                "fix": "拆出独立子公司，单独考核小市场盈利与迭代",
+                "blocks": ["B01", "B02", "B03", "B04"],
+                "source": "原文",
+            }
+        ],
+    }
+
+    cases = [
+        {"name": "flow_wide_collapsed", "figure": flow_fig, "options": {"wide": True, "expandAll": False}},
+        {"name": "flow_wide_expanded", "figure": flow_fig, "options": {"wide": True, "expandAll": True}},
+        {"name": "flow_narrow", "figure": flow_fig, "options": {"wide": False}},
+        {"name": "flow_na", "figure": flow_na, "options": {"wide": False}},
+        {"name": "decision_wide_collapsed", "figure": decision_fig, "options": {"wide": True, "expandAll": False}},
+        {"name": "decision_wide_expanded", "figure": decision_fig, "options": {"wide": True, "expandAll": True}},
+        {"name": "decision_narrow", "figure": decision_fig, "options": {"wide": False}},
+        {"name": "quad_wide", "figure": quad_fig, "options": {"wide": True}},
+        {"name": "quad_narrow", "figure": quad_fig, "options": {"wide": False}},
+        {"name": "chk_sections", "figure": chk_sections_fig, "options": {"wide": False}},
+        {"name": "chk_legacy", "figure": chk_legacy_fig, "options": {"wide": False}},
+        {"name": "postmortem", "figure": pm_fig, "options": {"wide": False}},
+    ]
+    res = _run_harness(tmp_path, cases)
+
+    assert res["flow_wide_collapsed"]["nodeOverlaps"] == 0
+    assert res["flow_wide_collapsed"]["fitScale"] >= 0.70
+    assert res["flow_wide_collapsed"]["fallbackPills"] == 0
+    assert "前置输入" in res["flow_wide_collapsed"]["html"]
+    assert "检查门禁" in res["flow_wide_collapsed"]["html"]
+    assert "避坑警报" in res["flow_wide_collapsed"]["html"]
+    assert "阶段产出" in res["flow_wide_collapsed"]["html"]
+    assert "data-expand-anchors" in res["flow_wide_collapsed"]["html"]
+    assert res["flow_wide_expanded"]["nodeOverlaps"] == 0
+    assert res["flow_wide_expanded"]["fitScale"] >= 0.65
+
+    assert "sop-narrow-shell" in res["flow_narrow"]["html"]
+    assert "sop-step-num" in res["flow_narrow"]["html"]
+    assert "全览图谱" in res["flow_narrow"]["html"]
+    assert 'data-qa-target="flow-na"' in res["flow_na"]["html"]
+
+    assert res["decision_wide_collapsed"]["nodeOverlaps"] == 0
+    assert res["decision_wide_collapsed"]["fitScale"] >= 0.70
+    assert res["decision_wide_collapsed"]["fallbackPills"] == 0
+    assert "场景诊断" in res["decision_wide_collapsed"]["html"]
+    assert "判断条件" in res["decision_wide_collapsed"]["html"]
+    assert "推荐动作" in res["decision_wide_collapsed"]["html"]
+    assert "止损/替代" in res["decision_wide_collapsed"]["html"]
+    assert res["decision_wide_expanded"]["nodeOverlaps"] == 0
+    assert res["decision_wide_expanded"]["fitScale"] >= 0.65
+
+    assert "decision-narrow-shell" in res["decision_narrow"]["html"]
+    assert "data-decision-filter" in res["decision_narrow"]["html"]
+    assert "全览图谱" in res["decision_narrow"]["html"]
+
+    assert "quad-grid-shell" in res["quad_wide"]["html"]
+    assert "quad-axis-y-label" in res["quad_wide"]["html"]
+    assert "优先立即落地" in res["quad_wide"]["html"]
+    assert "data-expand-anchors" in res["quad_wide"]["html"]
+
+    assert "quad-narrow-shell" in res["quad_narrow"]["html"]
+    assert "quad-coord-head" in res["quad_narrow"]["html"]
+    assert "data-quad-filter" in res["quad_narrow"]["html"]
+    assert "高纵 · 低横" in res["quad_narrow"]["html"]
+
+    assert 'data-section-id="before"' in res["chk_sections"]["html"]
+    assert 'data-section-id="during"' in res["chk_sections"]["html"]
+    assert 'data-section-id="redline"' in res["chk_sections"]["html"]
+    assert 'type="checkbox"' in res["chk_sections"]["html"]
+    assert "data-expand-anchors" in res["chk_sections"]["html"]
+    assert 'type="checkbox"' in res["chk_legacy"]["html"]
+    assert "ext-sections" not in res["chk_legacy"]["html"]
+
+    assert "ext-postmortem-item" in res["postmortem"]["html"]
+    assert "pm-pitfall" in res["postmortem"]["html"]
+    assert "pm-case" in res["postmortem"]["html"]
+    assert "pm-cause" in res["postmortem"]["html"]
+    assert "pm-fix" in res["postmortem"]["html"]
+    assert "data-expand-anchors" in res["postmortem"]["html"]

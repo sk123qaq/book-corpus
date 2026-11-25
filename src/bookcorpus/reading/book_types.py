@@ -44,13 +44,16 @@ READ_PROFILES: dict[str, ReadProfileMeta] = {
         read_type="practical",
         name="实用型书",
         adler_category="1. 实用型书",
-        goal="锁定「目的 → 手段 → 成立条件」，并转化为可执行动作",
+        goal="锁定「目的 → 手段 → 成立条件 → 避坑边界」，提炼可执行 SOP、条件决策与失效复盘",
         blueprints=(
-            BlueprintHint("flow_swimlane", "SOP 流程图", "把散落建议串成先后执行步骤"),
-            BlueprintHint("decision_tree", "条件决策树", "明确什么场景用哪一招"),
-            BlueprintHint("quadrant_matrix", "优先级四象限", "区分高杠杆动作与低效忙碌"),
+            BlueprintHint("flow_swimlane", "SOP 流程图", "提炼可复用的先后执行步骤与避坑门禁"),
+            BlueprintHint("decision_tree", "条件决策树", "明确什么场景用哪一招与止损红线"),
+            BlueprintHint("quadrant_matrix", "优先级四象限", "精选高杠杆动作并标明行动口诀"),
         ),
-        extensions=(ExtensionHint("checklist", "行动自检清单", "抽成可勾选行动清单与失效边界提醒"),),
+        extensions=(
+            ExtensionHint("checklist", "行动自检清单", "按启动前、执行中、踩坑红线三区提纯可勾选清单"),
+            ExtensionHint("failure_postmortem", "反例与失效复盘", "拆解书内反面案例、常见执行误区与纠偏动作"),
+        ),
     ),
     "literature": ReadProfileMeta(
         read_type="literature",
