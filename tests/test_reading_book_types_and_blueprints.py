@@ -1166,3 +1166,295 @@ def test_practical_five_tools_schemas_audit_and_postmortem(reading_root):
     assert "误区：" in item0["body"]
     assert "拆解反面案例" not in pm_res["figure"]["reading_note"]
     assert "拉卡莱达" in pm_res["diagram_html"]
+
+
+def test_science_five_tools_schemas_audit_and_concept_glossary(reading_root):
+    prof = resolve_read_profile(["科学技术", "物理与天文"], title="时间简史")
+    assert prof["read_type"] == "science"
+    assert [bp["blueprint"] for bp in prof["blueprints"]] == [
+        "derivation_dag",
+        "sensitivity_chart",
+        "system_flow",
+    ]
+    assert [ext["action"] for ext in prof["extensions"]] == ["concept_glossary", "boundary_check"]
+    assert "concept_glossary" in EXTENSION_ACTIONS
+    assert ACTION_LABELS["concept_glossary"] == "核心概念与公式词典"
+
+    # 1. derivation_dag dual-paradigm prompts & role normalization
+    deriv_prompt = prompt_for_diagram(
+        blueprint="derivation_dag", read_type="science", selected_text="奇点定理与观测", block_ids=["B01"]
+    )
+    assert "广度汇流推导树" in deriv_prompt[0]["content"]
+    assert "observation" in deriv_prompt[0]["content"]
+    assert "axiom" in deriv_prompt[0]["content"]
+
+    deriv_exp = audit_blueprint_payload(
+        {
+            "blueprint": "derivation_dag",
+            "caption": "晶体管发明推理",
+            "reading_note": "从现象到实验结论",
+            "summary": "多路实验汇流确认功率放大。",
+            "data": {
+                "paradigm": "experimental",
+                "nodes": [
+                    {"id": "M1", "role": "observation", "label": "硅提纯困难", "blocks": ["B01"]},
+                    {"id": "M2", "role": "hypothesis", "label": "表面态假说", "blocks": ["B01"]},
+                    {"id": "M3", "role": "experiment", "label": "金箔三角劈触锗", "blocks": ["B01"]},
+                    {"id": "M4", "role": "finding", "label": "功率放大四点五倍", "blocks": ["B01"]},
+                ],
+                "edges": [
+                    {"from": "M1", "to": "M3", "label": "迫使"},
+                    {"from": "M2", "to": "M3", "label": "引导"},
+                    {"from": "M3", "to": "M4", "label": "测得"},
+                ],
+            },
+        },
+        {"B01"},
+    )
+    assert deriv_exp["data"]["paradigm"] == "experimental"
+    assert [n["role"] for n in deriv_exp["data"]["nodes"]] == ["observation", "hypothesis", "experiment", "finding"]
+
+    # 2. sensitivity_chart 3 real modes + fake-percentage neutralization
+    sens_prompt = prompt_for_diagram(
+        blueprint="sensitivity_chart", read_type="science", selected_text="钱德拉塞卡极限", block_ids=["B01"]
+    )
+    assert "regime_threshold" in sens_prompt[0]["content"]
+    assert "严禁编造 0–100 假百分比" in sens_prompt[0]["content"]
+
+    sens_regime = audit_blueprint_payload(
+        {
+            "blueprint": "sensitivity_chart",
+            "caption": "恒星质量与坍缩终点",
+            "reading_note": "看钱德拉塞卡极限两侧的定性相变",
+            "summary": "质量越过临界阈值后简并压失效。",
+            "data": {
+                "mode": "regime_threshold",
+                "parameter": "恒星剩余质量 M (M☉)",
+                "regimes": [
+                    {
+                        "range": "< 1.5 M☉",
+                        "threshold": "",
+                        "state": "稳态白矮星",
+                        "mechanism": "电子泡利不相容斥力抗衡引力",
+                        "tone": "stable",
+                        "blocks": ["B01"],
+                        "source": "原文",
+                    },
+                    {
+                        "range": "1.5–3 M☉",
+                        "threshold": "钱德拉塞卡极限",
+                        "state": "中子星",
+                        "mechanism": "电子压入质子形成中子简并压平衡",
+                        "tone": "critical",
+                        "blocks": ["B01"],
+                        "source": "原文",
+                    },
+                    {
+                        "range": "> 3 M☉",
+                        "threshold": "奥本海默极限",
+                        "state": "黑洞引力坍缩",
+                        "mechanism": "简并斥力溃败，事件视界封闭光锥",
+                        "tone": "breakdown",
+                        "blocks": ["B01"],
+                        "source": "原文",
+                    },
+                ],
+            },
+        },
+        {"B01"},
+    )
+    assert sens_regime["data"]["mode"] == "regime_threshold"
+    assert sens_regime["data"]["regimes"][1]["threshold"] == "钱德拉塞卡极限"
+    assert "稳态白矮星" in render_assist_figure(sens_regime)
+
+    sens_numeric = audit_blueprint_payload(
+        {
+            "blueprint": "sensitivity_chart",
+            "caption": "温标与增益实测",
+            "reading_note": "真实物理量纲不截断",
+            "summary": "保留负温区与放大倍数实测值。",
+            "data": {
+                "mode": "numeric_curve",
+                "xLabel": "温度 T",
+                "yLabel": "输出增益",
+                "unit": "×",
+                "points": [
+                    {"x": "-40℃", "y": -0.5, "note": "低温反相区", "blocks": ["B01"], "source": "原文"},
+                    {"x": "25℃", "y": 4.5, "note": "常温放大", "blocks": ["B01"], "source": "原文"},
+                    {"x": "300℃", "y": 1200.0, "note": "击穿区", "blocks": ["B01"], "source": "原文"},
+                ],
+            },
+        },
+        {"B01"},
+    )
+    assert sens_numeric["data"]["mode"] == "numeric_curve"
+    assert [p["y"] for p in sens_numeric["data"]["points"]] == [-0.5, 4.5, 1200.0]
+
+    sens_na = audit_blueprint_payload(
+        {
+            "blueprint": "sensitivity_chart",
+            "caption": "纯公理推演无定量曲线",
+            "reading_note": "本章以全局因果拓扑证明为主",
+            "summary": "仅列出定性几何约束条件。",
+            "data": {
+                "mode": "not_applicable",
+                "not_applicable_reason": "本章属于纯微分几何与因果结构公理证明，不存在连续参数敏感度实验数据。",
+                "highlights": [
+                    {"title": "类时能量条件", "detail": "决定测地线是否必然汇聚", "blocks": ["B01"], "source": "原文"}
+                ],
+            },
+        },
+        {"B01"},
+    )
+    assert sens_na["data"]["mode"] == "not_applicable"
+    assert "类时能量条件" in render_assist_figure(sens_na)
+
+    fake_pct = audit_blueprint_payload(
+        {
+            "blueprint": "sensitivity_chart",
+            "caption": "旧版假百分比拦截",
+            "data": {
+                "yLabel": "变化幅度(%)",
+                "points": [{"beat": "临界点", "tension": 88, "emotion": "功率骤增", "blocks": ["B01"]}],
+            },
+        },
+        {"B01"},
+    )
+    assert fake_pct["data"]["mode"] == "regime_threshold"
+    assert "tension" not in json.dumps(fake_pct, ensure_ascii=False)
+
+    # 3. system_flow decoupled roles & not_applicable
+    sys_prompt = prompt_for_diagram(blueprint="system_flow", read_type="science", selected_text="点接触晶体管")
+    assert "input_energy" in sys_prompt[0]["content"]
+    assert "严禁克隆公理-定理推导链" in sys_prompt[0]["content"]
+
+    sys_audited = audit_blueprint_payload(
+        {
+            "blueprint": "system_flow",
+            "caption": "点接触晶体管机制流",
+            "data": {
+                "nodes": [
+                    {"id": "C1", "role": "input_energy", "label": "输入微弱信号", "blocks": ["B01"]},
+                    {"id": "C2", "role": "component", "label": "金箔刀缝触N型锗", "blocks": ["B01"]},
+                    {"id": "C3", "role": "process", "label": "向表面注入空穴", "blocks": ["B01"]},
+                    {"id": "C4", "role": "bottleneck", "label": "间距须≤0.05mm", "blocks": ["B01"]},
+                    {"id": "C5", "role": "output_effect", "label": "输出功率放大", "blocks": ["B01"]},
+                ],
+                "edges": [{"from": "C1", "to": "C2", "label": "激励"}],
+            },
+        },
+        {"B01"},
+    )
+    assert sys_audited["data"]["mode"] == "flow"
+    assert [n["role"] for n in sys_audited["data"]["nodes"]] == [
+        "input_energy",
+        "component",
+        "process",
+        "bottleneck",
+        "output_effect",
+    ]
+
+    sys_na = audit_blueprint_payload(
+        {
+            "blueprint": "system_flow",
+            "caption": "纯定理推导",
+            "data": {"mode": "not_applicable", "not_applicable_reason": "本章无实体装置与动态演化流。", "nodes": []},
+        },
+        {"B01"},
+    )
+    assert sys_na["data"]["mode"] == "not_applicable"
+
+    # 4. boundary_check 3 sections + prefix stripping + unsectioned legacy compatibility
+    bc_res = audit_blueprint_payload(
+        {
+            "blueprint": "extension_dossier",
+            "caption": "黑洞物理边界",
+            "reading_note": "公式/规律失效提示：",
+            "summary": "归纳相对论黑洞的成立边界。",
+            "items": [
+                {
+                    "section": "paradigm_shift",
+                    "title": "打破恒星永恒稳定幻觉",
+                    "stance": "范式演进",
+                    "body": "公式/规律失效提示：经典直觉认为引力总能被压力平衡。",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                },
+                {
+                    "section": "intuition_analogy",
+                    "title": "双生子跨越视界",
+                    "stance": "直觉类比",
+                    "body": "外部观察者看信号无限红移。",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                },
+                {
+                    "section": "breakdown_boundary",
+                    "title": "奇点处广义相对论失效",
+                    "stance": "失效边界",
+                    "body": "补充：曲率无穷大时必须引入量子引力。",
+                    "blocks": ["B01"],
+                    "source": "补充",
+                },
+            ],
+        },
+        {"B01"},
+        requested_action="boundary_check",
+    )
+    assert "公式/规律失效提示" not in bc_res["reading_note"]
+    assert not bc_res["items"][0]["body"].startswith("公式/规律失效提示")
+    assert not bc_res["items"][2]["body"].startswith("补充：")
+    assert [s["id"] for s in bc_res["sections"]] == ["paradigm_shift", "intuition_analogy", "breakdown_boundary"]
+
+    bc_legacy = audit_blueprint_payload(
+        {
+            "blueprint": "extension_dossier",
+            "caption": "旧边界缓存",
+            "reading_note": "旧说明",
+            "items": [{"title": "旧条", "body": "内容", "blocks": ["B01"], "source": "原文"}],
+        },
+        {"B01"},
+        requested_action="boundary_check",
+    )
+    assert "sections" not in bc_legacy
+
+    # 5. concept_glossary full-stack service + symbol cleaning + caching
+    cg_prompt = prompt_for_extension("concept_glossary", read_type="science", selected_text="黑洞视界")
+    assert "symbol" in cg_prompt[0]["content"]
+    assert "intuition" in cg_prompt[0]["content"]
+
+    cg_resp = {
+        "blueprint": "extension_glossary",
+        "caption": "黑洞物理词典",
+        "reading_note": "核对临界质量、视界与量子辐射术语",
+        "summary": "串联临界质量与奇点边界的核心概念。",
+        "items": [
+            {
+                "term": "钱德拉塞卡极限",
+                "symbol": "M ≈ 1.44 M☉",
+                "intuition": "白矮星撑住自身重量的体重上限",
+                "definition": "电子简并压所能支撑恒星残骸抵抗引力坍缩的最大质量。",
+                "blocks": ["B01"],
+                "source": "原文",
+            },
+            {
+                "term": "事件视界",
+                "symbol": "无",
+                "intuition": "有去无回的宇宙单行边界",
+                "definition": "时空光锥完全向内倾斜的边界曲面，光也无法逃逸。",
+                "blocks": ["B01"],
+                "source": "原文",
+            },
+        ],
+    }
+    client = _FakeBlueprintClient([cg_resp])
+    service = ReadingService(str(reading_root), client=client)
+    res = service.assist("B0002", 1, "concept_glossary", read_type="science", scope="chapter")
+    assert res["action"] == "concept_glossary"
+    assert res["action_label"] == "核心概念与公式词典"
+    assert res["blueprint"] == "extension_glossary"
+    assert res["figure"]["items"][0]["symbol"] == "M ≈ 1.44 M☉"
+    assert res["figure"]["items"][1]["symbol"] == ""
+    assert "M ≈ 1.44 M☉" in res["diagram_html"]
+    ch_cached = service.chapter("B0002", 1)
+    assert "science_concept_glossary_concept_glossary" in ch_cached["cached_tools"]
