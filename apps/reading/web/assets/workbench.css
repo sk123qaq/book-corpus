@@ -1613,11 +1613,13 @@ body.chapter-desk .right-marginalia .drawer-body {
 .dag-node-more { font-size: 10px; color: var(--amber); }
 .dag-node-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 
-.role-premise, .role-axiom, .role-sovereign, .role-structural, .role-capital, .role-family, .role-threshold { border-left: 3px solid var(--indigo); }
-.role-inference, .role-step, .role-lemma, .role-faction, .role-mechanism, .role-corridor, .role-ally, .role-home, .role-zone { border-left: 3px solid var(--pine); }
-.role-rebuttal, .role-risk, .role-conflict, .role-rival, .role-turning_point, .role-fortress, .role-antagonist, .role-outside { border-left: 3px solid var(--cinnabar); }
+.role-premise, .role-axiom, .role-sovereign, .role-structural, .role-capital, .role-family, .role-threshold, .role-input, .role-diagnosis { border-left: 3px solid var(--indigo); }
+.role-inference, .role-step, .role-lemma, .role-faction, .role-mechanism, .role-corridor, .role-ally, .role-home, .role-zone, .role-action, .role-strategy { border-left: 3px solid var(--pine); }
+.role-rebuttal, .role-risk, .role-conflict, .role-rival, .role-turning_point, .role-fortress, .role-antagonist, .role-outside, .role-pitfall, .role-fallback { border-left: 3px solid var(--cinnabar); }
+.role-pitfall { background: color-mix(in srgb, var(--cinnabar-soft) 18%, var(--surface)); }
 .role-conclusion, .role-theorem, .role-outcome, .role-consequence, .role-protagonist, .role-destination { border-left: 3px solid var(--cinnabar); border-color: var(--cinnabar); }
-.role-condition, .role-constraint, .role-trigger, .role-front, .role-catalyst, .role-prop, .role-transit { border-left: 3px solid var(--amber); }
+.role-output { border-left: 4px solid var(--pine); border-color: var(--pine); background: color-mix(in srgb, var(--pine-soft) 28%, var(--surface)); }
+.role-condition, .role-constraint, .role-trigger, .role-front, .role-catalyst, .role-prop, .role-transit, .role-gate { border-left: 3px solid var(--amber); }
 .role-neutral, .role-observer, .role-public { border-left: 3px solid var(--ink-3); }
 .dag-node-arc { font-size: 10.5px; color: var(--pine); line-height: 1.4; }
 .blk-anchor-more {
@@ -1839,6 +1841,69 @@ body.chapter-desk .right-marginalia .drawer-body {
 .lineage-card-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .lineage-filter-empty { font-size: 11.5px; color: var(--ink-3); padding: 8px 4px; }
 
+/* 实用型书：SOP 编号步骤流与条件决策问答卡（317px 窄抽屉） */
+.sop-narrow-shell, .decision-narrow-shell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sop-narrow-head, .decision-filter-bar, .quad-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sop-narrow-meta { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.sop-step-list { display: flex; flex-direction: column; gap: 7px; }
+.sop-step-card, .decision-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  cursor: pointer;
+}
+.sop-step-card:hover, .decision-card:hover { border-color: var(--cinnabar); }
+.decision-card[hidden] { display: none; }
+.sop-step-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.sop-step-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sop-step-num {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--surface);
+}
+.sop-role-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.sop-step-title { font-size: 12.5px; font-weight: 700; color: var(--ink); line-height: 1.4; word-break: break-word; }
+.sop-step-detail { font-size: 11.5px; color: var(--ink-2); line-height: 1.55; word-break: break-word; }
+.sop-step-edges, .decision-cond-in, .decision-branches { display: flex; flex-wrap: wrap; gap: 4px; }
+.sop-edge-chip, .decision-if-pill, .decision-branch-pill {
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  word-break: break-word;
+}
+.sop-edge-chip.is-neg { color: var(--cinnabar); border-color: var(--cinnabar-soft); }
+.decision-if-pill { color: var(--indigo); border-color: color-mix(in srgb, var(--indigo) 32%, var(--line)); }
+.decision-branch-pill.role-strategy { color: var(--pine); border-color: color-mix(in srgb, var(--pine) 35%, var(--line)); }
+.decision-branch-pill.role-fallback { color: var(--cinnabar); border-color: var(--cinnabar-soft); }
+.decision-branch-pill.role-condition { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
+.sop-step-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
 .dag-edge-label {
   position: absolute;
   padding: 2px 6px;
@@ -1908,19 +1973,82 @@ body.chapter-desk .right-marginalia .drawer-body {
 
 #measure-stage { position: fixed; left: -99999px; top: 0; visibility: hidden; pointer-events: none; z-index: -1; }
 
-.quad-grid-shell { display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto; gap: 6px 8px; padding: 8px; border: 1px solid var(--line); background: var(--paper); border-radius: 6px; }
-.quad-axis-y { grid-column: 1; grid-row: 1; display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 0.12em; font-size: 11px; font-weight: 600; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 4px; }
+.quad-grid-shell { display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: auto auto; gap: 6px 8px; padding: 10px; border: 1px solid var(--line); background: var(--paper); border-radius: 6px; }
+.quad-axis-y {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 4px;
+  min-height: 0;
+}
+.quad-axis-y-arrow { font-size: 12px; line-height: 1; color: var(--cinnabar); flex: none; }
+.quad-axis-y-label { writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 0.08em; line-height: 1.25; text-align: center; }
 .quad-matrix-area { grid-column: 2; grid-row: 1; display: grid; grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr); grid-template-rows: auto 1px auto; gap: 8px; }
 .quad-cross-v { grid-column: 2; grid-row: 1 / span 3; background: var(--line-strong); }
 .quad-cross-h { grid-column: 1 / span 3; grid-row: 2; background: var(--line-strong); }
-.quad-cell { padding: 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.quad-cell { padding: 8px 9px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .quad-cell.q-top-left { grid-column: 1; grid-row: 1; border-top: 2px solid var(--pine); }
 .quad-cell.q-top-right { grid-column: 3; grid-row: 1; border-top: 2px solid var(--cinnabar); }
 .quad-cell.q-bot-left { grid-column: 1; grid-row: 3; }
 .quad-cell.q-bot-right { grid-column: 3; grid-row: 3; border-top: 2px solid var(--amber); }
-.quad-cell-title { font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
-.quad-item { padding: 6px 7px; background: var(--paper); border-radius: 4px; font-size: 11.5px; display: flex; flex-direction: column; gap: 4px; word-break: break-word; }
+.quad-cell-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.quad-cell-title { font-size: 12px; font-weight: 700; color: var(--ink); }
+.quad-action-hint {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--pine-soft);
+  color: var(--pine);
+}
+.quad-item { padding: 6px 7px; background: var(--paper); border-radius: 4px; font-size: 11.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 4px; word-break: break-word; }
+.quad-item-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .quad-axis-x { grid-column: 2; grid-row: 2; text-align: center; padding: 4px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--ink-2); }
+
+/* 窄抽屉四象限：坐标说明头 + 象限胶囊切换 + 纵向卡片流 */
+.quad-narrow-shell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.quad-coord-head {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.quad-coord-head > div { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.quad-coord-k { font-weight: 700; color: var(--cinnabar); flex: none; }
+.quad-narrow-list { display: flex; flex-direction: column; gap: 8px; }
+.quad-narrow-card {
+  padding: 8px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.quad-narrow-card[hidden] { display: none; }
+.quad-narrow-card.q-top-right { border-left: 3px solid var(--cinnabar); }
+.quad-narrow-card.q-top-left { border-left: 3px solid var(--pine); }
+.quad-narrow-card.q-bot-right { border-left: 3px solid var(--amber); }
+.quad-narrow-card.q-bot-left { border-left: 3px solid var(--ink-3); }
+.quad-narrow-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.quad-pos-tag { font-size: 10px; font-weight: 600; color: var(--ink-3); padding: 1px 5px; border-radius: 4px; background: var(--paper); border: 1px solid var(--line); }
+.quad-narrow-items { display: flex; flex-direction: column; gap: 5px; }
 
 .lanes-grid { display: grid; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .lanes-head, .lanes-row { display: grid; gap: 6px; min-width: 390px; }
@@ -2111,6 +2239,35 @@ body.chapter-desk .right-marginalia .drawer-body {
 .ext-section[data-section-id="hidden_premise"] .ext-sec-title { border-left-color: var(--amber); }
 .ext-section[data-section-id="counterexample"] .ext-sec-title { border-left-color: var(--cinnabar); }
 .ext-section[data-section-id="modern_boundary"] .ext-sec-title { border-left-color: var(--pine); }
+.ext-section[data-section-id="before"] .ext-sec-title { border-left-color: var(--indigo); }
+.ext-section[data-section-id="during"] .ext-sec-title { border-left-color: var(--pine); }
+.ext-section[data-section-id="redline"] .ext-sec-title { border-left-color: var(--cinnabar); }
+
+/* 反例与失效复盘：四段结构化高密度卡片 */
+.pm-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
+.pm-row {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  word-break: break-word;
+}
+.pm-lbl { font-size: 10.5px; font-weight: 700; color: var(--ink-3); }
+.pm-pitfall { border-left: 2.5px solid var(--amber); }
+.pm-pitfall .pm-lbl { color: var(--amber); }
+.pm-case { border-left: 2.5px solid var(--cinnabar); }
+.pm-case .pm-lbl { color: var(--cinnabar); }
+.pm-cause { border-left: 2.5px solid var(--indigo); }
+.pm-cause .pm-lbl { color: var(--indigo); }
+.pm-fix { border-left: 2.5px solid var(--pine); }
+.pm-fix .pm-lbl { color: var(--pine); }
 
 .ext-list { display: flex; flex-direction: column; gap: 8px; }
 .ext-item { padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); display: flex; flex-direction: column; gap: 5px; }
