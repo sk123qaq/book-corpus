@@ -117,13 +117,16 @@
     },
     literature: {
       read_type: 'literature', name: '想象文学', adler_category: '想象文学',
-      goal: '把握人物关系、情绪张力、舞台调度与意象节奏',
+      goal: '重沉浸与体验：把握叙事张力、人物阵营、舞台/空间动线、伏笔视角与细读意象',
       blueprints: [
         { blueprint: 'tension_curve', label: '叙事张力曲线' },
-        { blueprint: 'relation_graph', label: '人物阵营图谱' },
-        { blueprint: 'spatial_route', label: '空间动线地图' },
+        { blueprint: 'relation_graph', label: '人物与阵营图谱' },
+        { blueprint: 'spatial_route', label: '空间与舞台动线' },
       ],
-      extensions: [{ action: 'imagery', label: '意象与舞台词典', cross_search: false }],
+      extensions: [
+        { action: 'narrative_clues', label: '叙事视角与伏笔线索', cross_search: false },
+        { action: 'imagery', label: '意象、潜台词与细读', cross_search: false },
+      ],
     },
     history: {
       read_type: 'history', name: '历史书', adler_category: '历史书',
@@ -2097,8 +2100,9 @@
       RD.mount('drawer-diagram').innerHTML = payload.diagram_html;
     }
     const noteText = payload.figure && payload.figure.reading_note;
-    if (payload.content && !(payload.figure && isRedundantSummary(payload.content, noteText))) {
-      RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(payload.content);
+    const contentText = String(payload.content || '').trim();
+    if (contentText && !(payload.figure && isRedundantSummary(contentText, noteText))) {
+      RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(contentText);
     } else if (payload.figure) {
       RD.mount('drawer-answer').innerHTML = '';
     }

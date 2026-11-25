@@ -74,7 +74,38 @@
     corridor: '通道平原',
     neutral: '中立缓冲',
     front: '外线战区',
+    // 文学·人物与空间
+    protagonist: '核心人物',
+    antagonist: '对立/施压',
+    catalyst: '关键变数',
+    observer: '旁观/群像',
+    home: '居所起点',
+    public: '公共场所',
+    threshold: '门窗界限',
+    transit: '通道街道',
+    destination: '枢纽终点',
+    prop: '核心道具',
+    zone: '舞台区域',
+    outside: '窗外/场外',
   };
+
+  const BEAT_KIND_META = {
+    setup: { label: '铺垫', color: 'var(--indigo)', cls: 'bk-setup' },
+    foreshadow: { label: '伏笔', color: 'var(--amber)', cls: 'bk-foreshadow' },
+    relief: { label: '舒缓', color: 'var(--pine)', cls: 'bk-relief' },
+    escalation: { label: '升级', color: 'var(--cinnabar)', cls: 'bk-escalation' },
+    climax: { label: '顶点', color: 'var(--cinnabar)', cls: 'bk-climax' },
+    aftermath: { label: '留白', color: 'var(--ink-3)', cls: 'bk-aftermath' },
+  };
+
+  const REL_KIND_META = {
+    bond: { stroke: 'var(--pine)', dash: 'none', cls: 'edge-pos', marker: 'green', label: '亲情/爱恋' },
+    conflict: { stroke: 'var(--cinnabar)', dash: 'none', cls: 'edge-neg', marker: 'red', label: '冲突/对抗' },
+    asymmetry: { stroke: 'var(--amber)', dash: '6 3', cls: 'edge-back', marker: 'amber', label: '隐瞒/错位' },
+    family: { stroke: 'var(--indigo)', dash: 'none', cls: 'edge-skip', marker: 'indigo', label: '血缘/姻亲' },
+  };
+
+  const ACTOR_PALETTE = ['var(--cinnabar)', 'var(--pine)', 'var(--indigo)', 'var(--amber)', '#7c4d2b', '#2b6a7c'];
 
   const DAG_BLUEPRINTS = new Set([
     'argument_map',
@@ -96,45 +127,32 @@
     return RD.esc ? RD.esc(s) : String(s == null ? '' : s);
   }
 
-  function renderAnchorPills(blocks, maxShow) {
-    const list = blocks || [];
-    if (!maxShow || list.length <= maxShow) {
-      return list
-        .map(
-          (b) =>
-            '<button type="button" class="blk-anchor" data-jump="' +
-            esc(b) +
-            '" title="点击定位原文 ' +
-            esc(b) +
-            '">↗ ' +
-            esc(b) +
-            '</button>'
-        )
-        .join(' ');
-    }
-    const head = list
-      .slice(0, maxShow)
-      .map(
-        (b) =>
-          '<button type="button" class="blk-anchor" data-jump="' +
-          esc(b) +
-          '" title="点击定位原文 ' +
-          esc(b) +
-          '">↗ ' +
-          esc(b) +
-          '</button>'
-      )
-      .join(' ');
-    const rest = list.slice(maxShow);
+  function renderAnchorPills(blocks, maxCount) {
+    const list = Array.isArray(blocks) ? blocks.filter(Boolean) : [];
+    if (!list.length) return '';
+    const cap = maxCount && maxCount > 0 ? maxCount : list.length;
+    const pill = (b) =>
+      '<button type="button" class="blk-anchor" data-jump="' +
+      esc(b) +
+      '" title="点击定位原文 ' +
+      esc(b) +
+      '">↗ ' +
+      esc(b) +
+      '</button>';
+    if (list.length <= cap) return list.map(pill).join(' ');
+    const head = list.slice(0, cap).map(pill).join(' ');
+    const rest = list.slice(cap);
     return (
       head +
-      ' <button type="button" class="blk-anchor blk-anchor-more" data-jump="' +
-      esc(rest[0]) +
-      '" title="全部块号：' +
-      esc(list.join(', ')) +
+      ' <button type="button" class="blk-anchor-more" data-expand-anchors title="展开其余 ' +
+      rest.length +
+      ' 个块号：' +
+      esc(rest.join(', ')) +
       '">+' +
       rest.length +
-      '</button>'
+      '</button><span class="blk-anchor-extra" hidden>' +
+      rest.map(pill).join(' ') +
+      '</span>'
     );
   }
 
@@ -166,9 +184,17 @@
     return stage;
   }
 
-  function measureNodeSizes(nodes, cardWidth, expandAll, maxAnchors) {
+  function measureNodeSizes(nodes, cardWidth, optsOrExpand, maybeMaxAnchors) {
+    const opts =
+      typeof optsOrExpand === 'object' && optsOrExpand !== null
+        ? optsOrExpand
+        : { expandAll: Boolean(optsOrExpand), maxAnchors: maybeMaxAnchors };
     const stage = ensureMeasureStage();
     const sizes = new Map();
+    const expandAll = Boolean(opts.expandAll);
+    const maxAnchors = opts.maxAnchors !== undefined ? opts.maxAnchors : 3;
+    const showArc = Boolean(opts.showArc);
+    const showZone = Boolean(opts.showZone);
     stage.style.width = cardWidth + 'px';
     stage.innerHTML = nodes
       .map(
@@ -181,12 +207,14 @@
           'px">' +
           '<div class="dag-node-role"><span>' +
           esc(ROLE_ZH[n.role] || n.role || '节点') +
+          (showZone && n.zone ? ' · ' + esc(n.zone) : '') +
           '</span>' +
           renderSrcTag(n.source) +
           '</div>' +
           '<div class="dag-node-label">' +
           esc(n.label) +
           '</div>' +
+          (showArc && n.arc ? '<div class="dag-node-arc">' + esc(n.arc) + '</div>' : '') +
           (n.detail
             ? '<div class="dag-node-more">' +
               (expandAll ? '▴ 收起' : '▾ 查看展开') +
@@ -308,6 +336,9 @@
         label,
         note: notes.join('；'),
         relationType: relType,
+        rel_kind: e.rel_kind || (rev && rev.rel_kind) || '',
+        kind: e.kind || '',
+        actor: e.actor || '',
         bidirectional: Boolean(rev) || relType === 'balance',
         isSelfLoop: e.from === e.to,
         isCycleBack: e.from === e.to,
@@ -518,7 +549,7 @@
               : maxInRank >= 2
                 ? 158
                 : 236;
-    const sizes = measureNodeSizes(nodes, cardW, expandAll, maxAnchors);
+    const sizes = measureNodeSizes(nodes, cardW, { expandAll, maxAnchors });
 
     const colGap = wantCompactLR
       ? R >= 6
@@ -2328,11 +2359,12 @@
     );
   }
 
-  function renderSplineChartHtml(payload) {
+  function renderSplineChartHtml(payload, options) {
     const pts = (payload.data && payload.data.points) || [];
     if (!pts.length) return '';
-    const W = 440;
-    const H = 200;
+    const wideMode = Boolean(options && options.wide);
+    const W = wideMode ? 680 : 440;
+    const H = wideMode ? 210 : 200;
     const padL = 40;
     const padR = 24;
     const padT = 18;
@@ -2341,8 +2373,10 @@
     const plotH = H - padT - padB;
     const coords = pts.map((p, i) => ({
       beat: p.beat,
+      beat_kind: p.beat_kind || '',
       tension: Number(p.tension || 0),
       emotion: p.emotion,
+      note: p.note || '',
       blocks: p.blocks,
       source: p.source,
       idx: i,
@@ -2384,14 +2418,55 @@
       .map((c) => {
         const bid = (c.blocks && c.blocks[0]) || '';
         const lblY = c.idx % 2 === 0 ? H - 22 : H - 7;
+        const bk = BEAT_KIND_META[c.beat_kind];
+        const stroke = bk ? bk.color : 'var(--cinnabar)';
+        const isClimax = c.beat_kind === 'climax';
+        const isForeshadow = c.beat_kind === 'foreshadow';
+        const isRelief = c.beat_kind === 'relief';
+        const r = isClimax ? 6 : isForeshadow ? 5.5 : 5;
+        const fill = isClimax ? 'var(--cinnabar)' : isForeshadow ? 'var(--surface)' : 'var(--desk-card, var(--paper))';
+        const dashAttr = isForeshadow ? ' stroke-dasharray="2.5 1.5"' : '';
+        const halo = isClimax
+          ? '<circle cx="' + c.x + '" cy="' + c.y + '" r="9.5" fill="none" stroke="var(--cinnabar)" stroke-width="1.3" opacity="0.55"/>'
+          : isRelief
+            ? '<circle cx="' + c.x + '" cy="' + c.y + '" r="8" fill="var(--pine-soft)" opacity="0.55"/>'
+            : '';
         return (
-          '<g data-jump="' +
+          '<g class="chart-pt-grp" tabindex="0" data-pt-idx="' +
+          c.idx +
+          '" data-pt-beat="' +
+          esc(c.beat) +
+          '" data-pt-kind="' +
+          esc(bk ? bk.label : '') +
+          '" data-pt-val="' +
+          Math.round(c.tension) +
+          '" data-pt-emotion="' +
+          esc(c.emotion || '') +
+          '" data-pt-note="' +
+          esc(c.note || '') +
+          '" data-pt-x="' +
+          c.x.toFixed(1) +
+          '" data-pt-y="' +
+          c.y.toFixed(1) +
+          '" data-pt-w="' +
+          W +
+          '" data-jump="' +
           esc(bid) +
-          '" style="cursor:pointer"><circle class="chart-pt" cx="' +
+          '" style="cursor:pointer">' +
+          halo +
+          '<circle class="chart-pt" cx="' +
           c.x +
           '" cy="' +
           c.y +
-          '" r="5" fill="var(--desk-card, var(--paper))" stroke="var(--cinnabar)" stroke-width="2.2"/><text x="' +
+          '" r="' +
+          r +
+          '" fill="' +
+          fill +
+          '" stroke="' +
+          stroke +
+          '" stroke-width="2.2"' +
+          dashAttr +
+          '/><text x="' +
           c.x +
           '" y="' +
           lblY +
@@ -2401,7 +2476,19 @@
         );
       })
       .join('');
+    const usedKinds = Array.from(new Set(coords.map((c) => c.beat_kind).filter((k) => BEAT_KIND_META[k])));
+    const kindBar = usedKinds.length
+      ? '<div class="chart-kind-bar">' +
+        usedKinds
+          .map((k) => {
+            const m = BEAT_KIND_META[k];
+            return '<span class="beat-kind-pill ' + m.cls + '">' + esc(m.label) + '</span>';
+          })
+          .join('') +
+        '</div>'
+      : '';
     return (
+      '<div class="chart-stage-wrap">' +
       '<svg class="chart-svg" viewBox="0 0 ' +
       W +
       ' ' +
@@ -2414,28 +2501,947 @@
       pathD +
       '" fill="none" stroke="var(--cinnabar)" stroke-width="2.5" stroke-linecap="round"/>' +
       circles +
-      '</svg><div class="chart-legend-list">' +
+      '</svg>' +
+      '<div class="chart-tooltip" data-chart-tip hidden></div>' +
+      '</div>' +
+      kindBar +
+      '<div class="chart-legend-list">' +
       coords
-        .map(
-          (c) =>
+        .map((c) => {
+          const bk = BEAT_KIND_META[c.beat_kind];
+          return (
             '<div class="chart-legend-item" data-jump="' +
             esc((c.blocks && c.blocks[0]) || '') +
-            '"><span><b>' +
+            '">' +
+            '<div class="chart-legend-top">' +
+            '<span class="chart-legend-head">' +
+            (bk ? '<span class="beat-kind-pill ' + bk.cls + '">' + esc(bk.label) + '</span> ' : '') +
+            '<b>' +
             esc(c.beat) +
-            '</b> · <span style="color:var(--ink-2)">' +
+            '</b> · <span class="chart-legend-emo">' +
             esc(c.emotion) +
-            '</span></span><span>' +
+            '</span></span>' +
+            '<span class="chart-legend-refs">' +
             renderSrcTag(c.source) +
             ' ' +
-            renderAnchorPills(c.blocks) +
-            '</span></div>'
-        )
+            renderAnchorPills(c.blocks, wideMode ? 5 : 3) +
+            '</span></div>' +
+            (c.note ? '<div class="chart-beat-note">' + esc(c.note) + '</div>' : '') +
+            '</div>'
+          );
+        })
         .join('') +
       '</div>'
     );
   }
 
-  function renderExtensionItemHtml(it) {
+  function resolveEdgeVisual(e) {
+    const rk = e.rel_kind && REL_KIND_META[e.rel_kind];
+    if (rk) return rk;
+    if (isNegativeEdgeLabel(e.label || '')) {
+      return { stroke: 'var(--cinnabar)', dash: 'none', cls: 'edge-neg', marker: 'red' };
+    }
+    return { stroke: 'var(--pine)', dash: 'none', cls: 'edge-pos', marker: 'green' };
+  }
+
+  function renderRelationGraphHtml(payload, options) {
+    const nodes = (payload.data && payload.data.nodes) || [];
+    const rawEdges = (payload.data && payload.data.edges) || [];
+    if (!nodes.length) return '<div class="wb-sub">暂无人物关系数据</div>';
+    const wideMode = Boolean(options && options.wide);
+    const hasCamps = nodes.some((n) => String(n.camp || '').trim());
+
+    if (!wideMode) {
+      const groups = new Map();
+      nodes.forEach((n) => {
+        const camp = String(n.camp || '').trim() || '核心人物';
+        if (!groups.has(camp)) groups.set(camp, []);
+        groups.get(camp).push(n);
+      });
+      const nodeLabelMap = new Map(nodes.map((n) => [n.id, n.label || n.id]));
+      const cardsHtml = Array.from(groups.entries())
+        .map(
+          ([camp, list]) =>
+            '<div class="camp-group-box">' +
+            '<div class="camp-group-title">' +
+            esc(camp) +
+            '<span>' +
+            list.length +
+            ' 位</span></div>' +
+            '<div class="camp-char-list">' +
+            list
+              .map((n) => {
+                const rels = rawEdges
+                  .filter((e) => e && (e.from === n.id || e.to === n.id))
+                  .slice(0, 4)
+                  .map((e) => {
+                    const peerId = e.from === n.id ? e.to : e.from;
+                    const arrow = e.from === n.id ? '→' : '←';
+                    const vis = resolveEdgeVisual(e);
+                    const peerName = nodeLabelMap.get(peerId) || peerId;
+                    return (
+                      '<span class="camp-rel-chip ' +
+                      vis.cls +
+                      '">' +
+                      arrow +
+                      ' ' +
+                      esc(peerName) +
+                      (e.label ? '：' + esc(e.label) : '') +
+                      '</span>'
+                    );
+                  })
+                  .join('');
+                const firstBlk = (n.blocks && n.blocks[0]) || '';
+                return (
+                  '<div class="camp-char-card role-' +
+                  esc(n.role || 'observer') +
+                  '" data-jump="' +
+                  esc(firstBlk) +
+                  '">' +
+                  '<div class="dag-node-role"><span>' +
+                  esc(ROLE_ZH[n.role] || n.role || '人物') +
+                  '</span>' +
+                  renderSrcTag(n.source) +
+                  '</div>' +
+                  '<div class="dag-node-label">' +
+                  esc(n.label) +
+                  '</div>' +
+                  (n.arc ? '<div class="camp-char-arc">' + esc(n.arc) + '</div>' : '') +
+                  (n.detail ? '<div class="camp-char-detail">' + esc(n.detail) + '</div>' : '') +
+                  (rels ? '<div class="camp-rel-row">' + rels + '</div>' : '') +
+                  '<div class="dag-node-foot">' +
+                  renderAnchorPills(n.blocks, 3) +
+                  '</div></div>'
+                );
+              })
+              .join('') +
+            '</div></div>'
+        )
+        .join('');
+      return (
+        '<div class="camp-groups-narrow" data-qa-target="relation-narrow">' +
+        cardsHtml +
+        '</div>' +
+        '<div class="dag-trace-tip"><button type="button" class="inline-zoom-link" data-bp-zoom-inline>点击打开宽屏阵营连线全览 ⤢</button></div>'
+      );
+    }
+
+    if (!hasCamps) {
+      return renderLayeredDagHtml(payload, options);
+    }
+
+    const camps = [];
+    const campMap = new Map();
+    nodes.forEach((n, idx) => {
+      const cName = String(n.camp || '').trim() || '其他人物';
+      if (!campMap.has(cName)) {
+        const obj = { name: cName, nodes: [] };
+        campMap.set(cName, obj);
+        camps.push(obj);
+      }
+      campMap.get(cName).nodes.push(Object.assign({}, n, { idx }));
+    });
+
+    const expandAll = Boolean(options && options.expandAll);
+    const maxAnchors = !expandAll ? 3 : 0;
+    const cardW = 208;
+    const sizes = measureNodeSizes(nodes, cardW, { showArc: true, expandAll, maxAnchors });
+    const innerCols = (cnt) => (cnt >= 4 ? 2 : 1);
+    const innerGapX = 18;
+    const innerGapY = 18;
+    const campPadX = 16;
+    const campHeadH = 34;
+    const campPadBot = 16;
+
+    const campBoxes = camps.map((c) => {
+      const cols = innerCols(c.nodes.length);
+      const rows = Math.ceil(c.nodes.length / cols);
+      let maxHByRow = new Array(rows).fill(0);
+      c.nodes.forEach((n, i) => {
+        const r = Math.floor(i / cols);
+        maxHByRow[r] = Math.max(maxHByRow[r], sizes.get(n.id).h);
+      });
+      const boxW = campPadX * 2 + cols * cardW + Math.max(0, cols - 1) * innerGapX;
+      const boxH = campHeadH + campPadBot + maxHByRow.reduce((a, b) => a + b, 0) + Math.max(0, rows - 1) * innerGapY;
+      return { name: c.name, nodes: c.nodes, cols, rows, maxHByRow, w: boxW, h: boxH, x: 0, y: 0 };
+    });
+
+    const gridCols = campBoxes.length <= 3 ? campBoxes.length : campBoxes.length <= 6 && campBoxes.every((c) => c.cols === 1) ? 3 : 2;
+    const gridRows = Math.ceil(campBoxes.length / gridCols);
+    const colWidths = new Array(gridCols).fill(0);
+    const rowHeights = new Array(gridRows).fill(0);
+    campBoxes.forEach((cb, i) => {
+      const r = Math.floor(i / gridCols);
+      const col = i % gridCols;
+      colWidths[col] = Math.max(colWidths[col], cb.w);
+      rowHeights[r] = Math.max(rowHeights[r], cb.h);
+    });
+
+    const campGapX = 104;
+    const campGapY = 78;
+    const outerPadX = 48;
+    const outerPadY = 36;
+    const pos = new Map();
+    const campHeaders = [];
+
+    let curY = outerPadY;
+    for (let r = 0; r < gridRows; r++) {
+      let curX = outerPadX;
+      for (let col = 0; col < gridCols; col++) {
+        const idx = r * gridCols + col;
+        if (idx < campBoxes.length) {
+          const cb = campBoxes[idx];
+          cb.x = curX;
+          cb.y = curY;
+          campHeaders.push({ x: cb.x, y: cb.y, w: cb.w, h: campHeadH });
+          let ny = cb.y + campHeadH;
+          for (let nr = 0; nr < cb.rows; nr++) {
+            for (let nc = 0; nc < cb.cols; nc++) {
+              const ni = nr * cb.cols + nc;
+              if (ni < cb.nodes.length) {
+                const nd = cb.nodes[ni];
+                const sz = sizes.get(nd.id);
+                const nx = cb.x + campPadX + nc * (cardW + innerGapX);
+                pos.set(nd.id, { x: nx, y: ny, w: sz.w, h: sz.h });
+              }
+            }
+            ny += cb.maxHByRow[nr] + innerGapY;
+          }
+        }
+        curX += colWidths[col] + campGapX;
+      }
+      curY += rowHeights[r] + campGapY;
+    }
+
+    const maxW = Math.max(320, outerPadX * 2 + colWidths.reduce((a, b) => a + b, 0) + Math.max(0, gridCols - 1) * campGapX);
+    const maxH = Math.max(220, curY - campGapY + outerPadY);
+
+    const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i })]));
+    const mergedEdges = prepareDagEdges(rawEdges, idMap);
+    const uidSuffix = 'rg-' + ++markerSeq;
+    const markers = {
+      green: 'rg-g-' + uidSuffix,
+      red: 'rg-r-' + uidSuffix,
+      indigo: 'rg-i-' + uidSuffix,
+      amber: 'rg-a-' + uidSuffix,
+    };
+
+    const nodeRects = Array.from(pos.values());
+    const blockerRects = nodeRects.concat(campHeaders);
+    const placedLabels = [];
+    const fallbackLegend = [];
+    const svgEdgePaths = [];
+    const htmlEdgeLabels = [];
+
+    const pairCounts = new Map();
+    mergedEdges.forEach((e) => {
+      if (e.isSelfLoop) return;
+      const a = pos.get(e.from);
+      const b = pos.get(e.to);
+      if (!a || !b) return;
+      const pk = [e.from, e.to].sort().join('\0');
+      const seq = pairCounts.get(pk) || 0;
+      pairCounts.set(pk, seq + 1);
+      const curveOffset = seq === 0 ? 18 : (seq % 2 === 1 ? 38 : -38);
+      const acx = a.x + a.w / 2;
+      const acy = a.y + a.h / 2;
+      const bcx = b.x + b.w / 2;
+      const bcy = b.y + b.h / 2;
+      const dx = bcx - acx;
+      const dy = bcy - acy;
+      let p0, p1;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        p0 = { x: dx >= 0 ? a.x + a.w : a.x, y: acy };
+        p1 = { x: dx >= 0 ? b.x : b.x + b.w, y: bcy };
+      } else {
+        p0 = { x: acx, y: dy >= 0 ? a.y + a.h : a.y };
+        p1 = { x: bcx, y: dy >= 0 ? b.y : b.y + b.h };
+      }
+      const len = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+      const nx = -(p1.y - p0.y) / len;
+      const ny = (p1.x - p0.x) / len;
+      const cx = Math.round((p0.x + p1.x) / 2 + nx * curveOffset);
+      const cy = Math.round((p0.y + p1.y) / 2 + ny * curveOffset);
+      const d = 'M ' + p0.x + ',' + p0.y + ' Q ' + cx + ',' + cy + ' ' + p1.x + ',' + p1.y;
+      const vis = resolveEdgeVisual(rawEdges.find((re) => re.from === e.from && re.to === e.to) || e);
+      const markerId = markers[vis.marker] || markers.green;
+      const fromLabel = (idMap.get(e.from) && idMap.get(e.from).label) || e.from;
+      const toLabel = (idMap.get(e.to) && idMap.get(e.to).label) || e.to;
+      const arrowSym = e.bidirectional ? ' ↔ ' : ' → ';
+      const edgeDesc = fromLabel + arrowSym + toLabel + (e.label ? '：' + e.label : '') + (e.note ? '（' + e.note + '）' : '');
+
+      svgEdgePaths.push(
+        '<g class="dag-edge-group" data-edge-idx="' +
+          e.idx +
+          '" data-from="' +
+          esc(e.from) +
+          '" data-to="' +
+          esc(e.to) +
+          '" data-edge-desc="' +
+          esc(edgeDesc) +
+          '">' +
+          '<path class="dag-edge-halo" d="' +
+          d +
+          '"/>' +
+          '<path class="dag-edge-path" d="' +
+          d +
+          '" stroke="' +
+          vis.stroke +
+          '" stroke-dasharray="' +
+          vis.dash +
+          '"' +
+          (e.bidirectional ? ' marker-start="url(#' + markerId + ')"' : '') +
+          ' marker-end="url(#' +
+          markerId +
+          ')"/>' +
+          '<path class="dag-edge-hit" d="' +
+          d +
+          '"/>' +
+          '</g>'
+      );
+
+      if (e.label) {
+        const lsz = measureLabelSize(e.label);
+        const mx = Math.round(0.25 * p0.x + 0.5 * cx + 0.25 * p1.x);
+        const my = Math.round(0.25 * p0.y + 0.5 * cy + 0.25 * p1.y);
+        const cands = [
+          { x: mx, y: my },
+          { x: mx, y: my - 16 },
+          { x: mx, y: my + 16 },
+          { x: Math.round(0.5625 * p0.x + 0.375 * cx + 0.0625 * p1.x), y: Math.round(0.5625 * p0.y + 0.375 * cy + 0.0625 * p1.y) },
+          { x: Math.round(0.0625 * p0.x + 0.375 * cx + 0.5625 * p1.x), y: Math.round(0.0625 * p0.y + 0.375 * cy + 0.5625 * p1.y) },
+        ];
+        let chosenRect = null;
+        for (const c of cands) {
+          const box = { x: Math.round(c.x - lsz.w / 2), y: Math.round(c.y - lsz.h / 2), w: lsz.w, h: lsz.h };
+          if (box.x < 4 || box.x + box.w > maxW - 4 || box.y < 4 || box.y + box.h > maxH - 4) continue;
+          if (!blockerRects.some((nr) => rectsOverlap(box, nr, 4)) && !placedLabels.some((lr) => rectsOverlap(box, lr, 4))) {
+            chosenRect = box;
+            break;
+          }
+        }
+        if (chosenRect) {
+          placedLabels.push(chosenRect);
+          htmlEdgeLabels.push(
+            '<span class="dag-edge-label ' +
+              vis.cls +
+              '" data-edge-idx="' +
+              e.idx +
+              '" style="left:' +
+              chosenRect.x +
+              'px;top:' +
+              chosenRect.y +
+              'px" title="' +
+              esc(edgeDesc) +
+              '">' +
+              esc(e.label) +
+              '</span>'
+          );
+        } else {
+          const badgeNum = fallbackLegend.length + 1;
+          const circ = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮'[badgeNum - 1] || String(badgeNum);
+          fallbackLegend.push({ idx: e.idx, text: circ + ' ' + fromLabel + arrowSym + toLabel + '：' + (e.note || e.label) });
+        }
+      }
+    });
+
+    const campZonesHtml = campBoxes
+      .map(
+        (cb) =>
+          '<div class="camp-zone-box" style="left:' +
+          cb.x +
+          'px;top:' +
+          cb.y +
+          'px;width:' +
+          cb.w +
+          'px;height:' +
+          cb.h +
+          'px"><div class="camp-zone-head">' +
+          esc(cb.name) +
+          '</div></div>'
+      )
+      .join('');
+
+    const cardsHtml = nodes
+      .map((n) => {
+        const p = pos.get(n.id);
+        const firstBlk = (n.blocks && n.blocks[0]) || '';
+        const isExp = expandAll && Boolean(n.detail);
+        return (
+          '<div class="dag-node role-' +
+          esc(n.role || 'observer') +
+          (isExp ? ' expanded' : '') +
+          '" style="left:' +
+          p.x +
+          'px;top:' +
+          p.y +
+          'px;width:' +
+          p.w +
+          'px" data-jump="' +
+          esc(firstBlk) +
+          '" data-node-id="' +
+          esc(n.id) +
+          '" title="悬停高亮关系 · 点击跳转原文 ' +
+          esc(firstBlk) +
+          '">' +
+          '<div class="dag-node-role"><span>' +
+          esc(ROLE_ZH[n.role] || n.role || '人物') +
+          '</span>' +
+          renderSrcTag(n.source) +
+          '</div>' +
+          '<div class="dag-node-label">' +
+          esc(n.label) +
+          '</div>' +
+          (n.arc ? '<div class="dag-node-arc">' + esc(n.arc) + '</div>' : '') +
+          (n.detail
+            ? '<div class="dag-node-more" data-toggle-detail>' +
+              (isExp ? '▴ 收起' : '▾ 查看展开') +
+              '</div><div class="dag-node-detail">' +
+              esc(n.detail) +
+              '</div>'
+            : '') +
+          '<div class="dag-node-foot">' +
+          renderAnchorPills(n.blocks, maxAnchors) +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    const markerDef = (id, fill) =>
+      '<marker id="' +
+      id +
+      '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 10 5 L 0 9 z" fill="' +
+      fill +
+      '"/></marker>';
+
+    const legendHtml = fallbackLegend.length
+      ? '<div class="edge-legend">' +
+        fallbackLegend
+          .map((item) => '<span class="edge-legend-pill" data-edge-idx="' + item.idx + '">' + esc(item.text) + '</span>')
+          .join('') +
+        '</div>'
+      : '';
+
+    const relLegend =
+      '<div class="rel-kind-legend">' +
+      Object.values(REL_KIND_META)
+        .map(
+          (m) =>
+            '<span class="rel-legend-chip"><i style="background:' +
+            m.stroke +
+            ';border-style:' +
+            (m.dash === 'none' ? 'solid' : 'dashed') +
+            '"></i>' +
+            esc(m.label) +
+            '</span>'
+        )
+        .join('') +
+      '</div>';
+
+    return (
+      '<div class="dag-viewport" data-qa-target="dag"><div class="dag-canvas camp-zoned" style="width:' +
+      maxW +
+      'px;height:' +
+      maxH +
+      'px">' +
+      campZonesHtml +
+      '<svg class="dag-edges" width="' +
+      maxW +
+      '" height="' +
+      maxH +
+      '" viewBox="0 0 ' +
+      maxW +
+      ' ' +
+      maxH +
+      '"><defs>' +
+      markerDef(markers.green, 'var(--pine)') +
+      markerDef(markers.red, 'var(--cinnabar)') +
+      markerDef(markers.indigo, 'var(--indigo)') +
+      markerDef(markers.amber, 'var(--amber)') +
+      '</defs>' +
+      svgEdgePaths.join('') +
+      '</svg>' +
+      cardsHtml +
+      htmlEdgeLabels.join('') +
+      '</div></div>' +
+      relLegend +
+      '<div class="dag-trace-tip" data-trace-tip>悬停人物或连线可高亮关系；点击节点跳转原文</div>' +
+      legendHtml
+    );
+  }
+
+  function resolve2DOverlaps(rects, bounds, pad) {
+    for (let iter = 0; iter < 64; iter++) {
+      let moved = false;
+      for (let i = 0; i < rects.length; i++) {
+        for (let j = i + 1; j < rects.length; j++) {
+          const a = rects[i];
+          const b = rects[j];
+          if (!rectsOverlap(a, b, pad)) continue;
+          moved = true;
+          const acx = a.x + a.w / 2;
+          const acy = a.y + a.h / 2;
+          const bcx = b.x + b.w / 2;
+          const bcy = b.y + b.h / 2;
+          const ox = a.w / 2 + b.w / 2 + pad - Math.abs(acx - bcx);
+          const oy = a.h / 2 + b.h / 2 + pad - Math.abs(acy - bcy);
+          if (ox <= oy) {
+            const dir = acx < bcx || (acx === bcx && i < j) ? -1 : 1;
+            const shift = Math.ceil(ox / 2) + 1;
+            a.x += dir * shift;
+            b.x -= dir * shift;
+          } else {
+            const dir = acy < bcy || (acy === bcy && i < j) ? -1 : 1;
+            const shift = Math.ceil(oy / 2) + 1;
+            a.y += dir * shift;
+            b.y -= dir * shift;
+          }
+          a.x = Math.max(bounds.left, Math.min(bounds.right - a.w, a.x));
+          a.y = Math.max(bounds.top, Math.min(bounds.bottom - a.h, a.y));
+          b.x = Math.max(bounds.left, Math.min(bounds.right - b.w, b.x));
+          b.y = Math.max(bounds.top, Math.min(bounds.bottom - b.h, b.y));
+        }
+      }
+      if (!moved) break;
+    }
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        if (rectsOverlap(rects[i], rects[j], 2)) return false;
+      }
+    }
+    return true;
+  }
+
+  function renderSpatialRouteHtml(payload, options) {
+    const data = (payload && payload.data) || {};
+    const mode = String(data.mode || '').toLowerCase();
+    if (mode !== 'route_map' && mode !== 'stage_blocking') {
+      return renderSpatialMapHtml(payload, options);
+    }
+
+    const nodes = data.nodes || [];
+    const rawEdges = data.edges || [];
+    if (!nodes.length) return '<div class="wb-sub">暂无空间节点数据</div>';
+
+    const wideMode = Boolean(options && options.wide);
+    const isStage = mode === 'stage_blocking';
+    const actors = [];
+    const actorColors = new Map();
+    rawEdges.forEach((e) => {
+      const a = String((e && e.actor) || '').trim();
+      if (a && !actorColors.has(a)) {
+        actorColors.set(a, ACTOR_PALETTE[actors.length % ACTOR_PALETTE.length]);
+        actors.push(a);
+      }
+    });
+    const edgeColor = (e) => {
+      if (e && e.kind === 'barrier') return 'var(--cinnabar)';
+      if (e && e.actor && actorColors.has(e.actor)) return actorColors.get(e.actor);
+      if (e && e.kind === 'parallel') return 'var(--indigo)';
+      if (e && e.kind === 'gaze') return 'var(--amber)';
+      return 'var(--pine)';
+    };
+
+    if (!wideMode) {
+      const MW = 640;
+      const MH = 400;
+      const padX = 56;
+      const padT = isStage ? 52 : 44;
+      const padB = isStage ? 46 : 36;
+      const miniRects = nodes.map((n, idx) => {
+        const nx = Number.isFinite(Number(n.x)) ? Number(n.x) : 18 + (idx % 4) * 20;
+        const ny = Number.isFinite(Number(n.y)) ? Number(n.y) : 20 + Math.floor(idx / 4) * 25;
+        const bw = 96;
+        const bh = 32;
+        const cx = padX + ((Math.max(4, Math.min(96, nx)) - 4) / 92) * (MW - padX * 2 - bw);
+        const cy = padT + ((Math.max(4, Math.min(96, ny)) - 4) / 92) * (MH - padT - padB - bh);
+        return { id: n.id, idx, x: Math.round(cx), y: Math.round(cy), w: bw, h: bh, node: n };
+      });
+      resolve2DOverlaps(miniRects, { left: 16, right: MW - 16, top: padT - 12, bottom: MH - padB + 8 }, 8);
+      const miniPos = new Map(miniRects.map((r) => [r.id, r]));
+      const miniLines = rawEdges
+        .map((e) => {
+          const a = miniPos.get(e.from);
+          const b = miniPos.get(e.to);
+          if (!a || !b) return '';
+          const col = edgeColor(e);
+          const dash = e.kind === 'gaze' ? '4 3' : e.kind === 'barrier' ? '7 4' : e.kind === 'parallel' ? '6 3' : 'none';
+          return (
+            '<line x1="' +
+            (a.x + a.w / 2) +
+            '" y1="' +
+            (a.y + a.h / 2) +
+            '" x2="' +
+            (b.x + b.w / 2) +
+            '" y2="' +
+            (b.y + b.h / 2) +
+            '" stroke="' +
+            col +
+            '" stroke-width="2" stroke-dasharray="' +
+            dash +
+            '" marker-end="url(#sp-mini-arr)"/>'
+          );
+        })
+        .join('');
+      const miniNodesSvg = miniRects
+        .map((r) => {
+          const short = String(r.node.label || r.id).slice(0, 7);
+          return (
+            '<g data-jump="' +
+            esc((r.node.blocks && r.node.blocks[0]) || '') +
+            '" style="cursor:pointer">' +
+            '<rect x="' +
+            r.x +
+            '" y="' +
+            r.y +
+            '" width="' +
+            r.w +
+            '" height="' +
+            r.h +
+            '" rx="6" fill="var(--surface)" stroke="var(--ink-3)" stroke-width="1.3"/>' +
+            '<text x="' +
+            (r.x + r.w / 2) +
+            '" y="' +
+            (r.y + 20) +
+            '" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--ink)">' +
+            esc((r.idx + 1) + '. ' + short) +
+            '</text></g>'
+          );
+        })
+        .join('');
+      const backdropSvg = isStage
+        ? '<rect x="14" y="30" width="' +
+          (MW - 28) +
+          '" height="' +
+          (MH - 62) +
+          '" rx="10" fill="none" stroke="var(--line-strong)" stroke-dasharray="6 4"/>' +
+          '<text x="' +
+          MW / 2 +
+          '" y="20" text-anchor="middle" font-size="11" fill="var(--ink-3)">↑ 窗外 / 后景</text>' +
+          '<text x="' +
+          MW / 2 +
+          '" y="' +
+          (MH - 12) +
+          '" text-anchor="middle" font-size="11" fill="var(--ink-3)">↓ 台口 / 观众席</text>'
+        : '<text x="' +
+          (MW - 18) +
+          '" y="22" text-anchor="end" font-size="11" fill="var(--ink-3)">北 ↑ · 西←→东</text>';
+      const listHtml = nodes
+        .map((n, idx) => {
+          const moves = rawEdges
+            .filter((e) => e && (e.from === n.id || e.to === n.id))
+            .slice(0, 3)
+            .map((e) => {
+              const actorPrefix = e.actor ? '[' + esc(e.actor) + '] ' : '';
+              return '<span class="spatial-move-chip">' + actorPrefix + esc(e.label || e.kind || '动线') + '</span>';
+            })
+            .join('');
+          return (
+            '<div class="spatial-mini-item" data-jump="' +
+            esc((n.blocks && n.blocks[0]) || '') +
+            '">' +
+            '<div class="spatial-mini-head"><b>' +
+            (idx + 1) +
+            '. ' +
+            esc(n.label) +
+            '</b><span>' +
+            (n.zone ? '<span class="spatial-zone-pill">' + esc(n.zone) + '</span> ' : '') +
+            renderSrcTag(n.source) +
+            '</span></div>' +
+            (n.detail ? '<div class="ext-sub">' + esc(n.detail) + '</div>' : '') +
+            (moves ? '<div class="camp-rel-row">' + moves + '</div>' : '') +
+            '<div>' +
+            renderAnchorPills(n.blocks, 3) +
+            '</div></div>'
+          );
+        })
+        .join('');
+      return (
+        '<div class="spatial-mini-wrap" data-qa-target="spatial-mini">' +
+        '<div class="spatial-mode-bar"><span>' +
+        esc(isStage ? '封闭舞台调度缩略图' : '二维地点动线缩略图') +
+        (data.stage_desc ? ' · ' + esc(data.stage_desc) : '') +
+        '</span><button type="button" class="inline-zoom-link" data-bp-zoom-inline>放大全览 ⤢</button></div>' +
+        '<svg class="spatial-mini-svg" viewBox="0 0 ' +
+        MW +
+        ' ' +
+        MH +
+        '"><defs><marker id="sp-mini-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 10 5 L 0 9 z" fill="var(--ink-2)"/></marker></defs>' +
+        backdropSvg +
+        miniLines +
+        miniNodesSvg +
+        '</svg>' +
+        '<div class="spatial-mini-list">' +
+        listHtml +
+        '</div></div>'
+      );
+    }
+
+    // Wide mode: 16:10 2D canvas with real DOM measurement + order-preserving overlap repulsion
+    const expandAll = Boolean(options && options.expandAll);
+    const maxAnchors = !expandAll ? 3 : 0;
+    const cardW = expandAll ? 176 : 166;
+    const sizes = measureNodeSizes(nodes, cardW, { expandAll, maxAnchors, showZone: true });
+    let W = 880;
+    let H = 550;
+    const padX = 36;
+    const padT = isStage ? 58 : 46;
+    const padB = isStage ? 52 : 40;
+    let rects = nodes.map((n, idx) => {
+      const sz = sizes.get(n.id);
+      const nx = Number.isFinite(Number(n.x)) ? Number(n.x) : 18 + (idx % 4) * 20;
+      const ny = Number.isFinite(Number(n.y)) ? Number(n.y) : 20 + Math.floor(idx / 4) * 25;
+      const rx = padX + ((Math.max(4, Math.min(96, nx)) - 4) / 92) * (W - padX * 2 - sz.w);
+      const ry = padT + ((Math.max(4, Math.min(96, ny)) - 4) / 92) * (H - padT - padB - sz.h);
+      return { id: n.id, x: Math.round(rx), y: Math.round(ry), w: sz.w, h: sz.h };
+    });
+    for (let grow = 0; grow < 3; grow++) {
+      if (resolve2DOverlaps(rects, { left: padX, right: W - padX, top: padT, bottom: H - padB }, 14)) break;
+      W = Math.round(W * 1.15);
+      H = Math.round(H * 1.15);
+      rects.forEach((r) => {
+        r.x = Math.round(r.x * 1.15);
+        r.y = Math.round(r.y * 1.15);
+      });
+    }
+    const pos = new Map(rects.map((r) => [r.id, r]));
+    const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i })]));
+    const directedEdges = rawEdges
+      .filter((e) => e && idMap.has(e.from) && idMap.has(e.to))
+      .map((e, idx) => Object.assign({}, e, { idx, isSelfLoop: e.from === e.to }));
+    const uidSuffix = 'sp-' + ++markerSeq;
+    const placedLabels = [];
+    const fallbackLegend = [];
+    const svgEdgePaths = [];
+    const htmlEdgeLabels = [];
+    const markerDefs = [];
+
+    const pairCounts = new Map();
+    directedEdges.forEach((e) => {
+      if (e.isSelfLoop) return;
+      const orig = e;
+      const a = pos.get(e.from);
+      const b = pos.get(e.to);
+      if (!a || !b) return;
+      const pk = [e.from, e.to].sort().join('\0');
+      const seq = pairCounts.get(pk) || 0;
+      pairCounts.set(pk, seq + 1);
+      const curveOffset = seq === 0 ? 14 : seq % 2 === 1 ? 34 : -34;
+      const acx = a.x + a.w / 2;
+      const acy = a.y + a.h / 2;
+      const bcx = b.x + b.w / 2;
+      const bcy = b.y + b.h / 2;
+      const dx = bcx - acx;
+      const dy = bcy - acy;
+      let p0, p1;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        p0 = { x: dx >= 0 ? a.x + a.w : a.x, y: acy };
+        p1 = { x: dx >= 0 ? b.x : b.x + b.w, y: bcy };
+      } else {
+        p0 = { x: acx, y: dy >= 0 ? a.y + a.h : a.y };
+        p1 = { x: bcx, y: dy >= 0 ? b.y : b.y + b.h };
+      }
+      const len = Math.max(1, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+      const nx = -(p1.y - p0.y) / len;
+      const ny = (p1.x - p0.x) / len;
+      const cx = Math.round((p0.x + p1.x) / 2 + nx * curveOffset);
+      const cy = Math.round((p0.y + p1.y) / 2 + ny * curveOffset);
+      const d = 'M ' + p0.x + ',' + p0.y + ' Q ' + cx + ',' + cy + ' ' + p1.x + ',' + p1.y;
+      const col = edgeColor(orig);
+      const mId = 'sp-m-' + uidSuffix + '-' + e.idx;
+      markerDefs.push(
+        '<marker id="' +
+          mId +
+          '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 10 5 L 0 9 z" fill="' +
+          col +
+          '"/></marker>'
+      );
+      const dash = orig.kind === 'gaze' ? '4 3' : orig.kind === 'barrier' ? '7 4' : orig.kind === 'parallel' ? '6 3' : 'none';
+      const fromLabel = (idMap.get(e.from) && idMap.get(e.from).label) || e.from;
+      const toLabel = (idMap.get(e.to) && idMap.get(e.to).label) || e.to;
+      const actorStr = orig.actor ? '[' + orig.actor + '] ' : '';
+      const edgeDesc = actorStr + fromLabel + ' → ' + toLabel + (e.label ? '：' + e.label : '') + (e.note ? '（' + e.note + '）' : '');
+
+      svgEdgePaths.push(
+        '<g class="dag-edge-group" data-edge-idx="' +
+          e.idx +
+          '" data-from="' +
+          esc(e.from) +
+          '" data-to="' +
+          esc(e.to) +
+          '" data-edge-desc="' +
+          esc(edgeDesc) +
+          '">' +
+          '<path class="dag-edge-halo" d="' +
+          d +
+          '"/>' +
+          '<path class="dag-edge-path" d="' +
+          d +
+          '" stroke="' +
+          col +
+          '" stroke-dasharray="' +
+          dash +
+          '" marker-end="url(#' +
+          mId +
+          ')"/>' +
+          '<path class="dag-edge-hit" d="' +
+          d +
+          '"/></g>'
+      );
+
+      const fullLbl = orig.actor && e.label ? orig.actor + '·' + e.label : e.label || orig.actor || '';
+      if (fullLbl) {
+        const lsz = measureLabelSize(fullLbl);
+        const mx = Math.round(0.25 * p0.x + 0.5 * cx + 0.25 * p1.x);
+        const my = Math.round(0.25 * p0.y + 0.5 * cy + 0.25 * p1.y);
+        const cands = [
+          { x: mx, y: my },
+          { x: mx, y: my - 16 },
+          { x: mx, y: my + 16 },
+          { x: Math.round(0.5625 * p0.x + 0.375 * cx + 0.0625 * p1.x), y: Math.round(0.5625 * p0.y + 0.375 * cy + 0.0625 * p1.y) },
+          { x: Math.round(0.0625 * p0.x + 0.375 * cx + 0.5625 * p1.x), y: Math.round(0.0625 * p0.y + 0.375 * cy + 0.5625 * p1.y) },
+        ];
+        let chosenRect = null;
+        for (const c of cands) {
+          const box = { x: Math.round(c.x - lsz.w / 2), y: Math.round(c.y - lsz.h / 2), w: lsz.w, h: lsz.h };
+          if (box.x < 4 || box.x + box.w > W - 4 || box.y < 4 || box.y + box.h > H - 4) continue;
+          if (!rects.some((nr) => rectsOverlap(box, nr, 4)) && !placedLabels.some((lr) => rectsOverlap(box, lr, 4))) {
+            chosenRect = box;
+            break;
+          }
+        }
+        if (chosenRect) {
+          placedLabels.push(chosenRect);
+          htmlEdgeLabels.push(
+            '<span class="dag-edge-label" data-edge-idx="' +
+              e.idx +
+              '" style="left:' +
+              chosenRect.x +
+              'px;top:' +
+              chosenRect.y +
+              'px;color:' +
+              col +
+              '" title="' +
+              esc(edgeDesc) +
+              '">' +
+              esc(fullLbl) +
+              '</span>'
+          );
+        } else {
+          const badgeNum = fallbackLegend.length + 1;
+          const circ = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮'[badgeNum - 1] || String(badgeNum);
+          fallbackLegend.push({ idx: e.idx, text: circ + ' ' + edgeDesc });
+        }
+      }
+    });
+
+    const cardsHtml = nodes
+      .map((n) => {
+        const p = pos.get(n.id);
+        const firstBlk = (n.blocks && n.blocks[0]) || '';
+        const isExp = expandAll && Boolean(n.detail);
+        return (
+          '<div class="dag-node role-' +
+          esc(n.role || 'zone') +
+          (isExp ? ' expanded' : '') +
+          '" style="left:' +
+          p.x +
+          'px;top:' +
+          p.y +
+          'px;width:' +
+          p.w +
+          'px" data-jump="' +
+          esc(firstBlk) +
+          '" data-node-id="' +
+          esc(n.id) +
+          '">' +
+          '<div class="dag-node-role"><span>' +
+          esc(ROLE_ZH[n.role] || n.role || '地点') +
+          (n.zone ? ' · ' + esc(n.zone) : '') +
+          '</span>' +
+          renderSrcTag(n.source) +
+          '</div>' +
+          '<div class="dag-node-label">' +
+          esc(n.label) +
+          '</div>' +
+          (n.detail
+            ? '<div class="dag-node-more" data-toggle-detail>' +
+              (isExp ? '▴ 收起' : '▾ 查看展开') +
+              '</div><div class="dag-node-detail">' +
+              esc(n.detail) +
+              '</div>'
+            : '') +
+          '<div class="dag-node-foot">' +
+          renderAnchorPills(n.blocks, maxAnchors) +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    const stageChrome = isStage
+      ? '<div class="spatial-stage-top">↑ 窗外 / 后景' +
+        (data.stage_desc ? ' · ' + esc(data.stage_desc) : '') +
+        '</div><div class="spatial-stage-bot">↓ 台口 / 观众席</div>'
+      : '<div class="spatial-stage-top">北 N ↑ · 上北下南 左西右东' +
+        (data.stage_desc ? ' · ' + esc(data.stage_desc) : '') +
+        '</div>';
+
+    const actorLegend = actors.length
+      ? '<div class="rel-kind-legend">' +
+        actors
+          .map(
+            (a) =>
+              '<span class="rel-legend-chip"><i style="background:' +
+              actorColors.get(a) +
+              '"></i>' +
+              esc(a) +
+              '</span>'
+          )
+          .join('') +
+        '</div>'
+      : '';
+
+    const legendHtml = fallbackLegend.length
+      ? '<div class="edge-legend">' +
+        fallbackLegend
+          .map((item) => '<span class="edge-legend-pill" data-edge-idx="' + item.idx + '">' + esc(item.text) + '</span>')
+          .join('') +
+        '</div>'
+      : '';
+
+    return (
+      '<div class="dag-viewport" data-qa-target="spatial-2d">' +
+      '<div class="dag-canvas spatial-canvas ' +
+      (isStage ? 'is-stage-blocking' : 'is-route-map') +
+      '" style="width:' +
+      W +
+      'px;height:' +
+      H +
+      'px">' +
+      stageChrome +
+      '<svg class="dag-edges" width="' +
+      W +
+      '" height="' +
+      H +
+      '" viewBox="0 0 ' +
+      W +
+      ' ' +
+      H +
+      '"><defs>' +
+      markerDefs.join('') +
+      '</defs>' +
+      svgEdgePaths.join('') +
+      '</svg>' +
+      cardsHtml +
+      htmlEdgeLabels.join('') +
+      '</div></div>' +
+      actorLegend +
+      '<div class="dag-trace-tip" data-trace-tip>悬停地点或动线可高亮轨迹；点击节点跳转原文</div>' +
+      legendHtml
+    );
+  }
+
+  function renderExtensionItemHtml(it, maxAnchors) {
     const headTxt = it.name || it.title || it.label || '';
     const badge = it.stance || it.role_badge || '';
     return (
@@ -2452,16 +3458,21 @@
       (it.title && it.name && it.title !== it.name ? '<div class="ext-item-subhead">' + esc(it.title) + '</div>' : '') +
       (it.body || it.detail ? '<div class="ext-sub">' + esc(it.body || it.detail) + '</div>' : '') +
       (it.warning ? '<div class="ext-sub" style="color:var(--ochre)">提示：' + esc(it.warning) + '</div>' : '') +
-      '<div>' +
-      renderAnchorPills(it.blocks) +
+      '<div class="ext-item-foot">' +
+      renderAnchorPills(it.blocks, maxAnchors) +
       '</div></div>'
     );
   }
 
-  function renderExtensionOrFallbackHtml(payload) {
-    const noticeHtml = payload.fallback_notice
-      ? '<div class="bp-fallback-banner">' + esc(payload.fallback_notice) + '</div>'
-      : '';
+  function renderExtensionOrFallbackHtml(payload, options) {
+    const items = payload.items || [];
+    const wideMode = Boolean(options && options.wide);
+    const maxAnchors = wideMode ? 6 : 3;
+    const isFallback = payload.blueprint === 'fallback_list';
+    const firstWarning = items.map((it) => it && it.warning).find(Boolean) || '';
+    const noticeTxt = payload.fallback_notice || (isFallback ? firstWarning : '');
+    const noticeHtml = noticeTxt ? '<div class="bp-fallback-banner">' + esc(noticeTxt) + '</div>' : '';
+
     if (Array.isArray(payload.sections) && payload.sections.length) {
       return (
         noticeHtml +
@@ -2474,7 +3485,7 @@
               esc(sec.title) +
               '</h5>' +
               '<div class="ext-list">' +
-              (sec.items || []).map(renderExtensionItemHtml).join('') +
+              (sec.items || []).map((it) => renderExtensionItemHtml(it, maxAnchors)).join('') +
               '</div></div>'
           )
           .join('') +
@@ -2482,7 +3493,6 @@
       );
     }
 
-    const items = payload.items || [];
     if (payload.blueprint === 'extension_checklist') {
       return (
         noticeHtml +
@@ -2499,31 +3509,69 @@
               '<div style="display:flex;justify-content:space-between;align-items:center">' +
               renderSrcTag(it.source) +
               ' ' +
-              renderAnchorPills(it.blocks) +
+              renderAnchorPills(it.blocks, maxAnchors) +
               '</div></div>'
           )
           .join('') +
         '</div>'
       );
     }
-    return noticeHtml + '<div class="ext-list">' + items.map(renderExtensionItemHtml).join('') + '</div>';
+
+    const hasSections = items.some((it) => String((it && it.section) || '').trim());
+    if (!hasSections) {
+      return (
+        noticeHtml +
+        '<div class="ext-list">' +
+        items.map((it) => renderExtensionItemHtml(it, maxAnchors)).join('') +
+        '</div>'
+      );
+    }
+
+    const secMap = new Map();
+    items.forEach((it) => {
+      const sec = String((it && it.section) || '').trim() || '细读要点';
+      if (!secMap.has(sec)) secMap.set(sec, []);
+      secMap.get(sec).push(it);
+    });
+    return (
+      noticeHtml +
+      '<div class="ext-sections">' +
+      Array.from(secMap.entries())
+        .map(
+          ([secName, list]) =>
+            '<div class="ext-section"><div class="ext-section-head">' +
+            esc(secName) +
+            '</div><div class="ext-list">' +
+            list.map((it) => renderExtensionItemHtml(it, maxAnchors)).join('') +
+            '</div></div>'
+        )
+        .join('') +
+      '</div>'
+    );
   }
 
   function renderBlueprintBody(payload, options) {
     if (!payload || typeof payload !== 'object') return '';
     const bp = payload.blueprint || 'flow_swimlane';
     if (bp === 'parallel_timeline') return renderTimelineHtml(payload, options);
-    if (bp === 'spatial_route') return renderSpatialMapHtml(payload, options);
     if (MATRIX_BLUEPRINTS.has(bp)) return renderMatrixTableHtml(payload);
     if (bp === 'quadrant_matrix') return renderQuadrantHtml(payload);
-    if (CURVE_BLUEPRINTS.has(bp)) return renderSplineChartHtml(payload);
+    if (CURVE_BLUEPRINTS.has(bp)) return renderSplineChartHtml(payload, options);
+    if (bp === 'relation_graph') return renderRelationGraphHtml(payload, options);
+    if (bp === 'spatial_route') {
+      const spMode = String((payload.data && payload.data.mode) || '').toLowerCase();
+      if (spMode === 'route_map' || spMode === 'stage_blocking') {
+        return renderSpatialRouteHtml(payload, options);
+      }
+      return renderSpatialMapHtml(payload, options);
+    }
     if (bp === 'extension_dossier' || bp === 'extension_checklist' || bp === 'fallback_list') {
-      return renderExtensionOrFallbackHtml(payload);
+      return renderExtensionOrFallbackHtml(payload, options);
     }
     if (DAG_BLUEPRINTS.has(bp) || (payload.data && Array.isArray(payload.data.nodes))) {
       return renderLayeredDagHtml(payload, options);
     }
-    return renderExtensionOrFallbackHtml(payload);
+    return renderExtensionOrFallbackHtml(payload, options);
   }
 
   function runCollisionAudit(stageEl) {
@@ -2584,13 +3632,28 @@
 
   function bindStageInteractions(rootEl, onFocusBlock, onZoomRequest) {
     if (!rootEl) return;
+    rootEl.querySelectorAll('[data-expand-anchors]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const extra = btn.nextElementSibling;
+        if (extra && extra.classList.contains('blk-anchor-extra')) {
+          extra.hidden = false;
+        }
+        btn.remove();
+      });
+    });
+
     rootEl.querySelectorAll('[data-jump]').forEach((el) => {
       el.addEventListener('click', (e) => {
+        if (e.target && e.target.closest('[data-expand-anchors]')) return;
         if (e.target && e.target.hasAttribute('data-toggle-detail')) {
           e.stopPropagation();
           el.classList.toggle('expanded');
           const more = e.target;
-          if (more) more.textContent = el.classList.contains('expanded') ? '▴ 收起' : '▾ 查看展开';
+          if (more) {
+            if (!more.dataset.closedText) more.dataset.closedText = more.textContent;
+            more.textContent = el.classList.contains('expanded') ? '▴ 收起' : more.dataset.closedText;
+          }
           return;
         }
         e.stopPropagation();
@@ -2635,10 +3698,49 @@
       });
     }
 
+    const chartWrap = rootEl.querySelector('.chart-stage-wrap');
+    const chartTip = chartWrap && chartWrap.querySelector('[data-chart-tip]');
+    if (chartWrap && chartTip) {
+      const showChartTip = (grp) => {
+        const beat = grp.getAttribute('data-pt-beat') || '';
+        const kind = grp.getAttribute('data-pt-kind') || '';
+        const val = grp.getAttribute('data-pt-val') || '';
+        const emo = grp.getAttribute('data-pt-emotion') || '';
+        const note = grp.getAttribute('data-pt-note') || '';
+        const x = Number(grp.getAttribute('data-pt-x') || 0);
+        const y = Number(grp.getAttribute('data-pt-y') || 0);
+        const w = Math.max(1, Number(grp.getAttribute('data-pt-w') || 440));
+        chartTip.innerHTML =
+          '<div class="chart-tip-head">' +
+          (kind ? '<span class="chart-tip-kind">' + esc(kind) + '</span> ' : '') +
+          '<b>' +
+          esc(beat) +
+          '</b> <span>(' +
+          esc(val) +
+          ')</span></div>' +
+          (emo ? '<div class="chart-tip-emo">' + esc(emo) + '</div>' : '') +
+          (note ? '<div class="chart-tip-note">' + esc(note) + '</div>' : '');
+        chartTip.hidden = false;
+        const leftPct = Math.max(16, Math.min(84, (x / w) * 100));
+        chartTip.style.left = leftPct + '%';
+        chartTip.style.top = y < 85 ? '68%' : '6px';
+      };
+      const hideChartTip = () => {
+        chartTip.hidden = true;
+      };
+      chartWrap.querySelectorAll('.chart-pt-grp').forEach((grp) => {
+        grp.addEventListener('mouseenter', () => showChartTip(grp));
+        grp.addEventListener('focusin', () => showChartTip(grp));
+        grp.addEventListener('mouseleave', hideChartTip);
+        grp.addEventListener('focusout', hideChartTip);
+      });
+    }
+
     const canvas = rootEl.querySelector('.dag-canvas, .spatial-canvas');
     if (!canvas) return;
     const tipEl = rootEl.querySelector('[data-trace-tip]');
-    const defaultTip = '悬停节点或连线可高亮因果路径；点击节点跳转原文';
+    const defaultTip = (tipEl && (tipEl.dataset.defaultTip || tipEl.textContent)) || '悬停节点或连线可高亮因果路径；点击节点跳转原文';
+    if (tipEl && !tipEl.dataset.defaultTip) tipEl.dataset.defaultTip = defaultTip;
     const nodeEls = Array.from(canvas.querySelectorAll('.dag-node[data-node-id], .spatial-node[data-node-id]'));
     const edgeGroups = Array.from(canvas.querySelectorAll('.dag-edge-group[data-edge-idx]'));
     const labelEls = Array.from(canvas.querySelectorAll('.dag-edge-label[data-edge-idx], .spatial-edge-label[data-edge-idx]'));
@@ -2752,7 +3854,7 @@
       modal.innerHTML =
         '<div class="zoom-head"><h4 id="zoom-title">宽屏全览</h4>' +
         '<div class="zoom-actions">' +
-        '<button type="button" class="wb-btn" id="btn-zoom-expand-all" aria-pressed="false" hidden>展开全部说明</button>' +
+        '<button type="button" class="wb-btn zoom-expand-btn" id="btn-zoom-expand-all" aria-pressed="false" hidden>展开全部说明</button>' +
         '<div class="zoom-controls" role="group" aria-label="画布缩放">' +
         '<button type="button" class="zoom-btn" id="btn-zoom-out" title="缩小" aria-label="缩小画布">−</button>' +
         '<button type="button" class="zoom-btn zoom-pct" id="btn-zoom-fit" title="切换适应画布 / 100%">100%</button>' +
@@ -3003,6 +4105,12 @@
           openZoomModal(figure, onFocusBlock);
         });
       }
+      containerEl.querySelectorAll('[data-bp-zoom-inline]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openZoomModal(figure, onFocusBlock);
+        });
+      });
       const inspectBtn = containerEl.querySelector('[data-bp-inspect]');
       if (inspectBtn) {
         inspectBtn.addEventListener('click', (e) => {

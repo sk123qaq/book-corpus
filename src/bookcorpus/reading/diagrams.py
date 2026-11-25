@@ -369,10 +369,24 @@ def render_assist_figure(figure):
     raw_data = figure.get("data") if isinstance(figure.get("data"), dict) else {}
     bp_mode = str(raw_data.get("mode") or "").strip().lower()
     if bp_mode == "not_applicable":
-        reason = str(raw_data.get("not_applicable_reason") or figure.get("summary") or "本章无显著空间格局约束。")
+        reason = str(
+            raw_data.get("not_applicable_reason") or figure.get("summary") or "本章无显著空间动线或格局约束。"
+        ).strip()
         body = f'<p class="fig-fallback">{html.escape(reason)}</p>'
     if not body and family in NODE_FAMILIES and isinstance(raw_data.get("nodes"), list):
         body = _node_svg(figure)
+    elif not body and (
+        blueprint in {"extension_dossier", "extension_checklist"} or isinstance(figure.get("items"), list)
+    ):
+        items = [it for it in (figure.get("items") or []) if isinstance(it, dict)]
+        if items:
+            lis = []
+            for it in items:
+                title = str(it.get("title") or it.get("text") or it.get("label") or "").strip()
+                detail = str(it.get("body") or it.get("detail") or "").strip()
+                detail_html = f"：{html.escape(detail)}" if detail else ""
+                lis.append(f"<li><b>{html.escape(title)}</b>{detail_html}</li>")
+            body = f'<ul class="fig-units">{"".join(lis)}</ul>'
     elif not body and family == "matrix":
         if isinstance(raw_data.get("columns"), list):
             compat_rows = []
