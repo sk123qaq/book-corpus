@@ -31,6 +31,7 @@ ACTION_LABELS = {
     "imagery": "意象、潜台词与细读",
     "historical_dossier": "人物与名物档案",
     "compare_context": "多史家视角对照",
+    "concept_glossary": "核心概念与公式词典",
     "boundary_check": "演进与适用边界",
     "sparring_dossier": "学术交锋档案",
     "counterexample_lab": "反例与现实检验",
