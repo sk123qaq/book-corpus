@@ -1458,3 +1458,340 @@ def test_science_five_tools_schemas_audit_and_concept_glossary(reading_root):
     assert "M ≈ 1.44 M☉" in res["diagram_html"]
     ch_cached = service.chapter("B0002", 1)
     assert "science_concept_glossary_concept_glossary" in ch_cached["cached_tools"]
+
+
+def test_social_five_tools_causal_matrix_metric_method_and_actor(reading_root):
+    prof = resolve_read_profile(["人文社科", "社会与经济"], title="以利为利")
+    assert prof["read_type"] == "social"
+    assert [bp["blueprint"] for bp in prof["blueprints"]] == ["causal_loop", "concept_matrix", "metric_chart"]
+    assert [ext["action"] for ext in prof["extensions"]] == ["method_audit", "actor_incentives"]
+    assert ACTION_LABELS["actor_incentives"] == "行动者激励与博弈"
+    assert "actor_incentives" in EXTENSION_ACTIONS
+
+    # 1. causal_loop：社科角色白名单、剔除方法论/测量误区节点、极性、滞后与回路
+    prompt = prompt_for_diagram(
+        blueprint="causal_loop", read_type="social", selected_text="分税制改革", block_ids=["B01"]
+    )[0]["content"]
+    assert "polarity" in prompt
+    assert "delay" in prompt
+    assert "loops" in prompt
+    assert "0-100" not in prompt
+    assert "tension" not in prompt
+    cl_raw = {
+        "blueprint": "causal_loop",
+        "caption": "土地财政正反馈",
+        "reading_note": "盯住财政压力如何转成土地金融",
+        "summary": "分税制后地方转向土地。",
+        "data": {
+            "loops": [{"id": "R1", "label": "土地金融正反馈环"}, {"id": "B1", "label": "经验纠偏调节环"}],
+            "nodes": [
+                {"id": "N1", "role": "driver", "label": "地方财政压力", "blocks": ["B01"], "source": "原文"},
+                {"id": "N2", "role": "policy", "label": "分税制", "blocks": ["B01"], "source": "原文"},
+                {"id": "N3", "role": "mechanism", "label": "土地出让收入", "blocks": ["B01"], "source": "原文"},
+                {"id": "N4", "role": "outcome", "label": "城市化扩张", "blocks": ["B01"], "source": "原文"},
+                {"id": "N5", "role": "lockin", "label": "土地金融锁定", "blocks": ["B01"], "source": "补充"},
+                {"id": "N6", "role": "inference", "label": "作者推论", "blocks": ["B01"], "source": "原文"},
+                {"id": "N7", "role": "driver", "label": "财政分权测量误区", "blocks": ["B01"], "source": "补充"},
+            ],
+            "edges": [
+                {"from": "N1", "to": "N2", "label": "催生", "polarity": "+"},
+                {"from": "N2", "to": "N3", "label": "倒逼", "polarity": "+", "delay": True},
+                {"from": "N3", "to": "N1", "label": "依赖", "polarity": "negative"},
+                {"from": "N3", "to": "N4", "label": "推动"},
+            ],
+        },
+    }
+    cl_res = audit_blueprint_payload(cl_raw, {"B01"})
+    labels = [n["label"] for n in cl_res["data"]["nodes"]]
+    assert "财政分权测量误区" not in labels
+    assert any("测量误区" in log or "方法论" in log for log in cl_res["audit_log"])
+    roles = {n["label"]: n["role"] for n in cl_res["data"]["nodes"]}
+    assert roles["地方财政压力"] == "driver"
+    assert roles["作者推论"] == "mechanism"
+    pol = {(e["from"], e["to"]): e for e in cl_res["data"]["edges"]}
+    assert pol[("N1", "N2")]["polarity"] == "+"
+    assert pol[("N2", "N3")]["delay"] is True
+    assert pol[("N3", "N1")]["polarity"] == "-"
+    assert pol[("N3", "N4")]["polarity"] in ("", "+")
+    assert [lp["id"] for lp in cl_res["data"]["loops"]] == ["R1", "B1"]
+
+    # 2. concept_matrix：克隆小节标题清洗 + 每行块号 ≤3
+    cm_raw = {
+        "blueprint": "concept_matrix",
+        "caption": "分权口径之争",
+        "reading_note": "看三种口径的张力",
+        "summary": "中央与学界对分权判断相反。",
+        "data": {
+            "rows": [
+                {
+                    "key": "勒庞：总论",
+                    "everyday": "群体无意识",
+                    "author": "匿名化传染",
+                    "extra": "未解释制度差异",
+                    "blocks": ["B01", "B02", "B03", "B04"],
+                    "source": "原文",
+                },
+                {
+                    "key": "勒庞：词语",
+                    "everyday": "词语魔力",
+                    "author": "断言重复",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                },
+                {
+                    "key": "勒庞：幻想",
+                    "everyday": "幻觉优先",
+                    "author": "情感说服",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                },
+                {
+                    "key": "勒庞：结论",
+                    "everyday": "领袖操控",
+                    "author": "群体退化",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                },
+            ]
+        },
+    }
+    cm_res = audit_blueprint_payload(cm_raw, {"B01", "B02", "B03", "B04"})
+    keys = [r["key"] for r in cm_res["data"]["rows"]]
+    assert all(not k.startswith("勒庞：") for k in keys), keys
+    assert len(cm_res["data"]["rows"][0]["blocks"]) <= 3
+    assert any("克隆" in log or "小节标题" in log for log in cm_res["audit_log"])
+
+    # 3. metric_chart series：真实数值不被钳制（负数 / 大数 / 单位）
+    mc_raw = {
+        "blueprint": "metric_chart",
+        "caption": "分税制前后工业化与城市化",
+        "reading_note": "只信原文给出的增速",
+        "summary": "工业化由 3.7% 转为 -1.1%。",
+        "data": {
+            "mode": "series",
+            "yLabel": "年均增速",
+            "unit": "%",
+            "series": [
+                {
+                    "name": "工业化",
+                    "points": [
+                        {"x": "1994前", "value": 3.7, "note": "乡镇工业扩张", "blocks": ["B01"], "source": "原文"},
+                        {"x": "1994后", "value": -1.1, "note": "增速转负", "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+                {
+                    "name": "城市化",
+                    "points": [
+                        {"x": "1994前", "value": 0.6, "blocks": ["B01"], "source": "原文"},
+                        {"x": "1994后", "value": 1.3, "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+            ],
+        },
+    }
+    mc_res = audit_blueprint_payload(mc_raw, {"B01"})
+    assert mc_res["data"]["mode"] == "series"
+    assert mc_res["data"]["yLabel"] == "年均增速"
+    assert mc_res["data"]["unit"] == "%"
+    vals = [p["value"] for s in mc_res["data"]["series"] for p in s["points"]]
+    assert vals == [3.7, -1.1, 0.6, 1.3]
+    assert mc_res["data"]["series"][0]["points"][1]["blocks"] == ["B01"]
+
+    # 4. metric_chart comparison：前后对照，保留真实单位与大数
+    cmp_raw = {
+        "blueprint": "metric_chart",
+        "caption": "县乡两税占比",
+        "reading_note": "对照 1994 与 2003",
+        "summary": "增值税降、营业税升。",
+        "data": {
+            "mode": "comparison",
+            "yLabel": "占县乡财政收入比重",
+            "unit": "%",
+            "series": [
+                {
+                    "name": "县乡增值税",
+                    "points": [
+                        {"x": "1994", "value": 22, "blocks": ["B01"], "source": "原文"},
+                        {"x": "2003", "value": 18, "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+                {
+                    "name": "县乡营业税",
+                    "points": [
+                        {"x": "1994", "value": 20, "blocks": ["B01"], "source": "原文"},
+                        {"x": "2003", "value": 25, "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+            ],
+        },
+    }
+    cmp_res = audit_blueprint_payload(cmp_raw, {"B01"})
+    assert cmp_res["data"]["mode"] == "comparison"
+    assert [p["value"] for p in cmp_res["data"]["series"][1]["points"]] == [20, 25]
+
+    # 5. metric_chart not_applicable：诚实退场 + 定性锚点
+    na_raw = {
+        "blueprint": "metric_chart",
+        "caption": "群体意见的即时成因",
+        "reading_note": "本章无数值序列",
+        "summary": "纯定性理论论述。",
+        "data": {
+            "mode": "not_applicable",
+            "reason": "本章属定性理论论述，未提供量化统计序列。",
+            "highlights": [
+                {"text": "群体由无意识动机驱动", "blocks": ["B01"], "source": "原文"},
+                {"text": "断言与重复是最有效说服手段", "blocks": ["B02"], "source": "原文"},
+            ],
+        },
+    }
+    na_res = audit_blueprint_payload(na_raw, {"B01", "B02"})
+    assert na_res["data"]["mode"] == "not_applicable"
+    assert "未提供量化统计序列" in na_res["data"]["reason"]
+    assert len(na_res["data"]["highlights"]) == 2
+    assert na_res["data"]["series"] == []
+    fallback_html = render_assist_figure(na_res)
+    assert "定性理论论述" in fallback_html
+
+    # 5b. metric_chart 剔除「示意/估算」与「补充」来源的伪数值，绝不把区间中值当原文
+    guess_res = audit_blueprint_payload(
+        {
+            "blueprint": "metric_chart",
+            "caption": "镀金时代复归",
+            "reading_note": "只画原文直引数字",
+            "summary": "前10%收入占比回到镀金时代水平。",
+            "data": {
+                "mode": "series",
+                "yLabel": "前10%收入占比",
+                "unit": "%",
+                "series": [
+                    {
+                        "name": "美国前10%",
+                        "points": [
+                            {
+                                "x": "20世纪初",
+                                "value": 45,
+                                "note": "此处为区间中值，示意",
+                                "blocks": ["B01"],
+                                "source": "补充",
+                            },
+                            {"x": "2000年", "value": 45, "blocks": ["B01"], "source": "原文"},
+                            {"x": "2010年", "value": 47, "blocks": ["B01"], "source": "原文"},
+                        ],
+                    }
+                ],
+            },
+        },
+        {"B01"},
+    )
+    guess_vals = [p["value"] for p in guess_res["data"]["series"][0]["points"]]
+    assert guess_vals == [45, 47]
+    assert any("不是原文直引数值" in log for log in guess_res["audit_log"])
+
+    # 6. metric_chart 旧缓存 points 结构向后兼容，且不再出现 0-100 假分
+    legacy = audit_blueprint_payload(
+        {
+            "blueprint": "metric_chart",
+            "caption": "旧缓存",
+            "data": {
+                "yLabel": "指数(0-100)",
+                "points": [{"beat": "起点", "tension": 40}, {"beat": "终点", "tension": 72}],
+            },
+        },
+        {"B01"},
+    )
+    assert legacy["data"]["mode"] == "series"
+    assert [p["value"] for p in legacy["data"]["series"][0]["points"]] == [40, 72]
+    assert any("旧缓存" in log or "points" in log for log in legacy["audit_log"])
+
+    # 7. method_audit：三分区、占位句替换、正文前缀清洗
+    method_prompt = prompt_for_extension("method_audit", read_type="social", selected_text="分税制", block_ids=["B01"])[
+        0
+    ]["content"]
+    assert "evidence_method" in method_prompt
+    assert "identification_bias" in method_prompt
+    assert "evolution_boundary" in method_prompt
+    method_raw = {
+        "blueprint": "extension_dossier",
+        "caption": "分税制的证据边界",
+        "reading_note": "切忌把局部样本直接绝对化",
+        "summary": "宏观统计强、反事实弱。",
+        "items": [
+            {
+                "section": "evidence_method",
+                "title": "全国县级财政统计",
+                "body": "用 1994—2003 县级面板数据追踪两税占比。",
+                "blocks": ["B01"],
+                "source": "原文",
+            },
+            {
+                "section": "identification_bias",
+                "title": "反事实缺失",
+                "body": "补充：无法观测未改革情形下的财政路径。",
+                "blocks": ["B01"],
+                "source": "补充",
+            },
+            {
+                "section": "evolution_boundary",
+                "title": "土地财政替代",
+                "body": "补充对照：2003 后土地出让金成为新支柱，限定了结论。",
+                "blocks": ["B02"],
+                "source": "补充",
+            },
+        ],
+    }
+    method_res = audit_blueprint_payload(method_raw, {"B01", "B02"}, requested_action="method_audit")
+    assert "切忌把局部样本直接绝对化" not in method_res["reading_note"]
+    assert [s["id"] for s in method_res["sections"]] == [
+        "evidence_method",
+        "identification_bias",
+        "evolution_boundary",
+    ]
+    assert not method_res["items"][1]["body"].startswith("补充：")
+    assert not method_res["items"][2]["body"].startswith("补充对照：")
+
+    # 8. actor_incentives：结构化字段 + 兼容 body + 全链路缓存键
+    actor_prompt = prompt_for_extension(
+        "actor_incentives", read_type="social", selected_text="分税制", block_ids=["B01"]
+    )[0]["content"]
+    for token in ("role_tag", "incentive", "constraint", "strategy"):
+        assert token in actor_prompt
+    actor_resp = {
+        "blueprint": "extension_dossier",
+        "caption": "分税制下的多方博弈",
+        "reading_note": "盯住中央与地方的激励错位",
+        "summary": "财权上收、事权下沉。",
+        "items": [
+            {
+                "title": "中央政府",
+                "role_tag": "核心决策方",
+                "incentive": "提高两个比重、恢复宏观调控能力",
+                "constraint": "不得触动地方既得利益过快",
+                "strategy": "以 1993 基数谈判换取地方接受分税制",
+                "blocks": ["B01", "B02"],
+                "source": "原文",
+            },
+            {
+                "title": "县乡基层政府",
+                "role_tag": "制度承受方",
+                "incentive": "保运转、保工资",
+                "constraint": "税源上收后自有收入锐减",
+                "strategy": "转向土地出让与预算外收费",
+                "blocks": ["B01"],
+                "source": "补充",
+            },
+        ],
+    }
+    actor_res = audit_blueprint_payload(actor_resp, {"B01", "B02"}, requested_action="actor_incentives")
+    assert actor_res["variant"] == "actor_incentives"
+    assert actor_res["items"][0]["role_tag"] == "核心决策方"
+    assert actor_res["items"][1]["constraint"] == "税源上收后自有收入锐减"
+    assert "激励：" in actor_res["items"][1]["body"]
+
+    client = _FakeBlueprintClient([actor_resp])
+    service = ReadingService(str(reading_root), client=client)
+    res = service.assist("B0002", 1, "actor_incentives", read_type="social", scope="chapter")
+    assert res["action"] == "actor_incentives"
+    assert res["action_label"] == "行动者激励与博弈"
+    assert res["figure"]["variant"] == "actor_incentives"
+    ch = service.chapter("B0002", 1)
+    assert any(key.startswith("social_actor_incentives") for key in ch["cached_tools"])
