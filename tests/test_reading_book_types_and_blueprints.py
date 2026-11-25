@@ -9,10 +9,13 @@ import pytest
 from bookcorpus.reading.book_types import READ_PROFILES, list_read_profiles, resolve_read_profile
 from bookcorpus.reading.diagram_audit import (
     EDGE_LABEL_LIMIT,
+    MAX_GRAPH_NODES,
     NODE_LABEL_LIMIT,
     audit_blueprint_payload,
     prompt_for_diagram,
+    prompt_for_extension,
 )
+from bookcorpus.reading.diagrams import render_assist_figure
 from bookcorpus.reading.service import ReadingService
 
 
@@ -105,15 +108,24 @@ def test_diagram_audit_normalizes_splits_overlong_and_degrades():
     assert len(audited["data"]["edges"][0]["label"]) == EDGE_LABEL_LIMIT + 1
     assert audited["audit_log"]
 
-    # Over-dense graph degrades cleanly
+    # Over-dense graph degrades cleanly AND preserves per-node original anchors without per-item warning spam
     dense = {
         "blueprint": "argument_map",
         "caption": "过密图",
-        "data": {"nodes": [{"id": f"N{i}", "label": f"节点{i}", "blocks": ["B01"]} for i in range(15)], "edges": []},
+        "data": {
+            "nodes": [
+                {"id": f"N{i}", "label": f"节点{i}", "blocks": [f"B{(i % 2) + 1:02d}"], "source": "原文"}
+                for i in range(MAX_GRAPH_NODES + 1)
+            ],
+            "edges": [],
+        },
     }
-    degraded = audit_blueprint_payload(dense, {"B01"}, fallback_block_ids=["B01"])
+    degraded = audit_blueprint_payload(dense, {"B01", "B02"}, fallback_block_ids=["B01"])
     assert degraded["blueprint"] == "fallback_list"
+    assert degraded["fallback_notice"]
     assert degraded["items"][0]["blocks"] == ["B01"]
+    assert degraded["items"][1]["blocks"] == ["B02"]
+    assert "warning" not in degraded["items"][0]
 
     # Broken text degrades cleanly
     broken = audit_blueprint_payload("{broken json...", {"B01"}, fallback_block_ids=["B01"])
@@ -323,3 +335,246 @@ def test_chapter_scope_full_context_caching_and_multi_block_selection(reading_ro
     ch_b2_after = service.chapter("B0002", 1)
     assert "social_diagram_causal_loop" in ch_b2_after["cached_tools"]
     assert "social_diagram_concept_matrix" not in ch_b2_after["cached_tools"]
+
+
+def test_history_six_orthogonal_tools_and_audits(reading_root):
+    prof = resolve_read_profile(["人文社科", "历史"], title="东晋门阀政治")
+    assert prof["read_type"] == "history"
+    assert [bp["blueprint"] for bp in prof["blueprints"]] == [
+        "parallel_timeline",
+        "power_hierarchy",
+        "spatial_route",
+        "historical_causality",
+    ]
+    assert [ext["action"] for ext in prof["extensions"]] == [
+        "historical_dossier",
+        "compare_context",
+    ]
+
+    # 1. parallel_timeline: sort_year auto-sorts BCE/CE, strips redundant 补充 prefix, keeps aftermath
+    tl_raw = {
+        "blueprint": "parallel_timeline",
+        "caption": "越颖对抗年表",
+        "reading_note": "按阵营对照",
+        "summary": "两线并行推进。",
+        "data": {
+            "lanes": ["司马越阵营", "刘石阵营"],
+            "rows": [
+                {
+                    "sort_year": 317,
+                    "time": "317年",
+                    "cells": [
+                        {"title": "司马睿建康称帝", "note": "补充：江左立国", "blocks": ["B02"], "source": "补充"},
+                        None,
+                    ],
+                },
+                {
+                    "sort_year": -221,
+                    "time": "公元前221年",
+                    "cells": [None, {"title": "秦统一度量衡", "note": "远源背景", "blocks": ["B01"], "source": "原文"}],
+                },
+            ],
+            "aftermath": [
+                {"title": "宋人史论", "body": "【补充】王夫之评东晋拒使。", "blocks": ["B02"], "source": "补充"}
+            ],
+        },
+    }
+    tl_audited = audit_blueprint_payload(tl_raw, {"B01", "B02"})
+    assert [r["sort_year"] for r in tl_audited["data"]["rows"]] == [-221, 317]
+    assert tl_audited["data"]["rows"][1]["cells"][0]["note"] == "江左立国"
+    assert tl_audited["data"]["aftermath"][0]["body"] == "王夫之评东晋拒使。"
+
+    # 2. power_hierarchy: up to 16 nodes allowed without degradation, preserves historical roles & relation_type
+    power_16 = {
+        "blueprint": "power_hierarchy",
+        "caption": "战前军事格局",
+        "data": {
+            "nodes": [
+                {
+                    "id": f"H{i}",
+                    "role": "sovereign" if i == 0 else ("constraint" if i == 15 else "faction"),
+                    "label": f"权力节点{i}",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                }
+                for i in range(16)
+            ],
+            "edges": [{"from": "H0", "to": "H1", "relation_type": "subordinate", "label": "统辖"}],
+        },
+    }
+    power_audited = audit_blueprint_payload(power_16, {"B01"})
+    assert power_audited["blueprint"] == "power_hierarchy"
+    assert len(power_audited["data"]["nodes"]) == 16
+    assert power_audited["data"]["edges"][0]["relation_type"] == "subordinate"
+
+    # 3. spatial_route: 2D coords, not_applicable, collapsed rejection, and legacy compat
+    sp_prompt = prompt_for_diagram(blueprint="spatial_route", read_type="history", selected_text="洛阳与建康")
+    assert "归一化相对地理方位坐标" in sp_prompt[0]["content"]
+    sp_2d = {
+        "blueprint": "spatial_route",
+        "caption": "南北空间格局",
+        "data": {
+            "mode": "geopolitics",
+            "scope_note": "幽并—中原—江左",
+            "nodes": [
+                {
+                    "id": "S1",
+                    "label": "幽州辽西",
+                    "x": 75,
+                    "y": 15,
+                    "zone": "鲜卑段氏",
+                    "role": "front",
+                    "blocks": ["B01"],
+                },
+                {
+                    "id": "S2",
+                    "label": "建康",
+                    "x": 78,
+                    "y": 82,
+                    "zone": "东晋",
+                    "role": "capital",
+                    "blocks": ["B02"],
+                },
+                {
+                    "id": "S3",
+                    "label": "平阳",
+                    "x": 38,
+                    "y": 35,
+                    "zone": "汉赵刘氏",
+                    "role": "capital",
+                    "blocks": ["B01"],
+                },
+            ],
+            "edges": [{"from": "S1", "to": "S2", "label": "渡海通使", "kind": "diplomacy", "route_group": "远交"}],
+        },
+    }
+    sp_audited = audit_blueprint_payload(sp_2d, {"B01", "B02"})
+    assert sp_audited["data"]["mode"] == "geopolitics"
+    assert sp_audited["data"]["nodes"][0]["x"] == 75.0
+
+    sp_na = audit_blueprint_payload(
+        {
+            "blueprint": "spatial_route",
+            "caption": "审讯",
+            "data": {"mode": "not_applicable", "not_applicable_reason": "纯公堂问对。"},
+        },
+        {"B01"},
+    )
+    assert sp_na["data"]["mode"] == "not_applicable"
+    assert "not_applicable" in render_assist_figure(sp_na) or "纯公堂问对" in render_assist_figure(sp_na)
+
+    sp_collapsed = audit_blueprint_payload(
+        {
+            "blueprint": "spatial_route",
+            "caption": "聚拢退化",
+            "data": {
+                "mode": "campaign",
+                "nodes": [
+                    {"id": "S1", "label": "A", "x": 50, "y": 50, "blocks": ["B01"]},
+                    {"id": "S2", "label": "B", "x": 51, "y": 51, "blocks": ["B01"]},
+                    {"id": "S3", "label": "C", "x": 52, "y": 50, "blocks": ["B02"]},
+                ],
+                "edges": [],
+            },
+        },
+        {"B01", "B02"},
+    )
+    assert sp_collapsed["blueprint"] == "fallback_list"
+    assert sp_collapsed["items"][2]["blocks"] == ["B02"]
+
+    sp_legacy = audit_blueprint_payload(
+        {
+            "blueprint": "spatial_route",
+            "caption": "旧缓存",
+            "data": {"nodes": [{"id": "S1", "label": "洛阳", "blocks": ["B01"]}], "edges": []},
+        },
+        {"B01"},
+    )
+    assert sp_legacy["blueprint"] == "spatial_route"
+    assert sp_legacy["data"]["nodes"][0]["blocks"] == ["B01"]
+
+    # 4. historical_causality
+    caus_audited = audit_blueprint_payload(
+        {
+            "blueprint": "historical_causality",
+            "caption": "通使决策因果",
+            "data": {
+                "nodes": [
+                    {"id": "C1", "role": "structural", "label": "八王之乱余波", "blocks": ["B01"]},
+                    {"id": "C2", "role": "consequence", "label": "拒刘石而联段氏", "blocks": ["B02"]},
+                ],
+                "edges": [{"from": "C1", "to": "C2", "label": "倒逼"}],
+            },
+        },
+        {"B01", "B02"},
+    )
+    assert caus_audited["blueprint"] == "historical_causality"
+    assert caus_audited["data"]["nodes"][0]["role"] == "structural"
+
+    # 5 & 6. historical_dossier & compare_context sections + prefix cleaning
+    ext_prompt = prompt_for_extension("historical_dossier", selected_text="人物")
+    assert "出场人物与阵营速查" in ext_prompt[0]["content"]
+    dossier_audited = audit_blueprint_payload(
+        {
+            "blueprint": "extension_dossier",
+            "caption": "人物与名物",
+            "summary": "",
+            "reading_note": "注意人名与官职",
+            "sections": [
+                {
+                    "id": "figures",
+                    "title": "出场人物与阵营速查",
+                    "items": [
+                        {
+                            "name": "温峤",
+                            "role_badge": "东晋重臣",
+                            "body": "补充：理刘琨冤案",
+                            "blocks": ["B01"],
+                            "source": "补充",
+                        }
+                    ],
+                },
+                {
+                    "id": "glossary",
+                    "title": "关键制度·条约·名物注",
+                    "items": [{"name": "皇太弟", "body": "储君称号", "blocks": ["B02"], "source": "原文"}],
+                },
+            ],
+        },
+        {"B01", "B02"},
+    )
+    assert dossier_audited["summary"] == ""
+    assert dossier_audited["sections"][0]["items"][0]["body"] == "理刘琨冤案"
+    assert "出场人物与阵营速查" in render_assist_figure(dossier_audited)
+
+
+def test_chapter_scope_context_separates_body_and_cited_footnotes(reading_root):
+    service = ReadingService(str(reading_root), client=_FakeBlueprintClient([]))
+    blocks = [
+        {
+            "id": "B01",
+            "kind": "paragraph",
+            "text": "正文第一段讨论核心问题。" * 40,
+            "fn_refs": [{"marker": "54", "target_block": "B05"}],
+        },
+        {"id": "B02", "kind": "paragraph", "text": "正文第二段延续上述分析。" * 40},
+        {"id": "B03", "kind": "image", "text": ""},
+        {"id": "B04", "kind": "footnote", "marker": "1", "text": "前节无关长尾注不应混入" * 30},
+        {
+            "id": "B05",
+            "kind": "footnote",
+            "marker": "54",
+            "text": "本节引用的关键考证注文。" * 30,
+            "ref_blocks": ["B01"],
+        },
+    ]
+    ctx, covered, sampled = service._chapter_scope_context("B0001", 1, blocks, budget=5000)
+    assert covered == 2
+    assert sampled is False
+    assert "[B01]" in ctx
+    assert "[B02]" in ctx
+    assert "[B04]" not in ctx
+    assert "【章末注释（仅供考证参考，勿喧宾夺主）】" in ctx
+    assert "[B05]" in ctx
+    fn_part = ctx.split("【章末注释（仅供考证参考，勿喧宾夺主）】", 1)[1]
+    assert len(fn_part) <= 950  # <= 18% of 5000 + header margin
