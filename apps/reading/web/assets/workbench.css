@@ -2451,7 +2451,9 @@ dialog.zoom-modal.zoom-dialog[open]:where(:not([data-closing]))::backdrop {
   .ch-pager-mid { text-align: center; }
 }
 
-/* 科学与数学 v2：窄抽屉推导/机制卡片流、临界相变分段轴、概念词典 */
+/* ==========================================================================
+   科学与数学 v2：窄抽屉推导/机制卡片流、临界相变分段轴、概念词典
+   ========================================================================== */
 .science-narrow-shell { display: flex; flex-direction: column; gap: 8px; }
 .science-narrow-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .science-mode-pill {
@@ -2668,3 +2670,146 @@ dialog.zoom-modal.zoom-dialog[open]:where(:not([data-closing]))::backdrop {
 .glossary-card-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .glossary-wide-table td.col-key { width: 22%; }
 .glossary-term-cell { font-weight: 700; color: var(--ink); margin-bottom: 3px; }
+
+/* ==========================================================================
+   社会科学 V2：五个正交工具的呈现（因果回路 / 概念矩阵 / 实证指标 / 方法局限 / 行动者博弈）
+   ========================================================================== */
+
+/* —— 因果回路：社科专属角色 —— */
+.dag-node.role-driver { border-left: 3px solid var(--cinnabar); background: color-mix(in srgb, var(--cinnabar-soft) 26%, var(--surface)); }
+.dag-node.role-policy { border-left: 3px solid var(--indigo); background: color-mix(in srgb, var(--indigo-soft, var(--surface)) 20%, var(--surface)); }
+.dag-node.role-mechanism { border-left: 3px solid var(--pine); }
+.dag-node.role-outcome { border-left: 3px solid #7c4d2b; }
+.dag-node.role-lockin { border-left: 3px solid var(--amber); background: color-mix(in srgb, var(--amber-soft, var(--surface)) 24%, var(--surface)); }
+.dag-edge-delay {
+  margin-left: 3px; padding: 0 3px; border-radius: 3px; font-style: normal;
+  font-size: 9.5px; color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+
+/* —— 窄抽屉：因果链路卡片流 —— */
+.causal-flow { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.causal-flow-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding-bottom: 6px; border-bottom: 1px dashed var(--line);
+}
+.causal-flow-title { font-size: 12px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.causal-loop-strip { display: flex; flex-wrap: wrap; gap: 5px; }
+.causal-loop-chip {
+  display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 7px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  font-size: 10.5px; color: var(--ink-2); max-width: 100%;
+}
+.causal-loop-chip b { color: var(--cinnabar); font-size: 10px; }
+.causal-role-group { display: flex; flex-direction: column; gap: 6px; }
+.causal-role-head {
+  display: flex; align-items: center; gap: 6px; margin: 0; font-size: 11.5px; font-weight: 700; color: var(--ink-2);
+}
+.causal-role-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+.causal-role-dot.role-driver { background: var(--cinnabar); }
+.causal-role-dot.role-policy { background: var(--indigo); }
+.causal-role-dot.role-mechanism { background: var(--pine); }
+.causal-role-dot.role-outcome { background: #7c4d2b; }
+.causal-role-dot.role-lockin { background: var(--amber); }
+.causal-card {
+  padding: 8px 10px; border-radius: 6px; background: var(--surface);
+  border: 1px solid var(--line); border-left: 3px solid var(--ink-3); min-width: 0;
+}
+.causal-card.role-driver { border-left-color: var(--cinnabar); }
+.causal-card.role-policy { border-left-color: var(--indigo); }
+.causal-card.role-mechanism { border-left-color: var(--pine); }
+.causal-card.role-outcome { border-left-color: #7c4d2b; }
+.causal-card.role-lockin { border-left-color: var(--amber); }
+.causal-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.causal-card-head b { font-size: 12.5px; line-height: 1.35; color: var(--ink); }
+.causal-card-detail { margin-top: 4px; font-size: 11.5px; line-height: 1.55; color: var(--ink-2); }
+.causal-outs { display: flex; flex-direction: column; gap: 2px; margin-top: 5px; }
+.causal-next { font-size: 11px; color: var(--ink-2); display: flex; align-items: center; gap: 4px; }
+.causal-arrow { font-style: normal; color: var(--ink-3); }
+.causal-pol { font-style: normal; font-weight: 700; font-size: 11px; padding: 0 3px; border-radius: 3px; }
+.causal-pol.pol-pos { color: var(--pine); background: color-mix(in srgb, var(--pine) 12%, transparent); }
+.causal-pol.pol-neg { color: var(--cinnabar); background: color-mix(in srgb, var(--cinnabar) 12%, transparent); }
+.causal-delay { font-style: normal; font-size: 9.5px; color: var(--amber); border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; }
+.causal-card-foot { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* —— 窄抽屉：概念口径对照卡片流 —— */
+.concept-cards { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.concept-card { padding: 9px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.concept-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.concept-card-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.concept-card-title b { font-size: 12.5px; color: var(--ink); line-height: 1.35; }
+.concept-card-title .tc-orig { font-size: 10.5px; color: var(--ink-3); }
+.concept-field { margin-top: 6px; }
+.concept-field-lbl {
+  display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--ink-3); text-transform: uppercase;
+}
+.concept-field p { margin: 2px 0 0; font-size: 11.8px; line-height: 1.6; color: var(--ink); }
+.concept-field-warn { padding-top: 5px; border-top: 1px dashed var(--line); }
+.concept-field-warn p { color: var(--ochre, var(--ink-2)); }
+.concept-card-foot { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* —— 实证指标图 —— */
+.metric-chart { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.metric-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.metric-y-label { font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+.metric-unit { font-style: normal; font-weight: 400; color: var(--ink-3); }
+.metric-mode-tag {
+  font-size: 9.5px; padding: 1px 6px; border-radius: 999px; color: var(--ink-2);
+  background: var(--surface); border: 1px solid var(--line-strong); white-space: nowrap;
+}
+.metric-svg { display: block; width: 100%; height: auto; }
+.metric-tick { font-size: 9px; fill: var(--ink-3); }
+.metric-xlabel { font-size: 9.5px; fill: var(--ink-2); }
+.metric-val { font-size: 9.5px; font-weight: 700; fill: var(--ink); }
+.metric-bar { opacity: 0.9; }
+.metric-line { stroke-linecap: round; stroke-linejoin: round; }
+.metric-dot { stroke: var(--surface); stroke-width: 1.2; }
+.metric-legend { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+.metric-legend .chart-legend-item { flex-direction: row; align-items: center; gap: 6px; padding: 2px 4px; border: 0; background: none; font-size: 11px; }
+.metric-leg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.metric-chart-foot { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* —— metric_chart 诚实退场 —— */
+.metric-na { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.metric-na-card { padding: 10px 12px; border-radius: 6px; background: var(--surface); border: 1px dashed var(--line-strong); }
+.metric-na-head { display: flex; align-items: center; gap: 6px; }
+.metric-na-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  color: var(--indigo); background: color-mix(in srgb, var(--indigo) 10%, transparent);
+}
+.metric-na-reason { margin: 6px 0 0; font-size: 12px; line-height: 1.65; color: var(--ink-2); }
+.metric-na-hl-wrap { padding: 9px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); }
+.metric-na-hl-title { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-3); }
+.metric-na-hl-list { display: flex; flex-direction: column; gap: 6px; margin-top: 5px; }
+.metric-na-hl { display: flex; flex-direction: column; gap: 3px; padding-top: 5px; border-top: 1px dashed var(--line); }
+.metric-na-hl:first-child { border-top: 0; padding-top: 0; }
+.metric-na-hl-text { font-size: 11.8px; line-height: 1.55; color: var(--ink); }
+.metric-na-hl-foot { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+/* —— 行动者激励与博弈 —— */
+.actor-cards { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.actor-cards.wide { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.actor-note { font-size: 11.5px; line-height: 1.6; color: var(--ink-2); padding: 6px 0 2px; }
+.actor-card { padding: 9px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.actor-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.actor-name-wrap { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.actor-name { font-size: 12.5px; color: var(--ink); line-height: 1.35; }
+.actor-role-tag {
+  font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+  color: var(--cinnabar); background: color-mix(in srgb, var(--cinnabar) 10%, transparent);
+  white-space: nowrap;
+}
+.actor-field { margin-top: 6px; display: flex; gap: 6px; align-items: baseline; }
+.actor-field-lbl { flex: 0 0 44px; font-size: 10px; font-weight: 700; color: var(--ink-3); }
+.actor-field-txt { margin: 0; flex: 1 1 auto; font-size: 11.8px; line-height: 1.6; color: var(--ink); min-width: 0; }
+.actor-body { margin-top: 6px; font-size: 11.8px; line-height: 1.6; color: var(--ink-2); }
+.actor-card-foot { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* 社科宽表：出处列三个块号挤在一行，避免折行 */
+.bp-table .blk-anchor { padding: 1px 4px; font-size: 9.5px; }
+.bp-table.concept-matrix-table { table-layout: fixed; }
+.bp-table.concept-matrix-table th:nth-child(1) { width: 16%; }
+.bp-table.concept-matrix-table th:nth-child(2) { width: 22%; }
+.bp-table.concept-matrix-table th:nth-child(3) { width: 23%; }
+.bp-table.concept-matrix-table th:nth-child(4) { width: 23%; }
+.bp-table.concept-matrix-table th:nth-child(5) { width: 16%; }

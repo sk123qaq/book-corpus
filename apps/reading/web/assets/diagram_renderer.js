@@ -114,7 +114,18 @@
     output_effect: '宏观效应',
   };
 
-  function roleLabel(role, bpOrLineage) {
+  const SOCIAL_CAUSAL_ROLE_ZH = {
+    driver: '核心驱动',
+    policy: '制度干预',
+    mechanism: '传导机制',
+    outcome: '宏观结果',
+    lockin: '锁定/风险',
+  };
+  const SOCIAL_CAUSAL_ROLE_ORDER = ['driver', 'policy', 'mechanism', 'outcome', 'lockin'];
+
+  function roleLabel(role, bpOrLineage, blueprint) {
+    const bp = blueprint || (typeof bpOrLineage === 'string' ? bpOrLineage : '');
+    if (bp === 'causal_loop' && SOCIAL_CAUSAL_ROLE_ZH[role]) return SOCIAL_CAUSAL_ROLE_ZH[role];
     if ((bpOrLineage === true || bpOrLineage === 'lineage_dag') && role === 'ally') return '同调佐证';
     if (bpOrLineage === 'decision_tree' && role === 'condition') return '判断条件';
     if (bpOrLineage === 'derivation_dag') {
@@ -393,6 +404,8 @@
       const label = l2 && l2 !== l1 ? (l1 ? l1 + ' / ' + l2 : l2) : l1;
       const notes = [e.note, rev && rev.note].filter(Boolean);
       const relType = String(e.relation_type || (rev && rev.relation_type) || '').trim();
+      const polRaw = String(e.polarity || (rev && rev.polarity) || '').trim();
+      const polarity = polRaw === '+' || polRaw === '-' ? polRaw : '';
       merged.push({
         idx: merged.length,
         from: e.from,
@@ -404,10 +417,12 @@
         rel_kind: e.rel_kind || (rev && rev.rel_kind) || '',
         kind: e.kind || '',
         actor: e.actor || '',
+        polarity,
+        delay: e.delay === true || (rev && rev.delay === true),
         bidirectional: Boolean(rev) || relType === 'balance',
         isSelfLoop: e.from === e.to,
         isCycleBack: e.from === e.to,
-        isNeg: relType === 'hostile' || isNegativeEdgeLabel(l1) || isNegativeEdgeLabel(l2),
+        isNeg: polarity === '-' || relType === 'hostile' || isNegativeEdgeLabel(l1) || isNegativeEdgeLabel(l2),
       });
     }
     return merged;
@@ -1120,6 +1135,9 @@
     const expandAll = Boolean(options && options.expandAll);
     const expandedIds = (options && options.expandedIds) || null;
     const expandedAnchorIds = (options && options.expandedAnchorIds) || null;
+    if (payload.blueprint === 'causal_loop' && !wideMode) {
+      return renderCausalLoopNarrowHtml(payload, nodes, rawEdges);
+    }
     if (isLineage && !wideMode) {
       return renderLineageNarrowHtml(payload, nodes, rawEdges);
     }
@@ -1156,16 +1174,18 @@
     const R = sortedRanks.length;
     const rankToIdx = new Map(sortedRanks.map((r, i) => [r, i]));
     const isArgument = payload.blueprint === 'argument_map';
+    const isCausal = payload.blueprint === 'causal_loop';
     const wantCompactLR =
       wideMode &&
       ((isHistoryDag && (R === 5 || (R === 6 && maxInRank >= 3))) ||
         (isArgument && (R === 6 || R === 5 || (R === 4 && maxInRank <= 2))) ||
         (isScienceDag && R >= 2) ||
-        ['flow_swimlane', 'decision_tree'].includes(payload.blueprint) ||
+        isCausal ||
+        ['flow_swimlane', 'decision_tree', 'system_flow'].includes(payload.blueprint) ||
         isLineage);
     const useBandedLR =
       wideMode &&
-      (((isHistoryDag || isArgument) && (R >= 7 || (R === 6 && maxInRank <= 2))) ||
+      (((isHistoryDag || isArgument || isCausal) && (R >= 7 || (R === 6 && (maxInRank <= 2 || isCausal)))) ||
         (isFlow && R >= 5) ||
         (isDecision && R >= 6) ||
         (isScienceDag && R >= 6));
@@ -1909,7 +1929,17 @@
       let dash = 'none';
       let labelKindCls = 'edge-pos';
 
-      if (isLineage && e.relation && LINEAGE_EDGE_STYLES[e.relation]) {
+      if (e.polarity === '+') {
+        stroke = 'var(--pine)';
+        marker = markerGreen;
+        dash = 'none';
+        labelKindCls = 'edge-pos';
+      } else if (e.polarity === '-') {
+        stroke = 'var(--cinnabar)';
+        marker = markerRed;
+        dash = '5 3';
+        labelKindCls = 'edge-neg';
+      } else if (isLineage && e.relation && LINEAGE_EDGE_STYLES[e.relation]) {
         const st = LINEAGE_EDGE_STYLES[e.relation];
         stroke = st.stroke;
         dash = st.dash;
@@ -1990,7 +2020,7 @@
       );
 
       if (lbl) {
-        const lsz = measureLabelSize(lbl);
+        const lsz = measureLabelSize(e.delay ? lbl + ' 滞后' : lbl);
         const labelCandidates = buildLabelCandidates(pts);
         const offsets = [
           { dx: 0, dy: 0 },
@@ -2040,6 +2070,7 @@
               esc(edgeDesc) +
               '">' +
               esc(lbl) +
+              (e.delay ? ' <i class="dag-edge-delay">滞后</i>' : '') +
               '</span>'
           );
         } else {
@@ -3203,6 +3234,7 @@
     return (
       '<div style="overflow-x:auto" data-qa-target="table"><table class="bp-table' +
       (isTermContrast ? ' term-contrast-table' : '') +
+      (payload.blueprint === 'concept_matrix' ? ' concept-matrix-table' : '') +
       '"><thead><tr>' +
       cols.map((c) => '<th>' + esc(c) + '</th>').join('') +
       '</tr></thead><tbody>' +
@@ -4883,11 +4915,359 @@
     );
   }
 
+  function renderCausalLoopNarrowHtml(payload, nodes, rawEdges) {
+    const data = (payload && payload.data) || {};
+    const loops = Array.isArray(data.loops) ? data.loops.filter((l) => l && (l.label || l.id)) : [];
+    const idMap = new Map(nodes.map((n) => [String(n.id), n]));
+    const outMap = new Map();
+    (rawEdges || []).forEach((e) => {
+      if (!e || !idMap.has(String(e.from)) || !idMap.has(String(e.to))) return;
+      const key = String(e.from);
+      if (!outMap.has(key)) outMap.set(key, []);
+      outMap.get(key).push(e);
+    });
+    const loopHtml = loops.length
+      ? '<div class="causal-loop-strip">' +
+        loops
+          .slice(0, 4)
+          .map(
+            (lp) =>
+              '<span class="causal-loop-chip"><b>' +
+              esc(lp.id || '回路') +
+              '</b>' +
+              esc(lp.label || '') +
+              '</span>'
+          )
+          .join('') +
+        '</div>'
+      : '';
+    const groups = SOCIAL_CAUSAL_ROLE_ORDER.map((role) => {
+      const group = nodes.filter((n) => (n.role && SOCIAL_CAUSAL_ROLE_ZH[n.role] ? n.role : 'mechanism') === role);
+      if (!group.length) return '';
+      const cards = group
+        .map((n) => {
+          const outs = (outMap.get(String(n.id)) || [])
+            .map((e) => {
+              const tgt = idMap.get(String(e.to));
+              const pol = e.polarity === '-' ? '-' : e.polarity === '+' ? '+' : '';
+              return (
+                '<span class="causal-next">' +
+                '<i class="causal-arrow">→</i>' +
+                esc((tgt && tgt.label) || e.to) +
+                (pol
+                  ? '<i class="causal-pol ' + (pol === '-' ? 'pol-neg' : 'pol-pos') + '">' + pol + '</i>'
+                  : '') +
+                (e.delay === true ? '<i class="causal-delay">滞后</i>' : '') +
+                '</span>'
+              );
+            })
+            .join('');
+          return (
+            '<div class="causal-card role-' +
+            esc(role) +
+            '">' +
+            '<div class="causal-card-head"><b>' +
+            esc(n.label) +
+            '</b>' +
+            renderSrcTag(n.source) +
+            '</div>' +
+            (n.detail ? '<div class="causal-card-detail">' + esc(n.detail) + '</div>' : '') +
+            (outs ? '<div class="causal-outs">' + outs + '</div>' : '') +
+            '<div class="causal-card-foot">' +
+            renderAnchorPills(n.blocks, 3) +
+            '</div></div>'
+          );
+        })
+        .join('');
+      return (
+        '<section class="causal-role-group" data-role="' +
+        role +
+        '"><h5 class="causal-role-head"><i class="causal-role-dot role-' +
+        role +
+        '"></i>' +
+        SOCIAL_CAUSAL_ROLE_ZH[role] +
+        '</h5>' +
+        cards +
+        '</section>'
+      );
+    }).join('');
+    return (
+      '<div class="causal-flow" data-qa-target="causal-flow">' +
+      '<div class="causal-flow-bar"><span class="causal-flow-title">因果链路与回路</span>' +
+      '<button type="button" class="lineage-zoom-inline" data-bp-zoom title="宽屏全览因果回路图">全览图谱 ⤢</button></div>' +
+      loopHtml +
+      groups +
+      '</div>'
+    );
+  }
+
+  function renderConceptMatrixCardsHtml(payload) {
+    const rows = (payload.data && payload.data.rows) || [];
+    const cards = rows
+      .map(
+        (r) =>
+          '<div class="concept-card">' +
+          '<div class="concept-card-head"><div class="concept-card-title"><b>' +
+          esc(r.key) +
+          '</b>' +
+          (r.original_term ? '<span class="tc-orig">' + esc(r.original_term) + '</span>' : '') +
+          '</div>' +
+          renderSrcTag(r.source) +
+          '</div>' +
+          (r.everyday
+            ? '<div class="concept-field"><span class="concept-field-lbl">核心界定</span><p>' + esc(r.everyday) + '</p></div>'
+            : '') +
+          (r.author
+            ? '<div class="concept-field"><span class="concept-field-lbl">关键机制</span><p>' + esc(r.author) + '</p></div>'
+            : '') +
+          (r.extra
+            ? '<div class="concept-field concept-field-warn"><span class="concept-field-lbl">盲区/反例</span><p>' +
+              esc(r.extra) +
+              '</p></div>'
+            : '') +
+          '<div class="concept-card-foot">' +
+          renderAnchorPills(r.blocks, 3) +
+          '</div></div>'
+      )
+      .join('');
+    return '<div class="concept-cards" data-qa-target="concept-cards">' + cards + '</div>';
+  }
+
+  function metricValueText(value, unit) {
+    const rounded = Math.abs(value) >= 1000 ? Math.round(value * 10) / 10 : Math.round(value * 100) / 100;
+    return String(rounded) + (unit || '');
+  }
+
+  function renderMetricChartHtml(payload, options) {
+    const data = (payload && payload.data) || {};
+    const wideMode = Boolean(options && options.wide);
+    const mode = String(data.mode || (Array.isArray(data.series) ? 'series' : '')).toLowerCase();
+    if (mode === 'not_applicable') {
+      const highlights = Array.isArray(data.highlights) ? data.highlights : [];
+      return (
+        '<div class="metric-na" data-qa-target="metric-na">' +
+        '<div class="metric-na-card"><div class="metric-na-head"><span class="metric-na-badge">本章无可量化统计</span></div>' +
+        '<p class="metric-na-reason">' +
+        esc(data.reason || '本章为定性论述，未提供连续或可对比的量化统计数据。') +
+        '</p></div>' +
+        (highlights.length
+          ? '<div class="metric-na-hl-wrap"><div class="metric-na-hl-title">定性史例与观察锚点</div><div class="metric-na-hl-list">' +
+            highlights
+              .slice(0, 4)
+              .map(
+                (h) =>
+                  '<div class="metric-na-hl"><span class="metric-na-hl-text">' +
+                  esc(h.text || '') +
+                  '</span><span class="metric-na-hl-foot">' +
+                  renderSrcTag(h.source) +
+                  renderAnchorPills(h.blocks, 3) +
+                  '</span></div>'
+              )
+              .join('') +
+            '</div></div>'
+          : '') +
+        '</div>'
+      );
+    }
+    const series = (Array.isArray(data.series) ? data.series : []).filter(
+      (s) => s && Array.isArray(s.points) && s.points.length
+    );
+    if (!series.length) return '';
+    const unit = String(data.unit || '');
+    const yLabel = String(data.yLabel || '指标');
+    const W = wideMode ? 680 : 300;
+    const H = wideMode ? 268 : 238;
+    const padL = wideMode ? 56 : 44;
+    const padR = wideMode ? 26 : 14;
+    const padT = 26;
+    const padB = 48;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const values = [];
+    series.forEach((s) => s.points.forEach((p) => values.push(Number(p.value))));
+    let lo = Math.min(0, ...values);
+    let hi = Math.max(0, ...values);
+    if (!isFinite(lo) || !isFinite(hi)) return '';
+    if (hi === lo) hi = lo + 1;
+    const span = hi - lo;
+    lo -= span * 0.08;
+    hi += span * 0.08;
+    const yOf = (v) => padT + ((hi - v) / (hi - lo)) * plotH;
+    const xs = series.reduce((acc, s) => (s.points.length > acc.length ? s.points : acc), []);
+    const count = Math.max(1, xs.length);
+    const xOf = (i) => padL + (count === 1 ? plotW / 2 : (plotW * i) / (count - 1));
+    const palette = ['var(--cinnabar)', 'var(--pine)', 'var(--indigo)', '#7c4d2b'];
+    const ticks = 4;
+    const grid = [];
+    for (let t = 0; t <= ticks; t++) {
+      const v = lo + ((hi - lo) * t) / ticks;
+      const y = yOf(v);
+      grid.push(
+        '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--rule)" stroke-dasharray="3 3"/>' +
+          '<text x="' + (padL - 6) + '" y="' + (y + 3) + '" text-anchor="end" class="metric-tick">' +
+          esc(metricValueText(Math.round(v * 100) / 100, '')) +
+          '</text>'
+      );
+    }
+    const zeroY = yOf(0);
+    const zeroLine =
+      lo < 0 && hi > 0
+        ? '<line x1="' + padL + '" y1="' + zeroY + '" x2="' + (W - padR) + '" y2="' + zeroY + '" stroke="var(--ink-3)" stroke-width="1.2"/>'
+        : '';
+    let plot = '';
+    if (mode === 'comparison') {
+      const groupW = plotW / count;
+      const barW = Math.max(6, Math.min(wideMode ? 30 : 18, (groupW * 0.72) / series.length));
+      series.forEach((s, si) => {
+        s.points.forEach((p, i) => {
+          const v = Number(p.value);
+          const y = yOf(Math.max(0, v));
+          const h = Math.abs(yOf(v) - yOf(0));
+          const gx = padL + groupW * i + groupW / 2 - (barW * series.length) / 2 + si * barW;
+          plot +=
+            '<rect class="metric-bar" x="' + gx + '" y="' + Math.min(y, yOf(0)) + '" width="' + barW + '" height="' + Math.max(2, h) + '" fill="' +
+            palette[si % palette.length] +
+            '" rx="2"><title>' + esc(s.name + ' ' + p.x + ' ' + metricValueText(v, unit)) + '</title></rect>' +
+            '<text x="' + (gx + barW / 2) + '" y="' + (Math.min(y, yOf(0)) - 4) + '" text-anchor="middle" class="metric-val">' +
+            esc(metricValueText(v, '')) +
+            '</text>';
+        });
+      });
+    } else {
+      series.forEach((s, si) => {
+        const pts = s.points.map((p, i) => xOf(i) + ',' + yOf(Number(p.value)));
+        plot +=
+          '<polyline class="metric-line" points="' +
+          pts.join(' ') +
+          '" fill="none" stroke="' +
+          palette[si % palette.length] +
+          '" stroke-width="2"/>';
+        s.points.forEach((p, i) => {
+          const v = Number(p.value);
+          const cx = xOf(i);
+          const cy = yOf(v);
+          plot +=
+            '<circle class="metric-dot" cx="' + cx + '" cy="' + cy + '" r="3.4" fill="' + palette[si % palette.length] + '"><title>' +
+            esc(s.name + ' ' + p.x + ' ' + metricValueText(v, unit)) +
+            '</title></circle>' +
+            '<text x="' + cx + '" y="' + (cy - (i % 2 ? 12 : 8)) + '" text-anchor="middle" class="metric-val">' +
+            esc(metricValueText(v, '')) +
+            '</text>';
+        });
+      });
+    }
+    const xLabels = xs
+      .map(
+        (p, i) =>
+          '<text x="' + xOf(i) + '" y="' + (H - padB + 18) + '" text-anchor="middle" class="metric-xlabel">' + esc(p.x || '') + '</text>'
+      )
+      .join('');
+    const legend =
+      series.length > 1
+        ? '<div class="chart-legend-list metric-legend">' +
+          series
+            .map(
+              (s, si) =>
+                '<span class="chart-legend-item"><i class="metric-leg-dot" style="background:' +
+                palette[si % palette.length] +
+                '"></i>' +
+                esc(s.name) +
+                '</span>'
+            )
+            .join('') +
+          '</div>'
+        : '';
+    const usedBlocks = [];
+    series.forEach((s) =>
+      s.points.forEach((p) => (p.blocks || []).forEach((b) => usedBlocks.includes(b) || usedBlocks.push(b)))
+    );
+    return (
+      '<div class="metric-chart" data-qa-target="metric-chart" data-mode="' +
+      esc(mode) +
+      '">' +
+      '<div class="metric-chart-head"><span class="metric-y-label">' +
+      esc(yLabel) +
+      (unit && yLabel.indexOf(unit) < 0 ? '<i class="metric-unit">（' + esc(unit) + '）</i>' : '') +
+      '</span><span class="metric-mode-tag">' +
+      (mode === 'comparison' ? '真实对比' : '真实序列') +
+      '</span></div>' +
+      '<svg class="metric-svg" viewBox="0 0 ' +
+      W +
+      ' ' +
+      H +
+      '" width="100%" role="img" aria-label="' +
+      esc(yLabel) +
+      '">' +
+      grid.join('') +
+      zeroLine +
+      plot +
+      xLabels +
+      '</svg>' +
+      legend +
+      '<div class="metric-chart-foot">' +
+      renderAnchorPills(usedBlocks, 3) +
+      '</div></div>'
+    );
+  }
+
+  function renderActorCardsHtml(payload, options) {
+    const wideMode = Boolean(options && options.wide);
+    const items = (payload.items || (payload.sections || []).flatMap((s) => s.items || [])).slice(0, 8);
+    const fields = [
+      ['incentive', '核心激励'],
+      ['constraint', '硬约束'],
+      ['strategy', '现实策略'],
+    ];
+    const cards = items
+      .map((it) => {
+        const rows = fields
+          .filter(([k]) => it[k])
+          .map(
+            ([k, lbl]) =>
+              '<div class="actor-field"><span class="actor-field-lbl">' +
+              lbl +
+              '</span><p class="actor-field-txt">' +
+              esc(it[k]) +
+              '</p></div>'
+          )
+          .join('');
+        const fallbackBody = !rows && (it.body || it.detail) ? '<div class="actor-body">' + esc(it.body || it.detail) + '</div>' : '';
+        return (
+          '<div class="actor-card">' +
+          '<div class="actor-card-head"><div class="actor-name-wrap"><b class="actor-name">' +
+          esc(it.title || it.text || it.name || '行动者') +
+          '</b>' +
+          (it.role_tag ? '<span class="actor-role-tag">' + esc(it.role_tag) + '</span>' : '') +
+          '</div>' +
+          renderSrcTag(it.source) +
+          '</div>' +
+          rows +
+          fallbackBody +
+          '<div class="actor-card-foot">' +
+          renderAnchorPills(it.blocks, 3) +
+          '</div></div>'
+        );
+      })
+      .join('');
+    return (
+      '<div class="actor-cards' +
+      (wideMode ? ' wide' : '') +
+      '" data-qa-target="actor-cards">' +
+      cards +
+      '</div>'
+    );
+  }
+
   function renderBlueprintBody(payload, options) {
     if (!payload || typeof payload !== 'object') return '';
     const bp = payload.blueprint || 'flow_swimlane';
+    const wideMode = Boolean(options && options.wide);
     if (bp === 'parallel_timeline') return renderTimelineHtml(payload, options);
+    if (bp === 'concept_matrix') {
+      return wideMode ? renderMatrixTableHtml(payload, options) : renderConceptMatrixCardsHtml(payload);
+    }
     if (MATRIX_BLUEPRINTS.has(bp)) return renderMatrixTableHtml(payload, options);
+    if (bp === 'metric_chart') return renderMetricChartHtml(payload, options);
     if (bp === 'quadrant_matrix') return renderQuadrantHtml(payload, options);
     if (bp === 'sensitivity_chart') return renderSensitivityHtml(payload, options);
     if (CURVE_BLUEPRINTS.has(bp)) return renderSplineChartHtml(payload, options);
@@ -4900,7 +5280,10 @@
       return renderSpatialMapHtml(payload, options);
     }
     if (bp === 'extension_glossary') return renderConceptGlossaryHtml(payload, options);
+    if (payload.variant === 'actor_incentives') return renderActorCardsHtml(payload, options);
     if (bp === 'extension_dossier' || bp === 'extension_checklist' || bp === 'fallback_list') {
+      const hasActorFields = (payload.items || []).some((it) => it && (it.incentive || it.constraint || it.strategy));
+      if (hasActorFields) return renderActorCardsHtml(payload, options);
       return renderExtensionOrFallbackHtml(payload, options);
     }
     if (DAG_BLUEPRINTS.has(bp) || (payload.data && Array.isArray(payload.data.nodes))) {
