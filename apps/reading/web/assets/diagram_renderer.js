@@ -102,11 +102,27 @@
     prop: '核心道具',
     zone: '舞台区域',
     outside: '窗外/场外',
+    // 科学·实验推理与机制流
+    observation: '观测现象',
+    hypothesis: '假说模型',
+    experiment: '实验检验',
+    finding: '科学结论',
+    input_energy: '输入/激励',
+    component: '部件/介质',
+    process: '物理/演化过程',
+    bottleneck: '阻断/约束',
+    output_effect: '宏观效应',
   };
 
   function roleLabel(role, bpOrLineage) {
     if ((bpOrLineage === true || bpOrLineage === 'lineage_dag') && role === 'ally') return '同调佐证';
     if (bpOrLineage === 'decision_tree' && role === 'condition') return '判断条件';
+    if (bpOrLineage === 'derivation_dag') {
+      if (role === 'axiom') return '公理/假设';
+      if (role === 'condition') return '边界条件';
+      if (role === 'lemma') return '引理/推论';
+      if (role === 'theorem') return '核心定理';
+    }
     return ROLE_ZH[role] || role || '节点';
   }
 
@@ -149,7 +165,7 @@
     'causal_loop',
   ]);
   const MATRIX_BLUEPRINTS = new Set(['term_contrast', 'concept_matrix', 'element_matrix']);
-  const CURVE_BLUEPRINTS = new Set(['tension_curve', 'sensitivity_chart', 'metric_chart']);
+  const CURVE_BLUEPRINTS = new Set(['tension_curve', 'metric_chart']);
 
   function esc(s) {
     return RD.esc ? RD.esc(s) : String(s == null ? '' : s);
@@ -225,7 +241,8 @@
     const maxAnchors = opts.maxAnchors !== undefined ? opts.maxAnchors : 3;
     const showArc = Boolean(opts.showArc);
     const showZone = Boolean(opts.showZone);
-    const roleCtx = opts.blueprint || opts.isLineage;
+    const isLineage = Boolean(opts.isLineage);
+    const roleCtx = opts.blueprint || (isLineage ? 'lineage_dag' : '');
     stage.style.width = cardWidth + 'px';
     stage.innerHTML = nodes
       .map((n) => {
@@ -325,6 +342,8 @@
   const DAG_ROOT_ROLES = new Set([
     'premise',
     'axiom',
+    'observation',
+    'input_energy',
     'condition',
     'sovereign',
     'structural',
@@ -972,23 +991,120 @@
     return { ranks, sortedRanks };
   }
 
+  function renderScienceNarrowHtml(payload, nodes, rawEdges, ranks, sortedRanks, idMap) {
+    const bp = payload.blueprint || 'derivation_dag';
+    const isFlow = bp === 'system_flow';
+    const rawData = (payload && payload.data) || {};
+    const expRoles = new Set(['observation', 'hypothesis', 'experiment', 'finding']);
+    const isExpParadigm =
+      !isFlow &&
+      (String(rawData.paradigm || '').toLowerCase() === 'experimental' || nodes.some((n) => expRoles.has(n.role)));
+    const badgeTxt = isFlow ? '机制流转步骤卡' : isExpParadigm ? '实验推理 · 分层推导' : '公理演绎 · 分层推导';
+
+    const outEdges = new Map(nodes.map((n) => [n.id, []]));
+    (rawEdges || []).forEach((e) => {
+      if (!e || !idMap.has(e.from) || !idMap.has(e.to)) return;
+      const toLbl = (idMap.get(e.to) && idMap.get(e.to).label) || e.to;
+      outEdges.get(e.from).push({
+        lbl: String(e.label || (isFlow ? '流转' : '推出')).trim(),
+        toLbl,
+      });
+    });
+
+    const layersHtml = sortedRanks
+      .map((r, ri) => {
+        const list = ranks.get(r) || [];
+        const layerTitle = isFlow ? '环节 ' + (ri + 1) : '第 ' + (ri + 1) + ' 层';
+        const cards = list
+          .map((n) => {
+            const outs = outEdges.get(n.id) || [];
+            const firstBlk = (n.blocks && n.blocks[0]) || '';
+            const relsHtml = outs.length
+              ? '<div class="science-edge-chips">' +
+                outs
+                  .slice(0, 4)
+                  .map(
+                    (o) =>
+                      '<span class="science-edge-chip">→ ' +
+                      esc(o.lbl) +
+                      ' · ' +
+                      esc(o.toLbl) +
+                      '</span>'
+                  )
+                  .join('') +
+                '</div>'
+              : '';
+            return (
+              '<div class="science-card role-' +
+              esc(n.role || (isFlow ? 'process' : 'lemma')) +
+              '" data-jump="' +
+              esc(firstBlk) +
+              '">' +
+              '<div class="science-card-head">' +
+              '<span class="science-role-badge">' +
+              esc(roleLabel(n.role, bp)) +
+              '</span>' +
+              renderSrcTag(n.source) +
+              '</div>' +
+              '<div class="science-card-title">' +
+              esc(n.label) +
+              '</div>' +
+              (n.detail ? '<div class="science-card-detail">' + esc(n.detail) + '</div>' : '') +
+              relsHtml +
+              '<div class="science-card-foot">' +
+              renderAnchorPills(n.blocks, 3) +
+              '</div></div>'
+            );
+          })
+          .join('');
+        return (
+          '<div class="science-layer-group">' +
+          '<div class="science-layer-head">' +
+          esc(layerTitle) +
+          '</div><div class="science-layer-cards">' +
+          cards +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    return (
+      '<div class="science-narrow-shell" data-qa-target="' +
+      (isFlow ? 'system-flow-cards' : 'derivation-cards') +
+      '">' +
+      '<div class="science-narrow-bar">' +
+      '<span class="science-mode-pill">' +
+      esc(badgeTxt) +
+      '</span>' +
+      '<button type="button" class="lineage-zoom-inline" data-bp-zoom title="宽屏全览图谱">全览图谱 ⤢</button>' +
+      '</div>' +
+      '<div class="science-layer-list">' +
+      layersHtml +
+      '</div></div>'
+    );
+  }
+
   function renderLayeredDagHtml(payload, options) {
     const rawData = (payload && payload.data) || {};
     const isLineage = payload.blueprint === 'lineage_dag';
     const isFlow = payload.blueprint === 'flow_swimlane';
     const isDecision = payload.blueprint === 'decision_tree';
     const isPracticalDag = isFlow || isDecision;
-    if ((isLineage || isFlow) && String(rawData.mode || '').toLowerCase() === 'not_applicable') {
+    const isSysFlow = payload.blueprint === 'system_flow';
+    const isScienceDag = payload.blueprint === 'derivation_dag' || isSysFlow;
+    if ((isLineage || isFlow || isSysFlow) && String(rawData.mode || '').toLowerCase() === 'not_applicable') {
       const defaultReason = isFlow
         ? '本章属理念阐发或原则讨论，未包含可复用的先后执行流程。'
-        : '本章主要展开内部推演或文学对话，未直接涉及外部思想家或学派谱系。';
+        : isSysFlow
+          ? '本章属纯公理或概念推演，未涉及实体实验装置、物理过程或演化迭代机制。'
+          : '本章主要展开内部推演或文学对话，未直接涉及外部思想家或学派谱系。';
       const reason = rawData.not_applicable_reason || rawData.reason || payload.summary || defaultReason;
       return (
         '<div class="lineage-na" data-qa-target="' +
-        (isFlow ? 'flow-na' : 'lineage-na') +
+        (isFlow ? 'flow-na' : isSysFlow ? 'system-flow-na' : 'lineage-na') +
         '">' +
         '<strong>' +
-        (isFlow ? '本章未展开 SOP 流程图' : '本章未展开外部思想谱系图') +
+        (isFlow ? '本章未展开 SOP 流程图' : isSysFlow ? '本章无实体装置或演化机制流' : '本章未展开外部思想谱系图') +
         '</strong>' +
         '<p>' +
         esc(reason) +
@@ -1028,6 +1144,10 @@
       ? assignLineageRanks(nodes, idMap, mergedEdges)
       : assignDagRanks(nodes, idMap, mergedEdges);
 
+    if (isScienceDag && !wideMode) {
+      return renderScienceNarrowHtml(payload, nodes, rawEdges, ranks, sortedRanks, idMap);
+    }
+
     let maxInRank = 1;
     sortedRanks.forEach((r) => {
       maxInRank = Math.max(maxInRank, ranks.get(r).length);
@@ -1040,13 +1160,15 @@
       wideMode &&
       ((isHistoryDag && (R === 5 || (R === 6 && maxInRank >= 3))) ||
         (isArgument && (R === 6 || R === 5 || (R === 4 && maxInRank <= 2))) ||
-        ['flow_swimlane', 'decision_tree', 'system_flow'].includes(payload.blueprint) ||
+        (isScienceDag && R >= 2) ||
+        ['flow_swimlane', 'decision_tree'].includes(payload.blueprint) ||
         isLineage);
     const useBandedLR =
       wideMode &&
       (((isHistoryDag || isArgument) && (R >= 7 || (R === 6 && maxInRank <= 2))) ||
         (isFlow && R >= 5) ||
-        (isDecision && R >= 6));
+        (isDecision && R >= 6) ||
+        (isScienceDag && R >= 6));
     const wantLR = !useBandedLR && wantCompactLR;
     const splitIdx = useBandedLR ? Math.ceil(R / 2) : R;
     idMap.forEach((n) => {
@@ -1059,39 +1181,47 @@
       ? R >= 5
         ? 172
         : 186
-      : useBandedLR
-        ? isPracticalDag
-          ? R >= 9
-            ? 164
-            : 174
-          : isHistoryDag
-            ? 176
-            : 182
-        : wantLR
+      : isScienceDag
+        ? useBandedLR
+          ? Math.ceil(R / 2) >= 6
+            ? 158
+            : 170
+          : R >= 5
+            ? 168
+            : 184
+        : useBandedLR
           ? isPracticalDag
-            ? R >= 5
-              ? 168
-              : 182
+            ? R >= 9
+              ? 164
+              : 174
             : isHistoryDag
-              ? R >= 6
-                ? 162
-                : 174
-              : R >= 6
-                ? 166
-                : 186
-          : wideMode
-            ? maxInRank >= 6
-              ? 150
+              ? 176
+              : 182
+          : wantLR
+            ? isPracticalDag
+              ? R >= 5
+                ? 168
+                : 182
+              : isHistoryDag
+                ? R >= 6
+                  ? 162
+                  : 174
+                : R >= 6
+                  ? 166
+                  : 186
+            : wideMode
+              ? maxInRank >= 6
+                ? 150
+                : maxInRank >= 4
+                  ? 172
+                  : maxInRank >= 2
+                    ? 194
+                    : 236
               : maxInRank >= 4
-                ? 172
+                ? 142
                 : maxInRank >= 2
-                  ? 194
-                  : 236
-            : maxInRank >= 4
-              ? 142
-              : maxInRank >= 2
-                ? 158
-                : 236;
+                  ? 158
+                  : 236;
     const sizes = measureNodeSizes(nodes, cardW, {
       expandAll,
       expandedIds,
@@ -1105,22 +1235,38 @@
       ? R >= 5
         ? 88
         : 104
-      : isPracticalDag && (useBandedLR || wantLR)
-        ? 88
-        : useBandedLR
-          ? 56
-          : wantLR
-            ? isHistoryDag
-              ? R >= 6
-                ? 46
-                : 54
-              : R >= 6
-                ? 56
-                : 74
-            : wideMode && maxInRank >= 6
-              ? 18
-              : 24;
-    const rowGap = isLineage ? 22 : useBandedLR || (wideMode && wantLR) ? 24 : wideMode ? 36 : 56;
+      : isScienceDag
+        ? useBandedLR
+          ? 82
+          : R >= 5
+            ? 84
+            : 92
+        : isPracticalDag && (useBandedLR || wantLR)
+          ? 88
+          : useBandedLR
+            ? 56
+            : wantLR
+              ? isHistoryDag
+                ? R >= 6
+                  ? 46
+                  : 54
+                : R >= 6
+                  ? 56
+                  : 74
+              : wideMode && maxInRank >= 6
+                ? 18
+                : 24;
+    const rowGap = isLineage
+      ? 22
+      : isScienceDag
+        ? maxInRank >= 4
+          ? 18
+          : 22
+        : useBandedLR || (wideMode && wantLR)
+          ? 24
+          : wideMode
+            ? 36
+            : 56;
     const trackStep = isLineage ? 22 : wideMode && (!wantLR || wantCompactLR) ? 15 : wideMode ? 16 : 18;
     const corridorStep = isLineage ? 36 : wideMode ? 32 : 26;
 
@@ -3260,6 +3406,437 @@
     );
   }
 
+  function fmtNumericTick(v) {
+    if (!Number.isFinite(v)) return '0';
+    if (v === 0) return '0';
+    const abs = Math.abs(v);
+    if (abs >= 1e5 || abs < 1e-3) return v.toExponential(1).replace(/\.0e/, 'e');
+    return Number(v.toPrecision(4)).toString();
+  }
+
+  function renderSensitivityHtml(payload, options) {
+    const rawData = (payload && payload.data) || {};
+    const wideMode = Boolean(options && options.wide);
+    const mode = String(rawData.mode || '').toLowerCase();
+
+    if (mode === 'not_applicable') {
+      const reason =
+        rawData.not_applicable_reason ||
+        rawData.reason ||
+        payload.summary ||
+        '本章集中展开公理推演或概念辨析，未出现定量参数响应或临界相变阈值。';
+      const highlights = Array.isArray(rawData.highlights) ? rawData.highlights : [];
+      const hlHtml = highlights.length
+        ? '<div class="sensitivity-hl-list">' +
+          highlights
+            .map(
+              (h) =>
+                '<div class="sensitivity-hl-card">' +
+                '<div class="sensitivity-hl-head"><b>' +
+                esc(h.title || '定性制约') +
+                '</b>' +
+                renderSrcTag(h.source) +
+                '</div>' +
+                (h.detail ? '<div class="sensitivity-hl-detail">' + esc(h.detail) + '</div>' : '') +
+                '<div class="science-card-foot">' +
+                renderAnchorPills(h.blocks, 3) +
+                '</div></div>'
+            )
+            .join('') +
+          '</div>'
+        : '';
+      return (
+        '<div class="sensitivity-na" data-qa-target="sensitivity-na">' +
+        '<strong>本章未呈现定量曲线或临界阈值</strong>' +
+        '<p>' +
+        esc(reason) +
+        '</p>' +
+        hlHtml +
+        '</div>'
+      );
+    }
+
+    if (mode === 'regime_threshold' || Array.isArray(rawData.regimes)) {
+      const regimes = Array.isArray(rawData.regimes) ? rawData.regimes : [];
+      if (!regimes.length) return '<div class="wb-sub">暂无临界相变区间数据</div>';
+      const param = rawData.parameter || '控制变量';
+      const toneLabel = { stable: '稳态区间', critical: '临界过渡', breakdown: '相变/失效' };
+      const toneCls = (t) => (t === 'breakdown' ? 'tone-breakdown' : t === 'critical' ? 'tone-critical' : 'tone-stable');
+
+      if (wideMode) {
+        const segCols = regimes.length;
+        const axisSegs = regimes
+          .map((rg, idx) => {
+            const cls = toneCls(rg.tone);
+            const thrPin =
+              idx > 0 && rg.threshold
+                ? '<div class="regime-threshold-pin"><span>' + esc(rg.threshold) + '</span></div>'
+                : idx === 0 && rg.threshold
+                  ? '<div class="regime-threshold-pin is-start"><span>' + esc(rg.threshold) + '</span></div>'
+                  : '';
+            return (
+              '<div class="regime-axis-seg ' +
+              cls +
+              '">' +
+              thrPin +
+              '<div class="regime-seg-range">' +
+              esc(rg.range || '') +
+              '</div>' +
+              '<div class="regime-seg-state">' +
+              esc(rg.state || '') +
+              '</div></div>'
+            );
+          })
+          .join('');
+
+        const cards = regimes
+          .map((rg) => {
+            const cls = toneCls(rg.tone);
+            return (
+              '<div class="regime-card ' +
+              cls +
+              '" data-jump="' +
+              esc((rg.blocks && rg.blocks[0]) || '') +
+              '">' +
+              '<div class="regime-card-head">' +
+              '<span class="regime-tone-pill">' +
+              esc(toneLabel[rg.tone] || '相态区间') +
+              '</span>' +
+              renderSrcTag(rg.source) +
+              '</div>' +
+              '<div class="regime-card-range">' +
+              esc(rg.range || '') +
+              '</div>' +
+              (rg.threshold ? '<div class="regime-card-thr">阈值：' + esc(rg.threshold) + '</div>' : '') +
+              '<div class="regime-card-state">' +
+              esc(rg.state || '') +
+              '</div>' +
+              (rg.mechanism ? '<div class="regime-card-mech">' + esc(rg.mechanism) + '</div>' : '') +
+              '<div class="science-card-foot">' +
+              renderAnchorPills(rg.blocks, 3) +
+              '</div></div>'
+            );
+          })
+          .join('');
+
+        return (
+          '<div class="sensitivity-regimes-wide" data-qa-target="sensitivity-regimes-wide">' +
+          '<div class="sensitivity-param-bar"><span>控制参数</span><b>' +
+          esc(param) +
+          '</b></div>' +
+          '<div class="regime-axis-bar" style="grid-template-columns:repeat(' +
+          segCols +
+          ',minmax(0,1fr))">' +
+          axisSegs +
+          '</div>' +
+          '<div class="regime-cards-grid" style="grid-template-columns:repeat(' +
+          segCols +
+          ',minmax(0,1fr))">' +
+          cards +
+          '</div></div>'
+        );
+      }
+
+      const stepsHtml = regimes
+        .map((rg, idx) => {
+          const cls = toneCls(rg.tone);
+          const divider = rg.threshold
+            ? '<div class="regime-threshold-divider"><span>⚡ 临界阈值 · ' + esc(rg.threshold) + '</span></div>'
+            : idx > 0
+              ? '<div class="regime-step-arrow">↓ 参数跃迁</div>'
+              : '';
+          return (
+            divider +
+            '<div class="regime-step-card ' +
+            cls +
+            '" data-jump="' +
+            esc((rg.blocks && rg.blocks[0]) || '') +
+            '">' +
+            '<div class="regime-card-head">' +
+            '<span class="regime-range-pill">' +
+            esc(rg.range || '') +
+            '</span>' +
+            '<span class="regime-tone-pill">' +
+            esc(toneLabel[rg.tone] || '相态') +
+            '</span>' +
+            renderSrcTag(rg.source) +
+            '</div>' +
+            '<div class="regime-card-state">' +
+            esc(rg.state || '') +
+            '</div>' +
+            (rg.mechanism ? '<div class="regime-card-mech">' + esc(rg.mechanism) + '</div>' : '') +
+            '<div class="science-card-foot">' +
+            renderAnchorPills(rg.blocks, 3) +
+            '</div></div>'
+          );
+        })
+        .join('');
+
+      return (
+        '<div class="sensitivity-regimes-narrow" data-qa-target="sensitivity-regimes">' +
+        '<div class="sensitivity-param-bar">' +
+        '<div><span>控制参数</span><b>' +
+        esc(param) +
+        '</b></div>' +
+        '<button type="button" class="lineage-zoom-inline" data-bp-zoom title="宽屏全览相变轴">全览相变轴 ⤢</button>' +
+        '</div>' +
+        '<div class="regime-step-list">' +
+        stepsHtml +
+        '</div></div>'
+      );
+    }
+
+    // Real quantitative numeric_curve (no 0-100 clamping!)
+    const pts = Array.isArray(rawData.points) ? rawData.points : [];
+    if (!pts.length) return '<div class="wb-sub">暂无参数响应数据</div>';
+    const xLabel = rawData.xLabel || '自变量';
+    const yLabel = rawData.yLabel || '响应量';
+    const unit = rawData.unit || '';
+    const yTitle = unit ? yLabel + ' (' + unit + ')' : yLabel;
+    const ys = pts.map((p) => Number(p.y));
+    let minY = Math.min(...ys);
+    let maxY = Math.max(...ys);
+    if (minY === maxY) {
+      const pad = Math.abs(minY) > 0 ? Math.abs(minY) * 0.2 : 1;
+      minY -= pad;
+      maxY += pad;
+    } else {
+      const span = maxY - minY;
+      minY -= span * 0.08;
+      maxY += span * 0.08;
+    }
+    const spanY = maxY - minY || 1;
+    const W = wideMode ? 680 : 440;
+    const H = wideMode ? 230 : 210;
+    const padL = 54;
+    const padR = 24;
+    const padT = 24;
+    const padB = 48;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const yOf = (val) => padT + (1 - (val - minY) / spanY) * plotH;
+    const coords = pts.map((p, i) => ({
+      xLbl: String(p.x != null ? p.x : p.beat || '点' + (i + 1)),
+      yVal: Number(p.y),
+      note: p.note || '',
+      blocks: p.blocks,
+      source: p.source,
+      idx: i,
+      cx: padL + (pts.length === 1 ? plotW / 2 : (i / (pts.length - 1)) * plotW),
+      cy: yOf(Number(p.y)),
+    }));
+    let pathD = 'M ' + coords[0].cx + ',' + coords[0].cy;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i];
+      const p1 = coords[i + 1];
+      const mx = (p0.cx + p1.cx) / 2;
+      pathD += ' C ' + mx + ',' + p0.cy + ' ' + mx + ',' + p1.cy + ' ' + p1.cx + ',' + p1.cy;
+    }
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => minY + t * spanY);
+    const gridY = ticks
+      .map((v) => {
+        const y = yOf(v);
+        return (
+          '<line x1="' +
+          padL +
+          '" y1="' +
+          y.toFixed(1) +
+          '" x2="' +
+          (W - padR) +
+          '" y2="' +
+          y.toFixed(1) +
+          '" stroke="var(--rule)" stroke-dasharray="3 3"/>' +
+          '<text x="' +
+          (padL - 6) +
+          '" y="' +
+          (y + 3).toFixed(1) +
+          '" text-anchor="end" font-size="9.5" fill="var(--ink-3)">' +
+          esc(fmtNumericTick(v)) +
+          '</text>'
+        );
+      })
+      .join('');
+    const zeroLine =
+      minY < 0 && maxY > 0
+        ? '<line x1="' +
+          padL +
+          '" y1="' +
+          yOf(0).toFixed(1) +
+          '" x2="' +
+          (W - padR) +
+          '" y2="' +
+          yOf(0).toFixed(1) +
+          '" stroke="var(--ink-3)" stroke-width="1"/>'
+        : '';
+    const circles = coords
+      .map((c) => {
+        const bid = (c.blocks && c.blocks[0]) || '';
+        const lblY = c.idx % 2 === 0 ? H - 24 : H - 9;
+        const valText = fmtNumericTick(c.yVal) + (unit ? ' ' + unit : '');
+        return (
+          '<g class="chart-pt-grp" tabindex="0" data-pt-idx="' +
+          c.idx +
+          '" data-pt-beat="' +
+          esc(c.xLbl) +
+          '" data-pt-val="' +
+          esc(valText) +
+          '" data-pt-note="' +
+          esc(c.note || '') +
+          '" data-pt-x="' +
+          c.cx.toFixed(1) +
+          '" data-pt-y="' +
+          c.cy.toFixed(1) +
+          '" data-pt-w="' +
+          W +
+          '" data-jump="' +
+          esc(bid) +
+          '" style="cursor:pointer">' +
+          '<circle class="chart-pt" cx="' +
+          c.cx.toFixed(1) +
+          '" cy="' +
+          c.cy.toFixed(1) +
+          '" r="5" fill="var(--surface)" stroke="var(--pine)" stroke-width="2.2"/>' +
+          '<text x="' +
+          c.cx.toFixed(1) +
+          '" y="' +
+          (c.cy - 9).toFixed(1) +
+          '" text-anchor="middle" font-size="9" font-weight="600" fill="var(--pine)">' +
+          esc(fmtNumericTick(c.yVal)) +
+          '</text>' +
+          '<text x="' +
+          c.cx.toFixed(1) +
+          '" y="' +
+          lblY +
+          '" text-anchor="middle" font-size="9.5" fill="var(--ink-2)">' +
+          esc(c.xLbl) +
+          '</text></g>'
+        );
+      })
+      .join('');
+
+    return (
+      '<div class="chart-axis-title"><span>纵轴：' +
+      esc(yTitle) +
+      '</span><span>横轴：' +
+      esc(xLabel) +
+      '</span></div>' +
+      '<div class="chart-stage-wrap">' +
+      '<svg class="chart-svg" viewBox="0 0 ' +
+      W +
+      ' ' +
+      H +
+      '" data-qa-target="sensitivity-numeric">' +
+      gridY +
+      zeroLine +
+      '<path d="' +
+      pathD +
+      '" fill="none" stroke="var(--pine)" stroke-width="2.4" stroke-linecap="round"/>' +
+      circles +
+      '</svg>' +
+      '<div class="chart-tooltip" data-chart-tip hidden></div>' +
+      '</div>' +
+      '<div class="chart-legend-list">' +
+      coords
+        .map(
+          (c) =>
+            '<div class="chart-legend-item" data-jump="' +
+            esc((c.blocks && c.blocks[0]) || '') +
+            '">' +
+            '<div class="chart-legend-top">' +
+            '<span class="chart-legend-head"><b>' +
+            esc(c.xLbl) +
+            '</b> · <span class="chart-legend-emo">' +
+            esc(fmtNumericTick(c.yVal) + (unit ? ' ' + unit : '')) +
+            '</span></span>' +
+            '<span class="chart-legend-refs">' +
+            renderSrcTag(c.source) +
+            ' ' +
+            renderAnchorPills(c.blocks, 3) +
+            '</span></div>' +
+            (c.note ? '<div class="chart-beat-note">' + esc(c.note) + '</div>' : '') +
+            '</div>'
+        )
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderConceptGlossaryHtml(payload, options) {
+    const items = Array.isArray(payload.items) && payload.items.length
+      ? payload.items
+      : (payload.sections || []).reduce((acc, s) => acc.concat((s && s.items) || []), []);
+    if (!items.length) return '<div class="wb-sub">暂无科学概念词条</div>';
+    const wideMode = Boolean(options && options.wide);
+
+    if (wideMode) {
+      return (
+        '<div style="overflow-x:auto" data-qa-target="glossary-table">' +
+        '<table class="bp-table glossary-wide-table">' +
+        '<thead><tr><th>核心概念与符号</th><th>一句话直觉 / 类比</th><th>精确科学定义与本章作用</th><th>出处与锚点</th></tr></thead>' +
+        '<tbody>' +
+        items
+          .map((it) => {
+            const term = it.term || it.title || it.name || '';
+            const sym = it.symbol || '';
+            const intuition = it.intuition || '';
+            const def = it.definition || it.body || it.detail || '';
+            return (
+              '<tr><td class="col-key">' +
+              '<div class="glossary-term-cell">' +
+              esc(term) +
+              '</div>' +
+              (sym ? '<code class="glossary-sym">' + esc(sym) + '</code>' : '') +
+              '<div style="margin-top:4px">' +
+              renderSrcTag(it.source) +
+              '</div></td><td>' +
+              esc(intuition) +
+              '</td><td>' +
+              esc(def) +
+              '</td><td>' +
+              renderAnchorPills(it.blocks, 3) +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>'
+      );
+    }
+
+    return (
+      '<div class="glossary-cards" data-qa-target="glossary-cards">' +
+      items
+        .map((it) => {
+          const term = it.term || it.title || it.name || '';
+          const sym = it.symbol || '';
+          const intuition = it.intuition || '';
+          const def = it.definition || it.body || it.detail || '';
+          return (
+            '<div class="glossary-card">' +
+            '<div class="glossary-card-head">' +
+            '<div class="glossary-term-wrap">' +
+            '<strong class="glossary-term">' +
+            esc(term) +
+            '</strong>' +
+            (sym ? '<code class="glossary-sym">' + esc(sym) + '</code>' : '') +
+            '</div>' +
+            renderSrcTag(it.source) +
+            '</div>' +
+            (intuition
+              ? '<div class="glossary-row glossary-intuition"><span>直觉类比</span><p>' + esc(intuition) + '</p></div>'
+              : '') +
+            (def
+              ? '<div class="glossary-row glossary-def"><span>科学定义</span><p>' + esc(def) + '</p></div>'
+              : '') +
+            '<div class="glossary-card-foot">' +
+            renderAnchorPills(it.blocks, 3) +
+            '</div></div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
   function resolveEdgeVisual(e) {
     const rk = e.rel_kind && REL_KIND_META[e.rel_kind];
     if (rk) return rk;
@@ -4220,8 +4797,7 @@
 
   function renderExtensionOrFallbackHtml(payload, options) {
     const items = payload.items || [];
-    const wideMode = Boolean(options && options.wide);
-    const maxAnchors = wideMode ? 6 : 3;
+    const maxAnchors = 3;
     const isFallback = payload.blueprint === 'fallback_list';
     const firstWarning = items.map((it) => it && it.warning).find(Boolean) || '';
     const noticeTxt = payload.fallback_notice || (isFallback ? firstWarning : '');
@@ -4313,6 +4889,7 @@
     if (bp === 'parallel_timeline') return renderTimelineHtml(payload, options);
     if (MATRIX_BLUEPRINTS.has(bp)) return renderMatrixTableHtml(payload, options);
     if (bp === 'quadrant_matrix') return renderQuadrantHtml(payload, options);
+    if (bp === 'sensitivity_chart') return renderSensitivityHtml(payload, options);
     if (CURVE_BLUEPRINTS.has(bp)) return renderSplineChartHtml(payload, options);
     if (bp === 'relation_graph') return renderRelationGraphHtml(payload, options);
     if (bp === 'spatial_route') {
@@ -4322,6 +4899,7 @@
       }
       return renderSpatialMapHtml(payload, options);
     }
+    if (bp === 'extension_glossary') return renderConceptGlossaryHtml(payload, options);
     if (bp === 'extension_dossier' || bp === 'extension_checklist' || bp === 'fallback_list') {
       return renderExtensionOrFallbackHtml(payload, options);
     }
