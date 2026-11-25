@@ -35,6 +35,7 @@ ROUTES = [
     (re.compile(r"^/api/shelf$"), "shelf"),
     (re.compile(r"^/api/catalog$"), "catalog"),
     (re.compile(r"^/api/book/([A-Za-z0-9_-]+)$"), "book"),
+    (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)/cached-tools$"), "chapter_cached_tools"),
     (re.compile(r"^/api/chapter/([A-Za-z0-9_-]+)/(\d+)$"), "chapter"),
     (re.compile(r"^/api/assist$"), "assist"),
     (re.compile(r"^/api/assist/pin$"), "assist_pin"),
@@ -274,6 +275,12 @@ class Handler(BaseHTTPRequestHandler):
                 data = self.service.book(match.group(1))
                 if data is None:
                     self._json(404, {"error": "没有这本书"}, head)
+                else:
+                    self._json(200, data, head)
+            elif name == "chapter_cached_tools":
+                data = self.service.cached_chapter_tools(match.group(1), int(match.group(2)))
+                if data is None:
+                    self._json(404, {"error": "没有这一章"}, head)
                 else:
                     self._json(200, data, head)
             elif name == "chapter":
