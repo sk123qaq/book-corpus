@@ -18,12 +18,26 @@ import threading
 import uuid
 from datetime import UTC, datetime
 
+from .mdparse import BLOCK_VERSION
+
 UID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 OPS_LOG_LIMIT = 500
 
 
 def _now_iso():
     return datetime.now(UTC).astimezone().isoformat(timespec="seconds")
+
+
+def _payload_stale(doc, source_sha):
+    """缓存载荷是否过期：源文件变了，或块号生成口径（BLOCK_VERSION）变了。"""
+    if not source_sha or not isinstance(doc, dict):
+        return False
+    doc_sha = doc.get("source_sha256") or ""
+    if not doc_sha:
+        return False
+    if doc_sha != source_sha:
+        return True
+    return doc.get("block_version") != BLOCK_VERSION
 
 
 class Store:
@@ -84,7 +98,7 @@ class Store:
         notes = doc.get("notes")
         if not isinstance(notes, list):
             return []
-        stale = bool(source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha)
+        stale = _payload_stale(doc, source_sha)
         out = []
         for item in notes:
             if not isinstance(item, dict) or not item.get("id"):
@@ -101,6 +115,7 @@ class Store:
             "uid": uid,
             "n": "%02d" % int(n),
             "source_sha256": source_sha or "",
+            "block_version": BLOCK_VERSION,
             "updated_at": _now_iso(),
             "notes": list(notes or []),
         }
@@ -180,13 +195,16 @@ class Store:
         doc = self._read_json(self.chapter_map_path(uid, n))
         if not isinstance(doc, dict):
             return None
-        if source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha:
+        if _payload_stale(doc, source_sha):
             copy = dict(doc)
             copy["stale"] = True
             return copy
         return doc
 
     def save_chapter_map(self, uid, n, payload):
+        if isinstance(payload, dict):
+            payload = dict(payload)
+            payload["block_version"] = BLOCK_VERSION
         self._write(self.chapter_map_path(uid, n), json.dumps(payload, ensure_ascii=False, indent=1))
         return payload
 
@@ -199,13 +217,16 @@ class Store:
         doc = self._read_json(self.chapter_tool_path(uid, n, key))
         if not isinstance(doc, dict):
             return None
-        if source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha:
+        if _payload_stale(doc, source_sha):
             copy = dict(doc)
             copy["stale"] = True
             return copy
         return doc
 
     def save_chapter_tool(self, uid, n, key, payload):
+        if isinstance(payload, dict):
+            payload = dict(payload)
+            payload["block_version"] = BLOCK_VERSION
         self._write(self.chapter_tool_path(uid, n, key), json.dumps(payload, ensure_ascii=False, indent=1))
         return payload
 
@@ -219,7 +240,7 @@ class Store:
             doc = self._read_json(path)
             if not isinstance(doc, dict):
                 continue
-            if source_sha and doc.get("source_sha256") and doc.get("source_sha256") != source_sha:
+            if _payload_stale(doc, source_sha):
                 continue
             keys.append(os.path.splitext(os.path.basename(path))[0])
         return keys

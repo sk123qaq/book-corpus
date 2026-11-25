@@ -80,6 +80,20 @@ def _is_translator_or_bib_note(text: str) -> bool:
     return bool(_BIB_REF_HEAD_RE.match(txt) or _BIB_PURE_CIT_RE.match(txt))
 
 
+_PUA_RE = re.compile("[\ue000-\uf8ff]")
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_PAGE_NUM_RE = re.compile(r"^\s*[-–—]?\s*\d{1,4}\s*[-–—]?\s*$")
+_PAGE_LABEL_RE = re.compile(r"^\s*第\s*\d{1,4}\s*页\s*$")
+_CAPTION_RE = re.compile(r"^\s*(?:图|表|插图|附图|Figure|Fig\.?|Table|数据来源|资料来源|来源)\s*[:：]?\s*\d*", re.I)
+
+
+def _clean_for_model(text):
+    """去掉 PUA 私用区、控制字符与替换符，避免喂给模型时出现乱码块。"""
+    txt = _PUA_RE.sub("", str(text or ""))
+    txt = _CONTROL_RE.sub("", txt).replace("\ufffd", "")
+    return re.sub(r"[ \t\u00a0]+", " ", txt).strip()
+
+
 def _block_preview_text(block):
     text = (block.get("text") or "").strip()
     if text:
@@ -91,6 +105,44 @@ def _block_preview_text(block):
     if rows:
         return "\n".join(" | ".join(str(cell) for cell in row) for row in rows if isinstance(row, list))
     return ""
+
+
+def _block_text_with_neighbors(blocks, idx):
+    """图片块 text 为空时，用相邻图注（图/表/Figure/数据来源）或文件名兜底。"""
+    block = blocks[idx]
+    text = _block_preview_text(block).strip()
+    if text:
+        return text
+    if (block.get("kind") or "") != "image":
+        return ""
+    rel = str(block.get("rel") or "")
+    for near in (idx + 1, idx - 1):
+        if 0 <= near < len(blocks):
+            caption = _block_preview_text(blocks[near]).strip()
+            if caption and _CAPTION_RE.match(caption[:60]):
+                return f"〔图片：{os.path.basename(rel) or '未命名'}〕{caption[:200]}"
+    if rel:
+        return f"〔图片：{os.path.basename(rel)}〕"
+    return ""
+
+
+def _tail_note_run(body_semantic):
+    """文末连续 ≥3 条同族注号段落的位置（用于读时尾注兜底）。"""
+    run = []
+    family = None
+    for idx in range(len(body_semantic) - 1, -1, -1):
+        _, kind, txt = body_semantic[idx]
+        if kind != "paragraph":
+            break
+        info = footnotes._match_tier2_prefix(txt)
+        if not info or info[0] not in ("A", "B"):
+            break
+        if family is None:
+            family = info[1]
+        elif info[1] != family:
+            break
+        run.append(idx)
+    return run if len(run) >= 3 else []
 
 
 def _summarize_chapter_map(model_doc, blocks):
@@ -458,22 +510,64 @@ class ReadingService:
         parts = []
         for blk in sample:
             bid = blk.get("id") or ""
-            txt = _block_preview_text(blk)
+            idx = id_to_idx.get(bid)
+            txt = _block_text_with_neighbors(blocks, idx) if idx is not None else _block_preview_text(blk)
             if txt:
                 parts.append(f"[{bid}] {txt[:240]}")
         return "\n".join(parts)[:1800]
 
+    def _cross_file_notes(self, uid, n, refs):
+        """把指向别的注释章的 refs 解析成注文；按目标章缓存，避免反复读盘。"""
+        cache = {}
+        seen = set()
+        out = []
+        for ref, host_bid in refs:
+            target = ref.get("target_chapter") or {}
+            try:
+                target_n = int(target.get("n") or 0)
+            except (TypeError, ValueError):
+                continue
+            if not target_n or target_n == int(n):
+                continue
+            if target_n not in cache:
+                cache[target_n] = self.library.read_chapter(uid, target_n) or {}
+            blocks = cache[target_n].get("blocks") or []
+            marker = str(ref.get("marker") or ref.get("_key") or "")
+            block_id = str(target.get("block_id") or "")
+            block = next((b for b in blocks if b.get("id") == block_id), None) if block_id else None
+            if block is None and marker:
+                block = next(
+                    (b for b in blocks if b.get("kind") == "footnote" and str(b.get("marker") or "") == marker),
+                    None,
+                )
+            if block is None:
+                continue
+            txt = _block_preview_text(block).strip()
+            if not txt:
+                continue
+            key = (target_n, block.get("id") or marker)
+            if key in seen:
+                continue
+            seen.add(key)
+            if marker.startswith(("注", "註")):
+                label = f"{host_bid}·{marker}"
+            else:
+                label = f"{host_bid}·注{marker}" if marker else f"{host_bid}·跨章注"
+            out.append((label, txt))
+        return out
+
     def _chapter_scope_context(self, uid, n, blocks, *, source_sha="", budget=24000):
-        """构造全章作用域下的带块号文本（24k 内全量不截断、超长章连续窗口采样、译者注与尾注隔离）。"""
+        """构造全章作用域下的带块号文本（24k 内全量、超长章窗口采样、注释章与尾注隔离）。"""
         body_semantic: list[tuple[str, str, str]] = []
         fn_semantic: list[tuple[str, str, str]] = []
+        cross_refs = []
         cited_fn_ids: set[str] = set()
         body_has_fn_refs = False
-        for blk in blocks or []:
+        for idx, blk in enumerate(blocks or []):
             bid = blk.get("id") or ""
             kind = blk.get("kind") or "paragraph"
-            txt = _block_preview_text(blk)
             if kind == "footnote":
+                txt = _clean_for_model(_block_preview_text(blk))
                 if bid and txt:
                     fn_semantic.append((bid, kind, txt))
                 for ref_bid in blk.get("ref_blocks") or []:
@@ -486,14 +580,36 @@ class ReadingService:
                 tbid = (ref or {}).get("target_block")
                 if tbid:
                     cited_fn_ids.add(tbid)
+                elif (ref or {}).get("target_chapter"):
+                    cross_refs.append((ref, bid))
             for item_refs in blk.get("item_fn_refs") or []:
                 for ref in item_refs or []:
                     body_has_fn_refs = True
                     tbid = (ref or {}).get("target_block")
                     if tbid:
                         cited_fn_ids.add(tbid)
-            if bid and txt:
+                    elif (ref or {}).get("target_chapter"):
+                        cross_refs.append((ref, bid))
+            txt = _clean_for_model(_block_text_with_neighbors(blocks, idx))
+            if not txt:
+                continue
+            if kind == "paragraph" and (_PAGE_NUM_RE.match(txt) or _PAGE_LABEL_RE.match(txt)):
+                continue
+            if bid:
                 body_semantic.append((bid, kind, txt))
+
+        # 读时尾注兜底：文末连续 ≥3 条「注N/[N]/①」样段落分流到注释区，不混进正文。
+        tail_run = _tail_note_run(body_semantic)
+        for idx in sorted(tail_run, reverse=True):
+            bid, _, txt = body_semantic.pop(idx)
+            fn_semantic.append((bid, "footnote", txt))
+
+        # 跨文件注释章：正文 ref 只有 target_chapter 时也要把注文取回来。
+        cross_notes = self._cross_file_notes(uid, n, cross_refs) if cross_refs else []
+        cross_labels = set()
+        for label, txt in cross_notes:
+            fn_semantic.append((label, "footnote", txt))
+            cross_labels.add(label)
 
         # 剥离文末「注释/译注」小标题与未被标成 footnote 的文末译者注/编者注
         while body_semantic:
@@ -507,7 +623,8 @@ class ReadingService:
                 continue
             break
 
-        if not body_semantic:
+        pure_note = not body_semantic and bool(fn_semantic)
+        if pure_note:
             body_semantic = fn_semantic
             fn_semantic = []
         if not body_semantic:
@@ -515,15 +632,19 @@ class ReadingService:
 
         if cited_fn_ids:
             candidate_fns = [item for item in fn_semantic if item[0] in cited_fn_ids]
+            candidate_fns.extend(item for item in fn_semantic if item[0] in cross_labels)
         elif not body_has_fn_refs:
             candidate_fns = fn_semantic
         else:
-            candidate_fns = []
-        # 过滤掉纯译者注、编按与纯文献页码出处注，只保留作者/正文实质引用的脚注
-        selected_fns = [item for item in candidate_fns if not _is_translator_or_bib_note(item[2])]
+            candidate_fns = [item for item in fn_semantic if item[0] in cross_labels]
+        # 跨文件注文是作者真实引用，不按译者注/文献注过滤。
+        selected_fns = [
+            item for item in candidate_fns if item[0] in cross_labels or not _is_translator_or_bib_note(item[2])
+        ]
 
         body_chars = sum(len(t) for _, _, t in body_semantic)
         fn_budget = min(int(budget * 0.18), max(400, int(body_chars * 0.18)))
+        pure_header = "【本章为全书/分卷注释汇总章】" if pure_note else ""
 
         def _append_footnotes(out_lines: list[str], cap: int) -> None:
             if not selected_fns or cap <= 0:
@@ -549,11 +670,18 @@ class ReadingService:
                 out_lines.extend(fn_lines)
 
         if body_chars <= budget:
-            lines = [f"[{bid}] {txt}" for bid, _, txt in body_semantic]
+            lines = [pure_header] if pure_header else []
+            lines.extend(f"[{bid}] {txt}" for bid, _, txt in body_semantic)
             _append_footnotes(lines, fn_budget)
             return "\n".join(lines), len(body_semantic), False
 
-        parts: list[str] = []
+        total_len = len(body_semantic)
+        avg_len = sum(len(t) for _, _, t in body_semantic) / max(1, total_len)
+        # 戏剧/诗歌/OCR 碎行：短块允许窗口容纳更多块，避免只看到十几个块。
+        open_max = 12 if avg_len >= 25 else 48
+        window_max_blocks = 12 if avg_len >= 25 else 240
+
+        parts: list[str] = [pure_header] if pure_header else []
         used_chars = 0
         cmap = self.store.chapter_map(uid, n, source_sha=source_sha)
         if isinstance(cmap, dict) and not cmap.get("stale") and cmap.get("sections"):
@@ -571,18 +699,29 @@ class ReadingService:
                 parts.append(line)
                 used_chars += len(line) + 1
 
+        # 小标题骨架单独给出，长章也能看出目录脉络。
+        headings = [(bid, txt) for bid, kind, txt in body_semantic if kind == "heading"]
+        if headings:
+            parts.append("【全章小标题脉络】")
+            outline_used = 0
+            for bid, txt in headings:
+                line = f"- [{bid}] {txt}"
+                if outline_used + len(line) + 1 > 1500:
+                    break
+                parts.append(line)
+                outline_used += len(line) + 1
+
         # 超长章按字符预算抽取「连续场景窗口」：保留全部小标题 + 首尾连续段落 + 中段若干连续窗口。
-        total_len = len(body_semantic)
         picked_idx = {idx for idx, (_, kind, _) in enumerate(body_semantic) if kind == "heading"}
 
         def _window_chars(indices):
-            return sum(min(1500, len(body_semantic[i][2])) + 8 for i in indices)
+            return sum(min(4000, len(body_semantic[i][2])) + 8 for i in indices)
 
-        # 1) 开头连续窗口（至少前 3 段，最多 ~2,200 字）
+        # 1) 开头连续窗口（至少前 3 段，最多 ~2,200 字；短块时多看一些）
         open_chars = 0
         open_end = 0
-        for idx in range(min(total_len, 12)):
-            c_len = min(1500, len(body_semantic[idx][2])) + 8
+        for idx in range(min(total_len, open_max)):
+            c_len = min(4000, len(body_semantic[idx][2])) + 8
             if idx >= 3 and open_chars + c_len > 2200:
                 break
             picked_idx.add(idx)
@@ -593,33 +732,33 @@ class ReadingService:
         close_indices = []
         close_chars = 0
         for idx in range(total_len - 1, max(-1, open_end - 1), -1):
-            c_len = min(1500, len(body_semantic[idx][2])) + 8
+            c_len = min(4000, len(body_semantic[idx][2])) + 8
             if len(close_indices) >= 3 and close_chars + c_len > 2200:
                 break
             close_indices.append(idx)
             close_chars += c_len
-            if len(close_indices) >= 12:
+            if len(close_indices) >= open_max:
                 break
         picked_idx.update(close_indices)
         close_start = min(close_indices) if close_indices else total_len
 
-        # 3) 中段连续场景窗口（每窗口保留相邻多块上下文，避免对话体散点割裂）
+        # 3) 中段连续场景窗口（10 个窗口，短块章每窗可容纳更多块）
         reserved_chars = used_chars + _window_chars(picked_idx) + (fn_budget if selected_fns else 0)
         mid_budget = max(4000, budget - reserved_chars)
         if close_start > open_end:
             span = close_start - open_end
-            num_windows = min(6, max(2, span // 12))
+            num_windows = min(10, max(2, span // 12))
             per_win_budget = max(900, mid_budget // max(1, num_windows))
             for w_idx in range(num_windows):
                 center = open_end + int((w_idx + 0.5) * span / num_windows)
                 win_indices = [center]
-                win_chars = min(1500, len(body_semantic[center][2])) + 8
+                win_chars = min(4000, len(body_semantic[center][2])) + 8
                 step = 1
-                while win_chars < per_win_budget and len(win_indices) < 12:
+                while win_chars < per_win_budget and len(win_indices) < window_max_blocks:
                     added = False
                     for cand in (center - step, center + step):
                         if open_end <= cand < close_start and cand not in picked_idx and cand not in win_indices:
-                            c_len = min(1500, len(body_semantic[cand][2])) + 8
+                            c_len = min(4000, len(body_semantic[cand][2])) + 8
                             if win_chars + c_len <= per_win_budget or len(win_indices) < 3:
                                 win_indices.append(cand)
                                 win_chars += c_len
@@ -630,17 +769,50 @@ class ReadingService:
                 picked_idx.update(win_indices)
 
         parts.append("【全章连续场景窗口节选（保留首尾、全部小标题及中段连续对话/叙事）】")
+
+        def _snippet(text, cap=4000):
+            return text[:cap] + ("…" if len(text) > cap else "")
+
+        ordered = sorted(picked_idx)
         prev_idx = None
-        for idx in sorted(picked_idx):
+        pos = 0
+        gap_markers = 0
+        while pos < len(ordered):
+            idx = ordered[pos]
             if prev_idx is not None and idx > prev_idx + 1:
                 gap = idx - prev_idx - 1
-                parts.append(f"……（略去 {body_semantic[prev_idx + 1][0]}–{body_semantic[idx - 1][0]} 共 {gap} 段）……")
+                # OCR 碎块章可能有几百个断点；缺口标记本身会吃掉预算，限流。
+                if gap_markers < 60:
+                    parts.append(
+                        f"……（略去 {body_semantic[prev_idx + 1][0]}–{body_semantic[idx - 1][0]} 共 {gap} 段）……"
+                    )
+                    gap_markers += 1
+            # 连续短碎片（戏剧台词/诗歌行/OCR 断行）合并展示，保留真实块号范围。
+            run = [idx]
+            nxt = pos + 1
+            while nxt < len(ordered) and ordered[nxt] == run[-1] + 1:
+                cand = ordered[nxt]
+                cand_txt = body_semantic[cand][2]
+                if body_semantic[cand][1] == "heading" or len(cand_txt) > 40:
+                    break
+                run.append(cand)
+                nxt += 1
+            if len(run) >= 3 and sum(len(body_semantic[k][2]) for k in run) / len(run) < 25:
+                joined = " ".join(body_semantic[k][2] for k in run)
+                parts.append(f"[{body_semantic[run[0]][0]}–{body_semantic[run[-1]][0]}] {_snippet(joined)}")
+                prev_idx = run[-1]
+                pos = nxt
+                continue
             bid, _, txt = body_semantic[idx]
-            snippet = txt[:1500] + ("…" if len(txt) > 1500 else "")
-            parts.append(f"[{bid}] {snippet}")
+            parts.append(f"[{bid}] {_snippet(txt)}")
             prev_idx = idx
+            pos += 1
         _append_footnotes(parts, min(fn_budget, int(budget * 0.15)))
-        return "\n".join(parts), len(body_semantic), True
+        text = "\n".join(parts)
+        if len(text) > int(budget * 1.15):
+            parts = [line for line in parts if not line.startswith("……（略去")]
+            text = "\n".join(parts)
+        return text, len(body_semantic), True
 
     def _chapter_tool_cache_key(self, read_type, action, blueprint):
         key_part = blueprint if action == "diagram" and blueprint else action

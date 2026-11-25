@@ -11,7 +11,7 @@ import unicodedata
 
 from ..scripts.layout import Layout, find_root
 from .chapters import merge_title_pages
-from .footnotes import resolve_chapter_footnotes
+from .footnotes import NOTE_CHAPTER_TITLE_RE, resolve_chapter_footnotes
 from .mdparse import non_space_count, parse_markdown
 from .shelf_index import ShelfIndex
 
@@ -258,13 +258,31 @@ class Library:
         raw_bytes = b"\0".join(chunks)
         raw = chunks[0].decode("utf-8", "replace")
         first_name = os.path.basename(paths[0])
-        parsed = parse_markdown(raw, chapter["stem"], base_dir=os.path.dirname(paths[0]))
+        source_names = [os.path.basename(path) for path in paths]
+        note_titles = [
+            str(item.get("title") or "")
+            for item in self.chapters(uid)
+            if NOTE_CHAPTER_TITLE_RE.match(str(item.get("title") or "").strip())
+        ]
+        parsed = parse_markdown(
+            raw,
+            chapter["stem"],
+            base_dir=os.path.dirname(paths[0]),
+            source_files=source_names,
+            note_chapters=note_titles,
+        )
         for block in parsed.get("blocks") or []:
             block["source_file"] = first_name
         if len(chunks) > 1:
             body_raw = chunks[1].decode("utf-8", "replace")
             second_name = os.path.basename(paths[1])
-            body = parse_markdown(body_raw, chapter.get("body_stem", "body"), base_dir=os.path.dirname(paths[1]))
+            body = parse_markdown(
+                body_raw,
+                chapter.get("body_stem", "body"),
+                base_dir=os.path.dirname(paths[1]),
+                source_files=source_names,
+                note_chapters=note_titles,
+            )
             body_blocks = list(body.get("blocks") or [])
             for block in body_blocks:
                 block["source_file"] = second_name
@@ -284,9 +302,9 @@ class Library:
         parsed["n"] = int(n)
         parsed["ordinal"] = chapter.get("ordinal")
         parsed["file"] = os.path.basename(paths[0])
-        parsed["source_files"] = [os.path.basename(path) for path in paths]
+        parsed["source_files"] = source_names
         parsed["source_sha256"] = hashlib.sha256(raw_bytes).hexdigest()
-        resolve_chapter_footnotes(parsed["blocks"], source_files=parsed["source_files"])
+        resolve_chapter_footnotes(parsed["blocks"], source_files=source_names, note_chapters=note_titles)
         parsed["body_han"] = sum(block["chars"] for block in parsed["blocks"])
         parsed["body_chars"] = sum(non_space_count(block["text"]) for block in parsed["blocks"])
         return parsed
