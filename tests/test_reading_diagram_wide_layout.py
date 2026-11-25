@@ -1,4 +1,4 @@
-"""Fast deterministic JS layout tests for diagram_renderer.js wide modal & spatial expand-all."""
+"""Fast deterministic JS layout tests for diagram_renderer wide modal, spatial & philosophy 5-tool layouts."""
 
 from __future__ import annotations
 
@@ -334,3 +334,305 @@ def test_wide_dag_aspect_and_spatial_expand_zero_overlap(tmp_path: Path) -> None
     assert out["spatial"]["overlaps2"] == 0, out["spatial"]
     assert out["spatial"]["fitPct1"] >= 65, out["spatial"]
     assert re.search(r"manualZoom", RENDERER_JS.read_text(encoding="utf-8"))
+
+
+PHILOSOPHY_NODE_HARNESS = r"""
+const fs = require('fs');
+const vm = require('vm');
+
+const code = fs.readFileSync(process.argv[2], 'utf8');
+const cases = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+
+const calcCardH = (chunk, isExp) => {
+  const pills = (chunk.match(/class="blk-anchor(?:"|\s)/g) || []).length;
+  const detMatch = chunk.match(/detail">([^<]*)</);
+  const detLen = isExp && detMatch ? detMatch[1].length : 0;
+  const detH = detLen ? Math.ceil(detLen / 11) * 17 + 16 : 0;
+  return 84 + Math.ceil(Math.max(1, pills) / 3) * 22 + detH;
+};
+
+const makeStageEl = () => {
+  let _html = '';
+  let _w = 186;
+  return {
+    id: 'measure-stage',
+    style: { set width(v) { _w = parseInt(v, 10) || 186; }, get width() { return _w + 'px'; } },
+    setAttribute() {},
+    set innerHTML(v) { _html = String(v || ''); },
+    get innerHTML() { return _html; },
+    querySelectorAll(sel) {
+      if (sel !== '.dag-node') return [];
+      const parts = _html.split('<div class="dag-node').slice(1);
+      return parts.map((chunk) => {
+        const isExp = chunk.split('>')[0].includes('expanded');
+        return { getBoundingClientRect: () => ({ width: _w, height: calcCardH(chunk, isExp) }) };
+      });
+    },
+    get firstElementChild() {
+      const m = _html.match(/>([^<]*)</);
+      const txt = m ? m[1] : '';
+      return { getBoundingClientRect: () => ({ width: Math.max(36, txt.length * 11 + 14), height: 20 }) };
+    },
+  };
+};
+
+const stageEl = makeStageEl();
+const makeDummyNode = () => ({
+  innerHTML: '',
+  className: '',
+  hidden: false,
+  dataset: {},
+  style: {},
+  classList: { toggle() {}, add() {}, remove() {}, contains: () => false },
+  setAttribute() {},
+  removeAttribute() {},
+  getAttribute() { return ''; },
+  addEventListener() {},
+  removeEventListener() {},
+  appendChild() {},
+  querySelector() { return makeDummyNode(); },
+  querySelectorAll() { return []; },
+  getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; },
+});
+
+const exposedCode = code.replace(
+  'RD.diagrams = {',
+  'RD.diagrams = { _renderBlueprintBody: renderBlueprintBody,'
+);
+const sb = {
+  window: { RD: {}, CSS: { supports: () => false } },
+  document: {
+    body: { appendChild() {} },
+    getElementById(id) { return id === 'measure-stage' ? stageEl : null; },
+    createElement() { return makeDummyNode(); },
+  },
+  getComputedStyle: () => ({ display: 'none' }),
+  console,
+  Math,
+  Map,
+  Set,
+  Array,
+  Number,
+  String,
+  Boolean,
+  Object,
+  RegExp,
+  JSON,
+};
+sb.window.window = sb.window;
+vm.runInNewContext(exposedCode, sb, { filename: 'diagram_renderer.js' });
+const renderBody = sb.window.RD.diagrams._renderBlueprintBody;
+
+const parseNodes = (html, expandAll) => {
+  const parts = html.split('<div class="dag-node').slice(1);
+  return parts
+    .map((chunk) => {
+      const m = chunk.match(/style="left:(\d+)px;top:(\d+)px;width:(\d+)px"/);
+      if (!m) return null;
+      const isExp = expandAll && chunk.split('>')[0].includes('expanded');
+      return { x: +m[1], y: +m[2], w: +m[3], h: calcCardH(chunk, isExp) };
+    })
+    .filter(Boolean);
+};
+
+const overlaps = (a, b) => !(
+  a.x + a.w + 1 <= b.x || b.x + b.w + 1 <= a.x || a.y + a.h + 1 <= b.y || b.y + b.h + 1 <= a.y
+);
+
+const out = {};
+for (const c of cases) {
+  const html = renderBody(c.figure, c.options || {});
+  const nodes = parseNodes(html, Boolean(c.options && c.options.expandAll));
+  let nodeOverlaps = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (overlaps(nodes[i], nodes[j])) nodeOverlaps++;
+    }
+  }
+  const cm = html.match(/class="dag-canvas" style="width:(\d+)px;height:(\d+)px"/);
+  const natW = cm ? +cm[1] : 0;
+  const natH = cm ? +cm[2] : 0;
+  const fitScale = natW && natH ? Math.min(1, 960 / natW, 680 / natH) : 1;
+  out[c.name] = {
+    html,
+    nodeCount: nodes.length,
+    nodeOverlaps,
+    natW,
+    natH,
+    fitScale: Number(fitScale.toFixed(3)),
+    fallbackPills: (html.match(/class="edge-legend-pill"/g) || []).length,
+  };
+}
+console.log(JSON.stringify(out));
+"""
+
+
+def _run_harness(tmp_path: Path, cases: list[dict]) -> dict:
+    harness_path = tmp_path / "harness.js"
+    harness_path.write_text(PHILOSOPHY_NODE_HARNESS, encoding="utf-8")
+    payload_path = tmp_path / "cases.json"
+    payload_path.write_text(json.dumps(cases, ensure_ascii=False), encoding="utf-8")
+    proc = subprocess.run(
+        ["node", str(harness_path), str(RENDERER_JS), str(payload_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(proc.stdout)
+
+
+def test_philosophy_wide_layout_and_narrow_views_regression(tmp_path: Path) -> None:
+    deep_arg = {
+        "blueprint": "argument_map",
+        "caption": "七层哲学论证链",
+        "reading_note": "测试深层论证折行",
+        "data": {
+            "nodes": [
+                {
+                    "id": f"A{i}",
+                    "role": "premise"
+                    if i < 3
+                    else ("rebuttal" if i == 5 else ("conclusion" if i == 7 else "inference")),
+                    "label": f"论证节点{i}",
+                    "detail": "详细展开说明论证前提与推演步骤之间的联系。",
+                    "blocks": ["B01", "B02", "B03", "B04", "B05"] if i == 1 else ["B01"],
+                    "source": "原文",
+                }
+                for i in range(1, 8)
+            ],
+            "edges": [{"from": f"A{i}", "to": f"A{i + 1}", "label": "推导"} for i in range(1, 7)],
+        },
+    }
+    lineage_fig = {
+        "blueprint": "lineage_dag",
+        "caption": "承认谱系图",
+        "reading_note": "围绕作者立场汇聚",
+        "data": {
+            "mode": "lineage",
+            "nodes": [
+                {"id": "L1", "role": "predecessor", "label": "黑格尔", "detail": "主奴辩证法", "blocks": ["B01"]},
+                {"id": "L2", "role": "predecessor", "label": "卢梭", "detail": "形而上自由", "blocks": ["B21"]},
+                {"id": "L3", "role": "mediator", "label": "科耶夫", "detail": "历史终结论", "blocks": ["B04"]},
+                {"id": "L4", "role": "ally", "label": "尼采", "detail": "最后的人对照", "blocks": ["B13"]},
+                {"id": "L5", "role": "author", "label": "福山作者立场", "detail": "为承认而斗争", "blocks": ["B05"]},
+                {"id": "L6", "role": "target", "label": "霍布斯", "detail": "自我保存优先", "blocks": ["B08"]},
+                {"id": "L7", "role": "target", "label": "洛克", "detail": "契约权利观", "blocks": ["B08"]},
+            ],
+            "edges": [
+                {"from": "L1", "to": "L3", "relation": "transform", "label": "阐释"},
+                {"from": "L2", "to": "L5", "relation": "inherit", "label": "继承"},
+                {"from": "L3", "to": "L5", "relation": "inherit", "label": "吸收"},
+                {"from": "L4", "to": "L5", "relation": "contrast", "label": "对照"},
+                {"from": "L5", "to": "L6", "relation": "critique", "label": "批驳"},
+                {"from": "L5", "to": "L7", "relation": "critique", "label": "批判"},
+            ],
+        },
+    }
+    term_fig = {
+        "blueprint": "term_contrast",
+        "caption": "术语辨析",
+        "data": {
+            "columns": ["核心术语", "日常汉语直觉", "作者专属定义", "出处"],
+            "rows": [
+                {
+                    "key": "公民",
+                    "original_term": "Bourgeois",
+                    "everyday": "普通市民",
+                    "author": "仅顾自保的现代契约个体",
+                    "blocks": ["B08", "B16"],
+                    "source": "原文",
+                }
+            ],
+        },
+    }
+    na_lineage = {
+        "blueprint": "lineage_dag",
+        "caption": "内部对话",
+        "data": {"mode": "not_applicable", "reason": "本章无外部学派引用。", "nodes": [], "edges": []},
+    }
+    ext_fig = {
+        "blueprint": "extension_dossier",
+        "caption": "反例实验室",
+        "sections": [
+            {
+                "id": "hidden_premise",
+                "title": "隐含未言明前提",
+                "items": [
+                    {"title": "前提一", "stance": "隐含前提", "body": "内容", "blocks": ["B01"], "source": "原文"}
+                ],
+            },
+            {
+                "id": "counterexample",
+                "title": "哲学反例与极端压力测试",
+                "items": [
+                    {"title": "反例一", "stance": "极端反例", "body": "内容", "blocks": ["B02"], "source": "补充"}
+                ],
+            },
+        ],
+        "items": [],
+    }
+
+    stacked_lineage = {
+        "blueprint": "lineage_dag",
+        "caption": "高频同调谱系",
+        "data": {
+            "nodes": [
+                {"id": "S0", "role": "predecessor", "label": "亚里士多德", "detail": "德性与幸福", "blocks": ["B01"]},
+                *[
+                    {
+                        "id": f"S{i}",
+                        "role": "ally",
+                        "label": f"同调学者{i}",
+                        "detail": "佐证内在优先",
+                        "blocks": [f"B0{i + 1}"],
+                    }
+                    for i in range(1, 8)
+                ],
+                {"id": "SA", "role": "author", "label": "叔本华", "detail": "幸福根于自身", "blocks": ["B02"]},
+                {"id": "ST", "role": "target", "label": "世俗外物观", "detail": "重外轻内", "blocks": ["B25"]},
+            ],
+            "edges": [
+                *[{"from": f"S{i}", "to": "SA", "relation": "inherit", "label": "佐证"} for i in range(0, 8)],
+                {"from": "SA", "to": "ST", "relation": "critique", "label": "批驳"},
+            ],
+        },
+    }
+    cases = [
+        {"name": "arg_wide_collapsed", "figure": deep_arg, "options": {"wide": True, "expandAll": False}},
+        {"name": "arg_wide_expanded", "figure": deep_arg, "options": {"wide": True, "expandAll": True}},
+        {"name": "lineage_wide", "figure": lineage_fig, "options": {"wide": True}},
+        {"name": "lineage_stacked_wide", "figure": stacked_lineage, "options": {"wide": True}},
+        {"name": "lineage_narrow", "figure": lineage_fig, "options": {"wide": False}},
+        {"name": "lineage_na", "figure": na_lineage, "options": {"wide": False}},
+        {"name": "term_narrow", "figure": term_fig, "options": {"wide": False}},
+        {"name": "term_wide", "figure": term_fig, "options": {"wide": True}},
+        {"name": "ext_sections", "figure": ext_fig, "options": {"wide": False}},
+    ]
+    res = _run_harness(tmp_path, cases)
+
+    assert res["arg_wide_collapsed"]["nodeOverlaps"] == 0
+    assert res["arg_wide_collapsed"]["fitScale"] >= 0.65
+    assert "data-expand-anchors" in res["arg_wide_collapsed"]["html"]
+    assert res["arg_wide_expanded"]["nodeOverlaps"] == 0
+    assert res["arg_wide_expanded"]["fitScale"] >= 0.65
+
+    assert res["lineage_wide"]["nodeOverlaps"] == 0
+    assert res["lineage_wide"]["fallbackPills"] == 0
+    assert res["lineage_wide"]["fitScale"] >= 0.70
+    assert 'stroke-dasharray="6 3"' in res["lineage_wide"]["html"]
+    assert "lineage-legend" in res["lineage_wide"]["html"]
+
+    assert res["lineage_stacked_wide"]["nodeOverlaps"] == 0
+    assert res["lineage_stacked_wide"]["fitScale"] >= 0.70
+
+    assert "data-lineage-filter" in res["lineage_narrow"]["html"]
+    assert "全览图谱" in res["lineage_narrow"]["html"]
+    assert "lineage-na" in res["lineage_na"]["html"]
+
+    assert "term-contrast-cards" in res["term_narrow"]["html"]
+    assert "Bourgeois" in res["term_narrow"]["html"]
+    assert "term-contrast-table" in res["term_wide"]["html"]
+    assert "tc-orig-table" in res["term_wide"]["html"]
+
+    assert 'data-section-id="hidden_premise"' in res["ext_sections"]["html"]
+    assert 'data-section-id="counterexample"' in res["ext_sections"]["html"]
