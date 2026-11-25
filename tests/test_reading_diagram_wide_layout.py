@@ -94,19 +94,15 @@ const sandbox = {
   JSON,
 };
 sandbox.window.window = sandbox.window;
-vm.runInNewContext(code, sandbox, { filename: 'diagram_renderer.js' });
 
-// Verify wide layout geometry across figure cases via public renderBlueprintCard inside a zoom-like hook,
-// or evaluate renderLayeredDagHtml / renderSpatialMapHtml inside the same IIFE context.
+// Evaluate renderLayeredDagHtml / renderSpatialMapHtml inside the same IIFE context.
 const exposedCode = code.replace(
   'RD.diagrams = {',
   'RD.diagrams = { _renderLayeredDagHtml: renderLayeredDagHtml, _renderSpatialMapHtml: renderSpatialMapHtml,'
 );
-const sb2 = Object.assign({}, sandbox, { window: { RD: {}, CSS: { supports: () => false } } });
-sb2.window.window = sb2.window;
-vm.runInNewContext(exposedCode, sb2, { filename: 'diagram_renderer.js' });
+vm.runInNewContext(exposedCode, sandbox, { filename: 'diagram_renderer.js' });
 
-const diagrams = sb2.window.RD.diagrams;
+const diagrams = sandbox.window.RD.diagrams;
 const parsePositionedNodes = (html, cls, expandAll) => {
   const parts = html.split('<div class="' + cls).slice(1);
   return parts
@@ -931,3 +927,338 @@ def test_practical_wide_layout_and_narrow_views_regression(tmp_path: Path) -> No
     assert "pm-cause" in res["postmortem"]["html"]
     assert "pm-fix" in res["postmortem"]["html"]
     assert "data-expand-anchors" in res["postmortem"]["html"]
+
+
+def test_science_wide_layout_and_narrow_views_regression(tmp_path: Path) -> None:
+    deep_deriv = {
+        "blueprint": "derivation_dag",
+        "caption": "十层广义相对论推导树",
+        "reading_note": "多前提汇流至奇点定理",
+        "data": {
+            "paradigm": "deductive",
+            "nodes": [
+                {
+                    "id": "M1",
+                    "role": "axiom",
+                    "label": "爱因斯坦场方程",
+                    "detail": "度规张量与能动张量耦合决定时空曲率。",
+                    "blocks": ["B01", "B02", "B03", "B04", "B05"],
+                    "source": "原文",
+                },
+                {
+                    "id": "M2",
+                    "role": "condition",
+                    "label": "强能量条件成立",
+                    "detail": "物质能量密度对光线始终表现为聚焦吸引。",
+                    "blocks": ["B06"],
+                    "source": "原文",
+                },
+                {
+                    "id": "M3",
+                    "role": "lemma",
+                    "label": "雷查德胡里聚焦",
+                    "detail": "类时测地线族膨胀率单调下降。",
+                    "blocks": ["B08"],
+                    "source": "原文",
+                },
+                {
+                    "id": "M4",
+                    "role": "lemma",
+                    "label": "共轭点必然出现",
+                    "detail": "测地线族在有限仿射参数内相交。",
+                    "blocks": ["B10"],
+                    "source": "原文",
+                },
+                {
+                    "id": "M5",
+                    "role": "lemma",
+                    "label": "闭陷获面存在",
+                    "detail": "内外向光束截面同时收缩。",
+                    "blocks": ["B12"],
+                    "source": "原文",
+                },
+                {
+                    "id": "M6",
+                    "role": "condition",
+                    "label": "因果可测无闭线",
+                    "detail": "排除违背因果律的时间闭合路径。",
+                    "blocks": ["B14"],
+                    "source": "原文",
+                },
+                {
+                    "id": "M7",
+                    "role": "lemma",
+                    "label": "最大测地线长度",
+                    "detail": "非完备曲线无法无限延伸。",
+                    "blocks": ["B16"],
+                    "source": "原文",
+                },
+                {
+                    "id": "M8",
+                    "role": "theorem",
+                    "label": "彭罗斯-霍金奇点定理",
+                    "detail": "时空必然包含类时或类光测地线不完备点。",
+                    "blocks": ["B18"],
+                    "source": "原文",
+                },
+            ],
+            "edges": [
+                {"from": "M1", "to": "M3", "label": "决定"},
+                {"from": "M2", "to": "M3", "label": "保证"},
+                {"from": "M3", "to": "M4", "label": "推出"},
+                {"from": "M4", "to": "M5", "label": "蕴含"},
+                {"from": "M5", "to": "M7", "label": "触发"},
+                {"from": "M6", "to": "M7", "label": "限定"},
+                {"from": "M7", "to": "M8", "label": "证得"},
+            ],
+        },
+    }
+
+    transistor_flow = {
+        "blueprint": "system_flow",
+        "caption": "点接触晶体管工作机制",
+        "reading_note": "观察弹簧压紧金箔与空穴注入放大",
+        "data": {
+            "mode": "flow",
+            "nodes": [
+                {
+                    "id": "C1",
+                    "role": "input_energy",
+                    "label": "微弱输入电流",
+                    "detail": "来自语音电信号。",
+                    "blocks": ["B01"],
+                },
+                {
+                    "id": "C2",
+                    "role": "component",
+                    "label": "塑胶三角劈与金箔",
+                    "detail": "刮开极窄刀缝。",
+                    "blocks": ["B04"],
+                },
+                {
+                    "id": "C3",
+                    "role": "bottleneck",
+                    "label": "缝隙≤0.05mm",
+                    "detail": "超出则无法放大。",
+                    "blocks": ["B05", "B06", "B07", "B08"],
+                },
+                {
+                    "id": "C4",
+                    "role": "component",
+                    "label": "弹簧压紧N型锗",
+                    "detail": "形成发射极与集电极。",
+                    "blocks": ["B09"],
+                },
+                {
+                    "id": "C5",
+                    "role": "process",
+                    "label": "发射极注入空穴",
+                    "detail": "改变锗表面电导率。",
+                    "blocks": ["B10"],
+                },
+                {
+                    "id": "C6",
+                    "role": "process",
+                    "label": "调制集电极电流",
+                    "detail": "载流子被反向偏压扫出。",
+                    "blocks": ["B11"],
+                },
+                {
+                    "id": "C7",
+                    "role": "process",
+                    "label": "跨区耦合增益",
+                    "detail": "输入小变化引出大波动。",
+                    "blocks": ["B12"],
+                },
+                {
+                    "id": "C8",
+                    "role": "output_effect",
+                    "label": "功率放大4.5倍",
+                    "detail": "首次验证固态晶体管放大。",
+                    "blocks": ["B13"],
+                },
+            ],
+            "edges": [
+                {"from": "C1", "to": "C2", "label": "接入"},
+                {"from": "C2", "to": "C3", "label": "受限"},
+                {"from": "C3", "to": "C4", "label": "压接"},
+                {"from": "C4", "to": "C5", "label": "激发"},
+                {"from": "C5", "to": "C6", "label": "驱动"},
+                {"from": "C6", "to": "C7", "label": "形成"},
+                {"from": "C7", "to": "C8", "label": "输出"},
+            ],
+        },
+    }
+
+    sys_na = {
+        "blueprint": "system_flow",
+        "caption": "纯几何推演",
+        "data": {"mode": "not_applicable", "not_applicable_reason": "本章无实体装置或动态演化机制。", "nodes": []},
+    }
+
+    sens_regime = {
+        "blueprint": "sensitivity_chart",
+        "caption": "电极间距与功率放大临界",
+        "data": {
+            "mode": "regime_threshold",
+            "parameter": "金箔刀缝电极间距 d (mm)",
+            "regimes": [
+                {
+                    "range": "≤ 0.05 mm",
+                    "threshold": "",
+                    "state": "功率放大 4.5×",
+                    "mechanism": "空穴未复合即抵达集电极，形成强电流调制",
+                    "tone": "stable",
+                    "blocks": ["B05", "B06", "B07", "B08"],
+                    "source": "原文",
+                },
+                {
+                    "range": "> 0.05 mm",
+                    "threshold": "0.05 mm 临界间距",
+                    "state": "放大效应失效",
+                    "mechanism": "空穴途中复合殆尽，无法有效调制输出",
+                    "tone": "breakdown",
+                    "blocks": ["B09"],
+                    "source": "原文",
+                },
+            ],
+        },
+    }
+
+    sens_num = {
+        "blueprint": "sensitivity_chart",
+        "caption": "温标与增益曲线",
+        "data": {
+            "mode": "numeric_curve",
+            "xLabel": "工作温度 T",
+            "yLabel": "增益系数",
+            "unit": "×",
+            "points": [
+                {"x": "-40℃", "y": -0.5, "note": "低温反相", "blocks": ["B01"], "source": "原文"},
+                {"x": "25℃", "y": 4.5, "note": "常温放大", "blocks": ["B05"], "source": "原文"},
+                {"x": "300℃", "y": 150.0, "note": "击穿跃迁", "blocks": ["B09"], "source": "原文"},
+            ],
+        },
+    }
+
+    sens_na = {
+        "blueprint": "sensitivity_chart",
+        "caption": "纯公理推演",
+        "data": {
+            "mode": "not_applicable",
+            "not_applicable_reason": "本章无连续定量参数变化曲线。",
+            "highlights": [{"title": "强能量条件", "detail": "测地线必聚焦", "blocks": ["B01"], "source": "原文"}],
+        },
+    }
+
+    boundary_fig = {
+        "blueprint": "extension_dossier",
+        "caption": "相对论黑洞边界",
+        "sections": [
+            {
+                "id": "paradigm_shift",
+                "title": "旧认知推翻与范式演进",
+                "items": [
+                    {
+                        "title": "打破稳态恒星假设",
+                        "body": "大质量恒星必然坍缩",
+                        "blocks": ["B01", "B02", "B03", "B04"],
+                        "source": "原文",
+                    }
+                ],
+            },
+            {
+                "id": "intuition_analogy",
+                "title": "直观类比与物理直觉",
+                "items": [{"title": "红移钟慢", "body": "远方观测者看信号停滞", "blocks": ["B05"], "source": "原文"}],
+            },
+            {
+                "id": "breakdown_boundary",
+                "title": "极端失效条件与未解边界",
+                "items": [{"title": "奇点处方程失效", "body": "需量子引力理论", "blocks": ["B08"], "source": "补充"}],
+            },
+        ],
+        "items": [],
+    }
+
+    glossary_fig = {
+        "blueprint": "extension_glossary",
+        "caption": "黑洞与奇点词典",
+        "items": [
+            {
+                "term": "钱德拉塞卡极限",
+                "symbol": "M ≈ 1.44 M☉",
+                "intuition": "白矮星不被压垮的质量上限",
+                "definition": "电子简并压所能抵抗引力的最大恒星残骸质量。",
+                "blocks": ["B01", "B02", "B03", "B04"],
+                "source": "原文",
+            },
+            {
+                "term": "事件视界",
+                "symbol": "",
+                "intuition": "有去无回的时空单向膜",
+                "definition": "逃逸速度达到光速的边界曲面。",
+                "blocks": ["B05"],
+                "source": "原文",
+            },
+        ],
+    }
+
+    cases = [
+        {"name": "deriv_wide_collapsed", "figure": deep_deriv, "options": {"wide": True, "expandAll": False}},
+        {"name": "deriv_wide_expanded", "figure": deep_deriv, "options": {"wide": True, "expandAll": True}},
+        {"name": "deriv_narrow", "figure": deep_deriv, "options": {"wide": False}},
+        {"name": "flow_wide_collapsed", "figure": transistor_flow, "options": {"wide": True, "expandAll": False}},
+        {"name": "flow_wide_expanded", "figure": transistor_flow, "options": {"wide": True, "expandAll": True}},
+        {"name": "flow_narrow", "figure": transistor_flow, "options": {"wide": False}},
+        {"name": "flow_na", "figure": sys_na, "options": {"wide": False}},
+        {"name": "sens_regime_wide", "figure": sens_regime, "options": {"wide": True}},
+        {"name": "sens_regime_narrow", "figure": sens_regime, "options": {"wide": False}},
+        {"name": "sens_num_wide", "figure": sens_num, "options": {"wide": True}},
+        {"name": "sens_na", "figure": sens_na, "options": {"wide": False}},
+        {"name": "boundary_sec", "figure": boundary_fig, "options": {"wide": False}},
+        {"name": "glossary_narrow", "figure": glossary_fig, "options": {"wide": False}},
+        {"name": "glossary_wide", "figure": glossary_fig, "options": {"wide": True}},
+    ]
+    res = _run_harness(tmp_path, cases)
+
+    assert res["deriv_wide_collapsed"]["nodeOverlaps"] == 0
+    assert res["deriv_wide_collapsed"]["fitScale"] >= 0.70, res["deriv_wide_collapsed"]
+    assert res["deriv_wide_collapsed"]["fallbackPills"] == 0
+    assert "公理/假设" in res["deriv_wide_collapsed"]["html"]
+    assert "边界条件" in res["deriv_wide_collapsed"]["html"]
+    assert "data-expand-anchors" in res["deriv_wide_collapsed"]["html"]
+    assert res["deriv_wide_expanded"]["nodeOverlaps"] == 0
+    assert "derivation-cards" in res["deriv_narrow"]["html"]
+    assert "全览图谱" in res["deriv_narrow"]["html"]
+
+    assert res["flow_wide_collapsed"]["nodeOverlaps"] == 0
+    assert res["flow_wide_collapsed"]["fitScale"] >= 0.70, res["flow_wide_collapsed"]
+    assert res["flow_wide_collapsed"]["fallbackPills"] == 0
+    assert "输入/激励" in res["flow_wide_collapsed"]["html"]
+    assert "阻断/约束" in res["flow_wide_collapsed"]["html"]
+    assert res["flow_wide_expanded"]["nodeOverlaps"] == 0
+    assert "system-flow-cards" in res["flow_narrow"]["html"]
+    assert "system-flow-na" in res["flow_na"]["html"]
+
+    assert "sensitivity-regimes-wide" in res["sens_regime_wide"]["html"]
+    assert "regime-threshold-pin" in res["sens_regime_wide"]["html"]
+    assert "变化幅度" not in res["sens_regime_wide"]["html"]
+    assert "sensitivity-regimes" in res["sens_regime_narrow"]["html"]
+    assert "regime-threshold-divider" in res["sens_regime_narrow"]["html"]
+    assert "全览相变轴" in res["sens_regime_narrow"]["html"]
+    assert "data-expand-anchors" in res["sens_regime_narrow"]["html"]
+
+    assert "sensitivity-numeric" in res["sens_num_wide"]["html"]
+    assert "-0.5" in res["sens_num_wide"]["html"]
+    assert "150" in res["sens_num_wide"]["html"]
+    assert "sensitivity-na" in res["sens_na"]["html"]
+
+    assert 'data-section-id="paradigm_shift"' in res["boundary_sec"]["html"]
+    assert 'data-section-id="breakdown_boundary"' in res["boundary_sec"]["html"]
+    assert "data-expand-anchors" in res["boundary_sec"]["html"]
+
+    assert "glossary-cards" in res["glossary_narrow"]["html"]
+    assert "M ≈ 1.44 M☉" in res["glossary_narrow"]["html"]
+    assert "data-expand-anchors" in res["glossary_narrow"]["html"]
+    assert "glossary-wide-table" in res["glossary_wide"]["html"]

@@ -108,13 +108,16 @@ READ_PROFILES: dict[str, ReadProfileMeta] = {
         read_type="science",
         name="科学与数学",
         adler_category="4. 科学与数学",
-        goal="理清核心问题、公理/实验前提、推导依赖与成立边界",
+        goal="理清公理/观测推导、临界相变与真实参数响应、物理/演化机制、核心词典与适用边界",
         blueprints=(
-            BlueprintHint("derivation_dag", "公理-定理推导图", "看清结论如何从前提假设长出"),
-            BlueprintHint("sensitivity_chart", "变量敏感度曲线", "直观展示参数变化带来的效应偏误"),
-            BlueprintHint("system_flow", "机制与装置流图", "空间化拆解物理/统计或实验过程"),
+            BlueprintHint("derivation_dag", "公理-定理推导图", "广度汇流拆解前提/观测如何推出定理或科学结论"),
+            BlueprintHint("sensitivity_chart", "临界条件与参数响应图", "呈现定性相变阈值区间或真实定量参数响应"),
+            BlueprintHint("system_flow", "机制与装置流图", "拆解物理过程、实验装置或演化迭代机制"),
         ),
-        extensions=(ExtensionHint("boundary_check", "演进与适用边界", "交代推翻了什么旧认知、生活类比与极端失效条件"),),
+        extensions=(
+            ExtensionHint("concept_glossary", "核心概念与公式词典", "速查核心科学概念、符号量纲、直觉类比与精确定义"),
+            ExtensionHint("boundary_check", "演进与适用边界", "分三区梳理旧认知推翻、直观类比与极端失效条件"),
+        ),
     ),
     "philosophy": ReadProfileMeta(
         read_type="philosophy",

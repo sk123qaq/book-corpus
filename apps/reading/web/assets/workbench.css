@@ -1613,13 +1613,13 @@ body.chapter-desk .right-marginalia .drawer-body {
 .dag-node-more { font-size: 10px; color: var(--amber); }
 .dag-node-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 
-.role-premise, .role-axiom, .role-sovereign, .role-structural, .role-capital, .role-family, .role-threshold, .role-input, .role-diagnosis { border-left: 3px solid var(--indigo); }
-.role-inference, .role-step, .role-lemma, .role-faction, .role-mechanism, .role-corridor, .role-ally, .role-home, .role-zone, .role-action, .role-strategy { border-left: 3px solid var(--pine); }
+.role-premise, .role-axiom, .role-observation, .role-input_energy, .role-sovereign, .role-structural, .role-capital, .role-family, .role-threshold, .role-input, .role-diagnosis { border-left: 3px solid var(--indigo); }
+.role-inference, .role-step, .role-lemma, .role-experiment, .role-process, .role-faction, .role-mechanism, .role-corridor, .role-ally, .role-home, .role-zone, .role-action, .role-strategy { border-left: 3px solid var(--pine); }
 .role-rebuttal, .role-risk, .role-conflict, .role-rival, .role-turning_point, .role-fortress, .role-antagonist, .role-outside, .role-pitfall, .role-fallback { border-left: 3px solid var(--cinnabar); }
 .role-pitfall { background: color-mix(in srgb, var(--cinnabar-soft) 18%, var(--surface)); }
-.role-conclusion, .role-theorem, .role-outcome, .role-consequence, .role-protagonist, .role-destination { border-left: 3px solid var(--cinnabar); border-color: var(--cinnabar); }
+.role-conclusion, .role-theorem, .role-finding, .role-output_effect, .role-outcome, .role-consequence, .role-protagonist, .role-destination { border-left: 3px solid var(--cinnabar); border-color: var(--cinnabar); }
 .role-output { border-left: 4px solid var(--pine); border-color: var(--pine); background: color-mix(in srgb, var(--pine-soft) 28%, var(--surface)); }
-.role-condition, .role-constraint, .role-trigger, .role-front, .role-catalyst, .role-prop, .role-transit, .role-gate { border-left: 3px solid var(--amber); }
+.role-condition, .role-hypothesis, .role-component, .role-bottleneck, .role-constraint, .role-trigger, .role-front, .role-catalyst, .role-prop, .role-transit, .role-gate { border-left: 3px solid var(--amber); }
 .role-neutral, .role-observer, .role-public { border-left: 3px solid var(--ink-3); }
 .dag-node-arc { font-size: 10.5px; color: var(--pine); line-height: 1.4; }
 .blk-anchor-more {
@@ -2242,6 +2242,9 @@ body.chapter-desk .right-marginalia .drawer-body {
 .ext-section[data-section-id="before"] .ext-sec-title { border-left-color: var(--indigo); }
 .ext-section[data-section-id="during"] .ext-sec-title { border-left-color: var(--pine); }
 .ext-section[data-section-id="redline"] .ext-sec-title { border-left-color: var(--cinnabar); }
+.ext-section[data-section-id="paradigm_shift"] .ext-sec-title { border-left-color: var(--indigo); }
+.ext-section[data-section-id="intuition_analogy"] .ext-sec-title { border-left-color: var(--pine); }
+.ext-section[data-section-id="breakdown_boundary"] .ext-sec-title { border-left-color: var(--cinnabar); }
 
 /* 反例与失效复盘：四段结构化高密度卡片 */
 .pm-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
@@ -2447,3 +2450,221 @@ dialog.zoom-modal.zoom-dialog[open]:where(:not([data-closing]))::backdrop {
   .ch-pager-card.next { align-items: flex-start; text-align: left; }
   .ch-pager-mid { text-align: center; }
 }
+
+/* 科学与数学 v2：窄抽屉推导/机制卡片流、临界相变分段轴、概念词典 */
+.science-narrow-shell { display: flex; flex-direction: column; gap: 8px; }
+.science-narrow-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.science-mode-pill {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.science-layer-list { display: flex; flex-direction: column; gap: 10px; }
+.science-layer-group { display: flex; flex-direction: column; gap: 5px; }
+.science-layer-head {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  padding: 2px 6px;
+  background: var(--paper);
+  border-radius: 4px;
+  align-self: flex-start;
+}
+.science-layer-cards { display: flex; flex-direction: column; gap: 6px; }
+.science-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+}
+.science-card:hover { border-color: var(--cinnabar); }
+.science-card-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.science-role-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.science-card-title { font-size: 12.5px; font-weight: 700; color: var(--ink); line-height: 1.4; word-break: break-word; }
+.science-card-detail { font-size: 11.5px; color: var(--ink-2); line-height: 1.55; word-break: break-word; }
+.science-edge-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.science-edge-chip {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--pine);
+}
+.science-card-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+.sensitivity-param-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+  margin-bottom: 8px;
+}
+.sensitivity-param-bar span { color: var(--ink-3); margin-right: 6px; font-size: 10.5px; }
+.sensitivity-param-bar b { color: var(--ink); }
+.sensitivity-regimes-wide { display: flex; flex-direction: column; gap: 12px; min-width: 640px; }
+.regime-axis-bar { display: grid; gap: 2px; border-radius: 8px; overflow: visible; }
+.regime-axis-seg {
+  position: relative;
+  padding: 10px 10px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.regime-axis-seg.tone-stable { border-top: 4px solid var(--pine); background: color-mix(in srgb, var(--pine-soft) 30%, var(--surface)); }
+.regime-axis-seg.tone-critical { border-top: 4px solid var(--amber); background: color-mix(in srgb, var(--amber-soft) 35%, var(--surface)); }
+.regime-axis-seg.tone-breakdown { border-top: 4px solid var(--cinnabar); background: color-mix(in srgb, var(--cinnabar-soft) 35%, var(--surface)); }
+.regime-threshold-pin {
+  position: absolute;
+  left: -1px;
+  top: -10px;
+  bottom: -6px;
+  width: 2px;
+  background: var(--cinnabar);
+  z-index: 3;
+}
+.regime-threshold-pin.is-start { background: var(--amber); }
+.regime-threshold-pin span {
+  position: absolute;
+  top: -14px;
+  left: 4px;
+  white-space: nowrap;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--cinnabar);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+.regime-threshold-pin.is-start span { background: var(--amber); }
+.regime-seg-range { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink); }
+.regime-seg-state { font-size: 12px; font-weight: 700; color: var(--ink); }
+.regime-cards-grid { display: grid; gap: 8px; }
+.regime-card, .regime-step-card {
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+}
+.regime-card.tone-stable, .regime-step-card.tone-stable { border-left: 3.5px solid var(--pine); }
+.regime-card.tone-critical, .regime-step-card.tone-critical { border-left: 3.5px solid var(--amber); }
+.regime-card.tone-breakdown, .regime-step-card.tone-breakdown { border-left: 3.5px solid var(--cinnabar); }
+.regime-card-head { display: flex; align-items: center; justify-content: space-between; gap: 5px; flex-wrap: wrap; }
+.regime-range-pill { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink); }
+.regime-tone-pill { padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); color: var(--ink-2); }
+.regime-card-range { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+.regime-card-thr { font-size: 10.5px; color: var(--cinnabar); font-weight: 600; }
+.regime-card-state { font-size: 12.5px; font-weight: 700; color: var(--ink); line-height: 1.35; }
+.regime-card-mech { font-size: 11.5px; color: var(--ink-2); line-height: 1.5; word-break: break-word; }
+.regime-step-list { display: flex; flex-direction: column; gap: 6px; }
+.regime-threshold-divider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--cinnabar);
+  padding: 2px 4px;
+}
+.regime-step-arrow { font-size: 10.5px; color: var(--ink-3); padding-left: 6px; }
+
+.sensitivity-na {
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sensitivity-na strong { color: var(--ink); }
+.sensitivity-na p { margin: 0; line-height: 1.55; }
+.sensitivity-hl-list { display: flex; flex-direction: column; gap: 6px; }
+.sensitivity-hl-card {
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sensitivity-hl-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--ink); }
+.sensitivity-hl-detail { font-size: 11.5px; color: var(--ink-2); line-height: 1.5; }
+
+.chart-axis-title {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+
+.glossary-cards { display: flex; flex-direction: column; gap: 8px; }
+.glossary-card {
+  padding: 9px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.glossary-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.glossary-term-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.glossary-term { font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.35; }
+.glossary-sym {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  color: var(--indigo);
+  word-break: break-word;
+}
+.glossary-row {
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.glossary-row.glossary-intuition { border-left: 2.5px solid var(--amber); }
+.glossary-row.glossary-def { border-left: 2.5px solid var(--pine); }
+.glossary-row span { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-3); margin-bottom: 2px; }
+.glossary-row.glossary-def span { color: var(--pine); }
+.glossary-row p { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--ink); word-break: break-word; }
+.glossary-card-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.glossary-wide-table td.col-key { width: 22%; }
+.glossary-term-cell { font-weight: 700; color: var(--ink); margin-bottom: 3px; }

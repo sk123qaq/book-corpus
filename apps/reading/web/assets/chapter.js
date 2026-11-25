@@ -147,13 +147,16 @@
     },
     science: {
       read_type: 'science', name: '科学与数学', adler_category: '科学与数学',
-      goal: '理清核心问题、公理前提、推导依赖与成立边界',
+      goal: '理清公理/观测推导、临界相变与真实参数响应、物理/演化机制、核心词典与适用边界',
       blueprints: [
         { blueprint: 'derivation_dag', label: '公理-定理推导图' },
-        { blueprint: 'sensitivity_chart', label: '变量敏感度曲线' },
+        { blueprint: 'sensitivity_chart', label: '临界条件与参数响应图' },
         { blueprint: 'system_flow', label: '机制与装置流图' },
       ],
-      extensions: [{ action: 'boundary_check', label: '演进与适用边界', cross_search: false }],
+      extensions: [
+        { action: 'concept_glossary', label: '核心概念与公式词典', cross_search: false },
+        { action: 'boundary_check', label: '演进与适用边界', cross_search: false },
+      ],
     },
     philosophy: {
       read_type: 'philosophy', name: '哲学书', adler_category: '哲学书',
@@ -2125,6 +2128,8 @@
     const pick = (arr) => (Array.isArray(arr) ? arr.find((b) => valid.has(b)) : '');
     if (fig && fig.data) {
       for (const nd of (fig.data.nodes || [])) { const hit = pick(nd.blocks); if (hit) return hit; }
+      for (const rg of (fig.data.regimes || [])) { const hit = pick(rg.blocks); if (hit) return hit; }
+      for (const hl of (fig.data.highlights || [])) { const hit = pick(hl.blocks); if (hit) return hit; }
       for (const pt of (fig.data.points || [])) { const hit = pick(pt.blocks); if (hit) return hit; }
       for (const rw of (fig.data.rows || [])) {
         const hit = pick(rw.blocks);

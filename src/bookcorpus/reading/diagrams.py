@@ -373,22 +373,54 @@ def render_assist_figure(figure):
             raw_data.get("not_applicable_reason")
             or raw_data.get("reason")
             or figure.get("summary")
-            or "本章无显著空间动线或外部学派谱系。"
+            or "本章未涉及该图表的适用结构。"
         ).strip()
-        body = f'<p class="fig-fallback">{html.escape(reason)}</p>'
+        highlights = [h for h in (raw_data.get("highlights") or []) if isinstance(h, dict)]
+        hl_html = ""
+        if highlights:
+            hl_lis = "".join(
+                f"<li><b>{html.escape(str(h.get('title') or ''))}</b>"
+                + (f"：{html.escape(str(h.get('detail') or ''))}" if h.get("detail") else "")
+                + "</li>"
+                for h in highlights
+            )
+            hl_html = f'<ul class="fig-units">{hl_lis}</ul>'
+        body = f'<p class="fig-fallback">{html.escape(reason)}</p>{hl_html}'
+    if not body and blueprint == "sensitivity_chart" and bp_mode == "regime_threshold":
+        regimes = [rg for rg in (raw_data.get("regimes") or []) if isinstance(rg, dict)]
+        if regimes:
+            param = str(raw_data.get("parameter") or "控制参数").strip()
+            lis = []
+            for rg in regimes:
+                rng = str(rg.get("range") or "").strip()
+                st = str(rg.get("state") or "").strip()
+                mech = str(rg.get("mechanism") or "").strip()
+                thr = str(rg.get("threshold") or "").strip()
+                head = f"{rng} → {st}" + (f"（临界：{thr}）" if thr else "")
+                lis.append(f"<li><b>{html.escape(head)}</b>{f'：{html.escape(mech)}' if mech else ''}</li>")
+            body = f'<p class="fig-param">参数：{html.escape(param)}</p><ul class="fig-units">{"".join(lis)}</ul>'
     if not body and family in NODE_FAMILIES and isinstance(raw_data.get("nodes"), list):
         body = _node_svg(figure)
     elif not body and (
-        blueprint in {"extension_dossier", "extension_checklist"} or isinstance(figure.get("items"), list)
+        blueprint in {"extension_dossier", "extension_checklist", "extension_glossary"}
+        or isinstance(figure.get("items"), list)
     ):
         items = [it for it in (figure.get("items") or []) if isinstance(it, dict)]
         if items:
             lis = []
             for it in items:
-                title = str(it.get("title") or it.get("text") or it.get("label") or "").strip()
-                detail = str(it.get("body") or it.get("detail") or "").strip()
-                detail_html = f"：{html.escape(detail)}" if detail else ""
-                lis.append(f"<li><b>{html.escape(title)}</b>{detail_html}</li>")
+                title = str(it.get("term") or it.get("title") or it.get("text") or it.get("label") or "").strip()
+                sym = str(it.get("symbol") or "").strip()
+                head = f"{title}（{sym}）" if sym else title
+                detail = str(it.get("definition") or it.get("body") or it.get("detail") or "").strip()
+                intuition = str(it.get("intuition") or "").strip()
+                combined = (
+                    f"{intuition}；{detail}".strip("；")
+                    if (intuition and detail and intuition != detail)
+                    else (detail or intuition)
+                )
+                detail_html = f"：{html.escape(combined)}" if combined else ""
+                lis.append(f"<li><b>{html.escape(head)}</b>{detail_html}</li>")
             body = f'<ul class="fig-units">{"".join(lis)}</ul>'
     elif not body and family == "matrix":
         if isinstance(raw_data.get("columns"), list):
@@ -403,7 +435,10 @@ def render_assist_figure(figure):
     elif not body and family == "quantity":
         if isinstance(raw_data.get("points"), list):
             compat_items = [
-                {"label": p.get("beat", ""), "value": p.get("tension", 0)}
+                {
+                    "label": str(p.get("x") if p.get("x") is not None else p.get("beat", "")),
+                    "value": p.get("y") if p.get("y") is not None else p.get("tension", 0),
+                }
                 for p in raw_data["points"]
                 if isinstance(p, dict)
             ]

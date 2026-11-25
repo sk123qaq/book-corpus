@@ -17,6 +17,8 @@ _SOURCE_PREFIX_RE = re.compile(
 )
 _EMPTY_TERM_VALUES = frozenset({"无", "暂无", "无对应", "无原词", "none", "n/a", "na", "-", "—", "/"})
 _SPARRING_PLACEHOLDER_NOTE = "先看清作者到底在反驳谁"
+_BOUNDARY_PLACEHOLDER_NOTE = "公式/规律失效提示"
+_BOUNDARY_PREFIX_RE = re.compile(r"^(?:公式/规律失效提示\s*[:：]\s*)+")
 
 ARGUMENT_ROLES = frozenset({"premise", "inference", "rebuttal", "conclusion", "condition"})
 LINEAGE_ROLES = frozenset({"predecessor", "ally", "mediator", "target", "author"})
@@ -26,6 +28,12 @@ DECISION_ROLES = frozenset({"diagnosis", "condition", "strategy", "fallback"})
 QUADRANT_MAX_ITEMS = 4
 _CHECKLIST_PLACEHOLDER_NOTES = ("适用前置条件", "动作转化", "行动自检清单")
 _POSTMORTEM_PLACEHOLDER_NOTES = ("避坑指南", "拆解反面案例", "反例与失效复盘")
+DERIVATION_ROLES = frozenset(
+    {"axiom", "condition", "lemma", "theorem", "observation", "hypothesis", "experiment", "finding"}
+)
+DERIVATION_PARADIGMS = frozenset({"deductive", "experimental"})
+SYSTEM_FLOW_ROLES = frozenset({"input_energy", "component", "process", "bottleneck", "output_effect"})
+SENSITIVITY_TONES = frozenset({"stable", "critical", "breakdown"})
 
 EXTENSION_SECTION_META: dict[str, tuple[tuple[str, str], ...]] = {
     "checklist": (
@@ -41,6 +49,11 @@ EXTENSION_SECTION_META: dict[str, tuple[tuple[str, str], ...]] = {
         ("hidden_premise", "隐含未言明前提"),
         ("counterexample", "哲学反例与极端压力测试"),
         ("modern_boundary", "当代现实映射与适用边界"),
+    ),
+    "boundary_check": (
+        ("paradigm_shift", "旧认知推翻与范式演进"),
+        ("intuition_analogy", "直观类比与物理直觉"),
+        ("breakdown_boundary", "极端失效条件与未解边界"),
     ),
 }
 
@@ -76,13 +89,15 @@ DAG_BLUEPRINTS = frozenset(
     }
 )
 MATRIX_BLUEPRINTS = frozenset({"term_contrast", "concept_matrix", "element_matrix"})
-CURVE_BLUEPRINTS = frozenset({"tension_curve", "sensitivity_chart", "metric_chart"})
+CURVE_BLUEPRINTS = frozenset({"tension_curve", "metric_chart"})
 
 DEFAULT_NODE_ROLE: dict[str, str] = {
     "power_hierarchy": "faction",
     "historical_causality": "mechanism",
     "flow_swimlane": "action",
     "decision_tree": "condition",
+    "derivation_dag": "lemma",
+    "system_flow": "process",
 }
 
 POWER_ROLES = frozenset({"sovereign", "faction", "ally", "rival", "constraint"})
@@ -197,21 +212,29 @@ BLUEPRINT_SCHEMA_HINTS: dict[str, str] = {
         '"items":[{"text":"≤26字高杠杆条目","blocks":["B01"],"source":"原文|补充"}]}]}'
     ),
     "derivation_dag": (
-        '"blueprint":"derivation_dag","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"M1","role":"axiom|lemma|condition|theorem","label":"≤16字公理/引理/定理",'
-        '"detail":"≤45字推导含义","blocks":["B01"],"source":"原文|补充"}],'
+        '"blueprint":"derivation_dag","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句核心推导解读（勿复读reading_note）",'
+        '"data":{"paradigm":"deductive|experimental",'
+        '"nodes":[{"id":"M1","role":"axiom|condition|lemma|theorem|observation|hypothesis|experiment|finding",'
+        '"label":"≤16字核心节点","detail":"≤55字推导或检验含义","blocks":["B01"],"source":"原文|补充"}],'
         '"edges":[{"from":"M1","to":"M2","label":"≤5字依据"}]}'
     ),
     "sensitivity_chart": (
-        '"blueprint":"sensitivity_chart","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"yLabel":"变化幅度(%)","points":[{"beat":"≤8字参数档位","tension":45,"emotion":"≤14字物理/统计表现",'
-        '"blocks":["B01"],"source":"原文|补充"}]}'
+        '"blueprint":"sensitivity_chart","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句临界阈值或参数响应解读（勿复读reading_note）",'
+        '"data":{"mode":"regime_threshold|numeric_curve|not_applicable",'
+        '"parameter":"控制变量名与单位(regime_threshold时必填)",'
+        '"regimes":[{"range":"区间如 < 1.5 M☉","threshold":"临界阈值(无则留空)","state":"≤12字相态或结果",'
+        '"mechanism":"≤55字物理或数学机制","tone":"stable|critical|breakdown","blocks":["B01"],"source":"原文|补充"}],'
+        '"xLabel":"自变量与单位(仅numeric_curve)","yLabel":"因变量与单位(仅numeric_curve)","unit":"真实物理单位",'
+        '"points":[{"x":"自变量真实刻度","y":0.0,"note":"≤45字物理意义","blocks":["B01"],"source":"原文"}],'
+        '"not_applicable_reason":"仅mode为not_applicable时写2句原因",'
+        '"highlights":[{"title":"≤18字定性制约","detail":"≤55字说明","blocks":["B01"],"source":"原文"}]}'
     ),
     "system_flow": (
-        '"blueprint":"system_flow","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"C1","role":"condition|rebuttal|theorem|lemma","label":"≤16字机制部件",'
-        '"detail":"≤45字作用过程","blocks":["B01"],"source":"原文|补充"}],'
-        '"edges":[{"from":"C1","to":"C2","label":"≤5字作用"}]}'
+        '"blueprint":"system_flow","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句机制运作解读（勿复读reading_note）",'
+        '"data":{"mode":"flow|not_applicable","not_applicable_reason":"仅当mode为not_applicable时写2句说明",'
+        '"nodes":[{"id":"C1","role":"input_energy|component|process|bottleneck|output_effect",'
+        '"label":"≤16字装置部件/物理或演化步骤","detail":"≤55字作用机制与参数","blocks":["B01"],"source":"原文|补充"}],'
+        '"edges":[{"from":"C1","to":"C2","label":"≤5字流转"}]}'
     ),
     "causal_loop": (
         '"blueprint":"causal_loop","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
@@ -346,13 +369,46 @@ EXTENSION_PROMPT_SPECS: dict[str, dict[str, str]] = {
             '同代世界史锚点必须保证年份准确，且 source 为"补充"时 body 开头禁止重复写"补充："二字。'
         ),
     },
+    "concept_glossary": {
+        "blueprint": "extension_glossary",
+        "title": "核心概念与公式词典",
+        "guidance": (
+            "结构与口径要求（6–9 条高密度科学词条）：\n"
+            "1. 每条提炼一个推动本章推导或机制的核心概念、定律、关键物理量或博弈策略；\n"
+            "2. symbol 填写原文明确出现或科学界公认的符号/公式/量纲"
+            '（如 "M > 1.5 M☉"、"R_ab l^a l^b ≥ 0"、"≤ 0.05 mm"）；'
+            '若该概念无明确公式/符号则留空 ""，严禁杜撰！\n'
+            "3. intuition 用一句大白话直觉或类比讲透；definition 给出精确科学定义及在本章中的作用；\n"
+            "4. 每条精选 1–3 个最直接块号，严禁堆砌长串块号；reading_note 须针对本章核心概念定制。"
+        ),
+        "instruction": (
+            '输出严格 JSON：{"blueprint":"extension_glossary","caption":"≤18字科学词典题",'
+            '"reading_note":"≤40字本章概念速查导读","summary":"2句总体概念主线（勿复读reading_note）",'
+            '"items":[{"term":"≤18字核心概念或定律名","symbol":"可选符号/公式/量纲(无则留空)",'
+            '"intuition":"≤40字一句话直觉或类比","definition":"≤75字精确科学定义与在本章中的作用",'
+            '"blocks":["B01"],"source":"原文|补充"}]}'
+        ),
+    },
     "boundary_check": {
         "blueprint": "extension_dossier",
-        "title": "演进脉络与适用边界",
+        "title": "演进与适用边界",
+        "guidance": (
+            "结构与口径要求（三分区、共 6–9 张高密度卡片）：\n"
+            '1. 第一区 section="paradigm_shift"（旧认知推翻与范式演进，2–3 条）：'
+            "点明作者/科学家推翻或修正了什么旧理论、直觉误区或工程路线；\n"
+            '2. 第二区 section="intuition_analogy"（直观类比与物理直觉，1–2 条）：'
+            "提炼帮助建立物理或数学直觉的关键类比（如地球经线类比共轭点、软木塞类比引力波、雪花类比晶体管产量）；\n"
+            '3. 第三区 section="breakdown_boundary"（极端失效条件与未解边界，3–4 条）：'
+            "界定定律、实验装置或模型在何种极端尺度、假设前提或外部约束下失效或尚待解决；\n"
+            "4. reading_note 必须针对本章核心理论与适用条件定制，严禁照抄「公式/规律失效提示：」等模板前缀！\n"
+            '5. 每卡精选 1–3 个块号；source 为 "补充" 时 body 开头严禁加「补充：」。'
+        ),
         "instruction": (
-            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字前提与边界",'
-            '"reading_note":"公式/规律失效提示","summary":"2句核心推导思路","items":[{"title":"≤20字演进/类比/极端条件",'
-            '"body":"≤70字推翻何种旧认知、生活类比或失效条件","blocks":["B01"],"source":"原文|补充"}]}'
+            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字演进与边界题",'
+            '"reading_note":"≤40字本章定制边界提醒(勿抄模板前缀)","summary":"2句核心边界综述（勿复读reading_note）",'
+            '"items":[{"section":"paradigm_shift|intuition_analogy|breakdown_boundary",'
+            '"title":"≤20字演进/类比/失效边界标签","stance":"≤8字标签(如 范式演进/直觉类比/失效边界)",'
+            '"body":"≤80字具体推翻对象、直观类比或极端失效条件","blocks":["B01"],"source":"原文|补充"}]}'
         ),
     },
     "sparring_dossier": {
@@ -530,6 +586,44 @@ BLUEPRINT_GUIDANCE: dict[str, str] = {
         "- 每个象限必须给出 action_hint（≤14 字行动口诀，如 立即重仓投入 / 小步试点验证 / 坚决舍弃）。\n"
         "- xAxis 与 yAxis 用清晰可比对的双维度（如 实施成本（低 → 高）、战略杠杆（低 → 高））；"
         "每条目精选 1–3 个最核心块号。"
+    ),
+    "derivation_dag": (
+        "专项约束（公理-定理推导图 — 广度汇流推导树）：\n"
+        "- 必须按「多条并行前提/观测/边界条件 → 中间引理/实验检验 → 核心定理/科学结论」的广度汇流推导树组织"
+        "（建议 6–12 节点，硬上限 16 个），严禁画成 12–14 层单链章节流水账！\n"
+        "- 按章节科学范式二选一（严禁将工程发明史硬套“引理→定理”）：\n"
+        '  1) 公理演绎模式（理论物理/数学，paradigm="deductive"）：role 仅限 axiom（公理/假设）、'
+        "condition（边界条件）、lemma（引理/中间推论）、theorem（核心定理）；\n"
+        '  2) 实验推理模式（科普/科学史/工程实验，paradigm="experimental"）：role 仅限 observation（观测现象）、'
+        "hypothesis（假说模型）、experiment（实验检验）、finding（科学结论）。\n"
+        "- 每节点精选 1–3 个最核心块号，边标签 ≤5 字。"
+    ),
+    "sensitivity_chart": (
+        "专项约束（临界条件与参数响应图 — 严禁编造假百分比！）：\n"
+        "- 最高铁律：严禁编造 0–100 假百分比或主观打分！绝不输出“变化幅度(%)”或虚构分数！\n"
+        "- 按章节实证特征在三种真实科学模式中三选一填入 data.mode：\n"
+        '  1) mode="regime_threshold"（科学书最核心！临界相变/参数区间分档）：'
+        "用于存在物理/数学/工程临界阈值引起定性相变或策略分化时"
+        "（如恒星质量 <1.5M☉ 白矮星 → ~1.5–3M☉ 中子星 → >钱德拉塞卡极限 黑洞；"
+        "电极间距 ≤0.05mm 功率放大 4.5× vs >0.05mm 失效；合作者比例 ≥5% 壮大 vs <5% 消亡）。"
+        "必须填写控制变量 parameter 与 2–6 个 regimes"
+        "（range、threshold、state、mechanism、tone=stable|critical|breakdown）；\n"
+        '  2) mode="numeric_curve"（真实定量曲线）：仅当原文明确给出同一自变量的多组真实数值时选用，'
+        "保留真实 xLabel / yLabel / unit 与原始数值（支持负值、小数、科学记数）；\n"
+        '  3) mode="not_applicable"（纯公理/概念章退场）：若全章既无临界相变阈值也无定量参数响应，'
+        '诚实设 mode="not_applicable"，填写 not_applicable_reason '
+        '与 2–3 条原文定性制约 highlights（标 source="原文"）。'
+    ),
+    "system_flow": (
+        "专项约束（机制与装置流图 — 彻底与推导树解耦！）：\n"
+        "- 严禁使用 axiom/lemma/theorem 等逻辑证明角色，严禁克隆公理-定理推导链！\n"
+        "- 专画「物理过程 / 实验装置结构 / 能量与信息流动 / 博弈或算法演化迭代机制」"
+        "（建议 6–12 节点，硬上限 16 个）。\n"
+        "- 节点 role 仅限 input_energy（输入/激励）、component（部件/介质）、"
+        "process（物理/演化过程）、bottleneck（阻断/约束）、output_effect（宏观效应）。\n"
+        "- 每节点精选 1–3 个最核心块号，边标签 ≤5 字。\n"
+        '- 若本章属纯数学公理推导且完全无实体装置、物理演化过程或动态迭代机制，请设 data.mode="not_applicable" '
+        "并用 2 句 not_applicable_reason 说明，绝不硬造。"
     ),
 }
 
@@ -831,6 +925,50 @@ def _norm_decision_role(raw_role: Any) -> str:
     return mapping.get(role, "condition")
 
 
+def _norm_derivation_role(raw_role: Any) -> str:
+    role = str(raw_role or "").strip().lower()
+    if role in DERIVATION_ROLES:
+        return role
+    mapping = {
+        "premise": "axiom",
+        "inference": "lemma",
+        "conclusion": "theorem",
+        "rebuttal": "condition",
+        "constraint": "condition",
+        "structural": "axiom",
+        "trigger": "observation",
+        "mechanism": "experiment",
+        "consequence": "finding",
+    }
+    return mapping.get(role, "lemma")
+
+
+def _norm_system_flow_role(raw_role: Any) -> str:
+    role = str(raw_role or "").strip().lower()
+    if role in SYSTEM_FLOW_ROLES:
+        return role
+    mapping = {
+        "axiom": "input_energy",
+        "premise": "input_energy",
+        "observation": "input_energy",
+        "trigger": "input_energy",
+        "condition": "bottleneck",
+        "constraint": "bottleneck",
+        "rebuttal": "bottleneck",
+        "inference": "process",
+        "lemma": "process",
+        "mechanism": "process",
+        "experiment": "process",
+        "step": "process",
+        "conclusion": "output_effect",
+        "theorem": "output_effect",
+        "finding": "output_effect",
+        "consequence": "output_effect",
+        "outcome": "output_effect",
+    }
+    return mapping.get(role, "process")
+
+
 def _audit_dag_data(
     raw_data: dict[str, Any],
     *,
@@ -840,14 +978,13 @@ def _audit_dag_data(
     blueprint: str = "",
 ) -> dict[str, Any] | None:
     if (
-        blueprint in {"lineage_dag", "flow_swimlane"}
+        blueprint in {"lineage_dag", "flow_swimlane", "system_flow"}
         and str(raw_data.get("mode") or "").strip().lower() == "not_applicable"
     ):
-        default_na = (
-            "本章属理念综述或概念阐发，未包含可复用的先后操作步骤。"
-            if blueprint == "flow_swimlane"
-            else "本章集中展开内部论证或对话，未涉及外部思想家或学派谱系。"
-        )
+        default_na = {
+            "flow_swimlane": "本章属理念综述或概念阐发，未包含可复用的先后操作步骤。",
+            "system_flow": "本章属纯公理或概念推演，未涉及实体实验装置、物理过程或演化迭代机制。",
+        }.get(blueprint, "本章集中展开内部论证或对话，未涉及外部思想家或学派谱系。")
         reason = str(raw_data.get("not_applicable_reason") or raw_data.get("reason") or default_na).strip()
         logs.append(f"{blueprint} 判定当前章节不适用该流程模型，已返回 not_applicable 提示")
         return {
@@ -897,6 +1034,10 @@ def _audit_dag_data(
             role = _norm_flow_role(raw_role)
         elif blueprint == "decision_tree":
             role = _norm_decision_role(raw_role)
+        elif blueprint == "derivation_dag":
+            role = _norm_derivation_role(raw_role)
+        elif blueprint == "system_flow":
+            role = _norm_system_flow_role(raw_role)
         elif blueprint == "power_hierarchy" and raw_role not in POWER_ROLES:
             role = fallback_role
         else:
@@ -960,8 +1101,15 @@ def _audit_dag_data(
     out: dict[str, Any] = {"nodes": nodes, "edges": edges}
     if blueprint == "lineage_dag":
         out["mode"] = "lineage"
-    elif blueprint == "flow_swimlane":
+    elif blueprint in {"flow_swimlane", "system_flow"}:
         out["mode"] = "flow"
+    elif blueprint == "derivation_dag":
+        paradigm = str(raw_data.get("paradigm") or "").strip().lower()
+        if paradigm in DERIVATION_PARADIGMS:
+            out["paradigm"] = paradigm
+        else:
+            exp_roles = {"observation", "hypothesis", "experiment", "finding"}
+            out["paradigm"] = "experimental" if any(n["role"] in exp_roles for n in nodes) else "deductive"
     return out
 
 
@@ -1250,6 +1398,156 @@ def _audit_curve_data(
     return {"yLabel": str(raw_data.get("yLabel") or "强度"), "points": points}
 
 
+def _norm_sensitivity_tone(raw_tone: Any, state: str = "") -> str:
+    tone = str(raw_tone or "").strip().lower()
+    if tone in SENSITIVITY_TONES:
+        return tone
+    txt = f"{tone} {state}"
+    if any(k in txt for k in ("崩溃", "失效", "坍缩", "灭绝", "消亡", "奇点", "breakdown")):
+        return "breakdown"
+    if any(k in txt for k in ("临界", "阈值", "极限", "相变", "转折", "critical")):
+        return "critical"
+    return "stable"
+
+
+def _audit_sensitivity_data(
+    raw_data: dict[str, Any],
+    *,
+    valid_ids: set[str],
+    default_blocks: list[str],
+    logs: list[str],
+) -> dict[str, Any] | None:
+    mode = str(raw_data.get("mode") or "").strip().lower()
+    raw_regimes = raw_data.get("regimes")
+    raw_points = raw_data.get("points")
+
+    if mode == "not_applicable" or (raw_data.get("not_applicable_reason") and not raw_regimes and not raw_points):
+        reason = str(
+            raw_data.get("not_applicable_reason")
+            or raw_data.get("reason")
+            or "本章集中展开定性公理或概念推演，未出现定量参数响应或相变临界阈值。"
+        ).strip()[:200]
+        highlights: list[dict[str, Any]] = []
+        for idx, hl in enumerate(raw_data.get("highlights") or []):
+            if not isinstance(hl, dict):
+                continue
+            source = _norm_source(hl.get("source"))
+            title = _strip_source_prefix(str(hl.get("title") or hl.get("label") or f"定性制约 {idx + 1}"), source)[:24]
+            detail = _strip_source_prefix(str(hl.get("detail") or hl.get("body") or hl.get("note") or ""), source)[:90]
+            blocks = _clean_blocks(
+                hl.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=title, logs=logs
+            )
+            highlights.append({"title": title, "detail": detail, "blocks": blocks, "source": source})
+        logs.append("本章无定量曲线或临界阈值，已按 not_applicable 呈现定性制约")
+        return {
+            "mode": "not_applicable",
+            "reason": reason,
+            "not_applicable_reason": reason,
+            "highlights": highlights,
+        }
+
+    if mode == "regime_threshold" or (isinstance(raw_regimes, list) and raw_regimes):
+        if not isinstance(raw_regimes, list) or not raw_regimes:
+            return None
+        parameter = str(raw_data.get("parameter") or "控制参数").strip()[:40]
+        regimes: list[dict[str, Any]] = []
+        for idx, rg in enumerate(raw_regimes):
+            if not isinstance(rg, dict):
+                continue
+            source = _norm_source(rg.get("source"))
+            rng = _strip_source_prefix(str(rg.get("range") or rg.get("condition") or f"区间 {idx + 1}"), source)[:28]
+            threshold = _strip_source_prefix(str(rg.get("threshold") or ""), source)[:28]
+            state = _strip_source_prefix(str(rg.get("state") or rg.get("outcome") or ""), source)[:24]
+            mechanism = _strip_source_prefix(str(rg.get("mechanism") or rg.get("detail") or ""), source)[:100]
+            if not state and not mechanism:
+                continue
+            blocks = _clean_blocks(
+                rg.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=rng, logs=logs
+            )
+            regimes.append(
+                {
+                    "range": rng,
+                    "threshold": threshold,
+                    "state": state or rng,
+                    "mechanism": mechanism,
+                    "tone": _norm_sensitivity_tone(rg.get("tone"), f"{state} {threshold}"),
+                    "blocks": blocks,
+                    "source": source,
+                }
+            )
+        if not regimes:
+            return None
+        return {"mode": "regime_threshold", "parameter": parameter, "regimes": regimes}
+
+    if isinstance(raw_points, list) and raw_points:
+        y_label = str(raw_data.get("yLabel") or "").strip()
+        x_label = str(raw_data.get("xLabel") or "").strip()
+        unit = str(raw_data.get("unit") or "").strip()[:20]
+        has_real_xy = any(isinstance(pt, dict) and ("y" in pt or "x" in pt) for pt in raw_points)
+        looks_fake_pct = not has_real_xy and ("变化幅度" in y_label or y_label in {"", "强度", "变化幅度(%)"})
+        if looks_fake_pct:
+            # 旧版 0–100 伪量化载荷或模型回退为 tension：剥除假分数，转为定性参数档位
+            converted: list[dict[str, Any]] = []
+            for idx, pt in enumerate(raw_points):
+                if not isinstance(pt, dict):
+                    continue
+                source = _norm_source(pt.get("source"))
+                rng = _strip_source_prefix(str(pt.get("beat") or f"档位 {idx + 1}"), source)[:28]
+                state = _strip_source_prefix(str(pt.get("emotion") or rng), source)[:24]
+                mech = _strip_source_prefix(str(pt.get("note") or ""), source)[:100]
+                blocks = _clean_blocks(
+                    pt.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=rng, logs=logs
+                )
+                converted.append(
+                    {
+                        "range": rng,
+                        "threshold": "",
+                        "state": state,
+                        "mechanism": mech,
+                        "tone": _norm_sensitivity_tone("", state),
+                        "blocks": blocks,
+                        "source": source,
+                    }
+                )
+            if converted:
+                logs.append("检测到无实测单位的 0–100 假分数，已剥除伪量化并转为临界分档视图")
+                return {
+                    "mode": "regime_threshold",
+                    "parameter": x_label or "参数变化档位",
+                    "regimes": converted,
+                }
+            return None
+
+        points: list[dict[str, Any]] = []
+        for idx, pt in enumerate(raw_points):
+            if not isinstance(pt, dict):
+                continue
+            source = _norm_source(pt.get("source"))
+            x_val = _strip_source_prefix(str(pt.get("x") or pt.get("beat") or f"点{idx + 1}"), source)[:24]
+            raw_y = pt.get("y", pt.get("value"))
+            if raw_y is None or isinstance(raw_y, bool):
+                continue
+            try:
+                y_val = float(raw_y)
+            except (TypeError, ValueError):
+                continue
+            note = _strip_source_prefix(str(pt.get("note") or pt.get("emotion") or ""), source)[:100]
+            blocks = _clean_blocks(
+                pt.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=x_val, logs=logs
+            )
+            points.append({"x": x_val, "y": y_val, "note": note, "blocks": blocks, "source": source})
+        if not points:
+            return None
+        return {
+            "mode": "numeric_curve",
+            "xLabel": x_label or "自变量",
+            "yLabel": y_label or "响应量",
+            "unit": unit,
+            "points": points,
+        }
+    return None
+
+
 def _audit_timeline_data(
     raw_data: dict[str, Any],
     *,
@@ -1410,13 +1708,29 @@ def _audit_extension_items(
         if not isinstance(it, dict):
             continue
         source = _norm_source(it.get("source"))
+        term = _strip_source_prefix(str(it.get("term") or ""), source)
         name = _strip_source_prefix(str(it.get("name") or ""), source)
-        title = _strip_source_prefix(str(it.get("title") or it.get("text") or name), source)
+        title = _strip_source_prefix(str(it.get("title") or it.get("text") or term or name), source)
         pitfall = _strip_source_prefix(str(it.get("pitfall") or ""), source)
         case = _strip_source_prefix(str(it.get("case") or ""), source)
         root_cause = _strip_source_prefix(str(it.get("root_cause") or ""), source)
         fix = _strip_source_prefix(str(it.get("fix") or ""), source)
-        body = _strip_source_prefix(str(it.get("body") or it.get("detail") or ""), source)
+        raw_body = _strip_source_prefix(str(it.get("body") or it.get("detail") or ""), source)
+        intuition = _strip_source_prefix(str(it.get("intuition") or it.get("analogy") or ""), source)
+        definition = _strip_source_prefix(str(it.get("definition") or ""), source)
+        symbol = _clean_original_term(it.get("symbol") or it.get("formula") or it.get("original_term"))
+        if bp == "extension_glossary" or term or definition or intuition:
+            if not term:
+                term = title
+            if not definition:
+                definition = raw_body
+            body = (
+                f"{intuition} — {definition}".strip(" —")
+                if (intuition and definition)
+                else (definition or intuition or raw_body)
+            )
+        else:
+            body = _BOUNDARY_PREFIX_RE.sub("", raw_body).strip()
         if not body and (pitfall or case or root_cause or fix):
             summary_parts = []
             if pitfall:
@@ -1441,6 +1755,11 @@ def _audit_extension_items(
             "blocks": blocks,
             "source": source,
         }
+        if bp == "extension_glossary" or term or definition or intuition:
+            entry["term"] = term
+            entry["symbol"] = symbol
+            entry["intuition"] = intuition
+            entry["definition"] = definition
         if name:
             entry["name"] = name
         if pitfall:
@@ -1481,13 +1800,29 @@ def _build_fallback_payload(
     notice = ""
     if isinstance(parsed, dict) and isinstance(parsed.get("data"), dict):
         data_obj = parsed["data"]
-        raw_list = data_obj.get("nodes") or data_obj.get("points") or data_obj.get("rows") or []
+        raw_list = (
+            data_obj.get("nodes")
+            or data_obj.get("regimes")
+            or data_obj.get("points")
+            or data_obj.get("rows")
+            or data_obj.get("highlights")
+            or []
+        )
         for entry in raw_list:
             if not isinstance(entry, dict):
                 continue
             source = _norm_source(entry.get("source"))
             label = _strip_source_prefix(
-                str(entry.get("label") or entry.get("title") or entry.get("beat") or entry.get("key") or ""),
+                str(
+                    entry.get("label")
+                    or entry.get("title")
+                    or entry.get("state")
+                    or entry.get("range")
+                    or entry.get("beat")
+                    or entry.get("x")
+                    or entry.get("key")
+                    or ""
+                ),
                 source,
             )
             if not label:
@@ -1495,6 +1830,7 @@ def _build_fallback_payload(
             detail = _strip_source_prefix(
                 str(
                     entry.get("detail")
+                    or entry.get("mechanism")
                     or entry.get("note")
                     or entry.get("emotion")
                     or " · ".join(p for p in (str(entry.get("everyday") or ""), str(entry.get("author") or "")) if p)
@@ -1580,6 +1916,19 @@ def _tailor_reading_note(
         if note:
             logs.append("检测到模板占位 reading_note，已按本章失效案例定制替换")
         return custom
+    if action == "boundary_check" or _BOUNDARY_PLACEHOLDER_NOTE in note:
+        stripped = _BOUNDARY_PREFIX_RE.sub("", note).strip()
+        if not stripped or stripped == _BOUNDARY_PLACEHOLDER_NOTE:
+            custom = (
+                f"围绕「{' / '.join(titles)}」把握范式演进与失效边界"[:40]
+                if titles
+                else f"聚焦「{caption}」厘清适用条件与极端边界"[:40]
+            )
+            logs.append("已剥离模板前缀「公式/规律失效提示」，定制本章边界导读")
+            return custom
+        if stripped != note:
+            logs.append("已剥离模板前缀「公式/规律失效提示：」")
+        return stripped
     return note
 
 
@@ -1595,6 +1944,8 @@ def _group_extension_sections(items: list[dict[str, Any]], *, requested_action: 
                 meta = act_meta
                 break
     if not meta:
+        return []
+    if requested_action == "boundary_check" and not any(str(it.get("section") or "").strip() for it in items):
         return []
     title_by_id = dict(meta)
     buckets: dict[str, list[dict[str, Any]]] = {sid: [] for sid, _ in meta}
@@ -1646,8 +1997,8 @@ def audit_blueprint_payload(
         if legacy_family:
             logs.append(f"兼容旧版 family='{legacy_family}'，已映射至蓝图 '{bp}'")
 
-    # Extension dossier / checklist branch（兼容扁平 items、分区 sections 及 figures/glossary 顶层键）
-    has_ext_shape = bp in {"extension_dossier", "extension_checklist"} or (
+    # Extension dossier / checklist / glossary branch（兼容扁平 items、分区 sections 及 figures/glossary 顶层键）
+    has_ext_shape = bp in {"extension_dossier", "extension_checklist", "extension_glossary"} or (
         "data" not in parsed
         and any(isinstance(parsed.get(k), list) for k in ("sections", "items", "figures", "glossary"))
     )
@@ -1764,6 +2115,8 @@ def audit_blueprint_payload(
         )
     elif bp in MATRIX_BLUEPRINTS:
         audited_data = _audit_matrix_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
+    elif bp == "sensitivity_chart":
+        audited_data = _audit_sensitivity_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
     elif bp in CURVE_BLUEPRINTS:
         audited_data = _audit_curve_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
     elif bp == "parallel_timeline":
