@@ -99,8 +99,6 @@ _TIER2_B_CIRCLED_RE = re.compile(rf"^(([{_CIRCLED_CHARS}])\s*)(\S.*)$")
 # Category C：`1.` / `1、` 这类只有落在注释区标题之后才认，避免吃掉有序列表。
 _TIER2_C_DOT_RE = re.compile(r"^(\s*(\d{1,4})\s*[.、．]\s*)(\S.*)$")
 
-# 裸注号引用：`注33`/`註12`、`[1]`/`〔1〕`/`［1］`/`【1】`、裸圈码 ①-⑳。
-# 只在“本章存在同一 key 的注定义”或“全书另有注释章”时启用，见 _bare_ref_enabled。
 _BARE_REF_RE = re.compile(
     rf"(?<![0-9A-Za-z])"
     rf"(?:注\s*(?P<zhu>[0-9]{{1,4}})"
@@ -696,7 +694,6 @@ def resolve_chapter_footnotes(
         for alt in _marker_alt_keys(key):
             candidates_by_key.setdefault(alt, []).append((idx, block, 2, info))
 
-    # 裸注号（注33 / [1] / ①）：必须有本地定义或独立注释章才启用，防误伤年份与列表序号。
     all_refs.extend(_extract_bare_refs(blocks, candidates_by_key, notes_start_idx, bool(note_chapters)))
 
     # 执行引用到定义的就近配对
