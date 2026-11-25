@@ -96,8 +96,24 @@
     return RD.esc ? RD.esc(s) : String(s == null ? '' : s);
   }
 
-  function renderAnchorPills(blocks) {
-    return (blocks || [])
+  function renderAnchorPills(blocks, maxShow) {
+    const list = blocks || [];
+    if (!maxShow || list.length <= maxShow) {
+      return list
+        .map(
+          (b) =>
+            '<button type="button" class="blk-anchor" data-jump="' +
+            esc(b) +
+            '" title="点击定位原文 ' +
+            esc(b) +
+            '">↗ ' +
+            esc(b) +
+            '</button>'
+        )
+        .join(' ');
+    }
+    const head = list
+      .slice(0, maxShow)
       .map(
         (b) =>
           '<button type="button" class="blk-anchor" data-jump="' +
@@ -109,6 +125,17 @@
           '</button>'
       )
       .join(' ');
+    const rest = list.slice(maxShow);
+    return (
+      head +
+      ' <button type="button" class="blk-anchor blk-anchor-more" data-jump="' +
+      esc(rest[0]) +
+      '" title="全部块号：' +
+      esc(list.join(', ')) +
+      '">+' +
+      rest.length +
+      '</button>'
+    );
   }
 
   function renderSrcTag(source) {
@@ -139,7 +166,7 @@
     return stage;
   }
 
-  function measureNodeSizes(nodes, cardWidth, expandAll) {
+  function measureNodeSizes(nodes, cardWidth, expandAll, maxAnchors) {
     const stage = ensureMeasureStage();
     const sizes = new Map();
     stage.style.width = cardWidth + 'px';
@@ -168,7 +195,7 @@
               '</div>'
             : '') +
           '<div class="dag-node-foot">' +
-          renderAnchorPills(n.blocks) +
+          renderAnchorPills(n.blocks, maxAnchors) +
           '</div></div>'
       )
       .join('');
@@ -444,10 +471,8 @@
 
     const wideMode = Boolean(options && options.wide);
     const expandAll = Boolean(options && options.expandAll);
-    const wantLR =
-      wideMode &&
-      ['flow_swimlane', 'lineage_dag', 'system_flow'].includes(payload.blueprint);
-
+    const maxAnchors = !expandAll ? 4 : 0;
+    const isHistoryDag = ['historical_causality', 'power_hierarchy'].includes(payload.blueprint);
     const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i, rank: 0, order: 0 })]));
     const mergedEdges = prepareDagEdges(rawEdges, idMap);
     const { ranks, sortedRanks } = assignDagRanks(nodes, idMap, mergedEdges);
@@ -456,65 +481,176 @@
     sortedRanks.forEach((r) => {
       maxInRank = Math.max(maxInRank, ranks.get(r).length);
     });
-    const cardW = wantLR ? 204 : maxInRank >= 4 ? 142 : maxInRank >= 2 ? 158 : 236;
-    const sizes = measureNodeSizes(nodes, cardW, expandAll);
+    const R = sortedRanks.length;
+    const rankToIdx = new Map(sortedRanks.map((r, i) => [r, i]));
+    const wantCompactLR =
+      wideMode && isHistoryDag && (R === 5 || (R === 6 && maxInRank >= 3));
+    const wantLR =
+      (wideMode && ['flow_swimlane', 'lineage_dag', 'system_flow'].includes(payload.blueprint)) ||
+      wantCompactLR;
+    const useBandedLR =
+      !wantLR && wideMode && isHistoryDag && (R >= 7 || (R === 6 && maxInRank <= 2));
+    const splitIdx = useBandedLR ? Math.ceil(R / 2) : R;
+    idMap.forEach((n) => {
+      const ri = rankToIdx.get(n.rank) ?? 0;
+      n.rankIdx = ri;
+      n.band = useBandedLR && ri >= splitIdx ? 1 : 0;
+    });
 
-    const colGap = wantLR ? 72 : 24;
-    const rowGap = wantLR ? 36 : 56;
-    const trackStep = 18;
-    const corridorStep = wideMode ? 34 : 26;
+    const cardW = wantCompactLR
+      ? R >= 6
+        ? 162
+        : 174
+      : useBandedLR
+        ? 176
+        : wantLR
+          ? 204
+          : wideMode
+            ? maxInRank >= 6
+              ? 150
+              : maxInRank >= 4
+                ? 172
+                : maxInRank >= 2
+                  ? 190
+                  : 236
+            : maxInRank >= 4
+              ? 142
+              : maxInRank >= 2
+                ? 158
+                : 236;
+    const sizes = measureNodeSizes(nodes, cardW, expandAll, maxAnchors);
+
+    const colGap = wantCompactLR
+      ? R >= 6
+        ? 46
+        : 54
+      : useBandedLR
+        ? 56
+        : wantLR
+          ? 72
+          : wideMode && maxInRank >= 6
+            ? 18
+            : 24;
+    const rowGap = wantCompactLR || useBandedLR ? 24 : wantLR ? 36 : wideMode ? 36 : 56;
+    const trackStep = wideMode && (!wantLR || wantCompactLR) ? 15 : 18;
+    const corridorStep = wideMode ? 32 : 26;
 
     // Step 1: Plan every edge's route type, face attachments, and gap/corridor slot needs
-    const gapSegments = new Map();
-    const getGapList = (g) => {
-      if (!gapSegments.has(g)) gapSegments.set(g, []);
-      return gapSegments.get(g);
+    const bandGapSegs = [new Map(), new Map()];
+    const getGapList = (g, band = 0) => {
+      const m = bandGapSegs[band];
+      if (!m.has(g)) m.set(g, []);
+      return m.get(g);
     };
-    const sideA = [];
-    const sideB = [];
+    const sideA = [[], []];
+    const sideB = [[], []];
+    const midCrossPlans = [];
     const edgePlans = [];
+    const effLR = wantLR || useBandedLR;
 
     mergedEdges.forEach((e) => {
       const fn = idMap.get(e.from);
       const tn = idMap.get(e.to);
       if (!fn || !tn) return;
-      const ar = fn.rank;
-      const br = tn.rank;
-      const aCnt = ranks.get(ar).length;
-      const bCnt = ranks.get(br).length;
+      const ar = fn.rankIdx;
+      const br = tn.rankIdx;
+      const aCnt = ranks.get(fn.rank).length;
+      const bCnt = ranks.get(tn.rank).length;
 
       if (e.isSelfLoop) {
         edgePlans.push({
           edge: e,
           kind: 'self',
-          outFace: wantLR ? 'bottom' : 'right',
-          inFace: wantLR ? 'bottom' : 'right',
+          outFace: effLR ? 'bottom' : 'right',
+          inFace: effLR ? 'bottom' : 'right',
         });
         return;
       }
 
+      if (useBandedLR && fn.band !== tn.band) {
+        let outFace = 'bottom';
+        let exitGap = null;
+        const exitBand = fn.band;
+        if (fn.band === 0) {
+          if (fn.order !== aCnt - 1) {
+            outFace = 'right';
+            exitGap = ar;
+          }
+        } else {
+          outFace = 'top';
+          if (fn.order !== 0) {
+            outFace = 'left';
+            exitGap = ar - 1;
+          }
+        }
+
+        let inFace = 'top';
+        let enterGap = null;
+        const enterBand = tn.band;
+        if (tn.band === 1) {
+          if (tn.order !== 0) {
+            inFace = 'left';
+            enterGap = br - 1;
+          }
+        } else {
+          inFace = 'bottom';
+          if (tn.order !== bCnt - 1) {
+            inFace = 'left';
+            enterGap = br - 1;
+          }
+        }
+
+        const plan = {
+          edge: e,
+          kind: 'midCross',
+          outFace,
+          inFace,
+          exitGap,
+          exitBand,
+          enterGap,
+          enterBand,
+          exitTrackIdx: 0,
+          enterTrackIdx: 0,
+          midTrackIdx: 0,
+          span: Math.abs(br - ar),
+        };
+        if (exitGap !== null) {
+          getGapList(exitGap, exitBand).push({ plan, role: 'exit', sortKey: fn.order * 100 + 20 });
+        }
+        if (enterGap !== null) {
+          getGapList(enterGap, enterBand).push({ plan, role: 'enter', sortKey: tn.order * 100 - 20 });
+        }
+        midCrossPlans.push(plan);
+        edgePlans.push(plan);
+        return;
+      }
+
+      const band = useBandedLR ? fn.band : 0;
       if (br === ar + 1 && !e.isCycleBack) {
         const plan = {
           edge: e,
           kind: 'adj',
+          band,
           gapIdx: ar,
-          outFace: wantLR ? 'right' : 'bottom',
-          inFace: wantLR ? 'left' : 'top',
+          outFace: effLR ? 'right' : 'bottom',
+          inFace: effLR ? 'left' : 'top',
           trackIdx: 0,
         };
-        getGapList(ar).push({ plan, role: 'adj', sortKey: fn.order * 100 + tn.order });
+        getGapList(ar, band).push({ plan, role: 'adj', sortKey: fn.order * 100 + tn.order });
         edgePlans.push(plan);
         return;
       }
 
       // Outer corridor edge: pick side closer to endpoints, damped slightly by current load
+      const bSideA = sideA[band];
+      const bSideB = sideB[band];
       const aRel = (fn.order + 0.5) / aCnt;
       const bRel = (tn.order + 0.5) / bCnt;
       const avgRel = (aRel + bRel) / 2;
-      const scoreA = avgRel + sideA.length * 0.14;
-      const scoreB = 1 - avgRel + sideB.length * 0.14;
+      const scoreA = avgRel + bSideA.length * 0.14;
+      const scoreB = 1 - avgRel + bSideB.length * 0.14;
       const useA = scoreA <= scoreB;
-      const corridorSide = useA ? (wantLR ? 'top' : 'left') : wantLR ? 'bottom' : 'right';
+      const corridorSide = useA ? (effLR ? 'top' : 'left') : effLR ? 'bottom' : 'right';
 
       const aIsOuter = useA ? fn.order === 0 : fn.order === aCnt - 1;
       const bIsOuter = useA ? tn.order === 0 : tn.order === bCnt - 1;
@@ -523,7 +659,7 @@
       let outFace = corridorSide;
       let exitGap = null;
       if (!aIsOuter) {
-        if (wantLR) {
+        if (effLR) {
           outFace = goingBack ? 'left' : 'right';
           exitGap = goingBack ? ar - 1 : ar;
         } else {
@@ -535,13 +671,14 @@
       let inFace = corridorSide;
       let enterGap = null;
       if (!bIsOuter) {
-        inFace = wantLR ? 'left' : 'top';
+        inFace = effLR ? 'left' : 'top';
         enterGap = br - 1;
       }
 
       const plan = {
         edge: e,
         kind: 'corridor',
+        band,
         useA,
         span: Math.abs(br - ar),
         minRank: Math.min(ar, br),
@@ -555,25 +692,27 @@
         enterTrackIdx: 0,
       };
       if (exitGap !== null) {
-        getGapList(exitGap).push({ plan, role: 'exit', sortKey: fn.order * 100 + (useA ? -10 : 10) });
+        getGapList(exitGap, band).push({ plan, role: 'exit', sortKey: fn.order * 100 + (useA ? -10 : 10) });
       }
       if (enterGap !== null) {
-        getGapList(enterGap).push({ plan, role: 'enter', sortKey: tn.order * 100 + (useA ? -10 : 10) });
+        getGapList(enterGap, band).push({ plan, role: 'enter', sortKey: tn.order * 100 + (useA ? -10 : 10) });
       }
-      (useA ? sideA : sideB).push(plan);
+      (useA ? bSideA : bSideB).push(plan);
       edgePlans.push(plan);
     });
 
     // Order each gap's horizontal/vertical tracks and nest outer corridor lanes shortest-innermost
-    const gapTracksCount = new Map();
-    gapSegments.forEach((items, g) => {
-      items.sort((a, b) => a.sortKey - b.sortKey);
-      items.forEach((it, idx) => {
-        if (it.role === 'adj') it.plan.trackIdx = idx;
-        else if (it.role === 'exit') it.plan.exitTrackIdx = idx;
-        else it.plan.enterTrackIdx = idx;
+    const bandGapCounts = [new Map(), new Map()];
+    bandGapSegs.forEach((segs, b) => {
+      segs.forEach((items, g) => {
+        items.sort((a, bIt) => a.sortKey - bIt.sortKey);
+        items.forEach((it, idx) => {
+          if (it.role === 'adj') it.plan.trackIdx = idx;
+          else if (it.role === 'exit') it.plan.exitTrackIdx = idx;
+          else it.plan.enterTrackIdx = idx;
+        });
+        bandGapCounts[b].set(g, items.length);
       });
-      gapTracksCount.set(g, items.length);
     });
 
     const sortCorridors = (arr) => {
@@ -582,31 +721,101 @@
         p.corridorLane = idx;
       });
     };
-    sortCorridors(sideA);
-    sortCorridors(sideB);
+    sortCorridors(sideA[0]);
+    sortCorridors(sideB[0]);
+    sortCorridors(sideA[1]);
+    sortCorridors(sideB[1]);
+    midCrossPlans.sort((a, b) => {
+      const af = idMap.get(a.edge.from);
+      const bf = idMap.get(b.edge.from);
+      return (af ? af.rankIdx : 0) - (bf ? bf.rankIdx : 0) || a.edge.idx - b.edge.idx;
+    });
+    midCrossPlans.forEach((p, idx) => {
+      p.midTrackIdx = idx;
+    });
 
     // Step 2: Compute node geometry with expanded per-gap and per-corridor gutters
-    const R = sortedRanks.length;
-    const gapSize = (g, base) => {
-      const n = gapTracksCount.get(g) || 0;
-      return n ? Math.max(base, 30 + n * trackStep) : base;
+    const gapSize = (g, base, band = 0) => {
+      const n = bandGapCounts[band].get(g) || 0;
+      return n ? Math.max(base, 26 + n * trackStep) : base;
     };
 
-    const sideAPad = (sideA.length ? sideA.length * corridorStep + 28 : 20) + ((wantLR ? 0 : gapTracksCount.get(-1) || 0) * trackStep);
-    const sideBPad = sideB.length ? sideB.length * corridorStep + 28 : 20;
-    const preGap = gapTracksCount.get(-1) ? 26 + gapTracksCount.get(-1) * trackStep : 22;
-    const postGap = gapTracksCount.get(R - 1) ? 26 + gapTracksCount.get(R - 1) * trackStep : 24;
-
     const pos = new Map();
-    const gapBounds = new Map();
+    const bandGapBounds = [new Map(), new Map()];
     let rawGraphLeft = 0;
     let rawGraphRight = 0;
     let rawGraphTop = 0;
     let rawGraphBottom = 0;
+    let b0Top = 0;
+    let b0Bottom = 0;
+    let b1Top = 0;
+    let b1Bottom = 0;
+    let midZoneTop = 0;
+    let midZoneBottom = 0;
 
-    if (!wantLR) {
+    if (useBandedLR) {
+      const b0PreCnt = bandGapCounts[0].get(-1) || 0;
+      const b1PreCnt = bandGapCounts[1].get(splitIdx - 1) || 0;
+      const b0Pre = b0PreCnt ? 26 + b0PreCnt * trackStep : 20;
+      const b1Pre = b1PreCnt ? 26 + b1PreCnt * trackStep : 20;
+      const leftPad = Math.max(b0Pre, b1Pre);
+
+      const layoutLrBand = (bandIdx, sliceIndices, bandPreKey, bandPostKey, bandYStart) => {
+        const colW = sliceIndices.map((ri) => Math.max(...ranks.get(sortedRanks[ri]).map((n) => sizes.get(n.id).w)));
+        const colH = sliceIndices.map((ri) => {
+          const list = ranks.get(sortedRanks[ri]);
+          return list.reduce((acc, n) => acc + sizes.get(n.id).h, 0) + (list.length - 1) * rowGap;
+        });
+        const bandMaxH = Math.max(120, ...colH);
+        const postCnt = bandGapCounts[bandIdx].get(bandPostKey) || 0;
+        const postG = postCnt ? 26 + postCnt * trackStep : 22;
+        let curX = leftPad;
+        bandGapBounds[bandIdx].set(bandPreKey, { start: 8, end: leftPad });
+        sliceIndices.forEach((ri, localIdx) => {
+          const list = ranks.get(sortedRanks[ri]);
+          let curY = bandYStart + (bandMaxH - colH[localIdx]) / 2;
+          list.forEach((n) => {
+            const sz = sizes.get(n.id);
+            pos.set(n.id, { x: Math.round(curX), y: Math.round(curY), w: sz.w, h: sz.h, rank: n.rank });
+            curY += sz.h + rowGap;
+          });
+          const layerRight = Math.round(curX + colW[localIdx]);
+          const gSpan = localIdx < sliceIndices.length - 1 ? gapSize(ri, colGap, bandIdx) : postG;
+          bandGapBounds[bandIdx].set(ri, { start: layerRight, end: layerRight + gSpan });
+          curX = layerRight + gSpan;
+        });
+        return { right: curX - postG, top: bandYStart, bottom: bandYStart + bandMaxH };
+      };
+
+      const b0Slice = Array.from({ length: splitIdx }, (_, k) => k);
+      const b1Slice = Array.from({ length: R - splitIdx }, (_, k) => splitIdx + k);
+      b0Top = sideA[0].length ? sideA[0].length * corridorStep + 26 : 20;
+      const b0PreMetrics = b0Slice.map((ri) => {
+        const list = ranks.get(sortedRanks[ri]);
+        return list.reduce((acc, n) => acc + sizes.get(n.id).h, 0) + (list.length - 1) * rowGap;
+      });
+      const b0H = Math.max(120, ...b0PreMetrics);
+      b0Bottom = b0Top + b0H;
+      const b0BotCorrH = sideB[0].length ? sideB[0].length * corridorStep + 24 : 16;
+      const midTracksH = midCrossPlans.length ? midCrossPlans.length * trackStep + 28 : 20;
+      const b1TopCorrH = sideA[1].length ? sideA[1].length * corridorStep + 24 : 16;
+      midZoneTop = b0Bottom + b0BotCorrH;
+      midZoneBottom = midZoneTop + midTracksH;
+      b1Top = midZoneBottom + b1TopCorrH;
+
+      const r0 = layoutLrBand(0, b0Slice, -1, splitIdx - 1, b0Top);
+      const r1 = layoutLrBand(1, b1Slice, splitIdx - 1, R - 1, b1Top);
+      b1Bottom = r1.bottom;
+      rawGraphLeft = leftPad;
+      rawGraphRight = Math.max(r0.right, r1.right);
+      rawGraphTop = b0Top;
+      rawGraphBottom = b1Bottom;
+    } else if (!wantLR) {
+      const gapTracksCount = bandGapCounts[0];
+      const sideAPad = (sideA[0].length ? sideA[0].length * corridorStep + 28 : 20) + ((gapTracksCount.get(-1) || 0) * trackStep);
+      const preGap = gapTracksCount.get(-1) ? 26 + gapTracksCount.get(-1) * trackStep : 22;
+      const postGap = gapTracksCount.get(R - 1) ? 26 + gapTracksCount.get(R - 1) * trackStep : 24;
       const leftPad = sideAPad;
-      const rightPad = sideBPad;
       const topPad = preGap;
       const layerHeights = sortedRanks.map((r) => Math.max(...ranks.get(r).map((n) => sizes.get(n.id).h)));
       const maxRowW = Math.max(
@@ -617,7 +826,7 @@
       );
       const innerWidth = Math.max(240, maxRowW);
       let curY = topPad;
-      gapBounds.set(-1, { start: 8, end: topPad });
+      bandGapBounds[0].set(-1, { start: 8, end: topPad });
       sortedRanks.forEach((r, ri) => {
         const list = ranks.get(r);
         const rowW = list.reduce((acc, n) => acc + sizes.get(n.id).w, 0) + (list.length - 1) * colGap;
@@ -628,8 +837,8 @@
           curX += sz.w + colGap;
         });
         const layerBottom = Math.round(curY + layerHeights[ri]);
-        const gSpan = ri < R - 1 ? gapSize(r, rowGap) : postGap;
-        gapBounds.set(r, { start: layerBottom, end: layerBottom + gSpan });
+        const gSpan = ri < R - 1 ? gapSize(ri, rowGap, 0) : postGap;
+        bandGapBounds[0].set(ri, { start: layerBottom, end: layerBottom + gSpan });
         curY = layerBottom + gSpan;
       });
       rawGraphLeft = leftPad;
@@ -637,8 +846,10 @@
       rawGraphTop = topPad;
       rawGraphBottom = curY - postGap;
     } else {
-      const topPad = sideAPad;
-      const botPad = sideBPad;
+      const gapTracksCount = bandGapCounts[0];
+      const topPad = sideA[0].length ? sideA[0].length * corridorStep + 28 : 20;
+      const preGap = gapTracksCount.get(-1) ? 26 + gapTracksCount.get(-1) * trackStep : 22;
+      const postGap = gapTracksCount.get(R - 1) ? 26 + gapTracksCount.get(R - 1) * trackStep : 24;
       const leftPad = preGap;
       const colWidths = sortedRanks.map((r) => Math.max(...ranks.get(r).map((n) => sizes.get(n.id).w)));
       const colHeights = sortedRanks.map((r) => {
@@ -647,7 +858,7 @@
       });
       const maxColH = Math.max(190, ...colHeights);
       let curX = leftPad;
-      gapBounds.set(-1, { start: 8, end: leftPad });
+      bandGapBounds[0].set(-1, { start: 8, end: leftPad });
       sortedRanks.forEach((r, ri) => {
         const list = ranks.get(r);
         let curY = topPad + (maxColH - colHeights[ri]) / 2;
@@ -657,8 +868,8 @@
           curY += sz.h + rowGap;
         });
         const layerRight = Math.round(curX + colWidths[ri]);
-        const gSpan = ri < R - 1 ? gapSize(r, colGap) : postGap;
-        gapBounds.set(r, { start: layerRight, end: layerRight + gSpan });
+        const gSpan = ri < R - 1 ? gapSize(ri, colGap, 0) : postGap;
+        bandGapBounds[0].set(ri, { start: layerRight, end: layerRight + gSpan });
         curX = layerRight + gSpan;
       });
       rawGraphLeft = leftPad;
@@ -667,16 +878,29 @@
       rawGraphBottom = topPad + maxColH;
     }
 
-    const trackCoord = (gapIdx, trackIdx) => {
-      const b = gapBounds.get(gapIdx);
-      const count = gapTracksCount.get(gapIdx) || 1;
+    const trackCoord = (gapIdx, trackIdx, band = 0) => {
+      const b = bandGapBounds[band].get(gapIdx);
+      const count = bandGapCounts[band].get(gapIdx) || 1;
       if (!b) return 12;
       const mid = (b.start + b.end) / 2;
       const first = mid - ((count - 1) * trackStep) / 2;
       return Math.round(first + trackIdx * trackStep);
     };
 
+    const midTrackCoord = (crossIdx) => {
+      const mid = (midZoneTop + midZoneBottom) / 2;
+      const first = mid - ((midCrossPlans.length - 1) * trackStep) / 2;
+      return Math.round(first + crossIdx * trackStep);
+    };
+
     const corridorCoord = (plan) => {
+      if (useBandedLR) {
+        const bTop = plan.band === 0 ? b0Top : b1Top;
+        const bBot = plan.band === 0 ? b0Bottom : b1Bottom;
+        return plan.useA
+          ? Math.round(bTop - 24 - plan.corridorLane * corridorStep)
+          : Math.round(bBot + 24 + plan.corridorLane * corridorStep);
+      }
       if (wantLR) {
         return plan.useA
           ? Math.round(rawGraphTop - 26 - plan.corridorLane * corridorStep)
@@ -749,13 +973,12 @@
     edgePlans.forEach((plan) => {
       const e = plan.edge;
       const a = pos.get(e.from);
-      const b = pos.get(e.to);
       let pts = [];
 
       if (plan.kind === 'self') {
         const sy = Math.round(a.y + a.h * 0.32);
         const ey = Math.round(a.y + a.h * 0.68);
-        if (!wantLR) {
+        if (!effLR) {
           const sx = a.x + a.w;
           const gx = sx + 28;
           pts = [
@@ -781,34 +1004,57 @@
         const rawEnd = portCoords.get(e.idx + ':e');
         const p0 = e.bidirectional ? offsetFromFace(rawStart, plan.outFace, 4) : { x: rawStart.x, y: rawStart.y };
         const pEnd = offsetFromFace(rawEnd, plan.inFace, 4);
+        const band = plan.band || 0;
 
-        if (plan.kind === 'adj') {
-          if (!wantLR) {
+        if (plan.kind === 'midCross') {
+          if (plan.exitGap === null && plan.enterGap === null && Math.abs(p0.x - pEnd.x) <= 2) {
+            pts = [p0, { x: p0.x, y: pEnd.y }];
+          } else {
+            const my = midTrackCoord(plan.midTrackIdx);
+            pts = [p0];
+            if (plan.exitGap !== null) {
+              const exitX = trackCoord(plan.exitGap, plan.exitTrackIdx, plan.exitBand);
+              pts.push({ x: exitX, y: p0.y });
+              pts.push({ x: exitX, y: my });
+            } else {
+              pts.push({ x: p0.x, y: my });
+            }
+            if (plan.enterGap !== null) {
+              const enterX = trackCoord(plan.enterGap, plan.enterTrackIdx, plan.enterBand);
+              pts.push({ x: enterX, y: my });
+              pts.push({ x: enterX, y: pEnd.y });
+            } else {
+              pts.push({ x: pEnd.x, y: my });
+            }
+            pts.push(pEnd);
+          }
+        } else if (plan.kind === 'adj') {
+          if (!effLR) {
             if (Math.abs(p0.x - pEnd.x) <= 2) {
               pts = [p0, { x: p0.x, y: pEnd.y }];
             } else {
-              const aisleY = trackCoord(plan.gapIdx, plan.trackIdx);
+              const aisleY = trackCoord(plan.gapIdx, plan.trackIdx, band);
               pts = [p0, { x: p0.x, y: aisleY }, { x: pEnd.x, y: aisleY }, pEnd];
             }
           } else if (Math.abs(p0.y - pEnd.y) <= 2) {
             pts = [p0, { x: pEnd.x, y: p0.y }];
           } else {
-            const aisleX = trackCoord(plan.gapIdx, plan.trackIdx);
+            const aisleX = trackCoord(plan.gapIdx, plan.trackIdx, band);
             pts = [p0, { x: aisleX, y: p0.y }, { x: aisleX, y: pEnd.y }, pEnd];
           }
         } else {
           const gc = corridorCoord(plan);
           pts = [p0];
-          if (!wantLR) {
+          if (!effLR) {
             let curY = p0.y;
             if (plan.exitGap !== null) {
-              const exitY = trackCoord(plan.exitGap, plan.exitTrackIdx);
+              const exitY = trackCoord(plan.exitGap, plan.exitTrackIdx, band);
               pts.push({ x: p0.x, y: exitY });
               curY = exitY;
             }
             pts.push({ x: gc, y: curY });
             if (plan.enterGap !== null) {
-              const enterY = trackCoord(plan.enterGap, plan.enterTrackIdx);
+              const enterY = trackCoord(plan.enterGap, plan.enterTrackIdx, band);
               pts.push({ x: gc, y: enterY });
               pts.push({ x: pEnd.x, y: enterY });
             } else {
@@ -818,13 +1064,13 @@
           } else {
             let curX = p0.x;
             if (plan.exitGap !== null) {
-              const exitX = trackCoord(plan.exitGap, plan.exitTrackIdx);
+              const exitX = trackCoord(plan.exitGap, plan.exitTrackIdx, band);
               pts.push({ x: exitX, y: p0.y });
               curX = exitX;
             }
             pts.push({ x: curX, y: gc });
             if (plan.enterGap !== null) {
-              const enterX = trackCoord(plan.enterGap, plan.enterTrackIdx);
+              const enterX = trackCoord(plan.enterGap, plan.enterTrackIdx, band);
               pts.push({ x: enterX, y: gc });
               pts.push({ x: enterX, y: pEnd.y });
             } else {
@@ -1123,7 +1369,7 @@
               '</div>'
             : '') +
           '<div class="dag-node-foot">' +
-          renderAnchorPills(n.blocks) +
+          renderAnchorPills(n.blocks, maxAnchors) +
           '</div></div>'
         );
       })
@@ -1470,7 +1716,7 @@
   };
   const SPATIAL_GROUP_PALETTE = ['var(--cinnabar)', 'var(--indigo)', 'var(--pine)', 'var(--amber)'];
 
-  function measureSpatialSizes(nodes, cardW, expandAll) {
+  function measureSpatialSizes(nodes, cardW, expandAll, maxAnchors) {
     const stage = ensureMeasureStage();
     const sizes = new Map();
     stage.style.width = cardW + 'px';
@@ -1500,7 +1746,7 @@
               '</div>'
             : '') +
           '<div class="dag-node-foot">' +
-          renderAnchorPills(n.blocks) +
+          renderAnchorPills(n.blocks, maxAnchors) +
           '</div></div>'
       )
       .join('');
@@ -1520,6 +1766,30 @@
 
   function resolveSpatialPositions(nodes, sizes, bounds) {
     const { padL, padR, padT, padB, W, H } = bounds;
+    const clampX = (v, w) => Math.max(padL, Math.min(W - padR - w, v));
+    const clampY = (v, h) => Math.max(padT, Math.min(H - padB - h, v));
+    const separateAxis = (a, b, axis, dir, total) => {
+      if (axis === 'x') {
+        const a0 = a.x;
+        const b0 = b.x;
+        const a1 = clampX(a0 + dir * (total * 0.5), a.w);
+        const movedA = (a1 - a0) * dir;
+        const b1 = clampX(b0 - dir * (total - movedA), b.w);
+        const movedB = (b0 - b1) * dir;
+        a.x = movedA + movedB < total ? clampX(a1 + dir * (total - movedA - movedB), a.w) : a1;
+        b.x = b1;
+      } else {
+        const a0 = a.y;
+        const b0 = b.y;
+        const a1 = clampY(a0 + dir * (total * 0.5), a.h);
+        const movedA = (a1 - a0) * dir;
+        const b1 = clampY(b0 - dir * (total - movedA), b.h);
+        const movedB = (b0 - b1) * dir;
+        a.y = movedA + movedB < total ? clampY(a1 + dir * (total - movedA - movedB), a.h) : a1;
+        b.y = b1;
+      }
+    };
+
     const boxes = nodes.map((n, idx) => {
       const sz = sizes.get(n.id);
       const nx = Math.max(0, Math.min(100, Number(n.x || 0))) / 100;
@@ -1559,70 +1829,55 @@
             moved = true;
             const ox = Math.min(ax2, bx2) - Math.max(ax1, bx1);
             const oy = Math.min(ay2, by2) - Math.max(ay1, by1);
+            const dxOrig = Math.abs(a.origCx - b.origCx);
+            const dyOrig = Math.abs(a.origCy - b.origCy);
             const preferX =
-              ox < oy || (Math.abs(a.origCx - b.origCx) > Math.abs(a.origCy - b.origCy) * 1.4 && ox < oy * 1.6);
+              iter < 90
+                ? ox < oy || (dxOrig > dyOrig * 1.4 && ox < oy * 1.6)
+                : iter < 150
+                  ? ox <= oy
+                  : ox <= oy * 0.65;
             if (preferX) {
-              const dir =
-                Math.abs(a.origCx - b.origCx) > 1
-                  ? a.origCx < b.origCx
-                    ? -1
-                    : 1
-                  : a.x <= b.x
-                    ? -1
-                    : 1;
-              a.x += dir * (ox * 0.55 + 1);
-              b.x -= dir * (ox * 0.55 + 1);
+              const dir = dxOrig > 1 ? (a.origCx < b.origCx ? -1 : 1) : a.x <= b.x ? -1 : 1;
+              separateAxis(a, b, 'x', dir, ox + 3);
             } else {
-              const dir =
-                Math.abs(a.origCy - b.origCy) > 1
-                  ? a.origCy < b.origCy
-                    ? -1
-                    : 1
-                  : a.y <= b.y
-                    ? -1
-                    : 1;
-              a.y += dir * (oy * 0.55 + 1);
-              b.y -= dir * (oy * 0.55 + 1);
+              const dir = dyOrig > 1 ? (a.origCy < b.origCy ? -1 : 1) : a.y <= b.y ? -1 : 1;
+              separateAxis(a, b, 'y', dir, oy + 3);
             }
-            a.x = Math.max(padL, Math.min(W - padR - a.w, a.x));
-            a.y = Math.max(padT, Math.min(H - padB - a.h, a.y));
-            b.x = Math.max(padL, Math.min(W - padR - b.w, b.x));
-            b.y = Math.max(padT, Math.min(H - padB - b.h, b.y));
           }
         }
       }
       if (iter < 40) {
         boxes.forEach((b) => {
-          b.x = Math.max(padL, Math.min(W - padR - b.w, b.x + (b.origX - b.x) * 0.05));
-          b.y = Math.max(padT, Math.min(H - padB - b.h, b.y + (b.origY - b.y) * 0.05));
+          b.x = clampX(b.x + (b.origX - b.x) * 0.05, b.w);
+          b.y = clampY(b.y + (b.origY - b.y) * 0.05, b.h);
         });
       } else if (!moved) {
         break;
       }
     }
 
-    // Strict final pass: if boundary clamping left any pair touching, nudge on whichever axis has free space
-    for (let pass = 0; pass < 80; pass++) {
+    // Strict final pass: guarantee separation within wall bounds, alternating axes if jammed
+    const minGap = 10;
+    for (let pass = 0; pass < 120; pass++) {
       let anyHit = false;
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
           const a = boxes[i];
           const b = boxes[j];
-          if (a.x < b.x + b.w + 8 && a.x + a.w + 8 > b.x && a.y < b.y + b.h + 8 && a.y + a.h + 8 > b.y) {
+          if (a.x < b.x + b.w + minGap && a.x + a.w + minGap > b.x && a.y < b.y + b.h + minGap && a.y + a.h + minGap > b.y) {
             anyHit = true;
-            const ox = Math.min(a.x + a.w + 8, b.x + b.w + 8) - Math.max(a.x, b.x);
-            const oy = Math.min(a.y + a.h + 8, b.y + b.h + 8) - Math.max(a.y, b.y);
-            const stepX = ox * 0.6 + 2;
-            const stepY = oy * 0.6 + 2;
-            const canX = (a.x - padL) + (W - padR - (b.x + b.w)) > ox || (b.x - padL) + (W - padR - (a.x + a.w)) > ox;
-            if (ox <= oy && canX) {
+            const ox = Math.min(a.x + a.w + minGap, b.x + b.w + minGap) - Math.max(a.x, b.x);
+            const oy = Math.min(a.y + a.h + minGap, b.y + b.h + minGap) - Math.max(a.y, b.y);
+            const roomX = (a.x - padL) + (W - padR - (a.x + a.w)) + (b.x - padL) + (W - padR - (b.x + b.w));
+            const roomY = (a.y - padT) + (H - padB - (a.y + a.h)) + (b.y - padT) + (H - padB - (b.y + b.h));
+            const useX = pass > 24 && pass % 3 === 2 ? false : ox <= oy && roomX > ox;
+            if (useX || roomY < oy) {
               const dir = a.x <= b.x ? -1 : 1;
-              a.x = Math.max(padL, Math.min(W - padR - a.w, a.x + dir * stepX));
-              b.x = Math.max(padL, Math.min(W - padR - b.w, b.x - dir * stepX));
+              separateAxis(a, b, 'x', dir, ox + 4);
             } else {
               const dir = a.y <= b.y ? -1 : 1;
-              a.y = Math.max(padT, Math.min(H - padB - a.h, a.y + dir * stepY));
-              b.y = Math.max(padT, Math.min(H - padB - b.h, b.y - dir * stepY));
+              separateAxis(a, b, 'y', dir, oy + 4);
             }
           }
         }
@@ -1658,24 +1913,26 @@
 
     const wideMode = Boolean(options && options.wide);
     const expandAll = Boolean(options && options.expandAll);
-    const cardW = 140;
-    const sizes = measureSpatialSizes(nodes, cardW, expandAll);
+    const maxAnchors = !expandAll ? 4 : 0;
+    const cardW = expandAll ? 174 : 140;
+    const sizes = measureSpatialSizes(nodes, cardW, expandAll, maxAnchors);
     const maxNodeH = Math.max(80, ...Array.from(sizes.values()).map((s) => s.h));
-    let W = expandAll ? 1180 : 980;
-    let H = expandAll ? Math.max(780, 440 + Math.round(maxNodeH * 2.2)) : 620;
+    const paddedArea = Array.from(sizes.values()).reduce((s, sz) => s + (sz.w + 28) * (sz.h + 28), 0);
+    let W = expandAll ? Math.max(1220, Math.ceil(Math.sqrt(paddedArea * 2.4))) : 980;
+    let H = expandAll ? Math.max(820, 480 + Math.round(maxNodeH * 2.1), Math.ceil((paddedArea * 2.2) / W)) : 620;
     let pos = resolveSpatialPositions(nodes, sizes, { padL: 24, padR: 24, padT: 48, padB: 28, W, H });
     const hasPosOverlap = (pMap) => {
       const list = Array.from(pMap.values());
       for (let i = 0; i < list.length; i++) {
         for (let j = i + 1; j < list.length; j++) {
-          if (rectsOverlap(list[i], list[j], 4)) return true;
+          if (rectsOverlap(list[i], list[j], 6)) return true;
         }
       }
       return false;
     };
-    if (hasPosOverlap(pos)) {
-      W += 220;
-      H += 200;
+    for (let grow = 0; grow < 6 && hasPosOverlap(pos); grow++) {
+      W += 260;
+      H += 220;
       pos = resolveSpatialPositions(nodes, sizes, { padL: 24, padR: 24, padT: 48, padB: 28, W, H });
     }
     const idMap = new Map(nodes.map((n) => [n.id, n]));
@@ -1933,7 +2190,7 @@
               '</div>'
             : '') +
           '<div class="dag-node-foot">' +
-          renderAnchorPills(n.blocks) +
+          renderAnchorPills(n.blocks, maxAnchors) +
           '</div></div>'
         );
       })
@@ -2562,6 +2819,7 @@
     let natH = 0;
     let fitScale = 1;
     let curScale = 1;
+    let manualZoom = false;
 
     const applyScale = (next) => {
       curScale = Math.max(0.3, Math.min(1.5, Number(next.toFixed(2))));
@@ -2614,10 +2872,10 @@
         fitScale = isTableCanvas
           ? Math.max(0.5, Math.min(1, availW / natW))
           : Math.max(0.32, Math.min(1, availW / natW, availH / natH));
-        if (!preserveScale) {
+        if (!preserveScale || !manualZoom) {
           curScale = fitScale < 0.96 ? Number(fitScale.toFixed(2)) : 1;
         }
-      } else if (!preserveScale) {
+      } else if (!preserveScale || !manualZoom) {
         curScale = 1;
       }
       applyScale(curScale);
@@ -2633,12 +2891,27 @@
         paintWide(true);
       };
     }
-    if (outBtn) outBtn.onclick = () => applyScale(curScale - 0.15);
-    if (inBtn) inBtn.onclick = () => applyScale(curScale + 0.15);
+    if (outBtn) {
+      outBtn.onclick = () => {
+        manualZoom = true;
+        applyScale(curScale - 0.15);
+      };
+    }
+    if (inBtn) {
+      inBtn.onclick = () => {
+        manualZoom = true;
+        applyScale(curScale + 0.15);
+      };
+    }
     if (fitBtn) {
       fitBtn.onclick = () => {
-        if (fitScale < 0.96 && Math.abs(curScale - fitScale) >= 0.03) applyScale(fitScale);
-        else applyScale(1);
+        if (fitScale < 0.96 && Math.abs(curScale - fitScale) >= 0.03) {
+          manualZoom = false;
+          applyScale(fitScale);
+        } else {
+          manualZoom = true;
+          applyScale(1);
+        }
       };
     }
   }

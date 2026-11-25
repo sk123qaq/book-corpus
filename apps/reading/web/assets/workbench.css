@@ -1540,6 +1540,7 @@ body.chapter-desk .right-marginalia .drawer-body {
   border: 1px solid var(--line);
 }
 .blk-anchor:hover { background: var(--cinnabar-soft); border-color: var(--cinnabar); }
+.blk-anchor-more { color: var(--ink-2); background: var(--paper); font-weight: 600; }
 
 .bp-stage-inner {
   padding: 8px;
