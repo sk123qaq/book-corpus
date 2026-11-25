@@ -140,16 +140,21 @@ READ_PROFILES: dict[str, ReadProfileMeta] = {
         adler_category="6. 社会科学",
         goal="以议题为中心：厘清混杂术语、多变量因果反馈与跨作者对照",
         blueprints=(
-            BlueprintHint("causal_loop", "因果反馈回路图", "标出 + / - 反馈与滞后锁定效应"),
-            BlueprintHint("concept_matrix", "跨学派概念矩阵", "梳理不同学者对同一术语的界定差异"),
-            BlueprintHint("metric_chart", "实证趋势图", "还原支撑观点的长周期或对比数据"),
+            BlueprintHint("causal_loop", "因果反馈回路图", "标出 + / - 反馈、滞后与锁定回路"),
+            BlueprintHint("concept_matrix", "跨学派概念矩阵", "对照不同学派与政策立场对同一概念的界定分歧"),
+            BlueprintHint("metric_chart", "实证数据与指标图", "还原原文真实统计数字，纯定性章节诚实退场"),
         ),
         extensions=(
             ExtensionHint(
                 "method_audit",
                 "方法与样本局限",
-                "标出定性/定量依据与抽样偏差，并联动书库跨书综述",
+                "识别本章研究方法、因果识别偏差与后续演进边界，并联动书库跨书综述",
                 cross_search=True,
+            ),
+            ExtensionHint(
+                "actor_incentives",
+                "行动者激励与博弈",
+                "拆解各方利益主体的目标激励、约束条件与博弈策略",
             ),
         ),
     ),
