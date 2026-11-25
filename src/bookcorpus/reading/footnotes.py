@@ -22,10 +22,18 @@ for _idx, _cp in enumerate(range(0x32B1, 0x32C0), 36):  # ㊱..㊿
 _CIRCLED_CHARS = "\u2460-\u2473\u3251-\u325f\u32b1-\u32bf"
 
 NOTE_HEADING_RE = re.compile(
-    r"^\s*[【\[\(（〔［]?\s*(?:(?:原书|全书|本章|本节|附录)\s*)?"
-    r"(?:注\s*释|註\s*釋|脚\s*注|腳\s*注|尾\s*注|注\s*解|引\s*注|译\s*注|譯\s*注|备\s*注|備\s*註"
-    r"|notes?|footnotes?|endnotes?)"
-    r"\s*[】\]\)）〕］]?\s*$",
+    r"^\s*[【\[\(（〔［〈《]?\s*"
+    r"(?:"
+    r"(?:作者|译者|譯者|编者|編者|校者|校|编|編|译|譯|原)?[注註](?:释|釋)?\s*\d{0,4}"
+    r"|(?:原书|全书|本书|本章|本节|各章|分章|附录)\s*(?:脚注|腳注|尾注|注释|註釋|注解|引注|译注|譯注|备注|備註)"
+    r"[^\n]{0,20}"
+    r"|(?:版本|校勘)[和与及]?(?:注释|註釋)(?:说明|說明)?"
+    r"|(?:脚注|腳注|尾注|注释|註釋|注解|引注|译注|譯注|备注|備註)"
+    r"|ご?注意"
+    r"|notes?|footnotes?|endnotes?"
+    r")"
+    r"\s*(?:[（(][^）)]*[）)])?"
+    r"\s*[】\]\)）〕］〉》]?\s*$",
     re.I,
 )
 
@@ -34,9 +42,14 @@ NOTE_CHAPTER_TITLE_RE = re.compile(
     r"chapter\s*\d+\s*[:：·.\s]*|"
     r"附录\s*[0-9A-Za-z一二三四五六七八九十]*\s*[:：·.\s]*|"
     r"appendix\s*[0-9A-Za-z]*\s*[:：·.\s]*)?"
-    r"(?:(?:原书|全书|本章|本节|各章|分章|末尾|篇末|numbered)\s*)?"
-    r"(?:注释|註釋|脚注|腳注|尾注|注解|引注|译注|譯注|备注|備註|notes|footnotes|endnotes)"
-    r"(?:\s*[（(][^）)]*[）)])?\s*$",
+    r"(?:(?:原书|全书|本书|本章|本节|各章|分章|末尾|篇末|numbered)\s*)?"
+    r"(?:"
+    r"(?:作者|译者|譯者|编者|編者|校者|校|编|編|译|譯|原)?[注註](?:释|釋)?\s*\d{0,4}"
+    r"|脚注|腳注|尾注|注释|註釋|注解|引注|译注|譯注|备注|備註|注意"
+    r"|(?:版本|校勘)[和与及]?(?:注释|註釋)(?:说明|說明)?"
+    r"|notes|footnotes|endnotes"
+    r")"
+    r"(?:\s*[（(][^）)]*[）)])?\s*[^\n]{0,16}$",
     re.I,
 )
 
@@ -78,9 +91,24 @@ _TITLE_NORM_RE = re.compile(r"[\W_]+")
 # Tier 2 上下文相关的裸前缀：Category A（方括号 / 注N）与 Category B（圆括号 / 圈数字）
 _TIER2_A_BRACKET_RE = re.compile(r"^(\[(\d{1,4}(?:[.-]\d{1,3})?)\]\s*)(\S.*)$")
 _TIER2_A_FULLBR_RE = re.compile(r"^([〔［【](\d{1,4})[〕］】]\s*)(\S.*)$")
-_TIER2_A_ZHU_RE = re.compile(rf"^(({_ZHU_CORE})\s*[：:.、\s]\s*)(\S.*)$")
+_TIER2_A_DBL_RE = re.compile(r"^(\[\[(\d{1,4})\]\]\(\)\s*)(\S.*)$")
+# 中文书常见 `注6脊髓…` 连写；只在段首且后接正文时认。
+_TIER2_A_ZHU_RE = re.compile(rf"^(({_ZHU_CORE})(?:[：:.、]\s*|\s+)?)(\S.*)$")
 _TIER2_B_PAREN_RE = re.compile(r"^([（(](\d{1,4})[）)]\s*)(\S.*)$")
 _TIER2_B_CIRCLED_RE = re.compile(rf"^(([{_CIRCLED_CHARS}])\s*)(\S.*)$")
+# Category C：`1.` / `1、` 这类只有落在注释区标题之后才认，避免吃掉有序列表。
+_TIER2_C_DOT_RE = re.compile(r"^(\s*(\d{1,4})\s*[.、．]\s*)(\S.*)$")
+
+_BARE_REF_RE = re.compile(
+    rf"(?<![0-9A-Za-z])"
+    rf"(?:注\s*(?P<zhu>[0-9]{{1,4}})"
+    rf"|註\s*(?P<zhu_t>[0-9]{{1,4}})"
+    rf"|\[(?P<bracket>[0-9]{{1,4}})\]"
+    rf"|〔(?P<fullbr>[0-9]{{1,4}})〕"
+    rf"|［(?P<fullwidth>[0-9]{{1,4}})］"
+    rf"|【(?P<lenticular>[0-9]{{1,4}})】"
+    rf"|(?P<circled>[{_CIRCLED_CHARS}]))"
+)
 
 _ALT_ZHU_NUM_RE = re.compile(r"^(?:卢梭|编者|译|原)?[注註]释?\s*(\d+|[*†‡]+)$")
 
@@ -313,11 +341,12 @@ def parse_explicit_footnote_def(raw_text: str) -> dict[str, Any] | None:
     return None
 
 
-def _match_tier2_prefix(text: str) -> tuple[str, str, str, int, str] | None:
+def _match_tier2_prefix(text: str, *, allow_dot: bool = False) -> tuple[str, str, str, int, str] | None:
     """匹配段落开头的裸注号前缀，返回 ``(category, family, display, prefix_len, key)``。"""
     for family, pat in (
         ("a_bracket", _TIER2_A_BRACKET_RE),
         ("a_fullbr", _TIER2_A_FULLBR_RE),
+        ("a_dbl", _TIER2_A_DBL_RE),
         ("a_zhu", _TIER2_A_ZHU_RE),
     ):
         m = pat.match(text)
@@ -334,6 +363,12 @@ def _match_tier2_prefix(text: str) -> tuple[str, str, str, int, str] | None:
             display, key = normalize_marker(m.group(2))
             if key:
                 return "B", family, display, len(m.group(1)), key
+    if allow_dot:
+        m = _TIER2_C_DOT_RE.match(text)
+        if m:
+            display, key = normalize_marker(m.group(2))
+            if key:
+                return "C", "c_dot", display, len(m.group(1)), key
     return None
 
 
@@ -361,9 +396,218 @@ def _reset_resolution_state(blocks: list[dict[str, Any]]) -> None:
                 ref.pop("target_chapter", None)
 
 
+def _promote_note_paragraph(block: dict[str, Any], info: tuple[str, str, str, int, str]) -> None:
+    """把带注号前缀的普通段落提升为 footnote 定义块，并剥掉前缀。"""
+    _cat, _family, display, prefix_len, _key = info
+    block["kind"] = "footnote"
+    block["marker"] = display
+    raw_txt = str(block.get("text") or "")
+    block["text"] = raw_txt[prefix_len:]
+    block["chars"] = _han_count(block["text"])
+    for inner_ref in block.get("fn_refs") or []:
+        inner_ref["pos"] = int(inner_ref.get("pos", 0)) - prefix_len
+    refs = [r for r in block.get("fn_refs") or [] if int(r.get("pos", 0)) >= 0]
+    if refs:
+        block["fn_refs"] = refs
+    else:
+        block.pop("fn_refs", None)
+
+
+def _promote_notes_section(blocks: list[dict[str, Any]], notes_start_idx: int) -> int:
+    """注释区标题之后，把 `注N`/`[N]`/`①`/`N.` 开头的段落全部提升为 footnote。"""
+    promoted = 0
+    for idx in range(notes_start_idx + 1, len(blocks)):
+        block = blocks[idx]
+        if block.get("kind") != "paragraph":
+            continue
+        info = _match_tier2_prefix(str(block.get("text") or ""), allow_dot=True)
+        if not info:
+            continue
+        _promote_note_paragraph(block, info)
+        promoted += 1
+    return promoted
+
+
+def _promote_trailing_notes(blocks: list[dict[str, Any]]) -> int:
+    """没有注释区标题时，把文末连续同族的 `注N`/`[N]`/`(N)`/圈码段落提升为 footnote。
+
+    至少连续 3 段才认，避免把正文末尾的短括号说明误当注文。
+    """
+    run: list[tuple[int, dict[str, Any], tuple[str, str, str, int, str]]] = []
+    family = ""
+    for idx in range(len(blocks) - 1, -1, -1):
+        block = blocks[idx]
+        if block.get("kind") != "paragraph":
+            break
+        info = _match_tier2_prefix(str(block.get("text") or ""))
+        if not info or info[0] not in ("A", "B"):
+            break
+        if not family:
+            family = info[1]
+        elif info[1] != family:
+            break
+        run.append((idx, block, info))
+    if len(run) < 3:
+        return 0
+    for _idx, block, info in run:
+        _promote_note_paragraph(block, info)
+    return len(run)
+
+
+def _promote_trailing_note_list(blocks: list[dict[str, Any]]) -> int:
+    """文末整块 endnote list（`- [[1]]()…` / `- 注1 …`）拆成 footnote 块。"""
+    if not blocks or blocks[-1].get("kind") != "list":
+        return 0
+    items = [str(item) for item in (blocks[-1].get("items") or [])]
+    if len(items) < 3:
+        return 0
+    infos = [_match_tier2_prefix(item) for item in items]
+    item_refs = blocks[-1].get("item_fn_refs") or []
+    markers: list[str] = []
+    matched = 0
+    for idx, (_item, info) in enumerate(zip(items, infos, strict=False)):
+        marker = info[2] if info and info[0] in ("A", "B") else ""
+        if not marker and idx < len(item_refs) and item_refs[idx]:
+            marker = str((item_refs[idx][0] or {}).get("marker") or "")
+        markers.append(marker)
+        if marker:
+            matched += 1
+    if matched < max(3, int(len(items) * 0.6)):
+        return 0
+    blocks.pop()
+    number = len(blocks) + 1
+    for item, info, marker in zip(items, infos, markers, strict=False):
+        text = item[info[3] :] if info and info[0] in ("A", "B") else item
+        block = {
+            "id": f"B{number:02d}",
+            "kind": "footnote",
+            "text": text.strip(),
+            "chars": _han_count(text),
+        }
+        if marker:
+            block["marker"] = marker
+        blocks.append(block)
+        number += 1
+    return len(items)
+
+
+def _bare_ref_key(match: re.Match[str]) -> tuple[str, str, str]:
+    for group, style in (
+        ("zhu", "zhu"),
+        ("zhu_t", "zhu"),
+        ("bracket", "bracket"),
+        ("fullbr", "bracket"),
+        ("fullwidth", "bracket"),
+        ("lenticular", "bracket"),
+        ("circled", "circled"),
+    ):
+        raw = match.group(group)
+        if raw:
+            if group in ("zhu", "zhu_t"):
+                raw = match.group(0).strip()
+            display, key = normalize_marker(raw)
+            return display, key, style
+    return "", "", ""
+
+
+def _bare_ref_enabled(
+    key: str,
+    style: str,
+    candidates_by_key: dict[str, list[Any]],
+    has_note_chapters: bool,
+) -> bool:
+    """裸注号只在有注定义（本章）或有独立注释章（跨文件）时启用。"""
+    if not key:
+        return False
+    if any(candidates_by_key.get(alt) for alt in _marker_alt_keys(key)):
+        return True
+    # 跨文件注释章没有本地定义，只信 `注N` 与圈码这类强形态，`[N]` 留给本地定义判断。
+    return has_note_chapters and style in ("zhu", "circled")
+
+
+def _shift_ref_positions(refs: list[dict[str, Any]], spans: list[tuple[int, int]]) -> None:
+    for ref in refs:
+        pos = int(ref.get("pos", 0))
+        removed = 0
+        for start, end in spans:
+            if end <= pos:
+                removed += end - start
+            elif start < pos:
+                pos = start
+        ref["pos"] = pos - removed
+
+
+def _extract_bare_refs(
+    blocks: list[dict[str, Any]],
+    candidates_by_key: dict[str, list[Any]],
+    notes_start_idx: int | None,
+    has_note_chapters: bool,
+) -> list[tuple[int, dict[str, Any], dict[str, Any]]]:
+    """从正文段落抽裸注号，剥掉标记并入 ``fn_refs``，返回新增引用供配对。"""
+    added: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+    for idx, block in enumerate(blocks):
+        if notes_start_idx is not None and idx >= notes_start_idx:
+            break
+        if block.get("kind") not in ("paragraph", "quote"):
+            continue
+        text = str(block.get("text") or "")
+        if not text:
+            continue
+        accepted: list[tuple[re.Match[str], str, str, str]] = []
+        for match in _BARE_REF_RE.finditer(text):
+            before = text[: match.start()]
+            if not before.strip():
+                # 段首注号是定义形态，不是引用。
+                continue
+            if before.rstrip().endswith("^"):
+                # 残破的 `^1^` 已由行内表达式处理；这里不重复认。
+                continue
+            display, key, style = _bare_ref_key(match)
+            if not _bare_ref_enabled(key, style, candidates_by_key, has_note_chapters):
+                continue
+            accepted.append((match, display, key, style))
+        if not accepted:
+            continue
+        spans = [match.span() for match, _d, _k, _s in accepted]
+        _shift_ref_positions(block.get("fn_refs") or [], spans)
+        pieces: list[str] = []
+        cursor = 0
+        out_len = 0
+        new_refs: list[dict[str, Any]] = []
+        for match, display, key, style in accepted:
+            piece = text[cursor : match.start()]
+            pieces.append(piece)
+            out_len += len(piece)
+            new_refs.append(
+                {
+                    "marker": display,
+                    "_key": key,
+                    "_style": style,
+                    "target_file": "",
+                    "pos": out_len,
+                }
+            )
+            cursor = match.end()
+        pieces.append(text[cursor:])
+        block["text"] = "".join(pieces)
+        block["chars"] = _han_count(block["text"])
+        existing = block.get("fn_refs")
+        if not isinstance(existing, list):
+            existing = []
+            block["fn_refs"] = existing
+        base = len(existing)
+        bid = str(block.get("id") or f"B{idx + 1:02d}")
+        for offset, ref in enumerate(new_refs):
+            ref["id"] = f"fnref-{bid}-{base + offset}"
+            existing.append(ref)
+            added.append((idx, block, ref))
+    return added
+
+
 def resolve_chapter_footnotes(
     blocks: list[dict[str, Any]],
     source_files: list[str] | tuple[str, ...] = (),
+    note_chapters: list[str] | tuple[str, ...] = (),
 ) -> None:
     """按最终块 ID 原地配对章内脚注引用与定义，可安全重复执行（幂等）。"""
     if not blocks:
@@ -378,6 +622,10 @@ def resolve_chapter_footnotes(
         if block.get("kind") == "heading" and NOTE_HEADING_RE.match((block.get("text") or "").strip()):
             notes_start_idx = idx
             break
+    if notes_start_idx is not None:
+        _promote_notes_section(blocks, notes_start_idx)
+    else:
+        _promote_trailing_notes(blocks)
 
     # 为全部引用分配确定性 ID，同时统计本文件可见的本地引用 key 及其最早出现位置
     local_ref_indices_by_key: dict[str, list[int]] = {}
@@ -446,6 +694,8 @@ def resolve_chapter_footnotes(
         for alt in _marker_alt_keys(key):
             candidates_by_key.setdefault(alt, []).append((idx, block, 2, info))
 
+    all_refs.extend(_extract_bare_refs(blocks, candidates_by_key, notes_start_idx, bool(note_chapters)))
+
     # 执行引用到定义的就近配对
     promoted_indices: set[int] = set()
     for b_idx, block, ref in all_refs:
@@ -501,6 +751,34 @@ def resolve_chapter_footnotes(
         if ref["id"] not in ref_ids:
             ref_ids.append(ref["id"])
 
+    # 无编号的小图标（note.png）按文档顺序配给本章未引用的数字尾注，
+    # 仅在数量严格相等时启用，避免把装饰图标错配到无关脚注。
+    paired_ids = {id(ref) for _b_idx, _block, ref in all_refs if ref.get("target_block")}
+    generic_icons = [
+        (b_idx, block, ref)
+        for b_idx, block, ref in all_refs
+        if id(ref) not in paired_ids
+        and ref.get("_style") == "icon"
+        and str(ref.get("marker") or "").lower() in {"", "note", "notes", "footnote", "tip", "icon", "fn", "注", "脚注"}
+    ]
+    lone_defs = [
+        block
+        for block in blocks
+        if block.get("kind") == "footnote" and block.get("marker") and not block.get("ref_blocks")
+    ]
+    if generic_icons and len(generic_icons) == len(lone_defs):
+        for (_b_idx, block, ref), def_block in zip(generic_icons, lone_defs, strict=False):
+            marker = str(def_block.get("marker") or "")
+            display, key = normalize_marker(marker)
+            ref["marker"] = display or marker
+            ref["_key"] = key
+            ref["target_block"] = str(def_block.get("id") or "")
+            src_bid = str(block.get("id") or "")
+            if src_bid:
+                def_block.setdefault("ref_blocks", []).append(src_bid)
+            if ref.get("id"):
+                def_block.setdefault("ref_ids", []).append(ref["id"])
+
     # 清理内部临时字段，保持返回 JSON 干净
     for block in blocks:
         block.pop("_key", None)
@@ -508,7 +786,6 @@ def resolve_chapter_footnotes(
         for _item_idx, refs in _iter_block_ref_lists(block):
             for ref in refs:
                 ref.pop("_key", None)
-                ref.pop("_style", None)
 
 
 def _norm_title(text: str) -> str:

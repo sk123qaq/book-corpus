@@ -94,7 +94,8 @@ def test_golden_ch04_block_ids_stable():
     with open(path, encoding="utf-8") as fh:
         parsed = parse_markdown(fh.read())
     ids = {block["id"] for block in parsed["blocks"]}
-    anchors = {"B03", "B08", "B18", "B24", "B29"}
+    # BLOCK_VERSION=2 把行内 note.png 折回句子，块号整体前移；黄金锚点按新块序重钉。
+    anchors = {"B03", "B06", "B14", "B18", "B22"}
     assert anchors <= ids, "四读黄金锚点丢了：%s" % (anchors - ids)
 
 

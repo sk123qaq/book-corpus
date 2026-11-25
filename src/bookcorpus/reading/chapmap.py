@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import events
 from .map_schema import PROMPT_VERSION, ChapterModelError, validate_chapter_model
+from .mdparse import BLOCK_VERSION
 from .model import DEFAULT_EFFORT, DEFAULT_MODEL, MAX_TOKENS, ModelProviderError, ModelTruncatedError
 from .textnorm import normalize_verbatim
 
@@ -271,10 +272,24 @@ def _strip_chunk_prefix(value, id_prefix):
     return value
 
 
+def _short_line_ratio(chunk):
+    """段落块里 ≤40 字的比例；戏剧台词、诗歌、OCR 碎行会非常高。"""
+    texts = [
+        str(block.get("text") or "").strip()
+        for block in chunk
+        if isinstance(block, dict) and (block.get("kind") or "paragraph") == "paragraph"
+    ]
+    texts = [text for text in texts if text]
+    if len(texts) < 20:
+        return 0.0
+    return sum(1 for text in texts if len(text) <= 40) / len(texts)
+
+
 def _cover_structural_blocks(data, chunk):
     """Put structural leftovers into non_semantic instead of failing coverage."""
     if not chunk:
         return
+    short_line_heavy = _short_line_ratio(chunk) >= 0.6
     referenced = set()
     for unit in data.get("units") or []:
         if isinstance(unit, dict):
@@ -303,6 +318,9 @@ def _cover_structural_blocks(data, chunk):
             reason = "decorative" if not text else "image"
         elif text.startswith("图") and len(text) <= 40:
             reason = "caption"
+        elif len(text) <= 40 and short_line_heavy and kind == "paragraph":
+            # 戏剧/诗歌/对话体：短段是正文台词，不能一刀切成 heading/transition 丢掉。
+            reason = "dialogue"
         elif len(text) <= 40 and not text.endswith(("。", "！", "？", "；")):
             reason = "heading"
         elif len(text) <= 40:
@@ -666,7 +684,8 @@ def cache_key(source_sha256, prompt_sha256, model, effort, chunk_chars=18000, ma
         max_blocks = None
     block_limit = "all" if max_blocks is None else max_blocks
     parts = (
-        f"{source_sha256}{prompt_sha256}{model}{effort}{chunk_chars}{limit}{block_limit}{PROMPT_VERSION}{PLAN_VERSION}"
+        f"{source_sha256}{prompt_sha256}{model}{effort}{chunk_chars}{limit}{block_limit}"
+        f"{PROMPT_VERSION}{PLAN_VERSION}block{BLOCK_VERSION}"
     )
     return hashlib.sha256(parts.encode()).hexdigest()
 

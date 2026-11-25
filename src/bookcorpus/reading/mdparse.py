@@ -1,16 +1,30 @@
 """Markdown 章节解析：front matter、标题与稳定的源文块。
 
-解析只做两件事：按空行切块、把段落内换行并成一个空格。块文本不做改写，
-块 ``chars`` 是汉字数（``[\\u4e00-\\u9fff]``），章节 ``chars`` 是非空白字符数。
-图片 ``images/note.png`` 是脚注图标，不渲染大图；其余图片保留相对路径。
+按空行切块、把段落内换行并成一个空格；块文本只做转档清洗（HTML 标签/实体、
+Pandoc 属性、行内脚注图标），不改写正文。块 ``chars`` 是汉字数
+（``[\\u4e00-\\u9fff]``），章节 ``chars`` 是非空白字符数。
+``note*.png`` / ``footnote*`` / ``tip*`` / ``icon*`` 等行内小图是脚注图标，
+折进所在句子的 ``fn_refs``，不渲染大图；其余图片保留相对路径。
+``BLOCK_VERSION`` 标记块号生成口径，解析规则改变块号时必须递增。
 """
 
+import html
 import os
 import re
 import struct
+from html.parser import HTMLParser
 from urllib.parse import unquote
 
-from .footnotes import extract_inline_footnotes, parse_explicit_footnote_def, resolve_chapter_footnotes
+from .footnotes import (
+    _PLAIN_ENDNOTE_LINE_RE,
+    _marker_alt_keys,
+    _match_tier2_prefix,
+    _promote_trailing_note_list,
+    extract_inline_footnotes,
+    normalize_marker,
+    parse_explicit_footnote_def,
+    resolve_chapter_footnotes,
+)
 
 HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
@@ -25,6 +39,27 @@ CODE_FENCE_RE = re.compile(r"^```(\S*)\s*$")
 TABLE_ROW_RE = re.compile(r"^\|.*\|\s*$")
 TABLE_ALIGN_RE = re.compile(r":?-{1,}:?")
 FRONT_MATTER_LIMIT = 60
+# 块号生成口径的版本号：解析规则一变，旧 chapter_map / chapter_tool 缓存必须失效，
+# 否则会拿旧块号去查新块，静默错位。改块号生成规则时递增。
+BLOCK_VERSION = 2
+
+_HTML_TAG_RE = re.compile(
+    r"</?(?:sup|sub|span|div|a|br|i|b|u|em|strong|small|big|font|p|td|tr|th|tbody|thead|table|img)\b[^>]*>",
+    re.I,
+)
+_PANDOC_CALIBRE_RE = re.compile(r"\s*\{[^{}\n]*\.calibre[^{}\n]*\}")
+_HTML_TABLE_RE = re.compile(r"<table\b[^>]*>.*?</table\s*>", re.I | re.S)
+_HTML_TABLE_LIMIT_ROWS = 300
+_HTML_TABLE_LIMIT_COLS = 30
+_HTML_TABLE_LIMIT_CELL = 400
+_HTML_TABLE_LIMIT_PROJECTION = 20000
+
+# 行内脚注图标先折成私有区占位符，句子合并后再物化成 fn_refs。
+_ICON_OPEN = "\ue100"
+_ICON_CLOSE = "\ue101"
+_ICON_TOKEN_RE = re.compile(re.escape(_ICON_OPEN) + r"(\d+)" + re.escape(_ICON_CLOSE))
+_ICON_STEM_RE = re.compile(r"^(?:note|footnote|tip|icon|fn)[_-]?\d*$", re.I)
+_INLINE_ICON_MAX_PX = 240
 
 
 def han_count(text):
@@ -110,20 +145,109 @@ def _take_h1(body):
 
 
 def _clean_inline(text):
-    """只清行内强调标记，保留正文用字。"""
+    """清行内强调、HTML 内联标签/实体与 Pandoc 属性，保留正文用字。"""
     text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
     text = INLINE_IMAGE_RE.sub("", text)
     text = INLINE_LINK_RE.sub(r"\1", text)
     text = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"\1", text)
-    return re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    if "<" in text:
+        text = _HTML_TAG_RE.sub("", text)
+    text = _PANDOC_CALIBRE_RE.sub("", text)
+    if "&" in text:
+        text = html.unescape(text)
+    return re.sub(r"[ \t\u00a0]+", " ", text).strip()
 
 
 def _clean_list_item(text):
     return _clean_inline(text).replace("**", "").lstrip("*").strip()
 
 
-def _append(blocks, kind, text, **extra):
-    cleaned, fn_refs = extract_inline_footnotes(text.strip(), _clean_inline)
+def _icon_ref(rel):
+    stem = unquote(rel.rsplit("/", 1)[-1]).rsplit(".", 1)[0].strip() or "note"
+    digits = re.search(r"(\d{1,3})", stem)
+    return {
+        "marker": digits.group(1) if digits else stem,
+        "_style": "icon",
+        "target_file": "",
+    }
+
+
+def _image_path(rel, base_dir):
+    if not base_dir:
+        return None
+    root = os.path.normpath(base_dir)
+    path = os.path.normpath(os.path.join(root, unquote(rel)))
+    prefix = root if root.endswith(os.sep) else root + os.sep
+    if not path.startswith(prefix):
+        return None
+    return path
+
+
+def _fold_inline_icons(text, base_dir=None):
+    """把夹在句子中的脚注图标折成占位符，返回 ``(text, icon_refs)``。
+
+    同时吃掉紧贴图标的 ``^``、``[ ]()`` 包装，避免留下 `^` 或 `](` 碎渣。
+    """
+    out: list[str] = []
+    refs: list[dict] = []
+    pos = 0
+    for match in IMAGE_RE.finditer(text):
+        start, end = match.span()
+        alt, rel = match.group(1), match.group(2)
+        inline = bool(text[:start].strip()) and bool(text[end:].strip())
+        if _image_kind(rel, base_dir, inline=inline, alt=alt) != "footnote":
+            continue
+        left, right = start, end
+        if left > 0 and text[left - 1] == "^":
+            left -= 1
+        if right < len(text) and text[right] == "^":
+            right += 1
+        if left > 0 and text[left - 1] == "[" and text.startswith("]()", right):
+            left -= 1
+            right += 3
+            if right < len(text) and text[right] == "^":
+                right += 1
+        out.append(text[pos:left])
+        out.append("%s%d%s" % (_ICON_OPEN, len(refs), _ICON_CLOSE))
+        refs.append(_icon_ref(rel))
+        pos = right
+    if not refs:
+        return text, []
+    out.append(text[pos:])
+    return "".join(out), refs
+
+
+def _materialize_icon_refs(cleaned, icon_refs):
+    """把占位符从文本里去掉，按出现位置生成 fn_refs。"""
+    entries: list[dict] = []
+    pieces: list[str] = []
+    cursor = 0
+    out_len = 0
+    for match in _ICON_TOKEN_RE.finditer(cleaned):
+        piece = cleaned[cursor : match.start()]
+        pieces.append(piece)
+        out_len += len(piece)
+        idx = int(match.group(1))
+        if 0 <= idx < len(icon_refs):
+            entry = dict(icon_refs[idx])
+            entry["pos"] = out_len
+            entries.append(entry)
+        cursor = match.end()
+    pieces.append(cleaned[cursor:])
+    return "".join(pieces), entries
+
+
+def _finish_inline(text, icon_refs=None, cleaner=_clean_inline):
+    cleaned, fn_refs = extract_inline_footnotes(text.strip(), cleaner)
+    if icon_refs:
+        cleaned, icon_entries = _materialize_icon_refs(cleaned, icon_refs)
+        fn_refs = sorted([*fn_refs, *icon_entries], key=lambda ref: int(ref.get("pos") or 0))
+    return cleaned, fn_refs
+
+
+def _append(blocks, kind, text, icon_refs=None, **extra):
+    cleaned, fn_refs = _finish_inline(text, icon_refs)
     block = {"id": "B%02d" % (len(blocks) + 1), "kind": kind, "text": cleaned, "chars": han_count(cleaned)}
     if fn_refs:
         block["fn_refs"] = fn_refs
@@ -163,8 +287,136 @@ def _append_table(blocks, lines, **span):
     _append_raw(blocks, "table", " ".join(flat), **extra)
 
 
-def _image_kind(rel):
-    return "footnote" if rel.rsplit("/", 1)[-1].lower() == "note.png" else "image"
+class _HTMLTableParser(HTMLParser):
+    """只抽表格结构：嵌套表格忽略内层，单元格文本按标签边界折叠。"""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tables: list[list[tuple[bool, list[str]]]] = []
+        self._depth = 0
+        self._rows: list[tuple[bool, list[str]]] | None = None
+        self._row: list[str] | None = None
+        self._row_has_head = False
+        self._cell: list[str] | None = None
+        self._cell_is_head = False
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag == "table":
+            if self._depth == 0:
+                self._rows = []
+            self._depth += 1
+            return
+        if self._depth != 1:
+            return
+        if tag == "tr":
+            self._row = []
+            self._row_has_head = False
+        elif tag in ("td", "th"):
+            self._cell = []
+            self._cell_is_head = tag == "th"
+            if tag == "th":
+                self._row_has_head = True
+        elif tag == "br" and self._cell is not None:
+            self._cell.append(" ")
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag == "table":
+            if self._depth == 1 and self._rows is not None:
+                self.tables.append(self._rows)
+                self._rows = None
+            self._depth = max(0, self._depth - 1)
+            return
+        if self._depth != 1:
+            return
+        if tag in ("td", "th") and self._cell is not None and self._row is not None:
+            cell = " ".join("".join(self._cell).split())
+            self._row.append(cell[:_HTML_TABLE_LIMIT_CELL])
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            if self._rows is not None and self._row:
+                self._rows.append((self._row_has_head, self._row[:_HTML_TABLE_LIMIT_COLS]))
+            self._row = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def _parse_html_tables(text):
+    parser = _HTMLTableParser()
+    try:
+        parser.feed(text)
+        parser.close()
+    except (ValueError, AssertionError):
+        return []
+    return parser.tables
+
+
+def _append_html_table(blocks, text, **span):
+    grids = _parse_html_tables(text)
+    if not grids:
+        return False
+    for grid in grids:
+        head: list[str] = []
+        rows: list[list[str]] = []
+        for is_head, row in grid:
+            if is_head and not head:
+                head = row
+                continue
+            rows.append(row)
+        truncated = len(rows) > _HTML_TABLE_LIMIT_ROWS
+        rows = rows[:_HTML_TABLE_LIMIT_ROWS]
+        flat = [cell for row in ([head] if head else []) + rows for cell in row if cell]
+        projection = " ".join(flat)
+        if len(projection) > _HTML_TABLE_LIMIT_PROJECTION:
+            projection = projection[:_HTML_TABLE_LIMIT_PROJECTION] + "…"
+        elif truncated:
+            projection += "…"
+        extra = {"rows": rows}
+        if head:
+            extra["head"] = head
+        if truncated:
+            extra["truncated"] = True
+        _append_raw(blocks, "table", projection, **extra, **span)
+    return True
+
+
+def _image_size_bytes(path):
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return None
+
+
+def _image_kind(rel, base_dir=None, *, inline=False, alt=""):
+    """判断图片是不是脚注图标。
+
+    文件名规则优先（note/note_2..6/footnote/tip/icon/fn），其次看行内上下文：
+    句中被引用、磁盘存在且最长边 ≤240px、体积 <200KB 的小图按图标处理。
+    正文里正常的图表随图一般成块出现，不会被行内规则吃掉。
+    """
+    stem = unquote(rel.rsplit("/", 1)[-1]).rsplit(".", 1)[0].strip()
+    if _ICON_STEM_RE.fullmatch(stem):
+        return "footnote"
+    if stem.lower().endswith(("_icon", "-icon")):
+        return "footnote"
+    if not inline or not base_dir:
+        return "image"
+    alt_text = (alt or "").strip().lower()
+    if alt_text not in ("note", "footnote", "icon", "tip", "脚注", "注"):
+        return "image"
+    path = _image_path(rel, base_dir)
+    if not path:
+        return "image"
+    size = _image_size_bytes(path)
+    if size is None or size >= 200 * 1024:
+        return "image"
+    dims = image_size(path)
+    if dims and max(dims) <= _INLINE_ICON_MAX_PX:
+        return "footnote"
+    return "image"
 
 
 def _jpeg_size(data):
@@ -262,12 +514,8 @@ def image_size(path):
 
 
 def _image_extra(rel, base_dir):
-    if not base_dir:
-        return {}
-    root = os.path.normpath(base_dir)
-    path = os.path.normpath(os.path.join(root, unquote(rel)))
-    prefix = root if root.endswith(os.sep) else root + os.sep
-    if not path.startswith(prefix):
+    path = _image_path(rel, base_dir)
+    if not path:
         return {}
     size = image_size(path)
     if not size:
@@ -276,27 +524,33 @@ def _image_extra(rel, base_dir):
 
 
 def _emit_inline(blocks, text, base_dir=None, **span):
-    """段落里可能夹着图片；图片单独成块，其余文字保住顺序。"""
+    """段落里可能夹着图片；脚注图标并入句子，其余图片单独成块。"""
+    folded, icon_refs = _fold_inline_icons(text, base_dir)
+    consumed = 0
+
+    def take_icons(segment):
+        nonlocal consumed
+        count = segment.count(_ICON_OPEN)
+        refs = icon_refs[consumed : consumed + count]
+        consumed += count
+        return refs
+
     pos = 0
-    for match in IMAGE_RE.finditer(text):
-        before = text[pos : match.start()]
+    for match in IMAGE_RE.finditer(folded):
+        before = folded[pos : match.start()]
         if before.strip():
-            _append(blocks, "paragraph", before, **span)
+            _append(blocks, "paragraph", before, icon_refs=take_icons(before), **span)
         alt, rel = match.group(1), match.group(2)
-        kind = _image_kind(rel)
-        if kind == "footnote":
-            _append(blocks, "footnote", alt, rel=rel, **span)
-        else:
-            _append(blocks, "image", alt, rel=rel, **_image_extra(rel, base_dir), **span)
+        _append(blocks, "image", alt, rel=rel, **_image_extra(rel, base_dir), **span)
         pos = match.end()
-    tail = text[pos:]
+    tail = folded[pos:]
     if tail.strip():
-        _append(blocks, "paragraph", tail, **span)
+        _append(blocks, "paragraph", tail, icon_refs=take_icons(tail), **span)
 
 
 def _heading_text(text):
-    """标题里的粗体标记是排版噪声；去掉并折叠空格。"""
-    return " ".join(text.replace("**", "").split())
+    """标题里的粗体、HTML 标签与实体是排版噪声；去掉并折叠空格。"""
+    return " ".join(_clean_inline(text.replace("**", "")).split())
 
 
 def _parse_chunk(blocks, chunk, base_dir=None, *, start_line=0, end_line=0):
@@ -306,6 +560,22 @@ def _parse_chunk(blocks, chunk, base_dir=None, *, start_line=0, end_line=0):
         return
     if all(HR_RE.match(line.strip()) for line in lines):
         return
+
+    if _HTML_TABLE_RE.search(chunk):
+        cursor = 0
+        matched = False
+        for table_match in _HTML_TABLE_RE.finditer(chunk):
+            before = chunk[cursor : table_match.start()]
+            if before.strip():
+                _emit_inline(blocks, " ".join(before.split("\n")).strip(), base_dir, **span)
+            if _append_html_table(blocks, table_match.group(0), **span):
+                matched = True
+            cursor = table_match.end()
+        tail = chunk[cursor:]
+        if tail.strip():
+            _emit_inline(blocks, " ".join(tail.split("\n")).strip(), base_dir, **span)
+        if matched:
+            return
 
     heading = HEADING_RE.match(lines[0].strip())
     if heading and len(lines) == 1:
@@ -344,7 +614,8 @@ def _parse_chunk(blocks, chunk, base_dir=None, *, start_line=0, end_line=0):
         item_fn_refs = []
         for line in lines:
             raw_item = LIST_RE.match(line.strip()).group(1).strip()
-            cleaned_item, refs = extract_inline_footnotes(raw_item, _clean_list_item)
+            folded_item, item_icons = _fold_inline_icons(raw_item, base_dir)
+            cleaned_item, refs = _finish_inline(folded_item, item_icons, cleaner=_clean_list_item)
             items.append(cleaned_item)
             item_fn_refs.append(refs)
         extra = {"items": items}
@@ -444,27 +715,62 @@ def _attach_orphan_footnotes(blocks):
     """把正文末尾的注释列表回填到空的 footnote 块。
 
     有些书的脚注不是 `[^1]: ...` 定义，而是在章末用列表集中列出；
-    解析器会先得到若干空 footnote 块。若末尾列表条目数与空脚注数
-    完全一致，就按顺序回填并移除该列表。
+    解析器会先得到若干空 footnote 块。这里按 marker 优先、顺序兜底做
+    宽松回填：只要列表条目数不少于空脚注数就回填，多余的条目留在列表里。
     """
-    orphans = [
-        block
-        for block in blocks
-        if block["kind"] == "footnote" and not block["text"].strip() and not block.get("marker")
-    ]
+    orphans = [block for block in blocks if block["kind"] == "footnote" and not block["text"].strip()]
     if not orphans or not blocks or blocks[-1]["kind"] != "list":
         return
-    items = blocks[-1].get("items") or []
-    if len(items) != len(orphans):
+    items = list(blocks[-1].get("items") or [])
+    if len(items) < len(orphans):
         return
-    for block, text in zip(orphans, items, strict=True):
-        block["text"] = text
-        block["chars"] = han_count(text)
-    blocks.pop()
+    used: set[int] = set()
+    for orphan in orphans:
+        marker = str(orphan.get("marker") or "")
+        _, key = normalize_marker(marker)
+        chosen = None
+        if key:
+            for idx, item in enumerate(items):
+                if idx in used:
+                    continue
+                info = _match_tier2_prefix(str(item))
+                if info and key in _marker_alt_keys(info[4]):
+                    chosen = idx
+                    break
+        if chosen is None:
+            for idx in range(len(items)):
+                if idx not in used:
+                    chosen = idx
+                    break
+        if chosen is None:
+            break
+        text = items[chosen]
+        info = _match_tier2_prefix(text)
+        if info:
+            text = text[info[3] :]
+        else:
+            plain = _PLAIN_ENDNOTE_LINE_RE.match(text)
+            if plain:
+                text = text[plain.end(1) :].lstrip()
+        orphan["text"] = text
+        orphan["chars"] = han_count(text)
+        used.add(chosen)
+    keep = [idx for idx in range(len(items)) if idx not in used]
+    if not keep:
+        blocks.pop()
+        return
+    blocks[-1]["items"] = [items[idx] for idx in keep]
+    refs = blocks[-1].get("item_fn_refs")
+    if isinstance(refs, list):
+        blocks[-1]["item_fn_refs"] = [refs[idx] for idx in keep if idx < len(refs)]
 
 
-def parse_markdown(raw, stem="", meta=None, base_dir=None):
-    """解析一章。返回 ``dict``：title/blocks/sections/body_han/body_chars/meta``。"""
+def parse_markdown(raw, stem="", meta=None, base_dir=None, source_files=(), note_chapters=()):
+    """解析一章。返回 ``dict``：title/blocks/sections/body_han/body_chars/meta``。
+
+    ``source_files`` / ``note_chapters`` 透传给脚注配对，用于识别跨文件注释章；
+    单章直接调用时留空即可。
+    """
     parsed_meta, body, fm_lines = _strip_front_matter_with_lines(raw)
     merged = dict(parsed_meta)
     if meta:
@@ -483,8 +789,9 @@ def parse_markdown(raw, stem="", meta=None, base_dir=None):
             for chunk, chunk_start, chunk_end in _iter_md_chunks(seg, seg_start):
                 _parse_chunk(blocks, chunk, base_dir, start_line=chunk_start, end_line=chunk_end)
     _attach_orphan_footnotes(blocks)
-    resolve_chapter_footnotes(blocks)
-    title = (merged.get("title") or h1 or stem or "").strip()
+    _promote_trailing_note_list(blocks)
+    resolve_chapter_footnotes(blocks, source_files=source_files, note_chapters=note_chapters)
+    title = _clean_inline(merged.get("title") or h1 or stem or "")
     body_han = sum(block["chars"] for block in blocks)
     body_chars = sum(non_space_count(block["text"]) for block in blocks)
     return {
@@ -502,7 +809,7 @@ def chapter_title(raw, stem=""):
     """只读 front matter 与首个 H1，用于章表（不建块）。"""
     meta, body = strip_front_matter(raw)
     h1, _ = _take_h1(body)
-    return (meta.get("title") or h1 or stem or "").strip()
+    return _clean_inline(meta.get("title") or h1 or stem or "")
 
 
 def lean_meta(raw):
@@ -517,7 +824,7 @@ def lean_meta(raw):
     # body = 标题行 + rest（_take_h1 只切后缀），只补算被摘掉的标题行，不再扫一遍全文。
     prefix = body[: len(body) - len(rest)]
     return {
-        "title": (meta.get("title") or h1 or "").strip(),
+        "title": _clean_inline(meta.get("title") or h1 or ""),
         "chars": chars,
         "full_chars": chars + non_space_count(prefix),
     }
