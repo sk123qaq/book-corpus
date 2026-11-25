@@ -56,6 +56,24 @@
     conclusion: '结论',
     theorem: '定理',
     condition: '条件',
+    // 历史·权力与阵营
+    sovereign: '中枢/君主',
+    faction: '核心机构/派系',
+    ally: '盟友/根基',
+    rival: '敌对/制衡',
+    constraint: '条约/制度约束',
+    // 历史·因果演进
+    structural: '深层结构',
+    trigger: '触发事件',
+    mechanism: '催化机制',
+    turning_point: '关键转折',
+    consequence: '长期后果',
+    // 历史·空间态势
+    capital: '都城中枢',
+    fortress: '要塞关隘',
+    corridor: '通道平原',
+    neutral: '中立缓冲',
+    front: '外线战区',
   };
 
   const DAG_BLUEPRINTS = new Set([
@@ -63,6 +81,7 @@
     'lineage_dag',
     'power_hierarchy',
     'spatial_route',
+    'historical_causality',
     'relation_graph',
     'flow_swimlane',
     'decision_tree',
@@ -120,7 +139,7 @@
     return stage;
   }
 
-  function measureNodeSizes(nodes, cardWidth) {
+  function measureNodeSizes(nodes, cardWidth, expandAll) {
     const stage = ensureMeasureStage();
     const sizes = new Map();
     stage.style.width = cardWidth + 'px';
@@ -129,6 +148,7 @@
         (n) =>
           '<div class="dag-node role-' +
           esc(n.role || 'inference') +
+          (expandAll && n.detail ? ' expanded' : '') +
           '" style="position:relative;width:' +
           cardWidth +
           'px">' +
@@ -140,7 +160,13 @@
           '<div class="dag-node-label">' +
           esc(n.label) +
           '</div>' +
-          (n.detail ? '<div class="dag-node-more">▾ 查看展开</div>' : '') +
+          (n.detail
+            ? '<div class="dag-node-more">' +
+              (expandAll ? '▴ 收起' : '▾ 查看展开') +
+              '</div><div class="dag-node-detail">' +
+              esc(n.detail) +
+              '</div>'
+            : '') +
           '<div class="dag-node-foot">' +
           renderAnchorPills(n.blocks) +
           '</div></div>'
@@ -154,7 +180,8 @@
       } else {
         const chars = String(n.label || '').length;
         const lines = Math.max(1, Math.ceil((chars * 12.5) / Math.max(80, cardWidth - 24)));
-        sizes.set(n.id, { w: cardWidth, h: 58 + lines * 18 + (n.detail ? 16 : 0) });
+        const detH = expandAll && n.detail ? Math.ceil(String(n.detail).length / 12) * 16 + 12 : 0;
+        sizes.set(n.id, { w: cardWidth, h: 58 + lines * 18 + (n.detail ? 16 : 0) + detH });
       }
     });
     stage.innerHTML = '';
@@ -205,7 +232,7 @@
 
   let markerSeq = 0;
 
-  const DAG_ROOT_ROLES = new Set(['premise', 'axiom', 'condition']);
+  const DAG_ROOT_ROLES = new Set(['premise', 'axiom', 'condition', 'sovereign', 'structural', 'trigger', 'capital']);
 
   function isNegativeEdgeLabel(lbl) {
     if (!lbl) return false;
@@ -217,7 +244,9 @@
       lbl.includes('切断') ||
       lbl.includes('削弱') ||
       lbl.includes('阻碍') ||
-      lbl.includes('冲突')
+      lbl.includes('冲突') ||
+      lbl.includes('敌对') ||
+      lbl.includes('反噬')
     );
   }
 
@@ -244,16 +273,18 @@
       const l2 = rev ? String(rev.label || '').trim() : '';
       const label = l2 && l2 !== l1 ? (l1 ? l1 + ' / ' + l2 : l2) : l1;
       const notes = [e.note, rev && rev.note].filter(Boolean);
+      const relType = String(e.relation_type || (rev && rev.relation_type) || '').trim();
       merged.push({
         idx: merged.length,
         from: e.from,
         to: e.to,
         label,
         note: notes.join('；'),
-        bidirectional: Boolean(rev),
+        relationType: relType,
+        bidirectional: Boolean(rev) || relType === 'balance',
         isSelfLoop: e.from === e.to,
         isCycleBack: e.from === e.to,
-        isNeg: isNegativeEdgeLabel(l1) || isNegativeEdgeLabel(l2),
+        isNeg: relType === 'hostile' || isNegativeEdgeLabel(l1) || isNegativeEdgeLabel(l2),
       });
     }
     return merged;
@@ -412,9 +443,10 @@
     if (!nodes.length) return '<div class="wb-sub">暂无图节点数据</div>';
 
     const wideMode = Boolean(options && options.wide);
+    const expandAll = Boolean(options && options.expandAll);
     const wantLR =
       wideMode &&
-      ['flow_swimlane', 'lineage_dag', 'spatial_route', 'system_flow'].includes(payload.blueprint);
+      ['flow_swimlane', 'lineage_dag', 'system_flow'].includes(payload.blueprint);
 
     const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i, rank: 0, order: 0 })]));
     const mergedEdges = prepareDagEdges(rawEdges, idMap);
@@ -425,7 +457,7 @@
       maxInRank = Math.max(maxInRank, ranks.get(r).length);
     });
     const cardW = wantLR ? 204 : maxInRank >= 4 ? 142 : maxInRank >= 2 ? 158 : 236;
-    const sizes = measureNodeSizes(nodes, cardW);
+    const sizes = measureNodeSizes(nodes, cardW, expandAll);
 
     const colGap = wantLR ? 72 : 24;
     const rowGap = wantLR ? 36 : 56;
@@ -894,11 +926,25 @@
       let dash = 'none';
       let labelKindCls = 'edge-pos';
 
-      if (isNeg) {
+      if (e.relationType === 'hostile' || isNeg) {
         stroke = 'var(--cinnabar)';
         marker = markerRed;
         labelKindCls = 'edge-neg';
         if (isBack || isSkip) dash = '6 3';
+      } else if (e.relationType === 'constraint') {
+        stroke = 'var(--amber)';
+        marker = markerAmber;
+        dash = '5 3';
+        labelKindCls = 'edge-back';
+      } else if (e.relationType === 'balance') {
+        stroke = 'var(--amber)';
+        marker = markerAmber;
+        labelKindCls = 'edge-back';
+      } else if (e.relationType === 'alliance') {
+        stroke = 'var(--indigo)';
+        marker = markerIndigo;
+        dash = '6 3';
+        labelKindCls = 'edge-skip';
       } else if (isBack) {
         stroke = 'var(--amber)';
         marker = markerAmber;
@@ -1043,9 +1089,11 @@
       .map((n) => {
         const p = pos.get(n.id);
         const firstBlk = (n.blocks && n.blocks[0]) || '';
+        const isExp = expandAll && Boolean(n.detail);
         return (
           '<div class="dag-node role-' +
           esc(n.role || 'inference') +
+          (isExp ? ' expanded' : '') +
           '" style="left:' +
           p.x +
           'px;top:' +
@@ -1068,7 +1116,9 @@
           esc(n.label) +
           '</div>' +
           (n.detail
-            ? '<div class="dag-node-more" data-toggle-detail>▾ 查看展开</div><div class="dag-node-detail">' +
+            ? '<div class="dag-node-more" data-toggle-detail>' +
+              (isExp ? '▴ 收起' : '▾ 查看展开') +
+              '</div><div class="dag-node-detail">' +
               esc(n.detail) +
               '</div>'
             : '') +
@@ -1101,8 +1151,8 @@
       fill +
       '"/></marker>';
 
-    return (
-      '<div class="dag-viewport" data-qa-target="dag"><div class="dag-canvas" style="width:' +
+    const rawCanvasHtml =
+      '<div class="dag-canvas" style="width:' +
       maxW +
       'px;height:' +
       maxH +
@@ -1124,7 +1174,99 @@
       '</svg>' +
       cardsHtml +
       htmlEdgeLabels.join('') +
-      '</div></div>' +
+      '</div>';
+
+    const narrowPreviewCap = 312;
+    const fitScale = !wideMode && maxW > narrowPreviewCap ? narrowPreviewCap / maxW : 1;
+    const viewportHtml =
+      fitScale < 1
+        ? '<div class="dag-fit-wrap" data-qa-target="dag" style="height:' +
+          Math.ceil(maxH * fitScale) +
+          'px"><div class="dag-fit-scale" style="width:' +
+          maxW +
+          'px;transform:scale(' +
+          fitScale.toFixed(4) +
+          ')">' +
+          rawCanvasHtml +
+          '</div></div>'
+        : '<div class="dag-viewport" data-qa-target="dag">' + rawCanvasHtml + '</div>';
+
+    if (!wideMode && payload.blueprint === 'power_hierarchy') {
+      const roleOrder = ['sovereign', 'faction', 'ally', 'rival', 'constraint'];
+      const grouped = new Map();
+      nodes.forEach((n) => {
+        const r = n.role || 'faction';
+        if (!grouped.has(r)) grouped.set(r, []);
+        grouped.get(r).push(n);
+      });
+      const orderedRoles = Array.from(grouped.keys()).sort((a, b) => {
+        const ia = roleOrder.indexOf(a);
+        const ib = roleOrder.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
+      const relOut = new Map();
+      mergedEdges.forEach((e) => {
+        const target = idMap.get(e.to);
+        const tName = target ? target.label : e.to;
+        if (!relOut.has(e.from)) relOut.set(e.from, []);
+        relOut.get(e.from).push((e.label || '关联') + ' → ' + tName);
+      });
+      const groupsHtml =
+        '<div class="power-group-list" data-power-panel="groups" hidden>' +
+        orderedRoles
+          .map(
+            (r) =>
+              '<div class="power-role-group"><div class="power-role-head role-' +
+              esc(r) +
+              '">' +
+              esc(ROLE_ZH[r] || r) +
+              '</div><div class="power-role-cards">' +
+              grouped
+                .get(r)
+                .map((n) => {
+                  const outs = relOut.get(n.id) || [];
+                  return (
+                    '<div class="power-group-card">' +
+                    '<div class="power-group-top"><b>' +
+                    esc(n.label) +
+                    '</b>' +
+                    renderSrcTag(n.source) +
+                    '</div>' +
+                    (n.detail ? '<div class="power-group-detail">' + esc(n.detail) + '</div>' : '') +
+                    (outs.length
+                      ? '<div class="power-group-rels">' +
+                        outs.map((o) => '<span class="power-rel-pill">' + esc(o) + '</span>').join('') +
+                        '</div>'
+                      : '') +
+                    '<div class="dag-node-foot">' +
+                    renderAnchorPills(n.blocks) +
+                    '</div></div>'
+                  );
+                })
+                .join('') +
+              '</div></div>'
+          )
+          .join('') +
+        '</div>';
+
+      return (
+        '<div class="power-narrow-shell">' +
+        '<div class="power-view-tabs" role="tablist">' +
+        '<button type="button" class="active" data-power-view="graph">结构预览</button>' +
+        '<button type="button" data-power-view="groups">阵营分组</button>' +
+        '</div>' +
+        '<div data-power-panel="graph">' +
+        viewportHtml +
+        '<div class="dag-trace-tip" data-trace-tip>点击「全览 ⤢」可放大查看全图；切「阵营分组」可按角色细读</div>' +
+        legendHtml +
+        '</div>' +
+        groupsHtml +
+        '</div>'
+      );
+    }
+
+    return (
+      viewportHtml +
       '<div class="dag-trace-tip" data-trace-tip>悬停节点或连线可高亮因果路径；点击节点跳转原文</div>' +
       legendHtml
     );
@@ -1176,15 +1318,118 @@
     );
   }
 
-  function renderTimelineHtml(payload) {
+  const LANE_ACCENTS = ['var(--pine)', 'var(--cinnabar)', 'var(--indigo)', 'var(--amber)'];
+
+  function renderTimelineHtml(payload, options) {
+    const wideMode = Boolean(options && options.wide);
     const lanes = (payload.data && payload.data.lanes) || [];
     const rows = (payload.data && payload.data.rows) || [];
-    const cols = '76px ' + lanes.map(() => 'minmax(115px, 1fr)').join(' ');
+    const aftermath = (payload.data && payload.data.aftermath) || [];
+
+    const aftermathHtml = aftermath.length
+      ? '<div class="tl-aftermath"><div class="tl-aftermath-head">后世回响与史论</div><div class="tl-aftermath-list">' +
+        aftermath
+          .map(
+            (af) =>
+              '<div class="tl-aftermath-card"><div class="tl-card-head"><b>' +
+              esc(af.title || '史论') +
+              '</b>' +
+              renderSrcTag(af.source) +
+              '</div>' +
+              (af.body ? '<p>' + esc(af.body) + '</p>' : '') +
+              '<div>' +
+              renderAnchorPills(af.blocks) +
+              '</div></div>'
+          )
+          .join('') +
+        '</div></div>'
+      : '';
+
+    if (!wideMode) {
+      const filterHtml =
+        lanes.length > 1
+          ? '<div class="tl-filter-bar" role="group" aria-label="阵营筛选">' +
+            '<button type="button" class="tl-filter-pill active" data-tl-lane="all">全部阵营</button>' +
+            lanes
+              .map(
+                (l, idx) =>
+                  '<button type="button" class="tl-filter-pill" data-tl-lane="' +
+                  idx +
+                  '"><i class="tl-dot" style="background:' +
+                  LANE_ACCENTS[idx % LANE_ACCENTS.length] +
+                  '"></i>' +
+                  esc(l) +
+                  '</button>'
+              )
+              .join('') +
+            '</div>'
+          : '';
+      const streamHtml = rows
+        .map((row) => {
+          const cards = [];
+          (row.cells || []).forEach((cell, idx) => {
+            if (!cell) return;
+            const laneName = lanes[idx] || '主线';
+            const color = LANE_ACCENTS[idx % LANE_ACCENTS.length];
+            cards.push(
+              '<div class="tl-card" data-lane-idx="' +
+                idx +
+                '" style="--lane-accent:' +
+                color +
+                '">' +
+                '<div class="tl-card-top">' +
+                '<span class="tl-lane-badge">' +
+                esc(laneName) +
+                '</span>' +
+                renderSrcTag(cell.source) +
+                '</div>' +
+                '<div class="tl-card-title">' +
+                esc(cell.title) +
+                '</div>' +
+                (cell.note ? '<p class="tl-card-note">' + esc(cell.note) + '</p>' : '') +
+                '<div class="tl-card-foot">' +
+                renderAnchorPills(cell.blocks) +
+                '</div></div>'
+            );
+          });
+          if (!cards.length) return '';
+          return (
+            '<div class="tl-row-group">' +
+            '<div class="tl-row-time">' +
+            esc(row.time) +
+            '</div>' +
+            '<div class="tl-row-cards">' +
+            cards.join('') +
+            '</div></div>'
+          );
+        })
+        .join('');
+      return (
+        '<div class="timeline-stream" data-qa-target="grid">' +
+        filterHtml +
+        '<div class="tl-stream-body">' +
+        streamHtml +
+        '</div>' +
+        aftermathHtml +
+        '</div>'
+      );
+    }
+
+    const cols = '88px ' + lanes.map(() => 'minmax(130px, 1fr)').join(' ');
     const head =
       '<div class="lanes-head" style="grid-template-columns:' +
       cols +
       '"><div class="lane-time-col">时间</div>' +
-      lanes.map((l) => '<div>' + esc(l) + '</div>').join('') +
+      lanes
+        .map(
+          (l, idx) =>
+            '<div style="border-top:3px solid ' +
+            LANE_ACCENTS[idx % LANE_ACCENTS.length] +
+            '">' +
+            esc(l) +
+            '</div>'
+        )
+        .join('') +
       '</div>';
     const body = rows
       .map(
@@ -1195,10 +1440,12 @@
           esc(row.time) +
           '</div>' +
           (row.cells || [])
-            .map((cell) =>
+            .map((cell, idx) =>
               !cell
                 ? '<div class="lane-cell"></div>'
-                : '<div class="lane-cell filled"><div style="display:flex;justify-content:space-between;gap:4px;align-items:center"><b>' +
+                : '<div class="lane-cell filled" style="border-top:2px solid ' +
+                  LANE_ACCENTS[idx % LANE_ACCENTS.length] +
+                  '"><div class="lane-cell-head"><b>' +
                   esc(cell.title) +
                   '</b>' +
                   renderSrcTag(cell.source) +
@@ -1212,7 +1459,588 @@
           '</div>'
       )
       .join('');
-    return '<div class="lanes-grid" data-qa-target="grid">' + head + body + '</div>';
+    return '<div class="lanes-grid" data-qa-target="grid">' + head + body + '</div>' + aftermathHtml;
+  }
+
+  const SPATIAL_EDGE_STYLES = {
+    advance: { label: '主攻动线', stroke: 'var(--cinnabar)', dash: 'none' },
+    flank: { label: '迂回包抄', stroke: 'var(--amber)', dash: '7 4' },
+    defense: { label: '防线牵制', stroke: 'var(--indigo)', dash: 'none' },
+    diplomacy: { label: '远交联结', stroke: 'var(--pine)', dash: '3 4' },
+  };
+  const SPATIAL_GROUP_PALETTE = ['var(--cinnabar)', 'var(--indigo)', 'var(--pine)', 'var(--amber)'];
+
+  function measureSpatialSizes(nodes, cardW, expandAll) {
+    const stage = ensureMeasureStage();
+    const sizes = new Map();
+    stage.style.width = cardW + 'px';
+    stage.innerHTML = nodes
+      .map(
+        (n) =>
+          '<div class="spatial-node role-' +
+          esc(n.role || 'corridor') +
+          (expandAll && n.detail ? ' expanded' : '') +
+          '" style="position:relative;width:' +
+          cardW +
+          'px">' +
+          '<div class="spatial-node-head"><span class="spatial-role-tag">' +
+          esc(ROLE_ZH[n.role] || n.role || '地点') +
+          '</span>' +
+          renderSrcTag(n.source) +
+          '</div>' +
+          '<div class="spatial-node-label">' +
+          esc(n.label) +
+          '</div>' +
+          (n.zone ? '<div class="spatial-node-zone">' + esc(n.zone) + '</div>' : '') +
+          (n.detail
+            ? '<div class="dag-node-more">' +
+              (expandAll ? '▴ 收起' : '▾ 态势') +
+              '</div><div class="spatial-node-detail">' +
+              esc(n.detail) +
+              '</div>'
+            : '') +
+          '<div class="dag-node-foot">' +
+          renderAnchorPills(n.blocks) +
+          '</div></div>'
+      )
+      .join('');
+    const els = stage.querySelectorAll('.spatial-node');
+    nodes.forEach((n, idx) => {
+      const r = els[idx] ? els[idx].getBoundingClientRect() : null;
+      if (r && r.height > 20) {
+        sizes.set(n.id, { w: Math.ceil(r.width), h: Math.ceil(r.height) });
+      } else {
+        const detH = expandAll && n.detail ? Math.ceil(String(n.detail).length / 10) * 16 + 10 : 0;
+        sizes.set(n.id, { w: cardW, h: 66 + (n.zone ? 16 : 0) + (n.detail ? 16 : 0) + detH });
+      }
+    });
+    stage.innerHTML = '';
+    return sizes;
+  }
+
+  function resolveSpatialPositions(nodes, sizes, bounds) {
+    const { padL, padR, padT, padB, W, H } = bounds;
+    const boxes = nodes.map((n, idx) => {
+      const sz = sizes.get(n.id);
+      const nx = Math.max(0, Math.min(100, Number(n.x || 0))) / 100;
+      const ny = Math.max(0, Math.min(100, Number(n.y || 0))) / 100;
+      const x0 = padL + nx * Math.max(10, W - padL - padR - sz.w);
+      const y0 = padT + ny * Math.max(10, H - padT - padB - sz.h);
+      return {
+        id: n.id,
+        idx,
+        origX: x0,
+        origY: y0,
+        origCx: x0 + sz.w / 2,
+        origCy: y0 + sz.h / 2,
+        x: x0,
+        y: y0,
+        w: sz.w,
+        h: sz.h,
+      };
+    });
+
+    const margin = 18;
+    for (let iter = 0; iter < 240; iter++) {
+      let moved = false;
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const a = boxes[i];
+          const b = boxes[j];
+          const ax1 = a.x - margin / 2;
+          const ay1 = a.y - margin / 2;
+          const ax2 = a.x + a.w + margin / 2;
+          const ay2 = a.y + a.h + margin / 2;
+          const bx1 = b.x - margin / 2;
+          const by1 = b.y - margin / 2;
+          const bx2 = b.x + b.w + margin / 2;
+          const by2 = b.y + b.h + margin / 2;
+          if (ax1 < bx2 && ax2 > bx1 && ay1 < by2 && ay2 > by1) {
+            moved = true;
+            const ox = Math.min(ax2, bx2) - Math.max(ax1, bx1);
+            const oy = Math.min(ay2, by2) - Math.max(ay1, by1);
+            const preferX =
+              ox < oy || (Math.abs(a.origCx - b.origCx) > Math.abs(a.origCy - b.origCy) * 1.4 && ox < oy * 1.6);
+            if (preferX) {
+              const dir =
+                Math.abs(a.origCx - b.origCx) > 1
+                  ? a.origCx < b.origCx
+                    ? -1
+                    : 1
+                  : a.x <= b.x
+                    ? -1
+                    : 1;
+              a.x += dir * (ox * 0.55 + 1);
+              b.x -= dir * (ox * 0.55 + 1);
+            } else {
+              const dir =
+                Math.abs(a.origCy - b.origCy) > 1
+                  ? a.origCy < b.origCy
+                    ? -1
+                    : 1
+                  : a.y <= b.y
+                    ? -1
+                    : 1;
+              a.y += dir * (oy * 0.55 + 1);
+              b.y -= dir * (oy * 0.55 + 1);
+            }
+            a.x = Math.max(padL, Math.min(W - padR - a.w, a.x));
+            a.y = Math.max(padT, Math.min(H - padB - a.h, a.y));
+            b.x = Math.max(padL, Math.min(W - padR - b.w, b.x));
+            b.y = Math.max(padT, Math.min(H - padB - b.h, b.y));
+          }
+        }
+      }
+      if (iter < 40) {
+        boxes.forEach((b) => {
+          b.x = Math.max(padL, Math.min(W - padR - b.w, b.x + (b.origX - b.x) * 0.05));
+          b.y = Math.max(padT, Math.min(H - padB - b.h, b.y + (b.origY - b.y) * 0.05));
+        });
+      } else if (!moved) {
+        break;
+      }
+    }
+
+    // Strict final pass: if boundary clamping left any pair touching, nudge on whichever axis has free space
+    for (let pass = 0; pass < 80; pass++) {
+      let anyHit = false;
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const a = boxes[i];
+          const b = boxes[j];
+          if (a.x < b.x + b.w + 8 && a.x + a.w + 8 > b.x && a.y < b.y + b.h + 8 && a.y + a.h + 8 > b.y) {
+            anyHit = true;
+            const ox = Math.min(a.x + a.w + 8, b.x + b.w + 8) - Math.max(a.x, b.x);
+            const oy = Math.min(a.y + a.h + 8, b.y + b.h + 8) - Math.max(a.y, b.y);
+            const stepX = ox * 0.6 + 2;
+            const stepY = oy * 0.6 + 2;
+            const canX = (a.x - padL) + (W - padR - (b.x + b.w)) > ox || (b.x - padL) + (W - padR - (a.x + a.w)) > ox;
+            if (ox <= oy && canX) {
+              const dir = a.x <= b.x ? -1 : 1;
+              a.x = Math.max(padL, Math.min(W - padR - a.w, a.x + dir * stepX));
+              b.x = Math.max(padL, Math.min(W - padR - b.w, b.x - dir * stepX));
+            } else {
+              const dir = a.y <= b.y ? -1 : 1;
+              a.y = Math.max(padT, Math.min(H - padB - a.h, a.y + dir * stepY));
+              b.y = Math.max(padT, Math.min(H - padB - b.h, b.y - dir * stepY));
+            }
+          }
+        }
+      }
+      if (!anyHit) break;
+    }
+
+    const pos = new Map();
+    boxes.forEach((b) => {
+      pos.set(b.id, { x: Math.round(b.x), y: Math.round(b.y), w: b.w, h: b.h });
+    });
+    return pos;
+  }
+
+  function renderSpatialMapHtml(payload, options) {
+    const data = payload.data || {};
+    if (data.mode === 'not_applicable') {
+      return (
+        '<div class="spatial-na" data-qa-target="spatial-na">' +
+        '<strong>本章无显著地理空间格局</strong>' +
+        '<p>' +
+        esc(data.not_applicable_reason || payload.summary || '本章内容以制度或事件推演为主，未构成地理态势分布。') +
+        '</p></div>'
+      );
+    }
+
+    const nodes = data.nodes || [];
+    if (!nodes.length) return '<div class="wb-sub">暂无空间节点数据</div>';
+    const hasCoords = nodes.some((n) => Number.isFinite(Number(n.x)) && Number.isFinite(Number(n.y)));
+    if (!hasCoords) {
+      return renderLayeredDagHtml(payload, options);
+    }
+
+    const wideMode = Boolean(options && options.wide);
+    const expandAll = Boolean(options && options.expandAll);
+    const cardW = 140;
+    const sizes = measureSpatialSizes(nodes, cardW, expandAll);
+    const maxNodeH = Math.max(80, ...Array.from(sizes.values()).map((s) => s.h));
+    let W = expandAll ? 1180 : 980;
+    let H = expandAll ? Math.max(780, 440 + Math.round(maxNodeH * 2.2)) : 620;
+    let pos = resolveSpatialPositions(nodes, sizes, { padL: 24, padR: 24, padT: 48, padB: 28, W, H });
+    const hasPosOverlap = (pMap) => {
+      const list = Array.from(pMap.values());
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          if (rectsOverlap(list[i], list[j], 4)) return true;
+        }
+      }
+      return false;
+    };
+    if (hasPosOverlap(pos)) {
+      W += 220;
+      H += 200;
+      pos = resolveSpatialPositions(nodes, sizes, { padL: 24, padR: 24, padT: 48, padB: 28, W, H });
+    }
+    const idMap = new Map(nodes.map((n) => [n.id, n]));
+    const rawEdges = (data.edges || []).filter((e) => e && idMap.has(e.from) && idMap.has(e.to));
+
+    const routeGroups = [];
+    const groupColor = new Map();
+    rawEdges.forEach((e) => {
+      const rg = String(e.route_group || '').trim();
+      if (rg && !groupColor.has(rg)) {
+        groupColor.set(rg, SPATIAL_GROUP_PALETTE[routeGroups.length % SPATIAL_GROUP_PALETTE.length]);
+        routeGroups.push(rg);
+      }
+    });
+
+    const uidSuffix = (wideMode ? 'sw' : 'sn') + '-' + ++markerSeq;
+    const markerIds = new Map();
+    const markerDefs = [];
+    const getMarker = (stroke) => {
+      if (markerIds.has(stroke)) return markerIds.get(stroke);
+      const id = 'sp-arr-' + uidSuffix + '-' + markerIds.size;
+      markerIds.set(stroke, id);
+      markerDefs.push(
+        '<marker id="' +
+          id +
+          '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 10 5 L 0 9 z" fill="' +
+          stroke +
+          '"/></marker>'
+      );
+      return id;
+    };
+
+    // Grid lines (4x4 subtle geographic graticule)
+    const gridLines = [];
+    for (let i = 1; i <= 4; i++) {
+      const gx = Math.round((W / 5) * i);
+      const gy = Math.round((H / 5) * i);
+      gridLines.push('<line x1="' + gx + '" y1="36" x2="' + gx + '" y2="' + (H - 18) + '" stroke="var(--line)" stroke-dasharray="4 4" opacity="0.6"/>');
+      gridLines.push('<line x1="16" y1="' + gy + '" x2="' + (W - 16) + '" y2="' + gy + '" stroke="var(--line)" stroke-dasharray="4 4" opacity="0.6"/>');
+    }
+
+    const nodeRects = Array.from(pos.values()).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h }));
+    const placedLabels = [];
+    const fallbackLegend = [];
+    const svgPaths = [];
+    const htmlEdgeLabels = [];
+
+    const boxAnchor = (box, tx, ty) => {
+      const cx = box.x + box.w / 2;
+      const cy = box.y + box.h / 2;
+      const dx = tx - cx;
+      const dy = ty - cy;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return { x: cx, y: cy };
+      const sx = dx !== 0 ? (box.w / 2) / Math.abs(dx) : Infinity;
+      const sy = dy !== 0 ? (box.h / 2) / Math.abs(dy) : Infinity;
+      const s = Math.min(sx, sy);
+      return { x: cx + dx * s, y: cy + dy * s };
+    };
+
+    const pairCounts = new Map();
+    rawEdges.forEach((e, idx) => {
+      const a = pos.get(e.from);
+      const b = pos.get(e.to);
+      if (!a || !b) return;
+      const acx = a.x + a.w / 2;
+      const acy = a.y + a.h / 2;
+      const bcx = b.x + b.w / 2;
+      const bcy = b.y + b.h / 2;
+      const p1 = boxAnchor(a, bcx, bcy);
+      const p2 = boxAnchor(b, acx, acy);
+      const key = e.from < e.to ? e.from + '::' + e.to : e.to + '::' + e.from;
+      const seen = pairCounts.get(key) || 0;
+      pairCounts.set(key, seen + 1);
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const dist = Math.max(1, Math.hypot(dx, dy));
+      const sign = (seen % 2 === 0 ? 1 : -1) * (e.from < e.to ? 1 : -1);
+      const bend = Math.min(46, Math.max(18, dist * 0.14)) * (1 + Math.floor(seen / 2) * 0.7) * sign;
+      const nx = -dy / dist;
+      const ny = dx / dist;
+      const ctrlX = (p1.x + p2.x) / 2 + nx * bend;
+      const ctrlY = (p1.y + p2.y) / 2 + ny * bend;
+      const d =
+        'M ' +
+        p1.x.toFixed(1) +
+        ',' +
+        p1.y.toFixed(1) +
+        ' Q ' +
+        ctrlX.toFixed(1) +
+        ',' +
+        ctrlY.toFixed(1) +
+        ' ' +
+        p2.x.toFixed(1) +
+        ',' +
+        p2.y.toFixed(1);
+
+      const st = SPATIAL_EDGE_STYLES[e.kind] || SPATIAL_EDGE_STYLES.advance;
+      const stroke = (e.route_group && groupColor.get(e.route_group)) || st.stroke;
+      const markerId = getMarker(stroke);
+      const fromLabel = (idMap.get(e.from) && idMap.get(e.from).label) || e.from;
+      const toLabel = (idMap.get(e.to) && idMap.get(e.to).label) || e.to;
+      const edgeDesc = fromLabel + ' → ' + toLabel + (e.label ? '：' + e.label : '') + (e.note ? '（' + e.note + '）' : '');
+
+      svgPaths.push(
+        '<g class="dag-edge-group" data-edge-idx="' +
+          idx +
+          '" data-from="' +
+          esc(e.from) +
+          '" data-to="' +
+          esc(e.to) +
+          '" data-edge-desc="' +
+          esc(edgeDesc) +
+          '">' +
+          '<path class="dag-edge-halo" d="' +
+          d +
+          '"/>' +
+          '<path class="dag-edge-path" d="' +
+          d +
+          '" stroke="' +
+          stroke +
+          '" stroke-dasharray="' +
+          st.dash +
+          '" marker-end="url(#' +
+          markerId +
+          ')"/>' +
+          '<path class="dag-edge-hit" d="' +
+          d +
+          '"/>' +
+          '</g>'
+      );
+
+      if (e.label) {
+        const lsz = measureLabelSize(e.label);
+        const curvePt = (t) => ({
+          x: Math.round((1 - t) * (1 - t) * p1.x + 2 * (1 - t) * t * ctrlX + t * t * p2.x),
+          y: Math.round((1 - t) * (1 - t) * p1.y + 2 * (1 - t) * t * ctrlY + t * t * p2.y),
+        });
+        const cands = [0.5, 0.36, 0.64].map(curvePt);
+        const offs = [
+          { dx: 0, dy: 0 },
+          { dx: 0, dy: -14 },
+          { dx: 0, dy: 14 },
+          { dx: -20, dy: 0 },
+          { dx: 20, dy: 0 },
+        ];
+        let chosen = null;
+        for (const c of cands) {
+          for (const off of offs) {
+            const box = {
+              x: Math.round(c.x + off.dx - lsz.w / 2),
+              y: Math.round(c.y + off.dy - lsz.h / 2),
+              w: lsz.w,
+              h: lsz.h,
+            };
+            if (box.x < 6 || box.x + box.w > W - 6 || box.y < 38 || box.y + box.h > H - 6) continue;
+            if (!nodeRects.some((nr) => rectsOverlap(box, nr, 5)) && !placedLabels.some((lr) => rectsOverlap(box, lr, 5))) {
+              chosen = box;
+              break;
+            }
+          }
+          if (chosen) break;
+        }
+        if (chosen) {
+          placedLabels.push(chosen);
+          htmlEdgeLabels.push(
+            '<span class="spatial-edge-label" data-edge-idx="' +
+              idx +
+              '" style="left:' +
+              chosen.x +
+              'px;top:' +
+              chosen.y +
+              'px;border-color:' +
+              stroke +
+              ';color:' +
+              stroke +
+              '" title="' +
+              esc(edgeDesc) +
+              '">' +
+              esc(e.label) +
+              '</span>'
+          );
+        } else {
+          const badgeNum = fallbackLegend.length + 1;
+          const circ = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮'[badgeNum - 1] || String(badgeNum);
+          fallbackLegend.push({ idx, text: circ + ' ' + fromLabel + ' → ' + toLabel + '：' + (e.note || e.label) });
+          for (const c of cands) {
+            const bx = {
+              x: Math.max(6, Math.min(W - 26, Math.round(c.x - 10))),
+              y: Math.max(38, Math.min(H - 24, Math.round(c.y - 9))),
+              w: 20,
+              h: 18,
+            };
+            if (!nodeRects.some((nr) => rectsOverlap(bx, nr, 3)) && !placedLabels.some((lr) => rectsOverlap(bx, lr, 3))) {
+              placedLabels.push(bx);
+              htmlEdgeLabels.push(
+                '<span class="spatial-edge-label" data-edge-idx="' +
+                  idx +
+                  '" style="left:' +
+                  bx.x +
+                  'px;top:' +
+                  bx.y +
+                  'px;border-color:' +
+                  stroke +
+                  ';color:' +
+                  stroke +
+                  '" title="' +
+                  esc(edgeDesc) +
+                  '">' +
+                  circ +
+                  '</span>'
+              );
+              break;
+            }
+          }
+        }
+      }
+    });
+
+    const nodesHtml = nodes
+      .map((n) => {
+        const p = pos.get(n.id);
+        const firstBlk = (n.blocks && n.blocks[0]) || '';
+        const isExp = expandAll && Boolean(n.detail);
+        return (
+          '<div class="spatial-node role-' +
+          esc(n.role || 'corridor') +
+          (isExp ? ' expanded' : '') +
+          '" style="left:' +
+          p.x +
+          'px;top:' +
+          p.y +
+          'px;width:' +
+          p.w +
+          'px" data-jump="' +
+          esc(firstBlk) +
+          '" data-node-id="' +
+          esc(n.id) +
+          '" title="点击定位原文 ' +
+          esc(firstBlk) +
+          '">' +
+          '<div class="spatial-node-head"><span class="spatial-role-tag">' +
+          esc(ROLE_ZH[n.role] || n.role || '地点') +
+          '</span>' +
+          renderSrcTag(n.source) +
+          '</div>' +
+          '<div class="spatial-node-label">' +
+          esc(n.label) +
+          '</div>' +
+          (n.zone ? '<div class="spatial-node-zone">' + esc(n.zone) + '</div>' : '') +
+          (n.detail
+            ? '<div class="dag-node-more" data-toggle-detail>' +
+              (isExp ? '▴ 收起' : '▾ 态势') +
+              '</div><div class="spatial-node-detail">' +
+              esc(n.detail) +
+              '</div>'
+            : '') +
+          '<div class="dag-node-foot">' +
+          renderAnchorPills(n.blocks) +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    const modeBadge = data.mode === 'campaign' ? '战役行军态势' : '地缘格局态势';
+    const canvasHtml =
+      '<div class="spatial-canvas" style="width:' +
+      W +
+      'px;height:' +
+      H +
+      'px">' +
+      '<div class="spatial-hud-left">' +
+      '<span class="spatial-mode-pill">' +
+      modeBadge +
+      '</span>' +
+      (data.scope_note ? '<span class="spatial-scope-pill">' + esc(data.scope_note) + '</span>' : '') +
+      '</div>' +
+      '<div class="spatial-compass" aria-label="上北下南">N ↑</div>' +
+      '<svg class="dag-edges" width="' +
+      W +
+      '" height="' +
+      H +
+      '" viewBox="0 0 ' +
+      W +
+      ' ' +
+      H +
+      '"><defs>' +
+      markerDefs.join('') +
+      '</defs>' +
+      gridLines.join('') +
+      svgPaths.join('') +
+      '</svg>' +
+      nodesHtml +
+      htmlEdgeLabels.join('') +
+      '</div>';
+
+    const usedKinds = Array.from(new Set(rawEdges.map((e) => e.kind || 'advance')));
+    const legendItems = usedKinds.map((k) => {
+      const st = SPATIAL_EDGE_STYLES[k] || SPATIAL_EDGE_STYLES.advance;
+      return (
+        '<span class="spatial-leg-item"><i class="spatial-leg-line" style="border-top:2px ' +
+        (st.dash === 'none' ? 'solid' : 'dashed') +
+        ' ' +
+        st.stroke +
+        '"></i>' +
+        esc(st.label) +
+        '</span>'
+      );
+    });
+    routeGroups.forEach((rg) => {
+      legendItems.push(
+        '<span class="spatial-leg-item"><i class="spatial-leg-dot" style="background:' +
+          groupColor.get(rg) +
+          '"></i>' +
+          esc(rg) +
+          '</span>'
+      );
+    });
+    const legendBar =
+      (legendItems.length ? '<div class="spatial-legend">' + legendItems.join('') + '</div>' : '') +
+      (fallbackLegend.length
+        ? '<div class="edge-legend">' +
+          fallbackLegend
+            .map((item) => '<span class="edge-legend-pill" data-edge-idx="' + item.idx + '">' + esc(item.text) + '</span>')
+            .join('') +
+          '</div>'
+        : '');
+
+    if (!wideMode) {
+      const previewScale = 312 / W;
+      const thumbList =
+        '<div class="spatial-narrow-list">' +
+        nodes
+          .map(
+            (n) =>
+              '<div class="spatial-narrow-chip" data-jump="' +
+              esc((n.blocks && n.blocks[0]) || '') +
+              '"><b>' +
+              esc(n.label) +
+              '</b>' +
+              (n.zone ? ' <span>(' + esc(n.zone) + ')</span>' : '') +
+              ' ' +
+              renderAnchorPills(n.blocks) +
+              '</div>'
+          )
+          .join('') +
+        '</div>';
+      return (
+        '<div class="spatial-preview-wrap" data-open-zoom title="点击展开全览空间态势图" style="height:' +
+        Math.ceil(H * previewScale) +
+        'px">' +
+        '<div class="spatial-preview-scale" style="width:' +
+        W +
+        'px;transform:scale(' +
+        previewScale.toFixed(4) +
+        ')">' +
+        canvasHtml +
+        '</div>' +
+        '<span class="spatial-zoom-hint">点击放大全览 ⤢</span>' +
+        '</div>' +
+        legendBar +
+        thumbList
+      );
+    }
+
+    return '<div class="spatial-viewport" data-qa-target="spatial">' + canvasHtml + '</div>' + legendBar;
   }
 
   function renderMatrixTableHtml(payload) {
@@ -1350,10 +2178,57 @@
     );
   }
 
+  function renderExtensionItemHtml(it) {
+    const headTxt = it.name || it.title || it.label || '';
+    const badge = it.stance || it.role_badge || '';
+    return (
+      '<div class="ext-item">' +
+      (headTxt || badge || it.source
+        ? '<div class="ext-item-head">' +
+          '<div class="ext-item-title-wrap">' +
+          (headTxt ? '<b class="ext-item-title">' + esc(headTxt) + '</b>' : '') +
+          (badge ? '<span class="ext-role-badge">' + esc(badge) + '</span>' : '') +
+          '</div>' +
+          renderSrcTag(it.source) +
+          '</div>'
+        : '') +
+      (it.title && it.name && it.title !== it.name ? '<div class="ext-item-subhead">' + esc(it.title) + '</div>' : '') +
+      (it.body || it.detail ? '<div class="ext-sub">' + esc(it.body || it.detail) + '</div>' : '') +
+      (it.warning ? '<div class="ext-sub" style="color:var(--ochre)">提示：' + esc(it.warning) + '</div>' : '') +
+      '<div>' +
+      renderAnchorPills(it.blocks) +
+      '</div></div>'
+    );
+  }
+
   function renderExtensionOrFallbackHtml(payload) {
+    const noticeHtml = payload.fallback_notice
+      ? '<div class="bp-fallback-banner">' + esc(payload.fallback_notice) + '</div>'
+      : '';
+    if (Array.isArray(payload.sections) && payload.sections.length) {
+      return (
+        noticeHtml +
+        '<div class="ext-sections">' +
+        payload.sections
+          .map(
+            (sec) =>
+              '<div class="ext-section">' +
+              '<h5 class="ext-sec-title">' +
+              esc(sec.title) +
+              '</h5>' +
+              '<div class="ext-list">' +
+              (sec.items || []).map(renderExtensionItemHtml).join('') +
+              '</div></div>'
+          )
+          .join('') +
+        '</div>'
+      );
+    }
+
     const items = payload.items || [];
     if (payload.blueprint === 'extension_checklist') {
       return (
+        noticeHtml +
         '<div class="ext-list">' +
         items
           .map(
@@ -1374,34 +2249,14 @@
         '</div>'
       );
     }
-    return (
-      '<div class="ext-list">' +
-      items
-        .map(
-          (it) =>
-            '<div class="ext-item">' +
-            (it.title || it.label
-              ? '<div style="display:flex;justify-content:space-between;gap:6px;align-items:center"><b style="font-size:12.5px;color:var(--pine)">' +
-                esc(it.title || it.label) +
-                '</b>' +
-                renderSrcTag(it.source) +
-                '</div>'
-              : '') +
-            (it.body || it.detail ? '<div class="ext-sub">' + esc(it.body || it.detail) + '</div>' : '') +
-            (it.warning ? '<div class="ext-sub" style="color:var(--ochre)">审计：' + esc(it.warning) + '</div>' : '') +
-            '<div>' +
-            renderAnchorPills(it.blocks) +
-            '</div></div>'
-        )
-        .join('') +
-      '</div>'
-    );
+    return noticeHtml + '<div class="ext-list">' + items.map(renderExtensionItemHtml).join('') + '</div>';
   }
 
   function renderBlueprintBody(payload, options) {
     if (!payload || typeof payload !== 'object') return '';
     const bp = payload.blueprint || 'flow_swimlane';
-    if (bp === 'parallel_timeline') return renderTimelineHtml(payload);
+    if (bp === 'parallel_timeline') return renderTimelineHtml(payload, options);
+    if (bp === 'spatial_route') return renderSpatialMapHtml(payload, options);
     if (MATRIX_BLUEPRINTS.has(bp)) return renderMatrixTableHtml(payload);
     if (bp === 'quadrant_matrix') return renderQuadrantHtml(payload);
     if (CURVE_BLUEPRINTS.has(bp)) return renderSplineChartHtml(payload);
@@ -1418,8 +2273,8 @@
     const report = { overlaps: 0, edgeFallbackCount: 0, details: [] };
     if (!stageEl || typeof stageEl.querySelectorAll !== 'function') return report;
     const toBox = (r) => ({ x: r.left, y: r.top, w: r.width, h: r.height });
-    const nodes = Array.from(stageEl.querySelectorAll('.dag-node'));
-    const labels = Array.from(stageEl.querySelectorAll('.dag-edge-label'));
+    const nodes = Array.from(stageEl.querySelectorAll('.dag-node, .spatial-node'));
+    const labels = Array.from(stageEl.querySelectorAll('.dag-edge-label, .spatial-edge-label'));
 
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
@@ -1470,13 +2325,15 @@
     return report;
   }
 
-  function bindStageInteractions(rootEl, onFocusBlock) {
+  function bindStageInteractions(rootEl, onFocusBlock, onZoomRequest) {
     if (!rootEl) return;
     rootEl.querySelectorAll('[data-jump]').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (e.target && e.target.hasAttribute('data-toggle-detail')) {
           e.stopPropagation();
           el.classList.toggle('expanded');
+          const more = e.target;
+          if (more) more.textContent = el.classList.contains('expanded') ? '▴ 收起' : '▾ 查看展开';
           return;
         }
         e.stopPropagation();
@@ -1485,13 +2342,49 @@
       });
     });
 
-    const canvas = rootEl.querySelector('.dag-canvas');
+    rootEl.querySelectorAll('[data-tl-lane]').forEach((pill) => {
+      pill.addEventListener('click', () => {
+        const target = pill.getAttribute('data-tl-lane');
+        rootEl.querySelectorAll('[data-tl-lane]').forEach((p) => p.classList.toggle('active', p === pill));
+        rootEl.querySelectorAll('.tl-row-group').forEach((grp) => {
+          let visibleCount = 0;
+          grp.querySelectorAll('.tl-card[data-lane-idx]').forEach((card) => {
+            const show = target === 'all' || card.getAttribute('data-lane-idx') === target;
+            card.hidden = !show;
+            if (show) visibleCount++;
+          });
+          grp.hidden = visibleCount === 0;
+        });
+      });
+    });
+
+    rootEl.querySelectorAll('[data-power-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const view = btn.getAttribute('data-power-view');
+        rootEl.querySelectorAll('[data-power-view]').forEach((b) => b.classList.toggle('active', b === btn));
+        rootEl.querySelectorAll('[data-power-panel]').forEach((pnl) => {
+          pnl.hidden = pnl.getAttribute('data-power-panel') !== view;
+        });
+      });
+    });
+
+    if (onZoomRequest) {
+      rootEl.querySelectorAll('[data-open-zoom]').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('[data-jump], [data-toggle-detail]')) return;
+          e.stopPropagation();
+          onZoomRequest();
+        });
+      });
+    }
+
+    const canvas = rootEl.querySelector('.dag-canvas, .spatial-canvas');
     if (!canvas) return;
     const tipEl = rootEl.querySelector('[data-trace-tip]');
     const defaultTip = '悬停节点或连线可高亮因果路径；点击节点跳转原文';
-    const nodeEls = Array.from(canvas.querySelectorAll('.dag-node[data-node-id]'));
+    const nodeEls = Array.from(canvas.querySelectorAll('.dag-node[data-node-id], .spatial-node[data-node-id]'));
     const edgeGroups = Array.from(canvas.querySelectorAll('.dag-edge-group[data-edge-idx]'));
-    const labelEls = Array.from(canvas.querySelectorAll('.dag-edge-label[data-edge-idx]'));
+    const labelEls = Array.from(canvas.querySelectorAll('.dag-edge-label[data-edge-idx], .spatial-edge-label[data-edge-idx]'));
     const legendEls = Array.from(rootEl.querySelectorAll('.edge-legend-pill[data-edge-idx]'));
 
     const nodeById = new Map(nodeEls.map((el) => [el.dataset.nodeId, el]));
@@ -1539,7 +2432,7 @@
         }
       });
       if (tipEl) {
-        const titleEl = target.querySelector('.dag-node-label');
+        const titleEl = target.querySelector('.dag-node-label, .spatial-node-label');
         const labelTxt = titleEl ? titleEl.textContent.trim() : nodeId;
         tipEl.classList.add('active');
         tipEl.textContent = '节点「' + labelTxt + '」· 入线 ' + inCnt + ' · 出线 ' + outCnt + '（点击跳转原文）';
@@ -1602,6 +2495,7 @@
       modal.innerHTML =
         '<div class="zoom-head"><h4 id="zoom-title">宽屏全览</h4>' +
         '<div class="zoom-actions">' +
+        '<button type="button" class="wb-btn" id="btn-zoom-expand-all" aria-pressed="false" hidden>展开全部说明</button>' +
         '<div class="zoom-controls" role="group" aria-label="画布缩放">' +
         '<button type="button" class="zoom-btn" id="btn-zoom-out" title="缩小" aria-label="缩小画布">−</button>' +
         '<button type="button" class="zoom-btn zoom-pct" id="btn-zoom-fit" title="切换适应画布 / 100%">100%</button>' +
@@ -1644,43 +2538,35 @@
     document.getElementById('zoom-title').textContent = (figure.caption || '图表全览') + '（宽屏画布 · 点击节点直跳原文）';
     const body = document.getElementById('zoom-body');
     const stage = modal.querySelector('.zoom-stage');
-    body.innerHTML = '<div class="zoom-canvas-wrap"><div class="zoom-canvas-scale">' + renderBlueprintBody(figure, { wide: true }) + '</div></div>';
+    const hasDetails = Boolean(
+      figure && figure.data && Array.isArray(figure.data.nodes) && figure.data.nodes.some((n) => n && n.detail)
+    );
+    let expandAll = false;
+    const expandBtn = document.getElementById('btn-zoom-expand-all');
+    if (expandBtn) {
+      expandBtn.hidden = !hasDetails;
+      expandBtn.setAttribute('aria-pressed', 'false');
+      expandBtn.textContent = '展开全部说明';
+    }
+
     if (typeof modal.showModal === 'function') {
       if (!modal.open) modal.showModal();
     } else {
       modal.classList.add('open');
     }
 
-    // Run audit unscaled first so coordinate bounds & collision numbers remain exact
-    const qa = runCollisionAudit(body);
-    const qaBadge = document.getElementById('zoom-qa');
-    qaBadge.className = 'qa-badge' + (qa.overlaps > 0 ? ' warn' : '');
-    qaBadge.textContent = qa.overlaps === 0 ? '✓ 宽屏质检：0 处重叠' : '⚠ 发现 ' + qa.overlaps + ' 处重叠';
-    bindStageInteractions(body, onFocusBlock);
-
-    const wrap = body.querySelector('.zoom-canvas-wrap');
-    const scaler = body.querySelector('.zoom-canvas-scale');
-    const wideCanvas = body.querySelector('.dag-canvas, .lanes-head');
+    const fitBtn = document.getElementById('btn-zoom-fit');
+    const outBtn = document.getElementById('btn-zoom-out');
+    const inBtn = document.getElementById('btn-zoom-in');
     let natW = 0;
     let natH = 0;
     let fitScale = 1;
     let curScale = 1;
 
-    if (wideCanvas && stage && scaler) {
-      natW = Math.max(scaler.scrollWidth, wideCanvas.scrollWidth + 8);
-      natH = Math.max(scaler.scrollHeight, 120);
-      const availW = Math.max(320, stage.clientWidth - 76);
-      const availH = Math.max(240, stage.clientHeight - 76);
-      fitScale = Math.max(0.32, Math.min(1, availW / natW, availH / natH));
-      if (fitScale < 0.96) curScale = Number(fitScale.toFixed(2));
-    }
-
-    const fitBtn = document.getElementById('btn-zoom-fit');
-    const outBtn = document.getElementById('btn-zoom-out');
-    const inBtn = document.getElementById('btn-zoom-in');
-
     const applyScale = (next) => {
       curScale = Math.max(0.3, Math.min(1.5, Number(next.toFixed(2))));
+      const wrap = body.querySelector('.zoom-canvas-wrap');
+      const scaler = body.querySelector('.zoom-canvas-scale');
       if (wrap && scaler) {
         if (natW > 0) {
           scaler.style.width = natW + 'px';
@@ -1703,6 +2589,50 @@
       }
     };
 
+    const paintWide = (preserveScale) => {
+      body.innerHTML =
+        '<div class="zoom-canvas-wrap"><div class="zoom-canvas-scale">' +
+        renderBlueprintBody(figure, { wide: true, expandAll }) +
+        '</div></div>';
+      const qa = runCollisionAudit(body);
+      const qaBadge = document.getElementById('zoom-qa');
+      qaBadge.className = 'qa-badge' + (qa.overlaps > 0 ? ' warn' : '');
+      qaBadge.textContent = qa.overlaps === 0 ? '✓ 宽屏质检：0 处重叠' : '⚠ 发现 ' + qa.overlaps + ' 处重叠';
+      bindStageInteractions(body, onFocusBlock);
+
+      const scaler = body.querySelector('.zoom-canvas-scale');
+      const wideCanvas = body.querySelector('.dag-canvas, .spatial-canvas, .lanes-head');
+      const isTableCanvas = Boolean(wideCanvas && wideCanvas.classList.contains('lanes-head'));
+      natW = 0;
+      natH = 0;
+      fitScale = 1;
+      if (wideCanvas && stage && scaler) {
+        natW = Math.max(scaler.scrollWidth, wideCanvas.scrollWidth + 8);
+        natH = Math.max(scaler.scrollHeight, 120);
+        const availW = Math.max(320, stage.clientWidth - 76);
+        const availH = Math.max(240, stage.clientHeight - 76);
+        fitScale = isTableCanvas
+          ? Math.max(0.5, Math.min(1, availW / natW))
+          : Math.max(0.32, Math.min(1, availW / natW, availH / natH));
+        if (!preserveScale) {
+          curScale = fitScale < 0.96 ? Number(fitScale.toFixed(2)) : 1;
+        }
+      } else if (!preserveScale) {
+        curScale = 1;
+      }
+      applyScale(curScale);
+    };
+
+    paintWide(false);
+
+    if (expandBtn) {
+      expandBtn.onclick = () => {
+        expandAll = !expandAll;
+        expandBtn.setAttribute('aria-pressed', String(expandAll));
+        expandBtn.textContent = expandAll ? '收起全部说明' : '展开全部说明';
+        paintWide(true);
+      };
+    }
     if (outBtn) outBtn.onclick = () => applyScale(curScale - 0.15);
     if (inBtn) inBtn.onclick = () => applyScale(curScale + 0.15);
     if (fitBtn) {
@@ -1711,7 +2641,6 @@
         else applyScale(1);
       };
     }
-    applyScale(curScale);
   }
 
   function renderBlueprintCard(containerEl, figure, options) {
@@ -1791,7 +2720,7 @@
               ? '排版无重叠' + (qa.edgeFallbackCount ? '（' + qa.edgeFallbackCount + '条转图例）' : '')
               : '重叠：' + qa.details.join('；');
         }
-        bindStageInteractions(stage, onFocusBlock);
+        bindStageInteractions(stage, onFocusBlock, () => openZoomModal(figure, onFocusBlock));
       }
 
       const zoomBtn = containerEl.querySelector('[data-bp-zoom]');

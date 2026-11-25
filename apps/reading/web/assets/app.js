@@ -84,6 +84,7 @@
     ask: '自由追问',
     checklist: '行动自检清单',
     imagery: '意象与舞台词典',
+    historical_dossier: '人物与名物档案',
     compare_context: '多史家视角对照',
     boundary_check: '演进与适用边界',
     sparring_dossier: '学术交锋档案',
