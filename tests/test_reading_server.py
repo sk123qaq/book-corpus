@@ -268,3 +268,94 @@ def test_assist_sse_pin_unpin_and_records_roundtrip(reading_root):
     finally:
         upstream.shutdown()
         upstream.server_close()
+
+
+def test_chapter_cached_tools_endpoint_and_assist_sse_sync(reading_root):
+    mock_http_port = _free_port()
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    fig_json = json.dumps(
+        {
+            "caption": "因果回路",
+            "reading_note": "观察正负反馈",
+            "summary": "[原文] 制度激励与结果互相强化。",
+            "data": {
+                "nodes": [
+                    {"id": "N1", "label": "制度激励", "role": "driver"},
+                    {"id": "N2", "label": "行为产出", "role": "outcome"},
+                ],
+                "edges": [{"from": "N1", "to": "N2", "polarity": "+", "label": "促进"}],
+            },
+        },
+        ensure_ascii=False,
+    )
+
+    class _MockDiagramUpstream(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length") or 0)
+            self.rfile.read(length)
+            payload = {
+                "choices": [{"message": {"content": fig_json}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 24, "total_tokens": 36},
+            }
+            raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, *args):
+            return
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", mock_http_port), _MockDiagramUpstream)
+    t = threading.Thread(target=upstream.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    t.start()
+    try:
+        proc, base = _start_server(
+            reading_root,
+            {
+                "READING_MODEL_URL": f"http://127.0.0.1:{mock_http_port}/v1/chat/completions",
+                "OPENCODE_GO_API_KEY": "sk-mock",
+            },
+        )
+        try:
+            status, body, _ = _request(base, "/api/chapter/B0001/1/cached-tools")
+            assert status == 200
+            assert json.loads(body) == {"uid": "B0001", "n": "01", "cached_tools": []}
+
+            status, _, _ = _request(base, "/api/chapter/NOPE/1/cached-tools")
+            assert status == 404
+            status, _, _ = _request(base, "/api/chapter/B0001/1/cached-tools", method="POST", body={})
+            assert status == 405
+
+            status, sse_body, _ = _request(
+                base,
+                "/api/assist",
+                method="POST",
+                body={
+                    "uid": "B0001",
+                    "n": 1,
+                    "action": "diagram",
+                    "blueprint": "causal_loop",
+                    "read_type": "social",
+                    "scope": "chapter",
+                    "stream": True,
+                },
+            )
+            assert status == 200
+            done_frames = [frame for frame in sse_body.strip().split("\n\n") if frame.startswith("event: done")]
+            assert len(done_frames) == 1
+            done_payload = json.loads(done_frames[0].split("data:", 1)[1].strip())
+            assert done_payload["cached"] is False
+            assert done_payload["cached_tools"] == ["social_diagram_causal_loop"]
+
+            status, after_body, _ = _request(base, "/api/chapter/B0001/1/cached-tools")
+            assert status == 200
+            assert json.loads(after_body)["cached_tools"] == ["social_diagram_causal_loop"]
+        finally:
+            _stop_server(proc)
+    finally:
+        upstream.shutdown()
+        upstream.server_close()

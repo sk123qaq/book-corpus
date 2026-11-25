@@ -838,6 +838,19 @@ class ReadingService:
             return dict(cached, cached=True, scope="chapter")
         return None
 
+    def cached_chapter_tools(self, uid, n):
+        """返回当前章节未过期的全章工具缓存键列表，找不到章节返回 None。"""
+        book = self.library.book(uid)
+        raw = self.library.read_chapter(uid, n)
+        if not book or not raw:
+            return None
+        source_sha = raw.get("source_sha256") or ""
+        return {
+            "uid": uid,
+            "n": "%02d" % int(n),
+            "cached_tools": self.store.list_chapter_tools(uid, n, source_sha=source_sha),
+        }
+
     def assist(
         self,
         uid,
@@ -896,7 +909,9 @@ class ReadingService:
                 cache_key = self._chapter_tool_cache_key(effective_rt, action, effective_bp)
                 cached = self.store.chapter_tool(uid, n, cache_key, source_sha=source_sha)
                 if isinstance(cached, dict) and not cached.get("stale"):
-                    return dict(cached, cached=True, scope="chapter")
+                    out = dict(cached, cached=True, scope="chapter")
+                    out["cached_tools"] = self.store.list_chapter_tools(uid, n, source_sha=source_sha)
+                    return out
             if not blocks:
                 raise ValueError("本章暂无可用正文块")
         else:
@@ -1073,6 +1088,7 @@ class ReadingService:
         if effective_scope == "chapter" and not clean_q and figure is not None:
             cache_key = self._chapter_tool_cache_key(effective_rt, action, effective_bp)
             self.store.save_chapter_tool(uid, n, cache_key, result)
+        result["cached_tools"] = self.store.list_chapter_tools(uid, n, source_sha=source_sha)
         return result
 
     # ---- 旁批钉住 / 删除 ---------------------------------------------

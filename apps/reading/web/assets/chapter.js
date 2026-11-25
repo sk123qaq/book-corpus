@@ -31,12 +31,15 @@
   let hidePins = false;
   let scopeMode = 'chapter';
   let activeToolKey = '';
-  let loadingToolKey = '';
+  const loadingToolKeys = new Set();
+  const inFlightRequests = new Map();
+  let nextRequestToken = 0;
+  let activeRequestToken = 0;
   let cachedToolKeys = new Set();
   let globalBound = false;
   let currentSelection = { block_ids: [], text: '' };
   let lastResult = null;
-  let abortCtrl = null;
+  let selectionAbortCtrl = null;
   let mapLoading = false;
   let mapStartedAt = 0;
   let mapTimer = 0;
@@ -480,7 +483,7 @@
       const ckey = toolCacheKey(prof.read_type, 'diagram', bp.blueprint);
       const isCached = cachedToolKeys.has(ckey);
       const isAct = activeToolKey === key;
-      const isLoad = loadingToolKey === key;
+      const isLoad = loadingToolKeys.has(key);
       const cls = 'marg-tool-btn' +
         (isCached ? ' is-cached' : ' is-uncached') +
         (isAct ? ' active' : '') +
@@ -504,7 +507,7 @@
       const ckey = toolCacheKey(prof.read_type, ext.action, '');
       const isCached = cachedToolKeys.has(ckey);
       const isAct = activeToolKey === key;
-      const isLoad = loadingToolKey === key;
+      const isLoad = loadingToolKeys.has(key);
       const cls = 'marg-tool-btn' +
         (isCached ? ' is-cached' : ' is-uncached') +
         (isAct ? ' active' : '') +
@@ -722,6 +725,7 @@
       profSel.addEventListener('change', () => {
         setStoredReadType(profSel.value);
         activeToolKey = '';
+        activeRequestToken = 0;
         renderShell();
         renderMapDrawer();
         renderTocDrawer();
@@ -1925,38 +1929,58 @@
     }
   }
 
-  async function runAssist(action, question, blueprint, scopeOverride, force) {
-    if (abortCtrl) abortCtrl.abort();
-    abortCtrl = new AbortController();
-    const settings = RD.modelSettings();
-    const prof = activeProfile();
-    const scope = scopeOverride || ((scopeMode === 'selection' && currentSelection.block_ids && currentSelection.block_ids.length) ? 'selection' : 'chapter');
-    const chosenBp = blueprint || (action === 'diagram' && prof.blueprints && prof.blueprints[0] ? prof.blueprints[0].blueprint : '');
-    const bpMeta = (prof.blueprints || []).find((b) => b.blueprint === chosenBp);
-    scopeMode = scope;
-    activeToolKey = action === 'diagram' && chosenBp ? ('diagram:' + chosenBp) : ('ext:' + action);
-    loadingToolKey = activeToolKey;
-    const requestedCacheKey = toolCacheKey(prof.read_type, action, chosenBp);
-    syncToolButtons();
-    lastResult = null;
+  function reconcileCachedTools(payload, requestedCacheKey) {
+    if (payload && Array.isArray(payload.cached_tools)) {
+      cachedToolKeys = new Set(payload.cached_tools);
+      return;
+    }
+    if (
+      payload &&
+      payload.scope === 'chapter' &&
+      !payload.question &&
+      (payload.figure || payload.cached)
+    ) {
+      const prof = activeProfile();
+      if (requestedCacheKey) cachedToolKeys.add(requestedCacheKey);
+      const derivedKey = toolCacheKey(prof.read_type, payload.action, payload.blueprint);
+      if (derivedKey) cachedToolKeys.add(derivedKey);
+    }
+  }
+
+  async function refreshCachedTools() {
+    try {
+      const res = await RD.api('/api/chapter/' + encodeURIComponent(UID) + '/' + encodeURIComponent(N) + '/cached-tools');
+      if (res && Array.isArray(res.cached_tools)) {
+        cachedToolKeys = new Set(res.cached_tools);
+        syncToolButtons();
+      }
+    } catch (e) {}
+  }
+
+  function renderFigureToDrawer(figure, html) {
+    if (figure && RD.diagrams && RD.diagrams.renderBlueprintCard) {
+      RD.diagrams.renderBlueprintCard(RD.mount('drawer-diagram'), figure, { onFocusBlock: focusBlock });
+    } else if (html) {
+      RD.mount('drawer-diagram').innerHTML = html;
+    }
+  }
+
+  function prepareDrawerForTool(opts) {
     setDrawerOpen(true);
     RD.mount('btn-pin').disabled = true;
     RD.mount('drawer-empty').hidden = true;
-
-    const titleBase = (action === 'diagram' && bpMeta) ? bpMeta.label : (RD.actionNames[action] || action);
-    RD.mount('drawer-title').textContent = titleBase;
+    RD.mount('drawer-title').textContent = opts.title;
     renderDrawerScopeBar({
-      scope,
-      action,
-      blueprint: chosenBp,
-      block_ids: scope === 'chapter' ? [] : currentSelection.block_ids,
+      scope: opts.scope,
+      action: opts.action,
+      blueprint: opts.blueprint,
+      block_ids: opts.scope === 'chapter' ? [] : currentSelection.block_ids,
       covered_blocks: (data && data.blocks && data.blocks.length) || 0,
       sampled: false,
       cached: false,
     });
-
     const quoteEl = RD.mount('drawer-quote');
-    if (scope === 'chapter') {
+    if (opts.scope === 'chapter') {
       quoteEl.hidden = true;
       quoteEl.textContent = '';
     } else {
@@ -1964,15 +1988,112 @@
       quoteEl.textContent = currentSelection.text || ('段落 ' + currentSelection.block_ids.join(', '));
     }
     RD.mount('drawer-diagram').innerHTML = '';
-    RD.mount('drawer-answer').innerHTML = '<div class="drawer-thinking">正在细读与组织回答…</div>';
+    if (opts.figure || opts.diagramHtml) {
+      renderFigureToDrawer(opts.figure, opts.diagramHtml);
+    }
+    RD.mount('drawer-answer').innerHTML = opts.streamBuf
+      ? RD.renderMarkdown(opts.streamBuf)
+      : '<div class="drawer-thinking">正在细读与组织回答…</div>';
     RD.mount('drawer-meta').textContent = '';
+  }
 
-    let streamBuf = '';
+  function dispatchSseFrame(frame, onEvent) {
+    let evName = 'message';
+    const dataLines = [];
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event:')) evName = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+    }
+    const dataText = dataLines.join('\n');
+    if (!dataText) return;
+    onEvent(evName, JSON.parse(dataText));
+  }
+
+  async function runAssist(action, question, blueprint, scopeOverride, force) {
+    const settings = RD.modelSettings();
+    const prof = activeProfile();
+    const scope = scopeOverride || ((scopeMode === 'selection' && currentSelection.block_ids && currentSelection.block_ids.length) ? 'selection' : 'chapter');
+    const chosenBp = blueprint || (action === 'diagram' && prof.blueprints && prof.blueprints[0] ? prof.blueprints[0].blueprint : '');
+    const bpMeta = (prof.blueprints || []).find((b) => b.blueprint === chosenBp);
+    const toolKey = action === 'diagram' && chosenBp ? ('diagram:' + chosenBp) : ('ext:' + action);
+    const titleBase = (action === 'diagram' && bpMeta) ? bpMeta.label : (RD.actionNames[action] || action);
+    const isChapterTool = scope === 'chapter' && !String(question || '').trim();
+    const reqKey = isChapterTool ? ('chapter:' + toolKey) : 'selection';
+    const requestedCacheKey = toolCacheKey(prof.read_type, action, chosenBp);
+
+    if (isChapterTool && !force && inFlightRequests.has(reqKey)) {
+      const existing = inFlightRequests.get(reqKey);
+      scopeMode = scope;
+      activeToolKey = toolKey;
+      activeRequestToken = existing.token;
+      syncToolButtons();
+      prepareDrawerForTool({
+        title: titleBase,
+        scope,
+        action,
+        blueprint: chosenBp,
+        streamBuf: existing.streamBuf,
+        figure: existing.figure,
+        diagramHtml: existing.diagramHtml,
+      });
+      existing.diagramRendered = Boolean(existing.figure || existing.diagramHtml);
+      return;
+    }
+
+    if (isChapterTool && force && inFlightRequests.has(reqKey)) {
+      inFlightRequests.get(reqKey).controller.abort();
+    }
+    if (!isChapterTool && selectionAbortCtrl) {
+      selectionAbortCtrl.abort();
+    }
+
+    const ctrl = new AbortController();
+    if (!isChapterTool) selectionAbortCtrl = ctrl;
+
+    const reqToken = ++nextRequestToken;
+    activeRequestToken = reqToken;
+    scopeMode = scope;
+    activeToolKey = toolKey;
+    loadingToolKeys.add(toolKey);
+    const entry = {
+      controller: ctrl,
+      token: reqToken,
+      toolKey,
+      label: titleBase,
+      streamBuf: '',
+      figure: null,
+      diagramHtml: '',
+      diagramRendered: false,
+      doneReceived: false,
+    };
+    inFlightRequests.set(reqKey, entry);
+
+    const releaseRequest = () => {
+      if (inFlightRequests.get(reqKey) === entry) {
+        inFlightRequests.delete(reqKey);
+      }
+      if (!isChapterTool && selectionAbortCtrl === ctrl) {
+        selectionAbortCtrl = null;
+      }
+      let stillLoading = false;
+      for (const item of inFlightRequests.values()) {
+        if (item.toolKey === toolKey) {
+          stillLoading = true;
+          break;
+        }
+      }
+      if (!stillLoading) loadingToolKeys.delete(toolKey);
+    };
+
+    syncToolButtons();
+    lastResult = null;
+    prepareDrawerForTool({ title: titleBase, scope, action, blueprint: chosenBp });
+
     try {
       const res = await fetch('/api/assist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-        signal: abortCtrl.signal,
+        signal: ctrl.signal,
         body: JSON.stringify({
           uid: UID,
           n: N,
@@ -1997,54 +2118,78 @@
       const ctype = res.headers.get('Content-Type') || '';
       if (!ctype.includes('text/event-stream')) {
         const json = await res.json();
-        applyDoneResult(json, requestedCacheKey);
+        entry.doneReceived = true;
+        releaseRequest();
+        applyDoneResult(json, requestedCacheKey, entry);
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let rest = '';
+      const onSseEvent = (evName, payload) => {
+        if (evName === 'delta') {
+          entry.streamBuf += payload.text || '';
+          if (activeRequestToken === reqToken) {
+            RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(entry.streamBuf);
+          }
+        } else if (evName === 'diagram') {
+          entry.figure = payload.figure || null;
+          entry.diagramHtml = payload.html || '';
+          if (activeRequestToken === reqToken) {
+            try {
+              renderFigureToDrawer(entry.figure, entry.diagramHtml);
+              entry.diagramRendered = true;
+            } catch (e) {
+              entry.diagramRendered = false;
+            }
+          }
+        } else if (evName === 'done') {
+          entry.doneReceived = true;
+          releaseRequest();
+          applyDoneResult(payload, requestedCacheKey, entry);
+        } else if (evName === 'error') {
+          throw new Error(payload.error || '伴读调用失败');
+        }
+      };
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        rest += decoder.decode(value, { stream: true });
+        rest += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
         let idx;
         while ((idx = rest.indexOf('\n\n')) >= 0) {
           const frame = rest.slice(0, idx);
           rest = rest.slice(idx + 2);
-          let evName = 'message';
-          let dataLine = '';
-          for (const line of frame.split('\n')) {
-            if (line.startsWith('event:')) evName = line.slice(6).trim();
-            else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
-          }
-          if (!dataLine) continue;
-          const payload = JSON.parse(dataLine);
-          if (evName === 'delta') {
-            streamBuf += payload.text || '';
-            RD.mount('drawer-answer').innerHTML = RD.renderMarkdown(streamBuf);
-          } else if (evName === 'diagram') {
-            if (payload.figure && RD.diagrams && RD.diagrams.renderBlueprintCard) {
-              RD.diagrams.renderBlueprintCard(RD.mount('drawer-diagram'), payload.figure, { onFocusBlock: focusBlock });
-            } else {
-              RD.mount('drawer-diagram').innerHTML = payload.html || '';
-            }
-          } else if (evName === 'done') {
-            applyDoneResult(payload, requestedCacheKey);
-          } else if (evName === 'error') {
-            throw new Error(payload.error || '伴读调用失败');
-          }
+          dispatchSseFrame(frame, onSseEvent);
         }
       }
-      if (loadingToolKey === activeToolKey) {
-        loadingToolKey = '';
+      rest += decoder.decode().replace(/\r\n/g, '\n');
+      let idx;
+      while ((idx = rest.indexOf('\n\n')) >= 0) {
+        const frame = rest.slice(0, idx);
+        rest = rest.slice(idx + 2);
+        dispatchSseFrame(frame, onSseEvent);
+      }
+      if (rest.trim()) {
+        dispatchSseFrame(rest, onSseEvent);
+      }
+      if (!entry.doneReceived) {
+        releaseRequest();
         syncToolButtons();
+        await refreshCachedTools();
       }
     } catch (err) {
-      if (err.name === 'AbortError') return;
-      loadingToolKey = '';
+      releaseRequest();
       syncToolButtons();
-      RD.mount('drawer-answer').innerHTML = '<p class="job-error">' + RD.esc(err.message) + '</p>';
-      RD.toast(err.message, true);
+      if (err.name === 'AbortError') {
+        await refreshCachedTools();
+        return;
+      }
+      await refreshCachedTools();
+      if (activeRequestToken === reqToken) {
+        RD.mount('drawer-answer').innerHTML = '<p class="job-error">' + RD.esc(err.message) + '</p>';
+        RD.toast(err.message, true);
+      }
     }
   }
 
@@ -2078,21 +2223,16 @@
     return dice >= 0.68 && a.length <= b.length * 1.65;
   }
 
-  function applyDoneResult(payload, requestedCacheKey) {
-    lastResult = payload;
-    loadingToolKey = '';
-    if (
-      payload &&
-      payload.scope === 'chapter' &&
-      !payload.question &&
-      (payload.figure || payload.cached)
-    ) {
-      const prof = activeProfile();
-      if (requestedCacheKey) cachedToolKeys.add(requestedCacheKey);
-      const derivedKey = toolCacheKey(prof.read_type, payload.action, payload.blueprint);
-      if (derivedKey) cachedToolKeys.add(derivedKey);
-    }
+  function applyDoneResult(payload, requestedCacheKey, entry) {
+    reconcileCachedTools(payload, requestedCacheKey);
     syncToolButtons();
+    if (entry && activeRequestToken !== entry.token) {
+      if (payload && payload.scope === 'chapter' && !payload.question && (payload.figure || payload.cached)) {
+        RD.toast('「' + entry.label + '」已生成并缓存');
+      }
+      return;
+    }
+    lastResult = payload;
     renderDrawerScopeBar({
       scope: payload.scope || 'selection',
       action: payload.action || 'diagram',
@@ -2102,10 +2242,8 @@
       sampled: Boolean(payload.sampled),
       cached: Boolean(payload.cached),
     });
-    if (payload.figure && RD.diagrams && RD.diagrams.renderBlueprintCard) {
-      RD.diagrams.renderBlueprintCard(RD.mount('drawer-diagram'), payload.figure, { onFocusBlock: focusBlock });
-    } else if (payload.diagram_html) {
-      RD.mount('drawer-diagram').innerHTML = payload.diagram_html;
+    if (!entry || !entry.diagramRendered) {
+      renderFigureToDrawer(payload.figure, payload.diagram_html);
     }
     const noteText = payload.figure && payload.figure.reading_note;
     const contentText = String(payload.content || '').trim();

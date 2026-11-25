@@ -244,3 +244,33 @@ def test_pin_and_unpin_assist_notes_serialize_concurrent_updates(reading_root, m
 
     remaining = orig_read("B0001", 1)
     assert {item["id"] for item in remaining} == {f"note-{i:02d}" for i in range(5, 10)}
+
+
+def test_assist_chapter_returns_updated_cached_tools(reading_root):
+    fig_payload = {
+        "caption": "核心因果回路",
+        "reading_note": "先看主反馈闭环",
+        "summary": "[原文] 两股力量彼此强化。",
+        "data": {
+            "nodes": [
+                {"id": "N1", "label": "变量甲", "role": "driver"},
+                {"id": "N2", "label": "变量乙", "role": "outcome"},
+            ],
+            "edges": [{"from": "N1", "to": "N2", "polarity": "+", "label": "推动"}],
+        },
+    }
+    client = _FakeAssistClient(figure_json=fig_payload)
+    service = ReadingService(str(reading_root), client=client)
+
+    assert service.cached_chapter_tools("B0001", 1) == {"uid": "B0001", "n": "01", "cached_tools": []}
+    assert service.cached_chapter_tools("MISSING", 1) is None
+
+    first = service.assist("B0001", 1, "diagram", blueprint="causal_loop", read_type="social", scope="chapter")
+    assert first["cached"] is False
+    assert first["cached_tools"] == ["social_diagram_causal_loop"]
+
+    second = service.assist("B0001", 1, "diagram", blueprint="causal_loop", read_type="social", scope="chapter")
+    assert second["cached"] is True
+    assert second["cached_tools"] == ["social_diagram_causal_loop"]
+    assert len(client.calls) == 1
+    assert service.cached_chapter_tools("B0001", 1)["cached_tools"] == ["social_diagram_causal_loop"]
