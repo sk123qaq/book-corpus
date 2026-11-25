@@ -309,13 +309,29 @@ def test_chapter_scope_full_context_caching_and_multi_block_selection(reading_ro
     assert refreshed["figure"]["caption"] == "重生成回路"
     assert len(client.calls) == 2
 
-    # 5. 超长章（>12,000 字）触发均匀骨架采样覆盖首中尾
-    long_blocks = [{"id": f"B{i:02d}", "kind": "paragraph", "text": f"第{i}段内容" + "甲" * 350} for i in range(1, 50)]
+    # 5a. 16k 字（<=24,000）完整喂入且不截断 >600 字长段
+    mid_blocks = [{"id": f"B{i:02d}", "kind": "paragraph", "text": f"第{i}段" + "乙" * 750} for i in range(1, 22)]
+    mid_ctx, mid_cnt, mid_sampled = service._chapter_scope_context("B0002", 1, mid_blocks)
+    assert mid_cnt == 21
+    assert mid_sampled is False
+    assert "乙" * 740 in mid_ctx
+
+    # 5b. 超长章（>24,000 字）触发连续场景窗口采样，保留首尾、全部小标题及中段连续上下文
+    long_blocks = [
+        {
+            "id": f"B{i:02d}",
+            "kind": "heading" if i in (1, 35) else "paragraph",
+            "text": f"第{i}段内容" + "甲" * 450,
+        }
+        for i in range(1, 70)
+    ]
     long_ctx, total_cnt, sampled = service._chapter_scope_context("B0002", 1, long_blocks)
-    assert total_cnt == 49
+    assert total_cnt == 69
     assert sampled is True
     assert "[B01]" in long_ctx
-    assert "[B49]" in long_ctx
+    assert "[B35]" in long_ctx
+    assert "[B69]" in long_ctx
+    assert "连续场景窗口" in long_ctx
 
     # 6. 多选区传入时，prompt 带上多段块号标记；同时校验 chapter() 返回的 cached_tools 只含全章缓存
     ch_b2 = service.chapter("B0002", 1)
@@ -578,3 +594,174 @@ def test_chapter_scope_context_separates_body_and_cited_footnotes(reading_root):
     assert "[B05]" in ctx
     fn_part = ctx.split("【章末注释（仅供考证参考，勿喧宾夺主）】", 1)[1]
     assert len(fn_part) <= 950  # <= 18% of 5000 + header margin
+
+
+def test_literature_v2_five_tools_schemas_and_anti_spoiler(reading_root):
+    from bookcorpus.reading.diagram_audit import prompt_for_extension
+
+    prof = resolve_read_profile(["文学", "戏剧"], title="雷雨")
+    assert [b["blueprint"] for b in prof["blueprints"]] == ["tension_curve", "relation_graph", "spatial_route"]
+    assert [e["action"] for e in prof["extensions"]] == ["narrative_clues", "imagery"]
+
+    # 1. Anti-spoiler hard rule in all literature diagram & extension prompts
+    for bp in ("tension_curve", "relation_graph", "spatial_route"):
+        msgs = prompt_for_diagram(blueprint=bp, read_type="literature", selected_text="第三幕正文", block_ids=["B01"])
+        assert "严禁剧透" in msgs[0]["content"]
+    for act in ("narrative_clues", "imagery"):
+        msgs = prompt_for_extension(act, read_type="literature", sub_kind="drama", selected_text="第三幕正文")
+        assert "严禁剧透" in msgs[0]["content"]
+
+    # 2. tension_curve beat_kind & note + legacy compatibility
+    tc = audit_blueprint_payload(
+        {
+            "blueprint": "tension_curve",
+            "caption": "第三幕张力",
+            "data": {
+                "points": [
+                    {
+                        "beat": "闷热开场",
+                        "beat_kind": "setup",
+                        "tension": 25,
+                        "emotion": "压抑沉闷",
+                        "note": "鲁家饭后静默对峙，潜流暗涌。",
+                        "blocks": ["B01", "B02"],
+                        "source": "原文",
+                    },
+                    {
+                        "beat": "蘩漪关窗",
+                        "beat_kind": "climax",
+                        "tension": 92,
+                        "emotion": "绝望决绝",
+                        "note": "蘩漪从窗外反锁窗户逼退周萍，冲突爆发。",
+                        "blocks": ["B517"],
+                        "source": "原文",
+                    },
+                ]
+            },
+        },
+        {"B01", "B02", "B517"},
+    )
+    assert tc["data"]["points"][0]["beat_kind"] == "setup"
+    assert tc["data"]["points"][1]["beat_kind"] == "climax"
+    assert "反锁" in tc["data"]["points"][1]["note"]
+
+    # 3. relation_graph camp/arc/rel_kind + 16-node capacity + legacy compat
+    rg = audit_blueprint_payload(
+        {
+            "blueprint": "relation_graph",
+            "caption": "鲁家与周家关系",
+            "data": {
+                "nodes": [
+                    {
+                        "id": "P1",
+                        "role": "protagonist",
+                        "camp": "周家",
+                        "label": "蘩漪",
+                        "arc": "从隐忍走向绝望反扑",
+                        "detail": "暗中追踪至此，锁死退路。",
+                        "blocks": ["B517"],
+                        "source": "原文",
+                    },
+                    {
+                        "id": "P2",
+                        "role": "antagonist",
+                        "camp": "周家",
+                        "label": "周萍",
+                        "arc": "企图逃离却当场受困",
+                        "blocks": ["B02"],
+                        "source": "原文",
+                    },
+                ],
+                "edges": [{"from": "P1", "to": "P2", "rel_kind": "conflict", "label": "逼迫对峙", "note": "窗外锁死"}],
+            },
+        },
+        {"B02", "B517"},
+    )
+    assert rg["data"]["nodes"][0]["camp"] == "周家"
+    assert rg["data"]["nodes"][0]["arc"] == "从隐忍走向绝望反扑"
+    assert rg["data"]["edges"][0]["rel_kind"] == "conflict"
+
+    # 4. spatial_route 3 modes: stage_blocking, route_map, not_applicable + history legacy compat
+    sb = audit_blueprint_payload(
+        {
+            "blueprint": "spatial_route",
+            "caption": "四凤内屋调度",
+            "data": {
+                "mode": "stage_blocking",
+                "stage_desc": "四凤内屋封闭舞台",
+                "nodes": [
+                    {
+                        "id": "S1",
+                        "role": "threshold",
+                        "zone": "后墙",
+                        "x": 50,
+                        "y": 10,
+                        "label": "中间木窗",
+                        "blocks": ["B01"],
+                    },
+                    {
+                        "id": "S2",
+                        "role": "outside",
+                        "zone": "窗外",
+                        "x": 55,
+                        "y": 4,
+                        "label": "窗外暗处",
+                        "blocks": ["B517"],
+                    },
+                ],
+                "edges": [{"from": "S2", "to": "S1", "kind": "barrier", "actor": "蘩漪", "label": "反关木窗"}],
+            },
+        },
+        {"B01", "B517"},
+    )
+    assert sb["data"]["mode"] == "stage_blocking"
+    assert sb["data"]["edges"][0]["actor"] == "蘩漪"
+
+    na = audit_blueprint_payload(
+        {
+            "blueprint": "spatial_route",
+            "caption": "纯心理独白",
+            "data": {
+                "mode": "not_applicable",
+                "not_applicable_reason": "本章为封闭内心独白，未发生物理空间转换或舞台调度。",
+                "nodes": [],
+                "edges": [],
+            },
+        },
+        {"B01"},
+    )
+    assert na["blueprint"] == "spatial_route"
+    assert na["data"]["mode"] == "not_applicable"
+    assert "内心独白" in na["data"]["not_applicable_reason"]
+
+    hist = audit_blueprint_payload(
+        {
+            "blueprint": "spatial_route",
+            "caption": "战役疆域",
+            "data": {"nodes": [{"id": "H1", "role": "condition", "label": "长安", "blocks": ["B01"]}], "edges": []},
+        },
+        {"B01"},
+    )
+    assert hist["blueprint"] == "spatial_route"
+    assert "mode" not in hist["data"]
+
+    # 5. Extension dossier sections + prefix stripping
+    ext = audit_blueprint_payload(
+        {
+            "blueprint": "extension_dossier",
+            "caption": "伏笔与视角",
+            "items": [
+                {
+                    "section": "叙事视角与时间结构",
+                    "title": "[原文] 倒叙开篇",
+                    "body": "补充：开篇先点出凶案日期，再回溯当日清晨动线。",
+                    "blocks": ["B01"],
+                    "source": "原文",
+                }
+            ],
+        },
+        {"B01"},
+    )
+    assert ext["items"][0]["section"] == "叙事视角与时间结构"
+    assert ext["items"][0]["title"] == "倒叙开篇"
+    assert ext["items"][0]["body"].startswith("开篇先点出")

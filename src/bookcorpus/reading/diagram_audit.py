@@ -12,9 +12,22 @@ SPATIAL_EDGE_LABEL_LIMIT = 14
 MAX_GRAPH_NODES = 16
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
-_REDUNDANT_SUPP_RE = re.compile(r"^(?:【补充】|\[补充\]|补充\s*[:：])\s*")
+_SOURCE_PREFIX_RE = re.compile(r"^(?:【(?:原文|补充)】\s*|\[(?:原文|补充)\]\s*|(?:原文|补充)\s*[:：]\s*)+")
 _TIME_BC_RE = re.compile(r"(?:公元前|前)\s*(\d{1,4})\s*年?")
 _TIME_AD_RE = re.compile(r"(-?\d{1,4})\s*年")
+_LITERATURE_ANTI_SPOILER = (
+    "【严禁剧透硬规则】严禁调用训练记忆剧透本章之后尚未揭晓的真凶、血缘秘密、人物结局或隐藏反转；"
+    "所有分析严格限定在本章已呈现的文本事实内。"
+)
+_BEAT_KINDS = frozenset({"setup", "foreshadow", "relief", "escalation", "climax", "aftermath"})
+_LITERATURE_SPATIAL_SCHEMA_HINT = (
+    '"blueprint":"spatial_route","caption":"≤18字图题","reading_note":"≤35字看图引导","summary":"2句核心解读（不与reading_note重复）",'
+    '"data":{"mode":"route_map|stage_blocking|not_applicable","stage_desc":"≤30字舞台或空间格局",'
+    '"not_applicable_reason":"仅mode为not_applicable时填写2句原因，否则留空",'
+    '"nodes":[{"id":"S1","role":"home|public|threshold|transit|destination|prop|zone|outside",'
+    '"zone":"≤10字片区或舞台区位","x":50,"y":50,"label":"≤14字地点或舞台锚点","detail":"≤45字态势说明","blocks":["B01"],"source":"原文|补充"}],'
+    '"edges":[{"from":"S1","to":"S2","kind":"move|gaze|barrier|parallel","actor":"人物路线名","label":"≤6字动线","note":"≤30字说明"}]}'
+)
 
 DAG_BLUEPRINTS = frozenset(
     {
@@ -41,8 +54,26 @@ DEFAULT_NODE_ROLE: dict[str, str] = {
 
 POWER_ROLES = frozenset({"sovereign", "faction", "ally", "rival", "constraint"})
 POWER_RELATIONS = frozenset({"subordinate", "balance", "alliance", "hostile", "constraint"})
-SPATIAL_ROLES = frozenset({"capital", "fortress", "corridor", "neutral", "front"})
-SPATIAL_EDGE_KINDS = frozenset({"advance", "flank", "defense", "diplomacy"})
+SPATIAL_ROLES = frozenset(
+    {
+        "capital",
+        "fortress",
+        "corridor",
+        "neutral",
+        "front",
+        "home",
+        "public",
+        "threshold",
+        "transit",
+        "destination",
+        "prop",
+        "zone",
+        "outside",
+    }
+)
+SPATIAL_EDGE_KINDS = frozenset(
+    {"advance", "flank", "defense", "diplomacy", "move", "gaze", "barrier", "parallel"}
+)
 
 LEGACY_FAMILY_TO_BLUEPRINT = {
     "flow": "flow_swimlane",
@@ -99,15 +130,16 @@ BLUEPRINT_SCHEMA_HINTS: dict[str, str] = {
         '"edges":[{"from":"C1","to":"C2","label":"≤5字(引发/催化/倒逼/反噬)"}]}'
     ),
     "relation_graph": (
-        '"blueprint":"relation_graph","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"P1","role":"premise|condition|rebuttal|inference","label":"≤16字人物与立场",'
-        '"detail":"≤45字关系变化","blocks":["B01"],"source":"原文|补充"}],'
-        '"edges":[{"from":"P1","to":"P2","label":"≤5字羁绊/冲突"}]}'
+        '"blueprint":"relation_graph","caption":"≤18字图题","reading_note":"≤35字看图引导","summary":"2句核心解读（不与reading_note重复）",'
+        '"data":{"nodes":[{"id":"P1","role":"protagonist|ally|antagonist|catalyst|observer","camp":"阵营/家庭/阶层",'
+        '"label":"≤14字人物与身份","arc":"≤25字本章心理或处境变化","detail":"≤55字行为动机与交互","blocks":["B01"],"source":"原文|补充"}],'
+        '"edges":[{"from":"P1","to":"P2","rel_kind":"bond|conflict|asymmetry|family","label":"≤6字关系","note":"≤35字说明"}]}'
     ),
     "tension_curve": (
-        '"blueprint":"tension_curve","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"yLabel":"张力强度","points":[{"beat":"≤8字节拍","tension":65,"emotion":"≤12字情绪状态",'
-        '"blocks":["B01"],"source":"原文"}]}'
+        '"blueprint":"tension_curve","caption":"≤18字图题","reading_note":"≤35字看图引导","summary":"2句核心解读（不与reading_note重复）",'
+        '"data":{"yLabel":"张力强度","points":[{"beat":"≤8字戏剧节拍",'
+        '"beat_kind":"setup|foreshadow|relief|escalation|climax|aftermath","tension":65,'
+        '"emotion":"≤12字情绪状态","note":"25–45字解释这一拍为何拉高或压低张力","blocks":["B01"],"source":"原文"}]}'
     ),
     "flow_swimlane": (
         '"blueprint":"flow_swimlane","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
@@ -177,13 +209,38 @@ EXTENSION_PROMPT_SPECS: dict[str, dict[str, str]] = {
             '"checked":false,"blocks":["B01"],"source":"原文|补充"}]}'
         ),
     },
+    "narrative_clues": {
+        "blueprint": "extension_dossier",
+        "title": "叙事视角与伏笔线索",
+        "instruction": (
+            f"{_LITERATURE_ANTI_SPOILER}\n"
+            "按以下三个分区共输出 6–9 条卡片（每条必须填写 section 字段，取下列三个分区名之一）：\n"
+            "1. 「叙事视角与时间结构」（1–3 条）：叙述者身份、视角切换、倒叙/插叙/双线结构或记忆矛盾。\n"
+            "2. 「关键伏笔、线索与信息差」（3–5 条）：草蛇灰线、物证/异常细节、谁知情谁不知情的信息差。\n"
+            "3. 「本章悬念与待观察线」（1–2 条）：本章留下的合理悬念，严禁提前泄底。\n"
+            '凡直接出自本章文本的视角、线索与悬念均标 source="原文"；仅引用书外创作背景或类型史对照时'
+            '才标 "补充"，且 body 严禁以「补充：」开头。\n'
+            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字视角与线索题",'
+            '"reading_note":"≤35字观察引导","summary":"2句总体线索综述（不与reading_note重复）",'
+            '"items":[{"section":"叙事视角与时间结构|关键伏笔、线索与信息差|本章悬念与待观察线",'
+            '"title":"≤20字视角或线索标签","body":"≤75字具体细节、信息差或悬念解析","blocks":["B01"],"source":"原文|补充"}]}'
+        ),
+    },
     "imagery": {
         "blueprint": "extension_dossier",
-        "title": "意象与舞台词典",
+        "title": "意象、潜台词与细读",
         "instruction": (
-            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字意象/舞台主题",'
-            '"reading_note":"阅读体验要点","summary":"2句基调总结","items":[{"title":"≤20字意象或调度标签",'
-            '"body":"≤65字意象冲突/潜台词/重音解析","blocks":["B01"],"source":"原文|补充"}]}'
+            f"{_LITERATURE_ANTI_SPOILER}\n"
+            "提纯为三个分区、共 6–9 张精品卡，严禁混入普通剧情复述，同时覆盖小说、戏剧、散文与诗歌：\n"
+            "1. 「核心意象与象征物」（3–4 条）：表层物象 → 深层隐喻或前后呼应。\n"
+            "2. 「潜台词、反讽与舞台重音」（2–3 条）：话里有话、动作停顿、情感错位。\n"
+            "3. 「声景氛围、叙事修辞与名句细读」（2–3 条）：声景/光影调度、值得停步细品的原句或诗文韵律留白。\n"
+            '严格校准 source：凡直接出自本章文本的意象、台词、声景与修辞解析均标 "原文"；'
+            '仅引用书外文学史典故或创作背景时才标 "补充"，且 body 严禁以「补充：」开头。\n'
+            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字意象与细读题",'
+            '"reading_note":"≤35字细读引导","summary":"2句基调总结（不与reading_note重复）",'
+            '"items":[{"section":"核心意象与象征物|潜台词、反讽与舞台重音|声景氛围、叙事修辞与名句细读",'
+            '"title":"≤20字意象或潜台词标签","body":"≤75字意象隐喻/潜台词/修辞细读","blocks":["B01"],"source":"原文|补充"}]}'
         ),
     },
     "historical_dossier": {
@@ -295,8 +352,36 @@ BLUEPRINT_GUIDANCE: dict[str, str] = {
         "mechanism（催化机制）、turning_point（关键转折）、consequence（长期后果）。\n"
         "- 边标签标明因果性质（如 引发、催化、倒逼、反噬）。建议节点数 6–12 个，严禁超过 16 个。"
     ),
+    "tension_curve": (
+        "张力曲线要求：\n"
+        "- 请提炼 6–9 个关键戏剧节拍（不要按段落机械均分进度条），捕捉铺垫(setup)、伏笔(foreshadow)、"
+        "虚假舒缓或骤降(relief)、冲突升级(escalation)、爆发顶点(climax)与留白余韵(aftermath)。\n"
+        "- 每个节拍必须填写 beat_kind，并用 note（25–45 字）解释这一拍为何拉高或压低张力。\n"
+        "- reading_note 写一句≤35字的读图视角引导，summary 写2句总体戏剧节奏解读（勿与 reading_note 重复）。"
+    ),
+    "relation_graph": (
+        "人物与阵营图谱要求：\n"
+        "- role 只能用文学人物角色：protagonist(核心人物)、ally(亲近/同阵营)、antagonist(对立/施压方)、"
+        "catalyst(关键变数/催化者)、observer(旁观/叙述者/群像)，严禁使用 premise/condition/rebuttal/conclusion。\n"
+        "- 严禁把天气、自然现象或纯事件当成人物节点；建议 6–12 位核心人物或群体。\n"
+        "- 每节点填写 camp（阵营/家庭/阶层，如「鲁家」「周家」）、arc（本章心理/处境变化）"
+        "与 1–3 个最关键代表块号 blocks。\n"
+        "- 每条边填写 rel_kind：bond(亲情/爱恋)、conflict(冲突/对抗)、asymmetry(隐瞒/错位/不平等)、family(血缘/姻亲)。"
+    ),
 }
 
+_LITERATURE_SPATIAL_GUIDANCE = (
+    "空间与舞台动线三模式自适应规则（三选一填入 data.mode）：\n"
+    '1. 单一封闭室内或戏剧舞台（如戏剧幕次、固定室内场）：mode="stage_blocking"，节点为房间区域、门窗与核心道具锚点'
+    "（如中间木窗、窗外暗处、左门、右门、圆桌洋灯、床头箱子），"
+    "坐标 x（0–100 左→右）、y（0–100 后景/窗=0 → 台口/观众=100）；\n"
+    '边用 kind="move"(进出走位)/"gaze"(窥视偷听)/"barrier"(阻隔压迫) + actor 标出人物调度，'
+    "绝不编造不存在的场景切换。\n"
+    '2. 多地点移动的小说：mode="route_map"，节点为真实地点，role 取 home/public/threshold/transit/destination，'
+    'x（0–100 西→东）、y（0–100 北→南），边用 kind="move"/"barrier"/"parallel" + actor。\n'
+    '3. 无显著空间转换或舞台调度的抒情诗、议论散文、纯心理独白：mode="not_applicable"，nodes 与 edges 留空数组 []，'
+    "在 not_applicable_reason 诚实写 2 句原因，绝不硬编。"
+)
 
 def prompt_for_diagram(
     *,
@@ -315,24 +400,31 @@ def prompt_for_diagram(
     chosen = (blueprint or "").strip()
     if chosen not in BLUEPRINT_SCHEMA_HINTS:
         chosen = "argument_map"
-    schema_hint = BLUEPRINT_SCHEMA_HINTS[chosen]
+    is_lit_spatial = chosen == "spatial_route" and read_type == "literature"
+    schema_hint = _LITERATURE_SPATIAL_SCHEMA_HINT if is_lit_spatial else BLUEPRINT_SCHEMA_HINTS[chosen]
     type_hint = f"（当前阅读视角：{read_type}）" if read_type else ""
     scope_hint = (
         f"当前作用范围：整章全局（涵盖全章 {covered_blocks or '全部'} 个正文段落"
-        + ("，长章已均匀抽取各节骨架" if sampled else "")
+        + ("，长章已按连续场景窗口抽样覆盖" if sampled else "")
         + "）。请覆盖全章各节真实脉络，不要只停留在开头几段，每个节点 blocks 必须准确引用对应段落真实块号。"
         if scope == "chapter"
         else f"当前作用范围：读者选中的段落（{', '.join(block_ids or []) or '当前片段'}）。"
     )
+    extra_lines: list[str] = []
+    if read_type == "literature":
+        extra_lines.append(_LITERATURE_ANTI_SPOILER)
+    if is_lit_spatial:
+        extra_lines.append(_LITERATURE_SPATIAL_GUIDANCE)
+    elif chosen in BLUEPRINT_GUIDANCE:
+        extra_lines.append(BLUEPRINT_GUIDANCE[chosen])
+    guidance_block = ("\n".join(extra_lines) + "\n") if extra_lines else ""
     coord_rule = (
         "2. 严禁输出 HTML/SVG 代码或像素宽高；必须给出归一化相对地理方位坐标 x（0–100，西→东）与 y（0–100，北→南）。\n"
         if chosen == "spatial_route"
         else "2. 严禁输出任何像素坐标、宽高、颜色或 HTML/SVG 代码。\n"
     )
-    edge_limit_hint = "12 字以内" if chosen == "spatial_route" else "5 字以内"
+    edge_limit_hint = "12 字以内" if (chosen == "spatial_route" and not is_lit_spatial) else "5 字以内"
     node_cap_hint = f"（图节点上限 {MAX_GRAPH_NODES} 个，建议 6–12 个）" if chosen in DAG_BLUEPRINTS else ""
-    guidance = BLUEPRINT_GUIDANCE.get(chosen, "")
-    guidance_block = f"{guidance}\n" if guidance else ""
     system = (
         f"你是阅读伴读助手，擅长把复杂文字转成清晰的关系图与结构化蓝图{type_hint}。\n"
         f"{scope_hint}\n"
@@ -362,6 +454,7 @@ def prompt_for_extension(
     action: str,
     *,
     sub_kind: str = "",
+    read_type: str = "",
     book: dict[str, Any] | None = None,
     chapter: dict[str, Any] | None = None,
     selected_text: str = "",
@@ -376,14 +469,21 @@ def prompt_for_extension(
     sub_hint = f"（文学子类侧重点：{sub_kind}）" if sub_kind else ""
     scope_hint = (
         f"作用范围：整章全局（涵盖全章 {covered_blocks or '全部'} 个段落"
-        + ("，已均匀覆盖全章骨架" if sampled else "")
+        + ("，已按连续场景窗口覆盖" if sampled else "")
         + "）。请归纳全章而不只看开头。"
         if scope == "chapter"
         else f"作用范围：读者选中的段落（{', '.join(block_ids or []) or '局部'}）。"
     )
+    spoiler_rule = (
+        f"{_LITERATURE_ANTI_SPOILER}\n"
+        if (read_type == "literature" or action in {"imagery", "narrative_clues"})
+        and _LITERATURE_ANTI_SPOILER not in spec["instruction"]
+        else ""
+    )
     system = (
         f"你是阅读伴读专家，负责生成「{spec['title']}」结构卡片{sub_hint}。\n"
         f"{scope_hint}\n"
+        f"{spoiler_rule}"
         "严格区分 [原文] 与 [补充]，严禁输出坐标或样式，只输出一个严格 JSON 对象（不要围栏）：\n"
         f"{spec['instruction']}"
     )
@@ -462,11 +562,8 @@ def _norm_source(val: Any) -> str:
     return "补充" if txt in {"补充", "ext", "external"} else "原文"
 
 
-def _strip_source_prefix(text: str, source: str) -> str:
-    cleaned = str(text or "").strip()
-    if source == "补充":
-        cleaned = _REDUNDANT_SUPP_RE.sub("", cleaned).strip()
-    return cleaned
+def _strip_source_prefix(text: str, source: str = "") -> str:
+    return _SOURCE_PREFIX_RE.sub("", str(text or "")).strip()
 
 
 def _parse_sort_year(raw_val: Any, time_lbl: str) -> int | None:
@@ -526,16 +623,21 @@ def _audit_dag_data(
         role = str(item.get("role") or fallback_role).strip()
         if blueprint == "power_hierarchy" and role not in POWER_ROLES:
             role = fallback_role
-        nodes.append(
-            {
-                "id": nid,
-                "role": role,
-                "label": label,
-                "detail": detail,
-                "blocks": blocks,
-                "source": source,
-            }
-        )
+        node_entry: dict[str, Any] = {
+            "id": nid,
+            "role": role,
+            "label": label,
+            "detail": detail,
+            "blocks": blocks,
+            "source": source,
+        }
+        camp = str(item.get("camp") or "").strip()[:24]
+        if camp:
+            node_entry["camp"] = camp
+        arc = str(item.get("arc") or "").strip()[:60]
+        if arc:
+            node_entry["arc"] = arc
+        nodes.append(node_entry)
     if not nodes:
         return None
 
@@ -559,9 +661,20 @@ def _audit_dag_data(
         rel_type = str(edge.get("relation_type") or "").strip()
         if rel_type in POWER_RELATIONS:
             entry["relation_type"] = rel_type
+        rel_kind = str(edge.get("rel_kind") or "").strip()
+        if rel_kind:
+            entry["rel_kind"] = rel_kind
         edges.append(entry)
 
     return {"nodes": nodes, "edges": edges}
+
+
+def _clamp_pct(val: Any, default: float = 50.0) -> float:
+    try:
+        num = float(default if val is None else val)
+    except (TypeError, ValueError):
+        num = default
+    return round(max(0.0, min(100.0, num)), 1)
 
 
 def _audit_spatial_data(
@@ -572,22 +685,21 @@ def _audit_spatial_data(
     logs: list[str],
 ) -> dict[str, Any] | None:
     mode = str(raw_data.get("mode") or "").strip().lower()
-    if mode == "not_applicable":
-        reason = (
-            str(raw_data.get("not_applicable_reason") or "").strip() or "本章以制度或事件推演为主，无显著地理空间约束。"
-        )
-        return {
-            "mode": "not_applicable",
-            "not_applicable_reason": reason,
-        }
-
     raw_nodes = raw_data.get("nodes")
-    if not isinstance(raw_nodes, list) or not raw_nodes:
-        return None
+    if mode == "not_applicable" or (raw_data.get("not_applicable_reason") and not raw_nodes):
+        reason = (
+            str(raw_data.get("not_applicable_reason") or "").strip()
+            or "本章无显著物理空间转换、地缘约束或舞台调度，无需强行绘制空间图。"
+        )[:180]
+        return {"mode": "not_applicable", "not_applicable_reason": reason, "nodes": [], "edges": []}
 
-    # 兼容旧版无二维坐标缓存：平滑沿用 DAG 结构，不白屏
-    has_coords = any(isinstance(nd, dict) and nd.get("x") is not None and nd.get("y") is not None for nd in raw_nodes)
-    if not has_coords:
+    lit_mode = mode in {"route_map", "stage_blocking"}
+    has_coords = isinstance(raw_nodes, list) and any(
+        isinstance(nd, dict) and nd.get("x") is not None and nd.get("y") is not None for nd in raw_nodes
+    )
+    if not lit_mode and not has_coords:
+        if not isinstance(raw_nodes, list) or not raw_nodes:
+            return None
         logs.append("兼容旧版无坐标空间图缓存，按拓扑模式渲染")
         return _audit_dag_data(
             raw_data,
@@ -597,8 +709,10 @@ def _audit_spatial_data(
             blueprint="spatial_route",
         )
 
+    if not isinstance(raw_nodes, list) or not raw_nodes:
+        return None
     if len(raw_nodes) > MAX_GRAPH_NODES:
-        logs.append(f"空间节点数 {len(raw_nodes)} 超出上限 {MAX_GRAPH_NODES}，触发结构化清单降级")
+        logs.append(f"空间节点数 {len(raw_nodes)} 超出单图上限 {MAX_GRAPH_NODES}，触发结构化清单降级")
         return None
 
     nodes: list[dict[str, Any]] = []
@@ -610,17 +724,21 @@ def _audit_spatial_data(
             continue
         raw_x_val = item.get("x")
         raw_y_val = item.get("y")
-        if raw_x_val is None or raw_y_val is None or isinstance(raw_x_val, bool) or isinstance(raw_y_val, bool):
-            logs.append(f"空间节点 {item.get('id') or idx + 1} 坐标缺失或非数字，已跳过")
-            continue
-        try:
-            raw_x = float(raw_x_val)
-            raw_y = float(raw_y_val)
-        except (TypeError, ValueError):
-            logs.append(f"空间节点 {item.get('id') or idx + 1} 坐标缺失或非数字，已跳过")
-            continue
-        x = round(max(0.0, min(100.0, raw_x)), 1)
-        y = round(max(0.0, min(100.0, raw_y)), 1)
+        if not lit_mode:
+            if raw_x_val is None or raw_y_val is None or isinstance(raw_x_val, bool) or isinstance(raw_y_val, bool):
+                logs.append(f"空间节点 {item.get('id') or idx + 1} 坐标缺失或非数字，已跳过")
+                continue
+            try:
+                x = _clamp_pct(float(raw_x_val))
+                y = _clamp_pct(float(raw_y_val))
+            except (TypeError, ValueError):
+                logs.append(f"空间节点 {item.get('id') or idx + 1} 坐标缺失或非数字，已跳过")
+                continue
+        else:
+            default_x = 18.0 + (idx % 4) * 21.0
+            default_y = 20.0 + (idx // 4) * 28.0
+            x = _clamp_pct(raw_x_val, default_x)
+            y = _clamp_pct(raw_y_val, default_y)
         nid = str(item.get("id") or f"S{idx + 1}").strip()
         source = _norm_source(item.get("source"))
         raw_label = _strip_source_prefix(str(item.get("label") or item.get("title") or nid), source)
@@ -628,7 +746,7 @@ def _audit_spatial_data(
         if len(raw_label) > NODE_LABEL_LIMIT:
             detail = f"{raw_label} · {detail}".strip(" ·") if detail else raw_label
             label = raw_label[:NODE_LABEL_LIMIT] + "…"
-            logs.append(f'空间节点 "{nid}" 标题超过 {NODE_LABEL_LIMIT} 字，已分流至 detail')
+            logs.append(f'空间节点 "{nid}" 标题超过 {NODE_LABEL_LIMIT} 字，已自动分流至 detail')
         else:
             label = raw_label
         blocks = _clean_blocks(
@@ -638,26 +756,27 @@ def _audit_spatial_data(
             hint=label,
             logs=logs,
         )
-        role = str(item.get("role") or "corridor").strip()
+        default_role = "zone" if mode == "stage_blocking" else ("public" if lit_mode else "corridor")
+        role = str(item.get("role") or default_role).strip()
         if role not in SPATIAL_ROLES:
-            role = "corridor"
-        zone = str(item.get("zone") or "").strip()
+            role = default_role
+        zone = str(item.get("zone") or "").strip()[:20]
         node_ids.add(nid)
         xs.append(x)
         ys.append(y)
-        nodes.append(
-            {
-                "id": nid,
-                "label": label,
-                "x": x,
-                "y": y,
-                "zone": zone,
-                "role": role,
-                "detail": detail,
-                "blocks": blocks,
-                "source": source,
-            }
-        )
+        node_entry: dict[str, Any] = {
+            "id": nid,
+            "label": label,
+            "x": x,
+            "y": y,
+            "role": role,
+            "detail": detail,
+            "blocks": blocks,
+            "source": source,
+        }
+        if zone or not lit_mode:
+            node_entry["zone"] = zone
+        nodes.append(node_entry)
 
     if not nodes:
         return None
@@ -665,6 +784,8 @@ def _audit_spatial_data(
         logs.append("空间节点坐标过度聚拢且缺少二维分布，触发结构化清单降级")
         return None
 
+    edge_limit = SPATIAL_EDGE_LABEL_LIMIT if not lit_mode else EDGE_LABEL_LIMIT
+    default_kind = "move" if lit_mode else "advance"
     edges: list[dict[str, str]] = []
     for edge in raw_data.get("edges") or []:
         if not isinstance(edge, dict):
@@ -675,27 +796,32 @@ def _audit_spatial_data(
             continue
         raw_lbl = str(edge.get("label") or "").strip()
         note = str(edge.get("note") or "").strip()
-        if len(raw_lbl) > SPATIAL_EDGE_LABEL_LIMIT:
+        if len(raw_lbl) > edge_limit:
             note = f"{raw_lbl} · {note}".strip(" ·") if note else raw_lbl
-            short_lbl = raw_lbl[:SPATIAL_EDGE_LABEL_LIMIT] + "…"
+            short_lbl = raw_lbl[:edge_limit] + "…"
+            if lit_mode:
+                logs.append(f'边 "{src}→{dst}" 标签超长，已收缩为 "{short_lbl}"')
         else:
             short_lbl = raw_lbl
-        kind = str(edge.get("kind") or "advance").strip()
+        kind = str(edge.get("kind") or default_kind).strip()
         if kind not in SPATIAL_EDGE_KINDS:
-            kind = "advance"
+            kind = default_kind
+        edge_entry: dict[str, str] = {
+            "from": src,
+            "to": dst,
+            "label": short_lbl,
+            "note": note,
+            "kind": kind,
+        }
         route_group = str(edge.get("route_group") or "").strip()
-        edges.append(
-            {
-                "from": src,
-                "to": dst,
-                "label": short_lbl,
-                "note": note,
-                "kind": kind,
-                "route_group": route_group,
-            }
-        )
+        if route_group or not lit_mode:
+            edge_entry["route_group"] = route_group
+        actor = str(edge.get("actor") or "").strip()[:16]
+        if actor:
+            edge_entry["actor"] = actor
+        edges.append(edge_entry)
 
-    clean_mode = mode if mode in {"campaign", "geopolitics"} else "geopolitics"
+    clean_mode = mode if mode in {"campaign", "geopolitics", "route_map", "stage_blocking"} else "geopolitics"
     out: dict[str, Any] = {
         "mode": clean_mode,
         "nodes": nodes,
@@ -704,6 +830,9 @@ def _audit_spatial_data(
     scope_note = str(raw_data.get("scope_note") or "").strip()
     if scope_note:
         out["scope_note"] = scope_note
+    stage_desc = str(raw_data.get("stage_desc") or "").strip()[:60]
+    if stage_desc:
+        out["stage_desc"] = stage_desc
     return out
 
 
@@ -792,18 +921,25 @@ def _audit_curve_data(
             val = 50.0
         val = max(0.0, min(100.0, val))
         emotion = _strip_source_prefix(str(pt.get("emotion") or pt.get("note") or ""), source)[:28]
+        note = _strip_source_prefix(str(pt.get("note") or ""), source)[:120]
+        beat_kind = str(pt.get("beat_kind") or "").strip().lower()
+        if beat_kind not in _BEAT_KINDS:
+            beat_kind = ""
         blocks = _clean_blocks(
             pt.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=beat, logs=logs
         )
-        points.append(
-            {
-                "beat": beat,
-                "tension": val,
-                "emotion": emotion,
-                "blocks": blocks,
-                "source": source,
-            }
-        )
+        point_entry: dict[str, Any] = {
+            "beat": beat,
+            "tension": val,
+            "emotion": emotion,
+            "blocks": blocks,
+            "source": source,
+        }
+        if beat_kind:
+            point_entry["beat_kind"] = beat_kind
+        if note and note != emotion:
+            point_entry["note"] = note
+        points.append(point_entry)
     if not points:
         return None
     return {"yLabel": str(raw_data.get("yLabel") or "强度"), "points": points}
@@ -970,6 +1106,9 @@ def _audit_extension_items(
         stance = str(it.get("stance") or "").strip()
         if stance:
             entry["stance"] = stance
+        section = str(it.get("section") or it.get("group") or "").strip()[:24]
+        if section:
+            entry["section"] = section
         if bp == "extension_checklist":
             entry["checked"] = bool(it.get("checked", False))
         items.append(entry)
@@ -987,28 +1126,41 @@ def _build_fallback_payload(
     logs: list[str],
 ) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
-    notice = "原图节点超限或结构不完整，已安全降级为带原文锚点的结构化清单。"
+    notice = ""
     if isinstance(parsed, dict) and isinstance(parsed.get("data"), dict):
-        for node in parsed["data"].get("nodes") or []:
-            if isinstance(node, dict) and (node.get("label") or node.get("title")):
-                source = _norm_source(node.get("source"))
-                label = _strip_source_prefix(str(node.get("label") or node.get("title")), source)
-                detail = _strip_source_prefix(str(node.get("detail") or node.get("note") or ""), source)
-                blocks = _clean_blocks(
-                    node.get("blocks") or node.get("block"),
-                    valid_ids=valid_ids,
-                    default_blocks=default_blocks,
-                    hint=label,
-                    logs=logs,
-                )
-                items.append(
-                    {
-                        "label": label,
-                        "detail": detail,
-                        "blocks": blocks,
-                        "source": source,
-                    }
-                )
+        data_obj = parsed["data"]
+        raw_list = data_obj.get("nodes") or data_obj.get("points") or data_obj.get("rows") or []
+        for entry in raw_list:
+            if not isinstance(entry, dict):
+                continue
+            source = _norm_source(entry.get("source"))
+            label = _strip_source_prefix(
+                str(entry.get("label") or entry.get("title") or entry.get("beat") or entry.get("key") or ""),
+                source,
+            )
+            if not label:
+                continue
+            detail = _strip_source_prefix(
+                str(entry.get("detail") or entry.get("note") or entry.get("emotion") or ""),
+                source,
+            )
+            blocks = _clean_blocks(
+                entry.get("blocks") or entry.get("block"),
+                valid_ids=valid_ids,
+                default_blocks=default_blocks,
+                hint=label[:12],
+                logs=logs,
+            )
+            items.append(
+                {
+                    "label": label,
+                    "detail": detail,
+                    "blocks": blocks,
+                    "source": source,
+                }
+            )
+        if items:
+            notice = "原图节点超限或结构不完整，已安全降级为带原文锚点的结构化清单。"
     if not items:
         snippet = (summary or raw_text or "模型未返回完整图表结构").strip()[:160]
         notice = "JSON 解析或字段校验未通过，已执行防白屏结构化降级。"
@@ -1020,7 +1172,7 @@ def _build_fallback_payload(
                 "source": "原文",
             }
         )
-    logs.append("已触发 fallback_list 安全降级，保留原条目块号锚点")
+    logs.append("已触发 fallback_list 安全降级，确保不白屏且保留原文块锚点")
     return {
         "blueprint": "fallback_list",
         "caption": caption or "结构化阅读要点（已安全降级）",

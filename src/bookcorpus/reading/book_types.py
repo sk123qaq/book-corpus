@@ -56,13 +56,24 @@ READ_PROFILES: dict[str, ReadProfileMeta] = {
         read_type="literature",
         name="想象文学",
         adler_category="2. 想象文学",
-        goal="重沉浸与体验：把握人物关系、情绪张力、舞台调度或意象节奏",
+        goal="重沉浸与体验：把握叙事张力、人物阵营、舞台/空间动线、伏笔视角与细读意象",
         blueprints=(
-            BlueprintHint("tension_curve", "叙事张力曲线", "展示情节铺垫、爆发与留白节奏"),
-            BlueprintHint("relation_graph", "人物阵营图谱", "标注阵营、情感羁绊与身份演变"),
-            BlueprintHint("spatial_route", "空间动线地图", "还原角色迁徙与心理距离变化"),
+            BlueprintHint("tension_curve", "叙事张力曲线", "提炼 6–9 个关键戏剧节拍与情绪起伏"),
+            BlueprintHint("relation_graph", "人物与阵营图谱", "按阵营分群展示核心人物关系、不对称信息与变化"),
+            BlueprintHint("spatial_route", "空间与舞台动线", "自适应二维地点动线或封闭舞台调度图"),
         ),
-        extensions=(ExtensionHint("imagery", "意象与舞台词典", "解析高频意象、韵律节奏或戏剧舞台潜台词"),),
+        extensions=(
+            ExtensionHint(
+                "narrative_clues",
+                "叙事视角与伏笔线索",
+                "梳理视角切换、时间结构、草蛇灰线与信息差（严禁剧透）",
+            ),
+            ExtensionHint(
+                "imagery",
+                "意象、潜台词与细读",
+                "分三区提纯核心意象、舞台潜台词与声景名句细读",
+            ),
+        ),
     ),
     "history": ReadProfileMeta(
         read_type="history",

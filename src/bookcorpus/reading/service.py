@@ -25,7 +25,8 @@ ACTION_LABELS = {
     "critique": "拆解前提",
     "ask": "自由追问",
     "checklist": "行动自检清单",
-    "imagery": "意象与舞台词典",
+    "narrative_clues": "叙事视角与伏笔线索",
+    "imagery": "意象、潜台词与细读",
     "historical_dossier": "人物与名物档案",
     "compare_context": "多史家视角对照",
     "boundary_check": "演进与适用边界",
@@ -191,6 +192,7 @@ def _assist_prompts(
         return diagram_audit.prompt_for_extension(
             action,
             sub_kind=sub_kind,
+            read_type=read_type,
             book=book,
             chapter=chapter,
             selected_text=selected_text,
@@ -440,13 +442,12 @@ class ReadingService:
                 parts.append(f"[{bid}] {txt[:240]}")
         return "\n".join(parts)[:1800]
 
-    def _chapter_scope_context(self, uid, n, blocks, *, source_sha="", budget=12000):
-        """构造全章作用域下的带块号文本（正文优先全量/均布，章末被引用注释受预算隔离）。"""
+    def _chapter_scope_context(self, uid, n, blocks, *, source_sha="", budget=24000):
+        """构造全章作用域下的带块号文本（24k 字内正文全量直出，超阈按连续场景窗口采样，章末被引用注释受预算隔离）。"""
         body_semantic: list[tuple[str, str, str]] = []
         fn_semantic: list[tuple[str, str, str]] = []
         cited_fn_ids: set[str] = set()
         body_has_fn_refs = False
-
         for blk in blocks or []:
             bid = blk.get("id") or ""
             kind = blk.get("kind") or "paragraph"
@@ -510,7 +511,7 @@ class ReadingService:
                 out_lines.extend(fn_lines)
 
         if body_chars <= budget:
-            lines = [f"[{bid}] {txt[:600]}" for bid, _, txt in body_semantic]
+            lines = [f"[{bid}] {txt}" for bid, _, txt in body_semantic]
             _append_footnotes(lines, fn_budget)
             return "\n".join(lines), len(body_semantic), False
 
@@ -527,35 +528,79 @@ class ReadingService:
                     for nd in (sec.get("nodes") or [])[:6]
                 )
                 line = f"- {sec_title}：{sec_sum} {node_hints}".strip()
+                if used_chars + len(line) + 1 > 2400:
+                    break
                 parts.append(line)
                 used_chars += len(line) + 1
 
-        # 按整章均匀抽样代表块（保留全部小标题 + 首尾 + 等步长采样），保证覆盖全章正文。
-        headings = {idx for idx, (_, kind, _) in enumerate(body_semantic) if kind == "heading"}
-        picked_idx = set(headings) | {
-            0,
-            min(1, len(body_semantic) - 1),
-            max(0, len(body_semantic) - 2),
-            len(body_semantic) - 1,
-        }
-        non_head = [idx for idx in range(len(body_semantic)) if idx not in picked_idx]
-        target_slots = 36
-        if non_head:
-            step = max(1, len(non_head) / target_slots)
-            pos = 0.0
-            while int(pos) < len(non_head):
-                picked_idx.add(non_head[int(pos)])
-                pos += step
+        # 超长章按字符预算抽取「连续场景窗口」：保留全部小标题 + 首尾连续段落 + 中段若干连续窗口。
+        total_len = len(body_semantic)
+        picked_idx = {idx for idx, (_, kind, _) in enumerate(body_semantic) if kind == "heading"}
 
-        parts.append("【全章代表段落节选（均布覆盖）】")
-        per_block_cap = max(180, min(380, (14000 - used_chars) // max(1, len(picked_idx))))
-        for idx in sorted(picked_idx):
-            bid, _, txt = body_semantic[idx]
-            line = f"[{bid}] {txt[:per_block_cap]}"
-            if used_chars + len(line) > 14500:
+        def _window_chars(indices):
+            return sum(min(1500, len(body_semantic[i][2])) + 8 for i in indices)
+
+        # 1) 开头连续窗口（至少前 3 段，最多 ~2,200 字）
+        open_chars = 0
+        open_end = 0
+        for idx in range(min(total_len, 12)):
+            c_len = min(1500, len(body_semantic[idx][2])) + 8
+            if idx >= 3 and open_chars + c_len > 2200:
                 break
-            parts.append(line)
-            used_chars += len(line) + 1
+            picked_idx.add(idx)
+            open_chars += c_len
+            open_end = idx + 1
+
+        # 2) 结尾连续窗口（至少末 3 段，最多 ~2,200 字），先预留配额确保结尾不丢失
+        close_indices = []
+        close_chars = 0
+        for idx in range(total_len - 1, max(-1, open_end - 1), -1):
+            c_len = min(1500, len(body_semantic[idx][2])) + 8
+            if len(close_indices) >= 3 and close_chars + c_len > 2200:
+                break
+            close_indices.append(idx)
+            close_chars += c_len
+            if len(close_indices) >= 12:
+                break
+        picked_idx.update(close_indices)
+        close_start = min(close_indices) if close_indices else total_len
+
+        # 3) 中段连续场景窗口（每窗口保留相邻多块上下文，避免对话体散点割裂）
+        reserved_chars = used_chars + _window_chars(picked_idx)
+        mid_budget = max(4000, budget - reserved_chars)
+        if close_start > open_end:
+            span = close_start - open_end
+            num_windows = min(6, max(2, span // 12))
+            per_win_budget = max(900, mid_budget // max(1, num_windows))
+            for w_idx in range(num_windows):
+                center = open_end + int((w_idx + 0.5) * span / num_windows)
+                win_indices = [center]
+                win_chars = min(1500, len(body_semantic[center][2])) + 8
+                step = 1
+                while win_chars < per_win_budget and len(win_indices) < 12:
+                    added = False
+                    for cand in (center - step, center + step):
+                        if open_end <= cand < close_start and cand not in picked_idx and cand not in win_indices:
+                            c_len = min(1500, len(body_semantic[cand][2])) + 8
+                            if win_chars + c_len <= per_win_budget or len(win_indices) < 3:
+                                win_indices.append(cand)
+                                win_chars += c_len
+                                added = True
+                    if not added:
+                        break
+                    step += 1
+                picked_idx.update(win_indices)
+
+        parts.append("【全章连续场景窗口节选（保留首尾、全部小标题及中段连续对话/叙事）】")
+        prev_idx = None
+        for idx in sorted(picked_idx):
+            if prev_idx is not None and idx > prev_idx + 1:
+                gap = idx - prev_idx - 1
+                parts.append(f"……（略去 {body_semantic[prev_idx + 1][0]}–{body_semantic[idx - 1][0]} 共 {gap} 段）……")
+            bid, _, txt = body_semantic[idx]
+            snippet = txt[:1500] + ("…" if len(txt) > 1500 else "")
+            parts.append(f"[{bid}] {snippet}")
+            prev_idx = idx
         _append_footnotes(parts, min(fn_budget, int(budget * 0.15)))
         return "\n".join(parts), len(body_semantic), True
 
