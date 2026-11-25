@@ -369,11 +369,15 @@ def render_assist_figure(figure):
     raw_data = figure.get("data") if isinstance(figure.get("data"), dict) else {}
     bp_mode = str(raw_data.get("mode") or "").strip().lower()
     if bp_mode == "not_applicable":
-        reason = str(raw_data.get("not_applicable_reason") or figure.get("summary") or "本章无显著空间动线或格局约束。").strip()
+        reason = str(
+            raw_data.get("not_applicable_reason") or figure.get("summary") or "本章无显著空间动线或格局约束。"
+        ).strip()
         body = f'<p class="fig-fallback">{html.escape(reason)}</p>'
     if not body and family in NODE_FAMILIES and isinstance(raw_data.get("nodes"), list):
         body = _node_svg(figure)
-    elif not body and (blueprint in {"extension_dossier", "extension_checklist"} or isinstance(figure.get("items"), list)):
+    elif not body and (
+        blueprint in {"extension_dossier", "extension_checklist"} or isinstance(figure.get("items"), list)
+    ):
         items = [it for it in (figure.get("items") or []) if isinstance(it, dict)]
         if items:
             lis = []

@@ -71,9 +71,7 @@ SPATIAL_ROLES = frozenset(
         "outside",
     }
 )
-SPATIAL_EDGE_KINDS = frozenset(
-    {"advance", "flank", "defense", "diplomacy", "move", "gaze", "barrier", "parallel"}
-)
+SPATIAL_EDGE_KINDS = frozenset({"advance", "flank", "defense", "diplomacy", "move", "gaze", "barrier", "parallel"})
 
 LEGACY_FAMILY_TO_BLUEPRINT = {
     "flow": "flow_swimlane",
@@ -382,6 +380,7 @@ _LITERATURE_SPATIAL_GUIDANCE = (
     '3. 无显著空间转换或舞台调度的抒情诗、议论散文、纯心理独白：mode="not_applicable"，nodes 与 edges 留空数组 []，'
     "在 not_applicable_reason 诚实写 2 句原因，绝不硬编。"
 )
+
 
 def prompt_for_diagram(
     *,
