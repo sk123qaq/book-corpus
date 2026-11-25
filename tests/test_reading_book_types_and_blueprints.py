@@ -979,3 +979,190 @@ def test_philosophy_five_tools_schemas_audit_and_counterexample_lab(reading_root
     assert res["action_label"] == "反例与现实检验"
     assert [s["id"] for s in res["figure"]["sections"]] == ["hidden_premise", "counterexample", "modern_boundary"]
     assert not res["figure"]["items"][1]["body"].startswith("补充：")
+
+
+def test_practical_five_tools_schemas_audit_and_postmortem(reading_root):
+    prof = resolve_read_profile(["商业与管理", "战略"], title="竞争战略")
+    assert prof["read_type"] == "practical"
+    assert [bp["blueprint"] for bp in prof["blueprints"]] == ["flow_swimlane", "decision_tree", "quadrant_matrix"]
+    assert [ext["action"] for ext in prof["extensions"]] == ["checklist", "failure_postmortem"]
+    assert "failure_postmortem" in EXTENSION_ACTIONS
+    assert ACTION_LABELS["failure_postmortem"] == "反例与失效复盘"
+
+    # 1. flow_swimlane: 5 practical roles, legacy role mapping, and not_applicable mode
+    flow_prompt = prompt_for_diagram(blueprint="flow_swimlane", read_type="practical", selected_text="竞争步骤")
+    assert "input|action|gate|pitfall|output" in flow_prompt[0]["content"]
+    assert "not_applicable" in flow_prompt[0]["content"]
+
+    flow_audited = audit_blueprint_payload(
+        {
+            "blueprint": "flow_swimlane",
+            "caption": "通用战略制定 SOP",
+            "reading_note": "先定定位再配资源",
+            "summary": "从行业评估到落地闭环。",
+            "data": {
+                "mode": "flow",
+                "nodes": [
+                    {"id": "F1", "role": "input", "label": "盘点资源与壁垒", "blocks": ["B01"]},
+                    {"id": "F2", "role": "action", "label": "选定三大通用战略", "blocks": ["B01"]},
+                    {"id": "F3", "role": "gate", "label": "检查是否夹在中间", "blocks": ["B01"]},
+                    {"id": "F4", "role": "pitfall", "label": "避免无序多元扩张", "blocks": ["B01"]},
+                    {"id": "F5", "role": "output", "label": "锁定高壁垒利润池", "blocks": ["B01"]},
+                    {"id": "F6", "role": "premise", "label": "旧角色兼容输入", "blocks": ["B01"]},
+                ],
+                "edges": [{"from": "F1", "to": "F2", "label": "进入选型"}],
+            },
+        },
+        {"B01"},
+    )
+    assert [n["role"] for n in flow_audited["data"]["nodes"]] == [
+        "input",
+        "action",
+        "gate",
+        "pitfall",
+        "output",
+        "input",
+    ]
+    assert flow_audited["data"]["mode"] == "flow"
+
+    flow_na = audit_blueprint_payload(
+        {
+            "blueprint": "flow_swimlane",
+            "caption": "纯理念探讨",
+            "data": {
+                "mode": "not_applicable",
+                "not_applicable_reason": "本章只讨论市场本质，无先后操作流程。",
+                "nodes": [],
+                "edges": [],
+            },
+        },
+        {"B01"},
+    )
+    assert flow_na["blueprint"] == "flow_swimlane"
+    assert flow_na["data"]["mode"] == "not_applicable"
+    assert "无先后操作流程" in flow_na["data"]["reason"]
+
+    # 2. decision_tree: 4 practical decision roles & branching prompt constraint
+    dec_prompt = prompt_for_diagram(blueprint="decision_tree", read_type="practical", selected_text="竞争选择")
+    assert "diagnosis|condition|strategy|fallback" in dec_prompt[0]["content"]
+    assert "树形分叉" in dec_prompt[0]["content"]
+
+    dec_audited = audit_blueprint_payload(
+        {
+            "blueprint": "decision_tree",
+            "caption": "竞争战略选型决策树",
+            "data": {
+                "nodes": [
+                    {"id": "D1", "role": "diagnosis", "label": "评估企业资源禀赋", "blocks": ["B01"]},
+                    {"id": "D2", "role": "condition", "label": "具备规模经济条件", "blocks": ["B01"]},
+                    {"id": "D3", "role": "strategy", "label": "推行总成本领先", "blocks": ["B01"]},
+                    {"id": "D4", "role": "fallback", "label": "避免夹在中间止损", "blocks": ["B01"]},
+                ],
+                "edges": [
+                    {"from": "D1", "to": "D2", "label": "先判规模"},
+                    {"from": "D2", "to": "D3", "label": "若具备"},
+                    {"from": "D2", "to": "D4", "label": "若不具备"},
+                ],
+            },
+        },
+        {"B01"},
+    )
+    assert [n["role"] for n in dec_audited["data"]["nodes"]] == ["diagnosis", "condition", "strategy", "fallback"]
+
+    # 3. quadrant_matrix: truncates >4 items per quadrant and preserves action_hint
+    quad_raw = {
+        "blueprint": "quadrant_matrix",
+        "caption": "投入取舍四象限",
+        "data": {
+            "xAxis": "实施难度（低 → 高）",
+            "yAxis": "战略回报（低 → 高）",
+            "quadrants": [
+                {
+                    "pos": "q-top-right",
+                    "title": "高回报高壁垒",
+                    "action_hint": "立即重仓投入",
+                    "items": [{"text": f"高杠杆动作{i}", "blocks": ["B01"]} for i in range(1, 7)],
+                }
+            ],
+        },
+    }
+    quad_audited = audit_blueprint_payload(quad_raw, {"B01"})
+    assert len(quad_audited["data"]["quadrants"][0]["items"]) == 4
+    assert quad_audited["data"]["quadrants"][0]["action_hint"] == "立即重仓投入"
+    assert any("精简截断为最高杠杆前 4 条" in log for log in quad_audited["audit_log"])
+
+    # 4. checklist: 3 sections (before/during/redline), placeholder replacement, and legacy flat compat
+    chk_prompt = prompt_for_extension("checklist", read_type="practical", selected_text="实操核验")
+    assert "before" in chk_prompt[0]["content"]
+    assert "during" in chk_prompt[0]["content"]
+    assert "redline" in chk_prompt[0]["content"]
+
+    chk_res = audit_blueprint_payload(
+        {
+            "blueprint": "extension_checklist",
+            "caption": "通用战略落地自检",
+            "reading_note": "适用前置条件",
+            "summary": "先定界再落地。",
+            "items": [
+                {"section": "before", "text": "核查行业五力结构", "detail": "确认上下游议价能力", "blocks": ["B01"]},
+                {
+                    "section": "during",
+                    "text": "对齐成本或差异化",
+                    "detail": "补充：统一组织KPI",
+                    "blocks": ["B01"],
+                    "source": "补充",
+                },
+                {"section": "redline", "text": "警惕夹在中间失血", "detail": "避免双向摇摆", "blocks": ["B01"]},
+            ],
+        },
+        {"B01"},
+        requested_action="checklist",
+    )
+    assert "适用前置条件" not in chk_res["reading_note"]
+    assert [s["id"] for s in chk_res["sections"]] == ["before", "during", "redline"]
+    assert chk_res["items"][1]["detail"] == "统一组织KPI"
+
+    legacy_chk = audit_blueprint_payload(
+        {
+            "blueprint": "extension_checklist",
+            "caption": "旧版扁平清单",
+            "reading_note": "逐项核验",
+            "items": [{"text": "旧条款", "detail": "旧说明", "checked": False, "blocks": ["B01"]}],
+        },
+        {"B01"},
+        requested_action="checklist",
+    )
+    assert "sections" not in legacy_chk
+    assert legacy_chk["items"][0]["checked"] is False
+
+    # 5. failure_postmortem: full service end-to-end with 4 structured fields & body synthesis
+    pm_resp = {
+        "blueprint": "extension_dossier",
+        "caption": "战略摇摆失效复盘",
+        "reading_note": "拆解反面案例",
+        "summary": "三类战略不可兼得，摇摆必然陷入低利润陷阱。",
+        "items": [
+            {
+                "title": "既要低成本又要差异化",
+                "pitfall": "在未隔离业务单元时同时追逐最低成本与高端溢价",
+                "case": "拉卡莱达等企业摇摆于两条路线之间，最终利润率低于行业均值",
+                "root_cause": "成本领先与差异化对应的供应链和组织激励互斥",
+                "fix": "补充：明确单一主战略或拆分独立事业部运作",
+                "blocks": ["B01"],
+                "source": "补充",
+            }
+        ],
+    }
+    client = _FakeBlueprintClient([pm_resp])
+    service = ReadingService(str(reading_root), client=client)
+    pm_res = service.assist("B0002", 1, "failure_postmortem", read_type="practical", scope="chapter")
+    assert pm_res["action"] == "failure_postmortem"
+    assert pm_res["action_label"] == "反例与失效复盘"
+    item0 = pm_res["figure"]["items"][0]
+    assert item0["pitfall"].startswith("在未隔离")
+    assert item0["case"].startswith("拉卡莱达")
+    assert item0["root_cause"].startswith("成本领先")
+    assert item0["fix"] == "明确单一主战略或拆分独立事业部运作"
+    assert "误区：" in item0["body"]
+    assert "拆解反面案例" not in pm_res["figure"]["reading_note"]
+    assert "拉卡莱达" in pm_res["diagram_html"]
