@@ -56,6 +56,11 @@
     conclusion: '结论',
     theorem: '定理',
     condition: '条件',
+    // 哲学·批判谱系
+    predecessor: '前辈渊源',
+    mediator: '转译改造',
+    target: '批驳靶子',
+    author: '作者立场',
     // 历史·权力与阵营
     sovereign: '中枢/君主',
     faction: '核心机构/派系',
@@ -87,6 +92,18 @@
     prop: '核心道具',
     zone: '舞台区域',
     outside: '窗外/场外',
+  };
+
+  function roleLabel(role, isLineage) {
+    if (isLineage && role === 'ally') return '同调佐证';
+    return ROLE_ZH[role] || role || '节点';
+  }
+
+  const LINEAGE_EDGE_STYLES = {
+    inherit: { label: '继承', stroke: 'var(--pine)', dash: 'none', marker: 'green', cls: 'edge-pos' },
+    transform: { label: '改造', stroke: 'var(--indigo)', dash: 'none', marker: 'indigo', cls: 'edge-skip' },
+    critique: { label: '批驳', stroke: 'var(--cinnabar)', dash: '6 3', marker: 'red', cls: 'edge-neg' },
+    contrast: { label: '对照', stroke: 'var(--amber)', dash: '5 3', marker: 'amber', cls: 'edge-back' },
   };
 
   const BEAT_KIND_META = {
@@ -144,7 +161,7 @@
     const rest = list.slice(cap);
     return (
       head +
-      ' <button type="button" class="blk-anchor-more" data-expand-anchors title="展开其余 ' +
+      ' <button type="button" class="blk-anchor blk-anchor-more" data-expand-anchors title="展开其余 ' +
       rest.length +
       ' 个块号：' +
       esc(rest.join(', ')) +
@@ -192,21 +209,26 @@
     const stage = ensureMeasureStage();
     const sizes = new Map();
     const expandAll = Boolean(opts.expandAll);
+    const expandedIds = opts.expandedIds || null;
+    const expandedAnchorIds = opts.expandedAnchorIds || null;
     const maxAnchors = opts.maxAnchors !== undefined ? opts.maxAnchors : 3;
     const showArc = Boolean(opts.showArc);
     const showZone = Boolean(opts.showZone);
+    const isLineage = Boolean(opts.isLineage);
     stage.style.width = cardWidth + 'px';
     stage.innerHTML = nodes
-      .map(
-        (n) =>
+      .map((n) => {
+        const isExp = Boolean((expandAll || (expandedIds && expandedIds.has(n.id))) && n.detail);
+        const cap = expandedAnchorIds && expandedAnchorIds.has(n.id) ? 0 : maxAnchors;
+        return (
           '<div class="dag-node role-' +
           esc(n.role || 'inference') +
-          (expandAll && n.detail ? ' expanded' : '') +
+          (isExp ? ' expanded' : '') +
           '" style="position:relative;width:' +
           cardWidth +
           'px">' +
           '<div class="dag-node-role"><span>' +
-          esc(ROLE_ZH[n.role] || n.role || '节点') +
+          esc(roleLabel(n.role, isLineage)) +
           (showZone && n.zone ? ' · ' + esc(n.zone) : '') +
           '</span>' +
           renderSrcTag(n.source) +
@@ -217,15 +239,16 @@
           (showArc && n.arc ? '<div class="dag-node-arc">' + esc(n.arc) + '</div>' : '') +
           (n.detail
             ? '<div class="dag-node-more">' +
-              (expandAll ? '▴ 收起' : '▾ 查看展开') +
+              (isExp ? '▴ 收起说明' : '▾ 查看展开') +
               '</div><div class="dag-node-detail">' +
               esc(n.detail) +
               '</div>'
             : '') +
           '<div class="dag-node-foot">' +
-          renderAnchorPills(n.blocks, maxAnchors) +
+          renderAnchorPills(n.blocks, cap) +
           '</div></div>'
-      )
+        );
+      })
       .join('');
     const els = stage.querySelectorAll('.dag-node');
     nodes.forEach((n, idx) => {
@@ -235,8 +258,9 @@
       } else {
         const chars = String(n.label || '').length;
         const lines = Math.max(1, Math.ceil((chars * 12.5) / Math.max(80, cardWidth - 24)));
-        const detH = expandAll && n.detail ? Math.ceil(String(n.detail).length / 12) * 16 + 12 : 0;
-        sizes.set(n.id, { w: cardWidth, h: 58 + lines * 18 + (n.detail ? 16 : 0) + detH });
+        const isExp = Boolean((expandAll || (expandedIds && expandedIds.has(n.id))) && n.detail);
+        const detLines = isExp ? Math.max(1, Math.ceil(String(n.detail || '').length / 13)) : 0;
+        sizes.set(n.id, { w: cardWidth, h: 58 + lines * 18 + (n.detail ? 16 : 0) + (detLines ? detLines * 16 + 10 : 0) });
       }
     });
     stage.innerHTML = '';
@@ -334,6 +358,7 @@
         from: e.from,
         to: e.to,
         label,
+        relation: String(e.relation || e.relation_type || (rev && (rev.relation || rev.relation_type)) || '').trim(),
         note: notes.join('；'),
         relationType: relType,
         rel_kind: e.rel_kind || (rev && rev.rel_kind) || '',
@@ -346,6 +371,248 @@
       });
     }
     return merged;
+  }
+
+  function assignLineageRanks(nodes, idMap, mergedEdges) {
+    // 以作者立场（author）为汇聚核心的分群列排布：
+    // 左侧前辈渊源/同调/转译逐级汇入 author，右侧批驳靶子与 author 张力对峙。
+    const zoneOf = (role) => {
+      if (role === 'target') return 'target';
+      if (role === 'author') return 'author';
+      if (role === 'mediator') return 'mediator';
+      if (role === 'ally') return 'ally';
+      return 'predecessor';
+    };
+
+    const leftNodes = [];
+    const authorNodes = [];
+    const targetNodes = [];
+    nodes.forEach((raw) => {
+      const n = idMap.get(raw.id);
+      const z = zoneOf(n.role);
+      if (z === 'author') authorNodes.push(n);
+      else if (z === 'target') targetNodes.push(n);
+      else leftNodes.push(n);
+    });
+
+    leftNodes.forEach((n) => {
+      n.rank = zoneOf(n.role) === 'mediator' ? 1 : 0;
+    });
+
+    // 若左区存在同区因果推进边，适当顺推至后续子列以免同列自遮挡
+    for (let pass = 0; pass < leftNodes.length; pass++) {
+      let changed = false;
+      mergedEdges.forEach((e) => {
+        if (e.isSelfLoop) return;
+        const fn = idMap.get(e.from);
+        const tn = idMap.get(e.to);
+        if (!fn || !tn) return;
+        if (zoneOf(fn.role) !== 'author' && zoneOf(fn.role) !== 'target' && zoneOf(tn.role) !== 'author' && zoneOf(tn.role) !== 'target') {
+          if (tn.rank <= fn.rank && fn.rank < 2) {
+            tn.rank = fn.rank + 1;
+            changed = true;
+          }
+        }
+      });
+      if (!changed) break;
+    }
+
+    const maxLeftRank = leftNodes.length ? Math.max(...leftNodes.map((n) => n.rank)) : -1;
+    const authorRank = maxLeftRank + 1;
+    const targetBaseRank = authorRank + (authorNodes.length || leftNodes.length ? 1 : 0);
+
+    // 单列超过 5 张卡时自动切分为多个子列，防止宽屏下出现 8 卡竖排“烟囱”拖低适应缩放；
+    // 5 张及以下保持单列，避免多出整列反而拉宽 5+ 列图谱的横向跨度
+    const MAX_ZONE_COL = 5;
+    const splitZoneRank = (list, baseRank) => {
+      if (list.length <= MAX_ZONE_COL) {
+        list.forEach((n) => {
+          n.rank = baseRank * 10;
+        });
+        return;
+      }
+      const roleOrder = { predecessor: 0, ally: 1, mediator: 2 };
+      const sorted = list
+        .map((n, idx) => ({ n, idx, prio: roleOrder[n.role] ?? 1 }))
+        .sort((a, b) => a.prio - b.prio || a.idx - b.idx);
+      const subCols = Math.ceil(sorted.length / MAX_ZONE_COL);
+      const chunkSize = Math.ceil(sorted.length / subCols);
+      sorted.forEach((entry, i) => {
+        entry.n.rank = baseRank * 10 + Math.floor(i / chunkSize);
+      });
+    };
+
+    const leftGroups = new Map();
+    leftNodes.forEach((n) => {
+      if (!leftGroups.has(n.rank)) leftGroups.set(n.rank, []);
+      leftGroups.get(n.rank).push(n);
+    });
+    leftGroups.forEach((grp, r) => splitZoneRank(grp, r));
+
+    authorNodes.forEach((n) => {
+      n.rank = authorRank * 10;
+    });
+    splitZoneRank(targetNodes, targetBaseRank);
+
+    // 压缩空列并按列分组
+    const usedRanks = Array.from(new Set(nodes.map((raw) => idMap.get(raw.id).rank))).sort((a, b) => a - b);
+    const rankRemap = new Map(usedRanks.map((r, i) => [r, i]));
+    idMap.forEach((n) => {
+      n.rank = rankRemap.get(n.rank);
+    });
+
+    const ranks = new Map();
+    idMap.forEach((n) => {
+      if (!ranks.has(n.rank)) ranks.set(n.rank, []);
+      ranks.get(n.rank).push(n);
+    });
+    const sortedRanks = Array.from(ranks.keys()).sort((a, b) => a - b);
+
+    // 按连接邻居做重心排序，减少交叉
+    const allNbrs = new Map(nodes.map((n) => [n.id, new Set()]));
+    mergedEdges.forEach((e) => {
+      if (e.isSelfLoop) return;
+      allNbrs.get(e.from).add(e.to);
+      allNbrs.get(e.to).add(e.from);
+    });
+    const updateOrders = () => {
+      sortedRanks.forEach((r) => {
+        ranks.get(r).forEach((n, i) => {
+          n.order = i;
+        });
+      });
+    };
+    updateOrders();
+    for (let pass = 0; pass < 2; pass++) {
+      for (let ri = 1; ri < sortedRanks.length; ri++) {
+        const r = sortedRanks[ri];
+        const prevR = sortedRanks[ri - 1];
+        ranks.get(r).sort((a, b) => {
+          const score = (node) => {
+            const pts = [];
+            allNbrs.get(node.id).forEach((nid) => {
+              const nb = idMap.get(nid);
+              if (nb && nb.rank === prevR) pts.push(nb.order);
+            });
+            return pts.length ? pts.reduce((s, x) => s + x, 0) / pts.length : node.order;
+          };
+          return score(a) - score(b) || a.order - b.order;
+        });
+        updateOrders();
+      }
+      for (let ri = sortedRanks.length - 2; ri >= 0; ri--) {
+        const r = sortedRanks[ri];
+        const nextR = sortedRanks[ri + 1];
+        ranks.get(r).sort((a, b) => {
+          const score = (node) => {
+            const pts = [];
+            allNbrs.get(node.id).forEach((nid) => {
+              const nb = idMap.get(nid);
+              if (nb && nb.rank === nextR) pts.push(nb.order);
+            });
+            return pts.length ? pts.reduce((s, x) => s + x, 0) / pts.length : node.order;
+          };
+          return score(a) - score(b) || a.order - b.order;
+        });
+        updateOrders();
+      }
+    }
+    return { ranks, sortedRanks };
+  }
+
+  function renderLineageNarrowHtml(payload, nodes, rawEdges) {
+    const idMap = new Map(nodes.map((n) => [n.id, n]));
+    const groupOf = (role) => {
+      if (role === 'predecessor' || role === 'mediator') return 'roots';
+      if (role === 'ally') return 'ally';
+      if (role === 'target') return 'target';
+      return 'author';
+    };
+    const roleOrder = { author: 0, predecessor: 1, mediator: 2, ally: 3, target: 4 };
+    const orderedNodes = nodes.slice().sort((a, b) => (roleOrder[a.role] ?? 9) - (roleOrder[b.role] ?? 9));
+
+    const rootsCnt = orderedNodes.filter((n) => groupOf(n.role) === 'roots').length;
+    const allyCnt = orderedNodes.filter((n) => groupOf(n.role) === 'ally').length;
+    const targetCnt = orderedNodes.filter((n) => groupOf(n.role) === 'target').length;
+
+    const edgesByNode = new Map(nodes.map((n) => [n.id, []]));
+    (rawEdges || []).forEach((e) => {
+      if (!e || !idMap.has(e.from) || !idMap.has(e.to)) return;
+      const relKey = e.relation || e.relation_type || 'inherit';
+      const style = LINEAGE_EDGE_STYLES[relKey] || LINEAGE_EDGE_STYLES.inherit;
+      const fromLbl = (idMap.get(e.from) && idMap.get(e.from).label) || e.from;
+      const toLbl = (idMap.get(e.to) && idMap.get(e.to).label) || e.to;
+      const lbl = e.label || style.label;
+      if (edgesByNode.has(e.from)) {
+        edgesByNode.get(e.from).push({ dir: '→', peer: toLbl, lbl, cls: style.cls });
+      }
+      if (edgesByNode.has(e.to) && e.from !== e.to) {
+        edgesByNode.get(e.to).push({ dir: '←', peer: fromLbl, lbl, cls: style.cls });
+      }
+    });
+
+    const filterBar =
+      '<div class="lineage-filter-bar" data-lineage-bar>' +
+      '<div class="lineage-filter-tabs" role="tablist" aria-label="谱系关系筛选">' +
+      '<button type="button" class="lineage-tab active" data-lineage-filter="all">全部 (' + orderedNodes.length + ')</button>' +
+      '<button type="button" class="lineage-tab" data-lineage-filter="roots"' + (rootsCnt ? '' : ' disabled') + '>渊源与改造 (' + rootsCnt + ')</button>' +
+      '<button type="button" class="lineage-tab" data-lineage-filter="ally"' + (allyCnt ? '' : ' disabled') + '>同调佐证 (' + allyCnt + ')</button>' +
+      '<button type="button" class="lineage-tab" data-lineage-filter="target"' + (targetCnt ? '' : ' disabled') + '>批驳靶子 (' + targetCnt + ')</button>' +
+      '</div>' +
+      '<button type="button" class="lineage-zoom-inline" data-bp-zoom title="宽屏全览思想谱系图">全览图谱 ⤢</button>' +
+      '</div>';
+
+    const cards = orderedNodes
+      .map((n) => {
+        const grp = groupOf(n.role);
+        const rels = edgesByNode.get(n.id) || [];
+        const relHtml = rels.length
+          ? '<div class="lineage-rel-chips">' +
+            rels
+              .slice(0, 4)
+              .map(
+                (r) =>
+                  '<span class="lineage-rel-chip ' +
+                  esc(r.cls) +
+                  '">' +
+                  esc(r.dir + ' ' + r.lbl + ' · ' + r.peer) +
+                  '</span>'
+              )
+              .join('') +
+            '</div>'
+          : '';
+        return (
+          '<div class="lineage-card role-' +
+          esc(n.role || 'mediator') +
+          '" data-lineage-group="' +
+          esc(grp) +
+          '">' +
+          '<div class="lineage-card-head">' +
+          '<span class="lineage-role-badge">' +
+          esc(ROLE_ZH[n.role] || n.role || '立场') +
+          '</span>' +
+          renderSrcTag(n.source) +
+          '</div>' +
+          '<div class="lineage-card-title">' +
+          esc(n.label) +
+          '</div>' +
+          (n.detail ? '<div class="lineage-card-detail">' + esc(n.detail) + '</div>' : '') +
+          relHtml +
+          '<div class="lineage-card-foot">' +
+          renderAnchorPills(n.blocks, 3) +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    return (
+      '<div class="lineage-narrow-shell" data-qa-target="lineage-cards">' +
+      filterBar +
+      '<div class="lineage-card-list">' +
+      cards +
+      '<div class="lineage-filter-empty" hidden>当前分组暂无条目。</div>' +
+      '</div></div>'
+    );
   }
 
   function assignDagRanks(nodes, idMap, mergedEdges) {
@@ -496,31 +763,62 @@
   }
 
   function renderLayeredDagHtml(payload, options) {
-    const nodes = (payload.data && payload.data.nodes) || [];
-    const rawEdges = (payload.data && payload.data.edges) || [];
+    const rawData = (payload && payload.data) || {};
+    if (payload.blueprint === 'lineage_dag' && String(rawData.mode || '').toLowerCase() === 'not_applicable') {
+      const reason = rawData.not_applicable_reason || rawData.reason || payload.summary || '本章主要展开内部推演或文学对话，未直接涉及外部思想家或学派谱系。';
+      return (
+        '<div class="lineage-na" data-qa-target="lineage-na">' +
+        '<strong>本章未展开外部思想谱系图</strong>' +
+        '<p>' +
+        esc(reason) +
+        '</p></div>'
+      );
+    }
+
+    const nodes = rawData.nodes || [];
+    const rawEdges = rawData.edges || [];
     if (!nodes.length) return '<div class="wb-sub">暂无图节点数据</div>';
 
     const wideMode = Boolean(options && options.wide);
     const expandAll = Boolean(options && options.expandAll);
-    const maxAnchors = !expandAll ? 4 : 0;
+    const expandedIds = (options && options.expandedIds) || null;
+    const expandedAnchorIds = (options && options.expandedAnchorIds) || null;
+    const isLineage = payload.blueprint === 'lineage_dag';
+    if (isLineage && !wideMode) {
+      return renderLineageNarrowHtml(payload, nodes, rawEdges);
+    }
     const isHistoryDag = ['historical_causality', 'power_hierarchy'].includes(payload.blueprint);
+    const maxAnchors =
+      options && options.maxAnchors !== undefined
+        ? options.maxAnchors
+        : isHistoryDag
+          ? !expandAll
+            ? 4
+            : 0
+          : 3;
     const idMap = new Map(nodes.map((n, i) => [n.id, Object.assign({}, n, { idx: i, rank: 0, order: 0 })]));
     const mergedEdges = prepareDagEdges(rawEdges, idMap);
-    const { ranks, sortedRanks } = assignDagRanks(nodes, idMap, mergedEdges);
+    const { ranks, sortedRanks } = isLineage
+      ? assignLineageRanks(nodes, idMap, mergedEdges)
+      : assignDagRanks(nodes, idMap, mergedEdges);
 
     let maxInRank = 1;
     sortedRanks.forEach((r) => {
       maxInRank = Math.max(maxInRank, ranks.get(r).length);
     });
+
     const R = sortedRanks.length;
     const rankToIdx = new Map(sortedRanks.map((r, i) => [r, i]));
+    const isArgument = payload.blueprint === 'argument_map';
     const wantCompactLR =
-      wideMode && isHistoryDag && (R === 5 || (R === 6 && maxInRank >= 3));
-    const wantLR =
-      (wideMode && ['flow_swimlane', 'lineage_dag', 'system_flow'].includes(payload.blueprint)) ||
-      wantCompactLR;
+      wideMode &&
+      ((isHistoryDag && (R === 5 || (R === 6 && maxInRank >= 3))) ||
+        (isArgument && (R === 6 || R === 5 || (R === 4 && maxInRank <= 2))) ||
+        ['flow_swimlane', 'system_flow'].includes(payload.blueprint) ||
+        isLineage);
     const useBandedLR =
-      !wantLR && wideMode && isHistoryDag && (R >= 7 || (R === 6 && maxInRank <= 2));
+      wideMode && (isHistoryDag || isArgument) && (R >= 7 || (R === 6 && maxInRank <= 2));
+    const wantLR = !useBandedLR && wantCompactLR;
     const splitIdx = useBandedLR ? Math.ceil(R / 2) : R;
     idMap.forEach((n) => {
       const ri = rankToIdx.get(n.rank) ?? 0;
@@ -528,43 +826,63 @@
       n.band = useBandedLR && ri >= splitIdx ? 1 : 0;
     });
 
-    const cardW = wantCompactLR
-      ? R >= 6
-        ? 162
-        : 174
+    const cardW = isLineage
+      ? R >= 5
+        ? 172
+        : 186
       : useBandedLR
-        ? 176
+        ? isHistoryDag
+          ? 176
+          : 182
         : wantLR
-          ? 204
+          ? isHistoryDag
+            ? R >= 6
+              ? 162
+              : 174
+            : R >= 6
+              ? 166
+              : 186
           : wideMode
             ? maxInRank >= 6
               ? 150
               : maxInRank >= 4
                 ? 172
                 : maxInRank >= 2
-                  ? 190
+                  ? 194
                   : 236
             : maxInRank >= 4
               ? 142
               : maxInRank >= 2
                 ? 158
                 : 236;
-    const sizes = measureNodeSizes(nodes, cardW, { expandAll, maxAnchors });
+    const sizes = measureNodeSizes(nodes, cardW, {
+      expandAll,
+      expandedIds,
+      expandedAnchorIds,
+      maxAnchors,
+      isLineage,
+    });
 
-    const colGap = wantCompactLR
-      ? R >= 6
-        ? 46
-        : 54
+    const colGap = isLineage
+      ? R >= 5
+        ? 88
+        : 104
       : useBandedLR
         ? 56
         : wantLR
-          ? 72
+          ? isHistoryDag
+            ? R >= 6
+              ? 46
+              : 54
+            : R >= 6
+              ? 56
+              : 74
           : wideMode && maxInRank >= 6
             ? 18
             : 24;
-    const rowGap = wantCompactLR || useBandedLR ? 24 : wantLR ? 36 : wideMode ? 36 : 56;
-    const trackStep = wideMode && (!wantLR || wantCompactLR) ? 15 : 18;
-    const corridorStep = wideMode ? 32 : 26;
+    const rowGap = isLineage ? 22 : useBandedLR || (wideMode && wantLR) ? 24 : wideMode ? 36 : 56;
+    const trackStep = isLineage ? 22 : wideMode && (!wantLR || wantCompactLR) ? 15 : wideMode ? 16 : 18;
+    const corridorStep = isLineage ? 36 : wideMode ? 32 : 26;
 
     // Step 1: Plan every edge's route type, face attachments, and gap/corridor slot needs
     const bandGapSegs = [new Map(), new Map()];
@@ -768,7 +1086,7 @@
     // Step 2: Compute node geometry with expanded per-gap and per-corridor gutters
     const gapSize = (g, base, band = 0) => {
       const n = bandGapCounts[band].get(g) || 0;
-      return n ? Math.max(base, 26 + n * trackStep) : base;
+      return n ? Math.max(base, 28 + n * trackStep) : base;
     };
 
     const pos = new Map();
@@ -1123,7 +1441,7 @@
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x + p.w);
-      maxY = Math.max(maxY, p.y + p.h);
+      maxY = Math.max(maxY, p.h + p.y);
     });
     routed.forEach((r) => {
       r.pts.forEach((pt) => {
@@ -1177,7 +1495,7 @@
       });
       const cands = [];
       segs.forEach((s) => {
-        [0.5, 0.32, 0.68].forEach((t) => {
+        [0.5, 0.34, 0.66, 0.22, 0.78].forEach((t) => {
           cands.push({
             x: Math.round(s.p1.x + (s.p2.x - s.p1.x) * t),
             y: Math.round(s.p1.y + (s.p2.y - s.p1.y) * t),
@@ -1203,7 +1521,20 @@
       let dash = 'none';
       let labelKindCls = 'edge-pos';
 
-      if (e.relationType === 'hostile' || isNeg) {
+      if (isLineage && e.relation && LINEAGE_EDGE_STYLES[e.relation]) {
+        const st = LINEAGE_EDGE_STYLES[e.relation];
+        stroke = st.stroke;
+        dash = st.dash;
+        labelKindCls = st.cls;
+        marker =
+          st.marker === 'red'
+            ? markerRed
+            : st.marker === 'indigo'
+              ? markerIndigo
+              : st.marker === 'amber'
+                ? markerAmber
+                : markerGreen;
+      } else if (e.relationType === 'hostile' || isNeg) {
         stroke = 'var(--cinnabar)';
         marker = markerRed;
         labelKindCls = 'edge-neg';
@@ -1279,8 +1610,14 @@
           { dx: 0, dy: 13 },
           { dx: -18, dy: 0 },
           { dx: 18, dy: 0 },
+          { dx: -26, dy: 0 },
+          { dx: 26, dy: 0 },
           { dx: 0, dy: -24 },
           { dx: 0, dy: 24 },
+          { dx: 0, dy: -36 },
+          { dx: 0, dy: 36 },
+          { dx: 0, dy: -46 },
+          { dx: 0, dy: 46 },
         ];
         let chosenRect = null;
         for (const cand of labelCandidates) {
@@ -1366,7 +1703,8 @@
       .map((n) => {
         const p = pos.get(n.id);
         const firstBlk = (n.blocks && n.blocks[0]) || '';
-        const isExp = expandAll && Boolean(n.detail);
+        const isExp = Boolean((expandAll || (expandedIds && expandedIds.has(n.id))) && n.detail);
+        const cap = expandedAnchorIds && expandedAnchorIds.has(n.id) ? 0 : maxAnchors;
         return (
           '<div class="dag-node role-' +
           esc(n.role || 'inference') +
@@ -1385,7 +1723,7 @@
           esc(firstBlk) +
           '">' +
           '<div class="dag-node-role"><span>' +
-          esc(ROLE_ZH[n.role] || n.role || '节点') +
+          esc(roleLabel(n.role, isLineage)) +
           '</span>' +
           renderSrcTag(n.source) +
           '</div>' +
@@ -1394,17 +1732,34 @@
           '</div>' +
           (n.detail
             ? '<div class="dag-node-more" data-toggle-detail>' +
-              (isExp ? '▴ 收起' : '▾ 查看展开') +
+              (isExp ? '▴ 收起说明' : '▾ 查看展开') +
               '</div><div class="dag-node-detail">' +
               esc(n.detail) +
               '</div>'
             : '') +
           '<div class="dag-node-foot">' +
-          renderAnchorPills(n.blocks, maxAnchors) +
+          renderAnchorPills(n.blocks, cap) +
           '</div></div>'
         );
       })
       .join('');
+
+    const lineageLegendHtml = isLineage
+      ? '<div class="lineage-legend">' +
+        Object.values(LINEAGE_EDGE_STYLES)
+          .map(
+            (st) =>
+              '<span class="lineage-leg-item"><i class="lineage-leg-line" style="border-top:2px ' +
+              (st.dash === 'none' ? 'solid' : 'dashed') +
+              ' ' +
+              st.stroke +
+              '"></i>' +
+              esc(st.label) +
+              '</span>'
+          )
+          .join('') +
+        '</div>'
+      : '';
 
     const legendHtml = fallbackLegend.length
       ? '<div class="edge-legend">' +
@@ -1544,6 +1899,7 @@
 
     return (
       viewportHtml +
+      lineageLegendHtml +
       '<div class="dag-trace-tip" data-trace-tip>悬停节点或连线可高亮因果路径；点击节点跳转原文</div>' +
       legendHtml
     );
@@ -2331,18 +2687,59 @@
     return '<div class="spatial-viewport" data-qa-target="spatial">' + canvasHtml + '</div>' + legendBar;
   }
 
-  function renderMatrixTableHtml(payload) {
+  function renderMatrixTableHtml(payload, options) {
     const cols = (payload.data && payload.data.columns) || [];
     const rows = (payload.data && payload.data.rows) || [];
+    const wideMode = Boolean(options && options.wide);
+    const isTermContrast = payload && payload.blueprint === 'term_contrast';
+
+    if (isTermContrast && !wideMode) {
+      return (
+        '<div class="term-contrast-cards" data-qa-target="term-cards">' +
+        rows
+          .map(
+            (r) =>
+              '<div class="tc-card">' +
+              '<div class="tc-card-head">' +
+              '<div class="tc-term-wrap">' +
+              '<strong class="tc-term">' +
+              esc(r.key) +
+              '</strong>' +
+              (r.original_term ? '<span class="tc-orig">' + esc(r.original_term) + '</span>' : '') +
+              '</div>' +
+              renderSrcTag(r.source) +
+              '</div>' +
+              '<div class="tc-card-compare">' +
+              '<div class="tc-col tc-everyday"><span class="tc-col-lbl">日常直觉</span><p>' +
+              esc(r.everyday) +
+              '</p></div>' +
+              '<div class="tc-col tc-author"><span class="tc-col-lbl">作者专义</span><p>' +
+              esc(r.author) +
+              '</p></div>' +
+              '</div>' +
+              '<div class="tc-card-foot">' +
+              renderAnchorPills(r.blocks, 3) +
+              '</div></div>'
+          )
+          .join('') +
+        '</div>'
+      );
+    }
+
     return (
-      '<div style="overflow-x:auto" data-qa-target="table"><table class="bp-table"><thead><tr>' +
+      '<div style="overflow-x:auto" data-qa-target="table"><table class="bp-table' +
+      (isTermContrast ? ' term-contrast-table' : '') +
+      '"><thead><tr>' +
       cols.map((c) => '<th>' + esc(c) + '</th>').join('') +
       '</tr></thead><tbody>' +
       rows
         .map(
           (r) =>
             '<tr><td class="col-key">' +
+            '<div>' +
             esc(r.key) +
+            '</div>' +
+            (r.original_term ? '<div class="tc-orig-table">' + esc(r.original_term) + '</div>' : '') +
             '<div style="margin-top:4px">' +
             renderSrcTag(r.source) +
             '</div></td><td>' +
@@ -2351,7 +2748,7 @@
             esc(r.author) +
             '</td><td>' +
             (r.extra ? esc(r.extra) + '</td><td>' : '') +
-            renderAnchorPills(r.blocks) +
+            renderAnchorPills(r.blocks, 3) +
             '</td></tr>'
         )
         .join('') +
@@ -3442,7 +3839,7 @@
   }
 
   function renderExtensionItemHtml(it, maxAnchors) {
-    const headTxt = it.name || it.title || it.label || '';
+    const headTxt = it.name || it.title || it.label || it.text || '';
     const badge = it.stance || it.role_badge || '';
     return (
       '<div class="ext-item">' +
@@ -3459,7 +3856,7 @@
       (it.body || it.detail ? '<div class="ext-sub">' + esc(it.body || it.detail) + '</div>' : '') +
       (it.warning ? '<div class="ext-sub" style="color:var(--ochre)">提示：' + esc(it.warning) + '</div>' : '') +
       '<div class="ext-item-foot">' +
-      renderAnchorPills(it.blocks, maxAnchors) +
+      renderAnchorPills(it.blocks, maxAnchors || 3) +
       '</div></div>'
     );
   }
@@ -3480,7 +3877,9 @@
         payload.sections
           .map(
             (sec) =>
-              '<div class="ext-section">' +
+              '<div class="ext-section" data-section-id="' +
+              esc(sec.id || '') +
+              '">' +
               '<h5 class="ext-sec-title">' +
               esc(sec.title) +
               '</h5>' +
@@ -3554,7 +3953,7 @@
     if (!payload || typeof payload !== 'object') return '';
     const bp = payload.blueprint || 'flow_swimlane';
     if (bp === 'parallel_timeline') return renderTimelineHtml(payload, options);
-    if (MATRIX_BLUEPRINTS.has(bp)) return renderMatrixTableHtml(payload);
+    if (MATRIX_BLUEPRINTS.has(bp)) return renderMatrixTableHtml(payload, options);
     if (bp === 'quadrant_matrix') return renderQuadrantHtml(payload);
     if (CURVE_BLUEPRINTS.has(bp)) return renderSplineChartHtml(payload, options);
     if (bp === 'relation_graph') return renderRelationGraphHtml(payload, options);
@@ -3630,30 +4029,62 @@
     return report;
   }
 
-  function bindStageInteractions(rootEl, onFocusBlock, onZoomRequest) {
+  function bindStageInteractions(rootEl, onFocusBlock, optsOrZoom) {
     if (!rootEl) return;
+    const opts = typeof optsOrZoom === 'function' ? { onZoomRequest: optsOrZoom } : optsOrZoom || {};
+    const onExpandNode = opts.onExpandNode;
+    const onExpandAnchors = opts.onExpandAnchors;
+
     rootEl.querySelectorAll('[data-expand-anchors]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const extra = btn.nextElementSibling;
-        if (extra && extra.classList.contains('blk-anchor-extra')) {
-          extra.hidden = false;
+        const dagNode = btn.closest('.dag-node[data-node-id]');
+        if (dagNode && onExpandAnchors) {
+          onExpandAnchors(dagNode.getAttribute('data-node-id'));
+          return;
         }
-        btn.remove();
+        const wrap = btn.parentElement;
+        const extra = wrap && wrap.querySelector('.blk-anchor-extra');
+        if (extra) extra.hidden = false;
+        btn.hidden = true;
       });
     });
+
+    const lineageBar = rootEl.querySelector('[data-lineage-bar]');
+    if (lineageBar) {
+      const cards = Array.from(rootEl.querySelectorAll('.lineage-card[data-lineage-group]'));
+      const emptyEl = rootEl.querySelector('.lineage-filter-empty');
+      lineageBar.querySelectorAll('[data-lineage-filter]').forEach((tab) => {
+        tab.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const filter = tab.getAttribute('data-lineage-filter') || 'all';
+          lineageBar.querySelectorAll('[data-lineage-filter]').forEach((b) => {
+            b.classList.toggle('active', b === tab);
+          });
+          let shown = 0;
+          cards.forEach((c) => {
+            const match = filter === 'all' || c.getAttribute('data-lineage-group') === filter;
+            c.hidden = !match;
+            if (match) shown += 1;
+          });
+          if (emptyEl) emptyEl.hidden = shown > 0;
+        });
+      });
+    }
 
     rootEl.querySelectorAll('[data-jump]').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (e.target && e.target.closest('[data-expand-anchors]')) return;
         if (e.target && e.target.hasAttribute('data-toggle-detail')) {
           e.stopPropagation();
-          el.classList.toggle('expanded');
-          const more = e.target;
-          if (more) {
-            if (!more.dataset.closedText) more.dataset.closedText = more.textContent;
-            more.textContent = el.classList.contains('expanded') ? '▴ 收起' : more.dataset.closedText;
+          const nid = el.getAttribute('data-node-id');
+          if (nid && onExpandNode) {
+            onExpandNode(nid);
+            return;
           }
+          el.classList.toggle('expanded');
+          const tog = el.querySelector('[data-toggle-detail]');
+          if (tog) tog.textContent = el.classList.contains('expanded') ? '▴ 收起说明' : '▾ 查看展开';
           return;
         }
         e.stopPropagation();
@@ -3897,10 +4328,11 @@
     document.getElementById('zoom-title').textContent = (figure.caption || '图表全览') + '（宽屏画布 · 点击节点直跳原文）';
     const body = document.getElementById('zoom-body');
     const stage = modal.querySelector('.zoom-stage');
-    const hasDetails = Boolean(
-      figure && figure.data && Array.isArray(figure.data.nodes) && figure.data.nodes.some((n) => n && n.detail)
-    );
+    const nodesArr = (figure && figure.data && Array.isArray(figure.data.nodes) && figure.data.nodes) || [];
+    const hasDetails = nodesArr.some((n) => n && n.detail);
     let expandAll = false;
+    const expandedIds = new Set();
+    const expandedAnchorIds = new Set();
     const expandBtn = document.getElementById('btn-zoom-expand-all');
     if (expandBtn) {
       expandBtn.hidden = !hasDetails;
@@ -3949,16 +4381,36 @@
       }
     };
 
-    const paintWide = (preserveScale) => {
-      body.innerHTML =
-        '<div class="zoom-canvas-wrap"><div class="zoom-canvas-scale">' +
-        renderBlueprintBody(figure, { wide: true, expandAll }) +
-        '</div></div>';
+    const renderModalBody = (preserveScale) => {
+      const html = renderBlueprintBody(figure, {
+        wide: true,
+        expandAll,
+        expandedIds,
+        expandedAnchorIds,
+      });
+      body.innerHTML = '<div class="zoom-canvas-wrap"><div class="zoom-canvas-scale">' + html + '</div></div>';
       const qa = runCollisionAudit(body);
       const qaBadge = document.getElementById('zoom-qa');
-      qaBadge.className = 'qa-badge' + (qa.overlaps > 0 ? ' warn' : '');
-      qaBadge.textContent = qa.overlaps === 0 ? '✓ 宽屏质检：0 处重叠' : '⚠ 发现 ' + qa.overlaps + ' 处重叠';
-      bindStageInteractions(body, onFocusBlock);
+      if (qaBadge) {
+        qaBadge.className = 'qa-badge' + (qa.overlaps > 0 ? ' warn' : '');
+        qaBadge.textContent = qa.overlaps === 0 ? '✓ 宽屏质检：0 处重叠' : '⚠ 发现 ' + qa.overlaps + ' 处重叠';
+      }
+      bindStageInteractions(body, onFocusBlock, {
+        onExpandNode: (nid) => {
+          if (expandedIds.has(nid)) expandedIds.delete(nid);
+          else expandedIds.add(nid);
+          if (expandBtn) {
+            expandAll = nodesArr.length > 0 && nodesArr.every((n) => !n.detail || expandedIds.has(n.id));
+            expandBtn.setAttribute('aria-pressed', String(expandAll));
+            expandBtn.textContent = expandAll ? '收起全部说明' : '展开全部说明';
+          }
+          renderModalBody(true);
+        },
+        onExpandAnchors: (nid) => {
+          expandedAnchorIds.add(nid);
+          renderModalBody(true);
+        },
+      });
 
       const scaler = body.querySelector('.zoom-canvas-scale');
       const wideCanvas = body.querySelector('.dag-canvas, .spatial-canvas, .lanes-head');
@@ -3983,39 +4435,28 @@
       applyScale(curScale);
     };
 
-    paintWide(false);
-
     if (expandBtn) {
       expandBtn.onclick = () => {
         expandAll = !expandAll;
+        expandedIds.clear();
+        if (expandAll) nodesArr.forEach((n) => { if (n && n.detail) expandedIds.add(n.id); });
         expandBtn.setAttribute('aria-pressed', String(expandAll));
         expandBtn.textContent = expandAll ? '收起全部说明' : '展开全部说明';
-        paintWide(true);
+        manualZoom = false;
+        renderModalBody(false);
       };
     }
-    if (outBtn) {
-      outBtn.onclick = () => {
-        manualZoom = true;
-        applyScale(curScale - 0.15);
-      };
-    }
-    if (inBtn) {
-      inBtn.onclick = () => {
-        manualZoom = true;
-        applyScale(curScale + 0.15);
-      };
-    }
+
+    if (outBtn) outBtn.onclick = () => { manualZoom = true; applyScale(curScale - 0.15); };
+    if (inBtn) inBtn.onclick = () => { manualZoom = true; applyScale(curScale + 0.15); };
     if (fitBtn) {
       fitBtn.onclick = () => {
-        if (fitScale < 0.96 && Math.abs(curScale - fitScale) >= 0.03) {
-          manualZoom = false;
-          applyScale(fitScale);
-        } else {
-          manualZoom = true;
-          applyScale(1);
-        }
+        manualZoom = true;
+        if (fitScale < 0.96 && Math.abs(curScale - fitScale) >= 0.03) applyScale(fitScale);
+        else applyScale(1);
       };
     }
+    renderModalBody(false);
   }
 
   function renderBlueprintCard(containerEl, figure, options) {
@@ -4098,15 +4539,8 @@
         bindStageInteractions(stage, onFocusBlock, () => openZoomModal(figure, onFocusBlock));
       }
 
-      const zoomBtn = containerEl.querySelector('[data-bp-zoom]');
-      if (zoomBtn) {
+      containerEl.querySelectorAll('[data-bp-zoom], [data-bp-zoom-inline]').forEach((zoomBtn) => {
         zoomBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openZoomModal(figure, onFocusBlock);
-        });
-      }
-      containerEl.querySelectorAll('[data-bp-zoom-inline]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
           e.stopPropagation();
           openZoomModal(figure, onFocusBlock);
         });

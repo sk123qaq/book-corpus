@@ -1540,9 +1540,13 @@ body.chapter-desk .right-marginalia .drawer-body {
   background: var(--surface);
   color: var(--cinnabar);
   border: 1px solid var(--line);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .blk-anchor:hover { background: var(--cinnabar-soft); border-color: var(--cinnabar); }
-.blk-anchor-more { color: var(--ink-2); background: var(--paper); font-weight: 600; }
+.blk-anchor-more { color: var(--ink-2); background: var(--paper); font-weight: 600; cursor: pointer; }
+.blk-anchor-extra { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.blk-anchor-extra[hidden] { display: none; }
 
 .bp-stage-inner {
   padding: 8px;
@@ -1721,6 +1725,120 @@ body.chapter-desk .right-marginalia .drawer-body {
 .ext-item-subhead { font-size: 12px; font-weight: 600; color: var(--ink); }
 .ext-item-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 
+/* 批判谱系图专属角色与画布图例 */
+.role-predecessor { border-left: 3px solid var(--pine); }
+.role-ally { border-left: 3px solid #2b6a7c; }
+.role-mediator { border-left: 3px solid var(--indigo); }
+.role-target { border-left: 3px solid var(--cinnabar); background: color-mix(in srgb, var(--cinnabar-soft) 22%, var(--surface)); }
+.role-author {
+  border-left: 4px solid var(--pine);
+  border-color: var(--pine);
+  background: color-mix(in srgb, var(--pine-soft) 35%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pine) 35%, transparent), var(--shadow-control);
+}
+
+.lineage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.lineage-leg-item { display: inline-flex; align-items: center; gap: 5px; }
+.lineage-leg-line { width: 18px; height: 0; display: inline-block; }
+
+.lineage-na {
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.lineage-na strong { display: block; margin-bottom: 4px; color: var(--ink); }
+.lineage-na p { margin: 0; line-height: 1.6; }
+
+/* 批判谱系窄抽屉分组卡片流 */
+.lineage-narrow-shell { display: flex; flex-direction: column; gap: 8px; }
+.lineage-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lineage-filter-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.lineage-tab {
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.lineage-tab:hover:not(:disabled) { border-color: var(--ink-3); color: var(--ink); }
+.lineage-tab:disabled { opacity: 0.42; cursor: default; }
+.lineage-tab.active {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.lineage-zoom-inline {
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pine);
+  background: var(--pine-soft);
+  border: 1px solid color-mix(in srgb, var(--pine) 30%, transparent);
+  white-space: nowrap;
+}
+.lineage-zoom-inline:hover { background: var(--pine); color: #F7F5EE; }
+.lineage-card-list { display: flex; flex-direction: column; gap: 7px; }
+.lineage-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lineage-card[hidden] { display: none; }
+.lineage-card-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.lineage-role-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.lineage-card-title { font-size: 12.5px; font-weight: 700; color: var(--ink); line-height: 1.4; }
+.lineage-card-detail { font-size: 11.5px; color: var(--ink-2); line-height: 1.55; }
+.lineage-rel-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.lineage-rel-chip {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.lineage-rel-chip.edge-pos { color: var(--pine); border-color: color-mix(in srgb, var(--pine) 35%, var(--line)); }
+.lineage-rel-chip.edge-skip { color: var(--indigo); border-color: color-mix(in srgb, var(--indigo) 35%, var(--line)); }
+.lineage-rel-chip.edge-neg { color: var(--cinnabar); border-color: var(--cinnabar-soft); }
+.lineage-rel-chip.edge-back { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
+.lineage-card-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.lineage-filter-empty { font-size: 11.5px; color: var(--ink-3); padding: 8px 4px; }
+
 .dag-edge-label {
   position: absolute;
   padding: 2px 6px;
@@ -1818,6 +1936,44 @@ body.chapter-desk .right-marginalia .drawer-body {
 .bp-table th, .bp-table td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
 .bp-table th { background: var(--paper); font-weight: 600; font-size: 11.5px; color: var(--ink-2); }
 .bp-table td.col-key { font-weight: 600; color: var(--ink); width: 24%; }
+.term-contrast-table td.col-key { width: 22%; }
+.term-contrast-table td:last-child { white-space: nowrap; }
+.tc-orig-table { margin-top: 2px; font-size: 11px; font-style: italic; font-weight: 400; color: var(--ink-3); word-break: break-word; }
+
+/* 词义辨析窄抽屉术语对照卡片流 */
+.term-contrast-cards { display: flex; flex-direction: column; gap: 8px; }
+.tc-card {
+  padding: 9px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.tc-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.tc-term-wrap { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tc-term { font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.35; }
+.tc-orig { font-size: 11px; font-style: italic; color: var(--ink-3); word-break: break-word; }
+.tc-card-compare { display: flex; flex-direction: column; gap: 6px; }
+.tc-col {
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.tc-col.tc-everyday { border-left: 2.5px solid var(--ink-3); }
+.tc-col.tc-author { border-left: 2.5px solid var(--pine); }
+.tc-col-lbl {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  margin-bottom: 2px;
+}
+.tc-col.tc-author .tc-col-lbl { color: var(--pine); }
+.tc-col p { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--ink); word-break: break-word; }
+.tc-card-foot { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; overflow-x: auto; }
 
 .chart-stage-wrap { position: relative; }
 .chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
@@ -1930,11 +2086,42 @@ body.chapter-desk .right-marginalia .drawer-body {
 .spatial-na-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); font-size: 11px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
 .spatial-na-card p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-2); }
 
+.bp-fallback-banner {
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: var(--amber-soft);
+  border-left: 3px solid var(--amber);
+  font-size: 11.5px;
+  color: var(--amber);
+  font-weight: 600;
+}
+.ext-sections { display: flex; flex-direction: column; gap: 12px; }
+.ext-section { display: flex; flex-direction: column; gap: 6px; }
+.ext-sec-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  padding-left: 7px;
+  border-left: 2.5px solid var(--cinnabar);
+}
+.ext-section[data-section-id="thought_experiment"] .ext-sec-title { border-left-color: var(--indigo); }
+.ext-section[data-section-id="hidden_premise"] .ext-sec-title { border-left-color: var(--amber); }
+.ext-section[data-section-id="counterexample"] .ext-sec-title { border-left-color: var(--cinnabar); }
+.ext-section[data-section-id="modern_boundary"] .ext-sec-title { border-left-color: var(--pine); }
+
 .ext-list { display: flex; flex-direction: column; gap: 8px; }
 .ext-item { padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); display: flex; flex-direction: column; gap: 5px; }
+.ext-item-head { display: flex; justify-content: space-between; gap: 6px; align-items: flex-start; }
+.ext-item-title-wrap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.ext-item-title { font-size: 12.5px; color: var(--pine); }
+.ext-role-badge { padding: 1px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line-strong); font-size: 10.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.ext-item-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .ext-check-label { display: flex; align-items: flex-start; gap: 7px; cursor: pointer; font-size: 12px; font-weight: 600; }
 .ext-check-label input { margin-top: 3px; accent-color: var(--cinnabar); }
-.ext-sub { font-size: 11.5px; line-height: 1.55; color: var(--ink-2); }
+.ext-sub { font-size: 11.5px; line-height: 1.58; color: var(--ink-2); }
 
 .json-box { margin: 0; padding: 10px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); font-family: var(--mono); font-size: 11px; line-height: 1.55; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
 .pipe-step { padding: 9px 11px; border: 1px solid var(--line); border-left: 2.5px solid var(--pine); border-radius: 6px; background: var(--paper); font-size: 12px; }
