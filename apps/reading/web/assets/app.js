@@ -93,6 +93,7 @@
     sparring_dossier: '学术交锋档案',
     counterexample_lab: '反例与现实检验',
     method_audit: '方法与样本局限',
+    actor_incentives: '行动者激励与博弈',
     craft_notes: '工艺流派考据',
     pin: '钉住旁批',
     unpin: '移除旁批',

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from typing import Any
 
@@ -19,6 +20,7 @@ _EMPTY_TERM_VALUES = frozenset({"无", "暂无", "无对应", "无原词", "none
 _SPARRING_PLACEHOLDER_NOTE = "先看清作者到底在反驳谁"
 _BOUNDARY_PLACEHOLDER_NOTE = "公式/规律失效提示"
 _BOUNDARY_PREFIX_RE = re.compile(r"^(?:公式/规律失效提示\s*[:：]\s*)+")
+_METHOD_PLACEHOLDER_NOTE = "切忌把局部样本直接绝对化"
 
 ARGUMENT_ROLES = frozenset({"premise", "inference", "rebuttal", "conclusion", "condition"})
 LINEAGE_ROLES = frozenset({"predecessor", "ally", "mediator", "target", "author"})
@@ -40,6 +42,11 @@ EXTENSION_SECTION_META: dict[str, tuple[tuple[str, str], ...]] = {
         ("before", "启动前准备"),
         ("during", "执行与核验"),
         ("redline", "失效边界与踩坑红线"),
+    ),
+    "method_audit": (
+        ("evidence_method", "研究方法与证据来源"),
+        ("identification_bias", "因果识别与样本局限"),
+        ("evolution_boundary", "后续演进与反例边界"),
     ),
     "sparring_dossier": (
         ("debate", "核心论战交锋"),
@@ -102,6 +109,34 @@ DEFAULT_NODE_ROLE: dict[str, str] = {
 
 POWER_ROLES = frozenset({"sovereign", "faction", "ally", "rival", "constraint"})
 POWER_RELATIONS = frozenset({"subordinate", "balance", "alliance", "hostile", "constraint"})
+
+# 社会科学因果回路：节点只允许变量/激励/制度机制/宏观结果/风险锁定五类角色。
+SOCIAL_CAUSAL_ROLES = ("driver", "policy", "mechanism", "outcome", "lockin")
+SOCIAL_CAUSAL_ROLE_SET = frozenset(SOCIAL_CAUSAL_ROLES)
+SOCIAL_CAUSAL_ROLE_FALLBACK = "mechanism"
+# 方法论评价与测量误区属于“方法与样本局限”扩展，不得冒充因果节点。
+_SOCIAL_METHOD_CRITIQUE_RE = re.compile(
+    r"(测量误区|测量偏差|测量局限|方法论反思|方法论局限|口径偏差|口径缺陷|统计口径之争|样本局限)"
+)
+SOCIAL_METRIC_MODES = frozenset({"series", "comparison", "not_applicable"})
+SOCIAL_METRIC_MODE_ALIASES = {
+    "trend": "series",
+    "time_series": "series",
+    "timeseries": "series",
+    "line": "series",
+    "compare": "comparison",
+    "bar": "comparison",
+    "bars": "comparison",
+    "grouped_bar": "comparison",
+    "na": "not_applicable",
+    "none": "not_applicable",
+    "not_applicable": "not_applicable",
+}
+SOCIAL_METRIC_MAX_SERIES = 4
+SOCIAL_METRIC_MAX_POINTS = 12
+_METRIC_GUESS_NOTE_RE = re.compile(r"示意|估算|中值|取中|补值|推测|推断|未见具体|未给(?:出)?具体")
+SOCIAL_CONCEPT_MAX_BLOCKS = 3
+_MATRIX_CLONE_SPLIT_RE = re.compile(r"[：:｜|]")
 SPATIAL_ROLES = frozenset(
     {
         "capital",
@@ -238,19 +273,24 @@ BLUEPRINT_SCHEMA_HINTS: dict[str, str] = {
     ),
     "causal_loop": (
         '"blueprint":"causal_loop","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"nodes":[{"id":"S1","role":"condition|inference|rebuttal","label":"≤16字变量节点",'
+        '"data":{"loops":[{"id":"R1","label":"≤18字反馈环名"}],'
+        '"nodes":[{"id":"S1","role":"driver|policy|mechanism|outcome|lockin","label":"≤16字变量或制度机制",'
         '"detail":"≤45字因果作用","blocks":["B01"],"source":"原文|补充"}],'
-        '"edges":[{"from":"S1","to":"S2","label":"+增强 或 -抑制"}]}'
+        '"edges":[{"from":"S1","to":"S2","label":"≤5字因果动作","polarity":"+","delay":false}]}'
     ),
     "concept_matrix": (
         '"blueprint":"concept_matrix","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
         '"data":{"columns":["学派/作者口径","核心界定","关键机制","盲区/反例","出处"],'
-        '"rows":[{"key":"流派","everyday":"概念界定","author":"解释机制","extra":"局限盲区","blocks":["B01"],"source":"原文|补充"}]}'
+        '"rows":[{"key":"学派、学者或政策立场","everyday":"核心界定","author":"关键机制",'
+        '"extra":"盲区/反例","blocks":["B01"],"source":"原文|补充"}]}'
     ),
     "metric_chart": (
         '"blueprint":"metric_chart","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
-        '"data":{"yLabel":"指数(0-100)","points":[{"beat":"≤8字阶段","tension":50,"emotion":"≤14字实证变化",'
-        '"blocks":["B01"],"source":"原文|补充"}]}'
+        '"data":{"mode":"series|comparison|not_applicable","yLabel":"纵轴指标名","unit":"%|亿元|万人",'
+        '"series":[{"name":"系列名","points":[{"x":"1994","value":22,"note":"≤35字原文口径",'
+        '"blocks":["B01"],"source":"原文"}]}],'
+        '"reason":"仅 not_applicable 时填写：全章除年份页码外无可比数字",'
+        '"highlights":[{"text":"≤30字定性史例或观察锚点","blocks":["B01"],"source":"原文"}]}'
     ),
     "element_matrix": (
         '"blueprint":"element_matrix","caption":"≤18字图题","reading_note":"≤40字读图引导","summary":"2句文字解读",'
@@ -460,12 +500,43 @@ EXTENSION_PROMPT_SPECS: dict[str, dict[str, str]] = {
     },
     "method_audit": {
         "blueprint": "extension_dossier",
-        "title": "研究方法与样本局限",
+        "title": "方法与样本局限",
         "instruction": (
-            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字实证与局限",'
-            '"reading_note":"切忌把局部样本直接绝对化","summary":"2句方法论综述",'
-            '"items":[{"title":"≤20字研究方法或局限维度",'
-            '"body":"≤70字定性定量依据、样本偏差或现实映射","blocks":["B01"],"source":"原文|补充"}]}'
+            "按三个分区输出 6–8 条高密度卡片，每条必须填写 section 字段（取下列三个 id 之一）：\n"
+            "1. evidence_method（研究方法与证据来源，2–3 条，多为 [原文]）："
+            "识别本章实际使用的实证方法（宏观统计 / 政策文本 / 当事人访谈 / "
+            "情景模拟 / 跨国案例 / 历史比较），并标出证据来源。\n"
+            "2. identification_bias（因果识别与样本局限，2–3 条，多为 [补充]）："
+            "精准指出内生性、反事实缺失、口径偏差、地域/时代样本偏向、种族本质论或不可证伪前提。\n"
+            "3. evolution_boundary（后续演进与反例边界，1–2 条）："
+            "说明后续制度演变或现代实证研究如何修正、限定本章结论。\n"
+            "reading_note 必须根据本章实际研究方法定制一句（≤30字），"
+            "严禁照抄「切忌把局部样本直接绝对化」之类通用占位句。\n"
+            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字方法与局限",'
+            '"reading_note":"≤30字本章专属方法提醒","summary":"2句方法论综述",'
+            '"items":[{"section":"evidence_method|identification_bias|evolution_boundary",'
+            '"title":"≤20字方法或局限维度","body":"≤70字具体证据、偏差或后续修正",'
+            '"blocks":["B01"],"source":"原文|补充"}]}'
+        ),
+    },
+    "actor_incentives": {
+        "blueprint": "extension_dossier",
+        "title": "行动者激励与博弈",
+        "instruction": (
+            "拆出 4–6 个核心行动者或利益群体（中央/地方/基层/企业/银行/群体/演说家等），"
+            "每张卡必须同时给出结构化字段与兼容正文：\n"
+            "- role_tag 限 核心决策方 / 博弈响应方 / 制度承受方 / 外部约束者 四类；\n"
+            "- incentive 写核心目标与激励，constraint 写硬约束或认知局限，"
+            "strategy 写现实策略与非预期后果；\n"
+            "- body 是四段字段的凝练摘要（≤80字），供旧渲染器或降级消费；\n"
+            "- 每张卡只保留 1–3 个最核心块号，严禁把整页块号堆成一串。\n"
+            "reading_note 必须点出本章最尖锐的那对利益冲突（≤30字），不要写通用博弈套话。\n"
+            '输出严格 JSON：{"blueprint":"extension_dossier","caption":"≤18字博弈格局",'
+            '"reading_note":"≤30字本章核心利益冲突","summary":"2句博弈综述",'
+            '"items":[{"title":"≤14字行动者名","role_tag":"核心决策方|博弈响应方|制度承受方|外部约束者",'
+            '"incentive":"≤40字核心目标与激励","constraint":"≤40字硬约束或认知局限",'
+            '"strategy":"≤45字现实策略与非预期后果","body":"≤80字兼容摘要",'
+            '"blocks":["B01"],"source":"原文|补充"}]}'
         ),
     },
     "craft_notes": {
@@ -624,6 +695,42 @@ BLUEPRINT_GUIDANCE: dict[str, str] = {
         "- 每节点精选 1–3 个最核心块号，边标签 ≤5 字。\n"
         '- 若本章属纯数学公理推导且完全无实体装置、物理演化过程或动态迭代机制，请设 data.mode="not_applicable" '
         "并用 2 句 not_applicable_reason 说明，绝不硬造。"
+    ),
+    "causal_loop": (
+        "专项约束（社会科学因果反馈回路）：\n"
+        "- 节点只能是变量、激励、制度机制、宏观结果或风险锁定五类（建议 6–12 个，硬上限 16 个）；"
+        "role 限 driver（核心驱动）、policy（制度干预）、mechanism（传导机制）、"
+        "outcome（宏观结果）、lockin（锁定/风险）。\n"
+        "- 严禁把作者的方法论评价、测量误区、口径争论或“本文不足”塞成因果节点；"
+        "这些内容属于“方法与样本局限”工具，不是因果变量。\n"
+        '- 每条边必须填 polarity："+" 表示正向增强，"-" 表示负向抑制；有滞后效应时填 delay:true。\n'
+        "- 若存在明显反馈环，在 data.loops 里给出 1–3 个环名（如 R1 土地金融正反馈环 / B1 经验纠偏调节环）。\n"
+        "- 至少包含一条闭环或反向抑制边，避免退化成单链时间线。"
+    ),
+    "concept_matrix": (
+        "专项约束（跨学派概念矩阵）：\n"
+        "- 必须抽取真正存在张力的口径对立（5–8 行）：不同学派/学者/政策立场的交锋，"
+        "严禁拿单作者章节的小节标题（如“勒庞：总论/词语/幻想/结论”）充数。\n"
+        "- 若本章是单作者论著，改为抽取跨时代、跨地区或跨范式的概念口径对照，"
+        "每行的 key 必须是可辨识的学派、学者、地区或范式名，而不是章节序号。\n"
+        "- everyday 写核心界定，author 写关键机制，extra 写盲区/反例；"
+        "每行只保留 1–3 个最核心块号，严禁铺一长串连续块号。\n"
+        "- 行与行之间必须能读出立场差异；若两行只是同义改写，合并或换成真正对立的口径。"
+    ),
+    "metric_chart": (
+        "专项约束（真实实证数据，最高优先级）：\n"
+        "- 严禁编造 0–100 伪指数、张力分数或任何原文没有的数字；本工具不是叙事张力曲线。\n"
+        "- 只允许三种模式：series（真实时间序列/阶段趋势）、comparison（真实定量对比）、"
+        "not_applicable（本章无量化数据）。\n"
+        "- series/comparison 中每个 value 必须 100% 来自原文明确出现的数字，保留原文单位与量纲，"
+        "支持负值（如 -1.1%）与大数（如 3089.7）；必须显式给出 yLabel 与 unit。\n"
+        "- 每个 value 必须是原文直接写出的数字：区间（如 40%～50%）不许取中值，缺数不许补「示意/估算」值，"
+        "来源一律填「原文」；同一张图只画一种指标与量纲，量纲不一致时只保留证据最硬的一组。\n"
+        "- 图表门槛很低：只要正文出现两组及以上同口径的真实数字（占比、基尼系数、人数、金额、收入倍数、"
+        "城乡或跨国对照，散见例证也算），就必须选 series 或 comparison，不得以「散见」「修辞性举证」"
+        "「以叙事为主」为由退场；能从同一段里凑出前后两个时点就选 series，能凑出两个对象就选 comparison。\n"
+        '- 只有全章除年份与页码外没有任何可比较数字时，才返回 mode="not_applicable"，'
+        "在 reason 里说明原因，并给出 2–4 条带真实块号的定性史例或观察锚点；绝对禁止捏造数字并标 [原文]。"
     ),
 }
 
@@ -969,6 +1076,46 @@ def _norm_system_flow_role(raw_role: Any) -> str:
     return mapping.get(role, "process")
 
 
+def _truthy(val: Any) -> bool:
+    if isinstance(val, bool):
+        return val
+    return str(val or "").strip().lower() in {"true", "1", "yes", "y", "是", "滞后"}
+
+
+def _norm_causal_polarity(raw: Any, label: str = "") -> str:
+    """因果边极性："+" 增强 / "-" 抑制；缺省时从边标签或字面描述推断。"""
+    text = str(raw or "").strip().lower()
+    if text in {"+", "positive", "pos", "增强", "正向", "促进"}:
+        return "+"
+    if text in {"-", "negative", "neg", "抑制", "负向", "削弱"}:
+        return "-"
+    probe = f"{text}{label}"
+    if any(k in probe for k in ("抑制", "削弱", "降低", "挤压", "负向", "递减", "抵消")):
+        return "-"
+    return "+"
+
+
+def _audit_causal_loops(raw: Any, logs: list[str]) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    loops: list[dict[str, str]] = []
+    for idx, item in enumerate(raw[:4]):
+        if isinstance(item, str):
+            label = item.strip()
+            loop_id = ""
+        elif isinstance(item, dict):
+            label = str(item.get("label") or item.get("name") or item.get("title") or "").strip()
+            loop_id = str(item.get("id") or "").strip()
+        else:
+            continue
+        if not label:
+            continue
+        loops.append({"id": (loop_id or f"L{idx + 1}")[:8], "label": label[:24]})
+    if len(raw) > 4:
+        logs.append(f"反馈环 {len(raw)} 条超出上限 4，已保留前 4 条")
+    return loops
+
+
 def _audit_dag_data(
     raw_data: dict[str, Any],
     *,
@@ -1003,14 +1150,20 @@ def _audit_dag_data(
         return None
 
     fallback_role = DEFAULT_NODE_ROLE.get(blueprint, "inference")
+    if blueprint == "causal_loop":
+        fallback_role = SOCIAL_CAUSAL_ROLE_FALLBACK
     nodes: list[dict[str, Any]] = []
     node_ids: set[str] = set()
+    dropped_critique: list[str] = []
     for idx, item in enumerate(raw_nodes):
         if not isinstance(item, dict):
             continue
         nid = str(item.get("id") or f"N{idx + 1}").strip()
         source = _norm_source(item.get("source"))
         raw_label = _strip_source_prefix(str(item.get("label") or item.get("title") or nid), source)
+        if blueprint == "causal_loop" and _SOCIAL_METHOD_CRITIQUE_RE.search(raw_label):
+            dropped_critique.append(raw_label)
+            continue
         detail = _strip_source_prefix(str(item.get("detail") or item.get("note") or ""), source)
         if len(raw_label) > NODE_LABEL_LIMIT:
             detail = f"{raw_label} · {detail}".strip(" ·") if detail else raw_label
@@ -1040,6 +1193,8 @@ def _audit_dag_data(
             role = _norm_system_flow_role(raw_role)
         elif blueprint == "power_hierarchy" and raw_role not in POWER_ROLES:
             role = fallback_role
+        elif blueprint == "causal_loop":
+            role = raw_role.lower() if raw_role.lower() in SOCIAL_CAUSAL_ROLE_SET else SOCIAL_CAUSAL_ROLE_FALLBACK
         else:
             role = raw_role or fallback_role
         node_ids.add(nid)
@@ -1060,8 +1215,14 @@ def _audit_dag_data(
         nodes.append(node_entry)
     if not nodes:
         return None
+    if dropped_critique:
+        logs.append(
+            "已剔除混入因果链的方法论评价/测量误区节点："
+            + "、".join(dropped_critique[:3])
+            + "（应归入“方法与样本局限”）"
+        )
 
-    edges: list[dict[str, str]] = []
+    edges: list[dict[str, Any]] = []
     for edge in raw_data.get("edges") or []:
         if not isinstance(edge, dict):
             continue
@@ -1077,7 +1238,7 @@ def _audit_dag_data(
             logs.append(f'边 "{src}→{dst}" 标签超长，已收缩为 "{short_lbl}"')
         else:
             short_lbl = raw_lbl
-        entry: dict[str, str] = {"from": src, "to": dst, "label": short_lbl, "note": note}
+        entry: dict[str, Any] = {"from": src, "to": dst, "label": short_lbl, "note": note}
         rel_type = str(edge.get("relation_type") or "").strip()
         if rel_type in POWER_RELATIONS:
             entry["relation_type"] = rel_type
@@ -1089,6 +1250,11 @@ def _audit_dag_data(
                 edge.get("relation") or edge.get("relation_type"),
                 short_lbl,
             )
+        if blueprint == "causal_loop":
+            polarity = _norm_causal_polarity(edge.get("polarity"), short_lbl)
+            entry["polarity"] = polarity
+            if edge.get("delay") is True or _truthy(edge.get("delay")):
+                entry["delay"] = True
         edges.append(entry)
 
     if blueprint == "decision_tree" and len(nodes) >= 5:
@@ -1110,6 +1276,10 @@ def _audit_dag_data(
         else:
             exp_roles = {"observation", "hypothesis", "experiment", "finding"}
             out["paradigm"] = "experimental" if any(n["role"] in exp_roles for n in nodes) else "deductive"
+    elif blueprint == "causal_loop":
+        loops = _audit_causal_loops(raw_data.get("loops"), logs)
+        if loops:
+            out["loops"] = loops
     return out
 
 
@@ -1293,8 +1463,11 @@ def _audit_matrix_data(
     valid_ids: set[str],
     default_blocks: list[str],
     logs: list[str],
+    blueprint: str = "",
 ) -> dict[str, Any] | None:
     cols = [str(c).strip() for c in (raw_data.get("columns") or []) if str(c).strip()]
+    if not cols and blueprint == "concept_matrix":
+        cols = ["学派/学者/政策立场", "核心界定", "关键机制", "盲区/反例", "出处"]
     raw_rows = raw_data.get("rows")
     if not cols or not isinstance(raw_rows, list) or not raw_rows:
         return None
@@ -1335,7 +1508,32 @@ def _audit_matrix_data(
             )
     if not rows:
         return None
+    if blueprint == "concept_matrix":
+        rows = _tidy_concept_matrix_rows(rows, logs)
     return {"columns": cols, "rows": rows}
+
+
+def _tidy_concept_matrix_rows(rows: list[dict[str, Any]], logs: list[str]) -> list[dict[str, Any]]:
+    """社科概念矩阵：块号收窄到 3 个，并识别“单作者小节目录克隆”。"""
+    trimmed = 0
+    for row in rows:
+        blocks = row.get("blocks") or []
+        if len(blocks) > SOCIAL_CONCEPT_MAX_BLOCKS:
+            row["blocks"] = blocks[:SOCIAL_CONCEPT_MAX_BLOCKS]
+            trimmed += 1
+    if trimmed:
+        logs.append(f"概念矩阵有 {trimmed} 行块号超过 3 个，已收缩到最核心的 3 个")
+
+    pairs = [_MATRIX_CLONE_SPLIT_RE.split(str(row.get("key") or ""), 1) for row in rows]
+    prefixes = [p[0].strip() for p in pairs if len(p) == 2 and p[0].strip() and p[1].strip()]
+    if len(rows) >= 4 and len(prefixes) == len(rows) and len(set(prefixes)) == 1:
+        for row, pair in zip(rows, pairs, strict=True):
+            row["key"] = pair[1].strip()[:24]
+        logs.append(
+            f"概念矩阵 {len(rows)} 行均以同一小节名「{prefixes[0]}：」开头，"
+            "疑似克隆单作者小节目录冒充学派对照，已剥离公共前缀；请检查各行是否真有口径张力"
+        )
+    return rows
 
 
 def _audit_curve_data(
@@ -1548,6 +1746,231 @@ def _audit_sensitivity_data(
     return None
 
 
+def _metric_number(val: Any) -> float | None:
+    """真实数值：接受 22、"22%"、"-1.1%"、"3,089.7" 等写法，不做 0–100 钳制。"""
+    if val is None or isinstance(val, bool):
+        return None
+    if isinstance(val, (int, float)):
+        num = float(val)
+    else:
+        text = str(val).strip().replace(",", "").replace("，", "").replace("％", "%")
+        match = re.search(r"[+-]?\d+(?:\.\d+)?", text)
+        if not match:
+            return None
+        num = float(match.group(0))
+    if not math.isfinite(num):
+        return None
+    return round(num, 4)
+
+
+def _metric_y_label(raw_data: dict[str, Any]) -> tuple[str, str]:
+    y_label = str(raw_data.get("yLabel") or raw_data.get("ylabel") or raw_data.get("y_label") or "")
+    y_label = _strip_source_prefix(y_label).strip()[:24]
+    unit = str(raw_data.get("unit") or "").strip()[:12]
+    if not unit:
+        match = re.search(r"[（(]\s*([^（）()]{1,10})\s*[）)]", y_label)
+        if match:
+            unit = match.group(1).strip()
+    return (y_label or "指标"), unit
+
+
+def _metric_point(
+    raw: Any,
+    idx: int,
+    *,
+    valid_ids: set[str],
+    default_blocks: list[str],
+    logs: list[str],
+) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    source = _norm_source(raw.get("source"))
+    label = str(
+        raw.get("x") or raw.get("beat") or raw.get("label") or raw.get("category") or raw.get("time") or f"点{idx + 1}"
+    )
+    label = label.strip()
+    value = _metric_number(raw.get("value") if raw.get("value") is not None else raw.get("tension"))
+    if value is None:
+        logs.append(f"指标图第 {idx + 1} 个数据点缺少真实数值，已剔除（绝不补造）")
+        return None
+    note = _strip_source_prefix(str(raw.get("note") or raw.get("emotion") or ""), source)[:60]
+    if source != "原文" or _METRIC_GUESS_NOTE_RE.search(note):
+        logs.append(f"指标图第 {idx + 1} 个数据点不是原文直引数值（来源或备注含推测），已剔除：{label[:12]}")
+        return None
+    blocks = _clean_blocks(
+        raw.get("blocks") or raw.get("block"),
+        valid_ids=valid_ids,
+        default_blocks=default_blocks,
+        hint=label[:12] or "指标点",
+        logs=logs,
+    )
+    return {
+        "x": label[:24],
+        "value": value,
+        "note": note,
+        "blocks": blocks,
+        "source": source,
+    }
+
+
+def _metric_rows_to_series(rows: list[Any]) -> list[dict[str, Any]]:
+    """把 [{label, values:[{name,value}]}] 透视为按系列分组的时间序列。"""
+    order: list[str] = []
+    grouped: dict[str, list[Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        x_label = row.get("label") or row.get("x") or row.get("category") or row.get("time") or ""
+        values = row.get("values")
+        if isinstance(values, dict):
+            values = [
+                {"name": k, "value": v, "blocks": row.get("blocks"), "source": row.get("source")}
+                for k, v in values.items()
+            ]
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or item.get("label") or item.get("series") or "指标").strip()
+            if name not in grouped:
+                order.append(name)
+                grouped[name] = []
+            point = dict(item)
+            point.setdefault("x", x_label)
+            point.setdefault("blocks", row.get("blocks"))
+            point.setdefault("source", row.get("source"))
+            grouped[name].append(point)
+    return [{"name": name, "points": grouped[name]} for name in order]
+
+
+def _audit_metric_data(
+    raw_data: dict[str, Any],
+    *,
+    valid_ids: set[str],
+    default_blocks: list[str],
+    logs: list[str],
+) -> dict[str, Any] | None:
+    """实证指标图：真实序列 / 真实对比 / 诚实退场三模式，不造伪指数。"""
+    raw_mode = str(raw_data.get("mode") or "").strip().lower()
+    mode = SOCIAL_METRIC_MODE_ALIASES.get(raw_mode, raw_mode)
+    if mode not in SOCIAL_METRIC_MODES:
+        if isinstance(raw_data.get("series"), list) or isinstance(raw_data.get("points"), list):
+            mode = "series"
+        elif isinstance(raw_data.get("rows"), list):
+            mode = "comparison"
+        elif raw_data.get("reason") or raw_data.get("not_applicable_reason"):
+            mode = "not_applicable"
+        else:
+            mode = "series"
+
+    if mode == "not_applicable":
+        reason = str(
+            raw_data.get("reason") or raw_data.get("not_applicable_reason") or raw_data.get("summary") or ""
+        ).strip()
+        if not reason:
+            logs.append("not_applicable 缺少 reason，无法诚实退场，已转安全降级")
+            return None
+        highlights: list[dict[str, Any]] = []
+        raw_highlights = raw_data.get("highlights")
+        if not isinstance(raw_highlights, list):
+            raw_highlights = raw_data.get("items")
+        for item in raw_highlights or []:
+            if not isinstance(item, dict):
+                continue
+            source = _norm_source(item.get("source"))
+            text = _strip_source_prefix(str(item.get("text") or item.get("title") or item.get("label") or ""), source)
+            if not text:
+                continue
+            blocks = _clean_blocks(
+                item.get("blocks") or item.get("block"),
+                valid_ids=valid_ids,
+                default_blocks=default_blocks,
+                hint=text[:10],
+                logs=logs,
+            )
+            highlights.append({"text": text[:40], "blocks": blocks, "source": source})
+            if len(highlights) >= 4:
+                break
+        if not highlights:
+            logs.append("not_applicable 缺少定性史例锚点，已补本章默认块号")
+            highlights = [
+                {
+                    "text": "本章以定性论述为主，无可比量化统计",
+                    "blocks": list(default_blocks[:1]),
+                    "source": "原文",
+                }
+            ]
+        logs.append("本章未提供可对比的量化统计数据，已诚实返回 not_applicable")
+        return {
+            "mode": "not_applicable",
+            "reason": reason[:160],
+            "highlights": highlights,
+            "yLabel": "",
+            "unit": "",
+            "series": [],
+        }
+
+    y_label, unit = _metric_y_label(raw_data)
+    raw_series = raw_data.get("series")
+    if isinstance(raw_series, dict):
+        raw_series = [raw_series]
+    if not isinstance(raw_series, list):
+        raw_series = []
+    if not raw_series and isinstance(raw_data.get("rows"), list):
+        raw_series = _metric_rows_to_series(raw_data["rows"])
+    if not raw_series and isinstance(raw_data.get("points"), list):
+        legacy_points = []
+        for pt in raw_data["points"]:
+            if not isinstance(pt, dict):
+                continue
+            legacy_points.append(
+                {
+                    "x": pt.get("beat") or pt.get("x") or pt.get("label"),
+                    "value": pt.get("value") if pt.get("value") is not None else pt.get("tension"),
+                    "note": pt.get("note") or pt.get("emotion"),
+                    "blocks": pt.get("blocks"),
+                    "source": pt.get("source"),
+                }
+            )
+        raw_series = [{"name": str(raw_data.get("seriesName") or "指标"), "points": legacy_points}]
+        logs.append("检测到旧缓存 points/beat/tension 结构，已按真实数值转为 series，请核对是否为原文数字")
+
+    series: list[dict[str, Any]] = []
+    total_points = 0
+    for s_idx, raw_s in enumerate(raw_series[:SOCIAL_METRIC_MAX_SERIES]):
+        if not isinstance(raw_s, dict):
+            continue
+        raw_points = raw_s.get("points")
+        if not isinstance(raw_points, list):
+            continue
+        points: list[dict[str, Any]] = []
+        for p_idx, raw_p in enumerate(raw_points[:SOCIAL_METRIC_MAX_POINTS]):
+            point = _metric_point(raw_p, p_idx, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
+            if point is not None:
+                points.append(point)
+        if not points:
+            continue
+        name = str(raw_s.get("name") or raw_s.get("label") or ("指标" if s_idx == 0 else f"序列{s_idx + 1}"))
+        series.append({"name": name.strip()[:20], "points": points})
+        total_points += len(points)
+
+    if len(raw_series) > SOCIAL_METRIC_MAX_SERIES:
+        logs.append(f"指标序列超过 {SOCIAL_METRIC_MAX_SERIES} 条，已保留前 {SOCIAL_METRIC_MAX_SERIES} 条")
+    if total_points < 2:
+        logs.append("有效真实数据点不足 2 个，无法成图")
+        return None
+    if mode == "comparison" and len(series) < 2 and all(len(s["points"]) < 2 for s in series):
+        logs.append("对比模式至少需要两组数字，已按单序列渲染")
+        mode = "series"
+    return {
+        "mode": mode,
+        "yLabel": y_label,
+        "unit": unit,
+        "series": series,
+    }
+
+
 def _audit_timeline_data(
     raw_data: dict[str, Any],
     *,
@@ -1744,6 +2167,20 @@ def _audit_extension_items(
             body = " · ".join(summary_parts)
         if not title and not body and not (pitfall or case or root_cause or fix):
             continue
+        role_tag = _strip_source_prefix(str(it.get("role_tag") or ""), source)[:16]
+        incentive = _strip_source_prefix(str(it.get("incentive") or ""), source)[:60]
+        constraint = _strip_source_prefix(str(it.get("constraint") or ""), source)[:60]
+        strategy = _strip_source_prefix(str(it.get("strategy") or ""), source)[:70]
+        if not body and (incentive or constraint or strategy):
+            body = "；".join(
+                f"{label}{value}"
+                for label, value in (
+                    ("激励：", incentive),
+                    ("约束：", constraint),
+                    ("策略：", strategy),
+                )
+                if value
+            )
         blocks = _clean_blocks(
             it.get("blocks"), valid_ids=valid_ids, default_blocks=default_blocks, hint=title or "扩展项", logs=logs
         )
@@ -1771,6 +2208,15 @@ def _audit_extension_items(
         if fix:
             entry["fix"] = fix
         role_badge = str(it.get("role_badge") or "").strip()
+        if role_tag:
+            entry["role_tag"] = role_tag
+        if incentive:
+            entry["incentive"] = incentive
+        if constraint:
+            entry["constraint"] = constraint
+        if strategy:
+            entry["strategy"] = strategy
+        role_badge = str(it.get("role_badge") or role_tag or "").strip()
         if role_badge:
             entry["role_badge"] = role_badge
         stance = str(it.get("stance") or "").strip()
@@ -1887,6 +2333,23 @@ def _tailor_reading_note(
         for it in items[:2]
         if str(it.get("title") or it.get("text") or "").strip()
     ]
+    if action == "method_audit" and (not note or _METHOD_PLACEHOLDER_NOTE in note):
+        titles = [str(it.get("title") or "").strip() for it in items[:2] if str(it.get("title") or "").strip()]
+        custom = (
+            f"先看本章用「{' / '.join(titles)}」等证据能推到哪一步"[:40]
+            if titles
+            else f"先看「{caption}」的证据链与反事实缺口"[:40]
+        )
+        if _METHOD_PLACEHOLDER_NOTE in note:
+            logs.append("检测到方法局限的通用占位 reading_note，已按本章证据链定制替换")
+        return custom
+    if action == "actor_incentives" and (not note or _METHOD_PLACEHOLDER_NOTE in note):
+        titles = [str(it.get("title") or "").strip() for it in items[:2] if str(it.get("title") or "").strip()]
+        return (
+            f"盯住「{' / '.join(titles)}」之间的激励错位与非预期后果"[:40]
+            if titles
+            else f"盯住「{caption}」里的利益错位"[:40]
+        )
     if (action == "sparring_dossier" or _SPARRING_PLACEHOLDER_NOTE in note) and (
         not note or _SPARRING_PLACEHOLDER_NOTE in note
     ):
@@ -1948,10 +2411,13 @@ def _group_extension_sections(items: list[dict[str, Any]], *, requested_action: 
     if requested_action == "boundary_check" and not any(str(it.get("section") or "").strip() for it in items):
         return []
     title_by_id = dict(meta)
+    id_by_title = {title: sid for sid, title in meta}
     buckets: dict[str, list[dict[str, Any]]] = {sid: [] for sid, _ in meta}
     fallback_sid = meta[0][0]
     for it in items:
         sid = str(it.get("section") or "").strip()
+        if sid not in buckets:
+            sid = id_by_title.get(sid, "")
         if sid not in buckets:
             sid = fallback_sid
         buckets[sid].append(it)
@@ -2050,7 +2516,7 @@ def audit_blueprint_payload(
             )
             if not logs:
                 logs.append("扩展分区卡片校验通过。")
-            return {
+            section_res: dict[str, Any] = {
                 "blueprint": bp or "extension_dossier",
                 "caption": caption,
                 "reading_note": reading_note,
@@ -2058,6 +2524,10 @@ def audit_blueprint_payload(
                 "audit_log": logs,
                 "sections": sections,
             }
+            if requested_action == "actor_incentives":
+                section_res["variant"] = "actor_incentives"
+                section_res["action"] = requested_action
+            return section_res
 
         items = _audit_extension_items(
             parsed.get("items") or [],
@@ -2092,6 +2562,9 @@ def audit_blueprint_payload(
         sections = _group_extension_sections(items, requested_action=requested_action)
         if sections:
             ext_res["sections"] = sections
+        if requested_action == "actor_incentives":
+            ext_res["variant"] = "actor_incentives"
+            ext_res["action"] = requested_action
         return ext_res
 
     raw_data = parsed.get("data")
@@ -2114,9 +2587,13 @@ def audit_blueprint_payload(
             raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs, blueprint=bp
         )
     elif bp in MATRIX_BLUEPRINTS:
-        audited_data = _audit_matrix_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
+        audited_data = _audit_matrix_data(
+            raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs, blueprint=bp
+        )
     elif bp == "sensitivity_chart":
         audited_data = _audit_sensitivity_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
+    elif bp == "metric_chart":
+        audited_data = _audit_metric_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
     elif bp in CURVE_BLUEPRINTS:
         audited_data = _audit_curve_data(raw_data, valid_ids=valid_ids, default_blocks=default_blocks, logs=logs)
     elif bp == "parallel_timeline":
@@ -2154,4 +2631,7 @@ def audit_blueprint_payload(
     }
     if legacy_family:
         result["family"] = legacy_family
+    if requested_action == "actor_incentives":
+        result["variant"] = "actor_incentives"
+        result["action"] = requested_action
     return result

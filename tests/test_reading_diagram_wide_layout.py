@@ -1262,3 +1262,239 @@ def test_science_wide_layout_and_narrow_views_regression(tmp_path: Path) -> None
     assert "M ≈ 1.44 M☉" in res["glossary_narrow"]["html"]
     assert "data-expand-anchors" in res["glossary_narrow"]["html"]
     assert "glossary-wide-table" in res["glossary_wide"]["html"]
+
+
+def _social_causal_figure() -> dict:
+    specs = [
+        ("C1", "driver", "地方财政压力"),
+        ("C2", "policy", "分税制改革"),
+        ("C3", "mechanism", "预算外收费扩张"),
+        ("C4", "mechanism", "土地出让收入"),
+        ("C5", "outcome", "开发区与新城扩张"),
+        ("C6", "lockin", "土地金融依赖"),
+        ("C7", "outcome", "地方债务累积"),
+        ("C8", "lockin", "风险锁定"),
+        ("C9", "mechanism", "中央转移支付"),
+    ]
+    nodes = [
+        {
+            "id": nid,
+            "role": role,
+            "label": label,
+            "detail": "这一步说明制度激励如何传导到下一环，并注明滞后与反馈方向。",
+            "blocks": ["B01", "B02", "B03", "B04", "B05"] if nid == "C1" else ["B01"],
+            "source": "原文" if nid != "C8" else "补充",
+        }
+        for nid, role, label in specs
+    ]
+    edges = [{"from": f"C{i}", "to": f"C{i + 1}", "label": "推动", "polarity": "+"} for i in range(1, 9)]
+    edges[1] = {"from": "C2", "to": "C3", "label": "倒逼", "polarity": "+", "delay": True}
+    edges.append({"from": "C6", "to": "C1", "label": "反向依赖", "polarity": "-"})
+    return {
+        "blueprint": "causal_loop",
+        "caption": "土地财政正反馈回路",
+        "reading_note": "盯住财政压力与土地金融的相互强化",
+        "data": {"nodes": nodes, "edges": edges, "loops": [{"id": "R1", "label": "土地金融正反馈环"}]},
+    }
+
+
+def _social_concept_figure() -> dict:
+    rows = [
+        {
+            "key": "王绍光：集权论",
+            "everyday": "分权削弱国家能力",
+            "author": "财政碎片化导致调控失灵",
+            "extra": "低估地方信息优势",
+            "blocks": ["B01", "B02", "B03", "B04"],
+            "source": "原文",
+        },
+        {
+            "key": "支出法分权派",
+            "everyday": "地方支出占比高即分权",
+            "author": "以支出份额衡量分权程度",
+            "extra": "混淆事权下移与自主权",
+            "blocks": ["B05"],
+            "source": "补充",
+        },
+        {
+            "key": "周飞舟：财权集权+事权下沉",
+            "everyday": "收入上收、责任下压",
+            "author": "土地财政成为地方新支柱",
+            "extra": "未覆盖东部发达县差异",
+            "blocks": ["B06"],
+            "source": "原文",
+        },
+    ]
+    return {
+        "blueprint": "concept_matrix",
+        "caption": "分权口径之争",
+        "data": {
+            "columns": ["学派/学者/政策立场", "核心界定", "关键机制", "盲区/反例", "出处"],
+            "rows": rows,
+        },
+    }
+
+
+def _social_metric_figure() -> dict:
+    return {
+        "blueprint": "metric_chart",
+        "caption": "分税制前后工业化与城市化",
+        "data": {
+            "mode": "series",
+            "yLabel": "年均增速",
+            "unit": "%",
+            "series": [
+                {
+                    "name": "工业化",
+                    "points": [
+                        {"x": "1994前", "value": 3.7, "blocks": ["B01"], "source": "原文"},
+                        {"x": "1994后", "value": -1.1, "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+                {
+                    "name": "城市化",
+                    "points": [
+                        {"x": "1994前", "value": 0.6, "blocks": ["B01"], "source": "原文"},
+                        {"x": "1994后", "value": 1.3, "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def test_social_five_tools_layout_cards_metric_modes_and_actor_cards(tmp_path: Path) -> None:
+    causal = _social_causal_figure()
+    concept = _social_concept_figure()
+    metric = _social_metric_figure()
+    comparison = {
+        "blueprint": "metric_chart",
+        "caption": "县乡两税占比",
+        "data": {
+            "mode": "comparison",
+            "yLabel": "占县乡财政收入比重",
+            "unit": "%",
+            "series": [
+                {
+                    "name": "增值税",
+                    "points": [
+                        {"x": "1994", "value": 22, "blocks": ["B01"], "source": "原文"},
+                        {"x": "2003", "value": 18, "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+                {
+                    "name": "营业税",
+                    "points": [
+                        {"x": "1994", "value": 20, "blocks": ["B01"], "source": "原文"},
+                        {"x": "2003", "value": 25, "blocks": ["B01"], "source": "原文"},
+                    ],
+                },
+            ],
+        },
+    }
+    not_applicable = {
+        "blueprint": "metric_chart",
+        "caption": "群体意见的即时成因",
+        "data": {
+            "mode": "not_applicable",
+            "reason": "本章属定性理论论述，未提供量化统计序列。",
+            "highlights": [{"text": "群体由无意识动机驱动", "blocks": ["B01"], "source": "原文"}],
+            "series": [],
+        },
+    }
+    actors = {
+        "blueprint": "extension_dossier",
+        "variant": "actor_incentives",
+        "caption": "分税制下的多方博弈",
+        "reading_note": "盯住中央与地方的激励错位",
+        "items": [
+            {
+                "title": "中央政府",
+                "role_tag": "核心决策方",
+                "incentive": "提高两个比重",
+                "constraint": "不得触动地方既得利益过快",
+                "strategy": "以基数谈判换取地方接受",
+                "blocks": ["B01", "B02"],
+                "source": "原文",
+            },
+            {
+                "title": "县乡基层政府",
+                "role_tag": "制度承受方",
+                "incentive": "保运转保工资",
+                "constraint": "自有收入锐减",
+                "strategy": "转向土地出让",
+                "blocks": ["B01"],
+                "source": "补充",
+            },
+        ],
+        "sections": [],
+    }
+    cases = [
+        {"name": "causal_wide", "figure": causal, "options": {"wide": True}},
+        {"name": "causal_wide_expanded", "figure": causal, "options": {"wide": True, "expandAll": True}},
+        {"name": "causal_narrow", "figure": causal, "options": {"wide": False}},
+        {"name": "concept_narrow", "figure": concept, "options": {"wide": False}},
+        {"name": "concept_wide", "figure": concept, "options": {"wide": True}},
+        {"name": "metric_series_narrow", "figure": metric, "options": {"wide": False}},
+        {"name": "metric_series_wide", "figure": metric, "options": {"wide": True}},
+        {"name": "metric_comparison_wide", "figure": comparison, "options": {"wide": True}},
+        {"name": "metric_na_narrow", "figure": not_applicable, "options": {"wide": False}},
+        {"name": "actor_narrow", "figure": actors, "options": {"wide": False}},
+        {"name": "actor_wide", "figure": actors, "options": {"wide": True}},
+    ]
+    res = _run_harness(tmp_path, cases)
+
+    # 宽屏因果回路：双排折行、≥65% 自适应、0 重叠、0 展开重叠
+    assert res["causal_wide"]["nodeOverlaps"] == 0, res["causal_wide"]
+    assert res["causal_wide"]["fitScale"] >= 0.65, res["causal_wide"]
+    assert res["causal_wide_expanded"]["nodeOverlaps"] == 0
+    assert res["causal_wide_expanded"]["fitScale"] >= 0.65
+    assert "核心驱动" in res["causal_wide"]["html"]
+    assert "锁定/风险" in res["causal_wide"]["html"]
+    assert 'stroke-dasharray="5 3"' in res["causal_wide"]["html"]
+    assert "dag-edge-delay" in res["causal_wide"]["html"]
+
+    # 窄抽屉因果：卡片流而非横向裁切画布
+    assert "causal-flow" in res["causal_narrow"]["html"]
+    assert "全览图谱" in res["causal_narrow"]["html"]
+    assert "土地金融正反馈环" in res["causal_narrow"]["html"]
+    assert res["causal_narrow"]["natW"] == 0
+
+    # 概念矩阵：窄屏卡片流、宽屏五列表
+    assert "concept-cards" in res["concept_narrow"]["html"]
+    assert "term-contrast-table" not in res["concept_narrow"]["html"]
+    assert "核心界定" in res["concept_narrow"]["html"]
+    assert "盲区/反例" in res["concept_narrow"]["html"]
+    assert "concept-card" in res["concept_narrow"]["html"]
+    assert "bp-table concept-matrix-table" in res["concept_wide"]["html"]
+    assert "overflow-x:auto" in res["concept_wide"]["html"]
+
+    # 实证指标：真实量纲、负值、显式数值与双系列图例
+    assert "metric-chart" in res["metric_series_wide"]["html"]
+    assert "年均增速" in res["metric_series_wide"]["html"]
+    assert "-1.1" in res["metric_series_wide"]["html"]
+    assert "3.7" in res["metric_series_wide"]["html"]
+    assert "metric-legend" in res["metric_series_wide"]["html"]
+    assert "metric-line" in res["metric_series_wide"]["html"]
+    assert 'stroke-width="1.2"' in res["metric_series_wide"]["html"]
+    assert "metric-bar" in res["metric_comparison_wide"]["html"]
+    assert "22" in res["metric_comparison_wide"]["html"]
+    assert 'class="metric-tick">0</text>' in res["metric_comparison_wide"]["html"]
+    assert 'class="metric-tick">-' not in res["metric_comparison_wide"]["html"]
+    assert (
+        'x="205.5" y="238" text-anchor="middle" class="metric-xlabel">1994</text>'
+        in res["metric_comparison_wide"]["html"]
+    )
+    assert (
+        'x="504.5" y="238" text-anchor="middle" class="metric-xlabel">2003</text>'
+        in res["metric_comparison_wide"]["html"]
+    )
+    assert "metric-na" in res["metric_na_narrow"]["html"]
+    assert "未提供量化统计序列" in res["metric_na_narrow"]["html"]
+    assert "metric-svg" not in res["metric_na_narrow"]["html"]
+
+    # 行动者：结构化字段卡片
+    assert "actor-cards" in res["actor_narrow"]["html"]
+    assert "核心激励" in res["actor_narrow"]["html"]
+    assert "制度承受方" in res["actor_narrow"]["html"]
+    assert "actor-cards wide" in res["actor_wide"]["html"]
