@@ -21,12 +21,15 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+SRC = os.path.dirname(os.path.dirname(HERE))
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+import lib_fts_cjk as cjk
 from lib_common import PATHS, ROOT, Layout
 
-sys.path.insert(0, HERE)
-import lib_fts_cjk as cjk
-from defpass import paragraphs
+from bookcorpus.md import clean_inline, load_manifest_chapter_roles, parse_markdown
 
 DB = PATHS.index_db
 CORPUS = PATHS.books
@@ -93,17 +96,92 @@ def chapters(limit_books=0, corpus=None):
     return books[:limit_books] if limit_books else books
 
 
-def _extract_book_rows(book, paths, root=None):
+def _blocks_to_para_rows(blocks, min_merge_chars=120):
+    """将 L1 块流合并为索引段：短段落向后合并，绝不跨 heading/table/code/footnote 边界。"""
+    out = []
+    buf_line = 0
+    buf_parts = []
+    buf_len = 0
+
+    def _flush():
+        nonlocal buf_line, buf_parts, buf_len
+        if buf_parts:
+            out.append((buf_line, "\n".join(buf_parts)))
+            buf_line = 0
+            buf_parts = []
+            buf_len = 0
+
+    for blk in blocks:
+        kind = blk.get("kind") or "paragraph"
+        text = str(blk.get("clean_text") if "clean_text" in blk else (blk.get("text") or "")).strip()
+        if kind == "image" and not text:
+            continue
+        if not text:
+            continue
+        line = int(blk.get("start_line") or 1)
+        if kind in ("heading", "table", "code", "footnote", "list"):
+            _flush()
+            out.append((line, text))
+            continue
+        if buf_parts and buf_len < min_merge_chars:
+            buf_parts.append(text)
+            buf_len += 1 + len(text)
+        else:
+            _flush()
+            buf_line = line
+            buf_parts = [text]
+            buf_len = len(text)
+    _flush()
+    return out
+
+
+def _extract_book_rows(book, paths, root=None, *, include_notes=False, include_front_back=False):
     base_root = root or ROOT
     out = []
     indexed_paths = set()
     total_chars = 0
+    roles_cache = {}
     for path in paths:
+        md_dir = os.path.dirname(path)
+        if md_dir not in roles_cache:
+            roles_cache[md_dir] = load_manifest_chapter_roles(md_dir)
+        manifest_roles = roles_cache[md_dir]
+        fname = os.path.basename(path)
+        stem = os.path.splitext(fname)[0]
+        try:
+            with open(path, encoding="utf-8", errors="ignore") as fh:
+                raw = fh.read()
+        except OSError:
+            continue
+        parsed = parse_markdown(
+            raw,
+            stem=stem,
+            base_dir=md_dir,
+            manifest_roles=manifest_roles,
+            file_name=fname,
+        )
+        role = parsed.get("chapter_role") or "body"
+        if role == "front_back" and not include_front_back:
+            continue
+        if role == "notes" and not include_notes:
+            continue
+
         rel = os.path.relpath(path, base_root)
-        rows = [(start, text, cjk.index_text(text)) for start, text in paragraphs(path)]
+        para_rows = _blocks_to_para_rows(parsed["blocks"])
+        h1_clean = clean_inline((parsed.get("h1") or "").replace("**", "")).strip()
+        if h1_clean and para_rows and len(para_rows[0][1]) < 40:
+            # L1 会剥除首个 # H1 供伴读标题栏渲染；若首段过短 (<40 字) 会被 qsearch 默认门槛过滤，
+            # 将干净的 H1 并回首段文本并保留首段真实 start_line，兼顾召回与 /open 定位。
+            first_line, first_text = para_rows[0]
+            if not first_text.startswith(h1_clean):
+                para_rows[0] = (first_line, f"{h1_clean}\n{first_text}")
+        rows = [(start, text, cjk.index_text(text)) for start, text in para_rows]
         if not any(tok for _, _, tok in rows):
             # 正文全是假名或符号时没有可索引 token，保留 front matter，章节不从索引里消失
-            rows = [(start, text, cjk.index_text(text)) for start, text in paragraphs(path, keep_front_matter=True)]
+            fm_lines = ["%s: %s" % (k, v) for k, v in (parsed.get("meta") or {}).items() if v]
+            if fm_lines:
+                fm_text = "\n".join(fm_lines)
+                rows = [(1, fm_text, cjk.index_text(fm_text))]
         for start, text, tok in rows:
             if not tok:
                 continue
@@ -175,7 +253,7 @@ def restore_expand(con, snap=SNAP, root=None):
     return n
 
 
-def build(db, limit_books=0, keep=False, root=None):
+def build(db, limit_books=0, keep=False, root=None, *, include_notes=False, include_front_back=False):
     base_root = os.path.abspath(root) if root else ROOT
     corpus = os.path.join(base_root, "books")
     snap = os.path.join(base_root, "工作区", "中间态", "index-expand-snapshot.db")
@@ -208,7 +286,9 @@ def build(db, limit_books=0, keep=False, root=None):
     built_at = _now_iso()
     for book, paths in books:
         sig = sig_of(paths)
-        rows, ch_cnt, chars_cnt = _extract_book_rows(book, paths, root=base_root)
+        rows, ch_cnt, chars_cnt = _extract_book_rows(
+            book, paths, root=base_root, include_notes=include_notes, include_front_back=include_front_back
+        )
         batch.extend(rows)
         tracked.append((book, sig, ch_cnt, len(rows), chars_cnt, built_at))
         done += len(paths)
@@ -451,10 +531,12 @@ def _delete_book_in_tx(con, book, include_expand=False):
     return deleted_para, deleted_expand
 
 
-def _upsert_book_in_tx(con, book, paths, root):
+def _upsert_book_in_tx(con, book, paths, root, *, include_notes=False, include_front_back=False):
     _delete_book_in_tx(con, book, include_expand=False)
     sig = sig_of(paths)
-    rows, ch_cnt, chars_cnt = _extract_book_rows(book, paths, root=root)
+    rows, ch_cnt, chars_cnt = _extract_book_rows(
+        book, paths, root=root, include_notes=include_notes, include_front_back=include_front_back
+    )
     if rows:
         con.executemany("INSERT INTO para(path,book,line,chars,tok,text) VALUES(?,?,?,?,?,?)", rows)
         con.execute("INSERT INTO para_fts(rowid, tok) SELECT id, tok FROM para WHERE book=?", (book,))
@@ -494,12 +576,12 @@ def _refresh_meta_from_tracking(con, elapsed):
     return {"books": nbooks, "chapters": nchap, "paras": npara, "chars": nchars}
 
 
-def sync(db, only_books=None, root=None, emit_json=False):
+def sync(db, only_books=None, root=None, emit_json=False, *, include_notes=False, include_front_back=False):
     """增量同步 index.db：只删除退库/改源书的旧段，只写入新增/改源书的新段。"""
     base_root = os.path.abspath(root) if root else ROOT
     corpus = os.path.join(base_root, "books")
     if not os.path.isfile(db):
-        con = build(db, root=base_root)
+        con = build(db, root=base_root, include_notes=include_notes, include_front_back=include_front_back)
         con.close()
         disk_books = len(chapters(0, corpus=corpus))
         return {"mode": "initial_build", "added": disk_books, "modified": 0, "removed": 0, "unchanged": 0}
@@ -549,7 +631,14 @@ def sync(db, only_books=None, root=None, emit_json=False):
             for book in removed:
                 _delete_book_in_tx(con, book, include_expand=True)
             for book in added + modified:
-                _upsert_book_in_tx(con, book, disk_map[book], root=base_root)
+                _upsert_book_in_tx(
+                    con,
+                    book,
+                    disk_map[book],
+                    root=base_root,
+                    include_notes=include_notes,
+                    include_front_back=include_front_back,
+                )
             stats = _refresh_meta_from_tracking(con, time.time() - t0)
         elapsed = time.time() - t0
         if not emit_json:
@@ -613,6 +702,12 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="只读查看待增量同步差集")
     ap.add_argument("--json", action="store_true", help="JSON 格式输出（配合 --dry-run / --sync / --delete）")
     ap.add_argument("--limit-books", type=int, default=0)
+    ap.add_argument("--include-notes", action="store_true", help="索引已标注为 notes 的注释章（默认过滤）")
+    ap.add_argument(
+        "--include-front-back",
+        action="store_true",
+        help="索引已标注为 front_back 的前置/后置水章（默认过滤）",
+    )
     a = ap.parse_args()
 
     base_root = os.path.abspath(a.root) if a.root else ROOT
@@ -641,13 +736,26 @@ def main():
             )
         return 0
     if a.sync:
-        res = sync(db, only_books=only, root=base_root, emit_json=a.json)
+        res = sync(
+            db,
+            only_books=only,
+            root=base_root,
+            emit_json=a.json,
+            include_notes=a.include_notes,
+            include_front_back=a.include_front_back,
+        )
         if a.json:
             print(json.dumps(res, ensure_ascii=False))
         return 0
     if not (a.rebuild or not os.path.exists(db)):
         ap.error("请指定 --sync（增量同步）、--rebuild（全库重建）、--delete 或 --dry-run")
-    con = build(db, a.limit_books, root=base_root)
+    con = build(
+        db,
+        a.limit_books,
+        root=base_root,
+        include_notes=a.include_notes,
+        include_front_back=a.include_front_back,
+    )
     con.close()
     return 0
 
