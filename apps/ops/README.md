@@ -40,7 +40,7 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 
 ## 三条只读数据源
 
-1. `src/bookcorpus/scripts/ops_status.py --json --root <root>`：顶栏、总览与 `sync_delta` 读数；脚本不存在时回落 `OPS_STATUS_FIXTURE`。
+1. `src/bookcorpus/scripts/ops_status.py --json --root <root>`：顶栏、总览、`md_canonical` 规范化覆盖统计与 `sync_delta` 读数；脚本不存在时回落 `OPS_STATUS_FIXTURE`。
 2. `ops.db`：任务、步骤、日志路径与状态计数。
 3. `build/library.db`（只读打开）与各批次的 `worklist.tsv`、`logs/<uid>.json`、`triage_final.csv`、`skip_list.tsv`、`defer/lang.tsv`。
 
