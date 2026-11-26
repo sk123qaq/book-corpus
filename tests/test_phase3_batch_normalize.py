@@ -551,3 +551,120 @@ def test_normalize_batch_respects_writer_lock(tmp_path: Path):
     assert proc.returncode == 0, stderr
     payload = json.loads(stdout)
     assert payload["succeeded"] == 1
+
+
+def test_scan_skips_math_formulas_and_fidelity_comments(tmp_path: Path):
+    """公式里的 <P(Ut+2)> / <Th) > 与保真注释不得被扫描器误判进 Batch 1。"""
+    ws = tmp_path / "ws"
+    _init_ws(ws)
+    _write_book_md(
+        ws,
+        "B0001",
+        "公式数学书",
+        {
+            "01_第一章.md": "# 第一章\n\n公式 <P(Ut+2)> 与 <Th) > 以及 $ <U(X^{b})> $。\n",
+            "02_第二章.md": "# 第二章\n\n<!-- 源 EPUB 重复收录相同正文；为保真保留此副本。 -->\n",
+        },
+        manifest={"uid": "B0001", "method": "ebook-to-md"},
+    )
+    plan = ncb.scan_corpus(ws)
+    assert plan["batches"]["1"] == []
+    assert [x["uid"] for x in plan["batches"]["3"]] == ["B0001"]
+
+
+def test_text_retention_guard_triggers_atomic_rollback_in_batch(tmp_path: Path, monkeypatch):
+    """Batch 遇到 TextRetentionGuardError 时从备份原子回滚并标注 text_retention_guard。"""
+    ws = tmp_path / "ws"
+    _init_ws(ws)
+    orig = (
+        "# 第一章\n\n"
+        "<div><span>前置标签一</span><span>前置标签二</span></div>\n\n" + ("不可静默丢失的学术正文段落。" * 50) + "\n"
+    )
+    md_dir = _write_book_md(
+        ws,
+        "B0001",
+        "熔断回滚书",
+        {"01_第一章.md": orig},
+        manifest={"uid": "B0001", "method": "paddle-ocr"},
+    )
+
+    def _corrupting_normalize(_md, **_kwargs):
+        raise ncb.TextRetentionGuardError("simulated loss", lost_chars=1200, drop_ratio=0.5)
+
+    monkeypatch.setattr(ncb, "normalize_book_md", _corrupting_normalize)
+    bk = tmp_path / "bk"
+    summary = ncb.run_batch(ws, batch="1", backup_root=bk, workers=1)
+    assert summary["rolled_back"] == 1
+    rec = summary["results"][0]
+    assert rec["status"] == "rolled_back"
+    assert rec["rolled_back"] is True
+    assert rec["guard"] == "text_retention_guard"
+    assert "text_retention_guard" in rec["error"]
+    assert (md_dir / "01_第一章.md").read_text(encoding="utf-8") == orig
+
+
+def test_find_pdf_python_handles_broken_venv_symlink_and_injects_pythonpath(tmp_path: Path, monkeypatch):
+    """断链 .venv-pdf/bin/python* 时自动探测同版本本机 python 并通过 PYTHONPATH 注入 site-packages。"""
+    ws = tmp_path / "ws"
+    _init_ws(ws)
+    venv_dir = ws / "工作区" / ".venv-pdf"
+    (venv_dir / "bin").mkdir(parents=True)
+    py_ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    # 模拟跨机同步后失效的软链
+    (venv_dir / "bin" / "python").symlink_to("/nonexistent/colaqaq/bin/python")
+    (venv_dir / "bin" / py_ver).symlink_to("/nonexistent/colaqaq/bin/python")
+
+    sp_dir = venv_dir / "lib" / py_ver / "site-packages"
+    sp_dir.mkdir(parents=True)
+    (sp_dir / "pymupdf.py").write_text("DUMMY = True\n", encoding="utf-8")
+
+    monkeypatch.delenv("BOOKS_PDF_PYTHON", raising=False)
+    monkeypatch.setattr(ncb, "_matching_system_pythons", lambda ver: [sys.executable] if ver == py_ver else [])
+    ncb._PDF_PYTHON_CACHE.clear()
+
+    py_exe, extra_pp = ncb._find_pdf_python_spec(ws)
+    assert py_exe == sys.executable
+    assert extra_pp == str(sp_dir)
+    assert ncb._find_pdf_python(ws) == sys.executable
+
+    # 验证 reextract 子进程调用继承 PYTHONPATH
+    md_dir = _write_book_md(
+        ws,
+        "B0099",
+        "断链测试书",
+        {"断链测试书.md": "# 断链测试书\n\n正文。\n"},
+        manifest={"uid": "B0099", "method": "pdf-text"},
+        pdf_bytes=b"%PDF-1.4 dummy",
+    )
+    assert md_dir.is_dir()
+    seen_envs: list[str] = []
+    orig_run = subprocess.run
+
+    def _spy_run(cmd, **kwargs):
+        if len(cmd) >= 2 and Path(str(cmd[1])).name in ("pdf_text_to_md.py", "pdf_audit_volume.py"):
+            seen_envs.append((kwargs.get("env") or {}).get("PYTHONPATH", ""))
+            if Path(str(cmd[1])).name == "pdf_text_to_md.py":
+                out_dir = Path(cmd[cmd.index("--out") + 1])
+                out_dir.mkdir(parents=True, exist_ok=True)
+                (out_dir / "断链测试书.md").write_text("# 断链测试书\n\n重抽正文。\n", encoding="utf-8")
+                (out_dir / ".manifest.json").write_text(
+                    json.dumps({"uid": "B0099", "method": "pdf-text"}), encoding="utf-8"
+                )
+                return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="100 / 100 100.00% 1 md\n锚点 : 1/1 窗命中 100.00%\n", stderr=""
+            )
+        return orig_run(cmd, **kwargs)
+
+    monkeypatch.setattr(ncb.subprocess, "run", _spy_run)
+    ok, err, _ = ncb._reextract_pdf_text_to_stage(ws, "B0099", tmp_path / "stage", split_chars=24000, split_blocks=800)
+    assert ok is True, err
+    assert len(seen_envs) == 2
+    assert all(str(sp_dir) in pp for pp in seen_envs)
+
+    # BOOKS_PDF_PYTHON 保持最高优先级覆盖
+    fake_override = tmp_path / "override_py"
+    fake_override.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    monkeypatch.setenv("BOOKS_PDF_PYTHON", str(fake_override))
+    monkeypatch.setattr(ncb, "_can_import_pymupdf", lambda exe, pythonpath=None: exe == str(fake_override))
+    assert ncb._find_pdf_python(ws) == str(fake_override)

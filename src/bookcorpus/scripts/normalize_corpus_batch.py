@@ -39,27 +39,30 @@ import lib_common as L
 
 from bookcorpus import workspace
 from bookcorpus.md.normalize import (
+    _PRESERVED_COMMENT_RE,
     CANONICAL_VERSION,
     DEFAULT_SPLIT_BLOCKS,
     DEFAULT_SPLIT_CHARS,
+    TextRetentionGuardError,
     _backup_md_dir,
     _discover_chapter_files,
     _split_code_segments,
     normalize_book_md,
 )
-from bookcorpus.md.parse import non_space_count, parse_markdown
+from bookcorpus.md.parse import (
+    HTML_TABLE_TAG_STRICT_RE,
+    HTML_TAG_STRICT_RE,
+    non_space_count,
+    parse_markdown,
+    protect_math_spans,
+)
 
 DEFAULT_EMBED_URL = "http://127.0.0.1:18080"
 HTML_SIGNIFICANT_BYTES = 100
 HTML_SIGNIFICANT_TAGS = 4
 
-_TABLE_POLLUTION_RE = re.compile(r"</?(?:table|td|tr|th|tbody|thead|tfoot)\b[^\n>]{0,300}>", re.I)
-_HTML_TAG_SCAN_RE = re.compile(
-    r"</?(?:sup|sub|span|div|a|br|hr|i|b|u|em|strong|small|big|font|p|td|tr|th|tbody|thead|tfoot|"
-    r"colgroup|col|caption|table|img|figure|figcaption|blockquote|center|section|article|header|footer|"
-    r"ul|ol|li|dl|dt|dd)\b[^\n>]{0,300}>",
-    re.I,
-)
+_TABLE_POLLUTION_RE = HTML_TABLE_TAG_STRICT_RE
+_HTML_TAG_SCAN_RE = HTML_TAG_STRICT_RE
 _HTML_COMMENT_SCAN_RE = re.compile(r"<!--[^\n]*?-->")
 _H2_RE = re.compile(r"^##\s+", re.M)
 _NOTE_ICON_RE = re.compile(r"!\[[^\]]*\]\([^)]*(?:note|footnote|tip|icon)[^)]*\)", re.I)
@@ -71,7 +74,7 @@ _PAGE_LINE_RE = re.compile(
 _RATIO_RE = re.compile(r"([\d,]+)\s*/\s*([\d,]+)\s+([\d.]+)%\s+\d+\s+md\b")
 _ANCHOR_RE = re.compile(r"锚点\s*:\s*([\d,]+)\s*/\s*([\d,]+)\s+窗命中\s+([\d.]+)%")
 
-_PDF_PYTHON_CACHE: dict[str, str | None] = {}
+_PDF_PYTHON_CACHE: dict[tuple[str, str], tuple[str | None, str | None]] = {}
 _PDF_PYTHON_LOCK = threading.Lock()
 
 
@@ -126,10 +129,16 @@ def _run_verify(md_dir: Path) -> tuple[int, str]:
     return proc.returncode, out.strip()
 
 
-def _can_import_pymupdf(py_exe: str) -> bool:
+def _can_import_pymupdf(py_exe: str, *, pythonpath: str | None = None) -> bool:
+    env: dict[str, str] | None = None
+    if pythonpath:
+        env = dict(os.environ)
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{pythonpath}{os.pathsep}{existing}" if existing else pythonpath
     try:
         proc = subprocess.run(
             [py_exe, "-c", "import pymupdf"],
+            env=env,
             capture_output=True,
             text=True,
             timeout=15,
@@ -140,31 +149,76 @@ def _can_import_pymupdf(py_exe: str) -> bool:
         return False
 
 
+def _matching_system_pythons(py_ver: str) -> list[str]:
+    """根据 ``python3.11`` 等版本名查找本机可用的匹配 Python 解释器。"""
+    cands: list[str] = []
+    local_bin = Path.home() / ".local" / "bin" / py_ver
+    if local_bin.exists():
+        cands.append(str(local_bin))
+    which_py = shutil.which(py_ver)
+    if which_py:
+        cands.append(which_py)
+    ver_num = py_ver.removeprefix("python")
+    uv_root = Path.home() / ".local" / "share" / "uv" / "python"
+    if uv_root.is_dir() and ver_num:
+        for p in sorted(uv_root.glob(f"cpython-{ver_num}*/bin/{py_ver}"), reverse=True):
+            if p.exists():
+                cands.append(str(p))
+    for sys_dir in ("/usr/local/bin", "/usr/bin"):
+        p = Path(sys_dir) / py_ver
+        if p.exists():
+            cands.append(str(p))
+    cur_ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    if cur_ver == py_ver:
+        cands.append(sys.executable)
+    return cands
+
+
+def _find_pdf_python_spec(root: Path) -> tuple[str | None, str | None]:
+    """查找可导入 ``pymupdf`` 的 Python 解释器与可选 ``PYTHONPATH``（兼容断链 .venv-pdf）。"""
+    override = (os.environ.get("BOOKS_PDF_PYTHON") or "").strip()
+    cache_key = (str(root.resolve()), override)
+    with _PDF_PYTHON_LOCK:
+        if cache_key in _PDF_PYTHON_CACHE:
+            return _PDF_PYTHON_CACHE[cache_key]
+
+        candidates: list[tuple[str, str | None]] = []
+        if override:
+            candidates.append((override, None))
+
+        venv_dir = root / "工作区" / ".venv-pdf"
+        for name in ("python", "python3"):
+            venv_py = venv_dir / "bin" / name
+            if venv_py.exists():
+                candidates.append((str(venv_py), None))
+
+        venv_lib = venv_dir / "lib"
+        if venv_lib.is_dir():
+            for sp_dir in sorted(venv_lib.glob("python*/site-packages"), reverse=True):
+                if not sp_dir.is_dir():
+                    continue
+                py_ver = sp_dir.parent.name
+                for py_exe in _matching_system_pythons(py_ver):
+                    candidates.append((py_exe, str(sp_dir)))
+
+        candidates.append((sys.executable, None))
+
+        found: tuple[str | None, str | None] = (None, None)
+        seen: set[tuple[str, str | None]] = set()
+        for cand, extra_pp in candidates:
+            if not cand or (cand, extra_pp) in seen:
+                continue
+            seen.add((cand, extra_pp))
+            if _can_import_pymupdf(cand, pythonpath=extra_pp):
+                found = (cand, extra_pp)
+                break
+        _PDF_PYTHON_CACHE[cache_key] = found
+        return found
+
+
 def _find_pdf_python(root: Path) -> str | None:
     """查找可导入 ``pymupdf`` 的 Python 解释器（优先环境覆盖与工作区 .venv-pdf）。"""
-    key = str(root.resolve())
-    with _PDF_PYTHON_LOCK:
-        if key in _PDF_PYTHON_CACHE:
-            return _PDF_PYTHON_CACHE[key]
-        override = (os.environ.get("BOOKS_PDF_PYTHON") or "").strip()
-        candidates: list[str] = []
-        if override:
-            candidates.append(override)
-        venv_py = root / "工作区" / ".venv-pdf" / "bin" / "python"
-        if venv_py.exists():
-            candidates.append(str(venv_py))
-        candidates.append(sys.executable)
-        found: str | None = None
-        seen: set[str] = set()
-        for cand in candidates:
-            if not cand or cand in seen:
-                continue
-            seen.add(cand)
-            if _can_import_pymupdf(cand):
-                found = cand
-                break
-        _PDF_PYTHON_CACHE[key] = found
-        return found
+    return _find_pdf_python_spec(root)[0]
 
 
 def _resolve_primary_pdf(root: Path, uid: str, book_meta: dict[str, Any], manifest: dict[str, Any]) -> Path | None:
@@ -229,12 +283,15 @@ def _scan_chapter_signals(chapter_files: list[Path], md_dir: Path) -> dict[str, 
             single_text = raw
         non_code = "\n".join(seg for is_code, seg in _split_code_segments(raw) if not is_code) if "```" in raw else raw
         if "<" in non_code:
-            if _TABLE_POLLUTION_RE.search(non_code):
+            scan_text, _ = protect_math_spans(non_code)
+            if _TABLE_POLLUTION_RE.search(scan_text):
                 has_table_tags = True
-            for m in _HTML_TAG_SCAN_RE.finditer(non_code):
+            for m in _HTML_TAG_SCAN_RE.finditer(scan_text):
                 html_tag_count += 1
                 html_bytes += len(m.group(0))
-            for m in _HTML_COMMENT_SCAN_RE.finditer(non_code):
+            for m in _HTML_COMMENT_SCAN_RE.finditer(scan_text):
+                if _PRESERVED_COMMENT_RE.match(m.group(0)):
+                    continue
                 html_bytes += len(m.group(0))
         if not has_h2 and _H2_RE.search(non_code):
             has_h2 = True
@@ -497,6 +554,12 @@ def _reextract_pdf_text_to_stage(
     pdf_py = _find_pdf_python(root)
     if not pdf_py:
         return False, "pymupdf_unavailable", {}
+    spec_py, extra_pp = _find_pdf_python_spec(root)
+    pdf_env: dict[str, str] | None = None
+    if extra_pp and spec_py == pdf_py:
+        pdf_env = dict(os.environ)
+        existing_pp = pdf_env.get("PYTHONPATH", "")
+        pdf_env["PYTHONPATH"] = f"{extra_pp}{os.pathsep}{existing_pp}" if existing_pp else extra_pp
 
     if stage_dir.exists():
         shutil.rmtree(stage_dir)
@@ -531,7 +594,7 @@ def _reextract_pdf_text_to_stage(
         "--structure",
         "auto",
     ]
-    proc_ext = subprocess.run(cmd_extract, cwd=str(root), capture_output=True, text=True, check=False)
+    proc_ext = subprocess.run(cmd_extract, cwd=str(root), env=pdf_env, capture_output=True, text=True, check=False)
     if proc_ext.returncode != 0 or not _discover_chapter_files(stage_dir):
         detail = (proc_ext.stderr or proc_ext.stdout or "").strip()[-240:]
         return False, f"pdf_extract_failed: {detail}", {}
@@ -539,6 +602,7 @@ def _reextract_pdf_text_to_stage(
     proc_audit = subprocess.run(
         [pdf_py, str(audit_script), str(pdf_path), "-o", str(stage_dir)],
         cwd=str(root),
+        env=pdf_env,
         capture_output=True,
         text=True,
         check=False,
@@ -547,13 +611,16 @@ def _reextract_pdf_text_to_stage(
     if proc_audit.returncode != 0:
         return False, "pdf_audit_failed", {"audit": audit_info}
 
-    norm_res = normalize_book_md(
-        stage_dir,
-        backup_dir=None,
-        dry_run=False,
-        split_chars=split_chars,
-        split_blocks=split_blocks,
-    )
+    try:
+        norm_res = normalize_book_md(
+            stage_dir,
+            backup_dir=None,
+            dry_run=False,
+            split_chars=split_chars,
+            split_blocks=split_blocks,
+        )
+    except TextRetentionGuardError as exc:
+        return False, f"text_retention_guard: {exc}", {"audit": audit_info}
 
     # 补齐源元数据与审计字段，保证与 pdf_md_batch 落盘契约一致
     stage_man_path = stage_dir / ".manifest.json"
@@ -606,31 +673,48 @@ def _process_in_place(
             "error": f"备份目标已存在，拒绝覆盖：{expected_backup}",
         }
 
-    manifest = _read_json(md_dir / ".manifest.json")
-    manifest_uid = str(manifest.get("uid") or "").strip()
-    bk_label = manifest_uid if manifest_uid and manifest_uid != "md" else uid
     created_backup: Path | None = None
 
     try:
-        if bk_label != uid:
-            created_backup = _backup_md_dir(md_dir, batch_backup_dir, uid)
-            norm_res = normalize_book_md(
-                md_dir,
-                backup_dir=None,
-                dry_run=False,
-                split_chars=split_chars,
-                split_blocks=split_blocks,
-            )
-        else:
-            norm_res = normalize_book_md(
-                md_dir,
-                backup_dir=batch_backup_dir,
-                dry_run=False,
-                split_chars=split_chars,
-                split_blocks=split_blocks,
-            )
-            if norm_res.get("backup_path"):
-                created_backup = Path(str(norm_res["backup_path"]))
+        created_backup = _backup_md_dir(md_dir, batch_backup_dir, uid)
+        norm_res = normalize_book_md(
+            md_dir,
+            backup_dir=None,
+            dry_run=False,
+            split_chars=split_chars,
+            split_blocks=split_blocks,
+        )
+    except TextRetentionGuardError as exc:
+        if expected_backup.is_dir():
+            created_backup = expected_backup
+        if created_backup is not None and created_backup.is_dir():
+            _atomic_restore_md(md_dir, created_backup)
+            return {
+                "uid": uid,
+                "batch": batch_num,
+                "subroute": subroute,
+                "ok": False,
+                "status": "rolled_back",
+                "changed": False,
+                "rolled_back": True,
+                "guard": "text_retention_guard",
+                "backup_path": str(created_backup),
+                "fallback_reason": fallback_reason,
+                "error": f"text_retention_guard: {exc}",
+            }
+        return {
+            "uid": uid,
+            "batch": batch_num,
+            "subroute": subroute,
+            "ok": False,
+            "status": "failed",
+            "changed": False,
+            "rolled_back": False,
+            "guard": "text_retention_guard",
+            "backup_path": "",
+            "fallback_reason": fallback_reason,
+            "error": f"text_retention_guard: {exc}",
+        }
     except Exception as exc:
         if expected_backup.is_dir():
             created_backup = expected_backup

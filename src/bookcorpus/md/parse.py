@@ -42,14 +42,35 @@ TABLE_ALIGN_RE = re.compile(r":?-{1,}:?")
 FRONT_MATTER_LIMIT = 60
 
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
-_HTML_TAG_RE = re.compile(
-    r"</?(?:sup|sub|span|div|a|br|hr|i|b|u|em|strong|small|big|font|p|td|tr|th|tbody|thead|tfoot|"
+_HTML_TAG_NAMES = (
+    r"(?:sup|sub|span|div|a|br|hr|i|b|u|em|strong|small|big|font|p|td|tr|th|tbody|thead|tfoot|"
     r"colgroup|col|caption|table|img|figure|figcaption|blockquote|center|section|article|header|footer|"
-    r"ul|ol|li|dl|dt|dd)\b[^>]*>",
+    r"ul|ol|li|dl|dt|dd)"
+)
+_HTML_TABLE_TAG_NAMES = r"(?:table|td|tr|th|tbody|thead|tfoot)"
+# 严格单行 HTML 属性：要求 `attr=val`，严禁跨行与数学变量裸属性（如 `<b x >`、`</i + l)`）。
+# 引号属性值后允许紧接下一个属性（如 `<table width="600"border="0">`）。
+_HTML_ATTR_QUOTED = r'[A-Za-z_:][A-Za-z0-9_.:-]{0,40}[ \t]*=[ \t]*(?:"[^"\r\n]{0,400}"|\'[^\'\r\n]{0,400}\')'
+_HTML_ATTR_UNQUOTED = r"[A-Za-z_:][A-Za-z0-9_.:-]{0,40}[ \t]*=[ \t]*[A-Za-z0-9_.:/%#-]{1,120}"
+_HTML_ATTR_ONE = rf"(?:{_HTML_ATTR_QUOTED}|{_HTML_ATTR_UNQUOTED})"
+_HTML_ATTRS_SPEC = rf"(?:[ \t]+{_HTML_ATTR_ONE}|(?<=[\"']){_HTML_ATTR_ONE}){{0,16}}"
+_HTML_TAG_LEN_GUARD = r"(?=[^\r\n]{1,1024}>)"
+
+HTML_TAG_STRICT_RE = re.compile(
+    rf"{_HTML_TAG_LEN_GUARD}<(?:/{_HTML_TAG_NAMES}[ \t]*|{_HTML_TAG_NAMES}{_HTML_ATTRS_SPEC}[ \t]*/?)>",
     re.I,
 )
+HTML_TABLE_TAG_STRICT_RE = re.compile(
+    rf"{_HTML_TAG_LEN_GUARD}<(?:/{_HTML_TABLE_TAG_NAMES}[ \t]*|{_HTML_TABLE_TAG_NAMES}{_HTML_ATTRS_SPEC}[ \t]*/?)>",
+    re.I,
+)
+_HTML_TAG_RE = HTML_TAG_STRICT_RE
 _PANDOC_CALIBRE_RE = re.compile(r"\s*\{(?:[^{}\n]*\.calibre[^{}\n]*|#[A-Za-z_][A-Za-z0-9_.:-]*(?:\s+[^{}\n]*)?)\}")
-_HTML_TABLE_RE = re.compile(r"<table\b[^>]*>.*?</table\s*>", re.I | re.S)
+_HTML_TABLE_RE = re.compile(rf"<table{_HTML_ATTRS_SPEC}[ \t]*>.*?</table[ \t]*>", re.I | re.S)
+_MATH_SPAN_RE = re.compile(
+    r"(?<!\\)\$\$(?:[^\n$]|\\\$|\$(?!\$)|\n(?!\n)){1,8000}?\$\$"
+    r"|(?<!\\)(?<!\$)\$(?!\$)(?!\d+(?:[.,]\d+)*\s+[A-Za-z\u4e00-\u9fff])(?:[^\n$]|\\\$){1,1000}?(?<!\\)\$(?![$\d])"
+)
 _HTML_TABLE_LIMIT_ROWS = 300
 _HTML_TABLE_LIMIT_COLS = 30
 _HTML_TABLE_LIMIT_CELL = 400
@@ -190,8 +211,38 @@ def _take_h1(body: str) -> tuple[str, str]:
     return h1, rest
 
 
+def protect_math_spans(text: str) -> tuple[str, tuple[str, list[str]]]:
+    """用无特殊字符的占位符保护 LaTeX ``$$...$$`` 与行内 ``$...$``，避免被清洗逻辑误伤。"""
+    if "$" not in text:
+        return text, ("", [])
+    spans: list[str] = []
+    prefix = "BCMATHSPAN"
+    while prefix in text:
+        prefix += "X"
+
+    def _repl(match: re.Match[str]) -> str:
+        idx = len(spans)
+        spans.append(match.group(0))
+        return f"{prefix}{idx}END"
+
+    return _MATH_SPAN_RE.sub(_repl, text), (prefix, spans)
+
+
+def restore_math_spans(text: str, state: tuple[str, Sequence[str]]) -> str:
+    """还原由 ``protect_math_spans`` 掩码的 LaTeX 数学片段。"""
+    prefix, spans = state
+    if not spans or not prefix:
+        return text
+    return re.sub(
+        rf"{re.escape(prefix)}(\d+)END",
+        lambda m: spans[int(m.group(1))] if int(m.group(1)) < len(spans) else m.group(0),
+        text,
+    )
+
+
 def clean_inline(text: str) -> str:
     """清行内强调、HTML 内联标签/注释/实体与 Pandoc 属性，保留正文用字。"""
+    text, math_state = protect_math_spans(text)
     text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
     text = INLINE_IMAGE_RE.sub("", text)
     text = INLINE_LINK_RE.sub(r"\1", text)
@@ -203,6 +254,7 @@ def clean_inline(text: str) -> str:
     text = _PANDOC_CALIBRE_RE.sub("", text)
     if "&" in text:
         text = html.unescape(text)
+    text = restore_math_spans(text, math_state)
     return re.sub(r"[ \t\u00a0]+", " ", text).strip()
 
 

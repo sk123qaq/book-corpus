@@ -715,3 +715,115 @@ def test_image_refs_title_dot_slash_and_unclosed_html_table(tmp_path: Path):
     assert "甲单元格 乙表头" in out
     assert "丙数据 丁结尾" in out
     assert "甲单元格乙表头" not in out
+
+
+def test_l0_protects_math_formulas_and_strict_html_tags(tmp_path: Path):
+    """严格单行 HTML 正则与 LaTeX 数学保护：绝不把 <P(Ut+2)/<i*/<U(X^{a})>/<b $$ 跨行吞字。"""
+    root = tmp_path / "ws"
+    raw = (
+        "# 第一章 模型推导\n\n"
+        "约束条件 <P(Ut+2) 推导中出现 <i* 和 <U(X^{a}) 以及 <b $$\n\n"
+        "跨行后面的正常文本不能被吞掉，包含 <b x >、</i + l) 与 <I see. I wonder.>。\n\n"
+        "行内数学 $ F'(K) > 0 $ 与 $ x < y &amp; z > 0 $ 保持原样。\n\n"
+        "$$ \\begin{array}{l} a < b & c > d \\end{array} $$\n\n"
+        '<div style="text-align: center;">真实居中标签应剥除</div>\n\n'
+        '<table width="600"border="0"><tr><td>指标</td><td>数值</td></tr></table>\n\n'
+        "花费 $100 与 <b>$200</b> 的真实标签仍应剥除。\n"
+    )
+    md_dir = _write_basic_book(root, "B0001", "公式保护", {"01_第一章.md": raw})
+    res = normalize_book_md(md_dir)
+    assert res["changed"] is True
+    out = (md_dir / "01_第一章.md").read_text(encoding="utf-8")
+    for token in (
+        "<P(Ut+2)",
+        "<i*",
+        "<U(X^{a})",
+        "<b $$",
+        "跨行后面的正常文本不能被吞掉",
+        "<b x >",
+        "</i + l)",
+        "<I see. I wonder.>",
+        "$ F'(K) > 0 $",
+        "$ x < y &amp; z > 0 $",
+        "$$ \\begin{array}{l} a < b & c > d \\end{array} $$",
+        "真实居中标签应剥除",
+        "| 指标 | 数值 |",
+        "$100 与 $200",
+    ):
+        assert token in out
+    assert "<div" not in out
+    assert "<b>" not in out
+    assert _run_verify(md_dir).returncode == 0
+
+
+def test_repeated_headers_spare_math_connectors_years_and_refrains(tmp_path: Path):
+    """收紧页眉判定：绝不误删数学引导词、诗集年份、诗行复沓与小说短对话，同时保留真实页眉/水印清洗。"""
+    root = tmp_path / "ws"
+    connectors = "\n\n".join(
+        f"Eq.{i} holds\n\nand\n\nwhere\n\nor\n\nHence,\n\nTherefore,\n\n"
+        "subject to\n\nLet\n\nwe get\n\ns.t.\n\nNo star: normal"
+        for i in range(1, 8)
+    )
+    refrains = "\n\n".join("十八世纪某月某日" for _ in range(7))
+    years_and_watermarks = "\n\n".join(
+        "1983年\n\n1984年\n\n1999年5月\n\n'Yes,' said Jane.\n\n"
+        "于坚集诗歌\n\nWWW.FANS.COM.CN\n\n最专业的时尚社区（普通LOGO版）"
+        for _ in range(10)
+    )
+    raw = f"# 第一章\n\n{connectors}\n\n{refrains}\n\n{years_and_watermarks}\n"
+    md_dir = _write_basic_book(root, "B0001", "页眉护栏", {"01_第一章.md": raw})
+    res = normalize_book_md(md_dir)
+    assert res["stats"]["header_lines_removed"] >= 20
+    out = (md_dir / "01_第一章.md").read_text(encoding="utf-8")
+    for keep in (
+        "and",
+        "where",
+        "or",
+        "Hence,",
+        "Therefore,",
+        "subject to",
+        "Let",
+        "we get",
+        "s.t.",
+        "No star: normal",
+        "1983年",
+        "1984年",
+        "1999年5月",
+        "十八世纪某月某日",
+        "'Yes,' said Jane.",
+    ):
+        assert keep in out
+    assert "于坚集诗歌" not in out
+    assert "WWW.FANS.COM.CN" not in out
+    assert "最专业的时尚社区（普通LOGO版）" not in out
+
+
+def test_preserves_ebook_to_md_fidelity_comments_for_duplicate_chapters(tmp_path: Path):
+    """重复章保真注释不得被 HTML 注释清洗或页眉去噪误删，保证 verify_output 通过。"""
+    root = tmp_path / "ws"
+    chapters: dict[str, str] = {}
+    for pair_idx in range(1, 13):
+        base_txt = f"# 第{pair_idx}节\n\n第{pair_idx}节独立正文内容，确保长度足够通过校验。" * 3 + "\n"
+        chapters[f"{pair_idx:02d}_节{pair_idx}.md"] = base_txt
+        chapters[f"{pair_idx + 12:02d}_节{pair_idx}.md"] = (
+            base_txt + "\n<!-- 源 EPUB 重复收录相同正文；为保真保留此副本。 -->\n"
+        )
+    md_dir = _write_basic_book(root, "B0001", "保真注释", chapters)
+    normalize_book_md(md_dir)
+    for pair_idx in range(1, 13):
+        txt = (md_dir / f"{pair_idx + 12:02d}_节{pair_idx}.md").read_text(encoding="utf-8")
+        assert "<!-- 源 EPUB 重复收录相同正文；为保真保留此副本。 -->" in txt
+    vp = _run_verify(md_dir)
+    assert vp.returncode == 0, vp.stdout + vp.stderr
+
+
+def test_text_retention_guard_raises_without_modifying_files(tmp_path: Path, monkeypatch):
+    """正文留存率异常骤降时触发 TextRetentionGuardError，并保证原盘零修改。"""
+    root = tmp_path / "ws"
+    orig = "# 第一章\n\n" + ("这是完整的学术正文句子，绝不允许被清洗步骤静默吞掉。" * 40) + "\n"
+    md_dir = _write_basic_book(root, "B0001", "熔断测试", {"01_第一章.md": orig})
+
+    monkeypatch.setattr(norm_mod, "clean_html_and_noise", lambda _txt, _st: "# 第一章\n\n被吞字。\n")
+    with pytest.raises(norm_mod.TextRetentionGuardError):
+        norm_mod.normalize_book_md(md_dir)
+    assert (md_dir / "01_第一章.md").read_text(encoding="utf-8") == orig
