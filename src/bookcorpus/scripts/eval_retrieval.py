@@ -14,6 +14,7 @@ import functools
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import time
@@ -21,7 +22,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import book_query
+import book_score
 import lib_common as L
+import lib_fts_cjk as cjk
+import vec_search
 
 ROOT = L.ROOT
 DEFPASS = os.path.join(HERE, "defpass.py")
@@ -31,39 +36,41 @@ QSEARCH = os.path.join(HERE, "qsearch.py")
 CAP = 99
 
 
-def env():
+def env(root=None):
     e = dict(os.environ)
     rg_dir = os.path.dirname(RG)
     if rg_dir:
         e["PATH"] = rg_dir + ":" + e.get("PATH", "")
+    if root:
+        e["BOOKS_ROOT"] = root
     return e
 
 
-def grep_files(patterns, literal=True):
+def grep_files(patterns, literal=True, *, root=None):
     cmd = ["grep", "-rl", "--include=*.md"]
     cmd += ["-F" if literal else "-E"]
     for p in patterns:
         cmd += ["-e", p]
     cmd.append("books")
-    out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+    out = subprocess.run(cmd, cwd=root or ROOT, capture_output=True, text=True)
     return [line for line in out.stdout.splitlines() if line]
 
 
-def rg_files(patterns):
+def rg_files(patterns, *, root=None):
     cmd = [RG, "-l", "-F", "--sort", "path", "-g", "*.md"]
     for p in patterns:
         cmd += ["-e", p]
     cmd.append("books")
-    out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env())
+    out = subprocess.run(cmd, cwd=root or ROOT, capture_output=True, text=True, env=env(root))
     return [line for line in out.stdout.splitlines() if line]
 
 
-def grep_expanded(patterns, excludes):
+def grep_expanded(patterns, excludes, *, root=None):
     cmd = ["grep", "-rn", "--include=*.md", "-E"]
     for p in patterns:
         cmd += ["-e", p]
     cmd.append("books")
-    out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+    out = subprocess.run(cmd, cwd=root or ROOT, capture_output=True, text=True)
     ex = re.compile("|".join(excludes)) if excludes else None
     seen, order = set(), []
     for line in out.stdout.splitlines():
@@ -79,9 +86,9 @@ def grep_expanded(patterns, excludes):
     return order
 
 
-def defpass_files(terms, aliases):
+def defpass_files(terms, aliases, *, root=None):
     cmd = [sys.executable, DEFPASS, "books", "-g", ",".join(terms), "-g", ",".join(aliases), "-n", "500"]
-    out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env())
+    out = subprocess.run(cmd, cwd=root or ROOT, capture_output=True, text=True, env=env(root))
     seen, order = set(), []
     for line in out.stdout.splitlines():
         m = re.match(r"^\[[^\]]+\]\s+(.+?):(\d+)$", line)
@@ -94,10 +101,11 @@ def defpass_files(terms, aliases):
     return order
 
 
-def qsearch_files(args):
-    out = subprocess.run(
-        [sys.executable, QSEARCH, *args, "--json", "-n", "100"], cwd=ROOT, capture_output=True, text=True
-    )
+def qsearch_files(args, *, root=None, index_db=None):
+    cmd = [sys.executable, QSEARCH, *args, "--json", "-n", "100"]
+    if index_db:
+        cmd.extend(["--db", index_db])
+    out = subprocess.run(cmd, cwd=root or ROOT, capture_output=True, text=True, env=env(root))
     if out.returncode != 0:
         raise RuntimeError(
             "%s 退出码 %d：%s" % (os.path.basename(QSEARCH), out.returncode, (out.stderr or "").strip()[-300:])
@@ -115,10 +123,11 @@ def qsearch_files(args):
     return order
 
 
-def qexpand_files(args):
-    out = subprocess.run(
-        [sys.executable, QEXPAND, *args, "--json", "-n", "100"], cwd=ROOT, capture_output=True, text=True
-    )
+def qexpand_files(args, *, root=None, index_db=None):
+    cmd = [sys.executable, QEXPAND, *args, "--json", "-n", "100"]
+    if index_db:
+        cmd.extend(["--db", index_db])
+    out = subprocess.run(cmd, cwd=root or ROOT, capture_output=True, text=True, env=env(root))
     if out.returncode != 0:
         raise RuntimeError(
             "%s 退出码 %d：%s" % (os.path.basename(QEXPAND), out.returncode, (out.stderr or "").strip()[-300:])
@@ -133,6 +142,63 @@ def qexpand_files(args):
         if path not in seen:
             seen.add(path)
             order.append(path)
+    return order
+
+
+def vec_files(question, *, emb_dir=None, url=None, top_k=500):
+    hits, _meta = vec_search.search_text(question, top_k=top_k, url=url, emb_dir=emb_dir)
+    seen, order = set(), []
+    for h in hits:
+        path = h.get("path")
+        if path and path not in seen:
+            seen.add(path)
+            order.append(path)
+    return order
+
+
+def book_query_files(
+    terms,
+    question,
+    *,
+    index_db=None,
+    lib_db=None,
+    root=None,
+    emb_dir=None,
+    url=None,
+    hybrid=True,
+    limit=50,
+    max_chapters=10,
+):
+    db_path = index_db or (os.path.join(root, "build", "检索", "index.db") if root else book_score.DB)
+    if lib_db and os.path.isfile(lib_db):
+        meta = book_score.load_meta(lib_db)
+    elif root:
+        cand_lib = os.path.join(root, "build", "library.db")
+        meta = book_score.load_meta(cand_lib) if os.path.isfile(cand_lib) else {}
+    else:
+        meta = None
+    q_terms = terms or cjk.split_groups(question)
+    con = sqlite3.connect("file:%s?mode=ro" % db_path, uri=True)
+    try:
+        planner = book_query.Planner(
+            con,
+            meta=meta,
+            limit=limit,
+            root=root,
+            emb_dir=emb_dir if hybrid else None,
+            embed_url=url if hybrid else None,
+            vec_fn=(lambda _q, _ex: ([], {"used": False, "ms": 0.0, "hits": 0, "qvec": None})) if not hybrid else None,
+        )
+        plan = planner.plan(q_terms, chapters=True, max_chapters=max_chapters, question=question)
+    finally:
+        con.close()
+    seen, order = set(), []
+    for bk in plan.chapters:
+        for ch in bk.get("selected") or []:
+            path = ch.get("chapter_path")
+            if path and path not in seen:
+                seen.add(path)
+                order.append(path)
     return order
 
 
@@ -172,7 +238,16 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 题，调试用")
     ap.add_argument("--jobs", type=int, default=8, help="并发题数；1 为串行")
+    ap.add_argument("--root", help="隔离工作区根（不改生产 build/检索/）")
+    ap.add_argument("--index-db", help="显式隔离 index.db 路径")
+    ap.add_argument("--lib-db", help="显式隔离 library.db 路径")
+    ap.add_argument("--emb-dir", help="显式隔离向量库目录（包含 emb.db 与 vectors.f16）")
+    ap.add_argument("--server", help="embedding HTTP 服务地址（默认 BOOKS_EMBED_URL）")
     a = ap.parse_args(argv)
+    work_root = os.path.abspath(a.root) if a.root else None
+    index_db = a.index_db or (os.path.join(work_root, "build", "检索", "index.db") if work_root else None)
+    lib_db = a.lib_db or (os.path.join(work_root, "build", "library.db") if work_root else None)
+    emb_dir = a.emb_dir or (os.path.join(work_root, "build", "检索", "embeddings") if work_root else None)
     systems = [s.strip() for s in a.system.split(",") if s.strip()]
     if not systems:
         ap.error("至少指定一个 --system")
@@ -185,22 +260,29 @@ def main(argv=None):
     if a.limit:
         gold = gold[: a.limit]
 
+    q_kw = {}
+    if work_root is not None:
+        q_kw["root"] = work_root
+    if index_db is not None:
+        q_kw["index_db"] = index_db
+
     def one(sysname, r):
         terms = [t for t in r["terms"].split(",") if t]
         if sysname == "A":
-            cand = grep_files(terms)
+            cand = grep_files(terms, root=work_root) if work_root else grep_files(terms)
         elif sysname == "B":
-            cand = rg_files(terms)
+            cand = rg_files(terms, root=work_root) if work_root else rg_files(terms)
         elif sysname == "C":
-            cand = defpass_files(terms, terms)
+            cand = defpass_files(terms, terms, root=work_root) if work_root else defpass_files(terms, terms)
         elif sysname == "D":
-            cand = grep_expanded([re.escape(p) for p in terms], [])
+            pat = [re.escape(p) for p in terms]
+            cand = grep_expanded(pat, [], root=work_root) if work_root else grep_expanded(pat, [])
         elif sysname == "E":
-            cand = qsearch_files([" ".join(terms)])
+            cand = qsearch_files([" ".join(terms)], **q_kw)
         elif sysname == "G":
-            cand = qsearch_files(["--expand", "--expand-kind", "prefix", " ".join(terms)])
+            cand = qsearch_files(["--expand", "--expand-kind", "prefix", " ".join(terms)], **q_kw)
         elif sysname == "K":
-            cand = qexpand_files([" ".join(terms), "--question", r["question"]])
+            cand = qexpand_files([" ".join(terms), "--question", r["question"]], **q_kw)
         elif sysname in ("K1", "K2"):
             cand = qexpand_files(
                 [
@@ -211,14 +293,37 @@ def main(argv=None):
                     "chapter",
                     "--base-weight",
                     "1" if sysname == "K1" else "2",
-                ]
+                ],
+                **q_kw,
             )
         elif sysname == "J":
-            cand = qsearch_files(["--expand", "--expand-kind", "queries", " ".join(terms)])
+            cand = qsearch_files(["--expand", "--expand-kind", "queries", " ".join(terms)], **q_kw)
         elif sysname == "H":
-            cand = qsearch_files(["--rerank", " ".join(terms)])
+            cand = qsearch_files(["--rerank", " ".join(terms)], **q_kw)
         elif sysname == "I":
-            cand = qsearch_files(["--expand", "--rerank", " ".join(terms)])
+            cand = qsearch_files(["--expand", "--rerank", " ".join(terms)], **q_kw)
+        elif sysname == "V":
+            cand = vec_files(r.get("question") or " ".join(terms), emb_dir=emb_dir, url=a.server)
+        elif sysname == "BQ":
+            cand = book_query_files(
+                terms,
+                r.get("question") or " ".join(terms),
+                index_db=index_db,
+                lib_db=lib_db,
+                root=work_root,
+                hybrid=False,
+            )
+        elif sysname == "HYB":
+            cand = book_query_files(
+                terms,
+                r.get("question") or " ".join(terms),
+                index_db=index_db,
+                lib_db=lib_db,
+                root=work_root,
+                emb_dir=emb_dir,
+                url=a.server,
+                hybrid=True,
+            )
         else:
             sys.exit("未知系统 " + sysname)
         rank, pos = rank_of(r["path"], cand)

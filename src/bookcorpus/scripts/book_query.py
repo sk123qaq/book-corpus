@@ -193,6 +193,11 @@ class Planner:
         exclude_books=None,
         exclude_spots=None,
         exclude_text="",
+        root=None,
+        emb_dir=None,
+        embed_db=None,
+        vec_path=None,
+        embed_url=None,
     ):
         self.con = con
         self.meta = book_score.load_meta() if meta is None else meta
@@ -206,6 +211,11 @@ class Planner:
         self.exclude_books = set(exclude_books or ())
         self.exclude_spots = {(str(p), int(ln or 0)) for p, ln in (exclude_spots or ()) if p}
         self.exclude_text = str(exclude_text or "").strip()
+        self.root = root
+        self.emb_dir = emb_dir
+        self.embed_db = embed_db
+        self.vec_path = vec_path
+        self.embed_url = embed_url
         self._search_fn = search_fn
         self._df_fn = df_fn
         self._vec_fn = vec_fn
@@ -268,7 +278,7 @@ class Planner:
 
     def toc(self, book):
         if book not in self._toc:
-            self._toc[book] = book_readme.readme_toc(book)
+            self._toc[book] = book_readme.readme_toc(book, root=self.root)
         return self._toc[book]
 
     def _one(self, n, kind, query_terms, groups):
@@ -317,7 +327,15 @@ class Planner:
             return hits, {"used": True, "ms": 0.0, "hits": len(hits), "qvec": None}
         if self._search_fn is not None:
             return [], {"used": False, "ms": 0.0, "hits": 0, "qvec": None}
-        return vec_search.search_text(query_text, top_k=200, exclude=vec_excl)
+        return vec_search.search_text(
+            query_text,
+            top_k=200,
+            exclude=vec_excl,
+            embed_db=self.embed_db,
+            vec_path=self.vec_path,
+            url=self.embed_url,
+            emb_dir=self.emb_dir,
+        )
 
     def _book_vec_hits(self, book, query_text, vhits, qvec):
         vh_b = [h for h in (vhits or []) if h.get("book") == book]
@@ -328,7 +346,19 @@ class Planner:
         elif self._search_fn is not None or qvec is None:
             rows = vh_b
         else:
-            rows = vec_search.search_book_text(book, query_text, top_k=20, qvec=qvec) or vh_b
+            rows = (
+                vec_search.search_book_text(
+                    book,
+                    query_text,
+                    top_k=20,
+                    embed_db=self.embed_db,
+                    vec_path=self.vec_path,
+                    url=self.embed_url,
+                    qvec=qvec,
+                    emb_dir=self.emb_dir,
+                )
+                or vh_b
+            )
         return self._filter_hits(rows, check_text=False)
 
     def plan(
@@ -417,7 +447,7 @@ class Planner:
             res.ranking = []
 
         if vhits:
-            res.ranking = apply_hybrid_ranking(res.ranking, vhits, self.meta)
+            res.ranking = apply_hybrid_ranking(res.ranking, vhits, self.meta, root=self.root)
 
         hits = None
         if chapters:
@@ -453,8 +483,11 @@ class Planner:
                         vh_b,
                         max_chapters=max_chapters,
                         title_fn=lambda cp, t=titles: t.get(cp) or os.path.basename(cp),
+                        snippet_fn=lambda cp, ln, rt=self.root: vec_search.read_snippet(cp, ln, root=rt),
                         question=query_text if use_rr else "",
                         rerank_fn=self._rerank_fn if use_rr else None,
+                        embed_db=self.embed_db,
+                        emb_dir=self.emb_dir,
                     )
                     if use_rr and any("rerank_score" in row for row in rows):
                         res.rerank_used = True
@@ -485,6 +518,9 @@ class Planner:
                 vec_hits_fn=vec_cb,
                 question=query_text,
                 rerank_fn=self._rerank_fn,
+                embed_db=self.embed_db,
+                emb_dir=self.emb_dir,
+                root=self.root,
             )
         res.fetches = self.fetches
         res.ms = round((time.time() - t0) * 1000, 1)
@@ -572,7 +608,7 @@ def focus_rows(hits, book, terms, toc, max_chapters):
     return kept or rows
 
 
-def apply_hybrid_ranking(ranking, vhits, meta):
+def apply_hybrid_ranking(ranking, vhits, meta, root=None):
     """用 RRF 把 BM25 书级排序与向量书级命中融合。"""
     v_scores = vec_search.vec_book_scores(vhits)
     if not v_scores:
@@ -617,7 +653,7 @@ def apply_hybrid_ranking(ranking, vhits, meta):
                 best=round(bsc, 4),
                 best_path=bp,
                 best_line=bl,
-                best_text=vec_search.read_snippet(bp, bl),
+                best_text=vec_search.read_snippet(bp, bl, root=root),
                 support=v_cnt.get(bk, 1),
                 topk=round(bsc, 4),
                 coverage=0.0,
@@ -653,6 +689,9 @@ def pin_focus(
     vec_hits_fn=None,
     question="",
     rerank_fn=None,
+    embed_db=None,
+    emb_dir=None,
+    root=None,
 ):
     """精确书名钉到 ranking[0] 与 chapters[0]，回写 focus 的首章定位。"""
     if not focus or focus.get("status") != "exact" or not focus.get("book"):
@@ -680,8 +719,11 @@ def pin_focus(
                 vh_b,
                 max_chapters=max_chapters,
                 title_fn=lambda cp, t=titles: t.get(cp) or os.path.basename(cp),
+                snippet_fn=lambda cp, ln, rt=root: vec_search.read_snippet(cp, ln, root=rt),
                 question=question,
                 rerank_fn=rerank_fn,
+                embed_db=embed_db,
+                emb_dir=emb_dir,
             )
             if any("rerank_score" in row for row in rows):
                 plan.rerank_used = True
@@ -785,6 +827,11 @@ def main(argv=None):
         "--max-rounds", type=int, default=DEFAULTS["max_rounds"], help="最多几轮（默认 %d）" % DEFAULTS["max_rounds"]
     )
     ap.add_argument("--chapter-selector", default="score", choices=["score", "readme"])
+    ap.add_argument("--root", help="隔离工作区根（推导 index.db / library.db / embeddings）")
+    ap.add_argument("--index-db", help="显式 index.db 路径")
+    ap.add_argument("--lib-db", help="显式 library.db 路径")
+    ap.add_argument("--emb-dir", help="隔离向量库目录（包含 emb.db 与 vectors.f16）")
+    ap.add_argument("--embed-url", help="embedding HTTP 服务地址（默认 BOOKS_EMBED_URL）")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--explain", action="store_true")
     a = ap.parse_args(argv)
@@ -795,10 +842,29 @@ def main(argv=None):
     if a.max_chapters <= 0:
         ap.error("--max-chapters 必须为正整数")
     terms = cjk.split_groups(" ".join(a.query))
-    con = sqlite3.connect("file:%s?mode=ro" % book_score.DB, uri=True)
-    p = Planner(con, scheme=a.book_score, limit=a.limit)
+    idx_db = a.index_db or (os.path.join(a.root, "build", "检索", "index.db") if a.root else book_score.DB)
+    lib_db = a.lib_db or (os.path.join(a.root, "build", "library.db") if a.root else None)
+    emb_dir = a.emb_dir or (os.path.join(a.root, "build", "检索", "embeddings") if a.root else None)
+    con = sqlite3.connect("file:%s?mode=ro" % idx_db, uri=True)
+    has_iso = any((a.root, a.index_db, a.lib_db, a.emb_dir, a.embed_url))
+    if has_iso:
+        meta = book_score.load_meta(lib_db) if (lib_db and os.path.isfile(lib_db)) else {}
+        p = Planner(
+            con,
+            meta=meta,
+            scheme=a.book_score,
+            limit=a.limit,
+            root=a.root,
+            emb_dir=emb_dir,
+            embed_url=a.embed_url,
+        )
+    else:
+        p = Planner(con, scheme=a.book_score, limit=a.limit)
     question = a.question or " ".join(terms)
-    res = p.plan(terms, max_rounds=a.max_rounds, chapter_selector=a.chapter_selector, max_chapters=a.max_chapters)
+    plan_kw = {"max_rounds": a.max_rounds, "chapter_selector": a.chapter_selector, "max_chapters": a.max_chapters}
+    if a.question:
+        plan_kw["question"] = a.question
+    res = p.plan(terms, **plan_kw)
     cardset = None
     if a.cards:
         card_count = a.limit if a.card_count is None else a.card_count

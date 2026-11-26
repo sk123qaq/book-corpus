@@ -5,6 +5,7 @@
 让上层 book_query、book_cards 与 answer.pick_passages 回退到纯 BM25，不阻塞流程。
 """
 
+import argparse
 import json
 import math
 import os
@@ -64,7 +65,13 @@ def _embed_model(model=None):
     return os.environ.get("BOOKS_EMBED_MODEL") or embed_corpus.DEFAULT_MODEL
 
 
-def _resolve_paths(embed_db=None, vec_path=None):
+def _resolve_paths(embed_db=None, vec_path=None, emb_dir=None):
+    if emb_dir is not None:
+        base = Path(emb_dir)
+        return (
+            str(embed_db or (base / "emb.db")),
+            str(vec_path or (base / "vectors.f16")),
+        )
     return (
         embed_db or PATHS.embed_db,
         vec_path or PATHS.embed_vectors,
@@ -88,9 +95,9 @@ def clear_cache():
         _UNHEALTHY_UNTIL.clear()
 
 
-def available(embed_db=None, vec_path=None):
+def available(embed_db=None, vec_path=None, emb_dir=None):
     """仅判断向量库文件是否存在且非空。"""
-    db_p, vec_p = _resolve_paths(embed_db, vec_path)
+    db_p, vec_p = _resolve_paths(embed_db, vec_path, emb_dir=emb_dir)
     try:
         return Path(db_p).is_file() and Path(vec_p).is_file() and Path(vec_p).stat().st_size > 0
     except OSError:
@@ -349,11 +356,28 @@ class VectorStore:
         return out
 
 
-def get_store(embed_db=None, vec_path=None, dim=DEFAULT_DIM):
+def _store_dim(db_p, dim=None):
+    if dim is not None:
+        return int(dim)
+    try:
+        con = sqlite3.connect(f"file:{db_p}?mode=ro", uri=True)
+        try:
+            row = con.execute("SELECT value FROM meta WHERE key='dim'").fetchone()
+            if row and str(row[0]).isdigit():
+                return int(row[0])
+        finally:
+            con.close()
+    except sqlite3.Error:
+        pass
+    return DEFAULT_DIM
+
+
+def get_store(embed_db=None, vec_path=None, dim=None, emb_dir=None):
     """按文件快照缓存加载 VectorStore；索引不可用时返回 None。"""
-    db_p, vec_p = _resolve_paths(embed_db, vec_path)
+    db_p, vec_p = _resolve_paths(embed_db, vec_path, emb_dir=emb_dir)
     if not available(db_p, vec_p):
         return None
+    eff_dim = _store_dim(db_p, dim)
     try:
         st_db = Path(db_p).stat()
         st_vec = Path(vec_p).stat()
@@ -362,28 +386,28 @@ def get_store(embed_db=None, vec_path=None, dim=DEFAULT_DIM):
     sig = (
         str(Path(db_p).resolve()),
         str(Path(vec_p).resolve()),
-        dim,
+        eff_dim,
         st_db.st_mtime_ns,
         st_vec.st_size,
         st_vec.st_mtime_ns,
     )
     with _LOCK:
-        store = _STORE_CACHE.get((sig[0], sig[1], dim))
+        store = _STORE_CACHE.get((sig[0], sig[1], eff_dim))
         if store is not None and getattr(store, "_sig", None) == sig:
             return store
     try:
-        store = VectorStore(db_p, vec_p, dim=dim)
+        store = VectorStore(db_p, vec_p, dim=eff_dim)
         store._sig = sig
     except (OSError, sqlite3.Error, ValueError):
         return None
     with _LOCK:
-        _STORE_CACHE[(sig[0], sig[1], dim)] = store
+        _STORE_CACHE[(sig[0], sig[1], eff_dim)] = store
     return store
 
 
-def health_info(embed_db=None, vec_path=None, url=None):
+def health_info(embed_db=None, vec_path=None, url=None, emb_dir=None):
     """返回向量检索组件状态，供 /api/health 与诊断检查。"""
-    db_p, vec_p = _resolve_paths(embed_db, vec_path)
+    db_p, vec_p = _resolve_paths(embed_db, vec_path, emb_dir=emb_dir)
     files_ok = available(db_p, vec_p)
     chunks = 0
     books = 0
@@ -438,11 +462,11 @@ def fuse_book_scores(bm25_books, vec_books, k=BOOK_RRF_K, w_bm25=1.0, w_vec=DEFA
     return scores
 
 
-def read_snippet(rel_path, line, max_chars=150):
+def read_snippet(rel_path, line, max_chars=150, root=None):
     """读取章节目标行附近的短预览，供纯向量新命中的章卡或选段展示。"""
     if not rel_path:
         return ""
-    full = Path(PATHS.root) / rel_path
+    full = Path(root or PATHS.root) / rel_path
     try:
         with full.open(encoding="utf-8", errors="replace") as fh:
             lines = fh.readlines()
@@ -455,12 +479,12 @@ def read_snippet(rel_path, line, max_chars=150):
     return text[:max_chars]
 
 
-def fetch_chunk_texts(chunk_ids, embed_db=None):
+def fetch_chunk_texts(chunk_ids, embed_db=None, emb_dir=None):
     """按 chunk_id 批量读取 emb.db 里存好的约 700 字原文块。"""
     ids = sorted({int(c) for c in (chunk_ids or ()) if c is not None})
     if not ids:
         return {}
-    db_p, _ = _resolve_paths(embed_db, None)
+    db_p, _ = _resolve_paths(embed_db, None, emb_dir=emb_dir)
     if not Path(db_p).is_file():
         return {}
     out = {}
@@ -490,6 +514,7 @@ def _score_chapter_rerank(
     rerank_fn=None,
     chapter_text_fn=None,
     embed_db=None,
+    emb_dir=None,
     max_chars=700,
 ):
     """对候选章的代表命中跑交叉编码器精排，返回 {chapter_path: max_score} 或 None。"""
@@ -518,7 +543,9 @@ def _score_chapter_rerank(
     if not cands:
         return None
 
-    chunk_texts = fetch_chunk_texts([cid for _, _, cid, _ in cands if cid is not None], embed_db=embed_db)
+    chunk_texts = fetch_chunk_texts(
+        [cid for _, _, cid, _ in cands if cid is not None], embed_db=embed_db, emb_dir=emb_dir
+    )
     texts = []
     for cp, ln, cid, fallback in cands:
         txt = ""
@@ -563,6 +590,7 @@ def fuse_chapters(
     w_rerank=CHAP_W_RERANK,
     chapter_text_fn=None,
     embed_db=None,
+    emb_dir=None,
 ):
     """章级 RRF 融合：合并 BM25、单书向量与可选交叉编码器精排。"""
     v_chaps = {}
@@ -591,6 +619,7 @@ def fuse_chapters(
         rerank_fn=rerank_fn,
         chapter_text_fn=chapter_text_fn,
         embed_db=embed_db,
+        emb_dir=emb_dir,
     )
     if not v_list and chap_rr is None:
         return list(bm25_rows)[:max_chapters]
@@ -691,13 +720,13 @@ def fuse_passages(
     return out
 
 
-def search_text(question, top_k=200, exclude=None, embed_db=None, vec_path=None, url=None):
+def search_text(question, top_k=200, exclude=None, embed_db=None, vec_path=None, url=None, emb_dir=None):
     """全库查询向量检索总入口，返回 (hits, meta_dict)。"""
     t0 = time.time()
     q = (question or "").strip()
     if not q:
         return [], {"used": False, "ms": 0.0, "hits": 0, "qvec": None, "reason": "empty_query"}
-    store = get_store(embed_db=embed_db, vec_path=vec_path)
+    store = get_store(embed_db=embed_db, vec_path=vec_path, emb_dir=emb_dir)
     if store is None:
         return [], {
             "used": False,
@@ -706,7 +735,7 @@ def search_text(question, top_k=200, exclude=None, embed_db=None, vec_path=None,
             "qvec": None,
             "reason": "no_vectors",
         }
-    qvec = embed_query(q, url=url)
+    qvec = embed_query(q, url=url, dim=store.dim)
     if qvec is None:
         return [], {
             "used": False,
@@ -745,14 +774,75 @@ def search_text(question, top_k=200, exclude=None, embed_db=None, vec_path=None,
     }
 
 
-def search_book_text(book, question, top_k=30, embed_db=None, vec_path=None, url=None, qvec=None):
+def search_book_text(book, question, top_k=30, embed_db=None, vec_path=None, url=None, qvec=None, emb_dir=None):
     """单书向量检索入口；不可用时平滑返回 []。"""
     if not book:
         return []
-    store = get_store(embed_db=embed_db, vec_path=vec_path)
+    store = get_store(embed_db=embed_db, vec_path=vec_path, emb_dir=emb_dir)
     if store is None:
         return []
-    qv = qvec if qvec is not None else embed_query(question, url=url)
+    qv = qvec if qvec is not None else embed_query(question, url=url, dim=store.dim)
     if qv is None:
         return []
     return store.search_book(book, qv, top_k=top_k)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("query", nargs="?", default="", help="检索问句")
+    ap.add_argument("--emb-dir", help="隔离向量库目录（包含 emb.db 与 vectors.f16）")
+    ap.add_argument("--embed-db", help="显式 emb.db 路径")
+    ap.add_argument("--vec-path", help="显式 vectors.f16 路径")
+    ap.add_argument("--root", help="工作区根（仅在未传 --emb-dir 时推导默认向量库）")
+    ap.add_argument("--server", help="embedding HTTP 服务地址（默认 BOOKS_EMBED_URL）")
+    ap.add_argument("--book", help="限定单书 uid")
+    ap.add_argument("-n", "--top-k", type=int, default=20, help="返回条数")
+    ap.add_argument("--health", action="store_true", help="输出向量库与服务健康状态")
+    ap.add_argument("--json", action="store_true", help="JSON 输出")
+    args = ap.parse_args(argv)
+
+    emb_dir = args.emb_dir
+    if emb_dir is None and args.root:
+        emb_dir = str(Path(args.root).resolve() / "build" / "检索" / "embeddings")
+
+    if args.health:
+        info = health_info(embed_db=args.embed_db, vec_path=args.vec_path, url=args.server, emb_dir=emb_dir)
+        print(json.dumps(info, ensure_ascii=False, indent=2 if args.json else None))
+        return 0 if info["ready"] else 1
+
+    if not args.query.strip():
+        ap.error("请提供查询词，或使用 --health")
+
+    if args.book:
+        hits = search_book_text(
+            args.book,
+            args.query,
+            top_k=args.top_k,
+            embed_db=args.embed_db,
+            vec_path=args.vec_path,
+            url=args.server,
+            emb_dir=emb_dir,
+        )
+        meta = {"used": bool(hits), "hits": len(hits), "book": args.book}
+    else:
+        hits, meta = search_text(
+            args.query,
+            top_k=args.top_k,
+            embed_db=args.embed_db,
+            vec_path=args.vec_path,
+            url=args.server,
+            emb_dir=emb_dir,
+        )
+        meta = {k: v for k, v in meta.items() if k != "qvec"}
+
+    if args.json:
+        print(json.dumps({"query": args.query, "meta": meta, "hits": hits}, ensure_ascii=False, indent=2))
+    else:
+        print(f"hits={len(hits)} used={meta.get('used')} reason={meta.get('reason', '')}")
+        for i, h in enumerate(hits, 1):
+            print(f"{i:2d} {h['score']:.4f} {h['book']} {h['path']}:{h['line']}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
