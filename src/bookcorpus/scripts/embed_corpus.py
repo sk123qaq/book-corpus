@@ -278,14 +278,40 @@ def book_chunks(
     return out
 
 
-def sig_of(paths, context_header=False):
+def skip_roles_for(include_front_back=False, skip_notes=False):
+    """根据章节角色开关返回应跳过的角色元组（默认仅跳过 front_back）。"""
+    roles = []
+    if not include_front_back:
+        roles.append("front_back")
+    if skip_notes:
+        roles.append("notes")
+    return tuple(roles)
+
+
+def sig_of(paths, context_header=False, include_front_back=False, skip_notes=False):
     h = hashlib.sha256()
     if context_header:
         h.update(b"context_header=1\n")
+    if include_front_back:
+        h.update(b"include_front_back=1\n")
+    if skip_notes:
+        h.update(b"skip_notes=1\n")
     for p in paths:
         st = Path(p).stat()
         h.update(f"{Path(p).name}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
     return h.hexdigest()[:16]
+
+
+def _book_json_title(book_dir, fallback):
+    bj = book_dir / "book.json"
+    if not bj.is_file():
+        return fallback
+    try:
+        data = json.loads(bj.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return fallback
+    title = str(data.get("title") or "").strip() if isinstance(data, dict) else ""
+    return title or fallback
 
 
 def md_books(root):
@@ -304,12 +330,15 @@ def md_books(root):
             con.close()
         return [(u, p, t or u) for u, p, t in rows]
     out = []
-    for child in sorted((root / "books").iterdir()):
+    books_dir = root / "books"
+    if not books_dir.is_dir():
+        return out
+    for child in sorted(books_dir.iterdir()):
         if child.name.startswith("_"):
             continue
         md = child / "md"
         if md.is_dir() and any(p.name.endswith(".md") and p.name.lower() != "readme.md" for p in md.iterdir()):
-            out.append((child.name, child.name, child.name))
+            out.append((child.name, child.name, _book_json_title(child, child.name)))
     return out
 
 
@@ -339,6 +368,8 @@ class Store:
         chunk_chars=700,
         overlap=0,
         context_header=False,
+        include_front_back=False,
+        skip_notes=False,
     ):
         self.db_path = Path(db_path)
         self.vec_path = Path(vec_path)
@@ -347,6 +378,8 @@ class Store:
         self.chunk_chars = chunk_chars
         self.overlap = overlap
         self.context_header = bool(context_header)
+        self.include_front_back = bool(include_front_back)
+        self.skip_notes = bool(skip_notes)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.db_path, timeout=30)
         self.db.row_factory = sqlite3.Row
@@ -389,21 +422,28 @@ class Store:
         )
 
     def _init_meta(self):
+        last_row = self.db.execute("SELECT value FROM meta WHERE key='last_id'").fetchone()
+        is_empty_store = last_row is None or int(last_row[0]) == 0
+        items = [
+            ("schema", 1),
+            ("dim", self.dim),
+            ("dtype", "float16"),
+            ("model", self.model),
+            ("chunk_chars", self.chunk_chars),
+            ("overlap", self.overlap),
+            ("context_header", "1" if self.context_header else "0"),
+            ("vectors", self.vec_path.name),
+            ("last_id", 0),
+            ("tokens_in", 0),
+            ("seconds", 0.0),
+            ("created_at", now()),
+        ]
+        if is_empty_store and self.include_front_back:
+            items.append(("include_front_back", "1"))
+        if is_empty_store and self.skip_notes:
+            items.append(("skip_notes", "1"))
         with self.db:
-            for key, value in (
-                ("schema", 1),
-                ("dim", self.dim),
-                ("dtype", "float16"),
-                ("model", self.model),
-                ("chunk_chars", self.chunk_chars),
-                ("overlap", self.overlap),
-                ("context_header", "1" if self.context_header else "0"),
-                ("vectors", self.vec_path.name),
-                ("last_id", 0),
-                ("tokens_in", 0),
-                ("seconds", 0.0),
-                ("created_at", now()),
-            ):
+            for key, value in items:
                 self.db.execute("INSERT OR IGNORE INTO meta(key,value) VALUES(?,?)", (key, str(value)))
             self.db.execute(
                 "INSERT INTO meta(key,value) VALUES('updated_at',?)"
@@ -438,6 +478,24 @@ class Store:
                     f"本次为 {int(self.context_header)}，新旧向量空间可能混存",
                     file=sys.stderr,
                 )
+            old_fb = self.meta("include_front_back", "0")
+            if self.last_id > 0 and bool(int(old_fb)) != self.include_front_back:
+                print(
+                    f"注意：库里已有向量 include_front_back={old_fb}，"
+                    f"本次为 {int(self.include_front_back)}，新旧水章过滤口径可能混存",
+                    file=sys.stderr,
+                )
+            old_sn = self.meta("skip_notes", "0")
+            if self.last_id > 0 and bool(int(old_sn)) != self.skip_notes:
+                print(
+                    f"注意：库里已有向量 skip_notes={old_sn}，本次为 {int(self.skip_notes)}，新旧注释过滤口径可能混存",
+                    file=sys.stderr,
+                )
+            if self.last_id == 0:
+                if self.include_front_back and self.meta("include_front_back") is None:
+                    self.set_meta("include_front_back", "1")
+                if self.skip_notes and self.meta("skip_notes") is None:
+                    self.set_meta("skip_notes", "1")
 
     def book_row(self, uid):
         return self.db.execute("SELECT * FROM book WHERE uid=?", (uid,)).fetchone()
@@ -837,8 +895,19 @@ def cmd_dry(root, args, books):
     total_chunks = total_chars = 0
     rows = []
     use_ctx = bool(getattr(args, "context_header", False))
+    include_fb = bool(getattr(args, "include_front_back", False))
+    skip_notes = bool(getattr(args, "skip_notes", False))
+    skip_roles = skip_roles_for(include_front_back=include_fb, skip_notes=skip_notes)
     for uid, path, title in books:
-        chunks = book_chunks(root, path, args.chunk_chars, args.overlap, context_header=use_ctx, book_title=title)
+        chunks = book_chunks(
+            root,
+            path,
+            args.chunk_chars,
+            args.overlap,
+            context_header=use_ctx,
+            book_title=title,
+            skip_roles=skip_roles,
+        )
         chars = sum(c["chars"] for c in chunks)
         total_chunks += len(chunks)
         total_chars += chars
@@ -985,6 +1054,9 @@ def run_embedding(root, store, books, args):
             print(f"已失活孤儿书 {pruned['books']} 本（{pruned['chunks']} 块标为垃圾块）", flush=True)
 
     use_ctx = bool(getattr(args, "context_header", False))
+    include_fb = bool(getattr(args, "include_front_back", False))
+    skip_notes = bool(getattr(args, "skip_notes", False))
+    skip_roles = skip_roles_for(include_front_back=include_fb, skip_notes=skip_notes)
     total_bytes = 0
     todo = []
     skipped = 0
@@ -992,7 +1064,7 @@ def run_embedding(root, store, books, args):
         paths = chapter_paths(root, path)
         if not paths:
             continue
-        sig = sig_of(paths, context_header=use_ctx)
+        sig = sig_of(paths, context_header=use_ctx, include_front_back=include_fb, skip_notes=skip_notes)
         row = store.book_row(uid)
         if row and row["status"] in ("done", "empty") and row["sig"] == sig and not args.force:
             skipped += 1
@@ -1035,6 +1107,7 @@ def run_embedding(root, store, books, args):
                     args.overlap,
                     context_header=use_ctx,
                     book_title=title,
+                    skip_roles=skip_roles,
                 )
                 if not chunks:
                     store.mark(uid, title, sig, "empty", "没有正文")
@@ -1108,6 +1181,16 @@ def main():
         action="store_true",
         help="在送入 embedding 模型的文本前拼接《书名》/章名/小节名（默认关闭以保持与存量向量空间一致）",
     )
+    ap.add_argument(
+        "--include-front-back",
+        action="store_true",
+        help="包含已标注为 front_back 的前置/后置水章（默认跳过）",
+    )
+    ap.add_argument(
+        "--skip-notes",
+        action="store_true",
+        help="跳过已标注为 notes 的纯注释章（默认保留）",
+    )
     ap.add_argument("--emb-dir", help="自定义向量库输出目录（默认 build/检索/embeddings）")
     ap.add_argument("--batch", type=int, default=32, help="每次请求的块数")
     ap.add_argument("--timeout", type=int, default=900, help="单次请求超时秒数")
@@ -1134,6 +1217,8 @@ def main():
         args.chunk_chars,
         args.overlap,
         context_header=args.context_header,
+        include_front_back=args.include_front_back,
+        skip_notes=args.skip_notes,
     )
     if args.status:
         cmd_status(store)

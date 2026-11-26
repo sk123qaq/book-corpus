@@ -9,7 +9,7 @@ f16 追加写到工作区的 `build/检索/embeddings/`。断点续跑，同一�
 ## Sub-features
 
 - `embed-dry-run` 只切块或只读估算：不加 `--json` 时在本地切块并统计块数、字数、估算 token 与耗时，不请求推理服务（但会构造 `Store` 创建空 `emb.db` 与 0 字节 `vectors.f16`）；加 `--json` 时跳过切块直接调只读 `diff_embed()`（返回 `has_db/engine_ready/added/modified/orphan/unchanged/chunks/garbage/garbage_ratio`，**不建任何文件**，忽略 `--books`/`--limit`，但会探测 `GET <server>/health`）。
-- `embed-run` 逐本嵌入：进度行带块数、字数、token、速率与剩余时间；每本结束即提交，可带 `--chunk-chars` / `--overlap` 调切块参数；`--keep-server` 可在嵌完后保留服务不关闭；无本地 `llama-server`/GGUF 模型时加 `--allow-missing-engine`（常与 `--sync` 合用）可在跳过前平滑返回退出码 `0`。
+- `embed-run` 逐本嵌入：进度行带块数、字数、token、速率与剩余时间；每本结束即提交，可带 `--chunk-chars` / `--overlap` 调切块参数；`--context-header` 可拼接《书名》/章名/小节名上下文头；`--include-front-back` 放行 `front_back` 水章（默认跳过），`--skip-notes` 跳过 `notes` 注释章（默认保留）；默认组合下 `sig_of()` 与存量 `emb.db` 完全兼容，非默认参数写入 `Store.meta` 且混用同库时向 `stderr` 告警；`--keep-server` 可在嵌完后保留服务不关闭；无本地 `llama-server`/GGUF 模型时加 `--allow-missing-engine`（常与 `--sync` 合用）可在跳过前平滑返回退出码 `0`。
 - `embed-resume` 断点续跑：章文件名、大小、mtime 不变的书跳过；`--force` 重嵌并把旧块标成 `active=0` 垃圾块；`--sync` 仅在**未传 `--books`** 时先调用 `prune_orphans` 对已退库或失活书标失活，再增量嵌入新增或变更书（若同时带 `--limit N` 且无 `--books`，`prune_orphans` 也只保留前 N 本）。
 - `embed-books` 选书：`--books B0001,B0002`、`--limit N` 缩小范围，默认全部有 md 的书。
 - `embed-status` 看库：书状态计数、有效块、垃圾块、last_id、向量体积、累计吞吐。
