@@ -445,14 +445,28 @@ def cards_for(
         noun_hits, terms, "best_support", getattr(planner, "exclude", []), planner.meta, planner.expand
     )
     if getattr(planner, "_search_fn", None) is None and (question or "").strip():
-        vhits, _vmeta = vec_search.search_text(question, top_k=200, exclude=getattr(planner, "exclude", []))
+        vhits, _vmeta = vec_search.search_text(
+            question,
+            top_k=200,
+            exclude=getattr(planner, "exclude", []),
+            embed_db=getattr(planner, "embed_db", None),
+            vec_path=getattr(planner, "vec_path", None),
+            url=getattr(planner, "embed_url", None),
+            emb_dir=getattr(planner, "emb_dir", None),
+        )
         scope = getattr(planner, "scope", set())
         if scope:
             vhits = [h for h in vhits if h.get("book") in scope]
         if vhits:
-            ranking = book_query.apply_hybrid_ranking(ranking, vhits, planner.meta)
+            ranking = book_query.apply_hybrid_ranking(ranking, vhits, planner.meta, root=getattr(planner, "root", None))
     hits = noun_hits
-    books = load_books() if books is None else books
+    if books is None:
+        p_root = getattr(planner, "root", None)
+        if p_root:
+            lib_p = os.path.join(p_root, "build", "library.db")
+            books = load_books(lib_p) if os.path.isfile(lib_p) else {}
+        else:
+            books = load_books()
     hints = query_hints(question, books, None, terms, focus)
     ranking = focus_order(ranking, focus)
     fire, reasons = trigger(question, ranking, hints, n)

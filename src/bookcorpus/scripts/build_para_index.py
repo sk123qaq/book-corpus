@@ -34,7 +34,6 @@ from bookcorpus.md import clean_inline, load_manifest_chapter_roles, parse_markd
 DB = PATHS.index_db
 CORPUS = PATHS.books
 SNAP = os.path.join(ROOT, "工作区", "中间态", "index-expand-snapshot.db")
-os.makedirs(os.path.dirname(SNAP), exist_ok=True)
 EXPAND_COLS = ("rowid", "path", "kind", "tok", "text", "model", "prompt_hash", "tokens_in", "tokens_out", "built_at")
 EXPAND_SQL = "(%s) VALUES(%s)" % (",".join(EXPAND_COLS), ",".join("?" * len(EXPAND_COLS)))
 

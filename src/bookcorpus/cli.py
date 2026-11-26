@@ -29,6 +29,7 @@ ALIASES = {
     "search": "qsearch",
     "query": "book_query",
     "eval": "eval_retrieval",
+    "eval-ab": "eval_embed_ab",
     "verify": "verify_phase",
     "status": "ops_status",
     "numbers": "doc_numbers",
@@ -57,6 +58,8 @@ HELP = """book-corpus <命令> [参数...]
   embed [--status|--verify|--dry-run] [--books B0001,B0002] [--force] [--serve]
                           把 md 正文切块做 embedding；产物在 build/检索/embeddings/，
                           断点续跑，--serve 只前台起 llama-server
+  eval-ab [--uids B0001,B0002] [--sample-size 8] [--work-dir DIR]
+                          隔离样本 A/B 对比：上下文前缀、L0 规范化与水章/注释过滤评测
   rerank-setup [--check|--probe|--force] [--json]
                           先检 GPU/显存并测速源，达标才建 工作区/.venv-rerank 与下模型
   rerank-serve [--serve|--daemon|--status] [--url URL]
@@ -549,8 +552,16 @@ def main(argv=None):
         run_script(rest[0], rest[1:], root)
         return 0
     if cmd in ALIASES:
-        root = "" if (ALIASES[cmd] == "normalize_md" and "--md-dir" in rest) else workspace.resolve(explicit_root)
-        run_script(ALIASES[cmd], rest, root)
+        target_script = ALIASES[cmd]
+        if target_script == "normalize_md" and "--md-dir" in rest:
+            root = ""
+        elif target_script == "eval_embed_ab":
+            from .scripts import layout as LY
+
+            root = workspace.resolve(explicit_root) if explicit_root else (LY.find_root() or "")
+        else:
+            root = workspace.resolve(explicit_root)
+        run_script(target_script, rest, root)
         return 0
     raise SystemExit("未知命令 %s。book-corpus --help 看全部。" % cmd)
 

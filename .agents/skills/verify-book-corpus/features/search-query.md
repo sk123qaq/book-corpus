@@ -11,7 +11,7 @@
 - `search-options` `-n` 默认 20，`--book-score mix|sum`（默认 `mix=0.7*最好段+0.3*段落均值`），`--rerank` 加定义式/引号/卷首特征，`--pool` 默认 `medium`（2000 段），`--min-chars` 默认 40。
 - `search-expand` `--expand` 并上 `build/检索/expand` 的扩展文本，`--expand-kind both|prefix|queries`。
 - `query-plan` 书级规划：最多 5 轮词法循环，stop 为 `C` / `A+B` / `cap` / `exhausted`；默认 `--book-score best_support`、`-n 6`（与 `book_cards.DEFAULT_CARDS` 一致，可用 `--card-count` 单独控制弹卡张数）、`--max-chapters 3`、`--chapter-selector score`。
-- `query-scope` 内部范围参数：`book_query.Planner(scope={uid,...})` 与 `book_cards.run(..., scope=...)` 在词法/向量命中合并前先过滤到书目集合，demo 的 `scope.books` 走这条；CLI 没有 `--scope` 开关，别在命令行找。
+- `query-scope` 内部范围参数：`book_query.Planner(scope={uid,...})` 与 `book_cards.run(..., scope=...)` 在词法/向量命中合并前先过滤到书目集合，demo 的 `scope.books` 走这条；CLI 没有 `--scope` 开关，别在命令行找。另外 `book_query.py`、`vec_search.py` 与 `eval_retrieval.py` 均支持显式 `--root` / `--index-db` / `--emb-dir` 指向隔离实验库。
 - `query-hybrid` 规划后跑向量检索：段、章、书三层 RRF（书 k=30、`w_vec=1.35`；章 k=5、最多 10 章），并在 `BOOKS_RERANK_URL`（默认 `127.0.0.1:18081`）可用时叠加可选 Stage B rerank（设 `BOOKS_RERANK_URL=off` 关掉）。成功时 JSON 顶层 `fusion:"hybrid"`、`vec_used:true`、`vec_ms`、`vec_hits`（向量检索总命中数）；失败/缺索引时 `fusion:"bm25_only"`、`vec_used:false`、`vec_hits:0`，章节仍由词法给出。
 - `query-cards` 书卡：`--cards` 默认开，`--no-cards` 关；触发原因有 `margin`、`types`、`long`、`concept`、`title_ambiguous` 等。文本在 stderr 打 `书卡：N 张，原因 …` 或 `不弹卡：书名/作者/原句提示`，`--json` 顶层带 `cards`。
 - `query-expand` `--expand-on-demand` 选中后跑 B4 按需扩展（默认关，会调模型并写 `工作区/检索/expand_cache/`）。
