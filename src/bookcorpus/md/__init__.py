@@ -15,6 +15,7 @@ from .footnotes import (
 from .normalize import (
     CANONICAL_VERSION,
     NormalizeStats,
+    TextRetentionGuardError,
     classify_chapter_role,
     normalize_book_md,
 )
@@ -76,6 +77,7 @@ __all__ = [
     "ChapterRole",
     "MdBlock",
     "NormalizeStats",
+    "TextRetentionGuardError",
     "chapter_title",
     "classify_chapter_role",
     "clean_inline",

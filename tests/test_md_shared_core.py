@@ -323,3 +323,32 @@ def test_real_corpus_dirty_books_clean_and_line_aligned():
             assert "<table" not in txt.lower()
             assert "note.png" not in txt.lower()
             assert "[[1]]()" not in txt
+
+
+def test_strict_html_tag_regex_and_math_protection_in_parse():
+    raw = (
+        "# 公式与HTML\n\n"
+        "经济公式 <P(Ut+2) 与 <i* 以及 <U(X^{a}) 跨行\n"
+        "下一段有 <b $$ 和 <b x > 还有 </i + l) 都不许吞字。\n\n"
+        "行内公式 $ F'(K) > 0 $ 与 $a*b < c$，以及块公式：\n\n"
+        "$$ f(x) < g(y) &amp; h(z) $$\n\n"
+        "真实HTML <span class='hi'>保留文本</span> 和 "
+        '<table width="600"border="0"><tr><td>单元格</td></tr></table>。\n\n'
+        "货币金额 $100 and <b>$200</b> 仍应剥除真实标签。\n"
+    )
+    parsed = parse_markdown(raw, stem="math")
+    joined = "\n".join(b["clean_text"] for b in parsed["blocks"])
+    assert "<P(Ut+2)" in joined
+    assert "<i*" in joined
+    assert "<U(X^{a})" in joined
+    assert "<b $$" in joined
+    assert "<b x >" in joined
+    assert "</i + l)" in joined
+    assert "$ F'(K) > 0 $" in joined
+    assert "$a*b < c$" in joined
+    assert "$$ f(x) < g(y) &amp; h(z) $$" in joined
+    assert "<span" not in joined
+    assert "保留文本" in joined
+    assert "单元格" in joined
+    assert "<b>" not in joined
+    assert "$100 and $200" in joined

@@ -29,19 +29,25 @@ from .footnotes import (
     parse_explicit_footnote_def,
 )
 from .parse import (
+    _HTML_ATTR_ONE,
+    _HTML_ATTRS_SPEC,
     CODE_FENCE_RE,
     FOOTNOTE_RE,
     FRONT_MATTER_LIMIT,
     HEADING_RE,
     HR_RE,
+    HTML_TAG_STRICT_RE,
     IMAGE_RE,
     LIST_RE,
     QUOTE_RE,
     TABLE_ROW_RE,
     _image_kind,
     clean_inline,
+    han_count,
     non_space_count,
     parse_markdown,
+    protect_math_spans,
+    restore_math_spans,
 )
 from .roles import CHAPTER_ROLES, ChapterRole, load_manifest_chapter_roles, normalize_chapter_role
 
@@ -56,23 +62,25 @@ _IMG_REF_RE = re.compile(r"!\[[^\]]*\]\((?:<([^>]+)>|([^)]+))\)")
 _LINK_REF_RE = re.compile(r"(?<![!\\])\[[^\]]*\]\((?:<([^>]+)>|([^)]+))\)")
 _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".jpx", ".gif", ".svg", ".webp", ".bmp")
 
-_HTML_TABLE_RE = re.compile(r"<table\b[^>]*>.*?</table\s*>", re.I | re.S)
-_HTML_IMG_RE = re.compile(r"<img\b([^>]*)/?>", re.I)
+_HTML_TABLE_RE = re.compile(rf"<table{_HTML_ATTRS_SPEC}[ \t]*>.*?</table[ \t]*>", re.I | re.S)
+_HTML_IMG_RE = re.compile(rf"<img({_HTML_ATTRS_SPEC})[ \t]*/?>", re.I)
 _HTML_IMG_SRC_RE = re.compile(r"""\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
 _HTML_IMG_ALT_RE = re.compile(r"""\balt\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
-_HTML_LINK_RE = re.compile(r"""<a\b([^>]*)>(.*?)</a>""", re.I | re.S)
-_HTML_HREF_RE = re.compile(r"""\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
-_HTML_BR_RE = re.compile(r"<br\s*/?>", re.I)
-_HTML_HR_RE = re.compile(r"<hr\b[^>]*/?>", re.I)
-_UNCLOSED_CELL_END_RE = re.compile(r"</(?:td|th)\s*>", re.I)
-_UNCLOSED_TR_END_RE = re.compile(r"</tr\s*>", re.I)
-_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
-_HTML_TAG_RE = re.compile(
-    r"</?(?:sup|sub|span|div|a|br|hr|i|b|u|em|strong|small|big|font|p|td|tr|th|tbody|thead|tfoot|"
-    r"colgroup|col|caption|table|img|figure|figcaption|blockquote|center|section|article|header|footer|"
-    r"ul|ol|li|dl|dt|dd)\b[^>]*>",
+_HTML_LINK_RE = re.compile(
+    rf"<a([ \t]+{_HTML_ATTR_ONE}{_HTML_ATTRS_SPEC})[ \t]*>((?:[^\n]|\n(?!\n)){{0,2000}}?)</a>",
     re.I,
 )
+_HTML_HREF_RE = re.compile(r"""\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
+_HTML_BR_RE = re.compile(r"<br[ \t]*/?>", re.I)
+_HTML_HR_RE = re.compile(rf"<hr{_HTML_ATTRS_SPEC}[ \t]*/?>", re.I)
+_UNCLOSED_CELL_END_RE = re.compile(r"</(?:td|th)[ \t]*>", re.I)
+_UNCLOSED_TR_END_RE = re.compile(r"</tr[ \t]*>", re.I)
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+_PRESERVED_COMMENT_RE = re.compile(
+    r"^<!--\s*(?:源\s*(?:EPUB|电子书|文件)\s*重复收录|为保真保留此副本|.*?(?:重复收录|保真保留)).*?-->$",
+    re.S,
+)
+_HTML_TAG_RE = HTML_TAG_STRICT_RE
 _PANDOC_ATTR_RE = re.compile(
     r"\s*\{(?:[^{}\n]*\.calibre[^{}\n]*|#[A-Za-z_][A-Za-z0-9_.:-]*(?:\s+[^{}\n]*)?|\.[A-Za-z_][A-Za-z0-9_-]*(?:\s+[^{}\n]*)?)\}"
 )
@@ -92,6 +100,68 @@ _EXPLICIT_PAGE_RE = re.compile(
     re.I,
 )
 _BARE_PAGE_NUM_RE = re.compile(r"^\d{1,4}$")
+_YEAR_DATE_LINE_RE = re.compile(
+    r"^(?:"
+    r"(?:公元前?\s*)?\d{3,4}\s*年(?:\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*[日号])?)?"
+    r"|\d{4}(?:\s*[-–—~./]\s*\d{1,4}){1,2}"
+    r"|(?:1[0-9]{3}|20[0-9]{2})"
+    r"|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}"
+    r")$",
+    re.I,
+)
+_ROMAN_NUMERAL_LINE_RE = re.compile(r"^[IVXLCDM]{1,6}$")
+_WATERMARK_HINT_RE = re.compile(
+    r"(?:https?://|www\.|\.(?:com|cn|net|org|edu|io)\b|logo版|版权所有|页眉|页脚)",
+    re.I,
+)
+_MATH_CONNECTOR_WORDS = frozenset(
+    {
+        "and",
+        "or",
+        "where",
+        "for",
+        "then",
+        "let",
+        "hence",
+        "therefore",
+        "thus",
+        "since",
+        "because",
+        "if",
+        "when",
+        "with",
+        "given",
+        "such that",
+        "subject to",
+        "we get",
+        "we have",
+        "we obtain",
+        "we see",
+        "we find",
+        "it follows",
+        "note that",
+        "proof",
+        "exercises",
+        "problems",
+        "example",
+        "examples",
+        "remark",
+        "remarks",
+        "corollary",
+        "lemma",
+        "theorem",
+        "proposition",
+        "definition",
+        "assumption",
+        "solution",
+        "answer",
+        "or equivalently",
+        "s.t.",
+        "i.e.",
+        "e.g.",
+        "also",
+    }
+)
 _CJK_BOUNDARY_RE = re.compile(r"[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]")
 _SENT_CLOSERS = "\u201d\u2019\"'\u300d\u300f\uff09\u3011\u300b\u3009)]】"
 _SENT_ENDERS = "。！？…!?.;:：；"
@@ -134,6 +204,25 @@ _BODY_PROTECTED_TITLE_RE = re.compile(
 )
 
 
+class TextRetentionGuardError(RuntimeError):
+    """正文留存率熔断异常：规范化后纯正文出现无法由合法清洗解释的骤降。"""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        lost_chars: int = 0,
+        lost_han: int = 0,
+        drop_ratio: float = 0.0,
+        chapter_name: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.lost_chars = lost_chars
+        self.lost_han = lost_han
+        self.drop_ratio = drop_ratio
+        self.chapter_name = chapter_name
+
+
 @dataclass
 class NormalizeStats:
     """单本书 L0 规范化统计。"""
@@ -149,6 +238,9 @@ class NormalizeStats:
     footnote_residues_cleaned: int = 0
     orphan_icons_removed: int = 0
     roles: dict[str, int] = field(default_factory=lambda: {"body": 0, "notes": 0, "front_back": 0})
+    _noise_chars_removed: int = 0
+    _noise_han_removed: int = 0
+    _header_chars_removed: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -434,6 +526,16 @@ def _replace_html_link(match: re.Match[str]) -> str:
     return inner_clean
 
 
+def _strip_html_comments_preserving_fidelity(text: str) -> str:
+    """清除普通 HTML 注释，但原样保留 ebook-to-md 保真/重复收录说明注释。"""
+    if "<!--" not in text:
+        return text
+    return _HTML_COMMENT_RE.sub(
+        lambda m: m.group(0) if _PRESERVED_COMMENT_RE.match(m.group(0)) else "",
+        text,
+    )
+
+
 def clean_html_and_noise(text: str, stats: NormalizeStats) -> str:
     """清洗 HTML 表格、无语义标签、HTML 实体、Pandoc 属性与控制字符/异常 PUA。"""
     if not text:
@@ -444,7 +546,7 @@ def clean_html_and_noise(text: str, stats: NormalizeStats) -> str:
             out_segs.append(seg)
             continue
         before_len = len(seg)
-        worked = seg
+        worked, math_state = protect_math_spans(seg)
 
         if "<table" in worked.lower():
 
@@ -455,7 +557,7 @@ def clean_html_and_noise(text: str, stats: NormalizeStats) -> str:
             worked = _HTML_TABLE_RE.sub(_sub_table, worked)
 
         if "<" in worked:
-            worked = _HTML_COMMENT_RE.sub("", worked)
+            worked = _strip_html_comments_preserving_fidelity(worked)
             worked = _HTML_IMG_RE.sub(_replace_html_img, worked)
             worked = _HTML_LINK_RE.sub(_replace_html_link, worked)
             worked = _HTML_BR_RE.sub("\n", worked)
@@ -472,6 +574,7 @@ def clean_html_and_noise(text: str, stats: NormalizeStats) -> str:
         worked = _ZERO_WIDTH_RE.sub("", worked)
         worked = _CONTROL_RE.sub("", worked)
         worked = _PUA_RE.sub("", worked)
+        worked = restore_math_spans(worked, math_state)
         # 折叠多余连续空行（超过 2 个换行压成 2 个）
         worked = re.sub(r"\n{3,}", "\n\n", worked)
 
@@ -521,8 +624,37 @@ def _is_page_number_line(line: str, *, allow_bare: bool) -> bool:
     return False
 
 
+def _is_header_candidate_disqualified(s: str) -> bool:
+    """排除数学引导词、独立年份日期、短符号/变量与保真注释，防止误删正文或诗行。"""
+    if not s or len(s) > 55 or _is_structural_line(s):
+        return True
+    if _BARE_PAGE_NUM_RE.fullmatch(s) or _EXPLICIT_PAGE_RE.match(s):
+        return True
+    if s.startswith(("<!--", "**", "[", "【", "（", "(", "<")):
+        return True
+    if s.endswith(
+        ("。", "！", "？", "!", "?", "：", ":", "，", ",", "；", ";", ".", '."', ".'", ".”", ".’", "」", "』")
+    ):
+        return True
+    if _YEAR_DATE_LINE_RE.match(s) or _ROMAN_NUMERAL_LINE_RE.match(s):
+        return True
+    lower = s.lower()
+    if lower in _MATH_CONNECTOR_WORDS or lower.rstrip(".,:; ") in _MATH_CONNECTOR_WORDS:
+        return True
+    if "a" <= s[0] <= "z" and not lower.startswith(("www.", "http://", "https://")):
+        return True
+    if not re.search(r"[A-Za-z\u4e00-\u9fff]", s):
+        return True
+    if any(ch in s for ch in "$\\={}<>^*+"):
+        return True
+    if len(s) <= 1:
+        return True
+    return s.isascii() and len(s) <= 2
+
+
 def _detect_repeated_headers(chunks: list[tuple[bool, str]], book_title: str = "") -> set[str]:
     counts: Counter[str] = Counter()
+    samples: dict[str, str] = {}
     near_page_num: set[str] = set()
     norm_title = re.sub(r"\s+", "", book_title or "").lower()
 
@@ -530,16 +662,13 @@ def _detect_repeated_headers(chunks: list[tuple[bool, str]], book_title: str = "
         if is_code or "\n" in chunk.strip():
             continue
         s = chunk.strip()
-        if not s or len(s) > 55 or _is_structural_line(s):
-            continue
-        if _BARE_PAGE_NUM_RE.fullmatch(s) or _EXPLICIT_PAGE_RE.match(s):
-            continue
-        if s.endswith(("。", "！", "？", "!", "?", "：", ":", "，", ",")):
-            continue
-        if s.startswith(("**", "[", "【", "（", "(")):
+        if _is_header_candidate_disqualified(s):
             continue
         key = _header_key(s)
+        if len(re.sub(r"[#\s]+", "", key)) <= 1:
+            continue
         counts[key] += 1
+        samples.setdefault(key, s)
         prev_is_pg = idx > 0 and not chunks[idx - 1][0] and _is_page_number_line(chunks[idx - 1][1], allow_bare=True)
         next_is_pg = (
             idx + 1 < len(chunks)
@@ -551,9 +680,18 @@ def _detect_repeated_headers(chunks: list[tuple[bool, str]], book_title: str = "
 
     headers: set[str] = set()
     for key, cnt in counts.items():
+        sample = samples.get(key, key)
         compact = re.sub(r"\s+", "", key).lower()
         title_hit = bool(norm_title and len(norm_title) >= 2 and (compact == norm_title or compact in norm_title))
-        if cnt >= 4 or (cnt >= 3 and (key in near_page_num or title_hit)):
+        # 含冒号键值说明（如习题难度注记 "No star: normal"）除非命中书名或网址，否则不作页眉
+        if (
+            (": " in sample or "：" in sample)
+            and not title_hit
+            and not sample.lower().startswith(("http://", "https://"))
+        ):
+            continue
+        has_watermark_hint = bool(_WATERMARK_HINT_RE.search(sample))
+        if (cnt >= 3 and (key in near_page_num or title_hit)) or (cnt >= 4 and has_watermark_hint) or cnt >= 8:
             headers.add(key)
     return headers
 
@@ -562,6 +700,8 @@ def _can_stitch_paragraphs(prev_text: str, next_text: str, *, short_run_neighbor
     p1 = prev_text.strip()
     p2 = next_text.strip()
     if not p1 or not p2:
+        return False
+    if p1.startswith("<!--") or p2.startswith("<!--"):
         return False
     if _is_structural_line(p1.splitlines()[-1]) or _is_structural_line(p2.splitlines()[0]):
         return False
@@ -644,6 +784,8 @@ def denoise_pages_and_stitch(text: str, stats: NormalizeStats, *, book_title: st
         is_single = "\n" not in s
         if is_single and _EXPLICIT_PAGE_RE.match(s):
             stats.page_lines_removed += 1
+            stats._noise_chars_removed += non_space_count(s)
+            stats._noise_han_removed += han_count(s)
             pending_noise_gap = True
             removed_here = True
             continue
@@ -658,11 +800,17 @@ def denoise_pages_and_stitch(text: str, stats: NormalizeStats, *, book_title: st
             likely_year = 1900 <= num <= 2099 and len(bare_indices) < 2 and not breaks_prev
             if 1 <= num <= 2500 and not likely_year:
                 stats.page_lines_removed += 1
+                stats._noise_chars_removed += non_space_count(s)
+                stats._noise_han_removed += han_count(s)
                 pending_noise_gap = True
                 removed_here = True
                 continue
-        if is_single and _header_key(s) in repeated_headers:
+        if is_single and not _is_header_candidate_disqualified(s) and _header_key(s) in repeated_headers:
+            c_rm = non_space_count(s)
             stats.header_lines_removed += 1
+            stats._noise_chars_removed += c_rm
+            stats._noise_han_removed += han_count(s)
+            stats._header_chars_removed += c_rm
             pending_noise_gap = True
             removed_here = True
             continue
@@ -675,10 +823,20 @@ def denoise_pages_and_stitch(text: str, stats: NormalizeStats, *, book_title: st
                 ls = ln.strip()
                 if _EXPLICIT_PAGE_RE.match(ls):
                     stats.page_lines_removed += 1
+                    stats._noise_chars_removed += non_space_count(ls)
+                    stats._noise_han_removed += han_count(ls)
                     removed_here = True
                     continue
-                if repeated_headers and _header_key(ls) in repeated_headers:
+                if (
+                    repeated_headers
+                    and not _is_header_candidate_disqualified(ls)
+                    and _header_key(ls) in repeated_headers
+                ):
+                    c_rm = non_space_count(ls)
                     stats.header_lines_removed += 1
+                    stats._noise_chars_removed += c_rm
+                    stats._noise_han_removed += han_count(ls)
+                    stats._header_chars_removed += c_rm
                     removed_here = True
                     continue
                 new_lines.append(ln)
@@ -1683,6 +1841,156 @@ def _resolve_book_title(md_dir: Path, manifest: Mapping[str, Any], chapter_files
     return str(manifest.get("uid") or md_dir.parent.name or "未命名")
 
 
+_STD_FN_MARK_RE = re.compile(r"\[\^[^\]\n]{1,24}\]:?")
+
+
+def _plain_body_metrics(text: str, md_dir: Path | None) -> tuple[int, int]:
+    """统计扣除合法 HTML/Pandoc/注释/脚注语法后的纯正文 ``(非空白字符数, 汉字数)``。"""
+    if not text:
+        return 0, 0
+    total_chars = 0
+    total_han = 0
+    for is_code, seg in _split_code_segments(text):
+        if is_code:
+            total_chars += non_space_count(seg)
+            total_han += han_count(seg)
+            continue
+        worked, math_state = protect_math_spans(seg)
+        if "<" in worked:
+            worked = _HTML_COMMENT_RE.sub(
+                lambda m: m.group(0) if (_PRESERVED_COMMENT_RE.match(m.group(0)) or len(m.group(0)) > 2000) else "",
+                worked,
+            )
+            worked = HTML_TAG_STRICT_RE.sub("", worked)
+        worked = _EMPTY_PANDOC_SPAN_RE.sub("", worked)
+        worked = _PANDOC_ATTR_RE.sub("", worked)
+        if "![" in worked:
+            worked = _INLINE_ICON_LINK_RE.sub(
+                lambda m: (
+                    ""
+                    if _is_footnote_icon_ref(unquote(m.group(3).split()[0].strip("<>")), m.group(2), md_dir)
+                    else m.group(0)
+                ),
+                worked,
+            )
+            worked = _INLINE_ICON_IMG_RE.sub(
+                lambda m: (
+                    ""
+                    if _is_footnote_icon_ref(unquote(m.group(3).split()[0].strip("<>")), m.group(2), md_dir)
+                    else m.group(0)
+                ),
+                worked,
+            )
+        if "[[" in worked:
+            worked = _INLINE_DBL_FN_RE.sub(
+                lambda m: m.group(0) if _is_preserved_dbl_fn_target(m.group(3) or "") else "",
+                worked,
+            )
+        if "[^" in worked:
+            worked = _STD_FN_MARK_RE.sub("", worked)
+        if "&" in worked:
+            worked = html.unescape(worked)
+        worked = worked.replace("\u00a0", " ")
+        worked = _ZERO_WIDTH_RE.sub("", worked)
+        worked = _CONTROL_RE.sub("", worked)
+        worked = _PUA_RE.sub("", worked)
+        worked = restore_math_spans(worked, math_state)
+        total_chars += non_space_count(worked)
+        total_han += han_count(worked)
+    return total_chars, total_han
+
+
+def _verify_text_retention(
+    *,
+    orig_metrics: Sequence[tuple[int, int]],
+    noise_metrics: Sequence[tuple[int, int]],
+    after_metrics: Sequence[tuple[int, int]],
+    chapter_names: Sequence[str],
+    did_split: bool,
+    header_chars_removed: int,
+) -> None:
+    """正文留存率熔断守卫：防止异常正则或误删页眉造成正文静默丢失。"""
+    orig_chars = sum(c for c, _ in orig_metrics)
+    orig_han = sum(h for _, h in orig_metrics)
+    noise_chars = sum(c for c, _ in noise_metrics)
+    noise_han = sum(h for _, h in noise_metrics)
+    after_chars = sum(c for c, _ in after_metrics)
+    after_han = sum(h for _, h in after_metrics)
+
+    if header_chars_removed > 2000 and orig_chars > 0 and (header_chars_removed / orig_chars) > 0.25:
+        ratio = header_chars_removed / orig_chars
+        raise TextRetentionGuardError(
+            f"重复页眉删除占比异常 ({header_chars_removed}/{orig_chars}, {ratio:.1%})",
+            lost_chars=header_chars_removed,
+            drop_ratio=ratio,
+        )
+
+    expected_chars = max(0, orig_chars - noise_chars)
+    expected_han = max(0, orig_han - noise_han)
+    lost_chars = expected_chars - after_chars
+    lost_han = expected_han - after_han
+    char_ratio = (lost_chars / expected_chars) if expected_chars > 0 else 0.0
+    han_ratio = (lost_han / expected_han) if expected_han > 0 else 0.0
+
+    if expected_chars > 0 and lost_chars > 300 and char_ratio > 0.02:
+        raise TextRetentionGuardError(
+            f"整书纯正文非空白字符异常丢失 {lost_chars} 字 "
+            f"({char_ratio:.2%}, 预期至少 {expected_chars}, 实得 {after_chars})",
+            lost_chars=lost_chars,
+            lost_han=max(0, lost_han),
+            drop_ratio=char_ratio,
+        )
+    if expected_han > 0 and lost_han > 300 and han_ratio > 0.02:
+        raise TextRetentionGuardError(
+            f"整书纯正文汉字异常丢失 {lost_han} 字 ({han_ratio:.2%}, 预期至少 {expected_han}, 实得 {after_han})",
+            lost_chars=max(0, lost_chars),
+            lost_han=lost_han,
+            drop_ratio=han_ratio,
+        )
+
+    if not did_split and len(orig_metrics) == len(after_metrics) == len(noise_metrics):
+        for name, (oc, oh), (nc, nh), (ac, ah) in zip(
+            chapter_names, orig_metrics, noise_metrics, after_metrics, strict=True
+        ):
+            exp_c = max(0, oc - nc)
+            exp_h = max(0, oh - nh)
+            if exp_c >= 100 and ac == 0:
+                raise TextRetentionGuardError(
+                    f"单章正文被意外吞空：{name} (预期至少 {exp_c} 字, 实得 0)",
+                    lost_chars=exp_c,
+                    drop_ratio=1.0,
+                    chapter_name=name,
+                )
+            if exp_c >= 300 and ac < int(exp_c * 0.2):
+                ch_ratio = (exp_c - ac) / exp_c
+                raise TextRetentionGuardError(
+                    f"单章正文骤降：{name} (预期至少 {exp_c} 字, 实得 {ac}, 降幅 {ch_ratio:.1%})",
+                    lost_chars=exp_c - ac,
+                    drop_ratio=ch_ratio,
+                    chapter_name=name,
+                )
+            ch_lost_c = exp_c - ac
+            ch_lost_h = exp_h - ah
+            if exp_c > 0 and ch_lost_c > 300 and (ch_lost_c / exp_c) > 0.02:
+                ch_ratio = ch_lost_c / exp_c
+                raise TextRetentionGuardError(
+                    f"单章纯正文异常丢失 {ch_lost_c} 字 ({ch_ratio:.2%})：{name}",
+                    lost_chars=ch_lost_c,
+                    lost_han=max(0, ch_lost_h),
+                    drop_ratio=ch_ratio,
+                    chapter_name=name,
+                )
+            if exp_h > 0 and ch_lost_h > 300 and (ch_lost_h / exp_h) > 0.02:
+                ch_h_ratio = ch_lost_h / exp_h
+                raise TextRetentionGuardError(
+                    f"单章汉字异常丢失 {ch_lost_h} 字 ({ch_h_ratio:.2%})：{name}",
+                    lost_chars=max(0, ch_lost_c),
+                    lost_han=ch_lost_h,
+                    drop_ratio=ch_h_ratio,
+                    chapter_name=name,
+                )
+
+
 def _backup_md_dir(md_dir: Path, backup_dir: Path, label: str) -> Path:
     """在修改前强制完整备份原 ``md/``；失败则抛异常且绝不碰原目录。"""
     dest = backup_dir / label
@@ -1758,11 +2066,15 @@ def normalize_book_md(
         )
 
     # 1. 对每章执行清洗：HTML/表格 -> 页码去噪与断句缝合 -> 脚注语法归一
+    orig_metrics = [_plain_body_metrics(rec["body"], root) for rec in orig_records]
+    ch_noise_metrics: list[tuple[int, int]] = []
     removed_icon_rels: set[str] = set()
     cleaned_bodies: list[str] = []
     for rec in orig_records:
         b = clean_html_and_noise(rec["body"], stats)
+        nc0, nh0 = stats._noise_chars_removed, stats._noise_han_removed
         b = denoise_pages_and_stitch(b, stats, book_title=book_title)
+        ch_noise_metrics.append((stats._noise_chars_removed - nc0, stats._noise_han_removed - nh0))
         b = normalize_chapter_footnotes(b, root, stats, removed_icon_rels=removed_icon_rels)
         cleaned_bodies.append(b)
 
@@ -1829,6 +2141,15 @@ def normalize_book_md(
             )
 
     stats.chapters_after = len(new_chapters)
+    after_metrics = [_plain_body_metrics(ch["body"], root) for ch in new_chapters]
+    _verify_text_retention(
+        orig_metrics=orig_metrics,
+        noise_metrics=ch_noise_metrics,
+        after_metrics=after_metrics,
+        chapter_names=[ch["name"] for ch in new_chapters],
+        did_split=did_split,
+        header_chars_removed=stats._header_chars_removed,
+    )
 
     # 3. 无损章节角色标注（front_back / notes / body），并把非 body 写入 YAML front matter
     chapter_roles: dict[str, ChapterRole] = {}
