@@ -474,6 +474,17 @@
 .ch-row .ch-state.has { background: var(--pine-soft); color: var(--pine); font-weight: 600; }
 .ch-row .ch-go { color: var(--ink-3); }
 .ch-row:hover .ch-go { color: var(--cinnabar); }
+.ch-fold-group { border-top: 1px dashed var(--line); }
+.ch-fold-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 18px; cursor: pointer; font-size: 13px; color: var(--ink-3);
+  background: color-mix(in srgb, var(--paper) 55%, var(--surface));
+  list-style: none;
+}
+.ch-fold-summary::-webkit-details-marker { display: none; }
+.ch-fold-summary:hover { color: var(--ink); background: var(--surface-hover); }
+.ch-fold-hint { font-size: 11.5px; color: var(--ink-3); }
+.ch-fold-body { border-top: 1px solid var(--line); }
 
 /* 记录页：按章汇总与流水表 */
 .recs { margin-top: 30px; }

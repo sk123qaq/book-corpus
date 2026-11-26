@@ -59,6 +59,7 @@
 | `md_link_health.py` | — | 全库 md 链接健康检查（只读，不改任何文件）。 |
 | `md_review_report.py` | — | 待查 md 的证据汇总：把 verify/audit 的报警落到可判断的事实上。 |
 | `mineru_book.py` | — | 整本走 MinerU 的 OCR 路线：切片 → 提交 → 逐页回填 → 与 Paddle 路线同一套拼装与门槛。 |
+| `normalize_md.py` | `normalize` | 幂等 L0 Markdown 规范化脚本：单书、按 UID 或全库批量规范化 md/ 目录。 |
 | `ops_pdf_triage.py` | — | 单本 PDF 分诊：普查 + 文本层/纸面探针 + 3 张缩略图 + 模型建议。只读源文件。 |
 | `ops_status.py` | `status` | 只读状态：操作台顶栏与总览要的数字，一次采集。 |
 | `paddleocr_pilot.py` | — | PaddleOCR-VL 云端试跑：切片、提交、轮询、下载，每页 md 与图片落盘。只读库，写批次目录。 |

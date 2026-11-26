@@ -62,7 +62,12 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 import lib_common as L
+
+from bookcorpus.md.normalize import normalize_book_md
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VENV_PY = os.path.join(L.WORK, ".venv-pdf", "bin", "python")
@@ -752,7 +757,7 @@ def assemble(ctx, row, merged, stage, log, result):
         "--source-sha256",
         row["sha256"],
         "--structure",
-        "single",
+        "auto",
         "--method",
         method,
         "--tool-version",
@@ -763,9 +768,29 @@ def assemble(ctx, row, merged, stage, log, result):
     log.write(p.stdout + p.stderr)
     result["commands"].append(
         "pdf_ocr_to_md.py --pages-dir work/%s/merged/pages --out out/%s "
-        "--structure single --method %s" % (row["uid"], row["uid"], method)
+        "--structure auto --method %s" % (row["uid"], row["uid"], method)
     )
     return p.returncode
+
+
+def normalize_stage(ctx, stage, log, result):
+    """在暂存目录执行 L0 规范化（含拆章、HTML/页码清洗、角色标注），绝不跳过或改写正文句。"""
+    res = normalize_book_md(stage)
+    st = res.get("stats") or {}
+    log.write(
+        "$ normalize_md.py %s (changed=%s, chapters=%s->%s, tables=%s, pages=%s)\n"
+        % (
+            brel(ctx, stage),
+            res.get("changed"),
+            st.get("chapters_before"),
+            st.get("chapters_after"),
+            st.get("html_tables_converted", 0),
+            st.get("page_lines_removed", 0),
+        )
+    )
+    if "commands" in result:
+        result["commands"].append("normalize_md.py out/%s" % result.get("uid", ""))
+    return res
 
 
 def parse_verify(out):
@@ -1238,8 +1263,8 @@ def enrich_manifest(stage, ctx, row, v, doc, coverage_ok, blank, suspect, short,
             "coverage_ok": coverage_ok,
             "blank_pages": len(blank),
             "suspect_miss_pages": len(suspect),
-            "structure": "single",
-            "single_file": True,
+            "structure": man.get("structure") or ("single" if chapters == 1 else "chapters"),
+            "single_file": chapters == 1,
             "suspect_pages": [s["page"] for s in suspect],
             "short_pages": len(short),
             "mineru_rescued_pages": list(rescued),
@@ -1313,9 +1338,10 @@ def run_one_text(row, ctx):
                 write_result(ctx, result)
                 return result
 
+        audit_rc, audit = audit_pdf(ctx, src, stage, log)
+        normalize_stage(ctx, stage, log, result)
         rc, v = verify(ctx, stage, log)
         v["verify_rc"] = rc
-        audit_rc, audit = audit_pdf(ctx, src, stage, log)
         man = L.read_md_manifest(stage)
         result.update(
             verify_rc=rc,
@@ -1511,6 +1537,12 @@ def run_one(row, ctx):
                 images=v["images"],
                 problems=v["problems"],
             )
+        normalize_stage(ctx, stage, log, result)
+        rc, v = verify(ctx, stage, log)
+        v["verify_rc"] = rc
+        result.update(
+            verify_rc=rc, chapters=v["chapters"], chars=v["chars"], images=v["images"], problems=v["problems"]
+        )
         override = os.path.join(ctx["batch"], "overrides", uid + ".json")
         human = ""
         if os.path.isfile(override):

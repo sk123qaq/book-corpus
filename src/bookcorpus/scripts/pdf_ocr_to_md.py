@@ -4,13 +4,11 @@
 输入是 PaddleOCR 那种一页一文件（doc_001.md…）的目录，加一份页码映射（paddle_run.json 的
 per_page，页序即文件序）。输出与 ebook-to-md 同形，好让 verify_output.py 直接复用。
 
-两种结构（--structure）：
-  single    一个内容文件 md/<书名>.md，页序拼接、空页跳过。扫描书按页全收，不做卷首卷尾过滤，
-            默认值，OCR 路线只用它。
-  chapters  按标题切章，一章一个文件。三级兜底：
-              1. 第N章/第N篇/第N部/卷 这类章级标题开头，一章一文件；
-              2. 全书没有章级标题时，任意 ## 标题都切；
-              3. 一个标题都没有时，按 --fallback-pages 页数切并记进 README 与 manifest。
+三种结构（--structure）：
+  auto      默认。识别到章级或 ## 标题（≥2 个）时按标题切章；否则对长书（>24k 字或
+            超过 --fallback-pages 页）按页分段切章，短篇整书单文件。
+  chapters  强制按标题切章（三级兜底：章级标题 → ## 标题 → --fallback-pages 页数）。
+  single    一个内容文件 md/<书名>.md，页序拼接、空页跳过（显式兼容入口）。
 两种结构的 README 用同一个生成器，条目格式与库内其余书一致（- 合集 / - 作者 / - 日期 /
 - 章节 / - 图片 / - 来源），`## 目录` 每行一条链接，好过 md_link_health.py 的判据。
 合集、作者、日期都来自调用方（库里的人账），不知道就不写那一行——日期尤其不能拿生成日期
@@ -34,8 +32,10 @@ import sys
 SRC_IMG_RE = re.compile(r"<div[^>]*>\s*<img[^>]*src=\"([^\"]+)\"[^>]*/?>\s*</div>", re.I)
 IMG_TAG_RE = re.compile(r"<img[^>]*src=\"([^\"]+)\"[^>]*/?>", re.I)
 CHAPTER_RE = re.compile(
-    r"^(#+)\s*(第[〇零一二三四五六七八九十百千0-9]+[章篇部卷]|附录|后记|前言|序言|自序|导言|尾声|结语)\b"
+    r"^(#+)\s*(第[〇零一二三四五六七八九十百千0-9]+[章篇部卷回]|Chapter\s+\d+|Part\s+\d+|附录|后记|前言|序言|自序|导言|导论|绪论|尾声|结语|参考文献|注释)\b",
+    re.I,
 )
+SUBHEAD_RE = re.compile(r"^##\s+\S")
 SKIP_IMG = re.compile(r"(footer|header)", re.I)
 BAD_FILENAME = re.compile(r"[\\/:*?\"<>|]")
 UNLISTED_NONE = "- 无（扫描书按页全收）"
@@ -107,22 +107,14 @@ def rewrite_images(text, pages_dir, out_dir, used):
     return IMG_TAG_RE.sub(repl, text)
 
 
-def split_units(pages, fallback_pages, mapping=None):
-    """(标题, 起始页序号, 正文) 列表。"""
-
-    def page_no(i):
-        return mapping[i] if mapping and i < len(mapping) else i + 1
-
-    stream = []
-    for i, p in enumerate(pages):
-        stream.append((i, p["text"].rstrip()))
+def _split_by_heading_re(pages, pat):
     units, cur = [], None
-    for i, text in stream:
+    for i, p in enumerate(pages):
+        text = p["text"].rstrip()
         lines = text.split("\n")
         first_head = None
         for j, line in enumerate(lines):
-            m = CHAPTER_RE.match(line.strip())
-            if m:
+            if pat.match(line.strip()):
                 first_head = (j, line.strip())
                 break
         if first_head is None:
@@ -143,13 +135,26 @@ def split_units(pages, fallback_pages, mapping=None):
         cur = {"title": head, "start": i, "parts": [rest]}
     if cur:
         units.append(cur)
+    return units
 
-    if len([u for u in units if u["title"]]) == 0:
-        units = []
-        for i in range(0, len(pages), fallback_pages):
-            chunk = [p["text"].rstrip() for p in pages[i : i + fallback_pages]]
-            last = min(i + fallback_pages, len(pages)) - 1
-            units.append({"title": "第 %d 至 %d 页" % (page_no(i), page_no(last)), "start": i, "parts": chunk})
+
+def split_units(pages, fallback_pages, mapping=None):
+    """(标题, 起始页序号, 正文) 列表。三级兜底：章级标题 → 任意 ## 标题 → 按页数分段。"""
+
+    def page_no(i):
+        return mapping[i] if mapping and i < len(mapping) else i + 1
+
+    units = _split_by_heading_re(pages, CHAPTER_RE)
+    if len([u for u in units if u["title"]]) < 2:
+        sub_units = _split_by_heading_re(pages, SUBHEAD_RE)
+        if len([u for u in sub_units if u["title"]]) >= 2:
+            units = sub_units
+        elif len([u for u in units if u["title"]]) == 0:
+            units = []
+            for i in range(0, len(pages), fallback_pages):
+                chunk = [p["text"].rstrip() for p in pages[i : i + fallback_pages]]
+                last = min(i + fallback_pages, len(pages)) - 1
+                units.append({"title": "第 %d 至 %d 页" % (page_no(i), page_no(last)), "start": i, "parts": chunk})
     return units
 
 
@@ -258,7 +263,7 @@ def main():
     ap.add_argument("--collection", default="")
     ap.add_argument("--author", default="")
     ap.add_argument("--date", default="")
-    ap.add_argument("--structure", choices=("single", "chapters"), default="single")
+    ap.add_argument("--structure", choices=("auto", "single", "chapters"), default="auto")
     ap.add_argument("--fallback-pages", type=int, default=30)
     a = ap.parse_args()
 
@@ -270,7 +275,17 @@ def main():
     for p in pages:
         p["text"] = rewrite_images(p["text"], a.pages_dir, a.out, used)
 
-    if a.structure == "single":
+    structure = a.structure
+    if structure == "auto":
+        raw_chars = sum(len(p["text"].strip()) for p in pages)
+        probe_units = split_units(pages, a.fallback_pages, mapping)
+        structure = (
+            "single"
+            if (raw_chars <= 24_000 and len(pages) <= a.fallback_pages and len(probe_units) <= 1)
+            else "chapters"
+        )
+
+    if structure == "single":
         chapters, total_chars, total_bytes = build_single(pages, a, used, a.out)
     else:
         chapters, total_chars, total_bytes = build_chapters(pages, a, mapping, used, a.out)
@@ -298,8 +313,8 @@ def main():
         "bytes": total_bytes,
         "chars": total_chars,
         "images": len(used),
-        "structure": a.structure,
-        "single_file": a.structure == "single",
+        "structure": structure,
+        "single_file": structure == "single",
         "generated_at": now(),
         "assembler": "pdf_ocr_to_md.py",
         "verified": False,
@@ -307,7 +322,7 @@ def main():
     write_manifest(a.out, manifest)
     print(
         "结构 %s，写出 %d 个内容文件，%d 字，%d 图，%d 页输入 -> %s"
-        % (a.structure, len(chapters), total_chars, len(used), len(pages), a.out)
+        % (structure, len(chapters), total_chars, len(used), len(pages), a.out)
     )
     for c in chapters[:6]:
         print("  %s  %d 字" % (c["file"], c["chars"]))

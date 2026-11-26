@@ -38,6 +38,8 @@ def merge_title_pages(chapters):
             current["title"] = current["title"] or following["title"]
             current["merged"] = True
             current["source_files"] = [current["file"], following["file"]]
+            if "chapter_role" in following or "chapter_role" in current:
+                current["chapter_role"] = following.get("chapter_role") or current.get("chapter_role") or "body"
             merged.append(current)
             index += 2
             continue

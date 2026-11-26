@@ -365,8 +365,8 @@ def enrich(stage, ctx, row, v, doc, blank, suspect, short, rescued, skipped):
             "coverage_ok": doc["coverage_ok"],
             "blank_pages": len(blank),
             "suspect_miss_pages": len(suspect),
-            "structure": "single",
-            "single_file": True,
+            "structure": man.get("structure") or ("single" if chapters == 1 else "chapters"),
+            "single_file": chapters == 1,
             "suspect_pages": [s["page"] for s in suspect],
             "short_pages": len(short),
             "mineru_models": {"chunks": "vlm", "rescue": "vlm 单页"},
@@ -588,18 +588,35 @@ def main():
             B.write_result(ctx, result)
             return 1
 
-        vrc, v = B.verify(ctx, stage, log)
-        v["verify_rc"] = vrc
-        result.update(
-            verify_rc=vrc, chapters=v["chapters"], chars=v["chars"], images=v["images"], problems=v["problems"]
-        )
         if has_text_layer(src):
             arc, audit = B.audit_pdf(ctx, src, stage, log)
-            result.update(audit_rc=arc, audit_ratio=audit.get("ratio"), audit_anchors=audit.get("anchors"))
+            B.normalize_stage(ctx, stage, log, result)
+            vrc, v = B.verify(ctx, stage, log)
+            v["verify_rc"] = vrc
+            result.update(
+                verify_rc=vrc,
+                chapters=v["chapters"],
+                chars=v["chars"],
+                images=v["images"],
+                problems=v["problems"],
+                audit_rc=arc,
+                audit_ratio=audit.get("ratio"),
+                audit_anchors=audit.get("anchors"),
+            )
             fails = B.gate_text(v, arc, audit)
         else:
             log.write("源 PDF 没有文本层，PDF 侧字数比与锚点不适用；门槛只看 verify、逐页覆盖、可疑页与缺图\n")
-            result["audit_rc"] = None
+            B.normalize_stage(ctx, stage, log, result)
+            vrc, v = B.verify(ctx, stage, log)
+            v["verify_rc"] = vrc
+            result.update(
+                verify_rc=vrc,
+                chapters=v["chapters"],
+                chars=v["chars"],
+                images=v["images"],
+                problems=v["problems"],
+                audit_rc=None,
+            )
             fails = B.gate(v, doc["coverage_ok"], suspect, doc["missing_images"])
         if doc["pages"] != int(row["pages"]) or not doc["coverage_ok"]:
             fails.append("页数 %d / 应 %s，连续覆盖 %s" % (doc["pages"], row["pages"], doc["coverage_ok"]))

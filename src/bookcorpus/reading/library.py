@@ -9,6 +9,7 @@ import threading
 import time
 import unicodedata
 
+from ..md.roles import load_manifest_chapter_roles, resolve_chapter_role
 from ..scripts.layout import Layout, find_root
 from .chapters import merge_title_pages
 from .footnotes import NOTE_CHAPTER_TITLE_RE, resolve_chapter_footnotes
@@ -212,7 +213,16 @@ class Library:
         cached = self._chapters.get(uid)
         if cached is not None:
             return cached
-        chapters = merge_title_pages(self._shelf_index().chapters(uid))
+        manifest_roles = load_manifest_chapter_roles(self.layout.md(uid))
+        raw_rows = self._shelf_index().chapters(uid)
+        for row in raw_rows:
+            fm_role = row.pop("fm_role", "")
+            row["chapter_role"] = resolve_chapter_role(
+                meta={"chapter_role": fm_role} if fm_role else None,
+                manifest_roles=manifest_roles,
+                file_name=row["file"],
+            )
+        chapters = merge_title_pages(raw_rows)
         for ordinal, chapter in enumerate(chapters, 1):
             chapter["ordinal"] = ordinal
         if len(self._chapters) >= 32:

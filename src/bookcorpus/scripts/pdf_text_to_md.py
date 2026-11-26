@@ -50,6 +50,137 @@ HEAD_START = re.compile(
     r"|[\uff08(][\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\d]+[)\uff09]"
     r"|\d+(?:\.\d+)*[\u3001.\s])"
 )
+EXPLICIT_PAGE_RE = re.compile(
+    r"^(?:[-–—]{1,3}\s*\d{1,4}\s*[-–—]{0,3}|\d{1,4}\s*[-–—]{1,3}|第\s*\d{1,4}\s*页|(?:page|p\.?)\s*\d{1,4})$",
+    re.I,
+)
+BARE_PAGE_RE = re.compile(r"^\d{1,4}$")
+CAPTION_START_RE = re.compile(
+    r"^(?:图|表|插图|附图|附表|Figure|Fig\.?|Table|Chart|数据来源|资料来源|来源|注|Note)\s*[\d.:：-]",
+    re.I,
+)
+CHAPTER_TIER1_RE = re.compile(
+    r"^(?:第\s*[〇零一二三四五六七八九十百千两0-9]+\s*[章篇部卷回]|Chapter\s+\d+|Part\s+\d+|"
+    r"前言|序言?|自序|代序|导言|引言|绪论|后记|结语|附录|参考文献|注释)",
+    re.I,
+)
+
+
+def _hf_key(text):
+    s = " ".join((text or "").split())
+    s = re.sub(r"^\d{1,4}\s+", "# ", s)
+    return re.sub(r"\s+\d{1,4}$", " #", s)
+
+
+def detect_doc_layout(doc):
+    """全书只读扫描一次：计算正文字号、标题字号分档，并定位页眉页脚与页码块索引。"""
+    size_counts = collections.Counter()
+    band_counts = collections.Counter()
+    page_entries = []
+
+    for p_idx, page in enumerate(doc):
+        blocks = page.get_text("dict")["blocks"]
+        page_h = float(page.rect.height or 800.0)
+        entries = []
+        for b_idx, b in enumerate(blocks):
+            if b.get("type") == 1:
+                continue
+            text = block_text(b)
+            if not text:
+                continue
+            for ln in b.get("lines") or []:
+                for sp in ln.get("spans") or []:
+                    st = (sp.get("text") or "").strip()
+                    if st:
+                        size_counts[round(sp["size"], 1)] += len(st)
+            _x0, y0, _x1, y1 = b["bbox"]
+            band = ""
+            if y0 <= 0.13 * page_h or y1 <= 0.16 * page_h:
+                band = "top"
+            elif y1 >= 0.87 * page_h or y0 >= 0.84 * page_h:
+                band = "bottom"
+            entries.append((b_idx, text, band))
+            if (
+                band
+                and len(text) <= 60
+                and not EXPLICIT_PAGE_RE.match(text.strip())
+                and not BARE_PAGE_RE.fullmatch(text.strip())
+                and not text.strip().endswith(("。", "！", "？", "!", "?", "：", ":", "，", ","))
+            ):
+                band_counts[(band, _hf_key(text))] += 1
+        page_entries.append((p_idx, entries))
+
+    doc_body = size_counts.most_common(1)[0][0] if size_counts else 10.0
+    threshold = max(3, int(doc.page_count * 0.25)) if doc.page_count >= 3 else 999999
+    repeated = {bk for bk, cnt in band_counts.items() if cnt >= threshold}
+
+    skip_by_page = {}
+    for p_idx, entries in page_entries:
+        skips = set()
+        for b_idx, text, band in entries:
+            s = text.strip()
+            if EXPLICIT_PAGE_RE.match(s) and len(s) <= 25:
+                skips.add(b_idx)
+                continue
+            if BARE_PAGE_RE.fullmatch(s):
+                num = int(s)
+                if 1 <= num <= 2500 and (band or not (1900 <= num <= 2099)):
+                    skips.add(b_idx)
+                    continue
+            if band and (band, _hf_key(s)) in repeated:
+                skips.add(b_idx)
+        if skips:
+            skip_by_page[p_idx] = skips
+
+    return doc_body, skip_by_page
+
+
+def block_dominant_size(b, body):
+    """按字符加权统计块的主导字号，防止单个大号首字/公式把正文段误判成标题。"""
+    counts = collections.Counter()
+    max_sz = 0.0
+    line_count = 0
+    for ln in b.get("lines") or []:
+        line_txt = "".join(sp.get("text") or "" for sp in ln.get("spans") or []).strip()
+        if not line_txt:
+            continue
+        line_count += 1
+        for sp in ln.get("spans") or []:
+            st = (sp.get("text") or "").strip()
+            if st:
+                sz = round(sp["size"], 1)
+                counts[sz] += len(st)
+                max_sz = max(max_sz, sz)
+    if not counts:
+        return body, max_sz or body, line_count
+    dom = counts.most_common(1)[0][0]
+    return dom, max_sz, line_count
+
+
+def _heading_level(text, dom_size, body, primary_heading_size=None):
+    """判定真标题并返回 Markdown 层级（``##`` 或 ``###``），非标题返回 ``0``。"""
+    s = (text or "").strip()
+    if not s or s.startswith("#") or len(s) > 60:
+        return 0
+    if dom_size < body * 1.15 or (dom_size - body) < 0.8:
+        return 0
+    if CAPTION_START_RE.match(s):
+        return 0
+    if s[-1] in "。，；,;":
+        return 0
+    if ("。" in s or "；" in s) or ("，" in s and len(s) > 22):
+        return 0
+    if s[0].islower():
+        return 0
+    if re.match(r"^[•·*\->\u2013\u2014]\s+", s):
+        return 0
+    if CHAPTER_TIER1_RE.match(s):
+        return 2
+    if primary_heading_size and dom_size >= primary_heading_size - 0.3:
+        return 2
+    if re.match(r"^\d+\.\d+", s):
+        return 3
+    return 2 if not primary_heading_size else 3
 
 
 def block_text(b):
@@ -148,7 +279,17 @@ def is_table_page(page):
     return len(xs) >= 3 and len(ys) >= 6
 
 
-def page_items(page, min_px=MIN_IMAGE_PX, keep_images=True, merge_blocks=True):
+def page_items(
+    page,
+    min_px=MIN_IMAGE_PX,
+    keep_images=True,
+    merge_blocks=True,
+    *,
+    skip_block_indices=None,
+    doc_body=None,
+    primary_heading_size=None,
+    detect_headings=False,
+):
     """一页按读序的块：文字块成段落字符串，图块成 ("image", 扩展名, 字节, 宽, 高)。
     过小的图按丢弃计数。返回 (块, 丢弃数)。keep_images=False 时不取图片字节（审计只数文字，
     省下每页几 MB），丢弃口径不变。
@@ -157,39 +298,66 @@ def page_items(page, min_px=MIN_IMAGE_PX, keep_images=True, merge_blocks=True):
     就接成一段（头图或表页不并）。一行一块的 ePub 转出 PDF 靠这个才成整段。
     """
     blocks = page.get_text("dict")["blocks"]
-    merge = merge_blocks and not is_table_page(page)
-    body = body_size(blocks) if merge else 0.0
+    tbl_page = is_table_page(page)
+    merge = merge_blocks and not tbl_page
+    body = doc_body if doc_body else (body_size(blocks) if (merge or detect_headings) else 0.0)
     page_w = page.rect.width
+    skips = skip_block_indices or set()
     items, dropped, cur = [], 0, None
-    for b in blocks:
+
+    def _emit_cur():
+        nonlocal cur
+        if not cur:
+            return
+        txt = cur["text"]
+        if cur.get("heading_lvl"):
+            txt = ("#" * cur["heading_lvl"]) + " " + txt
+        items.append(txt)
+        cur = None
+
+    for b_idx, b in enumerate(blocks):
+        if b_idx in skips:
+            continue
         if b.get("type") != 1:
             t = block_text(b)
             if not t:
                 continue
+            dom_sz, _max_sz, line_cnt = block_dominant_size(b, body)
+            h_lvl = (
+                _heading_level(t, dom_sz, body, primary_heading_size=primary_heading_size)
+                if (detect_headings and not tbl_page and line_cnt <= 3)
+                else 0
+            )
             if not merge:
-                items.append(t)
+                if h_lvl:
+                    items.append(("#" * h_lvl) + " " + t)
+                else:
+                    items.append(t)
                 continue
             nxt = block_metrics(b, t, body)
-            if _can_merge(cur, nxt, body, page_w):
+            nxt["size"] = max(dom_sz, nxt["size"])
+            nxt["heading_lvl"] = h_lvl
+            if h_lvl:
+                _emit_cur()
+                cur = nxt
+                _emit_cur()
+                continue
+            if cur and not cur.get("heading_lvl") and _can_merge(cur, nxt, body, page_w):
                 cur["text"] = _join_text(cur["text"], nxt["text"])
                 cur["y1"] = nxt["y1"]
                 cur["x1"] = max(cur["x1"], nxt["x1"])
                 continue
-            if cur:
-                items.append(cur["text"])
+            _emit_cur()
             cur = nxt
             continue
-        if cur:
-            items.append(cur["text"])
-            cur = None
+        _emit_cur()
         w, h = int(b.get("width") or 0), int(b.get("height") or 0)
         data = (b.get("image") or b"") if keep_images else b""
         if w >= min_px and h >= min_px and (bool(data) or not keep_images):
             items.append(("image", (b.get("ext") or "png").lstrip("."), data, w, h))
         else:
             dropped += 1
-    if cur:
-        items.append(cur["text"])
+    _emit_cur()
     return items, dropped
 
 
@@ -224,10 +392,35 @@ def chapter_starts(toc):
 
 
 def extract(doc, out_dir, merge_blocks=True):
-    """摊开全书：被引用的图落 images/，正文里的图换成一个占位。返回 (逐页块, 丢弃图数, 留图数)。"""
+    """摊开全书：去页眉页脚/页码、输出字号标题、落盘被引用的图。返回 (逐页块, 丢弃图数, 留图数)。"""
+    doc_body, skip_by_page = detect_doc_layout(doc)
+    # 预扫候选题号最大字号，用于区分 ## 与 ###
+    cand_sizes = set()
+    for p_idx, page in enumerate(doc):
+        if is_table_page(page):
+            continue
+        skips = skip_by_page.get(p_idx, set())
+        for b_idx, b in enumerate(page.get_text("dict")["blocks"]):
+            if b_idx in skips or b.get("type") == 1:
+                continue
+            t = block_text(b)
+            if not t:
+                continue
+            dom_sz, _, lc = block_dominant_size(b, doc_body)
+            if lc <= 3 and _heading_level(t, dom_sz, doc_body):
+                cand_sizes.add(round(dom_sz, 1))
+    primary_heading_size = max(cand_sizes) if len(cand_sizes) >= 2 else None
+
     pages, dropped, used = [], 0, 0
     for i, page in enumerate(doc, 1):
-        items, ndrop = page_items(page, merge_blocks=merge_blocks)
+        items, ndrop = page_items(
+            page,
+            merge_blocks=merge_blocks,
+            skip_block_indices=skip_by_page.get(i - 1),
+            doc_body=doc_body,
+            primary_heading_size=primary_heading_size,
+            detect_headings=True,
+        )
         dropped += ndrop
         parts, n = [], 0
         for it in items:

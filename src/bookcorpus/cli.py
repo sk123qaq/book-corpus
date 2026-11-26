@@ -34,6 +34,7 @@ ALIASES = {
     "numbers": "doc_numbers",
     "stats": "corpus_stats",
     "daily": "daily",
+    "normalize": "normalize_md",
 }
 
 HELP = """book-corpus <命令> [参数...]
@@ -539,10 +540,16 @@ def main(argv=None):
     if cmd == "run":
         if not rest:
             raise SystemExit("run 要脚本名：book-corpus run <脚本> [参数...]")
-        run_script(rest[0], rest[1:], workspace.resolve(explicit_root))
+        root = (
+            ""
+            if (rest[0] in ("normalize_md", "normalize_md.py") and "--md-dir" in rest)
+            else workspace.resolve(explicit_root)
+        )
+        run_script(rest[0], rest[1:], root)
         return 0
     if cmd in ALIASES:
-        run_script(ALIASES[cmd], rest, workspace.resolve(explicit_root))
+        root = "" if (ALIASES[cmd] == "normalize_md" and "--md-dir" in rest) else workspace.resolve(explicit_root)
+        run_script(ALIASES[cmd], rest, root)
         return 0
     raise SystemExit("未知命令 %s。book-corpus --help 看全部。" % cmd)
 
