@@ -6,10 +6,10 @@
 <!-- docs:index:start -->
 | 文档 | 状态 | 日期 | 标题 |
 |---|---|---|---|
-| [docs/检索/README.md](检索/README.md) | living | 2026-11-20 | 检索层（可重建产物，非人账） |
 | [docs/检索/指标口径.md](检索/指标口径.md) | living | 2026-11-20 | 指标口径 |
 | [docs/检索/踩坑记录.md](检索/踩坑记录.md) | living | 2026-11-20 | 检索层踩坑记录 |
 | [docs/使用指南.md](使用指南.md) | living | 2026-11-23 | book-corpus 使用指南 |
+| [docs/检索/README.md](检索/README.md) | living | 2026-11-26 | 检索层（可重建产物，非人账） |
 | [docs/design/书级融合与按需扩展-2026-10-22.md](design/书级融合与按需扩展-2026-10-22.md) | implemented | 2026-10-24 | 书级融合与按需扩展方案 |
 | [docs/design/回答阶段-结构化.md](design/回答阶段-结构化.md) | implemented | 2026-10-25 | 回答阶段结构化（2026-10-25） |
 | [docs/design/多格式来源支持-2026-11-05.md](design/多格式来源支持-2026-11-05.md) | implemented | 2026-11-05 | 多格式来源支持（txt / Word / Excel / PPT / md） |

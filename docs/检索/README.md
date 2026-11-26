@@ -1,7 +1,7 @@
 # 检索层（可重建产物，非人账）
 
-状态：living · 2026-11-20
-失效源：src/bookcorpus/scripts/qsearch.py src/bookcorpus/scripts/book_query.py src/bookcorpus/scripts/vec_search.py src/bookcorpus/scripts/embed_corpus.py src/bookcorpus/scripts/build_para_index.py src/bookcorpus/scripts/rerank*.py
+状态：living · 2026-11-26
+失效源：src/bookcorpus/md/*.py src/bookcorpus/scripts/qsearch.py src/bookcorpus/scripts/book_query.py src/bookcorpus/scripts/vec_search.py src/bookcorpus/scripts/embed_corpus.py src/bookcorpus/scripts/build_para_index.py src/bookcorpus/scripts/rerank*.py
 
 检索层是 `build/检索/` 下的可重建产物，只读 `books/<uid>/md/`，绝不写正文或人账。删掉整目录不影响任何书的可用性。
 
@@ -23,6 +23,7 @@
 
 ## 现行检索链路
 
+0. **共享 L1 解析内核（`src/bookcorpus/md/`）**：BM25 建库（`build_para_index.py`）与块向量切分（`embed_corpus.py`）同源消费 L1 块流，只索引纯净 `clean_text`（剥除 HTML 标签/Pandoc 属性/`note*.png`/`[[N]]()`，表格线性化为「表头: 单元格」，跳过无文字 `image`），按 `heading` 边界切分/合并并保留真实 1-based `start_line` 供 `/open` 同源定位；默认按章节角色（`chapter_role`：`body` / `notes` / `front_back`）过滤水章（`embed_corpus.py` 默认跳过 `front_back`，`build_para_index.py` 默认跳过 `front_back` 与 `notes`，可用 `--include-notes` / `--include-front-back` 放行）。`embed_corpus.py` 另提供 `--context-header` 开关（默认关闭，保持与存量 `emb.db` 向量空间及增量 `sig` 兼容）。
 1. **词法召回（必选）**：`src/bookcorpus/scripts/lib_fts_cjk.py` 做 CJK 重叠二元组 + 同位置 unigram 切分，`qsearch.py` 在 `para_fts` 做 BM25 召回与组覆盖度重排（`--pool medium=2000`）。
 2. **书级规划（默认入口 `book-corpus query`）**：`book_query.py` 走 `best_support` + B2.5 最多 5 轮词法循环；触发时默认弹 5–8 张书卡（`--no-cards` 关闭）；支持内部 `scope` 书目集合过滤。`qsearch.py --book` 保留旧 `mix` 口径作对照。
 3. **向量混合检索（可选）**：当 `emb.db`、`vectors.f16` 与 `$BOOKS_EMBED_URL`（默认端口 18080）同时就绪时，`vec_search.py` 在书、章、段三层做 RRF 融合（`fusion: "hybrid"`）；任一缺失时静默退回 `bm25_only`。

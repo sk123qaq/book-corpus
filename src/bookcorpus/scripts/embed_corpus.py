@@ -34,9 +34,14 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-from defpass import paragraphs
+SRC = HERE.parent.parent
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 from lib_common import ROOT
+
+from bookcorpus.md import load_manifest_chapter_roles, parse_markdown
 
 DEFAULT_URL = "http://127.0.0.1:18080"
 DEFAULT_DIM = 1024
@@ -122,26 +127,110 @@ def split_pieces(text, target):
     return [p for p in pieces if p.strip()]
 
 
-def chapter_chunks(md_path, target=700, overlap=0):
-    """一章切成若干块，返回 [(起始行, 文本)]。"""
+def chapter_chunk_records(md_path, target=700, overlap=0, *, manifest_roles=None, skip_roles=("front_back",)):
+    """一章按 L1 块流与 heading 边界切成 ~target 字符块，返回记录列表。"""
+    p = Path(md_path)
+    try:
+        raw = p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    parsed = parse_markdown(
+        raw,
+        stem=p.stem,
+        base_dir=p.parent,
+        manifest_roles=manifest_roles,
+        file_name=p.name,
+    )
+    role = parsed.get("chapter_role") or "body"
+    if role in skip_roles:
+        return []
+
     limit = int(target * 1.15)
     out = []
-    cur = []  # (line, piece)
+    cur = []  # (line, piece, heading_path, kind)
     cur_chars = 0
-    for line, para in paragraphs(md_path):
-        para = clean_para(para)
-        if not para:
+    cur_has_body = False
+
+    def _flush():
+        nonlocal cur, cur_chars, cur_has_body
+        if cur:
+            out.append(
+                {
+                    "line": cur[0][0],
+                    "text": "\n".join(item[1] for item in cur),
+                    "heading_path": cur[0][2],
+                    "chapter_title": parsed.get("title") or "",
+                }
+            )
+        cur = []
+        cur_chars = 0
+        cur_has_body = False
+
+    for blk in parsed["blocks"]:
+        kind = blk.get("kind") or "paragraph"
+        text = str(blk.get("clean_text") if "clean_text" in blk else (blk.get("text") or "")).strip()
+        if kind == "image" and not text:
             continue
-        for piece in split_pieces(para, target):
+        if not text:
+            continue
+        line = int(blk.get("start_line") or 1)
+        hp = str(blk.get("heading_path") or "")
+
+        if kind == "heading" and cur_has_body:
+            # heading 边界强制截断：不跨小节硬拼，也不把上节末尾 overlap 带入新小节
+            _flush()
+
+        for piece in split_pieces(text, target):
             if cur and cur_chars + len(piece) > limit and len(cur) > overlap:
-                out.append((cur[0][0], "\n".join(p for _, p in cur)))
+                out.append(
+                    {
+                        "line": cur[0][0],
+                        "text": "\n".join(item[1] for item in cur),
+                        "heading_path": cur[0][2],
+                        "chapter_title": parsed.get("title") or "",
+                    }
+                )
                 cur = cur[-overlap:] if overlap else []
-                cur_chars = sum(len(p) for _, p in cur)
-            cur.append((line, piece))
+                cur_chars = sum(len(item[1]) for item in cur)
+                cur_has_body = any(item[3] != "heading" for item in cur)
+            cur.append((line, piece, hp, kind))
             cur_chars += len(piece)
-    if cur:
-        out.append((cur[0][0], "\n".join(p for _, p in cur)))
+            if kind != "heading":
+                cur_has_body = True
+    _flush()
     return out
+
+
+def chapter_chunks(md_path, target=700, overlap=0, *, manifest_roles=None, skip_roles=("front_back",)):
+    """一章切成若干块，返回 [(起始行, 文本)]。"""
+    return [
+        (rec["line"], rec["text"])
+        for rec in chapter_chunk_records(
+            md_path,
+            target=target,
+            overlap=overlap,
+            manifest_roles=manifest_roles,
+            skip_roles=skip_roles,
+        )
+    ]
+
+
+def format_embed_input(text, *, book_title="", chapter_title="", heading_path=""):
+    """构造可选的入模上下文头（仅送入 embedding 接口，不污染库内 chunk.text）。"""
+    parts = []
+    if book_title:
+        parts.append(f"《{book_title}》")
+    if chapter_title:
+        parts.append(chapter_title)
+    if heading_path:
+        hp = heading_path
+        if chapter_title and (hp == chapter_title or hp.startswith(chapter_title + " > ")):
+            hp = hp[len(chapter_title) :].lstrip(" >")
+        if hp:
+            parts.append(hp)
+    if not parts:
+        return text
+    return f"{' / '.join(parts)}\n{text}"
 
 
 def chapter_paths(root, book_path):
@@ -151,20 +240,48 @@ def chapter_paths(root, book_path):
     return [p for p in sorted(md.iterdir()) if p.name.endswith(".md") and p.name.lower() != "readme.md" and p.is_file()]
 
 
-def book_chunks(root, book_path, target=700, overlap=0):
+def book_chunks(
+    root,
+    book_path,
+    target=700,
+    overlap=0,
+    *,
+    context_header=False,
+    book_title="",
+    skip_roles=("front_back",),
+):
     root = Path(root)
+    md_dir = root / "books" / book_path / "md"
+    manifest_roles = load_manifest_chapter_roles(md_dir)
     out = []
     seq = 0
     for path in chapter_paths(root, book_path):
         rel = path.relative_to(root).as_posix()
-        for line, text in chapter_chunks(path, target, overlap):
-            out.append({"path": rel, "seq": seq, "line": line, "text": text, "chars": len(text)})
+        for rec in chapter_chunk_records(
+            path,
+            target=target,
+            overlap=overlap,
+            manifest_roles=manifest_roles,
+            skip_roles=skip_roles,
+        ):
+            text = rec["text"]
+            entry = {"path": rel, "seq": seq, "line": rec["line"], "text": text, "chars": len(text)}
+            if context_header:
+                entry["embed_text"] = format_embed_input(
+                    text,
+                    book_title=book_title,
+                    chapter_title=rec.get("chapter_title") or "",
+                    heading_path=rec.get("heading_path") or "",
+                )
+            out.append(entry)
             seq += 1
     return out
 
 
-def sig_of(paths):
+def sig_of(paths, context_header=False):
     h = hashlib.sha256()
+    if context_header:
+        h.update(b"context_header=1\n")
     for p in paths:
         st = Path(p).stat()
         h.update(f"{Path(p).name}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
@@ -213,13 +330,23 @@ def unpack_f16(blob, dim):
 
 
 class Store:
-    def __init__(self, db_path, vec_path, dim=DEFAULT_DIM, model=DEFAULT_MODEL, chunk_chars=700, overlap=0):
+    def __init__(
+        self,
+        db_path,
+        vec_path,
+        dim=DEFAULT_DIM,
+        model=DEFAULT_MODEL,
+        chunk_chars=700,
+        overlap=0,
+        context_header=False,
+    ):
         self.db_path = Path(db_path)
         self.vec_path = Path(vec_path)
         self.dim = dim
         self.model = model
         self.chunk_chars = chunk_chars
         self.overlap = overlap
+        self.context_header = bool(context_header)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.db_path, timeout=30)
         self.db.row_factory = sqlite3.Row
@@ -270,6 +397,7 @@ class Store:
                 ("model", self.model),
                 ("chunk_chars", self.chunk_chars),
                 ("overlap", self.overlap),
+                ("context_header", "1" if self.context_header else "0"),
                 ("vectors", self.vec_path.name),
                 ("last_id", 0),
                 ("tokens_in", 0),
@@ -303,6 +431,13 @@ class Store:
             old = self.meta("chunk_chars")
             if old and int(old) != self.chunk_chars:
                 print(f"注意：库里已有块按 {old} 字符切，本次用 {self.chunk_chars}，新旧块混存", file=sys.stderr)
+            old_ctx = self.meta("context_header", "0")
+            if self.last_id > 0 and bool(int(old_ctx)) != self.context_header:
+                print(
+                    f"注意：库里已有向量 context_header={old_ctx}，"
+                    f"本次为 {int(self.context_header)}，新旧向量空间可能混存",
+                    file=sys.stderr,
+                )
 
     def book_row(self, uid):
         return self.db.execute("SELECT * FROM book WHERE uid=?", (uid,)).fetchone()
@@ -701,8 +836,9 @@ def cmd_verify(store):
 def cmd_dry(root, args, books):
     total_chunks = total_chars = 0
     rows = []
+    use_ctx = bool(getattr(args, "context_header", False))
     for uid, path, title in books:
-        chunks = book_chunks(root, path, args.chunk_chars, args.overlap)
+        chunks = book_chunks(root, path, args.chunk_chars, args.overlap, context_header=use_ctx, book_title=title)
         chars = sum(c["chars"] for c in chunks)
         total_chunks += len(chunks)
         total_chars += chars
@@ -848,6 +984,7 @@ def run_embedding(root, store, books, args):
         if pruned["books"]:
             print(f"已失活孤儿书 {pruned['books']} 本（{pruned['chunks']} 块标为垃圾块）", flush=True)
 
+    use_ctx = bool(getattr(args, "context_header", False))
     total_bytes = 0
     todo = []
     skipped = 0
@@ -855,7 +992,7 @@ def run_embedding(root, store, books, args):
         paths = chapter_paths(root, path)
         if not paths:
             continue
-        sig = sig_of(paths)
+        sig = sig_of(paths, context_header=use_ctx)
         row = store.book_row(uid)
         if row and row["status"] in ("done", "empty") and row["sig"] == sig and not args.force:
             skipped += 1
@@ -891,7 +1028,14 @@ def run_embedding(root, store, books, args):
             t0 = time.time()
             book_started = time.time()
             try:
-                chunks = book_chunks(root, path, args.chunk_chars, args.overlap)
+                chunks = book_chunks(
+                    root,
+                    path,
+                    args.chunk_chars,
+                    args.overlap,
+                    context_header=use_ctx,
+                    book_title=title,
+                )
                 if not chunks:
                     store.mark(uid, title, sig, "empty", "没有正文")
                     done_bytes += size
@@ -900,7 +1044,8 @@ def run_embedding(root, store, books, args):
                 sent = 0
                 for start in range(0, len(chunks), args.batch):
                     batch = chunks[start : start + args.batch]
-                    v, tok = post_embeddings(args.server, [c["text"] for c in batch], store.dim, timeout=args.timeout)
+                    inputs = [c.get("embed_text") or c["text"] for c in batch]
+                    v, tok = post_embeddings(args.server, inputs, store.dim, timeout=args.timeout)
                     vecs.extend(v)
                     sent += tok
                     if len(chunks) > args.batch * 4 and time.time() - t0 > 15:
@@ -958,6 +1103,12 @@ def main():
     ap.add_argument("--force", action="store_true", help="已完成的也重嵌（旧向量留作垃圾）")
     ap.add_argument("--chunk-chars", type=int, default=700)
     ap.add_argument("--overlap", type=int, default=0, help="块间重叠的段数，默认 0")
+    ap.add_argument(
+        "--context-header",
+        action="store_true",
+        help="在送入 embedding 模型的文本前拼接《书名》/章名/小节名（默认关闭以保持与存量向量空间一致）",
+    )
+    ap.add_argument("--emb-dir", help="自定义向量库输出目录（默认 build/检索/embeddings）")
     ap.add_argument("--batch", type=int, default=32, help="每次请求的块数")
     ap.add_argument("--timeout", type=int, default=900, help="单次请求超时秒数")
     ap.add_argument("--server", default=os.environ.get("BOOKS_EMBED_URL", DEFAULT_URL))
@@ -965,7 +1116,7 @@ def main():
     args = ap.parse_args()
 
     root = Path(args.root).resolve() if args.root else Path(ROOT)
-    emb_dir = root / "build" / "检索" / "embeddings"
+    emb_dir = Path(args.emb_dir).resolve() if args.emb_dir else (root / "build" / "检索" / "embeddings")
     emb_db = emb_dir / "emb.db"
     emb_vec = emb_dir / "vectors.f16"
 
@@ -975,7 +1126,15 @@ def main():
         print(json.dumps(diff_embed(root, db_path=emb_db, server_url=args.server), ensure_ascii=False))
         return 0
 
-    store = Store(emb_db, emb_vec, DEFAULT_DIM, DEFAULT_MODEL, args.chunk_chars, args.overlap)
+    store = Store(
+        emb_db,
+        emb_vec,
+        DEFAULT_DIM,
+        DEFAULT_MODEL,
+        args.chunk_chars,
+        args.overlap,
+        context_header=args.context_header,
+    )
     if args.status:
         cmd_status(store)
         return 0
