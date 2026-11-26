@@ -14,13 +14,15 @@ import threading
 import time
 from pathlib import Path
 
+from ..md.roles import CHAPTER_ROLES
 from .chapters import CHAPTER_RE
-from .mdparse import lean_meta
+from .mdparse import lean_meta, strip_front_matter
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 # lean_meta 或逐书章数口径变了就递增，下次启动整库重建。
 # 2：book 表从「合并标题页后的导航章数」改成「md 文件数」（统计对齐 2026-11-22）。
-PARSER_VERSION = 2
+# 3：chapter 表增加 fm_role 列以支持无损章节角色透出（2026-11-26）。
+PARSER_VERSION = 3
 DB_DIR = "阅读"
 DB_NAME = "shelf-index.db"
 
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS chapter (
     title TEXT NOT NULL,
     chars INTEGER NOT NULL,
     full_chars INTEGER NOT NULL,
+    fm_role TEXT NOT NULL DEFAULT '',
     ino INTEGER NOT NULL,
     ctime_ns INTEGER NOT NULL,
     mtime_ns INTEGER NOT NULL,
@@ -51,11 +54,11 @@ CREATE TABLE IF NOT EXISTS book (
 """
 
 UPSERT_CHAPTER = """
-INSERT INTO chapter (uid, name, n, stem, title, chars, full_chars, ino, ctime_ns, mtime_ns, size)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO chapter (uid, name, n, stem, title, chars, full_chars, fm_role, ino, ctime_ns, mtime_ns, size)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (uid, name) DO UPDATE SET
     n = excluded.n, stem = excluded.stem, title = excluded.title,
-    chars = excluded.chars, full_chars = excluded.full_chars,
+    chars = excluded.chars, full_chars = excluded.full_chars, fm_role = excluded.fm_role,
     ino = excluded.ino, ctime_ns = excluded.ctime_ns,
     mtime_ns = excluded.mtime_ns, size = excluded.size
 """
@@ -243,6 +246,9 @@ class ShelfIndex:
                     failed.append((uid, name))
                     continue
                 meta = lean_meta(raw)
+                fm_meta, _ = strip_front_matter(raw)
+                raw_role = str(fm_meta.get("chapter_role") or "").strip().lower()
+                fm_role = raw_role if raw_role in CHAPTER_ROLES else ""
                 sig = seen[(uid, name)]
                 rows.append(
                     (
@@ -253,6 +259,7 @@ class ShelfIndex:
                         meta["title"] or sig[1],
                         meta["chars"],
                         meta["full_chars"],
+                        fm_role,
                         sig[2],
                         sig[3],
                         sig[4],
@@ -341,12 +348,21 @@ class ShelfIndex:
         conn = self._connect()
         try:
             rows = conn.execute(
-                "SELECT name, n, stem, title, chars, full_chars FROM chapter WHERE uid = ? ORDER BY n, name", (uid,)
+                "SELECT name, n, stem, title, chars, full_chars, fm_role FROM chapter WHERE uid = ? ORDER BY n, name",
+                (uid,),
             ).fetchall()
         finally:
             conn.close()
         return [
-            {"file": row[0], "n": row[1], "stem": row[2], "title": row[3], "chars": row[4], "full_chars": row[5]}
+            {
+                "file": row[0],
+                "n": row[1],
+                "stem": row[2],
+                "title": row[3],
+                "chars": row[4],
+                "full_chars": row[5],
+                "fm_role": row[6],
+            }
             for row in rows
         ]
 
@@ -357,18 +373,26 @@ class ShelfIndex:
             conn = self._connect()
             try:
                 cursor = conn.execute(
-                    "SELECT uid, name, n, stem, title, chars, full_chars FROM chapter ORDER BY uid, n, name"
+                    "SELECT uid, name, n, stem, title, chars, full_chars, fm_role FROM chapter ORDER BY uid, n, name"
                 )
                 current = None
                 bucket = []
-                for uid, name, n, stem, title, chars, full_chars in cursor:
+                for uid, name, n, stem, title, chars, full_chars, fm_role in cursor:
                     if uid != current:
                         if bucket:
                             yield current, bucket
                         current = uid
                         bucket = []
                     bucket.append(
-                        {"file": name, "n": n, "stem": stem, "title": title, "chars": chars, "full_chars": full_chars}
+                        {
+                            "file": name,
+                            "n": n,
+                            "stem": stem,
+                            "title": title,
+                            "chars": chars,
+                            "full_chars": full_chars,
+                            "fm_role": fm_role,
+                        }
                     )
                 if bucket:
                     yield current, bucket

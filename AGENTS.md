@@ -99,7 +99,7 @@ As of 2026-11-20：1,953 本书，1,829 本有 md，124 本待拆章（124 pdf�
 脚本清单与一行说明只有一处：`book-corpus list`（读每个脚本的 docstring）。机器可读快照在
 `docs/reference/facts.md`，由 `book-corpus docs write` 生成；别在这里手抄，抄了就会过期。
 
-高频入口：`ingest`（收件箱）、`library`（重建书目库）、`catalog`、`verify`、`numbers`、`daily`、
+高频入口：`ingest`（收件箱）、`library`（重建书目库）、`normalize`（L0 规范化）、`catalog`、`verify`、`numbers`、`daily`、
 `search` / `query`。完整参数用 `book-corpus <脚本> --help`；批次规则与判据见 `docs/检索/`、
 `docs/briefs/` 与各批次账。
 

@@ -1,4 +1,4 @@
-"""共享 L1 Markdown 解析内核：块流解析、表格线性化、脚注与章节角色契约。"""
+"""共享 L1 Markdown 解析内核与 L0 规范化器：块流解析、表格线性化、脚注与章节角色契约。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from .footnotes import (
     normalize_marker,
     parse_explicit_footnote_def,
     resolve_chapter_footnotes,
+)
+from .normalize import (
+    CANONICAL_VERSION,
+    NormalizeStats,
+    classify_chapter_role,
+    normalize_book_md,
 )
 from .parse import (
     CODE_FENCE_RE,
@@ -49,6 +55,7 @@ from .roles import (
 )
 
 __all__ = [
+    "CANONICAL_VERSION",
     "CHAPTER_ROLES",
     "CODE_FENCE_RE",
     "DEFAULT_CHAPTER_ROLE",
@@ -68,7 +75,9 @@ __all__ = [
     "TABLE_ROW_RE",
     "ChapterRole",
     "MdBlock",
+    "NormalizeStats",
     "chapter_title",
+    "classify_chapter_role",
     "clean_inline",
     "enrich_cross_file_footnotes",
     "extract_inline_footnotes",
@@ -79,6 +88,7 @@ __all__ = [
     "linearize_table",
     "load_manifest_chapter_roles",
     "non_space_count",
+    "normalize_book_md",
     "normalize_chapter_role",
     "normalize_marker",
     "parse_blocks",

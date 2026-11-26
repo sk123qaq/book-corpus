@@ -37,9 +37,12 @@ from contextlib import suppress
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))  # bookcorpus 包目录，好看 docenv
+sys.path.insert(0, str(HERE.parent.parent))  # src/ 目录，供 bookcorpus.md 导入
 import docenv
 import lib_common as L
 import pdf_ocr_to_md as A
+
+from bookcorpus.md.normalize import normalize_book_md
 
 ROOT = L.ROOT
 TEXT_FORMATS = ("txt", "md")
@@ -466,6 +469,29 @@ def convert_book(root, item, ctx):
             "verified": False,
         },
     )
+    if fmt != "md" or chars > 24_000:
+        normalize_book_md(build)
+        verify_script = pathlib.Path(L.skill_dir("ebook-to-md")) / "scripts" / "verify_output.py"
+        if verify_script.is_file():
+            vp = subprocess.run([sys.executable, str(verify_script), str(build)], capture_output=True, text=True)
+            if vp.returncode != 0:
+                shutil.rmtree(build, ignore_errors=True)
+                detail = (vp.stdout or vp.stderr or "").strip().splitlines()
+                row.update(reason="verify-failed", error="; ".join(detail[-4:]) or "verify_output failed")
+                row["elapsed_ms"] = int((time.time() - t0) * 1000)
+                return row
+        man_after = L.read_md_manifest(str(build))
+        chars = int(man_after.get("chars") if man_after.get("chars") is not None else chars)
+        images = int(man_after.get("images") if man_after.get("images") is not None else images)
+        md_files = sorted(
+            p.name for p in build.iterdir() if p.is_file() and p.suffix == ".md" and p.name != "README.md"
+        )
+        if len(md_files) == 1:
+            md_name = md_files[0]
+            md_bytes = (build / md_name).stat().st_size
+        elif md_files:
+            md_name = md_files[0]
+            md_bytes = sum((build / fn).stat().st_size for fn in md_files)
     md_dir = bdir / "md"
     backup_dir = pathlib.Path(ctx["backup_root"]) / uid
     backup = install_md(build, md_dir, backup_dir)

@@ -40,7 +40,12 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 import lib_common as L
+
+from bookcorpus.md.normalize import normalize_book_md
 
 SKILL = os.path.join(L.skill_dir("ebook-to-md"), "scripts")
 SKILL_DOC = os.path.join(os.path.dirname(SKILL), "SKILL.md")
@@ -334,8 +339,18 @@ def recheck_audit_source(row, ctx, uid):
     return out, line
 
 
+L0_MANIFEST_KEYS = ("canonical_version", "normalized_at", "chapter_roles", "normalize_stats")
+
+
+def _normalize_stage(stage, commands):
+    """在暂存目录执行 L0 规范化（含 HTML/页码清洗、拆章、脚注与孤儿图标清理）。"""
+    res = normalize_book_md(stage)
+    commands.append("normalize_md.py out")
+    return res
+
+
 def recheck(row, ctx, result):
-    """只复核暂存区已有的产物：重跑 verify 与 audit，重写 manifest，过了就进库。"""
+    """只复核暂存区已有的产物：audit → L0 规范化 → verify，重写 manifest，过了就进库。"""
     uid = row["uid"]
     stage = os.path.join(ctx["out"], uid)
     dest = L.Layout(L.ROOT).md(row["uid"])
@@ -344,10 +359,7 @@ def recheck(row, ctx, result):
         return result
     old = L.read_md_manifest(stage)
     audited, prep = recheck_audit_source(row, ctx, uid)
-    rc, vout = sh([sys.executable, VERIFY, stage], L.ROOT)
-    v = parse_verify(vout)
-    result.update(verify_rc=rc, **v)
-    commands = ([prep] if prep else []) + ["verify_output.py out"]
+    commands = [prep] if prep else []
     rc2, aout, a = None, "", None
     if audited:
         rc2, aout = sh([sys.executable, AUDIT, audited, "-o", stage], L.ROOT)
@@ -365,6 +377,13 @@ def recheck(row, ctx, result):
             result["raw_chars"] = old["audit_chars"]
         result["note"] = "原文转不出中间 EPUB，文本量没法复核"
 
+    _normalize_stage(stage, commands)
+    rc, vout = sh([sys.executable, VERIFY, stage], L.ROOT)
+    v = parse_verify(vout)
+    result.update(verify_rc=rc, **v)
+    commands.append("verify_output.py out")
+
+    cur_man = L.read_md_manifest(stage)
     chapters, nbytes = L.count_md_dir(stage)
     manifest = {
         "uid": old.get("uid") or uid,
@@ -385,6 +404,9 @@ def recheck(row, ctx, result):
         "generated_at": now(),
         "verified": rc == 0 and rc2 == 0,
     }
+    for k in L0_MANIFEST_KEYS:
+        if k in cur_man:
+            manifest[k] = cur_man[k]
     with open(os.path.join(stage, ".manifest.json") + ".tmp", "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
@@ -488,10 +510,6 @@ def run_one(row, ctx):
     if audited != src:
         result["provenance_fixed"] = fix_provenance(target, os.path.basename(audited), os.path.basename(src))
 
-    rc, vout = sh([sys.executable, VERIFY, target], L.ROOT)
-    commands.append("verify_output.py out")
-    v = parse_verify(vout)
-    result.update(verify_rc=rc, **v)
     rc2, aout = sh([sys.executable, AUDIT, audited, "-o", target], L.ROOT)
     commands.append("audit_volume.py %s -o out" % os.path.relpath(audited, L.ROOT))
     a = parse_audit(aout)
@@ -499,6 +517,12 @@ def run_one(row, ctx):
     if a:
         result["audit_ratio"] = a["ratio"]
         result["raw_chars"] = a["raw"]
+
+    _normalize_stage(target, commands)
+    rc, vout = sh([sys.executable, VERIFY, target], L.ROOT)
+    commands.append("verify_output.py out")
+    v = parse_verify(vout)
+    result.update(verify_rc=rc, **v)
 
     if (rc or rc2) and ctx["fix"] and not accept:
         for _ in range(ctx["fix_cap"]):
@@ -509,8 +533,9 @@ def run_one(row, ctx):
                     break
                 ctx["fix_used"][0] += 1
             result.setdefault("fix", []).append(agent_fix(ctx, row, target, vout, aout))
-            rc, vout = sh([sys.executable, VERIFY, target], L.ROOT)
             rc2, aout = sh([sys.executable, AUDIT, audited, "-o", target], L.ROOT)
+            _normalize_stage(target, commands)
+            rc, vout = sh([sys.executable, VERIFY, target], L.ROOT)
             v = parse_verify(vout)
             a = parse_audit(aout)
             result.update(verify_rc=rc, **v)
@@ -519,6 +544,7 @@ def run_one(row, ctx):
                 result["audit_ratio"] = a["ratio"]
                 result["raw_chars"] = a["raw"]
 
+    cur_man = L.read_md_manifest(target)
     chapters, nbytes = L.count_md_dir(target)
     manifest = {
         "uid": uid,
@@ -539,6 +565,9 @@ def run_one(row, ctx):
         "verified": rc == 0 and rc2 == 0,
         "accepted": accept or "",
     }
+    for k in L0_MANIFEST_KEYS:
+        if k in cur_man:
+            manifest[k] = cur_man[k]
     with open(os.path.join(target, ".manifest.json") + ".tmp", "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=1)
         fh.write("\n")

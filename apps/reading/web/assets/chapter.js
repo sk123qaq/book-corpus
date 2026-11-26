@@ -1072,22 +1072,31 @@
       const author = data.book.author_display || data.book.author || '';
       subEl.textContent = (author ? author + ' · ' : '') + posTxt;
     }
-    box.innerHTML =
-      '<div class="toc-list">' +
-      bookChapters.map((c) => {
-        const active = Number(c.n) === curNum;
-        const marks = (c.has_map ? '<i class="toc-dot map" title="已建导图"></i>' : '') +
-          (c.note_count ? '<i class="toc-dot pin" title="' + c.note_count + ' 条旁批"></i>' : '');
-        return (
-          '<a class="toc-item' + (active ? ' active' : '') + '" href="' + RD.chapterHref(UID, c.n) + '"' +
-          (active ? ' aria-current="page"' : '') + '>' +
-            '<span class="toc-n">' + RD.esc(String(c.n).padStart(2, '0')) + '</span>' +
-            '<span class="toc-t">' + RD.esc(c.title) + '</span>' +
-            (marks ? '<span class="toc-marks">' + marks + '</span>' : '') +
-          '</a>'
-        );
-      }).join('') +
-      '</div>';
+    const renderTocItem = (c) => {
+      const active = Number(c.n) === curNum;
+      const marks = (c.has_map ? '<i class="toc-dot map" title="已建导图"></i>' : '') +
+        (c.note_count ? '<i class="toc-dot pin" title="' + c.note_count + ' 条旁批"></i>' : '');
+      return (
+        '<a class="toc-item' + (active ? ' active' : '') + '" href="' + RD.chapterHref(UID, c.n) + '"' +
+        (active ? ' aria-current="page"' : '') + '>' +
+          '<span class="toc-n">' + RD.esc(String(c.n).padStart(2, '0')) + '</span>' +
+          '<span class="toc-t">' + RD.esc(c.title) + '</span>' +
+          (marks ? '<span class="toc-marks">' + marks + '</span>' : '') +
+        '</a>'
+      );
+    };
+    const mainChapters = bookChapters.filter((c) => c.chapter_role !== 'front_back');
+    const frontBackChapters = bookChapters.filter((c) => c.chapter_role === 'front_back');
+    const openFrontBack = frontBackChapters.some((c) => Number(c.n) === curNum);
+    let tocHtml = '<div class="toc-list">' + mainChapters.map(renderTocItem).join('');
+    if (frontBackChapters.length) {
+      tocHtml += '<details class="toc-fold-group"' + (openFrontBack ? ' open' : '') + '>' +
+        '<summary class="toc-fold-summary">前置 / 后置页（' + frontBackChapters.length + '）</summary>' +
+        '<div class="toc-fold-body">' + frontBackChapters.map(renderTocItem).join('') + '</div>' +
+        '</details>';
+    }
+    tocHtml += '</div>';
+    box.innerHTML = tocHtml;
     const actEl = box.querySelector('.toc-item.active');
     if (actEl && spineTab === 'toc') {
       actEl.scrollIntoView({ block: 'center' });

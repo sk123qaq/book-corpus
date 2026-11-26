@@ -47,7 +47,7 @@ Preconditions:
 
 ## Gotchas
 
-- 2026-11-25 起伴读的 `Library.read_chapter` 会做 `BLOCK_VERSION=2` 的脚注/表格解析与跨文件补注；首页只读 `Library.books()` 与 shelf-index，不解析章正文，所以这些改动不改变首页的书目、章数、字数与最新一期读数。
+- 2026-11-25 起伴读的 `Library.read_chapter` 会做 `BLOCK_VERSION=2` 的脚注/表格解析与跨文件补注；2026-11-26 起 L0 规范化写入 `chapter_role`（`.manifest.json` 与非 `body` front matter）供 `/api/book` 默认折叠 `front_back` 水章；首页只读 `Library.books()` 与 shelf-index，不解析章正文，所以这些改动不改变首页的书目、章数、字数与最新一期读数。
 
 - 卡片指不指 `/go/<key>` 取决于目标地址是否等于默认值。改了端口之后卡片是普通链接，拉起和 503 都不会出现；要验拉起必须用默认地址。
 - 默认目标里 8765 / 8771 / 8772 被操作员的实例占着，`/go/reading` 之类会直接跳到操作员实例上，验证时不要点。8765 若空着，`/go/search` 会在 8765 起一个本轮实例——别在 8765 上验「跳转」。

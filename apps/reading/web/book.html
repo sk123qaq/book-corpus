@@ -64,7 +64,7 @@ function render() {
   const chapters = data.chapters || [];
   const chars = book.chars || 0;
   const packs = book.packs || 0;
-  const firstRead = chapters[0];
+  const firstRead = chapters.find((ch) => (ch.chapter_role || 'body') === 'body') || chapters[0];
   const notice = (new URLSearchParams(location.search).get('notice') || '').trim();
   // 页头章数与逐书统计走 md 文件视角（与书架同源）；页内章目是合并标题页后的导航章数。
   // 两者不一致（有标题页合并）时必须就地说明，不许页头 65、页内 36 而无注。
@@ -111,8 +111,9 @@ function render() {
       '</aside>' +
     '</div>';
 
-  RD.mount('ch-list').innerHTML = chapters.map((ch) => {
+  const renderChapterRow = (ch) => {
     const badges = [];
+    if (ch.chapter_role === 'notes') badges.push('注释');
     if (ch.has_map) badges.push('导图');
     if (ch.note_count) badges.push(ch.note_count + ' 条旁批');
     const stateLabel = badges.length ? badges.join(' · ') : '直读全文';
@@ -123,7 +124,17 @@ function render() {
       '<span class="ch-min">' + RD.fmt(ch.minutes) + ' 分钟</span>' +
       '<span class="ch-state' + (badges.length ? ' has' : '') + '">' + RD.esc(stateLabel) + '</span>' +
       '<span class="ch-go" aria-hidden="true">→</span></a>';
-  }).join('');
+  };
+  const mainChapters = chapters.filter((ch) => ch.chapter_role !== 'front_back');
+  const frontBackChapters = chapters.filter((ch) => ch.chapter_role === 'front_back');
+  let chListHtml = mainChapters.map(renderChapterRow).join('');
+  if (frontBackChapters.length) {
+    chListHtml += '<details class="ch-fold-group" id="ch-front-back-fold">' +
+      '<summary class="ch-fold-summary"><span>前置 / 后置页（' + RD.fmt(frontBackChapters.length) + ' 项 · 默认折叠）</span><span class="ch-fold-hint">点击展开阅读</span></summary>' +
+      '<div class="ch-fold-body">' + frontBackChapters.map(renderChapterRow).join('') + '</div>' +
+      '</details>';
+  }
+  RD.mount('ch-list').innerHTML = chListHtml;
 
   const activeChapters = chapters.filter((ch) => ch.has_map || ch.note_count > 0 || ch.ops_count > 0);
   RD.mount('book-notes-summary').innerHTML = activeChapters.length
