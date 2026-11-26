@@ -7,11 +7,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from bookcorpus.md import (
     CANONICAL_VERSION,
     normalize_book_md,
     parse_markdown,
     read_chapter_role,
+)
+from bookcorpus.md import (
+    normalize as norm_mod,
 )
 from bookcorpus.reading.chapmap import plan_chunks
 from bookcorpus.reading.library import Library
@@ -594,3 +599,119 @@ def test_batch_pipelines_invoke_audit_then_normalize_then_verify(tmp_path: Path,
     assert hasattr(split_md_batch, "normalize_book_md")
     assert hasattr(docs_to_md, "normalize_book_md")
     assert pdf_ocr_to_md is not None
+
+
+def test_headingless_pure_notes_chapter_no_unbound_local(tmp_path: Path):
+    """无标题纯 [[N]]() 注释章在循环全跳过时不应触发 UnboundLocalError。"""
+    root = tmp_path / "ws"
+    md_dir = _write_basic_book(
+        root,
+        "B0001",
+        "纯注测试",
+        {
+            "01_正文.md": "# 正文\n\n一段正文内容。\n",
+            "02_注释.md": (
+                "[[1]]() 第一条纯注解释。\n\n[[2]]() 第二条含内嵌[[4]]()引用。\n\n[[3]]() 第三条纯注说明。\n"
+            ),
+        },
+    )
+    res = normalize_book_md(md_dir)
+    assert res["chapter_roles"]["02_注释.md"] == "notes"
+    note_out = (md_dir / "02_注释.md").read_text(encoding="utf-8")
+    assert "chapter_role: notes" in note_out
+    assert "[^1]: 第一条纯注解释。" in note_out
+    assert "[^2]: 第二条含内嵌[^4]引用。" in note_out
+    assert "[^3]: 第三条纯注说明。" in note_out
+    assert "[[1]]()" not in note_out
+
+
+def test_cross_file_md_footnote_links_preserved(tmp_path: Path):
+    """带 .md 的跨文件脚注链接必须原样保留，空/页内锚点才转为 [^N]。"""
+    root = tmp_path / "ws"
+    ch1 = (
+        "# 第一章\n\n"
+        "保留带锚点[[1]](09_notes.md#fn1)、保留无锚点[[2]](09_notes.md)、"
+        "保留尖括号[[3]](<09_notes.md#fn3>)，仅转换空目标[[4]]()和纯锚点[[5]](#local)。\n\n"
+        "[[4]]() 第四条本页注。\n"
+    )
+    notes_ch = "# 注释\n\n[^1]: 跨文件第一条。\n"
+    md_dir = _write_basic_book(
+        root,
+        "B0001",
+        "跨文件注",
+        {"01_第一章.md": ch1, "09_notes.md": notes_ch},
+    )
+    normalize_book_md(md_dir)
+    out = (md_dir / "01_第一章.md").read_text(encoding="utf-8")
+    assert "[[1]](09_notes.md#fn1)" in out
+    assert "[[2]](09_notes.md)" in out
+    assert "[[3]](<09_notes.md#fn3>)" in out
+    assert "[[4]]()" not in out
+    assert "[[5]](#local)" not in out
+    assert "[^4]" in out
+    assert "[^5]" in out
+    assert "[^4]: 第四条本页注。" in out
+
+
+def test_split_writes_new_chapters_before_unlinking_old(tmp_path: Path, monkeypatch):
+    """did_split=True 时若写新章中途失败，旧章不得被提前删除。"""
+    root = tmp_path / "ws"
+    ch1 = "## 第一节\n\n" + ("这是足够长的一段测试文字。" * 60 + "\n\n") * 22
+    ch2 = "## 第二节\n\n" + ("这是第二节同样足够长的文字。" * 60 + "\n\n") * 22
+    md_dir = _write_basic_book(
+        root,
+        "B0001",
+        "原子拆章",
+        {"原子拆章.md": f"# 原子拆章\n\n{ch1}{ch2}"},
+    )
+    orig_write = norm_mod._write_text_atomic
+    calls: list[str] = []
+
+    def flaky_write(dest: Path, content: str) -> None:
+        calls.append(dest.name)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        orig_write(dest, content)
+
+    monkeypatch.setattr(norm_mod, "_write_text_atomic", flaky_write)
+    with pytest.raises(OSError, match="disk full"):
+        norm_mod.normalize_book_md(md_dir)
+    assert (md_dir / "原子拆章.md").is_file()
+
+
+def test_image_refs_title_dot_slash_and_unclosed_html_table(tmp_path: Path):
+    """图片引用带 ./ 与 title 不误判孤儿；未闭合残缺 table 标签不粘连单元格。"""
+    refs = norm_mod._referenced_images_in_texts(
+        [
+            "正文插图 ![](./images/fig1.png \"图 1\") 与 链接插图 [见图](./images/fig2.png '图 2')。\n"
+            '尖括号带标题 ![](<./images/fig3.jpg> "图 3")。\n'
+        ]
+    )
+    assert refs == {"images/fig1.png", "images/fig2.png", "images/fig3.jpg"}
+
+    root = tmp_path / "ws"
+    filler = "这是一个包含插图与残缺 HTML 表格的完整正文测试章节。" * 10
+    body = (
+        "---\ntitle: 第一章\nchapter: '01'\n---\n\n"
+        "# 第一章\n\n"
+        f"{filler}\n\n"
+        '正文插图 ![](./images/fig1.png "图 1") 与 常规插图 ![](images/fig0.png)。\n\n'
+        "<table><tr><td>甲单元格</td><th>乙表头</th></tr><tr><td>丙数据</td><td>丁结尾\n"
+    )
+    md_dir = _write_basic_book(
+        root,
+        "B0001",
+        "卫生边界",
+        {"README.md": "# 卫生边界\n", "01_第一章.md": body},
+        images={"fig0.png": b"IMG0", "fig1.png": b"IMG1", "note.png": b"ICON"},
+    )
+    res = normalize_book_md(md_dir)
+    # ./images/fig1.png 带 title 被识别为正文插图（非孤儿），未引用的小图标 note.png 正常清理
+    assert res["stats"]["orphan_icons_removed"] == 1
+    assert (md_dir / "images" / "fig0.png").is_file()
+    assert (md_dir / "images" / "fig1.png").is_file()
+    assert not (md_dir / "images" / "note.png").exists()
+    out = (md_dir / "01_第一章.md").read_text(encoding="utf-8")
+    assert "甲单元格 乙表头" in out
+    assert "丙数据 丁结尾" in out
+    assert "甲单元格乙表头" not in out

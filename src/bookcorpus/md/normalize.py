@@ -64,6 +64,8 @@ _HTML_LINK_RE = re.compile(r"""<a\b([^>]*)>(.*?)</a>""", re.I | re.S)
 _HTML_HREF_RE = re.compile(r"""\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
 _HTML_BR_RE = re.compile(r"<br\s*/?>", re.I)
 _HTML_HR_RE = re.compile(r"<hr\b[^>]*/?>", re.I)
+_UNCLOSED_CELL_END_RE = re.compile(r"</(?:td|th)\s*>", re.I)
+_UNCLOSED_TR_END_RE = re.compile(r"</tr\s*>", re.I)
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 _HTML_TAG_RE = re.compile(
     r"</?(?:sup|sub|span|div|a|br|hr|i|b|u|em|strong|small|big|font|p|td|tr|th|tbody|thead|tfoot|"
@@ -458,6 +460,8 @@ def clean_html_and_noise(text: str, stats: NormalizeStats) -> str:
             worked = _HTML_LINK_RE.sub(_replace_html_link, worked)
             worked = _HTML_BR_RE.sub("\n", worked)
             worked = _HTML_HR_RE.sub("\n---\n", worked)
+            worked = _UNCLOSED_CELL_END_RE.sub(" ", worked)
+            worked = _UNCLOSED_TR_END_RE.sub("\n", worked)
             worked = _HTML_TAG_RE.sub("", worked)
 
         worked = _EMPTY_PANDOC_SPAN_RE.sub("", worked)
@@ -772,6 +776,21 @@ def _split_chunk_with_fences(text: str) -> list[tuple[bool, str]]:
     return chunks
 
 
+def _is_preserved_dbl_fn_target(raw_target: str) -> bool:
+    """判断 ``[[N]](target)`` 的目标是否为外链或跨文件 `.md` 脚注链接（须原样保留）。"""
+    target = (raw_target or "").strip()
+    if not target:
+        return False
+    if target.lower().startswith(("http://", "https://", "mailto:")):
+        return True
+    if target.startswith("<") and ">" in target:
+        inner = target[1 : target.find(">")].strip()
+    else:
+        inner = re.split(r"""\s+(?=["'])""", target, maxsplit=1)[0].strip()
+    path_part = inner.split("#", 1)[0].strip()
+    return path_part.lower().endswith(".md")
+
+
 def normalize_chapter_footnotes(
     text: str,
     md_dir: Path | None,
@@ -949,8 +968,7 @@ def normalize_chapter_footnotes(
         if any(d["chunk_idx"] == idx for d in defs):
             continue
         for m in _INLINE_DBL_FN_RE.finditer(ch):
-            target = (m.group(3) or "").strip()
-            if target.lower().startswith(("http://", "https://", "mailto:")):
+            if _is_preserved_dbl_fn_target(m.group(3) or ""):
                 continue
             _, k = normalize_marker(m.group(2))
             if k:
@@ -995,6 +1013,32 @@ def normalize_chapter_footnotes(
         lbl = _safe_fn_label(d["display"] or d["key"], used_labels, seq_counter)
         d["label"] = lbl
         return lbl
+
+    def _sub_dbl_fn(m: re.Match[str]) -> str:
+        nonlocal changed
+        if _is_preserved_dbl_fn_target(m.group(3) or ""):
+            return m.group(0)
+        raw_lbl = m.group(2).strip()
+        display, k = normalize_marker(raw_lbl)
+        if not k:
+            return m.group(0)
+        cands = def_by_key.get(k) or []
+        if cands:
+            d = cands[0]
+            lbl = _assign_label_for_def(d)
+            paired_defs.add(id(d))
+            stats.footnotes_converted += 1
+            changed = True
+            return f"[^{lbl}]"
+        cand_std = re.sub(r"[^0-9A-Za-z_-]", "", display or k)
+        if cand_std and _STD_FN_LABEL_RE.fullmatch(cand_std) and len(display) <= 20:
+            used_labels.add(cand_std)
+            stats.footnote_residues_cleaned += 1
+            changed = True
+            return f"[^{cand_std}]"
+        stats.footnote_residues_cleaned += 1
+        changed = True
+        return f"[{display}]"
 
     # 执行行内替换
     generic_cursor = 0
@@ -1058,34 +1102,6 @@ def normalize_chapter_footnotes(
             return m.group(0) if res is None else res
 
         updated = _INLINE_ICON_IMG_RE.sub(_sub_icon_img, updated)
-
-        def _sub_dbl_fn(m: re.Match[str]) -> str:
-            nonlocal changed
-            target = (m.group(3) or "").strip()
-            if target.lower().startswith(("http://", "https://", "mailto:")):
-                return m.group(0)
-            raw_lbl = m.group(2).strip()
-            display, k = normalize_marker(raw_lbl)
-            if not k:
-                return m.group(0)
-            cands = def_by_key.get(k) or []
-            if cands:
-                d = cands[0]
-                lbl = _assign_label_for_def(d)
-                paired_defs.add(id(d))
-                stats.footnotes_converted += 1
-                changed = True
-                return f"[^{lbl}]"
-            cand_std = re.sub(r"[^0-9A-Za-z_-]", "", display or k)
-            if cand_std and _STD_FN_LABEL_RE.fullmatch(cand_std) and len(display) <= 20:
-                used_labels.add(cand_std)
-                stats.footnote_residues_cleaned += 1
-                changed = True
-                return f"[^{cand_std}]"
-            stats.footnote_residues_cleaned += 1
-            changed = True
-            return f"[{display}]"
-
         updated = _INLINE_DBL_FN_RE.sub(_sub_dbl_fn, updated)
         new_chunks.append((False, updated))
 
@@ -1610,10 +1626,17 @@ def _referenced_images_in_texts(texts: Iterable[str]) -> set[str]:
     for text in texts:
         for pat in (_IMG_REF_RE, _LINK_REF_RE):
             for g1, g2 in pat.findall(text):
-                target = unquote((g1 or g2 or "").strip())
+                raw = (g1 or g2 or "").strip()
+                if not g1 and raw:
+                    raw = re.split(r"""\s+(?=["'])""", raw, maxsplit=1)[0].strip()
+                    if raw.startswith("<") and raw.endswith(">"):
+                        raw = raw[1:-1].strip()
+                target = unquote(raw)
+                while target.startswith("./"):
+                    target = target[2:]
                 if not target or target.startswith(("http://", "https://", "mailto:", "#", "data:")):
                     continue
-                if pat is _LINK_REF_RE and Path(target).suffix.lower() not in _IMAGE_EXTS:
+                if pat is _LINK_REF_RE and Path(target.split("#", 1)[0]).suffix.lower() not in _IMAGE_EXTS:
                     continue
                 refs.add(target)
     return refs
@@ -1911,17 +1934,18 @@ def normalize_book_md(
         bk_label = uid if uid and uid != "md" else root.parent.name
         backup_path = str(_backup_md_dir(root, bk_root, bk_label))
 
-    # 7. 落盘（先写临时文件再原子 os.replace）
-    if did_split:
-        for old_p in chapter_files:
-            if old_p.is_file():
-                old_p.unlink()
-
+    # 7. 落盘（先写临时文件再原子 os.replace；拆章时先写新章再删不在新集中的旧文件）
     for ch in new_chapters:
         dest = root / ch["name"]
         if not did_split and ch["orig_raw"] == ch["rendered"] and dest.is_file():
             continue
         _write_text_atomic(dest, ch["rendered"])
+
+    if did_split:
+        keep_names = {ch["name"] for ch in new_chapters}
+        for old_p in chapter_files:
+            if old_p.name not in keep_names and old_p.is_file():
+                old_p.unlink()
 
     for icon_path in orphan_icons_to_delete:
         if icon_path.is_file():
