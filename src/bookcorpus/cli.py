@@ -35,6 +35,7 @@ ALIASES = {
     "stats": "corpus_stats",
     "daily": "daily",
     "normalize": "normalize_md",
+    "normalize-batch": "normalize_corpus_batch",
 }
 
 HELP = """book-corpus <命令> [参数...]

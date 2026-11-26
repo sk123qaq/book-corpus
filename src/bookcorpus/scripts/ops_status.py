@@ -349,6 +349,106 @@ def views(p, state):
     }
 
 
+def _read_manifest_lite(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _latest_norm_plan_batches(p):
+    """若工作区存在最近一次 规范化-*/plan.json，读取 uid -> batch 映射以补全 Batch 1 估算。"""
+    if not os.path.isdir(p.batches):
+        return {}
+    cands = [n for n in os.listdir(p.batches) if n.startswith("规范化-") and os.path.isdir(os.path.join(p.batches, n))]
+    for name in sorted(cands, reverse=True):
+        plan_path = os.path.join(p.batches, name, "plan.json")
+        if not os.path.isfile(plan_path):
+            continue
+        data = _read_manifest_lite(plan_path)
+        batches = data.get("batches")
+        if not isinstance(batches, dict):
+            continue
+        mapping = {}
+        for bkey in ("1", "2", "3"):
+            for item in batches.get(bkey) or []:
+                if isinstance(item, dict) and item.get("uid"):
+                    mapping[str(item["uid"])] = str(item.get("subroute") or bkey)
+        if mapping:
+            return mapping
+    return {}
+
+
+def md_canonical(p, state, disk_sigs=None):
+    """只读统计 canonical_version >= 1 覆盖情况及待规范化分批概览（只扫 .manifest.json，~80ms）。"""
+    if disk_sigs is None:
+        try:
+            import build_para_index as BPI
+
+            disk_sigs = BPI.scan_md_sigs(corpus=p.lib)
+        except (ImportError, OSError):
+            disk_sigs = {}
+    plan_map = _latest_norm_plan_batches(p)
+    total = len(disk_sigs)
+    canonical = 0
+    pending = 0
+    single_pending = 0
+    pdf_text_single_pending = 0
+    b1 = b2 = b3a = b3b = 0
+
+    for book_rel, (_sig, ch_cnt) in disk_sigs.items():
+        man = _read_manifest_lite(os.path.join(p.lib, book_rel, "md", ".manifest.json"))
+        try:
+            ver = int(man.get("canonical_version") or 0)
+        except (TypeError, ValueError):
+            ver = 0
+        if ver >= 1:
+            canonical += 1
+            continue
+        pending += 1
+        uid = os.path.basename(book_rel)
+        method = str(man.get("method") or "").strip()
+        is_single = int(ch_cnt or 0) == 1
+        if is_single:
+            single_pending += 1
+            if method == "pdf-text":
+                pdf_text_single_pending += 1
+        planned = plan_map.get(uid)
+        if planned == "html-clean" or planned == "1":
+            b1 += 1
+        elif planned == "single-split" or planned == "2":
+            b2 += 1
+        elif planned == "3A":
+            b3a += 1
+        elif planned == "3B":
+            b3b += 1
+        elif is_single and method == "pdf-text":
+            b3a += 1
+        elif is_single and (int(man.get("chars") or 0) > 24000 or method in ("paddle-ocr", "mineru-ocr")):
+            b2 += 1
+        else:
+            b3b += 1
+
+    state["md_canonical"] = {
+        "ok": True,
+        "total": total,
+        "canonical": canonical,
+        "pending": pending,
+        "coverage_pct": round(canonical / total * 100, 1) if total else 100.0,
+        "single_chapter_pending": single_pending,
+        "pdf_text_single_pending": pdf_text_single_pending,
+        "batches": {
+            "batch1_html": b1,
+            "batch2_single_split": b2,
+            "batch3a_pdf_text": b3a,
+            "batch3b_other": b3b,
+        },
+        "source": "plan+manifest" if plan_map else "manifest",
+    }
+
+
 def read_cache(p, state):
     try:
         with open(p.last_audit, encoding="utf-8") as fh:
@@ -758,6 +858,22 @@ def collect(p, deep=False):
             "lag_exact": False,
         },
         "views": {"awards": 0, "broken": 0},
+        "md_canonical": {
+            "ok": False,
+            "total": 0,
+            "canonical": 0,
+            "pending": 0,
+            "coverage_pct": 0.0,
+            "single_chapter_pending": 0,
+            "pdf_text_single_pending": 0,
+            "batches": {
+                "batch1_html": 0,
+                "batch2_single_split": 0,
+                "batch3a_pdf_text": 0,
+                "batch3b_other": 0,
+            },
+            "source": "none",
+        },
         "audit": {"fail": 0, "warn": 0, "items": [], "at": None, "ran": False, "stale": False},
         "ocr": {
             "batch": None,
@@ -786,6 +902,7 @@ def collect(p, deep=False):
         disk_sigs = None
     embed_status(p, state, disk_sigs=disk_sigs)
     views(p, state)
+    md_canonical(p, state, disk_sigs=disk_sigs)
     sync_delta(p, state, disk_sigs=disk_sigs)
     cache = read_cache(p, state)
     if deep:
@@ -825,6 +942,13 @@ def render(state):
             "" if idx["lag_exact"] else "（按计数，--deep 精确）",
         ),
         "视图 奖项 %d / 断链 %d" % (state["views"]["awards"], state["views"]["broken"]),
+        "规范化 %d / %d 本（待洗 %d，pdf-text 单章 %d）"
+        % (
+            (state.get("md_canonical") or {}).get("canonical", 0),
+            (state.get("md_canonical") or {}).get("total", 0),
+            (state.get("md_canonical") or {}).get("pending", 0),
+            (state.get("md_canonical") or {}).get("pdf_text_single_pending", 0),
+        ),
         "审计 FAIL %d / WARN %d（%s%s）"
         % (
             audit_state_["fail"],
