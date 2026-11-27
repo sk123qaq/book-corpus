@@ -265,6 +265,20 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
         f"后左侧栏固定 top={at_bot['srTop']} bottom={at_bot['srBottom']}"
     )
 
+    # 2) 桌面 1440x900：保持在已展开的可滚动页面验证吸顶，随后从页底直点侧栏切回 #overview
+    cdp.call(
+        "Emulation.setDeviceMetricsOverride",
+        {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False},
+    )
+    at_900 = shot.eval_js(cdp, _desktop_scroll_js("bottom"))
+    _assert_desktop_sticky(at_900, 900, min_scroll=150, max_topbar_top=-150, label="1440x900 页底")
+    assert 0 <= (900 - at_900["lastCardBottom"]) <= 45.0, f"1440x900 末张卡片下端超出预期底边距：{at_900}"
+    _save_png(cdp, screenshot_dir, "ops-sidebar-scrolled-1440x900.png")
+    print(
+        f"PASS 1440x900 滚到底部（scrollY={at_900['scrollY']}, topbarTop={at_900['topbarTop']}）"
+        f"后左侧栏固定 top={at_900['srTop']} bottom={at_900['srBottom']}"
+    )
+
     # 在页底不滚回顶部时，直接点击固定侧栏里的「总览」
     clicked = shot.eval_js(
         cdp,
@@ -278,48 +292,9 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
     assert clicked is True, "找不到左侧导航 #overview 链接"
     _wait_ready(shot, cdp, "#view h1", "总览")
     overview_check = shot.eval_js(cdp, _desktop_scroll_js(0))
-    assert abs(overview_check["srTop"]) <= 1.0, f"1440x700 #overview 侧栏 top 偏移：{overview_check}"
-    assert abs(overview_check["srBottom"] - 700) <= 1.0, f"1440x700 #overview 侧栏 bottom 偏移：{overview_check}"
-    print(f"PASS 1440x700 页底直点 #overview 切换成功，侧栏保持 top={overview_check['srTop']}")
-
-    # 2) 桌面 1440x900：在可滚动页面验证吸顶后切回 #overview 验证一屏收敛
-    cdp.call(
-        "Emulation.setDeviceMetricsOverride",
-        {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False},
-    )
-    shot.eval_js(cdp, "document.querySelector('#nav a[href=\"#maintain\"]').click(); window.scrollTo(0, 0); true")
-    _wait_ready(shot, cdp, "#view h1", "同步与维护")
-    shot.eval_js(
-        cdp,
-        """(async () => {
-          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-          const se = document.scrollingElement || document.documentElement;
-          for (let i = 0; i < 40; i += 1) {
-            document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
-            if (
-              se.scrollHeight > window.innerHeight + 160
-              && document.querySelector('#btn-reconcile, [data-act="maintain-reconcile"]')
-            ) {
-              break;
-            }
-            await sleep(40);
-          }
-          await sleep(50);
-          document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
-          return true;
-        })()""",
-        await_promise=True,
-    )
-    at_900 = shot.eval_js(cdp, _desktop_scroll_js("bottom"))
-    _assert_desktop_sticky(at_900, 900, min_scroll=150, max_topbar_top=-150, label="1440x900 页底")
-    assert 0 <= (900 - at_900["lastCardBottom"]) <= 45.0, f"1440x900 末张卡片下端超出预期底边距：{at_900}"
-    _save_png(cdp, screenshot_dir, "ops-sidebar-scrolled-1440x900.png")
-    print(
-        f"PASS 1440x900 滚到底部（scrollY={at_900['scrollY']}, topbarTop={at_900['topbarTop']}）"
-        f"后左侧栏固定 top={at_900['srTop']} bottom={at_900['srBottom']}"
-    )
-    shot.eval_js(cdp, "document.querySelector('#nav a[href=\"#overview\"]').click(); window.scrollTo(0, 0); true")
-    _wait_ready(shot, cdp, "#view h1", "总览")
+    assert abs(overview_check["srTop"]) <= 1.0, f"1440x900 #overview 侧栏 top 偏移：{overview_check}"
+    assert abs(overview_check["srBottom"] - 900) <= 1.0, f"1440x900 #overview 侧栏 bottom 偏移：{overview_check}"
+    print(f"PASS 页底直点 #overview 切换成功，侧栏保持 top={overview_check['srTop']}")
 
     # 3) 宽屏 1920x1080：无顶栏搜索按钮，main 与 .topbar-inner 限宽且在 .workspace 内水平居中对齐
     cdp.call(
