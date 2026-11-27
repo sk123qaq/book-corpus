@@ -289,21 +289,23 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
     )
     shot.eval_js(cdp, "document.querySelector('#nav a[href=\"#maintain\"]').click(); window.scrollTo(0, 0); true")
     _wait_ready(shot, cdp, "#view h1", "同步与维护")
-    time.sleep(0.35)
     shot.eval_js(
         cdp,
         """(async () => {
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-          for (let i = 0; i < 25; i += 1) {
-            const se = document.scrollingElement || document.documentElement;
+          const se = document.scrollingElement || document.documentElement;
+          for (let i = 0; i < 40; i += 1) {
             document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
-            if (se.scrollHeight > window.innerHeight + 160) {
-              await sleep(150);
-              document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
-              if (se.scrollHeight > window.innerHeight + 160) break;
+            if (
+              se.scrollHeight > window.innerHeight + 160
+              && document.querySelector('#btn-reconcile, [data-act="maintain-reconcile"]')
+            ) {
+              break;
             }
-            await sleep(100);
+            await sleep(40);
           }
+          await sleep(50);
+          document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
           return true;
         })()""",
         await_promise=True,
