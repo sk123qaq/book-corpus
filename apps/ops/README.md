@@ -28,7 +28,7 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 | 路径 | 内容 |
 |---|---|
 | `apps/ops/server.py` | 服务端逻辑：`ops.db`、任务队列与锁、门槛判定、自动增量同步接力、HTTP 接口 |
-| `apps/ops/web/index.html`、`app.js`、`style.css` | 六个主模块加六个兼容子页签的原生 JS 页面，无框架无 CDN，支持宣纸日间 / 墨夜主题切换；桌面端左侧导航固定吸顶（`<=820px` 窄屏回落顶部横栏），顶栏移除重复搜索按钮并与正文同宽（`1200px`）水平居中，左右顶部分隔线与满页末卡底端对齐（后端 `/api/search/health` 与 `/api/search/start` 接口保留） |
+| `apps/ops/web/index.html`、`app.js`、`style.css` | 六个主模块加六个兼容子页签的原生 JS 页面，无框架无 CDN，支持宣纸日间 / 墨夜主题切换（`#theme-toggle` 与状态刷新增设于顶栏右侧）；桌面端左侧导航固定吸顶（`<=820px` 窄屏回落顶部横栏），顶栏与正文同宽（`--content-max: 2080px`，水平居中）且左右顶部分隔线齐平 |
 | `工作区/运维/ops.db` | 任务与步骤（首次启动自建，可重建） |
 | `工作区/运维/jobs/<id>/` | `log.txt`、`commands.json`、`pid`、`plan.json`、`result.json`、`dry-run.json`、`report.json`、`thumbs/*.png` |
 | `工作区/运维/.writer.lock` | 写任务互斥与批次账读改写用的 `fcntl.flock` 文件 |
@@ -48,7 +48,7 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 
 页面文案面向用操作台管书的人，除日志诊断页外不暴露脚本名、命令行参数、文件路径与内部代号。
 
-- **1. 总览（`#overview`）**：当前焦点判定与可读率进度条、流水线六环节、下一步待办列表、多端服务状态栏；任务统一在「任务与日志」查看，本页不重复展示最近任务。
+- **1. 总览（`#overview`）**：顶部精简为三大区块——纯展示编辑台账首卡（核心判断、全文索引与政策存档台账、三色正文可读率条）、一体式流水线六环节轨道板（带底沿联动提醒条，无问题时自动隐藏；取消独立「下一步待办」卡）与无端口号的书库应用入口；任务统一在「任务与日志」查看，本页不重复展示最近任务。
 - **2. 新书入库（`#import`）**：自上而下全宽流（全宽投递条 → 收件箱清单 → 入库核对清单，可逐行改书名/分类/动作并确认入库）；文档转换进度与明细移至「正文生产 · 文档转正文」。
 - **3. 书目与分类（`#ledger`）**：含子页签 `ledger`（两行清爽工具栏 + 全库书目台账，去除磁盘路径与文件名，保存即自动同步）、`retire`（按编号/书名搜索移出 + 已标「不留」清单 + 原生确认弹窗，不放最近任务）、`cold`（退库台账 + 冷宫实物核验：表格带「实物状态」三态，页面「刷新」会按 `books/_冷宫` 实际文件校正台账）。
 - **4. 正文生产（`#split`）**：含子页签 `split`（电子书拆章/重拆/重检/查看问题/受理）、`docs`（文档转正文四格概览、补转、失败重试与最近一批折叠明细）、`pdf`（四格状态筛查、今日额度、批量分诊、内嵌待转清单与改处置弹窗；子页 `#pdf-list` 为完整多维筛选清单）、`manual`（手工格式扫描落位）；各子页均不重复展示最近任务卡片。
@@ -134,7 +134,7 @@ PYTHONPATH=$PWD/tests/acceptance/ops uv run --frozen python tests/manual/ops/sho
 ```
 
 - `check_ops.py` 造临时根与 stub 脚本，不碰真库，末行 `ALL PASS`。
-- `test_sidebar_sticky.py` 校对 `html`/`body` `overflow-x: clip` 与 `.sidebar` sticky 规则，并用 headless Chromium 验 `1440x700` / `1440x900` 侧栏吸顶与末卡贴底、`1920x1080` 去顶栏搜索按钮 / `1200px` 限宽居中 / 顶部分隔线齐平与短页自然排布，以及 `390x844` 窄屏回落，末行 `ALL PASS`。
+- `test_sidebar_sticky.py` 校对 `html`/`body` `overflow-x: clip` 与 `.sidebar` sticky 规则，并用 headless Chromium 验 `1440x700` / `1440x900` 长页侧栏吸顶、`1920x1080` 去顶栏搜索按钮 / `--content-max: 2080px` 居中对齐 / 顶部分隔线齐平与短页自然排布，以及 `390x844` 窄屏回落与顶栏 `#theme-toggle` 可见，末行 `ALL PASS`。
 - `shot_ops.py` 用 headless Chromium 走完六模块、兼容子页签、导入/分诊/删书弹窗与 1440x900 / 390x844 两档布局，末行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`（浏览器读 `CHROME_BIN`，缺省自动探测 `chromium`）。
 - 轻量导航回归亦可用 `.agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py`。
 

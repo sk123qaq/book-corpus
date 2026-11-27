@@ -256,10 +256,19 @@ function planHead() {
 
 function toast(message, bad) {
   const el = $('#toast');
+  if (!el) return;
   el.textContent = message;
   el.className = 'toast on' + (bad ? ' bad' : '');
+  if (typeof el.showPopover === 'function') {
+    try { el.showPopover(); } catch (err) { /* ignore popover state */ }
+  }
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { el.className = 'toast'; }, 3800);
+  toast.timer = setTimeout(() => {
+    el.className = 'toast';
+    if (typeof el.hidePopover === 'function') {
+      try { el.hidePopover(); } catch (err) { /* ignore popover state */ }
+    }
+  }, 3800);
 }
 
 async function api(path, opts) {
@@ -370,11 +379,18 @@ function bookCounts() {
   const pdfsToConvert = cg
     ? (Number(cg.pdf) || 0)
     : Math.max(0, (convertible != null ? convertible : 0) - ebooksToConvert - docsToConvert - otherToConvert);
+  const readable = snapNum(st, 'books_readable', 'md_indexable', 0);
+  const mdDone = st.md_done != null ? Number(st.md_done) : null;
+  const zeroChapterDone = st.zero_chapter_done != null
+    ? Math.max(0, Number(st.zero_chapter_done) || 0)
+    : (st.books_readable != null && mdDone != null ? Math.max(0, mdDone - Number(st.books_readable)) : 0);
   return {
     books: snapNum(st, 'books', 'books', 0),
     // 可读=快照 books_readable：md 目录存在且章数>0；不再用 md_done（会把 0 章 md（图片书）算成可读）。
     // 旧 payload（无 books_readable）退 md_indexable，口径相同；显式 null（未知）保留，页面显示「—」。
-    readable: snapNum(st, 'books_readable', 'md_indexable', 0),
+    readable,
+    mdDone,
+    zeroChapterDone,
     chapters: snapNum(st, 'stats_chapters', 'md_chapters', 0),
     builtAt: dig(st, 'stats_built_at', ''),
     // 待转口径在服务端：无 md 的书里去掉已定存档的。缺口径时退回旧公式
@@ -476,6 +492,13 @@ function ebookCount() {
   return S.pending.filter((row) => EBOOK.test(row.format)).length;
 }
 
+function formatStampTime(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const match = /(\d{2}:\d{2})(?::\d{2})?/.exec(text);
+  return match ? match[1] : text;
+}
+
 function renderStats() {
   const c = bookCounts();
   const items = [
@@ -488,18 +511,30 @@ function renderStats() {
       !c.indexKnown || c.lagBooks ? 'warn' : (statusState() === 'ok' ? 'ok' : '')],
     c.inbox ? ['收件箱', num(c.inbox), 'warn'] : null,
   ].filter(Boolean);
-  let html = items.map(([label, value, cls]) => `<span class="stat${cls ? ' ' + cls : ''}">${esc(label)}<b>${esc(value)}</b></span>`).join('');
+  let html = items.map(([label, value, cls]) => `<li class="stat${cls ? ' ' + cls : ''}">${esc(label)}<b>${esc(value)}</b></li>`).join('');
   if (!statsReadable()) {
     const detail = (S.payload && S.payload.error) || '';
-    html += `<span class="stat warn" title="${esc(detail)}">状态<b>读不到</b></span>`;
+    html += `<li class="stat warn" title="${esc(detail)}">状态<b>读不到</b></li>`;
   }
   const ops = (S.payload && S.payload.ops) || {};
-  if (ops.writer) html += '<span class="stat warn">写任务<b>在跑</b></span>';
-  const builtAt = c.builtAt || (S.payload && S.payload.stats_built_at) || '';
-  if (builtAt) {
-    html += '<span class="stat" title="四个数来自同一份快照；与 8765 检索、8771 伴读同源">统计于<b>' + esc(builtAt) + '</b></span>';
-  }
+  if (ops.writer) html += '<li class="stat warn">写任务<b>在跑</b></li>';
   $('#stats').innerHTML = html;
+
+  const builtAt = c.builtAt || (S.payload && S.payload.stats_built_at) || '';
+  const stampEl = $('#stats-stamp');
+  const stampTime = $('#stamp-time');
+  const stampDiv = $('#stamp-divider');
+  if (stampEl && stampTime) {
+    if (builtAt) {
+      stampTime.textContent = formatStampTime(builtAt);
+      stampEl.title = '统计于 ' + builtAt + '（来自统一统计基准，与各应用同源）';
+      stampEl.hidden = false;
+      if (stampDiv) stampDiv.hidden = false;
+    } else {
+      stampEl.hidden = true;
+      if (stampDiv) stampDiv.hidden = true;
+    }
+  }
 }
 
 function openModal(html) {
@@ -585,8 +620,40 @@ function scrollTabIntoView(el) {
   }
 }
 
+function wireTrackLinkage() {
+  const board = document.querySelector('#view .track-board');
+  if (!board || board.dataset.linkedWired === '1') return;
+  board.dataset.linkedWired = '1';
+  const setStage = (stage, active) => {
+    if (!stage) return;
+    const node = board.querySelector(`.track-stage[data-stage="${stage}"]`);
+    if (node && node.classList) node.classList.toggle('is-linked', active);
+  };
+  board.addEventListener('mouseover', (ev) => {
+    const link = ev.target.closest && ev.target.closest('[data-link-stage]');
+    if (link) setStage(link.dataset.linkStage, true);
+  });
+  board.addEventListener('mouseout', (ev) => {
+    const link = ev.target.closest && ev.target.closest('[data-link-stage]');
+    if (link && (!ev.relatedTarget || !link.contains(ev.relatedTarget))) {
+      setStage(link.dataset.linkStage, false);
+    }
+  });
+  board.addEventListener('focusin', (ev) => {
+    const link = ev.target.closest && ev.target.closest('[data-link-stage]');
+    if (link) setStage(link.dataset.linkStage, true);
+  });
+  board.addEventListener('focusout', (ev) => {
+    const link = ev.target.closest && ev.target.closest('[data-link-stage]');
+    if (link && (!ev.relatedTarget || !link.contains(ev.relatedTarget))) {
+      setStage(link.dataset.linkStage, false);
+    }
+  });
+}
+
 function afterRender() {
   wireDrop();
+  wireTrackLinkage();
   scrollTabIntoView(document.querySelector('#nav a.on'));
   scrollTabIntoView(document.querySelector('#view .subtabs a.on'));
   if (S.logSkipAfterRender) {
@@ -613,296 +680,296 @@ function wireDrop() {
 }
 
 // ---- 总览 ---------------------------------------------------------
-function todoItems(c) {
+const SVC_DESC = {
+  home: '全库书架与统一入口',
+  search: '自然语言检索与段落引用',
+  reading: '逐章正文阅读与批注',
+  daily: '每日推荐一章只读版',
+};
+
+function trackAlerts(c) {
   const items = [];
   if (statusState() === 'unknown') {
     items.push({
-      title: '状态读不到，先去同步与维护检查',
-      note: '书目库或检索索引未就绪时，计数和体检都不可信。',
-      href: '#maintain', label: '去维护', primary: true,
+      stage: 'audit', miss: true,
+      title: '暂时读不到书库状态',
+      note: '书目库或检索索引未就绪时计数与体检不可信',
+      href: '#maintain', label: '去维护',
     });
   } else if (!c.libKnown || !c.indexKnown || !c.catalogKnown || !c.viewsKnown) {
-    // 四段落缺哪补哪，合成一条待办：缺库、缺索引、缺书目总表、缺浏览入口都算状态不完整
     const lack = [];
     if (!c.libKnown) lack.push('书目库');
     if (!c.indexKnown) lack.push('检索索引');
     if (!c.catalogKnown) lack.push('书目总表');
     if (!c.viewsKnown) lack.push('浏览入口（奖项）');
     items.push({
+      stage: 'views', miss: true,
       title: '书库状态不完整',
-      note: '缺 ' + lack.join('、') + '，计数和体检都不可信。',
-      href: '#maintain', label: '去维护', primary: true,
+      note: '缺 ' + lack.join('、'),
+      href: '#maintain', label: '去维护',
     });
   }
   if (statusState() !== 'unknown' && !c.auditRan) {
     items.push({
+      stage: 'audit', miss: true,
       title: '还没有做过体检',
-      note: '跑一次收尾，体检通过后总览才算完整。', href: '#maintain', label: '去维护',
+      note: '跑一次收尾后总览才算完整',
+      href: '#maintain', label: '去维护',
     });
   } else if (c.auditStale) {
     items.push({
+      stage: 'audit',
       title: '体检结果已过期',
-      note: '最近一次入库或索引更新晚于体检，重跑收尾后再判断。', href: '#maintain', label: '去维护',
+      note: '入库或索引晚于上次体检',
+      href: '#maintain', label: '去维护',
     });
   }
   if (c.fail || c.broken) {
     items.push({
-      title: '有 ' + num(c.fail + c.broken) + ' 处需要处理',
-      note: '收尾会走一遍检查，先把这几处修好。', href: '#maintain', label: '去维护',
+      stage: c.broken && !c.fail ? 'views' : 'audit', miss: true,
+      title: '有 ' + num(c.fail + c.broken) + ' 处需处理',
+      note: '先修好异常项再体检',
+      href: '#maintain', label: '去维护',
     });
   }
   if (c.unmatched) {
     items.push({
+      stage: 'views',
       title: num(c.unmatched) + ' 条书目对不上文件',
-      note: '重出书目总表后就会消失。', href: '#maintain', label: '去维护',
+      note: '重出书目总表即可对齐',
+      href: '#maintain', label: '去维护',
     });
   }
   if (c.awaiting) {
     items.push({
+      stage: 'split',
       title: num(c.awaiting) + ' 个任务待确认',
-      note: '有产物停在暂存区，需要人工核对收口。', href: '#logs?state=awaiting_review', label: '去确认', primary: true,
+      note: '产物停在暂存区等核对',
+      href: '#logs?state=awaiting_review', label: '去确认',
     });
   }
   if (c.inbox) {
     items.push({
+      stage: 'inbox',
       title: '核对收件箱 ' + num(c.inbox) + ' 本新书',
-      note: '核对书名与分类建议后即可一键入库。', href: '#import', label: '去入库', primary: !c.awaiting,
+      note: '核对书名与分类后入库',
+      href: '#import', label: '去入库',
     });
   }
   if (c.inboxIgnored) {
     items.push({
-      title: '收件箱有 ' + num(c.inboxIgnored) + ' 个不支持格式文件',
-      note: '不在自动入库支持格式内（如 doc / djvu / csv）。', href: '#import', label: '去查看',
+      stage: 'inbox',
+      title: '收件箱有 ' + num(c.inboxIgnored) + ' 个不支持格式',
+      href: '#import', label: '去查看',
     });
   }
   if (c.ledgerStale) {
     items.push({
-      title: '账表有修改，书目库尚未同步',
-      note: '改过分类、书名或保留策略，去同步与维护对齐后会生效。', href: '#maintain', label: '去同步',
+      stage: 'ledger',
+      title: '分类账有修改待同步',
+      href: '#maintain', label: '去同步',
     });
   }
   const ebooks = c.ebooksToConvert || ebookCount();
   if (ebooks) {
     items.push({
-      title: '拆章 ' + num(ebooks) + ' 本待处理电子书',
-      note: '切分成按章正文后自动更新搜索索引。', href: '#split', label: '去拆章',
-    });
-  }
-  if (c.docsToConvert) {
-    items.push({
-      title: '转换 ' + num(c.docsToConvert) + ' 本待补转文档',
-      note: '文本与 Office 文档可在「文档转正文」一键补转。', href: '#docs', label: '去转文档',
+      stage: 'split',
+      title: '拆章 ' + num(ebooks) + ' 本电子书',
+      href: '#split', label: '去拆章',
     });
   }
   if (c.pdfsToConvert) {
     items.push({
-      title: '排入 ' + num(c.pdfsToConvert) + ' 本已分诊或待诊 PDF',
-      note: '图册与非中英文已按政策归入存档，不占转写额度。', href: '#pdf', label: '去选书', primary: !c.awaiting && !c.inbox,
+      stage: 'split',
+      title: '待转 PDF ' + num(c.pdfsToConvert) + ' 本',
+      note: '政策存档书已自动跳过',
+      href: '#pdf', label: '去处理',
+    });
+  }
+  if (c.docsToConvert) {
+    items.push({
+      stage: 'split',
+      title: '补转文档 ' + num(c.docsToConvert) + ' 本',
+      href: '#docs', label: '去转文档',
     });
   }
   if (c.otherToConvert) {
     items.push({
-      title: num(c.otherToConvert) + ' 本为手工格式（djvu / csv）',
-      note: '在外部转为正文放回目录后，点扫描落位即可入库。', href: '#manual', label: '去查看',
+      stage: 'split',
+      title: num(c.otherToConvert) + ' 本手工格式待转换',
+      href: '#manual', label: '去查看',
     });
   }
   if (c.lagBooks) {
     items.push({
+      stage: 'index',
       title: '检索索引落后 ' + num(c.lagBooks) + ' 本',
-      note: '这些书的新章节还搜不到。', href: '#maintain', label: '去维护',
+      href: '#maintain', label: '去维护',
     });
   }
   if (c.indexExtra) {
     items.push({
+      stage: 'index',
       title: '检索索引比书库多 ' + num(c.indexExtra) + ' 本',
-      note: '索引里可能还有已移出的书，去维护页增量对齐。', href: '#maintain', label: '去维护',
+      href: '#maintain', label: '去维护',
     });
   }
   if (c.warn) {
     items.push({
+      stage: 'audit',
       title: '体检有 ' + num(c.warn) + ' 条提醒',
-      note: '不影响日常阅读与搜索，可在同步与维护查看明细。', href: '#maintain', label: '去查看',
+      note: '可在维护页查看明细',
+      href: '#maintain', label: '去查看',
     });
   }
   return items;
 }
 
-function verdictText(c, todos) {
+function verdictText(c, alerts) {
   if (statusState() === 'unknown' || !statsReadable()) return '暂时读不到书库状态';
-  if (!c.libKnown || !c.indexKnown || !c.auditRan) return '状态不完整，先补齐再判断';
-  if (c.fail || c.broken) return '有几处需要处理';
-  // 缺书目总表/浏览入口这类问题不在 fail/broken 里，state 非 ok 就不能说干净
-  if (statusState() !== 'ok') return '状态不完整，先补齐再判断';
-  if (todos.length) return '书库整体运转正常，有 ' + num(todos.length) + ' 项待关注。';
-  return '库是干净的';
-}
-
-function heroNote(c) {
-  if (statusState() === 'unknown' || !statsReadable()) return '刷新一下试试；读不到的原因在顶栏提示里。';
-  const tail = !c.indexKnown
-    ? '检索索引读数未知。'
-    : (c.lagBooks
-      ? '索引落后 ' + num(c.lagBooks) + ' 本。'
-      : (c.indexExtra
-        ? '索引比书库多 ' + num(c.indexExtra) + ' 本。'
-        : (statusState() === 'ok' ? '检索索引已同步。' : '检索索引没有落后。')));
-  const arch = c.archive && c.archive.books ? '，其中 ' + num(c.archive.books) + ' 本归入政策存档、只存不转' : '';
-  const head = c.libKnown
-    ? '共收录 ' + num(c.books) + ' 本书（' + num(c.chapters) + ' 章），已有 ' + num(c.readable) + ' 本可读' + arch + '。'
-    : '书库计数未知（需去维护页检查）。';
-  return head + tail;
-}
-
-function heroAction(c) {
-  if (statusState() === 'unknown' || !c.libKnown || !c.indexKnown) return ['去维护', '#maintain'];
-  if (c.awaiting) return ['去任务中心确认', '#logs?state=awaiting_review'];
-  if (c.inbox) return ['核对收件箱 (' + num(c.inbox) + ')', '#import'];
-  if (c.ebooksToConvert || ebookCount()) return ['去拆章', '#split'];
-  if (c.pdfsToConvert) return ['去处理 PDF (' + num(c.pdfsToConvert) + ')', '#pdf'];
-  if (c.docsToConvert) return ['去转文档', '#docs'];
-  if (c.ledgerStale || c.lagBooks || c.warn || c.unmatched || !c.auditRan || c.auditStale || c.fail || c.broken || statusState() !== 'ok') {
-    return ['去同步与维护', '#maintain'];
+  if (!c.libKnown || !c.indexKnown || !c.auditRan || statusState() !== 'ok') {
+    if (c.fail || c.broken) return '有几处需要处理';
+    return '状态不完整，先补齐再判断';
   }
-  return null;
+  if (c.fail || c.broken) return '有几处需要处理';
+  if (!alerts.length) return '库是干净的';
+  return '书库整体运转正常，有 ' + num(alerts.length) + ' 项待关注';
 }
 
-function hero(c, todos) {
-  const action = heroAction(c);
-  const readyShare = c.libKnown && c.books ? Math.min(100, Math.max(0, (c.readable / c.books) * 100)) : 0;
-  const pctLabel = c.libKnown && c.books ? readyShare.toFixed(1) + '%' : '—';
-  const warnShare = c.libKnown && c.books
-    ? Math.min(100 - readyShare, Math.max(0, (c.toConvert / c.books) * 100))
-    : 0;
+function hero(c, alerts) {
+  const books = Number(c.books) || 0;
+  const readable = Number(c.readable) || 0;
+  const convertible = Number(c.toConvert) || 0;
+  const archBooks = c.archive ? (Number(c.archive.books) || 0) : 0;
+
+  const knownPct = c.libKnown && books > 0;
+  const readyShare = knownPct ? Math.min(100, Math.max(0, (readable / books) * 100)) : 0;
+  const warnShare = knownPct ? Math.min(100 - readyShare, Math.max(0, (convertible / books) * 100)) : 0;
+  const archShare = knownPct ? Math.min(100 - readyShare - warnShare, Math.max(0, (archBooks / books) * 100)) : 0;
+  const pctLabel = knownPct ? readyShare.toFixed(1) + '%' : '—';
+
+  const indexSub = !c.indexKnown
+    ? '检索索引未就绪'
+    : (c.filteredChapters
+      ? '已滤除前后页与空章 ' + num(c.filteredChapters) + ' 章'
+      : (c.lagChapters ? '索引落后 ' + num(c.lagChapters) + ' 章' : '全书正文均已覆盖'));
+  const archSub = c.archive
+    ? '图册 ' + num(c.archive.gallery || 0) + ' · 非中英文 ' + num(c.archive.ja || 0) + '（不转不删）'
+    : '暂无存档明细';
+
+  const ledgerItems = [
+    `<div class="ledger-item">
+      <dt class="ledger-label">全文索引</dt>
+      <dd class="ledger-val">${c.indexKnown ? num(c.indexedChapters) : '—'} <span class="ledger-unit">/ ${c.libKnown && c.chapters != null ? num(c.chapters) : '—'} 章</span></dd>
+      <dd class="ledger-sub">${esc(indexSub)}</dd>
+    </div>`,
+    `<div class="ledger-item">
+      <dt class="ledger-label">政策存档</dt>
+      <dd class="ledger-val">${c.archive ? num(archBooks) : '—'} <span class="ledger-unit">本</span></dd>
+      <dd class="ledger-sub">${esc(archSub)}</dd>
+    </div>`,
+  ];
+  if (c.libKnown && c.zeroChapterDone > 0) {
+    ledgerItems.push(`<div class="ledger-item">
+      <dt class="ledger-label">无正文绘本</dt>
+      <dd class="ledger-val">${num(c.zeroChapterDone)} <span class="ledger-unit">本</span></dd>
+      <dd class="ledger-sub">已拆 0 章（无正文可检索）</dd>
+    </div>`);
+  }
+
   return `<div class="page-head">
-      <div>
-        <h1>总览</h1>
-        <p class="page-lead">日常入库、分类与正文落地均自动增量同步，这里只聚焦当下需要处理的事。</p>
-      </div>
+      <h1 id="main-heading">总览</h1>
     </div>
-    <section class="hero-card section" aria-label="书库当前判断">
+    <section class="hero-card section" aria-labelledby="hero-verdict">
       <div class="hero-main">
-        <div class="hero-eyebrow">当前工作焦点</div>
-        <p class="verdict">${esc(verdictText(c, todos))}</p>
-        <p class="hero-note">${esc(heroNote(c))}</p>
-        <div class="hero-actions">
-          ${action ? `<a class="btn primary has-icon-right" href="${action[1]}"><span>${esc(action[0])}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>` : ''}
-          <button type="button" class="btn" data-act="status-refresh">刷新状态</button>
-        </div>
+        <h2 class="verdict" id="hero-verdict">${esc(verdictText(c, alerts))}</h2>
+        <dl class="hero-ledger${ledgerItems.length >= 3 ? ' cols-3' : ''}">${ledgerItems.join('')}</dl>
       </div>
       <div class="hero-meter">
         <div class="meter-top">
-          <span class="small muted">正文可读率</span>
+          <span class="meter-title">正文可读率</span>
           <span class="meter-pct">${esc(pctLabel)}</span>
         </div>
         <div class="meter-bar" role="img" aria-label="正文可读率 ${esc(pctLabel)}">
-          <div class="meter-fill-ok" style="width:${readyShare.toFixed(1)}%"></div>
-          <div class="meter-fill-warn" style="width:${warnShare.toFixed(1)}%"></div>
+          <div class="meter-seg meter-fill-ok" style="width:${readyShare.toFixed(1)}%"></div>
+          <div class="meter-seg meter-fill-warn" style="width:${warnShare.toFixed(1)}%"></div>
+          <div class="meter-seg meter-fill-arch" style="width:${archShare.toFixed(1)}%"></div>
         </div>
         <div class="meter-legend">
-          <div><span class="muted">已有正文</span><b>${esc(c.libKnown ? num(c.readable) : '—')}</b></div>
-          <div><span class="muted">待转正文</span><b>${esc(c.libKnown ? num(c.toConvert) : '—')}</b></div>
-          <div><span class="muted">政策存档</span><b>${esc(c.archive ? num(c.archive.books) : '—')}</b></div>
+          <span class="legend-item"><span class="swatch ok" aria-hidden="true"></span>已有正文 <span class="sub-num">${esc(pctLabel)}</span></span>
+          <span class="legend-item"><span class="swatch warn" aria-hidden="true"></span>待转 <span class="sub-num">${esc(knownPct ? warnShare.toFixed(1) + '%' : '—')}</span></span>
+          <span class="legend-item"><span class="swatch arch" aria-hidden="true"></span>政策存档 <span class="sub-num">${esc(knownPct ? archShare.toFixed(1) + '%' : '—')}</span></span>
         </div>
       </div>
     </section>`;
 }
 
-function pipeline(c) {
+function pipeline(c, alerts) {
   const unknown = statusState() === 'unknown';
   const ledgerGap = Number(c.ledgerRows) - Number(c.books);
   const cells = [
     {
-      name: '收书', href: '#import',
+      key: 'inbox', name: '收书', href: '#import',
       state: unknown ? 'miss' : (c.inbox ? 'half' : 'ok'),
-      word: unknown ? '未知' : (c.inbox ? '待处理' : '正常'),
-      read: unknown ? '状态读不到' : (c.inbox ? num(c.inbox) + ' 本待核对' : '收件箱已清空'),
+      word: unknown ? '未知' : (c.inbox ? '待核对 ' + num(c.inbox) : '正常'),
     },
     {
-      name: '入账', href: c.ledgerStale ? '#maintain' : '#ledger',
+      key: 'ledger', name: '入账', href: c.ledgerStale ? '#maintain' : '#ledger',
       state: !c.libKnown ? 'miss' : (ledgerGap ? 'miss' : (c.ledgerStale ? 'half' : 'ok')),
       word: !c.libKnown ? '未知' : (ledgerGap ? '需核对' : (c.ledgerStale ? '需同步' : '正常')),
-      read: !c.libKnown
-        ? '书数未知'
-        : (ledgerGap ? '差 ' + num(Math.abs(ledgerGap)) + ' 本'
-          : (c.ledgerStale ? '账表已改，待同步' : num(c.books) + ' 本已登记')),
     },
     {
-      name: '上架', href: '#maintain',
+      key: 'views', name: '上架', href: '#maintain',
       state: !c.viewsKnown ? 'miss' : (c.broken ? 'miss' : 'ok'),
       word: !c.viewsKnown ? '未知' : (c.broken ? '需处理' : '正常'),
-      read: !c.viewsKnown
-        ? '浏览入口缺失'
-        : (c.broken
-          ? num(c.broken) + ' 条入口失效'
-          : '奖项 ' + num(c.awards) + ' 条'),
     },
     {
-      name: '出正文',
+      key: 'split', name: '正文生产',
       href: (c.ebooksToConvert || ebookCount()) ? '#split'
         : (c.pdfsToConvert ? '#pdf' : (c.docsToConvert ? '#docs' : '#split')),
       state: !c.libKnown ? 'miss' : (c.toConvert ? 'half' : 'ok'),
-      word: !c.libKnown ? '未知' : (c.toConvert ? '待转写' : '正常'),
-      read: !c.libKnown
-        ? '计数未知'
-        : (c.toConvert ? num(c.toConvert) + ' 本可转' : num(c.readable) + ' 本全部就绪'),
+      word: !c.libKnown ? '未知' : (c.toConvert ? '待转 ' + num(c.toConvert) : '正常'),
     },
     {
-      name: '可检索', href: '#maintain',
+      key: 'index', name: '可检索', href: '#maintain',
       state: !c.indexKnown ? 'miss' : (c.lagBooks || c.lagChapters || c.indexExtra || c.indexExtraChapters ? 'half' : 'ok'),
       word: !c.indexKnown ? '未知' : (c.lagBooks || c.lagChapters ? '待处理' : (c.indexExtra || c.indexExtraChapters ? '需重建' : '正常')),
-      read: !c.indexKnown
-        ? '索引读数未知'
-        : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
-          : (c.lagChapters ? '落后 ' + num(c.lagChapters) + ' 章'
-            : (c.indexExtra ? '比书库多 ' + num(c.indexExtra) + ' 本'
-              : (c.indexExtraChapters ? '比书库多 ' + num(c.indexExtraChapters) + ' 章'
-                : num(c.indexedChapters || c.chapters) + ' 章已索引')))),
     },
     {
       // 体检记录本身没问题也不能替整个书库担保：state 非 ok 时降成「需注意」
-      name: '体检', href: '#maintain',
+      key: 'audit', name: '体检', href: '#maintain',
       state: !c.auditRan ? 'miss'
         : (c.auditStale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half')))),
       word: !c.auditRan ? '未运行'
         : (c.auditStale ? '已过期' : (c.fail ? '需处理' : (c.warn ? num(c.warn) + ' 条提醒' : (statusState() === 'ok' ? '正常' : '需注意')))),
-      read: !c.auditRan
-        ? '还没有体检记录'
-        : (c.auditStale ? '库或索引比体检新'
-          : (c.fail ? num(c.fail) + ' 项失败'
-            : (c.warn ? '核心检查通过'
-              : (statusState() === 'ok' ? '全部通过' : '无失败项')))),
     },
   ];
-  return `<section class="section" aria-label="六步书库流水线">
-    <div class="card-head" style="margin-bottom:10px">
-      <h2>流水线六环节</h2>
-      <span class="small muted">点击任一环节直达处理</span>
+  const arrowSvg = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 8.5 3.5"/><path d="M4.2 3.5H8.5v4.3"/></svg>';
+  return `<section class="section" aria-labelledby="sec-pipeline">
+    <div class="section-head">
+      <h2 id="sec-pipeline">流水线六环节</h2>
     </div>
-    <div class="pipeline">${cells.map((cell, idx) => `<a class="pipe-cell" href="${cell.href}">
-      <div class="pipe-head">
-        <span class="pipe-step" translate="no">${String(idx + 1).padStart(2, '0')}</span>
-        ${status(cell.state, cell.word)}
+    <div class="track-board">
+      <div class="track-grid">${cells.map((cell, idx) => {
+        const stepNo = String(idx + 1).padStart(2, '0');
+        const stateCls = cell.state === 'miss' ? ' is-miss' : (cell.state === 'half' ? ' is-warn' : '');
+        return `<a class="track-stage${stateCls}" href="${cell.href}" data-stage="${esc(cell.key)}">
+          <span class="track-watermark" aria-hidden="true">${stepNo}</span>
+          <span class="pipe-cue" aria-hidden="true">${arrowSvg}</span>
+          <div class="track-rail" aria-hidden="true"><span class="track-node"></span></div>
+          <div class="track-title"><span class="track-step-num" aria-hidden="true">${stepNo}</span>${esc(cell.name)}</div>
+          ${status(cell.state, cell.word)}
+        </a>`;
+      }).join('')}</div>
+      <div class="track-alerts"${alerts.length ? '' : ' hidden'}>
+        ${alerts.slice(0, 6).map((a) => `<a class="track-alert${a.miss ? ' is-miss' : ''}" href="${a.href}" data-link-stage="${esc(a.stage)}">
+          <span class="alert-dot" aria-hidden="true"></span>
+          <span><strong>${esc(a.title)}</strong>${a.note ? ' · ' + esc(a.note) : ''}</span>
+          <span class="alert-act">${esc(a.label)} →</span>
+        </a>`).join('')}
       </div>
-      <div class="pipe-name">${esc(cell.name)}</div>
-      <div class="pipe-read">${esc(cell.read)}</div>
-    </a>`).join('')}</div>
-  </section>`;
-}
-
-function nextSteps(todos) {
-  if (statusState() === 'unknown') return '<p class="empty">状态读不到，先点「刷新状态」。</p>';
-  if (!todos.length) {
-    return statusState() === 'ok'
-      ? '<div class="empty-state"><div><div class="empty-state-title">没有待办，书库是干净的</div><div class="empty-state-sub">当前收件箱已清空，检索索引与书目均处于最新状态。</div></div></div>'
-      : '<p class="empty">没有待办，但状态还不完整。</p>';
-  }
-  return todos.slice(0, 6).map((item, idx) => `<div class="rowline">
-    <div class="rl-main">
-      <div class="rl-title">${esc(item.title)}</div>
-      <div class="rl-note">${esc(item.note)}</div>
     </div>
-    <a class="btn sm${idx === 0 ? ' primary' : ''}" href="${item.href}">${esc(item.label)}</a>
-  </div>`).join('');
+  </section>`;
 }
 
 function subtabsBar(items, active) {
@@ -983,38 +1050,37 @@ function jobLine(job) {
 function servicesCard() {
   const list = S.services || [];
   if (!list.length) return '';
-  return `<section class="card" aria-label="书库应用入口">
-    <div class="card-head">
-      <h2>书库应用入口</h2>
-      <div class="row tight">
-        <span class="small muted">本地四端服务状态</span>
-        <button class="btn sm" data-act="services-refresh">刷新</button>
-      </div>
+  return `<section aria-labelledby="sec-apps">
+    <div class="section-head">
+      <h2 id="sec-apps">书库应用入口</h2>
+      <button type="button" class="btn compact" data-act="services-refresh">刷新</button>
     </div>
-    <div class="svc-bar">${list.map((svc) => `<div class="svc-item">
-      <div class="svc-meta">
-        <span class="dot ${svc.running ? 'on' : 'off'}" aria-hidden="true"></span>
-        <div><div class="svc-name">${esc(svc.name)}</div><div class="svc-port" translate="no">:${esc(svc.port)}</div></div>
-      </div>
-      ${svc.running
-        ? `<a class="btn sm" href="${esc(svc.url)}" target="_blank" rel="noopener">打开</a>`
-        : `<button class="btn sm" data-act="service-start" data-key="${esc(svc.key)}">启动</button>`}
-    </div>`).join('')}</div>
+    <div class="svc-bar">${list.map((svc) => {
+      const desc = SVC_DESC[svc.key] || svc.name || '';
+      const cls = svc.running ? 'is-on' : 'is-off';
+      return `<div class="svc-item ${cls}">
+        <div class="svc-info">
+          <div class="svc-title-row">
+            <span class="svc-name">${esc(svc.name)}</span>
+            <span class="svc-state ${svc.running ? 'on' : 'off'}"><span class="svc-dot ${svc.running ? 'on' : 'off'}" aria-hidden="true"></span>${svc.running ? '运行中' : '未启动'}</span>
+          </div>
+          <div class="svc-sub">${esc(desc)}</div>
+        </div>
+        <div class="svc-actions">
+          ${svc.running
+            ? `<a class="btn compact svc-open" href="${esc(svc.url)}" target="_blank" rel="noopener">打开 ↗</a>`
+            : `<button type="button" class="btn compact svc-start" data-act="service-start" data-key="${esc(svc.key)}">▶ 启动</button>`}
+        </div>
+      </div>`;
+    }).join('')}</div>
   </section>`;
 }
 
 function viewOverview() {
   const c = bookCounts();
-  const todos = todoItems(c);
-  return `${hero(c, todos)}
-    ${pipeline(c)}
-    <section class="card section" aria-label="下一步待办">
-      <div class="card-head">
-        <h2>下一步待办</h2>
-        <span class="pill${todos.length ? ' half' : ' ok'}">${num(todos.length)} 项</span>
-      </div>
-      ${nextSteps(todos)}
-    </section>
+  const alerts = trackAlerts(c);
+  return `${hero(c, alerts)}
+    ${pipeline(c, alerts)}
     ${servicesCard()}`;
 }
 
@@ -3523,6 +3589,12 @@ const actions = {
   },
 
   async 'status-refresh'() {
+    const btn = document.getElementById('btn-status-refresh');
+    if (btn && btn.classList) {
+      btn.classList.remove('spin');
+      void btn.offsetWidth;
+      btn.classList.add('spin');
+    }
     await loadStatus(true);
     await loadJobs();
     render();
@@ -4265,7 +4337,8 @@ const actions = {
   },
 
   async 'theme-toggle'() {
-    const isNight = document.documentElement.getAttribute('data-theme') === 'night';
+    const isNight = document.documentElement.getAttribute('data-theme') === 'night'
+      || document.documentElement.getAttribute('data-theme') === 'dark';
     applyTheme(isNight ? 'light' : 'night', true);
   },
 
@@ -4702,7 +4775,10 @@ async function pollTick() {
       if (html !== S.overviewHtml) {
         S.overviewHtml = html;
         const view = document.querySelector('#view');
-        if (view) view.innerHTML = html;
+        if (view) {
+          view.innerHTML = html;
+          wireTrackLinkage();
+        }
       }
     }
   } catch (err) {
@@ -4757,25 +4833,29 @@ async function boot() {
 }
 
 function applyTheme(theme, persist) {
-  const night = theme === 'night';
-  if (night) document.documentElement.setAttribute('data-theme', 'night');
-  else if (typeof document.documentElement.removeAttribute === 'function') document.documentElement.removeAttribute('data-theme');
+  const night = theme === 'night' || theme === 'dark';
+  const doc = document.documentElement;
+  if (night) doc.setAttribute('data-theme', 'night');
+  else if (typeof doc.setAttribute === 'function') doc.setAttribute('data-theme', 'light');
+  const schemeMeta = typeof document.querySelector === 'function'
+    ? document.querySelector('meta[name="color-scheme"]')
+    : null;
+  if (schemeMeta && typeof schemeMeta.setAttribute === 'function') {
+    schemeMeta.setAttribute('content', night ? 'dark' : 'light');
+  }
   const pressed = String(night);
-  const label = night ? '切换宣纸日间' : '切换墨夜主题';
+  const aria = night ? '切换宣纸日间' : '切换墨夜主题';
+  const shortLabel = night ? '日间' : '墨夜';
   const btn = document.getElementById('theme-toggle');
-  const btnMob = document.getElementById('theme-toggle-mobile');
   const swap = document.getElementById('theme-icon-swap');
-  const swapMob = document.getElementById('theme-icon-swap-mobile');
   const labelEl = document.getElementById('theme-label');
   const meta = document.getElementById('meta-theme-color');
-  if (btn) btn.setAttribute('aria-pressed', pressed);
-  if (btnMob) {
-    btnMob.setAttribute('aria-pressed', pressed);
-    btnMob.setAttribute('aria-label', label);
+  if (btn) {
+    btn.setAttribute('aria-pressed', pressed);
+    btn.setAttribute('aria-label', aria);
   }
-  if (swap) swap.classList.toggle('swapped', night);
-  if (swapMob) swapMob.classList.toggle('swapped', night);
-  if (labelEl) labelEl.textContent = label;
+  if (swap && swap.classList) swap.classList.toggle('swapped', night);
+  if (labelEl) labelEl.textContent = shortLabel;
   if (meta) meta.setAttribute('content', night ? '#161716' : '#F4F1E8');
   if (persist) {
     try { localStorage.setItem(THEME_KEY, night ? 'night' : 'light'); } catch (err) { /* ignore */ }
@@ -4783,9 +4863,29 @@ function applyTheme(theme, persist) {
 }
 
 function initTheme() {
-  let saved = 'light';
-  try { saved = localStorage.getItem(THEME_KEY) || 'light'; } catch (err) { saved = 'light'; }
-  applyTheme(saved, false);
+  let saved = '';
+  try { saved = localStorage.getItem(THEME_KEY) || ''; } catch (err) { saved = ''; }
+  if (!saved && typeof window.matchMedia === 'function') {
+    saved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'light';
+  }
+  applyTheme(saved === 'night' || saved === 'dark' ? 'night' : 'light', false);
+  if (typeof window.matchMedia === 'function') {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onMq = (ev) => {
+      let cur = '';
+      try { cur = localStorage.getItem(THEME_KEY) || ''; } catch (err) { cur = ''; }
+      if (!cur) applyTheme(ev.matches ? 'night' : 'light', false);
+    };
+    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMq);
+  }
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('storage', (ev) => {
+      if (ev && ev.key === THEME_KEY) {
+        const next = ev.newValue || 'light';
+        applyTheme(next === 'night' || next === 'dark' ? 'night' : 'light', false);
+      }
+    });
+  }
 }
 
 initTheme();
