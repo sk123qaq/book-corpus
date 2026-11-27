@@ -2226,6 +2226,7 @@ class App:
                 "stats_chars": None,
                 "stats_built_at": "",
                 "md_done": 0,
+                "zero_chapter_done": None,
                 "pending": {"pdf": 0, "txt": 0, "djvu": 0},
                 "inbox": {"files": 0, "items": []},
                 "ledger": {"rows": 0, "mtime": None},
@@ -2318,6 +2319,17 @@ class App:
             }
         groups["pdf"] = max(0, int(groups.get("pdf") or 0) - len(archived))
         payload["convertible_groups"] = groups
+        books_readable = payload.get("books_readable")
+        md_done = payload.get("md_done")
+        if (
+            isinstance(books_readable, int)
+            and not isinstance(books_readable, bool)
+            and isinstance(md_done, int)
+            and not isinstance(md_done, bool)
+        ):
+            payload["zero_chapter_done"] = max(0, md_done - books_readable)
+        elif "zero_chapter_done" not in payload:
+            payload["zero_chapter_done"] = None
         payload["prefill_ready"] = os.path.isfile(os.path.join(self.env.cat, "分类预填.csv"))
         payload["jobs"] = {
             "queued": counts.get("queued", 0),

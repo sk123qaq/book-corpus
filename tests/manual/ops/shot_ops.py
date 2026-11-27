@@ -821,11 +821,12 @@ SIDEBAR_STICKY = """
   window.scrollTo(0, se.scrollHeight);
   const side = document.querySelector('.sidebar');
   const brand = document.querySelector('.brand');
-  const toggle = document.querySelector('#theme-toggle');
-  if (!side || !brand || !toggle) return {ok: false, missing: true};
+  const navLinks = document.querySelectorAll('#nav a');
+  const lastNav = navLinks.length ? navLinks[navLinks.length - 1] : null;
+  if (!side || !brand || !lastNav) return {ok: false, missing: true};
   const sr = side.getBoundingClientRect();
   const br = brand.getBoundingClientRect();
-  const tr = toggle.getBoundingClientRect();
+  const tr = lastNav.getBoundingClientRect();
   const vh = window.innerHeight;
   const scrollY = window.scrollY;
   const ok = (
@@ -842,7 +843,7 @@ SIDEBAR_STICKY = """
     bottom: +sr.bottom.toFixed(1),
     vh: vh,
     brandTop: +br.top.toFixed(1),
-    toggleBottom: +tr.bottom.toFixed(1),
+    navBottom: +tr.bottom.toFixed(1),
   };
 })()
 """
@@ -1221,15 +1222,42 @@ def run_viewport(base, width, height, out_dir, port, live=False):
             and ov_jump.get("inView")
         ):
             failed_tabs.append("log-overview-jump")
-        eval_js(cdp, VISIT_TAB % ("overview", "overview", "总览", "overview", "总览"), await_promise=True, timeout=30)
-        cdp.drain(0.6)
         if width > 820:
+            eval_js(
+                cdp,
+                VISIT_TAB % ("maintain", "maintain", "同步与维护", "maintain", "同步与维护"),
+                await_promise=True,
+                timeout=30,
+            )
+            cdp.drain(0.35)
+            eval_js(
+                cdp,
+                """(async () => {
+                  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+                  for (let i = 0; i < 25; i += 1) {
+                    const se = document.scrollingElement || document.documentElement;
+                    document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
+                    if (se.scrollHeight > window.innerHeight + 40) {
+                      await sleep(150);
+                      document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
+                      if (se.scrollHeight > window.innerHeight + 40) break;
+                    }
+                    await sleep(100);
+                  }
+                  return true;
+                })()""",
+                await_promise=True,
+                timeout=15,
+            )
+            cdp.drain(0.15)
             sticky = eval_js(cdp, SIDEBAR_STICKY)
             notes.append("侧栏固定 %s" % (sticky,))
             if not sticky.get("ok"):
                 failed_tabs.append("sidebar-sticky")
             eval_js(cdp, "window.scrollTo(0, 0); true")
             cdp.drain(0.15)
+        eval_js(cdp, VISIT_TAB % ("overview", "overview", "总览", "overview", "总览"), await_promise=True, timeout=30)
+        cdp.drain(0.6)
         overflow = bool(widest[0]) or eval_js(cdp, "document.documentElement.scrollWidth > window.innerWidth")
         width_doc = eval_js(cdp, "document.documentElement.scrollWidth")
         inner = eval_js(cdp, "window.innerWidth")

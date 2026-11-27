@@ -1297,3 +1297,50 @@ def test_ops_status_and_audit_align_with_role_filter_and_empty_books(workspace):
     st_lag = ops_status.collect(p, deep=False)
     assert st_lag["index"]["lag_chapters"] == 1
     assert st_lag["sync_delta"]["fts"]["modified"] == ["B0002"]
+
+
+def test_status_reports_zero_chapter_done(workspace):
+    """/api/status 显式计算 zero_chapter_done = max(0, md_done - books_readable)。"""
+    app = _make_app(workspace)
+    app.env = server.Env(root=str(workspace), scripts=str(workspace / "no-scripts"))
+    status_file = workspace / "fixture-status.json"
+    status_file.write_text(
+        json.dumps(
+            {
+                "books": 10,
+                "books_readable": 8,
+                "md_done": 9,
+                "stats_chapters": 120,
+                "stats_chars": 50000,
+                "stats_built_at": "2026-11-27 12:00",
+                "pending": {"total": 1, "pdf": 1},
+                "inbox": {"files": 0, "items": []},
+                "ledger": {"rows": 10, "mtime": None},
+                "catalog": {"mtime": None, "unmatched": 0, "ok": True},
+                "index": {"ok": True, "books": 8, "chapters": 120, "lag_books": 0, "lag_chapters": 0},
+                "library": {"ok": True},
+                "views": {"awards": 0, "broken": 0, "ok": True},
+                "audit": {
+                    "fail": 0,
+                    "warn": 0,
+                    "items": [],
+                    "at": "2026-11-27T12:00:00+08:00",
+                    "ran": True,
+                    "stale": False,
+                },
+                "problems": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    prev = os.environ.get("OPS_STATUS_FIXTURE")
+    os.environ["OPS_STATUS_FIXTURE"] = str(status_file)
+    try:
+        res = app.status(refresh=True)
+    finally:
+        if prev is None:
+            os.environ.pop("OPS_STATUS_FIXTURE", None)
+        else:
+            os.environ["OPS_STATUS_FIXTURE"] = prev
+    assert res["status"]["zero_chapter_done"] == 1

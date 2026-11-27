@@ -3,7 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#F4F1E8" id="meta-theme-color">
+<script>
+try {
+  var savedScheme = localStorage.getItem('bookcorpus.ops-theme');
+  if (savedScheme === 'night') savedScheme = 'dark';
+  if (savedScheme === 'light' || savedScheme === 'dark') {
+    document.querySelector('meta[name="color-scheme"]').content = savedScheme;
+    document.documentElement.dataset.theme = savedScheme === 'dark' ? 'night' : 'light';
+    if (savedScheme === 'dark') document.getElementById('meta-theme-color').content = '#161716';
+  }
+} catch (e) {}
+</script>
 <title>书库操作台</title>
 <link rel="stylesheet" href="/style.css?v=__V__">
 </head>
@@ -15,37 +27,37 @@
       <span class="brand-seal" aria-hidden="true">书</span>
       <span class="brand-meta">
         <span class="brand-title">书库操作台</span>
-        <span class="brand-sub">个人藏书工作区</span>
+        <span class="brand-sub">书库本地管理与体检</span>
       </span>
     </a>
-    <nav class="side" id="nav" aria-label="操作台模块"></nav>
-    <div class="side-footer">
-      <button type="button" class="btn sm ghost has-icon-left" id="theme-toggle" data-act="theme-toggle" aria-pressed="false">
-        <span class="icon-swap" id="theme-icon-swap" aria-hidden="true">
-          <svg class="icon-a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-          <svg class="icon-b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-        </span>
-        <span id="theme-label">切换墨夜主题</span>
-      </button>
-    </div>
+    <nav class="side" id="nav" aria-label="功能分区"></nav>
   </aside>
   <div class="workspace">
     <header class="topbar">
       <div class="topbar-inner">
-        <div class="stats" id="stats" aria-label="书库实时指标"></div>
-        <button type="button" class="icon-btn mobile-only" id="theme-toggle-mobile" data-act="theme-toggle" aria-label="切换墨夜主题" aria-pressed="false">
-          <span class="icon-swap" id="theme-icon-swap-mobile" aria-hidden="true">
-            <svg class="icon-a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-            <svg class="icon-b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-          </span>
-        </button>
+        <ul class="stats" id="stats" role="list"></ul>
+        <div class="topbar-tools">
+          <span class="stamp" id="stats-stamp" hidden>统计于 <b id="stamp-time">—</b></span>
+          <span class="tool-divider" id="stamp-divider" hidden aria-hidden="true"></span>
+          <button type="button" class="btn compact" id="btn-status-refresh" data-act="status-refresh" aria-label="刷新书库状态">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.35-3.6"/><path d="M13.5 2.5v2.6h-2.6"/></svg>
+            <span>刷新</span>
+          </button>
+          <button type="button" class="btn ghost compact" id="theme-toggle" data-act="theme-toggle" aria-pressed="false" aria-label="切换墨夜主题">
+            <span class="icon-swap" id="theme-icon-swap" aria-hidden="true">
+              <svg class="icon-a" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 9.8A5.5 5.5 0 0 1 6.2 2.8a5.5 5.5 0 1 0 7 7z"/></svg>
+              <svg class="icon-b" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg>
+            </span>
+            <span id="theme-label">墨夜</span>
+          </button>
+        </div>
       </div>
     </header>
     <main id="view" tabindex="-1"><p class="muted">载入中…</p></main>
   </div>
 </div>
 <div id="modal"></div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" popover="manual" role="status" aria-live="polite"></div>
 <script src="/app.js?v=__V__"></script>
 </body>
 </html>

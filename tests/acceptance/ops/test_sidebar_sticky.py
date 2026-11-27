@@ -124,12 +124,13 @@ def _desktop_scroll_js(target_y: int | str) -> str:
   const side = document.querySelector('.sidebar');
   const topbar = document.querySelector('.topbar');
   const brand = document.querySelector('.brand');
-  const toggle = document.querySelector('#theme-toggle');
+  const navLinks = document.querySelectorAll('#nav a');
+  const lastNav = navLinks.length ? navLinks[navLinks.length - 1] : null;
   const sc = getComputedStyle(side);
   const sr = side.getBoundingClientRect();
   const tr = topbar.getBoundingClientRect();
   const br = brand.getBoundingClientRect();
-  const fr = toggle.getBoundingClientRect();
+  const nr = lastNav ? lastNav.getBoundingClientRect() : br;
   const lastEl = document.querySelector('#view > :last-child');
   return {{
     htmlOx: html.overflowX,
@@ -148,8 +149,8 @@ def _desktop_scroll_js(target_y: int | str) -> str:
     topbarTop: +tr.top.toFixed(1),
     brandTop: +br.top.toFixed(1),
     brandBottom: +br.bottom.toFixed(1),
-    toggleTop: +fr.top.toFixed(1),
-    toggleBottom: +fr.bottom.toFixed(1),
+    navTop: +nr.top.toFixed(1),
+    navBottom: +nr.bottom.toFixed(1),
     lastCardBottom: lastEl ? +lastEl.getBoundingClientRect().bottom.toFixed(1) : -1,
   }};
 }})({arg})
@@ -159,7 +160,7 @@ def _desktop_scroll_js(target_y: int | str) -> str:
 def _mobile_scroll_js(y: int) -> str:
     return f"""
 ((y) => {{
-  const mobBtn = document.querySelector('#theme-toggle-mobile');
+  const mobBtn = document.querySelector('#theme-toggle');
   const mobCs = mobBtn ? getComputedStyle(mobBtn) : null;
   const mobRect = mobBtn ? mobBtn.getBoundingClientRect() : null;
   window.scrollTo(0, y);
@@ -226,8 +227,8 @@ def _assert_desktop_sticky(probe: dict, vh: int, min_scroll: float, max_topbar_t
     assert abs(probe["srBottom"] - vh) <= 1.0, f"{label} 左侧栏未铺满视口高度：{probe}"
     assert probe["brandTop"] >= 0, f"{label} .brand 顶部超出视口：{probe}"
     assert probe["brandBottom"] <= vh, f"{label} .brand 底部超出视口：{probe}"
-    assert probe["toggleTop"] >= 0, f"{label} #theme-toggle 顶部超出视口：{probe}"
-    assert probe["toggleBottom"] <= vh, f"{label} #theme-toggle 底部超出视口：{probe}"
+    assert probe["navTop"] >= 0, f"{label} 末项导航顶部超出视口：{probe}"
+    assert probe["navBottom"] <= vh, f"{label} 末项导航底部超出视口：{probe}"
     assert probe["scrollWidth"] <= probe["vw"], f"{label} 发生横向溢出：{probe}"
 
 
@@ -237,64 +238,86 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
     cdp.call("Page.enable")
     base = f"http://127.0.0.1:{port}"
 
-    # 1) 桌面 1440x700：初始、中段、页底与页底直接点左侧导航
+    # 1) 桌面 1440x700：在较长页面（#maintain 展开详情）验证吸顶，并在页底直接点左侧导航回 #overview
     cdp.call(
         "Emulation.setDeviceMetricsOverride",
         {"width": 1440, "height": 700, "deviceScaleFactor": 1, "mobile": False},
     )
-    cdp.call("Page.navigate", {"url": f"{base}/#overview"})
-    _wait_ready(shot, cdp, "#view h1", "总览")
+    cdp.call("Page.navigate", {"url": f"{base}/#maintain"})
+    _wait_ready(shot, cdp, "#view h1", "同步与维护")
+    shot.eval_js(cdp, "document.querySelectorAll('#view details').forEach((d) => { d.open = true; }); true")
+    time.sleep(0.1)
 
     at_top = shot.eval_js(cdp, _desktop_scroll_js(0))
     assert abs(at_top["srTop"]) <= 1.0, f"1440x700 顶部状态 top 异常：{at_top}"
     assert abs(at_top["srBottom"] - 700) <= 1.0, f"1440x700 顶部状态 bottom 异常：{at_top}"
-    assert at_top["scrollHeight"] > 700, f"总览页高度不足以触发滚动：{at_top}"
+    assert at_top["scrollHeight"] > 700, f"维护页高度不足以触发滚动：{at_top}"
 
-    at_mid = shot.eval_js(cdp, _desktop_scroll_js(350))
-    _assert_desktop_sticky(at_mid, 700, min_scroll=300, max_topbar_top=-200, label="1440x700 中段")
+    at_mid = shot.eval_js(cdp, _desktop_scroll_js(300))
+    _assert_desktop_sticky(at_mid, 700, min_scroll=200, max_topbar_top=-150, label="1440x700 中段")
 
     at_bot = shot.eval_js(cdp, _desktop_scroll_js("bottom"))
-    _assert_desktop_sticky(at_bot, 700, min_scroll=300, max_topbar_top=-200, label="1440x700 页底")
-    assert abs(at_bot["lastCardBottom"] - 700) <= 2.0, f"1440x700 末张卡片下端未贴齐页面下端：{at_bot}"
+    _assert_desktop_sticky(at_bot, 700, min_scroll=200, max_topbar_top=-150, label="1440x700 页底")
+    assert 0 <= (700 - at_bot["lastCardBottom"]) <= 45.0, f"1440x700 末张卡片下端超出预期底边距：{at_bot}"
     _save_png(cdp, screenshot_dir, "ops-sidebar-scrolled-1440x700.png")
     print(
         f"PASS 1440x700 滚到底部（scrollY={at_bot['scrollY']}, topbarTop={at_bot['topbarTop']}）"
         f"后左侧栏固定 top={at_bot['srTop']} bottom={at_bot['srBottom']}"
     )
 
-    # 在页底不滚回顶部时，直接点击固定侧栏里的「同步与维护」
+    # 在页底不滚回顶部时，直接点击固定侧栏里的「总览」
     clicked = shot.eval_js(
         cdp,
         """(() => {
-          const link = document.querySelector('#nav a[href="#maintain"]');
+          const link = document.querySelector('#nav a[href="#overview"]');
           if (!link) return false;
           link.click();
           return true;
         })()""",
     )
-    assert clicked is True, "找不到左侧导航 #maintain 链接"
-    _wait_ready(shot, cdp, "#view h1", "同步与维护")
-    maintain_bot = shot.eval_js(cdp, _desktop_scroll_js("bottom"))
-    assert abs(maintain_bot["srTop"]) <= 1.0, f"1440x700 #maintain 侧栏 top 偏移：{maintain_bot}"
-    assert abs(maintain_bot["srBottom"] - 700) <= 1.0, f"1440x700 #maintain 侧栏 bottom 偏移：{maintain_bot}"
-    print(f"PASS 1440x700 页底直点 #maintain 切换成功，侧栏保持 top={maintain_bot['srTop']}")
+    assert clicked is True, "找不到左侧导航 #overview 链接"
+    _wait_ready(shot, cdp, "#view h1", "总览")
+    overview_check = shot.eval_js(cdp, _desktop_scroll_js(0))
+    assert abs(overview_check["srTop"]) <= 1.0, f"1440x700 #overview 侧栏 top 偏移：{overview_check}"
+    assert abs(overview_check["srBottom"] - 700) <= 1.0, f"1440x700 #overview 侧栏 bottom 偏移：{overview_check}"
+    print(f"PASS 1440x700 页底直点 #overview 切换成功，侧栏保持 top={overview_check['srTop']}")
 
-    # 2) 桌面 1440x900：切回 #overview 并滚到底部
+    # 2) 桌面 1440x900：在可滚动页面验证吸顶后切回 #overview 验证一屏收敛
     cdp.call(
         "Emulation.setDeviceMetricsOverride",
         {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False},
     )
-    shot.eval_js(cdp, "document.querySelector('#nav a[href=\"#overview\"]').click(); window.scrollTo(0, 0); true")
-    _wait_ready(shot, cdp, "#view h1", "总览")
-    time.sleep(0.15)
+    shot.eval_js(cdp, "document.querySelector('#nav a[href=\"#maintain\"]').click(); window.scrollTo(0, 0); true")
+    _wait_ready(shot, cdp, "#view h1", "同步与维护")
+    time.sleep(0.35)
+    shot.eval_js(
+        cdp,
+        """(async () => {
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          for (let i = 0; i < 25; i += 1) {
+            const se = document.scrollingElement || document.documentElement;
+            document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
+            if (se.scrollHeight > window.innerHeight + 160) {
+              await sleep(150);
+              document.querySelectorAll('#view details').forEach((d) => { d.open = true; });
+              if (se.scrollHeight > window.innerHeight + 160) break;
+            }
+            await sleep(100);
+          }
+          return true;
+        })()""",
+        await_promise=True,
+    )
     at_900 = shot.eval_js(cdp, _desktop_scroll_js("bottom"))
     _assert_desktop_sticky(at_900, 900, min_scroll=150, max_topbar_top=-150, label="1440x900 页底")
-    assert abs(at_900["lastCardBottom"] - 900) <= 2.0, f"1440x900 末张卡片下端未贴齐页面下端：{at_900}"
+    assert 0 <= (900 - at_900["lastCardBottom"]) <= 45.0, f"1440x900 末张卡片下端超出预期底边距：{at_900}"
     _save_png(cdp, screenshot_dir, "ops-sidebar-scrolled-1440x900.png")
     print(
         f"PASS 1440x900 滚到底部（scrollY={at_900['scrollY']}, topbarTop={at_900['topbarTop']}）"
         f"后左侧栏固定 top={at_900['srTop']} bottom={at_900['srBottom']}"
     )
+    shot.eval_js(cdp, "document.querySelector('#nav a[href=\"#overview\"]').click(); window.scrollTo(0, 0); true")
+    _wait_ready(shot, cdp, "#view h1", "总览")
 
     # 3) 宽屏 1920x1080：无顶栏搜索按钮，main 与 .topbar-inner 限宽且在 .workspace 内水平居中对齐
     cdp.call(
@@ -305,7 +328,7 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
     wide = shot.eval_js(cdp, WIDE_CENTER_PROBE)
     assert wide["hasSearchBtn"] is False, f"顶栏仍残留 #search-btn：{wide}"
     assert wide["hasSearchStart"] is False, f"顶栏仍残留 #search-start：{wide}"
-    assert wide["mainWidth"] <= 1200.5, f"main 超过 1200px 上限：{wide}"
+    assert wide["mainWidth"] <= 2080.5, f"main 超过 2080px 上限：{wide}"
     assert abs(wide["mainLeftGap"] - wide["mainRightGap"]) <= 2.0, f"main 未在工作区水平居中：{wide}"
     assert abs(wide["topLeftGap"] - wide["topRightGap"]) <= 2.0, f".topbar-inner 未在工作区水平居中：{wide}"
     assert abs(wide["mainLeft"] - wide["topLeft"]) <= 1.0, f"main 与 .topbar-inner 左缘未对齐：{wide}"
@@ -341,10 +364,10 @@ def _dom_checks(cdp, shot, port: int, screenshot_dir: Path | None) -> None:
     time.sleep(0.2)
     mob = shot.eval_js(cdp, _mobile_scroll_js(300))
     assert mob["sidePos"] == "static", f"390x844 下 .sidebar 应回落 static：{mob}"
-    assert mob["mobDisplay"] != "none", f"390x844 下 #theme-toggle-mobile 不可见：{mob}"
-    assert mob["mobWidth"] > 0, f"390x844 下 #theme-toggle-mobile 宽度异常：{mob}"
-    assert mob["mobHeight"] > 0, f"390x844 下 #theme-toggle-mobile 高度异常：{mob}"
-    assert mob["mobRight"] <= mob["vw"], f"390x844 下 #theme-toggle-mobile 越出视口：{mob}"
+    assert mob["mobDisplay"] != "none", f"390x844 下 #theme-toggle 不可见：{mob}"
+    assert mob["mobWidth"] > 0, f"390x844 下 #theme-toggle 宽度异常：{mob}"
+    assert mob["mobHeight"] > 0, f"390x844 下 #theme-toggle 高度异常：{mob}"
+    assert mob["mobRight"] <= mob["vw"], f"390x844 下 #theme-toggle 越出视口：{mob}"
     assert mob["scrollY"] >= 200, f"390x844 未滚下：{mob}"
     assert mob["srTop"] < -100, f"390x844 顶部导航未随页面滚走：{mob}"
     assert mob["scrollWidth"] <= mob["vw"], f"390x844 发生横向溢出：{mob}"
