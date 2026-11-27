@@ -97,9 +97,10 @@ TLA2TOOLS=~/.local/share/tla2tools/tla2tools.jar \
 | `Runner._finalize`（先放锁再写终态；`build_views` 子进程也带继承声明） | `Release` `Finish` | |
 | `Runner.adopt` / `_watch_adopted` / `_watch_adopted_lock` / `resume` | `Start` `AdoptFinish` | 按 DB/pid 文件/`/proc`/写锁四级认领并占位 |
 | `Runner.snapshot` / `writer_busy` / `ledger_lock` → `src/bookcorpus/scripts/lib_common.py` 的 `writer_lock_path` / `writer_lock`；`category_put` / `category_put_many` / `categories_delete`；`ingest.py` 的 `apply` 与 `rebuild` | `HttpStart` `HttpEnd` | HTTP 与 CLI 的人账写共用同一把 `.writer.lock`；同线程重入按计数放行，`BOOK_CORPUS_WRITER_LOCK_PATH` 命中时视为已继承 |
+| `src/bookcorpus/scripts/normalize_corpus_batch.py` `run_batch`（`with L.writer_lock`，1172 行）/ `_run_sync_pipeline`（961 行给同步子进程带继承声明） | —（CLI 直接取锁，不经 Runner） | 批次是直接 `writer_lock` 客户端：与 Runner 写任务抢同一把锁，抢不到就阻塞；它只给自己的同步子进程（`build_library` / `build_para_index` / `embed_corpus`）带 env 声明，没有 `pass_fds`。模型不展开这个 CLI 写者；孙进程缺口见「不管什么」 |
 | 任何改变「谁持有 `.writer.lock`」或「pid 何时落库」的改动 | `Crash` `Start` | |
 
-**同步基线：2026-11-24，`5f03ac9`（main）。** 已按这个提交重核 `Runner` 的动作注释行号与读数，并把 `ledger_lock` 的实现指向 `lib_common.writer_lock`。覆盖的代码在那之后变了，就把上面的行号与读数重核一遍，再更新这里；没核对过不要往前推。
+**同步基线：2026-11-27，`f55d81a`（PR #62 头，基于 main `fd86d23`）。** 已按这个提交重核：`Runner`（`server.py:1013-1880`）与 `lib_common.writer_lock` 无改动；`App` 自基线新增 `md_canonical` 空状态块（#59，16 行）与 PR #62 的 `filtered_chapters` / `empty_books` 两键，HTTP/`ledger_lock` 行号随之 +18 并已更新；同区间新增的 `normalize_corpus_batch.py` 写入口已记入上表。复跑五条规则全过（各 736 个不同状态）。覆盖的代码在那之后变了，就把上面的行号与读数重核一遍，再更新这里；没核对过不要往前推。PR 合并（本仓 squash）后把基线换成合并提交。
 
 ## 代码变了怎么更新
 
@@ -126,6 +127,8 @@ TLA2TOOLS=~/.local/share/tla2tools/tla2tools.jar \
 - 一个进程内的 `self.cv` 竞争、`store` 的 SQLite 事务、`_finalize` 里各 kind 的门槛判定，都不建模。
 - 单机、单根目录、`Runner` 这一个实现。多机或多根不覆盖。
 - `BOOK_CORPUS_WRITER_LOCK_PATH` 的继承声明：模型只建「孩子活着 ⇒ 锁在任务手里」，不建子进程内部对 `writer_lock()` 的重复调用，也不建孙进程。写脚本不要留下比任务活得久、又没继承锁 fd 的后台孙进程——它拿到了 env 声明却不持锁。
+- `normalize_corpus_batch._run_sync_pipeline` 的同步子进程（`build_library` / `build_para_index` / `embed_corpus`）不建模：它们只拿 env 声明，`Popen` 没有 `pass_fds`。正常路径由批次进程持锁直到 `subprocess.run` 返回；只有批次进程被单独 SIGKILL/OOM 杀掉、子进程仍在跑时，锁会先释放而子进程按声明不拿锁。这一段不在 `WriterHoldsLock` 的证明范围内。
+- `book-corpus normalize`（含 PR #62 的 `--reclassify-roles`）直接改 `books/<uid>/md/` 的 front matter，不调用 `writer_lock`；锁只约束 Runner 写任务与显式取锁的 CLI（`ingest`、`normalize-batch`）。直接 CLI 与 ops 写任务并发时的 md 竞争不在模型里。
 - 同线程重入与 `ledger_lock` 嵌套（`category_put` 在 `with ledger_lock` 里再拿一次）不建模：重入按线程计数，第二次不再 flock，等同于同一次写。
 - 模型只展开两个写任务（`Jobs = {J1, J2}`）。要更多，改 `OpsRunner.cfg` 的常量；三个任务的状态数会大一个量级，通常没必要——两个就够出「两个孩子」的反例。当前代码图用 `spec/chart-current.cfg` 收窄到 `Jobs={J1}` 才落进 500 状态预算；单任务图里 `NoTwoWriteChildren` 平凡成立，互斥仍由 `WriterHoldsLock` 守着。
 
