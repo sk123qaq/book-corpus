@@ -827,3 +827,145 @@ def test_text_retention_guard_raises_without_modifying_files(tmp_path: Path, mon
     with pytest.raises(norm_mod.TextRetentionGuardError):
         norm_mod.normalize_book_md(md_dir)
     assert (md_dir / "01_第一章.md").read_text(encoding="utf-8") == orig
+
+
+def test_classify_chapter_role_spares_body_in_front_back_and_toc_titles():
+    """前置页有正文、封面/后折页超长、目录后黏连正文或长诗均救回为 body，真水章与真长目录保持 front_back。"""
+    from bookcorpus.md import classify_chapter_role
+
+    # B0980 / B1106 / B0750 风格：前置页带实质正文 -> body；纯图或 <50 字占位前置页 -> front_back
+    assert (
+        classify_chapter_role(
+            "前置页 9",
+            "# 前置页 9\n\n" + ("这是一段真正的小说正文叙事，包含完整对话与描写。" * 60),
+            "03_前置页 9.md",
+            book_title="偶像失格",
+        )
+        == "body"
+    )
+    assert classify_chapter_role("前置页 2", "# 前置页 2\n\n![](images/p02.png)\n", "02_前置页 2.md") == "front_back"
+    assert classify_chapter_role("开始", "# 开始\n\n![](images/p01.png)\n", "01_开始.md") == "front_back"
+
+    # B1093 风格：封面标题下黏着长正文 -> body；真封面/真版权页 <1200 字 -> front_back
+    assert (
+        classify_chapter_role(
+            "封面",
+            "# 封面\n\n" + ("这是黏在封面后面的长篇小说正文内容。" * 100),
+            "01_封面.md",
+            book_title="美味料理",
+        )
+        == "body"
+    )
+    assert (
+        classify_chapter_role(
+            "后折页",
+            "# 后折页\n\n" + ("老秦是报业老江湖，懂得怎么给写东西的人煽风点火。" * 60),
+            "48_后折页.md",
+        )
+        == "body"
+    )
+    assert (
+        classify_chapter_role(
+            "版权页",
+            "# 版权页\n\n图书在版编目（CIP）数据\nISBN 978-7-115-42229-3\n版权所有，侵权必究。\n",
+            "05_版权页.md",
+        )
+        == "front_back"
+    )
+
+    # B1514 / B0536 风格：>=2000 字纯目录保持 front_back
+    pure_toc = "\n".join(f"第{i}章 章节标题测试 …… {i * 12}" for i in range(1, 140))
+    assert classify_chapter_role("目录", f"# 目录\n\n{pure_toc}\n", "02_目录.md") == "front_back"
+
+    # B1882 / B1515 / B1540 风格：目录后黏连全书正文或长诗（哪怕硬换行短行占多数）-> body
+    glued_prose = (
+        "\n".join(f"第{i}章 绪论……{i}" for i in range(1, 15))
+        + "\n\n"
+        + ("这是紧跟在目录后面的全书正文段落，包含完整的标点符号与连续论述。\n" * 60)
+    )
+    assert classify_chapter_role("目录", f"# 目录\n\n{glued_prose}\n", "07_目录.md") == "body"
+
+    glued_poetry = (
+        "\n".join(f"第{i}首 诗题 …… {i * 3}" for i in range(1, 20))
+        + "\n\n"
+        + ("多年前我曾亲眼见过\n至今仍让我感到震撼\n那是一大片墓碑\n在开阔的天空下闪闪发光\n" * 70)
+    )
+    assert classify_chapter_role("目录", f"# 目录\n\n{glued_poetry}\n", "02_目录.md") == "body"
+
+
+def test_reclassify_roles_only_preserves_body_and_is_idempotent(tmp_path: Path):
+    """reclassify_roles_only 仅无损重标 YAML front matter 与 .manifest.json，不改正文、不拆章、二次 0 变更。"""
+    root = tmp_path / "ws"
+    dirty_body = "<div>保留未清洗HTML与正文空白。</div>\n\n" + ("这是一段被误标为前置页的长正文叙事。" * 100) + "\n"
+    ch1_raw = (
+        "---\n"
+        'title: "前置页 4"\n'
+        'author: "宇佐见铃"\n'
+        "chapter: 1\n"
+        "chapter_role: front_back\n"
+        "---\n\n"
+        "# 前置页 4\n\n"
+        f"{dirty_body}"
+    )
+    ch2_raw = '---\ntitle: "封面"\nchapter: 2\n---\n\n# 封面\n\n![](images/cover.png)\n'
+    md_dir = _write_basic_book(
+        root,
+        "B0980",
+        "偶像失格",
+        {"01_前置页 4.md": ch1_raw, "02_封面.md": ch2_raw},
+        images={"cover.png": b"COV"},
+    )
+    (md_dir / ".manifest.json").write_text(
+        json.dumps(
+            {
+                "uid": "B0980",
+                "canonical_version": 1,
+                "chapter_roles": {"01_前置页 4.md": "front_back", "02_封面.md": "front_back"},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    res1 = normalize_book_md(md_dir, reclassify_roles_only=True)
+    assert res1["changed"] is True
+    assert res1["did_split"] is False
+    assert res1["reclassify_roles_only"] is True
+    assert res1["chapter_roles"] == {"01_前置页 4.md": "body", "02_封面.md": "front_back"}
+
+    ch1_after = (md_dir / "01_前置页 4.md").read_text(encoding="utf-8")
+    assert "chapter_role:" not in ch1_after
+    # 正文逐字节原样保留，未触发 L0 HTML 清洗
+    assert dirty_body in ch1_after
+    assert (md_dir / "02_封面.md").read_text(encoding="utf-8").endswith("![](images/cover.png)\n")
+    assert "chapter_role: front_back" in (md_dir / "02_封面.md").read_text(encoding="utf-8")
+
+    man = json.loads((md_dir / ".manifest.json").read_text(encoding="utf-8"))
+    assert man["chapter_roles"] == {"01_前置页 4.md": "body", "02_封面.md": "front_back"}
+    assert man["canonical_version"] == 1
+
+    # CLI --reclassify-roles --books 幂等：二次运行 changed=0 且 mtime 不变
+    mtimes_before = {p.name: p.stat().st_mtime_ns for p in md_dir.iterdir() if p.is_file()}
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bookcorpus",
+            "normalize",
+            "--root",
+            str(root),
+            "--books",
+            "B0980",
+            "--reclassify-roles",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["changed"] == 0
+    assert payload["reclassify_roles_only"] is True
+    mtimes_after = {p.name: p.stat().st_mtime_ns for p in md_dir.iterdir() if p.is_file()}
+    assert mtimes_before == mtimes_after

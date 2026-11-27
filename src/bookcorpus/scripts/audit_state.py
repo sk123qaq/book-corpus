@@ -19,8 +19,15 @@ import sqlite3
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+SRC = os.path.dirname(os.path.dirname(HERE))
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+from build_para_index import sig_of
 from lib_common import PATHS, ROOT, L
+
+from bookcorpus.md import load_manifest_chapter_roles, read_chapter_role
 
 CORPUS = PATHS.books
 CAT = PATHS.tables
@@ -257,16 +264,54 @@ def main():
                 "倒排 %d 段 / %d 章 / %d 本，路径全部存在"
                 % (idx.execute("SELECT count(*) FROM para").fetchone()[0], len(para_paths), len(para_books))
             )
+        tables = {r[0] for r in idx.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")}
+        tracked = {}
+        if "indexed_book" in tables:
+            tracked = {
+                r[0]: (r[1], int(r[2] or 0), int(r[3] or 0))
+                for r in idx.execute("SELECT book, sig, chapters, paras FROM indexed_book")
+            }
+        expected_books = expected_chapters = filtered_chapters = empty_books = drifted_books = 0
+        for _uid, (dirpath, ch_files) in md.items():
+            if not ch_files:
+                continue
+            book_rel = os.path.relpath(os.path.dirname(dirpath), CORPUS)
+            sorted_paths = [os.path.join(dirpath, fn) for fn in sorted(ch_files)]
+            if tracked and book_rel in tracked and sig_of(sorted_paths) == tracked[book_rel][0]:
+                idx_ch, idx_p = tracked[book_rel][1], tracked[book_rel][2]
+                if idx_p > 0:
+                    expected_books += 1
+                    expected_chapters += idx_ch
+                else:
+                    empty_books += 1
+                filtered_chapters += max(0, len(sorted_paths) - idx_ch)
+            else:
+                mroles = load_manifest_chapter_roles(dirpath)
+                body_cnt = sum(1 for fp in sorted_paths if read_chapter_role(fp, manifest_roles=mroles) == "body")
+                filtered_chapters += len(sorted_paths) - body_cnt
+                if body_cnt > 0:
+                    expected_books += 1
+                    expected_chapters += body_cnt
+                else:
+                    empty_books += 1
+                if tracked:
+                    drifted_books += 1
         behind = []
-        indexable = sum(1 for _, ch in md.values() if ch)
-        if len(para_books) != indexable:
-            behind.append("书 %d/%d" % (len(para_books), indexable))
-        if len(para_paths) != chapters:
-            behind.append("章 %d/%d" % (len(para_paths), chapters))
+        if len(para_books) != expected_books:
+            behind.append("书 %d/%d" % (len(para_books), expected_books))
+        if len(para_paths) != expected_chapters:
+            behind.append("章 %d/%d" % (len(para_paths), expected_chapters))
+        if not behind and drifted_books:
+            behind.append("待增量同步 %d 本" % drifted_books)
         if behind:
             warn("index.db 落后库（built_at %s）: %s" % (meta.get("built_at", "?"), ", ".join(behind)))
+        elif filtered_chapters or empty_books:
+            ok(
+                "index.db 与库的书数、章节数一致（%d 本 / %d 章，跳过非正文 %d 章、无正文书 %d 本）"
+                % (len(para_books), len(para_paths), filtered_chapters, empty_books)
+            )
         else:
-            ok("index.db 与库的书写数、章节数一致")
+            ok("index.db 与库的书数、章节数一致")
         n_expand = idx.execute("SELECT count(*) FROM expand").fetchone()[0]
         exp_paths = {r[0] for r in idx.execute("SELECT DISTINCT path FROM expand")}
         exp_missing = [p for p in exp_paths if not os.path.exists(os.path.join(ROOT, p))]

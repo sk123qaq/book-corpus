@@ -22,13 +22,15 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-_SRC = os.path.dirname(HERE)
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+_SRC = os.path.dirname(os.path.dirname(HERE))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from lib_common import ROOT, L
 
 from bookcorpus import corpus_snapshot
+from bookcorpus.md import load_manifest_chapter_roles, read_chapter_role
 
 AUDIT = os.path.join(HERE, "audit_state.py")
 AUDIT_TIMEOUT = 1800
@@ -270,10 +272,49 @@ def chapter_paths(p, books):
     return out
 
 
-def index(p, state, deep):
+def _book_indexable_paths(p, book_rel):
+    """返回单本书按当前契约应入倒排的 ``body`` 章节相对路径集合与被跳过的非正文数。"""
+    md_dir = os.path.join(p.lib, book_rel, "md")
+    if not os.path.isdir(md_dir):
+        return set(), 0
+    mroles = load_manifest_chapter_roles(md_dir)
+    body_paths = set()
+    filtered = 0
+    try:
+        with os.scandir(md_dir) as it:
+            entries = [e for e in it if e.name.endswith(".md") and e.name != "README.md" and e.is_file()]
+    except OSError:
+        return set(), 0
+    for entry in entries:
+        if read_chapter_role(entry.path, manifest_roles=mroles) == "body":
+            body_paths.add(os.path.join("books", book_rel, "md", entry.name))
+        else:
+            filtered += 1
+    return body_paths, filtered
+
+
+def _book_indexable_counts(md_dir):
+    if not os.path.isdir(md_dir):
+        return 0, 0
+    mroles = load_manifest_chapter_roles(md_dir)
+    body = filtered = 0
+    try:
+        with os.scandir(md_dir) as it:
+            entries = [e for e in it if e.name.endswith(".md") and e.name != "README.md" and e.is_file()]
+    except OSError:
+        return 0, 0
+    for entry in entries:
+        if read_chapter_role(entry.path, manifest_roles=mroles) == "body":
+            body += 1
+        else:
+            filtered += 1
+    return body, filtered
+
+
+def index(p, state, deep, disk_sigs=None):
     meta = {}
     index_books = lag_books = lag_chapters = 0
-    chapters = paras = 0
+    chapters = paras = filtered_chapters = empty_books = 0
     # ok=False 表示索引读数未知（缺库或读不了），页面显示「未知」，不报「已同步」。
     ok = os.path.isfile(p.indexdb)
     if not ok:
@@ -283,6 +324,14 @@ def index(p, state, deep):
             con = ro(p.indexdb)
             try:
                 meta = index_meta(con)
+                tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")}
+                tracked = {}
+                if "indexed_book" in tables:
+                    tracked = {
+                        r[0]: (r[1], int(r[2] or 0), int(r[3] or 0))
+                        for r in con.execute("SELECT book, sig, chapters, paras FROM indexed_book")
+                    }
+                has_tracking = bool(tracked)
                 if deep:
                     idx_books = set()
                     idx_chapters = set()
@@ -295,14 +344,51 @@ def index(p, state, deep):
                         paras = int(meta["paras"])
                     except (KeyError, TypeError, ValueError):
                         paras = con.execute("SELECT count(*) FROM para").fetchone()[0]
-                    lib_books = md_book_paths(p)
+                    lib_books_all = md_book_paths(p)
+                    lib_books = set()
+                    lib_chapters = set()
+                    for book_rel in lib_books_all:
+                        bpaths, bfilt = _book_indexable_paths(p, book_rel)
+                        filtered_chapters += bfilt
+                        if not bpaths or (
+                            has_tracking
+                            and book_rel in tracked
+                            and tracked[book_rel][2] == 0
+                            and disk_sigs is not None
+                            and disk_sigs.get(book_rel, (None,))[0] == tracked[book_rel][0]
+                        ):
+                            empty_books += 1
+                        else:
+                            lib_books.add(book_rel)
+                            lib_chapters.update(bpaths)
                     lag_books = len(lib_books - idx_books) - len(idx_books - lib_books)
-                    lib_chapters = chapter_paths(p, lib_books)
                     lag_chapters = len(lib_chapters - idx_chapters) - len(idx_chapters - lib_chapters)
                 else:
                     index_books, chapters, paras = index_counts(con, meta)
-                    lag_books = state["md_indexable"] - index_books
-                    lag_chapters = state["md_chapters"] - chapters
+                    if has_tracking and disk_sigs is not None:
+                        expected_books = expected_chapters = 0
+                        for book_rel, (cur_sig, ch_cnt) in disk_sigs.items():
+                            if book_rel in tracked and tracked[book_rel][0] == cur_sig:
+                                idx_ch, idx_p = tracked[book_rel][1], tracked[book_rel][2]
+                                if idx_p > 0:
+                                    expected_books += 1
+                                    expected_chapters += idx_ch
+                                else:
+                                    empty_books += 1
+                                filtered_chapters += max(0, ch_cnt - idx_ch)
+                            else:
+                                body_cnt, filt_cnt = _book_indexable_counts(os.path.join(p.lib, book_rel, "md"))
+                                filtered_chapters += filt_cnt
+                                if body_cnt > 0:
+                                    expected_books += 1
+                                    expected_chapters += body_cnt
+                                else:
+                                    empty_books += 1
+                        lag_books = expected_books - index_books
+                        lag_chapters = expected_chapters - chapters
+                    else:
+                        lag_books = state["md_indexable"] - index_books
+                        lag_chapters = state["md_chapters"] - chapters
             finally:
                 con.close()
         except sqlite3.Error as exc:
@@ -323,6 +409,8 @@ def index(p, state, deep):
         "lag_chapters": lag_chapters,
         "extra_books": extra_books,
         "extra_chapters": extra_chapters,
+        "filtered_chapters": filtered_chapters,
+        "empty_books": empty_books,
         "lag_exact": bool(deep),
         "db": p.indexdb if os.path.isfile(p.indexdb) else None,
         "ok": ok,
@@ -855,6 +943,8 @@ def collect(p, deep=False):
             "lag_chapters": 0,
             "extra_books": 0,
             "extra_chapters": 0,
+            "filtered_chapters": 0,
+            "empty_books": 0,
             "lag_exact": False,
         },
         "views": {"awards": 0, "broken": 0},
@@ -892,7 +982,6 @@ def collect(p, deep=False):
     inbox(p, state)
     ledger(p, state)
     catalog(p, state)
-    index(p, state, deep)
     disk_sigs = None
     try:
         import build_para_index as BPI
@@ -900,6 +989,7 @@ def collect(p, deep=False):
         disk_sigs = BPI.scan_md_sigs(corpus=p.lib)
     except (ImportError, OSError):
         disk_sigs = None
+    index(p, state, deep, disk_sigs=disk_sigs)
     embed_status(p, state, disk_sigs=disk_sigs)
     views(p, state)
     md_canonical(p, state, disk_sigs=disk_sigs)

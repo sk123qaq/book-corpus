@@ -2239,6 +2239,8 @@ class App:
                     "lag_chapters": 0,
                     "extra_books": 0,
                     "extra_chapters": 0,
+                    "filtered_chapters": 0,
+                    "empty_books": 0,
                     "db": None,
                     "ok": False,
                 },

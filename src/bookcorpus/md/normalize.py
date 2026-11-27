@@ -42,6 +42,7 @@ from .parse import (
     QUOTE_RE,
     TABLE_ROW_RE,
     _image_kind,
+    chapter_title,
     clean_inline,
     han_count,
     non_space_count,
@@ -185,18 +186,38 @@ _TIER1_HEADING_RE = re.compile(
     r")",
     re.I,
 )
+_TOC_TITLE_RE = re.compile(
+    r"^(?:"
+    r"总目录|简目|详细目录|插图目录|图表目录|目\s*录|"
+    r"table\s*of\s*contents|contents"
+    r")$",
+    re.I,
+)
 _FRONT_BACK_TITLE_RE = re.compile(
     r"^(?:"
     r"(?:前|后)?折页|勒口|书衣|腰封|奥付|版权(?:页|声明|所有|信息)?|图书在版编目|CIP(?:数据)?|"
     r"封面|封底|封二|封三|书脊|书名页|扉页|内封|题名页|"
-    r"总目录|简目|详细目录|插图目录|图表目录|目\s*录|"
     r"剧中人物(?:表)?|人物表|序幕人物|登场人物|"
-    r"前置页(?:\s*\d+)?|"
     r"cover|back\s*cover|title\s*page|half\s*title|copyright|colophon|imprint|"
-    r"table\s*of\s*contents|contents|cast\s*of\s*characters|dramatis\s*personae"
+    r"cast\s*of\s*characters|dramatis\s*personae"
     r")$",
     re.I,
 )
+_PLACEHOLDER_FRONT_TITLE_RE = re.compile(r"^前置页(?:\s*\d+)?$", re.I)
+_TOC_LINE_RE = re.compile(
+    r"(?:"
+    r"\.{2,}|…{2,}|·{3,}"
+    r"|(?:^|\s|/|第)\d{1,4}(?:\s|$)"
+    r"|\(\d{1,4}\)$|\[\d{1,4}\]$"
+    r"|^(?:第\s*[〇零一二三四五六七八九十百千两0-9]+\s*[章篇部卷回集辑节幕]"
+    r"|chapter|part|section|appendix|preface|foreword|bibliography|index"
+    r"|[A-Z]\.\d+|[一二三四五六七八九十]+、|\d+(?:\.\d+)+)"
+    r")",
+    re.I,
+)
+_NON_TOC_FRONT_BACK_BODY_LIMIT = 1_200
+_TOC_BODY_CHECK_MIN_CHARS = 2_000
+_TOC_BODY_MAX_CHARS = 15_000
 _BODY_PROTECTED_TITLE_RE = re.compile(
     r"(?:^第\s*[〇零一二三四五六七八九十百千两0-9]+\s*[章篇部卷回幕场节]|"
     r"^(?:序幕|楔子|尾声|引子|绪论|导论|引言|前言|后记|结语|chapter\s+\d+|part\s+\d+|act\s+\d+))",
@@ -1318,6 +1339,36 @@ def normalize_chapter_footnotes(
 # --------------------------------------------------------------------------- 章节角色判定
 
 
+def _is_real_toc_body(body_no_imgs: str, plain_chars: int) -> bool:
+    """长目录（>=2000 字）结构校验：排除目录后黏连整书/长散文/长诗的误标章。"""
+    if plain_chars > _TOC_BODY_MAX_CHARS:
+        return False
+    lines = [ln.strip() for ln in body_no_imgs.splitlines() if ln.strip()]
+    if len(lines) < 3:
+        return False
+    no_dots = re.sub(r"\.{2,}|…{2,}|·{3,}", " ", body_no_imgs)
+    end_punct = len(re.findall(r"[。！？]|(?<![A-Za-z0-9])[A-Za-z]{3,}\.(?=\s|$)", no_dots))
+    if end_punct * 1000 / max(plain_chars, 1) > 8.0:
+        return False
+    prose_chars = sum(
+        non_space_count(ln)
+        for ln in lines
+        if non_space_count(ln) >= 50
+        and re.search(r"[。！？.!?][”’\"')\]]*$", ln)
+        and not re.search(r"(\.{3,}|…{2,}|\s\d{1,4}$)", ln)
+    )
+    if prose_chars >= 400:
+        return False
+    half = lines[len(lines) // 2 :]
+    tail = lines[max(0, len(lines) - max(5, len(lines) // 4)) :]
+
+    def _toc_ratio(seq: Sequence[str]) -> float:
+        hits = sum(1 for ln in seq if _TOC_LINE_RE.search(ln) or _LINK_REF_RE.search(ln))
+        return hits / max(len(seq), 1)
+
+    return _toc_ratio(lines) >= 0.35 and _toc_ratio(half) >= 0.35 and _toc_ratio(tail) >= 0.30
+
+
 def classify_chapter_role(
     title: str,
     body: str,
@@ -1332,6 +1383,7 @@ def classify_chapter_role(
     clean_title = clean_inline(title).strip()
     stem = Path(file_name).stem if file_name else ""
     stem_clean = re.sub(r"^\d+_", "", stem).strip()
+    stem_norm = stem_clean.replace("_", " ").strip()
 
     if clean_title and NOTE_CHAPTER_TITLE_RE.match(clean_title):
         return "notes"
@@ -1345,21 +1397,34 @@ def classify_chapter_role(
     if clean_title and _BODY_PROTECTED_TITLE_RE.match(clean_title):
         return "body"
 
-    if clean_title and _FRONT_BACK_TITLE_RE.match(clean_title):
-        return "front_back"
-    if stem_clean and _FRONT_BACK_TITLE_RE.match(stem_clean):
-        return "front_back"
-
-    # 极短封面/书名页（无实质正文，仅图片或复述书名）
     body_no_h1 = re.sub(r"(?m)^#\s+.*$", "", body).strip()
     body_no_imgs = _IMG_REF_RE.sub("", body_no_h1).strip()
     plain_chars = non_space_count(body_no_imgs)
+
+    if (clean_title and _TOC_TITLE_RE.match(clean_title)) or (stem_norm and _TOC_TITLE_RE.match(stem_norm)):
+        if plain_chars < _TOC_BODY_CHECK_MIN_CHARS:
+            return "front_back"
+        return "front_back" if _is_real_toc_body(body_no_imgs, plain_chars) else "body"
+
+    if (clean_title and _FRONT_BACK_TITLE_RE.match(clean_title)) or (
+        stem_norm and _FRONT_BACK_TITLE_RE.match(stem_norm)
+    ):
+        if plain_chars >= _NON_TOC_FRONT_BACK_BODY_LIMIT:
+            return "body"
+        return "front_back"
+
+    # 极短封面/书名页/前置页（无实质正文，仅图片、占位提示或复述书名）
     if plain_chars < 50:
         norm_bt = re.sub(r"[\W_]+", "", (book_title or "").lower())
         norm_ct = re.sub(r"[\W_]+", "", clean_title.lower())
         if plain_chars == 0 or (norm_bt and norm_ct and (norm_ct in norm_bt or norm_bt in norm_ct)):
             return "front_back"
-        if stem_clean.startswith("前置页"):
+        if (
+            _PLACEHOLDER_FRONT_TITLE_RE.match(clean_title)
+            or _PLACEHOLDER_FRONT_TITLE_RE.match(stem_norm)
+            or clean_title.startswith("前置页")
+            or stem_clean.startswith("前置页")
+        ):
             return "front_back"
 
     return "body"
@@ -2006,6 +2071,142 @@ def _backup_md_dir(md_dir: Path, backup_dir: Path, label: str) -> Path:
     return dest
 
 
+def _update_front_matter_role_only(raw: str, *, role: ChapterRole, ch_title: str) -> str:
+    """仅更新或移除 YAML front matter 的 ``chapter_role``，正文与其余元信息逐字节保留。"""
+    has_bom = raw.startswith("\ufeff")
+    probe = raw[1:] if has_bom else raw
+    newline = "\r\n" if "\r\n" in probe.split("\n", 1)[0] else "\n"
+    lines = probe.splitlines(keepends=True)
+    fm_end = None
+    if lines and lines[0].strip() == "---":
+        for idx in range(1, min(len(lines), FRONT_MATTER_LIMIT + 1)):
+            if lines[idx].strip() == "---":
+                fm_end = idx
+                break
+
+    if fm_end is None:
+        if role == "body":
+            return raw
+        prefix = _format_front_matter([("title", ch_title), ("chapter_role", role)])
+        return ("\ufeff" if has_bom else "") + prefix + probe.lstrip("\r\n")
+
+    fm_lines = lines[1:fm_end]
+    role_idx = next(
+        (i for i, ln in enumerate(fm_lines) if ":" in ln and ln.split(":", 1)[0].strip() == "chapter_role"),
+        None,
+    )
+    if role == "body":
+        if role_idx is None:
+            return raw
+        new_fm = [ln for i, ln in enumerate(fm_lines) if i != role_idx]
+        if not new_fm:
+            rest = "".join(lines[fm_end + 1 :]).lstrip("\r\n")
+            return ("\ufeff" if has_bom else "") + rest
+        out = "".join([lines[0], *new_fm, *lines[fm_end:]])
+        return ("\ufeff" if has_bom else "") + out
+
+    target_line = f"chapter_role: {role}{newline}"
+    if role_idx is not None:
+        cur_line = fm_lines[role_idx]
+        cur_val = cur_line.split(":", 1)[1].strip().strip("\"'")
+        if cur_val.lower() == role:
+            return raw
+        new_fm = [target_line if i == role_idx else ln for i, ln in enumerate(fm_lines)]
+    else:
+        new_fm = [*fm_lines, target_line]
+    out = "".join([lines[0], *new_fm, *lines[fm_end:]])
+    return ("\ufeff" if has_bom else "") + out
+
+
+def _reclassify_book_roles_only(
+    root: Path,
+    manifest: dict[str, Any],
+    chapter_files: Sequence[Path],
+    *,
+    backup_dir: Path | None,
+    dry_run: bool,
+) -> dict[str, Any]:
+    """仅无损重算章节角色，更新 ``.manifest.json`` 与对应 YAML front matter，绝不改正文或拆章。"""
+    stats = NormalizeStats(chapters_before=len(chapter_files), chapters_after=len(chapter_files))
+    book_title = _resolve_book_title(root, manifest, chapter_files)
+    only_ch = len(chapter_files) == 1
+    chapter_roles: dict[str, ChapterRole] = {}
+    role_counts = {"body": 0, "notes": 0, "front_back": 0}
+    updates: list[tuple[Path, str]] = []
+    old_manifest_roles = manifest.get("chapter_roles") if isinstance(manifest.get("chapter_roles"), dict) else {}
+
+    for p in chapter_files:
+        raw = p.read_text(encoding="utf-8", errors="replace")
+        _fm_items, fm_meta, body = _split_front_matter_raw(raw)
+        ch_title = chapter_title(raw, stem=p.stem) or fm_meta.get("title") or p.stem
+        role = classify_chapter_role(
+            ch_title,
+            body,
+            p.name,
+            book_title=book_title,
+            is_only_chapter=only_ch,
+        )
+        if only_ch:
+            role = "body"
+        chapter_roles[p.name] = role
+        role_counts[role] += 1
+        rendered = _update_front_matter_role_only(raw, role=role, ch_title=ch_title)
+        if rendered != raw:
+            updates.append((p, rendered))
+
+    stats.roles = role_counts
+    manifest_path = root / ".manifest.json"
+    manifest_changed = old_manifest_roles != chapter_roles
+    anything_changed = bool(updates) or manifest_changed
+    uid = str(manifest.get("uid") or root.parent.name)
+
+    if not anything_changed or dry_run:
+        return {
+            "md_dir": str(root),
+            "uid": uid,
+            "changed": anything_changed,
+            "dry_run": dry_run,
+            "did_split": False,
+            "reclassify_roles_only": True,
+            "files_updated": len(updates),
+            "chapter_roles": chapter_roles,
+            "stats": stats.to_dict(),
+        }
+
+    backup_path = ""
+    if backup_dir is not None:
+        bk_root = Path(backup_dir)
+        bk_label = uid if uid and uid != "md" else root.parent.name
+        backup_path = str(_backup_md_dir(root, bk_root, bk_label))
+
+    for dest, content in updates:
+        _write_text_atomic(dest, content)
+
+    if manifest_changed:
+        new_manifest = dict(manifest)
+        if "uid" not in new_manifest:
+            new_manifest["uid"] = uid
+        new_manifest["chapter_roles"] = chapter_roles
+        if isinstance(new_manifest.get("normalize_stats"), dict):
+            new_stats = dict(new_manifest["normalize_stats"])
+            new_stats["roles"] = dict(role_counts)
+            new_manifest["normalize_stats"] = new_stats
+        _write_json_atomic(manifest_path, new_manifest)
+
+    return {
+        "md_dir": str(root),
+        "uid": uid,
+        "changed": True,
+        "dry_run": False,
+        "did_split": False,
+        "reclassify_roles_only": True,
+        "files_updated": len(updates),
+        "backup_path": backup_path,
+        "chapter_roles": chapter_roles,
+        "stats": stats.to_dict(),
+    }
+
+
 # --------------------------------------------------------------------------- 主入口
 
 
@@ -2016,6 +2217,7 @@ def normalize_book_md(
     dry_run: bool = False,
     split_chars: int = DEFAULT_SPLIT_CHARS,
     split_blocks: int = DEFAULT_SPLIT_BLOCKS,
+    reclassify_roles_only: bool = False,
 ) -> dict[str, Any]:
     """对单本书的 ``md/`` 执行幂等 L0 规范化；二次运行必须 0 变更。"""
     root = Path(md_dir)
@@ -2042,6 +2244,15 @@ def normalize_book_md(
             "reason": "no_chapters",
             "stats": NormalizeStats().to_dict(),
         }
+
+    if reclassify_roles_only:
+        return _reclassify_book_roles_only(
+            root,
+            manifest,
+            chapter_files,
+            backup_dir=Path(backup_dir) if backup_dir is not None else None,
+            dry_run=dry_run,
+        )
 
     stats = NormalizeStats(chapters_before=len(chapter_files))
     book_title = _resolve_book_title(root, manifest, chapter_files)
