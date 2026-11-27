@@ -833,13 +833,6 @@ function verdictText(c, alerts) {
   }
   if (c.fail || c.broken) return '有几处需要处理';
   if (!alerts.length) return '库是干净的';
-  const focus = [];
-  if (c.toConvert) focus.push(num(c.toConvert) + ' 本书待转');
-  if (c.inbox) focus.push('收件箱 ' + num(c.inbox) + ' 本待核对');
-  if (c.awaiting) focus.push(num(c.awaiting) + ' 项待确认');
-  if (c.lagBooks) focus.push('索引落后 ' + num(c.lagBooks) + ' 本');
-  if (c.warn) focus.push('体检有 ' + num(c.warn) + ' 条提醒');
-  if (focus.length) return '书库运转正常，当前焦点：' + focus.slice(0, 2).join('、');
   return '书库整体运转正常，有 ' + num(alerts.length) + ' 项待关注';
 }
 
@@ -919,26 +912,16 @@ function pipeline(c, alerts) {
       key: 'inbox', name: '收书', href: '#import',
       state: unknown ? 'miss' : (c.inbox ? 'half' : 'ok'),
       word: unknown ? '未知' : (c.inbox ? '待核对 ' + num(c.inbox) : '正常'),
-      read: unknown ? '状态读不到' : (c.inbox ? num(c.inbox) + ' 本待入库' : '收件箱已清空'),
     },
     {
       key: 'ledger', name: '入账', href: c.ledgerStale ? '#maintain' : '#ledger',
       state: !c.libKnown ? 'miss' : (ledgerGap ? 'miss' : (c.ledgerStale ? 'half' : 'ok')),
       word: !c.libKnown ? '未知' : (ledgerGap ? '需核对' : (c.ledgerStale ? '需同步' : '正常')),
-      read: !c.libKnown
-        ? '书数未知'
-        : (ledgerGap ? '差 ' + num(Math.abs(ledgerGap)) + ' 本'
-          : (c.ledgerStale ? '分类账已改，待同步' : num(c.books) + ' 本已登记')),
     },
     {
       key: 'views', name: '上架', href: '#maintain',
       state: !c.viewsKnown ? 'miss' : (c.broken ? 'miss' : 'ok'),
       word: !c.viewsKnown ? '未知' : (c.broken ? '需处理' : '正常'),
-      read: !c.viewsKnown
-        ? '浏览入口缺失'
-        : (c.broken
-          ? num(c.broken) + ' 条入口失效'
-          : '奖项 ' + num(c.awards) + ' 条'),
     },
     {
       key: 'split', name: '正文生产',
@@ -946,21 +929,11 @@ function pipeline(c, alerts) {
         : (c.pdfsToConvert ? '#pdf' : (c.docsToConvert ? '#docs' : '#split')),
       state: !c.libKnown ? 'miss' : (c.toConvert ? 'half' : 'ok'),
       word: !c.libKnown ? '未知' : (c.toConvert ? '待转 ' + num(c.toConvert) : '正常'),
-      read: !c.libKnown
-        ? '计数未知'
-        : (c.toConvert ? num(c.toConvert) + ' 本待处理' : num(c.readable) + ' 本已就绪'),
     },
     {
       key: 'index', name: '可检索', href: '#maintain',
       state: !c.indexKnown ? 'miss' : (c.lagBooks || c.lagChapters || c.indexExtra || c.indexExtraChapters ? 'half' : 'ok'),
       word: !c.indexKnown ? '未知' : (c.lagBooks || c.lagChapters ? '待处理' : (c.indexExtra || c.indexExtraChapters ? '需重建' : '正常')),
-      read: !c.indexKnown
-        ? '索引读数未知'
-        : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
-          : (c.lagChapters ? '落后 ' + num(c.lagChapters) + ' 章'
-            : (c.indexExtra ? '比书库多 ' + num(c.indexExtra) + ' 本'
-              : (c.indexExtraChapters ? '比书库多 ' + num(c.indexExtraChapters) + ' 章'
-                : num(c.indexedChapters || c.chapters) + ' 章已索引')))),
     },
     {
       // 体检记录本身没问题也不能替整个书库担保：state 非 ok 时降成「需注意」
@@ -969,19 +942,12 @@ function pipeline(c, alerts) {
         : (c.auditStale ? 'half' : (c.fail ? 'miss' : (c.warn ? 'half' : (statusState() === 'ok' ? 'ok' : 'half')))),
       word: !c.auditRan ? '未运行'
         : (c.auditStale ? '已过期' : (c.fail ? '需处理' : (c.warn ? num(c.warn) + ' 条提醒' : (statusState() === 'ok' ? '正常' : '需注意')))),
-      read: !c.auditRan
-        ? '还没有体检记录'
-        : (c.auditStale ? '库或索引比体检新'
-          : (c.fail ? num(c.fail) + ' 项失败'
-            : (c.warn ? '核心检查通过'
-              : (statusState() === 'ok' ? '全部通过' : '无失败项')))),
     },
   ];
   const arrowSvg = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 8.5 3.5"/><path d="M4.2 3.5H8.5v4.3"/></svg>';
   return `<section class="section" aria-labelledby="sec-pipeline">
     <div class="section-head">
       <h2 id="sec-pipeline">流水线六环节</h2>
-      <span class="small muted">点击任一环节直达处理</span>
     </div>
     <div class="track-board">
       <div class="track-grid">${cells.map((cell, idx) => {
@@ -993,7 +959,6 @@ function pipeline(c, alerts) {
           <div class="track-rail" aria-hidden="true"><span class="track-node"></span></div>
           <div class="track-title"><span class="track-step-num" aria-hidden="true">${stepNo}</span>${esc(cell.name)}</div>
           ${status(cell.state, cell.word)}
-          <div class="track-sub">${esc(cell.read)}</div>
         </a>`;
       }).join('')}</div>
       <div class="track-alerts"${alerts.length ? '' : ' hidden'}>

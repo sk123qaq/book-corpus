@@ -332,7 +332,7 @@ def scenario_partial_state():
         check("总览不说「库是干净的」", "库是干净的" not in overview, overview[:300])
         check("总览说「状态不完整」", "状态不完整" in overview, overview[:300])
         check("总览体检格不出现「全部通过」", "全部通过" not in overview, overview[:400])
-        check("总览体检格=需注意 / 无失败项", "需注意" in overview and "无失败项" in overview, overview[:400])
+        check("总览体检格=需注意", "需注意" in overview, overview[:400])
         check("待办含「书库状态不完整」", "书库状态不完整" in overview, overview[:400])
         check(
             "待办 note 点名书目总表与浏览入口",
