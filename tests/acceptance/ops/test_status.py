@@ -409,6 +409,10 @@ def real_checks():
     check("真库待转 pdf 与 v_pending_md 一致", state["pending"]["pdf"] == pdf, (state["pending"]["pdf"], pdf))
     idx = sqlite3.connect("file:%s?mode=ro" % indexdb, uri=True)
     meta = dict(idx.execute("SELECT key, value FROM meta"))
+    has_tracking = (
+        idx.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='indexed_book'").fetchone()[0] > 0
+        and idx.execute("SELECT count(*) FROM indexed_book").fetchone()[0] > 0
+    )
     idx.close()
     check(
         "真库索引读数与 index.db meta 一致",
@@ -426,11 +430,20 @@ def real_checks():
         "真库快照可读 = 可索引 md 本数", state["books_readable"] == indexable, (state.get("books_readable"), indexable)
     )
     check("真库快照章数与 derived 一致", state["stats_chapters"] == chapters, (state.get("stats_chapters"), chapters))
-    check(
-        "真库索引落后 = 可索引 md 本数 - 索引书数",
-        state["index"]["lag_books"] == indexable - int(meta["books"]),
-        state["index"],
-    )
+    if has_tracking:
+        sync_fts = (state.get("sync_delta") or {}).get("fts") or {}
+        if not (sync_fts.get("added") or sync_fts.get("modified") or sync_fts.get("removed")):
+            check(
+                "真库索引同步一致时落后为 0（扣除水章与无正文书）",
+                state["index"]["lag_books"] == 0 and state["index"]["lag_chapters"] == 0,
+                state["index"],
+            )
+    else:
+        check(
+            "真库索引落后 = 可索引 md 本数 - 索引书数",
+            state["index"]["lag_books"] == indexable - int(meta["books"]),
+            state["index"],
+        )
     check("真库索引 built_at 有值", bool(state["index"]["built_at"]), state["index"])
     con = sqlite3.connect("file:%s?mode=ro" % os.path.join(REAL_ROOT, "tables", "ledger.db"), uri=True)
     ledger_n = con.execute("SELECT count(*) FROM 分类").fetchone()[0]

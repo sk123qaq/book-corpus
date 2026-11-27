@@ -530,6 +530,39 @@ def _delete_book_in_tx(con, book, include_expand=False):
     return deleted_para, deleted_expand
 
 
+def _prune_orphan_expand_in_tx(con, base_root, *, only_books=None):
+    """清理 expand 与 expand_fts 中磁盘路径已不存在的死路径孤儿行，保留所有有效行。"""
+    tables = _table_names(con)
+    if "expand" not in tables:
+        return 0
+    has_fts = "expand_fts" in tables
+    if only_books:
+        distinct_paths = []
+        for book in sorted(set(only_books)):
+            prefix = "books/" + book + "/%"
+            distinct_paths.extend(
+                r[0] for r in con.execute("SELECT DISTINCT path FROM expand WHERE path LIKE ?", (prefix,))
+            )
+    else:
+        distinct_paths = [r[0] for r in con.execute("SELECT DISTINCT path FROM expand")]
+    dead_paths = [p for p in distinct_paths if not os.path.exists(os.path.join(base_root, p))]
+    if not dead_paths:
+        return 0
+    deleted = 0
+    for idx in range(0, len(dead_paths), 400):
+        chunk = dead_paths[idx : idx + 400]
+        placeholders = ",".join("?" * len(chunk))
+        if has_fts:
+            sql_fts = (
+                "INSERT INTO expand_fts(expand_fts, rowid, tok) "  # noqa: S608 占位符由列表长度生成
+                f"SELECT 'delete', rowid, tok FROM expand WHERE path IN ({placeholders})"
+            )
+            con.execute(sql_fts, chunk)
+        sql_del = f"DELETE FROM expand WHERE path IN ({placeholders})"  # noqa: S608 占位符由列表长度生成
+        deleted += con.execute(sql_del, chunk).rowcount
+    return deleted
+
+
 def _upsert_book_in_tx(con, book, paths, root, *, include_notes=False, include_front_back=False):
     _delete_book_in_tx(con, book, include_expand=False)
     sig = sig_of(paths)
@@ -619,12 +652,23 @@ def sync(db, only_books=None, root=None, emit_json=False, *, include_notes=False
                 removed.append(book)
 
         if not (added or modified or removed):
-            if bootstrapped:
-                _refresh_meta_from_tracking(con, time.time() - t0)
-                con.commit()
+            pruned_expand = 0
+            with con:
+                pruned_expand = _prune_orphan_expand_in_tx(con, base_root, only_books=want)
+                if bootstrapped:
+                    _refresh_meta_from_tracking(con, time.time() - t0)
+            elapsed = time.time() - t0
             if not emit_json:
-                print("index.db 已最新（不变 %d 本，%.2fs）" % (unchanged, time.time() - t0))
-            return {"mode": "sync", "added": 0, "modified": 0, "removed": 0, "unchanged": unchanged}
+                extra = ("，清理失效 expand %d 行" % pruned_expand) if pruned_expand else ""
+                print("index.db 已最新（不变 %d 本%s，%.2fs）" % (unchanged, extra, elapsed))
+            return {
+                "mode": "sync",
+                "added": 0,
+                "modified": 0,
+                "removed": 0,
+                "unchanged": unchanged,
+                "pruned_expand": pruned_expand,
+            }
 
         with con:
             for book in removed:
@@ -638,16 +682,19 @@ def sync(db, only_books=None, root=None, emit_json=False, *, include_notes=False
                     include_notes=include_notes,
                     include_front_back=include_front_back,
                 )
+            pruned_expand = _prune_orphan_expand_in_tx(con, base_root, only_books=want)
             stats = _refresh_meta_from_tracking(con, time.time() - t0)
         elapsed = time.time() - t0
         if not emit_json:
+            extra = ("，清理失效 expand %d 行" % pruned_expand) if pruned_expand else ""
             print(
-                "index.db 增量同步完成：+%d ~%d -%d（不变 %d），共 %d 本 / %d 章 / %d 段，%.2fs"
+                "index.db 增量同步完成：+%d ~%d -%d（不变 %d%s），共 %d 本 / %d 章 / %d 段，%.2fs"
                 % (
                     len(added),
                     len(modified),
                     len(removed),
                     unchanged,
+                    extra,
                     stats["books"],
                     stats["chapters"],
                     stats["paras"],
@@ -660,6 +707,7 @@ def sync(db, only_books=None, root=None, emit_json=False, *, include_notes=False
             "modified": len(modified),
             "removed": len(removed),
             "unchanged": unchanged,
+            "pruned_expand": pruned_expand,
             **stats,
             "seconds": round(elapsed, 2),
         }

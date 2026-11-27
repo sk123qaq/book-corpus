@@ -1214,3 +1214,86 @@ def test_clean_dry_run_preview_and_path_boundary(workspace):
         assert (jobs_root / "clean-thumb").exists()
         assert (jobs_root / "clean-running").exists()
         assert app.status_gen == gen_before + 1
+
+
+def test_ops_status_and_audit_align_with_role_filter_and_empty_books(workspace):
+    """含 front_back/notes 水章与纯图无正文书同步后，ops_status（轻/深）与 audit_state 均不误报落后。"""
+    import importlib.util
+
+    scripts_dir = REPO / "src" / "bookcorpus" / "scripts"
+    bpi_spec = importlib.util.spec_from_file_location("bpi_ops_align_test", scripts_dir / "build_para_index.py")
+    bpi = importlib.util.module_from_spec(bpi_spec)
+    bpi_spec.loader.exec_module(bpi)
+
+    # 给 B0001 增加 front_back 与 notes 章节；新增纯图无正文书 B0601（全 front_back）
+    b1_md = workspace / "books" / "B0001" / "md"
+    (b1_md / "000_封面.md").write_text(
+        "---\ntitle: 封面\nchapter_role: front_back\n---\n# 封面\n\n![](images/c.png)\n", encoding="utf-8"
+    )
+    (b1_md / "999_注释.md").write_text(
+        "---\ntitle: 注释\nchapter_role: notes\n---\n# 注释\n\n[^1]: 注释一条。\n", encoding="utf-8"
+    )
+
+    b601_dir = workspace / "books" / "B0601"
+    (b601_dir / "md").mkdir(parents=True)
+    (b601_dir / "source").mkdir(parents=True)
+    (b601_dir / "source" / "gallery.pdf").write_bytes(b"%PDF-1.4")
+    (b601_dir / "book.json").write_text(
+        json.dumps({"uid": "B0601", "title": "纯图漫画", "subjects": ["艺术"]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (b601_dir / "md" / "01_Page 1.md").write_text(
+        "---\ntitle: Page 1\nchapter_role: front_back\n---\n# Page 1\n\n![](images/p1.png)\n",
+        encoding="utf-8",
+    )
+    (b601_dir / "md" / "README.md").write_text("# 纯图漫画\n", encoding="utf-8")
+
+    # 补全源文件与人账并重建 library.db + index.db
+    for uid, src in (("B0001", "甲书.epub"), ("B0002", "乙书.epub"), ("B0003", "丙书.txt")):
+        (workspace / "books" / uid / "source" / src).write_bytes(b"src")
+    write_ledger(
+        workspace,
+        [
+            ("B0001", "社科", "甲书", ""),
+            ("B0002", "社科", "乙书", ""),
+            ("B0003", "文学", "丙书", ""),
+            ("B0601", "艺术", "纯图漫画", ""),
+        ],
+    )
+    assert run_cli("--root", workspace, "library", "--emit-json").returncode == 0
+    con = bpi.build(str(workspace / "build" / "检索" / "index.db"), root=str(workspace))
+    con.close()
+
+    # 1) ops_status 轻量模式与 --deep 均应报 lag_books=0, lag_chapters=0，并准确统计跳过水章与无正文书
+    p = _paths(workspace)
+    st_light = ops_status.collect(p, deep=False)
+    assert st_light["index"]["lag_books"] == 0
+    assert st_light["index"]["lag_chapters"] == 0
+    assert st_light["index"]["filtered_chapters"] == 3
+    assert st_light["index"]["empty_books"] == 1
+
+    st_deep = ops_status.collect(p, deep=True)
+    assert st_deep["index"]["lag_books"] == 0
+    assert st_deep["index"]["lag_chapters"] == 0
+    assert st_deep["index"]["filtered_chapters"] == 3
+    assert st_deep["index"]["empty_books"] == 1
+
+    # 2) audit_state --json 不报 index.db 落后 WARN，且 FAIL 为空
+    proc = subprocess.run(
+        [sys.executable, str(scripts_dir / "audit_state.py"), "--json", "--root", str(workspace)],
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    audit_payload = json.loads(proc.stdout)
+    assert audit_payload["fail"] == []
+    assert not any("index.db 落后" in w for w in audit_payload["warn"]), audit_payload["warn"]
+
+    # 3) 若磁盘真实新增一章 body（未 --sync），立即准确体现为 lag_books=1 / lag_chapters=1
+    (workspace / "books" / "B0002" / "md" / "002_新正文.md").write_text(
+        "# 新正文\n\n真实新增的正文段落。\n", encoding="utf-8"
+    )
+    st_lag = ops_status.collect(p, deep=False)
+    assert st_lag["index"]["lag_chapters"] == 1
+    assert st_lag["sync_delta"]["fts"]["modified"] == ["B0002"]

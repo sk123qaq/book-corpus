@@ -291,3 +291,56 @@ def test_retire_cleans_fts_and_deactivates_embed(workspace):
     assert not (workspace / "books" / "B0001").exists()
     assert (workspace / "books" / "_冷宫" / "甲书" / "source" / "甲书.epub").is_file()
     assert list((workspace / "工作区" / "批次").glob("移出-*/retired.tsv"))
+
+
+def test_para_index_sync_prunes_dead_expand_paths_and_keeps_live_rows(workspace):
+    """--sync（含签名不变分支）清理磁盘已不存在的 expand 死路径，保留有效行且 expand_fts 行数对齐。"""
+    db = workspace / "build" / "检索" / "index.db"
+    con = bpi.build(str(db), root=str(workspace))
+    live_path = "books/B0001/md/001_第1节.md"
+    dead_split_path = "books/B0001/md/整本旧单章.md"
+    dead_orphan_path = "books/B9998/md/不存在的章.md"
+    with con:
+        for p, text in (
+            (live_path, "科层制与现代国家治理"),
+            (dead_split_path, "拆章前的旧单章扩写摘要"),
+            (dead_orphan_path, "未知遗留死路径扩写"),
+        ):
+            con.execute(
+                "INSERT INTO expand(path, kind, tok, text, built_at) VALUES(?,?,?,?,?)",
+                (p, "prefix", cjk.index_text(text), text, "2026-11-26T00:00:00+0800"),
+            )
+        con.execute("INSERT INTO expand_fts(expand_fts) VALUES('rebuild')")
+    con.close()
+
+    # 即使没有任何书籍 sig 变更，--sync 仍必须清理两条死路径并保留有效行
+    res = bpi.sync(str(db), root=str(workspace))
+    assert res["added"] == 0
+    assert res["modified"] == 0
+    assert res["removed"] == 0
+    assert res["pruned_expand"] == 2
+
+    con = sqlite3.connect(str(db))
+    try:
+        rows = con.execute("SELECT path FROM expand").fetchall()
+        assert [r[0] for r in rows] == [live_path]
+        n_exp = con.execute("SELECT count(*) FROM expand").fetchone()[0]
+        n_fts = con.execute("SELECT count(*) FROM expand_fts").fetchone()[0]
+        assert n_exp == n_fts == 1
+        # 验证 FTS5 索引内死路径已被真正删除，有效行仍可检索
+        hit_live = con.execute(
+            "SELECT e.path FROM expand_fts f JOIN expand e ON e.rowid = f.rowid WHERE expand_fts MATCH ?",
+            (f'"{cjk.index_text("科层制")}"',),
+        ).fetchall()
+        assert [r[0] for r in hit_live] == [live_path]
+        hit_dead = con.execute(
+            "SELECT e.path FROM expand_fts f JOIN expand e ON e.rowid = f.rowid WHERE expand_fts MATCH ?",
+            (f'"{cjk.index_text("旧单章")}"',),
+        ).fetchall()
+        assert hit_dead == []
+    finally:
+        con.close()
+
+    # 再次 --sync 幂等：pruned_expand=0
+    res2 = bpi.sync(str(db), root=str(workspace))
+    assert res2["pruned_expand"] == 0

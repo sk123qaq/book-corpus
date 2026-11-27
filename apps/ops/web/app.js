@@ -396,6 +396,9 @@ function bookCounts() {
     lagChapters: Math.max(0, lagChaptersRaw),
     indexExtra: Math.max(0, -lagBooksRaw),
     indexExtraChapters: Math.max(0, -lagChaptersRaw),
+    indexedChapters: dig(st, 'index.chapters', 0),
+    filteredChapters: dig(st, 'index.filtered_chapters', 0),
+    emptyBooks: dig(st, 'index.empty_books', 0),
     warn: dig(st, 'audit.warn', 0),
     fail: dig(st, 'audit.fail', 0),
     unmatched: dig(st, 'catalog.unmatched', 0),
@@ -845,12 +848,15 @@ function pipeline(c) {
     },
     {
       name: '可检索', href: '#maintain',
-      state: !c.indexKnown ? 'miss' : (c.lagBooks || c.indexExtra ? 'half' : 'ok'),
-      word: !c.indexKnown ? '未知' : (c.lagBooks ? '待处理' : (c.indexExtra ? '需重建' : '正常')),
+      state: !c.indexKnown ? 'miss' : (c.lagBooks || c.lagChapters || c.indexExtra || c.indexExtraChapters ? 'half' : 'ok'),
+      word: !c.indexKnown ? '未知' : (c.lagBooks || c.lagChapters ? '待处理' : (c.indexExtra || c.indexExtraChapters ? '需重建' : '正常')),
       read: !c.indexKnown
         ? '索引读数未知'
         : (c.lagBooks ? '落后 ' + num(c.lagBooks) + ' 本'
-          : (c.indexExtra ? '比书库多 ' + num(c.indexExtra) + ' 本' : num(c.chapters) + ' 章已索引')),
+          : (c.lagChapters ? '落后 ' + num(c.lagChapters) + ' 章'
+            : (c.indexExtra ? '比书库多 ' + num(c.indexExtra) + ' 本'
+              : (c.indexExtraChapters ? '比书库多 ' + num(c.indexExtraChapters) + ' 章'
+                : num(c.indexedChapters || c.chapters) + ' 章已索引')))),
     },
     {
       // 体检记录本身没问题也不能替整个书库担保：state 非 ok 时降成「需注意」
@@ -2279,18 +2285,22 @@ function viewMaintain() {
   }
 
   // Cell 2: 全文检索
-  const ftsCls = !c.indexKnown ? 'miss' : (c.lagBooks || c.indexExtra || ftsUids.length ? 'half' : 'ok');
+  const ftsCls = !c.indexKnown ? 'miss' : (c.lagBooks || c.lagChapters || c.indexExtra || c.indexExtraChapters || ftsUids.length ? 'half' : 'ok');
   const ftsWord = !c.indexKnown ? '未知'
-    : (c.lagBooks ? '需注意'
-      : (c.indexExtra ? '需重建'
+    : (c.lagBooks || c.lagChapters ? '需注意'
+      : (c.indexExtra || c.indexExtraChapters ? '需重建'
         : (ftsUids.length ? '待增量 ' + num(ftsUids.length) + ' 本'
           : (isOk ? '已同步' : '没有落后'))));
   const ftsNote = !c.indexKnown ? '索引缺失或读不到'
     : (c.lagBooks
       ? '落后 ' + num(c.lagBooks) + ' 本' + (c.lagChapters ? ' · ' + num(c.lagChapters) + ' 章' : '')
-      : (c.indexExtra
-        ? '比书库多 ' + num(c.indexExtra) + ' 本' + (c.indexExtraChapters ? ' · ' + num(c.indexExtraChapters) + ' 章' : '')
-        : num(c.chapters) + ' 章无滞后'));
+      : (c.lagChapters
+        ? '落后 ' + num(c.lagChapters) + ' 章'
+        : (c.indexExtra
+          ? '比书库多 ' + num(c.indexExtra) + ' 本' + (c.indexExtraChapters ? ' · ' + num(c.indexExtraChapters) + ' 章' : '')
+          : (c.indexExtraChapters
+            ? '比书库多 ' + num(c.indexExtraChapters) + ' 章'
+            : num(c.indexedChapters || c.chapters) + ' 章无滞后' + (c.filteredChapters ? '（跳过 ' + num(c.filteredChapters) + ' 非正文）' : '')))));
 
   // Cell 3: 语义检索
   const embCls = !emb.initialized ? (emb.engine_ready ? 'half' : 'out') : (embDrift || emb.compact_recommended ? 'half' : 'ok');
