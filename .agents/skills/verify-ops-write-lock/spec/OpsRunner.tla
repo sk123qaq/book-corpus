@@ -84,7 +84,7 @@ Init ==
     ∧ flock    = "free"
     ∧ httpOn   = FALSE
 
-\* 操作人在页面上提交一个写任务。HTTP 层先查 writer_busy（server.py:3965-3975, 3992-3997；
+\* 操作人在页面上提交一个写任务。HTTP 层先查 writer_busy（server.py:3983-3993, 4010-4015；
 \* Runner.submit 在 1044-1068）。
 Submit(j) ==
     ∧ serverUp
@@ -214,8 +214,8 @@ AdoptFinish(j) ==
     ∧ flock' = "free"
     ∧ UNCHANGED pid ∧ UNCHANGED child ∧ UNCHANGED released ∧ UNCHANGED serverUp ∧ UNCHANGED httpOn
 
-\* HTTP 账表读改写：先查 writer_busy，再阻塞拿 .writer.lock（server.py:3965-3975,
-\* 3992-3997；ledger_lock 5186-5190 只是包一层 lib_common.writer_lock，
+\* HTTP 账表读改写：先查 writer_busy，再阻塞拿 .writer.lock（server.py:3983-3993,
+\* 4010-4015；ledger_lock 5204-5208 只是包一层 lib_common.writer_lock，
 \* 实现在 src/bookcorpus/scripts/lib_common.py:696-732）。
 HttpStart ==
     ∧ serverUp
