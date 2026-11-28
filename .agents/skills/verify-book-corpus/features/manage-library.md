@@ -2,27 +2,28 @@
 
 失效源：apps/ops/** src/bookcorpus/scripts/ops_status.py
 
-操作台把书库的维护动作收在六个模块：总览、新书入库、书目与分类、正文生产、同步与维护、任务与日志。
+操作台把书库的维护动作收在七个模块：总览、新书入库、书目与分类、正文生产、同步与维护、任务与日志、移动互联。
 `docs` / `pdf` / `pdf-list` / `manual` / `retire` / `cold` 是兼容子页签（`EXTRA_TABS`），hash 直达仍可用，但不再占左侧主导航。
-批次任务走队列，真正干活的是 `src/bookcorpus/scripts/` 下的脚本；账表改行（`category_put`/`category_put_many`）与上传在服务进程内直接写，不走队列。
+批次任务走队列，真正干活的是 `src/bookcorpus/scripts/` 下的脚本；账表改行（`category_put`/`category_put_many`）与上传在服务进程内直接写，不走队列。移动互联（`/api/mobile/*`）仅操作 `工作区/运维/mobile_gateway.*`、`工作区/阅读/mobile_outbox.json`、`工作区/阅读/mobile_inbox/` 与 `books/_收件箱/`，不入 `WRITE_ROUTES` 也不触碰 `.writer.lock`。
 2026-11-19 起日常入库、改分类、拆章、OCR 与退库会在服务端自动接力增量同步（元数据 → FTS → 向量），并在后台自动刷新 `last-audit.json` 体检缓存，同步完成后「体检提醒」不留过期提示。
 仅真正需要人工裁决的任务（暂存区待复核书目、服务重启接管导致退出码未知）停在 `awaiting_review`；扫描计划与分诊建议直接落 `succeeded`。
 
 ## Sub-features
 
-- `ops-overview` 总览：三大精简区块——纯展示台账首卡（核心判断、全文索引与政策存档/无正文绘本口径、三色可读率条）、一体式六环节工序轨道板与底沿联动提醒条（无待处理项时自动收起，有待确认任务时与 `#logs?state=awaiting_review` 联动跳转）、以及隐藏端口号的书库应用入口；取消「下一步待办」卡并统一术语为「正文生产」「待转」「已有正文/可读」「政策存档」；去掉重复「最近任务」卡。顶栏右侧放「统计于 HH:MM」、刷新状态 `#btn-status-refresh` 与单颗宣纸/墨夜切换 `#theme-toggle`（移出侧栏底与移动端双份开关）。
+- `ops-overview` 总览：三大精简区块——纯展示台账首卡（核心判断、全文索引与政策存档/无正文绘本口径、三色可读率条）、一体式六环节工序轨道板与底沿联动提醒条（无待处理项时自动收起，有待确认任务时与 `#logs?state=awaiting_review` 联动跳转）、以及隐藏端口号的书库应用入口（含第 5 张「移动网关」状态卡，点击直达 `#mobile`）；取消「下一步待办」卡并统一术语为「正文生产」「待转」「已有正文/可读」「政策存档」；去掉重复「最近任务」卡。顶栏右侧放「统计于 HH:MM」、刷新状态 `#btn-status-refresh` 与单颗宣纸/墨夜切换 `#theme-toggle`（移出侧栏底与移动端双份开关）。
 - `ops-import` 新书入库：自上而下全宽流（投递新书条 → 收件箱清单 → 入库核对清单），去掉底部文档转换卡。
 - `ops-split` 正文生产：子页签 `split` 电子书、`docs` 文档转正文（四格状态卡与最近一批折叠明细）、`pdf` PDF 分诊与转写（四格可点筛查、今日额度、批量分诊与待转清单）、`manual` 手工格式（djvu/csv）；`pdf-list` 是 PDF 的完整多维筛选子页签。
 - `ops-maintain` 同步与维护：四格同步健康总览（书目与视图 / 全文检索 / 语义检索 / 体检状态）+ 一键对齐按钮（`sync_delta.has_drift` 为真时文案为「补齐偏差（增量同步）」，无偏差时为「复核并增量对齐」；未建向量库时跑 4 步：`db`/`awards`/`fts sync`/`audit`，向量库已有块/孤儿或 `force_embed` 时含 `embed sync` 共 5 步）+ 折叠 `#status-issues` 体检提醒 + 章节主题增强 + 导出下载 + 低频高级运维重建；去掉「最近的同步与维护记录」卡。
 - `ops-ledger` 书目与分类：子页签 `ledger` 全库书目台账（两行工具栏，去除路径文字，默认分批渲染前 100 行并带 `#ledger-q` 80ms 防抖筛选、`全部书目 / 只看待复核` 分段切换、`加载更多 100 行`/`显示全部`）、`retire` 待退库与删书、`cold` 退库台账与冷宫实物核验（表格带「实物状态」列：在库 / 缺失 / 未登记，页面「刷新」会按 `books/_冷宫` 实际文件校正台账）。
 - `ops-retire` 删书：现在是「书目与分类」的子页签，不再是主导航；dry-run 与 apply 两步（原生 `<dialog>` 弹窗），apply 侧还有三道闸（uid 复核、`plan_hash`、勾确认）。
 - `ops-logs` 任务与日志：全站唯一查看排队/待确认/已完成批次的中心，支持快速分段筛选与 `#logs?state=awaiting_review` 过滤直达并自动展开首条待确认任务详情；从各模块或「任务与日志」表格行点击「详情」打开 `#job-detail`、高亮当前行（`tr.active`）并滚动定位到 `#job-detail`；待确认任务行提供「去处理」及详情页 `#job-review-box`（「去正文生产处理」/「去 PDF 清单处理」+ 备注输入 `#job-resolve-note` + 「确认已处理 / 标为失败 / 忽略关闭」，调用 `POST /api/jobs/<id>/resolve`），重跑与日志下载；只有 `queued`/`running` 可取消（`awaiting_review` 取消回 409）。
+- `ops-mobile` 移动互联：独立主导航 `#mobile`，管理移动网关（默认端口 `8780`，可用 `BOOK_CORPUS_MOBILE_PORT` 注入），提供启停/重启、局域网/Tailscale 对外地址选择、离线白底 SVG 二维码（BanRead 配对码 `bc-pair://v1` 与手机浏览器 `/m` 快传码切换）、密钥轮换原生 `<dialog>` 二次确认、推书队列（Outbox）与 `.bcbook` 下载、多端阅读进度分片总览、拉取手机 BanRead 局域网分享（9721 + 6 位配对码）以及手机收件暂存区一键投递到收件箱。
 - `ops-sync` 增量同步：`/api/status` 的 `status.sync_delta` 给出 `fts`（`has_db/has_tracking/added/modified/removed/unchanged/drift_count`）、`embed`（`ok/initialized/engine_ready/added/modified/orphan/chunks/garbage/garbage_ratio/compact_recommended`）、`expand`（`covered_books/uncovered_books`）与 `meta`（`ledger_stale/catalog_missing/views_missing`）。作业种类是 `sync.fts`、`sync.embed`、`sync.reconcile`、`sync.expand`；入库/拆章等作业结束会 `_chain_auto_sync`，向量库未初始化时跳过 embed。
 
 ## How to get to it (user POV)
 
 - 浏览器打开 `http://127.0.0.1:18770/`，标题是「书库操作台」。
-- 点左侧竖排导航的六个模块切换（不是顶部横排）：总览 / 新书入库 / 书目与分类 / 正文生产 / 同步与维护 / 任务与日志。
+- 点左侧竖排导航的七个模块切换（不是顶部横排）：总览 / 新书入库 / 书目与分类 / 正文生产 / 同步与维护 / 任务与日志 / 移动互联。
 - 模块内的子页签是横排 `.subtabs`；`#retire`、`#cold`、`#docs`、`#pdf`、`#pdf-list`、`#manual` 仍可直接 hash 打开，但主导航里没有。
 - 在「新书入库」选文件上传，或在「正文生产」勾几本再执行。
 - 在「任务与日志」查看待确认批次、人工收口或停止运行中任务；「同步与维护」点「复核并增量对齐」/「补齐偏差（增量同步）」看 4 步（无向量库）或 5 步结果。
@@ -45,9 +46,9 @@ Preconditions:
 - **收窄后的待确认与人工收口。** `POST /api/import/scan` 与 `POST /api/pdf/triage` 任务完成后状态直接落 `succeeded`（不进 `awaiting_review`）。在运行态操作台的 `ops.db` 写入一条 `split.run`（`staged-review`）的 `awaiting_review` 任务并 `?refresh=1` 后，无头 Chrome 打开 `#overview` 可见「1 个任务待确认」与 `#logs?state=awaiting_review` 链接；点击后 `#log-filter` 自动切到 `awaiting_review` 且详情展开 `#job-review-box`（含 `#job-resolve-note` 与「确认已处理 / 标为失败 / 忽略关闭」）；填写备注并点击「确认已处理」（`POST /api/jobs/<id>/resolve` 返回 `200` 且 `state="succeeded"`，再次调同一接口回 `409`，传非法 `resolution` 回 `400`，未知 `id` 回 `404`），`state_counts.awaiting_review` 归零且总览待办消失。
 - **任务详情直达与页内定位。** 构造长任务表令 `#job-detail` 位于首屏之下后，从 `#overview` / `#maintain` 点任一任务「详情」跳 `#logs`、清空跨页残留筛选并立即滚动使 `#job-detail` 进入视口且对应行高亮 `tr.active`；在 `#logs` 滚回顶部后先后点不同任务行与同一任务行的「详情」，`#job-detail` 标题与 `#job-meta` 切换到新任务并再次滚动定位到 `#job-detail`（页内切换保留 `#log-filter`）。
 - **台账分片渲染与防抖筛选。** 当人账超过 100 行时，无头 Chrome 打开 `#ledger` 首屏 `tbody tr` 为 `100` 行并显示 `#ledger-pager`（「加载更多 100 行」/「显示全部」）；在 `#ledger-q` 键入关键词约 80ms 后过滤生效且输入框不丢焦点；清空并点击「显示全部」渲染全部行且 `#ledger-pager` 隐藏。
-- **主导航与子页签都点得开。** `uv run --frozen python .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"` 起自己的 headless Chromium，切 `overview/import/ledger/split/maintain/logs` 与 `retire/cold/docs/pdf/pdf-list/manual` 十二个 hash（其中 `390x844` 溢出只在 `#overview` 检测），捕获控制台异常与 `Runtime.consoleAPICalled` 错误，断言每个有 `<h1>/<h2>`、无横向溢出、无控制台错误，出 `ops-overview-1440x900.png`，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`（结束时自动清理 `/tmp/ops-tabs-*`）。`apps/ops/web/app.js:3-10` 的 `TABS` 是六条，`EXTRA_TABS` 是 `docs` / `pdf` / `pdf-list` / `manual` / `retire` / `cold`；`#nav` 只有六条链接。
+- **主导航与子页签都点得开。** `uv run --frozen python .agents/skills/verify-book-corpus/scripts/drive_ops_tabs.py --base http://127.0.0.1:18770 --out "$EV"` 起自己的 headless Chromium，切 `overview/import/ledger/split/maintain/logs/mobile` 与 `retire/cold/docs/pdf/pdf-list/manual` 十三个 hash（其中 `390x844` 溢出只在 `#overview` 检测），捕获控制台异常与 `Runtime.consoleAPICalled` 错误，断言每个有 `<h1>/<h2>`、无横向溢出、无控制台错误，出 `ops-overview-1440x900.png`，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`（结束时自动清理 `/tmp/ops-tabs-*`）。`apps/ops/web/app.js` 的 `TABS` 是七条，`EXTRA_TABS` 是 `docs` / `pdf` / `pdf-list` / `manual` / `retire` / `cold`；`#nav` 有七条链接。
 - **左侧导航固定吸顶与桌面布局对齐。** `TMPDIR=/tmp uv run --frozen python tests/acceptance/ops/test_sidebar_sticky.py` 先校对 `apps/ops/web/style.css` 与 `GET /style.css` 中 `html`/`body` 为 `overflow-x: clip`（非 `hidden`）、`.sidebar` 为 `position: sticky; top: 0;`，再用无头 Chromium 验证：桌面 `1440×700` / `1440×900` 在可滚动长页（展开详情的 `#maintain`）滚到底部后 `.sidebar` 贴顶满屏（`abs(top) <= 1`、`abs(bottom - innerHeight) <= 1`、`.brand` 与末项导航留在视口内）、末张卡片下端保留底边距（`0 <= vh - lastCardBottom <= 45`），且页底直接点击左侧导航可切回 `#overview`；`1920×1080` 宽屏无顶栏搜索按钮（`#search-btn`/`#search-start` 不在 DOM），`main` 与 `.topbar-inner` 按 `2080px` 限宽水平居中且左缘对齐、`.brand` 与 `.topbar` 底部分隔线齐平（`<= 1px`）、`#stats` 文字垂直居中（上下留白差 `<= 2px`），不满一屏页面（`#manual`）保持自然排布不拉到底端；窄屏 `390×844` 保持 `position: static` 且顶栏 `#theme-toggle` 可见、滚下后顶部导航正常滚走、零横向溢出，控制台 0 错误，末行 `ALL PASS`。
-- **全量浏览器交互验收。** `uv run --frozen python tests/manual/ops/shot_ops.py`（已内置 `sys.path` 无需 `PYTHONPATH`，适配六模块、`RETIRE_MODAL` 与 `#job-review-box`），自建临时根跑完六模块、五子页签、导入/分诊/删书弹窗与 1440x900 / 390x844 两档布局，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`。
+- **全量浏览器交互验收。** `uv run --frozen python tests/manual/ops/shot_ops.py`（已内置 `sys.path` 无需 `PYTHONPATH`，适配七模块、`RETIRE_MODAL` 与 `#job-review-box`），自建临时根跑完七模块、五子页签、导入/分诊/删书弹窗与 1440x900 / 390x844 两档布局，末三行 `CONSOLE ERROR 0` / `overflow=false` / `SHOT PASS`。
 - **冷宫三态与校正（`#cold`）。** `GET /api/cold` 是只读核验：`items[]` 每条带 `state`（`in_cold` 台账有记录且 `books/_冷宫` 实物在 / `missing` 记录在实物没了 / `unregistered` 实物在台账没记录），另有 `counts.{in_cold,missing,unregistered,backfilled,total}`、`checked_at`、`cold_dir_exists`、`batches_exists`；旧 `retired.tsv` 没有 `state`/`last_checked` 列也照常按实物推断，不报错。`POST /api/cold/reconcile` 才写盘：实物在记 `in_cold`，实物没了记 `missing` 并写 `last_checked`（行保留，不删审计），实物有台账没有就补登一行（`reason=补登`、`note=补登：刷新时发现实物无台账`，目录名形如 `B9123 书名` 就解析出 uid，否则留空）；新列只会追加在表头末尾，首次写某份 tsv 前在同目录留 `retired.tsv.bak-YYYYmmdd-HHMMSS`（最多 3 份）。连调两次第二次 `changed=0`、`backups=[]`。页面证据：无头 Chrome 打开 `#cold`，`<th>实物状态</th>` 与 `.stats` 汇总条（在库 / 缺失 / 补登 / 未登记，校正后多一项本次改动）都在；`books/_冷宫` 被清空时台账行仍是「缺失 ✓行保留」而不会被静默隐掉。
 - **上传。** 在「新书导入」选一个文件上传。`curl -s http://127.0.0.1:18770/api/inbox` 里出现该文件，磁盘上落在 `$ROOT/books/_收件箱/`。
 - **删书两步。** 先 dry-run 再 apply（不再要求库外快照目录）。`curl -s -X POST http://127.0.0.1:18770/api/delete/dry-run -H 'Content-Type: application/json' -d '{"uid":"B0001","reason":"验证移出"}'` 产出 `dry-run.json`（含 `plan_hash`，不含 `snapshot` / `snapshot_ok`），预览弹窗不显示已退役的回滚副本行；`POST /api/delete/apply` 带 `uid`、`reason`、`plan_hash`、`confirm_uid`、`confirm:true` 落地后，原书进入 `books/_冷宫/`、`retired.tsv` 落 15 列无 `snapshot` 列，`/api/cold` 返回该条记录，`/api/status` 书目减 1（本轮实测 `1 → 0`）。

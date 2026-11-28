@@ -398,7 +398,7 @@ def rc_of_detail(detail):
 class Env:
     """一个数据根下的全部路径。--root 换根，代码目录仍指本文件所在处。"""
 
-    def __init__(self, root, scripts=None, search_url=None, demo_server=None):
+    def __init__(self, root, scripts=None, search_url=None, demo_server=None, mobile_port=None):
         self.root = os.path.abspath(root)
         # 搜索地址与演示页脚本可注入（离线验收用假服务），不设时就是本机 8765 与仓库里的
         # apps/demo/server.py，真实运行行为不变。构造参数优先于环境变量。
@@ -406,6 +406,11 @@ class Env:
         self.search_url = str(url).rstrip("/")
         script = demo_server or os.environ.get("BOOK_CORPUS_DEMO_SERVER") or DEMO_SERVER
         self.demo_server = os.path.abspath(os.path.expanduser(str(script)))
+        raw_mp = mobile_port if mobile_port is not None else os.environ.get("BOOK_CORPUS_MOBILE_PORT")
+        try:
+            self.mobile_port = int(raw_mp) if raw_mp not in (None, "") else None
+        except (TypeError, ValueError):
+            self.mobile_port = None
         self.ops = os.path.join(self.root, "工作区", "运维")
         self.jobs = os.path.join(self.ops, "jobs")
         self.scripts = os.path.abspath(scripts) if scripts else _package_scripts()
@@ -1989,6 +1994,7 @@ class App:
         self.pdf_probe_down_until = 0.0
         self.pdf_page_cache = {}
         self.pdf_page_lock = threading.Lock()
+        self._mobile_mgr = None
         # 先接管再起调度：把还在跑的写任务登记进 active_write，再启动调度循环
         self.runner.adopt()
         self.reconcile_stale_reviews()
@@ -3556,8 +3562,215 @@ class App:
 
         return app_links
 
+    def _mobile_gateway_mods(self):
+        src_dir = os.path.join(REAL_ROOT, "src")
+        if os.path.isdir(src_dir) and src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+        from bookcorpus.mobile_gateway import bundler as mg_bundler
+        from bookcorpus.mobile_gateway import manager as mg_manager
+        from bookcorpus.mobile_gateway import progress as mg_progress
+        from bookcorpus.mobile_gateway import server as mg_server
+        from bookcorpus.reading.book_types import resolve_read_profile
+        from bookcorpus.reading.library import CLOTHES, Library, _nkey
+
+        return mg_manager, mg_server, mg_bundler, mg_progress, Library, CLOTHES, _nkey, resolve_read_profile
+
+    def _mobile_manager(self):
+        mgr = getattr(self, "_mobile_mgr", None)
+        if mgr is None:
+            mg_manager = self._mobile_gateway_mods()[0]
+            mgr = mg_manager.MobileGatewayManager(
+                self.env.root,
+                search_url=getattr(self.env, "search_url", "http://127.0.0.1:8765"),
+                port_override=getattr(self.env, "mobile_port", None),
+            )
+            self._mobile_mgr = mgr
+        return mgr
+
+    def _mobile_library(self):
+        Library = self._mobile_gateway_mods()[4]
+        return Library(self.env.root, overlay_root="")
+
+    def _mobile_outbox(self):
+        mg_server = self._mobile_gateway_mods()[1]
+        return mg_server.OutboxStore(self.env.root)
+
+    def _mobile_progress(self):
+        mg_progress = self._mobile_gateway_mods()[3]
+        return mg_progress.ProgressStore(self.env.root)
+
+    def _enrich_outbox_tickets(self, tickets):
+        book_map = {}
+        with suppress(Exception):
+            lib = self._mobile_library()
+            book_map = {str(b["uid"]): b for b in lib.books()}
+        out = []
+        for t in tickets:
+            row = dict(t)
+            info = book_map.get(str(t.get("uid") or ""))
+            row["title"] = str((info or {}).get("title") or row.get("uid") or "")
+            row["author"] = str((info or {}).get("author") or "")
+            out.append(row)
+        return out
+
+    def mobile_status(self):
+        mgr = self._mobile_manager()
+        st = mgr.status(include_qr=True)
+        outbox_tickets = self._mobile_outbox().list_tickets()
+        inbox_items = mgr.list_mobile_inbox()
+        st["outbox_count"] = len(outbox_tickets)
+        st["inbox_count"] = len(inbox_items)
+        return st
+
+    def mobile_start(self):
+        res = self._mobile_manager().start()
+        if isinstance(res.get("status"), dict):
+            res["status"]["outbox_count"] = len(self._mobile_outbox().list_tickets())
+            res["status"]["inbox_count"] = len(self._mobile_manager().list_mobile_inbox())
+        return res
+
+    def mobile_stop(self):
+        res = self._mobile_manager().stop()
+        if isinstance(res.get("status"), dict):
+            res["status"]["outbox_count"] = len(self._mobile_outbox().list_tickets())
+            res["status"]["inbox_count"] = len(self._mobile_manager().list_mobile_inbox())
+        return res
+
+    def mobile_restart(self):
+        res = self._mobile_manager().restart()
+        if isinstance(res.get("status"), dict):
+            res["status"]["outbox_count"] = len(self._mobile_outbox().list_tickets())
+            res["status"]["inbox_count"] = len(self._mobile_manager().list_mobile_inbox())
+        return res
+
+    def mobile_config(self, payload):
+        res = self._mobile_manager().update_config(payload or {})
+        if isinstance(res.get("status"), dict):
+            res["status"]["outbox_count"] = len(self._mobile_outbox().list_tickets())
+            res["status"]["inbox_count"] = len(self._mobile_manager().list_mobile_inbox())
+        return res
+
+    def mobile_token_rotate(self):
+        res = self._mobile_manager().rotate_token()
+        if isinstance(res.get("status"), dict):
+            res["status"]["outbox_count"] = len(self._mobile_outbox().list_tickets())
+            res["status"]["inbox_count"] = len(self._mobile_manager().list_mobile_inbox())
+        return res
+
+    def mobile_catalog(self, query="", has_cache=None):
+        _m, _s, mg_bundler, _p, Library, CLOTHES, _nkey, resolve_read_profile = self._mobile_gateway_mods()
+        try:
+            lib = Library(self.env.root, overlay_root="")
+            books = list(lib.books())
+        except Exception:
+            return {"ok": True, "books": [], "total": 0}
+        q_norm = _nkey(query) if query else ""
+        items = []
+        for book in books:
+            uid = str(book["uid"])
+            title = str(book.get("title") or uid)
+            author = str(book.get("author") or "")
+            subjects = list(book.get("subjects") or [])
+            if q_norm:
+                blob = _nkey(" ".join([uid, title, author, " ".join(subjects)]))
+                if q_norm not in blob:
+                    continue
+            cached = mg_bundler.has_non_stale_companion_cache(lib, uid)
+            if has_cache is not None and cached != has_cache:
+                continue
+            profile = resolve_read_profile(subjects, title=title)
+            items.append(
+                {
+                    "uid": uid,
+                    "title": title,
+                    "author": author,
+                    "subjects": subjects,
+                    "read_type": str(profile.get("read_type") or "social"),
+                    "sub_kind": str(profile.get("sub_kind") or ""),
+                    "cloth_color": str(book.get("cloth") or CLOTHES[sum(ord(c) for c in uid) % len(CLOTHES)]),
+                    "logical_chapter_count": len(lib.chapters(uid)),
+                    "has_companion_cache": cached,
+                }
+            )
+        return {"ok": True, "books": items, "total": len(items)}
+
+    def mobile_outbox(self):
+        tickets = self._mobile_outbox().list_tickets()
+        return {"ok": True, "tickets": self._enrich_outbox_tickets(tickets)}
+
+    def mobile_outbox_enqueue(self, payload):
+        raw_uids = payload.get("uids")
+        if raw_uids is None and payload.get("uid"):
+            raw_uids = [payload.get("uid")]
+        if not isinstance(raw_uids, list) or not raw_uids:
+            raise ValueError("请至少选择一本书")
+        uids = [str(u or "").strip() for u in raw_uids if str(u or "").strip()]
+        lib = self._mobile_library()
+        for uid in uids:
+            if lib.book(uid) is None:
+                raise FileNotFoundError("书目不存在或暂无可读正文：%s" % uid)
+        include_cache = bool(payload.get("include_cache", True))
+        added = self._mobile_outbox().enqueue(uids, include_cache=include_cache)
+        tickets = self._enrich_outbox_tickets(self._mobile_outbox().list_tickets())
+        return {"ok": True, "added": added, "tickets": tickets}
+
+    def mobile_outbox_remove(self, payload):
+        raw_ids = payload.get("ticket_ids")
+        if raw_ids is None and payload.get("ticket_id"):
+            raw_ids = [payload.get("ticket_id")]
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise ValueError("缺少 ticket_ids")
+        res = self._mobile_outbox().ack([str(tid) for tid in raw_ids])
+        return {
+            "ok": True,
+            "acked": res["acked"],
+            "remaining": res["remaining"],
+            "tickets": self._enrich_outbox_tickets(res["tickets"]),
+        }
+
+    def mobile_outbox_clear(self):
+        res = self._mobile_outbox().clear()
+        return {"ok": True, "removed": res["removed"], "remaining": 0, "tickets": []}
+
+    def mobile_bundle(self, uid, include_cache=True):
+        mg_bundler = self._mobile_gateway_mods()[2]
+        lib = self._mobile_library()
+        return mg_bundler.ensure_cached_bundle(lib, uid, include_cache=include_cache)
+
+    def mobile_progress(self):
+        rows = self._mobile_progress().list_all_books()
+        book_map = {}
+        with suppress(Exception):
+            lib = self._mobile_library()
+            book_map = {str(b["uid"]): b for b in lib.books()}
+        for row in rows:
+            info = book_map.get(str(row.get("uid") or ""))
+            row["title"] = str((info or {}).get("title") or row.get("uid") or "")
+            row["author"] = str((info or {}).get("author") or "")
+        return {"ok": True, "books": rows}
+
+    def mobile_inbox(self):
+        return {"ok": True, "items": self._mobile_manager().list_mobile_inbox()}
+
+    def mobile_lan_pull(self, payload):
+        action = str(payload.get("action") or "preview").strip().lower()
+        url = str(payload.get("url") or "").strip()
+        code = str(payload.get("code") or "").strip()
+        if action == "preview":
+            return self._mobile_manager().lan_pull_preview(url, code)
+        if action == "fetch":
+            include_book = bool(payload.get("include_book", True))
+            return self._mobile_manager().lan_pull_fetch(url, code, include_book=include_book)
+        raise ValueError("action 仅支持 preview 或 fetch")
+
+    def mobile_inbox_to_import(self, payload):
+        item_id = str(payload.get("item_id") or "").strip()
+        res = self._mobile_manager().send_inbox_book_to_import(item_id)
+        self.invalidate_status()
+        return res
+
     def services_status(self):
-        """探测本机其它 4 个书库应用（首页/找一段/翻开书/日课）状态。"""
+        """探测本机其它 4 个书库应用（首页/找一段/翻开书/日课）与移动网关状态。"""
         al = self._app_links_mod()
         out = []
         for key in ("home", "search", "reading", "daily"):
@@ -3571,10 +3784,33 @@ class App:
                     "running": bool(al.port_open(svc.port)),
                 }
             )
+        mst = self._mobile_manager().status(include_qr=False)
+        out.append(
+            {
+                "key": "mobile",
+                "name": "移动网关",
+                "port": int(mst["port"]),
+                "url": "#mobile",
+                "running": bool(mst["running"]),
+                "internal": True,
+            }
+        )
         return out
 
     def service_start(self, key):
         key = str(key or "").strip()
+        if key == "mobile":
+            res = self._mobile_manager().start()
+            st = res.get("status") or {}
+            return {
+                "ok": bool(res.get("ok")),
+                "key": "mobile",
+                "name": "移动网关",
+                "port": int(st.get("port") or 8780),
+                "url": "#mobile",
+                "already": bool(res.get("already")),
+                "error": res.get("error"),
+            }
         if key not in ("home", "search", "reading", "daily"):
             raise ValueError("不支持的服务：%s" % key)
         al = self._app_links_mod()
@@ -3880,6 +4116,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, **self.app.get_settings()})
             elif route == "/api/services":
                 self.send_json(200, {"ok": True, "services": self.app.services_status()})
+            elif route == "/api/mobile/status":
+                self.send_json(200, self.app.mobile_status())
+            elif route == "/api/mobile/catalog":
+                q = (query.get("q") or [""])[0]
+                hc_raw = (query.get("has_cache") or [""])[0].strip().lower()
+                has_cache = None if hc_raw == "" else hc_raw in ("1", "true", "yes", "on")
+                self.send_json(200, self.app.mobile_catalog(query=q, has_cache=has_cache))
+            elif route == "/api/mobile/outbox":
+                self.send_json(200, self.app.mobile_outbox())
+            elif route == "/api/mobile/bundle":
+                uid = (query.get("uid") or [""])[0].strip()
+                ic_raw = (query.get("include_cache") or ["1"])[0].strip().lower()
+                include_cache = ic_raw not in ("0", "false", "no", "off")
+                self.api_mobile_bundle(uid, include_cache=include_cache)
+            elif route == "/api/mobile/progress":
+                self.send_json(200, self.app.mobile_progress())
+            elif route == "/api/mobile/inbox":
+                self.send_json(200, self.app.mobile_inbox())
             elif route == "/api/file":
                 self.api_file((query.get("path") or [""])[0])
             elif route.startswith("/api/"):
@@ -4008,6 +4262,26 @@ class Handler(BaseHTTPRequestHandler):
             },
         )
 
+    def api_mobile_bundle(self, uid, include_cache=True):
+        artifact = self.app.mobile_bundle(uid, include_cache=include_cache)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(artifact.size))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("ETag", artifact.etag)
+            self.send_header("Content-Disposition", 'attachment; filename="%s.bcbook"' % artifact.uid)
+            self.end_headers()
+            with open(artifact.path, "rb") as fh:
+                while True:
+                    chunk = fh.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            self.close_connection = True
+
     def api_file(self, relpath):
         if not relpath:
             self.fail(400, "path 为空")
@@ -4083,6 +4357,16 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/manual/rescan": lambda: self.api_manual_rescan(payload),
                 "/api/settings": lambda: self.send_json(200, self.app.save_settings(payload)),
                 "/api/services/start": lambda: self.send_json(200, self.app.service_start(payload.get("key"))),
+                "/api/mobile/start": lambda: self.send_json(200, self.app.mobile_start()),
+                "/api/mobile/stop": lambda: self.send_json(200, self.app.mobile_stop()),
+                "/api/mobile/restart": lambda: self.send_json(200, self.app.mobile_restart()),
+                "/api/mobile/config": lambda: self.send_json(200, self.app.mobile_config(payload)),
+                "/api/mobile/token/rotate": lambda: self.send_json(200, self.app.mobile_token_rotate()),
+                "/api/mobile/outbox/enqueue": lambda: self.send_json(200, self.app.mobile_outbox_enqueue(payload)),
+                "/api/mobile/outbox/remove": lambda: self.send_json(200, self.app.mobile_outbox_remove(payload)),
+                "/api/mobile/outbox/clear": lambda: self.send_json(200, self.app.mobile_outbox_clear()),
+                "/api/mobile/lan-pull": lambda: self.send_json(200, self.app.mobile_lan_pull(payload)),
+                "/api/mobile/inbox/to-import": lambda: self.send_json(200, self.app.mobile_inbox_to_import(payload)),
                 "/api/delete/dry-run": lambda: self.api_delete_dry(payload),
                 "/api/delete/apply": lambda: self.api_delete_apply(payload),
                 "/api/jobs/clean": lambda: self.api_clean(payload),
@@ -4114,6 +4398,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.api_resolve(route.split("/")[3], payload)
                 return
             self.fail(404, "没有这个接口")
+        except FileNotFoundError as exc:
+            self.fail(404, str(exc))
         except ValueError as exc:
             self.fail(400, str(exc))
         except Exception as exc:

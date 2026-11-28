@@ -428,6 +428,16 @@ def check_links(repo: Path) -> list[str]:
 
 def check_ports(repo: Path) -> list[str]:
     allowed = set(app_ports(repo).values())
+    mg_server = repo / "src/bookcorpus/mobile_gateway/server.py"
+    if mg_server.exists():
+        for node in ast.walk(ast.parse(_read(mg_server))):
+            if (
+                isinstance(node, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "DEFAULT_PORT" for t in node.targets)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, int)
+            ):
+                allowed.add(node.value.value)
     problems: list[str] = []
     for path in _md_files(repo):
         if _generated(repo, path):

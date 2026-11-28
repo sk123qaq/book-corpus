@@ -22,19 +22,22 @@ BLOCK_ID_RE = re.compile(r"^B\d+$")
 
 @dataclass(frozen=True)
 class DeviceProgressShard:
-    """单设备针对某部作品的独占阅读游标与防剧透水位线分片。"""
+    """单设备针对某部作品的独占阅读游标分片（兼容可选旧版水位线字段）。"""
 
     uid: str
     device_id: str
     ordinal: int
     block_id: str
     char_offset: int
-    high_water_mark_ordinal: int
     updated_at_ms: int
+    high_water_mark_ordinal: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """转为可 JSON 序列化的字典。"""
-        return asdict(self)
+        """转为可 JSON 序列化的字典；缺失旧水位线字段时省略。"""
+        data = asdict(self)
+        if self.high_water_mark_ordinal is None:
+            data.pop("high_water_mark_ordinal", None)
+        return data
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any], *, uid: str | None = None) -> DeviceProgressShard:
@@ -73,16 +76,18 @@ class DeviceProgressShard:
             raise ValueError("char_offset 必须 >= 0")
 
         hwm_raw = raw.get("high_water_mark_ordinal")
-        if hwm_raw is None:
-            raise ValueError("缺少 high_water_mark_ordinal")
-        if isinstance(hwm_raw, bool):
+        high_water_mark_ordinal: int | None
+        if hwm_raw is None or hwm_raw == "":
+            high_water_mark_ordinal = None
+        elif isinstance(hwm_raw, bool):
             raise ValueError("high_water_mark_ordinal 必须是 >= 1 的整数")
-        try:
-            high_water_mark_ordinal = int(hwm_raw)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("high_water_mark_ordinal 必须是 >= 1 的整数") from exc
-        if high_water_mark_ordinal < 1:
-            raise ValueError("high_water_mark_ordinal 必须 >= 1")
+        else:
+            try:
+                high_water_mark_ordinal = int(hwm_raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("high_water_mark_ordinal 必须是 >= 1 的整数") from exc
+            if high_water_mark_ordinal < 1:
+                raise ValueError("high_water_mark_ordinal 必须 >= 1")
 
         ts_raw = raw.get("updated_at_ms")
         if ts_raw is None:
@@ -103,8 +108,8 @@ class DeviceProgressShard:
             ordinal=ordinal,
             block_id=block_id,
             char_offset=char_offset,
-            high_water_mark_ordinal=high_water_mark_ordinal,
             updated_at_ms=updated_at_ms,
+            high_water_mark_ordinal=high_water_mark_ordinal,
         )
 
 
@@ -196,12 +201,33 @@ class ProgressStore:
         return shards
 
     def get_merged(self, uid: str) -> dict[str, Any]:
-        """读取并合并指定书籍的所有设备分片，返回高水位线 ``max`` 与全部分片。"""
+        """读取并合并指定书籍的所有设备分片，返回兼容水位线与全部分片。"""
         clean_uid = self._validate_uid(uid)
         shards = self.list_shards(clean_uid)
-        merged_hwm = max((s.high_water_mark_ordinal for s in shards), default=0)
+        merged_hwm = max(
+            (s.high_water_mark_ordinal if s.high_water_mark_ordinal is not None else s.ordinal for s in shards),
+            default=0,
+        )
         return {
             "uid": clean_uid,
             "merged_high_water_mark_ordinal": merged_hwm,
             "shards": [s.to_dict() for s in shards],
         }
+
+    def list_all_books(self) -> list[dict[str, Any]]:
+        """列出工作区内所有存在有效进度分片的书目合并快照，按最新更新时间倒序。"""
+        if not self.reading_work_dir.is_dir():
+            return []
+        rows: list[dict[str, Any]] = []
+        for book_dir in sorted(self.reading_work_dir.iterdir()):
+            if not book_dir.is_dir() or not UID_RE.match(book_dir.name):
+                continue
+            if not (book_dir / "progress").is_dir():
+                continue
+            merged = self.get_merged(book_dir.name)
+            if not merged["shards"]:
+                continue
+            merged["latest_updated_at_ms"] = max(int(s.get("updated_at_ms") or 0) for s in merged["shards"])
+            rows.append(merged)
+        rows.sort(key=lambda item: (-int(item.get("latest_updated_at_ms") or 0), str(item.get("uid") or "")))
+        return rows

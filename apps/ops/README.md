@@ -23,17 +23,21 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 
 搜索地址与演示页脚本可注入：环境变量 `BOOK_CORPUS_SEARCH_URL`、`BOOK_CORPUS_DEMO_SERVER`，或 `Env(search_url=..., demo_server=...)` 构造参数。默认值就是本机 `http://127.0.0.1:8765` 和仓库里的 `apps/demo/server.py`，不设时真实运行行为不变。离线验收靠它把两者指向假服务：`check_ops.py` 每轮都跑「已在跑 → 幂等 / 不在跑 → 启动 / 演示页脚本缺失 → 报错」三条分支，既不依赖跑测试的机器上有没有常驻 8765，也不改名仓库里的真实文件。
 
+移动网关默认端口可注入：环境变量 `BOOK_CORPUS_MOBILE_PORT` 或 `Env(mobile_port=...)` 构造参数（默认 `8780`），便于测试与离线验收隔离真实端口。
+
 ## 文件
 
 | 路径 | 内容 |
 |---|---|
-| `apps/ops/server.py` | 服务端逻辑：`ops.db`、任务队列与锁、门槛判定、自动增量同步接力、HTTP 接口 |
-| `apps/ops/web/index.html`、`app.js`、`style.css` | 六个主模块加六个兼容子页签的原生 JS 页面，无框架无 CDN，支持宣纸日间 / 墨夜主题切换（`#theme-toggle` 与状态刷新增设于顶栏右侧）；桌面端左侧导航固定吸顶（`<=820px` 窄屏回落顶部横栏），顶栏与正文同宽（`--content-max: 2080px`，水平居中）且左右顶部分隔线齐平 |
+| `apps/ops/server.py` | 服务端逻辑：`ops.db`、任务队列与锁、门槛判定、自动增量同步接力、移动互联管理代理、HTTP 接口 |
+| `apps/ops/web/index.html`、`app.js`、`style.css` | 七个主模块加六个兼容子页签的原生 JS 页面，无框架无 CDN，支持宣纸日间 / 墨夜主题切换（`#theme-toggle` 与状态刷新增设于顶栏右侧）；桌面端左侧导航固定吸顶（`<=820px` 窄屏回落顶部横栏），顶栏与正文同宽（`--content-max: 2080px`，水平居中）且左右顶部分隔线齐平 |
 | `工作区/运维/ops.db` | 任务与步骤（首次启动自建，可重建） |
 | `工作区/运维/jobs/<id>/` | `log.txt`、`commands.json`、`pid`、`plan.json`、`result.json`、`dry-run.json`、`report.json`、`thumbs/*.png` |
 | `工作区/运维/.writer.lock` | 写任务互斥与批次账读改写用的 `fcntl.flock` 文件 |
 | `工作区/运维/.reader.lock` | 只读任务共用锁（最多两个并行，与写任务互不阻塞） |
 | `工作区/运维/last-audit.json` | 审计缓存，由写入后后台自动刷新（或 `ops_status.py --deep`），页面只读 |
+| `工作区/运维/mobile_gateway.json` | 移动网关配置与持久化配对密钥（`0o600` 原子写盘，仅本机可读） |
+| `工作区/运维/mobile_gateway.pid`、`mobile_gateway.log` | 移动网关托管进程 PID 与脱敏运行日志（子进程经环境变量收密钥，命令行与日志不落明文） |
 | `tests/acceptance/ops/check_ops.py` | 服务与任务离线自检，末行 `ALL PASS` |
 | `tests/acceptance/ops/test_sidebar_sticky.py` | 桌面端左侧栏吸顶、宽屏居中去搜索按钮、顶底对齐与窄屏回落回归验收，末行 `ALL PASS` |
 | `tests/manual/ops/shot_ops.py` | headless Chromium 交互与截图自检，末行 `SHOT PASS` |
@@ -44,16 +48,17 @@ Ctrl-C 停服务。服务退出不杀其它页面服务，也不杀接手前已�
 2. `ops.db`：任务、步骤、日志路径与状态计数。
 3. `build/library.db`（只读打开）与各批次的 `worklist.tsv`、`logs/<uid>.json`、`triage_final.csv`、`skip_list.tsv`、`defer/lang.tsv`。
 
-## 页面（六大模块）
+## 页面（七大模块）
 
 页面文案面向用操作台管书的人，除日志诊断页外不暴露脚本名、命令行参数、文件路径与内部代号。
 
-- **1. 总览（`#overview`）**：顶部精简为三大区块——纯展示编辑台账首卡（核心判断、全文索引与政策存档台账、三色正文可读率条）、一体式流水线六环节轨道板（带底沿联动提醒条，无问题时自动隐藏；取消独立「下一步待办」卡）与无端口号的书库应用入口；任务统一在「任务与日志」查看，本页不重复展示最近任务。
+- **1. 总览（`#overview`）**：顶部精简为三大区块——纯展示编辑台账首卡（核心判断、全文索引与政策存档台账、三色正文可读率条）、一体式流水线六环节轨道板（带底沿联动提醒条，无问题时自动隐藏；取消独立「下一步待办」卡）与无端口号的书库应用入口（含「移动网关」第 5 张状态卡，点击直达 `#mobile`）；任务统一在「任务与日志」查看，本页不重复展示最近任务。
 - **2. 新书入库（`#import`）**：自上而下全宽流（全宽投递条 → 收件箱清单 → 入库核对清单，可逐行改书名/分类/动作并确认入库）；入库成功后服务端按格式自动接力电子书拆章（`split.run`，受 `auto_split` 设置控制，默认开启）与文档转正文（`docs.run`），PDF 保持待分诊，进度与明细在「正文生产」对应子页查看。
 - **3. 书目与分类（`#ledger`）**：含子页签 `ledger`（两行清爽工具栏 + 全库书目台账，去除磁盘路径与文件名，保存即自动同步）、`retire`（按编号/书名搜索移出 + 已标「不留」清单 + 原生确认弹窗，不放最近任务）、`cold`（退库台账 + 冷宫实物核验：表格带「实物状态」三态，页面「刷新」会按 `books/_冷宫` 实际文件校正台账）。
 - **4. 正文生产（`#split`）**：含子页签 `split`（电子书拆章/重拆/重检/查看问题/受理）、`docs`（文档转正文四格概览、补转、失败重试与最近一批折叠明细）、`pdf`（四格状态筛查、今日额度、批量分诊、内嵌待转清单与改处置弹窗；子页 `#pdf-list` 为完整多维筛选清单）、`manual`（手工格式扫描落位）；各子页均不重复展示最近任务卡片。
 - **5. 同步与维护（`#maintain`）**：四格同步健康总览（书目与视图 / 全文检索 / 语义检索 / 体检状态）、自动同步开关与「复核并增量对齐」、体检提醒折叠详情、章节主题增强、导出书目总表与低频高级运维重建；不重复展示最近同步记录。
 - **6. 任务与日志（`#logs`）**：全库后台任务的唯一查看与人工收口中心，含状态快速分段筛选、待确认提示条、步骤表、脱敏日志、取消、重跑与重启接管；从各模块点击详情或去确认直达并滚动定位 `#job-detail`。
+- **7. 移动互联（`#mobile`）**：移动网关启停/重启、监听与对外地址配置（局域网 / `.local` / Tailscale 自动发现）、离线白底 SVG 二维码（BanRead `bc-pair://v1` 配对码与手机浏览器 `/m` 快传码切换）、密钥轮换二次确认弹窗、推书队列（Outbox）增删清与 `.bcbook` 直接下载、多端阅读进度分片只读总览、拉取手机 BanRead 局域网直连分享（9721 + 6 位配对码）与手机收件暂存区一键投递到新书收件箱。
 
 兼容子页签 `#retire` / `#cold` / `#docs` / `#pdf` / `#pdf-list` / `#manual` 均可直接 hash 打开，不再占左侧主导航。
 
@@ -110,8 +115,24 @@ POST /api/maintain                     # {steps:[db,index,awards,audit,verify,ca
 POST /api/maintain/advanced            # 低频高级运维（向量首次构建、压缩、全量重建等）
 GET  /api/settings                     # 读取自动同步开关等操作台设置
 POST /api/settings                     # 保存操作台设置
-GET  /api/services                     # 首页/检索/阅读/日课多端服务健康状态
+GET  /api/services                     # 首页/检索/阅读/日课/移动网关多端服务健康状态
 POST /api/services/start               # 按 key 代起对应本地服务
+GET  /api/mobile/status                # 移动网关运行状态、对外地址候选、配对/快传离线 SVG 二维码与汇总计数
+POST /api/mobile/start                 # 托管启动移动网关子进程（密钥走环境变量，不落 argv/日志）
+POST /api/mobile/stop                  # 停止托管移动网关进程（拒绝误杀外部进程）
+POST /api/mobile/restart               # 重启移动网关进程
+POST /api/mobile/config                # 保存监听地址、端口、对外主机、自动拉起、快传开关等配置（0o600）
+POST /api/mobile/token/rotate          # 轮换 64 位配对密钥（网关运行中自动重启令旧密钥立即失效）
+GET  /api/mobile/catalog?q=&has_cache= # 查询可推送至手机的可读书目列表
+GET  /api/mobile/outbox                # 查看推书队列（Outbox）
+POST /api/mobile/outbox/enqueue        # 将选中书目入队推书队列（按 uid 去重刷新）
+POST /api/mobile/outbox/remove         # 按 ticket_ids 移除推书队列条目
+POST /api/mobile/outbox/clear          # 清空推书队列
+GET  /api/mobile/bundle?uid=&include_cache= # 打包并流式下载单本 .bcbook 离线包
+GET  /api/mobile/progress              # 只读查看各书的多端阅读进度分片汇总
+GET  /api/mobile/inbox                 # 查看手机传回的 .bcnote/.bcshare 与拉取暂存记录
+POST /api/mobile/lan-pull              # 预览或拉取手机 BanRead 局域网直连分享（9721 + X-BanRead-Code）
+POST /api/mobile/inbox/to-import       # 将手机暂存包里的原书一键投递到 books/_收件箱/
 GET  /api/search/health                # 代理查 8765 /api/health
 POST /api/search/start                 # 代起检索演示页（8765）
 GET  /api/file?path=...                # 白名单文件下载（文本产物脱敏，png/xlsx 原样）

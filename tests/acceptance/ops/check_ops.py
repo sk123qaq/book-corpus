@@ -617,6 +617,7 @@ def main(argv=None):
         else:
             shutil.rmtree(adopt_root, ignore_errors=True)
     search_checks()
+    mobile_checks()
     hard_root, hard_fixture = build_root()
     try:
         hardening_checks(hard_root, hard_fixture)
@@ -2110,6 +2111,57 @@ def insert_job(ops_db, job_id, kind="split.run", state="succeeded", pid=None):
     )
     conn.commit()
     conn.close()
+
+
+def mobile_checks():
+    """移动互联接口离线验收：隔离随机网关端口，不碰本机 8780，不入写锁队列。"""
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        mobile_port = int(sock.getsockname()[1])
+
+    root, fixture = build_root()
+    proc = None
+    try:
+        proc, port = start(root, fixture, extra_env={"BOOK_CORPUS_MOBILE_PORT": str(mobile_port)})
+        code, body = get(port, "/api/services")
+        services = body.get("services") or []
+        mob_svc = next((s for s in services if s.get("key") == "mobile"), None)
+        check(
+            "services 包含移动网关入口",
+            code == 200 and mob_svc is not None and mob_svc.get("url") == "#mobile" and mob_svc.get("internal") is True,
+            str(mob_svc),
+        )
+        code, body = get(port, "/api/mobile/status")
+        check(
+            "mobile status 含离线白底二维码与候选地址",
+            code == 200
+            and body.get("ok") is True
+            and body.get("running") is False
+            and "<svg" in str(body.get("pair_qr_svg") or "")
+            and "<svg" in str(body.get("web_qr_svg") or "")
+            and isinstance(body.get("candidates"), list),
+            "code=%s running=%s" % (code, body.get("running")),
+        )
+        code, body = post(port, "/api/mobile/config", {"preferred_host": "127.0.0.1", "allow_upload": False})
+        check(
+            "mobile config 持久化生效",
+            code == 200 and body.get("ok") is True and (body.get("status") or {}).get("allow_upload") is False,
+            str(body.get("error") or (body.get("status") or {}).get("allow_upload")),
+        )
+        code, body = get(port, "/api/mobile/outbox")
+        check("mobile outbox 200", code == 200 and body.get("ok") is True and isinstance(body.get("tickets"), list))
+        code, body = get(port, "/api/mobile/progress")
+        check("mobile progress 200", code == 200 and body.get("ok") is True and isinstance(body.get("books"), list))
+        code, body = get(port, "/api/mobile/inbox")
+        check("mobile inbox 200", code == 200 and body.get("ok") is True and isinstance(body.get("items"), list))
+        code, _ = http(port, "GET", "/api/mobile/status", headers={"Host": "evil.example"})
+        check("mobile 接口拒绝伪造 Host", code == 403, str(code))
+    finally:
+        if proc is not None:
+            stop(proc)
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def hardening_checks(root, fixture):
