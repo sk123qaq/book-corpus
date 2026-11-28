@@ -6,6 +6,7 @@ import pathlib
 import sys
 import threading
 import time
+import types
 import urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parents[1]
@@ -235,8 +236,9 @@ print(json.dumps({"batch": batch, "status_counts": status_counts, "pending_revie
         encoding="utf-8",
     )
 
-    monkeypatch.delitem(sys.modules, "build_para_index", raising=False)
-    monkeypatch.syspath_prepend(str(scripts))
+    fake_bpi = types.ModuleType("build_para_index")
+    fake_bpi.diff_index = lambda indexdb, root=None: {"added": ["B0001"], "modified": [], "removed": []}
+    monkeypatch.setitem(sys.modules, "build_para_index", fake_bpi)
 
     env = server.Env(str(root), scripts=str(scripts))
     env.prepare()
@@ -327,16 +329,20 @@ print(json.dumps({"batch": batch, "status_counts": status_counts, "pending_revie
     assert fts_jobs[0]["state"] == "succeeded"
 
     # 5) 若 split.run 产出 staged-review，gate_split 仍必须落 awaiting_review（不绕过校验）
-    review_id = runner.submit("split.run", "待复核样本", [])
-    rbase = pathlib.Path(env.job_dir(review_id))
-    (rbase / "log.txt").write_text(
-        json.dumps({"batch": "split-ops-rev", "status_counts": {"staged-review": 1}, "pending_review": ["B0002"]})
-        + "\n",
-        encoding="utf-8",
+    monkeypatch.setenv("TEST_SPLIT_MODE", "staged-review")
+    review_id = runner.submit(
+        "split.run",
+        "待复核样本",
+        server.split_commands(env, "split-ops-rev", ["B0002"], workers=1, replace=False),
+        batch_dir="工作区/批次/split-ops-rev",
     )
-    runner._finalize(review_id, store.get(review_id), [], [("split", 0), ("build_library", 0), ("gen_book_catalog", 0)])
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        rj = store.get(review_id)
+        if rj["state"] not in ("queued", "running"):
+            break
+        time.sleep(0.05)
     assert store.get(review_id)["state"] == "awaiting_review"
-    sys.modules.pop("build_para_index", None)
 
 
 def test_app_js_import_handoff_supports_auto_split():
