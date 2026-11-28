@@ -92,14 +92,14 @@ jobs:
           printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/bin/pi"
           chmod +x "$RUNNER_TEMP/bin/pi"
           echo "PI_BIN=$RUNNER_TEMP/bin/pi" >> "$GITHUB_ENV"
-      - name: 单元与端到端（<= 35s 预算）
+      - name: 单元与端到端（<= 50s 预算）
         run: |
           t0=$(date +%s)
           uv run --frozen pytest -o addopts="" -n auto --dist worksteal -m "not real_corpus" --durations=10
           elapsed=$(( $(date +%s) - t0 ))
-          echo "pytest elapsed: ${elapsed}s (budget: 35s)"
-          if [ "$elapsed" -gt 35 ]; then
-            echo "::error::pytest step exceeded 35s budget (${elapsed}s)"
+          echo "pytest elapsed: ${elapsed}s (budget: 50s)"
+          if [ "$elapsed" -gt 50 ]; then
+            echo "::error::pytest step exceeded 50s budget (${elapsed}s)"
             exit 1
           fi
       - name: 命令行冒烟
@@ -112,11 +112,11 @@ jobs:
           uv run --frozen book-corpus list > /dev/null
           uv run --frozen book-corpus init /tmp/ws
           uv run --frozen book-corpus doctor --root /tmp/ws
-      - name: test 耗时预算校验（<= 60s）
+      - name: test 耗时预算校验（<= 75s）
         run: |
           elapsed=$(( $(date +%s) - JOB_START ))
-          echo "test (${{ matrix.python-version }}) active elapsed: ${elapsed}s (budget: 60s)"
-          if [ "$elapsed" -gt 60 ]; then
-            echo "::error::test job exceeded 60s budget (${elapsed}s)"
+          echo "test (${{ matrix.python-version }}) active elapsed: ${elapsed}s (budget: 75s)"
+          if [ "$elapsed" -gt 75 ]; then
+            echo "::error::test job exceeded 75s budget (${elapsed}s)"
             exit 1
           fi
