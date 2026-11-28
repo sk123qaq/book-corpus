@@ -106,6 +106,43 @@ def _port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.25) -> boo
         return False
 
 
+def _listen_ports() -> set[int] | None:
+    """从 /proc 读取处于 LISTEN 的 TCP 端口；读不到时返回 None。
+
+    connect 探活会被外部监听进程的 backlog 饱和拖到超时，不能用来判断
+    「端口是否被占用」；/proc/net/tcp{,6} 只看内核状态，不受对端 accept 影响。
+    """
+    ports: set[int] = set()
+    found = False
+    for name in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            with Path(name).open(encoding="ascii", errors="replace") as fh:
+                next(fh, None)
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) < 4 or parts[3] != "0A":
+                        continue
+                    _, _, port_hex = parts[1].rpartition(":")
+                    if not port_hex:
+                        continue
+                    try:
+                        ports.add(int(port_hex, 16))
+                    except ValueError:
+                        continue
+            found = True
+        except OSError:
+            continue
+    return ports if found else None
+
+
+def _port_listening(port: int) -> bool:
+    """端口是否有任意进程在 LISTEN（含 backlog 已满、暂时不 accept 的情况）。"""
+    ports = _listen_ports()
+    if ports is not None:
+        return port in ports
+    return _port_open(port)
+
+
 def is_private_or_local_host(host: str) -> bool:
     """校验目标主机是否为私网/回环/mDNS 地址，防止 SSRF 访问公网或云元数据端点。"""
     clean = host.strip().lower().strip("[]")
@@ -491,7 +528,11 @@ class MobileGatewayManager:
             healthy, _code, _err = self._probe_health(port, token, timeout=0.4)
             if healthy:
                 state, running, managed, external_conflict = "running", True, pid is not None, False
-            elif _port_open(port, timeout=0.2):
+            elif pid is not None:
+                # 自己的托管子进程还在但健康检查没过（密钥被改、刚重启等）：
+                # 下次 start() 会回收重拉，不能误报成外部进程占用。
+                state, running, managed, external_conflict = "stopped", False, False, False
+            elif _port_listening(port):
                 state, running, managed, external_conflict = "external", False, False, True
             else:
                 state, running, managed, external_conflict = "stopped", False, False, False
@@ -517,7 +558,12 @@ class MobileGatewayManager:
                 running = True
                 managed = pid is not None
                 external_conflict = False
-            elif _port_open(port):
+            elif pid is not None:
+                state = "stopped"
+                running = False
+                managed = False
+                external_conflict = False
+            elif _port_listening(port):
                 state = "external"
                 running = False
                 managed = False
@@ -567,6 +613,75 @@ class MobileGatewayManager:
                 payload["web_qr_svg"] = render_svg(web_drop_uri, label="手机浏览器快传与配对二维码")
             return payload
 
+    def _external_conflict_error(self, port: int) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "error": f"端口 {port} 已被其他进程占用（非当前操作台托管或令牌不匹配），请先停止该进程或更换端口",
+            "status": self.status(),
+        }
+
+    @staticmethod
+    def _launch_args(pid: int) -> dict[str, str]:
+        """解析子进程 argv 里的 --key value / --flag，用于核对启动参数。"""
+        parts = _cmdline_of(pid)
+        if not parts:
+            return {}
+        out: dict[str, str] = {}
+        i = 0
+        while i < len(parts):
+            part = parts[i]
+            if part.startswith("--"):
+                key = part[2:]
+                if i + 1 < len(parts) and not parts[i + 1].startswith("--"):
+                    out[key] = parts[i + 1]
+                    i += 2
+                else:
+                    out[key] = "1"
+                    i += 1
+            else:
+                i += 1
+        return out
+
+    def _child_matches(self, pid: int, *, bind: str, port: int, allow_upload: bool) -> bool:
+        """托管子进程的启动参数是否与当前期望一致。
+
+        操作台重启、换 search_url、改 allow_upload 或直接改配置文件端口时，
+        旧子进程会带着过期参数继续跑；仅凭健康检查会把它当成「已在运行」复用。
+        """
+        args = self._launch_args(pid)
+        if not args:
+            return False
+        if args.get("bind") != bind:
+            return False
+        try:
+            if int(args.get("port", "0")) != port:
+                return False
+        except ValueError:
+            return False
+        if os.path.realpath(args.get("root", "")) != os.path.realpath(str(self.root)):
+            return False
+        if args.get("search-url", "").rstrip("/") != self.search_url.rstrip("/"):
+            return False
+        child_upload = args.get("no-allow-upload") is None and "allow-upload" in args
+        return child_upload == allow_upload
+
+    def _terminate_pid(self, pid: int, *, timeout: float = 4.0) -> None:
+        with contextlib.suppress(OSError):
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+        deadline = time.monotonic() + max(0.3, timeout)
+        while time.monotonic() < deadline and _pid_alive(pid):
+            time.sleep(0.03)
+        if _pid_alive(pid):
+            with contextlib.suppress(OSError):
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            end = time.monotonic() + 1.0
+            while time.monotonic() < end and _pid_alive(pid):
+                time.sleep(0.02)
+        with contextlib.suppress(OSError):
+            self.pid_path.unlink(missing_ok=True)
+        with contextlib.suppress(ChildProcessError, OSError):
+            os.waitpid(pid, os.WNOHANG)
+
     def start(self, *, timeout: float = 8.0) -> dict[str, Any]:
         """幂等启动受操作台托管的移动网关子进程。"""
         with self._lock:
@@ -576,16 +691,24 @@ class MobileGatewayManager:
             bind = str(cfg["bind"])
             allow_upload = bool(cfg["allow_upload"])
 
-            healthy, _code, _err = self._probe_health(port, token)
-            if healthy:
-                return {"ok": True, "already": True, "status": self.status()}
-
-            if _port_open(port):
-                return {
-                    "ok": False,
-                    "error": f"端口 {port} 已被其他进程占用（非当前操作台托管或令牌不匹配），请先停止该进程或更换端口",
-                    "status": self.status(),
-                }
+            pid = self._managed_pid()
+            if pid is not None:
+                healthy, _code, _err = self._probe_health(port, token)
+                if healthy and self._child_matches(pid, bind=bind, port=port, allow_upload=allow_upload):
+                    return {"ok": True, "already": True, "status": self.status()}
+                # 自己的子进程参数过期或健康检查失败：先回收，再按当前配置重拉。
+                self._terminate_pid(pid)
+                wait_end = time.monotonic() + 2.0
+                while time.monotonic() < wait_end and _port_listening(port):
+                    time.sleep(0.03)
+                if _port_listening(port):
+                    return self._external_conflict_error(port)
+            else:
+                healthy, _code, _err = self._probe_health(port, token)
+                if healthy:
+                    return {"ok": True, "already": True, "status": self.status()}
+                if _port_listening(port):
+                    return self._external_conflict_error(port)
 
             self.ops_dir.mkdir(parents=True, exist_ok=True)
             cmd = [
@@ -629,6 +752,8 @@ class MobileGatewayManager:
             deadline = time.monotonic() + max(1.0, timeout)
             while time.monotonic() < deadline:
                 if proc.poll() is not None:
+                    if _port_listening(port):
+                        return self._external_conflict_error(port)
                     return {
                         "ok": False,
                         "error": f"移动网关进程提前退出（code={proc.returncode}），请查看下方运行日志",
@@ -644,6 +769,8 @@ class MobileGatewayManager:
 
             with contextlib.suppress(OSError):
                 proc.terminate()
+            with contextlib.suppress(subprocess.TimeoutExpired, OSError):
+                proc.wait(timeout=2)
             return {
                 "ok": False,
                 "error": f"移动网关在 {timeout:g} 秒内未通过健康检查，请查看运行日志",
@@ -664,17 +791,7 @@ class MobileGatewayManager:
                     }
                 return {"ok": True, "was_running": False, "status": st}
 
-            with contextlib.suppress(OSError):
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
-            deadline = time.monotonic() + max(0.5, timeout)
-            while time.monotonic() < deadline and _pid_alive(pid):
-                time.sleep(0.03)
-            if _pid_alive(pid):
-                with contextlib.suppress(OSError):
-                    os.killpg(os.getpgid(pid), signal.SIGKILL)
-                time.sleep(0.05)
-            with contextlib.suppress(OSError):
-                self.pid_path.unlink(missing_ok=True)
+            self._terminate_pid(pid, timeout=timeout)
             out: dict[str, Any] = {"ok": True, "was_running": True}
             if include_status:
                 out["status"] = self.status()

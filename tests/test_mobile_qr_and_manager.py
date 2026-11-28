@@ -315,6 +315,109 @@ def test_manager_detects_external_port_conflict_and_refuses_to_kill(tmp_path: Pa
         srv.server_close()
 
 
+def test_manager_external_conflict_when_connect_probe_times_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """connect 探活不可用时，状态仍须按监听状态识别外部占用并拒绝启动。"""
+
+    class _ForeignHandler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args) -> None:  # noqa: A002
+            return
+
+        def do_GET(self) -> None:
+            self.send_response(401)
+            self.end_headers()
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), _ForeignHandler)
+    ext_port = int(srv.server_address[1])
+    thread = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+    thread.start()
+    try:
+        # 模拟 backlog 饱和/防火墙丢包：connect 探活超时，但端口确实处于 LISTEN
+        monkeypatch.setattr(mgr_mod, "_port_open", lambda *_a, **_k: False)
+        root = _make_root(tmp_path)
+        mgr = mgr_mod.MobileGatewayManager(root, port_override=ext_port)
+        st = mgr.status()
+        assert st["state"] == "external"
+        assert st["external_conflict"] is True
+
+        started = mgr.start()
+        assert started["ok"] is False
+        assert "占用" in started["error"] or "托管" in started["error"]
+        assert not mgr.pid_path.exists()
+        assert mgr.stop()["ok"] is False
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+    # 外部监听释放后回到 stopped（复位由下一次 start 负责）
+    assert mgr.status()["state"] == "stopped"
+    assert mgr_mod._port_listening(ext_port) is False
+
+
+def test_port_listening_sees_unaccepted_listener(tmp_path: Path):
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    port = int(listener.getsockname()[1])
+    try:
+        assert mgr_mod._port_listening(port) is True
+    finally:
+        listener.close()
+    assert mgr_mod._port_listening(port) is False
+
+
+def test_manager_recycles_stale_child_across_config_changes(tmp_path: Path):
+    """search_url / 持久化令牌 / 配置端口变化时，旧子进程不得被复用或遗留。"""
+    root = _make_root(tmp_path)
+    port = _free_port()
+    first = mgr_mod.MobileGatewayManager(root, search_url="http://127.0.0.1:9", port_override=port)
+    try:
+        started = first.start()
+        assert started["ok"] is True
+        pid0 = started["status"]["pid"]
+
+        # 1) search_url 变化：旧子进程参数过期，必须回收重拉
+        second = mgr_mod.MobileGatewayManager(root, search_url="http://127.0.0.1:8", port_override=port)
+        recycled = second.start()
+        assert recycled["ok"] is True
+        assert recycled.get("already") is not True
+        pid1 = recycled["status"]["pid"]
+        assert isinstance(pid1, int)
+        assert pid1 != pid0
+        cmdline = Path(f"/proc/{pid1}/cmdline").read_bytes().decode("utf-8", "replace")
+        assert "--search-url" in cmdline
+        assert "http://127.0.0.1:8" in cmdline
+        assert _health_status(port, second.load_config()["token"]) == 200
+
+        # 2) 持久化令牌被直接改写：按新令牌重启，旧令牌立即 401
+        old_token = second.load_config()["token"]
+        cfg = json.loads(second.config_path.read_text(encoding="utf-8"))
+        cfg["token"] = "b" * 64
+        mgr_mod._atomic_write_json(second.config_path, cfg, mode=0o600)
+        restarted = second.start()
+        assert restarted["ok"] is True
+        assert restarted.get("already") is not True
+        pid2 = restarted["status"]["pid"]
+        assert pid2 != pid1
+        assert _health_status(port, old_token) == 401
+        assert _health_status(port, "b" * 64) == 200
+
+        # 3) 手工改配置端口：旧端口释放，新端口接管，无孤儿
+        new_port = _free_port()
+        cfg = json.loads(second.config_path.read_text(encoding="utf-8"))
+        cfg["port"] = new_port
+        mgr_mod._atomic_write_json(second.config_path, cfg, mode=0o600)
+        third = mgr_mod.MobileGatewayManager(root, search_url="http://127.0.0.1:8")
+        moved = third.start()
+        assert moved["ok"] is True
+        assert moved["status"]["port"] == new_port
+        assert moved["status"]["running"] is True
+        assert _health_status(new_port, third.load_config()["token"]) == 200
+        assert mgr_mod._port_listening(port) is False
+        assert mgr_mod._pid_alive(pid2) is False
+    finally:
+        first.stop()
+
+
 def test_enumerate_host_candidates_filters_virtual_and_tun(monkeypatch: pytest.MonkeyPatch):
     fake_ip_json = json.dumps(
         [
