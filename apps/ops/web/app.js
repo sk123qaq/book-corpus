@@ -113,7 +113,7 @@ const S = {
   batch: null, splitBooks: [],
   review: null, reviewJob: null,
   retireHits: [], retireDrop: [], retireQuery: '', preview: null,
-  logJob: null, logDetail: null, follow: true, importDone: null, importDocsJob: '',
+  logJob: null, logDetail: null, follow: true, importDone: null, importDocsJob: '', importSplitJob: '', importSplitBatch: '',
   docs: null, docsNone: false, docsOpen: false, docsSig: '',
   logOpenId: null, logJumpSeq: 0, logSkipAfterRender: false,
   logScroll: 0, logStick: true, logRowsHtml: '',
@@ -129,7 +129,7 @@ const S = {
   pickSubject: '', pickSort: 'pages', settle: null, triageInfo: null,
   pdfInlineTag: 'all', pdfInlineQ: '',
   maintainSteps: new Set(FINISH_DEFAULT),
-  cold: null, coldError: '', coldRun: null, coldBusy: false, settings: { auto_embed: true }, services: [],
+  cold: null, coldError: '', coldRun: null, coldBusy: false, settings: { auto_embed: true, auto_split: true }, services: [],
   reconcileExtra: new Set(),
 };
 
@@ -1217,9 +1217,11 @@ function viewImport() {
         <p class="page-lead">上传新书到收件箱，核对书名与分类建议后一键入库。</p>
       </div>
     </div>
-    ${S.importDone ? `<div class="banner ok"><span>已入库，接下来按格式去拆章或分诊。${S.importDocsJob ? '已自动接转文档 md。' : ''}</span>
+    ${S.importDone ? `<div class="banner ok"><span>已入库${S.importSplitJob || S.importDocsJob ? '。' : '，接下来按格式去拆章或分诊。'}${S.importSplitJob ? '已自动接力电子书拆章（完成后自动更新伴读与检索）。' : ''}${S.importDocsJob ? '已自动接转文档 md。' : ''}</span>
       <div class="row tight">
-        <button class="btn sm" data-act="goto" data-tab="split">去拆章</button>
+        ${S.importSplitJob
+          ? '<button class="btn sm primary" data-act="split-goto">查看拆章进度 →</button>'
+          : '<button class="btn sm" data-act="goto" data-tab="split">去拆章</button>'}
         <button class="btn sm" data-act="goto" data-tab="pdf">去分诊 PDF</button>
         ${S.importDocsJob ? '<button class="btn sm" data-act="docs-goto">查看文档转换 →</button>' : ''}
       </div></div>`
@@ -3249,9 +3251,12 @@ async function loadCold() {
 async function loadSettings() {
   try {
     const body = await api('/api/settings');
-    S.settings = { auto_embed: body.auto_embed !== false };
+    S.settings = {
+      auto_embed: body.auto_embed !== false,
+      auto_split: body.auto_split !== false,
+    };
   } catch (err) {
-    S.settings = { auto_embed: true };
+    S.settings = { auto_embed: true, auto_split: true };
   }
 }
 
@@ -3671,6 +3676,8 @@ const actions = {
       + '只动收件箱里的文件和书库记录，不会删书库里的书。';
     if (!window.confirm(msg)) return;
     S.importDocsJob = '';
+    S.importSplitJob = '';
+    S.importSplitBatch = '';
     setBusy(true);
     try {
       await post('/api/import/plan', { job_id: S.planJob, items: S.plan });
@@ -3680,15 +3687,20 @@ const actions = {
       // 入库要 ingest + 重建 DB + 书目表，全库重建不止两分钟，上限放宽到 15 分钟
       const detail = await watchJob(body.job_id, afterJob, 1300);
       if (detail && detail.job.state === 'succeeded') {
-        toast('入库完成');
+        toast(detail.split_job ? '入库完成，已自动开始电子书拆章' : '入库完成');
         S.importDone = true;
         S.plan = null;
         S.planJob = null;
         S.legacyPlan = false;
-        // 入库任务跑完会自动接一个 docs.run：切到它，卡片上直接看进度
+        // 入库任务跑完会自动接 docs.run / split.run：同步状态，横幅上可直接查看进度
         if (detail.docs_job) {
           S.importDocsJob = String(detail.docs_job);
           docsJobSet(S.importDocsJob);
+        }
+        if (detail.split_job) {
+          S.importSplitJob = String(detail.split_job);
+          S.importSplitBatch = String(detail.split_batch || '');
+          if (S.importSplitBatch) S.batch = S.importSplitBatch;
         }
       } else {
         toast(summaryText(detail && detail.job.summary) || '入库没过，看日志', true);
@@ -3726,6 +3738,12 @@ const actions = {
   async 'docs-goto'() {
     if (location.hash !== '#docs') location.hash = '#docs';
     else await go('docs');
+  },
+
+  async 'split-goto'() {
+    if (S.importSplitBatch) S.batch = S.importSplitBatch;
+    if (location.hash !== '#split') location.hash = '#split';
+    else await go('split');
   },
 
   async 'split-all'(el) {
@@ -4109,7 +4127,10 @@ const actions = {
   async 'toggle-auto-embed'(el) {
     try {
       const body = await post('/api/settings', { auto_embed: !!el.checked });
-      S.settings = { auto_embed: body.auto_embed !== false };
+      S.settings = {
+        auto_embed: body.auto_embed !== false,
+        auto_split: body.auto_split !== false,
+      };
       toast(S.settings.auto_embed ? '已开启：正文落地后自动增量同步向量库' : '已暂停自动向量同步（可在维护页手动补齐）');
     } catch (err) {
       toast(err.message, true);
