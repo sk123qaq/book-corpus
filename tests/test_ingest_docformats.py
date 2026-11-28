@@ -81,10 +81,13 @@ def test_lib_common_is_the_single_source_of_extensions():
     )
     assert frozenset({".doc", ".ppt", ".csv", ".djvu"}) == lc.REJECT_EXTS
     assert frozenset({"txt", "md", "docx", "xlsx", "xls", "pptx"}) == lc.DOC_FORMATS
+    assert frozenset({"epub", "mobi", "azw3", "azw"}) == lc.EBOOK_FORMATS
     assert lc.ACCEPT_EXTS.isdisjoint(lc.REJECT_EXTS)
+    assert lc.DOC_FORMATS.isdisjoint(lc.EBOOK_FORMATS)
     # 白名单与来源表必须一一对应，不然 scan 收得进来、plan_for 又不认识
     assert {ext.lstrip(".") for ext in lc.ACCEPT_EXTS} == set(ingest.FORMATS)
     assert set(lc.DOC_FORMATS) <= set(ingest.FORMATS)
+    assert set(lc.EBOOK_FORMATS) <= set(ingest.FORMATS)
 
 
 def test_scan_rejects_doc_ppt_csv_djvu_and_counts(workspace):

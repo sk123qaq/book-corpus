@@ -67,36 +67,26 @@ def sha256_file(path):
     return h.hexdigest()
 
 
-def strip_tail_paren(stem):
-    end = len(stem) - 1
-    while end >= 0 and stem[end].isspace():
-        end -= 1
-    if end < 0 or stem[end] not in (")", "）"):
-        return stem, None
-    depth = 0
-    for i in range(end, -1, -1):
-        c = stem[i]
-        if c in (")", "）"):
-            depth += 1
-        elif c in ("(", "（"):
-            depth -= 1
-            if depth == 0:
-                return stem[:i].rstrip(), stem[i + 1 : end].strip()
-    return stem, None
+strip_tail_paren = L.strip_tail_paren
 
 
 def parse_name(name):
     stem = os.path.splitext(os.path.basename(name))[0]
+    stem = L.strip_download_site_noise(stem)
     paren = []
     while True:
-        stem, inner = strip_tail_paren(stem)
+        head, inner = strip_tail_paren(stem)
         if inner is None:
             break
-        paren.insert(0, inner)
-    author = ""
-    for p in paren:
-        if re.search(r"[著编译]|[\u4e00-\u9fff]{1,4}[·•]", p) or "." in p:
-            author = p
+        if L.is_download_site_noise(inner):
+            stem = head
+            continue
+        if re.search(r"[著编译]|[\u4e00-\u9fff]{1,4}[·•]", inner) or "." in inner:
+            stem = head
+            paren.insert(0, inner)
+            continue
+        break
+    author = paren[-1] if paren else ""
     return stem.strip(), author
 
 

@@ -963,6 +963,20 @@ def rebuild_commands(env):
 
 
 DOCS_SCRIPT = "docs_to_md.py"
+DEFAULT_SPLIT_WORKERS = 4
+
+
+def split_commands(env, batch, uids, *, workers=DEFAULT_SPLIT_WORKERS, replace=False, only=""):
+    """split.run 固定三步：split_md_batch → build_library --emit-json → gen_book_catalog。"""
+    args = ["--batch", batch]
+    args += ["--only", only] if only else ["--uids", ",".join(uids)]
+    args += ["--workers", str(workers), "--report-json"]
+    if replace:
+        args.append("--replace")
+    if only:
+        # 单本入口就是“真的重拆”，不然暂存区有产物时空转
+        args.append("--force")
+    return [make_cmd(env, "split", "split_md_batch.py", args), *rebuild_commands(env)]
 
 
 def docs_commands(env, job_dir, applied="", only=""):
@@ -1477,7 +1491,8 @@ class Runner:
                             timeout=30,
                         )
             chained_docs = self._chain_docs(job_id)
-            if not chained_docs and app_ref is not None:
+            chained_split = self._chain_split(job_id)
+            if not chained_docs and not chained_split and app_ref is not None:
                 app_ref.schedule_audit_refresh()
         elif job["kind"] in ("split.run", "docs.run", "pdf.run", "manual.rescan") and state in (
             "succeeded",
@@ -1638,6 +1653,83 @@ class Runner:
             return False
         write_json_atomic(seed, {"docs_job": new_id})
         self._log(job_id, "\n[docs] %d 本 doc 格式自动接转：job %s\n" % (len(hits), new_id))
+        return True
+
+    def _chain_split(self, job_id):
+        """导入入库成功后自动接力电子书拆章。split-seed.json 已在就不重发（幂等）。"""
+        base = self.env.job_dir(job_id)
+        seed = os.path.join(base, "split-seed.json")
+        if os.path.exists(seed):
+            prev = read_json(seed, {}) or {}
+            self._log(job_id, "\n[split] 已派过电子书拆章（%s），不重复提交\n" % prev.get("split_job"))
+            return False
+        settings = read_json(self.env.settings)
+        auto_split = True if not isinstance(settings, dict) else bool(settings.get("auto_split", True))
+        if not auto_split:
+            self._log(job_id, "\n[split] 自动拆章已关闭（auto_split=false），跳过电子书自动接力\n")
+            return False
+        applied = read_json(os.path.join(base, "applied.json"))
+        rows = applied.get("applied") if isinstance(applied, dict) else None
+        ebook_formats = lib_common_module().EBOOK_FORMATS
+        add_uids, replace_uids = [], []
+        for r in rows or []:
+            if not isinstance(r, dict):
+                continue
+            action = str(r.get("action") or "")
+            fmt = str(r.get("format") or "").lower()
+            uid = str(r.get("uid") or "").strip()
+            if fmt not in ebook_formats or not re.match(r"^B\d{4}$", uid):
+                continue
+            if action == "replace":
+                if uid not in replace_uids:
+                    replace_uids.append(uid)
+            elif action == "add" and uid not in add_uids:
+                add_uids.append(uid)
+        if replace_uids:
+            replace_set = set(replace_uids)
+            add_uids = [u for u in add_uids if u not in replace_set]
+        if not add_uids and not replace_uids:
+            return False
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        raw_suffix = re.sub(r"[^A-Za-z0-9._-]+", "", str(job_id or "").split("-")[-1])
+        tag = "%s-%s" % (stamp, raw_suffix) if raw_suffix else stamp
+        groups = []
+        if add_uids:
+            groups.append((add_uids, False, "split-ops-" + tag))
+        if replace_uids:
+            groups.append((replace_uids, True, "resplit-ops-" + tag))
+        submitted = []
+        for uids, replace, batch in groups:
+            workers = min(DEFAULT_SPLIT_WORKERS, max(1, len(uids)))
+            title = "%s %d 本" % ("重拆" if replace else "拆章", len(uids))
+            cmds = split_commands(self.env, batch, uids, workers=workers, replace=replace)
+            try:
+                new_id = self.submit(
+                    "split.run",
+                    title,
+                    cmds,
+                    batch_dir=os.path.join("工作区", "批次", batch),
+                )
+            except Exception as exc:
+                self._log(job_id, "\n[split] 电子书自动拆章提交失败：%s: %s\n" % (type(exc).__name__, exc))
+                continue
+            submitted.append({"job_id": new_id, "batch": batch, "replace": replace, "uids": uids})
+            self._log(
+                job_id,
+                "\n[split] %d 本电子书自动接力%s：job %s（批次 %s）\n"
+                % (len(uids), "重拆" if replace else "拆章", new_id, batch),
+            )
+        if not submitted:
+            return False
+        write_json_atomic(
+            seed,
+            {
+                "split_job": submitted[0]["job_id"],
+                "batch": submitted[0]["batch"],
+                "split_jobs": [item["job_id"] for item in submitted],
+                "batches": [item["batch"] for item in submitted],
+            },
+        )
         return True
 
     def _script_supports(self, script_name, flag):
@@ -2309,7 +2401,7 @@ class App:
         groups = dict(payload.get("pending_groups") or {})
         if not groups:
             pend = payload.get("pending") or {}
-            ebooks = ("epub", "mobi", "azw3", "azw")
+            ebooks = lib_common_module().EBOOK_FORMATS
             docs = lib_common_module().DOC_FORMATS
             groups = {
                 "ebook": sum(int(pend.get(k) or 0) for k in ebooks),
@@ -3214,12 +3306,15 @@ class App:
     def get_settings(self):
         raw = read_json(self.env.settings)
         auto_embed = True if not isinstance(raw, dict) else bool(raw.get("auto_embed", True))
-        return {"auto_embed": auto_embed}
+        auto_split = True if not isinstance(raw, dict) else bool(raw.get("auto_split", True))
+        return {"auto_embed": auto_embed, "auto_split": auto_split}
 
     def save_settings(self, payload):
         cur = self.get_settings()
         if "auto_embed" in payload:
             cur["auto_embed"] = bool(payload["auto_embed"])
+        if "auto_split" in payload:
+            cur["auto_split"] = bool(payload["auto_split"])
         write_json_atomic(self.env.settings, cur)
         self.invalidate_status()
         return {"ok": True, **cur}
@@ -3832,6 +3927,11 @@ class Handler(BaseHTTPRequestHandler):
         if (job or {}).get("kind") == "import.apply":
             seed = read_json(os.path.join(self.app.env.job_dir(job_id), "docs-seed.json")) or {}
             payload["docs_job"] = seed.get("docs_job")
+            split_seed = read_json(os.path.join(self.app.env.job_dir(job_id), "split-seed.json")) or {}
+            payload["split_job"] = split_seed.get("split_job")
+            payload["split_batch"] = split_seed.get("batch")
+            if split_seed.get("split_jobs"):
+                payload["split_jobs"] = split_seed.get("split_jobs")
         self.send_json(200, payload)
 
     def job_files(self, job_id):
@@ -3847,6 +3947,7 @@ class Handler(BaseHTTPRequestHandler):
             "progress.json",
             "applied.json",
             "docs-seed.json",
+            "split-seed.json",
         )
         for name in names:
             path = os.path.join(self.app.env.job_dir(job_id), name)
@@ -4352,17 +4453,7 @@ class Handler(BaseHTTPRequestHandler):
         if not only:
             batch = "resplit-ops-" if replace else "split-ops-"
             batch += time.strftime("%Y%m%d-%H%M%S")
-        args = ["--batch", batch]
-        args += ["--only", only] if only else ["--uids", ",".join(uids)]
-        args += ["--workers", str(workers), "--report-json"]
-        if replace:
-            args.append("--replace")
-        if only:
-            # 单本入口就是“真的重拆”，不然暂存区有产物时空转
-            args.append("--force")
-        argv_args = args
-        commands = [make_cmd(self.app.env, "split", "split_md_batch.py", argv_args)]
-        commands += rebuild_commands(self.app.env)
+        commands = split_commands(self.app.env, batch, uids, workers=workers, replace=replace, only=only)
         job_id = self.app.runner.submit(
             "split.run",
             "%s %d 本" % ("重拆" if replace else "拆章", len(uids)),

@@ -80,6 +80,8 @@ ACCEPT_EXTS = frozenset({".epub", ".pdf", ".mobi", ".azw3", ".azw", ".txt", ".md
 REJECT_EXTS = frozenset({".doc", ".ppt", ".csv", ".djvu"})
 # 能直接/经 markitdown 转成 md 的源格式
 DOC_FORMATS = frozenset({"txt", "md", "docx", "xlsx", "xls", "pptx"})
+# 需走 split_md_batch 拆章转 md 的电子书格式
+EBOOK_FORMATS = frozenset({"epub", "mobi", "azw3", "azw"})
 EXT = set(ACCEPT_EXTS)
 CONTENT_POOLS = [
     "原书",
@@ -176,6 +178,21 @@ KEYWORD_SUBJECT = [
 ]
 FALLBACK_SUBJECT = ("其他", "待归类")
 
+# 下载站 / 镜像站域名与来源标签（单一规则源：供文件名噪声剥离与作者清理共用）
+DOWNLOAD_SITE_TOKEN_RE = re.compile(
+    r"(?<![a-z0-9-])(?:www\.)?(?:"
+    r"z-?library(?:\.[a-z0-9-]{2,15})*"
+    r"|z-lib(?:\.[a-z0-9-]{2,15})*"
+    r"|zlib(?:\.[a-z0-9-]{2,15})+"
+    r"|1lib(?:\.[a-z0-9-]{2,15})+"
+    r"|singlelogin(?:\.[a-z0-9-]{2,15})+"
+    r"|b-ok(?:\.[a-z0-9-]{2,15})+"
+    r"|book(?:4you|sc|fi)(?:\.[a-z0-9-]{2,15})+"
+    r"|libgen(?:\.[a-z0-9-]{2,15})+"
+    r"|annas-archive(?:\.[a-z0-9-]{2,15})+"
+    r")(?![a-z0-9-])",
+    re.I,
+)
 ZLIB = re.compile(r"\s*\(z-library\.sk,\s*1lib\.sk,\s*z-lib\.sk\)$", re.I)
 TRUNC = re.compile(r"\s*\(\d+\)$")
 STRONG_SEP = re.compile(r"[=＝]|——")
@@ -254,11 +271,46 @@ AUTHOR_JUNK = {
 }
 
 
+def strip_tail_paren(stem):
+    """剥离字符串末尾一对配平的半角/全角括号，返回 (前缀, 括号内文本或 None)。"""
+    end = len(stem) - 1
+    while end >= 0 and stem[end].isspace():
+        end -= 1
+    if end < 0 or stem[end] not in (")", "）"):
+        return stem, None
+    depth = 0
+    for i in range(end, -1, -1):
+        c = stem[i]
+        if c in (")", "）"):
+            depth += 1
+        elif c in ("(", "（"):
+            depth -= 1
+            if depth == 0:
+                return stem[:i].rstrip(), stem[i + 1 : end].strip()
+    return stem, None
+
+
+def is_download_site_noise(text):
+    """整段文本是否全由电子书下载站/镜像站域名或来源标签组成。"""
+    tokens = [tok for tok in re.split(r"[,，;；/|\s]+", (text or "").strip()) if tok]
+    return bool(tokens) and all(DOWNLOAD_SITE_TOKEN_RE.fullmatch(tok) for tok in tokens)
+
+
+def strip_download_site_noise(stem):
+    """循环剥离 stem 末尾的下载站/镜像站噪声括号（兼容半角/全角、多域名、多层堆叠）。"""
+    cur = (stem or "").rstrip()
+    while True:
+        head, inner = strip_tail_paren(cur)
+        if inner is None or not is_download_site_noise(inner):
+            return cur
+        cur = head
+
+
 def clean_author(a):
-    """作者清洗：去「作者：」标签、去国家括注、挡掉出版社/扫描仪等非人名兜底值。"""
+    """作者清洗：去「作者：」标签、去国家括注、挡掉下载站域名与出版社/扫描仪等非人名兜底值。"""
     a = AUTHOR_LABEL.sub("", (a or "").strip()).strip()
     a = AUTHOR_BRACKET.sub("", a).strip()
-    if not a or a.lower() in AUTHOR_JUNK or a in COUNTRY_LIKE:
+    if not a or a.lower() in AUTHOR_JUNK or a in COUNTRY_LIKE or is_download_site_noise(a):
         return ""
     if re.fullmatch(r"[\d\s\-—_·.、,，]+", a):
         return ""
@@ -274,10 +326,10 @@ def norm(s):
 
 
 def clean_title(filename):
-    """文件名到目录名候选。去 z-library 后缀、去作者括注、去版本词尾巴、去省略号。"""
+    """文件名到目录名候选。去下载站后缀、去作者括注、去版本词尾巴、去省略号。"""
     base = os.path.splitext(os.path.basename(filename))[0]
     base = TRUNC.sub("", base)
-    base = ZLIB.sub("", base).strip()
+    base = strip_download_site_noise(base)
     base = re.sub(r"\s*\([^()]*\)$", "", base).strip()
     for o, c in (("(", ")"), ("（", "）"), ("[", "]"), ("【", "】")):
         while base.count(o) > base.count(c):
@@ -297,7 +349,7 @@ def clean_title(filename):
 def author_guess(filename, title_clean):
     """从文件名猜作者。取第一个括注里可用的人名，其次取「作者-书名」前缀。"""
     stem = os.path.splitext(os.path.basename(filename))[0]
-    stem = ZLIB.sub("", TRUNC.sub("", stem))
+    stem = strip_download_site_noise(TRUNC.sub("", stem))
     m = re.search(r"[（(]([^（）()]+)[）)]", stem)
     if m:
         inner = m.group(1)

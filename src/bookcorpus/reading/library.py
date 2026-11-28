@@ -11,12 +11,13 @@ import unicodedata
 
 from ..md.roles import load_manifest_chapter_roles, resolve_chapter_role
 from ..scripts.layout import Layout, find_root
+from ..scripts.lib_common import DOWNLOAD_SITE_TOKEN_RE
 from .chapters import merge_title_pages
 from .footnotes import NOTE_CHAPTER_TITLE_RE, resolve_chapter_footnotes
 from .mdparse import non_space_count, parse_markdown
 from .shelf_index import ShelfIndex
 
-AUTHOR_NOISE_RE = re.compile(r"(?:z-library(?:\.sk)?|1lib\.sk|z-lib\.sk)", re.I)
+AUTHOR_NOISE_RE = DOWNLOAD_SITE_TOKEN_RE
 CLOTHES = ("#1E3A36", "#2C4056", "#6B2B2B", "#A87A3E", "#4A5839", "#3F4E5A", "#5A3E2B", "#2F4F4F")
 # 叠加层默认关闭：不读旧数据仓的叠加层，需要时由调用方显式传 overlay_root。
 # 需要时由调用方显式传 overlay_root，不读环境变量。
