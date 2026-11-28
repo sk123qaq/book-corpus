@@ -122,7 +122,7 @@ def test_ops_mobile_full_api_flow(tmp_path: Path):
     _BoundHandler.app = app
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), _BoundHandler)
     ops_port = int(httpd.server_address[1])
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{ops_port}"
 
@@ -280,7 +280,7 @@ def test_ops_mobile_full_api_flow(tmp_path: Path):
 
         lan_srv = ThreadingHTTPServer(("127.0.0.1", 0), _LanHandler)
         lan_port = int(lan_srv.server_address[1])
-        lan_thread = threading.Thread(target=lan_srv.serve_forever, daemon=True)
+        lan_thread = threading.Thread(target=lan_srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
         lan_thread.start()
         try:
             st_prev, raw_prev, _ = _req(

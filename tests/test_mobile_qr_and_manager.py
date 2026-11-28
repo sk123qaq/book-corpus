@@ -297,7 +297,7 @@ def test_manager_detects_external_port_conflict_and_refuses_to_kill(tmp_path: Pa
 
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _DummyHandler)
     ext_port = int(srv.server_address[1])
-    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()
     try:
         root = _make_root(tmp_path)
@@ -405,7 +405,7 @@ def test_lan_pull_ssrf_auth_fetch_and_send_to_import(tmp_path: Path):
 
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _MockBanReadHandler)
     lan_port = int(srv.server_address[1])
-    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()
     try:
         url = f"http://127.0.0.1:{lan_port}/"

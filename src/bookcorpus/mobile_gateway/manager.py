@@ -463,6 +463,28 @@ class MobileGatewayManager:
         tail = "\n".join(raw.splitlines()[-lines:])
         return _redact_log_text(tail, token)
 
+    def quick_status(self) -> dict[str, Any]:
+        """轻量运行态探活（供 /api/services 状态卡使用，不生成 QR 也不调用外部 ip 命令）。"""
+        with self._lock:
+            cfg = self.load_config()
+            port = int(cfg["port"])
+            token = str(cfg["token"])
+            pid = self._managed_pid()
+            healthy, _code, _err = self._probe_health(port, token, timeout=0.4)
+            if healthy:
+                state, running, managed, external_conflict = "running", True, pid is not None, False
+            elif _port_open(port, timeout=0.2):
+                state, running, managed, external_conflict = "external", False, False, True
+            else:
+                state, running, managed, external_conflict = "stopped", False, False, False
+            return {
+                "state": state,
+                "running": running,
+                "managed": managed,
+                "external_conflict": external_conflict,
+                "port": port,
+            }
+
     def status(self, *, include_qr: bool = True) -> dict[str, Any]:
         """返回移动网关完整状态：运行态、配置、候选地址、配对 URI、离线 QR SVG、8765 状态与日志尾。"""
         with self._lock:
@@ -600,7 +622,7 @@ class MobileGatewayManager:
                     tmp_pid.write_text(f"{proc.pid}\n", encoding="utf-8")
                     tmp_pid.replace(self.pid_path)
                     return {"ok": True, "already": False, "pid": proc.pid, "status": self.status()}
-                time.sleep(0.12)
+                time.sleep(0.04)
 
             with contextlib.suppress(OSError):
                 proc.terminate()
@@ -610,12 +632,12 @@ class MobileGatewayManager:
                 "status": self.status(),
             }
 
-    def stop(self, *, timeout: float = 5.0) -> dict[str, Any]:
+    def stop(self, *, timeout: float = 5.0, include_status: bool = True) -> dict[str, Any]:
         """停止由操作台托管的移动网关子进程（校验 PID 与 cmdline，不误杀外部进程）。"""
         with self._lock:
             pid = self._managed_pid()
             if pid is None:
-                st = self.status()
+                st = self.status(include_qr=include_status)
                 if st["external_conflict"]:
                     return {
                         "ok": False,
@@ -628,19 +650,22 @@ class MobileGatewayManager:
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
             deadline = time.monotonic() + max(0.5, timeout)
             while time.monotonic() < deadline and _pid_alive(pid):
-                time.sleep(0.08)
+                time.sleep(0.03)
             if _pid_alive(pid):
                 with contextlib.suppress(OSError):
                     os.killpg(os.getpgid(pid), signal.SIGKILL)
-                time.sleep(0.1)
+                time.sleep(0.05)
             with contextlib.suppress(OSError):
                 self.pid_path.unlink(missing_ok=True)
-            return {"ok": True, "was_running": True, "status": self.status()}
+            out: dict[str, Any] = {"ok": True, "was_running": True}
+            if include_status:
+                out["status"] = self.status()
+            return out
 
     def restart(self) -> dict[str, Any]:
         """重启受托管的移动网关。"""
         with self._lock:
-            stop_res = self.stop()
+            stop_res = self.stop(include_status=False)
             if not stop_res.get("ok"):
                 return stop_res
             return self.start()
@@ -653,13 +678,12 @@ class MobileGatewayManager:
             cfg["token"] = secrets.token_hex(32)
             cfg["updated_at"] = _now_iso()
             _atomic_write_json(self.config_path, cfg, mode=0o600)
-            restarted = False
             if was_managed_running:
                 res = self.restart()
                 if not res.get("ok"):
                     return res
-                restarted = True
-            return {"ok": True, "restarted": restarted, "status": self.status()}
+                return {"ok": True, "restarted": True, "status": res["status"]}
+            return {"ok": True, "restarted": False, "status": self.status()}
 
     # ---- 手机接收箱（mobile_inbox）与 BanRead 9721 局域网拉取 ----------
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import html
 from dataclasses import dataclass
 
@@ -467,6 +468,7 @@ def encode_qr(text: str) -> QrMatrix:
     )
 
 
+@functools.lru_cache(maxsize=64)
 def render_svg(
     text: str,
     *,

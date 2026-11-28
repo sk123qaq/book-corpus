@@ -413,7 +413,7 @@ def mock_search_server():
             self.wfile.write(resp)
 
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _MockSearchHandler)
-    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()
     try:
         yield f"http://127.0.0.1:{srv.server_address[1]}", captured_requests
@@ -435,7 +435,7 @@ def gateway_fixture(tmp_path, mock_search_server):
         search_url=search_url,
         quiet=True,
     )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
@@ -648,7 +648,7 @@ def test_gateway_outbox_progress_and_cross_search(gateway_fixture, tmp_path):
         search_url=f"http://127.0.0.1:{dead_port}",
         quiet=True,
     )
-    t_down = threading.Thread(target=srv_down.serve_forever, daemon=True)
+    t_down = threading.Thread(target=srv_down.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     t_down.start()
     try:
         down_base = f"http://127.0.0.1:{srv_down.server_address[1]}"

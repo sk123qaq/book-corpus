@@ -3784,7 +3784,7 @@ class App:
                     "running": bool(al.port_open(svc.port)),
                 }
             )
-        mst = self._mobile_manager().status(include_qr=False)
+        mst = self._mobile_manager().quick_status()
         out.append(
             {
                 "key": "mobile",
