@@ -6,6 +6,7 @@ const TABS = [
   ['ledger', '书目与分类'],
   ['split', '正文生产'],
   ['maintain', '同步与维护'],
+  ['mobile', '移动互联'],
   ['logs', '任务与日志'],
 ];
 const NAV_ICONS = {
@@ -14,6 +15,7 @@ const NAV_ICONS = {
   ledger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
   split: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
   maintain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>',
+  mobile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.2"/><path d="M10 18h4"/><path d="M15 6.5a3 3 0 0 1 0 4.2"/><path d="M12.5 8.6h.01"/></svg>',
   logs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg>',
 };
 const THEME_KEY = 'bookcorpus.ops-theme';
@@ -131,6 +133,25 @@ const S = {
   maintainSteps: new Set(FINISH_DEFAULT),
   cold: null, coldError: '', coldRun: null, coldBusy: false, settings: { auto_embed: true, auto_split: true }, services: [],
   reconcileExtra: new Set(),
+  mobileStatus: null,
+  mobileCatalog: [],
+  mobileOutbox: [],
+  mobileProgress: [],
+  mobileInbox: [],
+  mobileQ: '',
+  mobileCacheOnly: false,
+  mobileIncludeCache: true,
+  mobilePick: new Set(),
+  mobileQrMode: 'pair',
+  mobileBusy: false,
+  mobileCatalogLimit: 40,
+  mobileLanUrl: '',
+  mobileLanCode: '',
+  mobileLanPreview: null,
+  mobileLanIncludeBook: true,
+  mobileLogOpen: false,
+  mobileProgressOpen: false,
+  mobileDebounce: null,
 };
 
 // 轮询没有「超时失败」这回事：到上限只是降频继续看，别把在跑的任务当没跑
@@ -320,6 +341,11 @@ function renderNav() {
     } else if (key === 'maintain') {
       const delta = (S.status && S.status.sync_delta) || null;
       if (delta && delta.has_drift) badge = '<span class="badge">!</span>';
+    } else if (key === 'mobile') {
+      const obCount = (S.mobileOutbox && S.mobileOutbox.length)
+        || (S.mobileStatus && S.mobileStatus.outbox_count) || 0;
+      if (obCount > 0) badge = `<span class="badge">${obCount}</span>`;
+      else if (S.mobileStatus && S.mobileStatus.running) badge = '<span class="badge mobile-live-badge" aria-label="运行中">●</span>';
     } else if (key === 'logs') {
       const active = (counts.running || 0) + (counts.queued || 0);
       if (active) badge = `<span class="badge">${active}</span>`;
@@ -594,6 +620,7 @@ function render() {
     'pdf-list': viewPdfList,
     manual: viewManual,
     maintain: viewMaintain,
+    mobile: viewMobile,
     ledger: viewLedger,
     retire: viewRetire,
     cold: viewCold,
@@ -685,6 +712,7 @@ const SVC_DESC = {
   search: '自然语言检索与段落引用',
   reading: '逐章正文阅读与批注',
   daily: '每日推荐一章只读版',
+  mobile: '伴读配对与手机传书',
 };
 
 function trackAlerts(c) {
@@ -1067,9 +1095,13 @@ function servicesCard() {
           <div class="svc-sub">${esc(desc)}</div>
         </div>
         <div class="svc-actions">
-          ${svc.running
-            ? `<a class="btn compact svc-open" href="${esc(svc.url)}" target="_blank" rel="noopener">打开 ↗</a>`
-            : `<button type="button" class="btn compact svc-start" data-act="service-start" data-key="${esc(svc.key)}">▶ 启动</button>`}
+          ${svc.internal
+            ? (svc.running
+              ? '<a class="btn compact svc-open" href="#mobile">配对 →</a>'
+              : `<button type="button" class="btn compact svc-start" data-act="service-start" data-key="${esc(svc.key)}">▶ 启动</button>`)
+            : (svc.running
+              ? `<a class="btn compact svc-open" href="${esc(svc.url)}" target="_blank" rel="noopener">打开 ↗</a>`
+              : `<button type="button" class="btn compact svc-start" data-act="service-start" data-key="${esc(svc.key)}">▶ 启动</button>`)}
         </div>
       </div>`;
     }).join('')}</div>
@@ -3269,6 +3301,413 @@ async function loadServices() {
   }
 }
 
+async function loadMobileStatus() {
+  try {
+    S.mobileStatus = await api('/api/mobile/status');
+  } catch (err) {
+    S.mobileStatus = null;
+  }
+}
+
+async function loadMobileCatalog() {
+  try {
+    const qs = S.mobileCacheOnly ? '?has_cache=1' : '';
+    const body = await api('/api/mobile/catalog' + qs);
+    S.mobileCatalog = body.books || [];
+  } catch (err) {
+    S.mobileCatalog = [];
+  }
+}
+
+async function loadMobileOutbox() {
+  try {
+    const body = await api('/api/mobile/outbox');
+    S.mobileOutbox = body.tickets || [];
+  } catch (err) {
+    S.mobileOutbox = [];
+  }
+}
+
+async function loadMobileProgress() {
+  try {
+    const body = await api('/api/mobile/progress');
+    S.mobileProgress = body.books || [];
+  } catch (err) {
+    S.mobileProgress = [];
+  }
+}
+
+async function loadMobileInbox() {
+  try {
+    const body = await api('/api/mobile/inbox');
+    S.mobileInbox = body.items || [];
+  } catch (err) {
+    S.mobileInbox = [];
+  }
+}
+
+async function loadMobileAll() {
+  await Promise.all([
+    loadMobileStatus(),
+    loadMobileCatalog(),
+    loadMobileOutbox(),
+    loadMobileProgress(),
+    loadMobileInbox(),
+  ]);
+}
+
+function legacyCopyText(text) {
+  const prev = document.activeElement;
+  const field = document.createElement('textarea');
+  field.value = text;
+  field.setAttribute('readonly', '');
+  field.style.cssText = 'position:fixed;inset-block-start:0;opacity:0';
+  document.body.append(field);
+  field.select();
+  try {
+    return document.execCommand('copy');
+  } finally {
+    field.remove();
+    if (prev && typeof prev.focus === 'function') {
+      try { prev.focus({ preventScroll: true }); } catch (e) { prev.focus(); }
+    }
+  }
+}
+
+async function copyTextWithFeedback(text, okMsg) {
+  if (!text) return;
+  let copied = false;
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } else {
+      copied = legacyCopyText(text);
+    }
+  } catch (err) {
+    copied = legacyCopyText(text);
+  }
+  const live = document.getElementById('mobile-copy-live');
+  const msg = copied ? (okMsg || '已复制到剪贴板') : '复制失败，请手动选中复制';
+  if (live) live.textContent = msg;
+  toast(msg, !copied);
+}
+
+function mobileFilteredCatalog() {
+  const q = String(S.mobileQ || '').trim().toLowerCase();
+  const rows = S.mobileCatalog || [];
+  if (!q) return rows;
+  return rows.filter((b) => {
+    const blob = [b.uid, b.title, b.author, (b.subjects || []).join(' ')].join(' ').toLowerCase();
+    return blob.indexOf(q) >= 0;
+  });
+}
+
+function mobileCatalogRowHtml(b) {
+  const checked = S.mobilePick.has(b.uid);
+  const ic = S.mobileIncludeCache ? '1' : '0';
+  const dlHref = '/api/mobile/bundle?uid=' + encodeURIComponent(b.uid) + '&include_cache=' + ic;
+  return `<tr>
+    <td data-label="选"><input type="checkbox" aria-label="选择 ${esc(b.title || b.uid)}" data-act="mobile-pick-one" value="${esc(b.uid)}"${checked ? ' checked' : ''}></td>
+    <td data-label="编号" class="mono" translate="no">${esc(b.uid)}</td>
+    <td data-label="书名" class="wrap"><strong>${esc(b.title || b.uid)}</strong>${b.author ? `<span class="small muted"> · ${esc(b.author)}</span>` : ''}</td>
+    <td data-label="章节" class="num">${num(b.logical_chapter_count || 0)}</td>
+    <td data-label="伴读缓存">${b.has_companion_cache ? '<span class="pill ok">含缓存</span>' : '<span class="pill">无</span>'}</td>
+    <td data-label="操作" class="nowrap">
+      <div class="row tight">
+        <button type="button" class="btn sm" data-act="mobile-push-one" data-uid="${esc(b.uid)}">推送手机</button>
+        <a class="btn sm ghost" href="${dlHref}">下载 .bcbook</a>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function paintMobileCatalog() {
+  const tbody = document.querySelector('#mobile-catalog-body');
+  if (!tbody) return;
+  const rows = mobileFilteredCatalog();
+  const visible = rows.slice(0, S.mobileCatalogLimit);
+  tbody.innerHTML = visible.length
+    ? visible.map(mobileCatalogRowHtml).join('')
+    : '<tr><td colspan="6" class="empty">没有匹配的可读书目。</td></tr>';
+  const pager = document.querySelector('#mobile-catalog-pager');
+  if (pager) {
+    if (rows.length > visible.length) {
+      pager.hidden = false;
+      pager.innerHTML = `<span class="hint">已显示 ${num(visible.length)} / ${num(rows.length)} 本</span>
+        <button type="button" class="btn sm" data-act="mobile-catalog-more">加载更多 40 本</button>`;
+    } else {
+      pager.hidden = true;
+      pager.innerHTML = '';
+    }
+  }
+  const pushBtn = document.querySelector('#mobile-push-selected');
+  if (pushBtn) {
+    pushBtn.disabled = !S.mobilePick.size || S.mobileBusy;
+    pushBtn.textContent = '推送选中到 Outbox (' + num(S.mobilePick.size) + ')';
+  }
+}
+
+function mobileRotateModal() {
+  return `<dialog class="modal" id="mobile-rotate-dlg" aria-labelledby="mobile-rotate-title">
+    <div class="dlg-head">
+      <div>
+        <h2 id="mobile-rotate-title">轮换移动网关配对令牌？</h2>
+        <p class="small muted">将生成全新的 64 位随机令牌并持久化保存。</p>
+      </div>
+      <button type="button" class="btn ghost sm" data-act="close-modal" aria-label="关闭弹窗">✕</button>
+    </div>
+    <div class="dlg-body">
+      <p>轮换后，此前已配对的手机将收到 401 鉴权失效提示，需要在伴读 App 中重新扫码或粘贴新的配对链接；若网关当前正在运行，将自动重启以使新令牌立即生效。</p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-act="close-modal" autofocus>取消</button>
+      <button type="button" class="btn danger" data-act="mobile-rotate-confirm">确认轮换</button>
+    </div>
+  </dialog>`;
+}
+
+function viewMobile() {
+  const st = S.mobileStatus;
+  const running = !!(st && st.running);
+  const conflict = !!(st && st.external_conflict);
+  const stateCls = running ? 'ok' : (conflict ? 'miss' : 'out');
+  const stateLabel = running ? '运行中' : (conflict ? '端口被外部占用' : '未启动');
+  const candidates = (st && st.candidates) || [];
+  const qrMode = S.mobileQrMode === 'web' ? 'web' : 'pair';
+  const activeQrSvg = st ? (qrMode === 'web' ? (st.web_qr_svg || '') : (st.pair_qr_svg || '')) : '';
+  const activeUri = st ? (qrMode === 'web' ? (st.web_drop_uri || '') : (st.pair_uri || '')) : '';
+  const maskedPreview = st
+    ? (qrMode === 'web'
+      ? (st.base_url + '/m#t=' + (st.token_masked || '••••'))
+      : ('bc-pair://v1?base=' + st.base_url + '&token=' + (st.token_masked || '••••')))
+    : '';
+  const tickets = S.mobileOutbox || [];
+  const filteredBooks = mobileFilteredCatalog();
+  const visibleBooks = filteredBooks.slice(0, S.mobileCatalogLimit);
+  const progressBooks = S.mobileProgress || [];
+  const inboxItems = S.mobileInbox || [];
+  const preview = S.mobileLanPreview;
+  const busyAttr = S.mobileBusy ? ' disabled' : '';
+
+  return `<div class="page-head">
+      <div>
+        <h1>移动互联</h1>
+        <p class="page-lead">在局域网托管伴读移动网关，向手机推送学习包、同步进度，并接收手机传回的电子书与伴读资料。</p>
+      </div>
+      <button type="button" class="btn compact" data-act="mobile-refresh"${busyAttr}>刷新状态</button>
+    </div>
+
+    ${conflict ? `<div class="banner bad"><span>端口 ${esc(st.port)} 已被非本操作台托管的进程占用，请先停止外部进程或在下方更换监听端口。</span></div>` : ''}
+
+    <section class="mobile-hero-grid section" aria-label="移动网关控制与配对">
+      <div class="card mobile-ctrl-card">
+        <div class="card-head">
+          <div class="row tight">
+            <h2>移动网关控制</h2>
+            ${status(stateCls, stateLabel)}
+          </div>
+          <span class="mono small muted" translate="no">${st ? ('令牌 ' + esc(st.token_masked || '—')) : '载入中…'}</span>
+        </div>
+
+        <div class="toolbar">
+          ${running
+            ? `<button type="button" class="btn sm" data-act="mobile-restart"${busyAttr}>重启网关</button>
+               <button type="button" class="btn sm danger" data-act="mobile-stop"${busyAttr}>停止网关</button>`
+            : `<button type="button" class="btn sm primary" data-act="mobile-start"${busyAttr}>▶ 启动移动网关</button>`}
+          <button type="button" class="btn sm ghost" data-act="mobile-rotate-open"${busyAttr}>轮换令牌</button>
+          <span class="spacer"></span>
+          ${st && !st.search_running
+            ? '<button type="button" class="btn sm ghost" data-act="mobile-start-search">检索服务未起 · 一键启动</button>'
+            : (st ? '<span class="pill ok">跨书检索已就绪</span>' : '')}
+        </div>
+
+        ${st ? `<div class="mobile-cfg-grid">
+          <label class="field">
+            <span>配对访问地址（手机可达）</span>
+            <select id="mobile-host-select">
+              ${candidates.map((c) => `<option value="${esc(c.host)}"${c.host === st.active_host && !st.custom_host ? ' selected' : ''}>${esc(c.label)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="field">
+            <span>自定义地址覆盖（可选）</span>
+            <input type="text" id="mobile-custom-host" value="${esc(st.custom_host || '')}" placeholder="例如 192.168.31.176 或 myhost.local">
+          </label>
+          <label class="field">
+            <span>监听范围</span>
+            <select id="mobile-bind-select">
+              <option value="0.0.0.0"${st.bind === '0.0.0.0' ? ' selected' : ''}>局域网可连（0.0.0.0）</option>
+              <option value="127.0.0.1"${st.bind === '127.0.0.1' ? ' selected' : ''}>仅本机（127.0.0.1 / USB）</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>监听端口</span>
+            <input type="number" id="mobile-port-input" min="1024" max="65535" value="${esc(st.port)}">
+          </label>
+        </div>
+        <div class="toolbar" style="margin-bottom:8px">
+          <label class="check-inline">
+            <input type="checkbox" id="mobile-allow-upload"${st.allow_upload ? ' checked' : ''}>
+            <span>允许手机浏览器快传文件到桌面</span>
+          </label>
+          <span class="spacer"></span>
+          <button type="button" class="btn sm" data-act="mobile-save-config"${busyAttr}>保存网络设置</button>
+        </div>
+        <div class="mobile-adb-bar">
+          <span class="small muted">USB 调试兜底：</span>
+          <code class="mono small" translate="no">${esc(st.adb_reverse_cmd || '')}</code>
+          <button type="button" class="btn sm ghost" data-act="mobile-copy-adb">复制命令</button>
+        </div>
+        <details class="mobile-log-details" data-mobile-details="log"${S.mobileLogOpen ? ' open' : ''}>
+          <summary>查看网关运行日志（最近 50 行，已脱敏）</summary>
+          <pre class="log-box">${esc(st.log_tail || '暂无运行日志。')}</pre>
+        </details>` : '<p class="muted">正在读取移动网关配置…</p>'}
+      </div>
+
+      <div class="card mobile-qr-card">
+        <div class="card-head">
+          <h2>扫码配对与快传</h2>
+          <div class="seg" role="group" aria-label="二维码模式切换">
+            <button type="button" class="seg-btn${qrMode === 'pair' ? ' on' : ''}" data-act="mobile-qr-mode" data-mode="pair">App 配对码</button>
+            <button type="button" class="seg-btn${qrMode === 'web' ? ' on' : ''}" data-act="mobile-qr-mode" data-mode="web">浏览器快传页</button>
+          </div>
+        </div>
+        <div class="mobile-qr-stage">
+          <div class="mobile-qr-frame">${activeQrSvg || '<p class="small muted">暂未生成二维码</p>'}</div>
+          <p class="hint" style="text-align:center">${qrMode === 'pair'
+            ? '供伴读 Android App 扫码/粘贴配对；如系统相机不直接唤起自定义协议，可切至右侧「浏览器快传页」。'
+            : '任意手机相机/微信扫码即可打开轻量网页：一键唤起伴读 App 配对，并可直接上传电子书或 .bcnote/.bcshare 到桌面。'}</p>
+          <div class="mobile-uri-box mono small" translate="no">${esc(maskedPreview)}</div>
+          <div class="row tight">
+            <button type="button" class="btn sm primary" data-act="mobile-copy-uri"${activeUri ? '' : ' disabled'}>${qrMode === 'pair' ? '复制配对链接' : '复制快传地址'}</button>
+          </div>
+          <span class="small muted" id="mobile-copy-live" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card section" aria-label="选书推送到手机">
+      <div class="card-head">
+        <div class="row tight">
+          <h2>推送到手机（Outbox）与导出 .bcbook</h2>
+          <span class="pill ${tickets.length ? 'half' : 'ok'}">待拉取 ${num(tickets.length)} 本</span>
+        </div>
+        <div class="row tight">
+          <button type="button" class="btn sm" data-act="mobile-outbox-refresh"${busyAttr}>刷新队列</button>
+          <button type="button" class="btn sm ghost" data-act="mobile-outbox-clear"${tickets.length && !S.mobileBusy ? '' : ' disabled'}>清空队列</button>
+        </div>
+      </div>
+
+      ${tickets.length ? `<div class="mobile-outbox-list">
+        ${tickets.map((t) => `<div class="mobile-outbox-chip">
+          <span class="mono small" translate="no">${esc(t.uid)}</span>
+          <span class="wrap"><strong>${esc(t.title || t.uid)}</strong></span>
+          ${t.include_cache ? '<span class="pill ok">含缓存</span>' : '<span class="pill">仅正文</span>'}
+          <span class="small muted">${esc(fmtTime(t.created_at))}</span>
+          <button type="button" class="btn sm ghost" data-act="mobile-outbox-remove" data-tid="${esc(t.ticket_id)}" aria-label="移出 ${esc(t.title || t.uid)}">移出</button>
+        </div>`).join('')}
+      </div>` : '<p class="hint" style="margin-bottom:12px">待拉取队列为空。在下方勾书点「推送选中到 Outbox」，然后在手机伴读「设置 → 拉取 Outbox」即可自动断点续传并核销。</p>'}
+
+      <div class="toolbar">
+        <div class="filter-group">
+          <input type="search" id="mobile-q" value="${esc(S.mobileQ)}" placeholder="按书名 / 作者 / UID 筛选可读书目…" aria-label="筛选可读书目" size="28">
+        </div>
+        <label class="check-inline">
+          <input type="checkbox" id="mobile-cache-only"${S.mobileCacheOnly ? ' checked' : ''}>
+          <span>仅看已有伴读缓存</span>
+        </label>
+        <label class="check-inline">
+          <input type="checkbox" id="mobile-include-cache"${S.mobileIncludeCache ? ' checked' : ''}>
+          <span>打包附带伴读缓存</span>
+        </label>
+        <span class="spacer"></span>
+        <button type="button" class="btn sm primary" id="mobile-push-selected" data-act="mobile-push-selected"${S.mobilePick.size && !S.mobileBusy ? '' : ' disabled'}>推送选中到 Outbox (${num(S.mobilePick.size)})</button>
+      </div>
+
+      <div class="tw table-wrap stack-mobile" tabindex="0" role="region" aria-label="可推送书目表">
+        <table>
+          <thead><tr><th style="width:36px">选</th><th style="width:86px">编号</th><th>书名与作者</th><th class="num" style="width:72px">章节</th><th style="width:92px">伴读缓存</th><th style="width:200px">操作</th></tr></thead>
+          <tbody id="mobile-catalog-body">
+            ${visibleBooks.length ? visibleBooks.map(mobileCatalogRowHtml).join('') : '<tr><td colspan="6" class="empty">暂无可读书目，或当前筛选下没有结果。</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <div class="toolbar" id="mobile-catalog-pager" style="margin-top:10px;margin-bottom:0"${filteredBooks.length > visibleBooks.length ? '' : ' hidden'}>
+        <span class="hint">已显示 ${num(visibleBooks.length)} / ${num(filteredBooks.length)} 本</span>
+        <button type="button" class="btn sm" data-act="mobile-catalog-more">加载更多 40 本</button>
+      </div>
+
+      <details class="mobile-log-details" data-mobile-details="progress" style="margin-top:14px"${S.mobileProgressOpen ? ' open' : ''}>
+        <summary>多端阅读进度分片（${num(progressBooks.length)} 本书已同步）</summary>
+        ${progressBooks.length ? `<div class="tw table-wrap stack-mobile" style="margin-top:8px"><table>
+          <thead><tr><th>编号</th><th>书名</th><th>已同步设备与位置</th></tr></thead>
+          <tbody>${progressBooks.map((row) => `<tr>
+            <td data-label="编号" class="mono" translate="no">${esc(row.uid)}</td>
+            <td data-label="书名" class="wrap">${esc(row.title || row.uid)}</td>
+            <td data-label="设备进度" class="wrap small">${(row.shards || []).map((s) => `<span class="pill">${esc(s.device_id)} · 第 ${num(s.ordinal)} 章 ${esc(s.block_id)}</span>`).join(' ')}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<p class="hint" style="margin-top:8px">尚无设备上传阅读进度分片。</p>'}
+      </details>
+    </section>
+
+    <section class="card" aria-label="手机传回桌面接收">
+      <div class="card-head">
+        <h2>手机 → 桌面接收（快传与局域网分享拉取）</h2>
+        <button type="button" class="btn sm" data-act="mobile-inbox-refresh"${busyAttr}>刷新列表</button>
+      </div>
+      <p class="hint" style="margin-bottom:12px">手机浏览器通过上方「浏览器快传页」上传的电子书会直接落入「<a href="#import">新书入库</a>」收件箱；<code>.bcnote</code> / <code>.bcshare</code> 伴读包与下方拉取的 BanRead 局域网分享会归档在此，含原书时可一键投递入库。</p>
+
+      <div class="mobile-lan-box">
+        <div class="mobile-lan-inputs">
+          <label class="field">
+            <span>BanRead 手机局域网分享链接（9721 端口）</span>
+            <input type="url" id="mobile-lan-url" value="${esc(S.mobileLanUrl)}" placeholder="http://192.168.31.xxx:9721/share/v1?code=123456">
+          </label>
+          <label class="field">
+            <span>6 位配对码（链接未带 code 时填）</span>
+            <input type="text" id="mobile-lan-code" value="${esc(S.mobileLanCode)}" placeholder="例如 123-456">
+          </label>
+        </div>
+        <div class="toolbar" style="margin-bottom:0">
+          <button type="button" class="btn sm" data-act="mobile-lan-preview"${busyAttr}>拉取清单预览</button>
+          ${preview ? `<label class="check-inline">
+            <input type="checkbox" id="mobile-lan-include-book"${S.mobileLanIncludeBook ? ' checked' : ''}>
+            <span>同时拉取原书文件</span>
+          </label>
+          <button type="button" class="btn sm primary" data-act="mobile-lan-fetch"${busyAttr}>确认拉取到桌面</button>` : ''}
+        </div>
+        ${preview ? `<div class="review-box" style="margin-top:10px;margin-bottom:0">
+          <p><strong>《${esc(preview.title || '未命名')}》</strong>${preview.author ? ' · ' + esc(preview.author) : ''}
+            <span class="pill">导图 ${num(preview.mapCount || 0)}</span>
+            <span class="pill">批注 ${num(preview.noteCount || 0)}</span>
+            <span class="pill">问答 ${num(preview.qaCount || 0)}</span>
+            ${preview.includeBookFile ? `<span class="pill ok">含原书 · ${fmtBytes(preview.bookSizeBytes || 0)}</span>` : '<span class="pill">仅伴读资料</span>'}</p>
+          <p class="small muted mono" style="margin-bottom:0">SHA-256: ${esc(String(preview.bookSourceSha256 || '').slice(0, 16))}…</p>
+        </div>` : ''}
+      </div>
+
+      ${inboxItems.length ? `<div class="tw table-wrap stack-mobile" style="margin-top:14px" tabindex="0" role="region" aria-label="手机伴读资料接收表">
+        <table>
+          <thead><tr><th>书名</th><th>来源</th><th>伴读资料</th><th>接收时间</th><th>原书投递</th></tr></thead>
+          <tbody>${inboxItems.map((it) => `<tr>
+            <td data-label="书名" class="wrap"><strong>${esc(it.title || it.item_id)}</strong>${it.author ? `<span class="small muted"> · ${esc(it.author)}</span>` : ''}</td>
+            <td data-label="来源"><span class="pill">${it.source === 'lan_pull' ? '局域网直连' : '浏览器快传'}</span></td>
+            <td data-label="伴读资料" class="small">导图 ${num(it.map_count || 0)} · 批注 ${num(it.note_count || 0)} · 问答 ${num(it.qa_count || 0)}</td>
+            <td data-label="接收时间" class="nowrap small muted">${esc(fmtTime(it.received_at))}</td>
+            <td data-label="原书投递" class="nowrap">${it.imported_to_inbox
+              ? `<a class="btn sm ghost" href="#import">已投递 · 去入库 →</a>`
+              : (it.has_book
+                ? `<button type="button" class="btn sm primary" data-act="mobile-inbox-to-import" data-item="${esc(it.item_id)}">投递原书到收件箱</button>`
+                : '<span class="small muted">仅伴读资料</span>')}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>` : `<div class="empty-state" style="margin-top:12px"><div>
+        <div class="empty-state-title">尚未收到手机伴读资料包</div>
+        <div class="empty-state-sub">手机扫码上传的 .bcnote / .bcshare 或上方拉取的局域网分享将显示在这里。</div>
+      </div></div>`}
+    </section>`;
+}
+
 async function refreshTab(allowStaleStatus) {
   const statusTask = () => (allowStaleStatus ? loadStatusIfStale() : loadStatus());
   if (S.tab === 'overview') {
@@ -3302,6 +3741,8 @@ async function refreshTab(allowStaleStatus) {
     await Promise.all([loadLedger(), statusTask(), loadRetireDrop()]);
   } else if (S.tab === 'maintain') {
     await Promise.all([statusTask(), loadJobs(), loadSettings()]);
+  } else if (S.tab === 'mobile') {
+    await Promise.all([statusTask(), loadMobileAll()]);
   } else if (S.tab === 'retire') {
     await Promise.all([statusTask(), loadJobs(), loadRetireDrop()]);
   } else if (S.tab === 'cold') {
@@ -4464,6 +4905,318 @@ const actions = {
       toast(err.message, true);
     }
   },
+
+  async 'mobile-refresh'() {
+    S.mobileBusy = true;
+    render();
+    try {
+      await loadMobileAll();
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-start'() {
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/start');
+      if (body.status) S.mobileStatus = body.status;
+      if (body.ok === false) {
+        toast(body.error || '启动移动网关失败', true);
+      } else {
+        toast(body.already ? '移动网关已在运行' : '移动网关已启动');
+      }
+      await loadServices();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-stop'() {
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/stop');
+      if (body.status) S.mobileStatus = body.status;
+      if (body.ok === false) {
+        toast(body.error || '停止移动网关失败', true);
+      } else {
+        toast('移动网关已停止');
+      }
+      await loadServices();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-restart'() {
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/restart');
+      if (body.status) S.mobileStatus = body.status;
+      if (body.ok === false) {
+        toast(body.error || '重启移动网关失败', true);
+      } else {
+        toast('移动网关已重启');
+      }
+      await loadServices();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-start-search'() {
+    try {
+      const body = await post('/api/services/start', { key: 'search' });
+      toast(body.ok ? (body.already ? '检索服务已在运行' : '检索服务已启动') : (body.error || '启动失败'), !body.ok);
+      await loadMobileStatus();
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  },
+
+  async 'mobile-save-config'() {
+    const hostSel = document.getElementById('mobile-host-select');
+    const customIn = document.getElementById('mobile-custom-host');
+    const bindSel = document.getElementById('mobile-bind-select');
+    const portIn = document.getElementById('mobile-port-input');
+    const upChk = document.getElementById('mobile-allow-upload');
+    const payload = {
+      preferred_host: hostSel ? hostSel.value : '',
+      custom_host: customIn ? customIn.value.trim() : '',
+      bind: bindSel ? bindSel.value : '0.0.0.0',
+      port: portIn ? Number(portIn.value) : 8780,
+      allow_upload: upChk ? !!upChk.checked : true,
+    };
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/config', payload);
+      if (body.status) S.mobileStatus = body.status;
+      if (body.ok === false) {
+        toast(body.error || '保存网络设置失败', true);
+      } else {
+        toast(body.restarted ? '网络设置已保存，网关已重启生效' : '网络设置已保存');
+      }
+      await loadServices();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-rotate-open'() {
+    openModal(mobileRotateModal());
+  },
+
+  async 'mobile-rotate-confirm'() {
+    closeModal();
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/token/rotate');
+      if (body.status) S.mobileStatus = body.status;
+      if (body.ok === false) {
+        toast(body.error || '轮换配对令牌失败', true);
+      } else {
+        toast(body.restarted ? '已轮换令牌并自动重启网关，请用手机重新扫码' : '已轮换配对令牌');
+      }
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-qr-mode'(el) {
+    S.mobileQrMode = el.dataset.mode === 'web' ? 'web' : 'pair';
+    render();
+  },
+
+  async 'mobile-copy-uri'() {
+    const st = S.mobileStatus;
+    if (!st) return;
+    const text = S.mobileQrMode === 'web' ? st.web_drop_uri : st.pair_uri;
+    await copyTextWithFeedback(text, S.mobileQrMode === 'web' ? '已复制浏览器快传地址' : '已复制 bc-pair:// 配对链接');
+  },
+
+  async 'mobile-copy-adb'() {
+    const st = S.mobileStatus;
+    if (!st || !st.adb_reverse_cmd) return;
+    await copyTextWithFeedback(st.adb_reverse_cmd, '已复制 adb reverse 命令');
+  },
+
+  async 'mobile-pick-one'(el) {
+    if (el.checked) S.mobilePick.add(el.value);
+    else S.mobilePick.delete(el.value);
+    paintMobileCatalog();
+  },
+
+  async 'mobile-catalog-more'() {
+    S.mobileCatalogLimit += 40;
+    paintMobileCatalog();
+  },
+
+  async 'mobile-push-one'(el) {
+    const uid = el.dataset.uid;
+    if (!uid) return;
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/outbox/enqueue', { uids: [uid], include_cache: S.mobileIncludeCache });
+      S.mobileOutbox = body.tickets || [];
+      if (S.mobileStatus) S.mobileStatus.outbox_count = S.mobileOutbox.length;
+      toast('已加入待拉取队列：' + uid);
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-push-selected'() {
+    const uids = Array.from(S.mobilePick);
+    if (!uids.length) {
+      toast('请先勾选要推送的书目', true);
+      return;
+    }
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/outbox/enqueue', { uids, include_cache: S.mobileIncludeCache });
+      S.mobileOutbox = body.tickets || [];
+      S.mobilePick.clear();
+      if (S.mobileStatus) S.mobileStatus.outbox_count = S.mobileOutbox.length;
+      toast('已推送 ' + num(uids.length) + ' 本书到待拉取队列');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-outbox-refresh'() {
+    await loadMobileOutbox();
+    if (S.mobileStatus) S.mobileStatus.outbox_count = S.mobileOutbox.length;
+    render();
+  },
+
+  async 'mobile-outbox-remove'(el) {
+    const tid = el.dataset.tid;
+    if (!tid) return;
+    try {
+      const body = await post('/api/mobile/outbox/remove', { ticket_ids: [tid] });
+      S.mobileOutbox = body.tickets || [];
+      if (S.mobileStatus) S.mobileStatus.outbox_count = S.mobileOutbox.length;
+      toast('已从待拉取队列移出');
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  },
+
+  async 'mobile-outbox-clear'() {
+    try {
+      const body = await post('/api/mobile/outbox/clear');
+      S.mobileOutbox = [];
+      if (S.mobileStatus) S.mobileStatus.outbox_count = 0;
+      toast('已清空 ' + num(body.removed || 0) + ' 条待拉取记录');
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  },
+
+  async 'mobile-inbox-refresh'() {
+    await loadMobileInbox();
+    if (S.mobileStatus) S.mobileStatus.inbox_count = S.mobileInbox.length;
+    render();
+  },
+
+  async 'mobile-lan-preview'() {
+    const urlEl = document.getElementById('mobile-lan-url');
+    const codeEl = document.getElementById('mobile-lan-code');
+    S.mobileLanUrl = urlEl ? urlEl.value.trim() : S.mobileLanUrl;
+    S.mobileLanCode = codeEl ? codeEl.value.trim() : S.mobileLanCode;
+    if (!S.mobileLanUrl) {
+      toast('请先填写手机 BanRead 局域网分享链接', true);
+      return;
+    }
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/lan-pull', {
+        action: 'preview',
+        url: S.mobileLanUrl,
+        code: S.mobileLanCode,
+      });
+      S.mobileLanPreview = body.manifest || null;
+      toast('已读取分享清单：《' + ((body.manifest && body.manifest.title) || '') + '》');
+    } catch (err) {
+      S.mobileLanPreview = null;
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-lan-fetch'() {
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/lan-pull', {
+        action: 'fetch',
+        url: S.mobileLanUrl,
+        code: S.mobileLanCode,
+        include_book: S.mobileLanIncludeBook,
+      });
+      S.mobileLanPreview = null;
+      await loadMobileInbox();
+      if (S.mobileStatus) S.mobileStatus.inbox_count = S.mobileInbox.length;
+      toast('已拉取到桌面：《' + ((body.item && body.item.title) || '') + '》');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
+
+  async 'mobile-inbox-to-import'(el) {
+    const itemId = el.dataset.item;
+    if (!itemId) return;
+    S.mobileBusy = true;
+    render();
+    try {
+      const body = await post('/api/mobile/inbox/to-import', { item_id: itemId });
+      await Promise.all([loadMobileInbox(), loadStatus()]);
+      toast('原书已投递到收件箱：' + (body.name || ''));
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      S.mobileBusy = false;
+      render();
+    }
+  },
 };
 
 // ---- 事件 ---------------------------------------------------------
@@ -4560,6 +5313,21 @@ document.addEventListener('input', (ev) => {
     S.ledgerDebounce = setTimeout(paintLedgerTable, 80);
     return;
   }
+  if (el.id === 'mobile-q') {
+    S.mobileQ = el.value;
+    S.mobileCatalogLimit = 40;
+    clearTimeout(S.mobileDebounce);
+    S.mobileDebounce = setTimeout(paintMobileCatalog, 80);
+    return;
+  }
+  if (el.id === 'mobile-lan-url') {
+    S.mobileLanUrl = el.value;
+    return;
+  }
+  if (el.id === 'mobile-lan-code') {
+    S.mobileLanCode = el.value;
+    return;
+  }
   if (el.id === 'pdf-inline-q') {
     S.pdfInlineQ = el.value;
     paintPdfInlineTable();
@@ -4579,6 +5347,21 @@ document.addEventListener('change', (ev) => {
   }
   if (el.id === 'split-replace') {
     S.replaceMd = el.checked;
+    return;
+  }
+  if (el.id === 'mobile-cache-only') {
+    S.mobileCacheOnly = el.checked;
+    S.mobileCatalogLimit = 40;
+    loadMobileCatalog().then(() => paintMobileCatalog()).catch(() => {});
+    return;
+  }
+  if (el.id === 'mobile-include-cache') {
+    S.mobileIncludeCache = el.checked;
+    paintMobileCatalog();
+    return;
+  }
+  if (el.id === 'mobile-lan-include-book') {
+    S.mobileLanIncludeBook = el.checked;
     return;
   }
   if (el.id === 'pdf-replace') {
@@ -4668,6 +5451,8 @@ document.addEventListener('change', (ev) => {
 document.addEventListener('toggle', (ev) => {
   const el = ev.target;
   if (el && el.dataset && el.dataset.docs === 'items') S.docsOpen = !!el.open;
+  if (el && el.dataset && el.dataset.mobileDetails === 'log') S.mobileLogOpen = !!el.open;
+  if (el && el.dataset && el.dataset.mobileDetails === 'progress') S.mobileProgressOpen = !!el.open;
 }, true);
 
 function uploadFiles(files) {
@@ -4838,6 +5623,7 @@ async function boot() {
     else if (S.tab === 'pdf-list') baseTasks.push(loadPdfBooks());
     else if (S.tab === 'ledger') baseTasks.push(loadLedger(), loadRetireDrop());
     else if (S.tab === 'maintain') baseTasks.push(loadSettings());
+    else if (S.tab === 'mobile') baseTasks.push(loadMobileAll());
     else if (S.tab === 'retire') baseTasks.push(loadRetireDrop());
     else if (S.tab === 'cold') baseTasks.push(loadCold(), loadRetireDrop());
     await Promise.all(baseTasks);

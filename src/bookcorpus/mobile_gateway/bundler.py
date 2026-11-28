@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 import zipfile
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from bookcorpus.reading.store import UID_RE, _payload_stale
 
 SCHEMA_VERSION = 1
 FIXED_ZIP_DATE_TIME = (2026, 1, 1, 0, 0, 0)
+SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+STREAM_CHUNK_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True)
@@ -39,16 +42,57 @@ def _read_json_dict(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _resolve_book_source_sha256(book_json: dict[str, Any], md_manifest: dict[str, Any]) -> str:
+def _sha256_file(path: Path) -> str:
+    """分块流式计算文件 SHA-256，避免大文件一次性载入内存。"""
+    hasher = hashlib.sha256()
+    with path.open("rb") as fh:
+        while True:
+            chunk = fh.read(STREAM_CHUNK_BYTES)
+            if not chunk:
+                break
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _valid_sha256(raw: Any) -> str:
+    text = str(raw or "").strip().lower()
+    return text if SHA256_HEX_RE.match(text) else ""
+
+
+def _resolve_book_source_sha256(
+    book_json: dict[str, Any],
+    md_manifest: dict[str, Any],
+    *,
+    book_dir: Path | None = None,
+    logical_chapters: list[dict[str, Any]] | None = None,
+) -> str:
+    """返回确定性 64 位十六进制 book_source_sha256，保证通过 Android BookSourceHash 校验。"""
     sources = book_json.get("sources")
     if isinstance(sources, list):
         for src in sources:
-            if isinstance(src, dict) and src.get("primary_src") and src.get("sha256"):
-                return str(src["sha256"])
+            if isinstance(src, dict) and src.get("primary_src"):
+                hit = _valid_sha256(src.get("sha256"))
+                if hit:
+                    return hit
         for src in sources:
-            if isinstance(src, dict) and src.get("sha256"):
-                return str(src["sha256"])
-    return str(md_manifest.get("source_sha256") or "")
+            if isinstance(src, dict):
+                hit = _valid_sha256(src.get("sha256"))
+                if hit:
+                    return hit
+
+    manifest_sha = _valid_sha256(md_manifest.get("source_sha256"))
+    if manifest_sha:
+        return manifest_sha
+
+    if book_dir is not None:
+        source_dir = book_dir / "source"
+        if source_dir.is_dir():
+            for cand in sorted(source_dir.iterdir()):
+                if cand.is_file() and not cand.name.startswith("."):
+                    return _sha256_file(cand)
+
+    chapter_hashes = [str(ch.get("chapter_content_sha256") or "") for ch in (logical_chapters or [])]
+    return hashlib.sha256("\n".join(chapter_hashes).encode("utf-8")).hexdigest()
 
 
 def _resolve_canonical_version(md_manifest: dict[str, Any]) -> int:
@@ -194,7 +238,6 @@ def build_bcbook_bundle(
     author = str(book_entry.get("author") or "")
     profile = resolve_read_profile(subjects, title=title)
     cloth_color = CLOTHES[sum(ord(ch) for ch in clean_uid) % len(CLOTHES)]
-    book_source_sha256 = _resolve_book_source_sha256(book_json, md_manifest)
     canonical_version = _resolve_canonical_version(md_manifest)
 
     chapters = library.chapters(clean_uid)
@@ -240,6 +283,13 @@ def build_bcbook_bundle(
                 )
             )
 
+    book_source_sha256 = _resolve_book_source_sha256(
+        book_json,
+        md_manifest,
+        book_dir=book_dir,
+        logical_chapters=logical_chapters,
+    )
+
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "uid": clean_uid,
@@ -272,13 +322,13 @@ def build_bcbook_bundle(
 
     out_path = Path(dest_path)
     _write_deterministic_zip(out_path, entries)
-    raw_zip = out_path.read_bytes()
-    digest = hashlib.sha256(raw_zip).hexdigest()
+    digest = _sha256_file(out_path)
+    size = out_path.stat().st_size
     return BundleArtifact(
         uid=clean_uid,
         include_cache=include_cache,
         path=out_path,
-        size=len(raw_zip),
+        size=size,
         sha256=digest,
         etag=f'"{digest}"',
     )
@@ -341,13 +391,13 @@ def ensure_cached_bundle(
     target = cache_dir / f"{clean_uid}_{flag}_{sig}.bcbook"
 
     if target.is_file():
-        raw_zip = target.read_bytes()
-        digest = hashlib.sha256(raw_zip).hexdigest()
+        digest = _sha256_file(target)
+        size = target.stat().st_size
         return BundleArtifact(
             uid=clean_uid,
             include_cache=include_cache,
             path=target,
-            size=len(raw_zip),
+            size=size,
             sha256=digest,
             etag=f'"{digest}"',
         )

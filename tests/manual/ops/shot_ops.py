@@ -56,6 +56,7 @@ TABS = (
     ("split", "正文生产"),
     ("maintain", "同步与维护"),
     ("logs", "任务与日志"),
+    ("mobile", "移动互联"),
 )
 SUBTABS = (
     ("retire", "书目与分类"),

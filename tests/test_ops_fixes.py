@@ -468,7 +468,7 @@ def test_stage2_ledger_auto_sync_cold_settings_and_reconcile(workspace):
         # 4) services 探测
         code_sv, sv = _http_json(base + "/api/services")
         assert code_sv == 200
-        assert {x["key"] for x in sv["services"]} == {"home", "search", "reading", "daily"}
+        assert {x["key"] for x in sv["services"]} == {"home", "search", "reading", "daily", "mobile"}
 
         # 5) reconcile / advanced / manual rescan 路由与参数校验
         # 向量库未初始化（chunks=0）时，日常 reconcile 自动跳过 embed sync，防止误触发全库建库

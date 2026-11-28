@@ -413,7 +413,7 @@ def mock_search_server():
             self.wfile.write(resp)
 
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _MockSearchHandler)
-    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()
     try:
         yield f"http://127.0.0.1:{srv.server_address[1]}", captured_requests
@@ -435,7 +435,7 @@ def gateway_fixture(tmp_path, mock_search_server):
         search_url=search_url,
         quiet=True,
     )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
@@ -648,7 +648,7 @@ def test_gateway_outbox_progress_and_cross_search(gateway_fixture, tmp_path):
         search_url=f"http://127.0.0.1:{dead_port}",
         quiet=True,
     )
-    t_down = threading.Thread(target=srv_down.serve_forever, daemon=True)
+    t_down = threading.Thread(target=srv_down.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     t_down.start()
     try:
         down_base = f"http://127.0.0.1:{srv_down.server_address[1]}"
@@ -713,3 +713,187 @@ def test_gateway_cli_generates_pairing_uri_and_token(tmp_path):
     finally:
         proc.terminate()
         proc.wait(timeout=5)
+
+
+def test_progress_post_without_high_water_mark_ordinal_compatibility(gateway_fixture):
+    """回归 P0：banread-android POST 进度分片不带 high_water_mark_ordinal 时必须返回 200 并兼容合并。"""
+    base, token, root, _captured, _service = gateway_fixture
+    st, raw, _ = _http_call(
+        base,
+        "/api/mobile/v1/progress/B0001",
+        method="POST",
+        token=token,
+        body={
+            "device_id": "banread-android-pixel",
+            "ordinal": 3,
+            "block_id": "B02",
+            "char_offset": 42,
+            "updated_at_ms": 1700000100000,
+        },
+    )
+    assert st == 200, raw.decode("utf-8", "replace")
+    resp = json.loads(raw)
+    assert resp["ok"] is True
+    assert "high_water_mark_ordinal" not in resp
+    assert resp["merged_high_water_mark_ordinal"] == 3
+
+    st_get, prog_raw, _ = _http_call(base, "/api/mobile/v1/progress/B0001", token=token)
+    assert st_get == 200
+    prog = json.loads(prog_raw)
+    assert prog["merged_high_water_mark_ordinal"] == 3
+    assert len(prog["shards"]) == 1
+    assert prog["shards"][0]["device_id"] == "banread-android-pixel"
+
+    # list_all_books 汇总给操作台只读总览
+    books = ProgressStore(root).list_all_books()
+    assert len(books) == 1
+    assert books[0]["uid"] == "B0001"
+    assert books[0]["merged_high_water_mark_ordinal"] == 3
+
+
+def test_bundler_deterministic_source_sha256_fallback(tmp_path):
+    """回归 P1：缺 sources[].sha256 与 .manifest.json source_sha256 时，book_source_sha256 仍须为确定性 64 位 hex。"""
+    root = tmp_path / "ws_fallback"
+    (root / "books").mkdir(parents=True)
+    (root / "工作区" / "阅读").mkdir(parents=True)
+    (root / "books.toml").write_text("schema = 2\n", encoding="utf-8")
+
+    b3 = root / "books" / "B0003"
+    (b3 / "md").mkdir(parents=True)
+    (b3 / "source").mkdir(parents=True)
+    (b3 / "book.json").write_text(
+        json.dumps({"uid": "B0003", "title": "无哈希样本", "author": "佚名", "subjects": ["文学"]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (b3 / "md" / "01_正文.md").write_text("# 第一章\n\n测试正文内容。\n", encoding="utf-8")
+
+    lib = Library(str(root), overlay_root="")
+    z1 = tmp_path / "b3_1.bcbook"
+    z2 = tmp_path / "b3_2.bcbook"
+    build_bcbook_bundle(lib, "B0003", z1, include_cache=False)
+    build_bcbook_bundle(lib, "B0003", z2, include_cache=False)
+    with zipfile.ZipFile(z1) as zf1, zipfile.ZipFile(z2) as zf2:
+        m1 = json.loads(zf1.read("manifest.json").decode("utf-8"))
+        m2 = json.loads(zf2.read("manifest.json").decode("utf-8"))
+    sha1 = m1["book_source_sha256"]
+    assert len(sha1) == 64
+    assert all(ch in "0123456789abcdef" for ch in sha1)
+    assert sha1 == m2["book_source_sha256"]
+
+    # 有 source/ 原文件但 book.json 缺 sha256 时，回退流式计算原文件 SHA-256
+    src_bytes = b"synthetic-epub-source-payload"
+    (b3 / "source" / "orig.epub").write_bytes(src_bytes)
+    z3 = tmp_path / "b3_3.bcbook"
+    build_bcbook_bundle(lib, "B0003", z3, include_cache=False)
+    with zipfile.ZipFile(z3) as zf3:
+        m3 = json.loads(zf3.read("manifest.json").decode("utf-8"))
+    assert m3["book_source_sha256"] == hashlib.sha256(src_bytes).hexdigest()
+
+
+def test_outbox_dedup_and_clear(gateway_fixture):
+    base, token, _root, _captured, service = gateway_fixture
+    st1, raw1, _ = _http_call(
+        base,
+        "/api/mobile/v1/outbox",
+        method="POST",
+        token=token,
+        body={"uids": ["B0001", "B0002"], "include_cache": True},
+    )
+    assert st1 == 200
+    assert len(json.loads(raw1)["tickets"]) == 2
+
+    # 同 uid 重复入队必须去重刷新而非无限累加
+    st2, raw2, _ = _http_call(
+        base,
+        "/api/mobile/v1/outbox",
+        method="POST",
+        token=token,
+        body={"uids": ["B0001"], "include_cache": False},
+    )
+    assert st2 == 200
+    tickets = json.loads(raw2)["tickets"]
+    assert len(tickets) == 2
+    by_uid = {t["uid"]: t for t in tickets}
+    assert by_uid["B0001"]["include_cache"] is False
+
+    cleared = service.outbox.clear()
+    assert cleared["ok"] is True
+    assert cleared["removed"] == 2
+    assert service.outbox.list_tickets() == []
+
+
+def test_mobile_drop_page_and_upload_endpoints(gateway_fixture):
+    base, token, root, _captured, service = gateway_fixture
+
+    # GET /m 无需鉴权、返回 HTML 静态壳、不泄露明文 token
+    st_m, html_bytes, hdrs = _http_call(base, "/m")
+    assert st_m == 200
+    assert "text/html" in hdrs.get("content-type", "")
+    html = html_bytes.decode("utf-8")
+    assert token not in html
+    assert "location.hash" in html
+    assert "bc-pair://v1" in html
+
+    # 未鉴权上传被拒 401
+    req_unauth = urllib.request.Request(
+        f"{base}/api/mobile/v1/upload",
+        data=b"hello",
+        method="POST",
+        headers={"X-Filename": "test.epub"},
+    )
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(req_unauth, timeout=10)
+    assert exc_info.value.code == 401
+
+    def _raw_upload(filename: str, data: bytes) -> tuple[int, dict]:
+        req = urllib.request.Request(
+            f"{base}/api/mobile/v1/upload",
+            data=data,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Filename": urllib.request.quote(filename),
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            return exc.code, json.loads(exc.read().decode("utf-8"))
+
+    # 非法文件名与不支持后缀被拒 400
+    st_bad, _ = _raw_upload("..", b"x")
+    assert st_bad == 400
+    st_ext, _ = _raw_upload("malware.exe", b"x")
+    assert st_ext == 400
+
+    # 电子书直接落 books/_收件箱/
+    st_epub, doc_epub = _raw_upload("../../手机传入.epub", b"PK\x03\x04demo-epub")
+    assert st_epub == 200
+    assert doc_epub["ok"] is True
+    assert doc_epub["kind"] == "book"
+    landed_epub = root / "books" / "_收件箱" / "手机传入.epub"
+    assert landed_epub.is_file()
+    assert landed_epub.read_bytes() == b"PK\x03\x04demo-epub"
+
+    # .bcshare 包落 工作区/阅读/mobile_inbox/<id>/ 并解析 share_manifest.json 与 book/ 原书
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(
+            "share_manifest.json",
+            json.dumps({"title": "手机分享书", "author": "测试作者", "noteCount": 3}, ensure_ascii=False),
+        )
+        zf.writestr("book/手机分享书.epub", b"PK\x03\x04embedded-book")
+    st_share, doc_share = _raw_upload("reading.bcshare", buf.getvalue())
+    assert st_share == 200
+    assert doc_share["ok"] is True
+    assert doc_share["kind"] == "share_package"
+    assert doc_share["item"]["title"] == "手机分享书"
+    assert doc_share["item"]["has_book"] is True
+    assert doc_share["item"]["note_count"] == 3
+
+    # 关闭 allow_upload 时返回 403
+    service.allow_upload = False
+    st_403, doc_403 = _raw_upload("another.epub", b"abc")
+    assert st_403 == 403
+    assert doc_403["ok"] is False

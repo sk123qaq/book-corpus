@@ -1443,8 +1443,8 @@ button.strip-cell[aria-pressed="true"] {
 
 .svc-bar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(12px, 1.5vw, 22px);
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: clamp(12px, 1.4vw, 20px);
 }
 
 .svc-item {
@@ -2097,8 +2097,169 @@ dialog.modal[open] {
 }
 .toast.bad { background: var(--danger); color: #fff; }
 
+/* ---- 移动互联（#mobile） ------------------------------------------ */
+.mobile-live-badge {
+  color: var(--pine) !important;
+  background: var(--pine-soft) !important;
+}
+
+.mobile-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.mobile-cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.mobile-adb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: var(--r-inner);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+.mobile-adb-bar code {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.mobile-log-details > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  padding: 4px 0;
+  user-select: none;
+}
+.mobile-log-details .log-box {
+  margin-top: 8px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--r-inner);
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mobile-qr-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+/* 无论宣纸日间还是墨夜暗色主题，二维码必须固定白底高对比静区以便手机摄像头识别 */
+.mobile-qr-frame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-control);
+  max-width: 100%;
+}
+.mobile-qr-frame svg {
+  display: block;
+  width: min(210px, 60vw);
+  height: auto;
+}
+
+.mobile-uri-box {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--r-inner);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  word-break: break-all;
+  text-align: center;
+}
+
+.mobile-outbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+.mobile-outbox-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border-radius: var(--r-inner);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+}
+.mobile-outbox-chip .wrap { flex: 1 1 180px; min-width: 0; }
+
+.mobile-lan-box {
+  padding: 12px 14px;
+  border-radius: var(--r-inner);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+}
+.mobile-lan-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 0.7fr);
+  gap: 8px 14px;
+}
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--r-control);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  gap: 2px;
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.seg-btn.on {
+  background: var(--surface);
+  color: var(--cinnabar);
+  font-weight: 600;
+  box-shadow: var(--shadow-control);
+}
+
 /* ---- 响应式断点 -------------------------------------------------- */
 @media (max-width: 1180px) {
+  .mobile-hero-grid { grid-template-columns: 1fr; }
   .hero-card { grid-template-columns: 1fr; gap: var(--sp-4); }
   .hero-meter {
     border-left: 0;
@@ -2175,6 +2336,8 @@ dialog.modal[open] {
     border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
   }
   .svc-bar { grid-template-columns: 1fr; }
+  .mobile-cfg-grid,
+  .mobile-lan-inputs { grid-template-columns: 1fr; }
   .topbar-tools { width: 100%; justify-content: flex-end; }
 }
 

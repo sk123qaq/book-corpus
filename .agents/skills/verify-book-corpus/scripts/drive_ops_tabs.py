@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive the ops console's six modules and compat subtabs in headless Chromium.
+"""Drive the ops console's seven modules and compat subtabs in headless Chromium.
 
 Checks every nav entry renders a heading, records console errors, horizontal
 overflow at 1440x900 and 390x844, and writes one screenshot.
@@ -26,7 +26,7 @@ import tempfile
 import time
 import urllib.request
 
-TABS = ["overview", "import", "ledger", "split", "maintain", "logs"]
+TABS = ["overview", "import", "ledger", "split", "maintain", "logs", "mobile"]
 SUBTABS = ["retire", "cold", "docs", "pdf", "pdf-list", "manual"]
 CHROME = os.environ.get("CHROME_BIN") or "/usr/bin/chromium"
 
