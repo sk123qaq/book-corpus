@@ -261,6 +261,24 @@ def _redact_log_text(text: str, token: str) -> str:
     return out
 
 
+class _RejectRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """禁止局域网拉取跟随任何 HTTP 3xx 重定向，防止绕过私网 SSRF 守卫。"""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        raise ValueError(f"安全限制：局域网分享拉取禁止 HTTP 重定向（{code}）")
+
+
+_LAN_PULL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _RejectRedirectHandler())
+
+
 def _inspect_share_zip(zip_path: Path) -> dict[str, Any]:
     """安全解析 .bcnote / .bcshare 压缩包里的 share_manifest.json 与原书条目。"""
     manifest: dict[str, Any] = {}
@@ -706,7 +724,7 @@ class MobileGatewayManager:
     def _http_fetch_bytes(self, url: str, code: str, *, max_bytes: int, timeout: float = 15.0) -> bytes:
         req = urllib.request.Request(url, method="GET", headers={"X-BanRead-Code": code})  # noqa: S310
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            with _LAN_PULL_OPENER.open(req, timeout=timeout) as resp:
                 chunks: list[bytes] = []
                 got = 0
                 while True:
@@ -733,7 +751,7 @@ class MobileGatewayManager:
         part = dest.with_name(f"{dest.name}.{uuid.uuid4().hex[:8]}.part")
         got = 0
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp, part.open("wb") as fh:  # noqa: S310
+            with _LAN_PULL_OPENER.open(req, timeout=timeout) as resp, part.open("wb") as fh:
                 while True:
                     block = resp.read(64 * 1024)
                     if not block:
@@ -904,12 +922,22 @@ class MobileGatewayManager:
                 with zipfile.ZipFile(pkg_path, "r") as zf:
                     if book_rel not in zf.namelist():
                         raise FileNotFoundError("分享包内找不到原书条目")
+                    extracted = 0
                     with zf.open(book_rel, "r") as src_fh, part.open("wb") as dst_fh:
-                        shutil.copyfileobj(src_fh, dst_fh, length=64 * 1024)
+                        while True:
+                            block = src_fh.read(64 * 1024)
+                            if not block:
+                                break
+                            extracted += len(block)
+                            if extracted > MAX_LAN_BOOK_BYTES:
+                                raise ValueError(f"分享包原书解压超过体积上限 ({MAX_LAN_BOOK_BYTES} bytes)")
+                            dst_fh.write(block)
             else:
                 src_book = (item_dir / book_rel).resolve()
                 if not str(src_book).startswith(f"{item_dir}{os.sep}") or not src_book.is_file():
                     raise FileNotFoundError("已拉取的原书文件不存在")
+                if src_book.stat().st_size > MAX_LAN_BOOK_BYTES:
+                    raise ValueError(f"原书文件超过体积上限 ({MAX_LAN_BOOK_BYTES} bytes)")
                 shutil.copyfile(src_book, part)
             size = part.stat().st_size
             part.replace(target)

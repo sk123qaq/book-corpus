@@ -712,7 +712,7 @@ const SVC_DESC = {
   search: '自然语言检索与段落引用',
   reading: '逐章正文阅读与批注',
   daily: '每日推荐一章只读版',
-  mobile: '伴读 App 配对、传书与进度同步',
+  mobile: '伴读配对与手机传书',
 };
 
 function trackAlerts(c) {
@@ -4923,7 +4923,11 @@ const actions = {
     try {
       const body = await post('/api/mobile/start');
       if (body.status) S.mobileStatus = body.status;
-      toast(body.already ? '移动网关已在运行' : '移动网关已启动');
+      if (body.ok === false) {
+        toast(body.error || '启动移动网关失败', true);
+      } else {
+        toast(body.already ? '移动网关已在运行' : '移动网关已启动');
+      }
       await loadServices();
     } catch (err) {
       toast(err.message, true);
@@ -4939,7 +4943,11 @@ const actions = {
     try {
       const body = await post('/api/mobile/stop');
       if (body.status) S.mobileStatus = body.status;
-      toast('移动网关已停止');
+      if (body.ok === false) {
+        toast(body.error || '停止移动网关失败', true);
+      } else {
+        toast('移动网关已停止');
+      }
       await loadServices();
     } catch (err) {
       toast(err.message, true);
@@ -4955,7 +4963,11 @@ const actions = {
     try {
       const body = await post('/api/mobile/restart');
       if (body.status) S.mobileStatus = body.status;
-      toast('移动网关已重启');
+      if (body.ok === false) {
+        toast(body.error || '重启移动网关失败', true);
+      } else {
+        toast('移动网关已重启');
+      }
       await loadServices();
     } catch (err) {
       toast(err.message, true);
@@ -4994,7 +5006,11 @@ const actions = {
     try {
       const body = await post('/api/mobile/config', payload);
       if (body.status) S.mobileStatus = body.status;
-      toast(body.restarted ? '网络设置已保存，网关已重启生效' : '网络设置已保存');
+      if (body.ok === false) {
+        toast(body.error || '保存网络设置失败', true);
+      } else {
+        toast(body.restarted ? '网络设置已保存，网关已重启生效' : '网络设置已保存');
+      }
       await loadServices();
     } catch (err) {
       toast(err.message, true);
@@ -5015,7 +5031,11 @@ const actions = {
     try {
       const body = await post('/api/mobile/token/rotate');
       if (body.status) S.mobileStatus = body.status;
-      toast(body.restarted ? '已轮换令牌并自动重启网关，请用手机重新扫码' : '已轮换配对令牌');
+      if (body.ok === false) {
+        toast(body.error || '轮换配对令牌失败', true);
+      } else {
+        toast(body.restarted ? '已轮换令牌并自动重启网关，请用手机重新扫码' : '已轮换配对令牌');
+      }
     } catch (err) {
       toast(err.message, true);
     } finally {

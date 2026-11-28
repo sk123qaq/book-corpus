@@ -444,3 +444,89 @@ def test_lan_pull_ssrf_auth_fetch_and_send_to_import(tmp_path: Path):
         srv.shutdown()
         srv.server_close()
         assert not (root / "books" / "_收件箱" / ".part").exists()
+
+
+def test_lan_pull_blocks_http_redirect_ssrf(tmp_path: Path):
+    """3xx 重定向到公网/云元数据地址必须被拦截，防止绕过私网 SSRF 守卫。"""
+    root = _make_root(tmp_path)
+    mgr = mgr_mod.MobileGatewayManager(root, port_override=_free_port())
+    manifest_bytes = json.dumps(
+        {"title": "重定向测试书", "includeBookFile": True, "bookFileName": "redirect.epub"},
+        ensure_ascii=False,
+    ).encode("utf-8")
+    companion_bytes = b"{}"
+
+    class _RedirectHandler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args) -> None:  # noqa: A002
+            return
+
+        def do_GET(self) -> None:
+            if self.path == "/share/v1/manifest" and self.headers.get("X-BanRead-Code") == "111111":
+                self.send_response(302)
+                self.send_header("Location", "http://169.254.169.254/latest/meta-data/")
+                self.end_headers()
+                return
+            if self.path == "/share/v1/manifest":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(manifest_bytes)))
+                self.end_headers()
+                self.wfile.write(manifest_bytes)
+                return
+            if self.path == "/share/v1/companion":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(companion_bytes)))
+                self.end_headers()
+                self.wfile.write(companion_bytes)
+                return
+            if self.path == "/share/v1/book":
+                self.send_response(302)
+                self.send_header("Location", "http://8.8.8.8/evil.epub")
+                self.end_headers()
+                return
+            self.send_response(404)
+            self.end_headers()
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), _RedirectHandler)
+    lan_port = int(srv.server_address[1])
+    thread = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{lan_port}/"
+        with pytest.raises(ValueError, match="重定向"):
+            mgr.lan_pull_preview(url, "111111")
+        with pytest.raises(ValueError, match="重定向"):
+            mgr.lan_pull_fetch(url, "222222", include_book=True)
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_send_inbox_book_to_import_enforces_zip_size_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """解压 .bcshare 内原书超过 MAX_LAN_BOOK_BYTES 时必须中断、清理 .part 并抛 ValueError。"""
+    import zipfile
+
+    root = _make_root(tmp_path)
+    mgr = mgr_mod.MobileGatewayManager(root, port_override=_free_port())
+    monkeypatch.setattr(mgr_mod, "MAX_LAN_BOOK_BYTES", 1024)
+
+    item_dir = mgr.mobile_inbox_dir / "up-20261128-zipbomb"
+    item_dir.mkdir(parents=True, exist_ok=True)
+    pkg_path = item_dir / "bomb.bcshare"
+    with zipfile.ZipFile(pkg_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(
+            "share_manifest.json",
+            json.dumps({"title": "超限样本", "includeBookFile": True}, ensure_ascii=False),
+        )
+        zf.writestr("book/bomb.epub", b"A" * 2048)
+
+    meta = mgr.register_uploaded_share_package(pkg_path, "bomb.bcshare")
+    assert meta["has_book"] is True
+
+    with pytest.raises(ValueError, match="体积上限"):
+        mgr.send_inbox_book_to_import(meta["item_id"])
+
+    inbox_dir = root / "books" / "_收件箱"
+    assert not (inbox_dir / "bomb.epub").exists()
+    assert not list(inbox_dir.glob("*.part"))
